@@ -1,6 +1,8 @@
 'use strict';
 const express = require('express');
 const crypto = require('crypto');
+const { createClient } = require('@supabase/supabase-js');
+const WebSocket = require('ws');
 
 const PORT = process.env.PORT || 8080;
 const SUPABASE_URL = process.env.SUPABASE_URL;
@@ -9,6 +11,13 @@ const HUB_PASSWORD = process.env.HUB_PASSWORD || 'changeme';
 const TZ = process.env.TZ_DISPLAY || 'America/New_York';
 // Cookie token derived from the password — set once per device, never expires (no logout).
 const TOKEN = crypto.createHash('sha256').update('status-hub:' + HUB_PASSWORD).digest('hex');
+
+// Supabase client used only for the Realtime subscription (push). Data reads use sb() REST.
+const supa = createClient(SUPABASE_URL, SUPABASE_KEY, {
+  auth: { persistSession: false },
+  realtime: { transport: WebSocket },
+});
+const sseClients = new Set();
 
 const app = express();
 app.use(express.urlencoded({ extended: false }));
@@ -86,6 +95,23 @@ async function buildStatus() {
   return { today, litter, nutrition, workouts, generated_at: new Date().toISOString() };
 }
 
+// ---- realtime push: recompute + push to all connected browsers on any DB change ----
+async function broadcast() {
+  let frame;
+  try { frame = 'data: ' + JSON.stringify(await buildStatus()) + '\n\n'; }
+  catch (e) { console.error('broadcast build failed:', e.message); return; }
+  for (const res of sseClients) { try { res.write(frame); } catch {} }
+}
+
+function startRealtime() {
+  supa.channel('hub-changes')
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'device_status' }, broadcast)
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'nutrition_entries' }, broadcast)
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'workout_sessions' }, broadcast)
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'exercises' }, broadcast)
+    .subscribe((status) => console.log('realtime channel:', status));
+}
+
 // ---- auth ----
 function getCookie(req, name) {
   const m = (req.headers.cookie || '').match(new RegExp('(?:^|; )' + name + '=([^;]+)'));
@@ -116,7 +142,18 @@ app.get('/api/status', async (req, res) => {
   catch (e) { res.status(500).json({ error: String(e.message || e) }); }
 });
 
-app.listen(PORT, '0.0.0.0', () => console.log(`status-hub on :${PORT}`));
+// Server-Sent Events: push assembled status to the browser, instantly on any DB change.
+app.get('/api/stream', async (req, res) => {
+  res.set({ 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache',
+            Connection: 'keep-alive', 'X-Accel-Buffering': 'no' });
+  res.flushHeaders();
+  sseClients.add(res);
+  try { res.write('data: ' + JSON.stringify(await buildStatus()) + '\n\n'); } catch {}
+  const ka = setInterval(() => { try { res.write(': keepalive\n\n'); } catch {} }, 25000);  // SSE heartbeat (proxy idle)
+  req.on('close', () => { clearInterval(ka); sseClients.delete(res); });
+});
+
+app.listen(PORT, '0.0.0.0', () => { console.log(`status-hub on :${PORT}`); startRealtime(); });
 
 // ---- HTML ----
 function loginHtml(err) {
@@ -176,9 +213,8 @@ function ago(iso){if(!iso)return'';const s=(Date.now()-new Date(iso))/1000;
 function dayColor(label){if(!label)return'#2a313a';const l=label.toLowerCase();
  if(l.includes('full body'))return'#e8eaed';if(l.includes('push'))return CAT_COLOR.push;
  if(l.includes('pull'))return CAT_COLOR.pull;if(l.includes('legs'))return CAT_COLOR.legs;return'#a855f7';}
-async function tick(){
- let s; try{const r=await fetch('/api/status');s=await r.json();}catch(e){return;}
- if(s.error){return;}
+function render(s){
+ if(!s||s.error){return;}
  // litter
  const L=s.litter||{};const st=L.status||'OFFLINE';
  document.getElementById('litter').innerHTML='<h2>Litter-Robot</h2>'+
@@ -200,6 +236,7 @@ async function tick(){
  document.getElementById('workouts').innerHTML='<h2>Workouts · Last 7 Days</h2><div class=week>'+cells+'</div>';
  document.getElementById('foot').textContent='litter updated '+ago(L.updated_at)+' · refreshed '+new Date().toLocaleTimeString();
 }
-tick();setInterval(tick,10000);
+const es=new EventSource('/api/stream');
+es.onmessage=e=>{try{render(JSON.parse(e.data));}catch(_){}};
 </script></body></html>`;
 }

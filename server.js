@@ -93,6 +93,7 @@ function getCookie(req, name) {
 }
 const authed = (req) => getCookie(req, 'hub') === TOKEN;
 
+app.get('/healthz', (req, res) => res.send('ok'));  // public (before auth gate)
 app.get('/login', (req, res) => res.type('html').send(loginHtml()));
 app.post('/login', (req, res) => {
   if ((req.body.password || '') === HUB_PASSWORD) {
@@ -114,7 +115,6 @@ app.get('/api/status', async (req, res) => {
   try { res.json(await buildStatus()); }
   catch (e) { res.status(500).json({ error: String(e.message || e) }); }
 });
-app.get('/healthz', (req, res) => res.send('ok'));
 
 app.listen(PORT, '0.0.0.0', () => console.log(`status-hub on :${PORT}`));
 

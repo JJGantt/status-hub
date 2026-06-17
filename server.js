@@ -167,6 +167,10 @@ const STATUS_LABEL={READY:'Ready',CLEAN_CYCLE:'Cleaning',CAT_SENSOR_INTERRUPTED:
 const STATUS_COLOR={READY:'#3b82f6',CLEAN_CYCLE:'#eab308',CAT_SENSOR_INTERRUPTED:'#f97316',
  PAUSED:'#f97316',DRAWER_FULL:'#ef4444',OFFLINE:'#ef4444',OFF:'#566'};
 const CAT_COLOR={push:'#ef4444',pull:'#22c55e',legs:'#3b82f6'};
+// hue gradient: t=0 green -> t=1 red, through real yellow at t=0.5
+function hueColor(t){const h=120*(1-Math.max(0,Math.min(1,t)));return 'hsl('+h+',85%,55%)';}
+function litterColor(v){return v==null?'#8b96a5':hueColor((90-v)/20);}  // 90% green -> 70% red
+function drawerColor(v){return v==null?'#8b96a5':hueColor((v-75)/20);}  // 75% green -> 95% red
 function ago(iso){if(!iso)return'';const s=(Date.now()-new Date(iso))/1000;
  if(s<90)return Math.round(s)+'s ago';if(s<5400)return Math.round(s/60)+'m ago';return Math.round(s/3600)+'h ago';}
 function dayColor(label){if(!label)return'#2a313a';const l=label.toLowerCase();
@@ -179,8 +183,8 @@ async function tick(){
  const L=s.litter||{};const st=L.status||'OFFLINE';
  document.getElementById('litter').innerHTML='<h2>Litter-Robot</h2>'+
   '<div class=big><span class=dot style="background:'+(STATUS_COLOR[st]||'#8b96a5')+'"></span>'+(STATUS_LABEL[st]||st)+'</div>'+
-  '<div class=row><span>Litter level</span><b>'+(L.litter_level_pct!=null?L.litter_level_pct+'%':'—')+'</b></div>'+
-  '<div class=row><span>Waste drawer</span><b>'+(L.waste_drawer_pct!=null?L.waste_drawer_pct+'%':'—')+'</b></div>';
+  '<div class=row><span>Litter level</span><b style="color:'+litterColor(L.litter_level_pct)+'">'+(L.litter_level_pct!=null?L.litter_level_pct+'%':'—')+'</b></div>'+
+  '<div class=row><span>Waste drawer</span><b style="color:'+drawerColor(L.waste_drawer_pct)+'">'+(L.waste_drawer_pct!=null?L.waste_drawer_pct+'%':'—')+'</b></div>';
  // nutrition
  const N=s.nutrition||{};const T=N.target||{};
  const macro=(n,v,t,u)=>'<div class=macro><div class=n>'+(v||0)+(u||'')+'</div><div class=l>'+n+(t!=null?' / '+t+(u||''):'')+'</div></div>';

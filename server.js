@@ -208,13 +208,17 @@ const CAT_COLOR={push:'#ef4444',pull:'#22c55e',legs:'#3b82f6'};
 function hueColor(t){const h=120*(1-Math.max(0,Math.min(1,t)));return 'hsl('+h+',85%,55%)';}
 function litterColor(v){return v==null?'#8b96a5':hueColor((90-v)/20);}  // 90% green -> 70% red
 function drawerColor(v){return v==null?'#8b96a5':hueColor((v-75)/20);}  // 75% green -> 95% red
-function ago(iso){if(!iso)return'';const s=(Date.now()-new Date(iso))/1000;
+function ago(iso){if(!iso)return'—';const s=(Date.now()-new Date(iso))/1000;
  if(s<90)return Math.round(s)+'s ago';if(s<5400)return Math.round(s/60)+'m ago';return Math.round(s/3600)+'h ago';}
+let last=null;
+function fmtFoot(){if(!last)return;const L=last.litter||{};
+ document.getElementById('foot').textContent='litter updated '+ago(L.updated_at)+' · '+new Date().toLocaleTimeString();}
 function dayColor(label){if(!label)return'#2a313a';const l=label.toLowerCase();
  if(l.includes('full body'))return'#e8eaed';if(l.includes('push'))return CAT_COLOR.push;
  if(l.includes('pull'))return CAT_COLOR.pull;if(l.includes('legs'))return CAT_COLOR.legs;return'#a855f7';}
 function render(s){
  if(!s||s.error){return;}
+ last=s;
  // litter
  const L=s.litter||{};const st=L.status||'OFFLINE';
  document.getElementById('litter').innerHTML='<h2>Litter-Robot</h2>'+
@@ -234,9 +238,10 @@ function render(s){
   return '<div class=day style="border-top-color:'+dayColor(d.label)+'"><div class=d>'+dow+'</div>'+w+'</div>';
  }).join('');
  document.getElementById('workouts').innerHTML='<h2>Workouts · Last 7 Days</h2><div class=week>'+cells+'</div>';
- document.getElementById('foot').textContent='litter updated '+ago(L.updated_at)+' · refreshed '+new Date().toLocaleTimeString();
+ fmtFoot();
 }
 const es=new EventSource('/api/stream');
 es.onmessage=e=>{try{render(JSON.parse(e.data));}catch(_){}};
+setInterval(fmtFoot,1000);  // tick the "updated X ago" live against the real clock
 </script></body></html>`;
 }

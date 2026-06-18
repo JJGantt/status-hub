@@ -37,7 +37,11 @@ typical intake pace and **refill** when I log.
   pull toward the *ideal* (even intake — protein distribution across ~4 feedings maximizes MPS),
   not enshrine current clumping. Smooth continuous decline, all four; bar sinks between meals,
   logging pops it up → encourages frequent even top-ups (the optimal pattern).
-- **wake / bed are adjustable fields** (default e.g. 7a–11p).
+- **Eating window (not wake/bed), auto-derived from history:** the pace runs first-entry →
+  last-entry (when you actually eat), which is more correct than wake/bed (no false "behind"
+  every morning). Use **median** first/last entry over rolling ~30d (robust to outlier days),
+  auto-updating, with a **manual override**. Window = data-derived; distribution within it =
+  aspirational-linear (the window is a real constraint; the spread is the behavior we're shaping).
 - **No "about to drop off" for food** — that's workout-only. Food ticks down smoothly, resets
   each morning. Nutrition = within-today pace; Workouts = 7-day rolling volume (different time
   logic, intentional).
@@ -93,10 +97,18 @@ per-set value, e.g. Curls→biceps 1.0, Rows→biceps 0.5).
   indirect-heavy ones want less. Age 40 + surfing (delt/lat/leg fatigue) + lean-bulk surplus →
   aim MAV (productive middle), not MRV. Targets are in *effective sets* (Σ sets × contribution),
   which already folds in indirect work.
-- **Starting targets** (editable per muscle, tune by recovery/response):
-  side_delts 18, rear_delts 14, front_delts 8, lats 16, mid_back 14, upper_traps 8,
-  upper_chest 12, lower_chest 10, biceps 14, triceps_long 10, triceps_lateral 10, forearms 8,
-  quads 14, hamstrings 12, glutes 12, gastrocnemius 14, abs 12, obliques 8.
+- **Uniform target (~14 effective sets/wk for ALL muscles), NOT a hand-tuned per-muscle spread.**
+  Research establishes the *range* (10–20) but NOT precise per-muscle optima — those come from
+  practitioner heuristics (RP landmarks), not RCTs. An earlier per-muscle table was retracted:
+  it (a) inflated upper_chest circularly ("it lags") and (b) double-counted by lowering targets
+  for indirect-heavy muscles — wrong, because the contribution model already puts indirect work in
+  the COUNT. With a uniform target, indirect-heavy muscles (front_delts, traps) auto-hit target
+  from compound work = the system tells you they need no direct work; under-supported muscles
+  (side/rear delts, calves) sit low until trained directly. No guessing.
+- **Per-muscle targets editable** — the only science-endorsed individualization is your own
+  recovery/response feedback (bump up if always recovered + not growing; down if perpetually
+  fried). The gamified loop is the tuning instrument.
+- Open: uniform value — 12 (conservative) / 14 (default) / 16 (aggressive)?
 - **Hard 7-day rolling window, no decay** — set counts fully for 7 days then drops off; this is
   what enables the "about to expire tomorrow" gray preview. (Not recency-weighted — goal is fixed.)
 

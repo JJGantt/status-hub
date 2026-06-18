@@ -106,6 +106,7 @@ function dayBucketOf(ts) {
 }
 
 // ---- workout volume heatmap: per-day set counts laid out as week-columns (GitHub style) ----
+const MON = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 function buildWorkoutHeatmap(rows, weeks = 20) {
   const counts = {};
   for (const r of rows || []) { const d = String(r.occurred_at).slice(0, 10); counts[d] = (counts[d] || 0) + 1; }
@@ -113,18 +114,24 @@ function buildWorkoutHeatmap(rows, weeks = 20) {
   const anchor = new Date(today + 'T12:00:00Z');
   const dow = anchor.getUTCDay(); // 0=Sun .. 6=Sat
   const startMs = anchor.getTime() - dow * 86400000 - (weeks - 1) * 7 * 86400000;
-  const level = (c) => (c <= 0 ? 0 : c < 9 ? 1 : c < 16 ? 2 : c < 23 ? 3 : 4); // set-count buckets
-  const cols = [];
+  // self-scaling intensity: your busiest day = brightest, the rest scale relative to it
+  let maxCount = 0; for (const k in counts) if (k <= today && counts[k] > maxCount) maxCount = counts[k];
+  const level = (c) => (c <= 0 ? 0 : Math.min(4, Math.max(1, Math.ceil((4 * c) / (maxCount || 1)))));
+  const cols = [], months = [];
+  let prevMon = -1;
   for (let w = 0; w < weeks; w++) {
     const col = [];
     for (let d = 0; d < 7; d++) {
       const ds = new Date(startMs + (w * 7 + d) * 86400000).toISOString().slice(0, 10);
       const c = counts[ds] || 0;
-      col.push({ date: ds, count: c, level: ds > today ? -1 : level(c) }); // -1 = future (don't render)
+      col.push({ date: ds, count: c, level: ds > today ? -1 : level(c), today: ds === today });
     }
+    const m = Number(col[0].date.slice(5, 7)) - 1;       // month of this column's first day
+    months.push(m !== prevMon ? MON[m] : '');            // label only when the month changes
+    prevMon = m;
     cols.push(col);
   }
-  return { weeks: cols };
+  return { weeks: cols, months, maxCount };
 }
 
 // ---- assemble dashboard data ----
@@ -304,7 +311,12 @@ function dashboardHtml() {
 .vdrop{height:100%;background:repeating-linear-gradient(45deg,#4b5563,#4b5563 3px,#39414d 3px,#39414d 6px)}
 #body .bodysvg{width:100%;height:auto;max-height:520px;display:block;margin-top:4px}
 #body .bodysvg path{fill:#222a33;stroke:#0b0d10;stroke-width:0.25;transition:fill .4s ease}
-.heat{display:flex;gap:3px;overflow-x:auto;padding-top:2px}
+.hmonths{display:flex;gap:3px;font-size:9px;color:#8b96a5;margin-left:30px;height:13px;overflow:hidden}
+.hm{width:12px;flex:none;white-space:nowrap}
+.hbody{display:flex}
+.hdows{display:flex;flex-direction:column;gap:3px;width:30px;flex:none}
+.hd{height:12px;line-height:12px;font-size:9px;color:#8b96a5;text-align:right;padding-right:5px}
+.heat{display:flex;gap:3px;overflow-x:auto}
 .hcol{display:flex;flex-direction:column;gap:3px}
 .hcell{width:12px;height:12px;border-radius:2px;background:#2a313a;flex:none}
 .dot{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:8px;vertical-align:middle}
@@ -366,14 +378,20 @@ function render(s){
   '<div class=obars>'+obar('Calories',PM.calories,'')+obar('Protein',PM.protein_g,'g')+
    obar('Carbs',PM.carbs_g,'g')+obar('Fat',PM.fat_g,'g')+'</div>'+
   '<div class=pnote>eating window '+(P.window_label||'—')+' · rings show grams off pace (− behind, + over)</div>';
- // workout volume heatmap (GitHub-contribution style: week columns, cell = a day's set count)
- const H=s.heatmap||{weeks:[]};
+ // workout volume heatmap (GitHub-contribution style: month labels top, weekdays left, today outlined)
+ const H=s.heatmap||{weeks:[],months:[]};
  const HC=['#2a313a','#0e4429','#006d32','#26a641','#39d353']; // [0]=empty (visible vs the card bg)
- const hcells=(H.weeks||[]).map(col=>'<div class=hcol>'+col.map(d=>{
+ const monthRow=(H.months||[]).map(m=>'<div class=hm>'+m+'</div>').join('');
+ const grid=(H.weeks||[]).map(col=>'<div class=hcol>'+col.map(d=>{
    const bg=d.level<0?'transparent':HC[d.level];
-   return '<div class=hcell title="'+d.date+': '+d.count+' set'+(d.count===1?'':'s')+'" style="background:'+bg+'"></div>';
+   const out=d.today?';outline:1.5px solid #e8eaed;outline-offset:-1px':'';
+   return '<div class=hcell title="'+d.date+': '+d.count+' set'+(d.count===1?'':'s')+'" style="background:'+bg+out+'"></div>';
  }).join('')+'</div>').join('');
- document.getElementById('workouts').innerHTML='<h2>Workout Volume</h2><div class=heat>'+hcells+'</div>';
+ const dowLabels=['','Mon','','Wed','','Fri',''].map(x=>'<div class=hd>'+x+'</div>').join('');
+ document.getElementById('workouts').innerHTML='<h2>Workout Volume</h2>'+
+  '<div class=hmonths>'+monthRow+'</div>'+
+  '<div class=hbody><div class=hdows>'+dowLabels+'</div><div class=heat>'+grid+'</div></div>'+
+  '<div class=pnote>each square = a day · brighter = more sets · today outlined (newest, far right)</div>';
  // muscle volume gauges
  const V=s.volume||{};
  const vgroups=(V.groups||[]).map(g=>{

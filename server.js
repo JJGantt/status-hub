@@ -32,17 +32,23 @@ async function sb(path) {
 }
 
 // ---- date helpers (in the display timezone) ----
-// A "day" runs DAY_START_HOUR→DAY_START_HOUR local, matching the data-layer's
-// nutrition bucketing: a 1am snack counts toward the day that just ended.
+// A nutrition "day" runs DAY_START_HOUR→DAY_START_HOUR local time, so a late-night
+// snack (before 4am) counts toward the day that just ended. This is a display-only
+// window over the real occurred_at timestamps — storage is never touched, so changing
+// this one number instantly re-groups all history with no migration.
 const DAY_START_HOUR = 4;
 function localDate(d = new Date()) {
   return d.toLocaleDateString('en-CA', { timeZone: TZ }); // YYYY-MM-DD
 }
-function bucketToday() {
-  return localDate(new Date(Date.now() - DAY_START_HOUR * 3600000));
+// [start, end) occurred_at bounds for the nutrition day currently in progress.
+function nutritionWindow() {
+  const hh = String(DAY_START_HOUR).padStart(2, '0');
+  const dayStart = localDate(new Date(Date.now() - DAY_START_HOUR * 3600000)); // pre-4am → prior day
+  const dayEnd = localDate(new Date(Date.parse(dayStart + 'T12:00:00Z') + 86400000));
+  return { day: dayStart, start: `${dayStart}T${hh}:00:00`, end: `${dayEnd}T${hh}:00:00` };
 }
 function lastNDates(n) {
-  const today = bucketToday();
+  const today = localDate();
   const anchor = new Date(today + 'T12:00:00Z'); // noon-UTC anchor avoids day flips
   const out = [];
   for (let i = n - 1; i >= 0; i--) {
@@ -65,12 +71,13 @@ function categoryLabel(cats) {
 
 // ---- assemble dashboard data ----
 async function buildStatus() {
-  const today = bucketToday();
+  const win = nutritionWindow();
+  const today = win.day;
   const week = lastNDates(7);
 
   const [deviceRows, entries, targets, sessions] = await Promise.all([
     sb('device_status?select=*'),
-    sb(`nutrition_entries?date=eq.${today}&select=calories,protein_g,carbs_g,fat_g`),
+    sb(`nutrition_entries?occurred_at=gte.${win.start}&occurred_at=lt.${win.end}&select=calories,protein_g,carbs_g,fat_g`),
     sb('nutrition_targets?order=date.desc&limit=1'),
     sb(`workout_sessions?select=date,exercises(categories)&date=gte.${week[0]}&order=date.asc`),
   ]);

@@ -105,15 +105,26 @@ function dayBucketOf(ts) {
   return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
 }
 
-// ---- workout category label ----
-const cap = (s) => s.charAt(0).toUpperCase() + s.slice(1);
-function categoryLabel(cats) {
-  if (!cats || !cats.length) return null;
-  const ppl = ['push', 'pull', 'legs'].filter((c) => cats.includes(c));
-  const extra = cats.filter((c) => !['push', 'pull', 'legs'].includes(c));
-  const parts = ppl.length === 3 ? ['Full body'] : ppl.map(cap);
-  extra.forEach((c) => parts.push(cap(c)));
-  return parts.join(' / ') || null;
+// ---- workout volume heatmap: per-day set counts laid out as week-columns (GitHub style) ----
+function buildWorkoutHeatmap(rows, weeks = 20) {
+  const counts = {};
+  for (const r of rows || []) { const d = String(r.occurred_at).slice(0, 10); counts[d] = (counts[d] || 0) + 1; }
+  const today = localDate();
+  const anchor = new Date(today + 'T12:00:00Z');
+  const dow = anchor.getUTCDay(); // 0=Sun .. 6=Sat
+  const startMs = anchor.getTime() - dow * 86400000 - (weeks - 1) * 7 * 86400000;
+  const level = (c) => (c <= 0 ? 0 : c < 9 ? 1 : c < 16 ? 2 : c < 23 ? 3 : 4); // set-count buckets
+  const cols = [];
+  for (let w = 0; w < weeks; w++) {
+    const col = [];
+    for (let d = 0; d < 7; d++) {
+      const ds = new Date(startMs + (w * 7 + d) * 86400000).toISOString().slice(0, 10);
+      const c = counts[ds] || 0;
+      col.push({ date: ds, count: c, level: ds > today ? -1 : level(c) }); // -1 = future (don't render)
+    }
+    cols.push(col);
+  }
+  return { weeks: cols };
 }
 
 // ---- assemble dashboard data ----
@@ -122,15 +133,16 @@ async function buildStatus() {
   const today = win.day;
   const week = lastNDates(7);
   const histStart = localDate(new Date(Date.now() - 40 * 86400000)); // intake history for the maintenance trend
+  const heatStart = localDate(new Date(Date.now() - 140 * 86400000)); // ~20 weeks for the workout volume heatmap
 
-  const [deviceRows, entries, setRows, catRows, weightRows, histRows, muscleRows] = await Promise.all([
+  const [deviceRows, entries, setRows, weightRows, histRows, muscleRows, heatRows] = await Promise.all([
     sb('device_status?select=*'),
     sb(`nutrition_entries?occurred_at=gte.${win.start}&occurred_at=lt.${win.end}&select=calories,protein_g,carbs_g,fat_g`),
     sb(`sets?occurred_at=gte.${week[0]}T00:00:00&select=occurred_at,exercise,muscles_override`),
-    sb('exercise_catalog?select=name,categories'),
     sb('weight_log?select=date,weight_lbs&order=date.asc'),
     sb(`nutrition_entries?occurred_at=gte.${histStart}T00:00:00&select=occurred_at,calories`),
     sb('exercise_muscles?select=name,muscle,contribution'),
+    sb(`sets?occurred_at=gte.${heatStart}T00:00:00&select=occurred_at`),
   ]);
 
   const litter = (deviceRows || [])[0] || null;
@@ -143,20 +155,6 @@ async function buildStatus() {
     fat_g: Math.round(sum('fat_g')),
     target: null, // set to the dynamic goal once maintenance is computed below
   };
-
-  const catByName = {};
-  for (const c of catRows || []) catByName[String(c.name).toLowerCase()] = c.categories || [];
-  const byDay = {};
-  for (const s of setRows || []) {
-    const d = String(s.occurred_at).slice(0, 10);
-    const set = byDay[d] || new Set();
-    for (const c of (catByName[String(s.exercise).toLowerCase()] || [])) set.add(c);
-    byDay[d] = set;
-  }
-  const workouts = week.map((d) => ({
-    date: d,
-    label: byDay[d] ? categoryLabel([...byDay[d]]) : null,
-  }));
 
   // ---- adaptive maintenance estimate ----
   const intakeTotals = {};
@@ -184,7 +182,10 @@ async function buildStatus() {
   // ---- weekly per-muscle volume gauges ----
   const volume = computeVolume(setRows || [], muscleRows || [], week);
 
-  return { today, litter, nutrition, maintenance, pace: paceData, volume, workouts, generated_at: new Date().toISOString() };
+  // ---- workout volume heatmap (GitHub-contribution style) ----
+  const heatmap = buildWorkoutHeatmap(heatRows);
+
+  return { today, litter, nutrition, maintenance, pace: paceData, volume, heatmap, generated_at: new Date().toISOString() };
 }
 
 // ---- realtime push: recompute + push to all connected browsers on any DB change ----
@@ -303,18 +304,16 @@ function dashboardHtml() {
 .vdrop{height:100%;background:repeating-linear-gradient(45deg,#4b5563,#4b5563 3px,#39414d 3px,#39414d 6px)}
 #body .bodysvg{width:100%;height:auto;max-height:520px;display:block;margin-top:4px}
 #body .bodysvg path{fill:#222a33;stroke:#0b0d10;stroke-width:0.25;transition:fill .4s ease}
-.week{display:grid;grid-template-columns:repeat(7,1fr);gap:8px}
-.day{background:#0e1318;border-radius:10px;padding:10px 6px;text-align:center;border-top:3px solid #2a313a}
-.day .d{font-size:12px;color:#8b96a5}.day .w{font-size:13px;font-weight:600;margin-top:6px;min-height:32px;display:flex;align-items:center;justify-content:center}
-.none{color:#3a434f}
+.heat{display:flex;gap:3px;overflow-x:auto;padding-top:2px}
+.hcol{display:flex;flex-direction:column;gap:3px}
+.hcell{width:12px;height:12px;border-radius:2px;background:#161b22;flex:none}
 .dot{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:8px;vertical-align:middle}
 .foot{max-width:1100px;margin:14px auto 0;color:#566;font-size:12px;text-align:right}
 </style></head><body>
 <div class=grid>
   <div class=card id=litter><h2>Litter-Robot</h2><div class=big>…</div></div>
   <div class=card id=nutrition><h2>Today · Nutrition</h2><div class=big>…</div></div>
-  <div class=card id=maintenance><h2>Maintenance · Goal</h2><div class=big>…</div></div>
-  <div class=card id=workouts><h2>Workouts · Last 7 Days</h2><div>…</div></div>
+  <div class=card id=workouts><h2>Workout Volume</h2><div>…</div></div>
   <div class=card id=volume><h2>Muscle Volume · 7-Day</h2><div>…</div></div>
   <div class=card id=body><h2>Muscle Map · 7-Day</h2>${BODY_SVG}</div>
 </div>
@@ -325,7 +324,6 @@ const STATUS_LABEL={READY:'Ready',CLEAN_CYCLE:'Cleaning',CAT_SENSOR_INTERRUPTED:
  CLEAN_CYCLE_COMPLETE:'Cycle complete',DRAWER_FULL:'Drawer full!',OFFLINE:'Offline',OFF:'Off'};
 const STATUS_COLOR={READY:'#3b82f6',CLEAN_CYCLE:'#eab308',CAT_SENSOR_INTERRUPTED:'#f97316',
  PAUSED:'#f97316',DRAWER_FULL:'#ef4444',OFFLINE:'#ef4444',OFF:'#566'};
-const CAT_COLOR={push:'#ef4444',pull:'#22c55e',legs:'#3b82f6'};
 // hue gradient: t=0 green -> t=1 red, through real yellow at t=0.5
 function hueColor(t){const h=120*(1-Math.max(0,Math.min(1,t)));return 'hsl('+h+',85%,55%)';}
 function litterColor(v){return v==null?'#8b96a5':hueColor((90-v)/20);}  // 90% green -> 70% red
@@ -335,9 +333,6 @@ function ago(iso){if(!iso)return'—';const s=(Date.now()-new Date(iso))/1000;
 let last=null;
 function fmtFoot(){if(!last)return;const L=last.litter||{};
  document.getElementById('foot').textContent='litter updated '+ago(L.updated_at)+' · '+new Date().toLocaleTimeString();}
-function dayColor(label){if(!label)return'#2a313a';const l=label.toLowerCase();
- if(l.includes('full body'))return'#e8eaed';if(l.includes('push'))return CAT_COLOR.push;
- if(l.includes('pull'))return CAT_COLOR.pull;if(l.includes('legs'))return CAT_COLOR.legs;return'#a855f7';}
 function render(s){
  if(!s||s.error){return;}
  last=s;
@@ -371,28 +366,14 @@ function render(s){
   '<div class=obars>'+obar('Calories',PM.calories,'')+obar('Protein',PM.protein_g,'g')+
    obar('Carbs',PM.carbs_g,'g')+obar('Fat',PM.fat_g,'g')+'</div>'+
   '<div class=pnote>eating window '+(P.window_label||'—')+' · rings show grams off pace (− behind, + over)</div>';
- // maintenance
- const M=s.maintenance||{};const C=M.coverage||{};const live=M.source==='live';
- const tlw=M.trend_lb_per_week;
- const trendTxt=tlw==null?'—':(tlw>0?'▲ +':tlw<0?'▼ ':'± ')+tlw.toFixed(2)+' lb/wk';
- const trendCol=tlw==null?'#8b96a5':tlw>0?'#22c55e':tlw<0?'#f97316':'#8b96a5';
- let dataLine;
- if(live){dataLine='Live · measured from '+C.weighins+' weigh-ins & '+C.intake_days+' logged days'+(C.intake_days_excluded?' ('+C.intake_days_excluded+' under-logged ignored)':'');}
- else{const nW=Math.max(0,(C.need_weighins||0)-(C.weighins||0)),nI=Math.max(0,(C.need_intake_days||0)-(C.intake_days||0));
-  dataLine='Calibrating — using cold-start anchor. Need '+nW+' more weigh-in'+(nW===1?'':'s')+', '+nI+' more logged day'+(nI===1?'':'s')+'.';}
- document.getElementById('maintenance').innerHTML='<h2>Maintenance · Goal</h2>'+
-  '<div class=big>'+(M.maintenance||0)+'<span class=sub style="font-size:18px"> cal/day</span></div>'+
-  '<div class=sub>estimated maintenance · '+(live?'measured':'cold-start anchor')+'</div>'+
-  '<div class=row><span>Recommended goal</span><b>'+(M.target||0)+' cal <span class=sub style="font-weight:400">+'+(M.surplus||0)+'</span></b></div>'+
-  '<div class=row><span>Weight trend</span><b style="color:'+trendCol+'">'+trendTxt+'</b></div>'+
-  '<div class=sub style="margin-top:12px;'+(live?'':'color:#eab308')+'">'+dataLine+'</div>';
- // workouts
- const cells=(s.workouts||[]).map(d=>{
-  const dow=new Date(d.date+'T12:00:00Z').toLocaleDateString('en-US',{weekday:'short'});
-  const w=d.label?'<span class=w style="color:'+dayColor(d.label)+'">'+d.label+'</span>':'<span class="w none">—</span>';
-  return '<div class=day style="border-top-color:'+dayColor(d.label)+'"><div class=d>'+dow+'</div>'+w+'</div>';
- }).join('');
- document.getElementById('workouts').innerHTML='<h2>Workouts · Last 7 Days</h2><div class=week>'+cells+'</div>';
+ // workout volume heatmap (GitHub-contribution style: week columns, cell = a day's set count)
+ const H=s.heatmap||{weeks:[]};
+ const HC=['#161b22','#0e4429','#006d32','#26a641','#39d353'];
+ const hcells=(H.weeks||[]).map(col=>'<div class=hcol>'+col.map(d=>{
+   const bg=d.level<0?'transparent':HC[d.level];
+   return '<div class=hcell title="'+d.date+': '+d.count+' set'+(d.count===1?'':'s')+'" style="background:'+bg+'"></div>';
+ }).join('')+'</div>').join('');
+ document.getElementById('workouts').innerHTML='<h2>Workout Volume</h2><div class=heat>'+hcells+'</div>';
  // muscle volume gauges
  const V=s.volume||{};
  const vgroups=(V.groups||[]).map(g=>{

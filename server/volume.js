@@ -56,7 +56,7 @@ function volColor(ratio) {
   if (ratio <= 0) return hslToHex(0, 0.55, 0.32);                  // dark red = tracked but ZERO this week (a gap)
   if (ratio < 1) return hslToHex(120 * ratio, 0.7, 0.5);            // red(0) → green(120)
   const t = Math.max(0, Math.min(1, ratio - 1));                    // 1x→0, 2x→1 (capped)
-  return hslToHex(120 + (220 - 120) * t, 0.62, 0.55);              // green(120) → blue(220)
+  return hslToHex(120 + 110 * t, 0.6, 0.5 - 0.2 * t);              // solid green at target → DARKER blue as it overfills
 }
 
 // setRows: [{occurred_at, exercise, muscles_override}]; muscleRows: [{name, muscle, contribution}];

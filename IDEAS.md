@@ -10,7 +10,12 @@ payload; the clients only paint.
 
 ## Inbox (unsorted — drop raw ideas here)
 
--
+- **General-purpose calendar** (future): the workout "last 7 days" strip was replaced with a
+  GitHub-contribution-style volume heatmap (week columns, cell darkness = that day's set count).
+  Later we may want a fuller calendar that incorporates everything — food + workouts + weight +
+  whatever — a single general-purpose life calendar, not just workouts.
+- Maintenance/Goal panel removed from the hub UI (the maintenance computation still runs and
+  drives the dynamic nutrition target; just not displayed). Could re-add a compact version later.
 
 ---
 

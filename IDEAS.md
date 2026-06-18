@@ -141,6 +141,26 @@ hero of the workouts row.
   contained WebView of the same SVG as fallback.
 - **Interaction:** collapsed = worst-off muscle; expand = full body; tap a muscle = its history.
 
+## Workout data-model migration: flat timestamped sets  *(planned — do BEFORE volume gamification)*
+
+Abandon the session structure. Session grouping was only for push/pull/legs classification,
+which is now derived from exercises' muscles, so the session table is dead weight.
+
+- **New `sets` table** (flat, append-only): `occurred_at` (naive-local timestamp, like nutrition),
+  `exercise`, `weight_lbs`, `reps`. Drop `set_num` (derive order from timestamps). Optional
+  `muscles_override` only as a one-off escape hatch.
+- **Keep catalog normalized** (`exercise_catalog`, `exercise_muscles`) — muscles join at read
+  time, NOT baked per-set (the mapping is a model we'll refine; baking would freeze stale values).
+  Unknown exercises get a catalog entry created on the fly.
+- **Migrate history**: flatten sessions→exercises→exercise_sets into `sets`; past sets get
+  date-only timestamps (no intraday time / no rest-timer for history). Keep old tables until
+  verified, then drop ONLY with explicit OK.
+- **Rewrite `workouts.ts`**: volume = Σ(sets × contribution) over trailing window via join.
+- **MCP**: `log_set` (one/many, stamps now), catalog create/edit tools, rework list/get, retire
+  session tools, UPDATE tool descriptions for the new flow.
+- **Hub workout card** (server.js) must move to the new model too.
+- **Unlocks:** rest timer (time since last set) + workout-time signal for the nutrition curves.
+
 ## Notifications  *(designed, not built — needs APNs key + always-on sender)*
 
 Real APNs push (works with app closed). Prereq: a one-time APNs Auth Key (.p8) from the

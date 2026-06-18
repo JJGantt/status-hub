@@ -360,6 +360,32 @@ function ago(iso){if(!iso)return'—';const s=(Date.now()-new Date(iso))/1000;
 let last=null;
 function fmtFoot(){if(!last)return;const L=last.litter||{};
  document.getElementById('foot').textContent='litter updated '+ago(L.updated_at)+' · '+new Date().toLocaleTimeString();}
+// Map a vulovix body-map region id → one of our tracked muscles.
+function muscleForId(id){
+ if(id.indexOf('shoulder-front')===0)return'front_delts';
+ if(id.indexOf('shoulder-side')===0)return'side_delts';
+ if(id.indexOf('deltoid-rear')===0)return'rear_delts';
+ if(id.indexOf('biceps')===0)return'biceps';
+ if(id.indexOf('forearm')===0)return'forearms';
+ if(id.indexOf('chest-upper')===0)return'upper_chest';
+ if(id.indexOf('chest-lower')===0)return'lower_chest';
+ if(id.indexOf('abs-')===0)return'abs';
+ if(id.indexOf('obliques')===0)return'abs'; // asset mislabels the central six-pack as "obliques" — it's rectus abdominis
+ if(id.indexOf('traps-upper')===0)return'upper_traps';
+ if(id.indexOf('traps-mid')===0||id.indexOf('traps-lower')===0)return'mid_back';
+ if(id.indexOf('lats-')===0)return'lats';
+ if(id.indexOf('triceps-long')===0)return'triceps_long';
+ if(id.indexOf('triceps-lateral')===0)return'triceps_lateral';
+ if(id.indexOf('quads')===0)return'quads';
+ if(id.indexOf('gluteus')===0)return'glutes';
+ if(id.indexOf('calves')===0)return'gastrocnemius';
+ if(id.indexOf('tibialis')===0)return'gastrocnemius';
+ if(id.indexOf('hamstrings')===0)return'hamstrings';
+ if(id.indexOf('lower-back')===0)return'erectors';
+ if(id.indexOf('adductors')===0)return'adductors';
+ if(id.indexOf('hip-flexor')===0)return'hip_flexors';
+ return null;
+}
 function render(s){
  if(!s||s.error){return;}
  last=s;
@@ -422,9 +448,9 @@ function render(s){
   return '<div class=vgrp><h3>'+g.group+'</h3>'+rows+'</div>';
  }).join('');
  document.getElementById('volume').innerHTML='<h2>Muscle Volume · 7-Day</h2>'+vgroups;
- // body map: paint each region with its worst-of volume color
- const RG=(V.regions)||{};
- document.querySelectorAll('#body path[data-r]').forEach(p=>{const c=RG[p.getAttribute('data-r')];if(c)p.style.fill=c;});
+ // body map: paint each fine region by its mapped muscle's color
+ const MC=(V.muscle_colors)||{};
+ document.querySelectorAll('#body path[data-r]').forEach(p=>{const m=muscleForId(p.getAttribute('data-r'));if(m&&MC[m])p.style.fill=MC[m];});
  fmtFoot();
 }
 const es=new EventSource('/api/stream');

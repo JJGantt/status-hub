@@ -34,6 +34,20 @@ async function sb(path) {
   if (!r.ok) throw new Error(`supabase ${path} -> ${r.status}`);
   return r.json();
 }
+// Paginated read — Supabase caps responses at 1000 rows (db-max-rows), so page via Range.
+async function sbRange(path) {
+  const out = [];
+  for (let from = 0; ; from += 1000) {
+    const r = await fetch(`${SUPABASE_URL}/rest/v1/${path}`, {
+      headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}`, 'Range-Unit': 'items', Range: `${from}-${from + 999}` },
+    });
+    if (!r.ok && r.status !== 206) throw new Error(`supabase ${path} -> ${r.status}`);
+    const chunk = await r.json();
+    out.push(...chunk);
+    if (chunk.length < 1000) break;
+  }
+  return out;
+}
 async function sbWrite(path, method, body) {
   const r = await fetch(`${SUPABASE_URL}/rest/v1/${path}`, {
     method,
@@ -149,7 +163,7 @@ async function buildStatus() {
     sb('weight_log?select=date,weight_lbs&order=date.asc'),
     sb(`nutrition_entries?occurred_at=gte.${histStart}T00:00:00&select=occurred_at,calories`),
     sb('exercise_muscles?select=name,muscle,contribution'),
-    sb(`sets?occurred_at=gte.${heatStart}T00:00:00&select=occurred_at&limit=20000`),
+    sbRange(`sets?occurred_at=gte.${heatStart}T00:00:00&select=occurred_at&order=occurred_at`),
   ]);
 
   const litter = (deviceRows || [])[0] || null;

@@ -18,10 +18,13 @@ const SURPLUS = 150;             // lean-bulk surplus over maintenance (~0.25 lb
 const HALF_LIFE_DAYS = 21;       // older data is down-weighted on this half-life
 const ANCHOR_MAINTENANCE = 2500; // cold start: Mar–Apr empirical (~2470) ≈ age-40 Mifflin×1.4 (~2480)
 
-// Macro floors — protein & fat are physiological floors held roughly constant; carbs absorb
-// the dynamic calorie changes (matches the "carbs are the adjustable fuel" philosophy).
-const PROTEIN_G = 185;
-const FAT_G = 80;
+// Macro rules — protein & fat are anchored to BODYWEIGHT (they scale as you grow), carbs
+// absorb the dynamic calorie changes (training fuel — the macro with no physiological anchor).
+const PROTEIN_PER_LB = 1.0;    // top of the evidence-based range (Morton 2018); no hypertrophy benefit above this on a bulk
+const FAT_PER_LB = 0.4;        // floor in g/lb — comfortably above the hormonal minimum
+const FAT_MIN_PCT_CAL = 0.20;  // hard guard: fat never below 20% of calories (hormonal floor)
+const FALLBACK_WEIGHT = 171;   // used only if there are zero weigh-ins on record
+const round5 = (x) => Math.round(x / 5) * 5;
 
 // Under-report / outlier rejection on daily intake totals:
 const ABS_FLOOR_CAL = 1000;      // a logged day below this is treated as incomplete, not a real low day
@@ -114,15 +117,21 @@ function estimateMaintenance({ weights = [], intakeByDay = [], today }) {
   }
   if (maintenance == null) maintenance = ANCHOR_MAINTENANCE;
 
-  // Dynamic goal: calories track maintenance + surplus; protein/fat are floors; carbs flex.
+  // Dynamic goal: calories track maintenance + surplus. Protein/fat scale with measured
+  // bodyweight (latest weigh-in, or the trend's current-weight estimate when live); carbs flex.
+  const sortedW = [...weights].sort((a, b) => (a.date < b.date ? -1 : 1));
+  const bodyweight = (currentWeight != null ? currentWeight
+    : (sortedW.length ? sortedW[sortedW.length - 1].weight : null)) || FALLBACK_WEIGHT;
   const calories = Math.round((maintenance + SURPLUS) / 10) * 10;
-  const carbs_g = Math.max(0, Math.round((calories - PROTEIN_G * 4 - FAT_G * 9) / 4));
+  const protein_g = round5(PROTEIN_PER_LB * bodyweight);
+  const fat_g = round5(Math.max(FAT_PER_LB * bodyweight, (FAT_MIN_PCT_CAL * calories) / 9));
+  const carbs_g = Math.max(0, round5((calories - protein_g * 4 - fat_g * 9) / 4));
 
   return {
     source,                                   // 'live' | 'calibrating'
     maintenance: Math.round(maintenance),
     target: calories,
-    target_macros: { calories, protein_g: PROTEIN_G, carbs_g, fat_g: FAT_G },
+    target_macros: { calories, protein_g, carbs_g, fat_g },
     surplus: SURPLUS,
     trend_lb_per_week: slope != null ? Math.round(slope * 7 * 100) / 100 : null,
     current_weight: currentWeight != null ? Math.round(currentWeight * 10) / 10 : null,

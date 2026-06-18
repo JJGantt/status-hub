@@ -29,7 +29,7 @@ function hslToHex(h, s, l) {
 // none → grey; under target → red→green by ratio; at target → green; OVER → green→blue
 // (continuous, capped at ~2x target = full blue) so overage is visible, not hidden at "full".
 function volColor(ratio) {
-  if (ratio <= 0) return '#3a434f';
+  if (ratio <= 0) return hslToHex(0, 0.55, 0.32);                  // dark red = tracked but ZERO this week (a gap)
   if (ratio < 1) return hslToHex(120 * ratio, 0.7, 0.5);            // red(0) → green(120)
   const t = Math.max(0, Math.min(1, ratio - 1));                    // 1x→0, 2x→1 (capped)
   return hslToHex(120 + (220 - 120) * t, 0.62, 0.55);              // green(120) → blue(220)

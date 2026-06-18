@@ -306,7 +306,7 @@ function dashboardHtml() {
 #body .bodysvg path{fill:#222a33;stroke:#0b0d10;stroke-width:0.25;transition:fill .4s ease}
 .heat{display:flex;gap:3px;overflow-x:auto;padding-top:2px}
 .hcol{display:flex;flex-direction:column;gap:3px}
-.hcell{width:12px;height:12px;border-radius:2px;background:#161b22;flex:none}
+.hcell{width:12px;height:12px;border-radius:2px;background:#2a313a;flex:none}
 .dot{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:8px;vertical-align:middle}
 .foot{max-width:1100px;margin:14px auto 0;color:#566;font-size:12px;text-align:right}
 </style></head><body>
@@ -368,7 +368,7 @@ function render(s){
   '<div class=pnote>eating window '+(P.window_label||'—')+' · rings show grams off pace (− behind, + over)</div>';
  // workout volume heatmap (GitHub-contribution style: week columns, cell = a day's set count)
  const H=s.heatmap||{weeks:[]};
- const HC=['#161b22','#0e4429','#006d32','#26a641','#39d353'];
+ const HC=['#2a313a','#0e4429','#006d32','#26a641','#39d353']; // [0]=empty (visible vs the card bg)
  const hcells=(H.weeks||[]).map(col=>'<div class=hcol>'+col.map(d=>{
    const bg=d.level<0?'transparent':HC[d.level];
    return '<div class=hcell title="'+d.date+': '+d.count+' set'+(d.count===1?'':'s')+'" style="background:'+bg+'"></div>';

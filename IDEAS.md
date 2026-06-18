@@ -128,14 +128,16 @@ per-set value, e.g. Curls→biceps 1.0, Rows→biceps 0.5).
 - **Hard 7-day rolling window, no decay** — set counts fully for 7 days then drops off; this is
   what enables the "about to expire tomorrow" gray preview. (Not recency-weighted — goal is fixed.)
 
-## Body Heatmap — anatomical muscle visualization  *(v1 DONE — aggregated; side-delt/lat split pending)*
+## Body Heatmap — anatomical muscle visualization  *(DONE — full fidelity)*
 
-**Status:** live. Vendored MIT body SVG (react-native-body-highlighter, front+back, bodymap.js),
-worst-of region coloring computed server-side (volume.js REGION_MAP). v1 aggregates to the asset's
-coarse regions — side_delts folded into `deltoids`, lats into `upper-back`, chest/triceps not split.
-Next refinement (option 2): hand-edit the SVG to carve out side delts + lats as their own regions.
+**Status:** live with FULL per-muscle fidelity. Swapped to vulovix/body-muscles (Apache-2.0,
+NOTICE added) — 89-region front+back SVG (bodymap.js, viewBox 0 0 72 93) that separates every
+muscle we track: side delts, lats, upper/lower chest, both triceps heads all distinct. volume.js
+emits per-muscle colors (muscle_colors); client `muscleForId()` routes each region id → muscle.
+No aggregation/worst-of needed (the asset is finer than our taxonomy). Untracked anatomy
+(head/hands/feet/serratus/spine/etc.) stays base grey.
 
-(original notes below)
+(original design notes below)
 ## Body Heatmap — design notes
 
 A front/back anatomical diagram of the muscular system where each muscle is colored by its

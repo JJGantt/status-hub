@@ -8,7 +8,13 @@ struct StatusHubApp: App {
             RootView()
                 .environmentObject(model)
                 .preferredColorScheme(.dark)
+            #if os(macOS)
+                .frame(minWidth: 420, idealWidth: 460, minHeight: 640, idealHeight: 820)
+            #endif
         }
+        #if os(macOS)
+        .windowResizability(.contentSize)
+        #endif
     }
 }
 
@@ -36,9 +42,8 @@ struct LoginView: View {
             Color.bg.ignoresSafeArea()
             VStack(spacing: 16) {
                 Text("Status Hub").font(.largeTitle.bold())
-                SecureField("Password", text: $pw)
+                secureField
                     .textFieldStyle(.roundedBorder)
-                    .textInputAutocapitalization(.never)
                     .autocorrectionDisabled()
                     .frame(maxWidth: 280)
                 if let err { Text(err).foregroundColor(.red).font(.footnote) }
@@ -55,6 +60,15 @@ struct LoginView: View {
             }
             .padding()
         }
+    }
+    // SecureField with iOS-only autocapitalization disabled, guarded for macOS.
+    private var secureField: some View {
+        let field = SecureField("Password", text: $pw)
+        #if os(iOS)
+        return field.textInputAutocapitalization(.never)
+        #else
+        return field
+        #endif
     }
 }
 

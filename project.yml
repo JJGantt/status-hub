@@ -3,6 +3,7 @@ options:
   bundleIdPrefix: com.jaredgantt
   deploymentTarget:
     iOS: "17.0"
+    macOS: "13.0"
   createIntermediateGroups: true
 settings:
   base:
@@ -11,6 +12,9 @@ settings:
     CURRENT_PROJECT_VERSION: "1"
     CODE_SIGN_STYLE: Automatic
     SWIFT_VERSION: "5.0"
+    PRODUCT_BUNDLE_IDENTIFIER: com.jaredgantt.statushub
+    GENERATE_INFOPLIST_FILE: YES
+    INFOPLIST_KEY_CFBundleDisplayName: Status Hub
 targets:
   StatusHub:
     type: application
@@ -20,10 +24,18 @@ targets:
       - path: Sources
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: com.jaredgantt.statushub
-        GENERATE_INFOPLIST_FILE: YES
-        INFOPLIST_KEY_CFBundleDisplayName: Status Hub
         INFOPLIST_KEY_UILaunchScreen_Generation: YES
         INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents: YES
         TARGETED_DEVICE_FAMILY: "1"
         SUPPORTS_MACCATALYST: NO
+  StatusHubMac:
+    type: application
+    platform: macOS
+    deploymentTarget: "13.0"
+    sources:
+      - path: Sources
+    settings:
+      base:
+        PRODUCT_NAME: Status Hub
+        ENABLE_HARDENED_RUNTIME: YES
+        ENABLE_APP_SANDBOX: NO

@@ -107,7 +107,7 @@ function dayBucketOf(ts) {
 
 // ---- workout volume heatmap: per-day set counts laid out as week-columns (GitHub style) ----
 const MON = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-function buildWorkoutHeatmap(rows, weeks = 20) {
+function buildWorkoutHeatmap(rows, weeks = 18) {
   const counts = {};
   for (const r of rows || []) { const d = String(r.occurred_at).slice(0, 10); counts[d] = (counts[d] || 0) + 1; }
   const today = localDate();
@@ -149,7 +149,7 @@ async function buildStatus() {
     sb('weight_log?select=date,weight_lbs&order=date.asc'),
     sb(`nutrition_entries?occurred_at=gte.${histStart}T00:00:00&select=occurred_at,calories`),
     sb('exercise_muscles?select=name,muscle,contribution'),
-    sb(`sets?occurred_at=gte.${heatStart}T00:00:00&select=occurred_at`),
+    sb(`sets?occurred_at=gte.${heatStart}T00:00:00&select=occurred_at&limit=20000`),
   ]);
 
   const litter = (deviceRows || [])[0] || null;
@@ -316,7 +316,8 @@ function dashboardHtml() {
 .hbody{display:flex}
 .hdows{display:flex;flex-direction:column;gap:3px;width:30px;flex:none}
 .hd{height:12px;line-height:12px;font-size:9px;color:#8b96a5;text-align:right;padding-right:5px}
-.heat{display:flex;gap:3px;overflow-x:auto}
+#workouts{grid-column:1/-1}
+.heat{display:flex;gap:3px;overflow:hidden}
 .hcol{display:flex;flex-direction:column;gap:3px}
 .hcell{width:12px;height:12px;border-radius:2px;background:#2a313a;flex:none}
 .dot{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:8px;vertical-align:middle}

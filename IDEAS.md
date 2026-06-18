@@ -105,9 +105,17 @@ per-set value, e.g. Curls→biceps 1.0, Rows→biceps 0.5).
   the COUNT. With a uniform target, indirect-heavy muscles (front_delts, traps) auto-hit target
   from compound work = the system tells you they need no direct work; under-supported muscles
   (side/rear delts, calves) sit low until trained directly. No guessing.
-- **Per-muscle targets editable** — the only science-endorsed individualization is your own
-  recovery/response feedback (bump up if always recovered + not growing; down if perpetually
-  fried). The gamified loop is the tuning instrument.
+- **NO output/growth feedback loop (unlike nutrition).** Nutrition closes a loop because we
+  measure the output (weight); the workout system measures only the INPUT (sets logged) — we
+  do not measure muscle growth, so targets canNOT self-correct from response. Earlier claim
+  that "the gamified loop tunes the targets" was wrong (imported nutrition logic). Consequence:
+  the target must be a **fixed research-based prior**, and research doesn't support a per-muscle
+  spread → **uniform ~14**. A spread would encode guesses, not evidence.
+- **What the gamified loop actually does:** adherence + coverage — ensures you accumulate target
+  volume on every muscle and nothing drifts undertrained/lopsided. NOT target discovery.
+- **Targets editable, but tuning is manual/subjective** (mirror, perceived development, per-lift
+  strength trend as weak proxy) — not data-driven. Real per-muscle feedback would require a new
+  output signal (girth measurements, progress photos, strength-trend proxy) — possible future, not now.
 - Open: uniform value — 12 (conservative) / 14 (default) / 16 (aggressive)?
 - **Hard 7-day rolling window, no decay** — set counts fully for 7 days then drops off; this is
   what enables the "about to expire tomorrow" gray preview. (Not recency-weighted — goal is fixed.)

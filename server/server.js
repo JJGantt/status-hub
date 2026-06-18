@@ -358,6 +358,7 @@ function muscleForId(id){
  if(id.indexOf('gluteus')===0)return'glutes';
  if(id.indexOf('calves')===0)return'gastrocnemius';
  if(id.indexOf('hamstrings')===0)return'hamstrings';
+ if(id.indexOf('lower-back')===0)return'erectors';
  return null;
 }
 function render(s){

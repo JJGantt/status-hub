@@ -32,11 +32,17 @@ async function sb(path) {
 }
 
 // ---- date helpers (in the display timezone) ----
+// A "day" runs DAY_START_HOUR→DAY_START_HOUR local, matching the data-layer's
+// nutrition bucketing: a 1am snack counts toward the day that just ended.
+const DAY_START_HOUR = 4;
 function localDate(d = new Date()) {
   return d.toLocaleDateString('en-CA', { timeZone: TZ }); // YYYY-MM-DD
 }
+function bucketToday() {
+  return localDate(new Date(Date.now() - DAY_START_HOUR * 3600000));
+}
 function lastNDates(n) {
-  const today = localDate();
+  const today = bucketToday();
   const anchor = new Date(today + 'T12:00:00Z'); // noon-UTC anchor avoids day flips
   const out = [];
   for (let i = n - 1; i >= 0; i--) {
@@ -59,7 +65,7 @@ function categoryLabel(cats) {
 
 // ---- assemble dashboard data ----
 async function buildStatus() {
-  const today = localDate();
+  const today = bucketToday();
   const week = lastNDates(7);
 
   const [deviceRows, entries, targets, sessions] = await Promise.all([

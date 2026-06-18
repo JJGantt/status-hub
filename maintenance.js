@@ -18,11 +18,43 @@ const SURPLUS = 150;             // lean-bulk surplus over maintenance (~0.25 lb
 const HALF_LIFE_DAYS = 21;       // older data is down-weighted on this half-life
 const ANCHOR_MAINTENANCE = 2500; // cold start: Mar–Apr empirical (~2470) ≈ age-40 Mifflin×1.4 (~2480)
 
+// Macro floors — protein & fat are physiological floors held roughly constant; carbs absorb
+// the dynamic calorie changes (matches the "carbs are the adjustable fuel" philosophy).
+const PROTEIN_G = 185;
+const FAT_G = 80;
+
+// Under-report / outlier rejection on daily intake totals:
+const ABS_FLOOR_CAL = 1000;      // a logged day below this is treated as incomplete, not a real low day
+const LOW_K = 2.0;               // drop days below median - LOW_K*sigma (robust, MAD-based)
+const HIGH_K = 3.0;              // drop absurd-high days (double-logs) above median + HIGH_K*sigma
+
 // Data-sufficiency gate (cold-start -> live):
 const SPAN_DAYS = 35;            // recent span the gate inspects
 const MIN_WEIGHINS = 8;          // distinct weigh-ins needed within the span
-const MIN_INTAKE_DAYS = 10;      // distinct completed intake-logged days needed within the span
-const MAX_GAP_DAYS = 5;          // newest weigh-in and intake must be at least this fresh
+const MIN_INTAKE_DAYS = 10;      // distinct VALID intake-logged days needed within the span
+const MAX_GAP_DAYS = 5;          // newest weigh-in and valid intake must be at least this fresh
+
+function median(xs) {
+  if (!xs.length) return null;
+  const a = [...xs].sort((p, q) => p - q), n = a.length;
+  return n % 2 ? a[(n - 1) / 2] : (a[n / 2 - 1] + a[n / 2]) / 2;
+}
+
+// Reject under-reported (and absurd-high) days. Returns the kept days + how many were dropped.
+function rejectOutliers(days) {
+  if (days.length < 4) { // too few to model a distribution — apply only the absolute floor
+    const kept = days.filter((d) => d.calories >= ABS_FLOOR_CAL);
+    return { kept, excluded: days.length - kept.length };
+  }
+  const cals = days.map((d) => d.calories);
+  const med = median(cals);
+  const sigma = 1.4826 * median(cals.map((c) => Math.abs(c - med))); // MAD -> robust sigma
+  // sigma==0 (near-identical days) degenerates the band, so fall back to proportional bounds.
+  const lo = sigma > 0 ? Math.max(ABS_FLOOR_CAL, med - LOW_K * sigma) : Math.max(ABS_FLOOR_CAL, med * 0.5);
+  const hi = sigma > 0 ? med + HIGH_K * sigma : med * 1.75;
+  const kept = days.filter((d) => d.calories >= lo && d.calories <= hi);
+  return { kept, excluded: days.length - kept.length };
+}
 
 function dayIndex(dateStr, todayStr) {
   const a = Date.parse(dateStr + 'T12:00:00Z');
@@ -60,9 +92,9 @@ function weightedAvg(days, todayStr) {
 function estimateMaintenance({ weights = [], intakeByDay = [], today }) {
   const inSpan = (d) => dayIndex(d.date, today) >= -SPAN_DAYS;
   const recentW = weights.filter(inSpan);
-  const recentI = intakeByDay.filter(inSpan);
+  const { kept: recentI, excluded: intakeExcluded } = rejectOutliers(intakeByDay.filter(inSpan));
   const daysAgo = (arr) => arr.length ? Math.min(...arr.map((d) => -dayIndex(d.date, today))) : Infinity;
-  const lastW = daysAgo(recentW), lastI = daysAgo(recentI);
+  const lastW = daysAgo(recentW), lastI = daysAgo(recentI); // freshness uses only VALID intake days
 
   const enoughW = recentW.length >= MIN_WEIGHINS && lastW <= MAX_GAP_DAYS;
   const enoughI = recentI.length >= MIN_INTAKE_DAYS && lastI <= MAX_GAP_DAYS;
@@ -82,16 +114,22 @@ function estimateMaintenance({ weights = [], intakeByDay = [], today }) {
   }
   if (maintenance == null) maintenance = ANCHOR_MAINTENANCE;
 
+  // Dynamic goal: calories track maintenance + surplus; protein/fat are floors; carbs flex.
+  const calories = Math.round((maintenance + SURPLUS) / 10) * 10;
+  const carbs_g = Math.max(0, Math.round((calories - PROTEIN_G * 4 - FAT_G * 9) / 4));
+
   return {
     source,                                   // 'live' | 'calibrating'
     maintenance: Math.round(maintenance),
-    target: Math.round((maintenance + SURPLUS) / 10) * 10,
+    target: calories,
+    target_macros: { calories, protein_g: PROTEIN_G, carbs_g, fat_g: FAT_G },
     surplus: SURPLUS,
     trend_lb_per_week: slope != null ? Math.round(slope * 7 * 100) / 100 : null,
     current_weight: currentWeight != null ? Math.round(currentWeight * 10) / 10 : null,
     coverage: {
       weighins: recentW.length, need_weighins: MIN_WEIGHINS,
       intake_days: recentI.length, need_intake_days: MIN_INTAKE_DAYS,
+      intake_days_excluded: intakeExcluded,
       span_days: SPAN_DAYS,
       last_weighin_days_ago: isFinite(lastW) ? lastW : null,
       last_intake_days_ago: isFinite(lastI) ? lastI : null,

@@ -85,10 +85,9 @@ async function buildStatus() {
   const week = lastNDates(7);
   const histStart = localDate(new Date(Date.now() - 40 * 86400000)); // intake history for the maintenance trend
 
-  const [deviceRows, entries, targets, sessions, weightRows, histRows] = await Promise.all([
+  const [deviceRows, entries, sessions, weightRows, histRows] = await Promise.all([
     sb('device_status?select=*'),
     sb(`nutrition_entries?occurred_at=gte.${win.start}&occurred_at=lt.${win.end}&select=calories,protein_g,carbs_g,fat_g`),
-    sb('nutrition_targets?order=date.desc&limit=1'),
     sb(`workout_sessions?select=date,exercises(categories)&date=gte.${week[0]}&order=date.asc`),
     sb('weight_log?select=date,weight_lbs&order=date.asc'),
     sb(`nutrition_entries?occurred_at=gte.${histStart}T00:00:00&select=occurred_at,calories`),
@@ -102,7 +101,7 @@ async function buildStatus() {
     protein_g: Math.round(sum('protein_g')),
     carbs_g: Math.round(sum('carbs_g')),
     fat_g: Math.round(sum('fat_g')),
-    target: (targets || [])[0] || null,
+    target: null, // set to the dynamic goal once maintenance is computed below
   };
 
   const byDay = {};
@@ -127,6 +126,7 @@ async function buildStatus() {
   const intakeByDay = Object.entries(intakeTotals).map(([date, calories]) => ({ date, calories }));
   const weights = (weightRows || []).map((r) => ({ date: String(r.date).slice(0, 10), weight: Number(r.weight_lbs) }));
   const maintenance = estimateMaintenance({ weights, intakeByDay, today });
+  nutrition.target = maintenance.target_macros; // the macro goal is the live dynamic target
 
   return { today, litter, nutrition, maintenance, workouts, generated_at: new Date().toISOString() };
 }
@@ -274,7 +274,7 @@ function render(s){
  const trendTxt=tlw==null?'—':(tlw>0?'▲ +':tlw<0?'▼ ':'± ')+tlw.toFixed(2)+' lb/wk';
  const trendCol=tlw==null?'#8b96a5':tlw>0?'#22c55e':tlw<0?'#f97316':'#8b96a5';
  let dataLine;
- if(live){dataLine='Live · measured from '+C.weighins+' weigh-ins & '+C.intake_days+' logged days';}
+ if(live){dataLine='Live · measured from '+C.weighins+' weigh-ins & '+C.intake_days+' logged days'+(C.intake_days_excluded?' ('+C.intake_days_excluded+' under-logged ignored)':'');}
  else{const nW=Math.max(0,(C.need_weighins||0)-(C.weighins||0)),nI=Math.max(0,(C.need_intake_days||0)-(C.intake_days||0));
   dataLine='Calibrating — using cold-start anchor. Need '+nW+' more weigh-in'+(nW===1?'':'s')+', '+nI+' more logged day'+(nI===1?'':'s')+'.';}
  document.getElementById('maintenance').innerHTML='<h2>Maintenance · Goal</h2>'+

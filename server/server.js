@@ -4,6 +4,7 @@ const crypto = require('crypto');
 const { createClient } = require('@supabase/supabase-js');
 const WebSocket = require('ws');
 const { estimateMaintenance } = require('./maintenance');
+const pace = require('./pace');
 
 const PORT = process.env.PORT || 8080;
 const SUPABASE_URL = process.env.SUPABASE_URL;
@@ -85,6 +86,14 @@ function lastNDates(n) {
   }
   return out;
 }
+// Current time as minutes into the 4am-origin day, in the display timezone.
+function nowOffsetTZ() {
+  const f = new Intl.DateTimeFormat('en-US', { timeZone: TZ, hour12: false, hour: '2-digit', minute: '2-digit' });
+  const parts = f.formatToParts(new Date());
+  const hh = Number(parts.find((p) => p.type === 'hour').value) % 24;
+  const mm = Number(parts.find((p) => p.type === 'minute').value);
+  return pace.offsetFromHM(hh, mm);
+}
 // Which 4am-day a naive-local occurred_at timestamp belongs to (matches nutritionWindow()).
 function dayBucketOf(ts) {
   const m = String(ts).match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::(\d{2}))?/);
@@ -156,7 +165,17 @@ async function buildStatus() {
   nutrition.target = maintenance.target_macros; // the macro goal is the live dynamic target
   syncStoredTarget(maintenance.target_macros, today).catch((e) => console.error('target sync:', e.message));
 
-  return { today, litter, nutrition, maintenance, workouts, generated_at: new Date().toISOString() };
+  // ---- gamified intake pacing (drain bars) ----
+  const eatWindow = pace.deriveWindow((histRows || []).map((r) => r.occurred_at));
+  const paceData = pace.computePace({
+    consumed: { calories: nutrition.calories, protein_g: nutrition.protein_g, carbs_g: nutrition.carbs_g, fat_g: nutrition.fat_g },
+    goal: maintenance.target_macros,
+    window: eatWindow,
+    nowOff: nowOffsetTZ(),
+  });
+  paceData.window_label = pace.windowLabel(eatWindow);
+
+  return { today, litter, nutrition, maintenance, pace: paceData, workouts, generated_at: new Date().toISOString() };
 }
 
 // ---- realtime push: recompute + push to all connected browsers on any DB change ----
@@ -249,6 +268,12 @@ function dashboardHtml() {
 .macros{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:14px}
 .macro{background:#0e1318;border-radius:10px;padding:10px;text-align:center}
 .macro .n{font-size:22px;font-weight:700}.macro .l{font-size:12px;color:#8b96a5}
+.pbars{margin-top:14px;display:flex;flex-direction:column;gap:12px}
+.pbar-l{display:flex;justify-content:space-between;font-size:13px;margin-bottom:5px}
+.pbar-l .nm{color:#c7ced8;font-weight:600}.pbar-l .vl{color:#8b96a5}
+.pbar-track{position:relative;height:14px;background:#0e1318;border-radius:7px;overflow:hidden;border:1px solid #222a33}
+.pbar-fill{height:100%;border-radius:7px 0 0 7px;transition:width .4s ease,background .4s ease}
+.pnote{color:#8b96a5;font-size:12px;margin-top:12px}
 .week{display:grid;grid-template-columns:repeat(7,1fr);gap:8px}
 .day{background:#0e1318;border-radius:10px;padding:10px 6px;text-align:center;border-top:3px solid #2a313a}
 .day .d{font-size:12px;color:#8b96a5}.day .w{font-size:13px;font-weight:600;margin-top:6px;min-height:32px;display:flex;align-items:center;justify-content:center}
@@ -291,12 +316,18 @@ function render(s){
   '<div class=big><span class=dot style="background:'+(STATUS_COLOR[st]||'#8b96a5')+'"></span>'+(STATUS_LABEL[st]||st)+'</div>'+
   '<div class=row><span>Litter level</span><b style="color:'+litterColor(L.litter_level_pct)+'">'+(L.litter_level_pct!=null?L.litter_level_pct+'%':'—')+'</b></div>'+
   '<div class=row><span>Waste drawer</span><b style="color:'+drawerColor(L.waste_drawer_pct)+'">'+(L.waste_drawer_pct!=null?L.waste_drawer_pct+'%':'—')+'</b></div>';
- // nutrition
- const N=s.nutrition||{};const T=N.target||{};
- const macro=(n,v,t,u)=>'<div class=macro><div class=n>'+(v||0)+(u||'')+'</div><div class=l>'+n+(t!=null?' / '+t+(u||''):'')+'</div></div>';
+ // nutrition — gamified drain bars (full = on/ahead of pace, drains green->red as you fall behind)
+ const P=s.pace||{};const PM=P.macros||{};
+ const pbar=(nm,m,unit)=>{if(!m)return'';
+  const fillW=Math.round((m.fill||0)*100);
+  return '<div class=pbar><div class=pbar-l><span class=nm>'+nm+'</span>'+
+   '<span class=vl>'+(m.consumed||0)+(unit||'')+' / '+(m.goal||0)+(unit||'')+'</span></div>'+
+   '<div class=pbar-track><div class=pbar-fill style="width:'+fillW+'%;background:'+m.color+'"></div></div></div>';};
  document.getElementById('nutrition').innerHTML='<h2>Today · Nutrition</h2>'+
-  '<div class=big>'+(N.calories||0)+'<span class=sub style="font-size:18px"> '+(T.calories!=null?'/ '+T.calories:'')+' cal</span></div>'+
-  '<div class=macros>'+macro('Protein',N.protein_g,T.protein_g,'g')+macro('Carbs',N.carbs_g,T.carbs_g,'g')+macro('Fat',N.fat_g,T.fat_g,'g')+'</div>';
+  '<div class=pbars>'+pbar('Calories',PM.calories,'')+pbar('Protein',PM.protein_g,'g')+
+   pbar('Carbs',PM.carbs_g,'g')+pbar('Fat',PM.fat_g,'g')+'</div>'+
+  '<div class=pnote>eating window '+(P.window_label||'—')+' · '+
+   (P.fraction!=null?Math.round(P.fraction*100)+'% through the day':'')+'</div>';
  // maintenance
  const M=s.maintenance||{};const C=M.coverage||{};const live=M.source==='live';
  const tlw=M.trend_lb_per_week;

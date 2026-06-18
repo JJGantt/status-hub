@@ -128,7 +128,15 @@ per-set value, e.g. Curls→biceps 1.0, Rows→biceps 0.5).
 - **Hard 7-day rolling window, no decay** — set counts fully for 7 days then drops off; this is
   what enables the "about to expire tomorrow" gray preview. (Not recency-weighted — goal is fixed.)
 
-## Body Heatmap — anatomical muscle visualization  *(planned — ambitious, feasible)*
+## Body Heatmap — anatomical muscle visualization  *(v1 DONE — aggregated; side-delt/lat split pending)*
+
+**Status:** live. Vendored MIT body SVG (react-native-body-highlighter, front+back, bodymap.js),
+worst-of region coloring computed server-side (volume.js REGION_MAP). v1 aggregates to the asset's
+coarse regions — side_delts folded into `deltoids`, lats into `upper-back`, chest/triceps not split.
+Next refinement (option 2): hand-edit the SVG to carve out side delts + lats as their own regions.
+
+(original notes below)
+## Body Heatmap — design notes
 
 A front/back anatomical diagram of the muscular system where each muscle is colored by its
 weekly volume ratio. Glance to see what's under-hit ("oh fuck, that's deep red"). Becomes the

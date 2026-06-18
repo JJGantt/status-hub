@@ -348,7 +348,7 @@ function muscleForId(id){
  if(id.indexOf('chest-upper')===0)return'upper_chest';
  if(id.indexOf('chest-lower')===0)return'lower_chest';
  if(id.indexOf('abs-')===0)return'abs';
- if(id.indexOf('obliques')===0)return'obliques';
+ if(id.indexOf('obliques')===0)return'abs'; // asset mislabels the upper six-pack as "obliques"; it's rectus abdominis
  if(id.indexOf('traps-upper')===0)return'upper_traps';
  if(id.indexOf('traps-mid')===0||id.indexOf('traps-lower')===0)return'mid_back';
  if(id.indexOf('lats-')===0)return'lats';

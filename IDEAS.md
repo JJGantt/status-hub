@@ -36,6 +36,50 @@ Open decisions:
 
 ---
 
+## UI Structure: Expandable Rows  *(planned — replaces the card grid)*
+
+Move from little filling cards to **thick rows**, each progressively expandable. Applies to
+web + iOS + macOS.
+
+- **Collapsed row:** all the basic info currently on the card.
+- **Expand 1:** historical look-back (default 1 week).
+- **Expand 2:** granular detail (individual entries / per-muscle breakdown).
+- Look-back applies to *everything*, expandable out to **all data + aggregations** (not just a week).
+
+## Nutrition Row  *(planned)*
+
+- **Collapsed:** calories consumed / goal, plus protein / carbs / fat consumed / goal — all in
+  the one row.
+- **Maintenance folded in** (no separate card): show the goal (e.g. 2650) and indicate inline
+  that it's a **+150 surplus**, so maintenance is derivable in-head.
+- **Editable surplus** — tapping the surplus lets me change it (this is the first *write*
+  interaction; see Infrastructure note).
+- **Expand 1:** previous days — calories + macros hit each day.
+- **Expand 2:** individual entries — exactly what I ate and when.
+
+## Workouts — Gamified Volume (sets per muscle)  *(planned — big edit)*
+
+Gamify weekly training volume **by sets per muscle**, using the existing
+`exercise_muscles(name, muscle, contribution)` map (24 exercises → 18 muscles; contribution =
+per-set value, e.g. Curls→biceps 1.0, Rows→biceps 0.5).
+
+- **Weekly volume per muscle** = Σ (sets × contribution) over a 7-day look-back.
+- **Target ≈ 20 sets/muscle/week** (TBD — discuss the right number; may vary by muscle).
+- **Progress bar per muscle**: 10/20 → 50%. Doing sets fills it; as days age out of the 7-day
+  window, volume drops back off.
+- **Forthcoming-decrease indicator**: a grayed portion of the bar showing sets about to expire
+  *tomorrow* (because they fall out of the look-back). Lets me decide to refill tomorrow or
+  **overfill today** to keep the muscle steady.
+- **Goal = keep every muscle steadily hit** near target, not spiky.
+- Expandable per muscle (which exercises contributed, when).
+- 18 muscles tracked: abs, biceps, forearms, front_delts, gastrocnemius, glutes, hamstrings,
+  lats, lower_chest, mid_back, obliques, quads, rear_delts, side_delts, triceps_lateral,
+  triceps_long, upper_chest, upper_traps.
+
+Open decisions:
+- Target sets per muscle (global ~20? per-muscle tuning?).
+- Look-back exactly 7 days, or recency-weighted like the nutrition pace curve?
+
 ## Notifications  *(designed, not built — needs APNs key + always-on sender)*
 
 Real APNs push (works with app closed). Prereq: a one-time APNs Auth Key (.p8) from the
@@ -60,6 +104,10 @@ Open decisions:
 - **Monorepo consolidation** (proposed): fold `status-hub-ios` into `status-hub/apps/`, move
   server to `status-hub/server/`, repoint Fly deploy. One repo, atomic cross-cutting changes.
 - **App icon** — both apps still use the default placeholder.
+- **Write actions** — the editable surplus is the first *write* from the clients. Today the
+  hub is read-only display. Need: a settings store (Supabase, e.g. `surplus`), a write endpoint
+  on the hub (auth'd via the same token), and `maintenance.js` reading surplus from there
+  instead of the hardcoded const. Opens the door to other in-app edits later.
 
 ---
 

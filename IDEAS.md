@@ -116,7 +116,9 @@ per-set value, e.g. Curls→biceps 1.0, Rows→biceps 0.5).
 - **Targets editable, but tuning is manual/subjective** (mirror, perceived development, per-lift
   strength trend as weak proxy) — not data-driven. Real per-muscle feedback would require a new
   output signal (girth measurements, progress photos, strength-trend proxy) — possible future, not now.
-- Open: uniform value — 12 (conservative) / 14 (default) / 16 (aggressive)?
+- **LOCKED: default 14 effective sets/week for every muscle, each independently adjustable.**
+  Implementation: per-muscle target config (Supabase, defaults to 14); adjusting a muscle is a
+  write action (same pattern as the editable surplus).
 - **Hard 7-day rolling window, no decay** — set counts fully for 7 days then drops off; this is
   what enables the "about to expire tomorrow" gray preview. (Not recency-weighted — goal is fixed.)
 

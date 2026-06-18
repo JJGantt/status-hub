@@ -327,12 +327,12 @@ function render(s){
  const ring=(glyph,m)=>{if(!m)return'';
   const base=(m.ring_base||0)*RC, over=(m.ring_over||0)*RC, dev=m.dev_g||0;
   const sign=dev>0?'+':'', numCol=dev<0?'#f87171':dev>0?(m.over_color||'#f59e0b'):'#22c55e';
-  const arc=(len,col)=>'<circle cx=40 cy=40 r=34 fill=none stroke="'+col+'" stroke-width=7 stroke-dasharray="'+len+' '+(RC-len)+'" stroke-linecap=round transform="rotate(-90 40 40)"/>';
-  return '<div class=ring><svg viewBox="0 0 80 80" width=82 height=82>'+
-   '<circle cx=40 cy=40 r=34 fill=none stroke="#0e1318" stroke-width=7/>'+
+  const arc=(len,col)=>'<circle cx="40" cy="40" r="34" fill="none" stroke="'+col+'" stroke-width="7" stroke-dasharray="'+len+' '+(RC-len)+'" stroke-linecap="round" transform="rotate(-90 40 40)" />';
+  return '<div class="ring"><svg viewBox="0 0 80 80" width="82" height="82">'+
+   '<circle cx="40" cy="40" r="34" fill="none" stroke="#0e1318" stroke-width="7" />'+
    arc(base,m.base_color)+(over>0?arc(over,m.over_color):'')+
-   '<text x=40 y=37 text-anchor=middle class=rg>'+glyph+'</text>'+
-   '<text x=40 y=54 text-anchor=middle class=rd fill="'+numCol+'">'+sign+dev+'g</text>'+
+   '<text x="40" y="37" text-anchor="middle" class="rg">'+glyph+'</text>'+
+   '<text x="40" y="54" text-anchor="middle" class="rd" fill="'+numCol+'">'+sign+dev+'g</text>'+
    '</svg></div>';};
  const obar=(nm,m,unit)=>{if(!m)return'';
   const pct=Math.min(1,m.progress||0)*100, over=Math.max(0,(m.progress||0)-1), overpct=Math.min(1,over)*100;

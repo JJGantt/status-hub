@@ -360,6 +360,8 @@ function muscleForId(id){
  if(id.indexOf('tibialis')===0)return'gastrocnemius'; // shin reads visually as lower-leg/calf; not tracked separately
  if(id.indexOf('hamstrings')===0)return'hamstrings';
  if(id.indexOf('lower-back')===0)return'erectors';
+ if(id.indexOf('adductors')===0)return'adductors';
+ if(id.indexOf('hip-flexor')===0)return'hip_flexors';
  return null;
 }
 function render(s){

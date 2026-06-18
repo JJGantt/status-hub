@@ -31,6 +31,33 @@ async function sb(path) {
   if (!r.ok) throw new Error(`supabase ${path} -> ${r.status}`);
   return r.json();
 }
+async function sbWrite(path, method, body) {
+  const r = await fetch(`${SUPABASE_URL}/rest/v1/${path}`, {
+    method,
+    headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  if (!r.ok) throw new Error(`supabase ${method} ${path} -> ${r.status}`);
+}
+
+// Keep the stored nutrition_targets row in sync with the hub's live dynamic goal so the
+// MCP (which reads that row) and the hub always agree. Writes only when the value changes;
+// one row per day (updates today's row, else inserts). Fire-and-forget from buildStatus.
+let lastSyncedTarget = null;
+async function syncStoredTarget(m, today) {
+  if (!m) return;
+  const key = `${m.calories}/${m.protein_g}/${m.carbs_g}/${m.fat_g}`;
+  if (key === lastSyncedTarget) return;
+  const rows = await sb(`nutrition_targets?date=eq.${today}&select=id,calories,protein_g,carbs_g,fat_g`);
+  const vals = { calories: m.calories, protein_g: m.protein_g, carbs_g: m.carbs_g, fat_g: m.fat_g };
+  const existing = (rows || [])[0];
+  if (existing && existing.calories === vals.calories && existing.protein_g === vals.protein_g
+      && existing.carbs_g === vals.carbs_g && existing.fat_g === vals.fat_g) { lastSyncedTarget = key; return; }
+  const logged_at = new Date().toISOString();
+  if (existing) await sbWrite(`nutrition_targets?id=eq.${existing.id}`, 'PATCH', { ...vals, logged_at });
+  else await sbWrite('nutrition_targets', 'POST', { ...vals, date: today, logged_at });
+  lastSyncedTarget = key;
+}
 
 // ---- date helpers (in the display timezone) ----
 // A nutrition "day" runs DAY_START_HOUR→DAY_START_HOUR local time, so a late-night
@@ -127,6 +154,7 @@ async function buildStatus() {
   const weights = (weightRows || []).map((r) => ({ date: String(r.date).slice(0, 10), weight: Number(r.weight_lbs) }));
   const maintenance = estimateMaintenance({ weights, intakeByDay, today });
   nutrition.target = maintenance.target_macros; // the macro goal is the live dynamic target
+  syncStoredTarget(maintenance.target_macros, today).catch((e) => console.error('target sync:', e.message));
 
   return { today, litter, nutrition, maintenance, workouts, generated_at: new Date().toISOString() };
 }

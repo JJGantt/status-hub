@@ -6,6 +6,7 @@ const WebSocket = require('ws');
 const { estimateMaintenance } = require('./maintenance');
 const pace = require('./pace');
 const { computeVolume } = require('./volume');
+const BODY_SVG = require('./bodymap');
 
 const PORT = process.env.PORT || 8080;
 const SUPABASE_URL = process.env.SUPABASE_URL;
@@ -300,6 +301,8 @@ function dashboardHtml() {
 .vtrack{display:flex;height:10px;background:#0e1318;border-radius:5px;overflow:hidden;border:1px solid #222a33}
 .vstable{height:100%;transition:width .4s ease}
 .vdrop{height:100%;background:repeating-linear-gradient(45deg,#4b5563,#4b5563 3px,#39414d 3px,#39414d 6px)}
+#body .bodysvg{width:100%;height:auto;max-height:520px;display:block;margin-top:4px}
+#body .bodysvg path{fill:#222a33;stroke:#0b0d10;stroke-width:0.6;transition:fill .4s ease}
 .week{display:grid;grid-template-columns:repeat(7,1fr);gap:8px}
 .day{background:#0e1318;border-radius:10px;padding:10px 6px;text-align:center;border-top:3px solid #2a313a}
 .day .d{font-size:12px;color:#8b96a5}.day .w{font-size:13px;font-weight:600;margin-top:6px;min-height:32px;display:flex;align-items:center;justify-content:center}
@@ -313,6 +316,7 @@ function dashboardHtml() {
   <div class=card id=maintenance><h2>Maintenance · Goal</h2><div class=big>…</div></div>
   <div class=card id=workouts><h2>Workouts · Last 7 Days</h2><div>…</div></div>
   <div class=card id=volume><h2>Muscle Volume · 7-Day</h2><div>…</div></div>
+  <div class=card id=body><h2>Muscle Map · 7-Day</h2>${BODY_SVG}</div>
 </div>
 <div class=foot id=foot></div>
 <script>
@@ -402,6 +406,9 @@ function render(s){
  }).join('');
  document.getElementById('volume').innerHTML='<h2>Muscle Volume · 7-Day</h2>'+vgroups+
   '<div class=pnote>target '+(V.target_default||14)+' sets/muscle/wk · striped = drops off tomorrow</div>';
+ // body map: paint each region with its worst-of volume color
+ const RG=(V.regions)||{};
+ for(const slug in RG){document.querySelectorAll('#body path[data-r="'+slug+'"]').forEach(p=>{p.style.fill=RG[slug];});}
  fmtFoot();
 }
 const es=new EventSource('/api/stream');

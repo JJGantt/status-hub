@@ -181,7 +181,8 @@ function getCookie(req, name) {
   const m = (req.headers.cookie || '').match(new RegExp('(?:^|; )' + name + '=([^;]+)'));
   return m ? decodeURIComponent(m[1]) : null;
 }
-const authed = (req) => getCookie(req, 'hub') === TOKEN;
+// Web uses the 'hub' cookie; the native app sends the same derived token as a header.
+const authed = (req) => getCookie(req, 'hub') === TOKEN || req.headers['x-hub-token'] === TOKEN;
 
 app.get('/healthz', (req, res) => res.send('ok'));  // public (before auth gate)
 app.get('/login', (req, res) => res.type('html').send(loginHtml()));

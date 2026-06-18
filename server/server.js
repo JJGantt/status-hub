@@ -256,6 +256,18 @@ app.get('/api/status', async (req, res) => {
   catch (e) { res.status(500).json({ error: String(e.message || e) }); }
 });
 
+// A single day's sets, grouped by exercise — for the heatmap day click-through.
+app.get('/api/workout-day', async (req, res) => {
+  try {
+    const date = String(req.query.date || '').slice(0, 10);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return res.status(400).json({ error: 'bad date' });
+    const rows = await sbRange(`sets?occurred_at=gte.${date}T00:00:00&occurred_at=lte.${date}T23:59:59&select=occurred_at,exercise,weight_lbs,reps&order=occurred_at`);
+    const order = [], byEx = {};
+    for (const r of rows) { if (!byEx[r.exercise]) { byEx[r.exercise] = []; order.push(r.exercise); } byEx[r.exercise].push({ weight_lbs: r.weight_lbs, reps: r.reps }); }
+    res.json({ date, total: rows.length, exercises: order.map((n) => ({ name: n, sets: byEx[n] })) });
+  } catch (e) { res.status(500).json({ error: String(e.message || e) }); }
+});
+
 // Server-Sent Events: push assembled status to the browser, instantly on any DB change.
 app.get('/api/stream', async (req, res) => {
   res.set({ 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache',
@@ -334,6 +346,13 @@ function dashboardHtml() {
 .heat{display:flex;gap:3px;overflow:hidden}
 .hcol{display:flex;flex-direction:column;gap:3px}
 .hcell{width:12px;height:12px;border-radius:2px;background:#2a313a;flex:none}
+#daymodal{display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);place-items:center;z-index:50;padding:18px}
+.modal-card{background:#151a20;border:1px solid #222a33;border-radius:14px;padding:22px;max-width:440px;width:100%;max-height:80vh;overflow:auto;position:relative}
+.modal-close{position:absolute;top:12px;right:16px;color:#8b96a5;cursor:pointer;font-size:18px}
+.modal-card h3{margin:0 0 12px;font-size:16px}
+.dex{padding:9px 0;border-top:1px solid #222a33}
+.dex-n{font-weight:600;margin-bottom:5px}
+.dset{display:inline-block;background:#0e1318;border-radius:6px;padding:3px 8px;margin:2px 5px 2px 0;font-size:12px;color:#c7ced8}
 .dot{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:8px;vertical-align:middle}
 .foot{max-width:1100px;margin:14px auto 0;color:#566;font-size:12px;text-align:right}
 </style></head><body>
@@ -345,6 +364,7 @@ function dashboardHtml() {
   <div class=card id=body><h2>Muscle Map · 7-Day</h2>${BODY_SVG}</div>
 </div>
 <div class=foot id=foot></div>
+<div id=daymodal><div class=modal-card><div class=modal-close id=dayclose>✕</div><div id=daycontent></div></div></div>
 <script>
 const STATUS_LABEL={READY:'Ready',CLEAN_CYCLE:'Cleaning',CAT_SENSOR_INTERRUPTED:'Stuck (auto-resuming)',
  PAUSED:'Paused',CAT_DETECTED:'Cat detected',CAT_SENSOR_TIMING:'Waiting (post-cat)',
@@ -426,7 +446,9 @@ function render(s){
  const grid=(H.weeks||[]).map(col=>'<div class=hcol>'+col.map(d=>{
    const bg=d.level<0?'transparent':HC[d.level];
    const out=d.today?';outline:1.5px solid #e8eaed;outline-offset:-1px':'';
-   return '<div class=hcell title="'+d.date+': '+d.count+' set'+(d.count===1?'':'s')+'" style="background:'+bg+out+'"></div>';
+   const click=d.level>=0?' data-date="'+d.date+'"':'';
+   const cur=d.level>=0?';cursor:pointer':'';
+   return '<div class=hcell'+click+' title="'+d.date+': '+d.count+' set'+(d.count===1?'':'s')+'" style="background:'+bg+out+cur+'"></div>';
  }).join('')+'</div>').join('');
  const dowLabels=['','Mon','','Wed','','Fri',''].map(x=>'<div class=hd>'+x+'</div>').join('');
  document.getElementById('workouts').innerHTML='<h2>Workout Volume</h2>'+
@@ -456,5 +478,19 @@ function render(s){
 const es=new EventSource('/api/stream');
 es.onmessage=e=>{try{render(JSON.parse(e.data));}catch(_){}};
 setInterval(fmtFoot,1000);  // tick the "updated X ago" live against the real clock
+async function openDay(date){
+ let j; try{ j=await (await fetch('/api/workout-day?date='+date)).json(); }catch(_){ return; }
+ const dd=document.getElementById('daycontent');
+ if(!j.exercises||!j.exercises.length){ dd.innerHTML='<h3>'+date+'</h3><div class=sub>No sets logged.</div>'; }
+ else{ let h='<h3>'+date+' · '+j.total+' sets</h3>';
+  for(const ex of j.exercises){ h+='<div class=dex><div class=dex-n>'+ex.name+'</div>'+ex.sets.map(s=>'<span class=dset>'+(s.weight_lbs===0?'BW':(s.weight_lbs+' lb'))+' × '+s.reps+'</span>').join('')+'</div>'; }
+  dd.innerHTML=h; }
+ document.getElementById('daymodal').style.display='grid';
+}
+document.addEventListener('click',e=>{
+ const cell=e.target.closest('.hcell');
+ if(cell&&cell.dataset.date){ openDay(cell.dataset.date); return; }
+ if(e.target.id==='daymodal'||e.target.id==='dayclose'){ document.getElementById('daymodal').style.display='none'; }
+});
 </script></body></html>`;
 }

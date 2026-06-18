@@ -80,6 +80,25 @@ Open decisions:
 - Target sets per muscle (global ~20? per-muscle tuning?).
 - Look-back exactly 7 days, or recency-weighted like the nutrition pace curve?
 
+## Body Heatmap — anatomical muscle visualization  *(planned — ambitious, feasible)*
+
+A front/back anatomical diagram of the muscular system where each muscle is colored by its
+weekly volume ratio. Glance to see what's under-hit ("oh fuck, that's deep red"). Becomes the
+hero of the workouts row.
+
+- **Mechanism:** SVG with one path per muscle, `id` = our muscle name. Hub computes a color per
+  muscle (server-computes principle); the diagram paints by id. Front + back views cover all 18.
+- **Color scale (diverging):** under-target → red, on-target → green, well-over → cool tint
+  (blue/violet) so over-hit reads differently. Opacity/dimming for barely-touched. Color, not
+  partial-fill (fill-height looks gimmicky).
+- **Asset is the real work (one-time):** need an SVG detailed/labeled to our muscles. Our list is
+  fine-grained (triceps_lateral/long, upper/lower chest, front/side/rear delts); stock body-maps
+  are coarser → likely **aggregate for the visual** (color "triceps" by long+lateral combined)
+  while the fine data stays in the expandable detail. Source from open-licensed SVG + hand-label.
+- **Rendering:** web = inline SVG (trivial). iOS/macOS = SVGView (MIT, native) preferred, or a
+  contained WebView of the same SVG as fallback.
+- **Interaction:** collapsed = worst-off muscle; expand = full body; tap a muscle = its history.
+
 ## Notifications  *(designed, not built — needs APNs key + always-on sender)*
 
 Real APNs push (works with app closed). Prereq: a one-time APNs Auth Key (.p8) from the

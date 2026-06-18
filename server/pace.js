@@ -65,23 +65,32 @@ function hslToHex(h, s, l) {
   const to = (v) => Math.round((v + m) * 255).toString(16).padStart(2, '0');
   return '#' + to(r) + to(g) + to(b);
 }
-// ratio >= 1 -> green; drains to red by ratio ~0.4
-function paceColor(ratio) {
-  const t = Math.max(0, Math.min(1, (1 - ratio) / 0.6));
+// Deviation is normalized by the FIXED daily goal (not by expected), so a given amount of
+// food moves the gauge the same regardless of time of day. devNorm = (consumed - expected)/goal.
+const COLOR_SCALE = 0.4; // devNorm magnitude that saturates the color
+function underColor(devNorm) { // devNorm <= 0: green (on pace) -> red (behind)
+  const t = Math.max(0, Math.min(1, -devNorm / COLOR_SCALE));
   return hslToHex(120 * (1 - t), 0.75, 0.5);
+}
+function overColor(devNorm) {  // devNorm > 0: amber -> orange (over pace = trending to overshoot)
+  const t = Math.max(0, Math.min(1, devNorm / COLOR_SCALE));
+  return hslToHex(45 - 20 * t, 0.9, 0.5);
 }
 
 function macroPace(consumed, goal, frac) {
   const expected = goal * frac;
-  const ratio = expected > 0 ? consumed / expected : (consumed > 0 ? 1.5 : 1); // pre-window: on-pace
+  const dev = consumed - expected;                 // grams off the pace line (signed)
+  const devNorm = goal > 0 ? dev / goal : 0;        // normalized by goal -> consistent all day
   return {
     consumed: Math.round(consumed),
     goal: Math.round(goal),
     expected: Math.round(expected),
-    consumed_pct: goal > 0 ? Math.round(Math.min(1.2, consumed / goal) * 100) / 100 : 0,
-    fill: Math.max(0, Math.min(1, ratio)), // bar fill: 1 = on/ahead, <1 = behind (the drained part)
-    ratio: Math.round(ratio * 100) / 100,
-    color: paceColor(ratio),
+    dev_g: Math.round(dev),                          // signed grams off pace -> center number
+    progress: goal > 0 ? Math.round((consumed / goal) * 1000) / 1000 : 0, // absolute, for the bars
+    ring_base: Math.round(Math.max(0, Math.min(1, 1 + devNorm)) * 1000) / 1000, // main arc: full=on-pace, drains
+    ring_over: Math.round(Math.max(0, Math.min(1, devNorm)) * 1000) / 1000,     // overflow arc (one wrap max visual)
+    base_color: devNorm <= 0 ? underColor(devNorm) : '#22c55e',
+    over_color: devNorm > 0 ? overColor(devNorm) : null,
   };
 }
 

@@ -268,12 +268,17 @@ function dashboardHtml() {
 .macros{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:14px}
 .macro{background:#0e1318;border-radius:10px;padding:10px;text-align:center}
 .macro .n{font-size:22px;font-weight:700}.macro .l{font-size:12px;color:#8b96a5}
-.pbars{margin-top:14px;display:flex;flex-direction:column;gap:12px}
-.pbar-l{display:flex;justify-content:space-between;font-size:13px;margin-bottom:5px}
-.pbar-l .nm{color:#c7ced8;font-weight:600}.pbar-l .vl{color:#8b96a5}
-.pbar-track{position:relative;height:14px;background:#0e1318;border-radius:7px;overflow:hidden;border:1px solid #222a33}
-.pbar-fill{height:100%;border-radius:7px 0 0 7px;transition:width .4s ease,background .4s ease}
-.pnote{color:#8b96a5;font-size:12px;margin-top:12px}
+.rings{display:flex;justify-content:space-around;gap:8px;margin-bottom:18px}
+.ring svg{display:block}
+.ring text.rg{font-size:15px;font-weight:700;fill:#c7ced8}
+.ring text.rd{font-size:13px;font-weight:700}
+.obars{display:flex;flex-direction:column;gap:11px}
+.obar-l{display:flex;justify-content:space-between;font-size:13px;margin-bottom:5px}
+.obar-l span:first-child{color:#c7ced8;font-weight:600}.obar-l span:last-child{color:#8b96a5}
+.obar-track{position:relative;display:flex;height:12px;background:#0e1318;border-radius:6px;overflow:hidden;border:1px solid #222a33}
+.obar-fill{height:100%;background:#3b82f6;transition:width .4s ease}
+.obar-over{height:100%;background:#d946ef;transition:width .4s ease}
+.pnote{color:#8b96a5;font-size:12px;margin-top:14px}
 .week{display:grid;grid-template-columns:repeat(7,1fr);gap:8px}
 .day{background:#0e1318;border-radius:10px;padding:10px 6px;text-align:center;border-top:3px solid #2a313a}
 .day .d{font-size:12px;color:#8b96a5}.day .w{font-size:13px;font-weight:600;margin-top:6px;min-height:32px;display:flex;align-items:center;justify-content:center}
@@ -316,18 +321,30 @@ function render(s){
   '<div class=big><span class=dot style="background:'+(STATUS_COLOR[st]||'#8b96a5')+'"></span>'+(STATUS_LABEL[st]||st)+'</div>'+
   '<div class=row><span>Litter level</span><b style="color:'+litterColor(L.litter_level_pct)+'">'+(L.litter_level_pct!=null?L.litter_level_pct+'%':'—')+'</b></div>'+
   '<div class=row><span>Waste drawer</span><b style="color:'+drawerColor(L.waste_drawer_pct)+'">'+(L.waste_drawer_pct!=null?L.waste_drawer_pct+'%':'—')+'</b></div>';
- // nutrition — gamified drain bars (full = on/ahead of pace, drains green->red as you fall behind)
+ // nutrition — pace rings (P/C/F: deviation from pace, drain/overfill) + overall progress bars
  const P=s.pace||{};const PM=P.macros||{};
- const pbar=(nm,m,unit)=>{if(!m)return'';
-  const fillW=Math.round((m.fill||0)*100);
-  return '<div class=pbar><div class=pbar-l><span class=nm>'+nm+'</span>'+
-   '<span class=vl>'+(m.consumed||0)+(unit||'')+' / '+(m.goal||0)+(unit||'')+'</span></div>'+
-   '<div class=pbar-track><div class=pbar-fill style="width:'+fillW+'%;background:'+m.color+'"></div></div></div>';};
+ const RC=2*Math.PI*34; // ring circumference (r=34)
+ const ring=(glyph,m)=>{if(!m)return'';
+  const base=(m.ring_base||0)*RC, over=(m.ring_over||0)*RC, dev=m.dev_g||0;
+  const sign=dev>0?'+':'', numCol=dev<0?'#f87171':dev>0?(m.over_color||'#f59e0b'):'#22c55e';
+  const arc=(len,col)=>'<circle cx=40 cy=40 r=34 fill=none stroke="'+col+'" stroke-width=7 stroke-dasharray="'+len+' '+(RC-len)+'" stroke-linecap=round transform="rotate(-90 40 40)"/>';
+  return '<div class=ring><svg viewBox="0 0 80 80" width=82 height=82>'+
+   '<circle cx=40 cy=40 r=34 fill=none stroke="#0e1318" stroke-width=7/>'+
+   arc(base,m.base_color)+(over>0?arc(over,m.over_color):'')+
+   '<text x=40 y=37 text-anchor=middle class=rg>'+glyph+'</text>'+
+   '<text x=40 y=54 text-anchor=middle class=rd fill="'+numCol+'">'+sign+dev+'g</text>'+
+   '</svg></div>';};
+ const obar=(nm,m,unit)=>{if(!m)return'';
+  const pct=Math.min(1,m.progress||0)*100, over=Math.max(0,(m.progress||0)-1), overpct=Math.min(1,over)*100;
+  return '<div class=obar><div class=obar-l><span>'+nm+'</span>'+
+   '<span>'+(m.consumed||0)+(unit||'')+' / '+(m.goal||0)+(unit||'')+'</span></div>'+
+   '<div class=obar-track><div class=obar-fill style="width:'+pct+'%"></div>'+
+   (over>0?'<div class=obar-over style="width:'+overpct+'%"></div>':'')+'</div></div>';};
  document.getElementById('nutrition').innerHTML='<h2>Today · Nutrition</h2>'+
-  '<div class=pbars>'+pbar('Calories',PM.calories,'')+pbar('Protein',PM.protein_g,'g')+
-   pbar('Carbs',PM.carbs_g,'g')+pbar('Fat',PM.fat_g,'g')+'</div>'+
-  '<div class=pnote>eating window '+(P.window_label||'—')+' · '+
-   (P.fraction!=null?Math.round(P.fraction*100)+'% through the day':'')+'</div>';
+  '<div class=rings>'+ring('P',PM.protein_g)+ring('C',PM.carbs_g)+ring('F',PM.fat_g)+'</div>'+
+  '<div class=obars>'+obar('Calories',PM.calories,'')+obar('Protein',PM.protein_g,'g')+
+   obar('Carbs',PM.carbs_g,'g')+obar('Fat',PM.fat_g,'g')+'</div>'+
+  '<div class=pnote>eating window '+(P.window_label||'—')+' · rings show grams off pace (− behind, + over)</div>';
  // maintenance
  const M=s.maintenance||{};const C=M.coverage||{};const live=M.source==='live';
  const tlw=M.trend_lb_per_week;

@@ -3,6 +3,7 @@ const express = require('express');
 const crypto = require('crypto');
 const { createClient } = require('@supabase/supabase-js');
 const WebSocket = require('ws');
+const { estimateMaintenance } = require('./maintenance');
 
 const PORT = process.env.PORT || 8080;
 const SUPABASE_URL = process.env.SUPABASE_URL;
@@ -57,6 +58,14 @@ function lastNDates(n) {
   }
   return out;
 }
+// Which 4am-day a naive-local occurred_at timestamp belongs to (matches nutritionWindow()).
+function dayBucketOf(ts) {
+  const m = String(ts).match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::(\d{2}))?/);
+  if (!m) return String(ts).slice(0, 10);
+  const d = new Date(+m[1], +m[2] - 1, +m[3], +m[4] - DAY_START_HOUR, +m[5], +(m[6] || 0));
+  const p = (n) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+}
 
 // ---- workout category label ----
 const cap = (s) => s.charAt(0).toUpperCase() + s.slice(1);
@@ -74,12 +83,15 @@ async function buildStatus() {
   const win = nutritionWindow();
   const today = win.day;
   const week = lastNDates(7);
+  const histStart = localDate(new Date(Date.now() - 40 * 86400000)); // intake history for the maintenance trend
 
-  const [deviceRows, entries, targets, sessions] = await Promise.all([
+  const [deviceRows, entries, targets, sessions, weightRows, histRows] = await Promise.all([
     sb('device_status?select=*'),
     sb(`nutrition_entries?occurred_at=gte.${win.start}&occurred_at=lt.${win.end}&select=calories,protein_g,carbs_g,fat_g`),
     sb('nutrition_targets?order=date.desc&limit=1'),
     sb(`workout_sessions?select=date,exercises(categories)&date=gte.${week[0]}&order=date.asc`),
+    sb('weight_log?select=date,weight_lbs&order=date.asc'),
+    sb(`nutrition_entries?occurred_at=gte.${histStart}T00:00:00&select=occurred_at,calories`),
   ]);
 
   const litter = (deviceRows || [])[0] || null;
@@ -105,7 +117,18 @@ async function buildStatus() {
     label: byDay[d] ? categoryLabel([...byDay[d]]) : null,
   }));
 
-  return { today, litter, nutrition, workouts, generated_at: new Date().toISOString() };
+  // ---- adaptive maintenance estimate ----
+  const intakeTotals = {};
+  for (const e of histRows || []) {
+    const d = dayBucketOf(e.occurred_at);
+    if (d === today) continue; // exclude the in-progress day (partial intake biases low)
+    intakeTotals[d] = (intakeTotals[d] || 0) + (Number(e.calories) || 0);
+  }
+  const intakeByDay = Object.entries(intakeTotals).map(([date, calories]) => ({ date, calories }));
+  const weights = (weightRows || []).map((r) => ({ date: String(r.date).slice(0, 10), weight: Number(r.weight_lbs) }));
+  const maintenance = estimateMaintenance({ weights, intakeByDay, today });
+
+  return { today, litter, nutrition, maintenance, workouts, generated_at: new Date().toISOString() };
 }
 
 // ---- realtime push: recompute + push to all connected browsers on any DB change ----
@@ -207,6 +230,7 @@ function dashboardHtml() {
 <div class=grid>
   <div class=card id=litter><h2>Litter-Robot</h2><div class=big>…</div></div>
   <div class=card id=nutrition><h2>Today · Nutrition</h2><div class=big>…</div></div>
+  <div class=card id=maintenance><h2>Maintenance · Goal</h2><div class=big>…</div></div>
   <div class=card id=workouts><h2>Workouts · Last 7 Days</h2><div>…</div></div>
 </div>
 <div class=foot id=foot></div>
@@ -244,6 +268,21 @@ function render(s){
  document.getElementById('nutrition').innerHTML='<h2>Today · Nutrition</h2>'+
   '<div class=big>'+(N.calories||0)+'<span class=sub style="font-size:18px"> '+(T.calories!=null?'/ '+T.calories:'')+' cal</span></div>'+
   '<div class=macros>'+macro('Protein',N.protein_g,T.protein_g,'g')+macro('Carbs',N.carbs_g,T.carbs_g,'g')+macro('Fat',N.fat_g,T.fat_g,'g')+'</div>';
+ // maintenance
+ const M=s.maintenance||{};const C=M.coverage||{};const live=M.source==='live';
+ const tlw=M.trend_lb_per_week;
+ const trendTxt=tlw==null?'—':(tlw>0?'▲ +':tlw<0?'▼ ':'± ')+tlw.toFixed(2)+' lb/wk';
+ const trendCol=tlw==null?'#8b96a5':tlw>0?'#22c55e':tlw<0?'#f97316':'#8b96a5';
+ let dataLine;
+ if(live){dataLine='Live · measured from '+C.weighins+' weigh-ins & '+C.intake_days+' logged days';}
+ else{const nW=Math.max(0,(C.need_weighins||0)-(C.weighins||0)),nI=Math.max(0,(C.need_intake_days||0)-(C.intake_days||0));
+  dataLine='Calibrating — using cold-start anchor. Need '+nW+' more weigh-in'+(nW===1?'':'s')+', '+nI+' more logged day'+(nI===1?'':'s')+'.';}
+ document.getElementById('maintenance').innerHTML='<h2>Maintenance · Goal</h2>'+
+  '<div class=big>'+(M.maintenance||0)+'<span class=sub style="font-size:18px"> cal/day</span></div>'+
+  '<div class=sub>estimated maintenance · '+(live?'measured':'cold-start anchor')+'</div>'+
+  '<div class=row><span>Recommended goal</span><b>'+(M.target||0)+' cal <span class=sub style="font-weight:400">+'+(M.surplus||0)+'</span></b></div>'+
+  '<div class=row><span>Weight trend</span><b style="color:'+trendCol+'">'+trendTxt+'</b></div>'+
+  '<div class=sub style="margin-top:12px;'+(live?'':'color:#eab308')+'">'+dataLine+'</div>';
  // workouts
  const cells=(s.workouts||[]).map(d=>{
   const dow=new Date(d.date+'T12:00:00Z').toLocaleDateString('en-US',{weekday:'short'});

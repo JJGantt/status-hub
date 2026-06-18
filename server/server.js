@@ -5,6 +5,7 @@ const { createClient } = require('@supabase/supabase-js');
 const WebSocket = require('ws');
 const { estimateMaintenance } = require('./maintenance');
 const pace = require('./pace');
+const { computeVolume } = require('./volume');
 
 const PORT = process.env.PORT || 8080;
 const SUPABASE_URL = process.env.SUPABASE_URL;
@@ -121,13 +122,14 @@ async function buildStatus() {
   const week = lastNDates(7);
   const histStart = localDate(new Date(Date.now() - 40 * 86400000)); // intake history for the maintenance trend
 
-  const [deviceRows, entries, setRows, catRows, weightRows, histRows] = await Promise.all([
+  const [deviceRows, entries, setRows, catRows, weightRows, histRows, muscleRows] = await Promise.all([
     sb('device_status?select=*'),
     sb(`nutrition_entries?occurred_at=gte.${win.start}&occurred_at=lt.${win.end}&select=calories,protein_g,carbs_g,fat_g`),
-    sb(`sets?occurred_at=gte.${week[0]}T00:00:00&select=occurred_at,exercise`),
+    sb(`sets?occurred_at=gte.${week[0]}T00:00:00&select=occurred_at,exercise,muscles_override`),
     sb('exercise_catalog?select=name,categories'),
     sb('weight_log?select=date,weight_lbs&order=date.asc'),
     sb(`nutrition_entries?occurred_at=gte.${histStart}T00:00:00&select=occurred_at,calories`),
+    sb('exercise_muscles?select=name,muscle,contribution'),
   ]);
 
   const litter = (deviceRows || [])[0] || null;
@@ -178,7 +180,10 @@ async function buildStatus() {
   });
   paceData.window_label = pace.windowLabel(eatWindow);
 
-  return { today, litter, nutrition, maintenance, pace: paceData, workouts, generated_at: new Date().toISOString() };
+  // ---- weekly per-muscle volume gauges ----
+  const volume = computeVolume(setRows || [], muscleRows || [], week);
+
+  return { today, litter, nutrition, maintenance, pace: paceData, volume, workouts, generated_at: new Date().toISOString() };
 }
 
 // ---- realtime push: recompute + push to all connected browsers on any DB change ----
@@ -239,7 +244,14 @@ app.get('/api/stream', async (req, res) => {
   req.on('close', () => { clearInterval(ka); sseClients.delete(res); });
 });
 
-app.listen(PORT, '0.0.0.0', () => { console.log(`status-hub on :${PORT}`); startRealtime(); });
+app.listen(PORT, '0.0.0.0', () => {
+  console.log(`status-hub on :${PORT}`);
+  startRealtime();
+  // Time-based fields (pace drain, volume drop-off) change with the clock, not just on DB
+  // edits — so re-push a fresh frame on a timer too. Push, not client polling; gated on
+  // having connected clients so it's free when nobody's watching.
+  setInterval(() => { if (sseClients.size) broadcast(); }, 30000);
+});
 
 // ---- HTML ----
 function loginHtml(err) {
@@ -281,6 +293,13 @@ function dashboardHtml() {
 .obar-fill{height:100%;background:#3b82f6;transition:width .4s ease}
 .obar-over{height:100%;background:#d946ef;transition:width .4s ease}
 .pnote{color:#8b96a5;font-size:12px;margin-top:14px}
+.vgrp h3{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:#6b7686;margin:12px 0 6px;font-weight:600}
+.vrow{margin-bottom:8px}
+.vrow-l{display:flex;justify-content:space-between;font-size:12px;margin-bottom:3px}
+.vrow-l .nm{color:#c7ced8}.vrow-l .vl{color:#8b96a5}
+.vtrack{display:flex;height:10px;background:#0e1318;border-radius:5px;overflow:hidden;border:1px solid #222a33}
+.vstable{height:100%;transition:width .4s ease}
+.vdrop{height:100%;background:repeating-linear-gradient(45deg,#4b5563,#4b5563 3px,#39414d 3px,#39414d 6px)}
 .week{display:grid;grid-template-columns:repeat(7,1fr);gap:8px}
 .day{background:#0e1318;border-radius:10px;padding:10px 6px;text-align:center;border-top:3px solid #2a313a}
 .day .d{font-size:12px;color:#8b96a5}.day .w{font-size:13px;font-weight:600;margin-top:6px;min-height:32px;display:flex;align-items:center;justify-content:center}
@@ -293,6 +312,7 @@ function dashboardHtml() {
   <div class=card id=nutrition><h2>Today · Nutrition</h2><div class=big>…</div></div>
   <div class=card id=maintenance><h2>Maintenance · Goal</h2><div class=big>…</div></div>
   <div class=card id=workouts><h2>Workouts · Last 7 Days</h2><div>…</div></div>
+  <div class=card id=volume><h2>Muscle Volume · 7-Day</h2><div>…</div></div>
 </div>
 <div class=foot id=foot></div>
 <script>
@@ -369,6 +389,19 @@ function render(s){
   return '<div class=day style="border-top-color:'+dayColor(d.label)+'"><div class=d>'+dow+'</div>'+w+'</div>';
  }).join('');
  document.getElementById('workouts').innerHTML='<h2>Workouts · Last 7 Days</h2><div class=week>'+cells+'</div>';
+ // muscle volume gauges
+ const V=s.volume||{};
+ const vgroups=(V.groups||[]).map(g=>{
+  const rows=g.muscles.map(m=>{
+   const stable=Math.round((m.stable_fill||0)*100), drop=Math.round((m.drop_fill||0)*100);
+   const dropTxt=m.dropping>0?' <span style="color:#6b7686">(−'+m.dropping+' tmrw)</span>':'';
+   return '<div class=vrow><div class=vrow-l><span class=nm>'+m.label+'</span><span class=vl>'+m.sets+' / '+m.target+dropTxt+'</span></div>'+
+    '<div class=vtrack><div class=vstable style="width:'+stable+'%;background:'+m.color+'"></div><div class=vdrop style="width:'+drop+'%"></div></div></div>';
+  }).join('');
+  return '<div class=vgrp><h3>'+g.group+'</h3>'+rows+'</div>';
+ }).join('');
+ document.getElementById('volume').innerHTML='<h2>Muscle Volume · 7-Day</h2>'+vgroups+
+  '<div class=pnote>target '+(V.target_default||14)+' sets/muscle/wk · striped = drops off tomorrow</div>';
  fmtFoot();
 }
 const es=new EventSource('/api/stream');

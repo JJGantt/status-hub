@@ -128,14 +128,31 @@ per-set value, e.g. Curls→biceps 1.0, Rows→biceps 0.5).
 - **Hard 7-day rolling window, no decay** — set counts fully for 7 days then drops off; this is
   what enables the "about to expire tomorrow" gray preview. (Not recency-weighted — goal is fixed.)
 
-## Body Heatmap — anatomical muscle visualization  *(DONE — full fidelity)*
+## Body Heatmap — anatomical muscle visualization  *(DONE — coarse asset; granular parked)*
 
-**Status:** live with FULL per-muscle fidelity. Swapped to vulovix/body-muscles (Apache-2.0,
-NOTICE added) — 89-region front+back SVG (bodymap.js, viewBox 0 0 72 93) that separates every
-muscle we track: side delts, lats, upper/lower chest, both triceps heads all distinct. volume.js
-emits per-muscle colors (muscle_colors); client `muscleForId()` routes each region id → muscle.
-No aggregation/worst-of needed (the asset is finer than our taxonomy). Untracked anatomy
-(head/hands/feet/serratus/spine/etc.) stays base grey.
+**CURRENT (live):** react-muscle-highlighter (soroojshehryar, **MIT**, NOTICE credits it).
+Coarse front+back SVG, `bodymap.js` (viewBox `0 0 1448 1448`, 154 paths, slug per region).
+Anatomically CORRECT: abs central, obliques on the sides, adductors + lower-back distinct.
+Coloring = `volume.js` `REGION_MAP` worst-of (region inherits lowest-ratio of its muscles).
+Folds (accepted tradeoff): deltoids = front+side+rear heads; upper-back = lats+mid_back;
+chest = upper+lower; triceps = both heads; tibialis shows calf color; hip_flexors has no
+region (gauge-only). Client paints `path[data-r=slug]` from `volume.regions`.
+
+**PARKED ALTERNATIVE — vulovix/body-muscles (Apache-2.0), if we want max granularity back:**
+- 89-region front+back SVG, viewBox `0 0 72 93`, format `{id,name,path}` in
+  `src/data/muscles.front.ts` / `.back.ts`. Separates EVERY muscle distinctly: side delts
+  (`shoulder-side-*`), front (`shoulder-front-*`), rear (`deltoid-rear-*`), lats
+  (`lats-upper/mid/lower-*`), upper/lower chest, both triceps heads.
+- **Why we left it:** (1) it MISLABELS the upper six-pack as `obliques` and tags only the lower
+  belly `abs`; (2) NO true side-waist oblique region exists; (3) fiddly. Verified by rendering.
+- **To switch back:** it's in git history (commit "Swap body heatmap to vulovix..."). Regenerate
+  `bodymap.js` from its muscles.front/back.ts; restore the client `muscleForId()` (prefix map:
+  shoulder-side→side_delts, lats-*→lats, chest-upper→upper_chest, triceps-long→triceps_long,
+  gluteus→glutes, calves|tibialis→gastrocnemius, lower-back→erectors, adductors→adductors,
+  hip-flexor→hip_flexors, AND `obliques`→`abs` to fix the mislabel); have `volume.js` emit
+  per-muscle `muscle_colors` (keyed by our slug) instead of region worst-of.
+- **Rendering check tip:** headless Chrome screenshots the SVG faithfully (qlmanage/librsvg don't):
+  `Chrome --headless --screenshot=out.png --window-size=W,H file.html` with the svg inlined.
 
 (original design notes below)
 ## Body Heatmap — design notes

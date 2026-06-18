@@ -399,8 +399,12 @@ function render(s){
   const rows=g.muscles.map(m=>{
    const stable=Math.round((m.stable_fill||0)*100), drop=Math.round((m.drop_fill||0)*100);
    const dropTxt=m.dropping>0?' <span style="color:#6b7686">(−'+m.dropping+' tmrw)</span>':'';
+   // at zero, show a tiny red sliver (not an empty track) so "uh-oh" is visible
+   const bars=(stable+drop===0)
+    ? '<div class=vstable style="width:4%;background:'+m.color+'"></div>'
+    : '<div class=vstable style="width:'+stable+'%;background:'+m.color+'"></div><div class=vdrop style="width:'+drop+'%"></div>';
    return '<div class=vrow><div class=vrow-l><span class=nm>'+m.label+'</span><span class=vl>'+m.sets+' / '+m.target+dropTxt+'</span></div>'+
-    '<div class=vtrack><div class=vstable style="width:'+stable+'%;background:'+m.color+'"></div><div class=vdrop style="width:'+drop+'%"></div></div></div>';
+    '<div class=vtrack>'+bars+'</div></div>';
   }).join('');
   return '<div class=vgrp><h3>'+g.group+'</h3>'+rows+'</div>';
  }).join('');

@@ -55,6 +55,27 @@ typical intake pace and **refill** when I log.
 
 ---
 
+## Nutrition: AI meal/snack suggestion to close the macro gap  *(idea)*
+
+A headless Claude call (refreshed ~every 30 min, displayed in the nutrition area) that, given the
+macros currently *down* vs target (from the pace rings), suggests a specific meal/snack **with
+portions** that would bring the macros closest to perfect *right now*. Inputs:
+- The current macro deficits (which of cal/protein/carbs/fat are behind, by how much).
+- The **nutrition log history** → infer ingredients likely on hand. Build an "ingredient heatmap"
+  (most-frequently-logged ingredients = most likely available) and tell Claude to **prioritize
+  those** ingredients so the suggestion is actually makeable.
+Output: a concrete food + portion sizes optimized to fill the remaining macro gap. Cheap headless
+call, low frequency. (Surfaces the suggestion; no auto-logging.)
+
+## Muscle drill-down: what hits each muscle  *(idea)*
+
+- **Muscle Volume card:** make each muscle gauge **clickable/expandable** → reveals the exercises
+  that contribute to it, ordered by contribution (1.0 primary movers first, then the 0.5
+  secondaries), each labeled with its value. (Data already exists in `exercise_muscles`.)
+- **Body map:** hover/tap a region → tooltip or panel naming the muscle + the same exercise list.
+  Feasible — SVG `<path>`s can carry titles and click handlers (we already make heatmap cells
+  clickable the same way).
+
 ## UI Structure: Expandable Rows  *(planned — replaces the card grid)*
 
 Move from little filling cards to **thick rows**, each progressively expandable. Applies to

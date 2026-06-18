@@ -306,10 +306,16 @@ button{width:100%;padding:12px;border:0;border-radius:8px;background:#3b82f6;col
 function dashboardHtml() {
   return `<!doctype html><html><head><meta charset=utf-8>
 <meta name=viewport content="width=device-width,initial-scale=1">
-<title>Status Hub</title><style>
-*{box-sizing:border-box} body{background:#0b0d10;color:#e8eaed;font:16px/1.4 system-ui;margin:0;padding:18px}
-.grid{display:grid;gap:18px;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));max-width:1100px;margin:0 auto}
-.card{background:#151a20;border:1px solid #222a33;border-radius:16px;padding:20px}
+<title>Status Hub</title>
+<link href="https://cdn.jsdelivr.net/npm/gridstack@10.3.1/dist/gridstack.min.css" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/gridstack@10.3.1/dist/gridstack-all.js"></script>
+<style>
+*{box-sizing:border-box} body{background:#0b0d10;color:#e8eaed;font:16px/1.4 system-ui;margin:0;padding:12px}
+.grid-stack{max-width:1240px;margin:0 auto}
+.grid-stack-item-content{overflow:visible}
+.drag-handle{position:absolute;top:9px;right:11px;z-index:6;cursor:move;color:#3a434f;font-size:15px;line-height:1;user-select:none}
+.drag-handle:hover{color:#8b96a5}
+.card{height:100%;overflow:auto;background:#151a20;border:1px solid #222a33;border-radius:16px;padding:20px}
 .card h2{margin:0 0 14px;font-size:14px;letter-spacing:.08em;text-transform:uppercase;color:#8b96a5;font-weight:600}
 .big{font-size:40px;font-weight:700;line-height:1}
 .sub{color:#8b96a5;font-size:14px;margin-top:6px}
@@ -337,15 +343,14 @@ function dashboardHtml() {
 .vdrop{height:100%;background:repeating-linear-gradient(45deg,#4b5563,#4b5563 3px,#39414d 3px,#39414d 6px)}
 #body .bodysvg{width:100%;height:auto;max-height:520px;display:block;margin-top:4px}
 #body .bodysvg path{fill:#222a33;stroke:#0b0d10;stroke-width:0.25;transition:fill .4s ease}
-.hmonths{display:flex;gap:3px;font-size:9px;color:#8b96a5;margin-left:30px;height:13px;overflow:hidden}
-.hm{width:12px;flex:none;white-space:nowrap}
-.hbody{display:flex}
-.hdows{display:flex;flex-direction:column;gap:3px;width:30px;flex:none}
-.hd{height:12px;line-height:12px;font-size:9px;color:#8b96a5;text-align:right;padding-right:5px}
-#workouts{grid-column:1/-1}
-.heat{display:flex;gap:3px;overflow:hidden}
-.hcol{display:flex;flex-direction:column;gap:3px}
-.hcell{width:12px;height:12px;border-radius:2px;background:#2a313a;flex:none}
+.hmonths{display:flex;gap:2.5px;font-size:9px;color:#8b96a5;margin-left:30px;height:13px}
+.hm{flex:1 1 0;min-width:0;white-space:nowrap}
+.hbody{display:flex;gap:4px}
+.hdows{display:flex;flex-direction:column;gap:2.5px;width:26px;flex:none}
+.hd{flex:1;font-size:9px;color:#8b96a5;text-align:right;padding-right:5px;display:flex;align-items:center;justify-content:flex-end}
+.heat{display:flex;gap:2.5px;flex:1 1 0}
+.hcol{display:flex;flex-direction:column;gap:2.5px;flex:1 1 0;min-width:0}
+.hcell{aspect-ratio:1;width:100%;border-radius:2px;background:#2a313a}
 #daymodal{display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);place-items:center;z-index:50;padding:18px}
 .modal-card{background:#151a20;border:1px solid #222a33;border-radius:14px;padding:22px;max-width:440px;width:100%;max-height:80vh;overflow:auto;position:relative}
 .modal-close{position:absolute;top:12px;right:16px;color:#8b96a5;cursor:pointer;font-size:18px}
@@ -356,12 +361,12 @@ function dashboardHtml() {
 .dot{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:8px;vertical-align:middle}
 .foot{max-width:1100px;margin:14px auto 0;color:#566;font-size:12px;text-align:right}
 </style></head><body>
-<div class=grid>
-  <div class=card id=litter><h2>Litter-Robot</h2><div class=big>…</div></div>
-  <div class=card id=nutrition><h2>Today · Nutrition</h2><div class=big>…</div></div>
-  <div class=card id=workouts><h2>Workout Volume</h2><div>…</div></div>
-  <div class=card id=volume><h2>Muscle Volume · 7-Day</h2><div>…</div></div>
-  <div class=card id=body><h2>Muscle Map · 7-Day</h2>${BODY_SVG}</div>
+<div class="grid-stack">
+  <div class="grid-stack-item" gs-id="litter" gs-w="4" gs-h="3"><div class="grid-stack-item-content"><span class=drag-handle>⠿</span><div class=card id=litter><h2>Litter-Robot</h2><div class=big>…</div></div></div></div>
+  <div class="grid-stack-item" gs-id="nutrition" gs-w="4" gs-h="6"><div class="grid-stack-item-content"><span class=drag-handle>⠿</span><div class=card id=nutrition><h2>Today · Nutrition</h2><div class=big>…</div></div></div></div>
+  <div class="grid-stack-item" gs-id="body" gs-w="4" gs-h="9"><div class="grid-stack-item-content"><span class=drag-handle>⠿</span><div class=card id=body><h2>Muscle Map · 7-Day</h2>${BODY_SVG}</div></div></div>
+  <div class="grid-stack-item" gs-id="volume" gs-w="4" gs-h="8"><div class="grid-stack-item-content"><span class=drag-handle>⠿</span><div class=card id=volume><h2>Muscle Volume · 7-Day</h2><div>…</div></div></div></div>
+  <div class="grid-stack-item" gs-id="workouts" gs-w="8" gs-h="4"><div class="grid-stack-item-content"><span class=drag-handle>⠿</span><div class=card id=workouts><h2>Workout Volume</h2><div>…</div></div></div></div>
 </div>
 <div class=foot id=foot></div>
 <div id=daymodal><div class=modal-card><div class=modal-close id=dayclose>✕</div><div id=daycontent></div></div></div>
@@ -492,5 +497,10 @@ document.addEventListener('click',e=>{
  if(cell&&cell.dataset.date){ openDay(cell.dataset.date); return; }
  if(e.target.id==='daymodal'||e.target.id==='dayclose'){ document.getElementById('daymodal').style.display='none'; }
 });
+// draggable / resizable dashboard — drag by the grip handle, resize from the corner; layout saved per device
+const grid=GridStack.init({column:12,cellHeight:74,margin:8,handle:'.drag-handle',float:false,columnOpts:{breakpoints:[{w:768,c:1}]}});
+const SAVED=localStorage.getItem('hublayout');
+if(SAVED){try{grid.load(JSON.parse(SAVED));}catch(_){}}
+grid.on('change',()=>{try{localStorage.setItem('hublayout',JSON.stringify(grid.save(false)));}catch(_){}});
 </script></body></html>`;
 }

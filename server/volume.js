@@ -26,12 +26,13 @@ function hslToHex(h, s, l) {
   const to = (v) => Math.round((v + m) * 255).toString(16).padStart(2, '0');
   return '#' + to(r) + to(g) + to(b);
 }
-// none → grey; under target → red→green by ratio; on target → green; well over (junk) → violet.
+// none → grey; under target → red→green by ratio; at target → green; OVER → green→blue
+// (continuous, capped at ~2x target = full blue) so overage is visible, not hidden at "full".
 function volColor(ratio) {
   if (ratio <= 0) return '#3a434f';
-  if (ratio <= 1) return hslToHex(120 * Math.max(0, ratio), 0.7, 0.5);
-  if (ratio <= 1.4) return hslToHex(120, 0.7, 0.5);
-  return hslToHex(265, 0.55, 0.62);
+  if (ratio < 1) return hslToHex(120 * ratio, 0.7, 0.5);            // red(0) → green(120)
+  const t = Math.max(0, Math.min(1, ratio - 1));                    // 1x→0, 2x→1 (capped)
+  return hslToHex(120 + (220 - 120) * t, 0.62, 0.55);              // green(120) → blue(220)
 }
 
 // setRows: [{occurred_at, exercise, muscles_override}]; muscleRows: [{name, muscle, contribution}];

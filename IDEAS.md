@@ -141,7 +141,13 @@ hero of the workouts row.
   contained WebView of the same SVG as fallback.
 - **Interaction:** collapsed = worst-off muscle; expand = full body; tap a muscle = its history.
 
-## Workout data-model migration: flat timestamped sets  *(planned — do BEFORE volume gamification)*
+## Workout data-model migration: flat timestamped sets  *(DONE — old tables pending drop)*
+
+**Status:** migrated & deployed. `sets` table live with all 1159 historical sets; workouts.ts +
+MCP tools + hub card + legacy HTTP all on the new model; volume verified. **Old tables
+(workout_sessions, exercises, exercise_sets) intentionally left intact — drop only on explicit OK.**
+**MCP tools update next session restart** (running process still has the old session tools; don't
+log workouts via them post-migration or data lands in the old tables — log via the `sets` model).
 
 Abandon the session structure. Session grouping was only for push/pull/legs classification,
 which is now derived from exercises' muscles, so the session table is dead weight.

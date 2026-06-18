@@ -392,7 +392,7 @@ function render(s){
   '<div class=rings>'+ring('P',PM.protein_g)+ring('C',PM.carbs_g)+ring('F',PM.fat_g)+'</div>'+
   '<div class=obars>'+obar('Calories',PM.calories,'')+obar('Protein',PM.protein_g,'g')+
    obar('Carbs',PM.carbs_g,'g')+obar('Fat',PM.fat_g,'g')+'</div>'+
-  '<div class=pnote>eating window '+(P.window_label||'—')+' · rings show grams off pace (− behind, + over)</div>';
+  '<div class=pnote>'+(P.window_label||'')+'</div>';
  // workout volume heatmap (GitHub-contribution style: month labels top, weekdays left, today outlined)
  const H=s.heatmap||{weeks:[],months:[]};
  const HC=['#2a313a','#0e4429','#006d32','#26a641','#39d353']; // [0]=empty (visible vs the card bg)
@@ -405,8 +405,7 @@ function render(s){
  const dowLabels=['','Mon','','Wed','','Fri',''].map(x=>'<div class=hd>'+x+'</div>').join('');
  document.getElementById('workouts').innerHTML='<h2>Workout Volume</h2>'+
   '<div class=hmonths>'+monthRow+'</div>'+
-  '<div class=hbody><div class=hdows>'+dowLabels+'</div><div class=heat>'+grid+'</div></div>'+
-  '<div class=pnote>each square = a day · brighter = more sets · today outlined (newest, far right)</div>';
+  '<div class=hbody><div class=hdows>'+dowLabels+'</div><div class=heat>'+grid+'</div></div>';
  // muscle volume gauges
  const V=s.volume||{};
  const vgroups=(V.groups||[]).map(g=>{
@@ -422,8 +421,7 @@ function render(s){
   }).join('');
   return '<div class=vgrp><h3>'+g.group+'</h3>'+rows+'</div>';
  }).join('');
- document.getElementById('volume').innerHTML='<h2>Muscle Volume · 7-Day</h2>'+vgroups+
-  '<div class=pnote>target '+(V.target_default||14)+' sets/muscle/wk · striped = drops off tomorrow</div>';
+ document.getElementById('volume').innerHTML='<h2>Muscle Volume · 7-Day</h2>'+vgroups;
  // body map: paint each region with its worst-of volume color
  const RG=(V.regions)||{};
  document.querySelectorAll('#body path[data-r]').forEach(p=>{const c=RG[p.getAttribute('data-r')];if(c)p.style.fill=c;});

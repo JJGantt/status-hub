@@ -121,10 +121,11 @@ async function buildStatus() {
   const week = lastNDates(7);
   const histStart = localDate(new Date(Date.now() - 40 * 86400000)); // intake history for the maintenance trend
 
-  const [deviceRows, entries, sessions, weightRows, histRows] = await Promise.all([
+  const [deviceRows, entries, setRows, catRows, weightRows, histRows] = await Promise.all([
     sb('device_status?select=*'),
     sb(`nutrition_entries?occurred_at=gte.${win.start}&occurred_at=lt.${win.end}&select=calories,protein_g,carbs_g,fat_g`),
-    sb(`workout_sessions?select=date,exercises(categories)&date=gte.${week[0]}&order=date.asc`),
+    sb(`sets?occurred_at=gte.${week[0]}T00:00:00&select=occurred_at,exercise`),
+    sb('exercise_catalog?select=name,categories'),
     sb('weight_log?select=date,weight_lbs&order=date.asc'),
     sb(`nutrition_entries?occurred_at=gte.${histStart}T00:00:00&select=occurred_at,calories`),
   ]);
@@ -140,11 +141,13 @@ async function buildStatus() {
     target: null, // set to the dynamic goal once maintenance is computed below
   };
 
+  const catByName = {};
+  for (const c of catRows || []) catByName[String(c.name).toLowerCase()] = c.categories || [];
   const byDay = {};
-  for (const s of sessions || []) {
-    const d = String(s.date).slice(0, 10);
+  for (const s of setRows || []) {
+    const d = String(s.occurred_at).slice(0, 10);
     const set = byDay[d] || new Set();
-    for (const ex of s.exercises || []) for (const c of ex.categories || []) set.add(c);
+    for (const c of (catByName[String(s.exercise).toLowerCase()] || [])) set.add(c);
     byDay[d] = set;
   }
   const workouts = week.map((d) => ({
@@ -190,8 +193,7 @@ function startRealtime() {
   supa.channel('hub-changes')
     .on('postgres_changes', { event: '*', schema: 'public', table: 'device_status' }, broadcast)
     .on('postgres_changes', { event: '*', schema: 'public', table: 'nutrition_entries' }, broadcast)
-    .on('postgres_changes', { event: '*', schema: 'public', table: 'workout_sessions' }, broadcast)
-    .on('postgres_changes', { event: '*', schema: 'public', table: 'exercises' }, broadcast)
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'sets' }, broadcast)
     .subscribe((status) => console.log('realtime channel:', status));
 }
 

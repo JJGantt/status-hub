@@ -165,6 +165,10 @@ Open decisions:
 - **Monorepo consolidation** (proposed): fold `status-hub-ios` into `status-hub/apps/`, move
   server to `status-hub/server/`, repoint Fly deploy. One repo, atomic cross-cutting changes.
 - **App icon** — both apps still use the default placeholder.
+- **Hub/MCP day-boundary inconsistency** — the hub buckets nutrition by the 4am rule (read-time);
+  the MCP's `get_nutrition` groups by the stored midnight `date` column. So an entry logged
+  12am–4am shows on different days across the two surfaces. Fix: apply the same 4am read-time
+  bucketing in the data-layer's `getNutrition` (don't change storage). Reconciles the surfaces.
 - **Write actions** — the editable surplus is the first *write* from the clients. Today the
   hub is read-only display. Need: a settings store (Supabase, e.g. `surplus`), a write endpoint
   on the hub (auth'd via the same token), and `maintenance.js` reading surplus from there

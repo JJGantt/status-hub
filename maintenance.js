@@ -24,7 +24,7 @@ const PROTEIN_PER_LB = 1.0;    // top of the evidence-based range (Morton 2018);
 const FAT_PER_LB = 0.4;        // floor in g/lb — comfortably above the hormonal minimum
 const FAT_MIN_PCT_CAL = 0.20;  // hard guard: fat never below 20% of calories (hormonal floor)
 const FALLBACK_WEIGHT = 171;   // used only if there are zero weigh-ins on record
-const round5 = (x) => Math.round(x / 5) * 5;
+const roundG = (x) => Math.round(x); // macro grams to the nearest 1 (nearest-5 is too coarse at low fat)
 
 // Under-report / outlier rejection on daily intake totals:
 const ABS_FLOOR_CAL = 1000;      // a logged day below this is treated as incomplete, not a real low day
@@ -123,9 +123,9 @@ function estimateMaintenance({ weights = [], intakeByDay = [], today }) {
   const bodyweight = (currentWeight != null ? currentWeight
     : (sortedW.length ? sortedW[sortedW.length - 1].weight : null)) || FALLBACK_WEIGHT;
   const calories = Math.round((maintenance + SURPLUS) / 10) * 10;
-  const protein_g = round5(PROTEIN_PER_LB * bodyweight);
-  const fat_g = round5(Math.max(FAT_PER_LB * bodyweight, (FAT_MIN_PCT_CAL * calories) / 9));
-  const carbs_g = Math.max(0, round5((calories - protein_g * 4 - fat_g * 9) / 4));
+  const protein_g = roundG(PROTEIN_PER_LB * bodyweight);
+  const fat_g = roundG(Math.max(FAT_PER_LB * bodyweight, (FAT_MIN_PCT_CAL * calories) / 9));
+  const carbs_g = Math.max(0, roundG((calories - protein_g * 4 - fat_g * 9) / 4));
 
   return {
     source,                                   // 'live' | 'calibrating'

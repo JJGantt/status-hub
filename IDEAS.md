@@ -30,9 +30,19 @@ typical intake pace and **refill** when I log.
   Handles pre-logging (fills early) and late logging (catches up retroactively).
 - **Server-side:** hub computes each bar's level + color + behind/ahead state; clients render.
 
-Open decisions:
-- All four bars (cal/protein/carbs/fat) or just calories + protein?
-- History window for the curve: rolling ~30 days (recommended) vs all-time weighted.
+**RESOLVED:**
+- **All four bars** (cal/protein/carbs/fat) — all matter.
+- **Pace model = time-based linear, NOT historical curve.** `expected by now = goal ×
+  (now − wake)/(bed − wake)`. Chosen over a historical-habit curve because the system should
+  pull toward the *ideal* (even intake — protein distribution across ~4 feedings maximizes MPS),
+  not enshrine current clumping. Smooth continuous decline, all four; bar sinks between meals,
+  logging pops it up → encourages frequent even top-ups (the optimal pattern).
+- **wake / bed are adjustable fields** (default e.g. 7a–11p).
+- **No "about to drop off" for food** — that's workout-only. Food ticks down smoothly, resets
+  each morning. Nutrition = within-today pace; Workouts = 7-day rolling volume (different time
+  logic, intentional).
+- Daily goals already persisted (dated `nutrition_targets` rows) for look-back; linear bar only
+  needs today's goal + wake/bed + clock.
 
 ---
 
@@ -76,9 +86,19 @@ per-set value, e.g. Curls→biceps 1.0, Rows→biceps 0.5).
   lats, lower_chest, mid_back, obliques, quads, rear_delts, side_delts, triceps_lateral,
   triceps_long, upper_chest, upper_traps.
 
-Open decisions:
-- Target sets per muscle (global ~20? per-muscle tuning?).
-- Look-back exactly 7 days, or recency-weighted like the nutrition pace curve?
+**RESOLVED:**
+- **Per-muscle targets, not a flat 20** (goal = pure hypertrophy). Evidence: 10–20 sets/wk/muscle
+  is the responsive range; more helps with diminishing returns (Pelland 2024/25 meta); frequency
+  ~irrelevant when volume equated; lagging/indirect-starved muscles want more, recovery-limited or
+  indirect-heavy ones want less. Age 40 + surfing (delt/lat/leg fatigue) + lean-bulk surplus →
+  aim MAV (productive middle), not MRV. Targets are in *effective sets* (Σ sets × contribution),
+  which already folds in indirect work.
+- **Starting targets** (editable per muscle, tune by recovery/response):
+  side_delts 18, rear_delts 14, front_delts 8, lats 16, mid_back 14, upper_traps 8,
+  upper_chest 12, lower_chest 10, biceps 14, triceps_long 10, triceps_lateral 10, forearms 8,
+  quads 14, hamstrings 12, glutes 12, gastrocnemius 14, abs 12, obliques 8.
+- **Hard 7-day rolling window, no decay** — set counts fully for 7 days then drops off; this is
+  what enables the "about to expire tomorrow" gray preview. (Not recency-weighted — goal is fixed.)
 
 ## Body Heatmap — anatomical muscle visualization  *(planned — ambitious, feasible)*
 

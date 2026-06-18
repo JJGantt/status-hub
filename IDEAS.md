@@ -71,7 +71,13 @@ web + iOS + macOS.
 - **Expand 1:** previous days — calories + macros hit each day.
 - **Expand 2:** individual entries — exactly what I ate and when.
 
-## Workouts — Gamified Volume (sets per muscle)  *(planned — big edit)*
+## Workouts — Gamified Volume (sets per muscle)  *(gauges DONE; heatmap pending)*
+
+**Status:** per-muscle volume gauges live on the hub (server/volume.js) — weekly Σ(set×contribution)
+vs uniform 14 target, grouped Legs/Push/Pull/Core, color by ratio, with a striped "drops off
+tomorrow" segment. Real-time refresh locked in (30s server re-push when clients connected, so the
+pace drain + volume drop-off update live, not just on DB edits). Body heatmap = next, derived from
+this same volume data.
 
 Gamify weekly training volume **by sets per muscle**, using the existing
 `exercise_muscles(name, muscle, contribution)` map (24 exercises → 18 muscles; contribution =

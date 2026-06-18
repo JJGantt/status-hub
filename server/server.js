@@ -302,7 +302,7 @@ function dashboardHtml() {
 .vstable{height:100%;transition:width .4s ease}
 .vdrop{height:100%;background:repeating-linear-gradient(45deg,#4b5563,#4b5563 3px,#39414d 3px,#39414d 6px)}
 #body .bodysvg{width:100%;height:auto;max-height:520px;display:block;margin-top:4px}
-#body .bodysvg path{fill:#222a33;stroke:#0b0d10;stroke-width:0.6;transition:fill .4s ease}
+#body .bodysvg path{fill:#222a33;stroke:#0b0d10;stroke-width:0.25;transition:fill .4s ease}
 .week{display:grid;grid-template-columns:repeat(7,1fr);gap:8px}
 .day{background:#0e1318;border-radius:10px;padding:10px 6px;text-align:center;border-top:3px solid #2a313a}
 .day .d{font-size:12px;color:#8b96a5}.day .w{font-size:13px;font-weight:600;margin-top:6px;min-height:32px;display:flex;align-items:center;justify-content:center}
@@ -338,6 +338,28 @@ function fmtFoot(){if(!last)return;const L=last.litter||{};
 function dayColor(label){if(!label)return'#2a313a';const l=label.toLowerCase();
  if(l.includes('full body'))return'#e8eaed';if(l.includes('push'))return CAT_COLOR.push;
  if(l.includes('pull'))return CAT_COLOR.pull;if(l.includes('legs'))return CAT_COLOR.legs;return'#a855f7';}
+// Map a body-map SVG region id (vulovix/body-muscles) to one of our tracked muscles.
+function muscleForId(id){
+ if(id.indexOf('shoulder-front')===0)return'front_delts';
+ if(id.indexOf('shoulder-side')===0)return'side_delts';
+ if(id.indexOf('deltoid-rear')===0)return'rear_delts';
+ if(id.indexOf('biceps')===0)return'biceps';
+ if(id.indexOf('forearm')===0)return'forearms';
+ if(id.indexOf('chest-upper')===0)return'upper_chest';
+ if(id.indexOf('chest-lower')===0)return'lower_chest';
+ if(id.indexOf('abs-')===0)return'abs';
+ if(id.indexOf('obliques')===0)return'obliques';
+ if(id.indexOf('traps-upper')===0)return'upper_traps';
+ if(id.indexOf('traps-mid')===0||id.indexOf('traps-lower')===0)return'mid_back';
+ if(id.indexOf('lats-')===0)return'lats';
+ if(id.indexOf('triceps-long')===0)return'triceps_long';
+ if(id.indexOf('triceps-lateral')===0)return'triceps_lateral';
+ if(id.indexOf('quads')===0)return'quads';
+ if(id.indexOf('gluteus')===0)return'glutes';
+ if(id.indexOf('calves')===0)return'gastrocnemius';
+ if(id.indexOf('hamstrings')===0)return'hamstrings';
+ return null;
+}
 function render(s){
  if(!s||s.error){return;}
  last=s;
@@ -406,9 +428,9 @@ function render(s){
  }).join('');
  document.getElementById('volume').innerHTML='<h2>Muscle Volume · 7-Day</h2>'+vgroups+
   '<div class=pnote>target '+(V.target_default||14)+' sets/muscle/wk · striped = drops off tomorrow</div>';
- // body map: paint each region with its worst-of volume color
- const RG=(V.regions)||{};
- for(const slug in RG){document.querySelectorAll('#body path[data-r="'+slug+'"]').forEach(p=>{p.style.fill=RG[slug];});}
+ // body map: paint each fine region by its mapped muscle's color
+ const MC=(V.muscle_colors)||{};
+ document.querySelectorAll('#body path[data-r]').forEach(p=>{const m=muscleForId(p.getAttribute('data-r'));if(m&&MC[m])p.style.fill=MC[m];});
  fmtFoot();
 }
 const es=new EventSource('/api/stream');

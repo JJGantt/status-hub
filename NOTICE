@@ -1,0 +1,3 @@
+This product includes the body-muscle SVG geometry from "body-muscles"
+(https://github.com/vulovix/body-muscles), © its authors, licensed under the
+Apache License 2.0. The vendored path data lives in server/bodymap.js.

@@ -10,25 +10,6 @@
 
 const TARGET_DEFAULT = 14;
 
-// Body-map display regions (coarser asset slugs) → our fine muscles. Each region inherits the
-// WORST (lowest ratio) of its muscles, so a neglected sub-muscle drags the region red even if a
-// sibling is over. side_delts rides with deltoids; lats with upper-back (asset has no distinct slug).
-const REGION_MAP = {
-  chest: ['upper_chest', 'lower_chest'],
-  deltoids: ['front_delts', 'side_delts', 'rear_delts'],
-  triceps: ['triceps_long', 'triceps_lateral'],
-  biceps: ['biceps'],
-  forearm: ['forearms'],
-  abs: ['abs'],
-  obliques: ['obliques'],
-  trapezius: ['upper_traps'],
-  'upper-back': ['lats', 'mid_back'],
-  quadriceps: ['quads'],
-  hamstring: ['hamstrings'],
-  gluteal: ['glutes'],
-  calves: ['gastrocnemius'],
-};
-
 const GROUPS = [
   { group: 'Legs', muscles: [['quads', 'Quads'], ['hamstrings', 'Hamstrings'], ['glutes', 'Glutes'], ['gastrocnemius', 'Calves']] },
   { group: 'Push', muscles: [['upper_chest', 'Upper chest'], ['lower_chest', 'Lower chest'], ['front_delts', 'Front delts'], ['side_delts', 'Side delts'], ['triceps_long', 'Triceps (long)'], ['triceps_lateral', 'Triceps (lat)']] },
@@ -91,19 +72,15 @@ function computeVolume(setRows, muscleRows, window, targets) {
       };
     }),
   }));
-  // Body-map region colors: worst-of (lowest ratio) across each region's muscles.
-  const regions = {};
-  for (const [slug, muscleList] of Object.entries(REGION_MAP)) {
-    let worst = Infinity;
-    for (const m of muscleList) {
-      const target = (targets && targets[m]) || TARGET_DEFAULT;
-      const ratio = target > 0 ? (total[m] || 0) / target : 0;
-      if (ratio < worst) worst = ratio;
-    }
-    regions[slug] = volColor(worst === Infinity ? 0 : worst);
+  // Per-muscle color for the body map (each fine SVG region maps to exactly one of these,
+  // so no aggregation needed — every muscle shows its own true color).
+  const muscle_colors = {};
+  for (const g of GROUPS) for (const [slug] of g.muscles) {
+    const target = (targets && targets[slug]) || TARGET_DEFAULT;
+    muscle_colors[slug] = volColor(target > 0 ? (total[slug] || 0) / target : 0);
   }
 
-  return { target_default: TARGET_DEFAULT, drop_day: dropDay, groups, regions };
+  return { target_default: TARGET_DEFAULT, drop_day: dropDay, groups, muscle_colors };
 }
 
 module.exports = { computeVolume };

@@ -10,12 +10,74 @@ payload; the clients only paint.
 
 ## Inbox (unsorted — drop raw ideas here)
 
+- **★ PRIORITY — Pi-display Claude conversation viewer.** The Pi wall display (`/tv` kiosk) gets an
+  area showing a live Claude conversation (at minimum the latest assistant response + last user
+  prompt; scrolling transcript TBD). An **MCP tool sets the "active Pi-display session"** — e.g.
+  "make this my active Pi display" → tool records which session to show. Source = the session's
+  JSONL transcript (Claude Code writes one per session at `~/.claude/projects/<enc-cwd>/<id>.jsonl`,
+  appended live). Two host cases: (a) **Mac-hosted** session → Pi reads the Mac's JSONL (Pi↔Mac SSH,
+  or a tiny Mac server tails+streams it); (b) **Pi-hosted** session (Pi runs its own `claude` session)
+  → read locally. Display is **non-interactive on the Pi**; the **phone app is the remote control**
+  (start a Pi-hosted session, switch active session, etc.).
+  OPEN DESIGN QUESTIONS: (1) the model can't reliably self-identify its own session ID → the
+  "set active" tool should resolve "the current session" by **most-recently-active transcript**
+  rather than needing an explicit ID. (2) **Data path**: local-only (Pi tails Mac JSONL via SSH /
+  small Mac streamer) vs relayed through Fly/Supabase — lean LOCAL (keeps transcripts off the cloud;
+  but note the Fly hub can't read the Mac filesystem, so the conversation is a separate local data
+  path the Pi composes alongside the `/tv` page). (3) shared "active session" pointer could live in
+  Supabase (both Mac+Pi can read) even if the transcript itself stays local.
+
+- **AI feature buttons (per-tab one-off agent calls; mainly the phone app).** Each tab (nutrition,
+  workout, …) gets a button → voice (or text) → a **one-off headless Claude call with a feature-
+  specific system prompt** so the user gives only the payload, not instructions. Nutrition: press →
+  say "banana" → prompt knows it's a food to log (estimate macros, log it). Workout: press → say
+  "dumbbell press 10 times 8" → prompt knows it's a set + the shorthand convention. **Never-fail /
+  offline-safe**: don't call Claude directly from the phone — **enqueue the request in Supabase**
+  (`{feature, text, ts, status}`); a **worker on Mac and/or Pi (whichever is online) claims & runs**
+  the headless Claude (with the data MCP) → logs → marks done. If no worker is up, it stays pending
+  and runs when one comes online — a queued call is never lost.
+  OPEN: (1) **define the workout shorthand** ("10 times 8" = ? reps × ? lbs — need Jared's exact
+  convention). (2) **on-device iOS speech-to-text** (send text) vs server STT (send audio) — lean
+  on-device (no audio upload, no server STT dependency). (3) needs the **native app updated** first.
+
+- **Pi wall-display: dedicated `/tv` kiosk route** (after the layout redesign). Old TCL LCD on the wall,
+  driven by the Raspberry Pi running **Chromium in kiosk mode** (`--kiosk --app=https://jared-status-hub.fly.dev/tv`;
+  persistent profile so the auth cookie sticks). The Pi is just a thin display client — hub lives on
+  Fly, so Pi flakiness only blanks the screen, never affects data. The `/tv` route **reuses the same
+  `/api/status` data + card render functions**, but with a TV-tuned container + theme: **pure-black bg
+  (#000)**, **16:9 fill, no scroll** (everything fits one frame, auto-scaled), **larger type** for
+  across-the-room legibility, **passive** (no hover/click). Burn-in: TCL = LCD → non-issue; dark theme
+  already helps; optional pixel-shift / nightly display-off (`vcgencmd display_power` or HDMI-CEC) if
+  ever wanted. Build after the redesign so it reuses the new card/row structure rather than redoing it.
+
+- **One-tap undo** (future; enabled by the `nutrition_audit` before/after log being built now): a
+  "Undo last action" affordance that reverses the most recent hub write — re-insert a deleted row from
+  `before`, revert an edit to `before`, delete an add via `after.id`. Until built, reversal is manual
+  (read the audit log, reverse the action). Could generalize to other tables later.
+
+- **Petlibro feeder integration** (wants to tackle soon): surface the automatic pet **food feeder**
+  (Petlibro) status in the hub's top **home-status row** alongside the Litter-Robot — e.g. last feed
+  time, portions dispensed, hopper/food level, errors. Needs API access: Petlibro runs on Tuya cloud;
+  likely an unofficial API / Tuya IoT integration to investigate (no official public API). Companion to
+  the litter watcher — both are "pet hardware status." Lives in the new thin status row (see layout).
+
 - **General-purpose calendar** (future): the workout "last 7 days" strip was replaced with a
   GitHub-contribution-style volume heatmap (week columns, cell darkness = that day's set count).
   Later we may want a fuller calendar that incorporates everything — food + workouts + weight +
   whatever — a single general-purpose life calendar, not just workouts.
 - Maintenance/Goal panel removed from the hub UI (the maintenance computation still runs and
   drives the dynamic nutrition target; just not displayed). Could re-add a compact version later.
+
+- **Voice pipeline: speaker verification (reject the TV, only respond to me).** The ESP32 voice
+  pipeline (`~/repos/voice-pipeline`, Fly app `jared-voice`: mic → wss → openWakeWord → Groq STT →
+  transcript) currently endpoints on an **adaptive ambient-energy floor** (Option A) — works because
+  my voice at the mic beats the TV across the room on loudness. It does NOT know *whose* voice it is,
+  so a TV could (rarely) trip the wake word or a loud TV moment could muddy a capture. The robust fix
+  is **speaker verification**: enroll a short sample of my voice → a voiceprint (embedding, e.g.
+  resemblyzer / ECAPA-TDNN) → gate captured utterances on "is this Jared?" before acting. Solves both
+  TV false-triggers AND distinguishing me from any other voice — by voice *characteristics*, not just
+  loudness. Heavier, separate layer; only build if the TV actually starts tripping it. Pairs with the
+  AI-feature-button / headless-Claude work since the transcript is the shared input.
 
 ---
 
@@ -67,6 +129,98 @@ portions** that would bring the macros closest to perfect *right now*. Inputs:
 Output: a concrete food + portion sizes optimized to fill the remaining macro gap. Cheap headless
 call, low frequency. (Surfaces the suggestion; no auto-logging.)
 
+## Nutrition: predictive quick-log (one-press repeat logging)  *(idea)*
+
+Take the LLM **out of the loop** for routine/repeat entries. If I'm logging the same thing as
+yesterday (e.g. overnight oats every morning), I shouldn't have to speak or describe it — just tap.
+
+- **Predict from time-of-day + history:** cluster past entries by (time-of-day window, item/macro
+  signature). When the current time matches a frequent pattern, surface that entry as a **one-press
+  quick-add**, pre-filled with the usual macros. E.g. ~morning → a "Overnight oats" button already
+  loaded with the exact macros from the recurring entry.
+- Show the top 1–3 likely items for the current window; tap = logged, no LLM call.
+- Pure quick-add of a *known* entry. The LLM stays only for genuinely novel foods.
+- Complements the AI meal suggestion (that's "what *should* I eat to fill the gap"; this is
+  "you're about to log the thing you always log — here's the button").
+- **Powered by the add-at-now repeat counts (BUILT add feature feeds this).** Now that re-adding an
+  item logs the exact same food, we accumulate per-item frequency + the median time-of-day it's
+  logged. That history is the prediction signal: "you log overnight oats ~9am almost every day."
+- **Proactive forgot-to-log prompt:** at the predicted time, surface "Want to add Overnight oats?"
+  — in-app, and (when push is built) as a **push notification** so a forgotten morning log gets
+  caught even if the app isn't open. One tap logs it. This is the catch-net for forgetting, distinct
+  from the "you're behind pace" nudge (that says *eat/log something*; this says *add THIS specific
+  thing you always have now*).
+
+## Nutrition: log view (intake history)  *(idea)*
+
+A general way to view the intake log over time — separate from the live pace HUD. Folds into the
+Nutrition Row expand levels (Expand 1 = previous days, Expand 2 = individual entries).
+
+- **A heatmap is probably NOT right here** (unlike workouts): I eat ~every day at ~similar amounts,
+  so a density grid of "did I eat" carries little signal.
+- **The macro-carryover science dictates the framing** (settled — don't relitigate):
+  - **Calories = weekly-average game.** Body weight/fat tracks the *weekly* energy-balance average;
+    daily swings wash out. Show calories as a rolling 7-day average, not a per-day pass/fail.
+  - **Protein = daily game.** No protein storage; a surplus day does NOT bank for a deficit day
+    (excess is oxidized/stored as fat, nitrogen excreted), and an under-protein day is a real miss.
+    So surface **daily protein hit/miss consistency** (a streak/strip of "cleared protein target?").
+  - **Carbs = in between.** Stored as glycogen (~400–500g muscle + ~100g liver) so a high day tops
+    off tomorrow's training fuel; true excess beyond glycogen+energy → fat (DNL minor in normal
+    eating). Daily for performance, weekly for body comp.
+- **Likely shapes:** per-day protein hit/miss strip (the hero), rolling 7-day calorie-average line,
+  tap a day → its entries (reuse the workout day-detail inline pattern).
+
+### Nutrition Log v2 — refinements  *(v1 BUILT: trend sparklines + protein calendar + tap-day entries; these queued behind the hub refactor)*
+
+- **Combined calorie+weight plot** (replaces the two separate sparklines): ONE plot, shared time
+  x-axis, **dual y-axis** (calories left / weight right, each auto-scaled), dashed **maintenance**
+  reference on the cal axis, labeled axis ticks + legend + current-value annotations. Same footprint,
+  readable. Purpose: *see the energy-balance loop* (cal-avg above maintenance → weight rises). Each
+  point = trailing-7-day avg ending that day. CONFIRMED behaviors: today excluded (finalized days
+  only, by date); averages only LOGGED days (skips no-log days, doesn't zero them); **NO outlier
+  rejection** in the display (the weekly avg must include real highs/lows — outlier rejection lives
+  only in the TDEE/maintenance estimate). Weight line: RAW daily weigh-ins (Jared wants to see the bumps/variance), plotted against the
+  smoothed 7-day calorie average.
+- **Calendar coloring — DECIDED: calorie-based, diverging scale.** Color each day by calories vs that
+  day's **historical** target (Jared's call over protein: he wants to spot stretches of consistently
+  under/over, and it pairs with clicking a day to see the full calorie breakdown). Scale: **blue =
+  under (cold) → green = on target → yellow → red = over (hot)**, diverging around green, with a
+  distinct deep-red for far-over. Historical target: targets table is sparse (calories constant 2650
+  so far) → use most-recent-prior snapshot per day; PLUS **persist a dated target row every day going
+  forward** (the maintenance sync) so real per-day targets accumulate once intake data flows.
+- **Muscle-map coloring — KEEP red-under→green→blue-over (not flipping).** Jared mused about making
+  blue=under everywhere for consistency. Recommendation: don't — the metrics differ. Muscle volume is
+  "fill toward a goal," where LOW is the alert state, so red-when-low (loud) is correct and blue-when-
+  low would wrongly read as calm. Calories are symmetric deviation around a target, so blue↔red around
+  green fits. Different color logic because different meaning. (Revisit only if Jared wants uniformity.)
+- **Day detail: all macros.** Day total shows cal + P + C + F (not just protein+cal); each entry too.
+- **Per-ingredient breakdown — DECIDED, BUILDING.** Added `ingredients` JSONB to `nutrition_entries`
+  (migration 00014; shape `[{name, calories, protein_g, carbs_g, fat_g}]`, null for simple/historical
+  entries). The logging LLM (MCP `log_nutrition`) populates it for composite foods **going forward**;
+  old aggregate entries (omelet/oats) won't have it. The hub expands an entry → shows the breakdown
+  when present. Each ingredient is itself addable as its own entry (see quick-add).
+- **Add-at-now quick-add — DECIDED. First hub WRITE action.** Each entry gets an "add" button → a
+  confirm popup that re-logs it at the **current wall-clock** time (NOT the viewed day). The popup:
+  (a) a whole-entry **portion multiplier** (default 1; +/− or text box; fractional ok), AND (b) if the
+  entry has an `ingredients` breakdown, the **editable ingredient list** — each ingredient's quantity
+  adjustable and each with **its own add button** (add just that ingredient at now). Add/Cancel.
+  INSERT new `nutrition_entries` row(s) with macros × factor at now. **Name is ANNOTATED** with the
+  portion (e.g. "Overnight oats (½×)") so a half-portion is never mistaken for a full one. (`quantity`
+  is always 1 today and macros are totals, so factor scales macros directly — Jared already does this
+  by hand, e.g. the "half portion oats" entry.) Needs an auth'd write endpoint on the hub.
+
+## Nutrition rings → pace rings (fill + sweeping marker)  *(proposed — pending confirm; queued hub build)*
+
+Reconceive the P/C/F rings from the current *deviation-from-pace* gauges into Apple-Watch-style
+**pace rings**: fill arc = **consumed ÷ daily goal** (full circle = goal), PLUS a **sweeping marker
+line** showing where you should be by now. Marker = fraction of the **eating window** elapsed
+(history-derived ~8a–10p, not the 24h clock), sweeping **clockwise from the top**, completing a full
+circle at window-end (= your goal = "don't eat past this line"). Fill color: green at/ahead of the
+marker, red as it falls behind, amber once past goal. Server adds per-macro consumed/goal fill +
+a shared `pace_frac` (pace.js already computes the window fraction). Touches `lib/pace.js` +
+`public/cards/nutrition.js`. OPEN: keep the consumed/goal **bars** (ring=glance, bar=exact) or drop
+them as redundant — lean keep.
+
 ## Muscle drill-down: what hits each muscle  *(idea)*
 
 - **Muscle Volume card:** make each muscle gauge **clickable/expandable** → reveals the exercises
@@ -75,6 +229,26 @@ call, low frequency. (Surfaces the suggestion; no auto-logging.)
 - **Body map:** hover/tap a region → tooltip or panel naming the muscle + the same exercise list.
   Feasible — SVG `<path>`s can carry titles and click handlers (we already make heatmap cells
   clickable the same way).
+- **BUILT:** muscle (map region or volume row) → its exercises (colloquial names, primary/secondary
+  by dimness) → tap an exercise → its muscles + equipment **variants** → tap a variant → YouTube
+  "how to" search. The remaining unbuilt piece of the drill-down is the **per-exercise progression
+  view** below.
+
+## Per-exercise progression view  *(idea)*
+
+Tonnage/load is only meaningful **per-exercise** (like-for-like), not aggregated. Filter to one
+exercise → chart over time:
+- **Tonnage** (Σ lbs×reps per session), **top-set weight**, and/or **estimated 1RM** — the
+  progressive-overload signal. Clean because you compare the movement to itself.
+- Bodyweight lifts (weight_lbs=0): track reps (and any added load) instead of pounds.
+- Hangs off the drill-down: muscle → exercise → this progression chart (next to the variant links).
+
+**Workout heatmap stays on set-count (decided).** A mode toggle to color the aggregate heatmap by
+*tonnage* was considered and **rejected**: aggregate tonnage is dominated by heavy compounds (one
+RDL set dwarfs many lateral-raise sets), reads bodyweight lifts as zero work (weight_lbs=0), and
+sums non-comparable pounds into a physiologically meaningless number. Sets are roughly commensurable
+across exercises — which is why set-count is the standard weekly-volume metric and the right heatmap
+coloring. Tonnage's home is the per-exercise view above.
 
 ## UI Structure: Expandable Rows  *(planned — replaces the card grid)*
 
@@ -234,7 +408,12 @@ hub would need to not auto-suspend for nutrition nudges).
 
 - **Waste drawer full** → push.
 - **Litter level ≤ 75%** → push.
-- **Nutrition pace nudge** — e.g. nothing logged by noon, or significantly behind pace.
+- **Nutrition pace nudge — "bars too low."** When the pace rings drain too far behind (e.g. nothing
+  logged by noon, or significantly behind pace), push a nudge. The signal is dual-purpose: it tells me
+  I either **forgot to log** something or genuinely **need to eat** — either way, act.
+- **Predictive "want to add X?" push** (see Predictive quick-log) — at the median time I usually log a
+  recurring item, push "Add Overnight oats?" so a forgotten routine log is caught even with the app
+  closed; one tap logs it. Catch-net for forgetting, distinct from the behind-pace nudge.
 - NOT litter-stuck (happens every cycle — too noisy).
 - Quiet hours so it never nudges overnight.
 

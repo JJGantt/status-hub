@@ -1,12 +1,18 @@
 'use strict';
 const express = require('express');
 const crypto = require('crypto');
+const fs = require('fs');
+const path = require('path');
 const { createClient } = require('@supabase/supabase-js');
 const WebSocket = require('ws');
-const { estimateMaintenance } = require('./maintenance');
-const pace = require('./pace');
-const { computeVolume } = require('./volume');
-const BODY_SVG = require('./bodymap');
+const { estimateMaintenance } = require('./lib/maintenance');
+const pace = require('./lib/pace');
+const { computeVolume } = require('./lib/volume');
+const BODY_SVG = require('./lib/bodymap');
+const { DAY_START_HOUR, localDate, nutritionWindow, lastNDates, dayBucketOf } = require('./lib/dates');
+const { buildWorkoutHeatmap } = require('./lib/heatmap');
+const { buildNutritionLog, calorieColor, targetCalFor } = require('./lib/nutritionlog');
+const { buildVariants } = require('./lib/variants');
 
 const PORT = process.env.PORT || 8080;
 const SUPABASE_URL = process.env.SUPABASE_URL;
@@ -22,6 +28,13 @@ const supa = createClient(SUPABASE_URL, SUPABASE_KEY, {
   realtime: { transport: WebSocket },
 });
 const sseClients = new Set();
+// Separate SSE pool for the /tv voice-conversation panel — these get raw voice_messages /
+// voice_focus rows, not the assembled status frame, so they don't carry the heavy status payload.
+const voiceClients = new Set();
+
+// Dashboard HTML, read once from disk with the muscle-map SVG injected at the placeholder.
+const DASHBOARD_HTML = fs.readFileSync(path.join(__dirname, 'public', 'index.html'), 'utf8')
+  .replace('<!--BODY_SVG-->', BODY_SVG);
 
 const app = express();
 app.use(express.urlencoded({ extended: false }));
@@ -49,12 +62,29 @@ async function sbRange(path) {
   return out;
 }
 async function sbWrite(path, method, body) {
-  const r = await fetch(`${SUPABASE_URL}/rest/v1/${path}`, {
+  const init = {
     method,
     headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
-  });
+  };
+  if (body !== undefined) init.body = JSON.stringify(body);
+  const r = await fetch(`${SUPABASE_URL}/rest/v1/${path}`, init);
   if (!r.ok) throw new Error(`supabase ${method} ${path} -> ${r.status}`);
+}
+
+// Best-effort audit trail for every hub nutrition write (add/edit/delete). before/after are
+// full row snapshots (or null) — enough to fully reverse any action. NEVER throws into the
+// caller: a failed audit insert must not fail the user's action, so it logs and swallows.
+async function audit(action, entryId, before, after) {
+  try {
+    await sbWrite('nutrition_audit', 'POST', {
+      id: crypto.randomUUID(),
+      at: new Date().toISOString(),
+      action,
+      entry_id: entryId,
+      before: before || null,
+      after: after || null,
+    });
+  } catch (e) { console.error('audit insert failed:', e.message); }
 }
 
 // Keep the stored nutrition_targets row in sync with the hub's live dynamic goal so the
@@ -76,32 +106,26 @@ async function syncStoredTarget(m, today) {
   lastSyncedTarget = key;
 }
 
-// ---- date helpers (in the display timezone) ----
-// A nutrition "day" runs DAY_START_HOUR→DAY_START_HOUR local time, so a late-night
-// snack (before 4am) counts toward the day that just ended. This is a display-only
-// window over the real occurred_at timestamps — storage is never touched, so changing
-// this one number instantly re-groups all history with no migration.
-const DAY_START_HOUR = 4;
-function localDate(d = new Date()) {
-  return d.toLocaleDateString('en-CA', { timeZone: TZ }); // YYYY-MM-DD
-}
-// [start, end) occurred_at bounds for the nutrition day currently in progress.
-function nutritionWindow() {
-  const hh = String(DAY_START_HOUR).padStart(2, '0');
-  const dayStart = localDate(new Date(Date.now() - DAY_START_HOUR * 3600000)); // pre-4am → prior day
-  const dayEnd = localDate(new Date(Date.parse(dayStart + 'T12:00:00Z') + 86400000));
-  return { day: dayStart, start: `${dayStart}T${hh}:00:00`, end: `${dayEnd}T${hh}:00:00` };
-}
-function lastNDates(n) {
-  const today = localDate();
-  const anchor = new Date(today + 'T12:00:00Z'); // noon-UTC anchor avoids day flips
-  const out = [];
-  for (let i = n - 1; i >= 0; i--) {
-    const d = new Date(anchor.getTime() - i * 86400000);
-    out.push(d.toISOString().slice(0, 10));
+// Live dynamic maintenance calorie target (same adaptive estimate the dashboard shows). Used as
+// the fallback for a day's historical target when no nutrition_targets snapshot precedes it.
+async function currentMaintenanceCal() {
+  const today = nutritionWindow().day;
+  const histStart = localDate(new Date(Date.now() - 40 * 86400000));
+  const [weightRows, histRows] = await Promise.all([
+    sb('weight_log?select=date,weight_lbs&order=date.asc'),
+    sb(`nutrition_entries?occurred_at=gte.${histStart}T00:00:00&select=occurred_at,calories`),
+  ]);
+  const intakeTotals = {};
+  for (const e of histRows || []) {
+    const d = dayBucketOf(e.occurred_at);
+    if (d === today) continue;
+    intakeTotals[d] = (intakeTotals[d] || 0) + (Number(e.calories) || 0);
   }
-  return out;
+  const intakeByDay = Object.entries(intakeTotals).map(([date, calories]) => ({ date, calories }));
+  const weights = (weightRows || []).map((r) => ({ date: String(r.date).slice(0, 10), weight: Number(r.weight_lbs) }));
+  return estimateMaintenance({ weights, intakeByDay, today }).target_macros.calories;
 }
+
 // Current time as minutes into the 4am-origin day, in the display timezone.
 function nowOffsetTZ() {
   const f = new Intl.DateTimeFormat('en-US', { timeZone: TZ, hour12: false, hour: '2-digit', minute: '2-digit' });
@@ -109,43 +133,6 @@ function nowOffsetTZ() {
   const hh = Number(parts.find((p) => p.type === 'hour').value) % 24;
   const mm = Number(parts.find((p) => p.type === 'minute').value);
   return pace.offsetFromHM(hh, mm);
-}
-// Which 4am-day a naive-local occurred_at timestamp belongs to (matches nutritionWindow()).
-function dayBucketOf(ts) {
-  const m = String(ts).match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::(\d{2}))?/);
-  if (!m) return String(ts).slice(0, 10);
-  const d = new Date(+m[1], +m[2] - 1, +m[3], +m[4] - DAY_START_HOUR, +m[5], +(m[6] || 0));
-  const p = (n) => String(n).padStart(2, '0');
-  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
-}
-
-// ---- workout volume heatmap: per-day set counts laid out as week-columns (GitHub style) ----
-const MON = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-function buildWorkoutHeatmap(rows, weeks = 18) {
-  const counts = {};
-  for (const r of rows || []) { const d = String(r.occurred_at).slice(0, 10); counts[d] = (counts[d] || 0) + 1; }
-  const today = localDate();
-  const anchor = new Date(today + 'T12:00:00Z');
-  const dow = anchor.getUTCDay(); // 0=Sun .. 6=Sat
-  const startMs = anchor.getTime() - dow * 86400000 - (weeks - 1) * 7 * 86400000;
-  // self-scaling intensity: your busiest day = brightest, the rest scale relative to it
-  let maxCount = 0; for (const k in counts) if (k <= today && counts[k] > maxCount) maxCount = counts[k];
-  const level = (c) => (c <= 0 ? 0 : Math.min(4, Math.max(1, Math.ceil((4 * c) / (maxCount || 1)))));
-  const cols = [], months = [];
-  let prevMon = -1;
-  for (let w = 0; w < weeks; w++) {
-    const col = [];
-    for (let d = 0; d < 7; d++) {
-      const ds = new Date(startMs + (w * 7 + d) * 86400000).toISOString().slice(0, 10);
-      const c = counts[ds] || 0;
-      col.push({ date: ds, count: c, level: ds > today ? -1 : level(c), today: ds === today });
-    }
-    const m = Number(col[0].date.slice(5, 7)) - 1;       // month of this column's first day
-    months.push(m !== prevMon ? MON[m] : '');            // label only when the month changes
-    prevMon = m;
-    cols.push(col);
-  }
-  return { weeks: cols, months, maxCount };
 }
 
 // ---- assemble dashboard data ----
@@ -156,7 +143,7 @@ async function buildStatus() {
   const histStart = localDate(new Date(Date.now() - 40 * 86400000)); // intake history for the maintenance trend
   const heatStart = localDate(new Date(Date.now() - 140 * 86400000)); // ~20 weeks for the workout volume heatmap
 
-  const [deviceRows, entries, setRows, weightRows, histRows, muscleRows, heatRows] = await Promise.all([
+  const [deviceRows, entries, setRows, weightRows, histRows, muscleRows, heatRows, catalogRows, nutLogRows, targetRows] = await Promise.all([
     sb('device_status?select=*'),
     sb(`nutrition_entries?occurred_at=gte.${win.start}&occurred_at=lt.${win.end}&select=calories,protein_g,carbs_g,fat_g`),
     sb(`sets?occurred_at=gte.${week[0]}T00:00:00&select=occurred_at,exercise,muscles_override`),
@@ -164,6 +151,9 @@ async function buildStatus() {
     sb(`nutrition_entries?occurred_at=gte.${histStart}T00:00:00&select=occurred_at,calories`),
     sb('exercise_muscles?select=name,muscle,contribution'),
     sbRange(`sets?occurred_at=gte.${heatStart}T00:00:00&select=occurred_at&order=occurred_at`),
+    sb('exercise_catalog?select=name,equipment'),
+    sbRange(`nutrition_entries?occurred_at=gte.${localDate(new Date(Date.now() - 86 * 86400000))}T00:00:00&select=occurred_at,calories,protein_g&order=occurred_at`),
+    sb('nutrition_targets?select=date,calories&order=date.asc'),
   ]);
 
   const litter = (deviceRows || [])[0] || null;
@@ -202,11 +192,16 @@ async function buildStatus() {
 
   // ---- weekly per-muscle volume gauges ----
   const volume = computeVolume(setRows || [], muscleRows || [], week);
+  volume.exercise_variants = buildVariants(catalogRows || []); // exercise → equipment variants + YouTube how-to links
 
   // ---- workout volume heatmap (GitHub-contribution style) ----
   const heatmap = buildWorkoutHeatmap(heatRows);
 
-  return { today, litter, nutrition, maintenance, pace: paceData, volume, heatmap, generated_at: new Date().toISOString() };
+  // ---- nutrition log: calorie-adherence calendar (per-day historical targets) + calorie/weight trend ----
+  const nutrition_log = buildNutritionLog(nutLogRows || [], weights, maintenance.target, maintenance.maintenance, today, targetRows || []);
+
+  const last_set_at = (heatRows && heatRows.length) ? heatRows[heatRows.length - 1].occurred_at : null;
+  return { today, litter, nutrition, maintenance, pace: paceData, volume, heatmap, nutrition_log, last_set_at, generated_at: new Date().toISOString() };
 }
 
 // ---- realtime push: recompute + push to all connected browsers on any DB change ----
@@ -217,11 +212,31 @@ async function broadcast() {
   for (const res of sseClients) { try { res.write(frame); } catch {} }
 }
 
+// Push a single voice event to every /tv client. Shape: { kind, row }. Kinds:
+//   'message'  — a voice_messages row (append/update the conversation)
+//   'focus'    — a voice_focus row (swap focus header / terminal view; row carries terminal_url)
+//   'sessions' — the focusable session list changed; row is null, client re-fetches /api/voice-sessions
+// The browser keys off kind.
+function pushVoice(kind, row) {
+  const frame = 'event: voice\ndata: ' + JSON.stringify({ kind, row }) + '\n\n';
+  for (const res of voiceClients) { try { res.write(frame); } catch {} }
+}
+
 function startRealtime() {
   supa.channel('hub-changes')
     .on('postgres_changes', { event: '*', schema: 'public', table: 'device_status' }, broadcast)
     .on('postgres_changes', { event: '*', schema: 'public', table: 'nutrition_entries' }, broadcast)
     .on('postgres_changes', { event: '*', schema: 'public', table: 'sets' }, broadcast)
+    // Voice pipeline: stream inserts/updates straight to the /tv conversation panel. INSERT and
+    // UPDATE both carry the new row in `payload.new` (UPDATE = a streamed row flipping done=true).
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'voice_messages' },
+      (p) => { if (p.new) pushVoice('message', p.new); })
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'voice_focus' },
+      (p) => { if (p.new) pushVoice('focus', p.new); })
+    // Focusable Mac sessions list changed — signal /tv to re-fetch /api/voice-sessions. No
+    // payload needed (re-fetch is simplest/robust); the row isn't carried.
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'voice_sessions' },
+      () => pushVoice('sessions', null))
     .subscribe((status) => console.log('realtime channel:', status));
 }
 
@@ -244,13 +259,26 @@ app.post('/login', (req, res) => {
   res.type('html').send(loginHtml('Wrong password'));
 });
 
+// Auth gate — everything below requires the cookie (or x-hub-token header). The browser
+// sends the cookie on same-origin module/css fetches automatically, so static assets are
+// served behind this gate too.
 app.use((req, res, next) => {
   if (authed(req)) return next();
   if (req.path.startsWith('/api')) return res.status(401).json({ error: 'unauthorized' });
   res.redirect('/login');
 });
 
-app.get('/', (req, res) => res.type('html').send(dashboardHtml()));
+app.get('/', (req, res) => res.type('html').send(DASHBOARD_HTML));
+// Pi/TV kiosk: near-black always-on wall display = the HUD + a live Claude-conversation panel.
+// Behind the same auth cookie. no-cache so a deploy is never masked by a stale cached page.
+app.get('/tv', (req, res) => {
+  res.setHeader('Cache-Control', 'no-cache');
+  res.type('html').send(fs.readFileSync(path.join(__dirname, 'public', 'tv.html'), 'utf8'));
+});
+// Static client assets (core.js, app.css, cards/*.js) — behind the auth gate above.
+// no-cache (revalidate via ETag each load) so a deploy is never masked by a stale cached asset.
+app.use(express.static(path.join(__dirname, 'public'), { setHeaders: (res) => res.setHeader('Cache-Control', 'no-cache') }));
+
 app.get('/api/status', async (req, res) => {
   try { res.json(await buildStatus()); }
   catch (e) { res.status(500).json({ error: String(e.message || e) }); }
@@ -268,6 +296,155 @@ app.get('/api/workout-day', async (req, res) => {
   } catch (e) { res.status(500).json({ error: String(e.message || e) }); }
 });
 
+// A single 4am→4am nutrition day's food entries — for the nutrition-log day click-through.
+app.get('/api/nutrition-day', async (req, res) => {
+  try {
+    const date = String(req.query.date || '').slice(0, 10);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return res.status(400).json({ error: 'bad date' });
+    const hh = String(DAY_START_HOUR).padStart(2, '0');
+    const next = localDate(new Date(Date.parse(date + 'T12:00:00Z') + 86400000));
+    const [entries, targetRows, fallbackCal] = await Promise.all([
+      sbRange(`nutrition_entries?occurred_at=gte.${date}T${hh}:00:00&occurred_at=lt.${next}T${hh}:00:00&select=id,occurred_at,name,calories,protein_g,carbs_g,fat_g,ingredients&order=occurred_at`),
+      sb('nutrition_targets?select=date,calories&order=date.asc'),
+      currentMaintenanceCal(),
+    ]);
+    let total_cal = 0, total_protein = 0, total_carbs = 0, total_fat = 0;
+    for (const e of entries) {
+      total_cal += Number(e.calories) || 0; total_protein += Number(e.protein_g) || 0;
+      total_carbs += Number(e.carbs_g) || 0; total_fat += Number(e.fat_g) || 0;
+    }
+    total_cal = Math.round(total_cal);
+    // historical target for this day: most-recent nutrition_targets snapshot with date <= day
+    // (fallback = live maintenance) — same selection buildNutritionLog uses for the calendar.
+    const targets = (targetRows || []).map((t) => ({ date: String(t.date).slice(0, 10), calories: Number(t.calories) || 0 }))
+      .filter((t) => t.calories > 0).sort((a, b) => (a.date < b.date ? -1 : 1));
+    const target_cal = Math.round(targetCalFor(date, targets, fallbackCal));
+    const delta_color = target_cal > 0 ? calorieColor(total_cal / target_cal) : null;
+    res.json({
+      date,
+      total_cal, total_protein: Math.round(total_protein),
+      total_carbs: Math.round(total_carbs), total_fat: Math.round(total_fat),
+      target_cal, delta_color,
+      entries,
+    });
+  } catch (e) { res.status(500).json({ error: String(e.message || e) }); }
+});
+
+// Re-log a past food at the current wall-clock time — the hub's first write action.
+// Body: {name, calories, protein_g, carbs_g, fat_g, ingredients?} with macros already
+// scaled by the portion multiplier client-side. Stores occurred_at/logged as naive-local
+// "now" in the display TZ and date = the 4am-bucket day for now (so a 1–4am add lands on
+// the prior day, matching the rest of the hub).
+app.post('/api/log-entry', express.json(), async (req, res) => {
+  try {
+    const b = req.body || {};
+    const name = typeof b.name === 'string' ? b.name.trim() : '';
+    const num = (v) => (v === null || v === undefined || v === '' || !isFinite(Number(v)) ? null : Number(v));
+    const calories = num(b.calories), protein_g = num(b.protein_g), carbs_g = num(b.carbs_g), fat_g = num(b.fat_g);
+    if (!name) return res.status(400).json({ error: 'name required' });
+    if ([calories, protein_g, carbs_g, fat_g].some((v) => v === null)) {
+      return res.status(400).json({ error: 'calories/protein_g/carbs_g/fat_g must be numeric' });
+    }
+    // "now" as naive-local wall-clock in the display TZ → "YYYY-MM-DDTHH:MM:SS".
+    const f = new Intl.DateTimeFormat('en-CA', {
+      timeZone: TZ, hour12: false,
+      year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit',
+    });
+    const p = {}; for (const part of f.formatToParts(new Date())) p[part.type] = part.value;
+    const hh = p.hour === '24' ? '00' : p.hour; // Intl can emit 24 for midnight
+    const occurred_at = `${p.year}-${p.month}-${p.day}T${hh}:${p.minute}:${p.second}`;
+    const row = {
+      id: crypto.randomUUID(),
+      date: dayBucketOf(occurred_at),
+      occurred_at,
+      logged: occurred_at,
+      name,
+      quantity: 1,
+      calories: Math.round(calories),
+      protein_g: Math.round(protein_g * 10) / 10,
+      carbs_g: Math.round(carbs_g * 10) / 10,
+      fat_g: Math.round(fat_g * 10) / 10,
+    };
+    if (Array.isArray(b.ingredients) && b.ingredients.length) {
+      row.ingredients = b.ingredients.map((g) => {
+        const o = {
+          name: String(g.name || g.ingredient || ''),
+          calories: Math.round(num(g.calories) || 0),
+          protein_g: Math.round((num(g.protein_g) || 0) * 10) / 10,
+          carbs_g: Math.round((num(g.carbs_g) || 0) * 10) / 10,
+          fat_g: Math.round((num(g.fat_g) || 0) * 10) / 10,
+        };
+        if (g.food != null) o.food = String(g.food);
+        if (g.unit != null) o.unit = String(g.unit);
+        if (g.amount != null && isFinite(Number(g.amount))) o.amount = Math.round(Number(g.amount) * 1000) / 1000;
+        return o;
+      });
+    }
+    await sbWrite('nutrition_entries', 'POST', row);
+    await audit('add', row.id, null, row); // `row` is the full inserted snapshot (id known client-side)
+    res.status(204).end();
+  } catch (e) { res.status(500).json({ error: String(e.message || e) }); }
+});
+
+// Edit an entry in place: PATCH {id, name?, calories, protein_g, carbs_g, fat_g, ingredients?}.
+// Absolute values, computed client-side (the popup recovers the original 1× and re-scales), so the
+// stored row and its name's "(N×)" suffix always reflect the real multiplier — never compounded.
+app.patch('/api/log-entry', express.json(), async (req, res) => {
+  try {
+    const b = req.body || {};
+    const id = typeof b.id === 'string' ? b.id : '';
+    if (!id) return res.status(400).json({ error: 'id required' });
+    const num = (v) => (v === null || v === undefined || v === '' || !isFinite(Number(v)) ? null : Number(v));
+    const calories = num(b.calories), protein_g = num(b.protein_g), carbs_g = num(b.carbs_g), fat_g = num(b.fat_g);
+    if ([calories, protein_g, carbs_g, fat_g].some((v) => v === null)) {
+      return res.status(400).json({ error: 'calories/protein_g/carbs_g/fat_g must be numeric' });
+    }
+    const rows = await sb(`nutrition_entries?id=eq.${id}&select=*`);
+    const before = (rows || [])[0];
+    if (!before) return res.status(404).json({ error: 'not found' });
+    const patch = {
+      calories: Math.round(calories),
+      protein_g: Math.round(protein_g * 10) / 10,
+      carbs_g: Math.round(carbs_g * 10) / 10,
+      fat_g: Math.round(fat_g * 10) / 10,
+    };
+    if (typeof b.name === 'string' && b.name.trim()) patch.name = b.name.trim();
+    if (Array.isArray(b.ingredients)) {
+      patch.ingredients = b.ingredients.map((g) => {
+        const o = {
+          name: String(g.name || g.ingredient || ''),
+          calories: Math.round(num(g.calories) || 0),
+          protein_g: Math.round((num(g.protein_g) || 0) * 10) / 10,
+          carbs_g: Math.round((num(g.carbs_g) || 0) * 10) / 10,
+          fat_g: Math.round((num(g.fat_g) || 0) * 10) / 10,
+        };
+        if (g.food != null) o.food = String(g.food);
+        if (g.unit != null) o.unit = String(g.unit);
+        if (g.amount != null && isFinite(Number(g.amount))) o.amount = Math.round(Number(g.amount) * 1000) / 1000;
+        return o;
+      });
+    }
+    await sbWrite(`nutrition_entries?id=eq.${id}`, 'PATCH', patch);
+    await audit('edit', id, before, { ...before, ...patch });
+    res.status(204).end();
+  } catch (e) { res.status(500).json({ error: String(e.message || e) }); }
+});
+
+// Delete an entry: DELETE ?id=<uuid>. Snapshots the full row first so the audit `before`
+// can fully re-insert it.
+app.delete('/api/log-entry', async (req, res) => {
+  try {
+    const id = String(req.query.id || '');
+    if (!id) return res.status(400).json({ error: 'id required' });
+    const rows = await sb(`nutrition_entries?id=eq.${id}&select=*`);
+    const before = (rows || [])[0];
+    if (!before) return res.status(404).json({ error: 'not found' });
+    await sbWrite(`nutrition_entries?id=eq.${id}`, 'DELETE', undefined);
+    await audit('delete', id, before, null);
+    res.status(204).end();
+  } catch (e) { res.status(500).json({ error: String(e.message || e) }); }
+});
+
 // Server-Sent Events: push assembled status to the browser, instantly on any DB change.
 app.get('/api/stream', async (req, res) => {
   res.set({ 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache',
@@ -279,6 +456,39 @@ app.get('/api/stream', async (req, res) => {
   req.on('close', () => { clearInterval(ka); sseClients.delete(res); });
 });
 
+// Backfill recent voice_messages for a focus so the /tv panel populates on load before live
+// updates arrive. Ordered created_at asc (oldest→newest, the render order). focus defaults to 'hub'.
+app.get('/api/voice-messages', async (req, res) => {
+  try {
+    const focus = String(req.query.focus || 'hub');
+    let limit = parseInt(req.query.limit, 10);
+    if (!Number.isFinite(limit) || limit <= 0) limit = 50;
+    limit = Math.min(limit, 500);
+    const rows = await sb(`voice_messages?focus=eq.${encodeURIComponent(focus)}&order=created_at.asc&limit=${limit}&select=*`);
+    res.json(rows || []);
+  } catch (e) { res.status(500).json({ error: String(e.message || e) }); }
+});
+
+// The focusable Mac sessions (5 most recent), newest first — for the /tv focusable list.
+// Pushed-to on change via the voice SSE (kind:'sessions'); this is the load/refresh fetch.
+app.get('/api/voice-sessions', async (req, res) => {
+  try {
+    const rows = await sb('voice_sessions?order=last_active.desc&select=*');
+    res.json(rows || []);
+  } catch (e) { res.status(500).json({ error: String(e.message || e) }); }
+});
+
+// Voice SSE: streams `event: voice` frames ({kind:'message'|'focus', row}) to the /tv panel.
+// Dedicated stream (not /api/stream) so the kiosk gets voice rows without the heavy status frame.
+app.get('/api/voice-stream', (req, res) => {
+  res.set({ 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache',
+            Connection: 'keep-alive', 'X-Accel-Buffering': 'no' });
+  res.flushHeaders();
+  voiceClients.add(res);
+  const ka = setInterval(() => { try { res.write(': keepalive\n\n'); } catch {} }, 25000);
+  req.on('close', () => { clearInterval(ka); voiceClients.delete(res); });
+});
+
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`status-hub on :${PORT}`);
   startRealtime();
@@ -288,7 +498,7 @@ app.listen(PORT, '0.0.0.0', () => {
   setInterval(() => { if (sseClients.size) broadcast(); }, 30000);
 });
 
-// ---- HTML ----
+// ---- login page (server-rendered; public, no client modules) ----
 function loginHtml(err) {
   return `<!doctype html><meta name=viewport content="width=device-width,initial-scale=1">
 <title>Status Hub</title><style>
@@ -301,206 +511,4 @@ button{width:100%;padding:12px;border:0;border-radius:8px;background:#3b82f6;col
 <div class=err>${err || ''}</div>
 <input type=password name=password placeholder=Password autofocus>
 <button>Enter</button></form>`;
-}
-
-function dashboardHtml() {
-  return `<!doctype html><html><head><meta charset=utf-8>
-<meta name=viewport content="width=device-width,initial-scale=1">
-<title>Status Hub</title>
-<link href="https://cdn.jsdelivr.net/npm/gridstack@10.3.1/dist/gridstack.min.css" rel="stylesheet">
-<script src="https://cdn.jsdelivr.net/npm/gridstack@10.3.1/dist/gridstack-all.js"></script>
-<style>
-*{box-sizing:border-box} body{background:#0b0d10;color:#e8eaed;font:16px/1.4 system-ui;margin:0;padding:12px}
-.grid-stack{max-width:1240px;margin:0 auto}
-.grid-stack-item-content{overflow:visible}
-.drag-handle{position:absolute;top:9px;right:11px;z-index:6;cursor:move;color:#3a434f;font-size:15px;line-height:1;user-select:none}
-.drag-handle:hover{color:#8b96a5}
-.card{height:100%;overflow:auto;background:#151a20;border:1px solid #222a33;border-radius:16px;padding:20px}
-.card h2{margin:0 0 14px;font-size:14px;letter-spacing:.08em;text-transform:uppercase;color:#8b96a5;font-weight:600}
-.big{font-size:40px;font-weight:700;line-height:1}
-.sub{color:#8b96a5;font-size:14px;margin-top:6px}
-.row{display:flex;justify-content:space-between;padding:6px 0;border-top:1px solid #222a33}
-.macros{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:14px}
-.macro{background:#0e1318;border-radius:10px;padding:10px;text-align:center}
-.macro .n{font-size:22px;font-weight:700}.macro .l{font-size:12px;color:#8b96a5}
-.rings{display:flex;justify-content:space-around;gap:8px;margin-bottom:18px}
-.ring svg{display:block}
-.ring text.rg{font-size:15px;font-weight:700;fill:#c7ced8}
-.ring text.rd{font-size:13px;font-weight:700}
-.obars{display:flex;flex-direction:column;gap:11px}
-.obar-l{display:flex;justify-content:space-between;font-size:13px;margin-bottom:5px}
-.obar-l span:first-child{color:#c7ced8;font-weight:600}.obar-l span:last-child{color:#8b96a5}
-.obar-track{position:relative;display:flex;height:12px;background:#0e1318;border-radius:6px;overflow:hidden;border:1px solid #222a33}
-.obar-fill{height:100%;background:#3b82f6;transition:width .4s ease}
-.obar-over{height:100%;background:#d946ef;transition:width .4s ease}
-.pnote{color:#8b96a5;font-size:12px;margin-top:14px}
-.vgrp h3{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:#6b7686;margin:12px 0 6px;font-weight:600}
-.vrow{margin-bottom:8px}
-.vrow-l{display:flex;justify-content:space-between;font-size:12px;margin-bottom:3px}
-.vrow-l .nm{color:#c7ced8}.vrow-l .vl{color:#8b96a5}
-.vtrack{display:flex;height:10px;background:#0e1318;border-radius:5px;overflow:hidden;border:1px solid #222a33}
-.vstable{height:100%;transition:width .4s ease}
-.vdrop{height:100%;background:repeating-linear-gradient(45deg,#4b5563,#4b5563 3px,#39414d 3px,#39414d 6px)}
-#body .bodysvg{width:100%;height:auto;max-height:520px;display:block;margin-top:4px}
-#body .bodysvg path{fill:#222a33;stroke:#0b0d10;stroke-width:0.25;transition:fill .4s ease}
-.hmonths{display:flex;gap:2.5px;font-size:9px;color:#8b96a5;margin-left:30px;height:13px}
-.hm{flex:1 1 0;min-width:0;white-space:nowrap}
-.hbody{display:flex;gap:4px}
-.hdows{display:flex;flex-direction:column;gap:2.5px;width:26px;flex:none}
-.hd{flex:1;font-size:9px;color:#8b96a5;text-align:right;padding-right:5px;display:flex;align-items:center;justify-content:flex-end}
-.heat{display:flex;gap:2.5px;flex:1 1 0}
-.hcol{display:flex;flex-direction:column;gap:2.5px;flex:1 1 0;min-width:0}
-.hcell{aspect-ratio:1;width:100%;border-radius:2px;background:#2a313a}
-#daymodal{display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);place-items:center;z-index:50;padding:18px}
-.modal-card{background:#151a20;border:1px solid #222a33;border-radius:14px;padding:22px;max-width:440px;width:100%;max-height:80vh;overflow:auto;position:relative}
-.modal-close{position:absolute;top:12px;right:16px;color:#8b96a5;cursor:pointer;font-size:18px}
-.modal-card h3{margin:0 0 12px;font-size:16px}
-.dex{padding:9px 0;border-top:1px solid #222a33}
-.dex-n{font-weight:600;margin-bottom:5px}
-.dset{display:inline-block;background:#0e1318;border-radius:6px;padding:3px 8px;margin:2px 5px 2px 0;font-size:12px;color:#c7ced8}
-.dot{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:8px;vertical-align:middle}
-.foot{max-width:1100px;margin:14px auto 0;color:#566;font-size:12px;text-align:right}
-</style></head><body>
-<div class="grid-stack">
-  <div class="grid-stack-item" gs-id="litter" gs-w="4" gs-h="3"><div class="grid-stack-item-content"><span class=drag-handle>⠿</span><div class=card id=litter><h2>Litter-Robot</h2><div class=big>…</div></div></div></div>
-  <div class="grid-stack-item" gs-id="nutrition" gs-w="4" gs-h="6"><div class="grid-stack-item-content"><span class=drag-handle>⠿</span><div class=card id=nutrition><h2>Today · Nutrition</h2><div class=big>…</div></div></div></div>
-  <div class="grid-stack-item" gs-id="body" gs-w="4" gs-h="9"><div class="grid-stack-item-content"><span class=drag-handle>⠿</span><div class=card id=body><h2>Muscle Map · 7-Day</h2>${BODY_SVG}</div></div></div>
-  <div class="grid-stack-item" gs-id="volume" gs-w="4" gs-h="8"><div class="grid-stack-item-content"><span class=drag-handle>⠿</span><div class=card id=volume><h2>Muscle Volume · 7-Day</h2><div>…</div></div></div></div>
-  <div class="grid-stack-item" gs-id="workouts" gs-w="8" gs-h="4"><div class="grid-stack-item-content"><span class=drag-handle>⠿</span><div class=card id=workouts><h2>Workout Volume</h2><div>…</div></div></div></div>
-</div>
-<div class=foot id=foot></div>
-<div id=daymodal><div class=modal-card><div class=modal-close id=dayclose>✕</div><div id=daycontent></div></div></div>
-<script>
-const STATUS_LABEL={READY:'Ready',CLEAN_CYCLE:'Cleaning',CAT_SENSOR_INTERRUPTED:'Stuck (auto-resuming)',
- PAUSED:'Paused',CAT_DETECTED:'Cat detected',CAT_SENSOR_TIMING:'Waiting (post-cat)',
- CLEAN_CYCLE_COMPLETE:'Cycle complete',DRAWER_FULL:'Drawer full!',OFFLINE:'Offline',OFF:'Off'};
-const STATUS_COLOR={READY:'#3b82f6',CLEAN_CYCLE:'#eab308',CAT_SENSOR_INTERRUPTED:'#f97316',
- PAUSED:'#f97316',DRAWER_FULL:'#ef4444',OFFLINE:'#ef4444',OFF:'#566'};
-// hue gradient: t=0 green -> t=1 red, through real yellow at t=0.5
-function hueColor(t){const h=120*(1-Math.max(0,Math.min(1,t)));return 'hsl('+h+',85%,55%)';}
-function litterColor(v){return v==null?'#8b96a5':hueColor((90-v)/20);}  // 90% green -> 70% red
-function drawerColor(v){return v==null?'#8b96a5':hueColor((v-75)/20);}  // 75% green -> 95% red
-function ago(iso){if(!iso)return'—';const s=(Date.now()-new Date(iso))/1000;
- if(s<90)return Math.round(s)+'s ago';if(s<5400)return Math.round(s/60)+'m ago';return Math.round(s/3600)+'h ago';}
-let last=null;
-function fmtFoot(){if(!last)return;const L=last.litter||{};
- document.getElementById('foot').textContent='litter updated '+ago(L.updated_at)+' · '+new Date().toLocaleTimeString();}
-// Map a vulovix body-map region id → one of our tracked muscles.
-function muscleForId(id){
- if(id.indexOf('shoulder-front')===0)return'front_delts';
- if(id.indexOf('shoulder-side')===0)return'side_delts';
- if(id.indexOf('deltoid-rear')===0)return'rear_delts';
- if(id.indexOf('biceps')===0)return'biceps';
- if(id.indexOf('forearm')===0)return'forearms';
- if(id.indexOf('chest-upper')===0)return'upper_chest';
- if(id.indexOf('chest-lower')===0)return'lower_chest';
- if(id.indexOf('abs-')===0)return'abs';
- if(id.indexOf('obliques')===0)return'abs'; // asset mislabels the central six-pack as "obliques" — it's rectus abdominis
- if(id.indexOf('traps-upper')===0)return'upper_traps';
- if(id.indexOf('traps-mid')===0||id.indexOf('traps-lower')===0)return'mid_back';
- if(id.indexOf('lats-')===0)return'lats';
- if(id.indexOf('triceps-long')===0)return'triceps_long';
- if(id.indexOf('triceps-lateral')===0)return'triceps_lateral';
- if(id.indexOf('quads')===0)return'quads';
- if(id.indexOf('gluteus')===0)return'glutes';
- if(id.indexOf('calves')===0)return'gastrocnemius';
- if(id.indexOf('tibialis')===0)return'gastrocnemius';
- if(id.indexOf('hamstrings')===0)return'hamstrings';
- if(id.indexOf('lower-back')===0)return'erectors';
- if(id.indexOf('adductors')===0)return'adductors';
- if(id.indexOf('hip-flexor')===0)return'hip_flexors';
- return null;
-}
-function render(s){
- if(!s||s.error){return;}
- last=s;
- // litter
- const L=s.litter||{};const st=L.status||'OFFLINE';
- document.getElementById('litter').innerHTML='<h2>Litter-Robot</h2>'+
-  '<div class=big><span class=dot style="background:'+(STATUS_COLOR[st]||'#8b96a5')+'"></span>'+(STATUS_LABEL[st]||st)+'</div>'+
-  '<div class=row><span>Litter level</span><b style="color:'+litterColor(L.litter_level_pct)+'">'+(L.litter_level_pct!=null?L.litter_level_pct+'%':'—')+'</b></div>'+
-  '<div class=row><span>Waste drawer</span><b style="color:'+drawerColor(L.waste_drawer_pct)+'">'+(L.waste_drawer_pct!=null?L.waste_drawer_pct+'%':'—')+'</b></div>';
- // nutrition — pace rings (P/C/F: deviation from pace, drain/overfill) + overall progress bars
- const P=s.pace||{};const PM=P.macros||{};
- const RC=2*Math.PI*34; // ring circumference (r=34)
- const ring=(glyph,m)=>{if(!m)return'';
-  const base=(m.ring_base||0)*RC, over=(m.ring_over||0)*RC, dev=m.dev_g||0;
-  const sign=dev>0?'+':'', numCol=dev<0?'#f87171':dev>0?(m.over_color||'#f59e0b'):'#22c55e';
-  const arc=(len,col)=>'<circle cx="40" cy="40" r="34" fill="none" stroke="'+col+'" stroke-width="7" stroke-dasharray="'+len+' '+(RC-len)+'" stroke-linecap="round" transform="rotate(-90 40 40)" />';
-  return '<div class="ring"><svg viewBox="0 0 80 80" width="82" height="82">'+
-   '<circle cx="40" cy="40" r="34" fill="none" stroke="#0e1318" stroke-width="7" />'+
-   arc(base,m.base_color)+(over>0?arc(over,m.over_color):'')+
-   '<text x="40" y="37" text-anchor="middle" class="rg">'+glyph+'</text>'+
-   '<text x="40" y="54" text-anchor="middle" class="rd" fill="'+numCol+'">'+sign+dev+'g</text>'+
-   '</svg></div>';};
- const obar=(nm,m,unit)=>{if(!m)return'';
-  const pct=Math.min(1,m.progress||0)*100, over=Math.max(0,(m.progress||0)-1), overpct=Math.min(1,over)*100;
-  return '<div class=obar><div class=obar-l><span>'+nm+'</span>'+
-   '<span>'+(m.consumed||0)+(unit||'')+' / '+(m.goal||0)+(unit||'')+'</span></div>'+
-   '<div class=obar-track><div class=obar-fill style="width:'+pct+'%"></div>'+
-   (over>0?'<div class=obar-over style="width:'+overpct+'%"></div>':'')+'</div></div>';};
- document.getElementById('nutrition').innerHTML='<h2>Today · Nutrition</h2>'+
-  '<div class=rings>'+ring('P',PM.protein_g)+ring('C',PM.carbs_g)+ring('F',PM.fat_g)+'</div>'+
-  '<div class=obars>'+obar('Calories',PM.calories,'')+obar('Protein',PM.protein_g,'g')+
-   obar('Carbs',PM.carbs_g,'g')+obar('Fat',PM.fat_g,'g')+'</div>'+
-  '<div class=pnote>'+(P.window_label||'')+'</div>';
- // workout volume heatmap (GitHub-contribution style: month labels top, weekdays left, today outlined)
- const H=s.heatmap||{weeks:[],months:[]};
- const HC=['#2a313a','#0e4429','#006d32','#26a641','#39d353']; // [0]=empty (visible vs the card bg)
- const monthRow=(H.months||[]).map(m=>'<div class=hm>'+m+'</div>').join('');
- const grid=(H.weeks||[]).map(col=>'<div class=hcol>'+col.map(d=>{
-   const bg=d.level<0?'transparent':HC[d.level];
-   const out=d.today?';outline:1.5px solid #e8eaed;outline-offset:-1px':'';
-   const click=d.level>=0?' data-date="'+d.date+'"':'';
-   const cur=d.level>=0?';cursor:pointer':'';
-   return '<div class=hcell'+click+' title="'+d.date+': '+d.count+' set'+(d.count===1?'':'s')+'" style="background:'+bg+out+cur+'"></div>';
- }).join('')+'</div>').join('');
- const dowLabels=['','Mon','','Wed','','Fri',''].map(x=>'<div class=hd>'+x+'</div>').join('');
- document.getElementById('workouts').innerHTML='<h2>Workout Volume</h2>'+
-  '<div class=hmonths>'+monthRow+'</div>'+
-  '<div class=hbody><div class=hdows>'+dowLabels+'</div><div class=heat>'+grid+'</div></div>';
- // muscle volume gauges
- const V=s.volume||{};
- const vgroups=(V.groups||[]).map(g=>{
-  const rows=g.muscles.map(m=>{
-   const stable=Math.round((m.stable_fill||0)*100), drop=Math.round((m.drop_fill||0)*100);
-   const dropTxt=m.dropping>0?' <span style="color:#6b7686">(−'+m.dropping+' tmrw)</span>':'';
-   // at zero, show a tiny red sliver (not an empty track) so "uh-oh" is visible
-   const bars=(stable+drop===0)
-    ? '<div class=vstable style="width:4%;background:'+m.color+'"></div>'
-    : '<div class=vstable style="width:'+stable+'%;background:'+m.color+'"></div><div class=vdrop style="width:'+drop+'%"></div>';
-   return '<div class=vrow><div class=vrow-l><span class=nm>'+m.label+'</span><span class=vl>'+m.sets+' / '+m.target+dropTxt+'</span></div>'+
-    '<div class=vtrack>'+bars+'</div></div>';
-  }).join('');
-  return '<div class=vgrp><h3>'+g.group+'</h3>'+rows+'</div>';
- }).join('');
- document.getElementById('volume').innerHTML='<h2>Muscle Volume · 7-Day</h2>'+vgroups;
- // body map: paint each fine region by its mapped muscle's color
- const MC=(V.muscle_colors)||{};
- document.querySelectorAll('#body path[data-r]').forEach(p=>{const m=muscleForId(p.getAttribute('data-r'));if(m&&MC[m])p.style.fill=MC[m];});
- fmtFoot();
-}
-const es=new EventSource('/api/stream');
-es.onmessage=e=>{try{render(JSON.parse(e.data));}catch(_){}};
-setInterval(fmtFoot,1000);  // tick the "updated X ago" live against the real clock
-async function openDay(date){
- let j; try{ j=await (await fetch('/api/workout-day?date='+date)).json(); }catch(_){ return; }
- const dd=document.getElementById('daycontent');
- if(!j.exercises||!j.exercises.length){ dd.innerHTML='<h3>'+date+'</h3><div class=sub>No sets logged.</div>'; }
- else{ let h='<h3>'+date+' · '+j.total+' sets</h3>';
-  for(const ex of j.exercises){ h+='<div class=dex><div class=dex-n>'+ex.name+'</div>'+ex.sets.map(s=>'<span class=dset>'+(s.weight_lbs===0?'BW':(s.weight_lbs+' lb'))+' × '+s.reps+'</span>').join('')+'</div>'; }
-  dd.innerHTML=h; }
- document.getElementById('daymodal').style.display='grid';
-}
-document.addEventListener('click',e=>{
- const cell=e.target.closest('.hcell');
- if(cell&&cell.dataset.date){ openDay(cell.dataset.date); return; }
- if(e.target.id==='daymodal'||e.target.id==='dayclose'){ document.getElementById('daymodal').style.display='none'; }
-});
-// draggable / resizable dashboard — drag by the grip handle, resize from the corner; layout saved per device
-const grid=GridStack.init({column:12,cellHeight:74,margin:8,handle:'.drag-handle',float:false,columnOpts:{breakpoints:[{w:768,c:1}]}});
-const SAVED=localStorage.getItem('hublayout');
-if(SAVED){try{grid.load(JSON.parse(SAVED));}catch(_){}}
-grid.on('change',()=>{try{localStorage.setItem('hublayout',JSON.stringify(grid.save(false)));}catch(_){}});
-</script></body></html>`;
 }

@@ -1,0 +1,328 @@
+// Nutrition Log card: combined dual-axis calorie+weight plot (weekly game) + calorie-adherence
+// calendar (daily game), with inline day detail + click/drag-scrub selection. READ-ONLY.
+import { esc, dualPlot, state } from '../shared.js';
+
+const CAL_COLOR='#3b82f6', W_COLOR='#a78bfa';
+let nutSelDate=null, nutReq=0;
+let lastDayEntries=null, lastDayDate=null; // last day-detail loaded (for add-popup lookups)
+
+export function render(s){
+ const N=s.nutrition_log; const wrap=document.getElementById('nutwrap'); if(!N){wrap.innerHTML='';return;}
+ // COMBINED PLOT: smoothed 7d cal avg (left axis) + raw daily weight (right axis) + maintenance ref line.
+ const calPts=(N.cal_series||[]).map(p=>({date:p.date,v:p.avg}));
+ const wPts=(N.weight_series||[]).map(p=>({date:p.date,v:p.w}));
+ const maint=isFinite(N.maintenance)?N.maintenance:undefined;
+ const goal=isFinite(N.goal)?N.goal:undefined;
+ const plot=dualPlot(calPts,wPts,maint,goal);
+ // legend + current-value annotations at the right edge
+ const calAnno=N.cal_avg7!=null?'<b style="color:'+CAL_COLOR+'">'+N.cal_avg7+'</b> kcal':'';
+ let wAnno='';
+ if(N.weight_now!=null){
+  let sl=''; if(N.weight_slope_wk!=null)sl=' <span class=nplot-sl>('+(N.weight_slope_wk>0?'+':'')+N.weight_slope_wk+'/wk)</span>';
+  wAnno='<b style="color:'+W_COLOR+'">'+N.weight_now+'</b>'+sl;
+ }
+ const legend='<div class=nplot-leg>'+
+   '<span class=nplot-key><i style="background:'+CAL_COLOR+'"></i>kcal · 7d avg'+(calAnno?' '+calAnno:'')+'</span>'+
+   (maint!==undefined?'<span class=nplot-key><i class=nplot-dash></i>maintenance '+Math.round(maint)+'</span>':'')+
+   (goal!==undefined?'<span class=nplot-key><i class=nplot-dash style="border-top-color:#22c55e"></i>target '+Math.round(goal)+(maint!==undefined?' <span class=nplot-sl>(+'+Math.round(goal-maint)+')</span>':'')+'</span>':'')+
+   '<span class=nplot-key><i style="background:'+W_COLOR+'"></i>weight'+(wAnno?' '+wAnno:'')+'</span>'+
+   '</div>';
+ const plotBlock='<div class=nplot-block>'+plot+legend+'</div>';
+ // CALORIE-ADHERENCE CALENDAR (reuse heatmap layout/classes); color = intake/target ratio (diverging)
+ const monthRow=(N.months||[]).map(m=>'<div class=hm>'+m+'</div>').join('');
+ const grid=(N.weeks||[]).map(col=>'<div class=hcol>'+col.map(d=>{
+   const bg=d.has?d.color:'#2a313a';
+   const out=d.today?';outline:1.5px solid #e8eaed;outline-offset:-1px':'';
+   const cur=d.has?';cursor:pointer':'';
+   const data=d.has?' data-ndate="'+d.date+'"':'';
+   const title=d.has?d.date+': '+Math.round(d.ratio*100)+'% of target':d.date;
+   return '<div class=hcell'+data+' title="'+title+'" style="background:'+bg+out+cur+'"></div>';
+ }).join('')+'</div>').join('');
+ const dowLabels=['','Mon','','Wed','','Fri',''].map(x=>'<div class=hd>'+x+'</div>').join('');
+ wrap.innerHTML=
+  '<div class=hmonths>'+monthRow+'</div>'+
+  '<div class=hbody><div class=hdows>'+dowLabels+'</div><div class=heat>'+grid+'</div></div>'+
+  plotBlock;
+ if(nutSelDate){ markNutCell(nutSelDate); if(nutSelDate===s.today)loadNutDay(nutSelDate); } // live-refresh today's log
+ else if(s.today)selectNutDay(s.today); // default the detail panel to today's log on first load
+}
+
+function markNutCell(date){
+ document.querySelectorAll('#nutwrap .hcell').forEach(c=>c.classList.toggle('nsel',c.dataset.ndate===date));
+}
+const mn=v=>Math.round(Number(v)||0); // macro number, rounded
+// Macro chips for an entry/total: cal + P/C/F. `cls` lets the day header use a bolder style.
+function macroChips(o){
+ return '<span class=dset>'+mn(o.calories)+' kcal</span>'+
+   '<span class=dset>'+mn(o.protein_g)+'g P</span>'+
+   '<span class=dset>'+mn(o.carbs_g)+'g C</span>'+
+   '<span class=dset>'+mn(o.fat_g)+'g F</span>';
+}
+async function loadNutDay(date){
+ const tok=++nutReq;
+ let j; try{ j=await (await fetch('/api/nutrition-day?date='+date)).json(); }catch(_){ return; }
+ if(tok!==nutReq)return; // a newer cell was selected mid-flight — drop this stale response
+ const ni=document.getElementById('nutinfo');
+ const sp=ni.closest('.detailpanel'), stick=sp&&(sp.scrollHeight-sp.scrollTop-sp.clientHeight<60); // keep pinned to newest if at bottom
+ if(!j.entries||!j.entries.length){ ni.innerHTML='<div class=heath>'+date+'</div><div class=bi-none>No food logged</div>'; return; }
+ // day header: calories shown as actual / target (signed Δ, colored), then P/C/F totals.
+ let calHdr;
+ if(j.target_cal>0){
+  const delta=j.total_cal-j.target_cal;
+  const sign=delta>0?'+':(delta<0?'−':'');
+  const col=j.delta_color||'#c7ced8';
+  calHdr='<span class=dset>'+j.total_cal+' / '+j.target_cal+' cal'+
+    ' <span style="color:'+col+';font-weight:600">('+sign+Math.abs(delta)+')</span></span>';
+ } else {
+  calHdr='<span class=dset>'+j.total_cal+' kcal</span>';
+ }
+ let h='<div class=heath>'+date+'</div><div class=dtot>'+calHdr+
+   '<span class=dset>'+mn(j.total_protein)+'g P</span>'+
+   '<span class=dset>'+mn(j.total_carbs)+'g C</span>'+
+   '<span class=dset>'+mn(j.total_fat)+'g F</span></div>';
+ j.entries.forEach((e,i)=>{
+  const t=(String(e.occurred_at).match(/T(\d{2}:\d{2})/)||[])[1]||'';
+  const ings=Array.isArray(e.ingredients)?e.ingredients:null;
+  const exp=ings&&ings.length;
+  // entry row — "+ now" add button re-logs this food at the current time.
+  h+='<div class="dex'+(exp?' dex-exp':'')+'" data-idx="'+i+'">'+
+     '<div class="dex-head"'+(exp?' data-toggle="'+i+'"':'')+'>'+
+       '<div class=dex-n>'+(exp?'<span class=dex-caret>▸</span>':'')+esc(e.name||'—')+'</div>'+
+       '<div class=dex-macros>'+macroChips(e)+(t?'<span class=dset>'+t+'</span>':'')+
+         '<button class=addbtn type=button data-add-entry="'+i+'" title="Add at now">+ now</button>'+
+         '<button class=morebtn type=button data-more-entry="'+i+'" title="Edit / delete" aria-label="Edit or delete">⋯</button>'+
+       '</div>'+
+     '</div>';
+  if(exp){
+   h+='<div class="dex-ings hidden" id="ding-'+i+'">'+ings.map((g,gi)=>
+     '<div class=ding><span class=ding-n>'+esc(ingLabel(g))+'</span>'+macroChips(g)+
+       '<button class=addbtn type=button data-add-ing="'+i+'.'+gi+'" title="Add at now">+ now</button>'+
+     '</div>').join('')+'</div>';
+  }
+  h+='</div>';
+ });
+ ni.innerHTML=h;
+ if(sp&&stick)sp.scrollTop=sp.scrollHeight; // scroll to the newest entry
+ lastDayEntries=j.entries; lastDayDate=date; // cache for the add-popup lookups
+}
+function selectNutDay(date){ if(date===nutSelDate)return; nutSelDate=date; markNutCell(date); loadNutDay(date); }
+
+(function(){
+ const nl=document.getElementById('nutritionlog'); let scrub=false;
+ const cellAt=(x,y)=>{const el=document.elementFromPoint(x,y);return el&&el.closest?el.closest('.hcell'):null;};
+ nl.addEventListener('pointerdown',e=>{const c=e.target.closest('.hcell');if(!c||!c.dataset.ndate)return;scrub=true;selectNutDay(c.dataset.ndate);e.preventDefault();e.stopPropagation();});
+ document.addEventListener('pointermove',e=>{if(!scrub)return;const c=cellAt(e.clientX,e.clientY);if(c&&c.dataset.ndate)selectNutDay(c.dataset.ndate);});
+ document.addEventListener('pointerup',()=>{scrub=false;});
+ // event-delegated clicks on the day-detail: add buttons + ingredient expand/collapse
+ document.getElementById('nutinfo').addEventListener('click',e=>{
+  const more=e.target.closest('[data-more-entry]');
+  if(more){ e.stopPropagation(); openRowMenu(more,+more.dataset.moreEntry); return; }
+  const addE=e.target.closest('[data-add-entry]');
+  if(addE){ e.stopPropagation(); openAddPopup(entryAt(+addE.dataset.addEntry)); return; }
+  const addI=e.target.closest('[data-add-ing]');
+  if(addI){ e.stopPropagation(); const[ei,gi]=addI.dataset.addIng.split('.').map(Number);
+   const en=entryAt(ei); const g=en&&en.ingredients&&en.ingredients[gi];
+   if(g)openAddPopup({name:ingLabel(g),food:g.food,amount:g.amount,unit:g.unit,calories:g.calories,protein_g:g.protein_g,carbs_g:g.carbs_g,fat_g:g.fat_g});
+   return; }
+  const head=e.target.closest('.dex-head[data-toggle]'); if(!head)return;
+  const i=head.dataset.toggle, box=document.getElementById('ding-'+i);
+  if(!box)return; box.classList.toggle('hidden');
+  const car=head.querySelector('.dex-caret'); if(car)car.textContent=box.classList.contains('hidden')?'▸':'▾';
+ });
+})();
+
+function entryAt(i){ return lastDayEntries&&lastDayEntries[i]?lastDayEntries[i]:null; }
+
+// ---- row-actions menu (⋯): Delete + Change quantity, anchored under the tapped button ----
+let openMenuEl=null;
+function closeRowMenu(){ if(openMenuEl){ openMenuEl.remove(); openMenuEl=null; document.removeEventListener('pointerdown',onDocDown,true); } }
+function onDocDown(e){ if(openMenuEl&&!openMenuEl.contains(e.target))closeRowMenu(); }
+function openRowMenu(btn,idx){
+ closeRowMenu();
+ const en=entryAt(idx); if(!en)return;
+ const m=document.createElement('div'); m.className='rowmenu';
+ m.innerHTML='<button type=button class=rowmenu-item data-act=qty>Change quantity</button>'+
+   '<button type=button class="rowmenu-item rowmenu-del" data-act=del>Delete</button>';
+ document.body.appendChild(m);
+ const r=btn.getBoundingClientRect();
+ // anchor right-aligned under the button, kept on-screen
+ const w=m.offsetWidth||150;
+ let left=r.right-w; if(left<6)left=6; if(left+w>window.innerWidth-6)left=window.innerWidth-6-w;
+ m.style.left=left+'px'; m.style.top=(r.bottom+4)+'px';
+ openMenuEl=m;
+ setTimeout(()=>document.addEventListener('pointerdown',onDocDown,true),0);
+ m.addEventListener('click',ev=>{
+  const it=ev.target.closest('[data-act]'); if(!it)return;
+  ev.stopPropagation();
+  const act=it.dataset.act; closeRowMenu();
+  if(act==='qty')openAddPopup(en,{mode:'edit',id:en.id});
+  else if(act==='del')confirmDelete(en);
+ });
+}
+
+async function confirmDelete(en){
+ if(!en||!en.id)return;
+ if(!window.confirm('Delete this entry?'))return;
+ try{
+  const r=await fetch('/api/log-entry?id='+encodeURIComponent(en.id),{method:'DELETE'});
+  if(!r.ok)throw new Error(r.status);
+  if(lastDayDate)loadNutDay(lastDayDate); // re-fetch the open day so the change shows
+ }catch(_){ /* leave the row; realtime will reconcile if it did delete */ }
+}
+
+// strip a trailing " (N×)" portion suffix → {base name, mult}. Lets a repeated item open with its
+// current multiplier as the default and its ORIGINAL (1×) macros as the reference, so adjusting is
+// always relative to the original dish (never additive: 1.5 then 2 → "(2×)", not "(2×) of (1.5×)").
+function splitPortion(name){
+ const m=String(name||'').match(/^(.*?)\s*\((\d+(?:\.\d+)?)×\)\s*$/);
+ if(m&&+m[2]>0)return {base:m[1].trim(),mult:+m[2]};
+ return {base:String(name||'').trim(),mult:1};
+}
+const fmtMult=v=>Number.isInteger(v)?String(v):String(Math.round(v*1000)/1000);
+const round3=v=>Math.round((Number(v)||0)*1000)/1000;
+function fmtAmt(n){ return String(round3(n)); }
+const GRAM_UNITS={g:1,gram:1,grams:1,ml:1,milliliter:1,milliliters:1};
+function stepFor(unit){ return GRAM_UNITS[String(unit||'').toLowerCase()]?5:0.25; }
+function ingStructured(g){ return !!(g&&g.amount!=null&&isFinite(Number(g.amount))&&(g.unit!=null||g.food!=null)); }
+// display label: structured → "1 cup rolled oats" / "0.5 banana"; legacy → its stored name text.
+function ingLabel(g){ if(ingStructured(g)){ const un=String(g.unit||'').trim(); return fmtAmt(g.amount)+(un?' '+un:'')+' '+(g.food||g.name||''); } return g.name||g.ingredient||'—'; }
+
+// ---- portion-multiplier popup ----
+// Add mode (default): scales the dish, POSTs a NEW row at now. In add mode each ingredient also gets
+//   its own portion stepper + an ✕ exclude toggle (excludes from the new entry only).
+// Edit mode (opts={mode:'edit',id}): overall portion only, PATCHes the existing row in place.
+// The meal total is always the sum of the included, scaled ingredients when ingredients exist.
+// `base` = {name,calories,protein_g,carbs_g,fat_g, ingredients?}.
+function openAddPopup(base,opts){
+ if(!base)return;
+ const edit=opts&&opts.mode==='edit';
+ const editId=edit?opts.id:null;
+ const sp=splitPortion(base.name); const cleanName=sp.base, baseMult=sp.mult;
+ const u=v=>(Number(v)||0)/baseMult;
+ const unitBase={calories:u(base.calories),protein_g:u(base.protein_g),carbs_g:u(base.carbs_g),fat_g:u(base.fat_g)};
+ const rawIngs=Array.isArray(base.ingredients)?base.ingredients:null;
+ // 1× reference for each ingredient (divide out any meal-level suffix). Structured rows carry
+ // food/amount/unit and are edited by AMOUNT; legacy rows (name only) keep a unitless multiplier.
+ const ings=rawIngs?rawIngs.map(g=>({
+   structured:ingStructured(g), food:g.food||'', unit:g.unit||'', name:g.name||g.ingredient||'—',
+   A:ingStructured(g)?u(g.amount):0,
+   calories:u(g.calories),protein_g:u(g.protein_g),carbs_g:u(g.carbs_g),fat_g:u(g.fat_g)
+ })):null;
+ const perIng=!edit&&!!ings;
+ // state: structured → amt (default = A×baseMult = the stored amount); legacy → imult; plus off.
+ const st=ings?ings.map(g=>({ amt:g.structured?round3(g.A*baseMult):0, imult:1, off:false })):null;
+ let mult=baseMult, touched=false;
+ const factor=i=>{ const g=ings[i],s=st[i]; if(g.structured)return g.A>0?s.amt/g.A:0; return mult*s.imult; };
+ const ingOn=i=>!(st&&st[i].off);
+
+ const back=document.createElement('div'); back.className='addmodal-back';
+ back.innerHTML=
+   '<div class=addmodal role=dialog aria-modal=true>'+
+     '<div class=addmodal-name>'+esc(cleanName||'—')+'</div>'+
+     '<div class=addmodal-mlabel>Portion</div>'+
+     '<div class=addmodal-mult>'+
+       '<button class=addmodal-step type=button data-step="-1">−</button>'+
+       '<input class=addmodal-minput type=text inputmode=decimal value="1">'+
+       '<button class=addmodal-step type=button data-step="1">+</button>'+
+     '</div>'+
+     '<div class=addmodal-macros></div>'+
+     (ings?'<div class=addmodal-ings></div>':'')+
+     '<div class=addmodal-btns>'+
+       '<button class=addmodal-cancel type=button>Cancel</button>'+
+       '<button class=addmodal-add type=button>'+(edit?'Save':'Add')+'</button>'+
+     '</div>'+
+   '</div>';
+ document.body.appendChild(back);
+ const input=back.querySelector('.addmodal-minput');
+ const macrosEl=back.querySelector('.addmodal-macros');
+ const ingsEl=back.querySelector('.addmodal-ings');
+ const sc=v=>Math.round(Number(v)||0);
+ const r1=v=>Math.round((Number(v)||0)*10)/10;
+
+ if(ingsEl){
+  ingsEl.innerHTML=ings.map((g,i)=>
+   '<div class=aing data-i="'+i+'">'+
+     '<div class=aing-top><span class=aing-n></span>'+
+       (perIng?'<button class=aing-x type=button title="Don\'t add this">✕</button>':'')+'</div>'+
+     '<div class=aing-ctl>'+
+       (perIng?'<button class=aing-step type=button data-step="-1">−</button>'+
+         '<input class=aing-input type=text inputmode=decimal>'+
+         '<button class=aing-step type=button data-step="1">+</button>':'')+
+       '<span class=aing-macros></span></div>'+
+   '</div>').join('');
+ }
+ function rowLabel(i){ const g=ings[i],s=st[i];
+   if(g.structured){ const un=String(g.unit||'').trim(); return fmtAmt(s.amt)+(un?' '+un:'')+' '+(g.food||g.name); }
+   return g.name; }
+ function paint(){
+  let t;
+  if(ings){ t={calories:0,protein_g:0,carbs_g:0,fat_g:0};
+   ings.forEach((g,i)=>{ if(!ingOn(i))return; const f=factor(i); t.calories+=g.calories*f;t.protein_g+=g.protein_g*f;t.carbs_g+=g.carbs_g*f;t.fat_g+=g.fat_g*f; });
+  } else t={calories:unitBase.calories*mult,protein_g:unitBase.protein_g*mult,carbs_g:unitBase.carbs_g*mult,fat_g:unitBase.fat_g*mult};
+  macrosEl.innerHTML='<span class=dset>'+sc(t.calories)+' kcal</span>'+
+    '<span class=dset>'+r1(t.protein_g)+'g P</span>'+
+    '<span class=dset>'+r1(t.carbs_g)+'g C</span>'+
+    '<span class=dset>'+r1(t.fat_g)+'g F</span>';
+  if(ingsEl)ings.forEach((g,i)=>{ const row=ingsEl.querySelector('.aing[data-i="'+i+'"]'); if(!row)return;
+   const on=ingOn(i), f=factor(i);
+   row.classList.toggle('aing-off',!on);
+   row.querySelector('.aing-n').textContent=rowLabel(i);
+   row.querySelector('.aing-macros').textContent=sc(g.calories*f)+' kcal · '+r1(g.protein_g*f)+'P '+r1(g.carbs_g*f)+'C '+r1(g.fat_g*f)+'F';
+   const x=row.querySelector('.aing-x'); if(x)x.textContent=on?'✕':'＋';
+  });
+ }
+ function syncIngInputs(){ if(!perIng||!ingsEl)return; ings.forEach((g,i)=>{ const inp=ingsEl.querySelector('.aing[data-i="'+i+'"] .aing-input'); if(inp)inp.value=g.structured?fmtAmt(st[i].amt):fmtMult(st[i].imult); }); }
+ function setMult(v){ mult=v>0?v:0; input.value=fmtMult(mult);
+   if(st)ings.forEach((g,i)=>{ if(g.structured)st[i].amt=round3(g.A*mult); });
+   syncIngInputs(); paint(); }
+ setMult(baseMult);
+
+ back.querySelectorAll('.addmodal-mult .addmodal-step').forEach(b=>b.addEventListener('click',()=>{
+  const next=round3(mult+0.25*Number(b.dataset.step)); setMult(next<0?0:next);
+ }));
+ input.addEventListener('input',()=>{ const v=parseFloat(input.value); mult=isFinite(v)&&v>0?v:0;
+   if(st)ings.forEach((g,i)=>{ if(g.structured)st[i].amt=round3(g.A*mult); }); syncIngInputs(); paint(); });
+
+ if(perIng&&ingsEl){
+  ingsEl.addEventListener('click',e=>{
+   const row=e.target.closest('.aing'); if(!row)return; const i=+row.dataset.i; const g=ings[i];
+   if(e.target.closest('.aing-x')){ st[i].off=!st[i].off; touched=true; const inp=row.querySelector('.aing-input'); if(inp)inp.disabled=st[i].off; paint(); return; }
+   const step=e.target.closest('.aing-step'); if(step){ const d=Number(step.dataset.step); touched=true;
+     if(g.structured){ const s=stepFor(g.unit); st[i].amt=round3(Math.max(0,st[i].amt+d*s)); }
+     else { st[i].imult=round3(Math.max(0,st[i].imult+0.25*d)); }
+     const inp=row.querySelector('.aing-input'); if(inp)inp.value=g.structured?fmtAmt(st[i].amt):fmtMult(st[i].imult); paint(); }
+  });
+  ingsEl.addEventListener('input',e=>{ const inp=e.target.closest('.aing-input'); if(!inp)return;
+   const row=inp.closest('.aing'); const i=+row.dataset.i; const g=ings[i]; const v=parseFloat(inp.value); touched=true;
+   if(g.structured)st[i].amt=isFinite(v)&&v>=0?v:0; else st[i].imult=isFinite(v)&&v>=0?v:0; paint(); });
+ }
+
+ const close=()=>back.remove();
+ back.addEventListener('click',e=>{ if(e.target===back)close(); });
+ back.querySelector('.addmodal-cancel').addEventListener('click',close);
+ const addBtn=back.querySelector('.addmodal-add');
+ addBtn.addEventListener('click',async()=>{
+  if(!(mult>0)){ input.focus(); return; }
+  const ingEdited=!!(perIng&&touched);
+  let t; if(ings){ t={calories:0,protein_g:0,carbs_g:0,fat_g:0}; ings.forEach((g,i)=>{ if(!ingOn(i))return; const f=factor(i); t.calories+=g.calories*f;t.protein_g+=g.protein_g*f;t.carbs_g+=g.carbs_g*f;t.fat_g+=g.fat_g*f; }); }
+  else t={calories:unitBase.calories*mult,protein_g:unitBase.protein_g*mult,carbs_g:unitBase.carbs_g*mult,fat_g:unitBase.fat_g*mult};
+  const name=ingEdited?cleanName:(cleanName+(mult===1?'':' ('+fmtMult(mult)+'×)'));
+  const body={ name:name||'—', calories:sc(t.calories), protein_g:r1(t.protein_g), carbs_g:r1(t.carbs_g), fat_g:r1(t.fat_g) };
+  if(ings){ body.ingredients=ings.map((g,i)=>({g:g,i:i})).filter(o=>ingOn(o.i)).map(function(o){ const g=o.g,i=o.i,f=factor(i);
+    const ob={ calories:sc(g.calories*f), protein_g:r1(g.protein_g*f), carbs_g:r1(g.carbs_g*f), fat_g:r1(g.fat_g*f) };
+    if(g.structured){ ob.food=g.food; ob.unit=g.unit; ob.amount=round3(st[i].amt); ob.name=rowLabel(i); }
+    else ob.name=g.name;
+    return ob; }); }
+  addBtn.disabled=true; addBtn.textContent=edit?'Saving…':'Adding…';
+  try{
+   let r;
+   if(edit) r=await fetch('/api/log-entry',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify(Object.assign({id:editId},body))});
+   else r=await fetch('/api/log-entry',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+   if(!r.ok)throw new Error(r.status);
+   close();
+   const today=state.last&&state.last.today;
+   if(edit){ if(lastDayDate)loadNutDay(lastDayDate); }
+   else if(today&&lastDayDate===today)loadNutDay(today);
+  }catch(_){ addBtn.disabled=false; addBtn.textContent='Retry'; }
+ });
+}

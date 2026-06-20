@@ -79,7 +79,30 @@ function computeVolume(setRows, muscleRows, window, targets) {
     muscle_colors[slug] = volColor(target > 0 ? (total[slug] || 0) / target : 0);
   }
 
-  return { target_default: TARGET_DEFAULT, drop_day: dropDay, groups, muscle_colors };
+  // Reverse map: muscle slug → exercises that train it (for the body-map hover/click panel).
+  const muscle_exercises = {};
+  for (const m of muscleRows || []) {
+    const slug = m.muscle;
+    if (!slug) continue;
+    if (!muscle_exercises[slug]) muscle_exercises[slug] = [];
+    if (!muscle_exercises[slug].some(e => e.name === m.name))
+      muscle_exercises[slug].push({ name: m.name, contribution: m.contribution });
+  }
+  for (const slug of Object.keys(muscle_exercises))
+    muscle_exercises[slug].sort((a, b) => b.contribution - a.contribution || a.name.localeCompare(b.name));
+
+  // Forward map: exercise name → muscles it trains (for clicking an exercise → highlight its muscles).
+  const exercise_muscles = {};
+  for (const m of muscleRows || []) {
+    if (!m.name || !m.muscle) continue;
+    if (!exercise_muscles[m.name]) exercise_muscles[m.name] = [];
+    if (!exercise_muscles[m.name].some(e => e.muscle === m.muscle))
+      exercise_muscles[m.name].push({ muscle: m.muscle, contribution: m.contribution });
+  }
+  for (const name of Object.keys(exercise_muscles))
+    exercise_muscles[name].sort((a, b) => b.contribution - a.contribution);
+
+  return { target_default: TARGET_DEFAULT, drop_day: dropDay, groups, muscle_colors, muscle_exercises, exercise_muscles };
 }
 
 module.exports = { computeVolume };

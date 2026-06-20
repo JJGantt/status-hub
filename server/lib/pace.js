@@ -34,21 +34,82 @@ function median(xs) {
 const DEFAULT_START = offsetFromHM(8, 0);   // 8:00am
 const DEFAULT_END = offsetFromHM(22, 0);    // 10:00pm
 const MIN_DAYS_FOR_WINDOW = 7;
+const RECENCY_DAYS = 21;                    // only consider the last 21 days of history
+// Breakfast share of daily calories. Research-grounded (~25% is a typical/recommended
+// breakfast fraction). Used to shift the window start earlier so the expected curve has
+// drained ~one breakfast's worth by the typical first-meal time.
+const BREAKFAST_FRACTION = 0.25;
 
-// Eating window from history: median first-entry offset and median last-entry offset per day.
+// Percentile via linear interpolation on a sorted ascending array (p in [0,1]).
+function percentile(sorted, p) {
+  const n = sorted.length;
+  if (!n) return null;
+  if (n === 1) return sorted[0];
+  const idx = p * (n - 1);
+  const lo = Math.floor(idx), hi = Math.ceil(idx);
+  if (lo === hi) return sorted[lo];
+  return sorted[lo] + (sorted[hi] - sorted[lo]) * (idx - lo);
+}
+
+// Eating window from history. Derives a typical first-meal time and last-meal time, then
+// shifts the window START earlier (into sleep) by ~a breakfast's worth so that a normal
+// breakfast at the typical first-meal time lands you on-pace rather than ahead.
 function deriveWindow(occurredList) {
+  // Group entries by 4am-origin day -> per-day first (min) and last (max) offset.
   const byDay = {};
   for (const ts of occurredList || []) {
     const k = dayKey(ts), off = offsetFromTs(ts);
     if (off == null) continue;
     (byDay[k] = byDay[k] || []).push(off);
   }
-  const firsts = [], lasts = [];
-  for (const k in byDay) { firsts.push(Math.min(...byDay[k])); lasts.push(Math.max(...byDay[k])); }
-  if (firsts.length < MIN_DAYS_FOR_WINDOW) return { startMin: DEFAULT_START, endMin: DEFAULT_END, source: 'default' };
-  let s = Math.round(median(firsts)), e = Math.round(median(lasts));
-  if (e - s < 360) e = s + 360; // enforce a sane minimum 6h window
-  return { startMin: s, endMin: e, source: 'derived' };
+  const days = Object.keys(byDay);
+
+  // Recency bias: only days within RECENCY_DAYS of the most recent day present.
+  let firsts = [], lasts = [];
+  if (days.length) {
+    const maxDay = days.reduce((a, b) => (a > b ? a : b));
+    const cutoff = new Date(maxDay + 'T00:00:00');
+    cutoff.setDate(cutoff.getDate() - (RECENCY_DAYS - 1));
+    const cutoffKey = cutoff.toISOString().slice(0, 10);
+    for (const k of days) {
+      if (k < cutoffKey) continue;
+      firsts.push(Math.min(...byDay[k]));
+      lasts.push(Math.max(...byDay[k]));
+    }
+  }
+
+  // IQR trimming is the ONLY thing gated on the 7-day threshold: Tukey fences need enough
+  // points to be meaningful. With ≥7 valid days, do the one-sided directional trim; with
+  // 1–6, use the days as-is. The start-shift below ALWAYS runs regardless of count.
+  if (firsts.length >= MIN_DAYS_FOR_WINDOW) {
+    // One-sided Tukey IQR trim (error modes are directional):
+    //  - firsts: drop only UPPER outliers (forgot-to-log-breakfast days read late).
+    //  - lasts:  drop only LOWER outliers (forgot-a-late-item days read early).
+    const fSorted = [...firsts].sort((a, b) => a - b);
+    const fQ1 = percentile(fSorted, 0.25), fQ3 = percentile(fSorted, 0.75);
+    const fFence = fQ3 + 1.5 * (fQ3 - fQ1);
+    firsts = firsts.filter((v) => v <= fFence);
+
+    const lSorted = [...lasts].sort((a, b) => a - b);
+    const lQ1 = percentile(lSorted, 0.25), lQ3 = percentile(lSorted, 0.75);
+    const lFence = lQ1 - 1.5 * (lQ3 - lQ1);
+    lasts = lasts.filter((v) => v >= lFence);
+  }
+
+  // Derive the base first-meal/end times from whatever valid days remain. With zero data,
+  // fall back to the fixed 8a–10p base — but the shift below STILL applies to it.
+  const haveData = firsts.length >= 1;
+  const firstMeal = haveData ? median(firsts) : DEFAULT_START;
+  let endMin = Math.round(haveData ? median(lasts) : DEFAULT_END);
+
+  // ALWAYS shift start earlier so expected reaches BREAKFAST_FRACTION by the first-meal time:
+  //   expected(firstMeal) = (firstMeal - startMin) / (endMin - startMin) = BF
+  //   => startMin = (firstMeal - BF*endMin) / (1 - BF)
+  let startMin = (firstMeal - BREAKFAST_FRACTION * endMin) / (1 - BREAKFAST_FRACTION);
+  startMin = Math.round(Math.max(0, Math.min(startMin, firstMeal)));
+
+  if (endMin - startMin < 360) endMin = startMin + 360; // enforce a sane minimum 6h window
+  return { startMin, endMin, source: haveData ? 'derived' : 'default' };
 }
 
 function hslToHex(h, s, l) {

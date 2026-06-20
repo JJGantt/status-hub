@@ -447,3 +447,94 @@ Open decisions:
 - Dynamic macro goal: protein 1.0 g/lb, fat 0.4 g/lb (≥20% cal floor), carbs flex; synced to MCP.
 - Native SwiftUI iOS app + native macOS app (shared sources), SSE live, Keychain auth.
 - Header-token auth on the hub for the native apps.
+
+---
+
+# ★ Voice → Claude → Pi-wall system  (spec — designed 2026-06-19, not yet built)
+
+A hands-free voice assistant displayed on the Pi/TV hub. Voice → text → a Claude that runs
+MCP actions (and can drive real Mac coding sessions on the wall). Designed end-to-end below;
+build is phased (MVP = Phase 1).
+
+## Pieces that already exist
+- `jared-voice` (Fly): ESP32 I2S mic → `wss://jared-voice.fly.dev/ws/audio` → openWakeWord →
+  Groq whisper → `handle_transcript(text)` (currently POSTs `{transcript,ts}` to optional WEBHOOK_URL).
+  **The ws endpoint is currently UNAUTHENTICATED** (binds 0.0.0.0, no token) — must fix.
+- Mac has whisper.cpp + ggml-small/medium models (used by Hammerspoon voice) → local STT is free.
+- Hub web app (SSE + Supabase realtime), Pi kiosk planned (/tv). Native macOS app exists but is STALE.
+
+## Core decisions (locked)
+- **Two target modes for the display:**
+  - **Default "hub session"** — lightweight Claude that does MCP actions (log food, lists, etc.),
+    rendered as a CONVERSATION PANEL inside the web hub UI (always visible with the HUD).
+  - **Focused Mac session** — a real Claude Code session shown in a web terminal (xterm.js).
+- **Worker priority: Mac → Fly → Pi.** Pi is flaky (optional tertiary). Mac primary = filesystem access.
+- **STT routing:** ESP prefers the **Mac over Tailscale/LAN when up** (audio stays local + the
+  file-capable path never touches the cloud); falls back to `jared-voice` (Fly) only when Mac is down.
+- **Queue, not webhook:** `handle_transcript` INSERTs into Supabase `voice_requests`; workers claim.
+  Producer reads `worker_presence` heartbeats and stamps `assigned_to` = first alive of Mac→Fly→Pi
+  (deterministic, gated on presence; reassign on claim-timeout for failure recovery).
+- **Hub-session context (RESOLVED — no paid API):** Agent SDK needs `ANTHROPIC_API_KEY` → rejected.
+  Worker = headless **`claude -p` on the subscription** (NOT `--bare`, which forces an API key); MCP via
+  `--mcp-config` + `--strict-mcp-config`; `--output-format stream-json`.
+  Context = **`--resume <hub_session_id>`** for the default session — small MCP calls keep a full day of
+  turns well under compaction, and day-long context is the point ("that thing from earlier, do X").
+  **Reset to a fresh session on inactivity (~2h gap) or a new day.** Per-machine session id (Mac's session
+  can't resume on Fly → failover starts fresh, accepted). **Serialize hub turns** (one at a time) because
+  there is NO session lock — concurrent `--resume` on one id interleaves/corrupts. Write each turn to
+  `voice_messages` for the /tv panel. Focused Mac sessions also use `--resume` (your real sessions, full context).
+- **set_focus MCP tool** — available to every Claude session (hub worker + Mac sessions). Flips a
+  `voice_focus` row; the dispatcher routes the next transcript and the `/tv` view renders accordingly.
+- **Focusable list = 5 most recent Mac sessions, NO filtering** (even 1-turn sessions count — a big
+  one-shot prompt is a resume candidate). Auto-named, no rename ever required.
+- **Session name = the `aiTitle` field** (record type `ai-title`) in each session `.jsonl`
+  (`~/.claude/projects/<proj>/<id>.jsonl`); recency = file mtime. Voice addressing is FUZZY
+  (match utterance against the 5 recent by keywords/project/position, not exact title).
+
+## Mac-session handoff (the hard part — solved)
+- **One live writer per session `.jsonl`.** No tmux (rejected — won't wrap all desk sessions).
+  Handoff RELOCATES the single instance; it does not mirror two.
+- **macOS app = orchestrator** (reason to finally update it):
+  - **Watches `~/.claude`** → auto-registry of sessions (id, cwd, `aiTitle`, mtime). You open sessions
+    however you like; they register automatically. No launching-through-the-app required.
+  - **Switch focus → wall:** find the desk tab via `lsof <session>.jsonl` → pid → tty → match the
+    **Terminal.app** tab with that tty (AppleScript exposes tab tty) → **close that tab** → wall web
+    terminal connects to a Mac PTY running `claude --resume <id>` (now sole writer). Voice → PTY socket.
+  - **Switch back → desk:** close the wall PTY instance → app opens a **new Terminal tab** (Cmd-T via
+    System Events into the existing front window; new window only if none open) running `claude --resume <id>`
+    in the session's cwd — "right back where it was."
+  - Single writer always; fully hands-free (no "go close it at your desk").
+
+## Pi display
+- Split happens INSIDE the browser: the "Claude area" swaps between the **default-session panel**
+  and an **xterm.js web terminal** (PTY-over-websocket to the Mac, runs `claude --resume`). HUD always
+  visible; no native-window tiling, no toggling away from the HUD. Voice into the terminal = write bytes
+  to the PTY socket (no xdotool/tmux), with an explicit "send/run that" to press Enter.
+
+## Security
+- **Auth the ESP→Fly ws** (device token; drop unauthed connects) — currently open = anyone can inject commands.
+- **Least-privilege key** on the Fly box (insert-only into `voice_requests` via RLS) — never the service_role key.
+- Mac PTY service = LAN/Tailscale-only + token. Audit all writes. Mac/Pi workers are pull-only (not exposed).
+- High-privilege (file-editing) path is Mac-local only; Fly fallback is data-MCP-only (degraded).
+
+## Open unknowns
+- RESOLVED (Phase 0): Agent SDK is **API-key only** → use `claude -p` on the subscription. CLI confirmed to
+  support `--mcp-config`/`--strict-mcp-config`/`--output-format stream-json`/`--resume`/`--continue`/
+  `--append-system-prompt`. Auto-compact only near the limit; **no** sliding-window flag → manual recent-turns
+  preamble. **No session lock** — two `--resume` on one id interleave/corrupt → orchestrator MUST guarantee
+  one live process per session (close desk tab before wall resume = mandatory, not optional).
+- STILL OPEN: Terminal.app AppleScript — new-tab-in-existing-window + reading each tab's `tty` (lsof→tty match).
+- STILL OPEN: PTY-over-websocket choice for the web terminal (ttyd / wetty / custom).
+- STILL OPEN: where a `rename` writes (overrides `aiTitle`? separate field?) so the watcher reads the right title.
+
+## Build phases
+- **Phase 0 — verify** the unknowns above (cheap probes; no commitment).
+- **Phase 1 — MVP voice assistant (no focus/terminal):** Supabase schema (`voice_requests`,
+  `voice_messages`, `worker_presence`, `voice_focus`); auth + enqueue in `jared-voice` (least-priv key);
+  Mac-local STT (ESP→Mac whisper) + Mac worker (`claude -p` subscription + data MCP + recent-turns preamble) → `voice_messages`;
+  hub `/tv` default-session panel + Pi kiosk; `jared-claude` Fly fallback container.
+- **Phase 2 — focus + Mac sessions on the wall:** `set_focus` MCP tool + `voice_focus`; macOS app
+  orchestrator (watch `~/.claude`, lsof→tty close, reopen tab); xterm.js web terminal → Mac PTY;
+  HUD focusable list (5 recent) + in-browser view-switch; bring the macOS app up to date.
+- **Phase 3 — polish:** ESP dual-endpoint (prefer Mac, fall back to Fly); Pi tertiary worker; tune the
+  sliding-window size; "send/run that" voice grammar for the terminal.

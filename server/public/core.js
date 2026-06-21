@@ -36,7 +36,7 @@ if(TOUCH){
   pg.appendChild(pf);pages.appendChild(pg);
  });
  const container=document.querySelector('.rows'); container.replaceWith(pages);
- // Default to the nutrition page on load (not the first/leftmost page, which is Jarvis).
+ // Default to the nutrition page on load (not the first/leftmost page, which is Raspy).
  const startIdx=Math.max(0,rows.findIndex(rc=>rc.classList.contains('nutrow')));
  const dots=document.createElement('div'); dots.className='dots';
  rows.forEach((_,i)=>{const d=document.createElement('span');if(i===startIdx)d.className='on';dots.appendChild(d);});

@@ -336,7 +336,7 @@ body.tv .dset{font-size:10px;padding:1px 5px}
 /* When a session is focused: hide the hub conversation + session list, show only the terminal. */
 body.tv-focused .tv-convo-log,body.tv-focused .tv-sessions{display:none}
 
-/* ===================== Jarvis (shared 'hub' conversation) =====================
+/* ===================== Raspy (shared 'hub' conversation) =====================
    Full-height conversation at the end of the hub — no card chrome: header + log (fills) + input.
    Web hub (desktop / phone / native WebView). The JS self-skips the TV (it has its own panel). */
 /* A self-contained chat view exactly one screen tall: fixed height:100dvh (the live visible height —
@@ -382,7 +382,7 @@ body.tv-focused .tv-convo-log,body.tv-focused .tv-sessions{display:none}
 .ai-fab:active{transform:scale(.94)}
 .ai-fab.ai-rec{background:#ef4444;animation:va-pulse 1.4s ease-out infinite}
 
-/* bottom activity bar — live "what Jarvis is doing": Listening / Transcribing / Thinking, then each
+/* bottom activity bar — live "what Raspy is doing": Listening / Transcribing / Thinking, then each
    tool call + args. Left-aligned, content-sized, max-width capped so it never reaches the FAB. */
 .ai-act{position:fixed;left:16px;bottom:26px;z-index:999;max-width:calc(100vw - 110px);
   display:inline-flex;flex-direction:column;align-items:stretch;gap:5px;background:#0f1318;border:1px solid #222a33;

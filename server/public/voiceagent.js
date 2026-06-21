@@ -1,4 +1,4 @@
-// In-app Jarvis. Three pieces sharing one pipeline (→ /api/voice-command|voice-text →
+// In-app Raspy. Three pieces sharing one pipeline (→ /api/voice-command|voice-text →
 // voice_requests → Mac worker → the shared 'hub' voice_messages thread):
 //   1. A full-height conversation card at the end of the hub (#ai-log): type, talk, reset.
 //   2. A fixed quick-add mic FAB (bottom-right) for a one-off voice command without scrolling.
@@ -37,13 +37,41 @@ function boot() {
 
 // A self-contained recorder: getUserMedia → MediaRecorder → upload to /api/voice-command.
 // quick=true marks a one-off quick-add (the FAB) so the server tags it for a terse reply.
-function makeRecorder({ onStatus, onActive, quick }) {
+function makeRecorder({ onStatus, onActive, quick, autoStop }) {
   let recording = false, rec = null, chunks = [], stream = null, maxTimer = null;
+  let actx = null, vadTimer = null;
   const pickMime = () => {
     for (const m of ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4', 'audio/ogg'])
       if (window.MediaRecorder && MediaRecorder.isTypeSupported(m)) return m;
     return '';
   };
+  // Voice-activity auto-stop (FAB): once speech begins, end + send on a short trailing silence — the
+  // "return to baseline" behavior the ESP/server use, so the quick mic is press-once with no second tap.
+  function startVAD() {
+    try {
+      actx = new (window.AudioContext || window.webkitAudioContext)(); if (actx.resume) actx.resume();
+      const an = actx.createAnalyser(); an.fftSize = 1024;
+      actx.createMediaStreamSource(stream).connect(an);
+      const buf = new Uint8Array(an.fftSize), t0 = performance.now();
+      let base = 0, baseN = 0, spoke = false, silence = 0;
+      const CAL_MS = 350, HANG_MS = 1300, GRACE_MS = 6000;   // learn floor, trailing-silence to end, no-speech bailout
+      vadTimer = setInterval(() => {
+        if (!recording) return;
+        an.getByteTimeDomainData(buf);
+        let s = 0; for (let i = 0; i < buf.length; i++) { const d = (buf[i] - 128) / 128; s += d * d; }
+        const rms = Math.sqrt(s / buf.length), now = performance.now();
+        if (now - t0 < CAL_MS) { base += rms; baseN++; return; }       // calibrate the ambient noise floor first
+        const thr = Math.max((baseN ? base / baseN : 0.01) * 2.5, 0.02);
+        if (rms >= thr) { spoke = true; silence = 0; }                  // speaking
+        else if (spoke) { if (!silence) silence = now; else if (now - silence >= HANG_MS) stop(); }  // trailing silence → send
+        else if (now - t0 > GRACE_MS) stop();                          // pressed but never spoke → give up
+      }, 60);
+    } catch (_) { /* no Web Audio → falls back to tap-to-stop + the 60s cap */ }
+  }
+  function stopVAD() {
+    if (vadTimer) { clearInterval(vadTimer); vadTimer = null; }
+    if (actx) { try { actx.close(); } catch (_) {} actx = null; }
+  }
   async function start() {
     if (recording) return;
     try { stream = await navigator.mediaDevices.getUserMedia({ audio: true }); }
@@ -53,12 +81,14 @@ function makeRecorder({ onStatus, onActive, quick }) {
     rec = new MediaRecorder(stream, mime ? { mimeType: mime } : undefined);
     rec.ondataavailable = (e) => { if (e.data && e.data.size) chunks.push(e.data); };
     rec.onstop = () => upload(mime);
-    rec.start(); recording = true; onActive(true); onStatus('Listening… tap to send', 'rec');
+    rec.start(); recording = true; onActive(true);
+    onStatus(autoStop ? 'Listening…' : 'Listening… tap to send', 'rec');
     maxTimer = setTimeout(() => stop(), 60000);
+    if (autoStop) startVAD();
   }
   function stop() {
     if (!recording) return;
-    recording = false; onActive(false); clearTimeout(maxTimer);
+    recording = false; onActive(false); clearTimeout(maxTimer); stopVAD();
     try { if (rec && rec.state !== 'inactive') rec.stop(); } catch (_) {}
   }
   async function upload(mime) {
@@ -170,7 +200,7 @@ function initCard() {
   sendBtn.addEventListener('click', sendText);
   textEl.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); sendText(); } });
   resetBtn.addEventListener('click', async () => {
-    if (!confirm('Reset the conversation? Jarvis will forget the prior context.')) return;
+    if (!confirm('Reset the conversation? Raspy will forget the prior context.')) return;
     clear(); setStatus('Context reset');
     try { await fetch('/api/voice-reset', { method: 'POST' }); } catch (_) {}
     setTimeout(() => setStatus(''), 2500);
@@ -201,7 +231,7 @@ function initFab(activity) {
     else if (kind === 'clear') activity.clear();
     else activity.busy(t);
   };
-  const fabRec = makeRecorder({ onStatus, onActive: (a) => fab.classList.toggle('ai-rec', a), quick: true });
+  const fabRec = makeRecorder({ onStatus, onActive: (a) => fab.classList.toggle('ai-rec', a), quick: true, autoStop: true });
   fab.addEventListener('click', () => fabRec.toggle());
 
   // Hide the FAB + activity bar while the full conversation card is on screen (its input is there).

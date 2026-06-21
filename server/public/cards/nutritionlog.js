@@ -5,6 +5,7 @@ import { esc, dualPlot, state } from '../shared.js';
 const CAL_COLOR='#3b82f6', W_COLOR='#a78bfa';
 let nutSelDate=null, nutReq=0;
 let lastDayEntries=null, lastDayDate=null; // last day-detail loaded (for add-popup lookups)
+const expandedIds=new Set(); // entry ids whose ingredient breakdown is open — persists across SSE re-renders until closed by hand
 
 export function render(s){
  const N=s.nutrition_log;
@@ -97,11 +98,12 @@ async function loadNutDay(date){
   const t=fmtTime(e.occurred_at);
   const ings=Array.isArray(e.ingredients)?e.ingredients:null;
   const exp=ings&&ings.length;
+  const open=exp&&expandedIds.has(e.id); // keep this entry expanded across re-renders if the user opened it
   const staged=!!e.staged;
   // committed entries get "+ now" (re-log); staged meals get a STAGED badge + a Commit button.
   h+='<div class="dex'+(exp?' dex-exp':'')+(staged?' dex-staged':'')+'" data-idx="'+i+'">'+
      '<div class="dex-head"'+(exp?' data-toggle="'+i+'"':'')+'>'+
-       '<div class=dex-n>'+(exp?'<span class=dex-caret>▸</span>':'')+esc(e.name||'—')+(staged?' <span class=stagedbadge>STAGED</span>':'')+'</div>'+
+       '<div class=dex-n>'+(exp?'<span class=dex-caret>'+(open?'▾':'▸')+'</span>':'')+esc(e.name||'—')+(staged?' <span class=stagedbadge>STAGED</span>':'')+'</div>'+
        '<div class=dex-macros>'+macroChips(e)+((!staged&&t)?'<span class=dset>'+t+'</span>':'')+
          (staged
            ?'<button class="addbtn commitbtn" type=button data-commit-entry="'+i+'" title="Commit — log as eaten now">commit</button>'
@@ -110,7 +112,7 @@ async function loadNutDay(date){
        '</div>'+
      '</div>';
   if(exp){
-   h+='<div class="dex-ings hidden" id="ding-'+i+'">'+ings.map((g,gi)=>
+   h+='<div class="dex-ings'+(open?'':' hidden')+'" id="ding-'+i+'">'+ings.map((g,gi)=>
      '<div class=ding><span class=ding-n>'+esc(ingLabel(g))+'</span>'+macroChips(g)+
        (staged?'':'<button class=addbtn type=button data-add-ing="'+i+'.'+gi+'" title="Add at now">+ now</button>')+
      '</div>').join('')+'</div>';
@@ -144,8 +146,9 @@ function selectNutDay(date){ if(date===nutSelDate)return; nutSelDate=date; markN
    return; }
   const head=e.target.closest('.dex-head[data-toggle]'); if(!head)return;
   const i=head.dataset.toggle, box=document.getElementById('ding-'+i);
-  if(!box)return; box.classList.toggle('hidden');
-  const car=head.querySelector('.dex-caret'); if(car)car.textContent=box.classList.contains('hidden')?'▸':'▾';
+  if(!box)return; const nowHidden=box.classList.toggle('hidden');
+  const en=entryAt(+i); if(en)nowHidden?expandedIds.delete(en.id):expandedIds.add(en.id); // remember so re-renders don't collapse it
+  const car=head.querySelector('.dex-caret'); if(car)car.textContent=nowHidden?'▸':'▾';
  });
 })();
 

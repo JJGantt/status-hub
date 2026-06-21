@@ -33,11 +33,11 @@ async function open() {
 
       '<div class="settings-sec">Voice routing</div>' +
       '<div class="settings-seg" id="set-routing">' +
-        '<button type="button" data-v="subscription"' + (routing === 'subscription' ? ' class="on"' : '') + '>Subscription<small>free · slower start</small></button>' +
-        '<button type="button" data-v="sdk"' + (routing === 'sdk' ? ' class="on"' : '') + '>SDK<small>fast · uses credit</small></button>' +
+        '<button type="button" data-v="subscription"' + (routing === 'subscription' ? ' class="on"' : '') + '>Subscription</button>' +
+        '<button type="button" data-v="sdk"' + (routing === 'sdk' ? ' class="on"' : '') + '>SDK</button>' +
       '</div>' +
 
-      '<div class="settings-sec">Trailing silence (seconds)<span class="settings-note">how long a pause ends a command</span></div>' +
+      '<div class="settings-sec">Trailing silence (seconds)</div>' +
       row('Phone', 'phone_silence_s', sil('phone_silence_s', 3)) +
       row('ESP (Hey&nbsp;Rhasspy)', 'esp_silence_s', sil('esp_silence_s', 3)) +
       row('Mac', 'mac_silence_s', sil('mac_silence_s', 3)) +

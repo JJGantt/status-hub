@@ -390,10 +390,8 @@ body.tv-focused .tv-convo-log,body.tv-focused .tv-sessions{display:none}
 .settings-h h3{margin:0;font-size:16px}
 .settings-x{background:none;border:0;color:#8b96a5;font-size:16px;cursor:pointer}
 .settings-sec{margin:16px 0 8px;font-size:12px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:#8b96a5}
-.settings-note{display:block;text-transform:none;letter-spacing:0;font-weight:400;color:#5a6573;font-size:11px;margin-top:2px}
 .settings-seg{display:flex;gap:8px}
-.settings-seg button{flex:1;background:#0e1318;border:1px solid #2a313a;color:#c2cad4;border-radius:10px;padding:10px;cursor:pointer;font-size:13px;font-weight:600;display:flex;flex-direction:column;gap:3px;align-items:center}
-.settings-seg button small{font-weight:400;color:#6b7686;font-size:11px}
+.settings-seg button{flex:1;background:#0e1318;border:1px solid #2a313a;color:#c2cad4;border-radius:10px;padding:12px;cursor:pointer;font-size:14px;font-weight:600;text-align:center}
 .settings-seg button.on{border-color:#3b82f6;background:#13203a;color:#e8eaed}
 .settings-row{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:7px 0;font-size:14px;color:#c2cad4}
 .settings-num{width:84px;padding:8px 10px;border-radius:8px;border:1px solid #2a313a;background:#0e1318;color:#e8eaed;font-size:14px;text-align:right}

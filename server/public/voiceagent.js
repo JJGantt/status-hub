@@ -54,7 +54,7 @@ function makeRecorder({ onStatus, onActive, quick, autoStop }) {
       actx.createMediaStreamSource(stream).connect(an);
       const buf = new Uint8Array(an.fftSize), t0 = performance.now();
       let base = 0, baseN = 0, spoke = false, silence = 0;
-      const CAL_MS = 350, HANG_MS = 1300, GRACE_MS = 6000;   // learn floor, trailing-silence to end, no-speech bailout
+      const CAL_MS = 350, HANG_MS = 3000, GRACE_MS = 8000;   // learn floor, trailing-silence to end (matches the ESP 3s hangover), no-speech bailout
       vadTimer = setInterval(() => {
         if (!recording) return;
         an.getByteTimeDomainData(buf);

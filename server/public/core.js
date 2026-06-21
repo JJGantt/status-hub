@@ -30,7 +30,9 @@ if(TOUCH){
  const rows=[...document.querySelectorAll('.rows > .row-card')];
  const pages=document.createElement('div'); pages.className='pages';
  rows.forEach(rc=>{
-  const pg=document.createElement('div');pg.className='page';
+  const pg=document.createElement('div');
+  // The Raspy chat page locks to the viewport (pinned header/input, internal log scroll); others scroll normally.
+  pg.className='page'+(rc.classList.contains('airow')?' page-ai':'');
   const pf=document.createElement('div');pf.className='pagefit';
   pf.appendChild(rc);            // move the whole row group into one swipe page
   pg.appendChild(pf);pages.appendChild(pg);

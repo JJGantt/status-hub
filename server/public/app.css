@@ -158,6 +158,11 @@ body.touch .fit{width:auto!important;zoom:1!important}
 .dots{position:fixed;bottom:9px;left:0;right:0;display:flex;justify-content:center;gap:7px;z-index:30;pointer-events:none}
 .dots span{width:7px;height:7px;border-radius:50%;background:#3a434f}
 .dots span.on{background:#8b96a5}
+/* Raspy chat page: lock to the viewport so the header (Raspy + Reset) stays pinned at the top and the
+   input row at the bottom — only the message log scrolls. Other pages keep their normal page scroll. */
+body.touch .page-ai{overflow:hidden}
+body.touch .page-ai .pagefit{height:100%;min-height:0;padding-bottom:20px}
+body.touch .page-ai .airow{height:auto;flex:1 1 auto;min-height:0}
 .dex{padding:9px 0;border-top:1px solid #222a33}
 .dtot{margin-bottom:6px}
 .dex-head{display:flex;flex-direction:column;gap:4px}

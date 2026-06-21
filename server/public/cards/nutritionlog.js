@@ -219,9 +219,9 @@ function ingStructured(g){ return !!(g&&g.amount!=null&&isFinite(Number(g.amount
 function ingLabel(g){ if(ingStructured(g)){ const un=String(g.unit||'').trim(); return fmtAmt(g.amount)+(un?' '+un:'')+' '+(g.food||g.name||''); } return g.name||g.ingredient||'—'; }
 
 // ---- portion-multiplier popup ----
-// Add mode (default): scales the dish, POSTs a NEW row at now. In add mode each ingredient also gets
-//   its own portion stepper + an ✕ exclude toggle (excludes from the new entry only).
-// Edit mode (opts={mode:'edit',id}): overall portion only, PATCHes the existing row in place.
+// Both modes show an overall Portion stepper PLUS, when the dish has ingredients, a per-ingredient
+// stepper + ✕ toggle. Add mode (default) POSTs a NEW row at now (✕ = leave it out of the new row);
+// edit mode (opts={mode:'edit',id}) PATCHes the existing row in place (✕ = remove it from the meal).
 // The meal total is always the sum of the included, scaled ingredients when ingredients exist.
 // `base` = {name,calories,protein_g,carbs_g,fat_g, ingredients?}.
 function openAddPopup(base,opts){
@@ -239,7 +239,7 @@ function openAddPopup(base,opts){
    A:ingStructured(g)?u(g.amount):0,
    calories:u(g.calories),protein_g:u(g.protein_g),carbs_g:u(g.carbs_g),fat_g:u(g.fat_g)
  })):null;
- const perIng=!edit&&!!ings;
+ const perIng=!!ings;   // per-ingredient steppers + ✕ in BOTH add and edit when the dish has ingredients
  // state: structured → amt (default = A×baseMult = the stored amount); legacy → imult; plus off.
  const st=ings?ings.map(g=>({ amt:g.structured?round3(g.A*baseMult):0, imult:1, off:false })):null;
  let mult=baseMult, touched=false;

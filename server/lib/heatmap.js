@@ -1,11 +1,12 @@
 'use strict';
 // Workout volume heatmap: per-day set counts laid out as week-columns (GitHub style).
-const { MON, localDate } = require('./dates');
+// Days bucket on the DAY_START_HOUR 4am boundary (same convention as nutrition), so both the
+// "today" cell and the counts roll over at 4am, not calendar midnight.
+const { MON, localDate, dayBucketOf, DAY_START_HOUR } = require('./dates');
 
-function buildWorkoutHeatmap(rows, weeks = 18) {
+function buildWorkoutHeatmap(rows, weeks = 18, today = localDate(new Date(Date.now() - DAY_START_HOUR * 3600000))) {
   const counts = {};
-  for (const r of rows || []) { const d = String(r.occurred_at).slice(0, 10); counts[d] = (counts[d] || 0) + 1; }
-  const today = localDate();
+  for (const r of rows || []) { const d = dayBucketOf(r.occurred_at); counts[d] = (counts[d] || 0) + 1; }
   const anchor = new Date(today + 'T12:00:00Z');
   const dow = anchor.getUTCDay(); // 0=Sun .. 6=Sat
   const startMs = anchor.getTime() - dow * 86400000 - (weeks - 1) * 7 * 86400000;

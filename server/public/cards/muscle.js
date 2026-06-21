@@ -81,11 +81,23 @@ function toggleSel(sel){ if(SEL&&SEL.kind===sel.kind&&SEL.key===sel.key)setSel(n
 
 // Muscle Volume card: sortable (Priority = least-trained first, default; or Grouped), rows clickable.
 function volRowHtml(m){
- const stable=Math.round((m.stable_fill||0)*100), drop=Math.round((m.drop_fill||0)*100);
- const dropTxt=m.dropping>0?' <span style="color:#6b7686">(−'+m.dropping+' tmrw)</span>':'';
- const bars=(stable+drop===0)
+ // Three slices, left→right: stable (solid) | drops the day after (faint stripes) | drops tomorrow
+ // (bright stripes). Nothing drops *today* — the window only slides at the 4am rollover — so the
+ // soonest-to-go slice (tomorrow) sits at the leading edge: at the rollover it falls off and the
+ // "day after" slice escalates into its place. Graduated warning, not a silent vanish.
+ const stable=Math.round((m.stable_fill||0)*100);
+ const dAfter=Math.round((m.drop_day_after_fill||0)*100);
+ const dTmrw=Math.round((m.drop_tomorrow_fill||0)*100);
+ let dropTxt='';
+ if(m.drop_tomorrow>0)dropTxt+=' <span style="color:#dfe5ee">(−'+m.drop_tomorrow+' tmrw)</span>';
+ if(m.drop_day_after>0)dropTxt+=' <span style="color:#7c8694">(−'+m.drop_day_after+' in 2d)</span>';
+ // Drop-off slices keep the bar's own colour (set inline); the white stripes that mark them as
+ // at-risk — bright for "tomorrow", faint for "day after" — come from the .vdrop-* CSS overlay.
+ const bars=(stable+dAfter+dTmrw===0)
   ? '<div class=vstable style="width:4%;background:'+m.color+'"></div>'
-  : '<div class=vstable style="width:'+stable+'%;background:'+m.color+'"></div><div class=vdrop style="width:'+drop+'%"></div>';
+  : '<div class=vstable style="width:'+stable+'%;background:'+m.color+'"></div>'+
+    (dAfter>0?'<div class="vdrop vdrop-2d" style="width:'+dAfter+'%;background-color:'+m.color+'"></div>':'')+
+    (dTmrw>0?'<div class="vdrop vdrop-tmrw" style="width:'+dTmrw+'%;background-color:'+m.color+'"></div>':'');
  return '<div class="vrow tappable" data-mus="'+m.muscle+'"><div class=vrow-l><span class=nm>'+m.label+'</span><span class=vl>'+m.sets+' / '+m.target+dropTxt+'</span></div>'+
   '<div class=vtrack>'+bars+'</div></div>';
 }
@@ -118,6 +130,7 @@ export function render(s){
 // "as tall as my sibling, as wide as height×ratio" without a flex circular-sizing trap.)
 function sizeMap(){
  if(TOUCH)return;
+ if(document.body.classList.contains('tv'))return; // TV grid sizes the map via CSS (width-fit)
  const fit=document.querySelector('.musright .musmap .fit');
  const svg=document.querySelector('.musmap #body svg');
  if(!fit||!svg)return;

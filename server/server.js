@@ -9,7 +9,7 @@ const { estimateMaintenance } = require('./lib/maintenance');
 const pace = require('./lib/pace');
 const { computeVolume } = require('./lib/volume');
 const BODY_SVG = require('./lib/bodymap');
-const { DAY_START_HOUR, localDate, nutritionWindow, lastNDates, dayBucketOf } = require('./lib/dates');
+const { DAY_START_HOUR, localDate, nutritionWindow, lastNTrainingDays, dayBucketOf } = require('./lib/dates');
 const { buildWorkoutHeatmap } = require('./lib/heatmap');
 const { buildNutritionLog, calorieColor, targetCalFor } = require('./lib/nutritionlog');
 const { buildVariants } = require('./lib/variants');
@@ -21,6 +21,14 @@ const HUB_PASSWORD = process.env.HUB_PASSWORD || 'changeme';
 const TZ = process.env.TZ_DISPLAY || 'America/New_York';
 // Cookie token derived from the password — set once per device, never expires (no logout).
 const TOKEN = crypto.createHash('sha256').update('status-hub:' + HUB_PASSWORD).digest('hex');
+// Device token for the Pi/TV kiosk: visiting any page with ?token=<TV_TOKEN> sets the hub
+// cookie, so the wall display authenticates by URL without ever needing the password.
+const TV_TOKEN = process.env.TV_TOKEN || '';
+// Groq Whisper for the in-app voice button (same model the ESP/Jarvis path uses).
+const GROQ_API_KEY = process.env.GROQ_API_KEY || '';
+// Sentinel transcript the worker recognizes as "drop the resumed hub session" (manual reset).
+// Must match RESET_SENTINEL in the voice-pipeline worker.
+const VOICE_RESET_SENTINEL = '__RESET_CONTEXT__';
 
 // Supabase client used only for the Realtime subscription (push). Data reads use sb() REST.
 const supa = createClient(SUPABASE_URL, SUPABASE_KEY, {
@@ -34,6 +42,10 @@ const voiceClients = new Set();
 
 // Dashboard HTML, read once from disk with the muscle-map SVG injected at the placeholder.
 const DASHBOARD_HTML = fs.readFileSync(path.join(__dirname, 'public', 'index.html'), 'utf8')
+  .replace('<!--BODY_SVG-->', BODY_SVG);
+// /tv serves the SAME real hub dashboard (core.js + cards over /api/stream) plus a voice column.
+// Inject the body-map SVG just like the dashboard so the muscle map renders identically.
+const TV_HTML = fs.readFileSync(path.join(__dirname, 'public', 'tv.html'), 'utf8')
   .replace('<!--BODY_SVG-->', BODY_SVG);
 
 const app = express();
@@ -113,7 +125,7 @@ async function currentMaintenanceCal() {
   const histStart = localDate(new Date(Date.now() - 40 * 86400000));
   const [weightRows, histRows] = await Promise.all([
     sb('weight_log?select=date,weight_lbs&order=date.asc'),
-    sb(`nutrition_entries?occurred_at=gte.${histStart}T00:00:00&select=occurred_at,calories`),
+    sb(`nutrition_entries?occurred_at=gte.${histStart}T00:00:00&staged=eq.false&select=occurred_at,calories`),
   ]);
   const intakeTotals = {};
   for (const e of histRows || []) {
@@ -139,20 +151,20 @@ function nowOffsetTZ() {
 async function buildStatus() {
   const win = nutritionWindow();
   const today = win.day;
-  const week = lastNDates(7);
+  const week = lastNTrainingDays(7);
   const histStart = localDate(new Date(Date.now() - 40 * 86400000)); // intake history for the maintenance trend
   const heatStart = localDate(new Date(Date.now() - 140 * 86400000)); // ~20 weeks for the workout volume heatmap
 
   const [deviceRows, entries, setRows, weightRows, histRows, muscleRows, heatRows, catalogRows, nutLogRows, targetRows] = await Promise.all([
     sb('device_status?select=*'),
-    sb(`nutrition_entries?occurred_at=gte.${win.start}&occurred_at=lt.${win.end}&select=calories,protein_g,carbs_g,fat_g`),
+    sb(`nutrition_entries?occurred_at=gte.${win.start}&occurred_at=lt.${win.end}&staged=eq.false&select=calories,protein_g,carbs_g,fat_g`),
     sb(`sets?occurred_at=gte.${week[0]}T00:00:00&select=occurred_at,exercise,muscles_override`),
     sb('weight_log?select=date,weight_lbs&order=date.asc'),
-    sb(`nutrition_entries?occurred_at=gte.${histStart}T00:00:00&select=occurred_at,calories`),
+    sb(`nutrition_entries?occurred_at=gte.${histStart}T00:00:00&staged=eq.false&select=occurred_at,calories`),
     sb('exercise_muscles?select=name,muscle,contribution'),
     sbRange(`sets?occurred_at=gte.${heatStart}T00:00:00&select=occurred_at&order=occurred_at`),
     sb('exercise_catalog?select=name,equipment'),
-    sbRange(`nutrition_entries?occurred_at=gte.${localDate(new Date(Date.now() - 86 * 86400000))}T00:00:00&select=occurred_at,calories,protein_g&order=occurred_at`),
+    sbRange(`nutrition_entries?occurred_at=gte.${localDate(new Date(Date.now() - 86 * 86400000))}T00:00:00&staged=eq.false&select=occurred_at,calories,protein_g&order=occurred_at`),
     sb('nutrition_targets?select=date,calories&order=date.asc'),
   ]);
 
@@ -195,10 +207,10 @@ async function buildStatus() {
   volume.exercise_variants = buildVariants(catalogRows || []); // exercise → equipment variants + YouTube how-to links
 
   // ---- workout volume heatmap (GitHub-contribution style) ----
-  const heatmap = buildWorkoutHeatmap(heatRows);
+  const heatmap = buildWorkoutHeatmap(heatRows, 20, today); // 20 weeks + 4am `today`, matching the nutrition heatmap
 
   // ---- nutrition log: calorie-adherence calendar (per-day historical targets) + calorie/weight trend ----
-  const nutrition_log = buildNutritionLog(nutLogRows || [], weights, maintenance.target, maintenance.maintenance, today, targetRows || []);
+  const nutrition_log = buildNutritionLog(nutLogRows || [], weights, maintenance.target, maintenance.maintenance, today, targetRows || [], 20);
 
   const last_set_at = (heatRows && heatRows.length) ? heatRows[heatRows.length - 1].occurred_at : null;
   return { today, litter, nutrition, maintenance, pace: paceData, volume, heatmap, nutrition_log, last_set_at, generated_at: new Date().toISOString() };
@@ -264,6 +276,13 @@ app.post('/login', (req, res) => {
 // served behind this gate too.
 app.use((req, res, next) => {
   if (authed(req)) return next();
+  // Kiosk device-token: ?token=<TV_TOKEN> on any request authenticates and seeds the cookie
+  // so the Pi's subsequent same-origin fetches (SSE, /api/*) are authorized too.
+  if (TV_TOKEN && req.query.token === TV_TOKEN) {
+    res.setHeader('Set-Cookie',
+      `hub=${TOKEN}; Max-Age=${60 * 60 * 24 * 3650}; Path=/; HttpOnly; SameSite=Lax`);
+    return next();
+  }
   if (req.path.startsWith('/api')) return res.status(401).json({ error: 'unauthorized' });
   res.redirect('/login');
 });
@@ -273,7 +292,7 @@ app.get('/', (req, res) => res.type('html').send(DASHBOARD_HTML));
 // Behind the same auth cookie. no-cache so a deploy is never masked by a stale cached page.
 app.get('/tv', (req, res) => {
   res.setHeader('Cache-Control', 'no-cache');
-  res.type('html').send(fs.readFileSync(path.join(__dirname, 'public', 'tv.html'), 'utf8'));
+  res.type('html').send(TV_HTML);
 });
 // Static client assets (core.js, app.css, cards/*.js) — behind the auth gate above.
 // no-cache (revalidate via ETag each load) so a deploy is never masked by a stale cached asset.
@@ -303,17 +322,23 @@ app.get('/api/nutrition-day', async (req, res) => {
     if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return res.status(400).json({ error: 'bad date' });
     const hh = String(DAY_START_HOUR).padStart(2, '0');
     const next = localDate(new Date(Date.parse(date + 'T12:00:00Z') + 86400000));
-    const [entries, targetRows, fallbackCal] = await Promise.all([
-      sbRange(`nutrition_entries?occurred_at=gte.${date}T${hh}:00:00&occurred_at=lt.${next}T${hh}:00:00&select=id,occurred_at,name,calories,protein_g,carbs_g,fat_g,ingredients&order=occurred_at`),
+    const isToday = date === nutritionWindow().day;
+    const SEL = 'id,occurred_at,name,calories,protein_g,carbs_g,fat_g,ingredients,staged';
+    const [committed, stagedRows, targetRows, fallbackCal] = await Promise.all([
+      sbRange(`nutrition_entries?occurred_at=gte.${date}T${hh}:00:00&occurred_at=lt.${next}T${hh}:00:00&staged=eq.false&select=${SEL}&order=occurred_at`),
+      // Staged meals (any day) always surface in the CURRENT day's list, pinned to the bottom.
+      isToday ? sbRange(`nutrition_entries?staged=eq.true&select=${SEL}&order=logged`) : Promise.resolve([]),
       sb('nutrition_targets?select=date,calories&order=date.asc'),
       currentMaintenanceCal(),
     ]);
+    // Day total counts ONLY committed (eaten) entries — staged meals never count.
     let total_cal = 0, total_protein = 0, total_carbs = 0, total_fat = 0;
-    for (const e of entries) {
+    for (const e of committed) {
       total_cal += Number(e.calories) || 0; total_protein += Number(e.protein_g) || 0;
       total_carbs += Number(e.carbs_g) || 0; total_fat += Number(e.fat_g) || 0;
     }
     total_cal = Math.round(total_cal);
+    const entries = committed.concat(stagedRows || []); // committed (by time) then staged (bottom)
     // historical target for this day: most-recent nutrition_targets snapshot with date <= day
     // (fallback = live maintenance) — same selection buildNutritionLog uses for the calendar.
     const targets = (targetRows || []).map((t) => ({ date: String(t.date).slice(0, 10), calories: Number(t.calories) || 0 }))
@@ -327,6 +352,36 @@ app.get('/api/nutrition-day', async (req, res) => {
       target_cal, delta_color,
       entries,
     });
+  } catch (e) { res.status(500).json({ error: String(e.message || e) }); }
+});
+
+// "now" as a naive-local wall-clock timestamp in the display TZ → "YYYY-MM-DDTHH:MM:SS"
+// (the format nutrition_entries.occurred_at and sets.occurred_at are stored in).
+function nowNaiveLocal() {
+  const f = new Intl.DateTimeFormat('en-CA', {
+    timeZone: TZ, hour12: false,
+    year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit',
+  });
+  const p = {}; for (const part of f.formatToParts(new Date())) p[part.type] = part.value;
+  const hh = p.hour === '24' ? '00' : p.hour; // Intl can emit 24 for midnight
+  return `${p.year}-${p.month}-${p.day}T${hh}:${p.minute}:${p.second}`;
+}
+
+// Repeat-a-set: log a new set for an exercise at the current time, reusing its weight and taking a
+// fresh rep count. Body: {exercise, weight_lbs, reps}. Realtime on `sets` re-pushes the dashboard,
+// so the heatmap, day detail, and rest timer all update live.
+app.post('/api/log-set', express.json(), async (req, res) => {
+  try {
+    const b = req.body || {};
+    const exercise = typeof b.exercise === 'string' ? b.exercise.trim() : '';
+    const reps = Number(b.reps);
+    const weight_lbs = Number(b.weight_lbs);
+    if (!exercise) return res.status(400).json({ error: 'exercise required' });
+    if (!Number.isInteger(reps) || reps <= 0) return res.status(400).json({ error: 'reps must be a positive integer' });
+    if (!isFinite(weight_lbs) || weight_lbs < 0) return res.status(400).json({ error: 'weight_lbs must be ≥ 0' });
+    const occurred_at = nowNaiveLocal();
+    await sbWrite('sets', 'POST', { occurred_at, exercise, weight_lbs, reps });
+    res.json({ ok: true, occurred_at });
   } catch (e) { res.status(500).json({ error: String(e.message || e) }); }
 });
 
@@ -345,14 +400,7 @@ app.post('/api/log-entry', express.json(), async (req, res) => {
     if ([calories, protein_g, carbs_g, fat_g].some((v) => v === null)) {
       return res.status(400).json({ error: 'calories/protein_g/carbs_g/fat_g must be numeric' });
     }
-    // "now" as naive-local wall-clock in the display TZ → "YYYY-MM-DDTHH:MM:SS".
-    const f = new Intl.DateTimeFormat('en-CA', {
-      timeZone: TZ, hour12: false,
-      year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit',
-    });
-    const p = {}; for (const part of f.formatToParts(new Date())) p[part.type] = part.value;
-    const hh = p.hour === '24' ? '00' : p.hour; // Intl can emit 24 for midnight
-    const occurred_at = `${p.year}-${p.month}-${p.day}T${hh}:${p.minute}:${p.second}`;
+    const occurred_at = nowNaiveLocal(); // naive-local wall-clock in the display TZ
     const row = {
       id: crypto.randomUUID(),
       date: dayBucketOf(occurred_at),
@@ -445,6 +493,23 @@ app.delete('/api/log-entry', async (req, res) => {
   } catch (e) { res.status(500).json({ error: String(e.message || e) }); }
 });
 
+// Commit a staged meal from the UI: flip staged→false and stamp it "now" so it logs as eaten and
+// starts counting. Realtime on nutrition_entries re-pushes the dashboard.
+app.post('/api/commit-staged', express.json(), async (req, res) => {
+  try {
+    const id = typeof (req.body && req.body.id) === 'string' ? req.body.id : '';
+    if (!id) return res.status(400).json({ error: 'id required' });
+    const rows = await sb(`nutrition_entries?id=eq.${id}&staged=eq.true&select=*`);
+    const before = (rows || [])[0];
+    if (!before) return res.status(404).json({ error: 'staged meal not found' });
+    const occurred_at = nowNaiveLocal();
+    const patch = { staged: false, occurred_at, logged: occurred_at, date: dayBucketOf(occurred_at) };
+    await sbWrite(`nutrition_entries?id=eq.${id}`, 'PATCH', patch);
+    await audit('edit', id, before, { ...before, ...patch });
+    res.status(204).end();
+  } catch (e) { res.status(500).json({ error: String(e.message || e) }); }
+});
+
 // Server-Sent Events: push assembled status to the browser, instantly on any DB change.
 app.get('/api/stream', async (req, res) => {
   res.set({ 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache',
@@ -476,6 +541,71 @@ app.get('/api/voice-sessions', async (req, res) => {
     const rows = await sb('voice_sessions?order=last_active.desc&select=*');
     res.json(rows || []);
   } catch (e) { res.status(500).json({ error: String(e.message || e) }); }
+});
+
+// In-app voice button: the browser/app uploads a recorded clip; we transcribe it with the SAME
+// Groq Whisper the ESP uses, then enqueue into voice_requests exactly like the Jarvis path. The
+// Mac worker claims it and writes the user+assistant turns into voice_messages (focus 'hub') —
+// the one shared conversation shown on the TV wall and in the app. Audio is never stored.
+app.post('/api/voice-command', express.raw({ type: '*/*', limit: '25mb' }), async (req, res) => {
+  try {
+    if (!GROQ_API_KEY) return res.status(503).json({ error: 'transcription not configured' });
+    const audio = req.body;
+    if (!audio || !audio.length) return res.status(400).json({ error: 'no audio' });
+    const ct = String(req.headers['content-type'] || 'audio/webm');
+    const ext = ct.includes('mp4') || ct.includes('m4a') ? 'm4a'
+              : ct.includes('mpeg') ? 'mp3' : ct.includes('wav') ? 'wav'
+              : ct.includes('ogg') ? 'ogg' : 'webm';
+    const form = new FormData();
+    form.append('file', new Blob([audio], { type: ct }), `clip.${ext}`);
+    form.append('model', 'whisper-large-v3-turbo');
+    form.append('response_format', 'text');
+    const gr = await fetch('https://api.groq.com/openai/v1/audio/transcriptions', {
+      method: 'POST', headers: { Authorization: `Bearer ${GROQ_API_KEY}` }, body: form });
+    if (!gr.ok) return res.status(502).json({ error: `transcription failed (${gr.status})` });
+    const transcript = (await gr.text()).trim();
+    if (!transcript) return res.json({ transcript: '', enqueued: false });
+    // The bottom-right quick-add FAB sends ?quick=1 → tag the request so the worker asks Jarvis for a
+    // terse, fits-in-the-status-chip confirmation. The full conversation card omits it (verbose replies).
+    const quick = String(req.query.quick || '') === '1';
+    await sbWrite('voice_requests', 'POST', { transcript, source: quick ? 'web-quick' : 'web', focus: 'hub' });
+    res.json({ transcript, enqueued: true });
+  } catch (e) { res.status(500).json({ error: String(e.message || e) }); }
+});
+
+// Typed command from the Jarvis card — no audio, just enqueue the text like the voice path.
+app.post('/api/voice-text', express.json(), async (req, res) => {
+  try {
+    const text = String((req.body && req.body.text) || '').trim();
+    if (!text) return res.status(400).json({ error: 'empty' });
+    await sbWrite('voice_requests', 'POST', { transcript: text, source: 'web', focus: 'hub' });
+    res.json({ enqueued: true });
+  } catch (e) { res.status(500).json({ error: String(e.message || e) }); }
+});
+
+// Reset the shared hub conversation: clear the stored thread, tell every live surface (web card +
+// TV panel) to clear, and enqueue a sentinel so the Mac worker drops its resumed Claude session —
+// the next command starts with fresh context.
+app.post('/api/voice-reset', async (req, res) => {
+  try {
+    await sbWrite('voice_messages?focus=eq.hub', 'DELETE');
+    pushVoice('reset', null);
+    await sbWrite('voice_requests', 'POST', { transcript: VOICE_RESET_SENTINEL, source: 'web', focus: 'hub' });
+    res.json({ ok: true });
+  } catch (e) { res.status(500).json({ error: String(e.message || e) }); }
+});
+
+// Low-latency activity push from the Mac worker: transient "what Jarvis is doing right now" events
+// (each tool call + args, and a done marker) relayed straight to the SSE clients, bypassing the
+// Supabase-realtime hop so the on-screen activity bar tracks the run in real time. Not persisted.
+app.post('/api/voice-activity', express.json(), (req, res) => {
+  const b = req.body || {};
+  pushVoice('activity', {
+    text: String(b.text || '').slice(0, 400),
+    state: b.state === 'done' ? 'done' : 'tool',
+    focus: String(b.focus || 'hub'),
+  });
+  res.status(204).end();
 });
 
 // Voice SSE: streams `event: voice` frames ({kind:'message'|'focus', row}) to the /tv panel.

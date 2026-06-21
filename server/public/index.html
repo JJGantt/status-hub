@@ -30,8 +30,22 @@
 
   <!-- ROW 4 — workout volume heatmap + a reserved tapped-day set list -->
   <div class="row-card workoutrow">
-    <div class="card wkheat"><div class="fit" id="workouts"><h2>Workout Volume <span id="resttimer" class="resttimer"></span></h2><div id="heatwrap"></div></div></div>
+    <div class="card wkheat"><div class="fit" id="workouts"><h2>Workout Volume</h2><div id="resttimer" class="resttimer"></div><div id="heatwrap"></div></div></div>
     <div class="card wkdetail"><div class="fit detailpanel"><div id="heatinfo"></div></div></div>
+  </div>
+
+  <!-- ROW 5 — Jarvis: full-height shared 'hub' conversation (same thread as the Pi wall). No card chrome. -->
+  <div class="row-card airow">
+    <div class="ai-shell">
+      <div class="ai-head"><h2>Jarvis</h2><button class="ai-reset" id="ai-reset" type="button" title="Start a fresh conversation">Reset context</button></div>
+      <div class="ai-log" id="ai-log"></div>
+      <div class="ai-input">
+        <button class="ai-mic" id="ai-mic" type="button" aria-label="Tap to talk"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="2" width="6" height="12" rx="3"></rect><path d="M5 11a7 7 0 0 0 14 0"></path><line x1="12" y1="18" x2="12" y2="22"></line></svg></button>
+        <input class="ai-text" id="ai-text" type="text" placeholder="Ask or tell Jarvis…" autocomplete="off">
+        <button class="ai-send" id="ai-send" type="button">Send</button>
+      </div>
+      <div class="ai-status" id="ai-status"></div>
+    </div>
   </div>
 </div>
 <div class=foot id=foot></div>

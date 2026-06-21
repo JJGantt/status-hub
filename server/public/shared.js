@@ -43,8 +43,9 @@ export function dualPlot(calPts,wPts,maint,target){
  s+='<line x1='+px0+' y1='+py0+' x2='+px0+' y2='+py1+' stroke="#2a313a" stroke-width=1 />';
  s+='<line x1='+px1+' y1='+py0+' x2='+px1+' y2='+py1+' stroke="#2a313a" stroke-width=1 />';
  s+='<line x1='+px0+' y1='+py1+' x2='+px1+' y2='+py1+' stroke="#2a313a" stroke-width=1 />';
- // dashed refs (left/cal axis): maintenance (grey) and target/goal (green)
- if(isFinite(maint)){const y=YC(maint).toFixed(1);s+='<line x1='+px0+' y1='+y+' x2='+px1+' y2='+y+' stroke="#6b7686" stroke-width=1 stroke-dasharray="4 3" />';}
+ // dashed refs (left/cal axis): maintenance (neutral warm-gray — kept well clear of the violet
+ // weight line so the two never read as related) and target/goal (green)
+ if(isFinite(maint)){const y=YC(maint).toFixed(1);s+='<line x1='+px0+' y1='+y+' x2='+px1+' y2='+y+' stroke="#9a948a" stroke-width=1 stroke-dasharray="5 4" />';}
  if(isFinite(target)){const y=YC(target).toFixed(1);s+='<line x1='+px0+' y1='+y+' x2='+px1+' y2='+y+' stroke="#22c55e" stroke-width=1 stroke-dasharray="4 3" />';}
  // weight line first (behind), then cal line
  if(wv.length>=2)s+='<path d="'+path(wv,YW)+'" fill=none stroke="'+W_COLOR+'" stroke-width=1.6 stroke-linejoin=round stroke-linecap=round />';

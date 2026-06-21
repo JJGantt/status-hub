@@ -5,6 +5,7 @@ import * as nutrition from './cards/nutrition.js';
 import * as muscle from './cards/muscle.js';
 import * as workouts from './cards/workouts.js';
 import * as nutritionlog from './cards/nutritionlog.js';
+import './voiceagent.js';   // mic FAB + shared 'hub' conversation (self-skips on the TV wall)
 
 function fmtFoot(){if(!state.last)return;const L=state.last.litter||{};
  document.getElementById('foot').textContent='litter updated '+ago(L.updated_at)+' · '+new Date().toLocaleTimeString();}

@@ -19,8 +19,12 @@ function nutritionWindow() {
   const dayEnd = localDate(new Date(Date.parse(dayStart + 'T12:00:00Z') + 86400000));
   return { day: dayStart, start: `${dayStart}T${hh}:00:00`, end: `${dayEnd}T${hh}:00:00` };
 }
-function lastNDates(n) {
-  const today = localDate();
+// The trailing n "training days", anchored on the DAY_START_HOUR boundary (NOT calendar midnight)
+// so the workout day rolls over at the same 4am line as the nutrition day. A late set (e.g. 1am)
+// still counts toward the day that just ended, and "today"/"tomorrow" stay intuitive after midnight
+// (the day after a 1am moment is still "today", not "tomorrow"). YYYY-MM-DD, oldest first.
+function lastNTrainingDays(n) {
+  const today = localDate(new Date(Date.now() - DAY_START_HOUR * 3600000)); // 4am-day (pre-4am → prior day)
   const anchor = new Date(today + 'T12:00:00Z'); // noon-UTC anchor avoids day flips
   const out = [];
   for (let i = n - 1; i >= 0; i--) {
@@ -38,4 +42,4 @@ function dayBucketOf(ts) {
   return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
 }
 
-module.exports = { TZ, DAY_START_HOUR, MON, localDate, nutritionWindow, lastNDates, dayBucketOf };
+module.exports = { TZ, DAY_START_HOUR, MON, localDate, nutritionWindow, lastNTrainingDays, dayBucketOf };

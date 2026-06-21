@@ -1,10 +1,17 @@
 'use strict';
+const { dayBucketOf } = require('./dates');
 // Weekly per-muscle training volume for the gamified workout gauges.
 //
-// Volume = Σ (set × contribution) over a trailing 7 calendar days, per muscle. Target is a
+// Volume = Σ (set × contribution) over a trailing 7 training days (bucketed on the DAY_START_HOUR
+// 4am boundary, same as nutrition — so the day rolls over at 4am, not midnight), per muscle. Target is a
 // uniform 14 effective sets/week (research-honest; no per-muscle spread — see IDEAS), each
-// independently adjustable later. We also surface "about to drop off tomorrow": the volume on
-// the oldest day in the window, which leaves when the 7-day window slides forward.
+// independently adjustable later. We also surface "about to drop off", in two urgency tiers.
+// Because the window is a fixed set of day-buckets that only slides at the 4am rollover, nothing
+// drops DURING today — the soonest a bucket can leave is the next rollover. So the tiers are:
+//   • drop_tomorrow  — volume on the OLDEST bucket (window[0]); leaves at the next 4am → gone TOMORROW (urgent).
+//   • drop_day_after — volume on the 2nd-oldest bucket (window[1]); leaves the rollover after → gone the DAY AFTER.
+// Two days of forewarning: a slice escalates from "day after" to "tomorrow" at the 4am rollover
+// instead of silently vanishing, so the bar always warns before volume is actually lost.
 //
 // Server computes everything (sets, target, fill, drop-off, color); clients only render.
 
@@ -36,38 +43,43 @@ function volColor(ratio) {
 }
 
 // setRows: [{occurred_at, exercise, muscles_override}]; muscleRows: [{name, muscle, contribution}];
-// window: [oldestDay ... today] date strings (oldest = the day that drops off tomorrow).
+// window: [oldestTrainingDay ... currentTrainingDay] 4am-day strings (oldest = the day that drops at the next 4am).
 function computeVolume(setRows, muscleRows, window, targets) {
-  const dropDay = window[0];
+  const dropDay = window[0];        // oldest bucket — leaves at the next 4am rollover → "drops tomorrow" (urgent)
+  const dropDay2 = window[1];       // 2nd-oldest — leaves the rollover after → "drops the day after"
   const musByName = new Map();
   for (const m of muscleRows || []) {
     const k = String(m.name).toLowerCase();
     if (!musByName.has(k)) musByName.set(k, []);
     musByName.get(k).push({ muscle: m.muscle, contribution: m.contribution });
   }
-  const total = {}, drop = {};
+  const total = {}, dropTmrw = {}, dropAfter = {};   // dropTmrw = gone tomorrow; dropAfter = gone the day after
   for (const s of setRows || []) {
-    const day = String(s.occurred_at).slice(0, 10);
+    const day = dayBucketOf(s.occurred_at);    // 4am-day bucket, matches the window dates above
     const map = s.muscles_override
       ? Object.entries(s.muscles_override).map(([muscle, contribution]) => ({ muscle, contribution }))
       : (musByName.get(String(s.exercise).toLowerCase()) || []);
     for (const mm of map) {
       total[mm.muscle] = (total[mm.muscle] || 0) + mm.contribution;
-      if (day === dropDay) drop[mm.muscle] = (drop[mm.muscle] || 0) + mm.contribution;
+      if (day === dropDay) dropTmrw[mm.muscle] = (dropTmrw[mm.muscle] || 0) + mm.contribution;
+      else if (day === dropDay2) dropAfter[mm.muscle] = (dropAfter[mm.muscle] || 0) + mm.contribution;
     }
   }
   const groups = GROUPS.map(g => ({
     group: g.group,
     muscles: g.muscles.map(([slug, label]) => {
       const sets = Math.round((total[slug] || 0) * 10) / 10;
-      const dropping = Math.round((drop[slug] || 0) * 10) / 10;
+      const drop_tomorrow = Math.round((dropTmrw[slug] || 0) * 10) / 10;   // oldest bucket, gone tomorrow (urgent)
+      const drop_day_after = Math.round((dropAfter[slug] || 0) * 10) / 10; // 2nd-oldest, gone the day after
+      const dropping = Math.round((drop_tomorrow + drop_day_after) * 10) / 10; // combined at-risk volume
       const target = (targets && targets[slug]) || TARGET_DEFAULT;
       const ratio = target > 0 ? sets / target : 0;
       return {
-        muscle: slug, label, sets, dropping, target,
+        muscle: slug, label, sets, dropping, drop_tomorrow, drop_day_after, target,
         fill: Math.max(0, Math.min(1, ratio)),                       // total fill vs target (capped)
-        stable_fill: target > 0 ? Math.max(0, Math.min(1, (sets - dropping) / target)) : 0, // survives tomorrow
-        drop_fill: target > 0 ? Math.min(1, dropping / target) : 0,  // the grayed "expires tomorrow" slice
+        stable_fill: target > 0 ? Math.max(0, Math.min(1, (sets - dropping) / target)) : 0, // survives both rollovers
+        drop_tomorrow_fill: target > 0 ? Math.min(1, drop_tomorrow / target) : 0,     // urgent (bright stripes)
+        drop_day_after_fill: target > 0 ? Math.min(1, drop_day_after / target) : 0,   // soon (faint stripes)
         color: volColor(ratio),
       };
     }),

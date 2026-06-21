@@ -67,7 +67,14 @@ body.touch .musclerow .musdetail .fit{padding:0}
 .ring text.rd{font-size:13px;font-weight:700}
 .ring .rtot{font-size:11px;color:#8b96a5;margin-top:1px;white-space:nowrap}
 .pnote{color:#8b96a5;font-size:12px;margin-top:12px}
-.resttimer{font-size:13px;font-weight:700;color:#39d353;font-variant-numeric:tabular-nums;text-transform:none;letter-spacing:0;margin-left:6px}
+/* rest timer — a big, prominent block (≈ heatmap footprint): uppercase label + huge live digits */
+.resttimer{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;
+  padding:22px 16px;margin:0 0 12px;background:#0e1318;border:1px solid #1b2128;border-radius:14px}
+.resttimer:empty{display:none}
+.rt-label{font-size:12px;letter-spacing:.18em;text-transform:uppercase;color:#5c6675;font-weight:700}
+.rt-time{font-size:clamp(3.2rem,15vw,5rem);font-weight:800;line-height:1;font-variant-numeric:tabular-nums;color:#39d353}
+.resttimer.cool .rt-time{color:#d6c042}   /* past 5 min — winding down */
+.resttimer.stale .rt-time{color:#8b96a5}  /* idle — not an active rest */
 .vgrp h3{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:#6b7686;margin:12px 0 6px;font-weight:600}
 .vsort{display:inline-flex;gap:2px;background:#0e1318;border:1px solid #222a33;border-radius:8px;padding:2px;margin-bottom:12px}
 .vs-opt{font-size:11px;color:#8b96a5;padding:3px 10px;border-radius:6px;cursor:pointer;user-select:none}
@@ -83,7 +90,13 @@ body.touch .musclerow .musdetail .fit{padding:0}
 .vrow-l .vl{color:#8b96a5;white-space:nowrap;flex:none}
 .vtrack{display:flex;height:10px;background:#0e1318;border-radius:5px;overflow:hidden;border:1px solid #222a33}
 .vstable{height:100%;transition:width .4s ease}
-.vdrop{height:100%;background:repeating-linear-gradient(45deg,#4b5563,#4b5563 3px,#39414d 3px,#39414d 6px)}
+/* Drop-off slices keep the bar's own colour (set inline as background-color); white diagonal
+   stripes overlay it to flag "at risk" — two intensities for the two windows. */
+.vdrop{height:100%;transition:width .4s ease}
+/* drops tomorrow — bright, denser white stripes (urgent, the soonest to fall off) */
+.vdrop-tmrw{background-image:repeating-linear-gradient(45deg,rgba(255,255,255,.92) 0 2px,transparent 2px 5px)}
+/* drops the day after tomorrow — faint, sparser white stripes (less urgent) */
+.vdrop-2d{background-image:repeating-linear-gradient(45deg,rgba(255,255,255,.34) 0 2px,transparent 2px 7px)}
 #body .bodysvg{width:100%;height:auto;max-height:520px;display:block;margin-top:4px}
 #body .bodysvg path{fill:#222a33;stroke:#0b0d10;stroke-width:0.25;transition:fill .4s ease}
 #body .bodysvg path.tappable{cursor:pointer}
@@ -131,7 +144,7 @@ body.touch .detailpanel #bodyinfo:empty::before{content:none}
 .nplot-leg{display:flex;flex-wrap:wrap;gap:6px 16px;margin-top:7px;font-size:12px;color:#8b96a5}
 .nplot-key{display:inline-flex;align-items:center;gap:6px}
 .nplot-key i{width:14px;height:3px;border-radius:2px;display:inline-block}
-.nplot-key i.nplot-dash{height:0;border-top:2px dashed #6b7686;background:none}
+.nplot-key i.nplot-dash{height:0;border-top:2px dashed #9a948a;background:none}
 .nplot-key b{font-weight:700}
 .nplot-sl{color:#8b96a5}
 /* phone: swipe horizontally between pages; each page scrolls vertically at full size. Cards never
@@ -148,6 +161,9 @@ body.touch .fit{width:auto!important;zoom:1!important}
 .dex{padding:9px 0;border-top:1px solid #222a33}
 .dtot{margin-bottom:6px}
 .dex-head{display:flex;flex-direction:column;gap:4px}
+.wk-exhead{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.wk-exhead .addbtn{flex:0 0 auto}
+.dex-sets{margin-top:4px}
 .dex-exp>.dex-head{cursor:pointer}
 .dex-n{font-weight:600}
 .dex-caret{color:#8b96a5;font-size:11px;margin-right:6px;display:inline-block}
@@ -162,6 +178,12 @@ body.touch .fit{width:auto!important;zoom:1!important}
 /* nutrition add-at-now: "+ now" button on entry/ingredient rows + confirm popup */
 .addbtn{background:#1b2a40;border:1px solid #2f4566;color:#7fb0ff;border-radius:6px;padding:3px 9px;margin:2px 0 2px 4px;font-size:11px;font-weight:600;cursor:pointer;line-height:1}
 .addbtn:hover{background:#23354f}
+/* staged meals: a STAGED badge + a green Commit button (replaces "+ now" on staged rows) */
+.stagedbadge{display:inline-block;font-size:9px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:#d6c042;background:rgba(214,192,66,.13);border:1px solid rgba(214,192,66,.4);border-radius:5px;padding:1px 5px;margin-left:6px;vertical-align:middle}
+.dex-staged{background:rgba(214,192,66,.08);box-shadow:inset 3px 0 0 #d6c042}
+.dex-staged .dex-n{color:#cdd3db}
+.commitbtn{background:#16361f;border-color:#2e6b3f;color:#86e3a6}
+.commitbtn:hover{background:#1d4628}
 /* ⋯ row-actions button + its popover menu (edit / delete) */
 .morebtn{background:#222a33;border:1px solid #36404c;color:#c7ced8;border-radius:6px;padding:3px 9px;margin:2px 0 2px 4px;font-size:13px;font-weight:700;cursor:pointer;line-height:1}
 .morebtn:hover{background:#2b3540}
@@ -199,56 +221,187 @@ body.touch .fit{width:auto!important;zoom:1!important}
 .addmodal-add:disabled{opacity:.6;cursor:default}
 
 /* ============================================================================
-   /tv KIOSK — near-black always-on wall display. Trimmed HUD (left) + the live
-   Claude-conversation panel (right). Scoped under body.tv so it never touches the
-   normal dashboard. ============================================================ */
-body.tv{background:#06080a;padding:0;height:100vh;overflow:hidden}
-.tv-grid{display:grid;grid-template-columns:minmax(280px,360px) 1fr;gap:0;height:100vh}
-/* LEFT — HUD summary column */
-.tv-hud{display:flex;flex-direction:column;gap:16px;padding:24px;border-right:1px solid #11161c;overflow:auto}
-.tv-hudcard{background:#0b1014;border:1px solid #161c24;border-radius:14px;padding:16px 18px}
-.tv-hudcard h3{margin:0 0 12px;font-size:12px;letter-spacing:.1em;text-transform:uppercase;color:#5c6675;font-weight:600}
-.tv-line{display:flex;align-items:center;gap:8px;margin-bottom:10px}
-.tv-line .dot{width:11px;height:11px;border-radius:50%;display:inline-block;flex:0 0 auto}
-.tv-line-v{font-size:18px;font-weight:600;color:#e6eaf0}
-.tv-kv{display:flex;justify-content:space-between;align-items:baseline;padding:4px 0;font-size:15px;color:#9aa6b4}
-.tv-kv b{color:#e6eaf0;font-weight:700}
-.tv-kvrow{display:flex;gap:18px;margin-top:8px}
-.tv-kvrow .tv-kv{flex:1;border-top:1px solid #161c24;padding-top:8px}
-.tv-big{font-size:42px;font-weight:800;line-height:1}
-.tv-big .tv-of{font-size:18px;font-weight:600;color:#5c6675}
-.tv-empty{color:#5c6675;font-size:14px}
-.tv-hudfoot{margin-top:auto;color:#4a5462;font-size:12px;letter-spacing:.03em}
-/* RIGHT — conversation panel */
-.tv-convo{display:flex;flex-direction:column;min-width:0;height:100vh}
-.tv-convo-head{display:flex;align-items:center;gap:10px;padding:18px 28px;border-bottom:1px solid #11161c;flex:0 0 auto}
+   /tv KIOSK — near-black always-on 4K wall display (chromium @ device-scale 2, so a
+   ~1920×1080 logical viewport). The FULL real hub dashboard is the main content (the
+   same .rows cards as the normal hub, rendered live by core.js). A compact voice column
+   sits on the right: a minimal conversation panel, the focusable session list, and a
+   session terminal that overlays the column when a Mac session is focused.
+   Scoped under body.tv so none of this touches the normal dashboard. ================ */
+body.tv{background:#06080a;padding:0;height:100vh;overflow:hidden;cursor:none}
+body.tv *{cursor:none!important}
+/* No scrollbars anywhere on the wall — it's a non-interactive kiosk. Panels still scroll
+   programmatically (e.g. the conversation auto-pins to its newest message), just no visible bar. */
+body.tv *{scrollbar-width:none!important;-ms-overflow-style:none!important}
+body.tv ::-webkit-scrollbar{width:0!important;height:0!important;display:none!important}
+/* tv-shell: dashboard (fills, fixed grid — NO scroll) | fixed-width voice column. */
+.tv-shell{display:flex;gap:0;height:100vh;width:100%}
+/* MAIN dashboard: flatten the row wrappers so every card lands in ONE grid sized to the
+   viewport, so the whole hub fits on one screen (no scrolling). */
+/* ===== TV wall: FOUR columns (rings | nutrition | muscle | workout) + voice. Pure black, minimal. =====
+   Col widths: rings narrow (fits the big rings) · nutrition == workout (so their heatmaps match) ·
+   muscle shrunk ~75% · the freed width goes to the voice column. */
+body.tv,body.tv .card,body.tv .tv-shell,body.tv .tv-voice,body.tv .tv-hudcard{background:#000!important}
+body.tv .card{border:1px solid #181c22}
+body.tv .rows{flex:1 1 auto;min-width:0;max-width:none;margin:0;padding:10px;height:100vh;overflow:hidden;
+  display:grid;gap:10px;grid-template-columns:240px 0.78fr 0.82fr 0.78fr;grid-template-rows:auto minmax(0,1fr);}
+body.tv .card{overflow:hidden;min-height:0;min-width:0}
+body.tv .rows .fit{display:flex;flex-direction:column;padding:10px 12px;height:100%;overflow:hidden;min-height:0;gap:6px}
+/* hide card titles entirely — content is self-evident, and it buys vertical room */
+body.tv .card h2{display:none}
+body.tv .statusrow{grid-column:1/-1;grid-row:1}
+/* each content column = a full-height flex COLUMN */
+body.tv .ringrow{grid-column:1;grid-row:2;display:flex;flex-direction:column;min-height:0}
+body.tv .nutrow{grid-column:2;grid-row:2;display:flex;flex-direction:column;min-height:0}
+body.tv .musclerow{grid-column:3;grid-row:2;display:flex;flex-direction:column;gap:8px;min-height:0}
+body.tv .workoutrow{grid-column:4;grid-row:2;display:flex;flex-direction:column;gap:8px;min-height:0}
+/* COL 1 — calorie + macro rings, stacked vertically, big and packed (small gap between them) */
+body.tv .ringrow .ringcard,body.tv .nutrow .nutcard{flex:1 1 auto;min-height:0}
+body.tv .ringrow #nutrition{display:flex;flex-direction:column;height:100%}
+body.tv .ringrow .rings{flex:1 1 auto;flex-direction:column;align-items:center;justify-content:center;gap:14px;margin:0;min-height:0}
+body.tv .ringrow .ring{flex:0 0 auto;width:100%;text-align:center}
+body.tv .ringrow .ring svg{max-width:200px;width:100%}
+body.tv .ringrow .ring .rtot{font-size:13px;margin-top:2px}
+body.tv .ringrow .pnote{flex:0 0 auto;text-align:center;font-size:11px;color:#5c6675;margin:0}
+/* COL 2 — nutrition: calorie heatmap (top) → food list (fills, scrolls) → cal/weight plot (bottom) */
+body.tv .nutrow #nutritionlog{display:flex;flex-direction:column;height:100%;min-height:0;gap:8px}
+body.tv .nutrow .nutheat{flex:0 0 auto}
+body.tv .nutrow .nutfoods{flex:1 1 auto;min-height:0;overflow:auto;display:block;padding:0}
+body.tv .nutrow .nutplot{flex:0 0 auto}
+/* COL 3 — muscle: body map (top 25%) + volume bars (bottom 75%) */
+body.tv .musmap{order:1;flex:0 0 25%;min-height:0}
+body.tv .musvol{order:2;flex:1 1 auto;min-height:0}
+body.tv .musdetail{display:none}
+body.tv .musmap #body{flex:1 1 auto;min-height:0;display:flex;align-items:center;justify-content:center}
+body.tv .musmap #body svg,body.tv .musmap .bodysvg{width:100%!important;height:100%!important;max-width:100%!important;max-height:100%!important}
+body.tv .musvol #volume{flex:1 1 auto;min-height:0;overflow:hidden;display:flex;flex-direction:column}
+body.tv .musvol .vsort{display:none}
+body.tv .musvol .vgrp h3{margin:4px 0 2px;font-size:9px}
+/* inline volume rows that DISTRIBUTE to fill the column (flex:1 1 0, no trailing gap) */
+body.tv .musvol .vgrp{display:flex;flex-direction:column;flex:1 1 auto;min-height:0}
+body.tv .musvol .vrow{display:flex;align-items:center;gap:9px;margin:0;padding:0;flex:1 1 0;min-height:0}
+body.tv .musvol .vrow-l{display:contents}
+body.tv .musvol .vrow-l .nm{order:1;flex:0 0 84px;font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:#c7ced8}
+body.tv .musvol .vtrack{order:2;flex:1 1 auto;height:16px;margin:0}
+body.tv .musvol .vrow-l .vl{order:3;flex:0 0 auto;font-size:11px;white-space:nowrap;color:#8b96a5}
+/* the drop-off urgency is carried by the stripe colour on the wall (amber=today, gray=tmrw); drop the
+   text annotation so it can't squeeze the bar in this narrower column */
+body.tv .musvol .vrow-l .vl span{display:none}
+/* COL 4 — workout: sets heatmap (top) → sets list (fills) */
+body.tv .wkheat{order:1;flex:0 0 auto}
+body.tv .wkdetail{order:2;flex:1 1 auto;min-height:0}
+body.tv .wkdetail .detailpanel{height:100%;overflow:auto;display:block}
+body.tv .wkdetail .heath{display:none}
+/* HEATMAPS — real squares, and BOTH the same size: the calorie + sets heatmaps each fill their
+   equal-width column (uncapped), so their cells come out identical. */
+body.tv .hcell{aspect-ratio:1!important;width:100%!important;max-width:none!important;flex:0 1 auto!important;height:auto!important;min-height:0;border-radius:2px}
+body.tv .hcol{flex:1 1 0;min-width:0;justify-content:flex-start}
+body.tv .heat{flex:1 1 auto;min-width:0}
+/* lists are non-interactive on the wall: drop the +now / ⋯ buttons, tighten rows */
+body.tv .addbtn,body.tv .morebtn{display:none!important}
+body.tv .dex{padding:2px 0}
+body.tv .dex-n{font-size:12px}
+body.tv .dset{font-size:10px;padding:1px 5px}
+/* VOICE column — compact, fixed width, near-black, its own border. */
+.tv-voice{flex:0 0 540px;display:flex;flex-direction:column;min-width:0;height:100vh;
+  background:#080b0e;border-left:1px solid #11161c;position:relative;overflow:hidden}
+.tv-voice-head{display:flex;align-items:center;gap:10px;padding:16px 20px;border-bottom:1px solid #11161c;flex:0 0 auto}
 .tv-focus-dot{width:10px;height:10px;border-radius:50%;background:#3b82f6;box-shadow:0 0 10px #3b82f6}
-.tv-focus-label{font-size:16px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:#9aa6b4}
-.tv-convo-log{flex:1 1 auto;overflow-y:auto;padding:24px 28px;display:flex;flex-direction:column;gap:16px;scroll-behavior:smooth}
-.tv-msg{max-width:80%;display:flex;flex-direction:column;gap:5px}
-.tv-msg-role{font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:#4a5462;font-weight:700}
-.tv-msg-text{font-size:20px;line-height:1.5;border-radius:14px;padding:14px 18px;white-space:pre-wrap;word-break:break-word}
-/* user: right-aligned, accent bubble */
-.tv-msg-user{align-self:flex-end;align-items:flex-end}
-.tv-msg-user .tv-msg-text{background:#16314f;color:#dbe9ff;border:1px solid #1f436b}
-/* assistant: left-aligned, dark bubble */
+.tv-focus-label{font-size:14px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:#9aa6b4}
+/* conversation log — minimal two-color chat (user blue / assistant gray), no role labels. */
+.tv-convo-log{flex:1 1 auto;overflow-y:auto;padding:16px;display:flex;flex-direction:column;gap:8px;scroll-behavior:smooth;min-height:0}
+/* minimal conversation — no chat bubbles; user vs assistant by alignment + color only. */
+.tv-msg{max-width:92%}
+.tv-msg-text{font-size:14px;line-height:1.45;padding:2px 0;white-space:pre-wrap;word-break:break-word;background:none;border:0;border-radius:0}
+.tv-msg-user{align-self:flex-end}
+.tv-msg-user .tv-msg-text{color:#6ea8ff;text-align:right}      /* you — accent blue, right */
 .tv-msg-assistant{align-self:flex-start}
-.tv-msg-assistant .tv-msg-text{background:#0e141a;color:#e6eaf0;border:1px solid #1a222c}
-/* tool / system: subtle inline meta, no bubble */
-.tv-msg-tool,.tv-msg-system{align-self:flex-start;max-width:100%}
-.tv-msg-tool .tv-msg-text,.tv-msg-system .tv-msg-text{background:none;border:0;padding:6px 0;font-size:14px;color:#5c6675;font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+.tv-msg-assistant .tv-msg-text{color:#c2cad4}                  /* assistant — light gray, left */
 .tv-caret{animation:tvblink 1s steps(2,start) infinite;color:#5c6675}
 @keyframes tvblink{50%{opacity:0}}
+.tv-empty{color:#5c6675;font-size:13px}
 
-/* Phase 2: focusable session list (left footer card) */
-.tv-sessions .tv-sess{display:flex;align-items:center;gap:8px;padding:5px 0;font-size:14px;color:#9aa6b4;border-top:1px solid #161c24}
+/* focusable session list (bottom of the voice column) */
+.tv-sessions{flex:0 0 auto;padding:12px 16px;border-top:1px solid #11161c}
+.tv-sessions h3{margin:0 0 8px;font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:#5c6675;font-weight:600}
+.tv-sessions .tv-sess{display:flex;align-items:center;gap:8px;padding:5px 0;font-size:13px;color:#9aa6b4;border-top:1px solid #11161c}
 .tv-sessions .tv-sess:first-of-type{border-top:0}
 .tv-sessions .tv-sess.on{color:#e6eaf0}
 .tv-sessions .tv-sess-dot{width:7px;height:7px;border-radius:50%;background:#2a3340;flex:0 0 auto}
 .tv-sessions .tv-sess.on .tv-sess-dot{background:#3b82f6;box-shadow:0 0 8px #3b82f6}
 .tv-sessions .tv-sess-title{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 
-/* Phase 2: web terminal (fills the Claude area when a Mac session is focused) */
-.tv-term{flex:1 1 auto;min-height:0;padding:8px 10px;background:#06080a}
+/* session terminal — overlays the voice column (below the focus header) when focus != 'hub'. */
+.tv-term{position:absolute;left:0;right:0;top:53px;bottom:0;padding:8px 10px;background:#06080a;z-index:5}
 .tv-term .xterm{height:100%}
 .tv-term .xterm-viewport{background:#06080a!important}
+/* When a session is focused: hide the hub conversation + session list, show only the terminal. */
+body.tv-focused .tv-convo-log,body.tv-focused .tv-sessions{display:none}
+
+/* ===================== Jarvis (shared 'hub' conversation) =====================
+   Full-height conversation at the end of the hub — no card chrome: header + log (fills) + input.
+   Web hub (desktop / phone / native WebView). The JS self-skips the TV (it has its own panel). */
+/* A self-contained chat view exactly one screen tall: fixed height:100dvh (the live visible height —
+   100vh would include the area behind the mobile address bar; vh is the fallback). Because it's a
+   FIXED height (not min-height), the message log scrolls internally and the input row stays pinned to
+   the bottom instead of the whole thing growing past the screen and scrolling with the page. */
+.airow{height:100vh;height:100dvh}
+.ai-shell{display:flex;flex-direction:column;gap:10px;flex:1 1 auto;min-height:0}
+.ai-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:0}
+.ai-head h2{margin:0}
+.ai-reset{background:#1b2128;border:1px solid #2a313a;color:#8b96a5;font-size:12px;font-weight:600;
+  padding:5px 11px;border-radius:8px;cursor:pointer}
+.ai-reset:hover{color:#e6eaf0;border-color:#3a4452}
+.ai-log{flex:1 1 auto;min-height:0;overflow-y:auto;display:flex;flex-direction:column;gap:8px;
+  background:#0e1318;border:1px solid #1b2128;border-radius:12px;padding:14px}
+.ai-msg{max-width:88%}
+.ai-msg-text{font-size:14px;line-height:1.45;white-space:pre-wrap;word-break:break-word}
+.ai-msg-user{align-self:flex-end}
+.ai-msg-user .ai-msg-text{color:#6ea8ff;text-align:right}
+.ai-msg-assistant{align-self:flex-start}
+.ai-msg-assistant .ai-msg-text{color:#c2cad4}
+.ai-caret{animation:tvblink 1s steps(2,start) infinite;color:#5c6675}
+.ai-input{display:flex;align-items:center;gap:8px}
+.ai-mic{flex:0 0 auto;width:40px;height:40px;border-radius:50%;border:1px solid #2a313a;background:#1b2128;
+  color:#9aa6b4;display:grid;place-items:center;cursor:pointer;transition:background .15s,color .15s}
+.ai-mic:hover{color:#e6eaf0;border-color:#3a4452}
+.ai-mic.ai-rec{background:#ef4444;color:#fff;border-color:#ef4444;animation:va-pulse 1.4s ease-out infinite}
+.ai-mic.ai-busy{opacity:.5;pointer-events:none}
+@keyframes va-pulse{0%{box-shadow:0 0 0 0 rgba(239,68,68,.5)}70%{box-shadow:0 0 0 12px rgba(239,68,68,0)}100%{box-shadow:0 0 0 0 rgba(239,68,68,0)}}
+.ai-text{flex:1 1 auto;min-width:0;padding:11px 14px;border-radius:10px;border:1px solid #2a313a;
+  background:#0e1318;color:#e8eaed;font-size:14px;outline:none}
+.ai-text:focus{border-color:#3b82f6}
+.ai-send{flex:0 0 auto;padding:11px 18px;border:0;border-radius:10px;background:#3b82f6;color:#fff;
+  font-size:14px;font-weight:600;cursor:pointer}
+.ai-send:hover{background:#4f8ef7}
+.ai-status{font-size:12px;color:#7c8694;min-height:15px}
+/* fixed quick-add mic FAB (bottom-right, survives scrolling; hidden once the conversation card shows) */
+.ai-fab-wrap{position:fixed;right:20px;bottom:20px;z-index:1000;transition:opacity .2s}
+.ai-fab-wrap.hidden{opacity:0;pointer-events:none}
+.ai-fab{width:56px;height:56px;border-radius:50%;border:0;background:#3b82f6;color:#fff;display:grid;
+  place-items:center;cursor:pointer;box-shadow:0 6px 20px rgba(0,0,0,.45);transition:background .15s,transform .1s}
+.ai-fab:hover{background:#4f8ef7}
+.ai-fab:active{transform:scale(.94)}
+.ai-fab.ai-rec{background:#ef4444;animation:va-pulse 1.4s ease-out infinite}
+
+/* bottom activity bar — live "what Jarvis is doing": Listening / Transcribing / Thinking, then each
+   tool call + args. Left-aligned, content-sized, max-width capped so it never reaches the FAB. */
+.ai-act{position:fixed;left:16px;bottom:26px;z-index:999;max-width:calc(100vw - 110px);
+  display:inline-flex;flex-direction:column;align-items:stretch;gap:5px;background:#0f1318;border:1px solid #222a33;
+  border-radius:12px;padding:8px 13px;font-size:13px;color:#c2cad4;box-shadow:0 6px 20px rgba(0,0,0,.4);
+  opacity:0;transform:translateY(6px);transition:opacity .2s,transform .2s;pointer-events:none;overflow:hidden}
+.ai-act.show{opacity:1;transform:translateY(0)}
+.ai-act.ai-act-off{display:none}                 /* suppressed while the conversation card is in view */
+.ai-act-row{display:flex;align-items:center;gap:9px;min-width:0;white-space:nowrap}
+.ai-act-txt{flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis}
+/* The transcribed prompt that kicked off this run — quoted, muted, sits above the live status. */
+.ai-act-prompt{display:none;max-width:36ch;font-size:12px;line-height:1.3;color:#8a93a0;font-style:italic;
+  overflow:hidden;-webkit-box-orient:vertical;-webkit-line-clamp:2}
+.ai-act.has-prompt .ai-act-prompt{display:-webkit-box}
+.ai-act-dot{width:8px;height:8px;border-radius:50%;flex:0 0 auto;background:#3b82f6}
+.ai-act-busy .ai-act-dot,.ai-act-tool .ai-act-dot{background:#3b82f6;animation:ai-blink 1s steps(2,start) infinite}
+.ai-act-rec .ai-act-dot{background:#ef4444;animation:va-pulse 1.4s ease-out infinite}
+.ai-act-done .ai-act-dot{background:#39d353;animation:none}
+.ai-act-err .ai-act-dot{background:#f87171;animation:none}
+.ai-act-tool .ai-act-txt{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;color:#9fd0ff}
+@keyframes ai-blink{50%{opacity:.35}}
+@media (max-width:640px){.ai-fab-wrap{right:16px;bottom:16px}.ai-act{left:12px;bottom:20px;max-width:calc(100vw - 96px)}}

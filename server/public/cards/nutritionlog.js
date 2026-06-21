@@ -7,7 +7,13 @@ let nutSelDate=null, nutReq=0;
 let lastDayEntries=null, lastDayDate=null; // last day-detail loaded (for add-popup lookups)
 
 export function render(s){
- const N=s.nutrition_log; const wrap=document.getElementById('nutwrap'); if(!N){wrap.innerHTML='';return;}
+ const N=s.nutrition_log;
+ // Desktop renders heatmap+plot together into #nutwrap. The TV wall splits them so the food
+ // list can sit BETWEEN them: heatmap → #nutheat (top), plot → #nutplot (bottom).
+ const wrap=document.getElementById('nutwrap');
+ const heatEl=document.getElementById('nutheat');
+ const plotEl=document.getElementById('nutplot');
+ if(!N){ if(wrap)wrap.innerHTML=''; if(heatEl)heatEl.innerHTML=''; if(plotEl)plotEl.innerHTML=''; return; }
  // COMBINED PLOT: smoothed 7d cal avg (left axis) + raw daily weight (right axis) + maintenance ref line.
  const calPts=(N.cal_series||[]).map(p=>({date:p.date,v:p.avg}));
  const wPts=(N.weight_series||[]).map(p=>({date:p.date,v:p.w}));
@@ -39,16 +45,23 @@ export function render(s){
    return '<div class=hcell'+data+' title="'+title+'" style="background:'+bg+out+cur+'"></div>';
  }).join('')+'</div>').join('');
  const dowLabels=['','Mon','','Wed','','Fri',''].map(x=>'<div class=hd>'+x+'</div>').join('');
- wrap.innerHTML=
+ const heatHtml=
   '<div class=hmonths>'+monthRow+'</div>'+
-  '<div class=hbody><div class=hdows>'+dowLabels+'</div><div class=heat>'+grid+'</div></div>'+
-  plotBlock;
+  '<div class=hbody><div class=hdows>'+dowLabels+'</div><div class=heat>'+grid+'</div></div>';
+ if(heatEl&&plotEl){ heatEl.innerHTML=heatHtml; plotEl.innerHTML=plotBlock; } // split (TV)
+ else if(wrap){ wrap.innerHTML=heatHtml+plotBlock; }                          // combined (desktop)
  if(nutSelDate){ markNutCell(nutSelDate); if(nutSelDate===s.today)loadNutDay(nutSelDate); } // live-refresh today's log
  else if(s.today)selectNutDay(s.today); // default the detail panel to today's log on first load
 }
 
 function markNutCell(date){
- document.querySelectorAll('#nutwrap .hcell').forEach(c=>c.classList.toggle('nsel',c.dataset.ndate===date));
+ document.querySelectorAll('#nutwrap .hcell, #nutheat .hcell').forEach(c=>c.classList.toggle('nsel',c.dataset.ndate===date));
+}
+// 12-hour wall-clock time from a naive-local occurred_at ("...T14:07..." → "2:07 PM").
+function fmtTime(occurred){
+ const m=String(occurred).match(/T(\d{2}):(\d{2})/); if(!m)return '';
+ let h=+m[1]; const ap=h<12?'AM':'PM'; h=h%12||12;
+ return h+':'+m[2]+' '+ap;
 }
 const mn=v=>Math.round(Number(v)||0); // macro number, rounded
 // Macro chips for an entry/total: cal + P/C/F. `cls` lets the day header use a bolder style.
@@ -81,22 +94,25 @@ async function loadNutDay(date){
    '<span class=dset>'+mn(j.total_carbs)+'g C</span>'+
    '<span class=dset>'+mn(j.total_fat)+'g F</span></div>';
  j.entries.forEach((e,i)=>{
-  const t=(String(e.occurred_at).match(/T(\d{2}:\d{2})/)||[])[1]||'';
+  const t=fmtTime(e.occurred_at);
   const ings=Array.isArray(e.ingredients)?e.ingredients:null;
   const exp=ings&&ings.length;
-  // entry row — "+ now" add button re-logs this food at the current time.
-  h+='<div class="dex'+(exp?' dex-exp':'')+'" data-idx="'+i+'">'+
+  const staged=!!e.staged;
+  // committed entries get "+ now" (re-log); staged meals get a STAGED badge + a Commit button.
+  h+='<div class="dex'+(exp?' dex-exp':'')+(staged?' dex-staged':'')+'" data-idx="'+i+'">'+
      '<div class="dex-head"'+(exp?' data-toggle="'+i+'"':'')+'>'+
-       '<div class=dex-n>'+(exp?'<span class=dex-caret>▸</span>':'')+esc(e.name||'—')+'</div>'+
-       '<div class=dex-macros>'+macroChips(e)+(t?'<span class=dset>'+t+'</span>':'')+
-         '<button class=addbtn type=button data-add-entry="'+i+'" title="Add at now">+ now</button>'+
+       '<div class=dex-n>'+(exp?'<span class=dex-caret>▸</span>':'')+esc(e.name||'—')+(staged?' <span class=stagedbadge>STAGED</span>':'')+'</div>'+
+       '<div class=dex-macros>'+macroChips(e)+((!staged&&t)?'<span class=dset>'+t+'</span>':'')+
+         (staged
+           ?'<button class="addbtn commitbtn" type=button data-commit-entry="'+i+'" title="Commit — log as eaten now">commit</button>'
+           :'<button class=addbtn type=button data-add-entry="'+i+'" title="Add at now">+ now</button>')+
          '<button class=morebtn type=button data-more-entry="'+i+'" title="Edit / delete" aria-label="Edit or delete">⋯</button>'+
        '</div>'+
      '</div>';
   if(exp){
    h+='<div class="dex-ings hidden" id="ding-'+i+'">'+ings.map((g,gi)=>
      '<div class=ding><span class=ding-n>'+esc(ingLabel(g))+'</span>'+macroChips(g)+
-       '<button class=addbtn type=button data-add-ing="'+i+'.'+gi+'" title="Add at now">+ now</button>'+
+       (staged?'':'<button class=addbtn type=button data-add-ing="'+i+'.'+gi+'" title="Add at now">+ now</button>')+
      '</div>').join('')+'</div>';
   }
   h+='</div>';
@@ -117,6 +133,8 @@ function selectNutDay(date){ if(date===nutSelDate)return; nutSelDate=date; markN
  document.getElementById('nutinfo').addEventListener('click',e=>{
   const more=e.target.closest('[data-more-entry]');
   if(more){ e.stopPropagation(); openRowMenu(more,+more.dataset.moreEntry); return; }
+  const commitE=e.target.closest('[data-commit-entry]');
+  if(commitE){ e.stopPropagation(); const en=entryAt(+commitE.dataset.commitEntry); if(en&&en.id)commitStaged(en); return; }
   const addE=e.target.closest('[data-add-entry]');
   if(addE){ e.stopPropagation(); openAddPopup(entryAt(+addE.dataset.addEntry)); return; }
   const addI=e.target.closest('[data-add-ing]');
@@ -132,6 +150,19 @@ function selectNutDay(date){ if(date===nutSelDate)return; nutSelDate=date; markN
 })();
 
 function entryAt(i){ return lastDayEntries&&lastDayEntries[i]?lastDayEntries[i]:null; }
+
+// Commit a staged meal — logs it as eaten now, after a confirmation step. Realtime re-pushes the
+// dashboard; we also reload the open day so the change shows immediately.
+async function commitStaged(en){
+ if(!en||!en.id)return;
+ const cal=en.calories!=null?' ('+Math.round(en.calories)+' cal)':'';
+ if(!window.confirm('Commit "'+(en.name||'this meal')+'"'+cal+'?\nIt will be logged as eaten now and start counting toward today.'))return;
+ try{
+  const r=await fetch('/api/commit-staged',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:en.id})});
+  if(!r.ok)throw new Error(r.status);
+  if(lastDayDate)loadNutDay(lastDayDate);
+ }catch(_){ /* realtime will reconcile */ }
+}
 
 // ---- row-actions menu (⋯): Delete + Change quantity, anchored under the tapped button ----
 let openMenuEl=null;

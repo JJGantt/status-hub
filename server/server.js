@@ -308,9 +308,9 @@ app.get('/api/workout-day', async (req, res) => {
   try {
     const date = String(req.query.date || '').slice(0, 10);
     if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return res.status(400).json({ error: 'bad date' });
-    const rows = await sbRange(`sets?occurred_at=gte.${date}T00:00:00&occurred_at=lte.${date}T23:59:59&select=occurred_at,exercise,weight_lbs,reps&order=occurred_at`);
+    const rows = await sbRange(`sets?occurred_at=gte.${date}T00:00:00&occurred_at=lte.${date}T23:59:59&select=id,occurred_at,exercise,weight_lbs,reps&order=occurred_at`);
     const order = [], byEx = {};
-    for (const r of rows) { if (!byEx[r.exercise]) { byEx[r.exercise] = []; order.push(r.exercise); } byEx[r.exercise].push({ weight_lbs: r.weight_lbs, reps: r.reps }); }
+    for (const r of rows) { if (!byEx[r.exercise]) { byEx[r.exercise] = []; order.push(r.exercise); } byEx[r.exercise].push({ id: r.id, weight_lbs: r.weight_lbs, reps: r.reps }); }
     res.json({ date, total: rows.length, exercises: order.map((n) => ({ name: n, sets: byEx[n] })) });
   } catch (e) { res.status(500).json({ error: String(e.message || e) }); }
 });
@@ -382,6 +382,22 @@ app.post('/api/log-set', express.json(), async (req, res) => {
     const occurred_at = nowNaiveLocal();
     await sbWrite('sets', 'POST', { occurred_at, exercise, weight_lbs, reps });
     res.json({ ok: true, occurred_at });
+  } catch (e) { res.status(500).json({ error: String(e.message || e) }); }
+});
+
+// Edit a single logged set's weight/reps by id. Body: {id, weight_lbs, reps}. Realtime on `sets`
+// re-pushes the dashboard (heatmap, day detail). Exercise/time are left untouched.
+app.patch('/api/log-set', express.json(), async (req, res) => {
+  try {
+    const b = req.body || {};
+    const id = Number(b.id);
+    if (!Number.isInteger(id)) return res.status(400).json({ error: 'id required' });
+    const reps = Number(b.reps);
+    const weight_lbs = Number(b.weight_lbs);
+    if (!Number.isInteger(reps) || reps <= 0) return res.status(400).json({ error: 'reps must be a positive integer' });
+    if (!isFinite(weight_lbs) || weight_lbs < 0) return res.status(400).json({ error: 'weight_lbs must be ≥ 0' });
+    await sbWrite(`sets?id=eq.${id}`, 'PATCH', { weight_lbs, reps });
+    res.json({ ok: true });
   } catch (e) { res.status(500).json({ error: String(e.message || e) }); }
 });
 

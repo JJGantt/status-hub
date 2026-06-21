@@ -59,7 +59,7 @@ async function loadHeatDay(date){
  j.exercises.forEach((ex,i)=>{
   h+='<div class=dex><div class=wk-exhead><div class=dex-n>'+esc(ex.name)+'</div>'+
      '<button class="addbtn wk-rep" type=button data-rep="'+i+'" title="Repeat last set (same weight)">+ set</button></div>'+
-     '<div class=dex-sets>'+ex.sets.map(st=>'<span class=dset>'+(st.weight_lbs===0?'BW':(st.weight_lbs+' lb'))+' × '+st.reps+'</span>').join('')+'</div></div>';
+     '<div class=dex-sets>'+ex.sets.map(st=>'<span class="dset wk-set" data-set="'+st.id+'" data-w="'+st.weight_lbs+'" data-r="'+st.reps+'" title="Tap to edit">'+(st.weight_lbs===0?'BW':(st.weight_lbs+' lb'))+' × '+st.reps+'</span>').join('')+'</div></div>';
  });
  hi.innerHTML=h;
  if(sp&&stick)sp.scrollTop=sp.scrollHeight; // scroll to the newest set
@@ -106,14 +106,65 @@ function openRepModal(ex){
  });
 }
 
+// Tap a logged set to edit its weight + reps. PATCHes /api/log-set by set id; realtime on `sets`
+// re-pushes the heatmap + day detail. Weight steps by 5 lb (0 = bodyweight), reps by 1.
+function openSetEditor(id,name,w0,r0){
+ let w=Math.max(0,Number(w0)||0), reps=Math.max(1,parseInt(r0,10)||1);
+ const back=document.createElement('div'); back.className='addmodal-back';
+ back.innerHTML='<div class=addmodal role=dialog aria-modal=true>'+
+   '<div class=addmodal-name>'+esc(name||'Set')+'</div>'+
+   '<div class=addmodal-mlabel>Weight (lb)</div>'+
+   '<div class=addmodal-mult>'+
+     '<button class=addmodal-step type=button data-fld=w data-step="-1">−</button>'+
+     '<input class="addmodal-minput wk-w" type=text inputmode=decimal value="'+w+'">'+
+     '<button class=addmodal-step type=button data-fld=w data-step="1">+</button>'+
+   '</div>'+
+   '<div class=addmodal-mlabel>Reps</div>'+
+   '<div class=addmodal-mult>'+
+     '<button class=addmodal-step type=button data-fld=r data-step="-1">−</button>'+
+     '<input class="addmodal-minput wk-r" type=text inputmode=numeric value="'+reps+'">'+
+     '<button class=addmodal-step type=button data-fld=r data-step="1">+</button>'+
+   '</div>'+
+   '<div class=addmodal-btns>'+
+     '<button class=addmodal-cancel type=button>Cancel</button>'+
+     '<button class=addmodal-add type=button>Save</button>'+
+   '</div></div>';
+ document.body.appendChild(back);
+ const wIn=back.querySelector('.wk-w'), rIn=back.querySelector('.wk-r');
+ back.querySelectorAll('.addmodal-step').forEach(b=>b.addEventListener('click',()=>{
+  const d=Number(b.dataset.step);
+  if(b.dataset.fld==='w'){ w=Math.max(0,Math.round((w+d*5)*10)/10); wIn.value=String(w); }
+  else { reps=Math.max(1,reps+d); rIn.value=String(reps); }
+ }));
+ wIn.addEventListener('input',()=>{ const v=parseFloat(wIn.value); w=Number.isFinite(v)&&v>=0?v:0; });
+ rIn.addEventListener('input',()=>{ const v=parseInt(rIn.value,10); reps=Number.isFinite(v)&&v>0?v:0; });
+ const close=()=>back.remove();
+ back.addEventListener('click',e=>{ if(e.target===back)close(); });
+ back.querySelector('.addmodal-cancel').addEventListener('click',close);
+ const saveBtn=back.querySelector('.addmodal-add');
+ saveBtn.addEventListener('click',async()=>{
+  if(!(reps>0)){ rIn.focus(); return; }
+  saveBtn.disabled=true; saveBtn.textContent='Saving…';
+  try{
+   const r=await fetch('/api/log-set',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:Number(id),weight_lbs:w,reps})});
+   if(!r.ok)throw new Error(r.status);
+   close(); // realtime re-pushes the heatmap + day detail
+  }catch(_){ saveBtn.disabled=false; saveBtn.textContent='Retry'; }
+ });
+}
+
 (function(){
  const wk=document.getElementById('workouts'); let scrub=false;
  const cellAt=(x,y)=>{const el=document.elementFromPoint(x,y);return el&&el.closest?el.closest('.hcell'):null;};
  wk.addEventListener('pointerdown',e=>{const c=e.target.closest('.hcell');if(!c||!c.dataset.date)return;scrub=true;selectDay(c.dataset.date);e.preventDefault();e.stopPropagation();/* don't let it become a card-drag */});
  document.addEventListener('pointermove',e=>{if(!scrub)return;const c=cellAt(e.clientX,e.clientY);if(c&&c.dataset.date)selectDay(c.dataset.date);});
  document.addEventListener('pointerup',()=>{scrub=false;});
- // repeat-set button in the day detail
+ // day detail: tap a set to edit it; "+ set" button to repeat the last set
  document.getElementById('heatinfo').addEventListener('click',e=>{
+  const setEl=e.target.closest('[data-set]');
+  if(setEl){ e.stopPropagation();
+   const dex=setEl.closest('.dex'); const name=dex?dex.querySelector('.dex-n').textContent:'Set';
+   openSetEditor(setEl.dataset.set,name,setEl.dataset.w,setEl.dataset.r); return; }
   const btn=e.target.closest('[data-rep]'); if(!btn)return;
   e.stopPropagation();
   const ex=lastHeatExercises&&lastHeatExercises[+btn.dataset.rep];

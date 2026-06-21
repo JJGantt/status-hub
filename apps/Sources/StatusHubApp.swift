@@ -1,12 +1,11 @@
 import SwiftUI
+import WebKit
 
 @main
 struct StatusHubApp: App {
-    @StateObject private var model = HubModel()
     var body: some Scene {
         WindowGroup {
-            RootView()
-                .environmentObject(model)
+            HubWebView()
                 .preferredColorScheme(.dark)
             #if os(macOS)
                 .frame(minWidth: 420, idealWidth: 460, minHeight: 640, idealHeight: 820)
@@ -17,6 +16,67 @@ struct StatusHubApp: App {
         #endif
     }
 }
+
+// Thin WKWebView wrapper around the web hub (Auth.host). The app is now a shell over the web UI so
+// every surface shares one codebase. Auth: pre-seed the `hub` cookie from the saved token (the same
+// value the web login sets) so an already-set-up install opens straight in; with no saved password
+// the web app's own /login page appears in the web view and sets the cookie itself. The mic is
+// auto-granted so the in-page voice FAB works (the OS still gates it once via the system prompt).
+// NOTE: the native RootView/LoginView/DashboardView (+ HubModel/Models/Views/Theme) below are now
+// superseded by this and unused — left in place pending an explicit OK to remove them.
+struct HubWebView {
+    final class Coordinator: NSObject, WKUIDelegate, WKNavigationDelegate {
+        func webView(_ webView: WKWebView,
+                     requestMediaCapturePermissionFor origin: WKSecurityOrigin,
+                     initiatedByFrame frame: WKFrameInfo,
+                     type: WKMediaCaptureType,
+                     decisionHandler: @escaping (WKPermissionDecision) -> Void) {
+            decisionHandler(.grant)   // first-party hub → no nested prompt
+        }
+    }
+
+    func makeCoordinator() -> Coordinator { Coordinator() }
+
+    fileprivate func build(_ coordinator: Coordinator) -> WKWebView {
+        let cfg = WKWebViewConfiguration()
+        cfg.mediaTypesRequiringUserActionForPlayback = []
+        cfg.websiteDataStore = .default()          // persistent cookies → stays signed in across launches
+        #if os(iOS)
+        cfg.allowsInlineMediaPlayback = true       // iOS-only knob
+        #endif
+        let wv = WKWebView(frame: .zero, configuration: cfg)
+        wv.uiDelegate = coordinator
+        wv.navigationDelegate = coordinator
+        #if os(iOS)
+        wv.scrollView.contentInsetAdjustmentBehavior = .never
+        wv.isOpaque = false
+        #endif
+        let url = URL(string: Auth.host)!
+        let req = URLRequest(url: url)
+        if let token = Auth.token(), let host = url.host,
+           let cookie = HTTPCookie(properties: [
+               .domain: host, .path: "/", .name: "hub", .value: token,
+               .secure: "TRUE", .expires: Date(timeIntervalSinceNow: 60 * 60 * 24 * 3650),
+           ]) {
+            wv.configuration.websiteDataStore.httpCookieStore.setCookie(cookie) { _ = wv.load(req) }
+        } else {
+            _ = wv.load(req)
+        }
+        return wv
+    }
+}
+
+#if os(iOS)
+extension HubWebView: UIViewRepresentable {
+    func makeUIView(context: Context) -> WKWebView { build(context.coordinator) }
+    func updateUIView(_ uiView: WKWebView, context: Context) {}
+}
+#else
+extension HubWebView: NSViewRepresentable {
+    func makeNSView(context: Context) -> WKWebView { build(context.coordinator) }
+    func updateNSView(_ nsView: WKWebView, context: Context) {}
+}
+#endif
 
 struct RootView: View {
     @EnvironmentObject var model: HubModel

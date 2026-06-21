@@ -201,9 +201,9 @@ async function confirmDelete(en){
  }catch(_){ /* leave the row; realtime will reconcile if it did delete */ }
 }
 
-// strip a trailing " (N×)" portion suffix → {base name, mult}. Lets a repeated item open with its
-// current multiplier as the default and its ORIGINAL (1×) macros as the reference, so adjusting is
-// always relative to the original dish (never additive: 1.5 then 2 → "(2×)", not "(2×) of (1.5×)").
+// strip a trailing " (N×)" portion suffix → {base name, mult}. Names are kept plain now (a suffix is
+// never added), but this still self-heals any legacy "(N×)" name on open: the stored macros/amounts
+// are divided back to a 1× reference, and saving re-writes the name without the suffix.
 function splitPortion(name){
  const m=String(name||'').match(/^(.*?)\s*\((\d+(?:\.\d+)?)×\)\s*$/);
  if(m&&+m[2]>0)return {base:m[1].trim(),mult:+m[2]};
@@ -242,7 +242,7 @@ function openAddPopup(base,opts){
  const perIng=!!ings;   // per-ingredient steppers + ✕ in BOTH add and edit when the dish has ingredients
  // state: structured → amt (default = A×baseMult = the stored amount); legacy → imult; plus off.
  const st=ings?ings.map(g=>({ amt:g.structured?round3(g.A*baseMult):0, imult:1, off:false })):null;
- let mult=baseMult, touched=false;
+ let mult=baseMult;
  const factor=i=>{ const g=ings[i],s=st[i]; if(g.structured)return g.A>0?s.amt/g.A:0; return mult*s.imult; };
  const ingOn=i=>!(st&&st[i].off);
 
@@ -317,14 +317,14 @@ function openAddPopup(base,opts){
  if(perIng&&ingsEl){
   ingsEl.addEventListener('click',e=>{
    const row=e.target.closest('.aing'); if(!row)return; const i=+row.dataset.i; const g=ings[i];
-   if(e.target.closest('.aing-x')){ st[i].off=!st[i].off; touched=true; const inp=row.querySelector('.aing-input'); if(inp)inp.disabled=st[i].off; paint(); return; }
-   const step=e.target.closest('.aing-step'); if(step){ const d=Number(step.dataset.step); touched=true;
+   if(e.target.closest('.aing-x')){ st[i].off=!st[i].off; const inp=row.querySelector('.aing-input'); if(inp)inp.disabled=st[i].off; paint(); return; }
+   const step=e.target.closest('.aing-step'); if(step){ const d=Number(step.dataset.step);
      if(g.structured){ const s=stepFor(g.unit); st[i].amt=round3(Math.max(0,st[i].amt+d*s)); }
      else { st[i].imult=round3(Math.max(0,st[i].imult+0.25*d)); }
      const inp=row.querySelector('.aing-input'); if(inp)inp.value=g.structured?fmtAmt(st[i].amt):fmtMult(st[i].imult); paint(); }
   });
   ingsEl.addEventListener('input',e=>{ const inp=e.target.closest('.aing-input'); if(!inp)return;
-   const row=inp.closest('.aing'); const i=+row.dataset.i; const g=ings[i]; const v=parseFloat(inp.value); touched=true;
+   const row=inp.closest('.aing'); const i=+row.dataset.i; const g=ings[i]; const v=parseFloat(inp.value);
    if(g.structured)st[i].amt=isFinite(v)&&v>=0?v:0; else st[i].imult=isFinite(v)&&v>=0?v:0; paint(); });
  }
 
@@ -334,11 +334,10 @@ function openAddPopup(base,opts){
  const addBtn=back.querySelector('.addmodal-add');
  addBtn.addEventListener('click',async()=>{
   if(!(mult>0)){ input.focus(); return; }
-  const ingEdited=!!(perIng&&touched);
   let t; if(ings){ t={calories:0,protein_g:0,carbs_g:0,fat_g:0}; ings.forEach((g,i)=>{ if(!ingOn(i))return; const f=factor(i); t.calories+=g.calories*f;t.protein_g+=g.protein_g*f;t.carbs_g+=g.carbs_g*f;t.fat_g+=g.fat_g*f; }); }
   else t={calories:unitBase.calories*mult,protein_g:unitBase.protein_g*mult,carbs_g:unitBase.carbs_g*mult,fat_g:unitBase.fat_g*mult};
-  const name=ingEdited?cleanName:(cleanName+(mult===1?'':' ('+fmtMult(mult)+'×)'));
-  const body={ name:name||'—', calories:sc(t.calories), protein_g:r1(t.protein_g), carbs_g:r1(t.carbs_g), fat_g:r1(t.fat_g) };
+  // Names stay plain — portion is reflected in the scaled macros/ingredients, never a "(N×)" suffix.
+  const body={ name:cleanName||'—', calories:sc(t.calories), protein_g:r1(t.protein_g), carbs_g:r1(t.carbs_g), fat_g:r1(t.fat_g) };
   if(ings){ body.ingredients=ings.map((g,i)=>({g:g,i:i})).filter(o=>ingOn(o.i)).map(function(o){ const g=o.g,i=o.i,f=factor(i);
     const ob={ calories:sc(g.calories*f), protein_g:r1(g.protein_g*f), carbs_g:r1(g.carbs_g*f), fat_g:r1(g.fat_g*f) };
     if(g.structured){ ob.food=g.food; ob.unit=g.unit; ob.amount=round3(st[i].amt); ob.name=rowLabel(i); }

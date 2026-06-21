@@ -5,36 +5,7 @@
 <script type="module" src="core.js"></script>
 </head><body>
 <div class="rows">
-  <!-- ROW 1 — status strip: device chips (litter now; pet feeder later) -->
-  <div class="row-card statusrow">
-    <div class="card statuscard"><div class="fit" id="litter"><h2>Litter-Robot</h2><div class=big>…</div></div></div>
-  </div>
-
-  <!-- ROW 2 — nutrition: left card = rings (horizontal) + calendar heatmap + cal/weight plot stacked; right card = day-detail entries -->
-  <div class="row-card nutrow">
-    <div class="card nutleft"><div class="fit">
-      <div id="nutrition"><h2>Today · Nutrition</h2><div class=big>…</div></div>
-      <div id="nutritionlog"><h2>Nutrition Log</h2><div id="nutwrap"></div></div>
-    </div></div>
-    <div class="card nutdetail"><div class="fit detailpanel"><div id="nutinfo"></div></div></div>
-  </div>
-
-  <!-- ROW 3 — muscle: volume list + drill-down on the LEFT, the tall body map on the RIGHT -->
-  <div class="row-card musclerow">
-    <div class="card musvol"><div class="fit" id="volume"><h2>Muscle Volume · 7-Day</h2><div>…</div></div></div>
-    <div class="musright">
-      <div class="card musmap"><div class="fit" id="body"><h2>Muscle Map · 7-Day</h2><!--BODY_SVG--></div></div>
-      <div class="card musdetail"><div class="fit detailpanel"><div id="bodyinfo"></div></div></div>
-    </div>
-  </div>
-
-  <!-- ROW 4 — workout volume heatmap + a reserved tapped-day set list -->
-  <div class="row-card workoutrow">
-    <div class="card wkheat"><div class="fit" id="workouts"><h2>Workout Volume</h2><div id="resttimer" class="resttimer"></div><div id="heatwrap"></div></div></div>
-    <div class="card wkdetail"><div class="fit detailpanel"><div id="heatinfo"></div></div></div>
-  </div>
-
-  <!-- ROW 5 — Jarvis: full-height shared 'hub' conversation (same thread as the Pi wall). No card chrome. -->
+  <!-- PAGE 1 (far left) — Jarvis: full-height shared 'hub' conversation (same thread as the Pi wall). No card chrome. -->
   <div class="row-card airow">
     <div class="ai-shell">
       <div class="ai-head"><h2>Jarvis</h2><button class="ai-reset" id="ai-reset" type="button" title="Start a fresh conversation">Reset context</button></div>
@@ -47,6 +18,34 @@
       <div class="ai-status" id="ai-status"></div>
     </div>
   </div>
+
+  <!-- PAGE 2 (DEFAULT on load) — nutrition: left card = rings (horizontal) + calendar heatmap + cal/weight plot stacked; right card = day-detail entries -->
+  <div class="row-card nutrow">
+    <div class="card nutleft"><div class="fit">
+      <div id="nutrition"><h2>Today · Nutrition</h2><div class=big>…</div></div>
+      <div id="nutritionlog"><h2>Nutrition Log</h2><div id="nutwrap"></div></div>
+    </div></div>
+    <div class="card nutdetail"><div class="fit detailpanel"><div id="nutinfo"></div></div></div>
+  </div>
+
+  <!-- PAGE 3 — muscle: volume list + drill-down on the LEFT, the tall body map on the RIGHT -->
+  <div class="row-card musclerow">
+    <div class="card musvol"><div class="fit" id="volume"><h2>Muscle Volume · 7-Day</h2><div>…</div></div></div>
+    <div class="musright">
+      <div class="card musmap"><div class="fit" id="body"><h2>Muscle Map · 7-Day</h2><!--BODY_SVG--></div></div>
+      <div class="card musdetail"><div class="fit detailpanel"><div id="bodyinfo"></div></div></div>
+    </div>
+  </div>
+
+  <!-- PAGE 4 — workout volume heatmap + a reserved tapped-day set list -->
+  <div class="row-card workoutrow">
+    <div class="card wkheat"><div class="fit" id="workouts"><h2>Workout Volume</h2><div id="resttimer" class="resttimer"></div><div id="heatwrap"></div></div></div>
+    <div class="card wkdetail"><div class="fit detailpanel"><div id="heatinfo"></div></div></div>
+  </div>
+
+  <!-- PAGE 5 (far right, least important) — status strip: device chips (litter now; pet feeder later) -->
+  <div class="row-card statusrow">
+    <div class="card statuscard"><div class="fit" id="litter"><h2>Litter-Robot</h2><div class=big>…</div></div></div>
+  </div>
 </div>
-<div class=foot id=foot></div>
 </body></html>

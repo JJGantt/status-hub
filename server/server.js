@@ -315,6 +315,32 @@ app.get('/api/workout-day', async (req, res) => {
   } catch (e) { res.status(500).json({ error: String(e.message || e) }); }
 });
 
+// ---- app settings (voice routing mode + per-device trailing-silence). Read by the worker + devices;
+// edited from the hub settings panel. Returns/accepts a flat {key: value} map. ----
+app.get('/api/settings', async (req, res) => {
+  try {
+    const rows = await sb('app_settings?select=key,value');
+    const out = {}; for (const r of rows) out[r.key] = r.value;
+    res.json(out);
+  } catch (e) { res.status(500).json({ error: String(e.message || e) }); }
+});
+app.post('/api/settings', express.json(), async (req, res) => {
+  try {
+    const b = req.body || {};
+    const key = typeof b.key === 'string' ? b.key.trim() : '';
+    if (!key) return res.status(400).json({ error: 'key required' });
+    const value = b.value == null ? '' : String(b.value);
+    const r = await fetch(`${SUPABASE_URL}/rest/v1/app_settings?on_conflict=key`, {
+      method: 'POST',
+      headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}`,
+                 'Content-Type': 'application/json', Prefer: 'resolution=merge-duplicates' },
+      body: JSON.stringify({ key, value, updated_at: new Date().toISOString() }),
+    });
+    if (!r.ok) throw new Error(`settings upsert -> ${r.status}`);
+    res.json({ ok: true });
+  } catch (e) { res.status(500).json({ error: String(e.message || e) }); }
+});
+
 // A single 4am→4am nutrition day's food entries — for the nutrition-log day click-through.
 app.get('/api/nutrition-day', async (req, res) => {
   try {

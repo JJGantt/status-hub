@@ -6,6 +6,7 @@ import * as muscle from './cards/muscle.js';
 import * as workouts from './cards/workouts.js';
 import * as nutritionlog from './cards/nutritionlog.js';
 import './voiceagent.js';   // mic FAB + shared 'hub' conversation (self-skips on the TV wall)
+import './settings.js';     // gear → settings panel (routing mode + trailing-silence); self-skips on TV
 
 // ---- render orchestrator: set shared frame, then each card in order ----
 function render(s){

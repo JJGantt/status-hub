@@ -8,9 +8,14 @@
 // thread. All skipped on the TV wall (no mic; it renders the conversation itself via tv.js).
 import { esc } from './shared.js';
 
+let phoneHangMs = 3000;   // phone trailing-silence (ms) for the FAB VAD; overridden by the phone_silence_s setting
+
 if (!document.body.classList.contains('tv')) boot();
 
 function boot() {
+  fetch('/api/settings').then((r) => r.json()).then((s) => {
+    const n = parseFloat(s.phone_silence_s); if (Number.isFinite(n) && n > 0) phoneHangMs = n * 1000;
+  }).catch(() => {});
   const activity = initActivityBar();
   const card = initCard();           // null if the conversation card isn't on this page
   initFab(activity);
@@ -54,7 +59,7 @@ function makeRecorder({ onStatus, onActive, quick, autoStop }) {
       actx.createMediaStreamSource(stream).connect(an);
       const buf = new Uint8Array(an.fftSize), t0 = performance.now();
       let base = 0, baseN = 0, spoke = false, silence = 0;
-      const CAL_MS = 350, HANG_MS = 3000, GRACE_MS = 8000;   // learn floor, trailing-silence to end (matches the ESP 3s hangover), no-speech bailout
+      const CAL_MS = 350, HANG_MS = phoneHangMs, GRACE_MS = Math.max(8000, phoneHangMs + 3000);   // trailing-silence from the phone_silence_s setting
       vadTimer = setInterval(() => {
         if (!recording) return;
         an.getByteTimeDomainData(buf);

@@ -43,9 +43,8 @@ export function render(s) {
       '<span class=sh-air>' + (h.airF != null ? h.airF + '°' : '—') + '</span>' +
     '</div>';
 
-  const bucketCell = (label, b) =>
+  const bucketCell = (b) =>
     '<span class=sr-buck>' +
-      '<span class=sr-bl>' + label + '</span>' +
       (b
         ? '<span class=sr-rt style="color:' + b.ratingColor + '">' + b.ratingLabel + '</span>' +
           '<span class=sr-ft>' + ftRange(b.hMin, b.hMax) + '</span>'
@@ -58,8 +57,8 @@ export function render(s) {
       '<div class="surfrow' + (isOpen ? ' open' : '') + '" data-day="' + d.weekday + '">' +
         '<span class=sr-x>' + (isOpen ? '▾' : '▸') + '</span>' +
         '<span class=sr-wd>' + d.weekday + '</span>' +
-        bucketCell('10–2p', d.midday) +
-        bucketCell('4–7p', d.late) +
+        bucketCell(d.midday) +
+        bucketCell(d.late) +
       '</div>';
     if (!isOpen) return row;
     const hours = (d.hours && d.hours.length)
@@ -69,7 +68,14 @@ export function render(s) {
     return row + '<div class=surfhours>' + hours + '</div>';
   };
 
-  el.innerHTML = head + '<div class=surfdays>' + (S.days || []).map(dayRow).join('') + '</div>';
+  const header =
+    '<div class=surfhead>' +
+      '<span></span><span></span>' +
+      '<span class=sh-col>10a–2p</span>' +
+      '<span class=sh-col>4–7p</span>' +
+    '</div>';
+
+  el.innerHTML = head + '<div class=surfdays>' + header + (S.days || []).map(dayRow).join('') + '</div>';
 
   if (!bound) {
     bound = true;

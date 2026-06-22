@@ -41,18 +41,20 @@
 .devchip .dc-l{font-size:12px;color:#8b96a5}
 .devchip .dc-v{font-size:15px;font-weight:700}
 .devchip .dc-v .dot{width:9px;height:9px;margin-right:6px}
-/* Surf card: 7-day outlook as expandable rows */
+/* Surf card: 7-day outlook as expandable rows (two time-of-day buckets per day) */
 .surfdays{display:flex;flex-direction:column;gap:6px;margin-top:12px}
-.surfrow{display:grid;grid-template-columns:18px 46px 1fr 1fr;align-items:center;gap:10px;
-  background:#0e1318;border:1px solid #222a33;border-radius:9px;padding:9px 12px;cursor:pointer;user-select:none}
+/* shared column grid for the header + each day row */
+.surfhead,.surfrow{display:grid;grid-template-columns:16px 44px 1fr 1fr;align-items:center;gap:12px}
+.surfhead{padding:0 12px 5px}
+.surfhead .sh-col{font-size:10px;color:#8b96a5;font-weight:600;text-transform:uppercase;letter-spacing:.05em}
+.surfrow{background:#0e1318;border:1px solid #222a33;border-radius:9px;padding:9px 12px;cursor:pointer;user-select:none}
 .surfrow:hover{border-color:#2f3a45}
 .surfrow.open{border-color:#2f3a45;border-bottom-left-radius:0;border-bottom-right-radius:0}
 .surfrow .sr-x{color:#8b96a5;font-size:11px}
 .surfrow .sr-wd{font-size:13px;font-weight:700;color:#e6eaf0;text-transform:uppercase;letter-spacing:.03em}
-.surfrow .sr-buck{display:flex;align-items:baseline;gap:8px;min-width:0}
-.surfrow .sr-bl{font-size:10px;color:#8b96a5;text-transform:uppercase;letter-spacing:.03em;flex:none}
-.surfrow .sr-rt{font-size:13px;font-weight:700;white-space:nowrap}
-.surfrow .sr-ft{font-size:14px;font-weight:700;color:#e6eaf0;white-space:nowrap}
+.surfrow .sr-buck{display:flex;flex-direction:column;gap:1px;min-width:0}        /* min-width:0 lets the column shrink (fixes overlap) */
+.surfrow .sr-rt{font-size:13px;font-weight:700;line-height:1.25;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.surfrow .sr-ft{font-size:13px;font-weight:700;color:#e6eaf0;line-height:1.2}
 .surfhours{background:#0b0f13;border:1px solid #222a33;border-top:none;border-radius:0 0 9px 9px;
   padding:6px 12px 9px;display:flex;flex-direction:column;gap:1px}
 .surfhr,.surfhr-head{display:grid;grid-template-columns:38px 1fr 56px 64px 40px;align-items:center;gap:8px;

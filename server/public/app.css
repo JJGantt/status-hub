@@ -41,15 +41,29 @@
 .devchip .dc-l{font-size:12px;color:#8b96a5}
 .devchip .dc-v{font-size:15px;font-weight:700}
 .devchip .dc-v .dot{width:9px;height:9px;margin-right:6px}
-/* Surf card: 7-day outlook strip (one cell per day) */
-.surfweek{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}
-.surfday{flex:1 1 0;min-width:74px;background:#0e1318;border:1px solid #222a33;border-radius:10px;
-  padding:9px 6px;text-align:center;display:flex;flex-direction:column;align-items:center;gap:3px}
-.surfday .sd-wd{font-size:12px;color:#8b96a5;font-weight:600;text-transform:uppercase;letter-spacing:.03em}
-.surfday .sd-dot{width:11px;height:11px;border-radius:50%;margin:1px 0}
-.surfday .sd-ft{font-size:15px;font-weight:700;color:#e6eaf0}
-.surfday .sd-rt{font-size:11px;font-weight:600}
-.surfday .sd-air{font-size:12px;color:#eab308}
+/* Surf card: 7-day outlook as expandable rows */
+.surfdays{display:flex;flex-direction:column;gap:6px;margin-top:12px}
+.surfrow{display:grid;grid-template-columns:18px 46px 1fr auto auto;align-items:center;gap:10px;
+  background:#0e1318;border:1px solid #222a33;border-radius:9px;padding:9px 12px;cursor:pointer;user-select:none}
+.surfrow:hover{border-color:#2f3a45}
+.surfrow.open{border-color:#2f3a45;border-bottom-left-radius:0;border-bottom-right-radius:0}
+.surfrow .sr-x{color:#8b96a5;font-size:11px}
+.surfrow .sr-wd{font-size:13px;font-weight:700;color:#e6eaf0;text-transform:uppercase;letter-spacing:.03em}
+.surfrow .sr-rt{font-size:13px;font-weight:700}
+.surfrow .sr-ft{font-size:14px;font-weight:700;color:#e6eaf0;text-align:right}
+.surfrow .sr-air{font-size:13px;color:#eab308;min-width:34px;text-align:right}
+.surfhours{background:#0b0f13;border:1px solid #222a33;border-top:none;border-radius:0 0 9px 9px;
+  padding:6px 12px 9px;display:flex;flex-direction:column;gap:1px}
+.surfhr,.surfhr-head{display:grid;grid-template-columns:38px 1fr 56px 64px 40px;align-items:center;gap:8px;
+  font-size:12px;padding:3px 0}
+.surfhr-head{color:#8b96a5;font-size:10px;text-transform:uppercase;letter-spacing:.04em;
+  border-bottom:1px solid #1a2129;margin-bottom:3px;padding-bottom:4px}
+.surfhr .sh-t{color:#8b96a5;font-weight:600}
+.surfhr .sh-rt{font-weight:700}
+.surfhr .sh-ft{color:#e6eaf0;font-weight:600}
+.surfhr .sh-w{color:#9fb0c0}
+.surfhr .sh-air{color:#eab308;text-align:right}
+.surfhr-empty{color:#8b96a5;font-size:12px;padding:4px 0}
 /* MOBILE: rows become vertically-stacked pages — no fixed heights, no inner scroll. */
 body.touch .row-card{flex-direction:column}
 body.touch .detailpanel{height:auto;overflow:visible}

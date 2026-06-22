@@ -150,36 +150,54 @@ function nowOffsetTZ() {
 // ---- assemble dashboard data ----
 // ---- surf: latest Surfline snapshot -> current + 7-day per-day rollup ----
 // Data is collected by the Pi (repo JJGantt/surf-report) into surf_snapshots.
+// Surfline's canonical rating palette (their default :root --conditions* scale).
 const SURF_RATING_COLOR = {
-  FLAT:'#566', VERY_POOR:'#8b96a5', POOR:'#8b96a5', POOR_TO_FAIR:'#6aa6c8',
-  FAIR:'#3b82f6', FAIR_TO_GOOD:'#22c55e', GOOD:'#16a34a', VERY_GOOD:'#15803d',
-  GOOD_TO_EPIC:'#a855f7', EPIC:'#7c3aed',
+  FLAT:'#4d8ba7', NONE:'#4d8ba7', VERY_POOR:'#98a2af', POOR:'#408fff',
+  POOR_TO_FAIR:'#30d2e8', FAIR:'#1ad64c', FAIR_TO_GOOD:'#ffcd1e',
+  GOOD:'#ff8900', EPIC:'#d54530',
 };
 const SURF_RATING_LABEL = {
-  FLAT:'Flat', VERY_POOR:'Very Poor', POOR:'Poor', POOR_TO_FAIR:'Poor–Fair',
-  FAIR:'Fair', FAIR_TO_GOOD:'Fair–Good', GOOD:'Good', VERY_GOOD:'Very Good',
-  GOOD_TO_EPIC:'Good–Epic', EPIC:'Epic',
+  FLAT:'Flat', NONE:'Flat', VERY_POOR:'Very Poor', POOR:'Poor', POOR_TO_FAIR:'Poor–Fair',
+  FAIR:'Fair', FAIR_TO_GOOD:'Fair–Good', GOOD:'Good', EPIC:'Epic',
 };
+const ratingColor = (k) => SURF_RATING_COLOR[k] || '#8b96a5';
+const ratingLabel = (k) => SURF_RATING_LABEL[k] || k || '—';
 const etDate    = (ts) => new Date(ts*1000).toLocaleDateString('en-CA', { timeZone:'America/New_York' });
 const etWeekday = (ts) => new Date(ts*1000).toLocaleDateString('en-US', { weekday:'short', timeZone:'America/New_York' });
+const etHour    = (ts) => (+new Date(ts*1000).toLocaleString('en-US', { hour:'numeric', hour12:false, timeZone:'America/New_York' })) % 24;
+const hourLabel = (h) => h === 0 ? '12a' : h < 12 ? h + 'a' : h === 12 ? '12p' : (h - 12) + 'p';
+const windShort = (h) => {
+  const t = { Offshore:'Off', Onshore:'On', 'Cross-shore':'Cross' }[h.wType] || '';
+  return h.wSpd != null ? `${t} ${Math.round(h.wSpd)}`.trim() : '—';
+};
 
 function buildSurf(row) {
   if (!row || !Array.isArray(row.rows) || !row.rows.length) return null;
   const rows = row.rows;
   const byDay = new Map();
   for (const h of rows) { const d = etDate(h.ts); (byDay.get(d) || byDay.set(d, []).get(d)).push(h); }
-  const days = [...byDay.values()].slice(0, 7).map((hrs) => {
-    const best = hrs.reduce((a, b) => ((b.rv ?? -1) > (a.rv ?? -1) ? b : a), hrs[0]);
-    const mins = hrs.map(h => h.sMin).filter(Number.isFinite);
-    const maxs = hrs.map(h => h.sMax).filter(Number.isFinite);
-    const airs = hrs.map(h => h.aT).filter(Number.isFinite);
+  const days = [...byDay.values()].slice(0, 7).map((all) => {
+    // Summarize over surfable daylight hours (8a–8p); fall back to the whole day if none left.
+    const daylight = all.filter(h => { const e = etHour(h.ts); return e >= 8 && e <= 20; })
+                        .sort((a, b) => a.ts - b.ts);
+    const use = daylight.length ? daylight : all;
+    const best = use.reduce((a, b) => ((b.rv ?? -1) > (a.rv ?? -1) ? b : a), use[0]);
+    const mins = use.map(h => h.sMin).filter(Number.isFinite);
+    const maxs = use.map(h => h.sMax).filter(Number.isFinite);
+    const airs = use.map(h => h.aT).filter(Number.isFinite);
     return {
-      weekday: etWeekday(hrs[0].ts),
-      ratingKey: best.rk, ratingLabel: SURF_RATING_LABEL[best.rk] || best.rk,
-      ratingColor: SURF_RATING_COLOR[best.rk] || '#8b96a5',
+      weekday: etWeekday(use[0].ts),
+      ratingLabel: ratingLabel(best.rk), ratingColor: ratingColor(best.rk),
       hMin: mins.length ? Math.min(...mins) : null,
       hMax: maxs.length ? Math.max(...maxs) : null,
       airHi: airs.length ? Math.round(Math.max(...airs)) : null,
+      hours: daylight.map(h => ({
+        t: hourLabel(etHour(h.ts)),
+        ratingLabel: ratingLabel(h.rk), ratingColor: ratingColor(h.rk),
+        hMin: h.sMin, hMax: h.sMax,
+        wind: windShort(h),
+        airF: h.aT != null ? Math.round(h.aT) : null,
+      })),
     };
   });
   const now = Date.now() / 1000;
@@ -190,8 +208,7 @@ function buildSurf(row) {
     capturedAt: row.captured_at,
     waterTempF: wt ? Math.round((wt.min + wt.max) / 2) : null,
     current: cur ? {
-      ratingLabel: SURF_RATING_LABEL[cur.rk] || cur.rk,
-      ratingColor: SURF_RATING_COLOR[cur.rk] || '#8b96a5',
+      ratingLabel: ratingLabel(cur.rk), ratingColor: ratingColor(cur.rk),
       hMin: cur.sMin, hMax: cur.sMax, airF: cur.aT != null ? Math.round(cur.aT) : null,
     } : null,
     days,

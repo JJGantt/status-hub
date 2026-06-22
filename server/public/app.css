@@ -13,7 +13,7 @@
 .nutrow{align-items:stretch}
 .nutrow .nutleft{flex:1 1 auto;min-width:0}
 .nutrow .nutdetail{flex:0 0 400px;min-width:0}
-.nutrow .nutleft #nutritionlog{margin-top:26px}
+.nutrow .nutleft #nutritionlog{margin-top:10px}
 .nutrow .nutleft #nutwrap .nplot-block{margin-top:14px}
 .nutrow .nutdetail .detailpanel{position:absolute;inset:0}
 /* Row 3 — muscle: volume list (left, full height) | right column = map on top + breakdown below,
@@ -212,7 +212,7 @@ body.touch .page-ai .airow{height:auto;flex:1 1 auto;min-height:0}
 .addbtn:hover{background:#23354f}
 /* staged meals: a STAGED badge + a green Commit button (replaces "+ now" on staged rows) */
 .stagedbadge{display:inline-block;font-size:9px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:#d6c042;background:rgba(214,192,66,.13);border:1px solid rgba(214,192,66,.4);border-radius:5px;padding:1px 5px;margin-left:6px;vertical-align:middle}
-.dex-staged{background:rgba(214,192,66,.08);box-shadow:inset 3px 0 0 #d6c042}
+.dex-staged{background:rgba(214,192,66,.08);box-shadow:inset 3px 0 0 #d6c042;padding-left:11px}
 .dex-staged .dex-n{color:#cdd3db}
 .commitbtn{background:#16361f;border-color:#2e6b3f;color:#86e3a6}
 .commitbtn:hover{background:#1d4628}

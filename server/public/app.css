@@ -422,6 +422,9 @@ body.tv-focused .tv-convo-log,body.tv-focused .tv-sessions{display:none}
 .settings-row{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:7px 0;font-size:14px;color:#c2cad4}
 .settings-num{width:84px;padding:8px 10px;border-radius:8px;border:1px solid #2a313a;background:#0e1318;color:#e8eaed;font-size:14px;text-align:right}
 .settings-num:focus{outline:none;border-color:#3b82f6}
+.settings-time{padding:8px 10px;border-radius:8px;border:1px solid #2a313a;background:#0e1318;color:#e8eaed;font-size:14px}
+.settings-time:focus{outline:none;border-color:#3b82f6}
+.settings-row.dim{opacity:.4}
 /* fixed quick-add mic FAB (bottom-right, survives scrolling; hidden once the conversation card shows) */
 .ai-fab-wrap{position:fixed;right:20px;bottom:20px;z-index:1000;transition:opacity .2s}
 .ai-fab-wrap.hidden{opacity:0;pointer-events:none}

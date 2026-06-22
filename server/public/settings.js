@@ -24,6 +24,9 @@ async function open() {
   try { cur = await (await fetch('/api/settings')).json(); } catch (_) {}
   const routing = cur.routing_mode === 'sdk' ? 'sdk' : 'subscription';
   const sil = (k, d) => { const n = parseFloat(cur[k]); return Number.isFinite(n) && n > 0 ? n : d; };
+  const wrOn = !['0', 'false', 'off', 'no'].includes(String(cur.weight_reminder_enabled ?? '1').toLowerCase());
+  const wrMode = cur.weight_reminder_mode === 'dynamic' ? 'dynamic' : 'manual';
+  const wrTime = /^\d{2}:\d{2}$/.test(cur.weight_reminder_time || '') ? cur.weight_reminder_time : '08:00';
 
   const back = document.createElement('div');
   back.className = 'settings-back';
@@ -41,6 +44,18 @@ async function open() {
       row('Phone', 'phone_silence_s', sil('phone_silence_s', 3)) +
       row('ESP (Hey&nbsp;Rhasspy)', 'esp_silence_s', sil('esp_silence_s', 3)) +
       row('Mac', 'mac_silence_s', sil('mac_silence_s', 3)) +
+
+      '<div class="settings-sec">Weight reminder</div>' +
+      '<div class="settings-seg" id="set-wr-enabled">' +
+        '<button type="button" data-v="0"' + (wrOn ? '' : ' class="on"') + '>Off</button>' +
+        '<button type="button" data-v="1"' + (wrOn ? ' class="on"' : '') + '>On</button>' +
+      '</div>' +
+      '<div class="settings-seg" id="set-wr-mode" style="margin-top:8px">' +
+        '<button type="button" data-v="manual"' + (wrMode === 'manual' ? ' class="on"' : '') + '>Manual</button>' +
+        '<button type="button" data-v="dynamic"' + (wrMode === 'dynamic' ? ' class="on"' : '') + '>Dynamic</button>' +
+      '</div>' +
+      '<label class="settings-row' + (wrMode === 'dynamic' ? ' dim' : '') + '" id="set-wr-time-row"><span>Time</span>' +
+        '<input class="settings-time" type="time" id="set-wr-time" value="' + wrTime + '"' + (wrMode === 'dynamic' ? ' disabled' : '') + '></label>' +
     '</div>';
   document.body.appendChild(back);
 
@@ -58,6 +73,25 @@ async function open() {
       const v = parseFloat(inp.value);
       if (Number.isFinite(v) && v > 0) save(inp.dataset.key, v);
     });
+  });
+
+  back.querySelector('#set-wr-enabled').addEventListener('click', (e) => {
+    const b = e.target.closest('[data-v]'); if (!b) return;
+    back.querySelectorAll('#set-wr-enabled button').forEach((x) => x.classList.toggle('on', x === b));
+    save('weight_reminder_enabled', b.dataset.v);
+  });
+  const wrTimeRow = back.querySelector('#set-wr-time-row');
+  const wrTimeInp = back.querySelector('#set-wr-time');
+  back.querySelector('#set-wr-mode').addEventListener('click', (e) => {
+    const b = e.target.closest('[data-v]'); if (!b) return;
+    back.querySelectorAll('#set-wr-mode button').forEach((x) => x.classList.toggle('on', x === b));
+    const dynamic = b.dataset.v === 'dynamic';
+    wrTimeRow.classList.toggle('dim', dynamic);   // manual time is irrelevant in dynamic mode
+    wrTimeInp.disabled = dynamic;
+    save('weight_reminder_mode', b.dataset.v);
+  });
+  wrTimeInp.addEventListener('change', () => {
+    if (/^\d{2}:\d{2}$/.test(wrTimeInp.value)) save('weight_reminder_time', wrTimeInp.value);
   });
 }
 

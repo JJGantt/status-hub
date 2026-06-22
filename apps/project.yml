@@ -25,7 +25,7 @@ targets:
     entitlements:
       path: StatusHub.entitlements
       properties:
-        aps-environment: development   # APNs sandbox for dev/Xcode-signed builds; 'production' for TestFlight/App Store
+        aps-environment: production   # production APNs for distribution (Ad Hoc / TestFlight / App Store) builds
     settings:
       base:
         INFOPLIST_KEY_UILaunchScreen_Generation: YES

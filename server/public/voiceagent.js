@@ -42,7 +42,7 @@ function boot() {
 
 // A self-contained recorder: getUserMedia → MediaRecorder → upload to /api/voice-command.
 // quick=true marks a one-off quick-add (the FAB) so the server tags it for a terse reply.
-function makeRecorder({ onStatus, onActive, quick, autoStop }) {
+function makeRecorder({ onStatus, onActive, quick, autoStop, tier }) {
   let recording = false, rec = null, chunks = [], stream = null, maxTimer = null;
   let actx = null, vadTimer = null;
   const pickMime = () => {
@@ -103,7 +103,11 @@ function makeRecorder({ onStatus, onActive, quick, autoStop }) {
     if (!blob.size) { onStatus('', 'clear'); return; }
     onStatus('Transcribing…', 'busy');
     try {
-      const r = await fetch('/api/voice-command' + (quick ? '?quick=1' : ''), {
+      const qp = new URLSearchParams();
+      if (quick) qp.set('quick', '1');
+      if (tier) qp.set('tier', tier);                 // 'fast' (sparkle) or 'power' (brain)
+      const qs = qp.toString();
+      const r = await fetch('/api/voice-command' + (qs ? '?' + qs : ''), {
         method: 'POST', headers: { 'Content-Type': blob.type || 'audio/webm' }, body: blob });
       const j = await r.json().catch(() => ({}));
       if (!r.ok || j.error) onStatus(j.error || 'Send failed', 'err');
@@ -219,15 +223,21 @@ function initCard() {
 
 // ---- fixed quick-add mic FAB ---------------------------------------------
 function initFab(activity) {
+  // Two stacked buttons: the brain (precision/Opus) sits on top, smaller; the sparkle (fast/Haiku)
+  // is the main button below. Both record voice the same way — they differ only in the tier sent.
+  const SPARKLE = '<svg viewBox="0 0 24 24" width="26" height="26" fill="currentColor" aria-hidden="true">' +
+    '<path d="M12 1c.6 5.7 4.3 9.4 10 10-5.7.6-9.4 4.3-10 10-.6-5.7-4.3-9.4-10-10 5.7-.6 9.4-4.3 10-10Z"/></svg>';
+  const BRAIN = '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+    '<path d="M12 5a3 3 0 1 0-5.997.142 4 4 0 0 0-2.526 5.77 4 4 0 0 0 .556 6.588A4 4 0 1 0 12 18Z"></path>' +
+    '<path d="M12 5a3 3 0 1 1 5.997.142 4 4 0 0 1 2.526 5.77 4 4 0 0 1-.556 6.588A4 4 0 1 1 12 18Z"></path></svg>';
   const wrap = document.createElement('div');
   wrap.className = 'ai-fab-wrap';
   wrap.innerHTML =
-    '<button class="ai-fab" id="ai-fab" type="button" aria-label="Quick voice command">' +
-      '<svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
-        '<rect x="9" y="2" width="6" height="12" rx="3"></rect><path d="M5 11a7 7 0 0 0 14 0"></path>' +
-        '<line x1="12" y1="18" x2="12" y2="22"></line></svg></button>';
+    '<button class="ai-fab ai-fab-power" id="ai-fab-power" type="button" aria-label="Precision voice command (max-power estimate)">' + BRAIN + '</button>' +
+    '<button class="ai-fab" id="ai-fab" type="button" aria-label="Quick voice command">' + SPARKLE + '</button>';
   document.body.appendChild(wrap);
   const fab = wrap.querySelector('#ai-fab');
+  const fabPower = wrap.querySelector('#ai-fab-power');
 
   const onStatus = (t, kind) => {
     if (kind === 'rec') activity.rec(t);
@@ -236,8 +246,10 @@ function initFab(activity) {
     else if (kind === 'clear') activity.clear();
     else activity.busy(t);
   };
-  const fabRec = makeRecorder({ onStatus, onActive: (a) => fab.classList.toggle('ai-rec', a), quick: true, autoStop: true });
-  fab.addEventListener('click', () => fabRec.toggle());
+  const fastRec = makeRecorder({ onStatus, onActive: (a) => fab.classList.toggle('ai-rec', a), quick: true, autoStop: true, tier: 'fast' });
+  const powerRec = makeRecorder({ onStatus, onActive: (a) => fabPower.classList.toggle('ai-rec', a), quick: true, autoStop: true, tier: 'power' });
+  fab.addEventListener('click', () => fastRec.toggle());
+  fabPower.addEventListener('click', () => powerRec.toggle());
 
   // Hide the FAB + activity bar while the full conversation card is on screen (its input is there).
   const card = document.querySelector('.airow');

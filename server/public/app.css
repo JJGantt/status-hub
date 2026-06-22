@@ -425,14 +425,19 @@ body.tv-focused .tv-convo-log,body.tv-focused .tv-sessions{display:none}
 .settings-time{padding:8px 10px;border-radius:8px;border:1px solid #2a313a;background:#0e1318;color:#e8eaed;font-size:14px}
 .settings-time:focus{outline:none;border-color:#3b82f6}
 .settings-row.dim{opacity:.4}
-/* fixed quick-add mic FAB (bottom-right, survives scrolling; hidden once the conversation card shows) */
-.ai-fab-wrap{position:fixed;right:20px;bottom:20px;z-index:1000;transition:opacity .2s}
+/* fixed voice FAB (bottom-right, survives scrolling; hidden once the conversation card shows).
+   Two stacked buttons: brain (precision/Opus) on top + smaller, sparkle (fast/Haiku) below = main. */
+.ai-fab-wrap{position:fixed;right:20px;bottom:20px;z-index:1000;display:flex;flex-direction:column;
+  align-items:center;gap:12px;transition:opacity .2s}
 .ai-fab-wrap.hidden{opacity:0;pointer-events:none}
 .ai-fab{width:56px;height:56px;border-radius:50%;border:0;background:#3b82f6;color:#fff;display:grid;
   place-items:center;cursor:pointer;box-shadow:0 6px 20px rgba(0,0,0,.45);transition:background .15s,transform .1s}
 .ai-fab:hover{background:#4f8ef7}
 .ai-fab:active{transform:scale(.94)}
 .ai-fab.ai-rec{background:#ef4444;animation:va-pulse 1.4s ease-out infinite}
+/* precision (brain) button — smaller, violet to signal the heavier "thinking" tier */
+.ai-fab-power{width:44px;height:44px;background:#7c3aed;box-shadow:0 4px 14px rgba(0,0,0,.4)}
+.ai-fab-power:hover{background:#8b5cf6}
 
 /* bottom activity bar — live "what Raspy is doing": Listening / Transcribing / Thinking, then each
    tool call + args. Left-aligned, content-sized, max-width capped so it never reaches the FAB. */

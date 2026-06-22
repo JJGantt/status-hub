@@ -711,7 +711,8 @@ app.post('/api/voice-command', express.raw({ type: '*/*', limit: '25mb' }), asyn
     // The bottom-right quick-add FAB sends ?quick=1 → tag the request so the worker asks Jarvis for a
     // terse, fits-in-the-status-chip confirmation. The full conversation card omits it (verbose replies).
     const quick = String(req.query.quick || '') === '1';
-    await sbWrite('voice_requests', 'POST', { transcript, source: quick ? 'web-quick' : 'web', focus: 'hub' });
+    const tier = ['fast', 'power'].includes(String(req.query.tier || '')) ? String(req.query.tier) : null;
+    await sbWrite('voice_requests', 'POST', { transcript, source: quick ? 'web-quick' : 'web', focus: 'hub', ...(tier ? { tier } : {}) });
     res.json({ transcript, enqueued: true });
   } catch (e) { res.status(500).json({ error: String(e.message || e) }); }
 });
@@ -721,7 +722,8 @@ app.post('/api/voice-text', express.json(), async (req, res) => {
   try {
     const text = String((req.body && req.body.text) || '').trim();
     if (!text) return res.status(400).json({ error: 'empty' });
-    await sbWrite('voice_requests', 'POST', { transcript: text, source: 'web', focus: 'hub' });
+    const tier = ['fast', 'power'].includes(String((req.body && req.body.tier) || '')) ? String(req.body.tier) : null;
+    await sbWrite('voice_requests', 'POST', { transcript: text, source: 'web', focus: 'hub', ...(tier ? { tier } : {}) });
     res.json({ enqueued: true });
   } catch (e) { res.status(500).json({ error: String(e.message || e) }); }
 });

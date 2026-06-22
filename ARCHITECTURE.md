@@ -179,6 +179,9 @@ has a fresh heartbeat** (`HEARTBEAT_FRESH_S`).
   `voice-pipeline/server/`).
 - ✅ Pi worker is live (`voice-worker.service`, 2026-06-22) — middle-priority fallback, both
   routing modes. (`mac-listener` plist on the Mac is still the one `(verify)` item below.)
-- 🔜 TestFlight/production build for the iOS app (longevity; dev builds expire in 7 days).
+- 🔜 **TestFlight migration** (longevity). Push works *now* on an Ad Hoc production build (~1yr).
+  The only blocker to permanent TestFlight is **Jared creating the App Store Connect app record**
+  (the ASC API can't create apps); after that Claude uploads + finishes. The App-Store `.ipa` and the
+  production entitlement are already prepared.
 - **(verify)** `mac-listener` launchd state (mic permission).
 - Wake word README says `hey_jarvis`; deployed value is `hey_rhasspy`.

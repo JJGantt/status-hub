@@ -43,15 +43,16 @@
 .devchip .dc-v .dot{width:9px;height:9px;margin-right:6px}
 /* Surf card: 7-day outlook as expandable rows */
 .surfdays{display:flex;flex-direction:column;gap:6px;margin-top:12px}
-.surfrow{display:grid;grid-template-columns:18px 46px 1fr auto auto;align-items:center;gap:10px;
+.surfrow{display:grid;grid-template-columns:18px 46px 1fr 1fr;align-items:center;gap:10px;
   background:#0e1318;border:1px solid #222a33;border-radius:9px;padding:9px 12px;cursor:pointer;user-select:none}
 .surfrow:hover{border-color:#2f3a45}
 .surfrow.open{border-color:#2f3a45;border-bottom-left-radius:0;border-bottom-right-radius:0}
 .surfrow .sr-x{color:#8b96a5;font-size:11px}
 .surfrow .sr-wd{font-size:13px;font-weight:700;color:#e6eaf0;text-transform:uppercase;letter-spacing:.03em}
-.surfrow .sr-rt{font-size:13px;font-weight:700}
-.surfrow .sr-ft{font-size:14px;font-weight:700;color:#e6eaf0;text-align:right}
-.surfrow .sr-air{font-size:13px;color:#eab308;min-width:34px;text-align:right}
+.surfrow .sr-buck{display:flex;align-items:baseline;gap:8px;min-width:0}
+.surfrow .sr-bl{font-size:10px;color:#8b96a5;text-transform:uppercase;letter-spacing:.03em;flex:none}
+.surfrow .sr-rt{font-size:13px;font-weight:700;white-space:nowrap}
+.surfrow .sr-ft{font-size:14px;font-weight:700;color:#e6eaf0;white-space:nowrap}
 .surfhours{background:#0b0f13;border:1px solid #222a33;border-top:none;border-radius:0 0 9px 9px;
   padding:6px 12px 9px;display:flex;flex-direction:column;gap:1px}
 .surfhr,.surfhr-head{display:grid;grid-template-columns:38px 1fr 56px 64px 40px;align-items:center;gap:8px;

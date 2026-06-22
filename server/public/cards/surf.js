@@ -43,15 +43,23 @@ export function render(s) {
       '<span class=sh-air>' + (h.airF != null ? h.airF + '°' : '—') + '</span>' +
     '</div>';
 
+  const bucketCell = (label, b) =>
+    '<span class=sr-buck>' +
+      '<span class=sr-bl>' + label + '</span>' +
+      (b
+        ? '<span class=sr-rt style="color:' + b.ratingColor + '">' + b.ratingLabel + '</span>' +
+          '<span class=sr-ft>' + ftRange(b.hMin, b.hMax) + '</span>'
+        : '<span class=sr-rt style="color:#8b96a5">—</span>') +
+    '</span>';
+
   const dayRow = (d) => {
     const isOpen = open.has(d.weekday);
     const row =
       '<div class="surfrow' + (isOpen ? ' open' : '') + '" data-day="' + d.weekday + '">' +
         '<span class=sr-x>' + (isOpen ? '▾' : '▸') + '</span>' +
         '<span class=sr-wd>' + d.weekday + '</span>' +
-        '<span class=sr-rt style="color:' + d.ratingColor + '">' + d.ratingLabel + '</span>' +
-        '<span class=sr-ft>' + ftRange(d.hMin, d.hMax) + '</span>' +
-        '<span class=sr-air>' + (d.airHi != null ? d.airHi + '°' : '—') + '</span>' +
+        bucketCell('10–2p', d.midday) +
+        bucketCell('4–7p', d.late) +
       '</div>';
     if (!isOpen) return row;
     const hours = (d.hours && d.hours.length)

@@ -176,21 +176,26 @@ function buildSurf(row) {
   const rows = row.rows;
   const byDay = new Map();
   for (const h of rows) { const d = etDate(h.ts); (byDay.get(d) || byDay.set(d, []).get(d)).push(h); }
-  const days = [...byDay.values()].slice(0, 7).map((all) => {
-    // Summarize over surfable daylight hours (8a–8p); fall back to the whole day if none left.
-    const daylight = all.filter(h => { const e = etHour(h.ts); return e >= 8 && e <= 20; })
-                        .sort((a, b) => a.ts - b.ts);
-    const use = daylight.length ? daylight : all;
-    const best = use.reduce((a, b) => ((b.rv ?? -1) > (a.rv ?? -1) ? b : a), use[0]);
-    const mins = use.map(h => h.sMin).filter(Number.isFinite);
-    const maxs = use.map(h => h.sMax).filter(Number.isFinite);
-    const airs = use.map(h => h.aT).filter(Number.isFinite);
+  // Aggregate a time-of-day bucket (inclusive ET hour range) -> best rating + size span.
+  const bucket = (all, lo, hi) => {
+    const b = all.filter(h => { const e = etHour(h.ts); return e >= lo && e <= hi; });
+    if (!b.length) return null;
+    const best = b.reduce((a, c) => ((c.rv ?? -1) > (a.rv ?? -1) ? c : a), b[0]);
+    const mins = b.map(h => h.sMin).filter(Number.isFinite);
+    const maxs = b.map(h => h.sMax).filter(Number.isFinite);
     return {
-      weekday: etWeekday(use[0].ts),
       ratingLabel: ratingLabel(best.rk), ratingColor: ratingColor(best.rk),
       hMin: mins.length ? Math.min(...mins) : null,
       hMax: maxs.length ? Math.max(...maxs) : null,
-      airHi: airs.length ? Math.round(Math.max(...airs)) : null,
+    };
+  };
+  const days = [...byDay.values()].slice(0, 7).map((all) => {
+    const daylight = all.filter(h => { const e = etHour(h.ts); return e >= 8 && e <= 20; })
+                        .sort((a, b) => a.ts - b.ts);
+    return {
+      weekday: etWeekday(all[0].ts),
+      midday: bucket(all, 10, 14),     // 10a–2p
+      late: bucket(all, 16, 19),       // 4p–7p
       hours: daylight.map(h => ({
         t: hourLabel(etHour(h.ts)),
         ratingLabel: ratingLabel(h.rk), ratingColor: ratingColor(h.rk),

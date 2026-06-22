@@ -3,6 +3,9 @@ import WebKit
 
 @main
 struct StatusHubApp: App {
+    #if os(iOS)
+    @UIApplicationDelegateAdaptor(AppDelegate.self) var appDelegate   // APNs registration (see Push.swift)
+    #endif
     var body: some Scene {
         WindowGroup {
             HubWebView()
@@ -33,6 +36,14 @@ struct HubWebView {
                      decisionHandler: @escaping (WKPermissionDecision) -> Void) {
             decisionHandler(.grant)   // first-party hub → no nested prompt
         }
+
+        #if os(iOS)
+        // Once the authenticated hub has loaded, hand the web view to PushManager so it can register
+        // the APNs token via a same-origin (cookie-authed) fetch.
+        func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
+            PushManager.shared.attach(webView)
+        }
+        #endif
     }
 
     func makeCoordinator() -> Coordinator { Coordinator() }

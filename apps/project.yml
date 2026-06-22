@@ -22,6 +22,10 @@ targets:
     deploymentTarget: "17.0"
     sources:
       - path: Sources
+    entitlements:
+      path: StatusHub.entitlements
+      properties:
+        aps-environment: development   # APNs sandbox for dev/Xcode-signed builds; 'production' for TestFlight/App Store
     settings:
       base:
         INFOPLIST_KEY_UILaunchScreen_Generation: YES

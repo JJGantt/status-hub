@@ -11,6 +11,7 @@
 		51DECA2330E0FBC3832EF2A4 /* Models.swift in Sources */ = {isa = PBXBuildFile; fileRef = B47214768CCEE8C99EEF5958 /* Models.swift */; };
 		60AE844C615F02EE05A50C80 /* Views.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7E727AC7945D69F9313E83AC /* Views.swift */; };
 		80C001EA5124225A4538240B /* StatusHubApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = DBE4FD566029B00F912457DA /* StatusHubApp.swift */; };
+		A4E6D950656AE1A3B80EECAA /* Push.swift in Sources */ = {isa = PBXBuildFile; fileRef = 835C09DFE3C581C0FCD41116 /* Push.swift */; };
 		A530752A59476C460CE68305 /* HubModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6DD537CFCDEFF1F747C3D8D2 /* HubModel.swift */; };
 		AAB739C371483A58ABEFFC12 /* Auth.swift in Sources */ = {isa = PBXBuildFile; fileRef = 695330199DB90BC0552A61A4 /* Auth.swift */; };
 		B39D666BE8C69D4E75BB31F5 /* HubModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6DD537CFCDEFF1F747C3D8D2 /* HubModel.swift */; };
@@ -18,6 +19,7 @@
 		D19716A696E535763020C4F4 /* Theme.swift in Sources */ = {isa = PBXBuildFile; fileRef = A3ED88961E8E93D6EBE0EA46 /* Theme.swift */; };
 		D998A2EA11DB625A5E768785 /* Models.swift in Sources */ = {isa = PBXBuildFile; fileRef = B47214768CCEE8C99EEF5958 /* Models.swift */; };
 		ED30317D3B77A590C83D95BC /* StatusHubApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = DBE4FD566029B00F912457DA /* StatusHubApp.swift */; };
+		EE1E28331D9AE8401BEE3601 /* Push.swift in Sources */ = {isa = PBXBuildFile; fileRef = 835C09DFE3C581C0FCD41116 /* Push.swift */; };
 		F10846CA6E8D579211CF7695 /* Theme.swift in Sources */ = {isa = PBXBuildFile; fileRef = A3ED88961E8E93D6EBE0EA46 /* Theme.swift */; };
 /* End PBXBuildFile section */
 
@@ -25,6 +27,7 @@
 		695330199DB90BC0552A61A4 /* Auth.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Auth.swift; sourceTree = "<group>"; };
 		6DD537CFCDEFF1F747C3D8D2 /* HubModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HubModel.swift; sourceTree = "<group>"; };
 		7E727AC7945D69F9313E83AC /* Views.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Views.swift; sourceTree = "<group>"; };
+		835C09DFE3C581C0FCD41116 /* Push.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Push.swift; sourceTree = "<group>"; };
 		A3ED88961E8E93D6EBE0EA46 /* Theme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Theme.swift; sourceTree = "<group>"; };
 		B47214768CCEE8C99EEF5958 /* Models.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Models.swift; sourceTree = "<group>"; };
 		DBE4FD566029B00F912457DA /* StatusHubApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StatusHubApp.swift; sourceTree = "<group>"; };
@@ -48,6 +51,7 @@
 				695330199DB90BC0552A61A4 /* Auth.swift */,
 				6DD537CFCDEFF1F747C3D8D2 /* HubModel.swift */,
 				B47214768CCEE8C99EEF5958 /* Models.swift */,
+				835C09DFE3C581C0FCD41116 /* Push.swift */,
 				DBE4FD566029B00F912457DA /* StatusHubApp.swift */,
 				A3ED88961E8E93D6EBE0EA46 /* Theme.swift */,
 				7E727AC7945D69F9313E83AC /* Views.swift */,
@@ -147,6 +151,7 @@
 				2688C061FF28D78494EECACD /* Auth.swift in Sources */,
 				B39D666BE8C69D4E75BB31F5 /* HubModel.swift in Sources */,
 				D998A2EA11DB625A5E768785 /* Models.swift in Sources */,
+				A4E6D950656AE1A3B80EECAA /* Push.swift in Sources */,
 				ED30317D3B77A590C83D95BC /* StatusHubApp.swift in Sources */,
 				F10846CA6E8D579211CF7695 /* Theme.swift in Sources */,
 				C97CE9C67CFCE106140773BB /* Views.swift in Sources */,
@@ -160,6 +165,7 @@
 				AAB739C371483A58ABEFFC12 /* Auth.swift in Sources */,
 				A530752A59476C460CE68305 /* HubModel.swift in Sources */,
 				51DECA2330E0FBC3832EF2A4 /* Models.swift in Sources */,
+				EE1E28331D9AE8401BEE3601 /* Push.swift in Sources */,
 				80C001EA5124225A4538240B /* StatusHubApp.swift in Sources */,
 				D19716A696E535763020C4F4 /* Theme.swift in Sources */,
 				60AE844C615F02EE05A50C80 /* Views.swift in Sources */,
@@ -173,6 +179,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_ENTITLEMENTS = StatusHub.entitlements;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -191,6 +198,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_ENTITLEMENTS = StatusHub.entitlements;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -261,7 +269,6 @@
 				GCC_WARN_UNUSED_VARIABLE = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = "Status Hub";
-				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Status Hub uses the microphone for voice commands to Raspy.";
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				MACOSX_DEPLOYMENT_TARGET = 13.0;
 				MARKETING_VERSION = 1.0;
@@ -360,7 +367,6 @@
 				GCC_WARN_UNUSED_VARIABLE = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = "Status Hub";
-				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Status Hub uses the microphone for voice commands to Raspy.";
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				MACOSX_DEPLOYMENT_TARGET = 13.0;
 				MARKETING_VERSION = 1.0;

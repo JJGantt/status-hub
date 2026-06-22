@@ -13,6 +13,8 @@ const { DAY_START_HOUR, localDate, nutritionWindow, lastNTrainingDays, dayBucket
 const { buildWorkoutHeatmap } = require('./lib/heatmap');
 const { buildNutritionLog, calorieColor, targetCalFor } = require('./lib/nutritionlog');
 const { buildVariants } = require('./lib/variants');
+const apns = require('./lib/apns');
+const weightReminder = require('./lib/weightReminder');
 
 const PORT = process.env.PORT || 8080;
 const SUPABASE_URL = process.env.SUPABASE_URL;
@@ -415,6 +417,29 @@ app.post('/api/settings', express.json(), async (req, res) => {
   } catch (e) { res.status(500).json({ error: String(e.message || e) }); }
 });
 
+// Register a device's APNs token (sent by the native app, authed by x-hub-token). Upsert so a
+// re-launch just refreshes last_seen rather than piling up rows.
+app.post('/api/register-push', express.json(), async (req, res) => {
+  try {
+    const token = String((req.body && req.body.token) || '').trim();
+    if (!/^[0-9a-fA-F]{16,}$/.test(token)) return res.status(400).json({ error: 'bad token' });
+    const row = {
+      token,
+      platform: (req.body && req.body.platform) || 'ios',
+      bundle_id: (req.body && req.body.bundle_id) || null,
+      last_seen: new Date().toISOString(),
+    };
+    const r = await fetch(`${SUPABASE_URL}/rest/v1/device_tokens?on_conflict=token`, {
+      method: 'POST',
+      headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}`,
+                 'Content-Type': 'application/json', Prefer: 'resolution=merge-duplicates,return=minimal' },
+      body: JSON.stringify(row),
+    });
+    if (!r.ok) throw new Error(`device_tokens upsert -> ${r.status}`);
+    res.json({ ok: true });
+  } catch (e) { res.status(500).json({ error: String(e.message || e) }); }
+});
+
 // A single 4am→4am nutrition day's food entries — for the nutrition-log day click-through.
 app.get('/api/nutrition-day', async (req, res) => {
   try {
@@ -743,6 +768,24 @@ app.listen(PORT, '0.0.0.0', () => {
   // having connected clients so it's free when nobody's watching.
   setInterval(() => { if (sseClients.size) broadcast(); }, 30000);
 });
+
+// ---- daily weight-logging push reminder (APNs). Checks each minute; fires once/day at the
+// configured time unless weight or food is already logged (see lib/weightReminder.js). ----
+async function sbInsert(table, row) {
+  try {
+    const r = await fetch(`${SUPABASE_URL}/rest/v1/${table}`, {
+      method: 'POST',
+      headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}`,
+                 'Content-Type': 'application/json', Prefer: 'return=minimal' },
+      body: JSON.stringify(row),
+    });
+    return r.ok;
+  } catch (_) { return false; }
+}
+const reminderCtx = { sb, supaInsert: sbInsert, apns, log: (m) => console.log('[weight-reminder]', m) };
+setInterval(() => weightReminder.tick(reminderCtx).catch((e) => console.log('[weight-reminder] error', e.message)), 60000);
+weightReminder.tick(reminderCtx).catch(() => {});  // also evaluate once on boot
+console.log(`[weight-reminder] armed (apns: ${apns.configured() ? 'configured, ' + apns.ENV : 'NOT configured'})`);
 
 // ---- login page (server-rendered; public, no client modules) ----
 function loginHtml(err) {

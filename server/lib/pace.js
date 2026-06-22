@@ -109,7 +109,9 @@ function deriveWindow(occurredList) {
   startMin = Math.round(Math.max(0, Math.min(startMin, firstMeal)));
 
   if (endMin - startMin < 360) endMin = startMin + 360; // enforce a sane minimum 6h window
-  return { startMin, endMin, source: haveData ? 'derived' : 'default' };
+  // firstMin = the derived typical first-meal time (minutes since 4am); startMin is shifted earlier
+  // off it for the pace curve, so consumers wanting "when you actually eat" should use firstMin.
+  return { startMin, endMin, firstMin: Math.round(firstMeal), source: haveData ? 'derived' : 'default' };
 }
 
 function hslToHex(h, s, l) {

@@ -148,6 +148,56 @@ function nowOffsetTZ() {
 }
 
 // ---- assemble dashboard data ----
+// ---- surf: latest Surfline snapshot -> current + 7-day per-day rollup ----
+// Data is collected by the Pi (repo JJGantt/surf-report) into surf_snapshots.
+const SURF_RATING_COLOR = {
+  FLAT:'#566', VERY_POOR:'#8b96a5', POOR:'#8b96a5', POOR_TO_FAIR:'#6aa6c8',
+  FAIR:'#3b82f6', FAIR_TO_GOOD:'#22c55e', GOOD:'#16a34a', VERY_GOOD:'#15803d',
+  GOOD_TO_EPIC:'#a855f7', EPIC:'#7c3aed',
+};
+const SURF_RATING_LABEL = {
+  FLAT:'Flat', VERY_POOR:'Very Poor', POOR:'Poor', POOR_TO_FAIR:'Poor–Fair',
+  FAIR:'Fair', FAIR_TO_GOOD:'Fair–Good', GOOD:'Good', VERY_GOOD:'Very Good',
+  GOOD_TO_EPIC:'Good–Epic', EPIC:'Epic',
+};
+const etDate    = (ts) => new Date(ts*1000).toLocaleDateString('en-CA', { timeZone:'America/New_York' });
+const etWeekday = (ts) => new Date(ts*1000).toLocaleDateString('en-US', { weekday:'short', timeZone:'America/New_York' });
+
+function buildSurf(row) {
+  if (!row || !Array.isArray(row.rows) || !row.rows.length) return null;
+  const rows = row.rows;
+  const byDay = new Map();
+  for (const h of rows) { const d = etDate(h.ts); (byDay.get(d) || byDay.set(d, []).get(d)).push(h); }
+  const days = [...byDay.values()].slice(0, 7).map((hrs) => {
+    const best = hrs.reduce((a, b) => ((b.rv ?? -1) > (a.rv ?? -1) ? b : a), hrs[0]);
+    const mins = hrs.map(h => h.sMin).filter(Number.isFinite);
+    const maxs = hrs.map(h => h.sMax).filter(Number.isFinite);
+    const airs = hrs.map(h => h.aT).filter(Number.isFinite);
+    return {
+      weekday: etWeekday(hrs[0].ts),
+      ratingKey: best.rk, ratingLabel: SURF_RATING_LABEL[best.rk] || best.rk,
+      ratingColor: SURF_RATING_COLOR[best.rk] || '#8b96a5',
+      hMin: mins.length ? Math.min(...mins) : null,
+      hMax: maxs.length ? Math.max(...maxs) : null,
+      airHi: airs.length ? Math.round(Math.max(...airs)) : null,
+    };
+  });
+  const now = Date.now() / 1000;
+  const cur = rows.reduce((a, b) => (Math.abs(b.ts - now) < Math.abs(a.ts - now) ? b : a), rows[0]);
+  const wt = row.water_temp || null;
+  return {
+    spot: row.slug || 'mayport-poles',
+    capturedAt: row.captured_at,
+    waterTempF: wt ? Math.round((wt.min + wt.max) / 2) : null,
+    current: cur ? {
+      ratingLabel: SURF_RATING_LABEL[cur.rk] || cur.rk,
+      ratingColor: SURF_RATING_COLOR[cur.rk] || '#8b96a5',
+      hMin: cur.sMin, hMax: cur.sMax, airF: cur.aT != null ? Math.round(cur.aT) : null,
+    } : null,
+    days,
+  };
+}
+
 async function buildStatus() {
   const win = nutritionWindow();
   const today = win.day;
@@ -155,7 +205,7 @@ async function buildStatus() {
   const histStart = localDate(new Date(Date.now() - 40 * 86400000)); // intake history for the maintenance trend
   const heatStart = localDate(new Date(Date.now() - 140 * 86400000)); // ~20 weeks for the workout volume heatmap
 
-  const [deviceRows, entries, setRows, weightRows, histRows, muscleRows, heatRows, catalogRows, nutLogRows, targetRows] = await Promise.all([
+  const [deviceRows, entries, setRows, weightRows, histRows, muscleRows, heatRows, catalogRows, nutLogRows, targetRows, surfRows] = await Promise.all([
     sb('device_status?select=*'),
     sb(`nutrition_entries?occurred_at=gte.${win.start}&occurred_at=lt.${win.end}&staged=eq.false&select=calories,protein_g,carbs_g,fat_g`),
     sb(`sets?occurred_at=gte.${week[0]}T00:00:00&select=occurred_at,exercise,muscles_override`),
@@ -166,9 +216,11 @@ async function buildStatus() {
     sb('exercise_catalog?select=name,equipment'),
     sbRange(`nutrition_entries?occurred_at=gte.${localDate(new Date(Date.now() - 86 * 86400000))}T00:00:00&staged=eq.false&select=occurred_at,calories,protein_g&order=occurred_at`),
     sb('nutrition_targets?select=date,calories&order=date.asc'),
+    sb('surf_snapshots?select=slug,water_temp,captured_at,rows&order=captured_at.desc&limit=1'),
   ]);
 
   const litter = (deviceRows || [])[0] || null;
+  const surf = buildSurf((surfRows || [])[0]);
 
   const sum = (k) => (entries || []).reduce((a, e) => a + (Number(e[k]) || 0), 0);
   const nutrition = {
@@ -213,7 +265,7 @@ async function buildStatus() {
   const nutrition_log = buildNutritionLog(nutLogRows || [], weights, maintenance.target, maintenance.maintenance, today, targetRows || [], 20);
 
   const last_set_at = (heatRows && heatRows.length) ? heatRows[heatRows.length - 1].occurred_at : null;
-  return { today, litter, nutrition, maintenance, pace: paceData, volume, heatmap, nutrition_log, last_set_at, generated_at: new Date().toISOString() };
+  return { today, litter, surf, nutrition, maintenance, pace: paceData, volume, heatmap, nutrition_log, last_set_at, generated_at: new Date().toISOString() };
 }
 
 // ---- realtime push: recompute + push to all connected browsers on any DB change ----

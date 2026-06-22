@@ -1,6 +1,7 @@
 // Bootstrapping: SSE → render orchestrator, then the layout init.
 import { TOUCH, state } from './shared.js';
 import * as litter from './cards/litter.js';
+import * as surf from './cards/surf.js';
 import * as nutrition from './cards/nutrition.js';
 import * as muscle from './cards/muscle.js';
 import * as workouts from './cards/workouts.js';
@@ -13,6 +14,7 @@ function render(s){
  if(!s||s.error){return;}
  state.last=s;
  litter.render(s);
+ surf.render(s);
  nutrition.render(s);
  workouts.render(s);
  nutritionlog.render(s);

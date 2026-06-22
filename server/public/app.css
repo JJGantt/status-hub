@@ -1,4 +1,4 @@
-*{box-sizing:border-box} body{background:#0b0d10;color:#e8eaed;font:16px/1.4 system-ui;margin:0;padding:12px}
+*{box-sizing:border-box} body{background:#0b0d10;color:#e8eaed;font:16px/1.4 system-ui;margin:0;padding:12px;-webkit-text-size-adjust:100%;text-size-adjust:100%}
 /* DESKTOP: four stacked full-width rows; normal page scroll, each row sized to its content. */
 .rows{max-width:1240px;margin:0 auto;display:flex;flex-direction:column;gap:12px}
 .row-card{display:flex;gap:12px}
@@ -13,7 +13,7 @@
 .nutrow{align-items:stretch}
 .nutrow .nutleft{flex:1 1 auto;min-width:0}
 .nutrow .nutdetail{flex:0 0 400px;min-width:0}
-.nutrow .nutleft #nutritionlog{margin-top:10px}
+.nutrow .nutleft #nutritionlog{margin-top:26px}
 .nutrow .nutleft #nutwrap .nplot-block{margin-top:14px}
 .nutrow .nutdetail .detailpanel{position:absolute;inset:0}
 /* Row 3 — muscle: volume list (left, full height) | right column = map on top + breakdown below,

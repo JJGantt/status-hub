@@ -15,8 +15,9 @@ documents **everything**, not just the hub. Keep it current as pieces change.
   reads/writes Supabase; nothing else is authoritative.
 - **One web codebase, many surfaces.** The web hub (desktop / phone / TV) is one codebase; the
   native iOS/macOS apps are thin WKWebView wrappers of it, so every screen shares the same UI.
-- **The Pi is NOT in the live path.** It crashed/disconnected too often and was retired to a
-  dormant spare. Anything that says "pi" is either reserved-for-later or legacy.
+- **The Pi is an active service host.** It runs the voice worker as a middle-priority fallback
+  (between Mac and Fly) and can host other services. Supabase remains the *data* source of truth,
+  but that's about storage, not about what runs on the Pi.
 
 ---
 
@@ -120,8 +121,8 @@ has a fresh heartbeat** (`HEARTBEAT_FRESH_S`).
 | Worker | `WORKER_ID` | Where | Priority | Routing | Status |
 |---|---|---|---|---|---|
 | **Mac** | `mac` | launchd on the Mac | highest (`mac,pi`) | `subscription` (default) or `sdk` | ✅ live, primary |
+| **Pi** | `pi` | systemd `voice-worker.service` | middle (`mac,pi,fly`) | `subscription` (default) or `sdk` | ✅ live, fallback |
 | **Fly** | `fly` | inside `jared-voice` | lowest (`mac,pi,fly`) | forced `sdk` (API only) | ✅ live, fallback |
-| **Pi** | `pi` | — | middle (reserved) | — | ❌ **not set up** (slot only) |
 
 - **Claiming latency:** workers used to poll every 1s. Now a **Supabase realtime listener**
   (`RealtimeWaker` in `worker.py`, added 2026-06-22) wakes the loop the instant a `voice_requests`
@@ -130,8 +131,13 @@ has a fresh heartbeat** (`HEARTBEAT_FRESH_S`).
   subscription (free); `sdk` = a warm `ClaudeSDKClient` (MCPs stay connected) on Anthropic API /
   Agent-SDK credit. Fly is always `sdk` (no subscription login); the Mac can opt into `sdk` for a
   warm fast lane.
-- **The Pi:** to make it a real fallback, deploy `worker.py` there as a service with
-  `WORKER_ID=pi`. Today the `pi` in the priority list does nothing.
+- **Subscription vs API key:** `claude -p` (subscription) must NOT have `ANTHROPIC_API_KEY` in its
+  environment or the CLI silently bills the API instead — so `run_claude` strips it for that
+  subprocess; the SDK path keeps it. (The service env carries the key so `sdk` mode works.)
+- **The Pi:** runs `worker.py` via systemd `voice-worker.service` (env in `~/.voice-worker.env`),
+  code cloned at `~/repos/voice-pipeline`, venv at `worker/.venv`. `git pull` + `sudo systemctl
+  restart voice-worker` to update. Heartbeats as the middle-priority fallback; claims when the Mac
+  is down.
 
 ---
 
@@ -171,8 +177,8 @@ has a fresh heartbeat** (`HEARTBEAT_FRESH_S`).
 
 - ⚠️ Delete `voice-pipeline/fly-worker/` — dead orphan that misleads (the real Fly worker is
   `voice-pipeline/server/`).
-- ❌ Pi worker is unbuilt — decide whether to deploy `worker.py` to the Pi (`WORKER_ID=pi`) or
-  drop `pi` from the priority list to stop implying it exists.
+- ✅ Pi worker is live (`voice-worker.service`, 2026-06-22) — middle-priority fallback, both
+  routing modes. (`mac-listener` plist on the Mac is still the one `(verify)` item below.)
 - 🔜 TestFlight/production build for the iOS app (longevity; dev builds expire in 7 days).
 - **(verify)** `mac-listener` launchd state (mic permission).
 - Wake word README says `hey_jarvis`; deployed value is `hey_rhasspy`.

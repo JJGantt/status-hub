@@ -78,7 +78,7 @@ async function tick(ctx) {
   }
 
   let tokens = [];
-  try { tokens = await sb('device_tokens?platform=eq.ios&select=token'); } catch (_) {}
+  try { tokens = await sb('device_tokens?platform=eq.ios&select=token,environment'); } catch (_) {}
   if (!tokens.length) {
     await supaInsert('notifications', { kind: 'weight_reminder', dedupe_key: dedupe, ok: false, detail: 'no device tokens' });
     return;
@@ -90,8 +90,8 @@ async function tick(ctx) {
   }
 
   let okAny = false; const details = [];
-  for (const { token } of tokens) {
-    const r = await apns.send(token, { title: TITLE, body: BODY });
+  for (const { token, environment } of tokens) {
+    const r = await apns.send(token, { title: TITLE, body: BODY, environment });
     okAny = okAny || r.ok;
     details.push(`${token.slice(0, 8)}=${r.status}${r.ok ? '' : '(' + (r.detail || '').slice(0, 60) + ')'}`);
   }

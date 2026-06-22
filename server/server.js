@@ -423,10 +423,12 @@ app.post('/api/register-push', express.json(), async (req, res) => {
   try {
     const token = String((req.body && req.body.token) || '').trim();
     if (!/^[0-9a-fA-F]{16,}$/.test(token)) return res.status(400).json({ error: 'bad token' });
+    const env = (req.body && req.body.environment) === 'production' ? 'production' : 'sandbox';
     const row = {
       token,
       platform: (req.body && req.body.platform) || 'ios',
       bundle_id: (req.body && req.body.bundle_id) || null,
+      environment: env,
       last_seen: new Date().toISOString(),
     };
     const r = await fetch(`${SUPABASE_URL}/rest/v1/device_tokens?on_conflict=token`, {

@@ -17,9 +17,16 @@ final class PushManager {
 
     private func flush() {
         guard let token, let wv = webView else { return }
+        // A Debug (Xcode) build gets a sandbox APNs token; a Release (TestFlight/App Store) build gets
+        // a production token. Report which so the server targets the matching APNs gateway per token.
+        #if DEBUG
+        let env = "sandbox"
+        #else
+        let env = "production"
+        #endif
         let js = """
         fetch('/api/register-push',{method:'POST',headers:{'Content-Type':'application/json'},\
-        body:JSON.stringify({token:'\(token)',platform:'ios'})}).catch(function(){});
+        body:JSON.stringify({token:'\(token)',platform:'ios',environment:'\(env)'})}).catch(function(){});
         """
         DispatchQueue.main.async { wv.evaluateJavaScript(js, completionHandler: nil) }
     }

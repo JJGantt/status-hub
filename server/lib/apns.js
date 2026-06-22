@@ -18,8 +18,10 @@ const fs = require('fs');
 const TEAM_ID = process.env.APNS_TEAM_ID || 'XMH4AVFC78';
 const KEY_ID = process.env.APNS_KEY_ID || '';
 const BUNDLE_ID = process.env.APNS_BUNDLE_ID || 'com.jaredgantt.statushub';
-const ENV = (process.env.APNS_ENV || 'sandbox').toLowerCase();
-const HOST = ENV === 'production' ? 'https://api.push.apple.com' : 'https://api.sandbox.push.apple.com';
+const ENV = (process.env.APNS_ENV || 'sandbox').toLowerCase();   // default when a token has no environment
+const hostFor = (env) => (String(env).toLowerCase() === 'production'
+  ? 'https://api.push.apple.com' : 'https://api.sandbox.push.apple.com');
+const HOST = hostFor(ENV);
 
 function privateKeyPem() {
   let pem = process.env.APNS_KEY_P8 || '';
@@ -48,15 +50,16 @@ function authToken() {
   return _jwt.token;
 }
 
-// Send one alert push. Resolves { ok, status, detail } and never rejects.
-function send(deviceToken, { title, body, payload } = {}) {
+// Send one alert push. `environment` ('sandbox'|'production') selects the gateway per token; omit to
+// use the APNS_ENV default. Resolves { ok, status, detail } and never rejects.
+function send(deviceToken, { title, body, payload, environment } = {}) {
   return new Promise((resolve) => {
     if (!configured()) return resolve({ ok: false, status: 0, detail: 'apns not configured' });
     let jwt;
     try { jwt = authToken(); } catch (e) { return resolve({ ok: false, status: 0, detail: 'jwt: ' + e.message }); }
     let done = false;
     const finish = (r) => { if (done) return; done = true; try { client.close(); } catch (_) {} resolve(r); };
-    const client = http2.connect(HOST);
+    const client = http2.connect(environment ? hostFor(environment) : HOST);
     client.on('error', (e) => finish({ ok: false, status: 0, detail: 'connect: ' + e.message }));
     const t = setTimeout(() => finish({ ok: false, status: 0, detail: 'timeout' }), 10000);
     const req = client.request({
@@ -78,4 +81,4 @@ function send(deviceToken, { title, body, payload } = {}) {
   });
 }
 
-module.exports = { configured, send, ENV, HOST, BUNDLE_ID, TEAM_ID, KEY_ID };
+module.exports = { configured, send, hostFor, ENV, HOST, BUNDLE_ID, TEAM_ID, KEY_ID };

@@ -60,7 +60,7 @@ async function open() {
 
       '<div class="settings-sec">Nutrition goal</div>' +
       '<label class="settings-row"><span>Surplus / deficit (kcal)<br><small>+ to bulk, − to cut, 0 = maintenance</small></span>' +
-        '<input class="settings-num" type="number" step="10" inputmode="numeric" id="set-surplus" value="' + surplusVal + '"></label>' +
+        '<input class="settings-num" type="number" step="10" min="-1000" max="1000" inputmode="numeric" id="set-surplus" value="' + surplusVal + '"></label>' +
     '</div>';
   document.body.appendChild(back);
 
@@ -81,8 +81,11 @@ async function open() {
   });
   // Surplus/deficit: signed integer (negative = cut), so it bypasses the positive-only handler above.
   back.querySelector('#set-surplus').addEventListener('change', (e) => {
-    const v = parseInt(e.target.value, 10);
-    if (Number.isFinite(v)) save('surplus_cal', v);
+    let v = parseInt(e.target.value, 10);
+    if (!Number.isFinite(v)) return;
+    v = Math.max(-1000, Math.min(1000, v));   // clamp out typos (e.g. an accidental extra digit)
+    e.target.value = v;
+    save('surplus_cal', v);
   });
 
   back.querySelector('#set-wr-enabled').addEventListener('click', (e) => {

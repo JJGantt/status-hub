@@ -15,11 +15,13 @@ const { buildNutritionLog, buildGoalResolver, calorieColor } = require('./lib/nu
 
 // Current surplus/deficit setting (signed kcal over maintenance; default +150 lean-bulk). Drives the
 // live daily goal and the active run's goal on the plot/heatmap. Editable in the settings panel.
+const SURPLUS_LIMIT = 1000; // clamp: nobody runs a surplus/deficit beyond ~1000 kcal; guards typos
 async function surplusCal() {
   try {
     const r = await sb('app_settings?key=eq.surplus_cal&select=value');
     const v = r && r[0] != null ? parseInt(r[0].value, 10) : NaN;
-    return Number.isFinite(v) ? v : 150;
+    if (!Number.isFinite(v)) return 150;
+    return Math.max(-SURPLUS_LIMIT, Math.min(SURPLUS_LIMIT, v));
   } catch { return 150; }
 }
 const { buildVariants } = require('./lib/variants');

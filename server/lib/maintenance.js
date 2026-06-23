@@ -103,7 +103,7 @@ function macroTargets(calories, bodyweight) {
   return { protein_g, carbs_g, fat_g };
 }
 
-function estimateMaintenance({ weights = [], intakeByDay = [], today }) {
+function estimateMaintenance({ weights = [], intakeByDay = [], today, surplus = SURPLUS }) {
   const inSpan = (d) => dayIndex(d.date, today) >= -SPAN_DAYS;
   const recentW = weights.filter(inSpan);
   const { kept: recentI, excluded: intakeExcluded } = rejectOutliers(intakeByDay.filter(inSpan));
@@ -133,7 +133,7 @@ function estimateMaintenance({ weights = [], intakeByDay = [], today }) {
   const sortedW = [...weights].sort((a, b) => (a.date < b.date ? -1 : 1));
   const bodyweight = (currentWeight != null ? currentWeight
     : (sortedW.length ? sortedW[sortedW.length - 1].weight : null)) || FALLBACK_WEIGHT;
-  const calories = Math.round((maintenance + SURPLUS) / 10) * 10;
+  const calories = Math.round((maintenance + surplus) / 10) * 10;
   const { protein_g, carbs_g, fat_g } = macroTargets(calories, bodyweight);
 
   return {
@@ -141,7 +141,7 @@ function estimateMaintenance({ weights = [], intakeByDay = [], today }) {
     maintenance: Math.round(maintenance),
     target: calories,
     target_macros: { calories, protein_g, carbs_g, fat_g },
-    surplus: SURPLUS,
+    surplus,
     trend_lb_per_week: slope != null ? Math.round(slope * 7 * 100) / 100 : null,
     current_weight: currentWeight != null ? Math.round(currentWeight * 10) / 10 : null,
     coverage: {

@@ -27,6 +27,7 @@ async function open() {
   const wrOn = !['0', 'false', 'off', 'no'].includes(String(cur.weight_reminder_enabled ?? '1').toLowerCase());
   const wrMode = cur.weight_reminder_mode === 'dynamic' ? 'dynamic' : 'manual';
   const wrTime = /^\d{2}:\d{2}$/.test(cur.weight_reminder_time || '') ? cur.weight_reminder_time : '08:00';
+  const surplusVal = Number.isFinite(parseInt(cur.surplus_cal, 10)) ? parseInt(cur.surplus_cal, 10) : 150;
 
   const back = document.createElement('div');
   back.className = 'settings-back';
@@ -56,6 +57,10 @@ async function open() {
       '</div>' +
       '<label class="settings-row' + (wrMode === 'dynamic' ? ' dim' : '') + '" id="set-wr-time-row"><span>Time</span>' +
         '<input class="settings-time" type="time" id="set-wr-time" value="' + wrTime + '"' + (wrMode === 'dynamic' ? ' disabled' : '') + '></label>' +
+
+      '<div class="settings-sec">Nutrition goal</div>' +
+      '<label class="settings-row"><span>Surplus / deficit (kcal)<br><small>+ to bulk, − to cut, 0 = maintenance</small></span>' +
+        '<input class="settings-num" type="number" step="10" inputmode="numeric" id="set-surplus" value="' + surplusVal + '"></label>' +
     '</div>';
   document.body.appendChild(back);
 
@@ -71,8 +76,13 @@ async function open() {
   back.querySelectorAll('.settings-num').forEach((inp) => {
     inp.addEventListener('change', () => {
       const v = parseFloat(inp.value);
-      if (Number.isFinite(v) && v > 0) save(inp.dataset.key, v);
+      if (inp.dataset.key && Number.isFinite(v) && v > 0) save(inp.dataset.key, v);
     });
+  });
+  // Surplus/deficit: signed integer (negative = cut), so it bypasses the positive-only handler above.
+  back.querySelector('#set-surplus').addEventListener('change', (e) => {
+    const v = parseInt(e.target.value, 10);
+    if (Number.isFinite(v)) save('surplus_cal', v);
   });
 
   back.querySelector('#set-wr-enabled').addEventListener('click', (e) => {

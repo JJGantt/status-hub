@@ -11,7 +11,17 @@ const { computeVolume } = require('./lib/volume');
 const BODY_SVG = require('./lib/bodymap');
 const { DAY_START_HOUR, localDate, nutritionWindow, lastNTrainingDays, dayBucketOf } = require('./lib/dates');
 const { buildWorkoutHeatmap } = require('./lib/heatmap');
-const { buildNutritionLog, calorieColor, targetCalFor } = require('./lib/nutritionlog');
+const { buildNutritionLog, buildGoalResolver, calorieColor } = require('./lib/nutritionlog');
+
+// Current surplus/deficit setting (signed kcal over maintenance; default +150 lean-bulk). Drives the
+// live daily goal and the active run's goal on the plot/heatmap. Editable in the settings panel.
+async function surplusCal() {
+  try {
+    const r = await sb('app_settings?key=eq.surplus_cal&select=value');
+    const v = r && r[0] != null ? parseInt(r[0].value, 10) : NaN;
+    return Number.isFinite(v) ? v : 150;
+  } catch { return 150; }
+}
 const { buildVariants } = require('./lib/variants');
 const apns = require('./lib/apns');
 const weightReminder = require('./lib/weightReminder');
@@ -120,25 +130,6 @@ async function syncStoredTarget(m, today) {
   lastSyncedTarget = key;
 }
 
-// Live dynamic maintenance calorie target (same adaptive estimate the dashboard shows). Used as
-// the fallback for a day's historical target when no nutrition_targets snapshot precedes it.
-async function currentMaintenanceCal() {
-  const today = nutritionWindow().day;
-  const histStart = localDate(new Date(Date.now() - 40 * 86400000));
-  const [weightRows, histRows] = await Promise.all([
-    sb('weight_log?select=date,weight_lbs&order=date.asc'),
-    sb(`nutrition_entries?occurred_at=gte.${histStart}T00:00:00&staged=eq.false&select=occurred_at,calories`),
-  ]);
-  const intakeTotals = {};
-  for (const e of histRows || []) {
-    const d = dayBucketOf(e.occurred_at);
-    if (d === today) continue;
-    intakeTotals[d] = (intakeTotals[d] || 0) + (Number(e.calories) || 0);
-  }
-  const intakeByDay = Object.entries(intakeTotals).map(([date, calories]) => ({ date, calories }));
-  const weights = (weightRows || []).map((r) => ({ date: String(r.date).slice(0, 10), weight: Number(r.weight_lbs) }));
-  return estimateMaintenance({ weights, intakeByDay, today }).target_macros.calories;
-}
 
 // Current time as minutes into the 4am-origin day, in the display timezone.
 function nowOffsetTZ() {
@@ -264,7 +255,8 @@ async function buildStatus() {
   }
   const intakeByDay = Object.entries(intakeTotals).map(([date, calories]) => ({ date, calories }));
   const weights = (weightRows || []).map((r) => ({ date: String(r.date).slice(0, 10), weight: Number(r.weight_lbs) }));
-  const maintenance = estimateMaintenance({ weights, intakeByDay, today });
+  const surplus = await surplusCal();   // current surplus/deficit setting
+  const maintenance = estimateMaintenance({ weights, intakeByDay, today, surplus });
   nutrition.target = maintenance.target_macros; // the macro goal is the live dynamic target
   syncStoredTarget(maintenance.target_macros, today).catch((e) => console.error('target sync:', e.message));
 
@@ -286,7 +278,7 @@ async function buildStatus() {
   const heatmap = buildWorkoutHeatmap(heatRows, 20, today); // 20 weeks + 4am `today`, matching the nutrition heatmap
 
   // ---- nutrition log: calorie-adherence calendar (per-day historical targets) + calorie/weight trend ----
-  const nutrition_log = buildNutritionLog(nutLogRows || [], weights, maintenance.target, maintenance.maintenance, today, targetRows || [], 20);
+  const nutrition_log = buildNutritionLog(nutLogRows || [], weights, maintenance.target, maintenance.maintenance, today, targetRows || [], 20, surplus);
 
   const last_set_at = (heatRows && heatRows.length) ? heatRows[heatRows.length - 1].occurred_at : null;
   return { today, litter, surf, nutrition, maintenance, pace: paceData, volume, heatmap, nutrition_log, last_set_at, generated_at: new Date().toISOString() };
@@ -451,13 +443,15 @@ app.get('/api/nutrition-day', async (req, res) => {
     const next = localDate(new Date(Date.parse(date + 'T12:00:00Z') + 86400000));
     const isToday = date === nutritionWindow().day;
     const SEL = 'id,occurred_at,name,calories,protein_g,carbs_g,fat_g,ingredients,staged';
-    const [committed, stagedRows, targetRows, fallbackCal, dayWeight] = await Promise.all([
+    const today = nutritionWindow().day;
+    const [committed, stagedRows, targetRows, allIntake, weightRows, surplus] = await Promise.all([
       sbRange(`nutrition_entries?occurred_at=gte.${date}T${hh}:00:00&occurred_at=lt.${next}T${hh}:00:00&staged=eq.false&select=${SEL}&order=occurred_at`),
       // Staged meals (any day) always surface in the CURRENT day's list.
       isToday ? sbRange(`nutrition_entries?staged=eq.true&select=${SEL}&order=logged`) : Promise.resolve([]),
       sb('nutrition_targets?select=date,calories&order=date.asc'),
-      currentMaintenanceCal(),
-      sb(`weight_log?date=lte.${date}&select=weight_lbs&order=date.desc&limit=1`),  // bodyweight as of this day
+      sbRange('nutrition_entries?staged=eq.false&select=occurred_at,calories&order=occurred_at'), // full history → clusters + per-day maintenance
+      sb('weight_log?select=date,weight_lbs&order=date.asc'),
+      surplusCal(),
     ]);
     // Day total counts ONLY committed (eaten) entries — staged meals never count.
     let total_cal = 0, total_protein = 0, total_carbs = 0, total_fat = 0;
@@ -468,15 +462,16 @@ app.get('/api/nutrition-day', async (req, res) => {
     total_cal = Math.round(total_cal);
     // Newest first: staged meals on top, then committed entries reverse-chronologically.
     const entries = (stagedRows || []).concat(committed.slice().reverse());
-    // historical target for this day: most-recent nutrition_targets snapshot with date <= day
-    // (fallback = live maintenance) — same selection buildNutritionLog uses for the calendar.
-    const targets = (targetRows || []).map((t) => ({ date: String(t.date).slice(0, 10), calories: Number(t.calories) || 0 }))
-      .filter((t) => t.calories > 0).sort((a, b) => (a.date < b.date ? -1 : 1));
-    const target_cal = Math.round(targetCalFor(date, targets, fallbackCal));
+    // This day's GOAL via the SAME cluster-aware resolver the calendar + plot use, so the header
+    // agrees with them: active run → maintenance+surplus (or stored target); an older cut →
+    // maintenance−deficit; untracked → maintenance.
+    const weights = (weightRows || []).map((r) => ({ date: String(r.date).slice(0, 10), weight: Number(r.weight_lbs) }));
+    const { goalForDay } = buildGoalResolver({ rows: allIntake, weights, targets: targetRows, today, surplus });
+    const target_cal = goalForDay(date);
     const delta_color = target_cal > 0 ? calorieColor(total_cal / target_cal) : null;
-    // Per-day macro GOALS, derived from this day's calorie target + bodyweight as of this day
-    // (the same dynamic formula the live target uses, so each day has its own historical goal).
-    const bw = (dayWeight && dayWeight[0] && Number(dayWeight[0].weight_lbs)) || null;
+    // Per-day macro GOALS = this day's calorie goal split by bodyweight as of this day.
+    const wAsOf = weights.filter((w) => w.date <= date);
+    const bw = wAsOf.length ? wAsOf[wAsOf.length - 1].weight : null;
     const target_macros = target_cal > 0 ? macroTargets(target_cal, bw) : null;
     res.json({
       date,

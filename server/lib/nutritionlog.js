@@ -43,14 +43,45 @@ function buildNutritionLog(rows, weights, goalCal, maintenanceEst, today, calTar
   const anchor = new Date(today + 'T12:00:00Z'), dow = anchor.getUTCDay();
   const startMs = anchor.getTime() - dow * 86400000 - (weeks - 1) * 7 * 86400000;
   const allDates = []; for (let i = 0; i < weeks * 7; i++) allDates.push(new Date(startMs + i * 86400000).toISOString().slice(0, 10));
-  // calorie calendar (week columns, like the workout heatmap) — diverging color by intake/target ratio
+  const dms = (d) => Date.parse(d + 'T12:00:00Z');
+  const SURPLUS = 150, DEFICIT = 150; // bulking adds a surplus (recent run); cutting runs a deficit (older run)
+  // Per-day maintenance "as of" each day — the scientific truth (flat at the anchor until there's
+  // enough data, then it bends on its own). Computed once and reused by the heatmap + trend curves.
+  const intakeByDay = Object.entries(cal).map(([date, calories]) => ({ date, calories }));
+  const maintBy = {};
+  for (const ds of allDates) {
+    if (ds > today) continue;
+    const wUpTo = (weights || []).filter((w) => w.date <= ds);
+    const iUpTo = intakeByDay.filter((x) => x.date <= ds);
+    maintBy[ds] = estimateMaintenance({ weights: wUpTo, intakeByDay: iUpTo, today: ds }).maintenance;
+  }
+  const maintFor = (ds) => (maintBy[ds] != null ? maintBy[ds] : maintenanceEst);
+  // Each day's GOAL = maintenance + its intent. Split the tracking history into clusters (a >4-day
+  // intake gap starts a new one): the most-recent cluster is the active run (use its stored daily
+  // targets, else maintenance + surplus); an OLDER tracked cluster is assumed to have been a cut, so
+  // its goal is maintenance − deficit; untracked days are neutral (maintenance).
+  const trackedDays = Object.keys(cal).filter((d) => cal[d] > 0 && d <= today).sort();
+  const clusters = []; let curC = [];
+  for (const d of trackedDays) { if (curC.length && (dms(d) - dms(curC[curC.length - 1])) / 86400000 > 4) { clusters.push(curC); curC = []; } curC.push(d); }
+  if (curC.length) clusters.push(curC);
+  const spans = clusters.map((c) => ({ start: c[0], end: c[c.length - 1] }));
+  const recentSpan = spans.length ? spans[spans.length - 1] : null;
+  const olderSpans = spans.slice(0, -1);
+  const inSpan = (ds, sp) => sp && ds >= sp.start && ds <= sp.end; // whole period, incl. un-logged days
+  const goalForDay = (ds) => {
+    const m = maintFor(ds);
+    if (inSpan(ds, recentSpan)) return Math.round(targetCalFor(ds, targets, m + SURPLUS));
+    if (olderSpans.some((sp) => inSpan(ds, sp))) return Math.round(m - DEFICIT);
+    return Math.round(m);
+  };
+  // calorie calendar (week columns, like the workout heatmap) — diverging color by intake/goal ratio
   const cols = [], months = []; let prevMon = -1;
   for (let w = 0; w < weeks; w++) {
     const col = [];
     for (let d = 0; d < 7; d++) {
       const ds = allDates[w * 7 + d];
       const has = Object.prototype.hasOwnProperty.call(cal, ds), future = ds > today;
-      const tgt = targetCalFor(ds, targets, goalCal);
+      const tgt = goalForDay(ds);
       const ratio = has && tgt > 0 ? cal[ds] / tgt : 0;
       col.push({ date: ds, has: has && !future, ratio: Math.round(ratio * 100) / 100, color: (has && !future) ? calorieColor(ratio) : null, today: ds === today });
     }
@@ -78,27 +109,13 @@ function buildNutritionLog(rows, weights, goalCal, maintenanceEst, today, calTar
     const denom = n * sxx - sx * sx;
     if (denom) weight_slope_wk = Math.round(((n * sxy - sx * sy) / denom) * 7 * 10) / 10;
   }
-  // Per-day curves for the trend plot. maintenance = the formula "as of" each day (its scientific
-  // truth — flat at the anchor until there's enough data, then it bends on its own). goal = the
-  // actual stored daily target where one exists; days before we tracked a target fall back to that
-  // day's maintenance (i.e. assume no surplus was running back then), never a constant +surplus.
-  const intakeByDay = Object.entries(cal).map(([date, calories]) => ({ date, calories }));
+  // Trend-plot curves, from the same per-day maintenance + cluster-aware goal the heatmap uses.
   const firstData = (calSeries[0] && calSeries[0].date) || (weight_series[0] && weight_series[0].date) || today;
-  const GOAL_CARRY_DAYS = 7;  // a stored daily goal only "counts" for up to this many days; beyond a
-                              // gap it reverts to maintenance, so one stale old target can't paint
-                              // months of history as a surplus that wasn't actually being run.
-  const dms = (d) => Date.parse(d + 'T12:00:00Z');
   const maint_series = [], goal_series = [];
   for (const ds of allDates) {
     if (ds > today || ds < firstData) continue;
-    const wUpTo = (weights || []).filter((w) => w.date <= ds);
-    const iUpTo = intakeByDay.filter((x) => x.date <= ds);
-    const m = estimateMaintenance({ weights: wUpTo, intakeByDay: iUpTo, today: ds }).maintenance;
-    maint_series.push({ date: ds, v: m });
-    let best = null;
-    for (const t of targets) { if (t.date <= ds) best = t; else break; }
-    const fresh = best && (dms(ds) - dms(best.date)) / 86400000 <= GOAL_CARRY_DAYS;
-    goal_series.push({ date: ds, v: Math.round(fresh ? best.calories : m) });  // recent goal, else maintenance
+    maint_series.push({ date: ds, v: Math.round(maintFor(ds)) });
+    goal_series.push({ date: ds, v: goalForDay(ds) });
   }
   return {
     weeks: cols, months,

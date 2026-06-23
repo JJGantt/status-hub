@@ -198,17 +198,21 @@ body.touch .page-ai .airow{height:auto;flex:1 1 auto;min-height:0}
 .dex-exp>.dex-head{cursor:pointer}
 .dex-n{font-weight:600}
 .dex-caret{color:#8b96a5;font-size:11px;margin-right:6px;display:inline-block}
-.dex-macros{display:flex;flex-wrap:wrap}
+/* one row, never wrapping — chips + time + action buttons stay in line; if a very narrow
+   screen can't fit them, it scrolls horizontally (hidden bar) rather than dropping to a 2nd row */
+.dex-macros{display:flex;flex-wrap:nowrap;align-items:center;overflow-x:auto;scrollbar-width:none}
+.dex-macros::-webkit-scrollbar{display:none}
+.dex-macros>*{flex:0 0 auto}
 .dex-ings{margin:6px 0 2px 14px;padding-left:8px;border-left:1px solid #222a33}
 .dex-ings.hidden{display:none}
 .ding{padding:4px 0;display:flex;flex-wrap:wrap;align-items:center;gap:0 4px}
 .ding-n{font-size:12px;color:#c7ced8;margin-right:6px}
-.dset{display:inline-block;background:#0e1318;border-radius:6px;padding:3px 8px;margin:2px 5px 2px 0;font-size:12px;color:#c7ced8}
+.dset{display:inline-block;background:#0e1318;border-radius:6px;padding:3px 7px;margin:2px 4px 2px 0;font-size:11.5px;color:#c7ced8}
 .wk-set{cursor:pointer;transition:box-shadow .12s,background .12s}      /* logged set chip — tap to edit weight/reps */
 .wk-set:hover{background:#16202c;box-shadow:inset 0 0 0 1px #2f4566}
 .dot{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:8px;vertical-align:middle}
 /* nutrition add-at-now: "+ now" button on entry/ingredient rows + confirm popup */
-.addbtn{background:#1b2a40;border:1px solid #2f4566;color:#7fb0ff;border-radius:6px;padding:3px 9px;margin:2px 0 2px 4px;font-size:11px;font-weight:600;cursor:pointer;line-height:1}
+.addbtn{background:#1b2a40;border:1px solid #2f4566;color:#7fb0ff;border-radius:6px;padding:3px 8px;margin:2px 0 2px 3px;font-size:11px;font-weight:600;cursor:pointer;line-height:1}
 .addbtn:hover{background:#23354f}
 /* staged meals: a STAGED badge + a green Commit button (replaces "+ now" on staged rows) */
 .stagedbadge{display:inline-block;font-size:9px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:#d6c042;background:rgba(214,192,66,.13);border:1px solid rgba(214,192,66,.4);border-radius:5px;padding:1px 5px;margin-left:6px;vertical-align:middle}
@@ -217,8 +221,11 @@ body.touch .page-ai .airow{height:auto;flex:1 1 auto;min-height:0}
 .commitbtn{background:#16361f;border-color:#2e6b3f;color:#86e3a6}
 .commitbtn:hover{background:#1d4628}
 /* ⋯ row-actions button + its popover menu (edit / delete) */
-.morebtn{background:#222a33;border:1px solid #36404c;color:#c7ced8;border-radius:6px;padding:3px 9px;margin:2px 0 2px 4px;font-size:13px;font-weight:700;cursor:pointer;line-height:1}
+.morebtn{background:#222a33;border:1px solid #36404c;color:#c7ced8;border-radius:6px;padding:3px 8px;margin:2px 0 2px 3px;font-size:13px;font-weight:700;cursor:pointer;line-height:1}
 .morebtn:hover{background:#2b3540}
+/* On phone the FAB stack floats over the bottom-right — leave clearance so the last food row's
+   buttons aren't hidden under it and stay tappable/scrollable. */
+body.touch #nutinfo{padding-bottom:140px}
 .rowmenu{position:fixed;z-index:70;background:#1b222a;border:1px solid #2a323c;border-radius:10px;padding:4px;box-shadow:0 10px 30px rgba(0,0,0,.6);min-width:150px}
 .rowmenu-item{display:block;width:100%;text-align:left;background:none;border:0;color:#e8eaed;padding:9px 12px;border-radius:7px;font-size:13px;cursor:pointer}
 .rowmenu-item:hover{background:#26303b}

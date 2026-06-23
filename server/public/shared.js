@@ -18,21 +18,21 @@ export function hueColor(t){const h=120*(1-Math.max(0,Math.min(1,t)));return 'hs
 // calPts/wPts: [{date,v}]. maint: dashed reference value on the calorie (left) axis.
 // Returns inline SVG sized via viewBox (full card width × ~120px). Null/sparse-safe.
 const CAL_COLOR='#3b82f6', W_COLOR='#a78bfa';
-export function dualPlot(calPts,wPts,maint,target){
+export function dualPlot(calPts,wPts,maintPts,targetPts){
  const W=600,H=120,L=46,R=46,T=10,B=18; // margins leave room for axis tick labels
  const px0=L,px1=W-R,py0=T,py1=H-B;
  const cv=calPts.filter(p=>isFinite(p.v)),wv=wPts.filter(p=>isFinite(p.v));
+ const mv=(maintPts||[]).filter(p=>isFinite(p.v)),tv=(targetPts||[]).filter(p=>isFinite(p.v));
  if(cv.length<1&&wv.length<1)return '<div class=nplot-empty>no data yet</div>';
- // shared x domain over all dates present
- const all=[...cv,...wv].map(p=>p.date).filter(Boolean).sort();
+ // shared x domain over all dates present (cal, weight, and the maintenance/target curves)
+ const all=[...cv,...wv,...mv,...tv].map(p=>p.date).filter(Boolean).sort();
  const xMin=all[0],xMax=all[all.length-1];
  const dms=d=>Date.parse(d+'T12:00:00Z');
  const xspan=(dms(xMax)-dms(xMin))||1;
  const X=d=>cv.length+wv.length<2?(px0+px1)/2:px0+(px1-px0)*((dms(d)-dms(xMin))/xspan);
- // left (cal) axis domain — include maintenance line so it stays on-canvas
- let cMin=cv.length?Math.min(...cv.map(p=>p.v)):0,cMax=cv.length?Math.max(...cv.map(p=>p.v)):1;
- if(isFinite(maint)){cMin=Math.min(cMin,maint);cMax=Math.max(cMax,maint);}
- if(isFinite(target)){cMin=Math.min(cMin,target);cMax=Math.max(cMax,target);}
+ // left (cal) axis domain — include the maintenance & target curves so they stay on-canvas
+ const calVals=[...cv,...mv,...tv].map(p=>p.v);
+ let cMin=calVals.length?Math.min(...calVals):0,cMax=calVals.length?Math.max(...calVals):1;
  const cspan=(cMax-cMin)||1; const YC=v=>py1-(py1-py0)*((v-cMin)/cspan);
  // right (weight) axis domain
  let wMin=wv.length?Math.min(...wv.map(p=>p.v)):0,wMax=wv.length?Math.max(...wv.map(p=>p.v)):1;
@@ -43,10 +43,13 @@ export function dualPlot(calPts,wPts,maint,target){
  s+='<line x1='+px0+' y1='+py0+' x2='+px0+' y2='+py1+' stroke="#2a313a" stroke-width=1 />';
  s+='<line x1='+px1+' y1='+py0+' x2='+px1+' y2='+py1+' stroke="#2a313a" stroke-width=1 />';
  s+='<line x1='+px0+' y1='+py1+' x2='+px1+' y2='+py1+' stroke="#2a313a" stroke-width=1 />';
- // dashed refs (left/cal axis): maintenance (neutral warm-gray — kept well clear of the violet
- // weight line so the two never read as related) and target/goal (green)
- if(isFinite(maint)){const y=YC(maint).toFixed(1);s+='<line x1='+px0+' y1='+y+' x2='+px1+' y2='+y+' stroke="#9a948a" stroke-width=1 stroke-dasharray="5 4" />';}
- if(isFinite(target)){const y=YC(target).toFixed(1);s+='<line x1='+px0+' y1='+y+' x2='+px1+' y2='+y+' stroke="#22c55e" stroke-width=1 stroke-dasharray="4 3" />';}
+ // dashed reference CURVES (left/cal axis): maintenance (neutral warm-gray — kept clear of the
+ // violet weight line) and target/goal (green). Each is per-day, so they bend over time instead of
+ // being flat — maintenance is the scientific truth, target is the actual daily goal that was set.
+ if(mv.length>=2)s+='<path d="'+path(mv,YC)+'" fill=none stroke="#9a948a" stroke-width=1.2 stroke-dasharray="5 4" stroke-linejoin=round stroke-linecap=round />';
+ else if(mv.length===1)s+='<circle cx='+X(mv[0].date).toFixed(1)+' cy='+YC(mv[0].v).toFixed(1)+' r=1.6 fill="#9a948a" />';
+ if(tv.length>=2)s+='<path d="'+path(tv,YC)+'" fill=none stroke="#22c55e" stroke-width=1.2 stroke-dasharray="4 3" stroke-linejoin=round stroke-linecap=round />';
+ else if(tv.length===1)s+='<circle cx='+X(tv[0].date).toFixed(1)+' cy='+YC(tv[0].v).toFixed(1)+' r=1.6 fill="#22c55e" />';
  // weight line first (behind), then cal line
  if(wv.length>=2)s+='<path d="'+path(wv,YW)+'" fill=none stroke="'+W_COLOR+'" stroke-width=1.6 stroke-linejoin=round stroke-linecap=round />';
  else if(wv.length===1)s+='<circle cx='+X(wv[0].date).toFixed(1)+' cy='+YW(wv[0].v).toFixed(1)+' r=2 fill="'+W_COLOR+'" />';

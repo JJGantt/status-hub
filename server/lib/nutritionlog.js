@@ -1,6 +1,7 @@
 'use strict';
 // Nutrition log: calorie-adherence calendar (diverging color by intake/target) + calorie/weight trend.
 const { MON, dayBucketOf } = require('./dates');
+const { estimateMaintenance } = require('./maintenance');
 
 function hslToHex(h, s, l) {
   const c = (1 - Math.abs(2 * l - 1)) * s, x = c * (1 - Math.abs(((h / 60) % 2) - 1)), m = l - c / 2;
@@ -77,9 +78,32 @@ function buildNutritionLog(rows, weights, goalCal, maintenanceEst, today, calTar
     const denom = n * sxx - sx * sx;
     if (denom) weight_slope_wk = Math.round(((n * sxy - sx * sy) / denom) * 7 * 10) / 10;
   }
+  // Per-day curves for the trend plot. maintenance = the formula "as of" each day (its scientific
+  // truth — flat at the anchor until there's enough data, then it bends on its own). goal = the
+  // actual stored daily target where one exists; days before we tracked a target fall back to that
+  // day's maintenance (i.e. assume no surplus was running back then), never a constant +surplus.
+  const intakeByDay = Object.entries(cal).map(([date, calories]) => ({ date, calories }));
+  const firstData = (calSeries[0] && calSeries[0].date) || (weight_series[0] && weight_series[0].date) || today;
+  const GOAL_CARRY_DAYS = 7;  // a stored daily goal only "counts" for up to this many days; beyond a
+                              // gap it reverts to maintenance, so one stale old target can't paint
+                              // months of history as a surplus that wasn't actually being run.
+  const dms = (d) => Date.parse(d + 'T12:00:00Z');
+  const maint_series = [], goal_series = [];
+  for (const ds of allDates) {
+    if (ds > today || ds < firstData) continue;
+    const wUpTo = (weights || []).filter((w) => w.date <= ds);
+    const iUpTo = intakeByDay.filter((x) => x.date <= ds);
+    const m = estimateMaintenance({ weights: wUpTo, intakeByDay: iUpTo, today: ds }).maintenance;
+    maint_series.push({ date: ds, v: m });
+    let best = null;
+    for (const t of targets) { if (t.date <= ds) best = t; else break; }
+    const fresh = best && (dms(ds) - dms(best.date)) / 86400000 <= GOAL_CARRY_DAYS;
+    goal_series.push({ date: ds, v: Math.round(fresh ? best.calories : m) });  // recent goal, else maintenance
+  }
   return {
     weeks: cols, months,
     cal_avg7, maintenance: maintenanceEst, goal: goalCal, cal_series: calSeries, weight_series,
+    maint_series, goal_series,
     weight_now: wIn.length ? wIn[wIn.length - 1].weight : null, weight_slope_wk,
   };
 }

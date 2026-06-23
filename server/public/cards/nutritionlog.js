@@ -20,7 +20,9 @@ export function render(s){
  const wPts=(N.weight_series||[]).map(p=>({date:p.date,v:p.w}));
  const maint=isFinite(N.maintenance)?N.maintenance:undefined;
  const goal=isFinite(N.goal)?N.goal:undefined;
- const plot=dualPlot(calPts,wPts,maint,goal);
+ const maintPts=(N.maint_series||[]).map(p=>({date:p.date,v:p.v}));
+ const goalPts=(N.goal_series||[]).map(p=>({date:p.date,v:p.v}));
+ const plot=dualPlot(calPts,wPts,maintPts,goalPts);
  // legend + current-value annotations at the right edge
  const calAnno=N.cal_avg7!=null?'<b style="color:'+CAL_COLOR+'">'+N.cal_avg7+'</b> kcal':'';
  let wAnno='';

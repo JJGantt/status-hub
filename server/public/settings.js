@@ -1,5 +1,6 @@
 // Settings panel (gear in the Raspy header). Reads/writes the shared app_settings via /api/settings:
-//   - voice routing mode (subscription = free claude -p on Mac/Pi; sdk = warm Agent SDK everywhere),
+//   - chat-box route (which of the two routes the TYPED box uses: efficiency=fast/Haiku/API,
+//     accuracy=power/Opus+thinking). The two FAB buttons + wake words carry their own tier and ignore this.
 //   - per-device trailing-silence seconds (how long of a pause ends a voice command).
 // Self-skips on the TV wall. Each control saves on change; no explicit save button.
 if (!document.body.classList.contains('tv')) boot();
@@ -22,7 +23,7 @@ async function save(key, value) {
 async function open() {
   let cur = {};
   try { cur = await (await fetch('/api/settings')).json(); } catch (_) {}
-  const routing = cur.routing_mode === 'sdk' ? 'sdk' : 'subscription';
+  const route = cur.chatbox_route === 'fast' ? 'fast' : 'power';
   const sil = (k, d) => { const n = parseFloat(cur[k]); return Number.isFinite(n) && n > 0 ? n : d; };
   const wrOn = !['0', 'false', 'off', 'no'].includes(String(cur.weight_reminder_enabled ?? '1').toLowerCase());
   const wrMode = cur.weight_reminder_mode === 'dynamic' ? 'dynamic' : 'manual';
@@ -35,10 +36,10 @@ async function open() {
     '<div class="settings-panel" role="dialog" aria-modal="true">' +
       '<div class="settings-h"><h3>Settings</h3><button class="settings-x" type="button" aria-label="Close">✕</button></div>' +
 
-      '<div class="settings-sec">Voice routing</div>' +
+      '<div class="settings-sec">Chat box route</div>' +
       '<div class="settings-seg" id="set-routing">' +
-        '<button type="button" data-v="subscription"' + (routing === 'subscription' ? ' class="on"' : '') + '>Subscription</button>' +
-        '<button type="button" data-v="sdk"' + (routing === 'sdk' ? ' class="on"' : '') + '>SDK</button>' +
+        '<button type="button" data-v="fast"' + (route === 'fast' ? ' class="on"' : '') + '>Efficiency</button>' +
+        '<button type="button" data-v="power"' + (route === 'power' ? ' class="on"' : '') + '>Accuracy</button>' +
       '</div>' +
 
       '<div class="settings-sec">Trailing silence (seconds)</div>' +
@@ -71,7 +72,7 @@ async function open() {
   back.querySelector('#set-routing').addEventListener('click', (e) => {
     const b = e.target.closest('[data-v]'); if (!b) return;
     back.querySelectorAll('#set-routing button').forEach((x) => x.classList.toggle('on', x === b));
-    save('routing_mode', b.dataset.v);
+    save('chatbox_route', b.dataset.v);
   });
   back.querySelectorAll('.settings-num').forEach((inp) => {
     inp.addEventListener('change', () => {

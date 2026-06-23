@@ -15,6 +15,9 @@ settings:
     PRODUCT_BUNDLE_IDENTIFIER: com.jaredgantt.statushub
     GENERATE_INFOPLIST_FILE: YES
     INFOPLIST_KEY_CFBundleDisplayName: Status Hub
+    # Required for getUserMedia in the WKWebView. Without it iOS silently denies the mic and the app
+    # never appears under Settings → Privacy → Microphone.
+    INFOPLIST_KEY_NSMicrophoneUsageDescription: Status Hub uses the microphone for voice commands.
 targets:
   StatusHub:
     type: application

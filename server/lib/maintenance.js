@@ -92,6 +92,17 @@ function weightedAvg(days, todayStr) {
 
 // weights: [{date:'YYYY-MM-DD', weight:Number}]  (full history, any order)
 // intakeByDay: [{date:'YYYY-MM-DD', calories:Number}]  (completed days only — caller excludes today)
+// Macro targets for a given calorie goal + bodyweight. Protein & fat anchor to bodyweight
+// (they scale as you grow); carbs absorb whatever calories remain. Pure function so it can
+// derive the goal for the live day OR any historical day (from that day's weight + cal target).
+function macroTargets(calories, bodyweight) {
+  const bw = bodyweight || FALLBACK_WEIGHT;
+  const protein_g = roundG(PROTEIN_PER_LB * bw);
+  const fat_g = roundG(Math.max(FAT_PER_LB * bw, (FAT_MIN_PCT_CAL * calories) / 9));
+  const carbs_g = Math.max(0, roundG((calories - protein_g * 4 - fat_g * 9) / 4));
+  return { protein_g, carbs_g, fat_g };
+}
+
 function estimateMaintenance({ weights = [], intakeByDay = [], today }) {
   const inSpan = (d) => dayIndex(d.date, today) >= -SPAN_DAYS;
   const recentW = weights.filter(inSpan);
@@ -123,9 +134,7 @@ function estimateMaintenance({ weights = [], intakeByDay = [], today }) {
   const bodyweight = (currentWeight != null ? currentWeight
     : (sortedW.length ? sortedW[sortedW.length - 1].weight : null)) || FALLBACK_WEIGHT;
   const calories = Math.round((maintenance + SURPLUS) / 10) * 10;
-  const protein_g = roundG(PROTEIN_PER_LB * bodyweight);
-  const fat_g = roundG(Math.max(FAT_PER_LB * bodyweight, (FAT_MIN_PCT_CAL * calories) / 9));
-  const carbs_g = Math.max(0, roundG((calories - protein_g * 4 - fat_g * 9) / 4));
+  const { protein_g, carbs_g, fat_g } = macroTargets(calories, bodyweight);
 
   return {
     source,                                   // 'live' | 'calibrating'
@@ -146,4 +155,4 @@ function estimateMaintenance({ weights = [], intakeByDay = [], today }) {
   };
 }
 
-module.exports = { estimateMaintenance, ANCHOR_MAINTENANCE, SURPLUS, HALF_LIFE_DAYS, KCAL_PER_LB };
+module.exports = { estimateMaintenance, macroTargets, ANCHOR_MAINTENANCE, SURPLUS, HALF_LIFE_DAYS, KCAL_PER_LB };

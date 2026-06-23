@@ -77,23 +77,22 @@ async function loadNutDay(date){
  let j; try{ j=await (await fetch('/api/nutrition-day?date='+date)).json(); }catch(_){ return; }
  if(tok!==nutReq)return; // a newer cell was selected mid-flight — drop this stale response
  const ni=document.getElementById('nutinfo');
- const sp=ni.closest('.detailpanel'), stick=sp&&(sp.scrollHeight-sp.scrollTop-sp.clientHeight<60); // keep pinned to newest if at bottom
- if(!j.entries||!j.entries.length){ ni.innerHTML='<div class=heath>'+date+'</div><div class=bi-none>No food logged</div>'; return; }
- // day header: calories shown as actual / target (signed Δ, colored), then P/C/F totals.
- let calHdr;
- if(j.target_cal>0){
-  const delta=j.total_cal-j.target_cal;
-  const sign=delta>0?'+':(delta<0?'−':'');
-  const col=j.delta_color||'#c7ced8';
-  calHdr='<span class=dset>'+j.total_cal+' / '+j.target_cal+' cal'+
-    ' <span style="color:'+col+';font-weight:600">('+sign+Math.abs(delta)+')</span></span>';
- } else {
-  calHdr='<span class=dset>'+j.total_cal+' kcal</span>';
- }
- let h='<div class=heath>'+date+'</div><div class=dtot>'+calHdr+
-   '<span class=dset>'+mn(j.total_protein)+'g P</span>'+
-   '<span class=dset>'+mn(j.total_carbs)+'g C</span>'+
-   '<span class=dset>'+mn(j.total_fat)+'g F</span></div>';
+ const sp=ni.closest('.detailpanel'), atTop=!sp||sp.scrollTop<60; // newest entries render on top now
+ const dt=new Date(date+'T12:00:00');
+ const dlabel=dt.toLocaleDateString('en-US',{weekday:'short'})+' · '+dt.toLocaleDateString('en-US',{month:'short',day:'numeric'});
+ if(!j.entries||!j.entries.length){ ni.innerHTML='<div class=nuthdr><div class=nuthdr-date>'+dlabel+'</div></div><div class=bi-none>No food logged</div>'; return; }
+ // Header: a distinct summary band — date + consumed/goal for cal, protein, carbs, fat. The goals
+ // are THIS day's own dynamic targets (from its calorie target + bodyweight). Set apart from the rows.
+ const tm=j.target_macros||{};
+ let calLbl='cal';
+ if(j.target_cal>0){ const d=j.total_cal-j.target_cal,s=d>0?'+':(d<0?'−':''); calLbl='cal <span class=nh-delta style="color:'+(j.delta_color||'#8b96a5')+'">('+s+Math.abs(d)+')</span>'; }
+ const stat=(v,goal,lbl)=>'<div class=nh-stat><div class=nh-v>'+v+(goal!=null?'<span class=nh-goal>/'+goal+'</span>':'')+'</div><div class=nh-l>'+lbl+'</div></div>';
+ let h='<div class=nuthdr><div class=nuthdr-date>'+dlabel+'</div><div class=nuthdr-stats>'+
+   stat(j.total_cal, j.target_cal>0?j.target_cal:null, calLbl)+
+   stat(mn(j.total_protein), tm.protein_g!=null?tm.protein_g:null, 'protein')+
+   stat(mn(j.total_carbs), tm.carbs_g!=null?tm.carbs_g:null, 'carbs')+
+   stat(mn(j.total_fat), tm.fat_g!=null?tm.fat_g:null, 'fat')+
+ '</div></div>';
  j.entries.forEach((e,i)=>{
   const t=fmtTime(e.occurred_at);
   const ings=Array.isArray(e.ingredients)?e.ingredients:null;
@@ -120,7 +119,7 @@ async function loadNutDay(date){
   h+='</div>';
  });
  ni.innerHTML=h;
- if(sp&&stick)sp.scrollTop=sp.scrollHeight; // scroll to the newest entry
+ if(sp&&atTop)sp.scrollTop=0; // newest is on top — keep it in view
  lastDayEntries=j.entries; lastDayDate=date; // cache for the add-popup lookups
 }
 function selectNutDay(date){ if(date===nutSelDate)return; nutSelDate=date; markNutCell(date); loadNutDay(date); }

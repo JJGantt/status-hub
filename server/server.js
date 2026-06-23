@@ -5,7 +5,7 @@ const fs = require('fs');
 const path = require('path');
 const { createClient } = require('@supabase/supabase-js');
 const WebSocket = require('ws');
-const { estimateMaintenance } = require('./lib/maintenance');
+const { estimateMaintenance, macroTargets } = require('./lib/maintenance');
 const pace = require('./lib/pace');
 const { computeVolume } = require('./lib/volume');
 const BODY_SVG = require('./lib/bodymap');
@@ -451,12 +451,13 @@ app.get('/api/nutrition-day', async (req, res) => {
     const next = localDate(new Date(Date.parse(date + 'T12:00:00Z') + 86400000));
     const isToday = date === nutritionWindow().day;
     const SEL = 'id,occurred_at,name,calories,protein_g,carbs_g,fat_g,ingredients,staged';
-    const [committed, stagedRows, targetRows, fallbackCal] = await Promise.all([
+    const [committed, stagedRows, targetRows, fallbackCal, dayWeight] = await Promise.all([
       sbRange(`nutrition_entries?occurred_at=gte.${date}T${hh}:00:00&occurred_at=lt.${next}T${hh}:00:00&staged=eq.false&select=${SEL}&order=occurred_at`),
-      // Staged meals (any day) always surface in the CURRENT day's list, pinned to the bottom.
+      // Staged meals (any day) always surface in the CURRENT day's list.
       isToday ? sbRange(`nutrition_entries?staged=eq.true&select=${SEL}&order=logged`) : Promise.resolve([]),
       sb('nutrition_targets?select=date,calories&order=date.asc'),
       currentMaintenanceCal(),
+      sb(`weight_log?date=lte.${date}&select=weight_lbs&order=date.desc&limit=1`),  // bodyweight as of this day
     ]);
     // Day total counts ONLY committed (eaten) entries — staged meals never count.
     let total_cal = 0, total_protein = 0, total_carbs = 0, total_fat = 0;
@@ -465,18 +466,23 @@ app.get('/api/nutrition-day', async (req, res) => {
       total_carbs += Number(e.carbs_g) || 0; total_fat += Number(e.fat_g) || 0;
     }
     total_cal = Math.round(total_cal);
-    const entries = committed.concat(stagedRows || []); // committed (by time) then staged (bottom)
+    // Newest first: staged meals on top, then committed entries reverse-chronologically.
+    const entries = (stagedRows || []).concat(committed.slice().reverse());
     // historical target for this day: most-recent nutrition_targets snapshot with date <= day
     // (fallback = live maintenance) — same selection buildNutritionLog uses for the calendar.
     const targets = (targetRows || []).map((t) => ({ date: String(t.date).slice(0, 10), calories: Number(t.calories) || 0 }))
       .filter((t) => t.calories > 0).sort((a, b) => (a.date < b.date ? -1 : 1));
     const target_cal = Math.round(targetCalFor(date, targets, fallbackCal));
     const delta_color = target_cal > 0 ? calorieColor(total_cal / target_cal) : null;
+    // Per-day macro GOALS, derived from this day's calorie target + bodyweight as of this day
+    // (the same dynamic formula the live target uses, so each day has its own historical goal).
+    const bw = (dayWeight && dayWeight[0] && Number(dayWeight[0].weight_lbs)) || null;
+    const target_macros = target_cal > 0 ? macroTargets(target_cal, bw) : null;
     res.json({
       date,
       total_cal, total_protein: Math.round(total_protein),
       total_carbs: Math.round(total_carbs), total_fat: Math.round(total_fat),
-      target_cal, delta_color,
+      target_cal, target_macros, delta_color,
       entries,
     });
   } catch (e) { res.status(500).json({ error: String(e.message || e) }); }

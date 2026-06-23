@@ -190,7 +190,16 @@ body.touch .page-ai{overflow:hidden}
 body.touch .page-ai .pagefit{height:100%;min-height:0;padding-bottom:20px}
 body.touch .page-ai .airow{height:auto;flex:1 1 auto;min-height:0}
 .dex{padding:9px 0;border-top:1px solid #222a33}
-.dtot{margin-bottom:6px}
+/* nutrition day-detail header — a distinct summary band (date + consumed/goal per macro),
+   visually separated from the item rows below it */
+.nuthdr{background:#11171e;border:1px solid #222a33;border-radius:10px;padding:10px 13px;margin-bottom:10px}
+.nuthdr-date{font-size:12px;font-weight:700;color:#8b96a5;text-transform:uppercase;letter-spacing:.05em;margin-bottom:9px}
+.nuthdr-stats{display:flex;flex-wrap:wrap;gap:9px 18px}
+.nh-stat{display:flex;flex-direction:column;gap:2px}
+.nh-v{font-size:18px;font-weight:800;color:#e6eaf0;line-height:1;white-space:nowrap}
+.nh-goal{font-size:12px;font-weight:600;color:#8b96a5;margin-left:1px}
+.nh-l{font-size:10px;color:#8b96a5;text-transform:uppercase;letter-spacing:.04em;white-space:nowrap}
+.nh-delta{font-weight:700}
 .dex-head{display:flex;flex-direction:column;gap:4px}
 .wk-exhead{display:flex;align-items:center;justify-content:space-between;gap:8px}
 .wk-exhead .addbtn{flex:0 0 auto}

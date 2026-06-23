@@ -41,6 +41,11 @@ targets:
     deploymentTarget: "13.0"
     sources:
       - path: Sources
+    entitlements:
+      path: StatusHubMac.entitlements
+      properties:
+        # Hardened runtime blocks the mic without this; needed for getUserMedia in the web view.
+        com.apple.security.device.audio-input: true
     settings:
       base:
         PRODUCT_NAME: Status Hub

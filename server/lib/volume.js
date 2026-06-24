@@ -1,5 +1,12 @@
 'use strict';
-const { dayBucketOf } = require('./dates');
+const { dayBucketOf, TZ } = require('./dates');
+
+// "Now" as a wall-clock epoch in the DISPLAY timezone, parsed the same naive way as occurred_at. The
+// set timestamps are naive local time (no offset), so on a UTC server (Fly) `new Date(occurred_at)`
+// reads them 4h early; comparing against this keeps the 3h bout-live gate correct on any server tz.
+function nowLocalTs() {
+  return new Date(new Date().toLocaleString('sv-SE', { timeZone: TZ }).replace(' ', 'T')).getTime();
+}
 // Weekly per-muscle training volume for the gamified workout gauges.
 //
 // Volume = Σ (set × contribution) over a trailing 7 training days (bucketed on the DAY_START_HOUR
@@ -91,7 +98,7 @@ function computeVolume(setRows, muscleRows, window, targets) {
   // The "+N" badge reflects the CURRENT bout — the most recent one, but only while it's still live
   // (a set within the last BOUT_GAP_MS). Once 3h pass with no set the bout is closed and "+N" clears.
   const lastBout = bouts.length ? bouts[bouts.length - 1] : null;
-  const boutRaw = (lastBout && Date.now() - lastBout.lastTs <= BOUT_GAP_MS) ? lastBout.raw : {};
+  const boutRaw = (lastBout && nowLocalTs() - lastBout.lastTs <= BOUT_GAP_MS) ? lastBout.raw : {};
   const groups = GROUPS.map(g => ({
     group: g.group,
     muscles: g.muscles.map(([slug, label]) => {

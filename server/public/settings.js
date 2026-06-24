@@ -34,6 +34,9 @@ async function open() {
   const cMod = ['haiku', 'sonnet', 'opus'].includes(cur.custom_model) ? cur.custom_model : 'sonnet';
   const cThink = ['none', 'low', 'high'].includes(cur.custom_think) ? cur.custom_think : 'low';
   const cRun = cur.custom_runner === 'api' ? 'api' : 'local';
+  const agentOn = ['1', 'true', 'on', 'yes'].includes(String(cur.agent_mode ?? '0').toLowerCase());
+  const agentCwd = (cur.agent_cwd || '').replace(/&/g, '&amp;').replace(/"/g, '&quot;');
+  const resetMin = (() => { const s = parseFloat(cur.session_reset_s); return Number.isFinite(s) && s > 0 ? Math.round(s / 60) : 5; })();
   const wfThresh = sil('voiceid_threshold', 0.30);
   const wfPause = sil('wakefree_pause_s', 2);
 
@@ -65,6 +68,18 @@ async function open() {
         '<button type="button" data-v="local"' + (cRun === 'local' ? ' class="on"' : '') + '>Local</button>' +
         '<button type="button" data-v="api"' + (cRun === 'api' ? ' class="on"' : '') + '>API</button>' +
       '</div>' +
+
+      '<div class="settings-sec">Full agent mode</div>' +
+      '<div class="settings-seg" id="set-agent-mode">' +
+        '<button type="button" data-v="0"' + (agentOn ? '' : ' class="on"') + '>Off</button>' +
+        '<button type="button" data-v="1"' + (agentOn ? ' class="on"' : '') + '>On</button>' +
+      '</div>' +
+      '<label class="settings-row"><span>Working directory</span>' +
+        '<input class="settings-text" type="text" id="set-agent-cwd" placeholder="~" value="' + agentCwd + '"></label>' +
+
+      '<div class="settings-sec">Session</div>' +
+      '<label class="settings-row"><span>Idle reset (minutes)</span>' +
+        '<input class="settings-num" type="number" min="1" max="240" step="1" inputmode="numeric" id="set-reset-min" value="' + resetMin + '"></label>' +
 
       '<div class="settings-sec">Trailing silence (seconds)</div>' +
       row('Phone', 'phone_silence_s', sil('phone_silence_s', 3)) +
@@ -130,6 +145,21 @@ async function open() {
       back.querySelectorAll('#' + id + ' button').forEach((x) => x.classList.toggle('on', x === b));
       save(key, b.dataset.v);
     }));
+  // Full agent mode — toggling either way resets the hub conversation, since the toolset + framing differ
+  // and a resumed session shouldn't straddle the switch.
+  back.querySelector('#set-agent-mode').addEventListener('click', (e) => {
+    const b = e.target.closest('[data-v]'); if (!b) return;
+    back.querySelectorAll('#set-agent-mode button').forEach((x) => x.classList.toggle('on', x === b));
+    save('agent_mode', b.dataset.v);
+    fetch('/api/voice-reset', { method: 'POST' }).catch(() => {});
+  });
+  back.querySelector('#set-agent-cwd').addEventListener('change', (e) => save('agent_cwd', e.target.value.trim()));
+  // Idle reset is shown in minutes but stored in seconds (session_reset_s). No data-key, so the generic
+  // positive-number handler below skips it.
+  back.querySelector('#set-reset-min').addEventListener('change', (e) => {
+    const m = parseInt(e.target.value, 10);
+    if (Number.isFinite(m) && m > 0) save('session_reset_s', Math.round(m * 60));
+  });
   back.querySelectorAll('.settings-num').forEach((inp) => {
     inp.addEventListener('change', () => {
       const v = parseFloat(inp.value);

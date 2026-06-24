@@ -35,6 +35,7 @@ async function open() {
   const cThink = ['none', 'medium', 'max'].includes(cur.custom_think) ? cur.custom_think : 'medium';
   const cRun = cur.custom_runner === 'api' ? 'api' : 'local';
   const agentOn = ['1', 'true', 'on', 'yes'].includes(String(cur.agent_mode ?? '0').toLowerCase());
+  const injectOn = ['1', 'true', 'on', 'yes'].includes(String(cur.voice_inject_mode ?? '0').toLowerCase());
   const agentCwdRaw = cur.agent_cwd || '';
   const resetMin = (() => { const s = parseFloat(cur.session_reset_s); return Number.isFinite(s) && s > 0 ? Math.round(s / 60) : 5; })();
   // Working-directory picker: options are the repo dirs the worker publishes (agent_cwd_options).
@@ -110,6 +111,12 @@ async function open() {
       '<label class="settings-row"><span>End-of-command pause (s)</span>' +
         '<input class="settings-num" type="number" min="0.5" max="6" step="0.5" inputmode="decimal" data-key="wakefree_pause_s" value="' + wfPause + '"></label>' +
 
+      '<div class="settings-sec">Voice inject mode</div>' +
+      '<div class="settings-seg" id="set-inject-mode">' +
+        '<button type="button" data-v="0"' + (injectOn ? '' : ' class="on"') + '>Off</button>' +
+        '<button type="button" data-v="1"' + (injectOn ? ' class="on"' : '') + '>On</button>' +
+      '</div>' +
+
       '<div class="settings-sec">Weight reminder</div>' +
       '<div class="settings-seg" id="set-wr-enabled">' +
         '<button type="button" data-v="0"' + (wrOn ? '' : ' class="on"') + '>Off</button>' +
@@ -146,6 +153,11 @@ async function open() {
     const b = e.target.closest('[data-v]'); if (!b) return;
     back.querySelectorAll('#set-wf-route button').forEach((x) => x.classList.toggle('on', x === b));
     save('wakefree_route', b.dataset.v);   // wakefree.py reads it live; listener bridges it to the ESP
+  });
+  back.querySelector('#set-inject-mode').addEventListener('click', (e) => {
+    const b = e.target.closest('[data-v]'); if (!b) return;
+    back.querySelectorAll('#set-inject-mode button').forEach((x) => x.classList.toggle('on', x === b));
+    save('voice_inject_mode', b.dataset.v);   // listener: Mac-mic → focused window; Fly server mutes the ESP
   });
   // Custom-route knobs (model / thinking effort / runner) — used by any route set to Custom.
   [['set-cust-model', 'custom_model'], ['set-cust-think', 'custom_think'], ['set-cust-runner', 'custom_runner']]

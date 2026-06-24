@@ -23,14 +23,17 @@ async function save(key, value) {
 async function open() {
   let cur = {};
   try { cur = await (await fetch('/api/settings')).json(); } catch (_) {}
-  const route = cur.chatbox_route === 'fast' ? 'fast' : 'power';
+  const route = ['fast', 'power', 'custom'].includes(cur.chatbox_route) ? cur.chatbox_route : 'power';
   const sil = (k, d) => { const n = parseFloat(cur[k]); return Number.isFinite(n) && n > 0 ? n : d; };
   const wrOn = !['0', 'false', 'off', 'no'].includes(String(cur.weight_reminder_enabled ?? '1').toLowerCase());
   const wrMode = cur.weight_reminder_mode === 'dynamic' ? 'dynamic' : 'manual';
   const wrTime = /^\d{2}:\d{2}$/.test(cur.weight_reminder_time || '') ? cur.weight_reminder_time : '08:00';
   const surplusVal = Number.isFinite(parseInt(cur.surplus_cal, 10)) ? parseInt(cur.surplus_cal, 10) : 150;
   const wfOn = ['1', 'true', 'on', 'yes'].includes(String(cur.wakefree_enabled ?? '0').toLowerCase());
-  const wfRoute = cur.wakefree_route === 'power' ? 'power' : 'fast';
+  const wfRoute = ['fast', 'power', 'custom'].includes(cur.wakefree_route) ? cur.wakefree_route : 'fast';
+  const cMod = ['haiku', 'sonnet', 'opus'].includes(cur.custom_model) ? cur.custom_model : 'sonnet';
+  const cThink = ['none', 'low', 'high'].includes(cur.custom_think) ? cur.custom_think : 'low';
+  const cRun = cur.custom_runner === 'api' ? 'api' : 'local';
   const wfThresh = sil('voiceid_threshold', 0.30);
   const wfPause = sil('wakefree_pause_s', 2);
 
@@ -44,6 +47,23 @@ async function open() {
       '<div class="settings-seg" id="set-routing">' +
         '<button type="button" data-v="fast"' + (route === 'fast' ? ' class="on"' : '') + '>Efficiency</button>' +
         '<button type="button" data-v="power"' + (route === 'power' ? ' class="on"' : '') + '>Accuracy</button>' +
+        '<button type="button" data-v="custom"' + (route === 'custom' ? ' class="on"' : '') + '>Custom</button>' +
+      '</div>' +
+
+      '<div class="settings-sec">Custom route</div>' +
+      '<div class="settings-seg" id="set-cust-model">' +
+        '<button type="button" data-v="haiku"' + (cMod === 'haiku' ? ' class="on"' : '') + '>Haiku</button>' +
+        '<button type="button" data-v="sonnet"' + (cMod === 'sonnet' ? ' class="on"' : '') + '>Sonnet</button>' +
+        '<button type="button" data-v="opus"' + (cMod === 'opus' ? ' class="on"' : '') + '>Opus</button>' +
+      '</div>' +
+      '<div class="settings-seg" id="set-cust-think" style="margin-top:8px">' +
+        '<button type="button" data-v="none"' + (cThink === 'none' ? ' class="on"' : '') + '>No&nbsp;thinking</button>' +
+        '<button type="button" data-v="low"' + (cThink === 'low' ? ' class="on"' : '') + '>Low</button>' +
+        '<button type="button" data-v="high"' + (cThink === 'high' ? ' class="on"' : '') + '>High</button>' +
+      '</div>' +
+      '<div class="settings-seg" id="set-cust-runner" style="margin-top:8px">' +
+        '<button type="button" data-v="local"' + (cRun === 'local' ? ' class="on"' : '') + '>Local</button>' +
+        '<button type="button" data-v="api"' + (cRun === 'api' ? ' class="on"' : '') + '>API</button>' +
       '</div>' +
 
       '<div class="settings-sec">Trailing silence (seconds)</div>' +
@@ -59,6 +79,7 @@ async function open() {
       '<div class="settings-seg" id="set-wf-route" style="margin-top:8px">' +
         '<button type="button" data-v="fast"' + (wfRoute === 'fast' ? ' class="on"' : '') + '>Efficiency</button>' +
         '<button type="button" data-v="power"' + (wfRoute === 'power' ? ' class="on"' : '') + '>Accuracy</button>' +
+        '<button type="button" data-v="custom"' + (wfRoute === 'custom' ? ' class="on"' : '') + '>Custom</button>' +
       '</div>' +
       '<label class="settings-row"><span>Voice-match threshold<br><small>lower = more permissive</small></span>' +
         '<input class="settings-num" type="number" min="0.1" max="0.9" step="0.05" inputmode="decimal" data-key="voiceid_threshold" value="' + wfThresh + '"></label>' +
@@ -102,6 +123,13 @@ async function open() {
     back.querySelectorAll('#set-wf-route button').forEach((x) => x.classList.toggle('on', x === b));
     save('wakefree_route', b.dataset.v);   // wakefree.py reads it live; listener bridges it to the ESP
   });
+  // Custom-route knobs (model / thinking effort / runner) — used by any route set to Custom.
+  [['set-cust-model', 'custom_model'], ['set-cust-think', 'custom_think'], ['set-cust-runner', 'custom_runner']]
+    .forEach(([id, key]) => back.querySelector('#' + id).addEventListener('click', (e) => {
+      const b = e.target.closest('[data-v]'); if (!b) return;
+      back.querySelectorAll('#' + id + ' button').forEach((x) => x.classList.toggle('on', x === b));
+      save(key, b.dataset.v);
+    }));
   back.querySelectorAll('.settings-num').forEach((inp) => {
     inp.addEventListener('change', () => {
       const v = parseFloat(inp.value);

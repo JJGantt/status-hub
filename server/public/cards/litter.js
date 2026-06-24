@@ -18,7 +18,7 @@ export function render(s){
  document.getElementById('litter').innerHTML=
   '<div class=devstrip>'+
    '<div class=devchips>'+
-     '<span class=devname>Litter-Robot</span>'+
+     '<img class=devicon src="/litter-robot.png" alt="Litter-Robot">'+
      chip('','<span class=dot style="background:'+(STATUS_COLOR[st]||'#8b96a5')+'"></span>'+(STATUS_LABEL[st]||st),'#e6eaf0')+
      chip('Litter',(L.litter_level_pct!=null?L.litter_level_pct+'%':'—'),litterColor(L.litter_level_pct))+
      chip('Drawer',(L.waste_drawer_pct!=null?L.waste_drawer_pct+'%':'—'),drawerColor(L.waste_drawer_pct))+

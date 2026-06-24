@@ -15,7 +15,6 @@ export function render(s) {
     '<span class="dc-v"' + (color ? ' style="color:' + color + '"' : '') + '>' + val + '</span></span>';
   el.innerHTML =
     '<div class="devstrip">' +
-      '<span class="devname">Routing' + (r.active ? '' : ' · staged') + '</span>' +
       '<div class="devchips">' +
         chip('Model', MODEL[r.model] || r.model) +
         chip('Think', THINK[r.thinking] || r.thinking) +

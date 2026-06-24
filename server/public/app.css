@@ -37,6 +37,7 @@
 .devstrip{display:flex;flex-wrap:wrap;gap:18px 28px;align-items:center}
 .devchips{display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px}
 .devname{font-size:13px;font-weight:600;color:#8b96a5;letter-spacing:.04em;text-transform:uppercase;margin-right:4px}
+.devicon{height:22px;width:auto;display:block;margin-right:4px}   /* Litter-Robot device icon (replaces the name label) */
 .devchip{display:inline-flex;align-items:baseline;gap:6px;background:#0e1318;border:1px solid #222a33;border-radius:8px;padding:5px 11px}
 .devchip .dc-l{font-size:12px;color:#8b96a5}
 .devchip .dc-v{font-size:15px;font-weight:700}
@@ -320,6 +321,7 @@ body.tv .tv-routecard .fit{justify-content:center;align-items:flex-start}
 /* status strip — bigger + borderless so it reads from across the room (room kept for a feeder group) */
 body.tv .devstrip{gap:24px 44px}
 body.tv .devname{font-size:23px}
+body.tv .devicon{height:44px}   /* device icon scaled up for the wall */
 body.tv .devchip{background:none;border:none;padding:0;gap:11px}
 body.tv .devchip .dc-l{font-size:18px}
 body.tv .devchip .dc-v{font-size:31px}

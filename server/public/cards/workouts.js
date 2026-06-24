@@ -24,11 +24,17 @@ export function render(s){
  tickRest();
 }
 // Two live clocks driven off the set log, both counting up:
-//  - SESSION (primary, big green): total time since the FIRST set of the current session. A session is
-//    a run of sets each within 20min of the previous; once 20min pass with no new set it's over and the
-//    clock resets to zero (collapses to the dimmed "since last set" readout below).
-//  - REST (sub-line): time since the LAST set (mm:ss), resets every set; goes amber past 5 min.
+//  - SINCE LAST SET (left, always): time since the LAST set. mm:ss when recent, then coarse (Hh Mm /
+//    Dd Hh). Green while active, amber past 5 min, dimmed once the session is over.
+//  - SESSION (right, only while active): total time since the FIRST set of the current session — a run
+//    of sets each within 20min of the previous. Once 20min pass with no new set the session is over and
+//    this side disappears (resets to zero); the next set starts a fresh session.
 const SESSION_GAP_S=20*60;          // a >20min gap between sets ends the session
+function fmtSince(s){
+ if(s<3600) return Math.floor(s/60)+':'+String(Math.floor(s%60)).padStart(2,'0');
+ if(s<86400) return Math.floor(s/3600)+'h '+Math.floor((s%3600)/60)+'m';
+ return Math.floor(s/86400)+'d '+Math.floor((s%86400)/3600)+'h';
+}
 function fmtSession(s){
  const h=Math.floor(s/3600), m=Math.floor((s%3600)/60), sec=Math.floor(s%60), p=n=>String(n).padStart(2,'0');
  return h>0 ? h+':'+p(m)+':'+p(sec) : m+':'+p(sec);
@@ -39,21 +45,19 @@ function tickRest(){
  if(!lastAt){el.innerHTML='';el.className='resttimer';return;}
  const now=Date.now();
  const rest=Math.max(0,(now-new Date(lastAt).getTime())/1000);   // seconds since the last set
- if(rest<=SESSION_GAP_S){                                         // —— active session ——
+ const active=rest<=SESSION_GAP_S;
+ el.className='resttimer'+(!active?' stale':(rest>=300?' cool':''));
+ // left — since last set (always)
+ let html='<div class="rt-side rt-left"><div class=rt-label>Since last set</div>'+
+   '<div class=rt-time>'+fmtSince(rest)+'</div></div>';
+ // right — session total (only while a session is live)
+ if(active){
    const startAt=d.session_start_at||lastAt;
    const sess=Math.max(0,(now-new Date(startAt).getTime())/1000);
-   const mmss=Math.floor(rest/60)+':'+String(Math.floor(rest%60)).padStart(2,'0');
-   el.className='resttimer'+(rest>=300?' cool':'');              // past 5 min: amber rest sub-line
-   el.innerHTML='<div class=rt-label>Session</div>'+
-     '<div class=rt-time>'+fmtSession(sess)+'</div>'+
-     '<div class=rt-sub>Rest '+mmss+'</div>';
- } else {                                                         // —— session over: dimmed coarse readout ——
-   const time = rest<86400
-     ? Math.floor(rest/3600)+'h '+Math.floor((rest%3600)/60)+'m'
-     : Math.floor(rest/86400)+'d '+Math.floor((rest%86400)/3600)+'h';
-   el.className='resttimer stale';
-   el.innerHTML='<div class=rt-label>Since last set</div><div class=rt-time>'+time+'</div>';
+   html+='<div class="rt-side rt-right"><div class=rt-label>Session</div>'+
+     '<div class="rt-time rt-session">'+fmtSession(sess)+'</div></div>';
  }
+ el.innerHTML=html;
 }
 
 function markHeatCell(date){

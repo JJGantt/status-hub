@@ -94,14 +94,16 @@ body.touch .musclerow .musdetail .fit{padding:0}
 .ring .rtot{font-size:11px;color:#8b96a5;margin-top:1px;white-space:nowrap}
 .pnote{color:#8b96a5;font-size:12px;margin-top:12px}
 /* rest timer — a big, prominent block (≈ heatmap footprint): uppercase label + huge live digits */
-.resttimer{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;
-  padding:22px 16px;margin:0 0 12px;background:#0e1318;border:1px solid #1b2128;border-radius:14px}
+.resttimer{display:flex;flex-direction:row;justify-content:space-between;align-items:flex-start;gap:14px;
+  padding:14px 18px;margin:0 0 12px;background:#0e1318;border:1px solid #1b2128;border-radius:14px}
 .resttimer:empty{display:none}
-.rt-label{font-size:12px;letter-spacing:.18em;text-transform:uppercase;color:#5c6675;font-weight:700}
-.rt-time{font-size:clamp(3.2rem,15vw,5rem);font-weight:800;line-height:1;font-variant-numeric:tabular-nums;color:#39d353}
-.rt-sub{font-size:14px;font-weight:700;color:#8b96a5;font-variant-numeric:tabular-nums}
-.resttimer.cool .rt-sub{color:#d6c042}    /* resting past 5 min — amber rest sub-line */
-.resttimer.stale .rt-time{color:#8b96a5}  /* idle — session over, dimmed */
+.rt-side{display:flex;flex-direction:column;gap:4px;min-width:0}
+.rt-left{align-items:flex-start;text-align:left}
+.rt-right{align-items:flex-end;text-align:right}
+.rt-label{font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:#5c6675;font-weight:700}
+.rt-time{font-size:2rem;font-weight:800;line-height:1;font-variant-numeric:tabular-nums;color:#39d353}
+.resttimer.cool .rt-left .rt-time{color:#d6c042}  /* resting past 5 min — amber since-last-set */
+.resttimer.stale .rt-time{color:#8b96a5}          /* session over — since-last-set dimmed */
 .vgrp h3{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:#6b7686;margin:12px 0 6px;font-weight:600}
 .vsort{display:inline-flex;gap:2px;background:#0e1318;border:1px solid #222a33;border-radius:8px;padding:2px;margin-bottom:12px}
 .vs-opt{font-size:11px;color:#8b96a5;padding:3px 10px;border-radius:6px;cursor:pointer;user-select:none}
@@ -331,10 +333,9 @@ body.tv .workoutrow{grid-column:4;grid-row:2;display:flex;flex-direction:column;
 body.tv .nutrow .nutplot{display:none}
 /* rest timer: sits under the workout heatmap. Compact card; clock digits ~ring-number size (the SVG
    rings render ~40px), readable across the room but not dominating. Base :empty rule still hides it. */
-body.tv #resttimer{padding:10px 14px;margin:8px 0 0}
-body.tv #resttimer .rt-time{font-size:42px}
+body.tv #resttimer{padding:12px 18px;margin:8px 0 0}
+body.tv #resttimer .rt-time{font-size:40px}
 body.tv #resttimer .rt-label{font-size:13px}
-body.tv #resttimer .rt-sub{font-size:19px}
 /* COL 1 — calorie + macro rings, stacked vertically, big and packed (small gap between them) */
 body.tv .ringrow .ringcard,body.tv .nutrow .nutcard{flex:1 1 auto;min-height:0}
 body.tv .ringrow #nutrition{display:flex;flex-direction:column;height:100%}

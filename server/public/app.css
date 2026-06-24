@@ -316,7 +316,7 @@ body.tv .ringrow{grid-column:1;grid-row:2;display:flex;flex-direction:column;min
    its column wider than 1fr, shrinking the neighbour — which made the workout heatmap render smaller
    than the nutrition one even though both are the same 20 weeks. With it, all three columns are equal. */
 body.tv .nutrow{grid-column:2;grid-row:2;display:flex;flex-direction:column;min-height:0;min-width:0}
-body.tv .musclerow{grid-column:3;grid-row:2;display:flex;flex-direction:column;gap:8px;min-height:0;min-width:0}
+body.tv .musclerow{grid-column:3;grid-row:2;display:flex;flex-direction:row;gap:12px;min-height:0;min-width:0}
 body.tv .workoutrow{grid-column:4;grid-row:2;display:flex;flex-direction:column;gap:8px;min-height:0;min-width:0}
 /* minimal: nutrition column = heatmap + food log only (drop the cal/weight plot); drop the rest timer */
 body.tv .nutrow .nutplot{display:none}
@@ -334,24 +334,28 @@ body.tv .nutrow #nutritionlog{display:flex;flex-direction:column;height:100%;min
 body.tv .nutrow .nutheat{flex:0 0 auto}
 body.tv .nutrow .nutfoods{flex:1 1 auto;min-height:0;overflow:auto;display:block;padding:0}
 body.tv .nutrow .nutplot{flex:0 0 auto}
-/* COL 3 — muscle: body map (top 25%) + volume bars (bottom 75%) */
-body.tv .musmap{order:1;flex:0 0 25%;min-height:0}
-body.tv .musvol{order:2;flex:1 1 auto;min-height:0}
+/* COL 3 — muscle: thin STACKED-figures sub-column on the LEFT (front over back, each = a ring-pair's
+   height), volume bars to the RIGHT. musclerow is a row now; only this column changed. */
+body.tv .musmap{order:0;flex:0 0 185px;min-height:0;min-width:0}
+body.tv .musvol{order:1;flex:1 1 auto;min-height:0;min-width:0}
 body.tv .musdetail{display:none}
-body.tv .musmap #body{flex:1 1 auto;min-height:0;display:flex;align-items:center;justify-content:center}
-body.tv .musmap #body svg,body.tv .musmap .bodysvg{width:100%!important;height:100%!important;max-width:100%!important;max-height:100%!important}
+body.tv .musmap .fit{padding:0;height:100%}
+body.tv .musmap #body{height:100%;display:flex;flex-direction:column;min-height:0}
+body.tv .musmap .figstack{flex:1 1 auto;display:flex;flex-direction:column;min-height:0}
+/* front figure = top half (≈ the Cal+P rings' height), back = bottom half (≈ C+F rings) */
+body.tv .musmap .figstack svg{flex:1 1 0;width:100%;height:50%;min-height:0;display:block;max-width:100%;max-height:100%}
 body.tv .musvol #volume{flex:1 1 auto;min-height:0;overflow:hidden;display:flex;flex-direction:column}
 body.tv .musvol .vsort{display:none}
-body.tv .musvol .vgrp h3{margin:4px 0 2px;font-size:9px}
-/* inline volume rows that DISTRIBUTE to fill the column (flex:1 1 0, no trailing gap) */
+body.tv .musvol .vgrp h3{margin:3px 0 2px;font-size:10px}
 body.tv .musvol .vgrp{display:flex;flex-direction:column;flex:1 1 auto;min-height:0}
-body.tv .musvol .vrow{display:flex;align-items:center;gap:9px;margin:0;padding:0;flex:1 1 0;min-height:0}
+/* one row per muscle: name (left) + a uniform-length bar; sets/target sits INSIDE the bar (the
+   coloured fill grows over it). The value is absolutely overlaid so it no longer changes the bar
+   length the way the old right-side label did — every track is now the same length. */
+body.tv .musvol .vrow{display:flex;align-items:center;gap:8px;margin:0;padding:0;flex:1 1 0;min-height:0;position:relative}
 body.tv .musvol .vrow-l{display:contents}
-body.tv .musvol .vrow-l .nm{order:1;flex:0 0 84px;font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:#c7ced8}
-body.tv .musvol .vtrack{order:2;flex:1 1 auto;height:16px;margin:0}
-body.tv .musvol .vrow-l .vl{order:3;flex:0 0 auto;font-size:11px;white-space:nowrap;color:#8b96a5}
-/* the drop-off urgency is carried by the stripe colour on the wall (amber=today, gray=tmrw); drop the
-   text annotation so it can't squeeze the bar in this narrower column */
+body.tv .musvol .vrow-l .nm{order:1;flex:0 0 76px;font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:#c7ced8}
+body.tv .musvol .vtrack{order:2;flex:1 1 auto;height:20px;margin:0}
+body.tv .musvol .vrow-l .vl{position:absolute;left:84px;top:50%;transform:translateY(-50%);font-size:12px;font-weight:700;color:#fff;text-shadow:0 1px 2px rgba(0,0,0,.9);white-space:nowrap;z-index:2;pointer-events:none}
 body.tv .musvol .vrow-l .vl span{display:none}
 /* COL 4 — workout: sets heatmap (top) → sets list (fills) */
 body.tv .wkheat{order:1;flex:0 0 auto}

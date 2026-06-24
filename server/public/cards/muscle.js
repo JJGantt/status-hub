@@ -152,8 +152,27 @@ function sizeMap(){
 }
 if(typeof window!=='undefined')window.addEventListener('resize',sizeMap);
 
+// TV wall only: show the body map as two STACKED figures (front on top, back below) in a thin column
+// instead of side-by-side. The asset is one 72×93 svg with the front figure in the left half (x 0–36)
+// and the back in the right half (x 36–72), so we render the same paths twice with split viewBoxes and
+// stack them. render()'s per-muscle fill painting still works — it queries '#body path[data-r]', which
+// now matches the paths in BOTH copies.
+function tvStackFigures(){
+ if(!document.body.classList.contains('tv'))return;
+ const host=document.getElementById('body'); if(!host)return;
+ const svg=host.querySelector('svg.bodysvg'); if(!svg||host.dataset.split)return;
+ host.dataset.split='1';
+ const inner=svg.innerHTML;
+ const wrap=document.createElement('div'); wrap.className='figstack';
+ wrap.innerHTML=
+   '<svg viewBox="0 0 36 93" preserveAspectRatio="xMidYMid meet" class="bodysvg figfront">'+inner+'</svg>'+
+   '<svg viewBox="36 0 36 93" preserveAspectRatio="xMidYMid meet" class="bodysvg figback">'+inner+'</svg>';
+ svg.replaceWith(wrap);
+}
+
 // ---- handlers (bound on import; DOM ready because core.js is a deferred module) ----
 (function(){
+ tvStackFigures();   // TV wall: split front/back into a stacked column (no-op on phone/desktop)
  const bodyEl=document.getElementById('body');
  document.querySelectorAll('#body path[data-r]').forEach(p=>{if(muscleForId(p.getAttribute('data-r')))p.classList.add('tappable');});
  if(!TOUCH){

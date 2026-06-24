@@ -363,8 +363,15 @@ body.tv .heat{flex:1 1 auto;min-width:0}
 /* lists are non-interactive on the wall: drop the +now / ⋯ buttons, tighten rows */
 body.tv .addbtn,body.tv .morebtn{display:none!important}
 body.tv .dex{padding:2px 0}
-body.tv .dex-n{font-size:12px}
-body.tv .dset{font-size:10px;padding:1px 5px}
+body.tv .dex-n{font-size:18px}                 /* food/exercise names — readable across the room */
+body.tv .dset{font-size:14px;padding:2px 7px}  /* macro + set chips — bigger (nutrition log + workout sets) */
+/* nutrition log: drop the today-totals header band (the rings already show that) and the expand caret */
+body.tv .nuthdr{display:none}
+body.tv .dex-caret{display:none}
+/* heatmaps (nutrition + workout): drop the day-of-week labels, keep the month row (a touch bigger),
+   and realign it now that the 30px day-label gutter is gone so months sit over their week columns */
+body.tv .hdows{display:none}
+body.tv .hmonths{margin-left:0;font-size:11px}
 /* VOICE column — compact, fixed width, near-black, its own border. */
 .tv-voice{flex:0 0 540px;display:flex;flex-direction:column;min-width:0;height:100vh;
   background:#080b0e;border-left:1px solid #11161c;position:relative;overflow:hidden}

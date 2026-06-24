@@ -35,8 +35,17 @@ async function open() {
   const cThink = ['none', 'low', 'high'].includes(cur.custom_think) ? cur.custom_think : 'low';
   const cRun = cur.custom_runner === 'api' ? 'api' : 'local';
   const agentOn = ['1', 'true', 'on', 'yes'].includes(String(cur.agent_mode ?? '0').toLowerCase());
-  const agentCwd = (cur.agent_cwd || '').replace(/&/g, '&amp;').replace(/"/g, '&quot;');
+  const agentCwdRaw = cur.agent_cwd || '';
   const resetMin = (() => { const s = parseFloat(cur.session_reset_s); return Number.isFinite(s) && s > 0 ? Math.round(s / 60) : 5; })();
+  // Working-directory picker: options are the repo dirs the worker publishes (agent_cwd_options).
+  let cwdOpts = []; try { cwdOpts = JSON.parse(cur.agent_cwd_options || '[]'); } catch (_) {}
+  if (!Array.isArray(cwdOpts)) cwdOpts = [];
+  const hesc = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  const cwdLabel = (p) => p.split('/').filter(Boolean).pop() || p;
+  const cwdAll = cwdOpts.slice();
+  if (agentCwdRaw && !cwdAll.includes(agentCwdRaw)) cwdAll.unshift(agentCwdRaw);  // keep a stale/custom value visible
+  const cwdOptsHtml = '<option value=""' + (agentCwdRaw ? '' : ' selected') + '>Home (~)</option>' +
+    cwdAll.map((p) => '<option value="' + hesc(p) + '"' + (p === agentCwdRaw ? ' selected' : '') + '>' + hesc(cwdLabel(p)) + '</option>').join('');
   const wfThresh = sil('voiceid_threshold', 0.30);
   const wfPause = sil('wakefree_pause_s', 2);
 
@@ -75,7 +84,7 @@ async function open() {
         '<button type="button" data-v="1"' + (agentOn ? ' class="on"' : '') + '>On</button>' +
       '</div>' +
       '<label class="settings-row"><span>Working directory</span>' +
-        '<input class="settings-text" type="text" id="set-agent-cwd" placeholder="~" value="' + agentCwd + '"></label>' +
+        '<select class="settings-text" id="set-agent-cwd">' + cwdOptsHtml + '</select></label>' +
 
       '<div class="settings-sec">Session</div>' +
       '<label class="settings-row"><span>Idle reset (minutes)</span>' +
@@ -153,7 +162,7 @@ async function open() {
     save('agent_mode', b.dataset.v);
     fetch('/api/voice-reset', { method: 'POST' }).catch(() => {});
   });
-  back.querySelector('#set-agent-cwd').addEventListener('change', (e) => save('agent_cwd', e.target.value.trim()));
+  back.querySelector('#set-agent-cwd').addEventListener('change', (e) => save('agent_cwd', e.target.value));
   // Idle reset is shown in minutes but stored in seconds (session_reset_s). No data-key, so the generic
   // positive-number handler below skips it.
   back.querySelector('#set-reset-min').addEventListener('change', (e) => {

@@ -20,7 +20,7 @@ export function render(s) {
         chip('Model', MODEL[r.model] || r.model) +
         chip('Think', THINK[r.thinking] || r.thinking) +
         chip('Runner', RUNNER[r.runner] || r.runner) +
-        chip('Voice', r.wake ? 'On' : 'Off', r.wake ? '#39d353' : '#5c6675') +
+        chip('AO', r.wake ? 'On' : 'Off', r.wake ? '#39d353' : '#5c6675') +  // AO = always-on (wake-free) voice
       '</div>' +
     '</div>';
 }

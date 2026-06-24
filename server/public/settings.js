@@ -95,7 +95,7 @@ async function open() {
       row('ESP (Hey&nbsp;Rhasspy)', 'esp_silence_s', sil('esp_silence_s', 3)) +
       row('Mac', 'mac_silence_s', sil('mac_silence_s', 3)) +
 
-      '<div class="settings-sec">Wake-free voice</div>' +
+      '<div class="settings-sec">Always-on voice (wake-free)</div>' +
       '<div class="settings-seg" id="set-wf-enabled">' +
         '<button type="button" data-v="0"' + (wfOn ? '' : ' class="on"') + '>Off</button>' +
         '<button type="button" data-v="1"' + (wfOn ? ' class="on"' : '') + '>On</button>' +

@@ -326,9 +326,13 @@ body.tv .ringrow{grid-column:1;grid-row:2;display:flex;flex-direction:column;min
 body.tv .nutrow{grid-column:2;grid-row:2;display:flex;flex-direction:column;min-height:0;min-width:0}
 body.tv .musclerow{grid-column:3;grid-row:2;display:flex;flex-direction:row;gap:12px;min-height:0;min-width:0}
 body.tv .workoutrow{grid-column:4;grid-row:2;display:flex;flex-direction:column;gap:8px;min-height:0;min-width:0}
-/* minimal: nutrition column = heatmap + food log only (drop the cal/weight plot); drop the rest timer */
+/* minimal: nutrition column = heatmap + food log only (drop the cal/weight plot) */
 body.tv .nutrow .nutplot{display:none}
-body.tv #resttimer{display:none}
+/* rest timer: sits under the workout heatmap. Compact card; clock digits ~ring-number size (the SVG
+   rings render ~40px), readable across the room but not dominating. Base :empty rule still hides it. */
+body.tv #resttimer{padding:10px 14px;margin:8px 0 0}
+body.tv #resttimer .rt-time{font-size:42px}
+body.tv #resttimer .rt-label{font-size:13px}
 /* COL 1 — calorie + macro rings, stacked vertically, big and packed (small gap between them) */
 body.tv .ringrow .ringcard,body.tv .nutrow .nutcard{flex:1 1 auto;min-height:0}
 body.tv .ringrow #nutrition{display:flex;flex-direction:column;height:100%}

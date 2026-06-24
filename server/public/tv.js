@@ -191,7 +191,10 @@ function showEmit(state, text) {
   emitEl.querySelector('.em-label').textContent = s.l;
   emitEl.querySelector('.em-text').textContent = text || '';
   emitEl.classList.add('show');
-  if (state === 'done') emitFade = setTimeout(() => emitEl.classList.remove('show'), 7000);
+  // Persist the resolution as long as the worker still holds context (session_reset_s, default
+  // 300s). When the context drains and the worker fires a 'reset', we clear it then — not on a
+  // short cosmetic timer. The fallback below just bounds a stuck strip if no reset ever arrives.
+  if (state === 'done') emitFade = setTimeout(() => emitEl.classList.remove('show'), 300000);
 }
 
 const voice = new EventSource('/api/voice-stream');
@@ -199,7 +202,11 @@ voice.addEventListener('voice', (e) => {
   let msg; try { msg = JSON.parse(e.data); } catch (_) { return; }
   if (msg.kind === 'activity') { const a = msg.row || {}; showEmit(a.state, a.text); }
   else if (msg.kind === 'message') upsert(msg.row);
-  else if (msg.kind === 'reset') { log.innerHTML = ''; seen.clear(); }
+  else if (msg.kind === 'reset') {
+    log.innerHTML = ''; seen.clear();
+    // Context drained — drop the persisted resolution from the strip too.
+    if (emitEl) { clearTimeout(emitFade); emitEl.classList.remove('show'); }
+  }
   else if (msg.kind === 'focus') { renderFocus(msg.row); loadSessions(); }
   else if (msg.kind === 'sessions') loadSessions();
 });

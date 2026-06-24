@@ -16,47 +16,57 @@ const crypto = require('crypto');
 const fs = require('fs');
 
 const TEAM_ID = process.env.APNS_TEAM_ID || 'XMH4AVFC78';
-const KEY_ID = process.env.APNS_KEY_ID || '';
 const BUNDLE_ID = process.env.APNS_BUNDLE_ID || 'com.jaredgantt.statushub';
 const ENV = (process.env.APNS_ENV || 'sandbox').toLowerCase();   // default when a token has no environment
 const hostFor = (env) => (String(env).toLowerCase() === 'production'
   ? 'https://api.push.apple.com' : 'https://api.sandbox.push.apple.com');
 const HOST = hostFor(ENV);
 
-function privateKeyPem() {
-  let pem = process.env.APNS_KEY_P8 || '';
-  if (!pem && process.env.APNS_KEY_PATH) {
-    try { pem = fs.readFileSync(process.env.APNS_KEY_PATH, 'utf8'); } catch (_) {}
-  }
-  if (pem && !pem.includes('BEGIN')) {            // allow a base64-wrapped inline key (easier as a Fly secret)
-    try { pem = Buffer.from(pem, 'base64').toString('utf8'); } catch (_) {}
-  }
+// Jared's APNs auth keys are ENVIRONMENT-SCOPED (a sandbox key can't authenticate a production push and
+// vice-versa — sending the sandbox key to api.push.apple.com yields 403 BadEnvironmentKeyInToken). So we
+// hold BOTH keys and pick the one matching each token's environment. The *_PRODUCTION vars are optional;
+// without them, production tokens fall back to the default key (and will 403 if it's the sandbox key).
+const KEY_ID = { sandbox: process.env.APNS_KEY_ID || '', production: process.env.APNS_KEY_ID_PRODUCTION || process.env.APNS_KEY_ID || '' };
+
+function pemFrom(inlineVar, pathVar) {
+  let pem = process.env[inlineVar] || '';
+  if (!pem && process.env[pathVar]) { try { pem = fs.readFileSync(process.env[pathVar], 'utf8'); } catch (_) {} }
+  if (pem && !pem.includes('BEGIN')) { try { pem = Buffer.from(pem, 'base64').toString('utf8'); } catch (_) {} }  // base64-wrapped inline key (easier as a Fly secret)
   return pem || null;
 }
+function privateKeyPem(env) {
+  if (String(env).toLowerCase() === 'production') {
+    return pemFrom('APNS_KEY_P8_PRODUCTION', 'APNS_KEY_PATH_PRODUCTION') || pemFrom('APNS_KEY_P8', 'APNS_KEY_PATH');
+  }
+  return pemFrom('APNS_KEY_P8', 'APNS_KEY_PATH');
+}
+function keyIdFor(env) { return String(env).toLowerCase() === 'production' ? KEY_ID.production : KEY_ID.sandbox; }
 
-function configured() { return !!(KEY_ID && TEAM_ID && privateKeyPem()); }
+function configured(env) { return !!(keyIdFor(env) && TEAM_ID && privateKeyPem(env)); }
 
-// APNs auth JWT — valid up to 1h; reuse for ~50 min (Apple rejects regenerating too often).
-let _jwt = { token: null, iat: 0 };
-function authToken() {
+// APNs auth JWT — valid up to 1h; reuse for ~50 min (Apple rejects regenerating too often). Cached per
+// environment since each uses a different signing key.
+const _jwt = { sandbox: { token: null, iat: 0 }, production: { token: null, iat: 0 } };
+function authToken(env) {
+  const e = String(env).toLowerCase() === 'production' ? 'production' : 'sandbox';
   const now = Math.floor(Date.now() / 1000);
-  if (_jwt.token && now - _jwt.iat < 3000) return _jwt.token;
+  if (_jwt[e].token && now - _jwt[e].iat < 3000) return _jwt[e].token;
   const b64 = (s) => Buffer.from(s).toString('base64url');
-  const signingInput = b64(JSON.stringify({ alg: 'ES256', kid: KEY_ID })) + '.' +
+  const signingInput = b64(JSON.stringify({ alg: 'ES256', kid: keyIdFor(e) })) + '.' +
                        b64(JSON.stringify({ iss: TEAM_ID, iat: now }));
-  const key = crypto.createPrivateKey(privateKeyPem());
+  const key = crypto.createPrivateKey(privateKeyPem(e));
   const sig = crypto.sign('sha256', Buffer.from(signingInput), { key, dsaEncoding: 'ieee-p1363' });
-  _jwt = { token: `${signingInput}.${sig.toString('base64url')}`, iat: now };
-  return _jwt.token;
+  _jwt[e] = { token: `${signingInput}.${sig.toString('base64url')}`, iat: now };
+  return _jwt[e].token;
 }
 
 // Send one alert push. `environment` ('sandbox'|'production') selects the gateway per token; omit to
 // use the APNS_ENV default. Resolves { ok, status, detail } and never rejects.
 function send(deviceToken, { title, body, payload, environment } = {}) {
   return new Promise((resolve) => {
-    if (!configured()) return resolve({ ok: false, status: 0, detail: 'apns not configured' });
+    if (!configured(environment)) return resolve({ ok: false, status: 0, detail: 'apns not configured for ' + (environment || ENV) });
     let jwt;
-    try { jwt = authToken(); } catch (e) { return resolve({ ok: false, status: 0, detail: 'jwt: ' + e.message }); }
+    try { jwt = authToken(environment); } catch (e) { return resolve({ ok: false, status: 0, detail: 'jwt: ' + e.message }); }
     let done = false;
     const finish = (r) => { if (done) return; done = true; try { client.close(); } catch (_) {} resolve(r); };
     const client = http2.connect(environment ? hostFor(environment) : HOST);

@@ -283,7 +283,20 @@ async function buildStatus() {
   const nutrition_log = buildNutritionLog(nutLogRows || [], weights, maintenance.target, maintenance.maintenance, today, targetRows || [], 20, surplus);
 
   const last_set_at = (heatRows && heatRows.length) ? heatRows[heatRows.length - 1].occurred_at : null;
-  return { today, litter, surf, nutrition, maintenance, pace: paceData, volume, heatmap, nutrition_log, last_set_at, generated_at: new Date().toISOString() };
+  // session_start_at: the first set of the trailing run where consecutive sets are <=20min apart. The
+  // client shows (now - session_start) as the session clock while the last set is <20min old, and lets
+  // it reset to zero once a 20min gap opens (the session ended). A >20min gap breaks the run, so a new
+  // workout's first set becomes the new session start.
+  const SESSION_GAP_MS = 20 * 60 * 1000;
+  let session_start_at = last_set_at;
+  if (heatRows && heatRows.length) {
+    for (let i = heatRows.length - 1; i > 0; i--) {
+      const gap = new Date(heatRows[i].occurred_at).getTime() - new Date(heatRows[i - 1].occurred_at).getTime();
+      if (gap <= SESSION_GAP_MS) session_start_at = heatRows[i - 1].occurred_at;
+      else break;
+    }
+  }
+  return { today, litter, surf, nutrition, maintenance, pace: paceData, volume, heatmap, nutrition_log, last_set_at, session_start_at, generated_at: new Date().toISOString() };
 }
 
 // ---- realtime push: recompute + push to all connected browsers on any DB change ----

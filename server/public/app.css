@@ -99,8 +99,9 @@ body.touch .musclerow .musdetail .fit{padding:0}
 .resttimer:empty{display:none}
 .rt-label{font-size:12px;letter-spacing:.18em;text-transform:uppercase;color:#5c6675;font-weight:700}
 .rt-time{font-size:clamp(3.2rem,15vw,5rem);font-weight:800;line-height:1;font-variant-numeric:tabular-nums;color:#39d353}
-.resttimer.cool .rt-time{color:#d6c042}   /* past 5 min — winding down */
-.resttimer.stale .rt-time{color:#8b96a5}  /* idle — not an active rest */
+.rt-sub{font-size:14px;font-weight:700;color:#8b96a5;font-variant-numeric:tabular-nums}
+.resttimer.cool .rt-sub{color:#d6c042}    /* resting past 5 min — amber rest sub-line */
+.resttimer.stale .rt-time{color:#8b96a5}  /* idle — session over, dimmed */
 .vgrp h3{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:#6b7686;margin:12px 0 6px;font-weight:600}
 .vsort{display:inline-flex;gap:2px;background:#0e1318;border:1px solid #222a33;border-radius:8px;padding:2px;margin-bottom:12px}
 .vs-opt{font-size:11px;color:#8b96a5;padding:3px 10px;border-radius:6px;cursor:pointer;user-select:none}
@@ -333,6 +334,7 @@ body.tv .nutrow .nutplot{display:none}
 body.tv #resttimer{padding:10px 14px;margin:8px 0 0}
 body.tv #resttimer .rt-time{font-size:42px}
 body.tv #resttimer .rt-label{font-size:13px}
+body.tv #resttimer .rt-sub{font-size:19px}
 /* COL 1 — calorie + macro rings, stacked vertically, big and packed (small gap between them) */
 body.tv .ringrow .ringcard,body.tv .nutrow .nutcard{flex:1 1 auto;min-height:0}
 body.tv .ringrow #nutrition{display:flex;flex-direction:column;height:100%}

@@ -77,6 +77,13 @@ function makeRecorder({ onStatus, onActive, quick, autoStop, tier }) {
     if (vadTimer) { clearInterval(vadTimer); vadTimer = null; }
     if (actx) { try { actx.close(); } catch (_) {} actx = null; }
   }
+  // Global mute: an explicit FAB command is an explicit, hard-coded-route input — while it's capturing,
+  // every always-on auto-routing listener (Mac wake-word, wake-free, ESP) must go deaf. Same shared
+  // voice_muted flag the push-to-talk dictation uses; the listeners react to it via realtime.
+  function muteOthers(on) {
+    fetch('/api/settings', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ key: 'voice_muted', value: on ? '1' : '0' }) }).catch(() => {});
+  }
   async function start() {
     if (recording) return;
     try { stream = await navigator.mediaDevices.getUserMedia({ audio: true }); }
@@ -87,6 +94,7 @@ function makeRecorder({ onStatus, onActive, quick, autoStop, tier }) {
     rec.ondataavailable = (e) => { if (e.data && e.data.size) chunks.push(e.data); };
     rec.onstop = () => upload(mime);
     rec.start(); recording = true; onActive(true);
+    muteOthers(true);   // mute every other listener (Mac + ESP) while this explicit command records
     onStatus(autoStop ? 'Listening…' : 'Listening… tap to send', 'rec');
     maxTimer = setTimeout(() => stop(), 60000);
     if (autoStop) startVAD();
@@ -98,6 +106,7 @@ function makeRecorder({ onStatus, onActive, quick, autoStop, tier }) {
   }
   async function upload(mime) {
     if (stream) { stream.getTracks().forEach((t) => t.stop()); stream = null; }
+    muteOthers(false);   // FAB done with the mic → the other listeners resume
     const blob = new Blob(chunks, { type: mime || 'audio/webm' });
     chunks = [];
     if (!blob.size) { onStatus('', 'clear'); return; }

@@ -29,6 +29,10 @@ async function open() {
   const wrMode = cur.weight_reminder_mode === 'dynamic' ? 'dynamic' : 'manual';
   const wrTime = /^\d{2}:\d{2}$/.test(cur.weight_reminder_time || '') ? cur.weight_reminder_time : '08:00';
   const surplusVal = Number.isFinite(parseInt(cur.surplus_cal, 10)) ? parseInt(cur.surplus_cal, 10) : 150;
+  const wfOn = ['1', 'true', 'on', 'yes'].includes(String(cur.wakefree_enabled ?? '0').toLowerCase());
+  const wfRoute = cur.wakefree_route === 'power' ? 'power' : 'fast';
+  const wfThresh = sil('voiceid_threshold', 0.30);
+  const wfPause = sil('wakefree_pause_s', 2);
 
   const back = document.createElement('div');
   back.className = 'settings-back';
@@ -46,6 +50,20 @@ async function open() {
       row('Phone', 'phone_silence_s', sil('phone_silence_s', 3)) +
       row('ESP (Hey&nbsp;Rhasspy)', 'esp_silence_s', sil('esp_silence_s', 3)) +
       row('Mac', 'mac_silence_s', sil('mac_silence_s', 3)) +
+
+      '<div class="settings-sec">Wake-free voice</div>' +
+      '<div class="settings-seg" id="set-wf-enabled">' +
+        '<button type="button" data-v="0"' + (wfOn ? '' : ' class="on"') + '>Off</button>' +
+        '<button type="button" data-v="1"' + (wfOn ? ' class="on"' : '') + '>On</button>' +
+      '</div>' +
+      '<div class="settings-seg" id="set-wf-route" style="margin-top:8px">' +
+        '<button type="button" data-v="fast"' + (wfRoute === 'fast' ? ' class="on"' : '') + '>Efficiency</button>' +
+        '<button type="button" data-v="power"' + (wfRoute === 'power' ? ' class="on"' : '') + '>Accuracy</button>' +
+      '</div>' +
+      '<label class="settings-row"><span>Voice-match threshold<br><small>lower = more permissive</small></span>' +
+        '<input class="settings-num" type="number" min="0.1" max="0.9" step="0.05" inputmode="decimal" data-key="voiceid_threshold" value="' + wfThresh + '"></label>' +
+      '<label class="settings-row"><span>End-of-command pause (s)</span>' +
+        '<input class="settings-num" type="number" min="0.5" max="6" step="0.5" inputmode="decimal" data-key="wakefree_pause_s" value="' + wfPause + '"></label>' +
 
       '<div class="settings-sec">Weight reminder</div>' +
       '<div class="settings-seg" id="set-wr-enabled">' +
@@ -73,6 +91,16 @@ async function open() {
     const b = e.target.closest('[data-v]'); if (!b) return;
     back.querySelectorAll('#set-routing button').forEach((x) => x.classList.toggle('on', x === b));
     save('chatbox_route', b.dataset.v);
+  });
+  back.querySelector('#set-wf-enabled').addEventListener('click', (e) => {
+    const b = e.target.closest('[data-v]'); if (!b) return;
+    back.querySelectorAll('#set-wf-enabled button').forEach((x) => x.classList.toggle('on', x === b));
+    save('wakefree_enabled', b.dataset.v);   // listener reacts live via realtime → mic handoff
+  });
+  back.querySelector('#set-wf-route').addEventListener('click', (e) => {
+    const b = e.target.closest('[data-v]'); if (!b) return;
+    back.querySelectorAll('#set-wf-route button').forEach((x) => x.classList.toggle('on', x === b));
+    save('wakefree_route', b.dataset.v);   // wakefree.py reads it live; listener bridges it to the ESP
   });
   back.querySelectorAll('.settings-num').forEach((inp) => {
     inp.addEventListener('change', () => {

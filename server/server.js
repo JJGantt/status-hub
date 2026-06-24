@@ -756,6 +756,38 @@ app.post('/api/voice-activity', express.json(), (req, res) => {
   res.status(204).end();
 });
 
+// Native push to Jared's phone (APNs). The voice worker POSTs the past-tense result of a completed
+// voice command here so it lands as a phone notification — same proven sender + device tokens as the
+// weight reminder, just ad-hoc text. Gated on the kiosk token. Fans out to every registered iOS token
+// on its own push environment (sandbox vs production), and logs the result to `notifications`.
+app.post('/api/notify', express.json(), async (req, res) => {
+  if (TV_TOKEN && req.query.token !== TV_TOKEN) return res.status(403).json({ error: 'forbidden' });
+  const b = req.body || {};
+  const title = String(b.title || 'Jarvis').slice(0, 100);
+  const body = String(b.body || '').trim().slice(0, 300);
+  const kind = String(b.kind || 'voice').slice(0, 40);
+  if (!body) return res.status(400).json({ error: 'body required' });
+  if (!apns.configured()) {
+    await sbInsert('notifications', { kind, title, body, ok: false, detail: 'apns not configured' });
+    return res.status(503).json({ error: 'apns not configured' });
+  }
+  let tokens = [];
+  try { tokens = await sb('device_tokens?platform=eq.ios&select=token,environment'); } catch (_) {}
+  if (!tokens.length) {
+    await sbInsert('notifications', { kind, title, body, ok: false, detail: 'no device tokens' });
+    return res.json({ ok: false, detail: 'no device tokens' });
+  }
+  const details = [];
+  let anyOk = false;
+  for (const { token, environment } of tokens) {
+    const r = await apns.send(token, { title, body, environment });
+    if (r.ok) anyOk = true;
+    details.push(`${token.slice(0, 8)}=${r.status}${r.ok ? '' : '(' + (r.detail || '').slice(0, 60) + ')'}`);
+  }
+  await sbInsert('notifications', { kind, title, body, ok: anyOk, detail: details.join(' ') });
+  res.json({ ok: anyOk, detail: details.join(' ') });
+});
+
 // Voice SSE: streams `event: voice` frames ({kind:'message'|'focus', row}) to the /tv panel.
 // Dedicated stream (not /api/stream) so the kiosk gets voice rows without the heavy status frame.
 app.get('/api/voice-stream', (req, res) => {

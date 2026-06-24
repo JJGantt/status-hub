@@ -291,7 +291,7 @@ body.tv ::-webkit-scrollbar{width:0!important;height:0!important;display:none!im
 body.tv,body.tv .card,body.tv .tv-shell,body.tv .tv-voice,body.tv .tv-hudcard{background:#000!important}
 body.tv .card{border:none}
 body.tv .rows{flex:1 1 auto;min-width:0;max-width:none;margin:0;padding:10px;height:100vh;overflow:hidden;
-  display:grid;gap:10px;grid-template-columns:380px 1fr;grid-template-rows:auto minmax(0,1fr);}
+  display:grid;gap:10px;grid-template-columns:340px 1fr 1fr 1fr;grid-template-rows:auto minmax(0,1fr);}
 body.tv .card{overflow:hidden;min-height:0;min-width:0}
 body.tv .rows .fit{display:flex;flex-direction:column;padding:10px 12px;height:100%;overflow:hidden;min-height:0;gap:6px}
 /* hide card titles entirely — content is self-evident, and it buys vertical room */
@@ -312,9 +312,12 @@ body.tv .devchip .dc-v{font-size:31px}
 body.tv .devchip .dc-v .dot{width:17px;height:17px;margin-right:10px}
 /* each content column = a full-height flex COLUMN */
 body.tv .ringrow{grid-column:1;grid-row:2;display:flex;flex-direction:column;min-height:0}
-body.tv .nutrow{display:none}      /* hidden for v1 rebuild — re-add when we bring nutrition detail back */
-body.tv .musclerow{display:none}   /* hidden for v1 rebuild */
-body.tv .workoutrow{display:none}  /* hidden for v1 rebuild */
+body.tv .nutrow{grid-column:2;grid-row:2;display:flex;flex-direction:column;min-height:0}
+body.tv .musclerow{grid-column:3;grid-row:2;display:flex;flex-direction:column;gap:8px;min-height:0}
+body.tv .workoutrow{grid-column:4;grid-row:2;display:flex;flex-direction:column;gap:8px;min-height:0}
+/* minimal: nutrition column = heatmap + food log only (drop the cal/weight plot); drop the rest timer */
+body.tv .nutrow .nutplot{display:none}
+body.tv #resttimer{display:none}
 /* COL 1 — calorie + macro rings, stacked vertically, big and packed (small gap between them) */
 body.tv .ringrow .ringcard,body.tv .nutrow .nutcard{flex:1 1 auto;min-height:0}
 body.tv .ringrow #nutrition{display:flex;flex-direction:column;height:100%}

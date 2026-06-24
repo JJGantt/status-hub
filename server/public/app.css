@@ -312,9 +312,12 @@ body.tv .devchip .dc-v{font-size:31px}
 body.tv .devchip .dc-v .dot{width:17px;height:17px;margin-right:10px}
 /* each content column = a full-height flex COLUMN */
 body.tv .ringrow{grid-column:1;grid-row:2;display:flex;flex-direction:column;min-height:0}
-body.tv .nutrow{grid-column:2;grid-row:2;display:flex;flex-direction:column;min-height:0}
-body.tv .musclerow{grid-column:3;grid-row:2;display:flex;flex-direction:column;gap:8px;min-height:0}
-body.tv .workoutrow{grid-column:4;grid-row:2;display:flex;flex-direction:column;gap:8px;min-height:0}
+/* min-width:0 is essential: without it a grid item's min-content (e.g. a long food name) can force
+   its column wider than 1fr, shrinking the neighbour — which made the workout heatmap render smaller
+   than the nutrition one even though both are the same 20 weeks. With it, all three columns are equal. */
+body.tv .nutrow{grid-column:2;grid-row:2;display:flex;flex-direction:column;min-height:0;min-width:0}
+body.tv .musclerow{grid-column:3;grid-row:2;display:flex;flex-direction:column;gap:8px;min-height:0;min-width:0}
+body.tv .workoutrow{grid-column:4;grid-row:2;display:flex;flex-direction:column;gap:8px;min-height:0;min-width:0}
 /* minimal: nutrition column = heatmap + food log only (drop the cal/weight plot); drop the rest timer */
 body.tv .nutrow .nutplot{display:none}
 body.tv #resttimer{display:none}
@@ -363,8 +366,8 @@ body.tv .heat{flex:1 1 auto;min-width:0}
 /* lists are non-interactive on the wall: drop the +now / ⋯ buttons, tighten rows */
 body.tv .addbtn,body.tv .morebtn{display:none!important}
 body.tv .dex{padding:2px 0}
-body.tv .dex-n{font-size:18px}                 /* food/exercise names — readable across the room */
-body.tv .dset{font-size:14px;padding:2px 7px}  /* macro + set chips — bigger (nutrition log + workout sets) */
+body.tv .dex-n{font-size:23px}                 /* food/exercise names — big; full day fits with room to spare */
+body.tv .dset{font-size:16px;padding:2px 8px}  /* macro + set chips — bigger (nutrition log + workout sets) */
 /* nutrition log: drop the today-totals header band (the rings already show that) and the expand caret */
 body.tv .nuthdr{display:none}
 body.tv .dex-caret{display:none}

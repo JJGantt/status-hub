@@ -24,6 +24,23 @@ async function surplusCal() {
     return Math.max(-SURPLUS_LIMIT, Math.min(SURPLUS_LIMIT, v));
   } catch { return 150; }
 }
+// Agent routing config for the TV panel: the Custom-route knobs (model / thinking / runner) the user
+// controls via the hub Settings and the voice MCP tools, plus whether wake-free voice is on. These are
+// what the conversational route uses whenever it's set to Custom (which the MCP setters auto-activate).
+async function routingConfig() {
+  let s = {};
+  try {
+    const rows = await sb('app_settings?key=in.(custom_model,custom_think,custom_runner,wakefree_enabled,chatbox_route,wakefree_route)&select=key,value');
+    s = Object.fromEntries((rows || []).map((r) => [r.key, r.value]));
+  } catch { /* fall through to defaults */ }
+  return {
+    model: ['haiku', 'sonnet', 'opus'].includes(s.custom_model) ? s.custom_model : 'sonnet',
+    thinking: ['none', 'medium', 'max'].includes(s.custom_think) ? s.custom_think : 'medium',
+    runner: s.custom_runner === 'api' ? 'api' : 'local',
+    wake: ['1', 'true', 'on', 'yes'].includes(String(s.wakefree_enabled ?? '0').toLowerCase()),
+    active: s.chatbox_route === 'custom' || s.wakefree_route === 'custom',  // is Custom the live route?
+  };
+}
 const { buildVariants } = require('./lib/variants');
 const apns = require('./lib/apns');
 const weightReminder = require('./lib/weightReminder');
@@ -258,6 +275,7 @@ async function buildStatus() {
   const intakeByDay = Object.entries(intakeTotals).map(([date, calories]) => ({ date, calories }));
   const weights = (weightRows || []).map((r) => ({ date: String(r.date).slice(0, 10), weight: Number(r.weight_lbs) }));
   const surplus = await surplusCal();   // current surplus/deficit setting
+  const routing = await routingConfig();   // agent model / thinking / runner / wake (TV routing panel)
   const maintenance = estimateMaintenance({ weights, intakeByDay, today, surplus });
   nutrition.target = maintenance.target_macros; // the macro goal is the live dynamic target
   syncStoredTarget(maintenance.target_macros, today).catch((e) => console.error('target sync:', e.message));
@@ -296,7 +314,7 @@ async function buildStatus() {
       else break;
     }
   }
-  return { today, litter, surf, nutrition, maintenance, pace: paceData, volume, heatmap, nutrition_log, last_set_at, session_start_at, generated_at: new Date().toISOString() };
+  return { today, litter, surf, nutrition, maintenance, pace: paceData, volume, heatmap, nutrition_log, last_set_at, session_start_at, routing, generated_at: new Date().toISOString() };
 }
 
 // ---- realtime push: recompute + push to all connected browsers on any DB change ----
@@ -322,6 +340,9 @@ function startRealtime() {
     .on('postgres_changes', { event: '*', schema: 'public', table: 'device_status' }, broadcast)
     .on('postgres_changes', { event: '*', schema: 'public', table: 'nutrition_entries' }, broadcast)
     .on('postgres_changes', { event: '*', schema: 'public', table: 'sets' }, broadcast)
+    // Settings (routing model/thinking/runner, wake toggle, nutrition goal): rebuild so the TV routing
+    // panel reflects an MCP/voice/settings change near-instantly instead of waiting for the 30s tick.
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'app_settings' }, broadcast)
     // Voice pipeline: stream inserts/updates straight to the /tv conversation panel. INSERT and
     // UPDATE both carry the new row in `payload.new` (UPDATE = a streamed row flipping done=true).
     .on('postgres_changes', { event: '*', schema: 'public', table: 'voice_messages' },

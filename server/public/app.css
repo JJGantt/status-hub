@@ -312,8 +312,11 @@ body.tv .emit .em-text{flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:e
    HIDDEN, not deleted — each card keeps mounting safely (core.js renders them unconditionally) so we
    can bring them back one at a time without breaking the rings. ---- */
 body.tv .tv-voice{display:none}                              /* historical chat — removed */
-body.tv .statusrow .statuscard:nth-of-type(2){display:none}  /* surf out of the strip for now */
+body.tv .statusrow .tv-surfcard{display:none}                /* surf out of the strip for now */
 body.tv .statusrow .fit{justify-content:center}
+/* top-strip agent routing card: sized to its content so the litter card fills the rest of the strip */
+body.tv .tv-routecard{flex:0 0 auto}
+body.tv .tv-routecard .fit{justify-content:center;align-items:flex-start}
 /* status strip — bigger + borderless so it reads from across the room (room kept for a feeder group) */
 body.tv .devstrip{gap:24px 44px}
 body.tv .devname{font-size:23px}

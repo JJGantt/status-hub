@@ -32,7 +32,7 @@ async function open() {
   const wfOn = ['1', 'true', 'on', 'yes'].includes(String(cur.wakefree_enabled ?? '0').toLowerCase());
   const wfRoute = ['fast', 'power', 'custom'].includes(cur.wakefree_route) ? cur.wakefree_route : 'fast';
   const cMod = ['haiku', 'sonnet', 'opus'].includes(cur.custom_model) ? cur.custom_model : 'sonnet';
-  const cThink = ['none', 'low', 'high'].includes(cur.custom_think) ? cur.custom_think : 'low';
+  const cThink = ['none', 'medium', 'max'].includes(cur.custom_think) ? cur.custom_think : 'medium';
   const cRun = cur.custom_runner === 'api' ? 'api' : 'local';
   const agentOn = ['1', 'true', 'on', 'yes'].includes(String(cur.agent_mode ?? '0').toLowerCase());
   const agentCwdRaw = cur.agent_cwd || '';
@@ -69,9 +69,9 @@ async function open() {
         '<button type="button" data-v="opus"' + (cMod === 'opus' ? ' class="on"' : '') + '>Opus</button>' +
       '</div>' +
       '<div class="settings-seg" id="set-cust-think" style="margin-top:8px">' +
-        '<button type="button" data-v="none"' + (cThink === 'none' ? ' class="on"' : '') + '>No&nbsp;thinking</button>' +
-        '<button type="button" data-v="low"' + (cThink === 'low' ? ' class="on"' : '') + '>Low</button>' +
-        '<button type="button" data-v="high"' + (cThink === 'high' ? ' class="on"' : '') + '>High</button>' +
+        '<button type="button" data-v="none"' + (cThink === 'none' ? ' class="on"' : '') + '>None</button>' +
+        '<button type="button" data-v="medium"' + (cThink === 'medium' ? ' class="on"' : '') + '>Medium</button>' +
+        '<button type="button" data-v="max"' + (cThink === 'max' ? ' class="on"' : '') + '>Maximum</button>' +
       '</div>' +
       '<div class="settings-seg" id="set-cust-runner" style="margin-top:8px">' +
         '<button type="button" data-v="local"' + (cRun === 'local' ? ' class="on"' : '') + '>Local</button>' +

@@ -289,27 +289,40 @@ body.tv ::-webkit-scrollbar{width:0!important;height:0!important;display:none!im
    Col widths: rings narrow (fits the big rings) · nutrition == workout (so their heatmaps match) ·
    muscle shrunk ~75% · the freed width goes to the voice column. */
 body.tv,body.tv .card,body.tv .tv-shell,body.tv .tv-voice,body.tv .tv-hudcard{background:#000!important}
-body.tv .card{border:1px solid #181c22}
+body.tv .card{border:none}
 body.tv .rows{flex:1 1 auto;min-width:0;max-width:none;margin:0;padding:10px;height:100vh;overflow:hidden;
-  display:grid;gap:10px;grid-template-columns:240px 0.78fr 0.82fr 0.78fr;grid-template-rows:auto minmax(0,1fr);}
+  display:grid;gap:10px;grid-template-columns:380px 1fr;grid-template-rows:auto minmax(0,1fr);}
 body.tv .card{overflow:hidden;min-height:0;min-width:0}
 body.tv .rows .fit{display:flex;flex-direction:column;padding:10px 12px;height:100%;overflow:hidden;min-height:0;gap:6px}
 /* hide card titles entirely — content is self-evident, and it buys vertical room */
 body.tv .card h2{display:none}
-body.tv .statusrow{grid-column:1/-1;grid-row:1}
+body.tv .statusrow{grid-column:1/-1;grid-row:1;min-height:108px}
+/* ---- TV route v1 (minimal rebuild): top status strip + left ring column ONLY. Other panels are
+   HIDDEN, not deleted — each card keeps mounting safely (core.js renders them unconditionally) so we
+   can bring them back one at a time without breaking the rings. ---- */
+body.tv .tv-voice{display:none}                              /* historical chat — removed */
+body.tv .statusrow .statuscard:nth-of-type(2){display:none}  /* surf out of the strip for now */
+body.tv .statusrow .fit{justify-content:center}
+/* status strip — bigger + borderless so it reads from across the room (room kept for a feeder group) */
+body.tv .devstrip{gap:24px 44px}
+body.tv .devname{font-size:23px}
+body.tv .devchip{background:none;border:none;padding:0;gap:11px}
+body.tv .devchip .dc-l{font-size:18px}
+body.tv .devchip .dc-v{font-size:31px}
+body.tv .devchip .dc-v .dot{width:17px;height:17px;margin-right:10px}
 /* each content column = a full-height flex COLUMN */
 body.tv .ringrow{grid-column:1;grid-row:2;display:flex;flex-direction:column;min-height:0}
-body.tv .nutrow{grid-column:2;grid-row:2;display:flex;flex-direction:column;min-height:0}
-body.tv .musclerow{grid-column:3;grid-row:2;display:flex;flex-direction:column;gap:8px;min-height:0}
-body.tv .workoutrow{grid-column:4;grid-row:2;display:flex;flex-direction:column;gap:8px;min-height:0}
+body.tv .nutrow{display:none}      /* hidden for v1 rebuild — re-add when we bring nutrition detail back */
+body.tv .musclerow{display:none}   /* hidden for v1 rebuild */
+body.tv .workoutrow{display:none}  /* hidden for v1 rebuild */
 /* COL 1 — calorie + macro rings, stacked vertically, big and packed (small gap between them) */
 body.tv .ringrow .ringcard,body.tv .nutrow .nutcard{flex:1 1 auto;min-height:0}
 body.tv .ringrow #nutrition{display:flex;flex-direction:column;height:100%}
-body.tv .ringrow .rings{flex:1 1 auto;flex-direction:column;align-items:center;justify-content:center;gap:14px;margin:0;min-height:0}
-body.tv .ringrow .ring{flex:0 0 auto;width:100%;text-align:center}
-body.tv .ringrow .ring svg{max-width:200px;width:100%}
-body.tv .ringrow .ring .rtot{font-size:13px;margin-top:2px}
-body.tv .ringrow .pnote{flex:0 0 auto;text-align:center;font-size:11px;color:#5c6675;margin:0}
+body.tv .ringrow .rings{flex:1 1 auto;flex-direction:column;align-items:center;justify-content:space-evenly;gap:10px;margin:0;min-height:0}
+body.tv .ringrow .ring{flex:1 1 0;display:flex;flex-direction:column;justify-content:center;width:100%;text-align:center;min-height:0}
+body.tv .ringrow .ring svg{max-width:240px;max-height:100%;width:100%}
+body.tv .ringrow .ring .rtot{display:none}     /* drop the tiny eaten/total — illegible at distance */
+body.tv .ringrow .pnote{display:none}          /* drop the eating-window note — keep it just the rings */
 /* COL 2 — nutrition: calorie heatmap (top) → food list (fills, scrolls) → cal/weight plot (bottom) */
 body.tv .nutrow #nutritionlog{display:flex;flex-direction:column;height:100%;min-height:0;gap:8px}
 body.tv .nutrow .nutheat{flex:0 0 auto}

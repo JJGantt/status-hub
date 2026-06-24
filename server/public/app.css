@@ -119,6 +119,8 @@ body.touch .musclerow .musdetail .fit{padding:0}
 .vrow-l .nm{color:#c7ced8;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
 .vrow-l .vl{color:#8b96a5;white-space:nowrap;flex:none}
 .vtrack{display:flex;height:10px;background:#0e1318;border-radius:5px;overflow:hidden;border:1px solid #222a33}
+.vbout{display:block;text-align:right;font-size:11px;font-weight:700;color:#fff;margin-top:2px;font-variant-numeric:tabular-nums}
+.vbout.capped{color:#ef4444}   /* hit the per-bout cap → red, stops at +11 */
 .vstable{height:100%;transition:width .4s ease}
 /* Drop-off slices keep the bar's own colour (set inline as background-color); white diagonal
    stripes overlay it to flag "at risk" — two intensities for the two windows. */
@@ -373,10 +375,11 @@ body.tv .musvol .vgrp{display:flex;flex-direction:column;flex:1 1 auto;min-heigh
    length the way the old right-side label did — every track is now the same length. */
 body.tv .musvol .vrow{display:flex;align-items:center;gap:8px;margin:0;padding:0;flex:1 1 0;min-height:0;position:relative}
 body.tv .musvol .vrow-l{display:contents}
-body.tv .musvol .vrow-l .nm{order:1;flex:0 0 76px;font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:#c7ced8}
+body.tv .musvol .vrow-l .nm{order:1;flex:0 0 96px;font-size:17px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:#c7ced8}
 body.tv .musvol .vtrack{order:2;flex:1 1 auto;height:20px;margin:0}
-body.tv .musvol .vrow-l .vl{position:absolute;left:84px;top:50%;transform:translateY(-50%);font-size:12px;font-weight:700;color:#fff;text-shadow:0 1px 2px rgba(0,0,0,.9);white-space:nowrap;z-index:2;pointer-events:none}
+body.tv .musvol .vrow-l .vl{position:absolute;left:104px;top:50%;transform:translateY(-50%);font-size:12px;font-weight:700;color:#fff;text-shadow:0 1px 2px rgba(0,0,0,.9);white-space:nowrap;z-index:2;pointer-events:none}
 body.tv .musvol .vrow-l .vl span{display:none}
+body.tv .musvol .vbout{position:absolute;right:8px;top:50%;transform:translateY(-50%);margin:0;font-size:13px;text-shadow:0 1px 2px rgba(0,0,0,.9);z-index:2}
 /* COL 4 — workout: sets heatmap (top) → sets list (fills) */
 body.tv .wkheat{order:1;flex:0 0 auto}
 body.tv .wkdetail{order:2;flex:1 1 auto;min-height:0}

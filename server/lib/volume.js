@@ -16,6 +16,13 @@ const { dayBucketOf } = require('./dates');
 // Server computes everything (sets, target, fill, drop-off, color); clients only render.
 
 const TARGET_DEFAULT = 14;
+// Per-bout hard clip (junk-volume guard): a muscle earns at most CAP adjusted sets within a single
+// training bout. A bout is a run of sets with no gap longer than BOUT_GAP_MS (so a second session
+// hours later is a FRESH bout with its own cap — it's added frequency, not junk). Beyond the cap the
+// extra sets simply aren't credited toward weekly volume (research: per-session returns flatten by
+// ~11 sets/muscle). The most recent live bout's raw per-muscle sums drive the on-bar "+N" badge.
+const PER_BOUT_CAP = 11;
+const BOUT_GAP_MS = 3 * 60 * 60 * 1000;   // >3h since the last set starts a new bout
 
 const GROUPS = [
   { group: 'Legs', muscles: [['quads', 'Quads'], ['hamstrings', 'Hamstrings'], ['glutes', 'Glutes'], ['adductors', 'Adductors'], ['hip_flexors', 'Hip flexors'], ['gastrocnemius', 'Calves']] },
@@ -53,18 +60,38 @@ function computeVolume(setRows, muscleRows, window, targets) {
     if (!musByName.has(k)) musByName.set(k, []);
     musByName.get(k).push({ muscle: m.muscle, contribution: m.contribution });
   }
+  // Expand sets → {ts, day, pairs}, time-sorted, then group into BOUTS (>3h gap = new bout). Clip each
+  // muscle's per-bout contribution at PER_BOUT_CAP; the clipped values feed the weekly total + drop tiers.
+  const expanded = (setRows || []).map(s => ({
+    ts: new Date(s.occurred_at).getTime(),
+    day: dayBucketOf(s.occurred_at),         // 4am-day bucket, matches the window dates above
+    pairs: s.muscles_override
+      ? Object.entries(s.muscles_override).map(([muscle, contribution]) => ({ muscle, contribution: Number(contribution) }))
+      : (musByName.get(String(s.exercise).toLowerCase()) || []),
+  })).sort((a, b) => a.ts - b.ts);
+
+  const bouts = [];
+  let cur = null;
+  for (const e of expanded) {
+    if (!cur || e.ts - cur.lastTs > BOUT_GAP_MS) { cur = { lastTs: e.ts, day: e.day, raw: {} }; bouts.push(cur); }
+    cur.lastTs = e.ts;
+    cur.day = e.day;                          // attribute the bout to its latest set's day (for drop tiers)
+    for (const mm of e.pairs) cur.raw[mm.muscle] = (cur.raw[mm.muscle] || 0) + Number(mm.contribution);
+  }
+
   const total = {}, dropTmrw = {}, dropAfter = {};   // dropTmrw = gone tomorrow; dropAfter = gone the day after
-  for (const s of setRows || []) {
-    const day = dayBucketOf(s.occurred_at);    // 4am-day bucket, matches the window dates above
-    const map = s.muscles_override
-      ? Object.entries(s.muscles_override).map(([muscle, contribution]) => ({ muscle, contribution }))
-      : (musByName.get(String(s.exercise).toLowerCase()) || []);
-    for (const mm of map) {
-      total[mm.muscle] = (total[mm.muscle] || 0) + mm.contribution;
-      if (day === dropDay) dropTmrw[mm.muscle] = (dropTmrw[mm.muscle] || 0) + mm.contribution;
-      else if (day === dropDay2) dropAfter[mm.muscle] = (dropAfter[mm.muscle] || 0) + mm.contribution;
+  for (const b of bouts) {
+    for (const [muscle, raw] of Object.entries(b.raw)) {
+      const clipped = Math.min(raw, PER_BOUT_CAP);   // hard clip per muscle per bout
+      total[muscle] = (total[muscle] || 0) + clipped;
+      if (b.day === dropDay) dropTmrw[muscle] = (dropTmrw[muscle] || 0) + clipped;
+      else if (b.day === dropDay2) dropAfter[muscle] = (dropAfter[muscle] || 0) + clipped;
     }
   }
+  // The "+N" badge reflects the CURRENT bout — the most recent one, but only while it's still live
+  // (a set within the last BOUT_GAP_MS). Once 3h pass with no set the bout is closed and "+N" clears.
+  const lastBout = bouts.length ? bouts[bouts.length - 1] : null;
+  const boutRaw = (lastBout && Date.now() - lastBout.lastTs <= BOUT_GAP_MS) ? lastBout.raw : {};
   const groups = GROUPS.map(g => ({
     group: g.group,
     muscles: g.muscles.map(([slug, label]) => {
@@ -74,8 +101,9 @@ function computeVolume(setRows, muscleRows, window, targets) {
       const dropping = Math.round((drop_tomorrow + drop_day_after) * 10) / 10; // combined at-risk volume
       const target = (targets && targets[slug]) || TARGET_DEFAULT;
       const ratio = target > 0 ? sets / target : 0;
+      const bout = Math.round((boutRaw[slug] || 0) * 10) / 10;   // current live bout's adjusted sets ("+N" badge)
       return {
-        muscle: slug, label, sets, dropping, drop_tomorrow, drop_day_after, target,
+        muscle: slug, label, sets, dropping, drop_tomorrow, drop_day_after, target, bout,
         fill: Math.max(0, Math.min(1, ratio)),                       // total fill vs target (capped)
         stable_fill: target > 0 ? Math.max(0, Math.min(1, (sets - dropping) / target)) : 0, // survives both rollovers
         drop_tomorrow_fill: target > 0 ? Math.min(1, drop_tomorrow / target) : 0,     // urgent (bright stripes)

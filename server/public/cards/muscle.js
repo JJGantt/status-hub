@@ -3,6 +3,16 @@
 // and the #bodyinfo detail (a fixed bottom sheet on mobile).
 import { state, TOUCH, esc } from '../shared.js';
 
+// On the TV wall, abbreviate the qualifier word so labels read BIG without getting wider:
+// "Lower back"→"L. back", "Side delts"→"S. delts", "Triceps (long)"→"Tri. long". Single words unchanged.
+const TV = document.body.classList.contains('tv');
+function shortLabel(label) {
+  const paren = label.match(/^(\w+)\s*\(([^)]+)\)$/);
+  if (paren) return paren[1].slice(0, 3) + '. ' + paren[2];          // Triceps (long) → Tri. long
+  const m = label.match(/^(\w+)[\s-](.+)$/);
+  return m ? m[1][0].toUpperCase() + '. ' + m[2] : label;           // Lower back → L. back; Mid-back → M. back
+}
+
 const MUSCLE_NAMES={
  quads:['Quads','Quadriceps'],hamstrings:['Hamstrings','Hamstrings'],glutes:['Glutes','Gluteals'],
  adductors:['Inner thigh','Adductors'],hip_flexors:['Hip flexors','Iliopsoas'],gastrocnemius:['Calves','Gastrocnemius'],
@@ -98,8 +108,13 @@ function volRowHtml(m){
   : '<div class=vstable style="width:'+stable+'%;background:'+m.color+'"></div>'+
     (dAfter>0?'<div class="vdrop vdrop-2d" style="width:'+dAfter+'%;background-color:'+m.color+'"></div>':'')+
     (dTmrw>0?'<div class="vdrop vdrop-tmrw" style="width:'+dTmrw+'%;background-color:'+m.color+'"></div>':'');
- return '<div class="vrow tappable" data-mus="'+m.muscle+'"><div class=vrow-l><span class=nm>'+m.label+'</span><span class=vl>'+m.sets+' / '+m.target+dropTxt+'</span></div>'+
-  '<div class=vtrack>'+bars+'</div></div>';
+ // "+N" badge (right of the bar): the current live bout's adjusted sets for this muscle. Climbs as you
+ // log sets; clamps + turns red at +11 (the per-bout cap — no further weekly credit).
+ const boutN = m.bout || 0;
+ const capped = boutN >= 11;
+ const boutTxt = boutN > 0 ? '<span class="vbout'+(capped?' capped':'')+'">+'+(capped?11:boutN)+'</span>' : '';
+ return '<div class="vrow tappable" data-mus="'+m.muscle+'"><div class=vrow-l><span class=nm>'+(TV?shortLabel(m.label):m.label)+'</span><span class=vl>'+m.sets+' / '+m.target+dropTxt+'</span></div>'+
+  '<div class=vtrack>'+bars+'</div>'+boutTxt+'</div>';
 }
 function renderVolume(){
  const V=(state.last&&state.last.volume)||{}; const groups=V.groups||[];

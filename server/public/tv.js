@@ -172,10 +172,33 @@ function renderSessions(rows) {
 // ---------------------------------------------------------------------------
 // Wire up the voice stream. (core.js owns /api/stream for the dashboard cards.)
 // ---------------------------------------------------------------------------
+// Bottom-strip emission feed: transient, no persistent conversation. listening (blue) → working/tools
+// (amber, the ESP-flashing phase) → resolution (green, same line pushed to the phone), then it fades.
+const emitEl = document.getElementById('emit');
+let emitFade = null;
+const EMIT_STYLE = {
+  listening: { c: '#3b82f6', l: 'Listening' },   // blue — matches the ESP solid-blue capture cue
+  working:   { c: '#eab308', l: 'Working' },      // amber — thinking, matches the ESP flashing
+  tool:      { c: '#eab308', l: 'Working' },
+  done:      { c: '#22c55e', l: 'Done' },         // green — resolution, then fades
+};
+function showEmit(state, text) {
+  if (!emitEl) return;
+  clearTimeout(emitFade);
+  const s = EMIT_STYLE[state] || EMIT_STYLE.tool;
+  emitEl.innerHTML = '<span class="em-dot"></span><span class="em-label"></span><span class="em-text"></span>';
+  emitEl.querySelector('.em-dot').style.background = s.c;
+  emitEl.querySelector('.em-label').textContent = s.l;
+  emitEl.querySelector('.em-text').textContent = text || '';
+  emitEl.classList.add('show');
+  if (state === 'done') emitFade = setTimeout(() => emitEl.classList.remove('show'), 7000);
+}
+
 const voice = new EventSource('/api/voice-stream');
 voice.addEventListener('voice', (e) => {
   let msg; try { msg = JSON.parse(e.data); } catch (_) { return; }
-  if (msg.kind === 'message') upsert(msg.row);
+  if (msg.kind === 'activity') { const a = msg.row || {}; showEmit(a.state, a.text); }
+  else if (msg.kind === 'message') upsert(msg.row);
   else if (msg.kind === 'reset') { log.innerHTML = ''; seen.clear(); }
   else if (msg.kind === 'focus') { renderFocus(msg.row); loadSessions(); }
   else if (msg.kind === 'sessions') loadSessions();

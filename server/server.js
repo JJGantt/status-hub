@@ -41,7 +41,7 @@ async function maintenanceMinDays() {
 async function routingConfig() {
   let s = {};
   try {
-    const rows = await sb('app_settings?key=in.(custom_model,custom_think,custom_runner,wakefree_enabled,wakefree_route)&select=key,value');
+    const rows = await sb('app_settings?key=in.(custom_model,custom_think,custom_runner,wakefree_enabled,wakefree_route,voice_inject_mode)&select=key,value');
     s = Object.fromEntries((rows || []).map((r) => [r.key, r.value]));
   } catch { /* fall through to defaults */ }
   const route = ['fast', 'power', 'custom'].includes(s.wakefree_route) ? s.wakefree_route : 'power';
@@ -59,6 +59,7 @@ async function routingConfig() {
     thinking: cfg.thinking,
     runner: cfg.runner,
     wake: ['1', 'true', 'on', 'yes'].includes(String(s.wakefree_enabled ?? '0').toLowerCase()),
+    inject: ['1', 'true', 'on', 'yes'].includes(String(s.voice_inject_mode ?? '0').toLowerCase()),
   };
 }
 const { buildVariants } = require('./lib/variants');

@@ -17,12 +17,13 @@ if (PHONE) {
     const fit = () => {
       const vw = window.innerWidth, vh = window.innerHeight;
       const portrait = vh >= vw;
-      // Web views can't force iOS orientation, so in portrait we show a "rotate" prompt (CSS) instead of a
-      // tiny letterboxed dashboard. Landscape fills the screen, reserving the control rail on the right.
-      document.body.classList.toggle('wallportrait', portrait);
-      if (portrait) return;
-      const availW = vw - RAIL;
-      const logicalH = 1080, logicalW = Math.round(logicalH * availW / vh), s = vh / logicalH;
+      document.body.classList.toggle('wallportrait', portrait);  // portrait reflows to a condensed vertical stack (CSS)
+      const availW = vw - RAIL;                                  // reserve the control rail on the right (both orientations)
+      // Pick a fixed logical canvas matched to the available area's aspect, then scale it to fill exactly.
+      // Landscape: height pinned to 1080. Portrait: width pinned to 1080, height grows tall.
+      let logicalW, logicalH, s;
+      if (portrait) { logicalW = 1080; s = availW / logicalW; logicalH = Math.round(vh / s); }
+      else { logicalH = 1080; s = vh / logicalH; logicalW = Math.round(availW / s); }
       shell.style.width = logicalW + 'px'; shell.style.height = logicalH + 'px';
       shell.style.transform = `scale(${s})`; shell.style.left = '0px'; shell.style.top = '0px';
     };
@@ -68,10 +69,5 @@ if (PHONE) {
     group.appendChild(gear);
     rail.appendChild(ex); rail.appendChild(group);
     document.body.appendChild(rail);
-
-    // Portrait: a "rotate to landscape" prompt instead of a tiny dashboard (web views can't force orientation).
-    const rot = document.createElement('div'); rot.className = 'wallrotate';
-    rot.innerHTML = '<div class="wallrotate-icon">⟳</div><div>Rotate to landscape</div>';
-    document.body.appendChild(rot);
   }
 }

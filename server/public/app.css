@@ -356,13 +356,24 @@ body.tv.phonewall .tv-voice{height:100%}
 .wallrail .wallgear{width:44px;height:44px;color:#9aa6b2}
 .wallrail .wfab.rec{background:#e5484d;color:#fff;border-color:#e5484d;animation:wallpttPulse 1s ease-in-out infinite}
 @keyframes wallpttPulse{0%,100%{box-shadow:0 0 0 0 rgba(229,72,77,.5)}50%{box-shadow:0 0 0 12px rgba(229,72,77,0)}}
-/* portrait: a rotate prompt instead of the tiny dashboard (web views can't force orientation) */
-.wallrotate{display:none}
-body.wallportrait .tv-shell,body.wallportrait .wallrail{display:none}
-body.wallportrait .wallrotate{display:flex;position:fixed;inset:0;z-index:1100;flex-direction:column;
-  align-items:center;justify-content:center;gap:14px;background:#06080a;color:#cfd8e3;font-size:18px;font-weight:600}
-.wallrotate-icon{font-size:54px;line-height:1;animation:wallrot 2.4s ease-in-out infinite}
-@keyframes wallrot{0%,55%{transform:rotate(0)}80%,100%{transform:rotate(-90deg)}}
+/* PORTRAIT wall mode: reflow the dashboard into one condensed vertical stack that fits the screen, with the
+   score as a thin vertical bar down the right. Detail/scrub panels + plots + the voice column are dropped
+   for the glance view; headers shrink. The whole canvas is then scaled to fit by wall.js. */
+body.tv.wallportrait .tv-voice{display:none}
+body.tv.wallportrait .rows{
+  grid-template-columns:1fr 30px;
+  grid-template-rows:auto minmax(0,.9fr) minmax(0,1fr) minmax(0,1.3fr) minmax(0,1fr);
+  gap:8px;padding:10px}
+body.tv.wallportrait .statusrow{grid-column:1;grid-row:1}
+body.tv.wallportrait .ringrow{grid-column:1;grid-row:2}
+body.tv.wallportrait .nutrow{grid-column:1;grid-row:3}
+body.tv.wallportrait .musclerow{grid-column:1;grid-row:4}
+body.tv.wallportrait .workoutrow{grid-column:1;grid-row:5}
+body.tv.wallportrait .healthbar{grid-column:2;grid-row:1/-1}
+body.tv.wallportrait .emitstrip{display:none}
+body.tv.wallportrait .nutfoods,body.tv.wallportrait #nutplot,
+body.tv.wallportrait .musdetail,body.tv.wallportrait .wkdetail{display:none}
+body.tv.wallportrait .rows h2{font-size:13px;margin:0 0 3px}
 
 /* BOTTOM STRIP — full-width transient process/emission feed (shorter than the top strip). Fades when idle. */
 body.tv .emitstrip{grid-column:1/5;grid-row:3;min-height:56px;display:flex;align-items:center;padding:0 4px}

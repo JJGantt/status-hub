@@ -119,7 +119,7 @@ body.touch .musclerow .musdetail .fit{padding:0}
 .vrow-l .nm{color:#c7ced8;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
 .vrow-l .vl{color:#8b96a5;white-space:nowrap;flex:none}
 .vtrack{display:flex;height:10px;background:#0e1318;border-radius:5px;overflow:hidden;border:1px solid #222a33}
-.vbout{display:block;text-align:right;font-size:11px;font-weight:700;color:#fff;margin-top:2px;font-variant-numeric:tabular-nums}
+.vbout{font-weight:700;color:#fff;font-variant-numeric:tabular-nums}   /* phone: inline (+N) paren in the value */
 .vbout.capped{color:#ef4444}   /* hit the per-bout cap → red, stops at +11 */
 .vstable{height:100%;transition:width .4s ease}
 /* Drop-off slices keep the bar's own colour (set inline as background-color); white diagonal

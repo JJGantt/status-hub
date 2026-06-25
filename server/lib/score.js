@@ -13,6 +13,8 @@
 //                Squared so small misses barely register and big ones bite (3× the miss ≈ 9× the penalty).
 //     fat      — TWO-SIDED, symmetric, quadratic. Want to land on target; over and under both penalized
 //                (we'd rather a calorie overage come from carbs than fat, hence fat is charged separately).
+//   Then a CATASTROPHE GATE: if the calorie score is badly low (a big against-goal miss) it multiplies the
+//   whole day down, so a blown cut (e.g. 24% over) is a horrible day no matter how good the macros were.
 //   The 6 completed days are averaged (unlogged day = 0). TODAY is pace-adjusted (goals prorated to the
 //   eating-window fraction so it reads "on track right now"). Nutrition% = 0.5·today + 0.5·past6avg.
 
@@ -20,6 +22,9 @@ const TARGET = 14;
 const W_PRO = 0.35, W_CAL = 0.35, W_FAT = 0.30;     // nutrition macro weights (sum 1); carbs derived, not scored
 const CAL_LENIENT = 0.40, CAL_STRICT = 0.25;        // calorie quadratic bands: with-goal side vs against-goal side
 const FAT_BAND = 0.40;                               // fat quadratic band (both directions)
+const CAL_GATE = 0.5;   // catastrophe gate: when the calorie score drops below this (a big against-goal miss)
+                        // it multiplicatively tanks the WHOLE day — nailing protein can't rescue a blown cut.
+                        // Above it the gate is 1 (no effect), so normal days are untouched.
 const W_TODAY = 0.5;                                 // today's weight within nutrition
 const W_TRAIN = 0.5;                                 // training's weight in the overall blend
 
@@ -52,7 +57,9 @@ function nutritionScore(days, surplus) {
     const cal = calorieScore(d.cal, d.calGoal * f, surplus);
     const pro = proteinScore(d.protein, d.proteinFloor * f);
     const fat = fatScore(d.fat, d.fatTarget * f);
-    return { ...d, f, calScore: cal, proScore: pro, fatScore: fat, dayPct: W_PRO * pro + W_CAL * cal + W_FAT * fat };
+    const base = W_PRO * pro + W_CAL * cal + W_FAT * fat;
+    const gate = Math.min(1, cal / CAL_GATE);    // 1 unless calories are catastrophically off → then it tanks the day
+    return { ...d, f, calScore: cal, proScore: pro, fatScore: fat, dayPct: base * gate };
   });
   const todayEntry = scored.find((d) => d.isToday);
   const past = scored.filter((d) => !d.isToday);

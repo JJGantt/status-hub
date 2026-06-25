@@ -52,6 +52,13 @@ async function backfill() {
 // ---------------------------------------------------------------------------
 const emitEl = document.getElementById('emit');
 let emitFade = null;
+
+// Heard-you pop. The UI plays it ITSELF the instant your words land on screen — same surface as the visual,
+// so it's synced by construction: no Pi round-trip, no Supabase hop, no separate audio route. Just a tiny
+// WAV firing on the same event that paints the transcript. (Kiosk needs --autoplay-policy=no-user-gesture.)
+const popSound = new Audio('/pop.wav');
+popSound.preload = 'auto';
+function playPop() { try { popSound.currentTime = 0; popSound.play().catch(() => {}); } catch (_) {} }
 const EMIT_STYLE = {
   listening: { c: '#3b82f6', l: 'Listening' },   // blue — matches the ESP solid-blue capture cue
   working:   { c: '#eab308', l: 'Working' },      // amber — thinking, matches the ESP flashing
@@ -77,7 +84,11 @@ function showEmit(state, text) {
 const voice = new EventSource('/api/voice-stream');
 voice.addEventListener('voice', (e) => {
   let msg; try { msg = JSON.parse(e.data); } catch (_) { return; }
-  if (msg.kind === 'activity') { const a = msg.row || {}; showEmit(a.state, a.text); }
+  if (msg.kind === 'activity') {
+    const a = msg.row || {};
+    if (a.state === 'working') playPop();   // a new command's words just landed → pop now, synced to the paint
+    showEmit(a.state, a.text);
+  }
   else if (msg.kind === 'message') upsert(msg.row);
   else if (msg.kind === 'reset') {
     log.innerHTML = ''; seen.clear();

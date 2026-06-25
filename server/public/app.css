@@ -319,9 +319,9 @@ body.tv .hb-track{flex:1 1 auto;width:38px;position:relative;background:#0e1318;
 body.tv .hb-fill{position:absolute;left:0;right:0;transition:height .6s ease,bottom .6s ease}
 body.tv .hb-nutr{background:#3b82f6}    /* nutrition contribution */
 body.tv .hb-train{background:#39d353}   /* training contribution */
-/* subtle 10-segment divisions: gives a reference for the 50% mark (max blue) and an at-a-glance read of the level */
+/* 10-segment divisions (bold): a clear reference for the 50% mark (max blue) and an at-a-glance read of the level */
 body.tv .hb-track::after{content:'';position:absolute;inset:0;pointer-events:none;
-  background:repeating-linear-gradient(to top, transparent 0, transparent calc(10% - 1.5px), rgba(140,150,165,.28) calc(10% - 1.5px), rgba(140,150,165,.28) 10%)}
+  background:repeating-linear-gradient(to top, transparent 0, transparent calc(10% - 3px), rgba(255,255,255,.55) calc(10% - 3px), rgba(255,255,255,.55) 10%)}
 /* BOTTOM STRIP — full-width transient process/emission feed (shorter than the top strip). Fades when idle. */
 body.tv .emitstrip{grid-column:1/5;grid-row:3;min-height:56px;display:flex;align-items:center;padding:0 4px}
 body.tv .emit{display:flex;align-items:center;width:100%;min-width:0;font-size:21px;color:#dfe5ee;

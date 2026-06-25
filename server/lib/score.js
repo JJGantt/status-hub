@@ -1,28 +1,41 @@
 'use strict';
-// Overall weekly score (see session design) = 0.5·Training + 0.5·Nutrition.
+// Overall weekly score = 0.5·Training + 0.5·Nutrition.
 //
-// TRAINING%  = Σ[ min(s,14) + 0.5·max(0, s−14) ] / (14 · N muscles)
-//   over the rolling-week clipped per-muscle sets. Under-target drags 1:1, over rewards at ½, 14
-//   everywhere = 100%, all-over > 100% (uncapped — over-training is rewarded).
+// TRAINING% = Σ[ min(s,14) + 0.5·max(0,s−14) ] / (14·N muscles) over the rolling-week clipped per-muscle
+//   sets. Under-target drags 1:1, over rewards at ½, 14 everywhere = 100%, all-over > 100%.
 //
-// NUTRITION% — each day scored on its own (deviations never cancel across days), then blended:
-//   Day% = 0.40·protein + 0.30·calorie + 0.15·carbs + 0.15·fat
-//   All scoring is 1× PROPORTIONAL (gentle — penalty equals your actual deviation, no amplified band):
-//     calorie / fat — TWO-SIDED: want to land on target, penalized over AND under, = max(0,1−|a−t|/t)
-//     protein / carbs — FLOOR: want to clear the floor, penalized only when UNDER, overage free = min(1,a/floor)
-//   The 6 completed days are averaged (unlogged day = 0). TODAY is scored pace-adjusted — each goal is
-//   prorated to the eating-window fraction so it reads "on track right now" and climbs live as you log.
-//   Nutrition% = 0.5·today + 0.5·past6avg (today weighed as much as the prior six combined).
+// NUTRITION% — three components per day (carbs are DERIVED from calories, so not scored separately):
+//   Day% = 0.35·protein + 0.35·calories + 0.30·fat
+//     protein  — FLOOR, linear: min(1, actual/floor). Under penalized; overage free. (A low-protein day
+//                also pulls calories low → double-penalized, which is the worst case, as intended.)
+//     calories — TWO-SIDED, GOAL-AWARE, QUADRATIC. The side that matches the goal direction (over on a
+//                bulk, under on a cut) is lenient (wide band); the opposite side is strict (narrow band).
+//                Squared so small misses barely register and big ones bite (3× the miss ≈ 9× the penalty).
+//     fat      — TWO-SIDED, symmetric, quadratic. Want to land on target; over and under both penalized
+//                (we'd rather a calorie overage come from carbs than fat, hence fat is charged separately).
+//   The 6 completed days are averaged (unlogged day = 0). TODAY is pace-adjusted (goals prorated to the
+//   eating-window fraction so it reads "on track right now"). Nutrition% = 0.5·today + 0.5·past6avg.
 
 const TARGET = 14;
-const W_PRO = 0.40, W_CAL = 0.30, W_CARB = 0.15, W_FAT = 0.15;   // macro weights within a day (sum 1)
-const W_TODAY = 0.5;                            // today's weight within nutrition
-const W_TRAIN = 0.5;                            // training's weight in the overall blend
+const W_PRO = 0.35, W_CAL = 0.35, W_FAT = 0.30;     // nutrition macro weights (sum 1); carbs derived, not scored
+const CAL_LENIENT = 0.40, CAL_STRICT = 0.25;        // calorie quadratic bands: with-goal side vs against-goal side
+const FAT_BAND = 0.40;                               // fat quadratic band (both directions)
+const W_TODAY = 0.5;                                 // today's weight within nutrition
+const W_TRAIN = 0.5;                                 // training's weight in the overall blend
 
-// two-sided (calories, fat): land ON target — 100% at target, falls to 0 at zero or 2× (linear, gentle).
-const twoSided = (a, t) => (t > 0 ? Math.max(0, 1 - Math.abs(a - t) / t) : (a <= 0 ? 1 : 0));
-// floor (protein, carbs): clear the floor — % of the way to it, capped at 100%; overage is free.
-const floorScore = (a, floor) => (floor > 0 ? Math.min(1, a / floor) : 1);
+const proteinScore = (a, floor) => (floor > 0 ? Math.min(1, a / floor) : 1);
+const quad = (relDev, band) => Math.max(0, 1 - (relDev / band) ** 2);   // quadratic falloff, 0 at dev == band
+// Calories: lenient on the side matching the goal (bulk→over, cut→under), strict on the opposite. surplus>0
+// bulk, <0 cut, 0 maintenance (symmetric). Quadratic so small misses are gentle and big ones bite.
+function calorieScore(a, goal, surplus) {
+  if (!(goal > 0)) return a <= 0 ? 1 : 0;
+  const over = a > goal;
+  const band = surplus > 0 ? (over ? CAL_LENIENT : CAL_STRICT)
+             : surplus < 0 ? (over ? CAL_STRICT : CAL_LENIENT)
+             : (CAL_LENIENT + CAL_STRICT) / 2;
+  return quad(Math.abs(a - goal) / goal, band);
+}
+const fatScore = (a, t) => (t > 0 ? quad(Math.abs(a - t) / t, FAT_BAND) : (a <= 0 ? 1 : 0));
 const pct = (x) => Math.round(x * 1000) / 10;
 
 function trainingScore(volume) {
@@ -32,16 +45,14 @@ function trainingScore(volume) {
   return { pct: target > 0 ? points / target : 0, points: Math.round(points * 10) / 10, target };
 }
 
-// days: [{ date, isToday, fraction, cal, protein, carbs, fat, calGoal, proteinFloor, carbFloor, fatTarget }]
-function nutritionScore(days) {
+// days: [{ date, isToday, fraction, cal, protein, fat, calGoal, proteinFloor, fatTarget }]; surplus signs the goal direction.
+function nutritionScore(days, surplus) {
   const scored = days.map((d) => {
     const f = d.isToday ? d.fraction : 1;          // today's goals are prorated to the eating-window fraction
-    const cal = twoSided(d.cal, d.calGoal * f);
-    const pro = floorScore(d.protein, d.proteinFloor * f);
-    const carb = floorScore(d.carbs, d.carbFloor * f);
-    const fat = twoSided(d.fat, d.fatTarget * f);
-    return { ...d, f, calScore: cal, proScore: pro, carbScore: carb, fatScore: fat,
-             dayPct: W_PRO * pro + W_CAL * cal + W_CARB * carb + W_FAT * fat };
+    const cal = calorieScore(d.cal, d.calGoal * f, surplus);
+    const pro = proteinScore(d.protein, d.proteinFloor * f);
+    const fat = fatScore(d.fat, d.fatTarget * f);
+    return { ...d, f, calScore: cal, proScore: pro, fatScore: fat, dayPct: W_PRO * pro + W_CAL * cal + W_FAT * fat };
   });
   const todayEntry = scored.find((d) => d.isToday);
   const past = scored.filter((d) => !d.isToday);
@@ -54,20 +65,19 @@ function nutritionScore(days) {
   return { pct: p, today: todayPct, pastAvg, days: scored };
 }
 
-function computeScore({ volume, days = [] }) {
+function computeScore({ volume, days = [], surplus = 0 }) {
   const t = trainingScore(volume);
-  const n = nutritionScore(days);
+  const n = nutritionScore(days, surplus);
   const overall = W_TRAIN * t.pct + (1 - W_TRAIN) * n.pct;
   return {
     overall: pct(overall),
     training: { pct: pct(t.pct), points: t.points, target: t.target },
     nutrition: {
-      pct: pct(n.pct), today: pct(n.today), past_avg: pct(n.pastAvg),
+      pct: pct(n.pct), today: pct(n.today), past_avg: pct(n.pastAvg), goal_mode: surplus > 0 ? 'surplus' : surplus < 0 ? 'deficit' : 'maintenance',
       days: n.days.map((d) => ({
         date: d.date, is_today: !!d.isToday, day_pct: pct(d.dayPct),
         cal: { actual: Math.round(d.cal), goal: Math.round(d.calGoal * d.f), score: pct(d.calScore) },
         protein: { actual: Math.round(d.protein), floor: Math.round(d.proteinFloor * d.f), score: pct(d.proScore) },
-        carbs: { actual: Math.round(d.carbs), floor: Math.round(d.carbFloor * d.f), score: pct(d.carbScore) },
         fat: { actual: Math.round(d.fat), target: Math.round(d.fatTarget * d.f), score: pct(d.fatScore) },
       })),
     },

@@ -37,7 +37,15 @@ function boot() {
     if (row.role === 'tool') return;               // (tools now arrive as 'activity', never as messages)
     if (card) card.upsert(row);                    // user/assistant → conversation
   });
-  if (card) card.backfill();
+  // The conversation must reflect the ONE central thread live, from ANY source — so resync on every
+  // (re)connect AND whenever the view returns to the foreground. EventSource silently suspends when a
+  // mobile browser backgrounds and never replays missed messages; without this the thread goes stale
+  // (showing only what THIS device sent) until a manual refresh. backfill() is idempotent (full rebuild),
+  // and 'open' fires on the first connect too, so it covers initial load as well.
+  if (card) {
+    sse.addEventListener('open', () => card.backfill());
+    document.addEventListener('visibilitychange', () => { if (!document.hidden) card.backfill(); });
+  }
 }
 
 // A self-contained recorder: getUserMedia → MediaRecorder → upload to /api/voice-command.

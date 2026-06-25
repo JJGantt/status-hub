@@ -377,8 +377,7 @@ async function broadcast() {
 
 // Push a single voice event to every /tv client. Shape: { kind, row }. Kinds:
 //   'message'  — a voice_messages row (append/update the conversation)
-//   'focus'    — a voice_focus row (swap focus header / terminal view; row carries terminal_url)
-//   'sessions' — the focusable session list changed; row is null, client re-fetches /api/voice-sessions
+// (Transient 'activity'/'reset' events are pushed directly from the worker via /api/voice-activity.)
 // The browser keys off kind.
 function pushVoice(kind, row) {
   const frame = 'event: voice\ndata: ' + JSON.stringify({ kind, row }) + '\n\n';
@@ -397,12 +396,6 @@ function startRealtime() {
     // UPDATE both carry the new row in `payload.new` (UPDATE = a streamed row flipping done=true).
     .on('postgres_changes', { event: '*', schema: 'public', table: 'voice_messages' },
       (p) => { if (p.new) pushVoice('message', p.new); })
-    .on('postgres_changes', { event: '*', schema: 'public', table: 'voice_focus' },
-      (p) => { if (p.new) pushVoice('focus', p.new); })
-    // Focusable Mac sessions list changed — signal /tv to re-fetch /api/voice-sessions. No
-    // payload needed (re-fetch is simplest/robust); the row isn't carried.
-    .on('postgres_changes', { event: '*', schema: 'public', table: 'voice_sessions' },
-      () => pushVoice('sessions', null))
     .subscribe((status) => console.log('realtime channel:', status));
 }
 
@@ -771,15 +764,6 @@ app.get('/api/voice-messages', async (req, res) => {
       else break;
     }
     res.json(rows.slice(start));   // current context only, oldest→newest
-  } catch (e) { res.status(500).json({ error: String(e.message || e) }); }
-});
-
-// The focusable Mac sessions (5 most recent), newest first — for the /tv focusable list.
-// Pushed-to on change via the voice SSE (kind:'sessions'); this is the load/refresh fetch.
-app.get('/api/voice-sessions', async (req, res) => {
-  try {
-    const rows = await sb('voice_sessions?order=last_active.desc&select=*');
-    res.json(rows || []);
   } catch (e) { res.status(500).json({ error: String(e.message || e) }); }
 });
 

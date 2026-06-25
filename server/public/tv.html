@@ -2,7 +2,6 @@
 <meta name=viewport content="width=device-width,initial-scale=1">
 <title>Status Hub · TV</title>
 <link rel="stylesheet" href="app.css">
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/xterm@5.3.0/css/xterm.min.css">
 <!-- core.js renders the REAL hub cards from /api/stream into the .rows below (same as the main hub). -->
 <script type="module" src="core.js"></script>
 <!-- tv.js layers the compact voice-conversation panel + session terminal on top. -->
@@ -57,17 +56,10 @@
     <div class="healthbar" id="healthbar"></div>
   </div>
 
-  <!-- ASIDE: compact voice column. Conversation panel when focus=='hub'; session terminal overlays when focused. -->
+  <!-- ASIDE: compact voice column — the live hub voice conversation. -->
   <aside class="tv-voice">
-    <header class="tv-voice-head" id="tv-focus" data-focus="hub">
-      <span class="tv-focus-dot"></span><span class="tv-focus-label">Hub</span>
-    </header>
-    <!-- focus == 'hub': minimal conversation log (live voice_messages). -->
+    <header class="tv-voice-head"><span class="tv-focus-label">Conversation</span></header>
     <div class="tv-convo-log" id="tv-log"></div>
-    <!-- Focusable Mac sessions, live from /api/voice-sessions. -->
-    <div class="tv-sessions" id="tv-sessions"></div>
-    <!-- focus != 'hub': xterm terminal overlays the voice column. -->
-    <div class="tv-term" id="tv-term" hidden></div>
   </aside>
 
 </div>

@@ -140,7 +140,8 @@ export function makeRecorder({ onStatus, onActive, quick, autoStop, tier }) {
 }
 
 // ---- bottom activity bar -------------------------------------------------
-function initActivityBar() {
+// Exported so the wall (tv.js) can reuse the EXACT same floating popup instead of its own emit strip.
+export function initActivityBar() {
   const bar = document.createElement('div');
   bar.className = 'ai-act';
   // A quoted "what you said" line (filled after transcription) stacked above the live status row.

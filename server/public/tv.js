@@ -2,6 +2,7 @@
 // main hub). This module adds ONLY the compact voice column: a minimal live conversation panel for the hub
 // thread, plus the bottom-strip emission feed. It reads /api/voice-stream (event: voice {kind,row}).
 import { esc } from './shared.js';
+import { initActivityBar } from './voiceagent.js';
 
 // ---------------------------------------------------------------------------
 // Conversation panel — hub voice_messages, oldest→newest. user = blue, assistant = gray. No role labels.
@@ -47,36 +48,16 @@ async function backfill() {
 }
 
 // ---------------------------------------------------------------------------
-// Bottom-strip emission feed: listening (blue) → working/tools (amber, the ESP-flashing phase) →
-// resolution (green, same line pushed to the phone), then it fades.
+// Activity popup — the SAME floating .ai-act popup the page view uses (no reserved strip): live
+// Listening → Working → each tool call → Done, with the result persisting briefly, floating on top.
+// Exported so the wall mic buttons (wall.js) drive the same instance.
 // ---------------------------------------------------------------------------
-const emitEl = document.getElementById('emit');
-let emitFade = null;
+export const activity = initActivityBar();
 
-// Heard-you pop. The UI plays it ITSELF the instant your words land on screen — same surface as the visual,
-// so it's synced by construction: no Pi round-trip, no Supabase hop, no separate audio route. Just a tiny
-// WAV firing on the same event that paints the transcript. (Kiosk needs --autoplay-policy=no-user-gesture.)
+// Heard-you pop. The UI plays it ITSELF the instant your words land on screen — synced to the paint.
 const popSound = new Audio('/pop.wav');
 popSound.preload = 'auto';
 function playPop() { try { popSound.currentTime = 0; popSound.play().catch(() => {}); } catch (_) {} }
-const EMIT_STYLE = {
-  listening: { c: '#3b82f6', l: 'Listening' },   // blue — matches the ESP solid-blue capture cue
-  working:   { c: '#eab308', l: 'Working' },      // amber — thinking, matches the ESP flashing
-  tool:      { c: '#eab308', l: 'Working' },
-  done:      { c: '#22c55e', l: 'Done' },         // green — resolution, then fades
-};
-function showEmit(state, text) {
-  if (!emitEl) return;
-  clearTimeout(emitFade);
-  const s = EMIT_STYLE[state] || EMIT_STYLE.tool;
-  emitEl.innerHTML = '<span class="em-dot"></span><span class="em-label"></span><span class="em-text"></span>';
-  emitEl.querySelector('.em-dot').style.background = s.c;
-  emitEl.querySelector('.em-label').textContent = s.l;
-  emitEl.querySelector('.em-text').textContent = text || '';
-  emitEl.classList.add('show');
-  // Persist the resolution as long as the worker holds context; a 'reset' clears it (not a cosmetic timer).
-  if (state === 'done') emitFade = setTimeout(() => emitEl.classList.remove('show'), 300000);
-}
 
 // ---------------------------------------------------------------------------
 // Voice stream. (core.js owns /api/stream for the dashboard cards.)
@@ -86,14 +67,11 @@ voice.addEventListener('voice', (e) => {
   let msg; try { msg = JSON.parse(e.data); } catch (_) { return; }
   if (msg.kind === 'activity') {
     const a = msg.row || {};
-    if (a.state === 'working') playPop();   // a new command's words just landed → pop now, synced to the paint
-    showEmit(a.state, a.text);
+    if (a.state === 'working') playPop();                                          // command's words just landed → pop
+    if (a.state === 'done') activity.done(a.text); else activity.tool(a.text);     // identical mapping to the page view
   }
   else if (msg.kind === 'message') upsert(msg.row);
-  else if (msg.kind === 'reset') {
-    log.innerHTML = ''; seen.clear();
-    if (emitEl) { clearTimeout(emitFade); emitEl.classList.remove('show'); }
-  }
+  else if (msg.kind === 'reset') { log.innerHTML = ''; seen.clear(); activity.clear(); }
 });
 
 backfill();

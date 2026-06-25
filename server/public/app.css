@@ -306,7 +306,7 @@ body.tv ::-webkit-scrollbar{width:0!important;height:0!important;display:none!im
 body.tv,body.tv .card,body.tv .tv-shell,body.tv .tv-voice,body.tv .tv-hudcard{background:#000!important}
 body.tv .card{border:none}
 body.tv .rows{flex:1 1 auto;min-width:0;max-width:none;margin:0;padding:10px;height:100vh;overflow:hidden;
-  display:grid;gap:10px;grid-template-columns:280px 1fr 1fr 1fr 60px;grid-template-rows:auto minmax(0,1fr) auto;}
+  display:grid;gap:10px;grid-template-columns:280px 1fr 1fr 1fr 60px;grid-template-rows:auto minmax(0,1fr);}
 body.tv .card{overflow:hidden;min-height:0;min-width:0}
 body.tv .rows .fit{display:flex;flex-direction:column;padding:10px 12px;height:100%;overflow:hidden;min-height:0;gap:6px}
 /* hide card titles entirely — content is self-evident, and it buys vertical room */
@@ -361,7 +361,7 @@ body.tv.phonewall .tv-voice{height:100%}
    canvas. Stack: status (full) → rings horizontal (full) → nutrition heatmap+list | workout heatmap+list
    (side by side) → muscle map+bars (glued to bottom) → horizontal health bar. A fixed bottom bar holds the
    buttons: settings + exit left, brain + sparkle right. Voice column + trend plot + emit strip dropped. */
-body.tv.wallportrait .tv-voice,body.tv.wallportrait .emitstrip,
+body.tv.wallportrait .tv-voice,
 body.tv.wallportrait #nutplot,body.tv.wallportrait .hb-delta{display:none}
 body.tv.wallportrait .rows{
   grid-template-columns:1fr 1fr;
@@ -405,14 +405,10 @@ body.tv.wallportrait .wallrail{flex-direction:row;top:auto;bottom:0;left:0;right
   padding:0 22px;border-left:0;border-top:1px solid #1b222b}
 body.tv.wallportrait .wallrail-grp{flex-direction:row;gap:18px}
 
-/* BOTTOM STRIP — full-width transient process/emission feed (shorter than the top strip). Fades when idle. */
-body.tv .emitstrip{grid-column:1/5;grid-row:3;min-height:56px;display:flex;align-items:center;padding:0 4px}
-body.tv .emit{display:flex;align-items:center;width:100%;min-width:0;font-size:21px;color:#dfe5ee;
-  white-space:nowrap;overflow:hidden;transition:opacity .6s ease;opacity:0}
-body.tv .emit.show{opacity:1}
-body.tv .emit .em-dot{flex:0 0 auto;width:13px;height:13px;border-radius:50%;margin-right:14px}
-body.tv .emit .em-label{flex:0 0 auto;color:#8b96a5;text-transform:uppercase;letter-spacing:.05em;font-size:14px;font-weight:700;margin-right:14px}
-body.tv .emit .em-text{flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis}
+/* The live process feed is now the shared .ai-act floating popup (same as the page view), not a reserved
+   strip. In portrait wall it floats just above the bottom control bar; landscape has no bottom bar so the
+   default bottom-left position is fine. */
+body.tv.wallportrait .ai-act{bottom:70px}
 /* ---- TV route v1 (minimal rebuild): top status strip + left ring column ONLY. Other panels are
    HIDDEN, not deleted — each card keeps mounting safely (core.js renders them unconditionally) so we
    can bring them back one at a time without breaking the rings. ---- */

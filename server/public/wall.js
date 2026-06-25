@@ -4,6 +4,7 @@
 // full-detail hub and a control rail. No-op on the real wall (≥1400px wide), so the Pi kiosk is untouched.
 import { makeRecorder } from './voiceagent.js';
 import { open as openSettings } from './settings.js';
+import { activity } from './tv.js';   // the shared floating activity popup (same one tv.js drives off the SSE)
 const PHONE = window.innerWidth < 1400;
 const RAIL = 72;   // landscape: width (px) of the right-side control rail beside the dashboard
 const BAR = 58;    // portrait: height (px) of the horizontal control bar along the bottom
@@ -49,11 +50,20 @@ if (PHONE) {
     ex.title = 'Exit wall mode'; ex.setAttribute('aria-label', 'Exit wall mode');
     ex.onclick = () => { location.href = '/'; };
 
+    // local mic feedback (Listening/Transcribing/Thinking/the transcript) → the shared activity popup,
+    // mapped exactly like the page view's FAB.
+    const onStatus = (t, kind) => {
+      if (kind === 'rec') activity.rec(t);
+      else if (kind === 'prompt') activity.prompt(t);
+      else if (kind === 'err') activity.err(t);
+      else if (kind === 'clear') activity.clear();
+      else activity.busy(t);
+    };
     const mkVoice = (cls, svg, tier, label) => {
       const b = document.createElement('button');
       b.className = 'wfab ' + cls; b.type = 'button'; b.setAttribute('aria-label', label);
       b.innerHTML = svg;
-      const rec = makeRecorder({ onStatus: () => {}, onActive: (a) => b.classList.toggle('rec', a),
+      const rec = makeRecorder({ onStatus, onActive: (a) => b.classList.toggle('rec', a),
         quick: true, autoStop: true, tier });          // tap to talk; VAD auto-sends on a trailing silence
       b.addEventListener('click', () => rec.toggle());
       return b;

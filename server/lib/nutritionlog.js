@@ -73,7 +73,7 @@ function buildGoalResolver({ rows = [], weights = [], targets = [], today, surpl
   return { goalForDay, maintFor };
 }
 
-function buildNutritionLog(rows, weights, goalCal, maintenanceEst, today, calTargets = [], weeks = 12, surplus = 150, deficit = 150) {
+function buildNutritionLog(rows, weights, goalCal, maintenanceEst, today, calTargets = [], weeks = 12, surplus = 150, deficit = 150, todayFraction = 1) {
   const cal = {};
   for (const r of rows || []) { const d = dayBucketOf(r.occurred_at); cal[d] = (cal[d] || 0) + (Number(r.calories) || 0); }
   const anchor = new Date(today + 'T12:00:00Z'), dow = anchor.getUTCDay();
@@ -86,10 +86,12 @@ function buildNutritionLog(rows, weights, goalCal, maintenanceEst, today, calTar
     const col = [];
     for (let d = 0; d < 7; d++) {
       const ds = allDates[w * 7 + d];
-      const has = Object.prototype.hasOwnProperty.call(cal, ds), future = ds > today;
-      const tgt = goalForDay(ds);
+      const isToday = ds === today, has = Object.prototype.hasOwnProperty.call(cal, ds), future = ds > today;
+      // Today's cell is colored vs the PACE-PRORATED goal (where you should be NOW), not the full-day goal —
+      // otherwise a partially-eaten day always looks like under-eating (blue). Other days use the full goal.
+      const tgt = goalForDay(ds) * (isToday && todayFraction > 0 ? todayFraction : 1);
       const ratio = has && tgt > 0 ? cal[ds] / tgt : 0;
-      col.push({ date: ds, has: has && !future, ratio: Math.round(ratio * 100) / 100, color: (has && !future) ? calorieColor(ratio) : null, today: ds === today });
+      col.push({ date: ds, has: has && !future, ratio: Math.round(ratio * 100) / 100, color: (has && !future) ? calorieColor(ratio) : null, today: isToday });
     }
     const m = Number(col[0].date.slice(5, 7)) - 1; months.push(m !== prevMon ? MON[m] : ''); prevMon = m; cols.push(col);
   }

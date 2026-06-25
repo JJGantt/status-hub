@@ -343,6 +343,13 @@ body.tv.phonewall .tv-voice{height:100%}
 .wallexit{position:fixed;top:10px;right:10px;z-index:1000;width:40px;height:40px;border-radius:10px;
   border:1px solid #2a3340;background:rgba(18,24,33,.85);color:#cfd8e3;font-size:19px;line-height:38px;
   text-align:center;cursor:pointer;padding:0;-webkit-tap-highlight-color:transparent}
+/* push-to-talk: hold-to-talk button, bottom-right of the wall view. Pulses red while recording. */
+.wallptt{position:fixed;right:16px;bottom:16px;z-index:1000;width:62px;height:62px;border-radius:50%;
+  border:1px solid #2a3340;background:rgba(18,24,33,.9);color:#cfd8e3;display:flex;align-items:center;
+  justify-content:center;cursor:pointer;-webkit-tap-highlight-color:transparent;touch-action:none;
+  user-select:none;box-shadow:0 4px 16px rgba(0,0,0,.5)}
+.wallptt.rec{background:#e5484d;color:#fff;border-color:#e5484d;animation:wallpttPulse 1s ease-in-out infinite}
+@keyframes wallpttPulse{0%,100%{box-shadow:0 0 0 0 rgba(229,72,77,.5)}50%{box-shadow:0 0 0 12px rgba(229,72,77,0)}}
 
 /* BOTTOM STRIP — full-width transient process/emission feed (shorter than the top strip). Fades when idle. */
 body.tv .emitstrip{grid-column:1/5;grid-row:3;min-height:56px;display:flex;align-items:center;padding:0 4px}

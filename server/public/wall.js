@@ -1,7 +1,8 @@
 // Phone "wall mode": the /tv dashboard is tuned for a 1920×1080 wall (fixed grid, 100vh everywhere). On a
 // small (phone) viewport we keep that exact layout but render it at a fixed 1920×1080 and CSS-scale the whole
 // shell to fit the screen, so the phone shows a faithful miniature of the wall. Plus an exit back to the
-// full-detail hub. No-op on the real wall (≥1400px wide), so the Pi kiosk is untouched.
+// full-detail hub and a push-to-talk button. No-op on the real wall (≥1400px wide), so the Pi kiosk is untouched.
+import { makeRecorder } from './voiceagent.js';
 const PHONE = window.innerWidth < 1400;
 if (PHONE) {
   const shell = document.querySelector('.tv-shell');
@@ -34,5 +35,24 @@ if (PHONE) {
     ex.title = 'Exit wall mode'; ex.setAttribute('aria-label', 'Exit wall mode');
     ex.onclick = () => { location.href = '/'; };
     document.body.appendChild(ex);
+
+    // Push-to-talk: hold to speak, release to send — through the same pipeline as the hub mic. The reply
+    // streams back into the wall's own voice column (tv.js). Independent of always-on (manual mic).
+    const ptt = document.createElement('button');
+    ptt.className = 'wallptt'; ptt.type = 'button'; ptt.setAttribute('aria-label', 'Push to talk');
+    ptt.innerHTML = '<svg viewBox="0 0 24 24" width="30" height="30" fill="currentColor" aria-hidden="true">' +
+      '<path d="M12 14a3 3 0 0 0 3-3V6a3 3 0 0 0-6 0v5a3 3 0 0 0 3 3Zm5-3a5 5 0 0 1-10 0H5a7 7 0 0 0 6 6.92V21h2v-3.08A7 7 0 0 0 19 11h-2Z"/></svg>';
+    document.body.appendChild(ptt);
+    const rec = makeRecorder({
+      onStatus: () => {},                              // reply surfaces in the voice column; no overlay needed
+      onActive: (a) => ptt.classList.toggle('rec', a),
+      quick: true, autoStop: false, tier: 'fast',      // PTT controls start/stop manually (hold), terse reply
+    });
+    const down = (e) => { e.preventDefault(); rec.start(); };
+    const up = (e) => { e.preventDefault(); rec.stop(); };
+    ptt.addEventListener('pointerdown', down);
+    ptt.addEventListener('pointerup', up);
+    ptt.addEventListener('pointerleave', up);
+    ptt.addEventListener('pointercancel', up);
   }
 }

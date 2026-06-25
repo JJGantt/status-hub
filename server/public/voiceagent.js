@@ -53,7 +53,8 @@ function boot() {
 
 // A self-contained recorder: getUserMedia → MediaRecorder → upload to /api/voice-command.
 // quick=true marks a one-off quick-add (the FAB) so the server tags it for a terse reply.
-function makeRecorder({ onStatus, onActive, quick, autoStop, tier }) {
+// Exported so the wall-mode push-to-talk button (wall.js) can reuse the exact same pipeline.
+export function makeRecorder({ onStatus, onActive, quick, autoStop, tier }) {
   let recording = false, rec = null, chunks = [], stream = null, maxTimer = null;
   let actx = null, vadTimer = null;
   const pickMime = () => {
@@ -135,7 +136,7 @@ function makeRecorder({ onStatus, onActive, quick, autoStop, tier }) {
       else { onStatus(j.transcript, 'prompt'); onStatus('Thinking…', 'busy'); } // show what was heard, then stream the run
     } catch (_) { onStatus('Send failed', 'err'); }
   }
-  return { toggle() { recording ? stop() : start(); } };
+  return { toggle() { recording ? stop() : start(); }, start, stop };
 }
 
 // ---- bottom activity bar -------------------------------------------------

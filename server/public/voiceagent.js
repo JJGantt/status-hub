@@ -9,12 +9,15 @@
 import { esc } from './shared.js';
 
 let phoneHangMs = 3000;   // phone trailing-silence (ms) for the FAB VAD; overridden by the phone_silence_s setting
+let resetMs = 30 * 60 * 1000;   // context-reset idle gap (ms) = session_reset_s. A message arriving after a gap
+                                // this long means the agent reset its context, so the shown thread resets too.
 
 if (!document.body.classList.contains('tv')) boot();
 
 function boot() {
   fetch('/api/settings').then((r) => r.json()).then((s) => {
     const n = parseFloat(s.phone_silence_s); if (Number.isFinite(n) && n > 0) phoneHangMs = n * 1000;
+    const rs = parseFloat(s.session_reset_s); if (Number.isFinite(rs) && rs > 0) resetMs = rs * 1000;
   }).catch(() => {});
   const activity = initActivityBar();
   const card = initCard();           // null if the conversation card isn't on this page
@@ -192,9 +195,16 @@ function initCard() {
     const body = t ? esc(t).replace(/\n/g, '<br>') : '<span class=ai-caret>▍</span>';
     return '<div class="ai-msg ai-msg-' + side + '"><div class=ai-msg-text>' + body + '</div></div>';
   }
+  let lastTs = 0;   // created_at (ms) of the newest message shown — to detect a context-reset gap
   function upsert(row) {
     if (!row || (row.focus || 'hub') !== 'hub') return;
     if (row.role === 'tool') return;        // tool calls live in the activity bar, not the thread
+    // A genuinely new message arriving after a gap longer than the reset window means the agent reset its
+    // context — so clear the thread first, mirroring the reset (the panel only ever shows the live context).
+    const ts = row.created_at ? Date.parse(row.created_at) : Date.now();
+    const fresh = !seen.has(row.id);
+    if (fresh && lastTs && (ts - lastTs) > resetMs) clear();
+    if (fresh) lastTs = ts;
     const stick = nearBottom();
     const tmp = document.createElement('div'); tmp.innerHTML = bubbleHtml(row);
     const el = tmp.firstElementChild, existing = seen.get(row.id);
@@ -202,10 +212,10 @@ function initCard() {
     seen.set(row.id, el);
     if (stick) scrollEnd();
   }
-  function clear() { log.innerHTML = ''; seen.clear(); }
+  function clear() { log.innerHTML = ''; seen.clear(); lastTs = 0; }
   async function backfill() {
     try {
-      const r = await fetch('/api/voice-messages?focus=hub&limit=50');
+      const r = await fetch('/api/voice-messages?focus=hub&limit=200');   // server scopes this to the current context
       if (!r.ok) return;
       clear();
       for (const row of await r.json()) upsert(row);

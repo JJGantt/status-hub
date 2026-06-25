@@ -25,6 +25,15 @@ async function surplusCal() {
     return Math.max(-SURPLUS_LIMIT, Math.min(SURPLUS_LIMIT, v));
   } catch { return 150; }
 }
+// Idle gap (seconds) after which the hub agent resets its context — the worker's `session_reset_s`
+// setting (default 30min). Used to scope the conversation panel to the current context.
+async function sessionResetS() {
+  try {
+    const r = await sb('app_settings?key=eq.session_reset_s&select=value');
+    const v = r && r[0] != null ? parseFloat(r[0].value) : NaN;
+    return Number.isFinite(v) && v > 0 ? v : 1800;
+  } catch { return 1800; }
+}
 // Min length (days) of the aligned intake-tracking window before adaptive maintenance goes live.
 // Editable in settings; default 14, clamped to a sane 7–60.
 async function maintenanceMinDays() {
@@ -751,8 +760,17 @@ app.get('/api/voice-messages', async (req, res) => {
     let limit = parseInt(req.query.limit, 10);
     if (!Number.isFinite(limit) || limit <= 0) limit = 50;
     limit = Math.min(limit, 500);
-    const rows = await sb(`voice_messages?focus=eq.${encodeURIComponent(focus)}&order=created_at.desc&limit=${limit}&select=*`);
-    res.json((rows || []).reverse());   // newest `limit`, returned oldest→newest for rendering
+    const rows = (await sb(`voice_messages?focus=eq.${encodeURIComponent(focus)}&order=created_at.desc&limit=${limit}&select=*`) || []).reverse();
+    // Scope to the CURRENT context: the trailing run with no idle gap longer than session_reset_s. After
+    // a longer gap the agent starts a fresh context, so older turns it no longer remembers aren't shown.
+    // The full thread stays in voice_messages as the log; this only narrows what the live panel renders.
+    const gapMs = (await sessionResetS()) * 1000;
+    let start = rows.length ? rows.length - 1 : 0;
+    for (let i = rows.length - 1; i > 0; i--) {
+      if (Date.parse(rows[i].created_at) - Date.parse(rows[i - 1].created_at) <= gapMs) start = i - 1;
+      else break;
+    }
+    res.json(rows.slice(start));   // current context only, oldest→newest
   } catch (e) { res.status(500).json({ error: String(e.message || e) }); }
 });
 

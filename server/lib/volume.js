@@ -1,12 +1,6 @@
 'use strict';
-const { dayBucketOf, TZ } = require('./dates');
+const { dayBucketOf } = require('./dates');
 
-// "Now" as a wall-clock epoch in the DISPLAY timezone, parsed the same naive way as occurred_at. The
-// set timestamps are naive local time (no offset), so on a UTC server (Fly) `new Date(occurred_at)`
-// reads them 4h early; comparing against this keeps the 3h bout-live gate correct on any server tz.
-function nowLocalTs() {
-  return new Date(new Date().toLocaleString('sv-SE', { timeZone: TZ }).replace(' ', 'T')).getTime();
-}
 // Weekly per-muscle training volume for the gamified workout gauges.
 //
 // Volume = Σ (set × contribution) over a trailing 7 training days (bucketed on the DAY_START_HOUR
@@ -27,7 +21,7 @@ const TARGET_DEFAULT = 14;
 // training bout. A bout is a run of sets with no gap longer than BOUT_GAP_MS (so a second session
 // hours later is a FRESH bout with its own cap — it's added frequency, not junk). Beyond the cap the
 // extra sets simply aren't credited toward weekly volume (research: per-session returns flatten by
-// ~11 sets/muscle). The most recent live bout's raw per-muscle sums drive the on-bar "+N" badge.
+// ~11 sets/muscle). TODAY's per-muscle sums (4am-day bucket) drive the on-bar "+N" badge, all day.
 const PER_BOUT_CAP = 11;
 const BOUT_GAP_MS = 3 * 60 * 60 * 1000;   // >3h since the last set starts a new bout
 
@@ -95,10 +89,15 @@ function computeVolume(setRows, muscleRows, window, targets) {
       else if (b.day === dropDay2) dropAfter[muscle] = (dropAfter[muscle] || 0) + clipped;
     }
   }
-  // The "+N" badge reflects the CURRENT bout — the most recent one, but only while it's still live
-  // (a set within the last BOUT_GAP_MS). Once 3h pass with no set the bout is closed and "+N" clears.
-  const lastBout = bouts.length ? bouts[bouts.length - 1] : null;
-  const boutRaw = (lastBout && nowLocalTs() - lastBout.lastTs <= BOUT_GAP_MS) ? lastBout.raw : {};
+  // The "+N" badge = TODAY's adjusted sets per muscle (today's 4am-day bucket). It persists for the
+  // whole day and resets at the 4am rollover — a glance at what you trained today. (In practice a muscle
+  // isn't hit in two separate bouts in one day, so this equals that muscle's single bout's contribution.)
+  const todayBucket = window[window.length - 1];
+  const todayRaw = {};
+  for (const e of expanded) {
+    if (e.day !== todayBucket) continue;
+    for (const mm of e.pairs) todayRaw[mm.muscle] = (todayRaw[mm.muscle] || 0) + Number(mm.contribution);
+  }
   const groups = GROUPS.map(g => ({
     group: g.group,
     muscles: g.muscles.map(([slug, label]) => {
@@ -108,9 +107,9 @@ function computeVolume(setRows, muscleRows, window, targets) {
       const dropping = Math.round((drop_tomorrow + drop_day_after) * 10) / 10; // combined at-risk volume
       const target = (targets && targets[slug]) || TARGET_DEFAULT;
       const ratio = target > 0 ? sets / target : 0;
-      const bout = Math.round((boutRaw[slug] || 0) * 10) / 10;   // current live bout's adjusted sets ("+N" badge)
+      const today = Math.round((todayRaw[slug] || 0) * 10) / 10;   // today's adjusted sets ("+N" badge, persists all day)
       return {
-        muscle: slug, label, sets, dropping, drop_tomorrow, drop_day_after, target, bout,
+        muscle: slug, label, sets, dropping, drop_tomorrow, drop_day_after, target, today,
         fill: Math.max(0, Math.min(1, ratio)),                       // total fill vs target (capped)
         stable_fill: target > 0 ? Math.max(0, Math.min(1, (sets - dropping) / target)) : 0, // survives both rollovers
         drop_tomorrow_fill: target > 0 ? Math.min(1, drop_tomorrow / target) : 0,     // urgent (bright stripes)

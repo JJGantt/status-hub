@@ -108,16 +108,16 @@ function volRowHtml(m){
   : '<div class=vstable style="width:'+stable+'%;background:'+m.color+'"></div>'+
     (dAfter>0?'<div class="vdrop vdrop-2d" style="width:'+dAfter+'%;background-color:'+m.color+'"></div>':'')+
     (dTmrw>0?'<div class="vdrop vdrop-tmrw" style="width:'+dTmrw+'%;background-color:'+m.color+'"></div>':'');
- // Current live bout's adjusted sets for this muscle; climbs as you log, clamps + turns red at +11
- // (the per-bout cap). PHONE: an inline parenthetical in the value, in step with the drop parens
- // (10 / 14 (+5.5)). TV: a separate badge overlaid on the right of the bar (positioned in CSS).
- const boutN = m.bout || 0;
- const capped = boutN >= 11;
- const boutVal = capped ? 11 : boutN;
- const boutParen = (!TV && boutN > 0) ? ' <span class="vbout'+(capped?' capped':'')+'">(+'+boutVal+')</span>' : '';
- const boutBadge = (TV && boutN > 0) ? '<span class="vbout'+(capped?' capped':'')+'">+'+boutVal+'</span>' : '';
- return '<div class="vrow tappable" data-mus="'+m.muscle+'"><div class=vrow-l><span class=nm>'+(TV?shortLabel(m.label):m.label)+'</span><span class=vl>'+m.sets+' / '+m.target+dropTxt+boutParen+'</span></div>'+
-  '<div class=vtrack>'+bars+'</div>'+boutBadge+'</div>';
+ // Today's adjusted sets for this muscle (persists all day, resets at the 4am rollover); climbs as you
+ // log, clamps + turns red at +11 (the per-bout cap). PHONE: an inline parenthetical in the value, in
+ // step with the drop parens (10 / 14 (+5.5)). TV: a separate badge overlaid on the right of the bar.
+ const todayN = m.today || 0;
+ const capped = todayN >= 11;
+ const todayVal = capped ? 11 : todayN;
+ const todayParen = (!TV && todayN > 0) ? ' <span class="vbout'+(capped?' capped':'')+'">(+'+todayVal+')</span>' : '';
+ const todayBadge = (TV && todayN > 0) ? '<span class="vbout'+(capped?' capped':'')+'">+'+todayVal+'</span>' : '';
+ return '<div class="vrow tappable" data-mus="'+m.muscle+'"><div class=vrow-l><span class=nm>'+(TV?shortLabel(m.label):m.label)+'</span><span class=vl>'+m.sets+' / '+m.target+dropTxt+todayParen+'</span></div>'+
+  '<div class=vtrack>'+bars+'</div>'+todayBadge+'</div>';
 }
 function renderVolume(){
  const V=(state.last&&state.last.volume)||{}; const groups=V.groups||[];

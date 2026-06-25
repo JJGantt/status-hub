@@ -34,7 +34,10 @@ es.onmessage=e=>{try{render(JSON.parse(e.data));}catch(_){}};
 // desktop = plain document-flow rows that scroll (defined in index.html / app.css; nothing to init).
 // phone = fixed swipe-through pages, one per row group. Each .row-card becomes a page, so the page
 // grouping mirrors the desktop rows exactly: [status] [nutrition+log] [muscle map+volume] [workouts].
-if(TOUCH){
+// On a TOUCH phone we swap to the swipe-page layout — UNLESS this is the TV/wall page (body.tv), which a
+// phone can also load in "wall mode" to mirror the dashboard (wall.js scales it). There the TV grid must
+// stay intact, so the swipe transform is skipped.
+if(TOUCH && !document.body.classList.contains('tv')){
  document.body.classList.add('touch');
  const rows=[...document.querySelectorAll('.rows > .row-card')];
  const pages=document.createElement('div'); pages.className='pages';
@@ -54,4 +57,8 @@ if(TOUCH){
  pages.after(dots);
  pages.addEventListener('scroll',()=>{const i=Math.round(pages.scrollLeft/pages.clientWidth);[...dots.children].forEach((d,k)=>d.classList.toggle('on',k===i));},{passive:true});
  if(startIdx>0)requestAnimationFrame(()=>{pages.scrollLeft=startIdx*pages.clientWidth;}); // land on nutrition without animation
+ // Wall-mode entry: jump to the landscape TV dashboard (the same wall UI, scaled to fit the phone — wall.js).
+ const wb=document.createElement('button'); wb.className='wallbtn'; wb.textContent='⊞';
+ wb.title='Wall mode'; wb.setAttribute('aria-label','Wall mode'); wb.onclick=()=>{location.href='/tv';};
+ document.body.appendChild(wb);
 }

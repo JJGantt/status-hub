@@ -742,16 +742,17 @@ app.get('/api/stream', async (req, res) => {
   req.on('close', () => { clearInterval(ka); sseClients.delete(res); });
 });
 
-// Backfill recent voice_messages for a focus so the /tv panel populates on load before live
-// updates arrive. Ordered created_at asc (oldest→newest, the render order). focus defaults to 'hub'.
+// Backfill recent voice_messages for a focus so the panel populates on load before live updates
+// arrive. We want the MOST RECENT `limit` turns — so fetch newest-first then reverse to oldest→newest
+// (the render order). The old asc+limit returned the OLDEST 50, hiding the recent thread. focus='hub'.
 app.get('/api/voice-messages', async (req, res) => {
   try {
     const focus = String(req.query.focus || 'hub');
     let limit = parseInt(req.query.limit, 10);
     if (!Number.isFinite(limit) || limit <= 0) limit = 50;
     limit = Math.min(limit, 500);
-    const rows = await sb(`voice_messages?focus=eq.${encodeURIComponent(focus)}&order=created_at.asc&limit=${limit}&select=*`);
-    res.json(rows || []);
+    const rows = await sb(`voice_messages?focus=eq.${encodeURIComponent(focus)}&order=created_at.desc&limit=${limit}&select=*`);
+    res.json((rows || []).reverse());   // newest `limit`, returned oldest→newest for rendering
   } catch (e) { res.status(500).json({ error: String(e.message || e) }); }
 });
 

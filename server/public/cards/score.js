@@ -10,7 +10,6 @@ export function render(s) {
   const nFill = Math.max(0, Math.min(50, sc.nutrition.pct * 0.5));   // nutrition's share of the bar (0–50%)
   const tFill = Math.max(0, Math.min(50, sc.training.pct * 0.5));     // training's share (0–50%)
   el.innerHTML =
-    '<div class="hb-num">' + Math.round(sc.overall) + '<span class="hb-pct">%</span></div>' +
     '<div class="hb-track">' +
       '<div class="hb-fill hb-nutr" style="bottom:0;height:' + nFill + '%"></div>' +
       '<div class="hb-fill hb-train" style="bottom:' + nFill + '%;height:' + tFill + '%"></div>' +

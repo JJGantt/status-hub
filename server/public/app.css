@@ -314,13 +314,14 @@ body.tv .card h2{display:none}
 body.tv .statusrow{grid-column:1/5;grid-row:1;min-height:108px}
 /* HEALTH BAR — overall score as a tall vertical gauge in the far-right column. Two stacked fill colours:
    nutrition (bottom) + training (top), each capped at its 50% half, together reaching the overall %. */
-body.tv .healthbar{grid-column:5;grid-row:1/-1;display:flex;flex-direction:column;align-items:center;gap:10px;padding:6px 4px 4px;min-height:0;min-width:0}
-body.tv .hb-num{font-size:26px;font-weight:800;color:#fff;line-height:1;font-variant-numeric:tabular-nums;flex:0 0 auto}
-body.tv .hb-num .hb-pct{font-size:14px;color:#8b96a5;font-weight:700;margin-left:1px}
+body.tv .healthbar{grid-column:5;grid-row:1/-1;display:flex;flex-direction:column;align-items:center;padding:8px 4px;min-height:0;min-width:0}
 body.tv .hb-track{flex:1 1 auto;width:38px;position:relative;background:#0e1318;border:2px solid #2a3340;border-radius:20px;overflow:hidden;min-height:0}
 body.tv .hb-fill{position:absolute;left:0;right:0;transition:height .6s ease,bottom .6s ease}
 body.tv .hb-nutr{background:#3b82f6}    /* nutrition contribution */
 body.tv .hb-train{background:#39d353}   /* training contribution */
+/* subtle 10-segment divisions: gives a reference for the 50% mark (max blue) and an at-a-glance read of the level */
+body.tv .hb-track::after{content:'';position:absolute;inset:0;pointer-events:none;
+  background:repeating-linear-gradient(to top, transparent 0, transparent calc(10% - 1.5px), rgba(140,150,165,.28) calc(10% - 1.5px), rgba(140,150,165,.28) 10%)}
 /* BOTTOM STRIP — full-width transient process/emission feed (shorter than the top strip). Fades when idle. */
 body.tv .emitstrip{grid-column:1/5;grid-row:3;min-height:56px;display:flex;align-items:center;padding:0 4px}
 body.tv .emit{display:flex;align-items:center;width:100%;min-width:0;font-size:21px;color:#dfe5ee;

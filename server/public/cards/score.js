@@ -16,10 +16,14 @@ export function render(s) {
   const tFill = Math.max(0, Math.min(50, sc.training.pct * 0.5));     // training's share (0–50%)
   const overall = Math.max(0, Math.min(100,
     typeof sc.overall === 'number' ? sc.overall : nFill + tFill));    // bar fills to here
+  // Drive the fills via CSS vars (numbers 0–50) so CSS can lay the bar out vertical (landscape) OR
+  // horizontal (portrait) from the same render.
+  el.style.setProperty('--nfill', nFill);
+  el.style.setProperty('--tfill', tFill);
   el.innerHTML =
     '<div class="hb-track">' +
-      '<div class="hb-fill hb-nutr" style="bottom:0;height:' + nFill + '%"></div>' +
-      '<div class="hb-fill hb-train" style="bottom:' + nFill + '%;height:' + tFill + '%"></div>' +
+      '<div class="hb-fill hb-nutr"></div>' +
+      '<div class="hb-fill hb-train"></div>' +
     '</div>';
   // Float the delta only on a genuine move (skip the first paint, and pace-drift noise below 0.1pt).
   if (prevOverall !== null && Math.abs(overall - prevOverall) >= 0.1) floatDelta(el, overall - prevOverall, overall);

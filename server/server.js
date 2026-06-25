@@ -24,6 +24,15 @@ async function surplusCal() {
     return Math.max(-SURPLUS_LIMIT, Math.min(SURPLUS_LIMIT, v));
   } catch { return 150; }
 }
+// Min length (days) of the aligned intake-tracking window before adaptive maintenance goes live.
+// Editable in settings; default 14, clamped to a sane 7–60.
+async function maintenanceMinDays() {
+  try {
+    const r = await sb('app_settings?key=eq.maintenance_min_days&select=value');
+    const v = r && r[0] != null ? parseInt(r[0].value, 10) : NaN;
+    return Number.isFinite(v) && v >= 7 && v <= 60 ? v : 14;
+  } catch { return 14; }
+}
 // Agent routing config for the TV panel: the ACTIVE voice route (wakefree_route) RESOLVED to the
 // model / thinking / runner it actually runs — Efficiency=Haiku/None/API, Accuracy=Opus/Max/Local, or
 // the Custom knobs — so the strip shows what's really running, not just the custom config. Plus whether
@@ -286,7 +295,8 @@ async function buildStatus() {
   const weights = (weightRows || []).map((r) => ({ date: String(r.date).slice(0, 10), weight: Number(r.weight_lbs) }));
   const surplus = await surplusCal();   // current surplus/deficit setting
   const routing = await routingConfig();   // agent model / thinking / runner / wake (TV routing panel)
-  const maintenance = estimateMaintenance({ weights, intakeByDay, today, surplus });
+  const minAlignedDays = await maintenanceMinDays();
+  const maintenance = estimateMaintenance({ weights, intakeByDay, today, surplus, minAlignedDays });
   nutrition.target = maintenance.target_macros; // the macro goal is the live dynamic target
   syncStoredTarget(maintenance.target_macros, today).catch((e) => console.error('target sync:', e.message));
 

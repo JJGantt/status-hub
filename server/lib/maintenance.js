@@ -31,11 +31,14 @@ const ABS_FLOOR_CAL = 1000;      // a logged day below this is treated as incomp
 const LOW_K = 2.0;               // drop days below median - LOW_K*sigma (robust, MAD-based)
 const HIGH_K = 3.0;              // drop absurd-high days (double-logs) above median + HIGH_K*sigma
 
-// Data-sufficiency gate (cold-start -> live):
-const SPAN_DAYS = 35;            // recent span the gate inspects
-const MIN_WEIGHINS = 8;          // distinct weigh-ins needed within the span
-const MIN_INTAKE_DAYS = 10;      // distinct VALID intake-logged days needed within the span
-const MAX_GAP_DAYS = 5;          // newest weigh-in and valid intake must be at least this fresh
+// Data-sufficiency gate (cold-start -> live). The analysis window is the current continuous
+// intake-LOGGING streak — NOT a fixed clock — so the weight trend and the intake average always
+// cover the SAME period (energy balance is invalid otherwise).
+const MIN_ALIGNED_DAYS = 14;     // default min length of the aligned window for a live estimate (a hub setting)
+const STREAK_MAX_GAP = 3;        // a gap longer than this (days) between logged days breaks the tracking streak
+const MIN_WEIGHIN_DAYS = 4;      // distinct weigh-in DAYS needed within the aligned window (same-day reads collapse to 1)
+const MIN_INTAKE_DAYS = 10;      // distinct VALID intake-logged days needed within the window
+const MAX_GAP_DAYS = 5;          // newest weigh-in/intake must be this fresh; also the slack for the start anchor
 
 function median(xs) {
   if (!xs.length) return null;
@@ -103,20 +106,47 @@ function macroTargets(calories, bodyweight) {
   return { protein_g, carbs_g, fat_g };
 }
 
-function estimateMaintenance({ weights = [], intakeByDay = [], today, surplus = SURPLUS }) {
-  const inSpan = (d) => dayIndex(d.date, today) >= -SPAN_DAYS;
-  const recentW = weights.filter(inSpan);
-  const { kept: recentI, excluded: intakeExcluded } = rejectOutliers(intakeByDay.filter(inSpan));
-  const daysAgo = (arr) => arr.length ? Math.min(...arr.map((d) => -dayIndex(d.date, today))) : Infinity;
-  const lastW = daysAgo(recentW), lastI = daysAgo(recentI); // freshness uses only VALID intake days
+function estimateMaintenance({ weights = [], intakeByDay = [], today, surplus = SURPLUS, minAlignedDays = MIN_ALIGNED_DAYS }) {
+  // Collapse same-day weigh-ins to one averaged point (multiple readings in a day must not over-count
+  // toward the gate or skew the trend).
+  const wByDay = {};
+  for (const w of weights) (wByDay[w.date] = wByDay[w.date] || []).push(w.weight);
+  const weighDays = Object.entries(wByDay).map(([date, ws]) => ({ date, weight: ws.reduce((a, b) => a + b, 0) / ws.length }));
 
-  const enoughW = recentW.length >= MIN_WEIGHINS && lastW <= MAX_GAP_DAYS;
-  const enoughI = recentI.length >= MIN_INTAKE_DAYS && lastI <= MAX_GAP_DAYS;
+  // Aligned analysis window = the current continuous intake-LOGGING streak [t0 .. today]. Walk back from
+  // the most recent logged day, staying in the streak while gaps stay <= STREAK_MAX_GAP; a longer gap
+  // (e.g. a months-long untracked stretch) breaks it. The weight trend AND the intake average are both
+  // clipped to this one window so the energy balance compares the same period — a stale weigh-in from
+  // before you started logging can no longer poison the slope.
+  const loggedDays = [...new Set(intakeByDay.map((d) => d.date))].filter((d) => dayIndex(d, today) <= 0).sort();
+  let t0 = null;
+  if (loggedDays.length) {
+    t0 = loggedDays[loggedDays.length - 1];
+    for (let i = loggedDays.length - 1; i > 0; i--) {
+      if (dayIndex(loggedDays[i], today) - dayIndex(loggedDays[i - 1], today) <= STREAK_MAX_GAP) t0 = loggedDays[i - 1];
+      else break;
+    }
+  }
+  const t0idx = t0 != null ? dayIndex(t0, today) : 0;
+  const inWindow = (date) => t0 != null && dayIndex(date, today) >= t0idx;
+
+  const winW = weighDays.filter((w) => inWindow(w.date));
+  const { kept: winI, excluded: intakeExcluded } = rejectOutliers(intakeByDay.filter((d) => inWindow(d.date)));
+  const newest = (arr) => arr.length ? Math.min(...arr.map((d) => -dayIndex(d.date, today))) : Infinity;
+  const oldest = (arr) => arr.length ? Math.max(...arr.map((d) => -dayIndex(d.date, today))) : -Infinity;
+
+  const windowLen = t0 != null ? -t0idx : 0;                          // days from t0 to today
+  const lastW = newest(winW), lastI = newest(winI);
+  // Live requires: an aligned window long enough for a trustworthy slope; enough weigh-in days that SPAN
+  // it (an anchor near the start, within MAX_GAP_DAYS of t0, and one fresh near today); enough valid intake.
+  const enoughWindow = windowLen >= minAlignedDays;
+  const enoughW = winW.length >= MIN_WEIGHIN_DAYS && lastW <= MAX_GAP_DAYS && oldest(winW) >= windowLen - MAX_GAP_DAYS;
+  const enoughI = winI.length >= MIN_INTAKE_DAYS && lastI <= MAX_GAP_DAYS;
 
   let maintenance = null, slope = null, currentWeight = null, source = 'calibrating';
-  if (enoughW && enoughI) {
-    const tr = weightedTrend(recentW, today);
-    const avg = weightedAvg(recentI, today);
+  if (enoughWindow && enoughW && enoughI) {
+    const tr = weightedTrend(winW, today);
+    const avg = weightedAvg(winI, today);
     if (tr && avg != null) {
       slope = tr.slope; currentWeight = tr.current;
       // Energy balance: intake - maintenance = stored-energy change (slope*KCAL_PER_LB).
@@ -130,7 +160,7 @@ function estimateMaintenance({ weights = [], intakeByDay = [], today, surplus = 
 
   // Dynamic goal: calories track maintenance + surplus. Protein/fat scale with measured
   // bodyweight (latest weigh-in, or the trend's current-weight estimate when live); carbs flex.
-  const sortedW = [...weights].sort((a, b) => (a.date < b.date ? -1 : 1));
+  const sortedW = [...weighDays].sort((a, b) => (a.date < b.date ? -1 : 1));
   const bodyweight = (currentWeight != null ? currentWeight
     : (sortedW.length ? sortedW[sortedW.length - 1].weight : null)) || FALLBACK_WEIGHT;
   const calories = Math.round((maintenance + surplus) / 10) * 10;
@@ -144,15 +174,16 @@ function estimateMaintenance({ weights = [], intakeByDay = [], today, surplus = 
     surplus,
     trend_lb_per_week: slope != null ? Math.round(slope * 7 * 100) / 100 : null,
     current_weight: currentWeight != null ? Math.round(currentWeight * 10) / 10 : null,
+    window_start: t0,
     coverage: {
-      weighins: recentW.length, need_weighins: MIN_WEIGHINS,
-      intake_days: recentI.length, need_intake_days: MIN_INTAKE_DAYS,
+      window_days: windowLen, need_window_days: minAlignedDays,
+      weighin_days: winW.length, need_weighin_days: MIN_WEIGHIN_DAYS,
+      intake_days: winI.length, need_intake_days: MIN_INTAKE_DAYS,
       intake_days_excluded: intakeExcluded,
-      span_days: SPAN_DAYS,
       last_weighin_days_ago: isFinite(lastW) ? lastW : null,
       last_intake_days_ago: isFinite(lastI) ? lastI : null,
     },
   };
 }
 
-module.exports = { estimateMaintenance, macroTargets, ANCHOR_MAINTENANCE, SURPLUS, HALF_LIFE_DAYS, KCAL_PER_LB };
+module.exports = { estimateMaintenance, macroTargets, ANCHOR_MAINTENANCE, SURPLUS, HALF_LIFE_DAYS, KCAL_PER_LB, MIN_ALIGNED_DAYS };

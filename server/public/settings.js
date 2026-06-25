@@ -38,6 +38,7 @@ export async function open() {
   const agentOn = ['1', 'true', 'on', 'yes'].includes(String(cur.agent_mode ?? '0').toLowerCase());
   const injectOn = ['1', 'true', 'on', 'yes'].includes(String(cur.voice_inject_mode ?? '0').toLowerCase());
   const speakOn = ['1', 'true', 'on', 'yes'].includes(String(cur.voice_speak_replies ?? '0').toLowerCase());
+  const pushOn = !['0', 'false', 'off', 'no'].includes(String(cur.push_enabled ?? '1').toLowerCase());
   const agentCwdRaw = cur.agent_cwd || '';
   const resetMin = (() => { const s = parseFloat(cur.session_reset_s); return Number.isFinite(s) && s > 0 ? Math.round(s / 60) : 5; })();
   // Working-directory picker: options are the repo dirs the worker publishes (agent_cwd_options).
@@ -124,6 +125,11 @@ export async function open() {
         '<button type="button" data-v="0"' + (speakOn ? '' : ' class="on"') + '>Off</button>' +
         '<button type="button" data-v="1"' + (speakOn ? ' class="on"' : '') + '>On</button>' +
       '</div>' +
+      '<div class="settings-sec">Push notifications</div>' +
+      '<div class="settings-seg" id="set-push">' +
+        '<button type="button" data-v="0"' + (pushOn ? '' : ' class="on"') + '>Off</button>' +
+        '<button type="button" data-v="1"' + (pushOn ? ' class="on"' : '') + '>On</button>' +
+      '</div>' +
 
       '<div class="settings-sec">Weight reminder</div>' +
       '<div class="settings-seg" id="set-wr-enabled">' +
@@ -175,6 +181,11 @@ export async function open() {
     const b = e.target.closest('[data-v]'); if (!b) return;
     back.querySelectorAll('#set-speak-replies button').forEach((x) => x.classList.toggle('on', x === b));
     save('voice_speak_replies', b.dataset.v);   // listener mirrors → voice-speak flag; Stop hook reads reply aloud
+  });
+  back.querySelector('#set-push').addEventListener('click', (e) => {
+    const b = e.target.closest('[data-v]'); if (!b) return;
+    back.querySelectorAll('#set-push button').forEach((x) => x.classList.toggle('on', x === b));
+    save('push_enabled', b.dataset.v);          // worker checks this before pushing a result to the phone
   });
   // Custom-route knobs (model / thinking effort / runner) — used by any route set to Custom.
   [['set-cust-model', 'custom_model'], ['set-cust-think', 'custom_think'], ['set-cust-runner', 'custom_runner']]

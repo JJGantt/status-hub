@@ -841,7 +841,7 @@ app.post('/api/voice-activity', express.json(), (req, res) => {
 app.post('/api/notify', express.json(), async (req, res) => {
   if (TV_TOKEN && req.query.token !== TV_TOKEN) return res.status(403).json({ error: 'forbidden' });
   const b = req.body || {};
-  const title = String(b.title || 'Jarvis').slice(0, 100);
+  const title = String(b.title || 'Hub').slice(0, 100);
   const body = String(b.body || '').trim().slice(0, 300);
   const kind = String(b.kind || 'voice').slice(0, 40);
   if (!body) return res.status(400).json({ error: 'body required' });

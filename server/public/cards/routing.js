@@ -4,6 +4,7 @@
 const MODEL = { haiku: 'Haiku', sonnet: 'Sonnet', opus: 'Opus' };
 const THINK = { none: 'None', medium: 'Medium', max: 'Maximum' };
 const RUNNER = { local: 'Local', api: 'API' };
+const ROUTE = { fast: 'Efficiency', power: 'Accuracy', custom: 'Custom' };
 
 export function render(s) {
   const el = document.getElementById('tv-routing');
@@ -16,10 +17,11 @@ export function render(s) {
   el.innerHTML =
     '<div class="devstrip">' +
       '<div class="devchips">' +
+        chip('Route', ROUTE[r.route] || r.route || '—') +   // the live voice route; the chips below are its resolved config
         chip('Model', MODEL[r.model] || r.model) +
         chip('Think', THINK[r.thinking] || r.thinking) +
         chip('Runner', RUNNER[r.runner] || r.runner) +
-        chip('AO', r.wake ? 'On' : 'Off', r.wake ? '#39d353' : '#5c6675') +  // AO = always-on (wake-free) voice
+        chip('AO', r.wake ? 'On' : 'Off', r.wake ? '#39d353' : '#5c6675') +  // AO = always-on (wake-free) voice; separate concern
       '</div>' +
     '</div>';
 }

@@ -24,21 +24,31 @@ async function surplusCal() {
     return Math.max(-SURPLUS_LIMIT, Math.min(SURPLUS_LIMIT, v));
   } catch { return 150; }
 }
-// Agent routing config for the TV panel: the Custom-route knobs (model / thinking / runner) the user
-// controls via the hub Settings and the voice MCP tools, plus whether wake-free voice is on. These are
-// what the conversational route uses whenever it's set to Custom (which the MCP setters auto-activate).
+// Agent routing config for the TV panel: the ACTIVE voice route (wakefree_route) RESOLVED to the
+// model / thinking / runner it actually runs — Efficiency=Haiku/None/API, Accuracy=Opus/Max/Local, or
+// the Custom knobs — so the strip shows what's really running, not just the custom config. Plus whether
+// wake-free voice is on (a separate concern).
 async function routingConfig() {
   let s = {};
   try {
-    const rows = await sb('app_settings?key=in.(custom_model,custom_think,custom_runner,wakefree_enabled,chatbox_route,wakefree_route)&select=key,value');
+    const rows = await sb('app_settings?key=in.(custom_model,custom_think,custom_runner,wakefree_enabled,wakefree_route)&select=key,value');
     s = Object.fromEntries((rows || []).map((r) => [r.key, r.value]));
   } catch { /* fall through to defaults */ }
-  return {
+  const route = ['fast', 'power', 'custom'].includes(s.wakefree_route) ? s.wakefree_route : 'power';
+  let cfg;
+  if (route === 'fast') cfg = { model: 'haiku', thinking: 'none', runner: 'api' };
+  else if (route === 'power') cfg = { model: 'opus', thinking: 'max', runner: 'local' };
+  else cfg = {
     model: ['haiku', 'sonnet', 'opus'].includes(s.custom_model) ? s.custom_model : 'sonnet',
     thinking: ['none', 'medium', 'max'].includes(s.custom_think) ? s.custom_think : 'medium',
     runner: s.custom_runner === 'api' ? 'api' : 'local',
+  };
+  return {
+    route,                 // 'fast' | 'power' | 'custom' — the live voice route
+    model: cfg.model,
+    thinking: cfg.thinking,
+    runner: cfg.runner,
     wake: ['1', 'true', 'on', 'yes'].includes(String(s.wakefree_enabled ?? '0').toLowerCase()),
-    active: s.chatbox_route === 'custom' || s.wakefree_route === 'custom',  // is Custom the live route?
   };
 }
 const { buildVariants } = require('./lib/variants');

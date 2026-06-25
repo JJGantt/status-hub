@@ -20,7 +20,7 @@ async function save(key, value) {
   } catch (_) {}
 }
 
-async function open() {
+export async function open() {
   let cur = {};
   try { cur = await (await fetch('/api/settings')).json(); } catch (_) {}
   const route = ['fast', 'power', 'custom'].includes(cur.chatbox_route) ? cur.chatbox_route : 'power';

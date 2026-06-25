@@ -58,7 +58,7 @@ if(TOUCH && !document.body.classList.contains('tv')){
  pages.addEventListener('scroll',()=>{const i=Math.round(pages.scrollLeft/pages.clientWidth);[...dots.children].forEach((d,k)=>d.classList.toggle('on',k===i));},{passive:true});
  if(startIdx>0)requestAnimationFrame(()=>{pages.scrollLeft=startIdx*pages.clientWidth;}); // land on nutrition without animation
  // Wall-mode entry: jump to the landscape TV dashboard (the same wall UI, scaled to fit the phone — wall.js).
- const wb=document.createElement('button'); wb.className='wallbtn'; wb.textContent='⊞';
+ const wb=document.createElement('button'); wb.className='wallbtn'; wb.textContent='⊞ Wall';
  wb.title='Wall mode'; wb.setAttribute('aria-label','Wall mode'); wb.onclick=()=>{location.href='/tv';};
  document.body.appendChild(wb);
 }

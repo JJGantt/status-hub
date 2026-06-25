@@ -314,7 +314,13 @@ body.tv .card h2{display:none}
 body.tv .statusrow{grid-column:1/5;grid-row:1;min-height:108px}
 /* HEALTH BAR — overall score as a tall vertical gauge in the far-right column. Two stacked fill colours:
    nutrition (bottom) + training (top), each capped at its 50% half, together reaching the overall %. */
-body.tv .healthbar{grid-column:5;grid-row:1/-1;display:flex;flex-direction:column;align-items:center;padding:8px 4px;min-height:0;min-width:0}
+body.tv .healthbar{grid-column:5;grid-row:1/-1;display:flex;flex-direction:column;align-items:center;padding:8px 4px;min-height:0;min-width:0;position:relative}
+/* floating score delta: a transient pill at the fill line, right-anchored so it grows left (never off-screen), rising + fading */
+body.tv .hb-delta{position:absolute;right:2px;z-index:6;padding:2px 7px;border-radius:9px;font-size:17px;font-weight:700;
+  line-height:1;white-space:nowrap;pointer-events:none;box-shadow:0 2px 8px rgba(0,0,0,.5);animation:hbDelta 2s ease-out forwards}
+body.tv .hb-delta.up{color:#0a140d;background:#39d353}
+body.tv .hb-delta.down{color:#fff;background:#e5484d}
+@keyframes hbDelta{0%{opacity:0;transform:translateY(8px)}12%{opacity:1}100%{opacity:0;transform:translateY(-46px)}}
 body.tv .hb-track{flex:1 1 auto;width:38px;position:relative;background:#0e1318;border:2px solid #2a3340;border-radius:20px;overflow:hidden;min-height:0}
 body.tv .hb-fill{position:absolute;left:0;right:0;transition:height .6s ease,bottom .6s ease}
 body.tv .hb-nutr{background:#3b82f6}    /* nutrition contribution */

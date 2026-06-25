@@ -1,12 +1,14 @@
 // Bootstrapping: SSE → render orchestrator, then the layout init.
 import { TOUCH, state } from './shared.js';
 import * as litter from './cards/litter.js';
+import * as feeder from './cards/feeder.js';
 import * as surf from './cards/surf.js';
 import * as nutrition from './cards/nutrition.js';
 import * as muscle from './cards/muscle.js';
 import * as workouts from './cards/workouts.js';
 import * as nutritionlog from './cards/nutritionlog.js';
 import * as routing from './cards/routing.js';   // TV voice-column routing panel (no-ops on phone)
+import * as score from './cards/score.js';       // TV overall-score health bar (no-ops on phone)
 import './voiceagent.js';   // mic FAB + shared 'hub' conversation (self-skips on the TV wall)
 import './settings.js';     // gear → settings panel (routing mode + trailing-silence); self-skips on TV
 
@@ -15,12 +17,14 @@ function render(s){
  if(!s||s.error){return;}
  state.last=s;
  litter.render(s);
+ feeder.render(s);    // cat feeder tile (no-ops on the TV wall, which omits #feeder)
  surf.render(s);
  nutrition.render(s);
  workouts.render(s);
  nutritionlog.render(s);
  muscle.render(s);     // paints the body map from volume colors + re-applies volume sort/selection
  routing.render(s);    // TV-only routing panel (model/thinking/runner/voice)
+ score.render(s);      // TV-only overall-score health bar (right column)
 }
 
 const es=new EventSource('/api/stream');

@@ -327,7 +327,7 @@ body.tv .hb-track::after{content:'';position:absolute;inset:0;pointer-events:non
 /* --- phone WALL MODE: the 1920×1080 TV shell rendered at fixed size and scaled to fit (wall.js sets the
    transform + centering). Children that used 100vh must become 100% of the fixed shell, not the phone vh. --- */
 body.tv.phonewall{height:100vh;overflow:hidden}
-body.tv.phonewall .tv-shell{position:fixed;top:0;left:0;width:1920px;height:1080px;transform-origin:top left}
+body.tv.phonewall .tv-shell{position:fixed;top:0;left:0;transform-origin:top left}  /* width/height/scale set by wall.js to fill the phone */
 body.tv.phonewall .rows{height:100%}
 body.tv.phonewall .tv-voice{height:100%}
 /* entry chip on the phone hub → /tv (wall mode); exit chip on the wall view → / (full detail). */

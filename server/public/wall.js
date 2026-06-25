@@ -7,12 +7,23 @@ if (PHONE) {
   const shell = document.querySelector('.tv-shell');
   if (shell) {
     document.body.classList.add('phonewall');
+    // Fit the wall to the phone. In LANDSCAPE (the intended use) match the logical canvas to the phone's
+    // actual aspect ratio — height pinned to the 1080 design reference, width grown to the phone's ratio — so
+    // the flexible dashboard columns FILL the screen width: no letterbox, no distortion. In portrait, fall
+    // back to letterboxing the fixed 16:9 (the 540px voice column would otherwise overflow a narrow canvas).
     const fit = () => {
       const vw = window.innerWidth, vh = window.innerHeight;
-      const s = Math.min(vw / 1920, vh / 1080);
-      shell.style.transform = `scale(${s})`;
-      shell.style.left = Math.round((vw - 1920 * s) / 2) + 'px';
-      shell.style.top = Math.round((vh - 1080 * s) / 2) + 'px';
+      if (vw > vh) {
+        const logicalH = 1080, logicalW = Math.round(logicalH * vw / vh), s = vh / logicalH;
+        shell.style.width = logicalW + 'px'; shell.style.height = logicalH + 'px';
+        shell.style.transform = `scale(${s})`; shell.style.left = '0px'; shell.style.top = '0px';
+      } else {
+        const s = Math.min(vw / 1920, vh / 1080);
+        shell.style.width = '1920px'; shell.style.height = '1080px';
+        shell.style.transform = `scale(${s})`;
+        shell.style.left = Math.round((vw - 1920 * s) / 2) + 'px';
+        shell.style.top = Math.round((vh - 1080 * s) / 2) + 'px';
+      }
     };
     fit();
     window.addEventListener('resize', fit);

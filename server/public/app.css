@@ -365,14 +365,17 @@ body.tv.wallportrait .tv-voice,body.tv.wallportrait .emitstrip,
 body.tv.wallportrait #nutplot,body.tv.wallportrait .hb-delta{display:none}
 body.tv.wallportrait .rows{
   grid-template-columns:1fr 1fr;
-  grid-template-rows:auto auto minmax(0,1.35fr) minmax(0,1fr) 30px;
+  grid-template-rows:auto 54px auto minmax(0,1.35fr) minmax(0,1fr);
   gap:8px;padding:10px}
 body.tv.wallportrait .statusrow{grid-column:1/3;grid-row:1}
-body.tv.wallportrait .ringrow{grid-column:1/3;grid-row:2}
-body.tv.wallportrait .nutrow{grid-column:1;grid-row:3}
-body.tv.wallportrait .workoutrow{grid-column:2;grid-row:3}
-body.tv.wallportrait .musclerow{grid-column:1/3;grid-row:4}
-body.tv.wallportrait .healthbar{grid-column:1/3;grid-row:5}
+body.tv.wallportrait .healthbar{grid-column:1/3;grid-row:2}
+body.tv.wallportrait .ringrow{grid-column:1/3;grid-row:3}
+body.tv.wallportrait .nutrow{grid-column:1;grid-row:4}
+body.tv.wallportrait .workoutrow{grid-column:2;grid-row:4}
+body.tv.wallportrait .musclerow{grid-column:1/3;grid-row:5}
+/* kill the litter-robot tile; routing fills the status row */
+body.tv.wallportrait .statusrow .statuscard:not(.tv-routecard){display:none}
+body.tv.wallportrait .statusrow .tv-routecard{flex:1 1 auto}
 body.tv.wallportrait .rows h2{font-size:11px;margin:0 0 2px}
 
 /* rings: one horizontal row (Cal·P·C·F) across the top, same size, filling the width */
@@ -384,11 +387,18 @@ body.tv.wallportrait .ringrow .ring{flex:1 1 0}
 body.tv.wallportrait .ringrow .ring svg{max-width:none;max-height:none;width:100%;height:auto}
 
 /* health bar: horizontal, full width, thin — fills left→right from the same --nfill/--tfill vars */
-body.tv.wallportrait .healthbar{flex-direction:row;align-items:stretch;padding:2px 2px;min-height:0}
-body.tv.wallportrait .hb-track{flex:1 1 auto;width:auto;height:auto;border-radius:13px}
+body.tv.wallportrait .healthbar{flex-direction:row;align-items:stretch;padding:2px;min-height:0}
+body.tv.wallportrait .hb-track{flex:1 1 auto;width:auto;height:auto;border-radius:25px}
 body.tv.wallportrait .hb-nutr{left:0;top:0;bottom:auto;height:100%;width:calc(var(--nfill,0)*1%)}
 body.tv.wallportrait .hb-train{left:calc(var(--nfill,0)*1%);top:0;bottom:auto;height:100%;width:calc(var(--tfill,0)*1%)}
 body.tv.wallportrait .hb-track::after{background:repeating-linear-gradient(to right,#000 0,#000 3px,transparent 3px,transparent 10%)}
+
+/* muscle section: the front+back figures SIDE BY SIDE (front left, back right) on the left, volume bars
+   filling the rest. (The .figstack is column on the wall; here it goes horizontal.) */
+body.tv.wallportrait .musmap{flex:0 0 38%!important;min-width:0}
+body.tv.wallportrait .musmap .fit{height:100%}
+body.tv.wallportrait .musmap .figstack{flex-direction:row;gap:6px;height:100%}
+body.tv.wallportrait .musmap .figstack svg{width:50%;height:100%}
 
 /* control rail → horizontal bottom bar: [settings exit] ........ [brain sparkle] */
 body.tv.wallportrait .wallrail{flex-direction:row;top:auto;bottom:0;left:0;right:0;width:100%;height:58px;

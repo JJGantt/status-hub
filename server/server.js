@@ -12,6 +12,7 @@ const BODY_SVG = require('./lib/bodymap');
 const { DAY_START_HOUR, localDate, nutritionWindow, lastNTrainingDays, dayBucketOf } = require('./lib/dates');
 const { buildWorkoutHeatmap } = require('./lib/heatmap');
 const { buildNutritionLog, buildGoalResolver, calorieColor } = require('./lib/nutritionlog');
+const { computeScore } = require('./lib/score');
 
 // Current surplus/deficit setting (signed kcal over maintenance; default +150 lean-bulk). Drives the
 // live daily goal and the active run's goal on the plot/heatmap. Editable in the settings panel.
@@ -267,12 +268,13 @@ async function buildStatus() {
     sb('exercise_muscles?select=name,muscle,contribution'),
     sbRange(`sets?occurred_at=gte.${heatStart}T00:00:00&select=occurred_at&order=occurred_at`),
     sb('exercise_catalog?select=name,equipment'),
-    sbRange(`nutrition_entries?occurred_at=gte.${localDate(new Date(Date.now() - 86 * 86400000))}T00:00:00&staged=eq.false&select=occurred_at,calories,protein_g&order=occurred_at`),
+    sbRange(`nutrition_entries?occurred_at=gte.${localDate(new Date(Date.now() - 86 * 86400000))}T00:00:00&staged=eq.false&select=occurred_at,calories,protein_g,fat_g&order=occurred_at`),
     sb('nutrition_targets?select=date,calories&order=date.asc'),
     sb('surf_snapshots?select=slug,water_temp,captured_at,rows&order=captured_at.desc&limit=1'),
   ]);
 
-  const litter = (deviceRows || [])[0] || null;
+  const litter = (deviceRows || []).find((d) => d.device !== 'cat-feeder') || null;
+  const feeder = (deviceRows || []).find((d) => d.device === 'cat-feeder') || null;
   const surf = buildSurf((surfRows || [])[0]);
 
   const sum = (k) => (entries || []).reduce((a, e) => a + (Number(e[k]) || 0), 0);
@@ -320,6 +322,24 @@ async function buildStatus() {
   // ---- nutrition log: calorie-adherence calendar (per-day historical targets) + calorie/weight trend ----
   const nutrition_log = buildNutritionLog(nutLogRows || [], weights, maintenance.target, maintenance.maintenance, today, targetRows || [], 20, surplus);
 
+  // ---- overall score (0.5·training + 0.5·nutrition over the rolling week) ----
+  const { goalForDay } = buildGoalResolver({ rows: nutLogRows || [], weights, targets: targetRows || [], today, surplus, fallbackMaint: maintenance.maintenance });
+  const dayCPF = {};   // 4am-day bucket -> {cal, protein, fat} actuals
+  for (const e of nutLogRows || []) {
+    const d = dayBucketOf(e.occurred_at);
+    const x = (dayCPF[d] = dayCPF[d] || { cal: 0, protein: 0, fat: 0 });
+    x.cal += Number(e.calories) || 0; x.protein += Number(e.protein_g) || 0; x.fat += Number(e.fat_g) || 0;
+  }
+  const wForDay = (ds) => { let w = null; for (const x of weights) { if (x.date <= ds) w = x.weight; else break; } return w; };  // weights are date-asc
+  const scoreDays = week.map((d) => {
+    const a = dayCPF[d] || { cal: 0, protein: 0, fat: 0 };
+    const calGoal = goalForDay(d);
+    const mt = macroTargets(calGoal, wForDay(d));
+    return { date: d, isToday: d === today, fraction: paceData.fraction, cal: a.cal, protein: a.protein, fat: a.fat,
+             calGoal, proteinFloor: mt.protein_g, fatTarget: mt.fat_g };
+  });
+  const score = computeScore({ volume, days: scoreDays });
+
   const last_set_at = (heatRows && heatRows.length) ? heatRows[heatRows.length - 1].occurred_at : null;
   // session_start_at: the first set of the trailing run where consecutive sets are <=20min apart. The
   // client shows (now - session_start) as the session clock while the last set is <20min old, and lets
@@ -334,7 +354,7 @@ async function buildStatus() {
       else break;
     }
   }
-  return { today, litter, surf, nutrition, maintenance, pace: paceData, volume, heatmap, nutrition_log, last_set_at, session_start_at, routing, generated_at: new Date().toISOString() };
+  return { today, litter, feeder, surf, nutrition, maintenance, pace: paceData, volume, heatmap, nutrition_log, last_set_at, session_start_at, routing, score, generated_at: new Date().toISOString() };
 }
 
 // ---- realtime push: recompute + push to all connected browsers on any DB change ----

@@ -278,7 +278,7 @@ async function buildStatus() {
     sb('exercise_muscles?select=name,muscle,contribution'),
     sbRange(`sets?occurred_at=gte.${heatStart}T00:00:00&select=occurred_at&order=occurred_at`),
     sb('exercise_catalog?select=name,equipment'),
-    sbRange(`nutrition_entries?occurred_at=gte.${localDate(new Date(Date.now() - 86 * 86400000))}T00:00:00&staged=eq.false&select=occurred_at,calories,protein_g,fat_g&order=occurred_at`),
+    sbRange(`nutrition_entries?occurred_at=gte.${localDate(new Date(Date.now() - 86 * 86400000))}T00:00:00&staged=eq.false&select=occurred_at,calories,protein_g,carbs_g,fat_g&order=occurred_at`),
     sb('nutrition_targets?select=date,calories&order=date.asc'),
     sb('surf_snapshots?select=slug,water_temp,captured_at,rows&order=captured_at.desc&limit=1'),
   ]);
@@ -334,19 +334,19 @@ async function buildStatus() {
 
   // ---- overall score (0.5·training + 0.5·nutrition over the rolling week) ----
   const { goalForDay } = buildGoalResolver({ rows: nutLogRows || [], weights, targets: targetRows || [], today, surplus, fallbackMaint: maintenance.maintenance });
-  const dayCPF = {};   // 4am-day bucket -> {cal, protein, fat} actuals
+  const dayCPF = {};   // 4am-day bucket -> {cal, protein, carbs, fat} actuals
   for (const e of nutLogRows || []) {
     const d = dayBucketOf(e.occurred_at);
-    const x = (dayCPF[d] = dayCPF[d] || { cal: 0, protein: 0, fat: 0 });
-    x.cal += Number(e.calories) || 0; x.protein += Number(e.protein_g) || 0; x.fat += Number(e.fat_g) || 0;
+    const x = (dayCPF[d] = dayCPF[d] || { cal: 0, protein: 0, carbs: 0, fat: 0 });
+    x.cal += Number(e.calories) || 0; x.protein += Number(e.protein_g) || 0; x.carbs += Number(e.carbs_g) || 0; x.fat += Number(e.fat_g) || 0;
   }
   const wForDay = (ds) => { let w = null; for (const x of weights) { if (x.date <= ds) w = x.weight; else break; } return w; };  // weights are date-asc
   const scoreDays = week.map((d) => {
-    const a = dayCPF[d] || { cal: 0, protein: 0, fat: 0 };
+    const a = dayCPF[d] || { cal: 0, protein: 0, carbs: 0, fat: 0 };
     const calGoal = goalForDay(d);
     const mt = macroTargets(calGoal, wForDay(d));
-    return { date: d, isToday: d === today, fraction: paceData.fraction, cal: a.cal, protein: a.protein, fat: a.fat,
-             calGoal, proteinFloor: mt.protein_g, fatTarget: mt.fat_g };
+    return { date: d, isToday: d === today, fraction: paceData.fraction, cal: a.cal, protein: a.protein, carbs: a.carbs, fat: a.fat,
+             calGoal, proteinFloor: mt.protein_g, carbFloor: mt.carbs_g, fatTarget: mt.fat_g };
   });
   const score = computeScore({ volume, days: scoreDays });
 

@@ -194,13 +194,12 @@ export async function open() {
       back.querySelectorAll('#' + id + ' button').forEach((x) => x.classList.toggle('on', x === b));
       save(key, b.dataset.v);
     }));
-  // Full agent mode — toggling either way resets the hub conversation, since the toolset + framing differ
-  // and a resumed session shouldn't straddle the switch.
+  // Full agent mode — hub and full-agent keep SEPARATE, persistent conversations now, so toggling the mode
+  // just switches which one is live; it no longer wipes anything (the worker resumes each mode's own session).
   back.querySelector('#set-agent-mode').addEventListener('click', (e) => {
     const b = e.target.closest('[data-v]'); if (!b) return;
     back.querySelectorAll('#set-agent-mode button').forEach((x) => x.classList.toggle('on', x === b));
     save('agent_mode', b.dataset.v);
-    fetch('/api/voice-reset', { method: 'POST' }).catch(() => {});
   });
   back.querySelector('#set-agent-cwd').addEventListener('change', (e) => save('agent_cwd', e.target.value));
   // Idle reset is shown in minutes but stored in seconds (session_reset_s). No data-key, so the generic

@@ -573,28 +573,13 @@ body.tv .hmonths{margin-left:0;font-size:11px}
 .settings-text{flex:1;min-width:0;padding:8px 10px;border-radius:8px;border:1px solid #2a313a;background:#0e1318;color:#e8eaed;font-size:14px}
 .settings-text:focus{outline:none;border-color:#3b82f6}
 .settings-row.dim{opacity:.4}
-/* fixed voice FAB (bottom-right, survives scrolling; hidden once the conversation card shows).
-   Two stacked buttons: brain (precision/Opus) on top + smaller, sparkle (fast/Haiku) below = main. */
-.ai-fab-wrap{position:fixed;right:20px;bottom:20px;z-index:1000;display:flex;flex-direction:column;
-  align-items:center;gap:12px;transition:opacity .2s}
-.ai-fab-wrap.hidden{opacity:0;pointer-events:none}
-.ai-fab{width:56px;height:56px;border-radius:50%;border:0;background:#3b82f6;color:#fff;display:grid;
-  place-items:center;cursor:pointer;box-shadow:0 6px 20px rgba(0,0,0,.45);transition:background .15s,transform .1s}
-.ai-fab:hover{background:#4f8ef7}
-.ai-fab:active{transform:scale(.94)}
-.ai-fab.ai-rec{background:#ef4444;animation:va-pulse 1.4s ease-out infinite}
-/* precision (brain) button — smaller, violet to signal the heavier "thinking" tier */
-.ai-fab-power{width:44px;height:44px;background:#7c3aed;box-shadow:0 4px 14px rgba(0,0,0,.4)}
-.ai-fab-power:hover{background:#8b5cf6}
-
 /* bottom activity bar — live "what Raspy is doing": Listening / Transcribing / Thinking, then each
-   tool call + args. Left-aligned, content-sized, max-width capped so it never reaches the FAB. */
+   tool call + args. Left-aligned, content-sized; floats just above the shared bottom navbar. */
 .ai-act{position:fixed;left:16px;bottom:70px;z-index:999;max-width:calc(100vw - 110px);
   display:inline-flex;flex-direction:column;align-items:stretch;gap:5px;background:#0f1318;border:1px solid #222a33;
   border-radius:12px;padding:8px 13px;font-size:13px;color:#c2cad4;box-shadow:0 6px 20px rgba(0,0,0,.4);
   opacity:0;transform:translateY(6px);transition:opacity .2s,transform .2s;pointer-events:none;overflow:hidden}
 .ai-act.show{opacity:1;transform:translateY(0)}
-.ai-act.ai-act-off{display:none}                 /* suppressed while the conversation card is in view */
 .ai-act-row{display:flex;align-items:center;gap:9px;min-width:0;white-space:nowrap}
 .ai-act-txt{flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis}
 /* The transcribed prompt that kicked off this run — quoted, muted, sits above the live status.
@@ -607,5 +592,11 @@ body.tv .hmonths{margin-left:0;font-size:11px}
 .ai-act-done .ai-act-dot{background:#39d353;animation:none}
 .ai-act-err .ai-act-dot{background:#f87171;animation:none}
 .ai-act-tool .ai-act-txt{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;color:#9fd0ff}
+/* TV KIOSK (big screen, no navbar): blow the activity popup WAY up so it reads from across the room. */
+body.tv:not(.phonewall) .ai-act{left:30px;bottom:30px;font-size:31px;padding:20px 32px;border-radius:18px;gap:12px;max-width:calc(100vw - 140px);border-width:2px}
+body.tv:not(.phonewall) .ai-act-prompt{font-size:27px}
+body.tv:not(.phonewall) .ai-act-row{gap:18px}
+body.tv:not(.phonewall) .ai-act-dot{width:20px;height:20px}
+body.tv:not(.phonewall) .ai-act-tool .ai-act-txt{font-size:29px}
 @keyframes ai-blink{50%{opacity:.35}}
 @media (max-width:640px){.ai-act{left:12px;bottom:66px;max-width:calc(100vw - 24px)}}

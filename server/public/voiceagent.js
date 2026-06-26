@@ -184,7 +184,6 @@ export function initActivityBar() {
     if (!sticky) hideT = setTimeout(() => { bar.classList.remove('show'); setPrompt(''); }, 3500);
   }
   return {
-    el: bar,
     prompt(t) { setPrompt(t); },                  // the transcribed command; stays up for the whole run
     rec(t) { setPrompt(''); show(t || 'Listening…', 'rec', true); },
     busy(t) { show(t, 'busy', true); },          // Transcribing… / Thinking…
@@ -268,43 +267,3 @@ function initCard() {
   return { upsert, clear, backfill };
 }
 
-// ---- fixed quick-add mic FAB ---------------------------------------------
-function initFab(activity) {
-  // Two stacked buttons: the brain (precision/Opus) sits on top, smaller; the sparkle (fast/Haiku)
-  // is the main button below. Both record voice the same way — they differ only in the tier sent.
-  const SPARKLE = '<svg viewBox="0 0 24 24" width="26" height="26" fill="currentColor" aria-hidden="true">' +
-    '<path d="M12 1c.6 5.7 4.3 9.4 10 10-5.7.6-9.4 4.3-10 10-.6-5.7-4.3-9.4-10-10 5.7-.6 9.4-4.3 10-10Z"/></svg>';
-  const BRAIN = '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
-    '<path d="M12 5a3 3 0 1 0-5.997.142 4 4 0 0 0-2.526 5.77 4 4 0 0 0 .556 6.588A4 4 0 1 0 12 18Z"></path>' +
-    '<path d="M12 5a3 3 0 1 1 5.997.142 4 4 0 0 1 2.526 5.77 4 4 0 0 1-.556 6.588A4 4 0 1 1 12 18Z"></path></svg>';
-  const wrap = document.createElement('div');
-  wrap.className = 'ai-fab-wrap';
-  wrap.innerHTML =
-    '<button class="ai-fab ai-fab-power" id="ai-fab-power" type="button" aria-label="Precision voice command (max-power estimate)">' + BRAIN + '</button>' +
-    '<button class="ai-fab" id="ai-fab" type="button" aria-label="Quick voice command">' + SPARKLE + '</button>';
-  document.body.appendChild(wrap);
-  const fab = wrap.querySelector('#ai-fab');
-  const fabPower = wrap.querySelector('#ai-fab-power');
-
-  const onStatus = (t, kind) => {
-    if (kind === 'rec') activity.rec(t);
-    else if (kind === 'prompt') activity.prompt(t);   // surface the transcribed command above the status
-    else if (kind === 'err') activity.err(t);
-    else if (kind === 'clear') activity.clear();
-    else activity.busy(t);
-  };
-  const fastRec = makeRecorder({ onStatus, onActive: (a) => fab.classList.toggle('ai-rec', a), quick: true, autoStop: true, tier: 'fast' });
-  const powerRec = makeRecorder({ onStatus, onActive: (a) => fabPower.classList.toggle('ai-rec', a), quick: true, autoStop: true, tier: 'power' });
-  fab.addEventListener('click', () => fastRec.toggle());
-  fabPower.addEventListener('click', () => powerRec.toggle());
-
-  // Hide the FAB + activity bar while the full conversation card is on screen (its input is there).
-  const card = document.querySelector('.airow');
-  if (card && 'IntersectionObserver' in window) {
-    new IntersectionObserver((es) => {
-      const onScreen = es[0].isIntersecting;
-      wrap.classList.toggle('hidden', onScreen);
-      activity.el.classList.toggle('ai-act-off', onScreen);
-    }, { threshold: 0.12 }).observe(card);
-  }
-}

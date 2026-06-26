@@ -10,6 +10,7 @@ import { activityBar } from './voiceagent.js';
 const log = document.getElementById('tv-log');
 const seen = new Map(); // row id -> bubble element, so streamed UPDATEs replace in place
 let activeMode = 'hub'; // which mode's conversation the wall shows — follows agent_mode, switches live
+const MAX_MSGS = 80;    // hard cap on retained bubbles so a 24/7 kiosk never grows #tv-log + `seen` unbounded
 
 function nearBottom() { return log.scrollHeight - log.scrollTop - log.clientHeight < 80; }
 function scrollToEnd() { log.scrollTop = log.scrollHeight; }
@@ -35,6 +36,12 @@ function upsert(row) {
   const el = tmp.firstElementChild;
   if (existing) { existing.replaceWith(el); seen.set(row.id, el); }
   else { log.appendChild(el); seen.set(row.id, el); }
+  // Evict oldest bubbles + their `seen` entries past the cap (prevents unbounded DOM/Map growth on the kiosk).
+  while (log.childElementCount > MAX_MSGS) {
+    const old = log.firstElementChild;
+    for (const [id, e] of seen) { if (e === old) { seen.delete(id); break; } }
+    old.remove();
+  }
   if (stick) scrollToEnd();
 }
 

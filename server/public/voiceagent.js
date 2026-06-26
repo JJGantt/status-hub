@@ -206,6 +206,7 @@ function initCard() {
   const setStatus = (t) => { if (statusEl) statusEl.textContent = t || ''; };
 
   const seen = new Map();
+  const MAX_MSGS = 240;   // cap retained bubbles so a long-open hub tab never grows #ai-log + `seen` unbounded
   const nearBottom = () => log.scrollHeight - log.scrollTop - log.clientHeight < 80;
   const scrollEnd = () => { log.scrollTop = log.scrollHeight; };
   function bubbleHtml(row) {
@@ -229,6 +230,11 @@ function initCard() {
     const el = tmp.firstElementChild, existing = seen.get(row.id);
     if (existing) existing.replaceWith(el); else log.appendChild(el);
     seen.set(row.id, el);
+    while (log.childElementCount > MAX_MSGS) {
+      const o = log.firstElementChild;
+      for (const [id, e] of seen) { if (e === o) { seen.delete(id); break; } }
+      o.remove();
+    }
     if (stick) scrollEnd();
   }
   function clear() { log.innerHTML = ''; seen.clear(); lastTs = 0; }

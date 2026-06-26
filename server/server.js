@@ -434,12 +434,16 @@ app.use((req, res, next) => {
   res.redirect('/login');
 });
 
-app.get('/', (req, res) => res.type('html').send(DASHBOARD_HTML));
-// Pi/TV kiosk: near-black always-on wall display = the HUD + a live Claude-conversation panel.
-// Behind the same auth cookie. no-cache so a deploy is never masked by a stale cached page.
-app.get('/tv', (req, res) => {
+// Wall view is the DEFAULT everywhere — both '/' and '/tv' serve it (the app loads '/'; the Pi loads '/tv').
+// The full detail page moves to '/page'. Each view's bottom-bar toggle flips between them. no-cache so a
+// deploy is never masked by a stale cached page.
+app.get(['/', '/tv'], (req, res) => {
   res.setHeader('Cache-Control', 'no-cache');
   res.type('html').send(TV_HTML);
+});
+app.get('/page', (req, res) => {
+  res.setHeader('Cache-Control', 'no-cache');
+  res.type('html').send(DASHBOARD_HTML);
 });
 // Static client assets (core.js, app.css, cards/*.js) — behind the auth gate above.
 // no-cache (revalidate via ETag each load) so a deploy is never masked by a stale cached asset.

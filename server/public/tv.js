@@ -2,7 +2,7 @@
 // main hub). This module adds ONLY the compact voice column: a minimal live conversation panel for the hub
 // thread, plus the bottom-strip emission feed. It reads /api/voice-stream (event: voice {kind,row}).
 import { esc } from './shared.js';
-import { initActivityBar } from './voiceagent.js';
+import { activityBar } from './voiceagent.js';
 
 // ---------------------------------------------------------------------------
 // Conversation panel — hub voice_messages, oldest→newest. user = blue, assistant = gray. No role labels.
@@ -52,7 +52,7 @@ async function backfill() {
 // Listening → Working → each tool call → Done, with the result persisting briefly, floating on top.
 // Exported so the wall mic buttons (wall.js) drive the same instance.
 // ---------------------------------------------------------------------------
-export const activity = initActivityBar();
+const activity = activityBar();
 
 // Heard-you pop. The UI plays it ITSELF the instant your words land on screen — synced to the paint.
 const popSound = new Audio('/pop.wav');

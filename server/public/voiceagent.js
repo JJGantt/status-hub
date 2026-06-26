@@ -11,6 +11,7 @@ import { esc } from './shared.js';
 let phoneHangMs = 3000;   // phone trailing-silence (ms) for the FAB VAD; overridden by the phone_silence_s setting
 let resetMs = 30 * 60 * 1000;   // context-reset idle gap (ms) = session_reset_s. A message arriving after a gap
                                 // this long means the agent reset its context, so the shown thread resets too.
+let _activityBar = null;        // shared activity-popup singleton — declared up here so boot() (below) can call activityBar() without a TDZ error
 
 if (!document.body.classList.contains('tv')) boot();
 
@@ -19,9 +20,9 @@ function boot() {
     const n = parseFloat(s.phone_silence_s); if (Number.isFinite(n) && n > 0) phoneHangMs = n * 1000;
     const rs = parseFloat(s.session_reset_s); if (Number.isFinite(rs) && rs > 0) resetMs = rs * 1000;
   }).catch(() => {});
-  const activity = initActivityBar();
+  const activity = activityBar();
   const card = initCard();           // null if the conversation card isn't on this page
-  initFab(activity);
+  // (the floating FAB is gone — the shared bottom navbar now provides the voice buttons on both views)
 
   // One voice stream feeds both the conversation and the activity bar.
   const sse = new EventSource('/api/voice-stream');
@@ -140,7 +141,9 @@ export function makeRecorder({ onStatus, onActive, quick, autoStop, tier }) {
 }
 
 // ---- bottom activity bar -------------------------------------------------
-// Exported so the wall (tv.js) can reuse the EXACT same floating popup instead of its own emit strip.
+// Singleton: ONE shared activity popup per page — used by the page view (boot), the wall (tv.js), and the
+// navbar's voice buttons, so they all drive the same floating overlay.
+export function activityBar() { return (_activityBar = _activityBar || initActivityBar()); }
 export function initActivityBar() {
   const bar = document.createElement('div');
   bar.className = 'ai-act';

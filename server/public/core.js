@@ -9,8 +9,9 @@ import * as workouts from './cards/workouts.js';
 import * as nutritionlog from './cards/nutritionlog.js';
 import * as routing from './cards/routing.js';   // TV voice-column routing panel (no-ops on phone)
 import * as score from './cards/score.js';       // TV overall-score health bar (no-ops on phone)
-import './voiceagent.js';   // mic FAB + shared 'hub' conversation (self-skips on the TV wall)
+import './voiceagent.js';   // shared 'hub' conversation + activity popup (self-skips on the TV wall)
 import './settings.js';     // gear → settings panel (routing mode + trailing-silence); self-skips on TV
+import { mountNavbar } from './navbar.js';   // shared bottom bar (toggle · settings · brain · sparkle)
 
 // ---- render orchestrator: set shared frame, then each card in order ----
 function render(s){
@@ -57,8 +58,6 @@ if(TOUCH && !document.body.classList.contains('tv')){
  pages.after(dots);
  pages.addEventListener('scroll',()=>{const i=Math.round(pages.scrollLeft/pages.clientWidth);[...dots.children].forEach((d,k)=>d.classList.toggle('on',k===i));},{passive:true});
  if(startIdx>0)requestAnimationFrame(()=>{pages.scrollLeft=startIdx*pages.clientWidth;}); // land on nutrition without animation
- // Wall-mode entry: jump to the landscape TV dashboard (the same wall UI, scaled to fit the phone — wall.js).
- const wb=document.createElement('button'); wb.className='wallbtn'; wb.textContent='⊞ Wall';
- wb.title='Wall mode'; wb.setAttribute('aria-label','Wall mode'); wb.onclick=()=>{location.href='/tv';};
- document.body.appendChild(wb);
 }
+// Shared bottom navbar on BOTH views (full page + phone wall); skip only the TV kiosk (wall on a big screen).
+if(!document.body.classList.contains('tv') || window.innerWidth < 1400) mountNavbar();

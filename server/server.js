@@ -832,7 +832,9 @@ app.post('/api/voice-activity', express.json(), (req, res) => {
   const b = req.body || {};
   pushVoice('activity', {
     text: String(b.text || '').slice(0, 400),
-    state: b.state === 'done' ? 'done' : 'tool',
+    // Preserve 'working' (the command's transcript, once per command) and 'done'; everything else is a
+    // tool call. 'working' is what the TV keys the heard-you pop off, so it must survive intact.
+    state: ['done', 'working'].includes(b.state) ? b.state : 'tool',
     focus: String(b.focus || 'hub'),
   });
   res.status(204).end();

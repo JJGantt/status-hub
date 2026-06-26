@@ -12,23 +12,37 @@ let phoneHangMs = 3000;   // phone trailing-silence (ms) for the FAB VAD; overri
 let resetMs = 30 * 60 * 1000;   // context-reset idle gap (ms) = session_reset_s. A message arriving after a gap
                                 // this long means the agent reset its context, so the shown thread resets too.
 let _activityBar = null;        // shared activity-popup singleton — declared up here so boot() (below) can call activityBar() without a TDZ error
+let _card = null;               // the conversation card (null on pages without it)
+let activeMode = 'hub';         // which mode's conversation the panel shows — follows agent_mode, live
+
+// Switch the panel to a mode's conversation: reload its thread + update the on-screen indicator. Hub and
+// full-agent keep SEPARATE threads (the worker tags each message); this is what makes the visible context
+// follow the active mode, switching live when the agent_mode toggle flips from anywhere.
+function setMode(mode) {
+  const m = mode === 'agent' ? 'agent' : 'hub';
+  if (m !== activeMode) { activeMode = m; if (_card) _card.backfill(); }
+  const el = document.getElementById('ai-mode');
+  if (el) { el.textContent = activeMode === 'agent' ? 'Agent' : 'Hub'; el.classList.toggle('is-agent', activeMode === 'agent'); }
+}
 
 if (!document.body.classList.contains('tv')) boot();
 
 function boot() {
+  const activity = activityBar();
+  _card = initCard();                // null if the conversation card isn't on this page
+  setMode('hub');                    // default indicator until settings load
   fetch('/api/settings').then((r) => r.json()).then((s) => {
     const n = parseFloat(s.phone_silence_s); if (Number.isFinite(n) && n > 0) phoneHangMs = n * 1000;
     const rs = parseFloat(s.session_reset_s); if (Number.isFinite(rs) && rs > 0) resetMs = rs * 1000;
+    setMode(['1', 'true', 'on', 'yes'].includes(String(s.agent_mode ?? '0').toLowerCase()) ? 'agent' : 'hub');
   }).catch(() => {});
-  const activity = activityBar();
-  const card = initCard();           // null if the conversation card isn't on this page
-  // (the floating FAB is gone — the shared bottom navbar now provides the voice buttons on both views)
 
-  // One voice stream feeds both the conversation and the activity bar.
+  // One voice stream feeds the conversation, the activity bar, and the live mode switch.
   const sse = new EventSource('/api/voice-stream');
   sse.addEventListener('voice', (e) => {
     let msg; try { msg = JSON.parse(e.data); } catch (_) { return; }
-    if (msg.kind === 'reset') { if (card) card.clear(); activity.clear(); return; }
+    if (msg.kind === 'reset') { if (_card) _card.clear(); activity.clear(); return; }
+    if (msg.kind === 'mode') { setMode(msg.row && msg.row.agent ? 'agent' : 'hub'); return; }  // toggle flipped → switch thread
     if (msg.kind === 'activity') {                 // live progress, pushed direct from the worker (low-latency)
       const a = msg.row || {};
       if ((a.focus || 'hub') !== 'hub') return;
@@ -38,17 +52,18 @@ function boot() {
     if (msg.kind !== 'message') return;
     const row = msg.row;
     if (!row || (row.focus || 'hub') !== 'hub') return;
+    if ((row.mode || 'hub') !== activeMode) return;   // only the ACTIVE mode's messages land in the panel
     if (row.role === 'tool') return;               // (tools now arrive as 'activity', never as messages)
-    if (card) card.upsert(row);                    // user/assistant → conversation
+    if (_card) _card.upsert(row);                  // user/assistant → conversation
   });
-  // The conversation must reflect the ONE central thread live, from ANY source — so resync on every
+  // The conversation must reflect the active mode's thread live, from ANY source — so resync on every
   // (re)connect AND whenever the view returns to the foreground. EventSource silently suspends when a
   // mobile browser backgrounds and never replays missed messages; without this the thread goes stale
   // (showing only what THIS device sent) until a manual refresh. backfill() is idempotent (full rebuild),
   // and 'open' fires on the first connect too, so it covers initial load as well.
-  if (card) {
-    sse.addEventListener('open', () => card.backfill());
-    document.addEventListener('visibilitychange', () => { if (!document.hidden) card.backfill(); });
+  if (_card) {
+    sse.addEventListener('open', () => _card.backfill());
+    document.addEventListener('visibilitychange', () => { if (!document.hidden) _card.backfill(); });
   }
 }
 
@@ -204,11 +219,11 @@ function initCard() {
   function upsert(row) {
     if (!row || (row.focus || 'hub') !== 'hub') return;
     if (row.role === 'tool') return;        // tool calls live in the activity bar, not the thread
-    // A genuinely new message arriving after a gap longer than the reset window means the agent reset its
-    // context — so clear the thread first, mirroring the reset (the panel only ever shows the live context).
+    // Hub only: a new message after a gap longer than the reset window means the hub reset its context — so
+    // clear the thread first, mirroring the reset. Full-agent never gap-resets, so its thread persists.
     const ts = row.created_at ? Date.parse(row.created_at) : Date.now();
     const fresh = !seen.has(row.id);
-    if (fresh && lastTs && (ts - lastTs) > resetMs) clear();
+    if (activeMode === 'hub' && fresh && lastTs && (ts - lastTs) > resetMs) clear();
     if (fresh) lastTs = ts;
     const stick = nearBottom();
     const tmp = document.createElement('div'); tmp.innerHTML = bubbleHtml(row);
@@ -220,7 +235,7 @@ function initCard() {
   function clear() { log.innerHTML = ''; seen.clear(); lastTs = 0; }
   async function backfill() {
     try {
-      const r = await fetch('/api/voice-messages?focus=hub&limit=200');   // server scopes this to the current context
+      const r = await fetch('/api/voice-messages?focus=hub&mode=' + activeMode + '&limit=200');   // the active mode's thread (server scopes hub to the current context)
       if (!r.ok) return;
       clear();
       for (const row of await r.json()) upsert(row);

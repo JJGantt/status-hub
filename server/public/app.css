@@ -521,7 +521,11 @@ body.tv .hmonths{margin-left:0;font-size:11px}
 .airow{height:100vh;height:100dvh}
 .ai-shell{display:flex;flex-direction:column;gap:10px;flex:1 1 auto;min-height:0}
 .ai-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:0}
+.ai-head-left{display:flex;align-items:center;gap:10px}
 .ai-head h2{margin:0}
+.ai-mode{font-size:11px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:#8b96a5;
+  background:#1b2128;border:1px solid #2a313a;border-radius:999px;padding:3px 10px;line-height:1}
+.ai-mode.is-agent{color:#0b0e12;background:#eab308;border-color:#eab308}
 .ai-reset{background:#1b2128;border:1px solid #2a313a;color:#8b96a5;font-size:12px;font-weight:600;
   padding:5px 11px;border-radius:8px;cursor:pointer}
 .ai-reset:hover{color:#e6eaf0;border-color:#3a4452}

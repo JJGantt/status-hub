@@ -391,7 +391,15 @@ function startRealtime() {
     .on('postgres_changes', { event: '*', schema: 'public', table: 'sets' }, broadcast)
     // Settings (routing model/thinking/runner, wake toggle, nutrition goal): rebuild so the TV routing
     // panel reflects an MCP/voice/settings change near-instantly instead of waiting for the 30s tick.
-    .on('postgres_changes', { event: '*', schema: 'public', table: 'app_settings' }, broadcast)
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'app_settings' }, (p) => {
+      broadcast(p);
+      // When the agent_mode toggle flips (from anywhere — voice, another device), tell the voice panel to
+      // switch to that mode's conversation live, so the on-screen context always matches the active mode.
+      if (p.new && p.new.key === 'agent_mode') {
+        const agent = ['1', 'true', 'on', 'yes'].includes(String(p.new.value).toLowerCase());
+        pushVoice('mode', { agent });
+      }
+    })
     // Voice pipeline: stream inserts/updates straight to the /tv conversation panel. INSERT and
     // UPDATE both carry the new row in `payload.new` (UPDATE = a streamed row flipping done=true).
     .on('postgres_changes', { event: '*', schema: 'public', table: 'voice_messages' },
@@ -754,13 +762,17 @@ app.get('/api/stream', async (req, res) => {
 app.get('/api/voice-messages', async (req, res) => {
   try {
     const focus = String(req.query.focus || 'hub');
+    const mode = String(req.query.mode || 'hub') === 'agent' ? 'agent' : 'hub';
     let limit = parseInt(req.query.limit, 10);
     if (!Number.isFinite(limit) || limit <= 0) limit = 50;
     limit = Math.min(limit, 500);
-    const rows = (await sb(`voice_messages?focus=eq.${encodeURIComponent(focus)}&order=created_at.desc&limit=${limit}&select=*`) || []).reverse();
-    // Scope to the CURRENT context: the trailing run with no idle gap longer than session_reset_s. After
-    // a longer gap the agent starts a fresh context, so older turns it no longer remembers aren't shown.
-    // The full thread stays in voice_messages as the log; this only narrows what the live panel renders.
+    // Mode filter — legacy rows (mode NULL) predate the split and count as 'hub'.
+    const modeFilter = mode === 'agent' ? '&mode=eq.agent' : '&or=(mode.is.null,mode.eq.hub)';
+    const rows = (await sb(`voice_messages?focus=eq.${encodeURIComponent(focus)}${modeFilter}&order=created_at.desc&limit=${limit}&select=*`) || []).reverse();
+    // Full-agent context never resets on an idle gap, so its whole thread is one context — show it all.
+    if (mode === 'agent') { res.json(rows); return; }
+    // Hub mode scopes to the CURRENT context: the trailing run with no idle gap longer than session_reset_s.
+    // After a longer gap the hub starts a fresh context, so older turns it no longer remembers aren't shown.
     const gapMs = (await sessionResetS()) * 1000;
     let start = rows.length ? rows.length - 1 : 0;
     for (let i = rows.length - 1; i > 0; i--) {

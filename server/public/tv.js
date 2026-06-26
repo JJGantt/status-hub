@@ -9,6 +9,7 @@ import { activityBar } from './voiceagent.js';
 // ---------------------------------------------------------------------------
 const log = document.getElementById('tv-log');
 const seen = new Map(); // row id -> bubble element, so streamed UPDATEs replace in place
+let activeMode = 'hub'; // which mode's conversation the wall shows — follows agent_mode, switches live
 
 function nearBottom() { return log.scrollHeight - log.scrollTop - log.clientHeight < 80; }
 function scrollToEnd() { log.scrollTop = log.scrollHeight; }
@@ -25,6 +26,7 @@ function bubbleHtml(row) {
 
 function upsert(row) {
   if (!row || row.focus !== 'hub') return;
+  if ((row.mode || 'hub') !== activeMode) return; // only the active mode's thread (hub vs full-agent)
   if (row.role === 'tool') return; // tool-call activity rows aren't part of the conversation thread
   const stick = nearBottom();
   const existing = seen.get(row.id);
@@ -38,7 +40,7 @@ function upsert(row) {
 
 async function backfill() {
   try {
-    const r = await fetch('/api/voice-messages?focus=hub&limit=50');
+    const r = await fetch('/api/voice-messages?focus=hub&mode=' + activeMode + '&limit=50');
     if (!r.ok) return;
     const rows = await r.json();
     log.innerHTML = ''; seen.clear();
@@ -70,8 +72,12 @@ voice.addEventListener('voice', (e) => {
     if (a.state === 'working') playPop();                                          // command's words just landed → pop
     if (a.state === 'done') activity.done(a.text); else activity.tool(a.text);     // identical mapping to the page view
   }
+  else if (msg.kind === 'mode') { activeMode = msg.row && msg.row.agent ? 'agent' : 'hub'; backfill(); }  // toggle flipped → show that mode's thread
   else if (msg.kind === 'message') upsert(msg.row);
   else if (msg.kind === 'reset') { log.innerHTML = ''; seen.clear(); activity.clear(); }
 });
 
-backfill();
+// Pick up the active mode on load, then backfill that mode's thread.
+fetch('/api/settings').then((r) => r.json()).then((s) => {
+  activeMode = ['1', 'true', 'on', 'yes'].includes(String(s.agent_mode ?? '0').toLowerCase()) ? 'agent' : 'hub';
+}).catch(() => {}).finally(() => backfill());

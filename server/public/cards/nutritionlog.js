@@ -98,7 +98,9 @@ async function loadNutDay(date){
  j.entries.forEach((e,i)=>{
   const t=fmtTime(e.occurred_at);
   const ings=Array.isArray(e.ingredients)?e.ingredients:null;
-  const exp=ings&&ings.length;
+  // Every entry now stores ≥1 ingredient. A single-ingredient entry IS its own breakdown, so it renders
+  // flat (no caret/expand) — only multi-ingredient meals are expandable.
+  const exp=ings&&ings.length>1;
   const open=exp&&expandedIds.has(e.id); // keep this entry expanded across re-renders if the user opened it
   const staged=!!e.staged;
   // committed entries get "+ now" (re-log); staged meals get a STAGED badge + a Commit button.
@@ -243,7 +245,7 @@ function openAddPopup(base,opts){
    A:ingStructured(g)?u(g.amount):0,
    calories:u(g.calories),protein_g:u(g.protein_g),carbs_g:u(g.carbs_g),fat_g:u(g.fat_g)
  })):null;
- const perIng=!!ings;   // per-ingredient steppers + ✕ in BOTH add and edit when the dish has ingredients
+ const perIng=!!ings&&ings.length>1;   // per-ingredient steppers only for true multi-ingredient meals; a single-ingredient food uses the simple Portion stepper
  // state: structured → amt (default = A×baseMult = the stored amount); legacy → imult; plus off.
  const st=ings?ings.map(g=>({ amt:g.structured?round3(g.A*baseMult):0, imult:1, off:false })):null;
  let mult=baseMult;
@@ -261,7 +263,7 @@ function openAddPopup(base,opts){
        '<button class=addmodal-step type=button data-step="1">+</button>'+
      '</div>'+
      '<div class=addmodal-macros></div>'+
-     (ings?'<div class=addmodal-ings></div>':'')+
+     (ings&&ings.length>1?'<div class=addmodal-ings></div>':'')+
      '<div class=addmodal-btns>'+
        '<button class=addmodal-cancel type=button>Cancel</button>'+
        '<button class=addmodal-add type=button>'+(edit?'Save':'Add')+'</button>'+

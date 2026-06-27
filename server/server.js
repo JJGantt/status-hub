@@ -620,6 +620,32 @@ app.patch('/api/log-set', express.json(), async (req, res) => {
   } catch (e) { res.status(500).json({ error: String(e.message || e) }); }
 });
 
+// Nutrition invariant (mirrors the data-layer): every entry stores ≥1 ingredient and its totals are
+// the SUM of those ingredients. Each ingredient's calories = stated, else Atwater (4/4/9) from its
+// macros. A simple food collapses to one name-only ingredient. Enforced server-side so the stored
+// row can never drift from its breakdown, regardless of what a client sends.
+function atwaterCals(p, c, f) { return Math.round(((p || 0) * 4) + ((c || 0) * 4) + ((f || 0) * 9)); }
+function rollEntry(macros, rawIngredients, name) {
+  const r10 = (v) => Math.round((Number(v) || 0) * 10) / 10;
+  const norm = (g) => {
+    const p = r10(g.protein_g), c = r10(g.carbs_g), f = r10(g.fat_g);
+    const cal = (g.calories === null || g.calories === undefined || g.calories === '') ? atwaterCals(p, c, f) : Math.round(Number(g.calories) || 0);
+    const o = { name: String(g.name || g.ingredient || name || ''), calories: cal, protein_g: p, carbs_g: c, fat_g: f };
+    if (g.food != null) o.food = String(g.food);
+    if (g.unit != null) o.unit = String(g.unit);
+    if (g.amount != null && isFinite(Number(g.amount))) o.amount = Math.round(Number(g.amount) * 1000) / 1000;
+    return o;
+  };
+  const ings = (Array.isArray(rawIngredients) && rawIngredients.length)
+    ? rawIngredients.map(norm)
+    : [norm({ name, ...macros })];
+  const t = ings.reduce((a, g) => ({
+    calories: a.calories + g.calories, protein_g: a.protein_g + g.protein_g,
+    carbs_g: a.carbs_g + g.carbs_g, fat_g: a.fat_g + g.fat_g,
+  }), { calories: 0, protein_g: 0, carbs_g: 0, fat_g: 0 });
+  return { calories: Math.round(t.calories), protein_g: r10(t.protein_g), carbs_g: r10(t.carbs_g), fat_g: r10(t.fat_g), ingredients: ings };
+}
+
 // Re-log a past food at the current wall-clock time — the hub's first write action.
 // Body: {name, calories, protein_g, carbs_g, fat_g, ingredients?} with macros already
 // scaled by the portion multiplier client-side. Stores occurred_at/logged as naive-local
@@ -643,26 +669,12 @@ app.post('/api/log-entry', express.json(), async (req, res) => {
       logged: occurred_at,
       name,
       quantity: 1,
-      calories: Math.round(calories),
-      protein_g: Math.round(protein_g * 10) / 10,
-      carbs_g: Math.round(carbs_g * 10) / 10,
-      fat_g: Math.round(fat_g * 10) / 10,
     };
-    if (Array.isArray(b.ingredients) && b.ingredients.length) {
-      row.ingredients = b.ingredients.map((g) => {
-        const o = {
-          name: String(g.name || g.ingredient || ''),
-          calories: Math.round(num(g.calories) || 0),
-          protein_g: Math.round((num(g.protein_g) || 0) * 10) / 10,
-          carbs_g: Math.round((num(g.carbs_g) || 0) * 10) / 10,
-          fat_g: Math.round((num(g.fat_g) || 0) * 10) / 10,
-        };
-        if (g.food != null) o.food = String(g.food);
-        if (g.unit != null) o.unit = String(g.unit);
-        if (g.amount != null && isFinite(Number(g.amount))) o.amount = Math.round(Number(g.amount) * 1000) / 1000;
-        return o;
-      });
-    }
+    // Totals = SUM of the ingredients; a simple food becomes one name-only ingredient.
+    const rolled = rollEntry({ calories, protein_g, carbs_g, fat_g }, b.ingredients, name);
+    row.calories = rolled.calories; row.protein_g = rolled.protein_g;
+    row.carbs_g = rolled.carbs_g; row.fat_g = rolled.fat_g;
+    row.ingredients = rolled.ingredients;
     await sbWrite('nutrition_entries', 'POST', row);
     await audit('add', row.id, null, row); // `row` is the full inserted snapshot (id known client-side)
     res.status(204).end();
@@ -685,28 +697,11 @@ app.patch('/api/log-entry', express.json(), async (req, res) => {
     const rows = await sb(`nutrition_entries?id=eq.${id}&select=*`);
     const before = (rows || [])[0];
     if (!before) return res.status(404).json({ error: 'not found' });
-    const patch = {
-      calories: Math.round(calories),
-      protein_g: Math.round(protein_g * 10) / 10,
-      carbs_g: Math.round(carbs_g * 10) / 10,
-      fat_g: Math.round(fat_g * 10) / 10,
-    };
+    const newName = (typeof b.name === 'string' && b.name.trim()) ? b.name.trim() : before.name;
+    // Totals = SUM of ingredients (the popup sends them; if absent, the macros become one ingredient).
+    const rolled = rollEntry({ calories, protein_g, carbs_g, fat_g }, b.ingredients, newName);
+    const patch = { calories: rolled.calories, protein_g: rolled.protein_g, carbs_g: rolled.carbs_g, fat_g: rolled.fat_g, ingredients: rolled.ingredients };
     if (typeof b.name === 'string' && b.name.trim()) patch.name = b.name.trim();
-    if (Array.isArray(b.ingredients)) {
-      patch.ingredients = b.ingredients.map((g) => {
-        const o = {
-          name: String(g.name || g.ingredient || ''),
-          calories: Math.round(num(g.calories) || 0),
-          protein_g: Math.round((num(g.protein_g) || 0) * 10) / 10,
-          carbs_g: Math.round((num(g.carbs_g) || 0) * 10) / 10,
-          fat_g: Math.round((num(g.fat_g) || 0) * 10) / 10,
-        };
-        if (g.food != null) o.food = String(g.food);
-        if (g.unit != null) o.unit = String(g.unit);
-        if (g.amount != null && isFinite(Number(g.amount))) o.amount = Math.round(Number(g.amount) * 1000) / 1000;
-        return o;
-      });
-    }
     await sbWrite(`nutrition_entries?id=eq.${id}`, 'PATCH', patch);
     await audit('edit', id, before, { ...before, ...patch });
     res.status(204).end();

@@ -740,6 +740,18 @@ app.post('/api/commit-staged', express.json(), async (req, res) => {
   } catch (e) { res.status(500).json({ error: String(e.message || e) }); }
 });
 
+// Feed the cat feeder. The feeder is LAN-only and this server runs on Fly, so we can't dispense
+// directly — enqueue a command the Pi collector (on the LAN) claims and executes within seconds.
+app.post('/api/feed', express.json(), async (req, res) => {
+  try {
+    let portions = parseInt(req.body && req.body.portions, 10);
+    if (!Number.isFinite(portions) || portions < 1) portions = 1;
+    portions = Math.min(12, portions);
+    await sbWrite('feeder_commands', 'POST', { action: 'feed', portions, source: 'hub-web', status: 'pending' });
+    res.status(202).json({ ok: true, portions });
+  } catch (e) { res.status(500).json({ error: String(e.message || e) }); }
+});
+
 // Server-Sent Events: push assembled status to the browser, instantly on any DB change.
 app.get('/api/stream', async (req, res) => {
   res.set({ 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache',

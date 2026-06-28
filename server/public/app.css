@@ -42,7 +42,13 @@
 .devchip .dc-l{font-size:12px;color:#8b96a5}
 .devchip .dc-v{font-size:15px;font-weight:700}
 .devchip .dc-v .dot{width:9px;height:9px;margin-right:6px}
-/* Cat-feeder schedule mini-list under the chip strip */
+/* Cat-feeder "Feed now" button + schedule mini-list under the chip strip */
+.feed-btn{margin-top:12px;width:100%;padding:11px 14px;border:1px solid #2a3a30;border-radius:10px;
+  background:#16241c;color:#7ee2a6;font-size:15px;font-weight:700;cursor:pointer;
+  letter-spacing:.02em;transition:background .12s,border-color .12s}
+.feed-btn:hover{background:#1c3026;border-color:#356b4a}
+.feed-btn:active{background:#234032}
+.feed-btn.busy{background:#1a2129;color:#8b96a5;border-color:#222a33;cursor:default}
 .feed-sched{margin-top:12px}
 .feed-shead{font-size:12px;color:#8b96a5;letter-spacing:.04em;text-transform:uppercase;margin-bottom:6px}
 .feed-srow{display:flex;justify-content:space-between;align-items:baseline;gap:14px;padding:4px 0;border-top:1px solid #1a212a}

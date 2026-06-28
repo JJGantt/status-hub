@@ -1,5 +1,10 @@
 import SwiftUI
 import WebKit
+#if os(iOS)
+import UIKit
+#elseif os(macOS)
+import AppKit
+#endif
 
 @main
 struct StatusHubApp: App {
@@ -36,6 +41,68 @@ struct HubWebView {
                      decisionHandler: @escaping (WKPermissionDecision) -> Void) {
             decisionHandler(.grant)   // first-party hub → no nested prompt
         }
+
+        // JS dialog panels. WKWebView suppresses window.alert/confirm/prompt (confirm returns false)
+        // unless these WKUIDelegate methods are implemented — which silently broke every in-page button
+        // gated on a confirm() (commit, delete, reset context). Present them as native dialogs instead.
+        func webView(_ webView: WKWebView, runJavaScriptAlertPanelWithMessage message: String,
+                     initiatedByFrame frame: WKFrameInfo, completionHandler: @escaping () -> Void) {
+            #if os(iOS)
+            guard let vc = Self.topVC() else { completionHandler(); return }
+            let a = UIAlertController(title: nil, message: message, preferredStyle: .alert)
+            a.addAction(UIAlertAction(title: "OK", style: .default) { _ in completionHandler() })
+            vc.present(a, animated: true)
+            #elseif os(macOS)
+            let a = NSAlert(); a.messageText = message; a.addButton(withTitle: "OK"); a.runModal(); completionHandler()
+            #endif
+        }
+
+        func webView(_ webView: WKWebView, runJavaScriptConfirmPanelWithMessage message: String,
+                     initiatedByFrame frame: WKFrameInfo, completionHandler: @escaping (Bool) -> Void) {
+            #if os(iOS)
+            guard let vc = Self.topVC() else { completionHandler(false); return }
+            let a = UIAlertController(title: nil, message: message, preferredStyle: .alert)
+            a.addAction(UIAlertAction(title: "Cancel", style: .cancel) { _ in completionHandler(false) })
+            a.addAction(UIAlertAction(title: "OK", style: .default) { _ in completionHandler(true) })
+            vc.present(a, animated: true)
+            #elseif os(macOS)
+            let a = NSAlert(); a.messageText = message
+            a.addButton(withTitle: "OK"); a.addButton(withTitle: "Cancel")
+            completionHandler(a.runModal() == .alertFirstButtonReturn)
+            #endif
+        }
+
+        func webView(_ webView: WKWebView, runJavaScriptTextInputPanelWithPrompt prompt: String,
+                     defaultText: String?, initiatedByFrame frame: WKFrameInfo,
+                     completionHandler: @escaping (String?) -> Void) {
+            #if os(iOS)
+            guard let vc = Self.topVC() else { completionHandler(defaultText); return }
+            let a = UIAlertController(title: nil, message: prompt, preferredStyle: .alert)
+            a.addTextField { $0.text = defaultText }
+            a.addAction(UIAlertAction(title: "Cancel", style: .cancel) { _ in completionHandler(nil) })
+            a.addAction(UIAlertAction(title: "OK", style: .default) { _ in completionHandler(a.textFields?.first?.text) })
+            vc.present(a, animated: true)
+            #elseif os(macOS)
+            let a = NSAlert(); a.messageText = prompt
+            a.addButton(withTitle: "OK"); a.addButton(withTitle: "Cancel")
+            let tf = NSTextField(frame: NSRect(x: 0, y: 0, width: 240, height: 24)); tf.stringValue = defaultText ?? ""
+            a.accessoryView = tf
+            completionHandler(a.runModal() == .alertFirstButtonReturn ? tf.stringValue : nil)
+            #endif
+        }
+
+        #if os(iOS)
+        // Topmost presented view controller to anchor the dialogs on.
+        static func topVC() -> UIViewController? {
+            let root = UIApplication.shared.connectedScenes
+                .compactMap { $0 as? UIWindowScene }
+                .flatMap { $0.windows }
+                .first { $0.isKeyWindow }?.rootViewController
+            var vc = root
+            while let p = vc?.presentedViewController { vc = p }
+            return vc
+        }
+        #endif
 
         #if os(iOS)
         // Once the authenticated hub has loaded, hand the web view to PushManager so it can register

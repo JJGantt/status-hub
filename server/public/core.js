@@ -9,6 +9,7 @@ import * as workouts from './cards/workouts.js';
 import * as nutritionlog from './cards/nutritionlog.js';
 import * as routing from './cards/routing.js';   // TV voice-column routing panel (no-ops on phone)
 import * as score from './cards/score.js';       // TV overall-score health bar (no-ops on phone)
+import * as mics from './cards/mics.js';         // page voice-liveness card (no-ops on the TV wall)
 import './voiceagent.js';   // shared 'hub' conversation + activity popup (self-skips on the TV wall)
 import './settings.js';     // gear → settings panel (routing mode + trailing-silence); self-skips on TV
 import { mountNavbar } from './navbar.js';   // shared bottom bar (toggle · settings · brain · sparkle)
@@ -24,8 +25,9 @@ function render(s){
  workouts.render(s);
  nutritionlog.render(s);
  muscle.render(s);     // paints the body map from volume colors + re-applies volume sort/selection
- routing.render(s);    // TV-only routing panel (model/thinking/runner/voice)
+ routing.render(s);    // TV-only routing panel (model/thinking/runner/voice + liveness chips)
  score.render(s);      // TV-only overall-score health bar (right column)
+ mics.render(s);       // page-only voice-liveness card (TV shows the same data in the routing strip)
 }
 
 const es=new EventSource('/api/stream');

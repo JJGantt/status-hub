@@ -269,7 +269,7 @@ async function buildStatus() {
   const histStart = localDate(new Date(Date.now() - 40 * 86400000)); // intake history for the maintenance trend
   const heatStart = localDate(new Date(Date.now() - 140 * 86400000)); // ~20 weeks for the workout volume heatmap
 
-  const [deviceRows, entries, setRows, weightRows, histRows, muscleRows, heatRows, catalogRows, nutLogRows, targetRows, surfRows] = await Promise.all([
+  const [deviceRows, entries, setRows, weightRows, histRows, muscleRows, heatRows, catalogRows, nutLogRows, targetRows, surfRows, presenceRows, workerRows] = await Promise.all([
     sb('device_status?select=*'),
     sb(`nutrition_entries?occurred_at=gte.${win.start}&occurred_at=lt.${win.end}&staged=eq.false&select=calories,protein_g,carbs_g,fat_g`),
     sb(`sets?occurred_at=gte.${week[0]}T00:00:00&select=occurred_at,exercise,muscles_override`),
@@ -281,6 +281,8 @@ async function buildStatus() {
     sbRange(`nutrition_entries?occurred_at=gte.${localDate(new Date(Date.now() - 86 * 86400000))}T00:00:00&staged=eq.false&select=occurred_at,calories,protein_g,fat_g&order=occurred_at`),
     sb('nutrition_targets?select=date,calories&order=date.asc'),
     sb('surf_snapshots?select=slug,water_temp,captured_at,rows&order=captured_at.desc&limit=1'),
+    sb('voice_presence?select=source,alive_at'),
+    sb('worker_presence?select=worker,last_seen'),
   ]);
 
   const litter = (deviceRows || []).find((d) => d.device !== 'cat-feeder') || null;
@@ -307,6 +309,21 @@ async function buildStatus() {
   const weights = (weightRows || []).map((r) => ({ date: String(r.date).slice(0, 10), weight: Number(r.weight_lbs) }));
   const surplus = await surplusCal();   // current surplus/deficit setting
   const routing = await routingConfig();   // agent model / thinking / runner / wake (TV routing panel)
+
+  // ---- mic / worker liveness ----
+  // Mics beacon voice_presence.alive_at every 30s WHILE audio frames are flowing (not merely while the
+  // process exists); workers heartbeat worker_presence.last_seen every 10s. Stale = down. The Mac mic is
+  // keyed on whichever process OWNS the mic: wakefree.py when always-on voice is on, the wake-word
+  // listener otherwise — so a dead owner can't hide behind its healthy sibling.
+  const LIVENESS_STALE_S = 90;   // 3 missed 30s beacons
+  const freshFor = (ts) => !!ts && (Date.now() - new Date(ts).getTime()) / 1000 <= LIVENESS_STALE_S;
+  const aliveBy = Object.fromEntries((presenceRows || []).map((r) => [r.source, r.alive_at]));
+  const beatBy = Object.fromEntries((workerRows || []).map((r) => [r.worker, r.last_seen]));
+  const mics = {
+    esp: freshFor(aliveBy.esp),
+    mac: freshFor(aliveBy[routing.wake ? 'mac-wakefree' : 'mac-listener']),
+    workers: { mac: freshFor(beatBy.mac), pi: freshFor(beatBy.pi), fly: freshFor(beatBy.fly) },
+  };
   const minAlignedDays = await maintenanceMinDays();
   const maintenance = estimateMaintenance({ weights, intakeByDay, today, surplus, minAlignedDays });
   nutrition.target = maintenance.target_macros; // the macro goal is the live dynamic target
@@ -364,7 +381,7 @@ async function buildStatus() {
       else break;
     }
   }
-  return { today, litter, feeder, surf, nutrition, maintenance, pace: paceData, volume, heatmap, nutrition_log, last_set_at, session_start_at, routing, score, generated_at: new Date().toISOString() };
+  return { today, litter, feeder, surf, nutrition, maintenance, pace: paceData, volume, heatmap, nutrition_log, last_set_at, session_start_at, routing, mics, score, generated_at: new Date().toISOString() };
 }
 
 // ---- realtime push: recompute + push to all connected browsers on any DB change ----

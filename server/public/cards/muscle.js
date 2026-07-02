@@ -85,10 +85,16 @@ function showSel(sel){
  if(!sel){document.getElementById('bodyinfo').innerHTML='';applyHighlight(null);return;}
  if(sel.kind==='muscle'){panelMuscle(sel.key);applyHighlight(muscleHmap(sel.key));}
  else{panelExercise(sel.key);applyHighlight(exerciseHmap(sel.key));}
- // phone wall: the panel floats as a bottom sheet over the scaled canvas — give it an explicit ✕
- // (re-tapping the exact muscle to dismiss is fiddly at wall scale, and mis-taps should be cheap)
- if(document.body.classList.contains('phonewall'))
-  document.getElementById('bodyinfo').insertAdjacentHTML('afterbegin','<button class=bi-close type=button aria-label=Close>✕</button>');
+ // phone wall: the panel floats as a sheet over the scaled canvas — give it an explicit ✕
+ // (re-tapping the exact muscle to dismiss is fiddly at wall scale, and mis-taps should be cheap),
+ // and pin its BOTTOM edge to the TOP of the muscle section so it never covers the map/bars
+ // being tapped. getBoundingClientRect() is post-transform, so this lands right at any scale.
+ if(document.body.classList.contains('phonewall')){
+  const info=document.getElementById('bodyinfo');
+  info.insertAdjacentHTML('afterbegin','<button class=bi-close type=button aria-label=Close>✕</button>');
+  const row=document.querySelector('.musclerow');
+  if(row)info.style.bottom=Math.max(66,Math.round(window.innerHeight-row.getBoundingClientRect().top)+6)+'px';
+ }
 }
 function setSel(sel){SEL=sel;showSel(sel);}
 function toggleSel(sel){ if(SEL&&SEL.kind===sel.kind&&SEL.key===sel.key)setSel(null); else setSel(sel); }

@@ -1,6 +1,7 @@
-// Shared bottom navigation — identical on BOTH views (wall + /page). Left: chat (the conversation),
-// the misc toggle (wall ⇄ devices/status page), and settings. Right: brain (full Opus) + sparkle
-// (fast) voice, both tap-to-talk, driving the shared activity popup. Mounted once per page by core.js.
+// Shared bottom navigation. PHONE WALL: just settings + the two voice buttons (chat/misc are swipe
+// panes — no nav buttons needed). /page (desktop): adds chat + back-to-wall buttons. Right side is
+// always brain (full Opus) + sparkle (fast) voice, tap-to-talk, driving the shared activity popup.
+// Mounted once per page by core.js.
 import { makeRecorder, activityBar } from './voiceagent.js';
 import { open as openSettings } from './settings.js';
 
@@ -38,36 +39,35 @@ export function mountNavbar() {
     return b;
   };
 
-  // Jump to a /page section: from the wall it's a navigation with a deep-link hash; already on /page
-  // it scrolls the swipe-pages (phone) or the document row (desktop) — no reload.
-  const goSection = (cls, hash) => {
-    if (onWall) { location.href = '/page' + hash; return; }
-    const pages = document.querySelector('.pages');
-    if (pages) {
-      const i = [...pages.children].findIndex((p) => p.querySelector('.' + cls));
-      if (i >= 0) pages.scrollTo({ left: i * pages.clientWidth, behavior: 'smooth' });
-    } else {
-      const el = document.querySelector('.' + cls);
-      if (el) el.scrollIntoView({ behavior: 'smooth' });
-    }
-  };
-
-  const chat = document.createElement('button');
-  chat.className = 'nav-toggle nav-chat'; chat.type = 'button'; chat.innerHTML = CHAT;
-  chat.setAttribute('aria-label', 'Conversation');
-  chat.onclick = () => goSection('airow', '#chat');
-
-  const tog = document.createElement('button');
-  tog.className = 'nav-toggle'; tog.type = 'button'; tog.innerHTML = SWAP;
-  tog.setAttribute('aria-label', onWall ? 'Devices & status' : 'Back to the wall');
-  tog.onclick = () => { if (onWall) goSection('statusrow', '#misc'); else location.href = '/'; };
-
   const gear = document.createElement('button');
   gear.className = 'nav-gear'; gear.type = 'button'; gear.setAttribute('aria-label', 'Settings');
   gear.innerHTML = GEAR; gear.addEventListener('click', () => openSettings());
 
   const left = document.createElement('div'); left.className = 'navbar-grp';
-  left.appendChild(chat); left.appendChild(tog); left.appendChild(gear);
+  if (!onWall) {
+    // /page (desktop use): chat + status live as rows here; the buttons scroll to them, and the
+    // toggle returns to the wall. The PHONE wall needs none of this — chat/misc are swipe panes.
+    const goSection = (cls) => {
+      const pages = document.querySelector('.pages');
+      if (pages) {
+        const i = [...pages.children].findIndex((p) => p.querySelector('.' + cls));
+        if (i >= 0) pages.scrollTo({ left: i * pages.clientWidth, behavior: 'smooth' });
+      } else {
+        const el = document.querySelector('.' + cls);
+        if (el) el.scrollIntoView({ behavior: 'smooth' });
+      }
+    };
+    const chat = document.createElement('button');
+    chat.className = 'nav-toggle nav-chat'; chat.type = 'button'; chat.innerHTML = CHAT;
+    chat.setAttribute('aria-label', 'Conversation');
+    chat.onclick = () => goSection('airow');
+    const tog = document.createElement('button');
+    tog.className = 'nav-toggle'; tog.type = 'button'; tog.innerHTML = SWAP;
+    tog.setAttribute('aria-label', 'Back to the wall');
+    tog.onclick = () => { location.href = '/'; };
+    left.appendChild(chat); left.appendChild(tog);
+  }
+  left.appendChild(gear);
   const right = document.createElement('div'); right.className = 'navbar-grp';
   right.appendChild(mkVoice('wfab-power', BRAIN, 'power', 'Voice command (full Opus thinking)'));
   right.appendChild(mkVoice('wfab-fast', SPARKLE, 'fast', 'Quick voice command (efficiency)'));

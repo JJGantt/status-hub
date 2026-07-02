@@ -338,7 +338,26 @@ body.tv .hb-track::after{content:'';position:absolute;inset:0;pointer-events:non
 /* --- phone WALL MODE: the 1920×1080 TV shell rendered at fixed size and scaled to fit (wall.js sets the
    transform + centering). Children that used 100vh must become 100% of the fixed shell, not the phone vh. --- */
 body.tv.phonewall{height:100vh;overflow:hidden}
-body.tv.phonewall .tv-shell{position:fixed;top:0;left:0;transform-origin:top left}  /* width/height/scale set by wall.js to fill the phone */
+body.tv.phonewall .tv-shell{position:relative;top:0;left:0;transform-origin:top left}  /* width/height/scale set by wall.js; lives INSIDE the center swipe pane (fixed would pin it over the pane scroller) */
+
+/* ===== phone wall: three swipeable panes — [chat] [wall] [misc], landing on the wall ===== */
+body.tv:not(.phonewall) .pane-chat,body.tv:not(.phonewall) .pane-misc{display:none}  /* kiosk: shell only */
+body.tv.phonewall .wallpanes{display:flex;overflow-x:auto;overflow-y:hidden;scroll-snap-type:x mandatory;scrollbar-width:none;height:100vh;height:100dvh}
+body.tv.phonewall .wallpanes::-webkit-scrollbar{display:none}
+body.tv.phonewall .pane{flex:0 0 100vw;min-width:0;scroll-snap-align:start;scroll-snap-stop:always}
+body.tv.phonewall .pane-wall{overflow:hidden}
+body.tv.phonewall .pane-chat{padding:12px 12px 70px;overflow:hidden;display:flex;flex-direction:column}
+body.tv.phonewall .pane-chat .ai-shell{height:100%}
+body.tv.phonewall .pane-misc{padding:12px 12px 70px;overflow-y:auto;display:flex;flex-direction:column;gap:12px}
+/* the misc pane renders at NATIVE phone scale — undo the wall's canvas-sized chrome/type inside it */
+body.tv.phonewall .pane-misc .card{flex:0 0 auto;background:#151a20!important;border:1px solid #222a33}
+body.tv.phonewall .pane-misc .card h2{display:block}
+body.tv.phonewall .pane-misc .devstrip{gap:18px 28px}
+body.tv.phonewall .pane-misc .devicon{height:22px}
+body.tv.phonewall .pane-misc .devchip{background:#0e1318;border:1px solid #222a33;padding:5px 11px;gap:6px}
+body.tv.phonewall .pane-misc .devchip .dc-l{font-size:12px}
+body.tv.phonewall .pane-misc .devchip .dc-v{font-size:15px}
+body.tv.phonewall .pane-misc .devchip .dc-v .dot{width:9px;height:9px;margin-right:6px}
 body.tv.phonewall .rows{height:100%}
 body.tv.phonewall .tv-voice{height:100%}
 /* shared bottom navigation — identical on both views (full page + phone wall). Left: toggle + settings.

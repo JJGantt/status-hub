@@ -9,6 +9,24 @@
 <!-- wall.js: on a phone-sized viewport, scale the whole 1920×1080 shell to fit (phone "wall mode"). -->
 <script type="module" src="wall.js"></script>
 </head><body class="tv">
+<!-- wallpanes: on the PHONE this is a three-pane swipe — [chat] [wall] [misc] — landing on the wall.
+     On the big-screen kiosk the side panes are display:none and only the shell renders. -->
+<div class="wallpanes" id="wallpanes">
+
+<section class="pane pane-chat">
+  <div class="ai-shell">
+    <div class="ai-head"><span class="ai-mode" id="ai-mode" title="Active conversation mode">Hub</span><button class="ai-reset" id="ai-reset" type="button" title="Start a fresh conversation">Reset context</button></div>
+    <div class="ai-log" id="ai-log"></div>
+    <div class="ai-input">
+      <button class="ai-mic" id="ai-mic" type="button" aria-label="Tap to talk"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="2" width="6" height="12" rx="3"></rect><path d="M5 11a7 7 0 0 0 14 0"></path><line x1="12" y1="18" x2="12" y2="22"></line></svg></button>
+      <input class="ai-text" id="ai-text" type="text" placeholder="Message…" autocomplete="off">
+      <button class="ai-send" id="ai-send" type="button">Send</button>
+    </div>
+    <div class="ai-status" id="ai-status"></div>
+  </div>
+</section>
+
+<section class="pane pane-wall">
 <!-- tv-shell: the full hub dashboard (main) + a compact voice column (aside). -->
 <div class="tv-shell">
 
@@ -57,6 +75,18 @@
     <header class="tv-voice-head"><span class="tv-focus-label">Conversation</span></header>
     <div class="tv-convo-log" id="tv-log"></div>
   </aside>
+
+</div>
+</section>
+
+<section class="pane pane-misc">
+  <!-- litter + surf cards are MOVED here from the shell by wall.js on the phone (they already exist
+       in the shell markup; two elements can't share an id). Feeder + mics render here directly. -->
+  <div class="misc-slot" id="misc-litter-slot"></div>
+  <div class="card statuscard"><div class="fit" id="feeder"><h2>Cat Feeder</h2><div class=big>…</div></div></div>
+  <div class="card statuscard"><div class="fit" id="mics"><h2>Voice System</h2><div class=big>…</div></div></div>
+  <div class="misc-slot" id="misc-surf-slot"></div>
+</section>
 
 </div>
 </body></html>

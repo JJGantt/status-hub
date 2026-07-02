@@ -838,13 +838,79 @@ app.post('/api/voice-command', express.raw({ type: '*/*', limit: '25mb' }), asyn
   } catch (e) { res.status(500).json({ error: String(e.message || e) }); }
 });
 
+// Photo attachments: the chat composer uploads each image here (raw body, one per request); it lands
+// in the private voice-attachments bucket and the returned flat object name (uuid.ext) rides the
+// voice_request, so whichever worker claims it (Mac/Pi) pulls the bytes down for the model to view.
+// The daily sweep below reaps objects after 7 days — photos exist to make ONE log entry, not to keep.
+const ATT_BUCKET = 'voice-attachments';
+const ATT_TYPES = { 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp', 'image/gif': 'gif' };
+const attName = (p) => /^[\w.\-]+$/.test(p);   // flat bucket — reject anything path-like
+app.post('/api/attach', express.raw({ type: 'image/*', limit: '15mb' }), async (req, res) => {
+  try {
+    const ct = String(req.headers['content-type'] || '').split(';')[0].trim();
+    const ext = ATT_TYPES[ct];
+    if (!ext) return res.status(415).json({ error: 'unsupported image type' });
+    if (!req.body || !req.body.length) return res.status(400).json({ error: 'empty upload' });
+    const name = `${crypto.randomUUID()}.${ext}`;
+    const r = await fetch(`${SUPABASE_URL}/storage/v1/object/${ATT_BUCKET}/${name}`, {
+      method: 'POST',
+      headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}`, 'Content-Type': ct },
+      body: req.body,
+    });
+    if (!r.ok) return res.status(502).json({ error: `storage upload failed (${r.status})` });
+    res.json({ path: name });
+  } catch (e) { res.status(500).json({ error: String(e.message || e) }); }
+});
+
+// Thumbnails for the chat thread — proxies the private bucket behind the hub auth gate.
+app.get('/api/attachment', async (req, res) => {
+  try {
+    const name = String(req.query.path || '');
+    if (!attName(name)) return res.status(400).json({ error: 'bad path' });
+    const r = await fetch(`${SUPABASE_URL}/storage/v1/object/${ATT_BUCKET}/${name}`, {
+      headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` },
+    });
+    if (!r.ok) return res.status(404).end();
+    res.setHeader('Content-Type', r.headers.get('content-type') || 'image/jpeg');
+    res.setHeader('Cache-Control', 'private, max-age=86400');   // object content never changes
+    res.send(Buffer.from(await r.arrayBuffer()));
+  } catch (e) { res.status(500).json({ error: String(e.message || e) }); }
+});
+
+async function sweepAttachments() {
+  try {
+    const r = await fetch(`${SUPABASE_URL}/storage/v1/object/list/${ATT_BUCKET}`, {
+      method: 'POST',
+      headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ prefix: '', limit: 1000, sortBy: { column: 'created_at', order: 'asc' } }),
+    });
+    if (!r.ok) return;
+    const cutoff = Date.now() - 7 * 24 * 3600 * 1000;
+    const old = (await r.json()).filter((o) => o.name && Date.parse(o.created_at) < cutoff).map((o) => o.name);
+    if (!old.length) return;
+    await fetch(`${SUPABASE_URL}/storage/v1/object/${ATT_BUCKET}`, {
+      method: 'DELETE',
+      headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ prefixes: old }),
+    });
+    console.log(`attachment sweep: deleted ${old.length} object(s) older than 7 days`);
+  } catch (e) { console.log('attachment sweep failed:', e.message || e); }
+}
+setInterval(sweepAttachments, 24 * 3600 * 1000);
+sweepAttachments();
+
 // Typed command from the Jarvis card — no audio, just enqueue the text like the voice path.
+// Photo attachments (object names from /api/attach) ride along; a photo-only send (no text) is valid —
+// the worker's framing directive tells the model the intent is to log what the photos show.
 app.post('/api/voice-text', express.json(), async (req, res) => {
   try {
     const text = String((req.body && req.body.text) || '').trim();
-    if (!text) return res.status(400).json({ error: 'empty' });
+    const attachments = Array.isArray(req.body && req.body.attachments)
+      ? req.body.attachments.map(String).filter(attName).slice(0, 12) : [];
+    if (!text && !attachments.length) return res.status(400).json({ error: 'empty' });
     const tier = ['fast', 'power'].includes(String((req.body && req.body.tier) || '')) ? String(req.body.tier) : null;
-    await sbWrite('voice_requests', 'POST', { transcript: text, source: 'web', focus: 'hub', ...(tier ? { tier } : {}) });
+    await sbWrite('voice_requests', 'POST', { transcript: text, source: 'web', focus: 'hub',
+      ...(tier ? { tier } : {}), ...(attachments.length ? { attachments } : {}) });
     res.json({ enqueued: true });
   } catch (e) { res.status(500).json({ error: String(e.message || e) }); }
 });

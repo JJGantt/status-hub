@@ -1,6 +1,6 @@
-// Voice-system liveness — page status strip. Same data as the TV routing strip's ESP/Mac/Wkr chips
-// (`s.mics`: mic alive-beacons + worker heartbeats), rendered as its own status card on the page,
-// which has no routing panel. Paints #mics; no-ops where absent (the TV wall).
+// Voice-system liveness — page status strip. Same data as the TV routing strip's ESP/Mac/Pi/Wkr
+// chips (`s.mics`: mic alive-beacons + worker heartbeats), rendered as its own status card on the
+// page, which has no routing panel. Paints #mics; no-ops where absent (the TV wall).
 export function render(s) {
   const el = document.getElementById('mics');
   if (!el) return;
@@ -16,6 +16,7 @@ export function render(s) {
     '<div class="devstrip"><div class="devchips">' +
       chip('ESP mic', m.esp ? 'Up' : 'Down', m.esp ? UP : DOWN) +
       chip('Mac mic', m.mac ? 'Up' : 'Down', m.mac ? UP : DOWN) +
+      chip('Pi', m.workers && m.workers.pi ? 'Up' : 'Down', m.workers && m.workers.pi ? UP : DOWN) +
       chip('Worker', liveWorker || 'Down', liveWorker ? UP : DOWN) +
     '</div></div>';
 }

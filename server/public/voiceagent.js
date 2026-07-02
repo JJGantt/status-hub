@@ -215,8 +215,21 @@ function initCard() {
   function bubbleHtml(row) {
     const side = (row.role || 'assistant') === 'user' ? 'user' : 'assistant';
     const t = row.text == null ? '' : String(row.text);
-    const body = t ? esc(t).replace(/\n/g, '<br>') : '<span class=ai-caret>▍</span>';
-    return '<div class="ai-msg ai-msg-' + side + '"><div class=ai-msg-text>' + body + '</div></div>';
+    // Photo attachments (object names) → thumbnails via the auth-gated proxy. A photo-only send has no
+    // text — the thumbnails ARE the bubble, so no typing caret for it.
+    const atts = Array.isArray(row.attachments) ? row.attachments : [];
+    let inner = atts.length
+      ? '<div class=ai-msg-imgs>' + atts.map((p) =>
+          '<img src="/api/attachment?path=' + encodeURIComponent(p) + '" alt="" loading=lazy>').join('') + '</div>'
+      : '';
+    if (t) inner += '<div class=ai-msg-text>' + esc(t).replace(/\n/g, '<br>') + '</div>';
+    else if (!atts.length) inner += '<div class=ai-msg-text><span class=ai-caret>▍</span></div>';
+    // Which worker answered (mac/pi/fly) — dimmed for the expected mac, so a fallback visually pops.
+    if (side === 'assistant' && row.worker) {
+      const w = esc(String(row.worker));
+      inner += '<span class="ai-worker ai-worker-' + w + '">' + w + '</span>';
+    }
+    return '<div class="ai-msg ai-msg-' + side + '">' + inner + '</div>';
   }
   let lastTs = 0;   // created_at (ms) of the newest message shown — to detect a context-reset gap
   function upsert(row) {
@@ -251,15 +264,86 @@ function initCard() {
     } catch (_) {}
   }
 
+  // ---- photo attachments --------------------------------------------------
+  // An image button in the composer row + a pending-thumbnail tray above it. iOS presents its native
+  // Take Photo / Photo Library sheet for the file input (the WKWebView app included). Files downscale
+  // client-side (≤1568px JPEG — the model's vision optimum, and quick on cellular) and start uploading
+  // the moment they're picked; send() waits for stragglers, then the object names ride the request.
+  const inputRow = textEl.closest('.ai-input');
+  const attBtn = document.createElement('button');
+  attBtn.className = 'ai-attach'; attBtn.type = 'button'; attBtn.setAttribute('aria-label', 'Attach photos');
+  attBtn.innerHTML = '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><path d="m21 15-5-5L5 21"></path></svg>';
+  const fileIn = document.createElement('input');
+  fileIn.type = 'file'; fileIn.accept = 'image/*'; fileIn.multiple = true; fileIn.style.display = 'none';
+  const tray = document.createElement('div'); tray.className = 'ai-tray';
+  inputRow.parentNode.insertBefore(tray, inputRow);
+  inputRow.insertBefore(attBtn, textEl);
+  inputRow.appendChild(fileIn);
+  let attItems = [];   // {el, url, promise, path}
+
+  function shrink(file) {
+    return new Promise((resolve, reject) => {
+      const url = URL.createObjectURL(file);
+      const img = new Image();
+      img.onload = () => {
+        const MAX = 1568;
+        const s = Math.min(1, MAX / Math.max(img.naturalWidth, img.naturalHeight));
+        const w = Math.round(img.naturalWidth * s), h = Math.round(img.naturalHeight * s);
+        const cv = document.createElement('canvas'); cv.width = w; cv.height = h;
+        cv.getContext('2d').drawImage(img, 0, 0, w, h);
+        URL.revokeObjectURL(url);
+        cv.toBlob((b) => (b ? resolve(b) : reject(new Error('encode failed'))), 'image/jpeg', 0.85);
+      };
+      img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('unreadable image')); };
+      img.src = url;
+    });
+  }
+  const syncTray = () => tray.classList.toggle('show', attItems.length > 0);
+  function addFiles(files) {
+    for (const f of files) {
+      const item = { path: null, url: '', el: document.createElement('div') };
+      item.el.className = 'ai-tray-item';
+      item.promise = shrink(f).then(async (blob) => {
+        item.url = URL.createObjectURL(blob);
+        item.el.style.backgroundImage = 'url(' + item.url + ')';
+        const r = await fetch('/api/attach', { method: 'POST', headers: { 'Content-Type': 'image/jpeg' }, body: blob });
+        const j = await r.json().catch(() => ({}));
+        if (!r.ok || !j.path) throw new Error(j.error || 'upload failed');
+        item.path = j.path; item.el.classList.add('ai-up');
+      }).catch((e) => { item.el.classList.add('ai-fail'); setStatus(String(e.message || e)); });
+      const x = document.createElement('button');
+      x.className = 'ai-tray-x'; x.type = 'button'; x.setAttribute('aria-label', 'Remove photo'); x.textContent = '✕';
+      x.onclick = () => { attItems = attItems.filter((i) => i !== item); if (item.url) URL.revokeObjectURL(item.url); item.el.remove(); syncTray(); };
+      item.el.appendChild(x);
+      tray.appendChild(item.el);
+      attItems.push(item);
+    }
+    syncTray();
+  }
+  function clearTray() { for (const i of attItems) { if (i.url) URL.revokeObjectURL(i.url); i.el.remove(); } attItems = []; syncTray(); }
+  attBtn.addEventListener('click', () => fileIn.click());
+  fileIn.addEventListener('change', () => { if (fileIn.files && fileIn.files.length) addFiles(fileIn.files); fileIn.value = ''; });
+
   async function sendText() {
     const text = (textEl.value || '').trim();
-    if (!text) return;
-    textEl.value = ''; setStatus('Sent — working…');
+    const items = attItems.slice();
+    if (!text && !items.length) return;
+    textEl.value = ''; setStatus(items.length ? 'Uploading…' : 'Sent — working…');
     try {
+      await Promise.all(items.map((i) => i.promise));
+      const attachments = items.map((i) => i.path).filter(Boolean);
+      if (attachments.length !== items.length) {   // a photo never made it up — don't send half a thought
+        setStatus('A photo failed to upload — remove it (✕) and send again');
+        textEl.value = text;
+        return;
+      }
+      setStatus('Sent — working…');
       const r = await fetch('/api/voice-text', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text }) });
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text, ...(attachments.length ? { attachments } : {}) }) });
+      if (r.ok) clearTray();
       setStatus(r.ok ? '' : 'Send failed');
-    } catch (_) { setStatus('Send failed'); }
+    } catch (_) { setStatus('Send failed'); textEl.value = text; }
   }
   sendBtn.addEventListener('click', sendText);
   textEl.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); sendText(); } });

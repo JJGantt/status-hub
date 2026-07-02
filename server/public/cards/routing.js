@@ -13,8 +13,9 @@ export function render(s) {
   const chip = (label, val, color) =>
     '<span class="devchip"><span class="dc-l">' + label + '</span>' +
     '<span class="dc-v"' + (color ? ' style="color:' + color + '"' : '') + '>' + val + '</span></span>';
-  // Liveness chips (s.mics): mic beacons + worker heartbeats. Wkr shows the highest-priority live
-  // worker (the one that would claim the next command), red 'Down' when none is.
+  // Liveness chips (s.mics): mic beacons + worker heartbeats. Pi is that worker's own heartbeat
+  // (independent of priority). Wkr shows the highest-priority live worker (the one that would
+  // claim the next command), red 'Down' when none is.
   const m = s.mics || {};
   const liveWorker = m.workers && (m.workers.mac ? 'Mac' : m.workers.pi ? 'Pi' : m.workers.fly ? 'Fly' : null);
   const UP = '#39d353', DOWN = '#f85149';
@@ -28,6 +29,7 @@ export function render(s) {
         chip('INJ', r.inject ? 'On' : 'Off', r.inject ? '#39d353' : '#5c6675') +  // INJ = voice-inject mode
         chip('ESP', m.esp ? 'Up' : 'Down', m.esp ? UP : DOWN) +
         chip('Mac', m.mac ? 'Up' : 'Down', m.mac ? UP : DOWN) +
+        chip('Pi', m.workers && m.workers.pi ? 'Up' : 'Down', m.workers && m.workers.pi ? UP : DOWN) +
         chip('Wkr', liveWorker || 'Down', liveWorker ? UP : DOWN) +
       '</div>' +
     '</div>';

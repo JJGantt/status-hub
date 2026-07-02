@@ -16,13 +16,23 @@ function nearBottom() { return log.scrollHeight - log.scrollTop - log.clientHeig
 function scrollToEnd() { log.scrollTop = log.scrollHeight; }
 
 // One bubble. Only user vs assistant matters; tool/system fold into the assistant (gray) bucket. Empty
-// streaming rows show a typing caret.
+// streaming rows show a typing caret. Photo attachments render as thumbnails (auth-gated proxy);
+// assistant rows carry a small chip naming the worker that answered (dimmed for the expected mac).
 function bubbleHtml(row) {
   const side = (row.role || 'assistant') === 'user' ? 'user' : 'assistant';
   const txt = (row.text == null ? '' : String(row.text));
-  const body = txt ? esc(txt).replace(/\n/g, '<br>') : '<span class=tv-caret>▍</span>';
-  return '<div class="tv-msg tv-msg-' + side + (row.done === false ? ' tv-streaming' : '') + '">' +
-    '<div class=tv-msg-text>' + body + '</div></div>';
+  const atts = Array.isArray(row.attachments) ? row.attachments : [];
+  let inner = atts.length
+    ? '<div class=tv-msg-imgs>' + atts.map((p) =>
+        '<img src="/api/attachment?path=' + encodeURIComponent(p) + '" alt="" loading=lazy>').join('') + '</div>'
+    : '';
+  if (txt) inner += '<div class=tv-msg-text>' + esc(txt).replace(/\n/g, '<br>') + '</div>';
+  else if (!atts.length) inner += '<div class=tv-msg-text><span class=tv-caret>▍</span></div>';
+  if (side === 'assistant' && row.worker) {
+    const w = esc(String(row.worker));
+    inner += '<span class="tv-worker tv-worker-' + w + '">' + w + '</span>';
+  }
+  return '<div class="tv-msg tv-msg-' + side + (row.done === false ? ' tv-streaming' : '') + '">' + inner + '</div>';
 }
 
 function upsert(row) {

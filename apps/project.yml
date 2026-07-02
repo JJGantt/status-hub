@@ -18,6 +18,10 @@ settings:
     # Required for getUserMedia in the WKWebView. Without it iOS silently denies the mic and the app
     # never appears under Settings → Privacy → Microphone.
     INFOPLIST_KEY_NSMicrophoneUsageDescription: Status Hub uses the microphone for voice commands.
+    # Required for the chat composer's photo attachments: the WKWebView file input offers Take Photo
+    # (camera) and Photo Library natively, but only when these usage strings exist.
+    INFOPLIST_KEY_NSCameraUsageDescription: Status Hub uses the camera to capture food and nutrition labels.
+    INFOPLIST_KEY_NSPhotoLibraryUsageDescription: Status Hub attaches photos of food and nutrition labels.
 targets:
   StatusHub:
     type: application

@@ -5,45 +5,24 @@
 <script type="module" src="core.js"></script>
 </head><body>
 <div class="rows">
-  <!-- PAGE 1 (far left) — Raspy: full-height shared 'hub' conversation (same thread as the Pi wall). No card chrome. -->
+  <!-- CHAT (page 0, default) — full-height shared conversation (hub/agent threads). No card chrome,
+       no name; settings live in the bottom navbar. Reached from the wall via the navbar chat button. -->
   <div class="row-card airow">
     <div class="ai-shell">
-      <div class="ai-head"><div class="ai-head-left"><h2>Raspy</h2><span class="ai-mode" id="ai-mode" title="Active conversation mode">Hub</span></div><div class="ai-head-btns"><button class="ai-gear" id="ai-gear" type="button" title="Settings" aria-label="Settings">⚙</button><button class="ai-reset" id="ai-reset" type="button" title="Start a fresh conversation">Reset context</button></div></div>
+      <div class="ai-head"><span class="ai-mode" id="ai-mode" title="Active conversation mode">Hub</span><button class="ai-reset" id="ai-reset" type="button" title="Start a fresh conversation">Reset context</button></div>
       <div class="ai-log" id="ai-log"></div>
       <div class="ai-input">
         <button class="ai-mic" id="ai-mic" type="button" aria-label="Tap to talk"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="2" width="6" height="12" rx="3"></rect><path d="M5 11a7 7 0 0 0 14 0"></path><line x1="12" y1="18" x2="12" y2="22"></line></svg></button>
-        <input class="ai-text" id="ai-text" type="text" placeholder="Ask or tell Raspy…" autocomplete="off">
+        <input class="ai-text" id="ai-text" type="text" placeholder="Message…" autocomplete="off">
         <button class="ai-send" id="ai-send" type="button">Send</button>
       </div>
       <div class="ai-status" id="ai-status"></div>
     </div>
   </div>
 
-  <!-- PAGE 2 (DEFAULT on load) — nutrition: left card = rings (horizontal) + calendar heatmap + cal/weight plot stacked; right card = day-detail entries -->
-  <div class="row-card nutrow">
-    <div class="card nutleft"><div class="fit">
-      <div id="nutrition"><h2>Today · Nutrition</h2><div class=big>…</div></div>
-      <div id="nutritionlog"><h2>Nutrition Log</h2><div id="nutwrap"></div></div>
-    </div></div>
-    <div class="card nutdetail"><div class="fit detailpanel"><div id="nutinfo"></div></div></div>
-  </div>
-
-  <!-- PAGE 3 — muscle: volume list + drill-down on the LEFT, the tall body map on the RIGHT -->
-  <div class="row-card musclerow">
-    <div class="card musvol"><div class="fit" id="volume"><h2>Muscle Volume · 7-Day</h2><div>…</div></div></div>
-    <div class="musright">
-      <div class="card musmap"><div class="fit" id="body"><h2>Muscle Map · 7-Day</h2><!--BODY_SVG--></div></div>
-      <div class="card musdetail"><div class="fit detailpanel"><div id="bodyinfo"></div></div></div>
-    </div>
-  </div>
-
-  <!-- PAGE 4 — workout volume heatmap + a reserved tapped-day set list -->
-  <div class="row-card workoutrow">
-    <div class="card wkheat"><div class="fit" id="workouts"><h2>Workout Volume</h2><div id="resttimer" class="resttimer"></div><div id="heatwrap"></div></div></div>
-    <div class="card wkdetail"><div class="fit detailpanel"><div id="heatinfo"></div></div></div>
-  </div>
-
-  <!-- PAGE 5 (far right, least important) — status strip: device chips (litter, cat feeder) + voice liveness + surf forecast -->
+  <!-- MISC (page 1, #misc) — everything that isn't on the wall: device chips + voice liveness + surf.
+       Reached from the wall via the navbar toggle. The nutrition/muscle/workout detail pages that used
+       to live here are gone — the interactive wall IS that detail now. -->
   <div class="row-card statusrow">
     <div class="card statuscard"><div class="fit" id="litter"><h2>Litter-Robot</h2><div class=big>…</div></div></div>
     <div class="card statuscard"><div class="fit" id="feeder"><h2>Cat Feeder</h2><div class=big>…</div></div></div>

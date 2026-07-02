@@ -85,6 +85,10 @@ function showSel(sel){
  if(!sel){document.getElementById('bodyinfo').innerHTML='';applyHighlight(null);return;}
  if(sel.kind==='muscle'){panelMuscle(sel.key);applyHighlight(muscleHmap(sel.key));}
  else{panelExercise(sel.key);applyHighlight(exerciseHmap(sel.key));}
+ // phone wall: the panel floats as a bottom sheet over the scaled canvas — give it an explicit ✕
+ // (re-tapping the exact muscle to dismiss is fiddly at wall scale, and mis-taps should be cheap)
+ if(document.body.classList.contains('phonewall'))
+  document.getElementById('bodyinfo').insertAdjacentHTML('afterbegin','<button class=bi-close type=button aria-label=Close>✕</button>');
 }
 function setSel(sel){SEL=sel;showSel(sel);}
 function toggleSel(sel){ if(SEL&&SEL.kind===sel.kind&&SEL.key===sel.key)setSel(null); else setSel(sel); }
@@ -131,7 +135,8 @@ function renderVolume(){
   all.sort((a,b)=>(a.sets/a.target)-(b.sets/b.target)||a.sets-b.sets||a.label.localeCompare(b.label));
   body=all.map(volRowHtml).join('');
  }
- document.getElementById('volume').innerHTML='<h2>Muscle Volume · 7-Day</h2>'+toggle+body;
+ const volEl=document.getElementById('volume'); if(!volEl)return;
+ volEl.innerHTML='<h2>Muscle Volume · 7-Day</h2>'+toggle+body;
  if(SEL)applyHighlight(SEL.kind==='muscle'?muscleHmap(SEL.key):exerciseHmap(SEL.key));
 }
 
@@ -192,17 +197,25 @@ function tvStackFigures(){
 (function(){
  tvStackFigures();   // TV wall: split front/back into a stacked column (no-op on phone/desktop)
  const bodyEl=document.getElementById('body');
+ if(!bodyEl)return;  // page without the muscle card (e.g. /page after consolidation) — nothing to bind
  document.querySelectorAll('#body path[data-r]').forEach(p=>{if(muscleForId(p.getAttribute('data-r')))p.classList.add('tappable');});
  if(!TOUCH){
   bodyEl.addEventListener('mouseover',e=>{const p=e.target.closest('path[data-r]');if(!p)return;const m=muscleForId(p.getAttribute('data-r'));if(m)showSel({kind:'muscle',key:m});});
   bodyEl.addEventListener('mouseout',e=>{if(e.target.closest('path[data-r]'))showSel(SEL);});
  }
  bodyEl.addEventListener('click',e=>{const p=e.target.closest('path[data-r]');if(!p)return;const m=muscleForId(p.getAttribute('data-r'));if(m)toggleSel({kind:'muscle',key:m});});
- // panel chips: exercise chip -> select exercise; muscle chip -> select muscle
- document.getElementById('bodyinfo').addEventListener('click',e=>{
+ // PHONE WALL: move the detail panel OUT of the transform-scaled shell onto <body> — fixed positioning
+ // inside a transformed ancestor is relative to that ancestor, not the viewport, so the bottom-sheet
+ // styling can only work from outside. (Same viewport test wall.js uses; body.phonewall isn't set yet
+ // at import time because wall.js loads after core.js's import graph.)
+ const info=document.getElementById('bodyinfo');
+ if(document.body.classList.contains('tv')&&window.innerWidth<1400&&info)document.body.appendChild(info);
+ // panel chips: exercise chip -> select exercise; muscle chip -> select muscle; ✕ -> dismiss
+ info.addEventListener('click',e=>{
+  if(e.target.closest('.bi-close')){setSel(null);return;}
   const v=e.target.closest('.var'); if(v){window.open(v.dataset.url,'_blank');return;}
   const ex=e.target.closest('.ex'); if(ex){setSel({kind:'exercise',key:ex.dataset.ex});return;}
-  // the box itself is not a dismiss target — re-tap the same muscle to close it
+  // the box itself is not a dismiss target — re-tap the same muscle (or ✕ on the wall) to close it
  });
  // volume card: sort toggle + clickable/hoverable rows
  const volEl=document.getElementById('volume');

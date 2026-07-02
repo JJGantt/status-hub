@@ -11,10 +11,6 @@
    The left's content defines the row height; the entries panel is absolutely filled so it scrolls
    within that height instead of growing the row (a full day of entries is long). */
 .nutrow{align-items:stretch}
-.nutrow .nutleft{flex:1 1 auto;min-width:0}
-.nutrow .nutdetail{flex:0 0 400px;min-width:0}
-.nutrow .nutleft #nutritionlog{margin-top:10px}
-.nutrow .nutleft #nutwrap .nplot-block{margin-top:14px}
 .nutrow .nutdetail .detailpanel{position:absolute;inset:0}
 /* Row 3 — muscle: volume list (left, full height) | right column = map on top + breakdown below,
    the two summing to the volume's height. Map width follows its height (aspect 72:93). */
@@ -160,8 +156,14 @@ body.touch .musclerow .musdetail .fit{padding:0}
 #bodyinfo .bi-m.sec{color:#6b7686}
 #bodyinfo .bi-none{color:#566;font-size:12px;margin-top:6px}
 /* phone: the detail is a fixed bottom sheet so selecting a muscle never reflows the page (no mis-taps) */
-body.touch #bodyinfo{position:fixed;left:8px;right:8px;bottom:8px;z-index:40;margin:0;border:1px solid #2a323c;border-top:1px solid #2a323c;border-radius:14px;padding:14px;background:#1b222a;max-height:46vh;overflow:auto;box-shadow:0 10px 34px rgba(0,0,0,.55)}
-body.touch #bodyinfo:empty{display:none} /* no empty sheet when nothing is selected */
+body.touch #bodyinfo,body.tv.phonewall #bodyinfo{position:fixed;left:8px;right:8px;bottom:8px;z-index:40;margin:0;border:1px solid #2a323c;border-top:1px solid #2a323c;border-radius:14px;padding:14px;background:#1b222a;max-height:46vh;overflow:auto;box-shadow:0 10px 34px rgba(0,0,0,.55)}
+body.touch #bodyinfo:empty,body.tv.phonewall #bodyinfo:empty{display:none} /* no empty sheet when nothing is selected */
+/* phone wall: the sheet clears the navbar and renders at NATIVE scale (it lives on <body>, outside
+   the scaled shell — muscle.js relocates it) */
+body.tv.phonewall #bodyinfo{bottom:66px;z-index:900}
+body.tv.phonewall .musdetail{display:none} /* its in-canvas host card is empty after relocation */
+.bi-close{position:absolute;top:8px;right:8px;background:#1b2128;border:1px solid #2a313a;color:#8b96a5;width:30px;height:30px;border-radius:8px;font-size:13px;line-height:1;cursor:pointer}
+.bi-close:hover{color:#e6eaf0;border-color:#3a4452}
 body.touch #bodyinfo .bi-x{font-size:14px;padding:6px 11px}
 .hmonths{display:flex;gap:2.5px;font-size:9px;color:#8b96a5;margin-left:30px;height:13px}
 .hm{flex:1 1 0;min-width:0;white-space:nowrap}
@@ -208,19 +210,17 @@ body.touch .fit{width:auto!important;zoom:1!important}
 /* Raspy chat page: lock to the viewport so the header (Raspy + Reset) stays pinned at the top and the
    input row at the bottom — only the message log scrolls. Other pages keep their normal page scroll. */
 body.touch .page-ai{overflow:hidden}
-body.touch .page-ai .pagefit{height:100%;min-height:0;padding-bottom:20px}
+body.touch .page-ai .pagefit{height:100%;min-height:0;padding-bottom:64px} /* clear the 58px fixed navbar */
 body.touch .page-ai .airow{height:auto;flex:1 1 auto;min-height:0}
 .dex{padding:9px 0;border-top:1px solid #222a33}
-/* nutrition day-detail header — a distinct summary band (date + consumed/goal per macro),
-   visually separated from the item rows below it */
-.nuthdr{background:#11171e;border:1px solid #222a33;border-radius:10px;padding:10px 13px;margin-bottom:10px}
-.nuthdr-date{font-size:12px;font-weight:700;color:#8b96a5;text-transform:uppercase;letter-spacing:.05em;margin-bottom:9px}
-.nuthdr-stats{display:flex;flex-wrap:wrap;gap:9px 18px}
-.nh-stat{display:flex;flex-direction:column;gap:2px}
-.nh-v{font-size:18px;font-weight:800;color:#e6eaf0;line-height:1;white-space:nowrap}
-.nh-goal{font-size:12px;font-weight:600;color:#8b96a5;margin-left:1px}
-.nh-l{font-size:10px;color:#8b96a5;text-transform:uppercase;letter-spacing:.04em;white-space:nowrap}
-.nh-delta{font-weight:700}
+/* selected-day summary band — one compact line under the calorie calendar: DOW + date, then
+   measured/goal for cal and each macro (that day's own targets) */
+.nutday{display:flex;align-items:center;gap:12px;flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none;background:#11171e;border:1px solid #222a33;border-radius:10px;padding:7px 11px;margin-bottom:8px}
+.nutday::-webkit-scrollbar{display:none}
+.nd-date{flex:0 0 auto;font-size:12px;font-weight:800;color:#8b96a5;letter-spacing:.05em}
+.nd-seg{flex:0 0 auto;font-size:12px;color:#8b96a5;white-space:nowrap}
+.nd-seg b{color:#e6eaf0;font-weight:800}
+.nd-goal{color:#8b96a5;font-weight:600}
 .dex-head{display:flex;flex-direction:column;gap:4px}
 .wk-exhead{display:flex;align-items:center;justify-content:space-between;gap:8px}
 .wk-exhead .addbtn{flex:0 0 auto}
@@ -250,16 +250,14 @@ body.touch .page-ai .airow{height:auto;flex:1 1 auto;min-height:0}
 .dex-staged .dex-n{color:#cdd3db}
 .commitbtn{background:#16361f;border-color:#2e6b3f;color:#86e3a6}
 .commitbtn:hover{background:#1d4628}
-/* ⋯ row-actions button + its popover menu (edit / delete) */
-.morebtn{background:#222a33;border:1px solid #36404c;color:#c7ced8;border-radius:6px;padding:3px 8px;margin:2px 0 2px 3px;font-size:13px;font-weight:700;cursor:pointer;line-height:1}
-.morebtn:hover{background:#2b3540}
-/* On phone the FAB stack floats over the bottom-right — leave clearance so the last food row's
-   buttons aren't hidden under it and stay tappable/scrollable. */
+/* expansion action row on a food entry: log-again (+) / change-quantity (±) / delete (✕) */
+.dact{display:flex;gap:8px;padding:6px 0 2px}
+.dact-btn{background:#1b2a40;border:1px solid #2f4566;color:#7fb0ff;border-radius:8px;min-width:46px;padding:5px 0;font-size:14px;font-weight:700;cursor:pointer;line-height:1;text-align:center}
+.dact-btn:hover{background:#23354f}
+.dact-del{background:#2d1a1d;border-color:#5a2c33;color:#f87171}
+.dact-del:hover{background:#3a2226}
+/* On phone leave clearance so the last food row's buttons aren't hidden under the navbar. */
 body.touch #nutinfo{padding-bottom:140px}
-.rowmenu{position:fixed;z-index:70;background:#1b222a;border:1px solid #2a323c;border-radius:10px;padding:4px;box-shadow:0 10px 30px rgba(0,0,0,.6);min-width:150px}
-.rowmenu-item{display:block;width:100%;text-align:left;background:none;border:0;color:#e8eaed;padding:9px 12px;border-radius:7px;font-size:13px;cursor:pointer}
-.rowmenu-item:hover{background:#26303b}
-.rowmenu-del{color:#f87171}
 .addmodal-back{position:fixed;inset:0;z-index:60;background:rgba(0,0,0,.6);display:grid;place-items:center;padding:16px}
 .addmodal{background:#1b222a;border:1px solid #2a323c;border-radius:14px;padding:18px;width:300px;max-width:100%;box-shadow:0 12px 40px rgba(0,0,0,.6)}
 .addmodal-name{font-weight:600;font-size:15px;margin-bottom:12px;color:#e8eaed}
@@ -485,17 +483,31 @@ body.tv .wkdetail .heath{display:none}
 body.tv .hcell{aspect-ratio:1!important;width:100%!important;max-width:none!important;flex:0 1 auto!important;height:auto!important;min-height:0;border-radius:2px}
 body.tv .hcol{flex:1 1 0;min-width:0;justify-content:flex-start}
 body.tv .heat{flex:1 1 auto;min-width:0}
-/* lists are non-interactive on the wall: drop the +now / ⋯ buttons, tighten rows */
-body.tv .addbtn,body.tv .morebtn{display:none!important}
+/* lists are non-interactive ONLY on the big-screen kiosk (no input device). The PHONE wall
+   (body.phonewall, added by wall.js under 1400px) is the main interactive app — buttons stay. */
+body.tv:not(.phonewall) .addbtn{display:none!important}
+body.tv:not(.phonewall) .dact{display:none!important}
 body.tv .dex{padding:2px 0}
 /* staged rows: the base 'body.tv .dex' padding wins over .dex-staged's, so re-add the left inset here
    to clear the 3px yellow stage line — otherwise the name/calories overlap it. */
 body.tv .dex-staged{padding-left:14px}
 body.tv .dex-n{font-size:23px}                 /* food/exercise names — big; full day fits with room to spare */
 body.tv .dset{font-size:16px;padding:2px 8px}  /* macro + set chips — bigger (nutrition log + workout sets) */
-/* nutrition log: drop the today-totals header band (the rings already show that) and the expand caret */
-body.tv .nuthdr{display:none}
-body.tv .dex-caret{display:none}
+/* nutrition log: the selected-day band scales up on the wall; the expand caret hides only on the
+   kiosk (phone wall rows are tappable) */
+body.tv .nutday{padding:9px 12px;gap:12px}
+body.tv .nd-date{font-size:15px}
+body.tv .nd-seg{font-size:15px}
+body.tv.phonewall .nd-date{font-size:17px}   /* the phone column is a touch wider; keep it readable at 0.36 scale */
+body.tv.phonewall .nd-seg{font-size:17px}
+body.tv:not(.phonewall) .dex-caret{display:none}
+/* phone wall is a scaled canvas (~0.36 in portrait) — bump interactive elements in LOGICAL px so
+   they land at comfortable physical tap sizes */
+body.tv.phonewall .addbtn{font-size:20px;padding:8px 14px;border-radius:10px}
+body.tv.phonewall .dact{gap:14px;padding:10px 0 4px}
+body.tv.phonewall .dact-btn{min-width:110px;padding:14px 0;font-size:26px;border-radius:14px}
+body.tv.phonewall .dex-caret{font-size:19px}
+body.tv.phonewall .dex{padding:6px 0}
 /* heatmaps (nutrition + workout): drop the day-of-week labels, keep the month row (a touch bigger),
    and realign it now that the 30px day-label gutter is gone so months sit over their week columns */
 body.tv .hdows{display:none}
@@ -517,8 +529,8 @@ body.tv .hmonths{margin-left:0;font-size:11px}
 .tv-caret{animation:tvblink 1s steps(2,start) infinite;color:#5c6675}
 @keyframes tvblink{50%{opacity:0}}
 
-/* ===================== Raspy (shared 'hub' conversation) =====================
-   Full-height conversation at the end of the hub — no card chrome: header + log (fills) + input.
+/* ===================== Conversation (shared 'hub' thread) =====================
+   Full-height chat — no card chrome, no name: a slim header (mode chip + reset) + log (fills) + input.
    Web hub (desktop / phone / native WebView). The JS self-skips the TV (it has its own panel). */
 /* A self-contained chat view exactly one screen tall: fixed height:100dvh (the live visible height —
    100vh would include the area behind the mobile address bar; vh is the fallback). Because it's a
@@ -527,8 +539,6 @@ body.tv .hmonths{margin-left:0;font-size:11px}
 .airow{height:100vh;height:100dvh}
 .ai-shell{display:flex;flex-direction:column;gap:10px;flex:1 1 auto;min-height:0}
 .ai-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:0}
-.ai-head-left{display:flex;align-items:center;gap:10px}
-.ai-head h2{margin:0}
 .ai-mode{font-size:11px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:#8b96a5;
   background:#1b2128;border:1px solid #2a313a;border-radius:999px;padding:3px 10px;line-height:1}
 .ai-mode.is-agent{color:#0b0e12;background:#eab308;border-color:#eab308}
@@ -558,9 +568,6 @@ body.tv .hmonths{margin-left:0;font-size:11px}
   font-size:14px;font-weight:600;cursor:pointer}
 .ai-send:hover{background:#4f8ef7}
 .ai-status{font-size:12px;color:#7c8694;min-height:15px}
-.ai-head-btns{display:flex;align-items:center;gap:8px}
-.ai-gear{background:#1b2128;border:1px solid #2a313a;color:#8b96a5;font-size:14px;width:30px;height:30px;border-radius:8px;cursor:pointer;line-height:1}
-.ai-gear:hover{color:#e6eaf0;border-color:#3a4452}
 /* settings panel (gear) */
 .settings-back{position:fixed;inset:0;z-index:1200;background:rgba(0,0,0,.55);display:grid;place-items:center;padding:16px}
 .settings-panel{width:min(420px,100%);max-height:86vh;overflow:auto;background:#11161c;border:1px solid #283039;border-radius:16px;padding:18px 18px 20px;box-shadow:0 18px 50px rgba(0,0,0,.6)}

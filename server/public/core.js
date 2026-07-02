@@ -35,8 +35,9 @@ es.onmessage=e=>{try{render(JSON.parse(e.data));}catch(_){}};
 
 // ---- layout ----
 // desktop = plain document-flow rows that scroll (defined in index.html / app.css; nothing to init).
-// phone = fixed swipe-through pages, one per row group. Each .row-card becomes a page, so the page
-// grouping mirrors the desktop rows exactly: [status] [nutrition+log] [muscle map+volume] [workouts].
+// phone = fixed swipe-through pages, one per row group: [chat] [misc/status]. The main dashboard is
+// the WALL ('/', scaled by wall.js) — /page holds only what the wall doesn't. The navbar deep-links
+// here with #chat / #misc.
 // On a TOUCH phone we swap to the swipe-page layout — UNLESS this is the TV/wall page (body.tv), which a
 // phone can also load in "wall mode" to mirror the dashboard (wall.js scales it). There the TV grid must
 // stay intact, so the swipe transform is skipped.
@@ -46,20 +47,23 @@ if(TOUCH && !document.body.classList.contains('tv')){
  const pages=document.createElement('div'); pages.className='pages';
  rows.forEach(rc=>{
   const pg=document.createElement('div');
-  // The Raspy chat page locks to the viewport (pinned header/input, internal log scroll); others scroll normally.
+  // The chat page locks to the viewport (pinned header/input, internal log scroll); others scroll normally.
   pg.className='page'+(rc.classList.contains('airow')?' page-ai':'');
   const pf=document.createElement('div');pf.className='pagefit';
   pf.appendChild(rc);            // move the whole row group into one swipe page
   pg.appendChild(pf);pages.appendChild(pg);
  });
  const container=document.querySelector('.rows'); container.replaceWith(pages);
- // Default to the nutrition page on load (not the first/leftmost page, which is Raspy).
- const startIdx=Math.max(0,rows.findIndex(rc=>rc.classList.contains('nutrow')));
+ // Land on the page the navbar asked for: #misc → the status page; default (#chat or none) → chat.
+ const startIdx=Math.max(0,rows.findIndex(rc=>rc.classList.contains(location.hash==='#misc'?'statusrow':'airow')));
  const dots=document.createElement('div'); dots.className='dots';
  rows.forEach((_,i)=>{const d=document.createElement('span');if(i===startIdx)d.className='on';dots.appendChild(d);});
  pages.after(dots);
  pages.addEventListener('scroll',()=>{const i=Math.round(pages.scrollLeft/pages.clientWidth);[...dots.children].forEach((d,k)=>d.classList.toggle('on',k===i));},{passive:true});
- if(startIdx>0)requestAnimationFrame(()=>{pages.scrollLeft=startIdx*pages.clientWidth;}); // land on nutrition without animation
+ if(startIdx>0)requestAnimationFrame(()=>{pages.scrollLeft=startIdx*pages.clientWidth;});
+}else if(!document.body.classList.contains('tv') && location.hash==='#misc'){
+ // desktop /page: document flow — honor the deep link by scrolling to the status row
+ requestAnimationFrame(()=>{const el=document.querySelector('.statusrow'); if(el)el.scrollIntoView();});
 }
 // Shared bottom navbar on BOTH views (full page + phone wall); skip only the TV kiosk (wall on a big screen).
 if(!document.body.classList.contains('tv') || window.innerWidth < 1400) mountNavbar();

@@ -1,15 +1,8 @@
-// Settings panel (gear in the Raspy header). Reads/writes the shared app_settings via /api/settings:
+// Settings panel (the navbar gear). Reads/writes the shared app_settings via /api/settings:
 //   - chat-box route (which of the two routes the TYPED box uses: efficiency=fast/Haiku/API,
 //     accuracy=power/Opus+thinking). The two FAB buttons + wake words carry their own tier and ignore this.
 //   - per-device trailing-silence seconds (how long of a pause ends a voice command).
-// Self-skips on the TV wall. Each control saves on change; no explicit save button.
-if (!document.body.classList.contains('tv')) boot();
-
-function boot() {
-  const gear = document.getElementById('ai-gear');
-  if (!gear) return;
-  gear.addEventListener('click', open);
-}
+// Each control saves on change; no explicit save button.
 
 async function save(key, value) {
   try {

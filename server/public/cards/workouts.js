@@ -16,7 +16,8 @@ export function render(s){
    return '<div class=hcell'+click+' title="'+d.date+': '+d.count+' set'+(d.count===1?'':'s')+'" style="background:'+bg+out+cur+'"></div>';
  }).join('')+'</div>').join('');
  const dowLabels=['','Mon','','Wed','','Fri',''].map(x=>'<div class=hd>'+x+'</div>').join('');
- document.getElementById('heatwrap').innerHTML=
+ const hw=document.getElementById('heatwrap'); if(!hw)return;
+ hw.innerHTML=
   '<div class=hmonths>'+monthRow+'</div>'+
   '<div class=hbody><div class=hdows>'+dowLabels+'</div><div class=heat>'+grid+'</div></div>';
  if(heatSelDate){ markHeatCell(heatSelDate); if(heatSelDate===s.today)loadHeatDay(heatSelDate); } // live-refresh today's sets
@@ -74,7 +75,7 @@ async function loadHeatDay(date){
  let h='<div class=heath>'+date+' · '+j.total+' sets</div>';
  j.exercises.forEach((ex,i)=>{
   h+='<div class=dex><div class=wk-exhead><div class=dex-n>'+esc(ex.name)+'</div>'+
-     '<button class="addbtn wk-rep" type=button data-rep="'+i+'" title="Repeat last set (same weight)">+ set</button></div>'+
+     '<button class="addbtn wk-rep" type=button data-rep="'+i+'" title="Log another set (same weight)">+</button></div>'+
      '<div class=dex-sets>'+ex.sets.map(st=>'<span class="dset wk-set" data-set="'+st.id+'" data-w="'+st.weight_lbs+'" data-r="'+st.reps+'" title="Tap to edit">'+(st.weight_lbs===0?'BW':(st.weight_lbs+' lb'))+' × '+st.reps+'</span>').join('')+'</div></div>';
  });
  hi.innerHTML=h;
@@ -171,6 +172,7 @@ function openSetEditor(id,name,w0,r0){
 
 (function(){
  const wk=document.getElementById('workouts'); let scrub=false;
+ if(!wk)return; // page without the workout card (e.g. /page after consolidation) — nothing to bind
  const cellAt=(x,y)=>{const el=document.elementFromPoint(x,y);return el&&el.closest?el.closest('.hcell'):null;};
  wk.addEventListener('pointerdown',e=>{const c=e.target.closest('.hcell');if(!c||!c.dataset.date)return;scrub=true;selectDay(c.dataset.date);e.preventDefault();e.stopPropagation();/* don't let it become a card-drag */});
  document.addEventListener('pointermove',e=>{if(!scrub)return;const c=cellAt(e.clientX,e.clientY);if(c&&c.dataset.date)selectDay(c.dataset.date);});

@@ -1,5 +1,6 @@
 // Nutrition Log card: combined dual-axis calorie+weight plot (weekly game) + calorie-adherence
-// calendar (daily game), with inline day detail + click/drag-scrub selection. READ-ONLY.
+// calendar (daily game), with inline day detail + click/drag-scrub selection. Every entry row
+// expands to its ingredient breakdown + actions (log-again / change-quantity / delete).
 import { esc, dualPlot, state } from '../shared.js';
 
 const CAL_COLOR='#3b82f6', W_COLOR='#a78bfa';
@@ -80,46 +81,45 @@ async function loadNutDay(date){
  if(tok!==nutReq)return; // a newer cell was selected mid-flight — drop this stale response
  const ni=document.getElementById('nutinfo');
  const sp=ni.closest('.detailpanel'), atTop=!sp||sp.scrollTop<60; // newest entries render on top now
+ // Selected-day summary band — compact one-liner: DOW + date, then measured/goal for cal + each
+ // macro, using THIS day's own stored targets (each day has its own dynamic goal + bodyweight macros).
  const dt=new Date(date+'T12:00:00');
- const dlabel=dt.toLocaleDateString('en-US',{weekday:'short'})+' · '+dt.toLocaleDateString('en-US',{month:'short',day:'numeric'});
- if(!j.entries||!j.entries.length){ ni.innerHTML='<div class=nuthdr><div class=nuthdr-date>'+dlabel+'</div></div><div class=bi-none>No food logged</div>'; return; }
- // Header: a distinct summary band — date + consumed/goal for cal, protein, carbs, fat. The goals
- // are THIS day's own dynamic targets (from its calorie target + bodyweight). Set apart from the rows.
+ const DOW=['SU','M','TU','W','TH','F','SA'][dt.getDay()];
+ const dshort=(dt.getMonth()+1)+'/'+dt.getDate();
+ const dayband=(inner)=>'<div class=nutday><span class=nd-date>'+DOW+' '+dshort+'</span>'+inner+'</div>';
+ if(!j.entries||!j.entries.length){ ni.innerHTML=dayband('')+'<div class=bi-none>No food logged</div>'; return; }
  const tm=j.target_macros||{};
- let calLbl='cal';
- if(j.target_cal>0){ const d=j.total_cal-j.target_cal,s=d>0?'+':(d<0?'−':''); calLbl='cal <span class=nh-delta style="color:'+(j.delta_color||'#8b96a5')+'">('+s+Math.abs(d)+')</span>'; }
- const stat=(v,goal,lbl)=>'<div class=nh-stat><div class=nh-v>'+v+(goal!=null?'<span class=nh-goal>/'+goal+'</span>':'')+'</div><div class=nh-l>'+lbl+'</div></div>';
- let h='<div class=nuthdr><div class=nuthdr-date>'+dlabel+'</div><div class=nuthdr-stats>'+
-   stat(j.total_cal, j.target_cal>0?j.target_cal:null, calLbl)+
-   stat(mn(j.total_protein), tm.protein_g!=null?tm.protein_g:null, 'protein')+
-   stat(mn(j.total_carbs), tm.carbs_g!=null?tm.carbs_g:null, 'carbs')+
-   stat(mn(j.total_fat), tm.fat_g!=null?tm.fat_g:null, 'fat')+
- '</div></div>';
+ const seg=(v,goal,lbl)=>'<span class=nd-seg><b>'+v+'</b>'+(goal!=null?'<span class=nd-goal>/'+goal+'</span>':'')+' '+lbl+'</span>';
+ let h=dayband(
+   seg(j.total_cal, j.target_cal>0?j.target_cal:null, 'cal')+
+   seg(mn(j.total_protein), tm.protein_g!=null?tm.protein_g:null, 'P')+
+   seg(mn(j.total_carbs), tm.carbs_g!=null?tm.carbs_g:null, 'C')+
+   seg(mn(j.total_fat), tm.fat_g!=null?tm.fat_g:null, 'F'));
  j.entries.forEach((e,i)=>{
   const t=fmtTime(e.occurred_at);
   const ings=Array.isArray(e.ingredients)?e.ingredients:null;
-  // Every entry now stores ≥1 ingredient. A single-ingredient entry IS its own breakdown, so it renders
-  // flat (no caret/expand) — only multi-ingredient meals are expandable.
-  const exp=ings&&ings.length>1;
-  const open=exp&&expandedIds.has(e.id); // keep this entry expanded across re-renders if the user opened it
+  // EVERY entry expands — the expansion holds the ingredient breakdown (multi-ingredient meals only)
+  // plus the row's actions (log-again / change-quantity / delete), so the collapsed rows stay clean.
+  const open=expandedIds.has(e.id); // keep this entry expanded across re-renders if the user opened it
   const staged=!!e.staged;
-  // committed entries get "+ now" (re-log); staged meals get a STAGED badge + a Commit button.
-  h+='<div class="dex'+(exp?' dex-exp':'')+(staged?' dex-staged':'')+'" data-idx="'+i+'">'+
-     '<div class="dex-head"'+(exp?' data-toggle="'+i+'"':'')+'>'+
-       '<div class=dex-n>'+(exp?'<span class=dex-caret>'+(open?'▾':'▸')+'</span>':'')+esc(e.name||'—')+(staged?' <span class=stagedbadge>STAGED</span>':'')+'</div>'+
+  h+='<div class="dex dex-exp'+(staged?' dex-staged':'')+'" data-idx="'+i+'">'+
+     '<div class="dex-head" data-toggle="'+i+'">'+
+       '<div class=dex-n><span class=dex-caret>'+(open?'▾':'▸')+'</span>'+esc(e.name||'—')+(staged?' <span class=stagedbadge>STAGED</span>':'')+'</div>'+
        '<div class=dex-macros>'+macroChips(e)+((!staged&&t)?'<span class=dset>'+t+'</span>':'')+
-         (staged
-           ?'<button class="addbtn commitbtn" type=button data-commit-entry="'+i+'" title="Commit — log as eaten now">commit</button>'
-           :'<button class=addbtn type=button data-add-entry="'+i+'" title="Add at now">+ now</button>')+
-         '<button class=morebtn type=button data-more-entry="'+i+'" title="Edit / delete" aria-label="Edit or delete">⋯</button>'+
+         (staged?'<button class="addbtn commitbtn" type=button data-commit-entry="'+i+'" title="Commit — log as eaten now">commit</button>':'')+
        '</div>'+
      '</div>';
-  if(exp){
-   h+='<div class="dex-ings'+(open?'':' hidden')+'" id="ding-'+i+'">'+ings.map((g,gi)=>
-     '<div class=ding><span class=ding-n>'+esc(ingLabel(g))+'</span>'+macroChips(g)+
-       (staged?'':'<button class=addbtn type=button data-add-ing="'+i+'.'+gi+'" title="Add at now">+ now</button>')+
-     '</div>').join('')+'</div>';
-  }
+  h+='<div class="dex-ings'+(open?'':' hidden')+'" id="ding-'+i+'">'+
+     (ings&&ings.length>1?ings.map((g,gi)=>
+       '<div class=ding><span class=ding-n>'+esc(ingLabel(g))+'</span>'+macroChips(g)+
+         (staged?'':'<button class=addbtn type=button data-add-ing="'+i+'.'+gi+'" title="Add at now">+ now</button>')+
+       '</div>').join(''):'')+
+     '<div class=dact>'+
+       (staged?'':'<button class=dact-btn type=button data-add-entry="'+i+'" title="Log again now">+</button>')+
+       '<button class=dact-btn type=button data-edit-entry="'+i+'" title="Change quantity">±</button>'+
+       '<button class="dact-btn dact-del" type=button data-del-entry="'+i+'" title="Delete">✕</button>'+
+     '</div>'+
+   '</div>';
   h+='</div>';
  });
  ni.innerHTML=h;
@@ -130,14 +130,17 @@ function selectNutDay(date){ if(date===nutSelDate)return; nutSelDate=date; markN
 
 (function(){
  const nl=document.getElementById('nutritionlog'); let scrub=false;
+ if(!nl)return; // page without the nutrition-log card (e.g. /page after consolidation) — nothing to bind
  const cellAt=(x,y)=>{const el=document.elementFromPoint(x,y);return el&&el.closest?el.closest('.hcell'):null;};
  nl.addEventListener('pointerdown',e=>{const c=e.target.closest('.hcell');if(!c||!c.dataset.ndate)return;scrub=true;selectNutDay(c.dataset.ndate);e.preventDefault();e.stopPropagation();});
  document.addEventListener('pointermove',e=>{if(!scrub)return;const c=cellAt(e.clientX,e.clientY);if(c&&c.dataset.ndate)selectNutDay(c.dataset.ndate);});
  document.addEventListener('pointerup',()=>{scrub=false;});
- // event-delegated clicks on the day-detail: add buttons + ingredient expand/collapse
+ // event-delegated clicks on the day-detail: expansion action row + ingredient expand/collapse
  document.getElementById('nutinfo').addEventListener('click',e=>{
-  const more=e.target.closest('[data-more-entry]');
-  if(more){ e.stopPropagation(); openRowMenu(more,+more.dataset.moreEntry); return; }
+  const editE=e.target.closest('[data-edit-entry]');
+  if(editE){ e.stopPropagation(); const en=entryAt(+editE.dataset.editEntry); if(en)openAddPopup(en,{mode:'edit',id:en.id}); return; }
+  const delE=e.target.closest('[data-del-entry]');
+  if(delE){ e.stopPropagation(); confirmDelete(entryAt(+delE.dataset.delEntry)); return; }
   const commitE=e.target.closest('[data-commit-entry]');
   if(commitE){ e.stopPropagation(); const en=entryAt(+commitE.dataset.commitEntry); if(en&&en.id)commitStaged(en); return; }
   const addE=e.target.closest('[data-add-entry]');
@@ -168,33 +171,6 @@ async function commitStaged(en){
   if(!r.ok)throw new Error(r.status);
   if(lastDayDate)loadNutDay(lastDayDate);
  }catch(_){ /* realtime will reconcile */ }
-}
-
-// ---- row-actions menu (⋯): Delete + Change quantity, anchored under the tapped button ----
-let openMenuEl=null;
-function closeRowMenu(){ if(openMenuEl){ openMenuEl.remove(); openMenuEl=null; document.removeEventListener('pointerdown',onDocDown,true); } }
-function onDocDown(e){ if(openMenuEl&&!openMenuEl.contains(e.target))closeRowMenu(); }
-function openRowMenu(btn,idx){
- closeRowMenu();
- const en=entryAt(idx); if(!en)return;
- const m=document.createElement('div'); m.className='rowmenu';
- m.innerHTML='<button type=button class=rowmenu-item data-act=qty>Change quantity</button>'+
-   '<button type=button class="rowmenu-item rowmenu-del" data-act=del>Delete</button>';
- document.body.appendChild(m);
- const r=btn.getBoundingClientRect();
- // anchor right-aligned under the button, kept on-screen
- const w=m.offsetWidth||150;
- let left=r.right-w; if(left<6)left=6; if(left+w>window.innerWidth-6)left=window.innerWidth-6-w;
- m.style.left=left+'px'; m.style.top=(r.bottom+4)+'px';
- openMenuEl=m;
- setTimeout(()=>document.addEventListener('pointerdown',onDocDown,true),0);
- m.addEventListener('click',ev=>{
-  const it=ev.target.closest('[data-act]'); if(!it)return;
-  ev.stopPropagation();
-  const act=it.dataset.act; closeRowMenu();
-  if(act==='qty')openAddPopup(en,{mode:'edit',id:en.id});
-  else if(act==='del')confirmDelete(en);
- });
 }
 
 async function confirmDelete(en){

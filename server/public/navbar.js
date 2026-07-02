@@ -1,8 +1,11 @@
-// Shared bottom navigation — identical on BOTH views (wall + full page). Left: a toggle that flips between
-// the two views, plus settings. Right: brain (full Opus) + sparkle (fast) voice, both tap-to-talk, driving
-// the shared activity popup. Mounted once per page by core.js.
+// Shared bottom navigation — identical on BOTH views (wall + /page). Left: chat (the conversation),
+// the misc toggle (wall ⇄ devices/status page), and settings. Right: brain (full Opus) + sparkle
+// (fast) voice, both tap-to-talk, driving the shared activity popup. Mounted once per page by core.js.
 import { makeRecorder, activityBar } from './voiceagent.js';
 import { open as openSettings } from './settings.js';
+
+const CHAT = '<svg viewBox="0 0 24 24" width="21" height="21" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+  '<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>';
 
 const SPARKLE = '<svg viewBox="0 0 24 24" width="25" height="25" fill="currentColor" aria-hidden="true">' +
   '<path d="M12 1c.6 5.7 4.3 9.4 10 10-5.7.6-9.4 4.3-10 10-.6-5.7-4.3-9.4-10-10 5.7-.6 9.4-4.3 10-10Z"/></svg>';
@@ -35,17 +38,36 @@ export function mountNavbar() {
     return b;
   };
 
+  // Jump to a /page section: from the wall it's a navigation with a deep-link hash; already on /page
+  // it scrolls the swipe-pages (phone) or the document row (desktop) — no reload.
+  const goSection = (cls, hash) => {
+    if (onWall) { location.href = '/page' + hash; return; }
+    const pages = document.querySelector('.pages');
+    if (pages) {
+      const i = [...pages.children].findIndex((p) => p.querySelector('.' + cls));
+      if (i >= 0) pages.scrollTo({ left: i * pages.clientWidth, behavior: 'smooth' });
+    } else {
+      const el = document.querySelector('.' + cls);
+      if (el) el.scrollIntoView({ behavior: 'smooth' });
+    }
+  };
+
+  const chat = document.createElement('button');
+  chat.className = 'nav-toggle nav-chat'; chat.type = 'button'; chat.innerHTML = CHAT;
+  chat.setAttribute('aria-label', 'Conversation');
+  chat.onclick = () => goSection('airow', '#chat');
+
   const tog = document.createElement('button');
   tog.className = 'nav-toggle'; tog.type = 'button'; tog.innerHTML = SWAP;
-  tog.setAttribute('aria-label', onWall ? 'Switch to full page view' : 'Switch to wall view');
-  tog.onclick = () => { location.href = onWall ? '/page' : '/'; };   // '/' is the wall (default)
+  tog.setAttribute('aria-label', onWall ? 'Devices & status' : 'Back to the wall');
+  tog.onclick = () => { if (onWall) goSection('statusrow', '#misc'); else location.href = '/'; };
 
   const gear = document.createElement('button');
   gear.className = 'nav-gear'; gear.type = 'button'; gear.setAttribute('aria-label', 'Settings');
   gear.innerHTML = GEAR; gear.addEventListener('click', () => openSettings());
 
   const left = document.createElement('div'); left.className = 'navbar-grp';
-  left.appendChild(tog); left.appendChild(gear);
+  left.appendChild(chat); left.appendChild(tog); left.appendChild(gear);
   const right = document.createElement('div'); right.className = 'navbar-grp';
   right.appendChild(mkVoice('wfab-power', BRAIN, 'power', 'Voice command (full Opus thinking)'));
   right.appendChild(mkVoice('wfab-fast', SPARKLE, 'fast', 'Quick voice command (efficiency)'));

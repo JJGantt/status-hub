@@ -1,4 +1,4 @@
-// In-app Raspy. Three pieces sharing one pipeline (→ /api/voice-command|voice-text →
+// In-app conversation. Three pieces sharing one pipeline (→ /api/voice-command|voice-text →
 // voice_requests → Mac worker → the shared 'hub' voice_messages thread):
 //   1. A full-height conversation card at the end of the hub (#ai-log): type, talk, reset.
 //   2. A fixed quick-add mic FAB (bottom-right) for a one-off voice command without scrolling.
@@ -261,7 +261,7 @@ function initCard() {
   sendBtn.addEventListener('click', sendText);
   textEl.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); sendText(); } });
   resetBtn.addEventListener('click', async () => {
-    if (!confirm('Reset the conversation? Raspy will forget the prior context.')) return;
+    if (!confirm('Reset the conversation? The prior context will be forgotten.')) return;
     clear(); setStatus('Context reset');
     try { await fetch('/api/voice-reset', { method: 'POST' }); } catch (_) {}
     setTimeout(() => setStatus(''), 2500);

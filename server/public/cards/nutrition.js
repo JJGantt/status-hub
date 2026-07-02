@@ -34,7 +34,8 @@ export function render(s) {
    '</svg>' +
    '<div class="rtot">' + (m.consumed || 0) + unit + ' / ' + (m.goal || 0) + unit + '</div>' +
    '</div>'; };
- document.getElementById('nutrition').innerHTML = '<h2>Today · Nutrition</h2>' +
+ const el = document.getElementById('nutrition'); if (!el) return; // absent on /page after consolidation
+ el.innerHTML = '<h2>Today · Nutrition</h2>' +
   '<div class=rings>' + ring('Cal', 'calories', '') + ring('P', 'protein_g', 'g') + ring('C', 'carbs_g', 'g') + ring('F', 'fat_g', 'g') + '</div>' +
   '<div class=pnote>' + (P.window_label || '') + '</div>';
  tickRings(); // paint immediately at the current second

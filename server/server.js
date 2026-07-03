@@ -829,6 +829,9 @@ app.post('/api/voice-command', express.raw({ type: '*/*', limit: '25mb' }), asyn
     if (!gr.ok) return res.status(502).json({ error: `transcription failed (${gr.status})` });
     const transcript = (await gr.text()).trim();
     if (!transcript) return res.json({ transcript: '', enqueued: false });
+    // ?dry=1 → transcribe only, no enqueue. The chat composer uses this while photos are pending: the
+    // transcript lands in the text box so the user sends text + photos together when they're ready.
+    if (String(req.query.dry || '') === '1') return res.json({ transcript, enqueued: false });
     // The bottom-right quick-add FAB sends ?quick=1 → tag the request so the worker asks Jarvis for a
     // terse, fits-in-the-status-chip confirmation. The full conversation card omits it (verbose replies).
     const quick = String(req.query.quick || '') === '1';

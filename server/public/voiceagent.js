@@ -72,8 +72,11 @@ function boot() {
 
 // A self-contained recorder: getUserMedia → MediaRecorder → upload to /api/voice-command.
 // quick=true marks a one-off quick-add (the FAB) so the server tags it for a terse reply.
+// dryWhen (optional): checked at upload time — when true, the server only transcribes (?dry=1) and the
+// text goes to onTranscript instead of enqueueing. The chat composer uses this while photos are pending,
+// so a dictated command joins the text box and sends WITH the photos, not ahead of them.
 // Exported so the wall-mode push-to-talk button (wall.js) can reuse the exact same pipeline.
-export function makeRecorder({ onStatus, onActive, quick, autoStop, tier }) {
+export function makeRecorder({ onStatus, onActive, quick, autoStop, tier, dryWhen, onTranscript }) {
   let recording = false, rec = null, chunks = [], stream = null, maxTimer = null;
   let actx = null, vadTimer = null;
   const pickMime = () => {
@@ -143,7 +146,9 @@ export function makeRecorder({ onStatus, onActive, quick, autoStop, tier }) {
     if (!blob.size) { onStatus('', 'clear'); return; }
     onStatus('Transcribing…', 'busy');
     try {
+      const dry = typeof dryWhen === 'function' && dryWhen();
       const qp = new URLSearchParams();
+      if (dry) qp.set('dry', '1');
       if (quick) qp.set('quick', '1');
       if (tier) qp.set('tier', tier);                 // 'fast' (sparkle) or 'power' (brain)
       const qs = qp.toString();
@@ -152,6 +157,7 @@ export function makeRecorder({ onStatus, onActive, quick, autoStop, tier }) {
       const j = await r.json().catch(() => ({}));
       if (!r.ok || j.error) onStatus(j.error || 'Send failed', 'err');
       else if (!j.transcript) onStatus('Didn’t catch that — try again', 'err');
+      else if (dry) { onTranscript(j.transcript); onStatus('', 'clear'); }      // compose mode: into the text box
       else { onStatus(j.transcript, 'prompt'); onStatus('Thinking…', 'busy'); } // show what was heard, then stream the run
     } catch (_) { onStatus('Send failed', 'err'); }
   }
@@ -354,7 +360,14 @@ function initCard() {
     setTimeout(() => setStatus(''), 2500);
   });
   // The card shows the transcript as its own user bubble, so ignore the 'prompt' status kind here.
-  const cardRec = makeRecorder({ onStatus: (t, kind) => { if (kind !== 'prompt') setStatus(t); }, onActive: (a) => micBtn.classList.toggle('ai-rec', a) });
+  // Photos pending → the mic composes instead of firing: its transcript joins the text box and the
+  // whole thing (text + photos) goes when Send is tapped. Empty tray → fire-and-forget as always.
+  const cardRec = makeRecorder({
+    onStatus: (t, kind) => { if (kind !== 'prompt') setStatus(t); },
+    onActive: (a) => micBtn.classList.toggle('ai-rec', a),
+    dryWhen: () => attItems.length > 0,
+    onTranscript: (t) => { textEl.value = (textEl.value.trim() ? textEl.value.trim() + ' ' : '') + t; },
+  });
   micBtn.addEventListener('click', () => cardRec.toggle());
 
   return { upsert, clear, backfill };

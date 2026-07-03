@@ -269,7 +269,9 @@
 				GCC_WARN_UNUSED_VARIABLE = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = "Status Hub";
+				INFOPLIST_KEY_NSCameraUsageDescription = "Status Hub uses the camera to capture food and nutrition labels.";
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Status Hub uses the microphone for voice commands.";
+				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "Status Hub attaches photos of food and nutrition labels.";
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				MACOSX_DEPLOYMENT_TARGET = 13.0;
 				MARKETING_VERSION = 1.0;
@@ -370,7 +372,9 @@
 				GCC_WARN_UNUSED_VARIABLE = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = "Status Hub";
+				INFOPLIST_KEY_NSCameraUsageDescription = "Status Hub uses the camera to capture food and nutrition labels.";
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Status Hub uses the microphone for voice commands.";
+				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "Status Hub attaches photos of food and nutrition labels.";
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				MACOSX_DEPLOYMENT_TARGET = 13.0;
 				MARKETING_VERSION = 1.0;

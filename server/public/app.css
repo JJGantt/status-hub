@@ -385,8 +385,14 @@ body.tv.mac .pane-chat .ai-log::-webkit-scrollbar{width:8px!important;height:8px
 body.tv.mac .pane-chat .ai-log::-webkit-scrollbar-thumb{background:#2a3340;border-radius:4px}
 body.tv.mac .pane-chat .ai-input{flex:0 0 auto;padding:10px 12px;border-top:1px solid #1b222b;display:flex;gap:8px;align-items:center}
 body.tv.mac .pane-chat .ai-status{flex:0 0 auto;padding:2px 14px 8px;min-height:0}
-/* slim drag handle on the sidebar's right edge (wired by the mac sidebar controller in wall.js/tv.js) */
+/* slim drag handle on the sidebar's right edge (wired by the mac sidebar controller in wall.js) */
 body.tv.mac .macdrag{position:absolute;top:0;right:-3px;width:6px;height:100%;cursor:col-resize!important;z-index:6}
+body.tv.mac .macdrag:hover{background:#2f6feb55}
+/* collapse toggle — floats just above the navbar on the left, over the sidebar's edge */
+body.tv.mac .macchat-toggle{position:fixed;left:8px;bottom:66px;z-index:1001;width:30px;height:30px;border-radius:8px;
+  border:1px solid #2a3340;background:rgba(18,24,33,.92);color:#cfd8e3;font-size:16px;line-height:1;
+  display:flex;align-items:center;justify-content:center;cursor:pointer!important}
+body.tv.mac.chatcollapsed .macdrag{display:none}
 
 /* shared bottom navigation — identical on both views (full page + phone wall). Left: toggle + settings.
    Right: brain + sparkle voice. */

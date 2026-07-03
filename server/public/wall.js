@@ -31,6 +31,42 @@ if (MAC) {
     window.addEventListener('resize', raf);
     window.addEventListener('macfit', raf);   // dispatched by the sidebar collapse/resize controller
     window.__macFit = raf;
+
+    // ---- VS-Code-style chat side panel: collapse toggle + drag-to-resize (persisted) ----
+    const chat = document.querySelector('.pane-chat');
+    if (chat) {
+      // restore saved width + collapsed state
+      const savedW = localStorage.getItem('macChatW');
+      if (savedW) document.body.style.setProperty('--macchat', savedW);
+      if (localStorage.getItem('macChatCollapsed') === '1') document.body.classList.add('chatcollapsed');
+
+      // collapse toggle (floats just above the navbar, left)
+      const tog = document.createElement('button');
+      tog.className = 'macchat-toggle'; tog.type = 'button'; tog.title = 'Show/hide chat';
+      const paintTog = () => { tog.textContent = document.body.classList.contains('chatcollapsed') ? '›' : '‹'; };
+      paintTog();
+      tog.addEventListener('click', () => {
+        document.body.classList.toggle('chatcollapsed');
+        localStorage.setItem('macChatCollapsed', document.body.classList.contains('chatcollapsed') ? '1' : '0');
+        paintTog(); raf();
+      });
+      document.body.appendChild(tog);
+
+      // drag handle on the sidebar's right edge
+      const drag = document.createElement('div'); drag.className = 'macdrag'; chat.appendChild(drag);
+      let dragging = false;
+      drag.addEventListener('mousedown', (e) => { dragging = true; e.preventDefault(); document.body.style.userSelect = 'none'; });
+      window.addEventListener('mousemove', (e) => {
+        if (!dragging) return;
+        const w = Math.max(240, Math.min(560, e.clientX)) + 'px';
+        document.body.style.setProperty('--macchat', w); raf();
+      });
+      window.addEventListener('mouseup', () => {
+        if (!dragging) return;
+        dragging = false; document.body.style.userSelect = '';
+        localStorage.setItem('macChatW', getComputedStyle(document.body).getPropertyValue('--macchat').trim());
+      });
+    }
   }
 } else if (PHONE) {
   const shell = document.querySelector('.tv-shell');

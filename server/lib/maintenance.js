@@ -1,7 +1,12 @@
 'use strict';
 // Adaptive maintenance (TDEE) estimate via energy balance:
 //
-//   maintenance = (avg daily intake) - (weight-trend slope in lb/day) * KCAL_PER_LB
+//   maintenance = (avg daily intake) - (weight-trend slope in lb/day) * kcal-per-lb
+//
+// The kcal-per-lb energy density is direction-aware: weight LOST is mostly fat (~3500 kcal/lb),
+// while weight GAINED on a lean bulk is a blend of muscle, glycogen, water, and some fat
+// (~2500 kcal/lb effective). Using 3500 for gains would overcharge each gained pound and
+// underestimate maintenance during a bulk.
 //
 // The weight trend already reflects EVERYTHING you burn (BMR + NEAT + lifting + surfing),
 // so workout calories are deliberately NOT added — that would double-count. Activity is
@@ -13,7 +18,8 @@
 // slope, we fall back to a cold-start anchor instead of reporting a confident-but-fake
 // number. The switch is gated on data sufficiency, not a clock.
 
-const KCAL_PER_LB = 3500;        // energy in ~1 lb of body fat; only scales the small slope term
+const KCAL_PER_LB_LOSS = 3500;   // energy in ~1 lb lost (mostly body fat); only scales the small slope term
+const KCAL_PER_LB_GAIN = 2500;   // effective energy in ~1 lb gained on a lean bulk (muscle/glycogen/water/fat blend)
 const SURPLUS = 150;             // lean-bulk surplus over maintenance (~0.25 lb/week)
 const HALF_LIFE_DAYS = 21;       // older data is down-weighted on this half-life
 const ANCHOR_MAINTENANCE = 2500; // cold start: Mar–Apr empirical (~2470) ≈ age-40 Mifflin×1.4 (~2480)
@@ -149,10 +155,12 @@ function estimateMaintenance({ weights = [], intakeByDay = [], today, surplus = 
     const avg = weightedAvg(winI, today);
     if (tr && avg != null) {
       slope = tr.slope; currentWeight = tr.current;
-      // Energy balance: intake - maintenance = stored-energy change (slope*KCAL_PER_LB).
-      // So maintenance = intake - slope*KCAL_PER_LB. Gaining (slope>0) => maintenance below intake;
+      // Energy balance: intake - maintenance = stored-energy change (slope * kcal-per-lb).
+      // So maintenance = intake - slope*kcalPerLb. Gaining (slope>0) => maintenance below intake;
       // losing (slope<0) => the double-negative pushes maintenance above intake.
-      maintenance = avg - slope * KCAL_PER_LB;
+      // Direction-aware density: losses burn mostly fat (3500); gains store mixed tissue (2500).
+      const kcalPerLb = slope > 0 ? KCAL_PER_LB_GAIN : KCAL_PER_LB_LOSS;
+      maintenance = avg - slope * kcalPerLb;
       source = 'live';
     }
   }
@@ -186,4 +194,4 @@ function estimateMaintenance({ weights = [], intakeByDay = [], today, surplus = 
   };
 }
 
-module.exports = { estimateMaintenance, macroTargets, ANCHOR_MAINTENANCE, SURPLUS, HALF_LIFE_DAYS, KCAL_PER_LB, MIN_ALIGNED_DAYS };
+module.exports = { estimateMaintenance, macroTargets, ANCHOR_MAINTENANCE, SURPLUS, HALF_LIFE_DAYS, KCAL_PER_LB_LOSS, KCAL_PER_LB_GAIN, MIN_ALIGNED_DAYS };

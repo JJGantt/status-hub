@@ -360,6 +360,34 @@ body.tv.phonewall .pane-misc .devchip .dc-v{font-size:15px}
 body.tv.phonewall .pane-misc .devchip .dc-v .dot{width:9px;height:9px;margin-right:6px}
 body.tv.phonewall .rows{height:100%}
 body.tv.phonewall .tv-voice{height:100%}
+
+/* ===== MAC APP (body.tv.mac, from ?mode=mac): the landscape wall rendered INTERACTIVELY. Layout is a
+   docked VS-Code-style chat side panel + the scaled dashboard; cursor + clicks are ON (undoing the kiosk),
+   and the shared bottom navbar (settings gear + voice) sits below the panes. The chat moves OUT of the wall
+   (the in-wall .tv-voice column is hidden) into the side panel; device chips already ride the wall's status
+   row, so the misc pane is dropped. wall.js scales .tv-shell into .pane-wall. ===== */
+body.tv.mac{cursor:auto}
+body.tv.mac *{cursor:auto!important}                       /* undo the kiosk's cursor:none */
+body.tv.mac .wallpanes{display:flex;flex-direction:row;height:calc(100vh - 58px);overflow:hidden}
+body.tv.mac .pane-chat{display:flex;flex-direction:column;flex:0 0 var(--macchat,340px);min-width:0;height:100%;
+  padding:0;background:#0c1015;border-right:1px solid #1b222b;position:relative}
+body.tv.mac.chatcollapsed .pane-chat{flex-basis:0;border-right:none;overflow:hidden}
+body.tv.mac .pane-wall{flex:1 1 auto;min-width:0;position:relative;height:100%;overflow:hidden}
+body.tv.mac .pane-misc{display:none}
+body.tv.mac .tv-shell{position:absolute;transform-origin:top left}   /* size/scale/offset set by wall.js */
+body.tv.mac .rows{height:100%}
+body.tv.mac .tv-voice{display:none}                        /* chat is the side panel now */
+/* chat sidebar chrome (VS-Code-ish column: header · scrolling log · input · status) */
+body.tv.mac .pane-chat .ai-shell{height:100%;display:flex;flex-direction:column;min-height:0}
+body.tv.mac .pane-chat .ai-head{padding:11px 14px;border-bottom:1px solid #1b222b;flex:0 0 auto}
+body.tv.mac .pane-chat .ai-log{flex:1 1 auto;overflow-y:auto;padding:12px 14px;min-height:0;scrollbar-width:thin!important}
+body.tv.mac .pane-chat .ai-log::-webkit-scrollbar{width:8px!important;height:8px!important;display:block!important}
+body.tv.mac .pane-chat .ai-log::-webkit-scrollbar-thumb{background:#2a3340;border-radius:4px}
+body.tv.mac .pane-chat .ai-input{flex:0 0 auto;padding:10px 12px;border-top:1px solid #1b222b;display:flex;gap:8px;align-items:center}
+body.tv.mac .pane-chat .ai-status{flex:0 0 auto;padding:2px 14px 8px;min-height:0}
+/* slim drag handle on the sidebar's right edge (wired by the mac sidebar controller in wall.js/tv.js) */
+body.tv.mac .macdrag{position:absolute;top:0;right:-3px;width:6px;height:100%;cursor:col-resize!important;z-index:6}
+
 /* shared bottom navigation — identical on both views (full page + phone wall). Left: toggle + settings.
    Right: brain + sparkle voice. */
 .navbar{position:fixed;left:0;right:0;bottom:0;height:58px;z-index:1000;display:flex;align-items:center;

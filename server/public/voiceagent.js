@@ -28,7 +28,8 @@ function setMode(mode) {
 // Boot everywhere EXCEPT the big-screen kiosk (≥1400px; it has tv.js's own panel and no input). The
 // PHONE wall now hosts the chat pane, so it boots too. (body.phonewall isn't set yet at import time —
 // wall.js loads after core.js's import graph — so test the same viewport predicate wall.js uses.)
-if (!document.body.classList.contains('tv') || window.innerWidth < 1400) boot();
+// The Mac app (body.mac, set in shared.js) ALSO hosts the interactive chat side panel at any width.
+if (!document.body.classList.contains('tv') || window.innerWidth < 1400 || document.body.classList.contains('mac')) boot();
 
 function boot() {
   const activity = activityBar();

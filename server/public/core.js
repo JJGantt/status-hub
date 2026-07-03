@@ -65,5 +65,6 @@ if(TOUCH && !document.body.classList.contains('tv')){
  // desktop /page: document flow — honor the deep link by scrolling to the status row
  requestAnimationFrame(()=>{const el=document.querySelector('.statusrow'); if(el)el.scrollIntoView();});
 }
-// Shared bottom navbar on BOTH views (full page + phone wall); skip only the TV kiosk (wall on a big screen).
-if(!document.body.classList.contains('tv') || window.innerWidth < 1400) mountNavbar();
+// Shared bottom navbar on BOTH views (full page + phone wall) + the Mac app (body.mac); skip only the
+// big-screen TV kiosk, which is display-only.
+if(!document.body.classList.contains('tv') || window.innerWidth < 1400 || document.body.classList.contains('mac')) mountNavbar();

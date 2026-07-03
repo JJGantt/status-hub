@@ -4,6 +4,13 @@
 
 export const TOUCH = matchMedia('(pointer: coarse)').matches; // phone/tablet: tap-only, no hover previews
 
+// Mac app view (?mode=mac): the landscape TV wall rendered INTERACTIVELY — chat as a docked VS-Code-style
+// side panel, clickable cards, the phone's navbar + settings — instead of the display-only kiosk. Set the
+// body class HERE (the first-loaded, dependency-free module) so voiceagent/core/wall all see `body.mac`
+// before their import-time boot/mount checks run (they gate the same way the ≥1400 kiosk does).
+export const MAC = new URLSearchParams(location.search).get('mode') === 'mac';
+if (MAC && document.body) document.body.classList.add('mac');
+
 // latest status frame — one writer (core's render). Held on an object so importers see updates
 // (you can't reassign another module's exported binding, but you can mutate a shared object).
 export const state = { last: null };

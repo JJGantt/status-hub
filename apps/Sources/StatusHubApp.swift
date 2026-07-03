@@ -16,7 +16,9 @@ struct StatusHubApp: App {
             HubWebView()
                 .preferredColorScheme(.dark)
             #if os(macOS)
-                .frame(minWidth: 420, idealWidth: 460, minHeight: 640, idealHeight: 820)
+                // Landscape: the Mac app renders the wall (?mode=mac) — the TV dashboard + a docked chat
+                // side panel — so it wants width, unlike the phone-shaped iOS build.
+                .frame(minWidth: 1040, idealWidth: 1440, minHeight: 660, idealHeight: 900)
             #endif
         }
         #if os(macOS)
@@ -129,7 +131,11 @@ struct HubWebView {
         wv.scrollView.contentInsetAdjustmentBehavior = .never
         wv.isOpaque = false
         #endif
+        #if os(macOS)
+        let url = URL(string: Auth.host + "/?mode=mac")!   // landscape wall + docked chat side panel
+        #else
         let url = URL(string: Auth.host)!
+        #endif
         let req = URLRequest(url: url)
         if let token = Auth.token(), let host = url.host,
            let cookie = HTTPCookie(properties: [

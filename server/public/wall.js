@@ -3,10 +3,36 @@
 // it to fit, reserving BAR px at the bottom for the shared navbar (navbar.js, mounted by core.js) — and the
 // experience becomes a THREE-PANE SWIPE: [chat] [wall] [misc], landing on the wall. No-op on the real wall
 // (≥1400px wide), so the Pi kiosk is untouched (its side panes are display:none).
+const MAC = document.body.classList.contains('mac');   // set by shared.js from ?mode=mac
 const PHONE = window.innerWidth < 1400;
 const BAR = 58;   // height (px) reserved at the bottom for the shared control bar
 
-if (PHONE) {
+// Mac app: scale the 1920×1080 wall into the area BESIDE the chat side panel (pane-wall), at any width.
+// The chat lives in the docked side panel (pane-chat), so the in-wall voice column (.tv-voice) is hidden
+// by CSS and the dashboard fills the shell. Re-fits on window resize and on 'macfit' (sidebar collapse/drag).
+if (MAC) {
+  const shell = document.querySelector('.tv-shell');
+  const host = document.querySelector('.pane-wall');
+  if (shell && host) {
+    const LW = 1600, LH = 1000;   // landscape logical canvas
+    const fit = () => {
+      const availW = host.clientWidth, availH = host.clientHeight;
+      if (!availW || !availH) return;
+      const s = Math.min(availW / LW, availH / LH);
+      shell.style.width = LW + 'px'; shell.style.height = LH + 'px';
+      shell.style.transformOrigin = 'top left';
+      shell.style.transform = `scale(${s})`;
+      shell.style.position = 'absolute';
+      shell.style.left = Math.max(0, (availW - LW * s) / 2) + 'px';
+      shell.style.top = Math.max(0, (availH - LH * s) / 2) + 'px';
+    };
+    const raf = () => requestAnimationFrame(fit);
+    raf();
+    window.addEventListener('resize', raf);
+    window.addEventListener('macfit', raf);   // dispatched by the sidebar collapse/resize controller
+    window.__macFit = raf;
+  }
+} else if (PHONE) {
   const shell = document.querySelector('.tv-shell');
   if (shell) {
     document.body.classList.add('phonewall');

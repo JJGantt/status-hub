@@ -381,7 +381,11 @@ async function buildStatus() {
       else break;
     }
   }
-  return { today, litter, feeder, surf, nutrition, maintenance, pace: paceData, volume, heatmap, nutrition_log, last_set_at, session_start_at, routing, mics, score, generated_at: new Date().toISOString() };
+  // Convert to real UTC ISO here, at the client-facing boundary — everything above (gap math, day
+  // bucketing) stays on the naive-local convention since it's internally consistent server-side.
+  return { today, litter, feeder, surf, nutrition, maintenance, pace: paceData, volume, heatmap, nutrition_log,
+    last_set_at: naiveLocalToUtcIso(last_set_at, TZ), session_start_at: naiveLocalToUtcIso(session_start_at, TZ),
+    routing, mics, score, generated_at: new Date().toISOString() };
 }
 
 // ---- realtime push: recompute + push to all connected browsers on any DB change ----
@@ -601,6 +605,26 @@ function nowNaiveLocal() {
   const p = {}; for (const part of f.formatToParts(new Date())) p[part.type] = part.value;
   const hh = p.hour === '24' ? '00' : p.hour; // Intl can emit 24 for midnight
   return `${p.year}-${p.month}-${p.day}T${hh}:${p.minute}:${p.second}`;
+}
+
+// occurred_at is stored naive (no UTC offset) — a wall-clock reading in TZ, e.g. "2026-07-04T10:43:14".
+// That's fine for server-side day-bucketing (dayBucketOf/localDate always assume TZ), but sending it
+// to the client as-is is a bug: the browser's `new Date(str)` on a suffix-less string parses it as
+// LOCAL TIME IN THE VIEWING DEVICE'S OWN ZONE, not TZ. On a device actually set to TZ this is invisible
+// (the two zones coincide); anywhere else — e.g. traveling — it silently mis-times every live clock
+// built on it (the workout rest timer went stuck at 0:00 this way: the phone's zone made `lastAt` parse
+// as being in the future, so now-lastAt clamped to 0 and never ticked up). Convert to a real UTC ISO
+// string (correct through DST) before it ever reaches a client-facing field.
+function naiveLocalToUtcIso(naiveStr, tz) {
+  if (!naiveStr) return naiveStr;
+  const guess = new Date(naiveStr + 'Z');   // arbitrary reference instant, only used to resolve DST state
+  const f = new Intl.DateTimeFormat('en-US', {
+    timeZone: tz, hourCycle: 'h23',
+    year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit',
+  });
+  const p = {}; for (const part of f.formatToParts(guess)) p[part.type] = part.value;
+  const offset = Date.UTC(p.year, p.month - 1, p.day, p.hour, p.minute, p.second) - guess.getTime();
+  return new Date(guess.getTime() - offset).toISOString();
 }
 
 // Repeat-a-set: log a new set for an exercise at the current time, reusing its weight and taking a

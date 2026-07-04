@@ -265,7 +265,7 @@ body.touch #nutinfo{padding-bottom:140px}
 .addmodal-mult{display:flex;align-items:center;gap:8px;margin-bottom:12px}
 .addmodal-step{width:34px;height:34px;border-radius:8px;border:1px solid #2f4566;background:#0e1318;color:#7fb0ff;font-size:18px;line-height:1;cursor:pointer}
 .addmodal-step:hover{background:#16202c}
-.addmodal-minput{flex:1;text-align:center;padding:8px;border-radius:8px;border:1px solid #2a313a;background:#0b0d10;color:#e8eaed;font-size:15px}
+.addmodal-minput{flex:1;text-align:center;padding:8px;border-radius:8px;border:1px solid #2a313a;background:#0b0d10;color:#e8eaed;font-size:16px}
 .addmodal-macros{display:flex;flex-wrap:wrap;margin-bottom:10px}
 .addmodal-ings{margin:0 0 10px;padding-left:8px;border-left:1px solid #222a33;max-height:160px;overflow:auto}
 .aing{padding:6px 0;border-bottom:1px solid #222a33}
@@ -275,7 +275,7 @@ body.touch #nutinfo{padding-bottom:140px}
 .aing-x{width:22px;height:22px;border-radius:6px;border:1px solid #3a3030;background:#0e1318;color:#e07a7a;font-size:11px;line-height:1;cursor:pointer;flex:none}
 .aing-ctl{display:flex;align-items:center;flex-wrap:wrap;gap:5px;margin-top:5px}
 .aing-step{width:24px;height:24px;border-radius:6px;border:1px solid #2f4566;background:#0e1318;color:#7fb0ff;font-size:14px;line-height:1;cursor:pointer;flex:none}
-.aing-input{width:42px;text-align:center;padding:4px;border-radius:6px;border:1px solid #2a313a;background:#0b0d10;color:#e8eaed;font-size:12px;flex:none}
+.aing-input{width:48px;text-align:center;padding:4px;border-radius:6px;border:1px solid #2a313a;background:#0b0d10;color:#e8eaed;font-size:16px;flex:none}
 .aing-input:disabled{opacity:.4}
 .aing-macros{font-size:11px;color:#8b96a5;margin-left:2px}
 .aing-off{opacity:.45}
@@ -616,7 +616,7 @@ body.tv .hmonths{margin-left:0;font-size:11px}
 .ai-mic.ai-busy{opacity:.5;pointer-events:none}
 @keyframes va-pulse{0%{box-shadow:0 0 0 0 rgba(239,68,68,.5)}70%{box-shadow:0 0 0 12px rgba(239,68,68,0)}100%{box-shadow:0 0 0 0 rgba(239,68,68,0)}}
 .ai-text{flex:1 1 auto;min-width:0;padding:11px 14px;border-radius:10px;border:1px solid #2a313a;
-  background:#0e1318;color:#e8eaed;font-size:14px;outline:none}
+  background:#0e1318;color:#e8eaed;font-size:16px;outline:none}
 .ai-text:focus{border-color:#3b82f6}
 .ai-send{flex:0 0 auto;padding:11px 18px;border:0;border-radius:10px;background:#3b82f6;color:#fff;
   font-size:14px;font-weight:600;cursor:pointer}
@@ -657,11 +657,11 @@ body.tv .hmonths{margin-left:0;font-size:11px}
 .settings-seg button{flex:1;background:#0e1318;border:1px solid #2a313a;color:#c2cad4;border-radius:10px;padding:12px;cursor:pointer;font-size:14px;font-weight:600;text-align:center}
 .settings-seg button.on{border-color:#3b82f6;background:#13203a;color:#e8eaed}
 .settings-row{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:7px 0;font-size:14px;color:#c2cad4}
-.settings-num{width:84px;padding:8px 10px;border-radius:8px;border:1px solid #2a313a;background:#0e1318;color:#e8eaed;font-size:14px;text-align:right}
+.settings-num{width:84px;padding:8px 10px;border-radius:8px;border:1px solid #2a313a;background:#0e1318;color:#e8eaed;font-size:16px;text-align:right}
 .settings-num:focus{outline:none;border-color:#3b82f6}
-.settings-time{padding:8px 10px;border-radius:8px;border:1px solid #2a313a;background:#0e1318;color:#e8eaed;font-size:14px}
+.settings-time{padding:8px 10px;border-radius:8px;border:1px solid #2a313a;background:#0e1318;color:#e8eaed;font-size:16px}
 .settings-time:focus{outline:none;border-color:#3b82f6}
-.settings-text{flex:1;min-width:0;padding:8px 10px;border-radius:8px;border:1px solid #2a313a;background:#0e1318;color:#e8eaed;font-size:14px}
+.settings-text{flex:1;min-width:0;padding:8px 10px;border-radius:8px;border:1px solid #2a313a;background:#0e1318;color:#e8eaed;font-size:16px}
 .settings-text:focus{outline:none;border-color:#3b82f6}
 .settings-row.dim{opacity:.4}
 /* bottom activity bar — live "what Raspy is doing": Listening / Transcribing / Thinking, then each

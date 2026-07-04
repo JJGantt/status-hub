@@ -443,7 +443,7 @@ function startRealtime() {
   // A change to any cached source table dirties the row cache, then rebuilds + pushes. The extra
   // subscriptions (weight_log … surf_snapshots) exist for the cache: without them an edit would sit
   // invisible until the 15-min backstop refetch.
-  const changed = () => { dirtyRows(); dirtyNutDay(); broadcast(); };
+  const changed = () => { dirtyRows(); dirtyNutDay(); dirtyWorkoutDay(); broadcast(); };
   supa.channel('hub-changes')
     // device_status is fetched live per build (not cached) — its routine ~2-min state mirrors must
     // rebuild the frame but must NOT drag the heavy cached queries along. Plain broadcast only.
@@ -531,14 +531,24 @@ app.get('/api/status', async (req, res) => {
 });
 
 // A single day's sets, grouped by exercise — for the heatmap day click-through.
+// Cached like /api/nutrition-day: the client re-fetches the open day on every SSE frame, which
+// re-queried the day's sets ~every 30s all day. Sets only change on writes — realtime (`sets` is in
+// changed()) covers external writers, and the hub's own set writes dirty it synchronously.
+const workoutDayCache = new Map();   // date -> { body, at }
+const WORKOUTDAY_BACKSTOP_MS = 15 * 60 * 1000;
+const dirtyWorkoutDay = () => workoutDayCache.clear();
 app.get('/api/workout-day', async (req, res) => {
   try {
     const date = String(req.query.date || '').slice(0, 10);
     if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return res.status(400).json({ error: 'bad date' });
+    const hit = workoutDayCache.get(date);
+    if (hit && Date.now() - hit.at < WORKOUTDAY_BACKSTOP_MS) return res.json(hit.body);
     const rows = await sbRange(`sets?occurred_at=gte.${date}T00:00:00&occurred_at=lte.${date}T23:59:59&select=id,occurred_at,exercise,weight_lbs,reps&order=occurred_at`);
     const order = [], byEx = {};
     for (const r of rows) { if (!byEx[r.exercise]) { byEx[r.exercise] = []; order.push(r.exercise); } byEx[r.exercise].push({ id: r.id, weight_lbs: r.weight_lbs, reps: r.reps }); }
-    res.json({ date, total: rows.length, exercises: order.map((n) => ({ name: n, sets: byEx[n] })) });
+    const body = { date, total: rows.length, exercises: order.map((n) => ({ name: n, sets: byEx[n] })) };
+    workoutDayCache.set(date, { body, at: Date.now() });
+    res.json(body);
   } catch (e) { res.status(500).json({ error: String(e.message || e) }); }
 });
 
@@ -692,6 +702,7 @@ app.post('/api/log-set', express.json(), async (req, res) => {
     if (!isFinite(weight_lbs) || weight_lbs < 0) return res.status(400).json({ error: 'weight_lbs must be ≥ 0' });
     const occurred_at = resolveNow(b);
     await sbWrite('sets', 'POST', { occurred_at, exercise, weight_lbs, reps });
+    dirtyWorkoutDay();   // synchronous — the client re-fetches the day immediately after this returns
     res.json({ ok: true, occurred_at });
   } catch (e) { res.status(500).json({ error: String(e.message || e) }); }
 });
@@ -708,6 +719,7 @@ app.patch('/api/log-set', express.json(), async (req, res) => {
     if (!Number.isInteger(reps) || reps <= 0) return res.status(400).json({ error: 'reps must be a positive integer' });
     if (!isFinite(weight_lbs) || weight_lbs < 0) return res.status(400).json({ error: 'weight_lbs must be ≥ 0' });
     await sbWrite(`sets?id=eq.${id}`, 'PATCH', { weight_lbs, reps });
+    dirtyWorkoutDay();   // synchronous — the client re-fetches the day immediately after this returns
     res.json({ ok: true });
   } catch (e) { res.status(500).json({ error: String(e.message || e) }); }
 });

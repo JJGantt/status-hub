@@ -268,8 +268,7 @@ async function sendOutboxItem(item, onStatus) {
     item.path = await uploadBlob(blob, ct);
     await outboxPut(item);                             // an interruption from here on resumes straight at the send
   }
-  onStatus && onStatus('Sending…', 'busy');
-  const r = await fetch('/api/voice-text', {
+  const r = await fetch('/api/voice-text', {           // stays on 'Uploading photo…' through this tiny send
     method: 'POST', headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ text: item.text || '', attachments: [item.path], client_now: item.client_now, client_msg_id: item.clientMsgId }),
   });
@@ -308,9 +307,8 @@ export async function runPhotoOutbox(onStatus) {
           await sendOutboxItem(item, onStatus);
           await outboxDelete(item.id);
           progressed = true;
-          // 200 back from /api/voice-text = the request row exists and the worker owns it. THIS is the
-          // moment the phone can be closed: the upload's done and the work now happens server-side.
-          onStatus && onStatus('Processing on the server — safe to close', 'done');
+          // 200 back from /api/voice-text = the request row exists and the worker is processing it server-side.
+          onStatus && onStatus('Processing photo', 'done');
         } catch (e) {
           beaconOutboxError(e, item);
           onStatus && onStatus('Photo captured — it’ll send when you reopen the hub', 'wait');
@@ -331,8 +329,7 @@ export async function enqueuePhoto(file, onStatus) {
     client_now: localNowNaive(), clientMsgId: uid(), path: null, text: '' };
   await outboxPut(item);                               // from here the photo cannot be lost
   outboxBadge();
-  onStatus && onStatus('Photo captured', 'busy');
-  runPhotoOutbox(onStatus);                            // fire-and-forget; resumes later if this send is interrupted
+  runPhotoOutbox(onStatus);                            // fire-and-forget; resumes later if this send is interrupted (shows 'Uploading photo…' first)
 }
 
 export function activityBar() { return (_activityBar = _activityBar || initActivityBar()); }

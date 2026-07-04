@@ -53,8 +53,8 @@ body.tv.phonewall #tv-routing,
 body.tv.phonewall #tv-routing .devstrip{width:100%;min-width:0}
 body.tv.phonewall #tv-routing .devchips{width:100%;justify-content:space-between;gap:4px}
 body.tv.phonewall #tv-routing .devchip{padding:4px 2px;gap:5px}
-body.tv.phonewall #tv-routing .devchip .dc-l{font-size:19px}
-body.tv.phonewall #tv-routing .devchip .dc-v{font-size:21px}
+body.tv.phonewall #tv-routing .devchip .dc-l{font-size:24px}
+body.tv.phonewall #tv-routing .devchip .dc-v{font-size:26px}
 /* Cat-feeder "Feed now" button + schedule mini-list under the chip strip */
 .feed-btn{margin-top:12px;width:100%;padding:11px 14px;border:1px solid #2a3a30;border-radius:10px;
   background:#16241c;color:#7ee2a6;font-size:15px;font-weight:700;cursor:pointer;

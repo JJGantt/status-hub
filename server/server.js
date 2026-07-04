@@ -15,13 +15,26 @@ const { buildWorkoutHeatmap } = require('./lib/heatmap');
 const { buildNutritionLog, buildGoalResolver, calorieColor } = require('./lib/nutritionlog');
 const { computeScore } = require('./lib/score');
 
+// Settings cache: app_settings is read several times per status build but only changes on explicit
+// writes, which the realtime subscription announces (→ dirtySettings). One whole-table fetch serves
+// every reader; the 15-min backstop covers a silently dropped realtime event.
+const settingsCache = { map: null, at: 0 };
+const SETTINGS_BACKSTOP_MS = 15 * 60 * 1000;
+const dirtySettings = () => { settingsCache.map = null; };
+async function settingsAll() {
+  if (settingsCache.map && Date.now() - settingsCache.at < SETTINGS_BACKSTOP_MS) return settingsCache.map;
+  const rows = await sb('app_settings?select=key,value');
+  settingsCache.map = Object.fromEntries((rows || []).map((r) => [r.key, r.value]));
+  settingsCache.at = Date.now();
+  return settingsCache.map;
+}
+
 // Current surplus/deficit setting (signed kcal over maintenance; default +150 lean-bulk). Drives the
 // live daily goal and the active run's goal on the plot/heatmap. Editable in the settings panel.
 const SURPLUS_LIMIT = 1000; // clamp: nobody runs a surplus/deficit beyond ~1000 kcal; guards typos
 async function surplusCal() {
   try {
-    const r = await sb('app_settings?key=eq.surplus_cal&select=value');
-    const v = r && r[0] != null ? parseInt(r[0].value, 10) : NaN;
+    const v = parseInt((await settingsAll()).surplus_cal, 10);
     if (!Number.isFinite(v)) return 150;
     return Math.max(-SURPLUS_LIMIT, Math.min(SURPLUS_LIMIT, v));
   } catch { return 150; }
@@ -30,8 +43,7 @@ async function surplusCal() {
 // setting (default 30min). Used to scope the conversation panel to the current context.
 async function sessionResetS() {
   try {
-    const r = await sb('app_settings?key=eq.session_reset_s&select=value');
-    const v = r && r[0] != null ? parseFloat(r[0].value) : NaN;
+    const v = parseFloat((await settingsAll()).session_reset_s);
     return Number.isFinite(v) && v > 0 ? v : 1800;
   } catch { return 1800; }
 }
@@ -39,8 +51,7 @@ async function sessionResetS() {
 // Editable in settings; default 14, clamped to a sane 7–60.
 async function maintenanceMinDays() {
   try {
-    const r = await sb('app_settings?key=eq.maintenance_min_days&select=value');
-    const v = r && r[0] != null ? parseInt(r[0].value, 10) : NaN;
+    const v = parseInt((await settingsAll()).maintenance_min_days, 10);
     return Number.isFinite(v) && v >= 7 && v <= 60 ? v : 14;
   } catch { return 14; }
 }
@@ -50,10 +61,7 @@ async function maintenanceMinDays() {
 // wake-free voice is on (a separate concern).
 async function routingConfig() {
   let s = {};
-  try {
-    const rows = await sb('app_settings?key=in.(custom_model,custom_think,custom_runner,wakefree_enabled,wakefree_route,voice_inject_mode)&select=key,value');
-    s = Object.fromEntries((rows || []).map((r) => [r.key, r.value]));
-  } catch { /* fall through to defaults */ }
+  try { s = await settingsAll(); } catch { /* fall through to defaults */ }
   const route = ['fast', 'power', 'custom'].includes(s.wakefree_route) ? s.wakefree_route : 'power';
   let cfg;
   if (route === 'fast') cfg = { model: 'haiku', thinking: 'none', runner: 'api' };
@@ -263,15 +271,27 @@ function buildSurf(row) {
   };
 }
 
-async function buildStatus() {
-  const win = nutritionWindow();
-  const today = win.day;
-  const week = lastNTrainingDays(7);
-  const histStart = localDate(new Date(Date.now() - 40 * 86400000)); // intake history for the maintenance trend
-  const heatStart = localDate(new Date(Date.now() - 140 * 86400000)); // ~20 weeks for the workout volume heatmap
+// ---- dashboard source-row cache ------------------------------------------------------------
+// The 30s broadcast tick exists to advance clock-derived fields (pace drain, session clock) — but
+// the DB rows it renders only change on writes, and realtime already announces every write. So the
+// heavy queries are fetched once and reused for every rebuild; a refetch happens only when
+// (a) realtime dirtied the cache, (b) the date windows embedded in the queries rolled over, or
+// (c) the 15-min reconciliation backstop lapses (covers a silently dropped realtime event).
+// Presence and device_status rows are NOT cached — they're tiny (~200B/~1KB) and are WRITTEN every
+// couple of minutes by design (worker heartbeats, litter/feeder state mirrors); caching them would
+// make those routine writes dirty the cache and drag the 11 heavy queries along ~720×/day.
+// This took Supabase egress from ~143KB × every 30s (≈0.5GB/day, the free-plan quota blowout) to
+// effectively zero at idle.
+const rowCache = { rows: null, key: '', at: 0, dirty: true };
+const ROWCACHE_BACKSTOP_MS = 15 * 60 * 1000;
+const dirtyRows = () => { rowCache.dirty = true; };
 
-  const [deviceRows, entries, setRows, weightRows, histRows, muscleRows, heatRows, catalogRows, nutLogRows, targetRows, surfRows, presenceRows, workerRows] = await Promise.all([
-    sb('device_status?select=*'),
+async function fetchStatusRows(win, week, histStart, heatStart) {
+  const nutLogStart = localDate(new Date(Date.now() - 86 * 86400000));
+  const key = [win.start, win.end, week[0], histStart, heatStart, nutLogStart].join('|');
+  if (!rowCache.dirty && rowCache.rows && rowCache.key === key
+      && Date.now() - rowCache.at < ROWCACHE_BACKSTOP_MS) return rowCache.rows;
+  const [entries, setRows, weightRows, histRows, muscleRows, heatRows, catalogRows, nutLogRows, targetRows, surfRows] = await Promise.all([
     sb(`nutrition_entries?occurred_at=gte.${win.start}&occurred_at=lt.${win.end}&staged=eq.false&select=calories,protein_g,carbs_g,fat_g`),
     sb(`sets?occurred_at=gte.${week[0]}T00:00:00&select=occurred_at,exercise,muscles_override`),
     sb('weight_log?select=date,weight_lbs&order=date.asc'),
@@ -279,9 +299,25 @@ async function buildStatus() {
     sb('exercise_muscles?select=name,muscle,contribution'),
     sbRange(`sets?occurred_at=gte.${heatStart}T00:00:00&select=occurred_at&order=occurred_at`),
     sb('exercise_catalog?select=name,equipment'),
-    sbRange(`nutrition_entries?occurred_at=gte.${localDate(new Date(Date.now() - 86 * 86400000))}T00:00:00&staged=eq.false&select=occurred_at,calories,protein_g,fat_g&order=occurred_at`),
+    sbRange(`nutrition_entries?occurred_at=gte.${nutLogStart}T00:00:00&staged=eq.false&select=occurred_at,calories,protein_g,fat_g&order=occurred_at`),
     sb('nutrition_targets?select=date,calories&order=date.asc'),
     sb('surf_snapshots?select=slug,water_temp,captured_at,rows&order=captured_at.desc&limit=1'),
+  ]);
+  rowCache.rows = { entries, setRows, weightRows, histRows, muscleRows, heatRows, catalogRows, nutLogRows, targetRows, surfRows };
+  rowCache.key = key; rowCache.at = Date.now(); rowCache.dirty = false;
+  return rowCache.rows;
+}
+
+async function buildStatus() {
+  const win = nutritionWindow();
+  const today = win.day;
+  const week = lastNTrainingDays(7);
+  const histStart = localDate(new Date(Date.now() - 40 * 86400000)); // intake history for the maintenance trend
+  const heatStart = localDate(new Date(Date.now() - 140 * 86400000)); // ~20 weeks for the workout volume heatmap
+
+  const [{ entries, setRows, weightRows, histRows, muscleRows, heatRows, catalogRows, nutLogRows, targetRows, surfRows }, deviceRows, presenceRows, workerRows] = await Promise.all([
+    fetchStatusRows(win, week, histStart, heatStart),
+    sb('device_status?select=*'),
     sb('voice_presence?select=source,alive_at'),
     sb('worker_presence?select=worker,last_seen'),
   ]);
@@ -404,13 +440,25 @@ function pushVoice(kind, row) {
 }
 
 function startRealtime() {
+  // A change to any cached source table dirties the row cache, then rebuilds + pushes. The extra
+  // subscriptions (weight_log … surf_snapshots) exist for the cache: without them an edit would sit
+  // invisible until the 15-min backstop refetch.
+  const changed = () => { dirtyRows(); broadcast(); };
   supa.channel('hub-changes')
+    // device_status is fetched live per build (not cached) — its routine ~2-min state mirrors must
+    // rebuild the frame but must NOT drag the heavy cached queries along. Plain broadcast only.
     .on('postgres_changes', { event: '*', schema: 'public', table: 'device_status' }, broadcast)
-    .on('postgres_changes', { event: '*', schema: 'public', table: 'nutrition_entries' }, broadcast)
-    .on('postgres_changes', { event: '*', schema: 'public', table: 'sets' }, broadcast)
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'nutrition_entries' }, changed)
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'sets' }, changed)
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'weight_log' }, changed)
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'nutrition_targets' }, changed)
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'exercise_catalog' }, changed)
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'exercise_muscles' }, changed)
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'surf_snapshots' }, changed)
     // Settings (routing model/thinking/runner, wake toggle, nutrition goal): rebuild so the TV routing
     // panel reflects an MCP/voice/settings change near-instantly instead of waiting for the 30s tick.
     .on('postgres_changes', { event: '*', schema: 'public', table: 'app_settings' }, (p) => {
+      dirtySettings();
       broadcast(p);
       // When the agent_mode toggle flips (from anywhere — voice, another device), tell the voice panel to
       // switch to that mode's conversation live, so the on-screen context always matches the active mode.
@@ -497,9 +545,7 @@ app.get('/api/workout-day', async (req, res) => {
 // edited from the hub settings panel. Returns/accepts a flat {key: value} map. ----
 app.get('/api/settings', async (req, res) => {
   try {
-    const rows = await sb('app_settings?select=key,value');
-    const out = {}; for (const r of rows) out[r.key] = r.value;
-    res.json(out);
+    res.json(await settingsAll());   // realtime-invalidated cache — see settingsAll()
   } catch (e) { res.status(500).json({ error: String(e.message || e) }); }
 });
 app.post('/api/settings', express.json(), async (req, res) => {
@@ -515,6 +561,7 @@ app.post('/api/settings', express.json(), async (req, res) => {
       body: JSON.stringify({ key, value, updated_at: new Date().toISOString() }),
     });
     if (!r.ok) throw new Error(`settings upsert -> ${r.status}`);
+    dirtySettings();   // synchronous — a write-then-read client must not race the realtime round-trip
     res.json({ ok: true });
   } catch (e) { res.status(500).json({ error: String(e.message || e) }); }
 });

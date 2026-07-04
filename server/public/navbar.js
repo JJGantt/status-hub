@@ -2,7 +2,7 @@
 // panes — no nav buttons needed). /page (desktop): adds chat + back-to-wall buttons. Right side is
 // always brain (full Opus) + sparkle (fast) voice, tap-to-talk, driving the shared activity popup.
 // Mounted once per page by core.js.
-import { makeRecorder, activityBar } from './voiceagent.js';
+import { makeRecorder, activityBar, sendPhotoNow } from './voiceagent.js';
 import { open as openSettings } from './settings.js';
 
 const CHAT = '<svg viewBox="0 0 24 24" width="21" height="21" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
@@ -17,6 +17,8 @@ const GEAR = '<svg viewBox="0 0 24 24" width="21" height="21" fill="none" stroke
   '<circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1Z"></path></svg>';
 const SWAP = '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
   '<path d="M16 3l4 4-4 4M20 7H8M8 21l-4-4 4-4M4 17h12"></path></svg>';
+const CAMERA = '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+  '<path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2Z"></path><circle cx="12" cy="13" r="4"></circle></svg>';
 
 export function mountNavbar() {
   if (document.querySelector('.navbar')) return;          // once per page
@@ -69,10 +71,33 @@ export function mountNavbar() {
   }
   left.appendChild(gear);
   const right = document.createElement('div'); right.className = 'navbar-grp';
+
+  // One-shot photo: camera ONLY (no library — `capture` skips straight to the camera sheet), shrinks +
+  // uploads + sends immediately as a photo-only message. For "one photo is all the context I need" —
+  // the composer's attach button (review tray, add text) is for anything more deliberate than that.
+  const camIn = document.createElement('input');
+  camIn.type = 'file'; camIn.accept = 'image/*'; camIn.style.display = 'none';
+  camIn.setAttribute('capture', 'environment');
+  const camBtn = document.createElement('button');
+  camBtn.className = 'wfab wfab-cam'; camBtn.type = 'button'; camBtn.setAttribute('aria-label', 'Quick photo');
+  camBtn.innerHTML = CAMERA;
+  camBtn.addEventListener('click', () => camIn.click());
+  camIn.addEventListener('change', async () => {
+    const f = camIn.files && camIn.files[0]; camIn.value = '';
+    if (!f) return;
+    camBtn.disabled = true; camBtn.classList.add('busy');
+    try {
+      await sendPhotoNow(f, (t) => t && activity.busy(t));
+      activity.done('Photo sent');
+    } catch (e) { activity.err(String(e.message || e)); }
+    finally { camBtn.disabled = false; camBtn.classList.remove('busy'); }
+  });
+  right.appendChild(camBtn);
   right.appendChild(mkVoice('wfab-power', BRAIN, 'power', 'Voice command (full Opus thinking)'));
   right.appendChild(mkVoice('wfab-fast', SPARKLE, 'fast', 'Quick voice command (efficiency)'));
 
   const bar = document.createElement('div'); bar.className = 'navbar';
   bar.appendChild(left); bar.appendChild(right);
+  bar.appendChild(camIn);
   document.body.appendChild(bar);
 }

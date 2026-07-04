@@ -168,6 +168,43 @@ export function makeRecorder({ onStatus, onActive, quick, autoStop, tier, dryWhe
 // ---- bottom activity bar -------------------------------------------------
 // Singleton: ONE shared activity popup per page — used by the page view (boot), the wall (tv.js), and the
 // navbar's voice buttons, so they all drive the same floating overlay.
+// ---- photo upload (shared by the composer's attach tray AND the navbar's one-shot camera button) --------
+// Downscale to the model's vision-optimum JPEG (≤1568px — quick on cellular too), then hand it to /api/attach.
+function shrink(file) {
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => {
+      const MAX = 1568;
+      const s = Math.min(1, MAX / Math.max(img.naturalWidth, img.naturalHeight));
+      const w = Math.round(img.naturalWidth * s), h = Math.round(img.naturalHeight * s);
+      const cv = document.createElement('canvas'); cv.width = w; cv.height = h;
+      cv.getContext('2d').drawImage(img, 0, 0, w, h);
+      URL.revokeObjectURL(url);
+      cv.toBlob((b) => (b ? resolve(b) : reject(new Error('encode failed'))), 'image/jpeg', 0.85);
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('unreadable image')); };
+    img.src = url;
+  });
+}
+async function uploadBlob(blob) {
+  const r = await fetch('/api/attach', { method: 'POST', headers: { 'Content-Type': 'image/jpeg' }, body: blob });
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok || !j.path) throw new Error(j.error || 'upload failed');
+  return j.path;
+}
+// One-shot capture (navbar camera button): shrink → upload → send immediately as a photo-only message —
+// no composer, no review tray. onStatus gets transient progress text ('' clears it).
+export async function sendPhotoNow(file, onStatus) {
+  onStatus && onStatus('Uploading photo…');
+  const path = await uploadBlob(await shrink(file));
+  onStatus && onStatus('Sending…');
+  const r = await fetch('/api/voice-text', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ text: '', attachments: [path] }) });
+  if (!r.ok) throw new Error('send failed');
+  onStatus && onStatus('');
+}
+
 export function activityBar() { return (_activityBar = _activityBar || initActivityBar()); }
 export function initActivityBar() {
   const bar = document.createElement('div');
@@ -288,23 +325,6 @@ function initCard() {
   inputRow.appendChild(fileIn);
   let attItems = [];   // {el, url, promise, path}
 
-  function shrink(file) {
-    return new Promise((resolve, reject) => {
-      const url = URL.createObjectURL(file);
-      const img = new Image();
-      img.onload = () => {
-        const MAX = 1568;
-        const s = Math.min(1, MAX / Math.max(img.naturalWidth, img.naturalHeight));
-        const w = Math.round(img.naturalWidth * s), h = Math.round(img.naturalHeight * s);
-        const cv = document.createElement('canvas'); cv.width = w; cv.height = h;
-        cv.getContext('2d').drawImage(img, 0, 0, w, h);
-        URL.revokeObjectURL(url);
-        cv.toBlob((b) => (b ? resolve(b) : reject(new Error('encode failed'))), 'image/jpeg', 0.85);
-      };
-      img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('unreadable image')); };
-      img.src = url;
-    });
-  }
   const syncTray = () => tray.classList.toggle('show', attItems.length > 0);
   function addFiles(files) {
     for (const f of files) {
@@ -313,10 +333,7 @@ function initCard() {
       item.promise = shrink(f).then(async (blob) => {
         item.url = URL.createObjectURL(blob);
         item.el.style.backgroundImage = 'url(' + item.url + ')';
-        const r = await fetch('/api/attach', { method: 'POST', headers: { 'Content-Type': 'image/jpeg' }, body: blob });
-        const j = await r.json().catch(() => ({}));
-        if (!r.ok || !j.path) throw new Error(j.error || 'upload failed');
-        item.path = j.path; item.el.classList.add('ai-up');
+        item.path = await uploadBlob(blob); item.el.classList.add('ai-up');
       }).catch((e) => { item.el.classList.add('ai-fail'); setStatus(String(e.message || e)); });
       const x = document.createElement('button');
       x.className = 'ai-tray-x'; x.type = 'button'; x.setAttribute('aria-label', 'Remove photo'); x.textContent = '✕';

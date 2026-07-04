@@ -2,7 +2,7 @@
 // `routing` field: Model / Thinking / Runner / wake-free voice. Reuses the litter card's devstrip +
 // devchip markup so it matches the strip visually. Paints #tv-routing; no-ops where absent (phone).
 const MODEL = { haiku: 'Haiku', sonnet: 'Sonnet', opus: 'Opus' };
-const THINK = { none: 'None', medium: 'Medium', max: 'Maximum' };
+const THINK = { none: 'None', medium: 'Med', max: 'Max' };   // abbreviated so the strip fits one line
 const RUNNER = { local: 'Local', api: 'API' };
 
 export function render(s) {

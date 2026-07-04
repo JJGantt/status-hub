@@ -38,6 +38,14 @@
 .devchip .dc-l{font-size:12px;color:#8b96a5}
 .devchip .dc-v{font-size:15px;font-weight:700}
 .devchip .dc-v .dot{width:9px;height:9px;margin-right:6px}
+/* Routing/liveness strip (#tv-routing): keep all 9 chips on ONE line — never wrap. Compact chips; if a
+   narrow viewport (portrait phone wall) still can't fit them, scroll horizontally instead of stacking. */
+#tv-routing .devstrip{flex-wrap:nowrap;gap:0;overflow-x:auto;scrollbar-width:none;min-width:0}
+#tv-routing .devstrip::-webkit-scrollbar{display:none}
+#tv-routing .devchips{flex-wrap:nowrap;gap:5px;min-width:0}
+#tv-routing .devchip{flex:0 0 auto;padding:3px 8px;gap:4px}
+#tv-routing .devchip .dc-l{font-size:10px}
+#tv-routing .devchip .dc-v{font-size:12px}
 /* Cat-feeder "Feed now" button + schedule mini-list under the chip strip */
 .feed-btn{margin-top:12px;width:100%;padding:11px 14px;border:1px solid #2a3a30;border-radius:10px;
   background:#16241c;color:#7ee2a6;font-size:15px;font-weight:700;cursor:pointer;

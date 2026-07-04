@@ -849,7 +849,9 @@ app.post('/api/voice-command', express.raw({ type: '*/*', limit: '25mb' }), asyn
     // terse, fits-in-the-status-chip confirmation. The full conversation card omits it (verbose replies).
     const quick = String(req.query.quick || '') === '1';
     const tier = ['fast', 'power'].includes(String(req.query.tier || '')) ? String(req.query.tier) : null;
-    await sbWrite('voice_requests', 'POST', { transcript, source: quick ? 'web-quick' : 'web', focus: 'hub', ...(tier ? { tier } : {}) });
+    const client_now = CLIENT_NOW_RE.test(String(req.query.client_now || '')) ? String(req.query.client_now) : null;
+    await sbWrite('voice_requests', 'POST', { transcript, source: quick ? 'web-quick' : 'web', focus: 'hub',
+      ...(tier ? { tier } : {}), ...(client_now ? { client_now } : {}) });
     res.json({ transcript, enqueued: true });
   } catch (e) { res.status(500).json({ error: String(e.message || e) }); }
 });
@@ -925,8 +927,9 @@ app.post('/api/voice-text', express.json(), async (req, res) => {
       ? req.body.attachments.map(String).filter(attName).slice(0, 12) : [];
     if (!text && !attachments.length) return res.status(400).json({ error: 'empty' });
     const tier = ['fast', 'power'].includes(String((req.body && req.body.tier) || '')) ? String(req.body.tier) : null;
+    const client_now = CLIENT_NOW_RE.test(String((req.body && req.body.client_now) || '')) ? String(req.body.client_now) : null;
     await sbWrite('voice_requests', 'POST', { transcript: text, source: 'web', focus: 'hub',
-      ...(tier ? { tier } : {}), ...(attachments.length ? { attachments } : {}) });
+      ...(tier ? { tier } : {}), ...(attachments.length ? { attachments } : {}), ...(client_now ? { client_now } : {}) });
     res.json({ enqueued: true });
   } catch (e) { res.status(500).json({ error: String(e.message || e) }); }
 });

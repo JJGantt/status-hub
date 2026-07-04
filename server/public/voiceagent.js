@@ -6,7 +6,7 @@
 //      Listening / Transcribing / Thinking, then each tool call WITH its arguments as it runs.
 // Tool-call rows (role='tool') are surfaced ONLY in the activity bar, never in the conversation
 // thread. All skipped on the TV wall (no mic; it renders the conversation itself via tv.js).
-import { esc } from './shared.js';
+import { esc, localNowNaive } from './shared.js';
 
 let phoneHangMs = 3000;   // phone trailing-silence (ms) for the FAB VAD; overridden by the phone_silence_s setting
 let resetMs = 30 * 60 * 1000;   // context-reset idle gap (ms) = session_reset_s. A message arriving after a gap
@@ -152,6 +152,7 @@ export function makeRecorder({ onStatus, onActive, quick, autoStop, tier, dryWhe
       if (dry) qp.set('dry', '1');
       if (quick) qp.set('quick', '1');
       if (tier) qp.set('tier', tier);                 // 'fast' (sparkle) or 'power' (brain)
+      qp.set('client_now', localNowNaive());           // this device's own wall clock, wherever it is
       const qs = qp.toString();
       const r = await fetch('/api/voice-command' + (qs ? '?' + qs : ''), {
         method: 'POST', headers: { 'Content-Type': blob.type || 'audio/webm' }, body: blob });
@@ -200,7 +201,7 @@ export async function sendPhotoNow(file, onStatus) {
   const path = await uploadBlob(await shrink(file));
   onStatus && onStatus('Sending…');
   const r = await fetch('/api/voice-text', { method: 'POST', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ text: '', attachments: [path] }) });
+    body: JSON.stringify({ text: '', attachments: [path], client_now: localNowNaive() }) });
   if (!r.ok) throw new Error('send failed');
   onStatus && onStatus('');
 }
@@ -364,7 +365,7 @@ function initCard() {
       setStatus('Sent — working…');
       const r = await fetch('/api/voice-text', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text, ...(attachments.length ? { attachments } : {}) }) });
+        body: JSON.stringify({ text, client_now: localNowNaive(), ...(attachments.length ? { attachments } : {}) }) });
       if (r.ok) clearTray();
       setStatus(r.ok ? '' : 'Send failed');
     } catch (_) { setStatus('Send failed'); textEl.value = text; }

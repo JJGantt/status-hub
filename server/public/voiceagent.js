@@ -308,10 +308,12 @@ export async function runPhotoOutbox(onStatus) {
           await sendOutboxItem(item, onStatus);
           await outboxDelete(item.id);
           progressed = true;
-          onStatus && onStatus('Photo sent', 'done');
+          // 200 back from /api/voice-text = the request row exists and the worker owns it. THIS is the
+          // moment the phone can be closed: the upload's done and the work now happens server-side.
+          onStatus && onStatus('Processing on the server — safe to close', 'done');
         } catch (e) {
           beaconOutboxError(e, item);
-          onStatus && onStatus('Photo saved — it’ll finish when you reopen the hub', 'wait');
+          onStatus && onStatus('Photo captured — it’ll send when you reopen the hub', 'wait');
         }
       }
       if (!progressed) break;                          // a full pass sent nothing (e.g. offline) — stop; a later trigger retries
@@ -329,7 +331,7 @@ export async function enqueuePhoto(file, onStatus) {
     client_now: localNowNaive(), clientMsgId: uid(), path: null, text: '' };
   await outboxPut(item);                               // from here the photo cannot be lost
   outboxBadge();
-  onStatus && onStatus('Photo saved', 'busy');
+  onStatus && onStatus('Photo captured', 'busy');
   runPhotoOutbox(onStatus);                            // fire-and-forget; resumes later if this send is interrupted
 }
 

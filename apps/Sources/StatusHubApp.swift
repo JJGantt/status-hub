@@ -22,7 +22,14 @@ struct StatusHubApp: App {
             #endif
         }
         #if os(macOS)
-        .windowResizability(.contentSize)
+        // .contentMinSize (not .contentSize): only enforce the frame's minWidth/minHeight floor. .contentSize
+        // continuously re-derives the window size from the content's reported "ideal" size on every SwiftUI
+        // re-render — since HubWebView is an opaque WKWebView wrapper, that re-derivation rides on AppKit's
+        // fitting-size computation for the wrapped view rather than our fixed idealWidth/idealHeight, so
+        // interactions that change the web content's internal layout (e.g. collapsing the chat sidebar) could
+        // nudge the actual NSWindow a few points smaller. The wall already fits itself to whatever size the
+        // window is (wall.js); the window shouldn't be re-fit to the wall in turn.
+        .windowResizability(.contentMinSize)
         #endif
     }
 }

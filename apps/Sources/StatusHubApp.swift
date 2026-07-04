@@ -15,6 +15,14 @@ struct StatusHubApp: App {
         WindowGroup {
             HubWebView()
                 .preferredColorScheme(.dark)
+                // Without this, SwiftUI's default keyboard-avoidance shrinks the WHOLE WebView's frame
+                // when the on-screen keyboard shows (e.g. tapping the chat input) — which shrinks
+                // window.innerHeight inside the page and makes wall.js's resize-driven fit() bake in
+                // that transient size. It doesn't reliably restore when the keyboard dismisses (the wall
+                // reads a few points smaller after switching to chat and back). The web page's own
+                // focused-input scroll-into-view already handles the keyboard; the native layer doesn't
+                // need to resize around it too.
+                .ignoresSafeArea(.keyboard, edges: .bottom)
             #if os(macOS)
                 // Landscape: the Mac app renders the wall (?mode=mac) — the TV dashboard + a docked chat
                 // side panel — so it wants width, unlike the phone-shaped iOS build.

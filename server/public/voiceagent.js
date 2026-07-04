@@ -276,6 +276,21 @@ async function sendOutboxItem(item, onStatus) {
   if (!r.ok) throw new Error('send failed');
 }
 
+function beaconOutboxError(err, item) {                 // surface a failure the phone's console would otherwise hide
+  try {
+    const payload = JSON.stringify({
+      ev: 'quick-photo-fail',
+      err: String((err && err.message) || err),
+      fileType: (item && (item.type || (item.file && item.file.type))) || '',
+      fileSize: (item && item.file && item.file.size) || 0,
+      uploaded: !!(item && item.path),
+      ua: navigator.userAgent,
+    });
+    if (navigator.sendBeacon) navigator.sendBeacon('/api/clientlog', new Blob([payload], { type: 'application/json' }));
+    else fetch('/api/clientlog', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: payload, keepalive: true });
+  } catch (_) {}
+}
+
 let _outboxBusy = false;
 // Drive every queued photo to completion. onStatus(text, kind) surfaces progress: kind 'busy' | 'done' | 'wait'.
 export async function runPhotoOutbox(onStatus) {
@@ -294,7 +309,8 @@ export async function runPhotoOutbox(onStatus) {
           await outboxDelete(item.id);
           progressed = true;
           onStatus && onStatus('Photo sent', 'done');
-        } catch (_) {
+        } catch (e) {
+          beaconOutboxError(e, item);
           onStatus && onStatus('Photo saved — it’ll finish when you reopen the hub', 'wait');
         }
       }

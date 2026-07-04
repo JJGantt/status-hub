@@ -868,11 +868,26 @@ const ATT_TYPES = { 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp
 // decode the capture) can still arrive as HEIC — convert it to JPEG here so the pipeline never breaks on format.
 const ATT_HEIC = new Set(['image/heic', 'image/heif', 'image/heic-sequence', 'image/heif-sequence']);
 const attName = (p) => /^[\w.\-]+$/.test(p);   // flat bucket — reject anything path-like
-app.post('/api/attach', express.raw({ type: ['image/*'], limit: '30mb' }), async (req, res) => {
+// Phones report unreliable (sometimes empty) content-types — especially on the shrink-failed fallback
+// that uploads the raw camera file — so identify the real format from the file's own magic bytes and
+// ignore the header. HEIC/HEIF is then converted to JPEG (browsers + the vision API can't read it).
+function sniffImageType(b) {
+  if (!b || b.length < 12) return null;
+  if (b[0] === 0xFF && b[1] === 0xD8 && b[2] === 0xFF) return 'image/jpeg';
+  if (b[0] === 0x89 && b[1] === 0x50 && b[2] === 0x4E && b[3] === 0x47) return 'image/png';
+  if (b[0] === 0x47 && b[1] === 0x49 && b[2] === 0x46) return 'image/gif';
+  if (b[0] === 0x52 && b[1] === 0x49 && b[2] === 0x46 && b[8] === 0x57 && b[9] === 0x45 && b[10] === 0x42 && b[11] === 0x50) return 'image/webp';
+  if (b[4] === 0x66 && b[5] === 0x74 && b[6] === 0x79 && b[7] === 0x70) {   // ISO-BMFF 'ftyp' box → HEIC/HEIF family
+    const brand = b.toString('latin1', 8, 12);
+    if (['heic', 'heix', 'hevc', 'heim', 'heis', 'hevm', 'hevs', 'mif1', 'msf1', 'heif'].includes(brand)) return 'image/heic';
+  }
+  return null;
+}
+app.post('/api/attach', express.raw({ type: () => true, limit: '30mb' }), async (req, res) => {
   try {
     if (!req.body || !req.body.length) return res.status(400).json({ error: 'empty upload' });
-    let ct = String(req.headers['content-type'] || '').split(';')[0].trim();
     let body = req.body;
+    let ct = sniffImageType(body) || String(req.headers['content-type'] || '').split(';')[0].trim();
     if (ATT_HEIC.has(ct)) {
       try {
         body = Buffer.from(await heicConvert({ buffer: req.body, format: 'JPEG', quality: 0.85 }));
@@ -880,7 +895,7 @@ app.post('/api/attach', express.raw({ type: ['image/*'], limit: '30mb' }), async
       } catch (e) { return res.status(415).json({ error: 'could not read HEIC image' }); }
     }
     const ext = ATT_TYPES[ct];
-    if (!ext) return res.status(415).json({ error: 'unsupported image type' });
+    if (!ext) return res.status(415).json({ error: `unsupported image type (${ct || 'unknown'}, ${body.length}b)` });
     const name = `${crypto.randomUUID()}.${ext}`;
     const r = await fetch(`${SUPABASE_URL}/storage/v1/object/${ATT_BUCKET}/${name}`, {
       method: 'POST',
@@ -890,6 +905,13 @@ app.post('/api/attach', express.raw({ type: ['image/*'], limit: '30mb' }), async
     if (!r.ok) return res.status(502).json({ error: `storage upload failed (${r.status})` });
     res.json({ path: name });
   } catch (e) { res.status(500).json({ error: String(e.message || e) }); }
+});
+
+// Client error sink: the phone POSTs a failed quick-photo's real reason here (step, file type/size,
+// server error) so a failure that's otherwise invisible in the phone's console lands in the app log.
+app.post('/api/clientlog', express.json({ limit: '16kb' }), (req, res) => {
+  try { console.log('[clientlog]', JSON.stringify(req.body).slice(0, 900)); } catch (_) {}
+  res.status(204).end();
 });
 
 // Thumbnails for the chat thread — proxies the private bucket behind the hub auth gate.

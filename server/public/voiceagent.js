@@ -174,7 +174,10 @@ export function makeRecorder({ onStatus, onActive, quick, autoStop, tier, dryWhe
       if (!r.ok || j.error) onStatus(j.error || 'Send failed', 'err');
       else if (!j.transcript) onStatus('Didn’t catch that — try again', 'err');
       else if (dry) { onTranscript(j.transcript); onStatus('', 'clear'); }      // compose mode: into the text box
-      else { onStatus(j.transcript, 'prompt'); onStatus('Thinking…', 'busy'); } // show what was heard, then stream the run
+      else {                                                                     // show what was heard, then stream the run
+        if (_card) _card.optimistic({ text: j.transcript, kind: 'text' });       // the spoken command as its own live user bubble
+        onStatus(j.transcript, 'prompt'); onStatus('Thinking…', 'busy');
+      }
     } catch (_) { onStatus('Send failed', 'err'); }
   }
   return { toggle() { recording ? stop() : start(); }, start, stop };
@@ -267,6 +270,7 @@ async function sendOutboxItem(item, onStatus) {
     catch (_) { blob = item.file; ct = item.type || (item.file && item.file.type) || 'application/octet-stream'; }
     item.path = await uploadBlob(blob, ct);
     await outboxPut(item);                             // an interruption from here on resumes straight at the send
+    if (_card && item.clientMsgId) _card.setPendingPath(item.clientMsgId, item.path);   // reconcile its optimistic chat bubble to the real object
   }
   const r = await fetch('/api/voice-text', {           // stays on 'Uploading photo…' through this tiny send
     method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -329,6 +333,9 @@ export async function enqueuePhoto(file, onStatus) {
     client_now: localNowNaive(), clientMsgId: uid(), path: null, text: '' };
   await outboxPut(item);                               // from here the photo cannot be lost
   outboxBadge();
+  // Show it in the conversation the instant it's taken (where a chat card exists), not only once the worker
+  // replies. Keyed by clientMsgId so the outbox can attach the uploaded path, and the server row can replace it.
+  if (_card) { try { _card.optimistic({ localImages: [URL.createObjectURL(file)], clientId: item.clientMsgId, kind: 'photo' }); } catch (_) {} }
   runPhotoOutbox(onStatus);                            // fire-and-forget; resumes later if this send is interrupted (shows 'Uploading photo…' first)
 }
 
@@ -380,32 +387,37 @@ function initCard() {
   const setStatus = (t) => { if (statusEl) statusEl.textContent = t || ''; };
 
   const seen = new Map();
+  const pending = new Map();   // optimistic (locally-sent, not-yet-processed) bubbles: clientId -> {el, paths, text, kind, localImages, at}
+  const PENDING_TTL = 120000;  // an optimistic bubble no server row matched is dropped after this on the next backfill (self-heals a missed reconcile)
   const MAX_MSGS = 240;   // cap retained bubbles so a long-open hub tab never grows #ai-log + `seen` unbounded
   const nearBottom = () => log.scrollHeight - log.scrollTop - log.clientHeight < 80;
   const scrollEnd = () => { log.scrollTop = log.scrollHeight; };
   function bubbleHtml(row) {
     const side = (row.role || 'assistant') === 'user' ? 'user' : 'assistant';
     const t = row.text == null ? '' : String(row.text);
-    // Photo attachments (object names) → thumbnails via the auth-gated proxy. A photo-only send has no
-    // text — the thumbnails ARE the bubble, so no typing caret for it.
+    // Thumbnails: an optimistic (just-sent) bubble carries local blob URLs (row.localImages) shown directly;
+    // a server row carries object names (row.attachments) shown via the auth-gated proxy. A photo-only send
+    // has no text — the thumbnails ARE the bubble, so no typing caret for it.
+    const local = Array.isArray(row.localImages) ? row.localImages : [];
     const atts = Array.isArray(row.attachments) ? row.attachments : [];
-    let inner = atts.length
-      ? '<div class=ai-msg-imgs>' + atts.map((p) =>
-          '<img src="/api/attachment?path=' + encodeURIComponent(p) + '" alt="" loading=lazy>').join('') + '</div>'
-      : '';
+    const imgs = local.length
+      ? local.map((u) => '<img src="' + u + '" alt="" loading=lazy>').join('')
+      : atts.map((p) => '<img src="/api/attachment?path=' + encodeURIComponent(p) + '" alt="" loading=lazy>').join('');
+    let inner = (local.length || atts.length) ? '<div class=ai-msg-imgs>' + imgs + '</div>' : '';
     if (t) inner += '<div class=ai-msg-text>' + esc(t).replace(/\n/g, '<br>') + '</div>';
-    else if (!atts.length) inner += '<div class=ai-msg-text><span class=ai-caret>▍</span></div>';
+    else if (!local.length && !atts.length) inner += '<div class=ai-msg-text><span class=ai-caret>▍</span></div>';
     // Which worker answered (mac/pi/fly) — dimmed for the expected mac, so a fallback visually pops.
     if (side === 'assistant' && row.worker) {
       const w = esc(String(row.worker));
       inner += '<span class="ai-worker ai-worker-' + w + '">' + w + '</span>';
     }
-    return '<div class="ai-msg ai-msg-' + side + '">' + inner + '</div>';
+    return '<div class="ai-msg ai-msg-' + side + (row.pending ? ' ai-msg-pending' : '') + '">' + inner + '</div>';
   }
   let lastTs = 0;   // created_at (ms) of the newest message shown — to detect a context-reset gap
   function upsert(row) {
     if (!row || (row.focus || 'hub') !== 'hub') return;
     if (row.role === 'tool') return;        // tool calls live in the activity bar, not the thread
+    reconcile(row);                         // a real row for a locally-sent message replaces its optimistic bubble
     // Hub only: a new message after a gap longer than the reset window means the hub reset its context — so
     // clear the thread first, mirroring the reset. Full-agent never gap-resets, so its thread persists.
     const ts = row.created_at ? Date.parse(row.created_at) : Date.now();
@@ -424,13 +436,58 @@ function initCard() {
     }
     if (stick) scrollEnd();
   }
-  function clear() { log.innerHTML = ''; seen.clear(); lastTs = 0; }
+  function dropPending(cid) {
+    const p = pending.get(cid); if (!p) return;
+    p.el.remove();
+    (p.localImages || []).forEach((u) => { try { URL.revokeObjectURL(u); } catch (_) {} });
+    pending.delete(cid);
+  }
+  function clear() { log.innerHTML = ''; seen.clear(); lastTs = 0; for (const cid of [...pending.keys()]) dropPending(cid); }
+  // Optimistic send: render the user's own message/photo the instant they send it, before the worker has
+  // processed anything. The matching server row (via SSE or backfill) replaces it later — see reconcile().
+  function optimistic(o) {
+    const cid = o.clientId || ('c-' + Date.now().toString(36) + Math.random().toString(36).slice(2));
+    const holder = document.createElement('div');
+    holder.innerHTML = bubbleHtml({ role: 'user', text: o.text || '', localImages: o.localImages || [], pending: true });
+    const el = holder.firstElementChild;
+    const stick = nearBottom();
+    log.appendChild(el);
+    pending.set(cid, { el, paths: (o.paths || []).filter(Boolean), text: (o.text || '').trim(),
+      kind: o.kind || (o.localImages && o.localImages.length ? 'photo' : (o.text ? 'text' : 'voice')),
+      localImages: o.localImages || [], at: Date.now() });
+    if (stick) scrollEnd();
+    return cid;
+  }
+  function setPendingPath(cid, paths) { const p = pending.get(cid); if (p) p.paths = [].concat(paths || []).filter(Boolean); }
+  // Match an incoming server user row to a pending optimistic bubble and drop the placeholder. Photos match on
+  // the uploaded object path (exact); typed text matches on the text; a text-bearing row also stands in for
+  // the oldest voice placeholder (the transcript arriving for a spoken command).
+  function reconcile(row) {
+    if (!row || row.role !== 'user' || !pending.size) return;
+    const atts = Array.isArray(row.attachments) ? row.attachments : [];
+    let hit = null;
+    if (atts.length) {
+      for (const [cid, p] of pending) if (p.paths.some((x) => atts.includes(x))) { hit = cid; break; }
+    } else {
+      const txt = String(row.text || '').trim();
+      if (txt) for (const [cid, p] of pending) if (p.kind === 'text' && p.text && p.text === txt) { hit = cid; break; }
+      if (!hit && txt) for (const [cid, p] of pending) if (p.kind === 'voice') { hit = cid; break; }
+    }
+    if (hit) dropPending(hit);
+  }
   async function backfill() {
     try {
       const r = await fetch('/api/voice-messages?focus=hub&mode=' + activeMode + '&limit=200');   // the active mode's thread (server scopes hub to the current context)
       if (!r.ok) return;
-      clear();
-      for (const row of await r.json()) upsert(row);
+      const rows = await r.json();
+      const now = Date.now();
+      log.innerHTML = ''; seen.clear(); lastTs = 0;      // detaches server + optimistic els; the pending map still holds the optimistic ones
+      for (const row of rows) upsert(row);               // reconcile() drops any pending the server thread now contains
+      for (const cid of [...pending.keys()]) {           // re-append still-unmatched optimistic bubbles at the bottom
+        const p = pending.get(cid);
+        if (now - p.at > PENDING_TTL) dropPending(cid);  // never matched in time → it landed under a different key; stop showing it
+        else log.appendChild(p.el);
+      }
       scrollEnd();
     } catch (_) {}
   }
@@ -455,7 +512,8 @@ function initCard() {
   const syncTray = () => tray.classList.toggle('show', attItems.length > 0);
   function addFiles(files) {
     for (const f of files) {
-      const item = { path: null, url: '', el: document.createElement('div') };
+      const item = { path: null, url: '', rawUrl: '', el: document.createElement('div') };
+      try { item.rawUrl = URL.createObjectURL(f); } catch (_) {}   // instant thumbnail for the optimistic chat bubble
       item.el.className = 'ai-tray-item';
       item.promise = shrink(f).then(async (blob) => {
         item.url = URL.createObjectURL(blob);
@@ -479,22 +537,25 @@ function initCard() {
     const text = (textEl.value || '').trim();
     const items = attItems.slice();
     if (!text && !items.length) return;
-    textEl.value = ''; setStatus(items.length ? 'Uploading…' : 'Sent — working…');
+    textEl.value = '';
+    const cid = optimistic({ text, localImages: items.map((i) => i.rawUrl).filter(Boolean) });   // show it the instant it's sent
+    setStatus(items.length ? 'Uploading…' : 'Sent — working…');
     try {
       await Promise.all(items.map((i) => i.promise));
       const attachments = items.map((i) => i.path).filter(Boolean);
       if (attachments.length !== items.length) {   // a photo never made it up — don't send half a thought
         setStatus('A photo failed to upload — remove it (✕) and send again');
-        textEl.value = text;
+        textEl.value = text; dropPending(cid);
         return;
       }
+      setPendingPath(cid, attachments);            // let the eventual server row reconcile against the uploaded object
       setStatus('Sent — working…');
       const r = await fetch('/api/voice-text', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ text, client_now: localNowNaive(), ...(attachments.length ? { attachments } : {}) }) });
-      if (r.ok) clearTray();
+      if (r.ok) clearTray(); else dropPending(cid);
       setStatus(r.ok ? '' : 'Send failed');
-    } catch (_) { setStatus('Send failed'); textEl.value = text; }
+    } catch (_) { setStatus('Send failed'); textEl.value = text; dropPending(cid); }
   }
   sendBtn.addEventListener('click', sendText);
   textEl.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); sendText(); } });
@@ -515,6 +576,6 @@ function initCard() {
   });
   micBtn.addEventListener('click', () => cardRec.toggle());
 
-  return { upsert, clear, backfill };
+  return { upsert, clear, backfill, optimistic, setPendingPath, dropPending };
 }
 

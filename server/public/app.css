@@ -602,6 +602,7 @@ body.tv .hmonths{margin-left:0;font-size:11px}
 .ai-log{flex:1 1 auto;min-height:0;overflow-y:auto;display:flex;flex-direction:column;gap:8px;
   background:#0e1318;border:1px solid #1b2128;border-radius:12px;padding:14px}
 .ai-msg{max-width:88%}
+.ai-msg-pending{opacity:.55}   /* optimistic bubble in flight; solidifies when the server row replaces it */
 .ai-msg-text{font-size:14px;line-height:1.45;white-space:pre-wrap;word-break:break-word}
 .ai-msg-user{align-self:flex-end}
 .ai-msg-user .ai-msg-text{color:#6ea8ff;text-align:right}

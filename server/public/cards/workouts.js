@@ -1,6 +1,6 @@
 // Workout Volume card: GitHub-style heatmap with inline day detail + click/drag-scrub selection,
 // defaulting to today; plus a rest timer (time since last set, hidden once past 5 min).
-import { state, esc } from '../shared.js';
+import { state, esc, localNowNaive } from '../shared.js';
 let heatSelDate=null, heatReq=0;
 let lastHeatExercises=null; // exercises for the open day-detail (for the repeat-set popup)
 
@@ -40,12 +40,28 @@ function fmtSession(s){
  const h=Math.floor(s/3600), m=Math.floor((s%3600)/60), sec=Math.floor(s%60), p=n=>String(n).padStart(2,'0');
  return h>0 ? h+':'+p(m)+':'+p(sec) : m+':'+p(sec);
 }
+// Pure wall-clock arithmetic — NO timezone conversion, ever. occurred_at is a naive reading (no
+// offset) of whatever clock was doing the logging, wherever that was; "now" here is THIS device's
+// own current wall clock. Both get reduced to digits and diffed with Date.UTC as a plain calendar
+// calculator (never `new Date(str)`, which would silently reinterpret the naive string as being in
+// THIS device's zone and go through a real UTC conversion — the bug that froze this timer at 0:00
+// while traveling). A rest/session clock never spans an actual timezone change mid-use, so comparing
+// raw wall-clock digits is exactly right, not an approximation.
+function wallClockMs(naiveStr){
+ const m=String(naiveStr).match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})/);
+ if(!m)return NaN;
+ return Date.UTC(+m[1],+m[2]-1,+m[3],+m[4],+m[5],+m[6]);
+}
+function nowWallClockMs(){
+ const d=new Date();
+ return Date.UTC(d.getFullYear(),d.getMonth(),d.getDate(),d.getHours(),d.getMinutes(),d.getSeconds());
+}
 function tickRest(){
  const el=document.getElementById('resttimer'); if(!el)return;
  const d=state.last||{}, lastAt=d.last_set_at;
  if(!lastAt){el.innerHTML='';el.className='resttimer';return;}
- const now=Date.now();
- const rest=Math.max(0,(now-new Date(lastAt).getTime())/1000);   // seconds since the last set
+ const now=nowWallClockMs();
+ const rest=Math.max(0,(now-wallClockMs(lastAt))/1000);   // wall-clock seconds since the last set
  const active=rest<=SESSION_GAP_S;
  el.className='resttimer'+(!active?' stale':(rest>=300?' cool':''));
  // left — since last set (always)
@@ -54,7 +70,7 @@ function tickRest(){
  // right — session total (only while a session is live)
  if(active){
    const startAt=d.session_start_at||lastAt;
-   const sess=Math.max(0,(now-new Date(startAt).getTime())/1000);
+   const sess=Math.max(0,(now-wallClockMs(startAt))/1000);
    html+='<div class="rt-side rt-right"><div class=rt-label>Session</div>'+
      '<div class="rt-time rt-session">'+fmtSession(sess)+'</div></div>';
  }
@@ -116,7 +132,7 @@ function openRepModal(ex){
   if(!(reps>0)){ input.focus(); return; }
   addBtn.disabled=true; addBtn.textContent='Adding…';
   try{
-   const r=await fetch('/api/log-set',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({exercise:ex.name,weight_lbs:w,reps})});
+   const r=await fetch('/api/log-set',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({exercise:ex.name,weight_lbs:w,reps,client_now:localNowNaive()})});
    if(!r.ok)throw new Error(r.status);
    close(); // realtime re-pushes the dashboard (heatmap, day detail, rest timer reset)
   }catch(_){ addBtn.disabled=false; addBtn.textContent='Retry'; }

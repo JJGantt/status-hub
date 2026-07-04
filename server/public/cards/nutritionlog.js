@@ -1,7 +1,7 @@
 // Nutrition Log card: combined dual-axis calorie+weight plot (weekly game) + calorie-adherence
 // calendar (daily game), with inline day detail + click/drag-scrub selection. Every entry row
 // expands to its ingredient breakdown + actions (log-again / change-quantity / delete).
-import { esc, dualPlot, state } from '../shared.js';
+import { esc, dualPlot, state, localNowNaive } from '../shared.js';
 
 const CAL_COLOR='#3b82f6', W_COLOR='#a78bfa';
 let nutSelDate=null, nutReq=0;
@@ -167,7 +167,7 @@ async function commitStaged(en){
  const cal=en.calories!=null?' ('+Math.round(en.calories)+' cal)':'';
  if(!window.confirm('Commit "'+(en.name||'this meal')+'"'+cal+'?\nIt will be logged as eaten now and start counting toward today.'))return;
  try{
-  const r=await fetch('/api/commit-staged',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:en.id})});
+  const r=await fetch('/api/commit-staged',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:en.id,client_now:localNowNaive()})});
   if(!r.ok)throw new Error(r.status);
   if(lastDayDate)loadNutDay(lastDayDate);
  }catch(_){ /* realtime will reconcile */ }
@@ -329,7 +329,7 @@ function openAddPopup(base,opts){
   try{
    let r;
    if(edit) r=await fetch('/api/log-entry',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify(Object.assign({id:editId},body))});
-   else r=await fetch('/api/log-entry',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+   else r=await fetch('/api/log-entry',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(Object.assign({client_now:localNowNaive()},body))});
    if(!r.ok)throw new Error(r.status);
    close();
    const today=state.last&&state.last.today;

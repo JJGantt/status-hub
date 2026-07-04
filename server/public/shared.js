@@ -16,6 +16,13 @@ if (MAC && document.body) document.body.classList.add('mac');
 export const state = { last: null };
 
 export function esc(s){return String(s).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;');}
+// This device's own current wall clock, naive (no offset) — "YYYY-MM-DDTHH:MM:SS", matching exactly
+// how sets/nutrition_entries.occurred_at is stored. Sent with every write so the logged time is
+// whatever the clock reads on the device doing the logging, wherever that is — never converted to a
+// fixed home zone. A stationary kiosk/TV has no "Jared" device to ask, so writes from there fall back
+// to the server's own naive-local (see server.js nowNaiveLocal); this is only for phone/browser writes.
+export function localNowNaive(){const d=new Date(),p=n=>String(n).padStart(2,'0');
+ return d.getFullYear()+'-'+p(d.getMonth()+1)+'-'+p(d.getDate())+'T'+p(d.getHours())+':'+p(d.getMinutes())+':'+p(d.getSeconds());}
 export function ago(iso){if(!iso)return'—';const s=(Date.now()-new Date(iso))/1000;
  if(s<90)return Math.round(s)+'s ago';if(s<5400)return Math.round(s/60)+'m ago';return Math.round(s/3600)+'h ago';}
 // hue gradient: t=0 green -> t=1 red, through real yellow at t=0.5

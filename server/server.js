@@ -381,11 +381,8 @@ async function buildStatus() {
       else break;
     }
   }
-  // Convert to real UTC ISO here, at the client-facing boundary — everything above (gap math, day
-  // bucketing) stays on the naive-local convention since it's internally consistent server-side.
   return { today, litter, feeder, surf, nutrition, maintenance, pace: paceData, volume, heatmap, nutrition_log,
-    last_set_at: naiveLocalToUtcIso(last_set_at, TZ), session_start_at: naiveLocalToUtcIso(session_start_at, TZ),
-    routing, mics, score, generated_at: new Date().toISOString() };
+    last_set_at, session_start_at, routing, mics, score, generated_at: new Date().toISOString() };
 }
 
 // ---- realtime push: recompute + push to all connected browsers on any DB change ----
@@ -607,24 +604,16 @@ function nowNaiveLocal() {
   return `${p.year}-${p.month}-${p.day}T${hh}:${p.minute}:${p.second}`;
 }
 
-// occurred_at is stored naive (no UTC offset) — a wall-clock reading in TZ, e.g. "2026-07-04T10:43:14".
-// That's fine for server-side day-bucketing (dayBucketOf/localDate always assume TZ), but sending it
-// to the client as-is is a bug: the browser's `new Date(str)` on a suffix-less string parses it as
-// LOCAL TIME IN THE VIEWING DEVICE'S OWN ZONE, not TZ. On a device actually set to TZ this is invisible
-// (the two zones coincide); anywhere else — e.g. traveling — it silently mis-times every live clock
-// built on it (the workout rest timer went stuck at 0:00 this way: the phone's zone made `lastAt` parse
-// as being in the future, so now-lastAt clamped to 0 and never ticked up). Convert to a real UTC ISO
-// string (correct through DST) before it ever reaches a client-facing field.
-function naiveLocalToUtcIso(naiveStr, tz) {
-  if (!naiveStr) return naiveStr;
-  const guess = new Date(naiveStr + 'Z');   // arbitrary reference instant, only used to resolve DST state
-  const f = new Intl.DateTimeFormat('en-US', {
-    timeZone: tz, hourCycle: 'h23',
-    year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit',
-  });
-  const p = {}; for (const part of f.formatToParts(guess)) p[part.type] = part.value;
-  const offset = Date.UTC(p.year, p.month - 1, p.day, p.hour, p.minute, p.second) - guess.getTime();
-  return new Date(guess.getTime() - offset).toISOString();
+// occurred_at is intentionally naive (no UTC offset) — a pure wall-clock reading, e.g.
+// "2026-07-04T10:43:14", with NO timezone concept attached at all. It should read whatever the
+// clock said on whatever device was actually doing the logging, wherever that was — never
+// converted to/from any zone. Browser writes (log-set, nutrition stage/commit) send their own
+// current wall clock as `client_now` (shared.js localNowNaive()); this only falls back to the
+// server's own naive-local reading when the client didn't supply one (e.g. an automated caller).
+const CLIENT_NOW_RE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}$/;
+function resolveNow(body) {
+  const c = body && body.client_now;
+  return typeof c === 'string' && CLIENT_NOW_RE.test(c) ? c : nowNaiveLocal();
 }
 
 // Repeat-a-set: log a new set for an exercise at the current time, reusing its weight and taking a
@@ -639,7 +628,7 @@ app.post('/api/log-set', express.json(), async (req, res) => {
     if (!exercise) return res.status(400).json({ error: 'exercise required' });
     if (!Number.isInteger(reps) || reps <= 0) return res.status(400).json({ error: 'reps must be a positive integer' });
     if (!isFinite(weight_lbs) || weight_lbs < 0) return res.status(400).json({ error: 'weight_lbs must be ≥ 0' });
-    const occurred_at = nowNaiveLocal();
+    const occurred_at = resolveNow(b);
     await sbWrite('sets', 'POST', { occurred_at, exercise, weight_lbs, reps });
     res.json({ ok: true, occurred_at });
   } catch (e) { res.status(500).json({ error: String(e.message || e) }); }
@@ -702,7 +691,7 @@ app.post('/api/log-entry', express.json(), async (req, res) => {
     if ([calories, protein_g, carbs_g, fat_g].some((v) => v === null)) {
       return res.status(400).json({ error: 'calories/protein_g/carbs_g/fat_g must be numeric' });
     }
-    const occurred_at = nowNaiveLocal(); // naive-local wall-clock in the display TZ
+    const occurred_at = resolveNow(b); // this device's own wall clock, wherever it is
     const row = {
       id: crypto.randomUUID(),
       date: dayBucketOf(occurred_at),
@@ -773,7 +762,7 @@ app.post('/api/commit-staged', express.json(), async (req, res) => {
     const rows = await sb(`nutrition_entries?id=eq.${id}&staged=eq.true&select=*`);
     const before = (rows || [])[0];
     if (!before) return res.status(404).json({ error: 'staged meal not found' });
-    const occurred_at = nowNaiveLocal();
+    const occurred_at = resolveNow(req.body);
     const patch = { staged: false, occurred_at, logged: occurred_at, date: dayBucketOf(occurred_at) };
     await sbWrite(`nutrition_entries?id=eq.${id}`, 'PATCH', patch);
     await audit('edit', id, before, { ...before, ...patch });

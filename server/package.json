@@ -4,10 +4,13 @@
   "private": true,
   "type": "commonjs",
   "main": "server.js",
-  "scripts": { "start": "node server.js" },
+  "scripts": {
+    "start": "node server.js"
+  },
   "dependencies": {
-    "express": "^4.19.2",
     "@supabase/supabase-js": "^2.45.0",
+    "express": "^4.19.2",
+    "heic-convert": "^2.1.0",
     "ws": "^8.18.0"
   }
 }

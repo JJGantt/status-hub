@@ -35,6 +35,20 @@ function boot() {
   const activity = activityBar();
   _card = initCard();                // null if the conversation card isn't on this page
   setMode('hub');                    // default indicator until settings load
+
+  // Durable photo outbox: resume any interrupted send now, and again whenever we return to the
+  // foreground, regain the network, or restore from bfcache — so a photo caught mid-send by a
+  // screen-lock finishes itself the moment the hub is reopened. Progress routes to the activity bar.
+  const photoStatus = (t, kind) => {
+    if (!t) return;
+    if (kind === 'done') activity.done(t);
+    else if (kind === 'wait') activity.err(t);
+    else activity.busy(t);
+  };
+  runPhotoOutbox(photoStatus);
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') runPhotoOutbox(photoStatus); });
+  window.addEventListener('online', () => runPhotoOutbox(photoStatus));
+  window.addEventListener('pageshow', () => runPhotoOutbox(photoStatus));
   fetch('/api/settings').then((r) => r.json()).then((s) => {
     const n = parseFloat(s.phone_silence_s); if (Number.isFinite(n) && n > 0) phoneHangMs = n * 1000;
     const rs = parseFloat(s.session_reset_s); if (Number.isFinite(rs) && rs > 0) resetMs = rs * 1000;
@@ -188,22 +202,119 @@ function shrink(file) {
     img.src = url;
   });
 }
-async function uploadBlob(blob) {
-  const r = await fetch('/api/attach', { method: 'POST', headers: { 'Content-Type': 'image/jpeg' }, body: blob });
+async function uploadBlob(blob, contentType) {
+  const ct = contentType || blob.type || 'image/jpeg';
+  const r = await fetch('/api/attach', { method: 'POST', headers: { 'Content-Type': ct }, body: blob });
   const j = await r.json().catch(() => ({}));
   if (!r.ok || !j.path) throw new Error(j.error || 'upload failed');
   return j.path;
 }
-// One-shot capture (navbar camera button): shrink → upload → send immediately as a photo-only message —
-// no composer, no review tray. onStatus gets transient progress text ('' clears it).
-export async function sendPhotoNow(file, onStatus) {
-  onStatus && onStatus('Uploading photo…');
-  const path = await uploadBlob(await shrink(file));
-  onStatus && onStatus('Sending…');
-  const r = await fetch('/api/voice-text', { method: 'POST', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ text: '', attachments: [path], client_now: localNowNaive() }) });
+
+// ===== durable photo outbox ==============================================================
+// A captured photo is written to IndexedDB the INSTANT it's taken — before any shrink or upload — so it
+// can't be lost to a screen-lock, app kill, reload, or dropped connection. A guarded processor drives
+// each pending photo shrink → upload → send, checkpointing the uploaded object name so a resumed run
+// skips straight to the (tiny) send. It runs on capture, on boot, on return-to-foreground
+// (visibilitychange), when the network returns (online), and on bfcache restore (pageshow) — so an
+// interrupted send finishes the moment the hub is reopened. iOS freezes JS + kills in-flight fetches on
+// screen-off (and the only APIs that outlive a page — sendBeacon / keepalive — cap at ~64 KB, far under a
+// photo), so a real upload can't complete in the background; this guarantees no LOSS and an automatic,
+// immediate resume instead. client_now is stamped at CAPTURE time so a photo sent minutes later (after an
+// unlock) still logs against when it was actually taken; client_msg_id makes a resent send idempotent.
+const OUTBOX_DB = 'hub-photo-outbox';
+const OUTBOX_STORE = 'pending';
+const uid = () => ((self.crypto && crypto.randomUUID)
+  ? crypto.randomUUID() : 'p-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2));
+
+function outboxDB() {
+  return new Promise((resolve, reject) => {
+    let rq;
+    try { rq = indexedDB.open(OUTBOX_DB, 1); } catch (e) { return reject(e); }
+    rq.onupgradeneeded = () => rq.result.createObjectStore(OUTBOX_STORE, { keyPath: 'id' });
+    rq.onsuccess = () => resolve(rq.result);
+    rq.onerror = () => reject(rq.error);
+  });
+}
+function outboxRun(mode, run) {
+  return outboxDB().then((db) => new Promise((resolve, reject) => {
+    const tx = db.transaction(OUTBOX_STORE, mode);
+    const rq = run(tx.objectStore(OUTBOX_STORE));      // an IDBRequest (result read on complete) or undefined
+    tx.oncomplete = () => resolve(rq ? rq.result : undefined);
+    tx.onerror = () => reject(tx.error);
+    tx.onabort = () => reject(tx.error);
+  }));
+}
+const outboxPut = (item) => outboxRun('readwrite', (s) => s.put(item));
+const outboxDelete = (id) => outboxRun('readwrite', (s) => s.delete(id));
+const outboxAll = () => outboxRun('readonly', (s) => s.getAll());
+
+async function outboxBadge() {
+  let n = 0;
+  try { n = ((await outboxAll()) || []).length; } catch (_) {}
+  try { window.dispatchEvent(new CustomEvent('hub-photo-outbox', { detail: { pending: n } })); } catch (_) {}
+}
+export async function pendingPhotoCount() { try { return ((await outboxAll()) || []).length; } catch (_) { return 0; } }
+
+const shrinkTwice = async (file) => {                  // the iOS canvas decode can miss transiently; one retry before the raw fallback
+  try { return await shrink(file); } catch (_) { return await shrink(file); }
+};
+
+async function sendOutboxItem(item, onStatus) {
+  if (!item.path) {                                    // not uploaded yet — shrink to JPEG (raw file as fallback), upload, then checkpoint
+    onStatus && onStatus('Uploading photo…', 'busy');
+    let blob, ct;
+    try { blob = await shrinkTwice(item.file); ct = 'image/jpeg'; }
+    catch (_) { blob = item.file; ct = item.type || (item.file && item.file.type) || 'application/octet-stream'; }
+    item.path = await uploadBlob(blob, ct);
+    await outboxPut(item);                             // an interruption from here on resumes straight at the send
+  }
+  onStatus && onStatus('Sending…', 'busy');
+  const r = await fetch('/api/voice-text', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ text: item.text || '', attachments: [item.path], client_now: item.client_now, client_msg_id: item.clientMsgId }),
+  });
   if (!r.ok) throw new Error('send failed');
-  onStatus && onStatus('');
+}
+
+let _outboxBusy = false;
+// Drive every queued photo to completion. onStatus(text, kind) surfaces progress: kind 'busy' | 'done' | 'wait'.
+export async function runPhotoOutbox(onStatus) {
+  if (_outboxBusy) return;                             // one processor at a time; the loop re-reads so mid-run enqueues are still caught
+  _outboxBusy = true;
+  try {
+    for (;;) {
+      let items = [];
+      try { items = (await outboxAll()) || []; } catch (_) { break; }
+      if (!items.length) break;
+      items.sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
+      let progressed = false;
+      for (const item of items) {
+        try {
+          await sendOutboxItem(item, onStatus);
+          await outboxDelete(item.id);
+          progressed = true;
+          onStatus && onStatus('Photo sent', 'done');
+        } catch (_) {
+          onStatus && onStatus('Photo saved — it’ll finish when you reopen the hub', 'wait');
+        }
+      }
+      if (!progressed) break;                          // a full pass sent nothing (e.g. offline) — stop; a later trigger retries
+    }
+  } finally {
+    _outboxBusy = false;
+    outboxBadge();
+  }
+}
+
+// Capture entry point (navbar camera button): persist FIRST, then kick the processor. Resolves as soon as
+// the photo is safely on disk; the upload+send proceed in the background and survive interruption.
+export async function enqueuePhoto(file, onStatus) {
+  const item = { id: uid(), createdAt: Date.now(), file, type: (file && file.type) || '',
+    client_now: localNowNaive(), clientMsgId: uid(), path: null, text: '' };
+  await outboxPut(item);                               // from here the photo cannot be lost
+  outboxBadge();
+  onStatus && onStatus('Photo saved', 'busy');
+  runPhotoOutbox(onStatus);                            // fire-and-forget; resumes later if this send is interrupted
 }
 
 export function activityBar() { return (_activityBar = _activityBar || initActivityBar()); }

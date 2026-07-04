@@ -5,6 +5,7 @@ const fs = require('fs');
 const path = require('path');
 const { createClient } = require('@supabase/supabase-js');
 const WebSocket = require('ws');
+const heicConvert = require('heic-convert');
 const { estimateMaintenance, macroTargets } = require('./lib/maintenance');
 const pace = require('./lib/pace');
 const { computeVolume } = require('./lib/volume');
@@ -862,18 +863,29 @@ app.post('/api/voice-command', express.raw({ type: '*/*', limit: '25mb' }), asyn
 // The daily sweep below reaps objects after 7 days — photos exist to make ONE log entry, not to keep.
 const ATT_BUCKET = 'voice-attachments';
 const ATT_TYPES = { 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp', 'image/gif': 'gif' };
+// iOS cameras hand back HEIC/HEIF, which neither browsers (the chat thumbnails) nor Claude's vision API
+// can read. The client normally shrinks to JPEG in-canvas, but a fallback upload (when that canvas can't
+// decode the capture) can still arrive as HEIC — convert it to JPEG here so the pipeline never breaks on format.
+const ATT_HEIC = new Set(['image/heic', 'image/heif', 'image/heic-sequence', 'image/heif-sequence']);
 const attName = (p) => /^[\w.\-]+$/.test(p);   // flat bucket — reject anything path-like
-app.post('/api/attach', express.raw({ type: 'image/*', limit: '15mb' }), async (req, res) => {
+app.post('/api/attach', express.raw({ type: ['image/*'], limit: '30mb' }), async (req, res) => {
   try {
-    const ct = String(req.headers['content-type'] || '').split(';')[0].trim();
+    if (!req.body || !req.body.length) return res.status(400).json({ error: 'empty upload' });
+    let ct = String(req.headers['content-type'] || '').split(';')[0].trim();
+    let body = req.body;
+    if (ATT_HEIC.has(ct)) {
+      try {
+        body = Buffer.from(await heicConvert({ buffer: req.body, format: 'JPEG', quality: 0.85 }));
+        ct = 'image/jpeg';
+      } catch (e) { return res.status(415).json({ error: 'could not read HEIC image' }); }
+    }
     const ext = ATT_TYPES[ct];
     if (!ext) return res.status(415).json({ error: 'unsupported image type' });
-    if (!req.body || !req.body.length) return res.status(400).json({ error: 'empty upload' });
     const name = `${crypto.randomUUID()}.${ext}`;
     const r = await fetch(`${SUPABASE_URL}/storage/v1/object/${ATT_BUCKET}/${name}`, {
       method: 'POST',
       headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}`, 'Content-Type': ct },
-      body: req.body,
+      body,
     });
     if (!r.ok) return res.status(502).json({ error: `storage upload failed (${r.status})` });
     res.json({ path: name });
@@ -920,16 +932,24 @@ sweepAttachments();
 // Typed command from the Jarvis card — no audio, just enqueue the text like the voice path.
 // Photo attachments (object names from /api/attach) ride along; a photo-only send (no text) is valid —
 // the worker's framing directive tells the model the intent is to log what the photos show.
+// De-dupe resent sends: the durable photo outbox may re-POST if a screen-lock killed the ack before the
+// client marked the send done. A client_msg_id turns that retry into a no-op instead of a duplicate log.
+// In-memory suffices — the hub runs a single instance and the retry window is seconds to minutes; the map
+// is bounded so it can't grow without limit.
+const seenMsgIds = new Map();   // client_msg_id -> first-seen ts
 app.post('/api/voice-text', express.json(), async (req, res) => {
   try {
     const text = String((req.body && req.body.text) || '').trim();
     const attachments = Array.isArray(req.body && req.body.attachments)
       ? req.body.attachments.map(String).filter(attName).slice(0, 12) : [];
     if (!text && !attachments.length) return res.status(400).json({ error: 'empty' });
+    const msgId = String((req.body && req.body.client_msg_id) || '').slice(0, 64);
+    if (msgId && seenMsgIds.has(msgId)) return res.json({ enqueued: true, duplicate: true });
     const tier = ['fast', 'power'].includes(String((req.body && req.body.tier) || '')) ? String(req.body.tier) : null;
     const client_now = CLIENT_NOW_RE.test(String((req.body && req.body.client_now) || '')) ? String(req.body.client_now) : null;
     await sbWrite('voice_requests', 'POST', { transcript: text, source: 'web', focus: 'hub',
       ...(tier ? { tier } : {}), ...(attachments.length ? { attachments } : {}), ...(client_now ? { client_now } : {}) });
+    if (msgId) { seenMsgIds.set(msgId, Date.now()); if (seenMsgIds.size > 1000) seenMsgIds.delete(seenMsgIds.keys().next().value); }
     res.json({ enqueued: true });
   } catch (e) { res.status(500).json({ error: String(e.message || e) }); }
 });

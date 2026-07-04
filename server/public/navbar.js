@@ -2,7 +2,7 @@
 // panes — no nav buttons needed). /page (desktop): adds chat + back-to-wall buttons. Right side is
 // always brain (full Opus) + sparkle (fast) voice, tap-to-talk, driving the shared activity popup.
 // Mounted once per page by core.js.
-import { makeRecorder, activityBar, sendPhotoNow } from './voiceagent.js';
+import { makeRecorder, activityBar, enqueuePhoto, pendingPhotoCount } from './voiceagent.js';
 import { open as openSettings } from './settings.js';
 
 const CHAT = '<svg viewBox="0 0 24 24" width="21" height="21" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
@@ -81,14 +81,30 @@ export function mountNavbar() {
   const camBtn = document.createElement('button');
   camBtn.className = 'wfab wfab-cam'; camBtn.type = 'button'; camBtn.setAttribute('aria-label', 'Quick photo');
   camBtn.innerHTML = CAMERA;
+  camBtn.style.position = 'relative';
+  // Count badge: photos captured but not yet sent (persisted in the durable outbox, so never lost).
+  // Driven live by the outbox's 'hub-photo-outbox' event; seeded with the current count on mount.
+  const camBadge = document.createElement('span');
+  camBadge.style.cssText = 'position:absolute;top:-3px;right:-3px;min-width:17px;height:17px;padding:0 4px;border-radius:9px;background:#e0492f;color:#fff;font-size:11px;line-height:17px;text-align:center;font-weight:700;pointer-events:none;';
+  camBadge.hidden = true;
+  camBtn.appendChild(camBadge);
+  const setCamBadge = (n) => { camBadge.textContent = String(n || 0); camBadge.hidden = !n; };
+  window.addEventListener('hub-photo-outbox', (e) => setCamBadge((e.detail && e.detail.pending) || 0));
+  pendingPhotoCount().then(setCamBadge);
   camBtn.addEventListener('click', () => camIn.click());
   camIn.addEventListener('change', async () => {
     const f = camIn.files && camIn.files[0]; camIn.value = '';
     if (!f) return;
     camBtn.disabled = true; camBtn.classList.add('busy');
     try {
-      await sendPhotoNow(f, (t) => t && activity.busy(t));
-      activity.done('Photo sent');
+      // persist-first: resolves as soon as the photo is safely queued; the upload+send proceed in the
+      // background and survive a screen-lock, resuming automatically when the hub is reopened.
+      await enqueuePhoto(f, (t, kind) => {
+        if (!t) return;
+        if (kind === 'done') activity.done(t);
+        else if (kind === 'wait') activity.err(t);
+        else activity.busy(t);
+      });
     } catch (e) { activity.err(String(e.message || e)); }
     finally { camBtn.disabled = false; camBtn.classList.remove('busy'); }
   });

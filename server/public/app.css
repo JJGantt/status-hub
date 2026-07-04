@@ -46,9 +46,10 @@
 #tv-routing .devchips{flex-wrap:nowrap;min-width:0}
 /* phone wall: size the chips UP so the 9 natural-width chips grow to fill the 390px strip (they were
    sitting tiny in the left ~65%). Bigger font = fills the width AND readable, at natural per-chip sizes. */
-body.tv.phonewall #tv-routing .devchip{padding:4px 6px;gap:5px}
-body.tv.phonewall #tv-routing .devchip .dc-l{font-size:15px}
-body.tv.phonewall #tv-routing .devchip .dc-v{font-size:17px}
+body.tv.phonewall #tv-routing .devchips{gap:7px}
+body.tv.phonewall #tv-routing .devchip{padding:4px 4px;gap:5px}
+body.tv.phonewall #tv-routing .devchip .dc-l{font-size:22px}
+body.tv.phonewall #tv-routing .devchip .dc-v{font-size:24px}
 /* Cat-feeder "Feed now" button + schedule mini-list under the chip strip */
 .feed-btn{margin-top:12px;width:100%;padding:11px 14px;border:1px solid #2a3a30;border-radius:10px;
   background:#16241c;color:#7ee2a6;font-size:15px;font-weight:700;cursor:pointer;

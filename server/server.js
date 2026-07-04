@@ -443,7 +443,7 @@ function startRealtime() {
   // A change to any cached source table dirties the row cache, then rebuilds + pushes. The extra
   // subscriptions (weight_log … surf_snapshots) exist for the cache: without them an edit would sit
   // invisible until the 15-min backstop refetch.
-  const changed = () => { dirtyRows(); broadcast(); };
+  const changed = () => { dirtyRows(); dirtyNutDay(); broadcast(); };
   supa.channel('hub-changes')
     // device_status is fetched live per build (not cached) — its routine ~2-min state mirrors must
     // rebuild the frame but must NOT drag the heavy cached queries along. Plain broadcast only.
@@ -459,6 +459,7 @@ function startRealtime() {
     // panel reflects an MCP/voice/settings change near-instantly instead of waiting for the 30s tick.
     .on('postgres_changes', { event: '*', schema: 'public', table: 'app_settings' }, (p) => {
       dirtySettings();
+      dirtyNutDay();   // surplus_cal shapes the day header's goal figures
       broadcast(p);
       // When the agent_mode toggle flips (from anywhere — voice, another device), tell the voice panel to
       // switch to that mode's conversation live, so the on-screen context always matches the active mode.
@@ -592,10 +593,21 @@ app.post('/api/register-push', express.json(), async (req, res) => {
 });
 
 // A single 4am→4am nutrition day's food entries — for the nutrition-log day click-through.
+// Cached: the client re-fetches the open day on EVERY SSE status frame (its "live-refresh"), which
+// re-ran five Supabase queries — one of them a full-history scan — every ~30s all day. The response
+// only changes when nutrition data changes, and every path that changes it dirties this cache:
+// realtime events cover external writers (voice/MCP), and the hub's own write endpoints dirty it
+// synchronously so their immediate client re-fetch can't race the realtime round-trip.
+const nutDayCache = new Map();   // `${date}|${window day}` -> { body, at }
+const NUTDAY_BACKSTOP_MS = 15 * 60 * 1000;
+const dirtyNutDay = () => nutDayCache.clear();
 app.get('/api/nutrition-day', async (req, res) => {
   try {
     const date = String(req.query.date || '').slice(0, 10);
     if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return res.status(400).json({ error: 'bad date' });
+    const cacheKey = date + '|' + nutritionWindow().day;   // window day flips at 4am → isToday changes
+    const hit = nutDayCache.get(cacheKey);
+    if (hit && Date.now() - hit.at < NUTDAY_BACKSTOP_MS) return res.json(hit.body);
     const hh = String(DAY_START_HOUR).padStart(2, '0');
     const next = localDate(new Date(Date.parse(date + 'T12:00:00Z') + 86400000));
     const isToday = date === nutritionWindow().day;
@@ -630,13 +642,15 @@ app.get('/api/nutrition-day', async (req, res) => {
     const wAsOf = weights.filter((w) => w.date <= date);
     const bw = wAsOf.length ? wAsOf[wAsOf.length - 1].weight : null;
     const target_macros = target_cal > 0 ? macroTargets(target_cal, bw) : null;
-    res.json({
+    const body = {
       date,
       total_cal, total_protein: Math.round(total_protein),
       total_carbs: Math.round(total_carbs), total_fat: Math.round(total_fat),
       target_cal, target_macros, delta_color,
       entries,
-    });
+    };
+    nutDayCache.set(cacheKey, { body, at: Date.now() });
+    res.json(body);
   } catch (e) { res.status(500).json({ error: String(e.message || e) }); }
 });
 
@@ -754,6 +768,7 @@ app.post('/api/log-entry', express.json(), async (req, res) => {
     row.carbs_g = rolled.carbs_g; row.fat_g = rolled.fat_g;
     row.ingredients = rolled.ingredients;
     await sbWrite('nutrition_entries', 'POST', row);
+    dirtyNutDay();   // synchronous — the client re-fetches the day immediately after this returns
     await audit('add', row.id, null, row); // `row` is the full inserted snapshot (id known client-side)
     res.status(204).end();
   } catch (e) { res.status(500).json({ error: String(e.message || e) }); }
@@ -781,6 +796,7 @@ app.patch('/api/log-entry', express.json(), async (req, res) => {
     const patch = { calories: rolled.calories, protein_g: rolled.protein_g, carbs_g: rolled.carbs_g, fat_g: rolled.fat_g, ingredients: rolled.ingredients };
     if (typeof b.name === 'string' && b.name.trim()) patch.name = b.name.trim();
     await sbWrite(`nutrition_entries?id=eq.${id}`, 'PATCH', patch);
+    dirtyNutDay();   // synchronous — the client re-fetches the day immediately after this returns
     await audit('edit', id, before, { ...before, ...patch });
     res.status(204).end();
   } catch (e) { res.status(500).json({ error: String(e.message || e) }); }
@@ -796,6 +812,7 @@ app.delete('/api/log-entry', async (req, res) => {
     const before = (rows || [])[0];
     if (!before) return res.status(404).json({ error: 'not found' });
     await sbWrite(`nutrition_entries?id=eq.${id}`, 'DELETE', undefined);
+    dirtyNutDay();   // synchronous — the client re-fetches the day immediately after this returns
     await audit('delete', id, before, null);
     res.status(204).end();
   } catch (e) { res.status(500).json({ error: String(e.message || e) }); }
@@ -813,6 +830,7 @@ app.post('/api/commit-staged', express.json(), async (req, res) => {
     const occurred_at = resolveNow(req.body);
     const patch = { staged: false, occurred_at, logged: occurred_at, date: dayBucketOf(occurred_at) };
     await sbWrite(`nutrition_entries?id=eq.${id}`, 'PATCH', patch);
+    dirtyNutDay();   // synchronous — the client re-fetches the day immediately after this returns
     await audit('edit', id, before, { ...before, ...patch });
     res.status(204).end();
   } catch (e) { res.status(500).json({ error: String(e.message || e) }); }

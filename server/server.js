@@ -1145,7 +1145,7 @@ async function sbInsert(table, row) {
     return r.ok;
   } catch (_) { return false; }
 }
-const reminderCtx = { sb, supaInsert: sbInsert, apns, log: (m) => console.log('[weight-reminder]', m) };
+const reminderCtx = { sb, supaInsert: sbInsert, apns, settingsAll, log: (m) => console.log('[weight-reminder]', m) };
 setInterval(() => weightReminder.tick(reminderCtx).catch((e) => console.log('[weight-reminder] error', e.message)), 60000);
 weightReminder.tick(reminderCtx).catch(() => {});  // also evaluate once on boot
 console.log(`[weight-reminder] armed (apns: ${apns.configured() ? 'configured, ' + apns.ENV : 'NOT configured'})`);

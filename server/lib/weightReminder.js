@@ -40,24 +40,40 @@ async function targetTime(sb, settings) {
   return manual;  // fall back to the manual time if history is unavailable
 }
 
+// Once a day is handled (sent or skipped), later ticks that day return without touching Supabase —
+// the notifications dedupe row remains the restart-safe source of truth; this just avoids re-asking
+// it every minute. The dynamic target (a 40-day nutrition read) is computed once per day too.
+let claimedDay = null;
+let cachedTarget = { day: null, hm: null };
+
 async function tick(ctx) {
-  const { sb, supaInsert, apns, log } = ctx;
+  const { sb, supaInsert, apns, log, settingsAll } = ctx;
+
+  const today = localDate();
+  if (claimedDay === today) return;                   // handled — quiet until the day rolls over
 
   let settings = {};
-  try { (await sb('app_settings?select=key,value')).forEach((r) => (settings[r.key] = r.value)); }
-  catch (_) { return; }
+  try {
+    if (settingsAll) settings = await settingsAll();  // server's realtime-invalidated cache
+    else (await sb('app_settings?select=key,value')).forEach((r) => (settings[r.key] = r.value));
+  } catch (_) { return; }
 
   const enabledRaw = String(settings.weight_reminder_enabled ?? '1').toLowerCase();
   if (['0', 'false', 'off', 'no'].includes(enabledRaw)) return;
 
-  const target = await targetTime(sb, settings);
+  let target;
+  if (settings.weight_reminder_mode !== 'dynamic') {
+    target = await targetTime(sb, settings);          // manual mode reads no history — free
+  } else {
+    if (cachedTarget.day !== today) cachedTarget = { day: today, hm: await targetTime(sb, settings) };
+    target = cachedTarget.hm;
+  }
   if (nowHM() < target) return;                       // not time yet today
 
-  const today = localDate();
   const dedupe = `weight_reminder:${today}`;
   try {
     const seen = await sb(`notifications?dedupe_key=eq.${encodeURIComponent(dedupe)}&select=id&limit=1`);
-    if (seen.length) return;                          // already handled (sent or skipped) today
+    if (seen.length) { claimedDay = today; return; }  // already handled (sent or skipped) today
   } catch (_) { return; }
 
   // Suppress if weight OR food already logged today.
@@ -73,6 +89,7 @@ async function tick(ctx) {
 
   if (skip) {
     await supaInsert('notifications', { kind: 'weight_reminder', dedupe_key: dedupe, ok: false, detail: 'skipped: ' + skip });
+    claimedDay = today;
     if (log) log(`skipped (${skip})`);
     return;
   }
@@ -99,6 +116,7 @@ async function tick(ctx) {
     kind: 'weight_reminder', dedupe_key: dedupe, title: TITLE, body: BODY,
     sent_at: new Date().toISOString(), ok: okAny, detail: details.join(' '),
   });
+  claimedDay = today;
   if (log) log(`sent (ok=${okAny}) ${details.join(' ')}`);
 }
 

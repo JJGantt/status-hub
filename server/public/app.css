@@ -83,7 +83,7 @@ body.ss-open .navbar{z-index:2001}
 .sectsheet[data-sec="nut"] #nutritionlog{flex:1 1 auto;min-height:0;display:flex;flex-direction:column;padding:12px 14px;gap:10px}
 .sectsheet[data-sec="nut"] #nutheat{flex:0 0 auto;overflow-x:auto}
 .sectsheet[data-sec="nut"] .nutfoods{flex:1 1 auto;min-height:0;overflow-y:auto;position:static;max-height:none}
-.sectsheet[data-sec="nut"] #nutplot{flex:0 0 auto;display:block!important}   /* keep the trend plot (override the more-specific portrait-wall display:none) */
+.sectsheet[data-sec="nut"] #nutplot{display:none}   /* no trend plot in the expanded view — just heatmap + day totals + food list */
 /* WORKOUTS: #workouts (heat + rest timer, both kept) on top, #heatinfo (set list) scrolls below */
 .sectsheet[data-sec="wk"] #workouts{flex:0 0 auto;padding:12px 14px}
 .sectsheet[data-sec="wk"] #workouts #heatwrap{overflow-x:auto}

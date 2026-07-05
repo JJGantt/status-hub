@@ -74,7 +74,14 @@ body.tv.phonewall #tv-routing .devchip .dc-v{font-size:26px}
 .sectsheet .ss-x{width:38px;height:38px;border-radius:10px;border:1px solid #2a3340;background:rgba(18,24,33,.9);
   color:#cfd8e3;font-size:15px;display:flex;align-items:center;justify-content:center;cursor:pointer;flex:0 0 auto}
 /* content stops above the fixed AI navbar (58px), which is raised over the sheet so it stays reachable */
-.sectsheet .ss-body{flex:1 1 auto;min-height:0;display:flex;flex-direction:column;overflow:hidden;font-size:15px;padding-bottom:58px}
+.sectsheet .ss-body{flex:1 1 auto;min-height:0;display:flex;flex-direction:column;overflow:hidden;font-size:13px;padding-bottom:58px}
+/* entries don't need to be big in the expanded view — shrink ONLY here (scoped to .sectsheet; regular view
+   untouched). The moved hosts are .fit elements carrying a large logical font tuned for the scaled wall, so
+   force the size down on the hosts + entry classes. */
+.sectsheet #nutritionlog,.sectsheet #workouts,.sectsheet #heatinfo,.sectsheet .nutfoods{font-size:13px!important}
+.sectsheet .dex,.sectsheet .dex-n,.sectsheet .dex-head{font-size:13px!important}
+.sectsheet .dset{font-size:10.5px!important}
+.sectsheet .dayband,.sectsheet .bi-none{font-size:13px!important}
 body.ss-open .navbar{z-index:2001}
 .sectsheet .heat .hcell{width:17px;height:17px}          /* bigger cells → easy to tap the day you want */
 .sectsheet .expand-btn{display:none}                     /* the host's own corner icon travels with it — hide it inside the sheet */

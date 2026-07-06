@@ -316,7 +316,7 @@ body.touch .page-ai .airow{height:auto;flex:1 1 auto;min-height:0}
 .dact-del:hover{background:#3a2226}
 /* On phone leave clearance so the last food row's buttons aren't hidden under the navbar. */
 body.touch #nutinfo{padding-bottom:140px}
-.addmodal-back{position:fixed;inset:0;z-index:60;background:rgba(0,0,0,.6);display:grid;place-items:center;padding:16px}
+.addmodal-back{position:fixed;inset:0;z-index:3000;background:rgba(0,0,0,.6);display:grid;place-items:center;padding:16px}   /* top-most: above the expandable section sheet (2000) + navbar */
 .addmodal{background:#1b222a;border:1px solid #2a323c;border-radius:14px;padding:18px;width:300px;max-width:100%;box-shadow:0 12px 40px rgba(0,0,0,.6)}
 .addmodal-name{font-weight:600;font-size:15px;margin-bottom:12px;color:#e8eaed}
 .addmodal-mlabel{font-size:11px;color:#8b96a5;margin-bottom:6px;text-transform:uppercase;letter-spacing:.04em}
@@ -706,7 +706,7 @@ body.tv .hmonths{margin-left:0;font-size:11px}
 .tv-worker-pi{color:#d9a13c}
 .tv-worker-fly{color:#a78bfa}
 /* settings panel (gear) */
-.settings-back{position:fixed;inset:0;z-index:1200;background:rgba(0,0,0,.55);display:grid;place-items:center;padding:16px}
+.settings-back{position:fixed;inset:0;z-index:3000;background:rgba(0,0,0,.55);display:grid;place-items:center;padding:16px}   /* above the section sheet too */
 .settings-panel{width:min(420px,100%);max-height:86vh;overflow:auto;background:#11161c;border:1px solid #283039;border-radius:16px;padding:18px 18px 20px;box-shadow:0 18px 50px rgba(0,0,0,.6)}
 .settings-h{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
 .settings-h h3{margin:0;font-size:16px}

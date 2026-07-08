@@ -6,7 +6,7 @@ const path = require('path');
 const { createClient } = require('@supabase/supabase-js');
 const WebSocket = require('ws');
 const heicConvert = require('heic-convert');
-const { estimateMaintenance, macroTargets } = require('./lib/maintenance');
+const { estimateMaintenance, estimateHistory, macroTargets } = require('./lib/maintenance');
 const pace = require('./lib/pace');
 const { computeVolume } = require('./lib/volume');
 const BODY_SVG = require('./lib/bodymap');
@@ -295,7 +295,7 @@ async function fetchStatusRows(win, week, histStart, heatStart) {
     sb(`nutrition_entries?occurred_at=gte.${win.start}&occurred_at=lt.${win.end}&staged=eq.false&select=calories,protein_g,carbs_g,fat_g`),
     sb(`sets?occurred_at=gte.${week[0]}T00:00:00&select=occurred_at,exercise,muscles_override`),
     sb('weight_log?select=date,weight_lbs&order=date.asc'),
-    sb(`nutrition_entries?occurred_at=gte.${histStart}T00:00:00&staged=eq.false&select=occurred_at,calories`),
+    sbRange(`nutrition_entries?occurred_at=gte.${histStart}T00:00:00&staged=eq.false&select=occurred_at,calories&order=occurred_at`),
     sb('exercise_muscles?select=name,muscle,contribution'),
     sbRange(`sets?occurred_at=gte.${heatStart}T00:00:00&select=occurred_at&order=occurred_at`),
     sb('exercise_catalog?select=name,equipment'),
@@ -312,7 +312,7 @@ async function buildStatus() {
   const win = nutritionWindow();
   const today = win.day;
   const week = lastNTrainingDays(7);
-  const histStart = localDate(new Date(Date.now() - 40 * 86400000)); // intake history for the maintenance trend
+  const histStart = localDate(new Date(Date.now() - 210 * 86400000)); // intake history for the maintenance trend + per-day replay (viz paging)
   const heatStart = localDate(new Date(Date.now() - 140 * 86400000)); // ~20 weeks for the workout volume heatmap
 
   const [{ entries, setRows, weightRows, histRows, muscleRows, heatRows, catalogRows, nutLogRows, targetRows, surfRows }, deviceRows, presenceRows, workerRows] = await Promise.all([
@@ -363,6 +363,7 @@ async function buildStatus() {
   };
   const minAlignedDays = await maintenanceMinDays();
   const maintenance = estimateMaintenance({ weights, intakeByDay, today, surplus, minAlignedDays });
+  if (maintenance.viz) maintenance.viz.series = estimateHistory({ weights, intakeByDay, today, surplus, minAlignedDays });
   nutrition.target = maintenance.target_macros; // the macro goal is the live dynamic target
   syncStoredTarget(maintenance.target_macros, today).catch((e) => console.error('target sync:', e.message));
 

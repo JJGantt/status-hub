@@ -118,7 +118,7 @@ function macroTargets(calories, bodyweight) {
   return { protein_g, carbs_g, fat_g };
 }
 
-function estimateMaintenance({ weights = [], intakeByDay = [], today, surplus = SURPLUS, minAlignedDays = MIN_ALIGNED_DAYS }) {
+function estimateMaintenance({ weights = [], intakeByDay = [], today, surplus = SURPLUS, minAlignedDays = MIN_ALIGNED_DAYS, _viz = true }) {
   // Collapse same-day weigh-ins to one averaged point (multiple readings in a day must not over-count
   // toward the gate or skew the trend).
   const wByDay = {};
@@ -196,15 +196,18 @@ function estimateMaintenance({ weights = [], intakeByDay = [], today, surplus = 
     current_weight: currentWeight != null ? Math.round(currentWeight * 10) / 10 : null,
     window_start: A,
     window_end: B,
+    avg_intake: avgIntake != null ? Math.round(avgIntake) : null,
     // Per-day detail for the "what is this number based on" visualization (phone-wall maintenance pane).
     // Everything the chart draws, straight from the estimator's own intermediates — never recomputed
-    // client-side, so the display can't drift from the calc.
-    viz: B == null ? null : {
-      weighins: winW.map((w) => ({ date: w.date, weight: w.weight, rw: recencyWeight(dayIndex(w.date, B)) })),
-      intake: winIAll.map((d) => ({ date: d.date, calories: d.calories, kept: winI.includes(d), rw: recencyWeight(dayIndex(d.date, B)) })),
-      post: intakeByDay.filter((d) => dayIndex(d.date, B) >= 0 && dayIndex(d.date, today) <= 0)
-        .map((d) => ({ date: d.date, calories: d.calories })),
-      avg_intake: avgIntake != null ? Math.round(avgIntake) : null,
+    // client-side, so the display can't drift from the calc. Ships ALL weigh-ins and logged days (not
+    // just the current window) so the client can page back through history; `kept` is the outlier flag
+    // within the current window, null outside it. Skipped for the per-day history replay (_viz=false).
+    viz: (!_viz || B == null) ? null : {
+      weighins: weighDays.map((w) => ({ date: w.date, weight: w.weight, rw: recencyWeight(dayIndex(w.date, B)) })),
+      intake: intakeByDay.filter((d) => dayIndex(d.date, today) <= 0)
+        .map((d) => ({ date: d.date, calories: d.calories,
+                       kept: winIAll.includes(d) ? winI.includes(d) : null,
+                       rw: recencyWeight(Math.min(0, dayIndex(d.date, B))) })),
       slope_lb_day: slope,
       weight_at_end: currentWeight != null ? Math.round(currentWeight * 10) / 10 : null,
     },
@@ -220,4 +223,28 @@ function estimateMaintenance({ weights = [], intakeByDay = [], today, surplus = 
   };
 }
 
-module.exports = { estimateMaintenance, macroTargets, ANCHOR_MAINTENANCE, SURPLUS, HALF_LIFE_DAYS, KCAL_PER_LB_LOSS, KCAL_PER_LB_GAIN, MIN_ALIGNED_DAYS };
+// Per-day history replay: what the estimator says AS-OF each day (weights ≤ D, intake < D), from the
+// first weigh-in to today. This is the source for the historical avg/maintenance/target curves in the
+// viz pane — computed by the same code as the live number, so the curves step exactly where weigh-ins
+// land and hold flat between them (the freeze made visible). Days before the first valid window yield
+// nulls (calibrating), which the client renders as gaps.
+function estimateHistory({ weights = [], intakeByDay = [], today, surplus = SURPLUS, minAlignedDays = MIN_ALIGNED_DAYS }) {
+  if (!weights.length) return [];
+  const first = weights.map((w) => w.date).sort()[0];
+  const out = [];
+  for (let t = Date.parse(first + 'T12:00:00Z'); ; t += 86400000) {
+    const D = new Date(t).toISOString().slice(0, 10);
+    if (dayIndex(D, today) > 0) break;
+    const e = estimateMaintenance({
+      weights: weights.filter((w) => w.date <= D),
+      intakeByDay: intakeByDay.filter((d) => d.date < D),
+      today: D, surplus, minAlignedDays, _viz: false,
+    });
+    out.push(e.source === 'live'
+      ? { date: D, avg: e.avg_intake, maintenance: e.maintenance, target: e.target }
+      : { date: D, avg: null, maintenance: null, target: null });
+  }
+  return out;
+}
+
+module.exports = { estimateMaintenance, estimateHistory, macroTargets, ANCHOR_MAINTENANCE, SURPLUS, HALF_LIFE_DAYS, KCAL_PER_LB_LOSS, KCAL_PER_LB_GAIN, MIN_ALIGNED_DAYS };

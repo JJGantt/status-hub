@@ -37,14 +37,20 @@ const ABS_FLOOR_CAL = 1000;      // a logged day below this is treated as incomp
 const LOW_K = 2.0;               // drop days below median - LOW_K*sigma (robust, MAD-based)
 const HIGH_K = 3.0;              // drop absurd-high days (double-logs) above median + HIGH_K*sigma
 
-// Data-sufficiency gate (cold-start -> live). The analysis window is the current continuous
-// intake-LOGGING streak — NOT a fixed clock — so the weight trend and the intake average always
-// cover the SAME period (energy balance is invalid otherwise).
+// Data-sufficiency gate (cold-start -> live). The analysis window is bookended by WEIGH-INS:
+// it runs [first weigh-in .. last weigh-in] of the current continuous intake-logging streak, and
+// intake is averaged over [first weigh-in .. last weigh-in - 1]. The one-day offset is the morning
+// weigh-in convention: a fasted AM reading on day B reflects intake through day B-1's dinner, and
+// the day-A reading is the baseline (intake before A is already baked into it). Weight and calories
+// therefore cover the SAME physical period — energy balance is invalid otherwise. Between weigh-ins
+// the estimate is FROZEN (recency weights anchor to the window end, not the clock): empirical data
+// keeps its authority until new data arrives. There is deliberately NO staleness timeout — an aging
+// weigh-in never reverts the estimate to the generic anchor (that would replace a personalized,
+// empirically-derived number with a worse one on zero evidence).
 const MIN_ALIGNED_DAYS = 14;     // default min length of the aligned window for a live estimate (a hub setting)
 const STREAK_MAX_GAP = 3;        // a gap longer than this (days) between logged days breaks the tracking streak
 const MIN_WEIGHIN_DAYS = 4;      // distinct weigh-in DAYS needed within the aligned window (same-day reads collapse to 1)
 const MIN_INTAKE_DAYS = 10;      // distinct VALID intake-logged days needed within the window
-const MAX_GAP_DAYS = 5;          // newest weigh-in/intake must be this fresh; also the slack for the start anchor
 
 function median(xs) {
   if (!xs.length) return null;
@@ -119,42 +125,47 @@ function estimateMaintenance({ weights = [], intakeByDay = [], today, surplus = 
   for (const w of weights) (wByDay[w.date] = wByDay[w.date] || []).push(w.weight);
   const weighDays = Object.entries(wByDay).map(([date, ws]) => ({ date, weight: ws.reduce((a, b) => a + b, 0) / ws.length }));
 
-  // Aligned analysis window = the current continuous intake-LOGGING streak [t0 .. today]. Walk back from
-  // the most recent logged day, staying in the streak while gaps stay <= STREAK_MAX_GAP; a longer gap
-  // (e.g. a months-long untracked stretch) breaks it. The weight trend AND the intake average are both
-  // clipped to this one window so the energy balance compares the same period — a stale weigh-in from
-  // before you started logging can no longer poison the slope.
-  const loggedDays = [...new Set(intakeByDay.map((d) => d.date))].filter((d) => dayIndex(d, today) <= 0).sort();
+  // Aligned analysis window, bookended by weigh-ins. B = the most recent weigh-in — the window's END
+  // and the recency anchor (NOT today: recomputing between weigh-ins must yield the identical number,
+  // so intake logged after B can never move the estimate — that was a feedback loop where accidental
+  // surplus raised tomorrow's target with zero weight evidence). Walk the intake-logging streak back
+  // from B-1 (gaps <= STREAK_MAX_GAP keep it alive; the streak must also reach to within the same gap
+  // of B-1, else intake doesn't cover the period the scale measured). A = the earliest weigh-in inside
+  // the streak — the window's START (the day-A morning reading is the baseline; intake before it is
+  // already baked in). Weight spans [A..B]; intake spans [A..B-1] (morning-weigh-in convention).
+  const B = weighDays.length ? weighDays.map((w) => w.date).sort().pop() : null;
   let t0 = null;
-  if (loggedDays.length) {
-    t0 = loggedDays[loggedDays.length - 1];
-    for (let i = loggedDays.length - 1; i > 0; i--) {
-      if (dayIndex(loggedDays[i], today) - dayIndex(loggedDays[i - 1], today) <= STREAK_MAX_GAP) t0 = loggedDays[i - 1];
-      else break;
+  if (B != null) {
+    const loggedDays = [...new Set(intakeByDay.map((d) => d.date))]
+      .filter((d) => dayIndex(d, B) < 0).sort();   // strictly before B (intake window ends at B-1)
+    if (loggedDays.length && dayIndex(loggedDays[loggedDays.length - 1], B) >= -1 - STREAK_MAX_GAP) {
+      t0 = loggedDays[loggedDays.length - 1];
+      for (let i = loggedDays.length - 1; i > 0; i--) {
+        if (dayIndex(loggedDays[i], B) - dayIndex(loggedDays[i - 1], B) <= STREAK_MAX_GAP) t0 = loggedDays[i - 1];
+        else break;
+      }
     }
   }
-  const t0idx = t0 != null ? dayIndex(t0, today) : 0;
-  const inWindow = (date) => t0 != null && dayIndex(date, today) >= t0idx;
+  const winWAll = t0 != null ? weighDays.filter((w) => dayIndex(w.date, B) <= 0 && dayIndex(w.date, t0) >= 0) : [];
+  const A = winWAll.length ? winWAll.map((w) => w.date).sort()[0] : null;
+  const winW = A != null ? winWAll.filter((w) => dayIndex(w.date, A) >= 0) : [];
+  const { kept: winI, excluded: intakeExcluded } = rejectOutliers(
+    A != null ? intakeByDay.filter((d) => dayIndex(d.date, A) >= 0 && dayIndex(d.date, B) < 0) : []);
 
-  const winW = weighDays.filter((w) => inWindow(w.date));
-  const { kept: winI, excluded: intakeExcluded } = rejectOutliers(intakeByDay.filter((d) => inWindow(d.date)));
-  const newest = (arr) => arr.length ? Math.min(...arr.map((d) => -dayIndex(d.date, today))) : Infinity;
-  const oldest = (arr) => arr.length ? Math.max(...arr.map((d) => -dayIndex(d.date, today))) : -Infinity;
-
-  const windowLen = t0 != null ? -t0idx : 0;                          // days from t0 to today
-  const lastW = newest(winW), lastI = newest(winI);
-  // Live requires: an aligned window long enough for a trustworthy slope; enough weigh-in days that SPAN
-  // it (an anchor near the start, within MAX_GAP_DAYS of t0, and one fresh near today); enough valid intake.
+  const windowLen = A != null ? -dayIndex(A, B) : 0;                  // days from A to B
+  // Live requires: a window long enough for a trustworthy slope, enough weigh-in days, enough valid
+  // intake. NO freshness-vs-today gate — the estimate stays live on the last aligned window until a
+  // new weigh-in extends it (empirical beats the generic anchor at any age).
   const enoughWindow = windowLen >= minAlignedDays;
-  const enoughW = winW.length >= MIN_WEIGHIN_DAYS && lastW <= MAX_GAP_DAYS && oldest(winW) >= windowLen - MAX_GAP_DAYS;
-  const enoughI = winI.length >= MIN_INTAKE_DAYS && lastI <= MAX_GAP_DAYS;
+  const enoughW = winW.length >= MIN_WEIGHIN_DAYS;
+  const enoughI = winI.length >= MIN_INTAKE_DAYS;
 
   let maintenance = null, slope = null, currentWeight = null, source = 'calibrating';
   if (enoughWindow && enoughW && enoughI) {
-    const tr = weightedTrend(winW, today);
-    const avg = weightedAvg(winI, today);
+    const tr = weightedTrend(winW, B);   // recency anchored at B → frozen between weigh-ins
+    const avg = weightedAvg(winI, B);
     if (tr && avg != null) {
-      slope = tr.slope; currentWeight = tr.current;
+      slope = tr.slope; currentWeight = tr.current;   // trend intercept = weight at B
       // Energy balance: intake - maintenance = stored-energy change (slope * kcal-per-lb).
       // So maintenance = intake - slope*kcalPerLb. Gaining (slope>0) => maintenance below intake;
       // losing (slope<0) => the double-negative pushes maintenance above intake.
@@ -182,14 +193,16 @@ function estimateMaintenance({ weights = [], intakeByDay = [], today, surplus = 
     surplus,
     trend_lb_per_week: slope != null ? Math.round(slope * 7 * 100) / 100 : null,
     current_weight: currentWeight != null ? Math.round(currentWeight * 10) / 10 : null,
-    window_start: t0,
+    window_start: A,
+    window_end: B,
     coverage: {
       window_days: windowLen, need_window_days: minAlignedDays,
       weighin_days: winW.length, need_weighin_days: MIN_WEIGHIN_DAYS,
       intake_days: winI.length, need_intake_days: MIN_INTAKE_DAYS,
       intake_days_excluded: intakeExcluded,
-      last_weighin_days_ago: isFinite(lastW) ? lastW : null,
-      last_intake_days_ago: isFinite(lastI) ? lastI : null,
+      // informational only (relative to the request clock) — freshness never gates the estimate
+      last_weighin_days_ago: B != null ? -dayIndex(B, today) : null,
+      last_intake_days_ago: (() => { const ds = intakeByDay.filter((d) => dayIndex(d.date, today) <= 0); return ds.length ? Math.min(...ds.map((d) => -dayIndex(d.date, today))) : null; })(),
     },
   };
 }

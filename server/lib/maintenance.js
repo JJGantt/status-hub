@@ -149,8 +149,8 @@ function estimateMaintenance({ weights = [], intakeByDay = [], today, surplus = 
   const winWAll = t0 != null ? weighDays.filter((w) => dayIndex(w.date, B) <= 0 && dayIndex(w.date, t0) >= 0) : [];
   const A = winWAll.length ? winWAll.map((w) => w.date).sort()[0] : null;
   const winW = A != null ? winWAll.filter((w) => dayIndex(w.date, A) >= 0) : [];
-  const { kept: winI, excluded: intakeExcluded } = rejectOutliers(
-    A != null ? intakeByDay.filter((d) => dayIndex(d.date, A) >= 0 && dayIndex(d.date, B) < 0) : []);
+  const winIAll = A != null ? intakeByDay.filter((d) => dayIndex(d.date, A) >= 0 && dayIndex(d.date, B) < 0) : [];
+  const { kept: winI, excluded: intakeExcluded } = rejectOutliers(winIAll);
 
   const windowLen = A != null ? -dayIndex(A, B) : 0;                  // days from A to B
   // Live requires: a window long enough for a trustworthy slope, enough weigh-in days, enough valid
@@ -160,11 +160,12 @@ function estimateMaintenance({ weights = [], intakeByDay = [], today, surplus = 
   const enoughW = winW.length >= MIN_WEIGHIN_DAYS;
   const enoughI = winI.length >= MIN_INTAKE_DAYS;
 
-  let maintenance = null, slope = null, currentWeight = null, source = 'calibrating';
+  let maintenance = null, slope = null, currentWeight = null, source = 'calibrating', avgIntake = null;
   if (enoughWindow && enoughW && enoughI) {
     const tr = weightedTrend(winW, B);   // recency anchored at B → frozen between weigh-ins
     const avg = weightedAvg(winI, B);
     if (tr && avg != null) {
+      avgIntake = avg;
       slope = tr.slope; currentWeight = tr.current;   // trend intercept = weight at B
       // Energy balance: intake - maintenance = stored-energy change (slope * kcal-per-lb).
       // So maintenance = intake - slope*kcalPerLb. Gaining (slope>0) => maintenance below intake;
@@ -195,6 +196,18 @@ function estimateMaintenance({ weights = [], intakeByDay = [], today, surplus = 
     current_weight: currentWeight != null ? Math.round(currentWeight * 10) / 10 : null,
     window_start: A,
     window_end: B,
+    // Per-day detail for the "what is this number based on" visualization (phone-wall maintenance pane).
+    // Everything the chart draws, straight from the estimator's own intermediates — never recomputed
+    // client-side, so the display can't drift from the calc.
+    viz: B == null ? null : {
+      weighins: winW.map((w) => ({ date: w.date, weight: w.weight, rw: recencyWeight(dayIndex(w.date, B)) })),
+      intake: winIAll.map((d) => ({ date: d.date, calories: d.calories, kept: winI.includes(d), rw: recencyWeight(dayIndex(d.date, B)) })),
+      post: intakeByDay.filter((d) => dayIndex(d.date, B) >= 0 && dayIndex(d.date, today) <= 0)
+        .map((d) => ({ date: d.date, calories: d.calories })),
+      avg_intake: avgIntake != null ? Math.round(avgIntake) : null,
+      slope_lb_day: slope,
+      weight_at_end: currentWeight != null ? Math.round(currentWeight * 10) / 10 : null,
+    },
     coverage: {
       window_days: windowLen, need_window_days: minAlignedDays,
       weighin_days: winW.length, need_weighin_days: MIN_WEIGHIN_DAYS,

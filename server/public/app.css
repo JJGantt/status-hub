@@ -399,7 +399,7 @@ body.tv.phonewall{height:100vh;overflow:hidden}
 body.tv.phonewall .tv-shell{position:relative;top:0;left:0;transform-origin:top left}  /* width/height/scale set by wall.js; lives INSIDE the center swipe pane (fixed would pin it over the pane scroller) */
 
 /* ===== phone wall: three swipeable panes — [chat] [wall] [misc], landing on the wall ===== */
-body.tv:not(.phonewall) .pane-chat,body.tv:not(.phonewall) .pane-misc{display:none}  /* kiosk: shell only */
+body.tv:not(.phonewall) .pane-chat,body.tv:not(.phonewall) .pane-misc,body.tv:not(.phonewall) .pane-maint{display:none}  /* kiosk: shell only */
 body.tv.phonewall .wallpanes{display:flex;overflow-x:auto;overflow-y:hidden;scroll-snap-type:x mandatory;scrollbar-width:none;height:100vh;height:100dvh}
 body.tv.phonewall .wallpanes::-webkit-scrollbar{display:none}
 body.tv.phonewall .pane{flex:0 0 100vw;min-width:0;scroll-snap-align:start;scroll-snap-stop:always}
@@ -407,6 +407,20 @@ body.tv.phonewall .pane-wall{overflow:hidden}
 body.tv.phonewall .pane-chat{padding:12px 12px 70px;overflow:hidden;display:flex;flex-direction:column}
 body.tv.phonewall .pane-chat .ai-shell{height:100%}
 body.tv.phonewall .pane-misc{padding:12px 12px 70px;overflow-y:auto;display:flex;flex-direction:column;gap:12px}
+/* maintenance-window pane (4th swipe): native phone scale, like misc */
+body.tv.phonewall .pane-maint{padding:12px 12px 70px;overflow-y:auto}
+body.tv.phonewall .pane-maint .card{background:#151a20!important;border:1px solid #222a33;border-radius:12px}
+.maintcard{padding:14px}
+.maintcard svg{width:100%;height:auto;display:block}
+.mv-title{font-size:16px;font-weight:700;color:#e6edf3}
+.mv-sub{font-size:12px;color:#8b96a5;margin:3px 0 10px}
+.mv-note{font-size:13px;color:#8b96a5;margin-top:8px}
+.mv-leg{display:flex;flex-wrap:wrap;gap:5px 16px;margin-top:8px;font-size:11.5px;color:#8b96a5}
+.mv-leg i{display:inline-block;width:12px;height:12px;border-radius:3px;vertical-align:-2px;margin-right:5px}
+.mv-leg .mv-hatchkey{display:inline-block;width:12px;height:12px;border-radius:3px;vertical-align:-2px;margin-right:5px;
+  background:repeating-linear-gradient(45deg,#39434f 0 2px,#7c8794 2px 4px)}
+.mv-math{margin-top:9px;font-size:12px;color:#c7ced8;font-variant-numeric:tabular-nums;background:#0e1318;
+  border:1px solid #222a33;border-radius:8px;padding:8px 10px}
 /* the misc pane renders at NATIVE phone scale — undo the wall's canvas-sized chrome/type inside it */
 body.tv.phonewall .pane-misc .card{flex:0 0 auto;background:#151a20!important;border:1px solid #222a33}
 body.tv.phonewall .pane-misc .card h2{display:block}
@@ -431,7 +445,7 @@ body.tv.mac .pane-chat{display:flex;flex-direction:column;flex:0 0 var(--macchat
   padding:0;background:#0c1015;border-right:1px solid #1b222b;position:relative}
 body.tv.mac.chatcollapsed .pane-chat{flex-basis:0;border-right:none;overflow:hidden}
 body.tv.mac .pane-wall{flex:1 1 auto;min-width:0;position:relative;height:100%;overflow:hidden}
-body.tv.mac .pane-misc{display:none}
+body.tv.mac .pane-misc,body.tv.mac .pane-maint{display:none}
 body.tv.mac .tv-shell{position:absolute;transform-origin:top left}   /* size/scale/offset set by wall.js */
 body.tv.mac .rows{height:100%}
 body.tv.mac .tv-voice{display:none}                        /* chat is the side panel now */

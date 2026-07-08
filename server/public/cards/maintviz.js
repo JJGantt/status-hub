@@ -86,7 +86,7 @@ export function render(s) {
 
   const trendTxt = m.trend_lb_per_week != null ? `${m.trend_lb_per_week > 0 ? '+' : ''}${m.trend_lb_per_week} lb/wk` : '';
   el.innerHTML =
-    '<div class="mv-title">Calorie target — the data behind it</div>' +
+    '<div class="mv-title">Calorie target</div>' +
     `<div class="mv-sub">window ${esc(fmt(A))} → ${esc(fmt(B))} (weigh-in bookended) · trend ${esc(trendTxt)} · weight ${esc(String(v.weight_at_end ?? '—'))} lb</div>` +
     `<svg viewBox="0 0 ${W} 446" xmlns="http://www.w3.org/2000/svg">` +
     `<defs><pattern id="mvhatch" width="6" height="6" patternTransform="rotate(45)" patternUnits="userSpaceOnUse">` +
@@ -101,7 +101,7 @@ export function render(s) {
     '<div class="mv-leg">' +
     '<span><i style="background:#a78bfa"></i>weigh-ins (opacity = recency weight)</span>' +
     '<span><i style="background:#3b82f6"></i>intake day used</span>' +
-    '<span><i class="mv-hatchkey"></i>after last weigh-in — not used until you weigh in</span>' +
+    '<span><i class="mv-hatchkey"></i>after last weigh-in (unused)</span>' +
     '</div>' +
     `<div class="mv-math">${esc(`${v.avg_intake ?? '—'} avg − (${v.slope_lb_day != null ? (v.slope_lb_day * 1).toFixed(3) : '—'} lb/day × ${v.slope_lb_day > 0 ? 2500 : 3500}) = ${m.maintenance} maintenance → ${m.surplus >= 0 ? '+' : ''}${m.surplus} surplus = ${m.target} target`)}</div>`;
 }

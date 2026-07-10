@@ -13,9 +13,14 @@
 //   absolute tolerance (small misses barely register, big ones bite). Because pace is small early, the
 //   absolute gap you can have early is small too, so an unfinished morning never craters to 0.
 //     protein  — FLOOR: only being UNDER pace is penalized (overage free). 0 at 50g behind pace.
-//     calories — TWO-SIDED, SYMMETRIC. 0 at 750 kcal off pace either direction. (No goal-aware
-//                asymmetry: the calorie goal already sitting above maintenance accounts for that.)
-//     fat      — TWO-SIDED, SYMMETRIC. 0 at 25g off pace either direction.
+//     calories — TWO-SIDED. 0 at 750 kcal off pace. (No goal-aware asymmetry: the calorie goal already
+//                sitting above maintenance accounts for that.)
+//     fat      — TWO-SIDED. 0 at 25g off pace.
+//   The two-sided overage is split at the DAY TARGET, because front-loading is not overshooting: the
+//   part that merely runs ahead of pace while still under the day's target counts at EARLY_WEIGHT, and
+//   only the part past the target costs full. Behind pace always costs full. No today/past branch is
+//   needed — a completed day has fraction=1, so pace == target, the early part is 0, and the split
+//   collapses back to a plain symmetric deviation.
 //   Past completed days use the full target as pace (fraction = 1); an unlogged day = 0. TODAY's pace is
 //   prorated to the elapsed eating-window fraction. Nutrition% = 0.5·today + 0.5·past6avg.
 
@@ -24,6 +29,7 @@ const W_PRO = 0.35, W_CAL = 0.35, W_FAT = 0.30;     // nutrition macro weights (
 const PRO_TOL = 50;     // protein: grams BEHIND pace at which the score hits 0 (under only; over is free)
 const CAL_TOL = 750;    // calories: kcal off pace (either direction) at which the score hits 0
 const FAT_TOL = 25;     // fat: grams off pace (either direction) at which the score hits 0
+const EARLY_WEIGHT = 0.5; // ahead-of-pace-but-under-target overage counts at half
 const W_TODAY = 0.5;                                 // today's weight within nutrition
 const W_TRAIN = 0.5;                                 // training's weight in the overall blend
 
@@ -33,9 +39,16 @@ const quadAbs = (dev, tol) => (tol > 0 ? Math.max(0, 1 - (dev / tol) ** 2) : (de
 
 // Protein is a floor: only a shortfall vs pace costs anything; being at/over pace scores 1.
 const proteinScore = (actual, pace) => quadAbs(Math.max(0, pace - actual), PRO_TOL);
-// Calories / fat are two-sided: deviation from pace in either direction costs, symmetrically.
-const calorieScore = (actual, pace) => quadAbs(Math.abs(actual - pace), CAL_TOL);
-const fatScore = (actual, pace) => quadAbs(Math.abs(actual - pace), FAT_TOL);
+// Two-sided deviation, discounted for front-loading. Behind pace costs full. Ahead of pace splits at
+// the day target: the under-target part is only early (EARLY_WEIGHT), the part past target costs full.
+function twoSidedDev(actual, pace, target) {
+  if (actual <= pace) return pace - actual;
+  const excess = Math.max(0, actual - target);       // genuinely overshot the day
+  const early = actual - pace - excess;              // merely ahead of schedule
+  return EARLY_WEIGHT * early + excess;
+}
+const calorieScore = (actual, pace, target) => quadAbs(twoSidedDev(actual, pace, target), CAL_TOL);
+const fatScore = (actual, pace, target) => quadAbs(twoSidedDev(actual, pace, target), FAT_TOL);
 const pct = (x) => Math.round(x * 1000) / 10;
 
 function trainingScore(volume) {
@@ -50,9 +63,9 @@ function nutritionScore(days) {
   const scored = days.map((d) => {
     const f = d.isToday ? d.fraction : 1;          // today's pace is prorated to the elapsed window fraction
     const calPace = d.calGoal * f, proPace = d.proteinFloor * f, fatPace = d.fatTarget * f;
-    const cal = calorieScore(d.cal, calPace);
+    const cal = calorieScore(d.cal, calPace, d.calGoal);
     const pro = proteinScore(d.protein, proPace);
-    const fat = fatScore(d.fat, fatPace);
+    const fat = fatScore(d.fat, fatPace, d.fatTarget);
     const dayPct = W_PRO * pro + W_CAL * cal + W_FAT * fat;
     return { ...d, f, calPace, proPace, fatPace, calScore: cal, proScore: pro, fatScore: fat, dayPct };
   });

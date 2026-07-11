@@ -104,16 +104,24 @@ function computeVolume(setRows, muscleRows, window, targets) {
       const sets = Math.round((total[slug] || 0) * 10) / 10;
       const drop_tomorrow = Math.round((dropTmrw[slug] || 0) * 10) / 10;   // oldest bucket, gone tomorrow (urgent)
       const drop_day_after = Math.round((dropAfter[slug] || 0) * 10) / 10; // 2nd-oldest, gone the day after
-      const dropping = Math.round((drop_tomorrow + drop_day_after) * 10) / 10; // combined at-risk volume
       const target = (targets && targets[slug]) || TARGET_DEFAULT;
       const ratio = target > 0 ? sets / target : 0;
       const today = Math.round((todayRaw[slug] || 0) * 10) / 10;   // today's adjusted sets ("+N" badge, persists all day)
+      // Bar slices are capped BANDS between the muscle's projected fill levels, so an overfilled bar
+      // (sets > target) doesn't over-stripe: sets aging out of the OVERAGE above target burn cushion
+      // that was never drawn as bar length, so they must not shrink the bar. Each stripe's LEFT edge =
+      // exactly where the bar will sit after that rollover (bright starts at tomorrow's level, faint at
+      // the day-after level); the three bands sum to the current capped fill, never past 100%.
+      const cap = (n) => (target > 0 ? Math.max(0, Math.min(1, n / target)) : 0);
+      const lvlNow = cap(sets);                                     // current fill, capped at target
+      const lvlTmrw = cap(sets - drop_tomorrow);                    // fill after tomorrow's 4am rollover
+      const lvl2day = cap(sets - drop_tomorrow - drop_day_after);   // fill after the rollover after that
       return {
-        muscle: slug, label, sets, dropping, drop_tomorrow, drop_day_after, target, today,
-        fill: Math.max(0, Math.min(1, ratio)),                       // total fill vs target (capped)
-        stable_fill: target > 0 ? Math.max(0, Math.min(1, (sets - dropping) / target)) : 0, // survives both rollovers
-        drop_tomorrow_fill: target > 0 ? Math.min(1, drop_tomorrow / target) : 0,     // urgent (bright stripes)
-        drop_day_after_fill: target > 0 ? Math.min(1, drop_day_after / target) : 0,   // soon (faint stripes)
+        muscle: slug, label, sets, drop_tomorrow, drop_day_after, target, today,
+        fill: lvlNow,                                                // total fill vs target (capped)
+        stable_fill: lvl2day,                                        // survives both rollovers
+        drop_day_after_fill: lvlTmrw - lvl2day,                      // band: 2-day level → tomorrow level (faint stripes)
+        drop_tomorrow_fill: lvlNow - lvlTmrw,                        // band: tomorrow level → now (bright stripes)
         color: volColor(ratio),
       };
     }),

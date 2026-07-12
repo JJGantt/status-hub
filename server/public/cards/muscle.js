@@ -6,6 +6,11 @@ import { state, TOUCH, esc } from '../shared.js';
 // On the TV wall, abbreviate the qualifier word so labels read BIG without getting wider:
 // "Lower back"→"L. back", "Side delts"→"S. delts", "Triceps (long)"→"Tri. long". Single words unchanged.
 const TV = document.body.classList.contains('tv');
+
+// Recovery tint on the muscle label by when it was last worked (server `recency`): TODAY = amber (freshly
+// fatigued), YESTERDAY = gold (recovering), older/untouched → no tint = default gray (recovered, ready to
+// train). A separate visual channel from the bar's volume color, so low-bar + plain-gray = behind and ready.
+const RECENCY_TINT = { today: '#f2a13d', yesterday: '#c9a06a' };
 function shortLabel(label) {
   const paren = label.match(/^(\w+)\s*\(([^)]+)\)$/);
   if (paren) return paren[1].slice(0, 3) + '. ' + paren[2];          // Triceps (long) → Tri. long
@@ -126,7 +131,9 @@ function volRowHtml(m){
  const todayVal = capped ? 11 : todayN;
  const todayParen = (!TV && todayN > 0) ? ' <span class="vbout'+(capped?' capped':'')+'">(+'+todayVal+')</span>' : '';
  const todayBadge = (TV && todayN > 0) ? '<span class="vbout'+(capped?' capped':'')+'">+'+todayVal+'</span>' : '';
- return '<div class="vrow tappable" data-mus="'+m.muscle+'"><div class=vrow-l><span class=nm>'+(TV?shortLabel(m.label):m.label)+'</span><span class=vl>'+m.sets+' / '+m.target+dropTxt+todayParen+'</span></div>'+
+ const rtint = RECENCY_TINT[m.recency];   // amber/gold if worked today/yesterday, else default gray
+ const nm = '<span class=nm'+(rtint?' style="color:'+rtint+'"':'')+'>'+(TV?shortLabel(m.label):m.label)+'</span>';
+ return '<div class="vrow tappable" data-mus="'+m.muscle+'"><div class=vrow-l>'+nm+'<span class=vl>'+m.sets+' / '+m.target+dropTxt+todayParen+'</span></div>'+
   '<div class=vtrack>'+bars+'</div>'+todayBadge+'</div>';
 }
 function renderVolume(){

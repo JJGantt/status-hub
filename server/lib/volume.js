@@ -98,6 +98,16 @@ function computeVolume(setRows, muscleRows, window, targets) {
     if (e.day !== todayBucket) continue;
     for (const mm of e.pairs) todayRaw[mm.muscle] = (todayRaw[mm.muscle] || 0) + Number(mm.contribution);
   }
+  // Recovery tint: the most recent 4am-day BUCKET a muscle got any contribution (a press, a synergist
+  // share, anything) — today / yesterday / older. Pure day-buckets, not a rolling 48h clock: whatever
+  // landed yesterday reads "yesterday" all of today regardless of time, and the day before is always
+  // clean. Same day-bucketed data the volume window already uses.
+  const ydayBucket = window.length >= 2 ? window[window.length - 2] : null;
+  const ydayRaw = {};
+  for (const e of expanded) {
+    if (e.day !== ydayBucket) continue;
+    for (const mm of e.pairs) ydayRaw[mm.muscle] = (ydayRaw[mm.muscle] || 0) + Number(mm.contribution);
+  }
   const groups = GROUPS.map(g => ({
     group: g.group,
     muscles: g.muscles.map(([slug, label]) => {
@@ -107,6 +117,8 @@ function computeVolume(setRows, muscleRows, window, targets) {
       const target = (targets && targets[slug]) || TARGET_DEFAULT;
       const ratio = target > 0 ? sets / target : 0;
       const today = Math.round((todayRaw[slug] || 0) * 10) / 10;   // today's adjusted sets ("+N" badge, persists all day)
+      const recency = (todayRaw[slug] || 0) > 0 ? "today"          // last day-bucket this muscle was worked
+                    : (ydayRaw[slug] || 0) > 0 ? "yesterday" : "ready";
       // Bar slices are capped BANDS between the muscle's projected fill levels, so an overfilled bar
       // (sets > target) doesn't over-stripe: sets aging out of the OVERAGE above target burn cushion
       // that was never drawn as bar length, so they must not shrink the bar. Each stripe's LEFT edge =
@@ -117,7 +129,7 @@ function computeVolume(setRows, muscleRows, window, targets) {
       const lvlTmrw = cap(sets - drop_tomorrow);                    // fill after tomorrow's 4am rollover
       const lvl2day = cap(sets - drop_tomorrow - drop_day_after);   // fill after the rollover after that
       return {
-        muscle: slug, label, sets, drop_tomorrow, drop_day_after, target, today,
+        muscle: slug, label, sets, drop_tomorrow, drop_day_after, target, today, recency,
         fill: lvlNow,                                                // total fill vs target (capped)
         stable_fill: lvl2day,                                        // survives both rollovers
         drop_day_after_fill: lvlTmrw - lvl2day,                      // band: 2-day level → tomorrow level (faint stripes)

@@ -76,9 +76,10 @@ export function render(s) {
     if (d.date >= B) {   // after the last weigh-in → not in any window yet
       si += `<rect x="${(X(d.date) - bw / 2).toFixed(1)}" y="${YI(d.calories).toFixed(1)}" width="${bw.toFixed(1)}" height="${(iy1 - YI(d.calories)).toFixed(1)}" fill="url(#mvhatch)" fill-opacity="0.55"/>`;
     } else {
-      const c = d.kept === false ? '#e5484d' : '#3b82f6';
-      const op = d.kept == null ? 0.4 : (0.3 + 0.7 * (d.rw || 0));   // outside the current window: dim flat blue
-      si += `<rect x="${(X(d.date) - bw / 2).toFixed(1)}" y="${YI(d.calories).toFixed(1)}" width="${bw.toFixed(1)}" height="${(iy1 - YI(d.calories)).toFixed(1)}" fill="${c}" fill-opacity="${op.toFixed(2)}"/>`;
+      // Every logged day is real data (no outlier rejection) → always blue. In-window days are
+      // recency-shaded; days before the window start are dim flat blue.
+      const op = d.kept == null ? 0.4 : (0.3 + 0.7 * (d.rw || 0));
+      si += `<rect x="${(X(d.date) - bw / 2).toFixed(1)}" y="${YI(d.calories).toFixed(1)}" width="${bw.toFixed(1)}" height="${(iy1 - YI(d.calories)).toFixed(1)}" fill="#3b82f6" fill-opacity="${op.toFixed(2)}"/>`;
     }
   }
   // historical per-day curves (step: a value holds until the next day's) — avg dashed blue,

@@ -32,10 +32,12 @@ const FAT_MIN_PCT_CAL = 0.20;  // hard guard: fat never below 20% of calories (h
 const FALLBACK_WEIGHT = 171;   // used only if there are zero weigh-ins on record
 const roundG = (x) => Math.round(x); // macro grams to the nearest 1 (nearest-5 is too coarse at low fat)
 
-// Under-report / outlier rejection on daily intake totals:
-const ABS_FLOOR_CAL = 1000;      // a logged day below this is treated as incomplete, not a real low day
-const LOW_K = 2.0;               // drop days below median - LOW_K*sigma (robust, MAD-based)
-const HIGH_K = 3.0;              // drop absurd-high days (double-logs) above median + HIGH_K*sigma
+// NOTE: there is deliberately NO automatic outlier/under-report rejection on daily intake. Every day
+// that has logged entries is real data and counts toward the intake average. Rejecting a day and
+// re-averaging the rest silently imputes the mean for it, which corrupts the energy balance (the weight
+// trend already reflects that day's calories). Genuinely unlogged days are absent by construction (no
+// rows → no entry); an incompletely-logged day can only be excluded MANUALLY (it's indistinguishable
+// from a real light day by calories alone).
 
 // Data-sufficiency gate (cold-start -> live). The analysis window is bookended by WEIGH-INS:
 // it runs [first weigh-in .. last weigh-in] of the current continuous intake-logging streak, and
@@ -50,29 +52,7 @@ const HIGH_K = 3.0;              // drop absurd-high days (double-logs) above me
 const MIN_ALIGNED_DAYS = 14;     // default min length of the aligned window for a live estimate (a hub setting)
 const STREAK_MAX_GAP = 3;        // a gap longer than this (days) between logged days breaks the tracking streak
 const MIN_WEIGHIN_DAYS = 4;      // distinct weigh-in DAYS needed within the aligned window (same-day reads collapse to 1)
-const MIN_INTAKE_DAYS = 10;      // distinct VALID intake-logged days needed within the window
-
-function median(xs) {
-  if (!xs.length) return null;
-  const a = [...xs].sort((p, q) => p - q), n = a.length;
-  return n % 2 ? a[(n - 1) / 2] : (a[n / 2 - 1] + a[n / 2]) / 2;
-}
-
-// Reject under-reported (and absurd-high) days. Returns the kept days + how many were dropped.
-function rejectOutliers(days) {
-  if (days.length < 4) { // too few to model a distribution — apply only the absolute floor
-    const kept = days.filter((d) => d.calories >= ABS_FLOOR_CAL);
-    return { kept, excluded: days.length - kept.length };
-  }
-  const cals = days.map((d) => d.calories);
-  const med = median(cals);
-  const sigma = 1.4826 * median(cals.map((c) => Math.abs(c - med))); // MAD -> robust sigma
-  // sigma==0 (near-identical days) degenerates the band, so fall back to proportional bounds.
-  const lo = sigma > 0 ? Math.max(ABS_FLOOR_CAL, med - LOW_K * sigma) : Math.max(ABS_FLOOR_CAL, med * 0.5);
-  const hi = sigma > 0 ? med + HIGH_K * sigma : med * 1.75;
-  const kept = days.filter((d) => d.calories >= lo && d.calories <= hi);
-  return { kept, excluded: days.length - kept.length };
-}
+const MIN_INTAKE_DAYS = 10;      // distinct intake-logged days needed within the window
 
 function dayIndex(dateStr, todayStr) {
   const a = Date.parse(dateStr + 'T12:00:00Z');
@@ -149,8 +129,8 @@ function estimateMaintenance({ weights = [], intakeByDay = [], today, surplus = 
   const winWAll = t0 != null ? weighDays.filter((w) => dayIndex(w.date, B) <= 0 && dayIndex(w.date, t0) >= 0) : [];
   const A = winWAll.length ? winWAll.map((w) => w.date).sort()[0] : null;
   const winW = A != null ? winWAll.filter((w) => dayIndex(w.date, A) >= 0) : [];
-  const winIAll = A != null ? intakeByDay.filter((d) => dayIndex(d.date, A) >= 0 && dayIndex(d.date, B) < 0) : [];
-  const { kept: winI, excluded: intakeExcluded } = rejectOutliers(winIAll);
+  // Every logged day in the aligned window counts — no outlier rejection (see the note at the top).
+  const winI = A != null ? intakeByDay.filter((d) => dayIndex(d.date, A) >= 0 && dayIndex(d.date, B) < 0) : [];
 
   const windowLen = A != null ? -dayIndex(A, B) : 0;                  // days from A to B
   // Live requires: a window long enough for a trustworthy slope, enough weigh-in days, enough valid
@@ -206,7 +186,7 @@ function estimateMaintenance({ weights = [], intakeByDay = [], today, surplus = 
       weighins: weighDays.map((w) => ({ date: w.date, weight: w.weight, rw: recencyWeight(dayIndex(w.date, B)) })),
       intake: intakeByDay.filter((d) => dayIndex(d.date, today) <= 0)
         .map((d) => ({ date: d.date, calories: d.calories,
-                       kept: winIAll.includes(d) ? winI.includes(d) : null,
+                       kept: winI.includes(d) ? true : null,   // in the current aligned window?
                        rw: recencyWeight(Math.min(0, dayIndex(d.date, B))) })),
       slope_lb_day: slope,
       weight_at_end: currentWeight != null ? Math.round(currentWeight * 10) / 10 : null,
@@ -215,7 +195,6 @@ function estimateMaintenance({ weights = [], intakeByDay = [], today, surplus = 
       window_days: windowLen, need_window_days: minAlignedDays,
       weighin_days: winW.length, need_weighin_days: MIN_WEIGHIN_DAYS,
       intake_days: winI.length, need_intake_days: MIN_INTAKE_DAYS,
-      intake_days_excluded: intakeExcluded,
       // informational only (relative to the request clock) — freshness never gates the estimate
       last_weighin_days_ago: B != null ? -dayIndex(B, today) : null,
       last_intake_days_ago: (() => { const ds = intakeByDay.filter((d) => dayIndex(d.date, today) <= 0); return ds.length ? Math.min(...ds.map((d) => -dayIndex(d.date, today))) : null; })(),

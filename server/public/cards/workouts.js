@@ -74,8 +74,19 @@ function tickRest(){
    html+='<div class="rt-side rt-right"><div class=rt-label>Session</div>'+
      '<div class="rt-time rt-session">'+fmtSession(sess)+'</div></div>';
  }
+ // The rep watcher, under the clocks: what the watch's counted sets are being logged
+ // as right now. Only useful BEFORE a set, so it sits where the eye already goes.
+ const rw=(state.last||{}).rep_watcher;
+ if(rw&&rw.exercise){
+   const wt=(rw.weight_lbs===0||rw.weight_lbs==null)?'bodyweight':fmtLbs(rw.weight_lbs)+' lb';
+   html+='<div class=rt-watcher><span class=rt-wdot></span>'+
+     '<span class=rt-wex>'+esc(rw.exercise)+'</span>'+
+     '<span class=rt-wwt>'+wt+'</span></div>';
+ }
  el.innerHTML=html;
 }
+
+function fmtLbs(n){ const v=Number(n)||0; return Number.isInteger(v)?String(v):v.toFixed(1); }
 
 function markHeatCell(date){
  document.querySelectorAll('#heatwrap .hcell').forEach(c=>c.classList.toggle('hsel',c.dataset.date===date));

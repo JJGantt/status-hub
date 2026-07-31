@@ -405,6 +405,22 @@ async function buildStatus() {
   });
   const score = computeScore({ volume, days: scoreDays, surplus });   // surplus signs the goal-aware calorie scoring
 
+  // The rep watcher: what the Apple Watch app's counted sets are currently being
+  // logged as. Shown under the rest clock so it is visible at a glance whether a set
+  // about to be performed will actually be recorded — knowing that BEFORE the set is
+  // the only time it helps. Ten minutes with no set clears it, mirrored from the SQL
+  // so the UI and the trigger agree on what "live" means.
+  let rep_watcher = null;
+  try {
+    const rw = (await sb('set_watcher?id=eq.1&select=exercise,weight_lbs,armed_at,last_set_at'))[0];
+    if (rw && rw.exercise) {
+      const stamp = rw.last_set_at || rw.armed_at;
+      if (stamp && Date.now() - new Date(stamp).getTime() < 10 * 60 * 1000) {
+        rep_watcher = { exercise: rw.exercise, weight_lbs: rw.weight_lbs };
+      }
+    }
+  } catch (_) { /* watcher is a nicety; never fail the dashboard over it */ }
+
   const last_set_at = (heatRows && heatRows.length) ? heatRows[heatRows.length - 1].occurred_at : null;
   // session_start_at: the first set of the trailing run where consecutive sets are <=20min apart. The
   // client shows (now - session_start) as the session clock while the last set is <20min old, and lets
@@ -420,7 +436,7 @@ async function buildStatus() {
     }
   }
   return { today, litter, feeder, surf, nutrition, maintenance, pace: paceData, volume, heatmap, nutrition_log,
-    last_set_at, session_start_at, routing, mics, score, generated_at: new Date().toISOString() };
+    last_set_at, session_start_at, rep_watcher, routing, mics, score, generated_at: new Date().toISOString() };
 }
 
 // ---- realtime push: recompute + push to all connected browsers on any DB change ----

@@ -472,6 +472,12 @@ function startRealtime() {
     .on('postgres_changes', { event: '*', schema: 'public', table: 'exercise_catalog' }, changed)
     .on('postgres_changes', { event: '*', schema: 'public', table: 'exercise_muscles' }, changed)
     .on('postgres_changes', { event: '*', schema: 'public', table: 'surf_snapshots' }, changed)
+    // The rep watcher, so setting it appears at once rather than on the next periodic
+    // frame. Its whole value is confirming BEFORE a set that sets are being logged as
+    // the right thing, and a delay there defeats the purpose. workset_reports is NOT
+    // subscribed: every report writes a row to `sets`, which is, so the push already
+    // happens and adding reports would only duplicate it.
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'set_watcher' }, changed)
     // Settings (routing model/thinking/runner, wake toggle, nutrition goal): rebuild so the TV routing
     // panel reflects an MCP/voice/settings change near-instantly instead of waiting for the 30s tick.
     .on('postgres_changes', { event: '*', schema: 'public', table: 'app_settings' }, (p) => {

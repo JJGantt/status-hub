@@ -456,15 +456,29 @@ function pushVoice(kind, row) {
   for (const res of voiceClients) { try { res.write(frame); } catch {} }
 }
 
+// Last time ANY realtime event arrived. The socket can sit reporting SUBSCRIBED while
+// delivering nothing — it has done exactly that on the voice server and the Mac
+// listener, and the only symptom is that things stop appearing. Nothing in the client
+// notices, so liveness has to be judged by whether events are actually arriving.
+let lastRealtimeEvent = Date.now();
+let hubChannel = null;
+
+// device_status is mirrored roughly every two minutes by other devices, so in normal
+// operation this channel is never quiet for long. Silence well past that is the
+// signature of a dead socket rather than a quiet house.
+const REALTIME_SILENCE_LIMIT_MS = 6 * 60 * 1000;
+
 function startRealtime() {
   // A change to any cached source table dirties the row cache, then rebuilds + pushes. The extra
   // subscriptions (weight_log … surf_snapshots) exist for the cache: without them an edit would sit
   // invisible until the 15-min backstop refetch.
-  const changed = () => { dirtyRows(); dirtyNutDay(); dirtyWorkoutDay(); broadcast(); };
-  supa.channel('hub-changes')
+  const seen = () => { lastRealtimeEvent = Date.now(); };
+  const changed = () => { seen(); dirtyRows(); dirtyNutDay(); dirtyWorkoutDay(); broadcast(); };
+  hubChannel = supa.channel('hub-changes')
     // device_status is fetched live per build (not cached) — its routine ~2-min state mirrors must
     // rebuild the frame but must NOT drag the heavy cached queries along. Plain broadcast only.
-    .on('postgres_changes', { event: '*', schema: 'public', table: 'device_status' }, broadcast)
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'device_status' },
+      () => { seen(); broadcast(); })
     .on('postgres_changes', { event: '*', schema: 'public', table: 'nutrition_entries' }, changed)
     .on('postgres_changes', { event: '*', schema: 'public', table: 'sets' }, changed)
     .on('postgres_changes', { event: '*', schema: 'public', table: 'weight_log' }, changed)
@@ -481,6 +495,7 @@ function startRealtime() {
     // Settings (routing model/thinking/runner, wake toggle, nutrition goal): rebuild so the TV routing
     // panel reflects an MCP/voice/settings change near-instantly instead of waiting for the 30s tick.
     .on('postgres_changes', { event: '*', schema: 'public', table: 'app_settings' }, (p) => {
+      seen();
       dirtySettings();
       dirtyNutDay();   // surplus_cal shapes the day header's goal figures
       broadcast(p);
@@ -494,9 +509,30 @@ function startRealtime() {
     // Voice pipeline: stream inserts/updates straight to the /tv conversation panel. INSERT and
     // UPDATE both carry the new row in `payload.new` (UPDATE = a streamed row flipping done=true).
     .on('postgres_changes', { event: '*', schema: 'public', table: 'voice_messages' },
-      (p) => { if (p.new) pushVoice('message', p.new); })
-    .subscribe((status) => console.log('realtime channel:', status));
+      (p) => { seen(); if (p.new) pushVoice('message', p.new); })
+    .subscribe((status) => {
+      console.log('realtime channel:', status);
+      // SUBSCRIBED means the handshake completed, not that events will flow. Treat it
+      // only as "the clock starts now" so a channel that comes back deaf still trips
+      // the watchdog instead of looking healthy forever.
+      if (status === 'SUBSCRIBED') lastRealtimeEvent = Date.now();
+    });
 }
+
+// Recycle a socket that has gone quiet.
+//
+// A half-open realtime connection reports SUBSCRIBED and delivers nothing. The
+// visible effect is that a set logged on the watch does not reach the screen until
+// the 15-minute cache backstop lapses, which reads as "the hub is slow" rather than
+// as a fault. Reconnecting is cheap and the check costs one comparison a minute.
+setInterval(() => {
+  const quiet = Date.now() - lastRealtimeEvent;
+  if (quiet < REALTIME_SILENCE_LIMIT_MS) return;
+  console.log(`realtime silent for ${Math.round(quiet / 1000)}s — recycling the socket`);
+  try { if (hubChannel) supa.removeChannel(hubChannel); } catch (e) { console.log('removeChannel:', e.message); }
+  lastRealtimeEvent = Date.now();   // give the new channel a full window before retrying
+  try { startRealtime(); } catch (e) { console.log('resubscribe failed:', e.message); }
+}, 60000);
 
 // ---- auth ----
 function getCookie(req, name) {

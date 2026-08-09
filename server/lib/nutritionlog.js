@@ -66,6 +66,11 @@ function buildGoalResolver({ rows = [], weights = [], targets = [], today, surpl
   };
   const goalForDay = (ds) => {
     const m = maintFor(ds);
+    // The LIVE day's goal is ALWAYS maintenance + the current surplus/deficit setting — that is
+    // exactly what the surplus knob is defined to drive. A goal that only appears once you've logged
+    // food is wrong: your target for the day is set the moment the day starts, not after your first
+    // bite. (Historical days still fall through to the tracked-cluster logic below.)
+    if (ds === today) return Math.round(targetCalFor(ds, tgs, m + surplus));
     if (inSpan(ds, recentSpan)) return Math.round(targetCalFor(ds, tgs, m + surplus));
     if (olderSpans.some((sp) => inSpan(ds, sp))) return Math.round(m - deficit);
     return Math.round(m);

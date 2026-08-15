@@ -10,7 +10,10 @@ function litterColor(v){return v==null?'#8b96a5':hueColor((90-v)/20);}  // 90% g
 function drawerColor(v){return v==null?'#8b96a5':hueColor((v-75)/20);}  // 75% green -> 95% red
 
 export function render(s){
- const L=s.litter||{};const st=L.status||'OFFLINE';
+ const L=s.litter||{};const st0=L.status||'OFFLINE';
+ // The LR4's DRAWER_FULL flag trips early (seen at 53% depth); trust the depth %, matching how the
+ // watcher drives cleaning. Only show "full" at a real level (>=90%); otherwise it's effectively idle.
+ const st=(st0==='DRAWER_FULL'&&!(L.waste_drawer_pct>=90))?'READY':st0;
  // Thin horizontal home-status strip: one device = a row of inline chips. Leaves room for more
  // device chip-groups later (e.g. a pet feeder) — just append another .devchips block.
  const chip=(label,val,col)=>'<span class=devchip><span class=dc-l>'+label+'</span>'+

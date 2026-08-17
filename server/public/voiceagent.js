@@ -165,7 +165,7 @@ export function makeRecorder({ onStatus, onActive, quick, autoStop, tier, dryWhe
       const qp = new URLSearchParams();
       if (dry) qp.set('dry', '1');
       if (quick) qp.set('quick', '1');
-      if (tier) qp.set('tier', tier);                 // 'fast' (sparkle) or 'power' (brain)
+      if (tier) qp.set('tier', tier);                 // 'standard' (sparkle) or 'brain' (brain button)
       qp.set('client_now', localNowNaive());           // this device's own wall clock, wherever it is
       const qs = qp.toString();
       const r = await fetch('/api/voice-command' + (qs ? '?' + qs : ''), {

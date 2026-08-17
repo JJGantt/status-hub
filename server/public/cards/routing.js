@@ -1,9 +1,6 @@
-// Routing panel — TV top status strip. Shows the agent's live config from the dashboard stream's
-// `routing` field: Model / Thinking / Runner / wake-free voice. Reuses the litter card's devstrip +
-// devchip markup so it matches the strip visually. Paints #tv-routing; no-ops where absent (phone).
-const MODEL = { haiku: 'Haiku', sonnet: 'Sonnet', opus: 'Opus' };
-const THINK = { none: 'None', medium: 'Med', max: 'Max' };   // abbreviated so the strip fits one line
-const RUNNER = { local: 'Local', api: 'API' };
+// Routing/liveness panel — TV top status strip. Routing is fixed now (standard Sonnet→Opus), so this
+// shows always-on + inject state and the mic/worker liveness from the dashboard stream. Reuses the
+// litter card's devstrip + devchip markup so it matches. Paints #tv-routing; no-ops where absent (phone).
 
 export function render(s) {
   const el = document.getElementById('tv-routing');
@@ -22,9 +19,6 @@ export function render(s) {
   el.innerHTML =
     '<div class="devstrip">' +
       '<div class="devchips">' +
-        chip('Model', MODEL[r.model] || r.model) +
-        chip('Think', THINK[r.thinking] || r.thinking) +
-        chip('Runner', RUNNER[r.runner] || r.runner) +
         chip('AO', r.wake ? 'On' : 'Off', r.wake ? '#39d353' : '#5c6675') +  // AO = always-on (wake-free) voice
         chip('INJ', r.inject ? 'On' : 'Off', r.inject ? '#39d353' : '#5c6675') +  // INJ = voice-inject mode
         chip('ESP', m.esp ? 'Up' : 'Down', m.esp ? UP : DOWN) +

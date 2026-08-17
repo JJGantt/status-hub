@@ -1,8 +1,7 @@
-// Settings panel (the navbar gear). Reads/writes the shared app_settings via /api/settings:
-//   - chat-box route (which of the two routes the TYPED box uses: efficiency=fast/Haiku/API,
-//     accuracy=power/Opus+thinking). The two FAB buttons + wake words carry their own tier and ignore this.
-//   - per-device trailing-silence seconds (how long of a pause ends a voice command).
-// Each control saves on change; no explicit save button.
+// Settings panel (the navbar gear). Reads/writes the shared app_settings via /api/settings.
+// Routing is now fixed: the brain button → Opus (max thinking), everything else → the standard Sonnet
+// agent that handles simple things itself and escalates to Opus for anything needing the gated tools —
+// so there are no model/route pickers here anymore. Each control saves on change; no explicit save button.
 
 async function save(key, value) {
   try {
@@ -16,7 +15,6 @@ async function save(key, value) {
 export async function open() {
   let cur = {};
   try { cur = await (await fetch('/api/settings')).json(); } catch (_) {}
-  const route = ['fast', 'power', 'custom'].includes(cur.chatbox_route) ? cur.chatbox_route : 'power';
   const sil = (k, d) => { const n = parseFloat(cur[k]); return Number.isFinite(n) && n > 0 ? n : d; };
   const wrOn = !['0', 'false', 'off', 'no'].includes(String(cur.weight_reminder_enabled ?? '1').toLowerCase());
   const wrMode = cur.weight_reminder_mode === 'dynamic' ? 'dynamic' : 'manual';
@@ -24,10 +22,6 @@ export async function open() {
   const surplusVal = Number.isFinite(parseInt(cur.surplus_cal, 10)) ? parseInt(cur.surplus_cal, 10) : 150;
   const maintDays = (() => { const n = parseInt(cur.maintenance_min_days, 10); return Number.isFinite(n) && n >= 7 ? n : 14; })();
   const wfOn = ['1', 'true', 'on', 'yes'].includes(String(cur.wakefree_enabled ?? '0').toLowerCase());
-  const wfRoute = ['fast', 'power', 'custom'].includes(cur.wakefree_route) ? cur.wakefree_route : 'fast';
-  const cMod = ['haiku', 'sonnet', 'opus'].includes(cur.custom_model) ? cur.custom_model : 'sonnet';
-  const cThink = ['none', 'medium', 'max'].includes(cur.custom_think) ? cur.custom_think : 'medium';
-  const cRun = cur.custom_runner === 'api' ? 'api' : 'local';
   const agentOn = ['1', 'true', 'on', 'yes'].includes(String(cur.agent_mode ?? '0').toLowerCase());
   const injectOn = ['1', 'true', 'on', 'yes'].includes(String(cur.voice_inject_mode ?? '0').toLowerCase());
   const speakOn = ['1', 'true', 'on', 'yes'].includes(String(cur.voice_speak_replies ?? '0').toLowerCase());
@@ -52,29 +46,6 @@ export async function open() {
     '<div class="settings-panel" role="dialog" aria-modal="true">' +
       '<div class="settings-h"><h3>Settings</h3><button class="settings-x" type="button" aria-label="Close">✕</button></div>' +
 
-      '<div class="settings-sec">Chat box route</div>' +
-      '<div class="settings-seg" id="set-routing">' +
-        '<button type="button" data-v="fast"' + (route === 'fast' ? ' class="on"' : '') + '>Efficiency</button>' +
-        '<button type="button" data-v="power"' + (route === 'power' ? ' class="on"' : '') + '>Accuracy</button>' +
-        '<button type="button" data-v="custom"' + (route === 'custom' ? ' class="on"' : '') + '>Custom</button>' +
-      '</div>' +
-
-      '<div class="settings-sec">Custom route</div>' +
-      '<div class="settings-seg" id="set-cust-model">' +
-        '<button type="button" data-v="haiku"' + (cMod === 'haiku' ? ' class="on"' : '') + '>Haiku</button>' +
-        '<button type="button" data-v="sonnet"' + (cMod === 'sonnet' ? ' class="on"' : '') + '>Sonnet</button>' +
-        '<button type="button" data-v="opus"' + (cMod === 'opus' ? ' class="on"' : '') + '>Opus</button>' +
-      '</div>' +
-      '<div class="settings-seg" id="set-cust-think" style="margin-top:8px">' +
-        '<button type="button" data-v="none"' + (cThink === 'none' ? ' class="on"' : '') + '>None</button>' +
-        '<button type="button" data-v="medium"' + (cThink === 'medium' ? ' class="on"' : '') + '>Medium</button>' +
-        '<button type="button" data-v="max"' + (cThink === 'max' ? ' class="on"' : '') + '>Maximum</button>' +
-      '</div>' +
-      '<div class="settings-seg" id="set-cust-runner" style="margin-top:8px">' +
-        '<button type="button" data-v="local"' + (cRun === 'local' ? ' class="on"' : '') + '>Local</button>' +
-        '<button type="button" data-v="api"' + (cRun === 'api' ? ' class="on"' : '') + '>API</button>' +
-      '</div>' +
-
       '<div class="settings-sec">Full agent mode</div>' +
       '<div class="settings-seg" id="set-agent-mode">' +
         '<button type="button" data-v="0"' + (agentOn ? '' : ' class="on"') + '>Off</button>' +
@@ -96,11 +67,6 @@ export async function open() {
       '<div class="settings-seg" id="set-wf-enabled">' +
         '<button type="button" data-v="0"' + (wfOn ? '' : ' class="on"') + '>Off</button>' +
         '<button type="button" data-v="1"' + (wfOn ? ' class="on"' : '') + '>On</button>' +
-      '</div>' +
-      '<div class="settings-seg" id="set-wf-route" style="margin-top:8px">' +
-        '<button type="button" data-v="fast"' + (wfRoute === 'fast' ? ' class="on"' : '') + '>Efficiency</button>' +
-        '<button type="button" data-v="power"' + (wfRoute === 'power' ? ' class="on"' : '') + '>Accuracy</button>' +
-        '<button type="button" data-v="custom"' + (wfRoute === 'custom' ? ' class="on"' : '') + '>Custom</button>' +
       '</div>' +
       '<label class="settings-row"><span>Voice-match threshold<br><small>lower = more permissive</small></span>' +
         '<input class="settings-num" type="number" min="0.1" max="0.9" step="0.05" inputmode="decimal" data-key="voiceid_threshold" value="' + wfThresh + '"></label>' +
@@ -150,20 +116,10 @@ export async function open() {
   back.addEventListener('click', (e) => { if (e.target === back) close(); });
   back.querySelector('.settings-x').addEventListener('click', close);
 
-  back.querySelector('#set-routing').addEventListener('click', (e) => {
-    const b = e.target.closest('[data-v]'); if (!b) return;
-    back.querySelectorAll('#set-routing button').forEach((x) => x.classList.toggle('on', x === b));
-    save('chatbox_route', b.dataset.v);
-  });
   back.querySelector('#set-wf-enabled').addEventListener('click', (e) => {
     const b = e.target.closest('[data-v]'); if (!b) return;
     back.querySelectorAll('#set-wf-enabled button').forEach((x) => x.classList.toggle('on', x === b));
     save('wakefree_enabled', b.dataset.v);   // listener reacts live via realtime → mic handoff
-  });
-  back.querySelector('#set-wf-route').addEventListener('click', (e) => {
-    const b = e.target.closest('[data-v]'); if (!b) return;
-    back.querySelectorAll('#set-wf-route button').forEach((x) => x.classList.toggle('on', x === b));
-    save('wakefree_route', b.dataset.v);   // wakefree.py reads it live; listener bridges it to the ESP
   });
   back.querySelector('#set-inject-mode').addEventListener('click', (e) => {
     const b = e.target.closest('[data-v]'); if (!b) return;
@@ -180,13 +136,6 @@ export async function open() {
     back.querySelectorAll('#set-push button').forEach((x) => x.classList.toggle('on', x === b));
     save('push_enabled', b.dataset.v);          // worker checks this before pushing a result to the phone
   });
-  // Custom-route knobs (model / thinking effort / runner) — used by any route set to Custom.
-  [['set-cust-model', 'custom_model'], ['set-cust-think', 'custom_think'], ['set-cust-runner', 'custom_runner']]
-    .forEach(([id, key]) => back.querySelector('#' + id).addEventListener('click', (e) => {
-      const b = e.target.closest('[data-v]'); if (!b) return;
-      back.querySelectorAll('#' + id + ' button').forEach((x) => x.classList.toggle('on', x === b));
-      save(key, b.dataset.v);
-    }));
   // Full agent mode — hub and full-agent keep SEPARATE, persistent conversations now, so toggling the mode
   // just switches which one is live; it no longer wipes anything (the worker resumes each mode's own session).
   back.querySelector('#set-agent-mode').addEventListener('click', (e) => {

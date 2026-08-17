@@ -55,27 +55,12 @@ async function maintenanceMinDays() {
     return Number.isFinite(v) && v >= 7 && v <= 60 ? v : 14;
   } catch { return 14; }
 }
-// Agent routing config for the TV panel: the ACTIVE voice route (wakefree_route) RESOLVED to the
-// model / thinking / runner it actually runs — Efficiency=Haiku/None/API, Accuracy=Opus/Max/Local, or
-// the Custom knobs — so the strip shows what's really running, not just the custom config. Plus whether
-// wake-free voice is on (a separate concern).
+// Voice state for the TV strip + the mic-liveness check: whether always-on (wake-free) voice and inject
+// mode are on. Routing is fixed now (standard Sonnet→Opus), so there's no model/route to resolve here.
 async function routingConfig() {
   let s = {};
   try { s = await settingsAll(); } catch { /* fall through to defaults */ }
-  const route = ['fast', 'power', 'custom'].includes(s.wakefree_route) ? s.wakefree_route : 'power';
-  let cfg;
-  if (route === 'fast') cfg = { model: 'haiku', thinking: 'none', runner: 'api' };
-  else if (route === 'power') cfg = { model: 'opus', thinking: 'max', runner: 'local' };
-  else cfg = {
-    model: ['haiku', 'sonnet', 'opus'].includes(s.custom_model) ? s.custom_model : 'sonnet',
-    thinking: ['none', 'medium', 'max'].includes(s.custom_think) ? s.custom_think : 'medium',
-    runner: s.custom_runner === 'api' ? 'api' : 'local',
-  };
   return {
-    route,                 // 'fast' | 'power' | 'custom' — the live voice route
-    model: cfg.model,
-    thinking: cfg.thinking,
-    runner: cfg.runner,
     wake: ['1', 'true', 'on', 'yes'].includes(String(s.wakefree_enabled ?? '0').toLowerCase()),
     inject: ['1', 'true', 'on', 'yes'].includes(String(s.voice_inject_mode ?? '0').toLowerCase()),
   };
@@ -985,7 +970,7 @@ app.post('/api/voice-command', express.raw({ type: '*/*', limit: '25mb' }), asyn
     // The bottom-right quick-add FAB sends ?quick=1 → tag the request so the worker asks Jarvis for a
     // terse, fits-in-the-status-chip confirmation. The full conversation card omits it (verbose replies).
     const quick = String(req.query.quick || '') === '1';
-    const tier = ['fast', 'power'].includes(String(req.query.tier || '')) ? String(req.query.tier) : null;
+    const tier = ['brain', 'standard', 'power', 'fast', 'custom'].includes(String(req.query.tier || '')) ? String(req.query.tier) : null;
     const client_now = CLIENT_NOW_RE.test(String(req.query.client_now || '')) ? String(req.query.client_now) : null;
     await sbWrite('voice_requests', 'POST', { transcript, source: quick ? 'web-quick' : 'web', focus: 'hub',
       ...(tier ? { tier } : {}), ...(client_now ? { client_now } : {}) });
@@ -1103,7 +1088,7 @@ app.post('/api/voice-text', express.json(), async (req, res) => {
     if (!text && !attachments.length) return res.status(400).json({ error: 'empty' });
     const msgId = String((req.body && req.body.client_msg_id) || '').slice(0, 64);
     if (msgId && seenMsgIds.has(msgId)) return res.json({ enqueued: true, duplicate: true });
-    const tier = ['fast', 'power'].includes(String((req.body && req.body.tier) || '')) ? String(req.body.tier) : null;
+    const tier = ['brain', 'standard', 'power', 'fast', 'custom'].includes(String((req.body && req.body.tier) || '')) ? String(req.body.tier) : null;
     const client_now = CLIENT_NOW_RE.test(String((req.body && req.body.client_now) || '')) ? String(req.body.client_now) : null;
     await sbWrite('voice_requests', 'POST', { transcript: text, source: 'web', focus: 'hub',
       ...(tier ? { tier } : {}), ...(attachments.length ? { attachments } : {}), ...(client_now ? { client_now } : {}) });

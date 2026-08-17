@@ -1,6 +1,7 @@
 // Shared bottom navigation. PHONE WALL: just settings + the two voice buttons (chat/misc are swipe
 // panes — no nav buttons needed). /page (desktop): adds chat + back-to-wall buttons. Right side is
-// always brain (full Opus) + sparkle (fast) voice, tap-to-talk, driving the shared activity popup.
+// brain button (Opus, max thinking) + standard button (the Sonnet agent that escalates to Opus),
+// tap-to-talk, driving the shared activity popup.
 // Mounted once per page by core.js.
 import { makeRecorder, activityBar, enqueuePhoto, pendingPhotoCount } from './voiceagent.js';
 import { open as openSettings } from './settings.js';
@@ -109,8 +110,8 @@ export function mountNavbar() {
     finally { camBtn.disabled = false; camBtn.classList.remove('busy'); }
   });
   right.appendChild(camBtn);
-  right.appendChild(mkVoice('wfab-power', BRAIN, 'power', 'Voice command (full Opus thinking)'));
-  right.appendChild(mkVoice('wfab-fast', SPARKLE, 'fast', 'Quick voice command (efficiency)'));
+  right.appendChild(mkVoice('wfab-power', BRAIN, 'brain', 'Voice command (Opus, max thinking)'));
+  right.appendChild(mkVoice('wfab-fast', SPARKLE, 'standard', 'Voice command (smart — escalates to Opus when needed)'));
 
   const bar = document.createElement('div'); bar.className = 'navbar';
   bar.appendChild(left); bar.appendChild(right);

@@ -36,7 +36,7 @@ export function render(s) {
   const inView = (d) => d >= S && d <= E;
   const canBack = S > dataStart, canFwd = viewEnd != null;
 
-  const W = 600, L = 46, R = 14;
+  const W = 600, L = 46, R = 40;   // R = right gutter for the weight scale + curve value labels (kept clear of dots)
   const X = (d) => L + (W - L - R) * ((idx(d, S) + 0.5) / VIEW_DAYS);
   const XBand = (W - L - R) / VIEW_DAYS;
 
@@ -60,8 +60,9 @@ export function render(s) {
       const op = Math.max(0.3, 0.35 + 0.65 * (w.rw || 0)), r = 3.2 + 2.6 * (w.rw || 0);
       sw += `<circle cx="${X(w.date).toFixed(1)}" cy="${YW(w.weight).toFixed(1)}" r="${r.toFixed(1)}" fill="#a78bfa" fill-opacity="${op.toFixed(2)}"/>`;
     }
-    sw += `<text x="${W - R}" y="${wy0 + 9}" fill="#5c6675" font-size="10" text-anchor="end">${wmax.toFixed(1)}</text>` +
-          `<text x="${W - R}" y="${wy1}" fill="#5c6675" font-size="10" text-anchor="end">${wmin.toFixed(1)}</text>`;
+    // Weight scale labels live in the right gutter (past the last dot), bright and legible — never over the plot.
+    sw += `<text x="${W - 3}" y="${wy0 + 9}" fill="#d4dbe4" font-size="12.5" font-weight="600" text-anchor="end">${wmax.toFixed(1)}</text>` +
+          `<text x="${W - 3}" y="${wy1}" fill="#d4dbe4" font-size="12.5" font-weight="600" text-anchor="end">${wmin.toFixed(1)}</text>`;
   }
 
   // ---- intake panel (y: 200..416) ----
@@ -105,7 +106,7 @@ export function render(s) {
   const labels = [
     { k: 'target', c: '#39d353', dy: -5 }, { k: 'maintenance', c: '#e6b93d', dy: 14 }, { k: 'avg', c: '#3b82f6', dy: 26 },
   ].map(({ k, c, dy }) => { const val = lastVal(k); return val == null ? '' :
-    `<text x="${W - R}" y="${(YI(val) + dy).toFixed(1)}" fill="${c}" font-size="11" text-anchor="end">${k === 'maintenance' ? 'maint' : k} ${val}</text>`; }).join('');
+    `<text x="${W - 3}" y="${(YI(val) + dy).toFixed(1)}" fill="${c}" font-size="11" text-anchor="end">${k === 'maintenance' ? 'maint' : k} ${val}</text>`; }).join('');
 
   // ---- frozen zone + window markers (only where visible) ----
   let deco = '';

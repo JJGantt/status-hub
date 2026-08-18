@@ -364,6 +364,17 @@ async function buildStatus() {
   const maintenance = estimateMaintenance({ weights, intakeByDay, today, surplus, minAlignedDays, phase });
   // estimateHistory — the per-day replay stays phase-less so past goals are never backfilled.
   if (maintenance.viz) maintenance.viz.series = estimateHistory({ weights, intakeByDay, today, surplus, minAlignedDays });
+  // ...but the replay's FINAL point still reflects the old straddled calc, so override ONLY today's point
+  // with the live phase-aware number — the on-plot curve + its labels then agree with the header/math,
+  // while every prior day stays frozen (no backfill).
+  if (maintenance.viz && maintenance.viz.series && maintenance.viz.series.length && maintenance.source !== 'calibrating') {
+    const lastPt = maintenance.viz.series[maintenance.viz.series.length - 1];
+    if (lastPt && lastPt.date === today) {
+      lastPt.avg = maintenance.avg_intake;
+      lastPt.maintenance = maintenance.maintenance;
+      lastPt.target = maintenance.target;
+    }
+  }
   nutrition.target = maintenance.target_macros; // the macro goal is the live dynamic target
   syncStoredTarget(maintenance.target_macros, today).catch((e) => console.error('target sync:', e.message));
 

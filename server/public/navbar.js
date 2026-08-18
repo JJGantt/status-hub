@@ -30,11 +30,11 @@ export function mountNavbar() {
     else if (kind === 'clear') activity.clear();
     else activity.busy(t);
   };
-  const mkVoice = (cls, svg, tier, label) => {
+  const mkVoice = (cls, svg, label) => {
     const b = document.createElement('button');
     b.className = 'wfab ' + cls; b.type = 'button'; b.setAttribute('aria-label', label);
     b.innerHTML = svg;
-    const rec = makeRecorder({ onStatus, onActive: (a) => b.classList.toggle('rec', a), quick: true, autoStop: true, tier });
+    const rec = makeRecorder({ onStatus, onActive: (a) => b.classList.toggle('rec', a), quick: true, autoStop: true });
     b.addEventListener('click', () => rec.toggle());
     return b;
   };
@@ -107,7 +107,7 @@ export function mountNavbar() {
     finally { camBtn.disabled = false; camBtn.classList.remove('busy'); }
   });
   right.appendChild(camBtn);
-  right.appendChild(mkVoice('wfab-fast', SPARKLE, 'standard', 'Voice command'));
+  right.appendChild(mkVoice('wfab-fast', SPARKLE, 'Voice command'));
 
   const bar = document.createElement('div'); bar.className = 'navbar';
   bar.appendChild(left); bar.appendChild(right);

@@ -91,7 +91,7 @@ function boot() {
 // text goes to onTranscript instead of enqueueing. The chat composer uses this while photos are pending,
 // so a dictated command joins the text box and sends WITH the photos, not ahead of them.
 // Exported so the wall-mode push-to-talk button (wall.js) can reuse the exact same pipeline.
-export function makeRecorder({ onStatus, onActive, quick, autoStop, tier, dryWhen, onTranscript }) {
+export function makeRecorder({ onStatus, onActive, quick, autoStop, dryWhen, onTranscript }) {
   let recording = false, rec = null, chunks = [], stream = null, maxTimer = null;
   let actx = null, vadTimer = null;
   const pickMime = () => {
@@ -165,7 +165,6 @@ export function makeRecorder({ onStatus, onActive, quick, autoStop, tier, dryWhe
       const qp = new URLSearchParams();
       if (dry) qp.set('dry', '1');
       if (quick) qp.set('quick', '1');
-      if (tier) qp.set('tier', tier);                 // 'standard' (sparkle) or 'brain' (brain button)
       qp.set('client_now', localNowNaive());           // this device's own wall clock, wherever it is
       const qs = qp.toString();
       const r = await fetch('/api/voice-command' + (qs ? '?' + qs : ''), {

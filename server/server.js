@@ -970,10 +970,9 @@ app.post('/api/voice-command', express.raw({ type: '*/*', limit: '25mb' }), asyn
     // The bottom-right quick-add FAB sends ?quick=1 → tag the request so the worker asks Jarvis for a
     // terse, fits-in-the-status-chip confirmation. The full conversation card omits it (verbose replies).
     const quick = String(req.query.quick || '') === '1';
-    const tier = ['brain', 'standard', 'power', 'fast', 'custom'].includes(String(req.query.tier || '')) ? String(req.query.tier) : null;
     const client_now = CLIENT_NOW_RE.test(String(req.query.client_now || '')) ? String(req.query.client_now) : null;
     await sbWrite('voice_requests', 'POST', { transcript, source: quick ? 'web-quick' : 'web', focus: 'hub',
-      ...(tier ? { tier } : {}), ...(client_now ? { client_now } : {}) });
+      ...(client_now ? { client_now } : {}) });
     res.json({ transcript, enqueued: true });
   } catch (e) { res.status(500).json({ error: String(e.message || e) }); }
 });
@@ -1088,10 +1087,9 @@ app.post('/api/voice-text', express.json(), async (req, res) => {
     if (!text && !attachments.length) return res.status(400).json({ error: 'empty' });
     const msgId = String((req.body && req.body.client_msg_id) || '').slice(0, 64);
     if (msgId && seenMsgIds.has(msgId)) return res.json({ enqueued: true, duplicate: true });
-    const tier = ['brain', 'standard', 'power', 'fast', 'custom'].includes(String((req.body && req.body.tier) || '')) ? String(req.body.tier) : null;
     const client_now = CLIENT_NOW_RE.test(String((req.body && req.body.client_now) || '')) ? String(req.body.client_now) : null;
     await sbWrite('voice_requests', 'POST', { transcript: text, source: 'web', focus: 'hub',
-      ...(tier ? { tier } : {}), ...(attachments.length ? { attachments } : {}), ...(client_now ? { client_now } : {}) });
+      ...(attachments.length ? { attachments } : {}), ...(client_now ? { client_now } : {}) });
     if (msgId) { seenMsgIds.set(msgId, Date.now()); if (seenMsgIds.size > 1000) seenMsgIds.delete(seenMsgIds.keys().next().value); }
     res.json({ enqueued: true });
   } catch (e) { res.status(500).json({ error: String(e.message || e) }); }

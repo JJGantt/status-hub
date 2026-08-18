@@ -101,12 +101,15 @@ export function render(s) {
     `<path d="${step('avg')}" fill="none" stroke="#3b82f6" stroke-width="1.5" stroke-dasharray="5 4"/>` +
     `<path d="${step('maintenance')}" fill="none" stroke="#e6b93d" stroke-width="1.8"/>` +
     `<path d="${step('target')}" fill="none" stroke="#39d353" stroke-width="1.8"/>`;
-  // right-edge labels = last visible value of each curve
-  const lastVal = (key) => { for (let i = rows.length - 1; i >= 0; i--) if (rows[i][key] != null) return rows[i][key]; return null; };
-  const labels = [
-    { k: 'target', c: '#39d353', dy: -5 }, { k: 'maintenance', c: '#e6b93d', dy: 14 }, { k: 'avg', c: '#3b82f6', dy: 26 },
-  ].map(({ k, c, dy }) => { const val = lastVal(k); return val == null ? '' :
-    `<text x="${W - 3}" y="${(YI(val) + dy).toFixed(1)}" fill="${c}" font-size="11" text-anchor="end">${k === 'maintenance' ? 'maint' : k} ${val}</text>`; }).join('');
+  // intake y-axis: faint horizontal gridlines at round thousands, labeled in the right gutter. No exact
+  // per-curve value callouts — the live numbers are in the math line below and the line colors are keyed
+  // in the legend; the gridlines just let you read roughly where each line sits.
+  let grid = '';
+  for (let c = 1000; c < imax; c += 1000) {
+    const y = YI(c);
+    grid += `<line x1="${L}" y1="${y.toFixed(1)}" x2="${W - R}" y2="${y.toFixed(1)}" stroke="#39434f" stroke-width="1" stroke-opacity="0.5"/>` +
+            `<text x="${W - 3}" y="${(y + 3).toFixed(1)}" fill="#7c8794" font-size="10" text-anchor="end">${c / 1000}k</text>`;
+  }
 
   // ---- frozen zone + window markers (only where visible) ----
   let deco = '';
@@ -136,7 +139,7 @@ export function render(s) {
     `<svg viewBox="0 0 ${W} 442" xmlns="http://www.w3.org/2000/svg">` +
     `<defs><pattern id="mvhatch" width="6" height="6" patternTransform="rotate(45)" patternUnits="userSpaceOnUse">` +
     `<rect width="6" height="6" fill="#39434f"/><line x1="0" y1="0" x2="0" y2="6" stroke="#7c8794" stroke-width="2.4"/></pattern></defs>` +
-    deco + sw + si + curves + labels + ticks +
+    deco + sw + grid + si + curves + ticks +
     '</svg>' +
     '<div class="mv-leg">' +
     '<span><i style="background:#a78bfa"></i>weigh-in</span>' +

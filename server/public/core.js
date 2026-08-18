@@ -11,6 +11,7 @@ import * as routing from './cards/routing.js';   // TV voice-column routing pane
 import * as score from './cards/score.js';       // TV overall-score health bar (no-ops on phone)
 import * as mics from './cards/mics.js';         // page voice-liveness card (no-ops on the TV wall)
 import * as maintviz from './cards/maintviz.js'; // phone-wall maintenance-window pane (no-ops elsewhere)
+import * as todo from './cards/todo.js';         // phone-wall reminders/lists/notes pane (no-ops elsewhere)
 import './voiceagent.js';   // shared 'hub' conversation + activity popup (self-skips on the TV wall)
 import './settings.js';     // gear → settings panel (routing mode + trailing-silence); self-skips on TV
 import { mountNavbar } from './navbar.js';   // shared bottom bar (toggle · settings · brain · sparkle)
@@ -30,6 +31,7 @@ function render(s){
  score.render(s);      // TV-only overall-score health bar (right column)
  mics.render(s);       // page-only voice-liveness card (TV shows the same data in the routing strip)
  maintviz.render(s);   // phone-wall maintenance-window pane (fourth swipe pane)
+ todo.render(s);       // phone-wall reminders/lists/notes pane (fifth swipe pane; self-fetches)
 }
 
 const es=new EventSource('/api/stream');

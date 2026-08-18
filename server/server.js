@@ -196,6 +196,16 @@ function nowOffsetTZ() {
   return pace.offsetFromHM(hh, mm);
 }
 
+// Current local wall-clock in the display timezone as 'YYYY-MM-DDTHH:MM:SS' — for comparing reminder
+// due times (which are stored as local-naive ISO strings) without any UTC offset math.
+function etNowString() {
+  const p = new Intl.DateTimeFormat('en-CA', { timeZone: TZ, hour12: false, year: 'numeric', month: '2-digit',
+    day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' }).formatToParts(new Date());
+  const g = (t) => p.find((x) => x.type === t).value;
+  const hh = g('hour') === '24' ? '00' : g('hour');
+  return `${g('year')}-${g('month')}-${g('day')}T${hh}:${g('minute')}:${g('second')}`;
+}
+
 // ---- assemble dashboard data ----
 // ---- surf: latest Surfline snapshot -> current + 7-day per-day rollup ----
 // Data is collected by the Pi (repo JJGantt/surf-report) into surf_snapshots.
@@ -1176,6 +1186,24 @@ app.post('/api/voice-activity', express.json(), (req, res) => {
 // voice command here so it lands as a phone notification — same proven sender + device tokens as the
 // weight reminder, just ad-hoc text. Gated on the kiosk token. Fans out to every registered iOS token
 // on its own push environment (sandbox vs production), and logs the result to `notifications`.
+// Push a notification to every registered iOS device; records one `notifications` row (with an optional
+// dedupe_key so a caller can guarantee once-only delivery). Shared by /api/notify and reminder firing.
+async function pushAll(kind, title, body, dedupe_key) {
+  const base = { kind, title, body, ...(dedupe_key ? { dedupe_key } : {}) };
+  if (!apns.configured()) { await sbInsert('notifications', { ...base, ok: false, detail: 'apns not configured' }); return { ok: false, detail: 'apns not configured' }; }
+  let tokens = [];
+  try { tokens = await sb('device_tokens?platform=eq.ios&select=token,environment'); } catch (_) {}
+  if (!tokens.length) { await sbInsert('notifications', { ...base, ok: false, detail: 'no device tokens' }); return { ok: false, detail: 'no device tokens' }; }
+  const details = []; let anyOk = false;
+  for (const { token, environment } of tokens) {
+    const r = await apns.send(token, { title, body, environment });
+    if (r.ok) anyOk = true;
+    details.push(`${token.slice(0, 8)}=${r.status}${r.ok ? '' : '(' + (r.detail || '').slice(0, 60) + ')'}`);
+  }
+  await sbInsert('notifications', { ...base, ok: anyOk, detail: details.join(' ') });
+  return { ok: anyOk, detail: details.join(' ') };
+}
+
 app.post('/api/notify', express.json(), async (req, res) => {
   if (TV_TOKEN && req.query.token !== TV_TOKEN) return res.status(403).json({ error: 'forbidden' });
   const b = req.body || {};
@@ -1183,25 +1211,53 @@ app.post('/api/notify', express.json(), async (req, res) => {
   const body = String(b.body || '').trim().slice(0, 300);
   const kind = String(b.kind || 'voice').slice(0, 40);
   if (!body) return res.status(400).json({ error: 'body required' });
-  if (!apns.configured()) {
-    await sbInsert('notifications', { kind, title, body, ok: false, detail: 'apns not configured' });
-    return res.status(503).json({ error: 'apns not configured' });
-  }
-  let tokens = [];
-  try { tokens = await sb('device_tokens?platform=eq.ios&select=token,environment'); } catch (_) {}
-  if (!tokens.length) {
-    await sbInsert('notifications', { kind, title, body, ok: false, detail: 'no device tokens' });
-    return res.json({ ok: false, detail: 'no device tokens' });
-  }
-  const details = [];
-  let anyOk = false;
-  for (const { token, environment } of tokens) {
-    const r = await apns.send(token, { title, body, environment });
-    if (r.ok) anyOk = true;
-    details.push(`${token.slice(0, 8)}=${r.status}${r.ok ? '' : '(' + (r.detail || '').slice(0, 60) + ')'}`);
-  }
-  await sbInsert('notifications', { kind, title, body, ok: anyOk, detail: details.join(' ') });
-  res.json({ ok: anyOk, detail: details.join(' ') });
+  const r = await pushAll(kind, title, body);
+  if (r.detail === 'apns not configured') return res.status(503).json({ error: 'apns not configured' });
+  res.json(r);
+});
+
+// ---- minimal reminders / lists / notes surface. Voice/MCP writes them; this is the visual pane. ----
+app.get('/api/todos', async (req, res) => {
+  try {
+    const [reminders, listNames, items, notes] = await Promise.all([
+      sb('reminders?done=eq.false&deleted=eq.false&select=id,text,due&order=due.asc.nullslast,created.asc'),
+      sb('lists?select=name&order=name'),
+      sb('list_items?done=eq.false&deleted=eq.false&select=id,list_name,text&order=created.asc'),
+      sb('notes?select=name,content&order=name'),
+    ]);
+    const lists = (listNames || []).map((l) => ({ name: l.name,
+      items: (items || []).filter((i) => i.list_name === l.name).map((i) => ({ id: i.id, text: i.text })) }));
+    res.json({ reminders: reminders || [], lists, notes: notes || [] });
+  } catch (e) { res.status(500).json({ error: String(e.message || e) }); }
+});
+app.post('/api/todos/complete', express.json(), async (req, res) => {
+  try {
+    const b = req.body || {};
+    const id = String(b.id || '');
+    if (!id) return res.status(400).json({ error: 'id required' });
+    const table = b.kind === 'item' ? 'list_items' : 'reminders';
+    await sbWrite(`${table}?id=eq.${encodeURIComponent(id)}`, 'PATCH', { done: true, updated: new Date().toISOString() });
+    res.json({ ok: true });
+  } catch (e) { res.status(500).json({ error: String(e.message || e) }); }
+});
+app.post('/api/todos/add', express.json(), async (req, res) => {
+  try {
+    const b = req.body || {};
+    const text = String(b.text || '').trim();
+    if (!text) return res.status(400).json({ error: 'text required' });
+    const now = new Date().toISOString();
+    if (b.kind === 'item') {
+      const list = String(b.list || '').trim();
+      if (!list) return res.status(400).json({ error: 'list required' });
+      const exists = await sb(`lists?name=eq.${encodeURIComponent(list)}&select=name&limit=1`);
+      if (!exists.length) await sbWrite('lists', 'POST', { name: list });
+      await sbWrite('list_items', 'POST', { id: crypto.randomUUID(), list_name: list, text, done: false, deleted: false, created: now, updated: now });
+    } else {
+      const due = String(b.due || '').trim() || null;
+      await sbWrite('reminders', 'POST', { id: crypto.randomUUID(), text, due, done: false, deleted: false, created: now, updated: now });
+    }
+    res.json({ ok: true });
+  } catch (e) { res.status(500).json({ error: String(e.message || e) }); }
 });
 
 // Voice SSE: streams `event: voice` frames ({kind:'message'|'focus', row}) to the /tv panel.
@@ -1241,6 +1297,27 @@ const reminderCtx = { sb, supaInsert: sbInsert, apns, settingsAll, log: (m) => c
 setInterval(() => weightReminder.tick(reminderCtx).catch((e) => console.log('[weight-reminder] error', e.message)), 60000);
 weightReminder.tick(reminderCtx).catch(() => {});  // also evaluate once on boot
 console.log(`[weight-reminder] armed (apns: ${apns.configured() ? 'configured, ' + apns.ENV : 'NOT configured'})`);
+
+// ---- reminder firing: app-push a reminder once its due time (local) has passed. Dedupe via a
+// `notifications` row keyed `reminder:<id>` so it fires exactly once. Date-only dues fire at 9am local.
+async function remindersTick() {
+  if (!apns.configured()) return;
+  const nowET = etNowString();
+  let rows;
+  try { rows = await sb('reminders?done=eq.false&deleted=eq.false&due=not.is.null&select=id,text,due'); } catch (_) { return; }
+  for (const r of rows) {
+    let fire = String(r.due);
+    if (!/T\d/.test(fire)) fire = fire.slice(0, 10) + 'T09:00:00';   // date-only → 9am local that day
+    if (fire > nowET) continue;                                       // not due yet
+    const dk = `reminder:${r.id}`;
+    try { if ((await sb(`notifications?dedupe_key=eq.${encodeURIComponent(dk)}&select=id&limit=1`)).length) continue; } catch (_) { continue; }
+    await pushAll('reminder', 'Reminder', r.text, dk);
+    console.log(`[reminders] fired ${r.id} "${String(r.text).slice(0, 40)}"`);
+  }
+}
+setInterval(() => remindersTick().catch((e) => console.log('[reminders] error', e.message)), 60000);
+remindersTick().catch(() => {});
+console.log('[reminders] firing armed');
 
 // ---- login page (server-rendered; public, no client modules) ----
 function loginHtml(err) {

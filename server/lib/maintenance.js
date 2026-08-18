@@ -98,7 +98,11 @@ function macroTargets(calories, bodyweight) {
   return { protein_g, carbs_g, fat_g };
 }
 
-function estimateMaintenance({ weights = [], intakeByDay = [], today, surplus = SURPLUS, minAlignedDays = MIN_ALIGNED_DAYS, _viz = true }) {
+// phase (optional): { start:'YYYY-MM-DD', seed:Number|null, hold:Bool } — the current goal phase. A phase
+// begins when the goal (surplus_cal) flips sign (bulk↔cut); its start caps the analysis window so the
+// opposite-regime tail isn't averaged into the trend, and `seed` holds the robust maintenance measured up
+// to the flip until the new phase has its own trustworthy data (TDEE doesn't jump at a goal change).
+function estimateMaintenance({ weights = [], intakeByDay = [], today, surplus = SURPLUS, minAlignedDays = MIN_ALIGNED_DAYS, phase = null, _viz = true }) {
   // Collapse same-day weigh-ins to one averaged point (multiple readings in a day must not over-count
   // toward the gate or skew the trend).
   const wByDay = {};
@@ -126,6 +130,12 @@ function estimateMaintenance({ weights = [], intakeByDay = [], today, surplus = 
       }
     }
   }
+  // Phase boundary: cap the window at the current phase's start so a cut→bulk (or bulk→cut) regime
+  // change isn't averaged into the current trend. Only applies when the phase began on/before `today`,
+  // so the per-day history replay (which passes NO phase) is never retroactively changed — past goals
+  // stay frozen, not backfilled.
+  const phaseActive = phase && phase.start && Date.parse(phase.start) <= Date.parse(today);
+  if (phaseActive && t0 != null && phase.start > t0) t0 = phase.start;
   const winWAll = t0 != null ? weighDays.filter((w) => dayIndex(w.date, B) <= 0 && dayIndex(w.date, t0) >= 0) : [];
   const A = winWAll.length ? winWAll.map((w) => w.date).sort()[0] : null;
   const winW = A != null ? winWAll.filter((w) => dayIndex(w.date, A) >= 0) : [];
@@ -155,6 +165,15 @@ function estimateMaintenance({ weights = [], intakeByDay = [], today, surplus = 
       maintenance = avg - slope * kcalPerLb;
       source = 'live';
     }
+  }
+  // Seed & hold across a phase flip: TDEE doesn't jump when the goal sign changes, so until the new
+  // phase has its own trustworthy in-phase data, hold the robust maintenance measured up to the flip
+  // (the seed) rather than reverting to the generic anchor. `hold` forces the seed even past the data
+  // gate — used to ride out the post-cut water/glycogen bounce, which transiently depresses the
+  // energy-balance estimate. The trend + current-weight (viz) still come from the in-phase window above.
+  if (phaseActive && phase.seed != null && (phase.hold || source !== 'live')) {
+    maintenance = phase.seed;
+    source = 'seeded';
   }
   if (maintenance == null) maintenance = ANCHOR_MAINTENANCE;
 

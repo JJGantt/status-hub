@@ -55,6 +55,19 @@ async function maintenanceMinDays() {
     return Number.isFinite(v) && v >= 7 && v <= 60 ? v : 14;
   } catch { return 14; }
 }
+// Current goal phase: { start, seed, sign, hold }. A phase begins when surplus_cal flips sign
+// (bulk↔cut); its start caps the maintenance window and `seed` holds the pre-flip maintenance until the
+// new phase has enough of its own data. Stored as JSON in app_settings.maintenance_phase.
+async function maintenancePhase() {
+  try {
+    const raw = (await settingsAll()).maintenance_phase;
+    if (!raw) return null;
+    const p = typeof raw === 'string' ? JSON.parse(raw) : raw;
+    if (!p || !p.start) return null;
+    return { start: String(p.start).slice(0, 10), seed: p.seed != null ? Number(p.seed) : null,
+             sign: Number(p.sign) || 0, hold: !!p.hold };
+  } catch { return null; }
+}
 // Voice state for the TV strip + the mic-liveness check: whether always-on (wake-free) voice and inject
 // mode are on. Routing is fixed now (standard Sonnet→Opus), so there's no model/route to resolve here.
 async function routingConfig() {
@@ -347,7 +360,9 @@ async function buildStatus() {
     workers: { mac: freshFor(beatBy.mac), pi: freshFor(beatBy.pi), fly: freshFor(beatBy.fly) },
   };
   const minAlignedDays = await maintenanceMinDays();
-  const maintenance = estimateMaintenance({ weights, intakeByDay, today, surplus, minAlignedDays });
+  const phase = await maintenancePhase();   // caps the live window at the current goal phase; NOT passed to
+  const maintenance = estimateMaintenance({ weights, intakeByDay, today, surplus, minAlignedDays, phase });
+  // estimateHistory — the per-day replay stays phase-less so past goals are never backfilled.
   if (maintenance.viz) maintenance.viz.series = estimateHistory({ weights, intakeByDay, today, surplus, minAlignedDays });
   nutrition.target = maintenance.target_macros; // the macro goal is the live dynamic target
   syncStoredTarget(maintenance.target_macros, today).catch((e) => console.error('target sync:', e.message));
@@ -609,6 +624,7 @@ app.post('/api/settings', express.json(), async (req, res) => {
     const key = typeof b.key === 'string' ? b.key.trim() : '';
     if (!key) return res.status(400).json({ error: 'key required' });
     const value = b.value == null ? '' : String(b.value);
+    const prevSurplus = key === 'surplus_cal' ? (await settingsAll()).surplus_cal : null;   // before the write
     const r = await fetch(`${SUPABASE_URL}/rest/v1/app_settings?on_conflict=key`, {
       method: 'POST',
       headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}`,
@@ -617,6 +633,29 @@ app.post('/api/settings', express.json(), async (req, res) => {
     });
     if (!r.ok) throw new Error(`settings upsert -> ${r.status}`);
     dirtySettings();   // synchronous — a write-then-read client must not race the realtime round-trip
+    // A goal sign-flip (bulk↔cut) starts a NEW maintenance phase, seeded with the maintenance measured
+    // robustly up to now (= today's synced target − the OLD surplus) and held until the new phase has its
+    // own data. Same-sign magnitude tweaks (e.g. +150→+250) do NOT reset the phase.
+    if (key === 'surplus_cal') {
+      const oldS = parseInt(prevSurplus, 10), newS = parseInt(value, 10);
+      const oldSign = Number.isFinite(oldS) ? Math.sign(oldS) : 0;
+      const newSign = Number.isFinite(newS) ? Math.sign(newS) : 0;
+      if (newSign !== 0 && newSign !== oldSign) {
+        const today = nutritionWindow().day;
+        const trows = await sb(`nutrition_targets?date=eq.${today}&select=calories`);
+        const curTarget = trows && trows[0] ? Number(trows[0].calories) : null;
+        const seed = (curTarget != null && Number.isFinite(oldS)) ? Math.round(curTarget - oldS) : null;
+        const phaseRec = { start: today, seed, sign: newSign, hold: false };
+        await fetch(`${SUPABASE_URL}/rest/v1/app_settings?on_conflict=key`, {
+          method: 'POST',
+          headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}`,
+                     'Content-Type': 'application/json', Prefer: 'resolution=merge-duplicates' },
+          body: JSON.stringify({ key: 'maintenance_phase', value: JSON.stringify(phaseRec), updated_at: new Date().toISOString() }),
+        });
+        dirtySettings();
+        console.log(`[phase] goal sign flip ${oldSign}→${newSign}; new phase start=${today} seed=${seed}`);
+      }
+    }
     res.json({ ok: true });
   } catch (e) { res.status(500).json({ error: String(e.message || e) }); }
 });

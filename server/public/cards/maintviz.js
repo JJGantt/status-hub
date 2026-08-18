@@ -51,6 +51,14 @@ export function render(s) {
     const wts = weighins.map((w) => w.weight);
     const wmin = Math.min(...wts) - 0.6, wmax = Math.max(...wts) + 0.6;
     const YW = (w) => wy1 - (wy1 - wy0) * ((w - wmin) / (wmax - wmin));
+    // horizontal weight gridlines at round values, labeled in the right gutter (same axis style as intake).
+    // Drawn first so the trend line and dots sit on top.
+    const wstep = (wmax - wmin) > 12 ? 5 : 2;
+    for (let w = Math.ceil(wmin / wstep) * wstep; w <= wmax; w += wstep) {
+      const gy = YW(w);
+      sw += `<line x1="${L}" y1="${gy.toFixed(1)}" x2="${W - R}" y2="${gy.toFixed(1)}" stroke="#39434f" stroke-width="1" stroke-opacity="0.5"/>` +
+            `<text x="${W - 3}" y="${(gy + 3).toFixed(1)}" fill="#7c8794" font-size="10" text-anchor="end">${w}</text>`;
+    }
     if (v.slope_lb_day != null && v.weight_at_end != null && inView(B)) {
       const a0 = inView(A) ? A : S;   // clip the trend line to the viewport
       const yA = v.weight_at_end + v.slope_lb_day * idx(a0, B);
@@ -60,9 +68,6 @@ export function render(s) {
       const op = Math.max(0.3, 0.35 + 0.65 * (w.rw || 0)), r = 3.2 + 2.6 * (w.rw || 0);
       sw += `<circle cx="${X(w.date).toFixed(1)}" cy="${YW(w.weight).toFixed(1)}" r="${r.toFixed(1)}" fill="#a78bfa" fill-opacity="${op.toFixed(2)}"/>`;
     }
-    // Weight scale labels live in the right gutter (past the last dot), bright and legible — never over the plot.
-    sw += `<text x="${W - 3}" y="${wy0 + 9}" fill="#d4dbe4" font-size="12.5" font-weight="600" text-anchor="end">${wmax.toFixed(1)}</text>` +
-          `<text x="${W - 3}" y="${wy1}" fill="#d4dbe4" font-size="12.5" font-weight="600" text-anchor="end">${wmin.toFixed(1)}</text>`;
   }
 
   // ---- intake panel (y: 200..416) ----

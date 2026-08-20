@@ -33,10 +33,31 @@ targets:
       path: StatusHub.entitlements
       properties:
         aps-environment: production   # production APNs for distribution (Ad Hoc / TestFlight / App Store) builds
+    # Managed Info.plist (not GENERATE_INFOPLIST_FILE) so we can register the statushub:// URL scheme — a
+    # one-tap home-screen shortcut opens statushub://record and the app auto-fires the voice FAB.
+    info:
+      path: Sources/Info-iOS.plist
+      properties:
+        CFBundleDisplayName: Status Hub
+        CFBundleShortVersionString: "$(MARKETING_VERSION)"
+        CFBundleVersion: "$(CURRENT_PROJECT_VERSION)"
+        LSRequiresIPhoneOS: true
+        UILaunchScreen: {}
+        UIApplicationSupportsIndirectInputEvents: true
+        UISupportedInterfaceOrientations:
+          - UIInterfaceOrientationPortrait
+          - UIInterfaceOrientationLandscapeLeft
+          - UIInterfaceOrientationLandscapeRight
+        NSMicrophoneUsageDescription: Status Hub uses the microphone for voice commands.
+        NSCameraUsageDescription: Status Hub uses the camera to capture food and nutrition labels.
+        NSPhotoLibraryUsageDescription: Status Hub attaches photos of food and nutrition labels.
+        CFBundleURLTypes:
+          - CFBundleURLName: com.jaredgantt.statushub
+            CFBundleURLSchemes:
+              - statushub
     settings:
       base:
-        INFOPLIST_KEY_UILaunchScreen_Generation: YES
-        INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents: YES
+        GENERATE_INFOPLIST_FILE: NO
         TARGETED_DEVICE_FAMILY: "1"
         SUPPORTS_MACCATALYST: NO
   StatusHubMac:

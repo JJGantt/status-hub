@@ -23,6 +23,13 @@ struct StatusHubApp: App {
                 // focused-input scroll-into-view already handles the keyboard; the native layer doesn't
                 // need to resize around it too.
                 .ignoresSafeArea(.keyboard, edges: .bottom)
+            #if os(iOS)
+                // Opened via statushub://record (a home-screen shortcut) → fire the same voice FAB the
+                // user would tap, so it lands straight in "listening".
+                .onOpenURL { url in
+                    if url.scheme == "statushub", url.host == "record" { RecordLaunch.shared.request() }
+                }
+            #endif
             #if os(macOS)
                 // Landscape: the Mac app renders the wall (?mode=mac) — the TV dashboard + a docked chat
                 // side panel — so it wants width, unlike the phone-shaped iOS build.
@@ -30,7 +37,7 @@ struct StatusHubApp: App {
             #endif
         }
         #if os(macOS)
-        // .contentMinSize (not .contentSize): only enforce the frame's minWidth/minHeight floor. .contentSize
+        // .contentMinSize (not .contentSize): only enforce the frame's minWidth/minHeight floor. .contentSize .contentSize
         // continuously re-derives the window size from the content's reported "ideal" size on every SwiftUI
         // re-render — since HubWebView is an opaque WKWebView wrapper, that re-derivation rides on AppKit's
         // fitting-size computation for the wrapped view rather than our fixed idealWidth/idealHeight, so
@@ -41,6 +48,34 @@ struct StatusHubApp: App {
         #endif
     }
 }
+
+#if os(iOS)
+// Bridges a statushub://record launch (from a home-screen shortcut) to the loaded web hub: fires the same
+// voice FAB the user would tap, so the app opens straight into "listening". Polls until the page has mounted
+// the recorder (window.__startVoiceCommand), so it works on a cold launch too (the URL can arrive before
+// the web content finishes loading).
+final class RecordLaunch {
+    static let shared = RecordLaunch()
+    weak var webView: WKWebView?
+    private var pending = false
+
+    func request() { pending = true; fire() }
+    func fireIfPending() { if pending { fire() } }
+
+    private func fire(retries: Int = 12) {
+        guard pending, let wv = webView else { return }
+        wv.evaluateJavaScript("!!(window.__startVoiceCommand)") { [weak self] ready, _ in
+            guard let self, self.pending else { return }
+            if (ready as? Bool) == true {
+                self.pending = false
+                wv.evaluateJavaScript("window.__startVoiceCommand()", completionHandler: nil)
+            } else if retries > 0 {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) { self.fire(retries: retries - 1) }
+            }
+        }
+    }
+}
+#endif
 
 // Thin WKWebView wrapper around the web hub (Auth.host). The app is now a shell over the web UI so
 // every surface shares one codebase. Auth: pre-seed the `hub` cookie from the saved token (the same
@@ -126,6 +161,7 @@ struct HubWebView {
         // the APNs token via a same-origin (cookie-authed) fetch.
         func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
             PushManager.shared.attach(webView)
+            RecordLaunch.shared.fireIfPending()   // statushub://record cold launch → auto-start the voice FAB
         }
         #endif
     }
@@ -142,6 +178,9 @@ struct HubWebView {
         let wv = WKWebView(frame: .zero, configuration: cfg)
         wv.uiDelegate = coordinator
         wv.navigationDelegate = coordinator
+        #if os(iOS)
+        RecordLaunch.shared.webView = wv   // so a statushub://record launch can drive this web view
+        #endif
         #if os(iOS)
         wv.scrollView.contentInsetAdjustmentBehavior = .never
         wv.isOpaque = false

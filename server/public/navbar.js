@@ -36,6 +36,9 @@ export function mountNavbar() {
     b.innerHTML = svg;
     const rec = makeRecorder({ onStatus, onActive: (a) => b.classList.toggle('rec', a), quick: true, autoStop: true });
     b.addEventListener('click', () => rec.toggle());
+    // The native app (opened via statushub://record from a home-screen shortcut) calls this to start the
+    // exact same recorder without an on-screen tap — so it lands straight in "listening", like pressing it.
+    if (cls === 'wfab-fast') window.__startVoiceCommand = () => rec.start();
     return b;
   };
 

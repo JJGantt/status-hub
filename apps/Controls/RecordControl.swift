@@ -1,0 +1,24 @@
+import WidgetKit
+import SwiftUI
+import AppIntents
+
+// Lock Screen / Control Center control (iOS 18+): a "Record" button that opens Status Hub straight into a
+// voice command. Uses the statushub://record URL scheme the app already handles (fires the voice FAB), so
+// the control needs none of the app's code — it just opens the app to record.
+struct RecordControl: ControlWidget {
+    var body: some ControlWidgetConfiguration {
+        StaticControlConfiguration(kind: "com.jaredgantt.statushub.record") {
+            ControlWidgetButton(action: OpenURLIntent(URL(string: "statushub://record")!)) {
+                Label("Record", systemImage: "mic.fill")
+            }
+        }
+        .displayName("Record")
+    }
+}
+
+@main
+struct StatusHubControlsBundle: WidgetBundle {
+    var body: some Widget {
+        RecordControl()
+    }
+}

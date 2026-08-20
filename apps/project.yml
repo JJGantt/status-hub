@@ -60,6 +60,31 @@ targets:
         GENERATE_INFOPLIST_FILE: NO
         TARGETED_DEVICE_FAMILY: "1"
         SUPPORTS_MACCATALYST: NO
+    dependencies:
+      - target: StatusHubControls
+        embed: true
+  # iOS 18 Control widget → the "Record" button appears in the Lock Screen / Control Center gallery.
+  StatusHubControls:
+    type: app-extension
+    platform: iOS
+    deploymentTarget: "18.0"
+    sources:
+      - path: Controls
+    info:
+      path: Controls/Info.plist
+      properties:
+        CFBundleDisplayName: Status Hub Controls
+        CFBundleShortVersionString: "$(MARKETING_VERSION)"
+        CFBundleVersion: "$(CURRENT_PROJECT_VERSION)"
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.widgetkit-extension
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: NO
+        PRODUCT_BUNDLE_IDENTIFIER: com.jaredgantt.statushub.controls
+        PRODUCT_NAME: StatusHubControls
+        SKIP_INSTALL: YES
+        TARGETED_DEVICE_FAMILY: "1"
   StatusHubMac:
     type: application
     platform: macOS

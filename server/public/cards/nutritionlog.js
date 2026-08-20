@@ -219,7 +219,10 @@ function openAddPopup(base,opts){
  const ings=rawIngs?rawIngs.map(g=>({
    structured:ingStructured(g), food:g.food||'', unit:g.unit||'', name:g.name||g.ingredient||'—',
    A:ingStructured(g)?u(g.amount):0,
-   calories:u(g.calories),protein_g:u(g.protein_g),carbs_g:u(g.carbs_g),fat_g:u(g.fat_g)
+   calories:u(g.calories),protein_g:u(g.protein_g),carbs_g:u(g.carbs_g),fat_g:u(g.fat_g),
+   // Produce rides along and scales with the portion exactly like the macros do. Dropping it here
+   // would silently zero the day's produce totals on any portion edit or log-again.
+   produce_type:g.produce_type||'', produce_g:u(g.produce_g)
  })):null;
  const perIng=!!ings&&ings.length>1;   // per-ingredient steppers only for true multi-ingredient meals; a single-ingredient food uses the simple Portion stepper
  // state: structured → amt (default = A×baseMult = the stored amount); legacy → imult; plus off.
@@ -322,6 +325,7 @@ function openAddPopup(base,opts){
   const body={ name:cleanName||'—', calories:sc(t.calories), protein_g:r1(t.protein_g), carbs_g:r1(t.carbs_g), fat_g:r1(t.fat_g) };
   if(ings){ body.ingredients=ings.map((g,i)=>({g:g,i:i})).filter(o=>ingOn(o.i)).map(function(o){ const g=o.g,i=o.i,f=factor(i);
     const ob={ calories:sc(g.calories*f), protein_g:r1(g.protein_g*f), carbs_g:r1(g.carbs_g*f), fat_g:r1(g.fat_g*f) };
+    if(g.produce_type&&g.produce_g>0){ ob.produce_type=g.produce_type; ob.produce_g=r1(g.produce_g*f); }
     if(g.structured){ ob.food=g.food; ob.unit=g.unit; ob.amount=round3(st[i].amt); ob.name=rowLabel(i); }
     else ob.name=g.name;
     return ob; }); }

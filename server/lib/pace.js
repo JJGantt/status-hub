@@ -181,4 +181,26 @@ function windowLabel(window) {
   return `${fmt(window.startMin)}–${fmt(window.endMin)}`;
 }
 
-module.exports = { deriveWindow, computePace, offsetFromHM, windowLabel };
+// Fill gauges for the produce rings (vegetables / leafy greens / fruit).
+//
+// Deliberately NOT paced. The macro rings above are drain gauges — full when you're on-pace, bleeding
+// toward empty as the clock advances without logging — because calories/macros have a target you can
+// overshoot. Produce is the opposite shape: there's no penalty for eating it all at dinner and no such
+// thing as too much, so these start EMPTY every day and just fill toward a fixed goal. No window, no
+// clock term, no marker, no overflow arc. `progress` is clamped at 1 so the ring can't wrap.
+function computeFill(consumed, goals) {
+  const out = {};
+  for (const k of ['veg_g', 'leafy_g', 'fruit_g']) {
+    const goal = (goals || {})[k] || 0;
+    const got = (consumed || {})[k] || 0;
+    out[k] = {
+      consumed: Math.round(got),
+      goal: Math.round(goal),
+      progress: goal > 0 ? Math.round(Math.min(1, got / goal) * 1000) / 1000 : 0,
+      met: goal > 0 && got >= goal,
+    };
+  }
+  return out;
+}
+
+module.exports = { deriveWindow, computePace, computeFill, offsetFromHM, windowLabel };

@@ -36,9 +36,50 @@ export function render(s) {
    '</div>'; };
  const el = document.getElementById('nutrition'); if (!el) return; // absent on /page after consolidation
  el.innerHTML = '<h2>Today · Nutrition</h2>' +
-  '<div class=rings>' + ring('Cal', 'calories', '') + ring('P', 'protein_g', 'g') + ring('C', 'carbs_g', 'g') + ring('F', 'fat_g', 'g') + '</div>' +
+  '<div class=rings>' + ring('Cal', 'calories', '') + ring('P', 'protein_g', 'g') + ring('C', 'carbs_g', 'g') + ring('F', 'fat_g', 'g') +
+   miniGroup(P.produce) + '</div>' +
   '<div class=pnote>' + (P.window_label || '') + '</div>';
  tickRings(); // paint immediately at the current second
+}
+
+// ---- produce rings (vegetables / leafy greens / fruit) --------------------
+// Deliberately a different gauge from the four above. Those DRAIN with the clock (pace); these start
+// empty each day and FILL toward a fixed goal, so there's no marker, no overflow arc, and no live
+// tick — they only change when food is logged, which arrives via the normal SSE re-render.
+// No number is drawn: at this size only the icon is legible, so the icon carries the identity and the
+// unfilled track is tinted with the ring's own color so you can still tell them apart at 0%.
+const MRC = 2 * Math.PI * 30;  // mini ring circumference (r=30)
+const PRODUCE = [
+ { key: 'leafy_g', color: '#22c55e', title: 'Leafy greens' },
+ { key: 'veg_g', color: '#f59e0b', title: 'Vegetables' },
+ { key: 'fruit_g', color: '#ef4444', title: 'Fruit' },
+];
+// Tiny white glyphs, ~23 units tall inside the r=30 ring (inner diameter 52) so they read as shapes
+// rather than filling the hole. Solid silhouettes only — strokes and interior detail vanish by ~20px,
+// which is the size these hit on the phone. The RING COLOR carries identity at that size; the glyph
+// only has to be distinct in outline (pointed / wedge / round).
+const ICONS = {
+ // leaf: symmetric pointed blade with a dark center vein
+ leafy_g: '<path d="M40 29c8 6 10 17 0 24-10-7-8-18 0-24z" fill="#fff"/><path d="M40 32v18" stroke="#0e1318" stroke-width="1.6" stroke-linecap="round"/>',
+ // carrot: tapered wedge pointing down + three fronds
+ veg_g: '<path d="M34 37h12l-5 16a1 1 0 0 1-2 0z" fill="#fff"/><path d="M39 36 32 29l4 7zM41 36l7-7-4 7zM39.2 36V28h1.6v8z" fill="#fff"/>',
+ // apple: two-lobe body with a top notch + stem
+ fruit_g: '<path d="M40 36c-2.5-2.5-9-2-9 5 0 6.5 4 12 9 12s9-5.5 9-12c0-7-6.5-7.5-9-5z" fill="#fff"/><path d="M39.2 36v-6h1.6v6z" fill="#fff"/>',
+};
+
+function miniGroup(produce) {
+ if (!produce) return '';
+ return '<div class="ringmini">' + PRODUCE.map((p) => {
+  const m = produce[p.key]; if (!m) return '';
+  const fill = Math.max(0, Math.min(1, m.progress || 0)) * MRC;
+  return '<div class="mring" title="' + p.title + ' ' + (m.consumed || 0) + 'g / ' + (m.goal || 0) + 'g">' +
+   '<svg viewBox="0 0 80 80">' +
+   '<circle cx="40" cy="40" r="30" fill="none" stroke="' + p.color + '" stroke-opacity=".22" stroke-width="8" />' +
+   '<circle cx="40" cy="40" r="30" fill="none" stroke="' + p.color + '" stroke-width="8" stroke-linecap="round"' +
+    ' transform="rotate(-90 40 40)" stroke-dasharray="' + fill.toFixed(2) + ' ' + (MRC - fill).toFixed(2) + '" />' +
+   (ICONS[p.key] || '') +
+   '</svg></div>';
+ }).join('') + '</div>';
 }
 
 // live tick: recompute the pace position from the browser clock + the (fixed-for-the-day) window

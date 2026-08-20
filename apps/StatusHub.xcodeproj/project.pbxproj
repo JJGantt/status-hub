@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		0C6EDE683DFC99BC5DD60409 /* RecordIntent.swift in Sources */ = {isa = PBXBuildFile; fileRef = F198CD20CEADF9EC7C93F50C /* RecordIntent.swift */; };
 		2688C061FF28D78494EECACD /* Auth.swift in Sources */ = {isa = PBXBuildFile; fileRef = 695330199DB90BC0552A61A4 /* Auth.swift */; };
 		4047BFD86E0305E129C06B77 /* Info-iOS.plist in Resources */ = {isa = PBXBuildFile; fileRef = 12B2F6A89FA87D30EEC5ED56 /* Info-iOS.plist */; };
 		51DECA2330E0FBC3832EF2A4 /* Models.swift in Sources */ = {isa = PBXBuildFile; fileRef = B47214768CCEE8C99EEF5958 /* Models.swift */; };
@@ -22,6 +23,7 @@
 		ED30317D3B77A590C83D95BC /* StatusHubApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = DBE4FD566029B00F912457DA /* StatusHubApp.swift */; };
 		EE1E28331D9AE8401BEE3601 /* Push.swift in Sources */ = {isa = PBXBuildFile; fileRef = 835C09DFE3C581C0FCD41116 /* Push.swift */; };
 		F10846CA6E8D579211CF7695 /* Theme.swift in Sources */ = {isa = PBXBuildFile; fileRef = A3ED88961E8E93D6EBE0EA46 /* Theme.swift */; };
+		FB6B5DF33E6070D5348F0E27 /* RecordIntent.swift in Sources */ = {isa = PBXBuildFile; fileRef = F198CD20CEADF9EC7C93F50C /* RecordIntent.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -35,6 +37,7 @@
 		DBE4FD566029B00F912457DA /* StatusHubApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StatusHubApp.swift; sourceTree = "<group>"; };
 		DE7144970264B4FD475213E8 /* StatusHubMac.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = StatusHubMac.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		EF4C42BEDA65C5384974460A /* StatusHub.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = StatusHub.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		F198CD20CEADF9EC7C93F50C /* RecordIntent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecordIntent.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXGroup section */
@@ -55,6 +58,7 @@
 				12B2F6A89FA87D30EEC5ED56 /* Info-iOS.plist */,
 				B47214768CCEE8C99EEF5958 /* Models.swift */,
 				835C09DFE3C581C0FCD41116 /* Push.swift */,
+				F198CD20CEADF9EC7C93F50C /* RecordIntent.swift */,
 				DBE4FD566029B00F912457DA /* StatusHubApp.swift */,
 				A3ED88961E8E93D6EBE0EA46 /* Theme.swift */,
 				7E727AC7945D69F9313E83AC /* Views.swift */,
@@ -167,6 +171,7 @@
 				B39D666BE8C69D4E75BB31F5 /* HubModel.swift in Sources */,
 				D998A2EA11DB625A5E768785 /* Models.swift in Sources */,
 				A4E6D950656AE1A3B80EECAA /* Push.swift in Sources */,
+				FB6B5DF33E6070D5348F0E27 /* RecordIntent.swift in Sources */,
 				ED30317D3B77A590C83D95BC /* StatusHubApp.swift in Sources */,
 				F10846CA6E8D579211CF7695 /* Theme.swift in Sources */,
 				C97CE9C67CFCE106140773BB /* Views.swift in Sources */,
@@ -181,6 +186,7 @@
 				A530752A59476C460CE68305 /* HubModel.swift in Sources */,
 				51DECA2330E0FBC3832EF2A4 /* Models.swift in Sources */,
 				EE1E28331D9AE8401BEE3601 /* Push.swift in Sources */,
+				0C6EDE683DFC99BC5DD60409 /* RecordIntent.swift in Sources */,
 				80C001EA5124225A4538240B /* StatusHubApp.swift in Sources */,
 				D19716A696E535763020C4F4 /* Theme.swift in Sources */,
 				60AE844C615F02EE05A50C80 /* Views.swift in Sources */,

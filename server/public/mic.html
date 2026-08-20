@@ -1,0 +1,37 @@
+<!doctype html><html><head><meta charset=utf-8>
+<meta name=viewport content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<title>Voice</title>
+<!-- Installs to the home screen as a standalone fullscreen app: one big tap-to-talk button that runs the
+     exact same voice pipeline as the hub's bottom-right button. -->
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Voice">
+<meta name="theme-color" content="#0b0e12">
+<link rel="apple-touch-icon" href="mic-icon.png">
+<style>
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{margin:0;height:100%;background:#0b0e12;font-family:-apple-system,system-ui,sans-serif;overscroll-behavior:none}
+  body{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:34px;user-select:none;-webkit-user-select:none;
+       padding:max(24px,env(safe-area-inset-top)) 24px max(24px,env(safe-area-inset-bottom))}
+  .mic-btn{-webkit-appearance:none;appearance:none;border:none;cursor:pointer;padding:0;
+    width:62vmin;height:62vmin;max-width:340px;max-height:340px;border-radius:50%;
+    background:radial-gradient(circle at 50% 38%,#2a3140,#12161d);
+    box-shadow:0 0 0 1px #2a3340,0 20px 60px rgba(0,0,0,.5);
+    display:flex;align-items:center;justify-content:center;transition:transform .12s,box-shadow .3s}
+  .mic-btn:active{transform:scale(.96)}
+  .mic-btn svg{width:44%;height:44%;color:#c4b5fd}
+  .mic-btn.rec{box-shadow:0 0 0 2px #8b5cf6,0 0 60px 8px rgba(139,92,246,.55);animation:pulse 1.3s ease-in-out infinite}
+  @keyframes pulse{0%,100%{transform:scale(1)}50%{transform:scale(1.04)}}
+  .status{font-size:20px;font-weight:600;color:#e6ebf2;text-align:center;min-height:26px}
+  .status.err{color:#f0836b}
+  .echo{font-size:15px;color:#8b96a5;text-align:center;max-width:90%;line-height:1.35;min-height:20px}
+</style>
+<script type="module" src="mic.js"></script>
+</head><body>
+  <button id="micbtn" class="mic-btn" aria-label="Start voice command">
+    <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 1c.6 5.7 4.3 9.4 10 10-5.7.6-9.4 4.3-10 10-.6-5.7-4.3-9.4-10-10 5.7-.6 9.4-4.3 10-10Z"/></svg>
+  </button>
+  <div id="status" class="status">Tap to talk</div>
+  <div id="echo" class="echo"></div>
+</body></html>

@@ -115,6 +115,8 @@ const DASHBOARD_HTML = fs.readFileSync(path.join(__dirname, 'public', 'index.htm
 // Inject the body-map SVG just like the dashboard so the muscle map renders identically.
 const TV_HTML = fs.readFileSync(path.join(__dirname, 'public', 'tv.html'), 'utf8')
   .replace('<!--BODY_SVG-->', BODY_SVG);
+// Minimal home-screen "Voice" launcher (Add to Home Screen → standalone fullscreen tap-to-talk button).
+const MIC_HTML = fs.readFileSync(path.join(__dirname, 'public', 'mic.html'), 'utf8');
 
 const app = express();
 app.use(express.urlencoded({ extended: false }));
@@ -600,6 +602,10 @@ app.get(['/', '/tv'], (req, res) => {
 app.get('/page', (req, res) => {
   res.setHeader('Cache-Control', 'no-cache');
   res.type('html').send(DASHBOARD_HTML);
+});
+app.get('/mic', (req, res) => {
+  res.setHeader('Cache-Control', 'no-cache');
+  res.type('html').send(MIC_HTML);
 });
 // Static client assets (core.js, app.css, cards/*.js) — behind the auth gate above.
 // no-cache (revalidate via ETag each load) so a deploy is never masked by a stale cached asset.

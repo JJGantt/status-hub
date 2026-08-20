@@ -8,7 +8,7 @@ import AppIntents
 struct RecordControl: ControlWidget {
     var body: some ControlWidgetConfiguration {
         StaticControlConfiguration(kind: "com.jaredgantt.statushub.record") {
-            ControlWidgetButton(action: OpenURLIntent(URL(string: "statushub://record")!)) {
+            ControlWidgetButton(action: HubVoiceIntent()) {
                 Label("Record", systemImage: "mic.fill")
             }
         }

@@ -29,6 +29,7 @@ targets:
     deploymentTarget: "17.0"
     sources:
       - path: Sources
+      - path: Shared
     entitlements:
       path: StatusHub.entitlements
       properties:
@@ -60,6 +61,7 @@ targets:
         GENERATE_INFOPLIST_FILE: NO
         TARGETED_DEVICE_FAMILY: "1"
         SUPPORTS_MACCATALYST: NO
+        SWIFT_ACTIVE_COMPILATION_CONDITIONS: $(inherited) HUB_APP
     dependencies:
       - target: StatusHubControls
         embed: true
@@ -70,6 +72,7 @@ targets:
     deploymentTarget: "18.0"
     sources:
       - path: Controls
+      - path: Shared
     info:
       path: Controls/Info.plist
       properties:

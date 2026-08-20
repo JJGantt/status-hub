@@ -18,7 +18,9 @@
 		A4E6D950656AE1A3B80EECAA /* Push.swift in Sources */ = {isa = PBXBuildFile; fileRef = 835C09DFE3C581C0FCD41116 /* Push.swift */; };
 		A530752A59476C460CE68305 /* HubModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6DD537CFCDEFF1F747C3D8D2 /* HubModel.swift */; };
 		AAB739C371483A58ABEFFC12 /* Auth.swift in Sources */ = {isa = PBXBuildFile; fileRef = 695330199DB90BC0552A61A4 /* Auth.swift */; };
+		B0778EBC2C7F517F88E6662D /* HubVoiceIntent.swift in Sources */ = {isa = PBXBuildFile; fileRef = 630A58399AEBE9A0EB63449B /* HubVoiceIntent.swift */; };
 		B39D666BE8C69D4E75BB31F5 /* HubModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6DD537CFCDEFF1F747C3D8D2 /* HubModel.swift */; };
+		C917F517205EDE3DA975EE4A /* HubVoiceIntent.swift in Sources */ = {isa = PBXBuildFile; fileRef = 630A58399AEBE9A0EB63449B /* HubVoiceIntent.swift */; };
 		C97CE9C67CFCE106140773BB /* Views.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7E727AC7945D69F9313E83AC /* Views.swift */; };
 		D19716A696E535763020C4F4 /* Theme.swift in Sources */ = {isa = PBXBuildFile; fileRef = A3ED88961E8E93D6EBE0EA46 /* Theme.swift */; };
 		D998A2EA11DB625A5E768785 /* Models.swift in Sources */ = {isa = PBXBuildFile; fileRef = B47214768CCEE8C99EEF5958 /* Models.swift */; };
@@ -54,6 +56,7 @@
 
 /* Begin PBXFileReference section */
 		12B2F6A89FA87D30EEC5ED56 /* Info-iOS.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = "Info-iOS.plist"; sourceTree = "<group>"; };
+		630A58399AEBE9A0EB63449B /* HubVoiceIntent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HubVoiceIntent.swift; sourceTree = "<group>"; };
 		695330199DB90BC0552A61A4 /* Auth.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Auth.swift; sourceTree = "<group>"; };
 		6DD537CFCDEFF1F747C3D8D2 /* HubModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HubModel.swift; sourceTree = "<group>"; };
 		7E727AC7945D69F9313E83AC /* Views.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Views.swift; sourceTree = "<group>"; };
@@ -80,6 +83,14 @@
 			name = Products;
 			sourceTree = "<group>";
 		};
+		46F4A2164300BF712B758B03 /* Shared */ = {
+			isa = PBXGroup;
+			children = (
+				630A58399AEBE9A0EB63449B /* HubVoiceIntent.swift */,
+			);
+			path = Shared;
+			sourceTree = "<group>";
+		};
 		4F3C15E0045F52C4F298B679 /* Sources */ = {
 			isa = PBXGroup;
 			children = (
@@ -100,6 +111,7 @@
 			isa = PBXGroup;
 			children = (
 				949CE30CB2642F8013288295 /* Controls */,
+				46F4A2164300BF712B758B03 /* Shared */,
 				4F3C15E0045F52C4F298B679 /* Sources */,
 				28DDBE315FD7A2196B48531F /* Products */,
 			);
@@ -233,6 +245,7 @@
 			files = (
 				2688C061FF28D78494EECACD /* Auth.swift in Sources */,
 				B39D666BE8C69D4E75BB31F5 /* HubModel.swift in Sources */,
+				C917F517205EDE3DA975EE4A /* HubVoiceIntent.swift in Sources */,
 				D998A2EA11DB625A5E768785 /* Models.swift in Sources */,
 				A4E6D950656AE1A3B80EECAA /* Push.swift in Sources */,
 				FB6B5DF33E6070D5348F0E27 /* RecordIntent.swift in Sources */,
@@ -261,6 +274,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				B0778EBC2C7F517F88E6662D /* HubVoiceIntent.swift in Sources */,
 				99C55A70179E1025B9004EF9 /* RecordControl.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -310,6 +324,7 @@
 				);
 				SDKROOT = iphoneos;
 				SUPPORTS_MACCATALYST = NO;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "$(inherited) HUB_APP";
 				TARGETED_DEVICE_FAMILY = 1;
 			};
 			name = Release;
@@ -329,6 +344,7 @@
 				);
 				SDKROOT = iphoneos;
 				SUPPORTS_MACCATALYST = NO;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "$(inherited) HUB_APP";
 				TARGETED_DEVICE_FAMILY = 1;
 			};
 			name = Debug;

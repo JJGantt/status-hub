@@ -59,8 +59,9 @@ const PRODUCE = [
 // which is the size these hit on the phone. The RING COLOR carries identity at that size; the glyph
 // only has to be distinct in outline (pointed / wedge / round).
 const ICONS = {
- // leaf: symmetric pointed blade with a dark center vein
- leafy_g: '<path d="M40 29c8 6 10 17 0 24-10-7-8-18 0-24z" fill="#fff"/><path d="M40 32v18" stroke="#0e1318" stroke-width="1.6" stroke-linecap="round"/>',
+ // leaf: tilted blade (tip upper-right, base lower-left) with a stem and an angled midrib. The tilt +
+ // stem are what make it read as a leaf — a symmetric upright oval reads as a seed instead.
+ leafy_g: '<path d="M30 50c0-12 10-22 23-22 0 12-10 22-23 22z" fill="#fff"/><path d="M32 48 47 33" stroke="#0e1318" stroke-width="1.7" stroke-linecap="round"/><path d="M30 50l-4.5 4.5" stroke="#fff" stroke-width="2.4" stroke-linecap="round"/>',
  // carrot: tapered wedge pointing down + three fronds
  veg_g: '<path d="M34 37h12l-5 16a1 1 0 0 1-2 0z" fill="#fff"/><path d="M39 36 32 29l4 7zM41 36l7-7-4 7zM39.2 36V28h1.6v8z" fill="#fff"/>',
  // apple: two-lobe body with a top notch + stem
@@ -71,12 +72,17 @@ function miniGroup(produce) {
  if (!produce) return '';
  return '<div class="ringmini">' + PRODUCE.map((p) => {
   const m = produce[p.key]; if (!m) return '';
-  const fill = Math.max(0, Math.min(1, m.progress || 0)) * MRC;
+  const frac = Math.max(0, Math.min(1, m.progress || 0));
+  const fill = frac * MRC;
+  // At exactly 0 the round line-cap would still paint a dot at 12 o'clock, so an untouched goal would
+  // read as slightly started. Drop the arc entirely instead — empty has to look empty.
+  const arc = frac <= 0 ? '' :
+   '<circle cx="40" cy="40" r="30" fill="none" stroke="' + p.color + '" stroke-width="8" stroke-linecap="round"' +
+   ' transform="rotate(-90 40 40)" stroke-dasharray="' + fill.toFixed(2) + ' ' + (MRC - fill).toFixed(2) + '" />';
   return '<div class="mring" title="' + p.title + ' ' + (m.consumed || 0) + 'g / ' + (m.goal || 0) + 'g">' +
    '<svg viewBox="0 0 80 80">' +
    '<circle cx="40" cy="40" r="30" fill="none" stroke="' + p.color + '" stroke-opacity=".22" stroke-width="8" />' +
-   '<circle cx="40" cy="40" r="30" fill="none" stroke="' + p.color + '" stroke-width="8" stroke-linecap="round"' +
-    ' transform="rotate(-90 40 40)" stroke-dasharray="' + fill.toFixed(2) + ' ' + (MRC - fill).toFixed(2) + '" />' +
+   arc +
    (ICONS[p.key] || '') +
    '</svg></div>';
  }).join('') + '</div>';

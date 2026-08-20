@@ -13,7 +13,12 @@ struct StatusHubApp: App {
     #endif
     var body: some Scene {
         WindowGroup {
-            HubWebView()
+            ZStack(alignment: .bottom) {
+                HubWebView()
+                #if os(iOS)
+                RecorderButton()   // native record → real audio (manual stop) → the hub voice pipeline
+                #endif
+            }
                 .preferredColorScheme(.dark)
                 // Without this, SwiftUI's default keyboard-avoidance shrinks the WHOLE WebView's frame
                 // when the on-screen keyboard shows (e.g. tapping the chat input) — which shrinks

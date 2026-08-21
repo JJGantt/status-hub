@@ -181,7 +181,7 @@ function windowLabel(window) {
   return `${fmt(window.startMin)}–${fmt(window.endMin)}`;
 }
 
-// Fill gauges for the produce rings (vegetables / leafy greens / fruit).
+// Fill gauges for the produce rings (vegetables / dark green vegetables / fruit).
 //
 // Deliberately NOT paced. The macro rings above are drain gauges — full when you're on-pace, bleeding
 // toward empty as the clock advances without logging — because calories/macros have a target you can
@@ -190,7 +190,7 @@ function windowLabel(window) {
 // clock term, no marker, no overflow arc. `progress` is clamped at 1 so the ring can't wrap.
 function computeFill(consumed, goals) {
   const out = {};
-  for (const k of ['veg_g', 'leafy_g', 'fruit_g']) {
+  for (const k of ['veg_g', 'dark_green_g', 'fruit_g']) {
     const goal = (goals || {})[k] || 0;
     const got = (consumed || {})[k] || 0;
     out[k] = {

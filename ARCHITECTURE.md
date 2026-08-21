@@ -4,7 +4,9 @@ Central reference for the whole ecosystem (hub UI, voice pipeline, data layer, d
 hosting). Lives in the `status-hub` repo because that's the most active/central repo, but it
 documents **everything**, not just the hub. Keep it current as pieces change.
 
-> Verified state as of 2026-06-22. Lines marked **(verify)** are inferred and worth re-checking.
+> Verified state as of 2026-08-20. Lines marked **(verify)** are inferred and worth re-checking.
+> For the hub UI's own internals (payload contract, module/card map, domain engine, API + settings
+> catalog), see **[docs/HUB-INTERNALS.md](docs/HUB-INTERNALS.md)** — this file is the ecosystem view.
 
 ---
 
@@ -64,13 +66,20 @@ documents **everything**, not just the hub. Keep it current as pieces change.
 
 ## 4. Surfaces (all share the web hub codebase)
 
-- **Web hub** — `status-hub/server/public/` (`core.js`, `cards/*`, `app.css`). Desktop = scrolling
-  rows; phone = swipe pages; both off `/api/stream` (SSE). Served by the Node server at `/`.
+- **Web hub** — `status-hub/server/public/` (`core.js`, `cards/*`, `app.css`). Desktop `/page` =
+  scrolling rows; phone = swipe panes on `/` (chat · wall · misc · **maint** · **todo**); all off
+  `/api/stream` (SSE). Served by the Node server. (Card/module map: [docs/HUB-INTERNALS.md](docs/HUB-INTERNALS.md).)
+- **`/mic`** — a minimal fullscreen tap-to-talk launcher page (Add-to-Home-Screen web-clip); reuses
+  the same recorder + pipeline as the in-app voice FAB.
 - **TV / kiosk wall** — `/tv` (same dashboard + a live voice-conversation panel). Auth by
   `?token=<TV_TOKEN>`. Near-black always-on display.
-- **Native iOS / macOS app** — `status-hub/apps/` (`StatusHub` iOS + `StatusHubMac`),
-  xcodegen-generated (`project.yml`). A thin WKWebView wrapper of the web hub; seeds the auth
-  cookie from the Keychain password (`Auth.swift`). iOS adds **push** (`Push.swift`).
+- **Native iOS / macOS app** — `status-hub/apps/` (`StatusHub` iOS + `StatusHubMac` +
+  `StatusHubControls`), xcodegen-generated (`project.yml`). A WKWebView shell over the web hub that
+  seeds the auth cookie from the Keychain password (`Auth.swift`) and adds **push** (`Push.swift`) —
+  **plus native voice entry points**: a `statushub://record` URL scheme, a Siri/Spotlight **App
+  Shortcut**, and an iOS-18 **Lock Screen / Control Center control** that all open the app straight
+  into "listening" (fire the web voice FAB via `RecordLaunch`). No longer just a thin wrapper — see
+  [docs/HUB-INTERNALS.md](docs/HUB-INTERNALS.md) §9.
 - **ESP32** — the voice mic (see §5).
 - **iPhone push** — native APNs notifications (see §7).
 

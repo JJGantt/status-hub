@@ -32,10 +32,10 @@ async function settingsAll() {
 // Current surplus/deficit setting (signed kcal over maintenance; default +150 lean-bulk). Drives the
 // live daily goal and the active run's goal on the plot/heatmap. Editable in the settings panel.
 const SURPLUS_LIMIT = 1000; // clamp: nobody runs a surplus/deficit beyond ~1000 kcal; guards typos
-// Daily produce goals (vegetables / leafy greens / fruit). FIXED constants in app_settings — nothing
+// Daily produce goals (vegetables / dark green vegetables / fruit). FIXED constants in app_settings — nothing
 // recalculates them, unlike the macro targets which the maintenance engine re-derives every build.
-// veg INCLUDES leafy (leafy is a floor within the vegetable goal), so the two are never added.
-const PRODUCE_TARGET_DEFAULTS = { veg_g: 300, leafy_g: 75, fruit_g: 250 };
+// veg INCLUDES dark_green (dark green is a floor within the vegetable goal), so the two are never added.
+const PRODUCE_TARGET_DEFAULTS = { veg_g: 300, dark_green_g: 150, fruit_g: 250 };
 async function produceTargets() {
   try {
     const s = await settingsAll();
@@ -45,7 +45,7 @@ async function produceTargets() {
     };
     return {
       veg_g: pick('produce_target_veg_g', PRODUCE_TARGET_DEFAULTS.veg_g),
-      leafy_g: pick('produce_target_leafy_g', PRODUCE_TARGET_DEFAULTS.leafy_g),
+      dark_green_g: pick('produce_target_dark_green_g', PRODUCE_TARGET_DEFAULTS.dark_green_g),
       fruit_g: pick('produce_target_fruit_g', PRODUCE_TARGET_DEFAULTS.fruit_g),
     };
   } catch { return { ...PRODUCE_TARGET_DEFAULTS }; }
@@ -321,7 +321,7 @@ async function fetchStatusRows(win, week, histStart, heatStart) {
   if (!rowCache.dirty && rowCache.rows && rowCache.key === key
       && Date.now() - rowCache.at < ROWCACHE_BACKSTOP_MS) return rowCache.rows;
   const [entries, setRows, weightRows, histRows, muscleRows, heatRows, catalogRows, nutLogRows, targetRows, surfRows] = await Promise.all([
-    sb(`nutrition_entries?occurred_at=gte.${win.start}&occurred_at=lt.${win.end}&staged=eq.false&select=calories,protein_g,carbs_g,fat_g,veg_g,leafy_g,fruit_g`),
+    sb(`nutrition_entries?occurred_at=gte.${win.start}&occurred_at=lt.${win.end}&staged=eq.false&select=calories,protein_g,carbs_g,fat_g,veg_g,dark_green_g,fruit_g`),
     sb(`sets?occurred_at=gte.${week[0]}T00:00:00&select=occurred_at,exercise,muscles_override`),
     sb('weight_log?select=date,weight_lbs&order=date.asc'),
     sbRange(`nutrition_entries?occurred_at=gte.${histStart}T00:00:00&staged=eq.false&select=occurred_at,calories&order=occurred_at`),
@@ -361,10 +361,10 @@ async function buildStatus() {
     protein_g: Math.round(sum('protein_g')),
     carbs_g: Math.round(sum('carbs_g')),
     fat_g: Math.round(sum('fat_g')),
-    // Produce grams. veg_g ALREADY includes leafy_g — the data layer rolls leafy into both, so these
+    // Produce grams. veg_g ALREADY includes dark_green_g — the data layer rolls dark greens into both, so these
     // are summed straight across and must never be added together.
     veg_g: Math.round(sum('veg_g')),
-    leafy_g: Math.round(sum('leafy_g')),
+    dark_green_g: Math.round(sum('dark_green_g')),
     fruit_g: Math.round(sum('fruit_g')),
     target: null, // set to the dynamic goal once maintenance is computed below
   };
@@ -427,7 +427,7 @@ async function buildStatus() {
   // clock); produce starts EMPTY each day and simply fills toward a fixed goal. No window, no marker,
   // no time term at all — so it goes through computeFill(), never computePace().
   paceData.produce = pace.computeFill(
-    { veg_g: nutrition.veg_g, leafy_g: nutrition.leafy_g, fruit_g: nutrition.fruit_g },
+    { veg_g: nutrition.veg_g, dark_green_g: nutrition.dark_green_g, fruit_g: nutrition.fruit_g },
     await produceTargets(),
   );
 
@@ -898,20 +898,20 @@ function rollEntry(macros, rawIngredients, name) {
 }
 
 // Produce rollup — mirrors data-layer's produceRollup() exactly. Leafy greens count toward BOTH
-// leafy_g and veg_g (leafy is a floor WITHIN the vegetable goal, not a separate bucket), so the
+// dark_green_g and veg_g (dark green is a floor WITHIN the vegetable goal, not a separate bucket), so the
 // two are never summed together downstream.
-const PRODUCE_TYPES = ['leafy_green', 'non_leafy_vegetable', 'fruit'];
+const PRODUCE_TYPES = ['dark_green_vegetable', 'other_vegetable', 'fruit'];
 function produceRoll(ings) {
   const r10 = (v) => Math.round((Number(v) || 0) * 10) / 10;
-  const t = { veg_g: 0, leafy_g: 0, fruit_g: 0 };
+  const t = { veg_g: 0, dark_green_g: 0, fruit_g: 0 };
   for (const g of ings) {
     const grams = Number(g.produce_g) || 0;
     if (!grams || !g.produce_type) continue;
-    if (g.produce_type === 'leafy_green') { t.leafy_g += grams; t.veg_g += grams; }
-    else if (g.produce_type === 'non_leafy_vegetable') t.veg_g += grams;
+    if (g.produce_type === 'dark_green_vegetable') { t.dark_green_g += grams; t.veg_g += grams; }
+    else if (g.produce_type === 'other_vegetable') t.veg_g += grams;
     else if (g.produce_type === 'fruit') t.fruit_g += grams;
   }
-  return { veg_g: r10(t.veg_g), leafy_g: r10(t.leafy_g), fruit_g: r10(t.fruit_g) };
+  return { veg_g: r10(t.veg_g), dark_green_g: r10(t.dark_green_g), fruit_g: r10(t.fruit_g) };
 }
 
 // Re-log a past food at the current wall-clock time — the hub's first write action.
@@ -942,7 +942,7 @@ app.post('/api/log-entry', express.json(), async (req, res) => {
     const rolled = rollEntry({ calories, protein_g, carbs_g, fat_g }, b.ingredients, name);
     row.calories = rolled.calories; row.protein_g = rolled.protein_g;
     row.carbs_g = rolled.carbs_g; row.fat_g = rolled.fat_g;
-    row.veg_g = rolled.veg_g; row.leafy_g = rolled.leafy_g; row.fruit_g = rolled.fruit_g;
+    row.veg_g = rolled.veg_g; row.dark_green_g = rolled.dark_green_g; row.fruit_g = rolled.fruit_g;
     row.ingredients = rolled.ingredients;
     await sbWrite('nutrition_entries', 'POST', row);
     dirtyNutDay();   // synchronous — the client re-fetches the day immediately after this returns
@@ -970,7 +970,7 @@ app.patch('/api/log-entry', express.json(), async (req, res) => {
     const newName = (typeof b.name === 'string' && b.name.trim()) ? b.name.trim() : before.name;
     // Totals = SUM of ingredients (the popup sends them; if absent, the macros become one ingredient).
     const rolled = rollEntry({ calories, protein_g, carbs_g, fat_g }, b.ingredients, newName);
-    const patch = { calories: rolled.calories, protein_g: rolled.protein_g, carbs_g: rolled.carbs_g, fat_g: rolled.fat_g, veg_g: rolled.veg_g, leafy_g: rolled.leafy_g, fruit_g: rolled.fruit_g, ingredients: rolled.ingredients };
+    const patch = { calories: rolled.calories, protein_g: rolled.protein_g, carbs_g: rolled.carbs_g, fat_g: rolled.fat_g, veg_g: rolled.veg_g, dark_green_g: rolled.dark_green_g, fruit_g: rolled.fruit_g, ingredients: rolled.ingredients };
     if (typeof b.name === 'string' && b.name.trim()) patch.name = b.name.trim();
     await sbWrite(`nutrition_entries?id=eq.${id}`, 'PATCH', patch);
     dirtyNutDay();   // synchronous — the client re-fetches the day immediately after this returns

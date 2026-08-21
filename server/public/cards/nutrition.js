@@ -42,7 +42,7 @@ export function render(s) {
  tickRings(); // paint immediately at the current second
 }
 
-// ---- produce rings (vegetables / leafy greens / fruit) --------------------
+// ---- produce rings (dark green vegetables / all vegetables / fruit) -------
 // Deliberately a different gauge from the four above. Those DRAIN with the clock (pace); these start
 // empty each day and FILL toward a fixed goal, so there's no marker, no overflow arc, and no live
 // tick — they only change when food is logged, which arrives via the normal SSE re-render.
@@ -50,8 +50,8 @@ export function render(s) {
 // unfilled track is tinted with the ring's own color so you can still tell them apart at 0%.
 const MRC = 2 * Math.PI * 30;  // mini ring circumference (r=30)
 const PRODUCE = [
- { key: 'leafy_g', color: '#22c55e', title: 'Leafy greens' },
- { key: 'veg_g', color: '#f59e0b', title: 'Vegetables' },
+ { key: 'dark_green_g', color: '#22c55e', title: 'Dark green vegetables' },
+ { key: 'veg_g', color: '#f59e0b', title: 'Vegetables (all)' },
  { key: 'fruit_g', color: '#ef4444', title: 'Fruit' },
 ];
 // Tiny white glyphs, ~23 units tall inside the r=30 ring (inner diameter 52) so they read as shapes
@@ -61,7 +61,7 @@ const PRODUCE = [
 const ICONS = {
  // leaf: tilted blade (tip upper-right, base lower-left) with a stem and an angled midrib. The tilt +
  // stem are what make it read as a leaf — a symmetric upright oval reads as a seed instead.
- leafy_g: '<path d="M30 50c0-12 10-22 23-22 0 12-10 22-23 22z" fill="#fff"/><path d="M32 48 47 33" stroke="#0e1318" stroke-width="1.7" stroke-linecap="round"/><path d="M30 50l-4.5 4.5" stroke="#fff" stroke-width="2.4" stroke-linecap="round"/>',
+ dark_green_g: '<path d="M30 50c0-12 10-22 23-22 0 12-10 22-23 22z" fill="#fff"/><path d="M32 48 47 33" stroke="#0e1318" stroke-width="1.7" stroke-linecap="round"/><path d="M30 50l-4.5 4.5" stroke="#fff" stroke-width="2.4" stroke-linecap="round"/>',
  // carrot: tapered wedge pointing down + three fronds
  veg_g: '<path d="M34 37h12l-5 16a1 1 0 0 1-2 0z" fill="#fff"/><path d="M39 36 32 29l4 7zM41 36l7-7-4 7zM39.2 36V28h1.6v8z" fill="#fff"/>',
  // apple: two-lobe body with a top notch + stem

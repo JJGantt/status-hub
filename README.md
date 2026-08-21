@@ -26,8 +26,10 @@ node server.js                 # local run on :8080
 fly deploy --now               # deploy (fly.toml lives here; build context = server/)
 ```
 
-Key files: `server.js` (Express, SSE, auth, dashboard HTML), `maintenance.js` (adaptive TDEE
-+ dynamic macro goal). Auth: password → sha256 cookie (web) or `X-Hub-Token` header (apps).
+Key files: `server.js` (Express, SSE, auth, page HTML), `lib/*` (the domain engine — `maintenance.js`
+adaptive TDEE + goal phases, `pace.js`, `nutritionlog.js`, `volume.js`, `score.js`, …). Auth:
+password → sha256 cookie (web) or `X-Hub-Token` header (apps). **Full internals map:
+[docs/HUB-INTERNALS.md](docs/HUB-INTERNALS.md).**
 
 ## Apps (`apps/`)
 
@@ -48,4 +50,6 @@ xcodebuild -project StatusHub.xcodeproj -scheme StatusHubMac -configuration Debu
 open "build/Build/Products/Debug/Status Hub.app"
 ```
 
-Bundle id `com.jaredgantt.statushub`, team `XMH4AVFC78`. Both targets share `apps/Sources/`.
+Bundle id `com.jaredgantt.statushub`, team `XMH4AVFC78`. `StatusHub` (iOS) + `StatusHubMac` share
+`apps/Sources/`; the iOS-18 Lock-Screen/Control-Center control (`StatusHubControls`) + the shared
+`HubVoiceIntent` live in `apps/Controls/` + `apps/Shared/`.

@@ -57,7 +57,12 @@ documents **everything**, not just the hub. Keep it current as pieces change.
 - `voice_messages` — the shared "hub" conversation thread shown on every surface.
 - `voice_focus` / `voice_sessions` — what the wall is focused on / session list.
 - `worker_presence` — each worker's heartbeat (drives priority arbitration).
-- `app_settings` — flat key/value settings (routing mode, trailing-silence, weight-reminder…).
+- `app_settings` — flat key/value settings (surplus/deficit, `maintenance_phase`, wake-free / inject /
+  mute, weight-reminder, agent mode…). Full catalog: [docs/HUB-INTERNALS.md](docs/HUB-INTERNALS.md) §7.
+- `litter_events` — the litter-watcher's persisted event stream (cycles, resets, alerts, presence).
+- Produce tracking: `nutrition_entries.ingredients` carry `produce_type` (`leafy`/`vegetable`/`fruit`)
+  + `produce_g`; the server rolls them into `veg_g` / `leafy_g` / `fruit_g` (leafy ⊂ veg). Reminders /
+  lists / notes now have both MCP tools **and** a hub surface (`/api/todos` + the todo pane).
 - `govee_devices` — auto-discovered Govee lights (synced from the cloud API).
 - `device_tokens` — APNs tokens for push (with per-token `environment`).
 - `notifications` — push send-log + per-day dedupe.
@@ -127,19 +132,24 @@ Multiple machines run the **same** `worker.py`; only one processes each request.
 heartbeats into `worker_presence`; a worker only claims a request if **no higher-priority worker
 has a fresh heartbeat** (`HEARTBEAT_FRESH_S`).
 
-| Worker | `WORKER_ID` | Where | Priority | Routing | Status |
+| Worker | `WORKER_ID` | Where | Priority | Runner | Status |
 |---|---|---|---|---|---|
-| **Mac** | `mac` | launchd on the Mac | highest (`mac,pi`) | `subscription` (default) or `sdk` | ✅ live, primary |
-| **Pi** | `pi` | systemd `voice-worker.service` | middle (`mac,pi,fly`) | `subscription` (default) or `sdk` | ✅ live, fallback |
-| **Fly** | `fly` | inside `jared-voice` | lowest (`mac,pi,fly`) | forced `sdk` (API only) | ✅ live, fallback |
+| **Mac** | `mac` | launchd on the Mac | highest (`mac,pi`) | `claude -p` (subscription) | ✅ live, primary |
+| **Pi** | `pi` | systemd `voice-worker.service` | middle (`mac,pi,fly`) | `claude -p` (subscription) | ✅ live, fallback |
+| **Fly** | `fly` | inside `jared-voice` | lowest (`mac,pi,fly`) | Anthropic API (no subscription login) | ✅ live, fallback |
 
-- **Claiming latency:** workers used to poll every 1s. Now a **Supabase realtime listener**
-  (`RealtimeWaker` in `worker.py`, added 2026-06-22) wakes the loop the instant a `voice_requests`
-  row is INSERTed; the 1s poll remains as a fallback if the socket drops.
-- **`routing_mode`** (`app_settings`): `subscription` = cold `claude -p` on your Claude
-  subscription (free); `sdk` = a warm `ClaudeSDKClient` (MCPs stay connected) on Anthropic API /
-  Agent-SDK credit. Fly is always `sdk` (no subscription login); the Mac can opt into `sdk` for a
-  warm fast lane.
+- **Claiming latency:** a **Supabase realtime listener** (`RealtimeWaker` in `worker.py`) wakes the
+  loop the instant a `voice_requests` row is INSERTed; a short poll (`IDLE_POLL_S`, ~15s) is the
+  backstop, and the claim socket is recycled every ~5 min to beat realtime half-open death.
+- **Model routing — single dynamic route (2026-08 overhaul):** the old two-route / "brain" button /
+  custom model+thinking+runner selection is **gone**. Every hub command runs **Sonnet first** (a fast
+  first-responder given only SAFE read/actuator tools via `--allowedTools`; the gated data-WRITE tools
+  are absent, so in `-p` mode it's *denied* them and physically can't corrupt data). If the turn needs
+  a gated write — it emits `__ESCALATE__`, or attempts a gated tool and is denied — it re-runs on a
+  **fresh Opus** with the full toolset. Hub turns use **fresh runs with the recent conversation
+  replayed** from `voice_messages` (no shared `--resume` session — that caused model/schema
+  cross-contamination); only full-agent (coding) mode keeps a `--resume` CLI session. The `tier` field
+  and the `set_model`/`set_thinking`/`set_runner` voice tools were removed with this.
 - **Subscription vs API key:** `claude -p` (subscription) must NOT have `ANTHROPIC_API_KEY` in its
   environment or the CLI silently bills the API instead — so `run_claude` strips it for that
   subprocess; the SDK path keeps it. (The service env carries the key so `sdk` mode works.)
@@ -163,6 +173,9 @@ has a fresh heartbeat** (`HEARTBEAT_FRESH_S`).
 - **Weight reminder** (first use case): once/day at the configured time (Settings → Weight
   reminder: On/Off, Manual/Dynamic, default Manual 08:00). **Skips** if weight *or* food is
   already logged that day. Deduped via `notifications` (survives restarts).
+- **Reminder firing** (2026-08): a 60s tick also app-pushes any user reminder whose local `due` has
+  passed (deduped via a `notifications` row keyed `reminder:<id>`; date-only dues fire 9am). Shares the
+  `pushAll()` fan-out with `/api/notify`.
 - **APNs key** lives in Fly secrets on `jared-status-hub` (`APNS_KEY_ID`, `APNS_KEY_P8`,
   `APNS_ENV`) — **not** in Supabase. Key file stashed at `~/.appstoreconnect/private_keys/`.
 - **Sandbox vs production:** dev (Xcode) builds → sandbox tokens; TestFlight/App Store builds →

@@ -900,15 +900,15 @@ function rollEntry(macros, rawIngredients, name) {
 // Produce rollup — mirrors data-layer's produceRollup() exactly. Leafy greens count toward BOTH
 // leafy_g and veg_g (leafy is a floor WITHIN the vegetable goal, not a separate bucket), so the
 // two are never summed together downstream.
-const PRODUCE_TYPES = ['leafy', 'vegetable', 'fruit'];
+const PRODUCE_TYPES = ['leafy_green', 'non_leafy_vegetable', 'fruit'];
 function produceRoll(ings) {
   const r10 = (v) => Math.round((Number(v) || 0) * 10) / 10;
   const t = { veg_g: 0, leafy_g: 0, fruit_g: 0 };
   for (const g of ings) {
     const grams = Number(g.produce_g) || 0;
     if (!grams || !g.produce_type) continue;
-    if (g.produce_type === 'leafy') { t.leafy_g += grams; t.veg_g += grams; }
-    else if (g.produce_type === 'vegetable') t.veg_g += grams;
+    if (g.produce_type === 'leafy_green') { t.leafy_g += grams; t.veg_g += grams; }
+    else if (g.produce_type === 'non_leafy_vegetable') t.veg_g += grams;
     else if (g.produce_type === 'fruit') t.fruit_g += grams;
   }
   return { veg_g: r10(t.veg_g), leafy_g: r10(t.leafy_g), fruit_g: r10(t.fruit_g) };

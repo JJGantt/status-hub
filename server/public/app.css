@@ -558,9 +558,18 @@ body.tv.wallportrait .ringrow .ring{flex:1 1 0}
 body.tv.wallportrait .ringrow .ring svg{max-width:none;max-height:none;width:100%;height:auto}
 /* PHONE: macro rings run left-to-right, so the produce trio stacks VERTICALLY to the right of Fat,
    spanning the row's full height (each ~1/3 of it, which sizes them to about a third of a macro ring). */
-body.tv.wallportrait .ringrow .ringmini{flex-direction:column;align-self:stretch;justify-content:space-between;gap:4px}
-body.tv.wallportrait .ringrow .mring{flex:1 1 0;min-height:0;display:flex;align-items:center}
-body.tv.wallportrait .ringrow .mring svg{max-width:none;width:auto;height:100%;margin:0}
+/* PHONE sizing is WIDTH-driven, not height-driven. Letting flex distribute the column's height and
+   deriving width from aspect-ratio left each mring with an auto width the group still reserved space
+   for (21px of ring inside an 87px box — a whole macro ring of dead air). Pinning the group to a % of
+   the row and sizing the squares off that is deterministic: 3 rings + gaps then land just inside the
+   row height, and the reclaimed width goes back to the four macro rings. */
+body.tv.wallportrait .ringrow .ringmini{flex-direction:column;align-self:center;justify-content:center;align-items:center;gap:4px;width:7%}
+body.tv.wallportrait .ringrow .mring{flex:0 0 auto;width:100%;aspect-ratio:1}
+body.tv.wallportrait .ringrow .mring svg{max-width:none;width:100%;height:100%;margin:0}
+/* At ~26px the glyph would render ~6px and read as a smudge, so scale it up inside the ring and thin
+   the ring stroke to make room. The colour is the primary identifier at this size; the icon confirms it. */
+body.tv.wallportrait .ringrow .mring .micon{transform:scale(1.5);transform-origin:40px 40px}
+body.tv.wallportrait .ringrow .mring circle{stroke-width:6}
 
 /* health bar: horizontal, full width, thin — fills left→right from the same --nfill/--tfill vars */
 body.tv.wallportrait .healthbar{flex-direction:row;align-items:stretch;padding:2px;min-height:0}

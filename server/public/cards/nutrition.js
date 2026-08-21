@@ -83,7 +83,7 @@ function miniGroup(produce) {
    '<svg viewBox="0 0 80 80">' +
    '<circle cx="40" cy="40" r="30" fill="none" stroke="' + p.color + '" stroke-opacity=".22" stroke-width="8" />' +
    arc +
-   (ICONS[p.key] || '') +
+   '<g class="micon">' + (ICONS[p.key] || '') + '</g>' +
    '</svg></div>';
  }).join('') + '</div>';
 }

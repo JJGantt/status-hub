@@ -64,25 +64,28 @@ private extension Color {
 }
 
 private struct RingView: View {
-    let label: String, ring: Ring?
+    let label: String
+    let ring: Ring?
+    var lineWidth: CGFloat = 6
 
     var body: some View {
         let base = min(max(ring?.ring_base ?? 0, 0), 1)
         let over = min(max(ring?.ring_over ?? 0, 0), 1)
         let baseColor = Color(hex: ring?.base_color ?? "#22c55e")
         ZStack {
-            Circle().stroke(Color.primary.opacity(0.14), lineWidth: 6)          // empty track
+            Circle().stroke(Color.primary.opacity(0.14), lineWidth: lineWidth)   // empty track
             Circle()                                                            // pace arc
                 .trim(from: 0, to: base)
-                .stroke(baseColor, style: StrokeStyle(lineWidth: 6, lineCap: .round))
+                .stroke(baseColor, style: StrokeStyle(lineWidth: lineWidth, lineCap: .round))
                 .rotationEffect(.degrees(-90))                                  // start at 12 o'clock
             if let over_color = ring?.over_color, over > 0 {                    // overflow, one wrap max
                 Circle()
                     .trim(from: 0, to: over)
-                    .stroke(Color(hex: over_color), style: StrokeStyle(lineWidth: 6, lineCap: .round))
+                    .stroke(Color(hex: over_color), style: StrokeStyle(lineWidth: lineWidth, lineCap: .round))
                     .rotationEffect(.degrees(-90))
             }
-            Text(label).font(.system(size: 11, weight: .bold, design: .rounded)).foregroundStyle(.primary)
+            Text(label).font(.system(size: lineWidth < 6 ? 9 : 11, weight: .bold, design: .rounded))
+                .foregroundStyle(.primary)
         }
         .aspectRatio(1, contentMode: .fit)
     }
@@ -101,13 +104,20 @@ struct RingsWidgetView: View {
 
     var body: some View {
         Group {
-            if family == .systemSmall {
-                // 2x2 — four rings in a square don't fit legibly in a row at this size.
+            switch family {
+            case .systemSmall:
+                // 2x2 — four rings in a row are illegible at this size.
                 VStack(spacing: 8) {
                     HStack(spacing: 8) { ring(0); ring(1) }
                     HStack(spacing: 8) { ring(2); ring(3) }
                 }
-            } else {
+            case .accessoryCircular:
+                // Lock Screen circular is ~36pt: only one ring fits and stays readable, so it shows
+                // calories, the ring that matters most at a glance.
+                RingView(label: "Cal", ring: entry.rings?.calories, lineWidth: 5)
+            case .accessoryRectangular:
+                HStack(spacing: 6) { ForEach(0..<4, id: \.self) { ring($0, lineWidth: 4) } }
+            default:                                    // .systemMedium
                 HStack(spacing: 12) { ForEach(0..<4, id: \.self) { ring($0) } }
             }
         }
@@ -115,9 +125,9 @@ struct RingsWidgetView: View {
         .widgetURL(URL(string: "statushub://open"))   // any host but "record" just opens the app
     }
 
-    private func ring(_ i: Int) -> some View {
+    private func ring(_ i: Int, lineWidth: CGFloat = 6) -> some View {
         let (label, r) = items[i]
-        return RingView(label: label, ring: r)
+        return RingView(label: label, ring: r, lineWidth: lineWidth)
     }
 }
 
@@ -129,6 +139,10 @@ struct RingsWidget: Widget {
         }
         .configurationDisplayName("Macro Rings")
         .description("Today's calories, protein, carbs and fat.")
-        .supportedFamilies([.systemSmall, .systemMedium])
+        // Home Screen AND Lock Screen. The accessory families are what make it offerable on the
+        // Lock Screen at all — declaring only the system* ones is why it didn't appear there.
+        // Note iOS renders accessory widgets in a flattened tint, so the pace COLOURS do not survive
+        // on the Lock Screen; the arc lengths still read correctly.
+        .supportedFamilies([.systemSmall, .systemMedium, .accessoryCircular, .accessoryRectangular])
     }
 }

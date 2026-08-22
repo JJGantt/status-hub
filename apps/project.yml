@@ -111,6 +111,9 @@ targets:
     deploymentTarget: "13.0"
     sources:
       - path: Sources
+      # Auth lives in Shared/ because the iOS widget extension needs it too. Only this ONE file is
+      # pulled in here — Shared/HubVoiceIntent.swift is an iOS AppIntent with no macOS counterpart.
+      - path: Shared/Auth.swift
       - path: AssetsMac.xcassets
     entitlements:
       path: StatusHubMac.entitlements

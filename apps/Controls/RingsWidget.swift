@@ -1,53 +1,69 @@
 import WidgetKit
 import SwiftUI
 
-// Home / Lock Screen widget: today's four macro rings at a glance, no app launch needed.
+// Home / Lock Screen widget: today's four macro pace rings, drawn to match the hub's nutrition card.
 //
-// This lives in the CONTROLS extension rather than a new widget-extension target on purpose. A new
-// target needs its own bundle id, which needs a provisioning profile, which needs a working Xcode
-// account session — and that session is currently rejected. A widgetkit-extension can host both
-// ControlWidgets and ordinary Widgets in one WidgetBundle, so reusing this already-provisioned
-// extension avoids the whole problem.
+// This lives in the CONTROLS extension rather than a new widget-extension target. One
+// widgetkit-extension is meant to host several widgets and controls in a single WidgetBundle, so
+// this is the intended shape — and it also avoids needing a new bundle id, which would need a new
+// provisioning profile, which the currently-rejected Xcode account session can't issue.
+//
+// The rings are a PACE gauge, not absolute progress: full when on pace, draining as the clock runs
+// ahead of what's been eaten, with an overflow arc once ahead. The white tick is where the arc would
+// end if you were exactly on pace. All of it comes precomputed from the server (see /api/rings) so
+// lib/pace.js stays the only implementation of that maths.
 
-// Mirrors one macro's pace gauge from lib/pace.js. ring_base is the main arc — FULL when you're on
-// pace and draining as the day runs ahead of what you've eaten; ring_over is the overflow arc once
-// you're ahead of pace. Colours come from the server so the widget and the hub card can never drift.
-struct Ring: Decodable {
-    let ring_base: Double
-    let ring_over: Double
-    let base_color: String
-    let over_color: String?
+struct Macro: Decodable {
+    let consumed: Double, goal: Double, dev_g: Double
+    let ring_base: Double, ring_over: Double
+    let base_color: String, over_color: String?, dev_color: String
 }
-struct Rings: Decodable { let calories: Ring; let protein_g: Ring; let carbs_g: Ring; let fat_g: Ring }
+struct Frame: Decodable {
+    let t: Int                 // minutes from the fetch
+    let frac: Double           // how far through the eating window — drives the marker
+    let macros: [String: Macro]
+}
+struct RingsFeed: Decodable { let step_min: Int; let frames: [Frame] }
 
 struct RingsEntry: TimelineEntry {
     let date: Date
-    let rings: Rings?          // nil = couldn't load (no token yet, offline, hub down)
+    let frame: Frame?          // nil = couldn't load (no token yet, offline, hub down)
 }
 
 struct RingsProvider: TimelineProvider {
-    func placeholder(in context: Context) -> RingsEntry { RingsEntry(date: Date(), rings: nil) }
+    func placeholder(in context: Context) -> RingsEntry { RingsEntry(date: Date(), frame: nil) }
 
     func getSnapshot(in context: Context, completion: @escaping (RingsEntry) -> Void) {
-        fetch { completion(RingsEntry(date: Date(), rings: $0)) }
+        fetch { completion(RingsEntry(date: Date(), frame: $0?.frames.first)) }
     }
 
-    // Refresh every 15 minutes. WidgetKit budgets refreshes per day, so this is deliberately
-    // unambitious — macros move on the scale of meals, not seconds.
+    // One network fetch yields a few hours of frames, so the arcs keep draining and the marker keeps
+    // advancing between fetches. WidgetKit budgets refreshes per day; this way movement doesn't cost
+    // any of that budget.
     func getTimeline(in context: Context, completion: @escaping (Timeline<RingsEntry>) -> Void) {
-        fetch { rings in
-            let next = Calendar.current.date(byAdding: .minute, value: 15, to: Date()) ?? Date().addingTimeInterval(900)
-            completion(Timeline(entries: [RingsEntry(date: Date(), rings: rings)], policy: .after(next)))
+        fetch { feed in
+            let now = Date()
+            guard let feed, !feed.frames.isEmpty else {
+                completion(Timeline(entries: [RingsEntry(date: now, frame: nil)],
+                                    policy: .after(now.addingTimeInterval(900))))
+                return
+            }
+            let entries = feed.frames.map {
+                RingsEntry(date: now.addingTimeInterval(TimeInterval($0.t) * 60), frame: $0)
+            }
+            // Refetch once the frames run out — consumed values are stale by then anyway.
+            let end = entries.last?.date ?? now.addingTimeInterval(900)
+            completion(Timeline(entries: entries, policy: .after(end)))
         }
     }
 
-    private func fetch(_ done: @escaping (Rings?) -> Void) {
+    private func fetch(_ done: @escaping (RingsFeed?) -> Void) {
         guard let url = URL(string: Auth.host + "/api/rings"), let token = Auth.token() else { return done(nil) }
         var r = URLRequest(url: url)
         r.timeoutInterval = 15
         r.setValue(token, forHTTPHeaderField: "X-Hub-Token")
         URLSession.shared.dataTask(with: r) { data, _, _ in
-            done(data.flatMap { try? JSONDecoder().decode(Rings.self, from: $0) })
+            done(data.flatMap { try? JSONDecoder().decode(RingsFeed.self, from: $0) })
         }.resume()
     }
 }
@@ -63,31 +79,82 @@ private extension Color {
     }
 }
 
+/// The on-pace marker. Geometry mirrors cards/nutrition.js tickRings(): angle 2π·frac measured
+/// COUNTER-clockwise from twelve o'clock, drawn between 0.725 and 0.9875 of the half-size — the same
+/// proportions as the card's r=29→39.5 line inside its 80-unit box.
+private struct PaceMark: Shape {
+    let frac: Double
+    func path(in rect: CGRect) -> Path {
+        let c = CGPoint(x: rect.midX, y: rect.midY)
+        let half = min(rect.width, rect.height) / 2
+        let phi = 2 * Double.pi * frac
+        let pt = { (f: Double) in
+            CGPoint(x: c.x - half * f * sin(phi), y: c.y - half * f * cos(phi))
+        }
+        var p = Path()
+        p.move(to: pt(0.725))
+        p.addLine(to: pt(0.9875))
+        return p
+    }
+}
+
 private struct RingView: View {
     let label: String
-    let ring: Ring?
-    var lineWidth: CGFloat = 6
+    let macro: Macro?
+    let frac: Double
+    var compact = false          // Lock Screen / small: drop the totals line, thinner strokes
 
     var body: some View {
-        let base = min(max(ring?.ring_base ?? 0, 0), 1)
-        let over = min(max(ring?.ring_over ?? 0, 0), 1)
-        let baseColor = Color(hex: ring?.base_color ?? "#22c55e")
-        ZStack {
-            Circle().stroke(Color.primary.opacity(0.14), lineWidth: lineWidth)   // empty track
-            Circle()                                                            // pace arc
-                .trim(from: 0, to: base)
-                .stroke(baseColor, style: StrokeStyle(lineWidth: lineWidth, lineCap: .round))
-                .rotationEffect(.degrees(-90))                                  // start at 12 o'clock
-            if let over_color = ring?.over_color, over > 0 {                    // overflow, one wrap max
-                Circle()
-                    .trim(from: 0, to: over)
-                    .stroke(Color(hex: over_color), style: StrokeStyle(lineWidth: lineWidth, lineCap: .round))
-                    .rotationEffect(.degrees(-90))
+        VStack(spacing: 2) {
+            GeometryReader { geo in
+                let size = min(geo.size.width, geo.size.height)
+                let lw = size * (compact ? 0.115 : 0.16)      // card is stroke 7 on a d=68 circle
+                let base = min(max(macro?.ring_base ?? 0, 0), 1)
+                let over = min(max(macro?.ring_over ?? 0, 0), 1)
+                ZStack {
+                    Circle().stroke(Color.primary.opacity(0.16), lineWidth: lw)
+                    Circle()
+                        .trim(from: 0, to: base)
+                        .stroke(Color(hex: macro?.base_color ?? "#22c55e"),
+                                style: StrokeStyle(lineWidth: lw, lineCap: .round))
+                        .rotationEffect(.degrees(-90))
+                    if let oc = macro?.over_color, over > 0 {
+                        Circle()
+                            .trim(from: 0, to: over)
+                            .stroke(Color(hex: oc), style: StrokeStyle(lineWidth: lw, lineCap: .round))
+                            .rotationEffect(.degrees(-90))
+                    }
+                    PaceMark(frac: frac)
+                        .stroke(Color.white, style: StrokeStyle(lineWidth: max(1, size * 0.045), lineCap: .round))
+                    VStack(spacing: 0) {
+                        Text(label)
+                            .font(.system(size: size * 0.24, weight: .semibold, design: .rounded))
+                            .foregroundStyle(.primary)
+                        if let m = macro {
+                            Text(devText(m))
+                                .font(.system(size: size * 0.20, weight: .semibold, design: .rounded))
+                                .foregroundStyle(Color(hex: m.dev_color))
+                        }
+                    }
+                }
+                .frame(width: size, height: size)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
-            Text(label).font(.system(size: lineWidth < 6 ? 9 : 11, weight: .bold, design: .rounded))
-                .foregroundStyle(.primary)
+            .aspectRatio(1, contentMode: .fit)
+
+            if !compact, let m = macro {
+                Text("\(Int(m.consumed))/\(Int(m.goal))")
+                    .font(.system(size: 9, weight: .medium, design: .rounded))
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1).minimumScaleFactor(0.7)
+            }
         }
-        .aspectRatio(1, contentMode: .fit)
+    }
+
+    /// Signed distance from the pace line, same as the card's centre number.
+    private func devText(_ m: Macro) -> String {
+        let d = Int(m.dev_g)
+        return (d > 0 ? "+" : "") + String(d)
     }
 }
 
@@ -95,39 +162,30 @@ struct RingsWidgetView: View {
     @Environment(\.widgetFamily) private var family
     let entry: RingsEntry
 
-    // Colour is carried per-ring by the pace data (green on pace -> red behind, amber over), exactly
-    // as on the hub card, so nothing is hard-coded per macro here.
-    private var items: [(String, Ring?)] {
-        [("Cal", entry.rings?.calories), ("P", entry.rings?.protein_g),
-         ("C",   entry.rings?.carbs_g),  ("F", entry.rings?.fat_g)]
-    }
+    private let keys = [("Cal", "calories"), ("P", "protein_g"), ("C", "carbs_g"), ("F", "fat_g")]
 
     var body: some View {
+        let frac = entry.frame?.frac ?? 0
         Group {
             switch family {
-            case .systemSmall:
-                // 2x2 — four rings in a row are illegible at this size.
-                VStack(spacing: 8) {
-                    HStack(spacing: 8) { ring(0); ring(1) }
-                    HStack(spacing: 8) { ring(2); ring(3) }
-                }
             case .accessoryCircular:
-                // Lock Screen circular is ~36pt: only one ring fits and stays readable, so it shows
-                // calories, the ring that matters most at a glance.
-                RingView(label: "Cal", ring: entry.rings?.calories, lineWidth: 5)
+                // ~36pt: only one ring stays legible, so it shows calories.
+                RingView(label: "Cal", macro: entry.frame?.macros["calories"], frac: frac, compact: true)
             case .accessoryRectangular:
-                HStack(spacing: 6) { ForEach(0..<4, id: \.self) { ring($0, lineWidth: 4) } }
-            default:                                    // .systemMedium
-                HStack(spacing: 12) { ForEach(0..<4, id: \.self) { ring($0) } }
+                HStack(spacing: 6) { ForEach(keys, id: \.0) { row($0, compact: true) } }
+            default:
+                // One row of four on both Home Screen sizes — a 2x2 wastes the width and forces
+                // vertical padding that squeezes the rings.
+                HStack(spacing: family == .systemSmall ? 4 : 12) {
+                    ForEach(keys, id: \.0) { row($0, compact: family == .systemSmall) }
+                }
             }
         }
-        .padding(4)
         .widgetURL(URL(string: "statushub://open"))   // any host but "record" just opens the app
     }
 
-    private func ring(_ i: Int, lineWidth: CGFloat = 6) -> some View {
-        let (label, r) = items[i]
-        return RingView(label: label, ring: r, lineWidth: lineWidth)
+    private func row(_ k: (String, String), compact: Bool) -> some View {
+        RingView(label: k.0, macro: entry.frame?.macros[k.1], frac: entry.frame?.frac ?? 0, compact: compact)
     }
 }
 
@@ -138,11 +196,9 @@ struct RingsWidget: Widget {
                 .containerBackground(.fill.tertiary, for: .widget)
         }
         .configurationDisplayName("Macro Rings")
-        .description("Today's calories, protein, carbs and fat.")
-        // Home Screen AND Lock Screen. The accessory families are what make it offerable on the
-        // Lock Screen at all — declaring only the system* ones is why it didn't appear there.
-        // Note iOS renders accessory widgets in a flattened tint, so the pace COLOURS do not survive
-        // on the Lock Screen; the arc lengths still read correctly.
+        .description("Today's calories, protein, carbs and fat — on pace, draining with the clock.")
+        // The accessory families are what make it offerable on the Lock Screen at all. Note iOS
+        // renders those in a flattened tint, so the pace COLOURS don't survive there; arc lengths do.
         .supportedFamilies([.systemSmall, .systemMedium, .accessoryCircular, .accessoryRectangular])
     }
 }

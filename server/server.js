@@ -675,20 +675,35 @@ const dirtyWorkoutDay = () => workoutDayCache.clear();
 app.get('/api/rings', async (req, res) => {
   try {
     const st = await buildStatus();
-    const m = (st.pace && st.pace.macros) || {};
-    // The SAME pace gauge the hub's nutrition card draws — full when on pace, draining with the
-    // clock, with an overflow arc once you're ahead. Deliberately not absolute progress: the widget
-    // has to read as the same instrument as the card, not a second opinion.
-    const one = (k) => ({
-      ring_base: m[k]?.ring_base ?? 0, ring_over: m[k]?.ring_over ?? 0,
-      base_color: m[k]?.base_color ?? '#22c55e', over_color: m[k]?.over_color ?? null,
-      consumed: m[k]?.consumed ?? 0, goal: m[k]?.goal ?? 0, dev_g: m[k]?.dev_g ?? 0,
-    });
-    res.json({
-      calories: one('calories'), protein_g: one('protein_g'),
-      carbs_g: one('carbs_g'), fat_g: one('fat_g'),
-      updated: etNowString(),
-    });
+    const P = st.pace || {};
+    const m = P.macros || {};
+    const KEYS = ['calories', 'protein_g', 'carbs_g', 'fat_g'];
+    const consumed = {}, goal = {};
+    for (const k of KEYS) { consumed[k] = m[k]?.consumed ?? 0; goal[k] = m[k]?.goal ?? 0; }
+
+    // A widget renders a STATIC snapshot — it can't tick a clock the way the hub card does. So the
+    // server returns a series of future frames and WidgetKit steps through them on schedule. The
+    // pace arcs drain and the marker advances without another network call, and, more importantly,
+    // the pace maths stays here in lib/pace.js instead of being re-implemented in Swift where the
+    // two copies would quietly drift apart.
+    const STEP_MIN = 10, SPAN_MIN = 240;
+    const frames = [];
+    for (let t = 0; t <= SPAN_MIN; t += STEP_MIN) {
+      const f = pace.computePace({ consumed, goal, window: P.window, nowOff: (P.nowOff ?? 0) + t });
+      const macros = {};
+      for (const k of KEYS) {
+        const x = f.macros[k];
+        macros[k] = {
+          consumed: x.consumed, goal: x.goal, dev_g: x.dev_g,
+          ring_base: x.ring_base, ring_over: x.ring_over,
+          base_color: x.base_color, over_color: x.over_color,
+          // Matches the card's own rule for the number under the glyph (cards/nutrition.js tickRings).
+          dev_color: x.dev_g < 0 ? '#f87171' : x.dev_g > 0 ? (x.over_color || '#22c55e') : '#22c55e',
+        };
+      }
+      frames.push({ t, frac: f.fraction, macros });
+    }
+    res.json({ step_min: STEP_MIN, frames });
   } catch (e) { res.status(500).json({ error: String(e.message || e) }); }
 });
 

@@ -10,6 +10,7 @@
 		0C6EDE683DFC99BC5DD60409 /* RecordIntent.swift in Sources */ = {isa = PBXBuildFile; fileRef = F198CD20CEADF9EC7C93F50C /* RecordIntent.swift */; };
 		0E69DD82E7A03FBF6DC8305C /* RingsWidget.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0AD761F7ECC2DBF3FA1641B0 /* RingsWidget.swift */; };
 		2865661A326AF6F9FE5F6E61 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = AC135E9E04A98CDB11B57AB2 /* Assets.xcassets */; };
+		2AE6971801629766230C380C /* Auth.swift in Sources */ = {isa = PBXBuildFile; fileRef = 88D699B5FDC0F7476374CF07 /* Auth.swift */; };
 		4047BFD86E0305E129C06B77 /* Info-iOS.plist in Resources */ = {isa = PBXBuildFile; fileRef = 12B2F6A89FA87D30EEC5ED56 /* Info-iOS.plist */; };
 		51DECA2330E0FBC3832EF2A4 /* Models.swift in Sources */ = {isa = PBXBuildFile; fileRef = B47214768CCEE8C99EEF5958 /* Models.swift */; };
 		58F20A294FB54B942342ABB3 /* StatusHubControls.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = AD44A10C47F3ACE73074E7B2 /* StatusHubControls.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
@@ -290,6 +291,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				2AE6971801629766230C380C /* Auth.swift in Sources */,
 				A530752A59476C460CE68305 /* HubModel.swift in Sources */,
 				51DECA2330E0FBC3832EF2A4 /* Models.swift in Sources */,
 				EE1E28331D9AE8401BEE3601 /* Push.swift in Sources */,

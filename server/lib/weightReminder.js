@@ -16,7 +16,7 @@ const pace = require('./pace');
 const { localDate, nutritionWindow } = require('./dates');
 const TZ = process.env.TZ_DISPLAY || 'America/New_York';
 
-const TITLE = 'Log your weight';
+const TITLE = '⚖️ Log your weight';
 const BODY = 'Step on the scale before your first meal.';
 
 function nowHM() {  // current wall time HH:MM (24h) in the display timezone

@@ -38,6 +38,13 @@ targets:
       path: StatusHub.entitlements
       properties:
         aps-environment: production   # production APNs for distribution (Ad Hoc / TestFlight / App Store) builds
+        # TODO: add `com.apple.developer.usernotifications.time-sensitive: true` here once the
+        # Time Sensitive Notifications capability is enabled on the App ID. It is the only way a
+        # normal push breaks through a Focus. It canNOT be enabled via the App Store Connect API
+        # (not among the 28 capabilityType values it accepts) — it needs the developer portal or
+        # Xcode's Signing & Capabilities, and Xcode's account login must be valid to regenerate the
+        # profile. Until then the server still SENDS interruption-level 'time-sensitive'; iOS just
+        # ignores it without the entitlement, so nothing breaks — Focus simply isn't pierced.
     # Managed Info.plist (not GENERATE_INFOPLIST_FILE) so we can register the statushub:// URL scheme — a
     # one-tap home-screen shortcut opens statushub://record and the app auto-fires the voice FAB.
     info:

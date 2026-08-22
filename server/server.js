@@ -1255,9 +1255,13 @@ app.post('/api/voice-activity', express.json(), (req, res) => {
 // without looking. Sounds are .caf files bundled in the iOS app (apps/Sounds/); an unknown kind
 // falls back to the system default. 'passive' keeps voice acks from buzzing — they're confirmations
 // you'll read later, not things to interrupt you.
+// Sound distinguishes these by ear, the emoji distinguishes them by eye — the app icon is identical
+// on every one, so without a marker in the title a reminder and a voice confirmation look the same
+// in a stacked list. 'time-sensitive' is what lets a reminder through a Focus; a voice ack is
+// 'passive' so it lands in the list without lighting the screen.
 const NOTIFY_STYLE = {
-  reminder: { sound: 'reminder.caf' },
-  voice:    { interruptionLevel: 'passive' },   // confirmations — don't buzz for these
+  reminder: { emoji: '⏰', sound: 'reminder.caf', interruptionLevel: 'time-sensitive' },
+  voice:    { emoji: '🎙️', interruptionLevel: 'passive' },
 };
 
 // The home-screen badge = reminders that are OVERDUE: not done, not deleted, and past their due
@@ -1276,7 +1280,8 @@ async function unaddressedReminderCount() {
 
 async function pushAll(kind, title, body, dedupe_key, extra = {}) {
   const base = { kind, title, body, ...(dedupe_key ? { dedupe_key } : {}) };
-  const style = { ...(NOTIFY_STYLE[kind] || {}), ...extra };   // copy: never mutate the shared constant
+  const { emoji, ...style } = { ...(NOTIFY_STYLE[kind] || {}), ...extra };   // copy: never mutate the shared constant
+  if (emoji && !String(title).startsWith(emoji)) title = `${emoji} ${title}`;
   const badge = await unaddressedReminderCount();
   if (Number.isInteger(badge)) style.badge = badge;
   if (!apns.configured()) { await sbInsert('notifications', { ...base, ok: false, detail: 'apns not configured' }); return { ok: false, detail: 'apns not configured' }; }

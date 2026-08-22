@@ -117,11 +117,10 @@ function wireSwipe(el) {
     row.addEventListener('pointerup', end);
     row.addEventListener('pointercancel', end);
 
-    // Marks it DONE — the same thing the notification's Done button does. Checking off and clearing
-    // away are one idea here, so there's exactly one "I dealt with this" state however you reach it.
-    // The row survives in the table, so nothing is truly lost.
+    // Clears it — the one and only "dealt with" state, same as the notification's Done button and
+    // the voice tools. Soft, so the row survives its recovery window before being purged.
     li.querySelector('.del').addEventListener('click', () =>
-      post('/api/todos/complete', { kind: li.dataset.kind, id: li.dataset.id }));
+      post('/api/todos/clear', { kind: li.dataset.kind, id: li.dataset.id }));
   });
 
   // Tapping anywhere else puts an open row away.

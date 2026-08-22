@@ -1325,7 +1325,7 @@ const NOTIFY_STYLE = {
 // to a wrong number.
 async function unaddressedReminderCount() {
   try {
-    const rows = await sb('reminders?done=eq.false&deleted=eq.false&due=not.is.null&select=due');
+    const rows = await sb('reminders?deleted=eq.false&due=not.is.null&select=due');
     const nowET = etNowString();
     return rows.filter((r) => dueMoment(r.due) <= nowET).length;
   } catch (_) { return null; }
@@ -1367,9 +1367,9 @@ app.post('/api/notify', express.json(), async (req, res) => {
 app.get('/api/todos', async (req, res) => {
   try {
     const [reminders, listNames, items, notes] = await Promise.all([
-      sb('reminders?done=eq.false&deleted=eq.false&select=id,text,due&order=due.asc.nullslast,created.asc'),
+      sb('reminders?deleted=eq.false&select=id,text,due&order=due.asc.nullslast,created.asc'),
       sb('lists?select=name&order=name'),
-      sb('list_items?done=eq.false&deleted=eq.false&select=id,list_name,text&order=created.asc'),
+      sb('list_items?deleted=eq.false&select=id,list_name,text&order=created.asc'),
       sb('notes?select=name,content&order=name'),
     ]);
     const lists = (listNames || []).map((l) => ({ name: l.name,
@@ -1377,13 +1377,15 @@ app.get('/api/todos', async (req, res) => {
     res.json({ reminders: reminders || [], lists, notes: notes || [] });
   } catch (e) { res.status(500).json({ error: String(e.message || e) }); }
 });
-app.post('/api/todos/complete', express.json(), async (req, res) => {
+// Clear a reminder or list item. There is ONE cleared state — checking off and deleting are the
+// same act — and it's soft, so the row survives for the recovery window before being purged.
+app.post('/api/todos/clear', express.json(), async (req, res) => {
   try {
     const b = req.body || {};
     const id = String(b.id || '');
     if (!id) return res.status(400).json({ error: 'id required' });
     const table = b.kind === 'item' ? 'list_items' : 'reminders';
-    await sbWrite(`${table}?id=eq.${encodeURIComponent(id)}`, 'PATCH', { done: true, updated: new Date().toISOString() });
+    await sbWrite(`${table}?id=eq.${encodeURIComponent(id)}`, 'PATCH', { deleted: true, updated: new Date().toISOString() });
     res.json({ ok: true, badge: await unaddressedReminderCount() });
     syncBadge().catch(() => {});   // don't make the caller wait on APNs
   } catch (e) { res.status(500).json({ error: String(e.message || e) }); }
@@ -1425,10 +1427,10 @@ app.post('/api/todos/add', express.json(), async (req, res) => {
       if (!list) return res.status(400).json({ error: 'list required' });
       const exists = await sb(`lists?name=eq.${encodeURIComponent(list)}&select=name&limit=1`);
       if (!exists.length) await sbWrite('lists', 'POST', { name: list });
-      await sbWrite('list_items', 'POST', { id: crypto.randomUUID(), list_name: list, text, done: false, deleted: false, created: now, updated: now });
+      await sbWrite('list_items', 'POST', { id: crypto.randomUUID(), list_name: list, text, deleted: false, created: now, updated: now });
     } else {
       const due = String(b.due || '').trim() || null;
-      await sbWrite('reminders', 'POST', { id: crypto.randomUUID(), text, due, done: false, deleted: false, created: now, updated: now });
+      await sbWrite('reminders', 'POST', { id: crypto.randomUUID(), text, due, deleted: false, created: now, updated: now });
     }
     res.json({ ok: true });
   } catch (e) { res.status(500).json({ error: String(e.message || e) }); }
@@ -1484,7 +1486,7 @@ async function remindersTick() {
   if (!apns.configured()) return;
   const nowET = etNowString();
   let rows;
-  try { rows = await sb('reminders?done=eq.false&deleted=eq.false&due=not.is.null&select=id,text,due'); } catch (_) { return; }
+  try { rows = await sb('reminders?deleted=eq.false&due=not.is.null&select=id,text,due'); } catch (_) { return; }
   for (const r of rows) {
     if (dueMoment(r.due) > nowET) continue;                           // not due yet
     const dk = `reminder:${r.id}`;
@@ -1516,6 +1518,21 @@ async function syncBadge() {
 }
 setInterval(() => syncBadge().catch((e) => console.log('[badge] error', e.message)), 60000);
 syncBadge().catch(() => {});
+
+// ---- retention. Clearing is a SOFT delete so it can be undone, but that's only tenable if the rows
+// don't pile up forever. Anything cleared longer ago than the window is hard-deleted. Hourly is
+// plenty for a 30-day horizon; exactness doesn't matter here.
+const PURGE_AFTER_DAYS = 30;
+async function purgeCleared() {
+  const cutoff = new Date(Date.now() - PURGE_AFTER_DAYS * 86400000).toISOString();
+  for (const table of ['reminders', 'list_items']) {
+    try {
+      await sbWrite(`${table}?deleted=eq.true&updated=lt.${encodeURIComponent(cutoff)}`, 'DELETE');
+    } catch (e) { console.log(`[purge] ${table}:`, e.message); }
+  }
+}
+setInterval(() => purgeCleared().catch(() => {}), 3600000);
+purgeCleared().catch(() => {});
 
 // ---- login page (server-rendered; public, no client modules) ----
 function loginHtml(err) {

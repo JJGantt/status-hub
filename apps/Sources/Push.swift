@@ -130,7 +130,7 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
         }
         switch response.actionIdentifier {
         case "REMINDER_DONE":
-            HubAPI.post("/api/todos/complete", ["id": id], done: completionHandler)
+            HubAPI.post("/api/todos/clear", ["id": id], done: completionHandler)
         case "REMINDER_SNOOZE_1H":
             HubAPI.post("/api/todos/snooze", ["id": id, "hours": 1], done: completionHandler)
         case "REMINDER_SNOOZE_24H":

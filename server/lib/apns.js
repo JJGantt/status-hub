@@ -71,8 +71,11 @@ function authToken(env) {
 // count rather than only the ones that change it. Omit title AND body for a badge-only update:
 // that switches the push to type 'background', which is the only form iOS honours without an alert
 // (best-effort — iOS throttles background pushes, so treat silent decrements as eventual).
+// `category` names a UNNotificationCategory the app registered at launch, which is what puts the
+// action buttons on the notification. `payload` carries app-visible data alongside `aps` — the
+// reminder's id rides there so an action knows which row it is acting on.
 // Resolves { ok, status, detail } and never rejects.
-function send(deviceToken, { title, body, payload, environment, sound, interruptionLevel, badge } = {}) {
+function send(deviceToken, { title, body, payload, environment, sound, interruptionLevel, badge, category } = {}) {
   return new Promise((resolve) => {
     if (!configured(environment)) return resolve({ ok: false, status: 0, detail: 'apns not configured for ' + (environment || ENV) });
     let jwt;
@@ -107,6 +110,7 @@ function send(deviceToken, { title, body, payload, environment, sound, interrupt
       : { alert: { title, body }, sound: sound || 'default' };
     if (!silent && interruptionLevel) aps['interruption-level'] = interruptionLevel;
     if (Number.isInteger(badge)) aps.badge = badge;
+    if (category && !silent) aps.category = category;   // selects the action buttons the app registered
     req.end(JSON.stringify({ aps, ...(payload || {}) }));
   });
 }

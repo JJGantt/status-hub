@@ -217,15 +217,17 @@ function nowOffsetTZ() {
   return pace.offsetFromHM(hh, mm);
 }
 
-// Current local wall-clock in the display timezone as 'YYYY-MM-DDTHH:MM:SS' — for comparing reminder
-// due times (which are stored as local-naive ISO strings) without any UTC offset math.
-function etNowString() {
+// A moment as local wall-clock in the display timezone, 'YYYY-MM-DDTHH:MM:SS'. Reminder due times
+// are stored as local-naive ISO strings, so rendering into the same shape lets them be compared (and
+// written) as plain strings with no UTC offset math anywhere.
+function etStringAt(d) {
   const p = new Intl.DateTimeFormat('en-CA', { timeZone: TZ, hour12: false, year: 'numeric', month: '2-digit',
-    day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' }).formatToParts(new Date());
+    day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' }).formatToParts(d);
   const g = (t) => p.find((x) => x.type === t).value;
   const hh = g('hour') === '24' ? '00' : g('hour');
   return `${g('year')}-${g('month')}-${g('day')}T${hh}:${g('minute')}:${g('second')}`;
 }
+const etNowString = () => etStringAt(new Date());
 
 // ---- assemble dashboard data ----
 // ---- surf: latest Surfline snapshot -> current + 7-day per-day rollup ----
@@ -1258,25 +1260,23 @@ const NOTIFY_STYLE = {
   voice:    { interruptionLevel: 'passive' },   // confirmations — don't buzz for these
 };
 
-// The home-screen badge = reminders actually awaiting action: not done, not deleted, and either
-// already due or carrying no due date at all. A reminder scheduled for next Tuesday is NOT
-// unaddressed yet, so it doesn't badge until its time arrives. Returns null if the count can't be
-// read, in which case the push simply omits the badge rather than clearing it to a wrong number.
+// The home-screen badge = reminders that are OVERDUE: not done, not deleted, and past their due
+// time. Nothing else counts. Snoozing pushes the due date forward, which is a real answer to the
+// reminder, so it correctly drops off the badge until it comes due again. An undated reminder never
+// fires a push either (remindersTick requires a due), so it has never pinged him and must not badge.
+// Returns null if the count can't be read — the push then omits the badge rather than clearing it
+// to a wrong number.
 async function unaddressedReminderCount() {
   try {
-    const rows = await sb('reminders?done=eq.false&deleted=eq.false&select=due');
+    const rows = await sb('reminders?done=eq.false&deleted=eq.false&due=not.is.null&select=due');
     const nowET = etNowString();
-    return rows.filter((r) => {
-      if (!r.due) return true;                                        // undated to-do — always pending
-      const fire = /T\d/.test(String(r.due)) ? String(r.due) : String(r.due).slice(0, 10) + 'T09:00:00';
-      return fire <= nowET;
-    }).length;
+    return rows.filter((r) => dueMoment(r.due) <= nowET).length;
   } catch (_) { return null; }
 }
 
-async function pushAll(kind, title, body, dedupe_key) {
+async function pushAll(kind, title, body, dedupe_key, extra = {}) {
   const base = { kind, title, body, ...(dedupe_key ? { dedupe_key } : {}) };
-  const style = { ...(NOTIFY_STYLE[kind] || {}) };   // copy: never mutate the shared constant
+  const style = { ...(NOTIFY_STYLE[kind] || {}), ...extra };   // copy: never mutate the shared constant
   const badge = await unaddressedReminderCount();
   if (Number.isInteger(badge)) style.badge = badge;
   if (!apns.configured()) { await sbInsert('notifications', { ...base, ok: false, detail: 'apns not configured' }); return { ok: false, detail: 'apns not configured' }; }
@@ -1326,10 +1326,36 @@ app.post('/api/todos/complete', express.json(), async (req, res) => {
     if (!id) return res.status(400).json({ error: 'id required' });
     const table = b.kind === 'item' ? 'list_items' : 'reminders';
     await sbWrite(`${table}?id=eq.${encodeURIComponent(id)}`, 'PATCH', { done: true, updated: new Date().toISOString() });
-    res.json({ ok: true });
+    res.json({ ok: true, badge: await unaddressedReminderCount() });
     syncBadge().catch(() => {});   // don't make the caller wait on APNs
   } catch (e) { res.status(500).json({ error: String(e.message || e) }); }
 });
+// Snooze: push a reminder's due time out by N hours from NOW (not from its old due, which may be
+// long past). It stays undone and un-deleted — snoozing is deferral, not completion — but it stops
+// being overdue, so it correctly drops off the badge until it comes round again. The notifications
+// dedupe row is cleared too, otherwise the reminder could never fire a second time.
+app.post('/api/todos/snooze', express.json(), async (req, res) => {
+  try {
+    const b = req.body || {};
+    const id = String(b.id || '');
+    const hours = Number(b.hours);
+    if (!id) return res.status(400).json({ error: 'id required' });
+    if (!Number.isFinite(hours) || hours <= 0 || hours > 24 * 30) return res.status(400).json({ error: 'hours out of range' });
+    const due = etStringAt(new Date(Date.now() + hours * 3600 * 1000));
+    await sbWrite(`reminders?id=eq.${encodeURIComponent(id)}`, 'PATCH', { due, updated: new Date().toISOString() });
+    await sbWrite(`notifications?dedupe_key=eq.${encodeURIComponent('reminder:' + id)}`, 'DELETE');
+    res.json({ ok: true, due, badge: await unaddressedReminderCount() });
+    syncBadge().catch(() => {});
+  } catch (e) { res.status(500).json({ error: String(e.message || e) }); }
+});
+
+// The app reads this when it comes to the foreground, so the badge is right even if a silent
+// background push never landed.
+app.get('/api/badge', async (req, res) => {
+  const n = await unaddressedReminderCount();
+  res.json({ badge: Number.isInteger(n) ? n : 0 });
+});
+
 app.post('/api/todos/add', express.json(), async (req, res) => {
   try {
     const b = req.body || {};
@@ -1390,18 +1416,24 @@ console.log(`[weight-reminder] armed (apns: ${apns.configured() ? 'configured, '
 
 // ---- reminder firing: app-push a reminder once its due time (local) has passed. Dedupe via a
 // `notifications` row keyed `reminder:<id>` so it fires exactly once. Date-only dues fire at 9am local.
+// A date-only due means 9am local that day; otherwise the stored local-naive timestamp is the moment.
+function dueMoment(due) {
+  const d = String(due);
+  return /T\d/.test(d) ? d : d.slice(0, 10) + 'T09:00:00';
+}
+
 async function remindersTick() {
   if (!apns.configured()) return;
   const nowET = etNowString();
   let rows;
   try { rows = await sb('reminders?done=eq.false&deleted=eq.false&due=not.is.null&select=id,text,due'); } catch (_) { return; }
   for (const r of rows) {
-    let fire = String(r.due);
-    if (!/T\d/.test(fire)) fire = fire.slice(0, 10) + 'T09:00:00';   // date-only → 9am local that day
-    if (fire > nowET) continue;                                       // not due yet
+    if (dueMoment(r.due) > nowET) continue;                           // not due yet
     const dk = `reminder:${r.id}`;
     try { if ((await sb(`notifications?dedupe_key=eq.${encodeURIComponent(dk)}&select=id&limit=1`)).length) continue; } catch (_) { continue; }
-    await pushAll('reminder', 'Reminder', r.text, dk);
+    // category + the row id give the notification its Done / 1 hour / Tomorrow buttons and tell the
+    // app which reminder an action refers to.
+    await pushAll('reminder', 'Reminder', r.text, dk, { category: 'REMINDER', payload: { reminder_id: r.id } });
     console.log(`[reminders] fired ${r.id} "${String(r.text).slice(0, 40)}"`);
   }
 }

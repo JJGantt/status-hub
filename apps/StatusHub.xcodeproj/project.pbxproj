@@ -9,6 +9,7 @@
 /* Begin PBXBuildFile section */
 		0C6EDE683DFC99BC5DD60409 /* RecordIntent.swift in Sources */ = {isa = PBXBuildFile; fileRef = F198CD20CEADF9EC7C93F50C /* RecordIntent.swift */; };
 		2688C061FF28D78494EECACD /* Auth.swift in Sources */ = {isa = PBXBuildFile; fileRef = 695330199DB90BC0552A61A4 /* Auth.swift */; };
+		2865661A326AF6F9FE5F6E61 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = AC135E9E04A98CDB11B57AB2 /* Assets.xcassets */; };
 		4047BFD86E0305E129C06B77 /* Info-iOS.plist in Resources */ = {isa = PBXBuildFile; fileRef = 12B2F6A89FA87D30EEC5ED56 /* Info-iOS.plist */; };
 		51DECA2330E0FBC3832EF2A4 /* Models.swift in Sources */ = {isa = PBXBuildFile; fileRef = B47214768CCEE8C99EEF5958 /* Models.swift */; };
 		58F20A294FB54B942342ABB3 /* StatusHubControls.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = AD44A10C47F3ACE73074E7B2 /* StatusHubControls.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
@@ -18,6 +19,7 @@
 		A4E6D950656AE1A3B80EECAA /* Push.swift in Sources */ = {isa = PBXBuildFile; fileRef = 835C09DFE3C581C0FCD41116 /* Push.swift */; };
 		A530752A59476C460CE68305 /* HubModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6DD537CFCDEFF1F747C3D8D2 /* HubModel.swift */; };
 		AAB739C371483A58ABEFFC12 /* Auth.swift in Sources */ = {isa = PBXBuildFile; fileRef = 695330199DB90BC0552A61A4 /* Auth.swift */; };
+		B074269468DD14567FC7F3FF /* AssetsMac.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 43113D1E0A8CEB8334CFC02E /* AssetsMac.xcassets */; };
 		B0778EBC2C7F517F88E6662D /* HubVoiceIntent.swift in Sources */ = {isa = PBXBuildFile; fileRef = 630A58399AEBE9A0EB63449B /* HubVoiceIntent.swift */; };
 		B39D666BE8C69D4E75BB31F5 /* HubModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6DD537CFCDEFF1F747C3D8D2 /* HubModel.swift */; };
 		C917F517205EDE3DA975EE4A /* HubVoiceIntent.swift in Sources */ = {isa = PBXBuildFile; fileRef = 630A58399AEBE9A0EB63449B /* HubVoiceIntent.swift */; };
@@ -56,6 +58,7 @@
 
 /* Begin PBXFileReference section */
 		12B2F6A89FA87D30EEC5ED56 /* Info-iOS.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = "Info-iOS.plist"; sourceTree = "<group>"; };
+		43113D1E0A8CEB8334CFC02E /* AssetsMac.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = AssetsMac.xcassets; sourceTree = "<group>"; };
 		630A58399AEBE9A0EB63449B /* HubVoiceIntent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HubVoiceIntent.swift; sourceTree = "<group>"; };
 		695330199DB90BC0552A61A4 /* Auth.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Auth.swift; sourceTree = "<group>"; };
 		6DD537CFCDEFF1F747C3D8D2 /* HubModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HubModel.swift; sourceTree = "<group>"; };
@@ -63,6 +66,7 @@
 		80B371A0F840BA7F14954FE5 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		835C09DFE3C581C0FCD41116 /* Push.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Push.swift; sourceTree = "<group>"; };
 		A3ED88961E8E93D6EBE0EA46 /* Theme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Theme.swift; sourceTree = "<group>"; };
+		AC135E9E04A98CDB11B57AB2 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		AD44A10C47F3ACE73074E7B2 /* StatusHubControls.appex */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = "wrapper.app-extension"; path = StatusHubControls.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		B47214768CCEE8C99EEF5958 /* Models.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Models.swift; sourceTree = "<group>"; };
 		DBE4FD566029B00F912457DA /* StatusHubApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StatusHubApp.swift; sourceTree = "<group>"; };
@@ -110,6 +114,8 @@
 		8B3D9C515137832BB1FDEE95 = {
 			isa = PBXGroup;
 			children = (
+				AC135E9E04A98CDB11B57AB2 /* Assets.xcassets */,
+				43113D1E0A8CEB8334CFC02E /* AssetsMac.xcassets */,
 				949CE30CB2642F8013288295 /* Controls */,
 				46F4A2164300BF712B758B03 /* Shared */,
 				4F3C15E0045F52C4F298B679 /* Sources */,
@@ -169,6 +175,7 @@
 			buildConfigurationList = 16A2D55E7D01AC515421B707 /* Build configuration list for PBXNativeTarget "StatusHub" */;
 			buildPhases = (
 				BF616C497B262B05475FD24A /* Sources */,
+				B43536071C3233EB5EDD3895 /* Resources */,
 				D7FDA2D48C7C2B4191ADC658 /* Embed Foundation Extensions */,
 			);
 			buildRules = (
@@ -232,7 +239,16 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				B074269468DD14567FC7F3FF /* AssetsMac.xcassets in Resources */,
 				4047BFD86E0305E129C06B77 /* Info-iOS.plist in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		B43536071C3233EB5EDD3895 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				2865661A326AF6F9FE5F6E61 /* Assets.xcassets in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

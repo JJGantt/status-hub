@@ -435,12 +435,14 @@ body.tv.phonewall .pane-todo .card{background:#151a20!important;border:1px solid
 .todo ul{list-style:none;margin:0;padding:0}
 .todo li{border-bottom:1px solid #1c232b}
 .todo li:last-child{border-bottom:none}
-/* Swipe-to-delete: .row slides left off a .del button parked underneath it. .row must be OPAQUE
-   (the card's own background) or the button shows through before it's revealed. touch-action:pan-y
-   keeps vertical scrolling native while the horizontal drag is handled in JS. */
+/* Swipe-to-clear: .row slides left off a .del button parked underneath it. Two things are load
+   bearing here. .row must be OPAQUE (the card's own background) so the button can't be seen through
+   it — and it must be POSITIONED with a z-index, because an absolutely-positioned element paints
+   above static in-flow content no matter the DOM order, which otherwise leaves the X permanently
+   visible. touch-action:pan-y keeps vertical scrolling native while JS handles the horizontal drag. */
 .todo li.sw{position:relative;overflow:hidden}
-.todo .row{display:flex;align-items:center;gap:11px;padding:10px 2px;background:#151a20;
-  transition:transform .18s ease;touch-action:pan-y;will-change:transform}
+.todo .row{position:relative;z-index:1;display:flex;align-items:center;gap:11px;padding:10px 2px;
+  background:#151a20;transition:transform .18s ease;touch-action:pan-y;will-change:transform}
 .todo li.sw.open .row{transform:translateX(-72px)}
 .todo .del{position:absolute;top:0;right:0;width:72px;height:100%;border:0;padding:0;
   background:#ef4444;color:#fff;font-size:24px;line-height:1;cursor:pointer;

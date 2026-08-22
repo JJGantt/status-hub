@@ -18,7 +18,7 @@ function fmtDue(due) {
   return s;
 }
 
-// One row. No checkbox: removing something is a deliberate left-swipe that reveals an X, so it
+// One row. No checkbox: clearing something is a deliberate left-swipe that reveals an X, so it
 // can't happen from a stray tap the way a checkbox could. The X sits UNDER the row and is revealed
 // by sliding the row off it, which is why .row needs an opaque background.
 function row(kind, id, inner) {
@@ -117,8 +117,11 @@ function wireSwipe(el) {
     row.addEventListener('pointerup', end);
     row.addEventListener('pointercancel', end);
 
+    // Marks it DONE — the same thing the notification's Done button does. Checking off and clearing
+    // away are one idea here, so there's exactly one "I dealt with this" state however you reach it.
+    // The row survives in the table, so nothing is truly lost.
     li.querySelector('.del').addEventListener('click', () =>
-      post('/api/todos/delete', { kind: li.dataset.kind, id: li.dataset.id }));
+      post('/api/todos/complete', { kind: li.dataset.kind, id: li.dataset.id }));
   });
 
   // Tapping anywhere else puts an open row away.

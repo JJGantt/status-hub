@@ -85,6 +85,11 @@ targets:
     sources:
       - path: Controls
       - path: Shared
+    entitlements:
+      path: StatusHubControls.entitlements
+      properties:
+        keychain-access-groups:
+          - $(AppIdentifierPrefix)com.jaredgantt.statushub
     info:
       path: Controls/Info.plist
       properties:

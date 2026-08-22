@@ -8,24 +8,25 @@
 
 /* Begin PBXBuildFile section */
 		0C6EDE683DFC99BC5DD60409 /* RecordIntent.swift in Sources */ = {isa = PBXBuildFile; fileRef = F198CD20CEADF9EC7C93F50C /* RecordIntent.swift */; };
-		2688C061FF28D78494EECACD /* Auth.swift in Sources */ = {isa = PBXBuildFile; fileRef = 695330199DB90BC0552A61A4 /* Auth.swift */; };
+		0E69DD82E7A03FBF6DC8305C /* RingsWidget.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0AD761F7ECC2DBF3FA1641B0 /* RingsWidget.swift */; };
 		2865661A326AF6F9FE5F6E61 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = AC135E9E04A98CDB11B57AB2 /* Assets.xcassets */; };
 		4047BFD86E0305E129C06B77 /* Info-iOS.plist in Resources */ = {isa = PBXBuildFile; fileRef = 12B2F6A89FA87D30EEC5ED56 /* Info-iOS.plist */; };
 		51DECA2330E0FBC3832EF2A4 /* Models.swift in Sources */ = {isa = PBXBuildFile; fileRef = B47214768CCEE8C99EEF5958 /* Models.swift */; };
 		58F20A294FB54B942342ABB3 /* StatusHubControls.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = AD44A10C47F3ACE73074E7B2 /* StatusHubControls.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		60AE844C615F02EE05A50C80 /* Views.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7E727AC7945D69F9313E83AC /* Views.swift */; };
 		745EBC9E16BCB0B7808949B4 /* reminder.caf in Resources */ = {isa = PBXBuildFile; fileRef = D45C11A97894E271FE097B5B /* reminder.caf */; };
+		7876C764C368F15A396CAEDC /* Auth.swift in Sources */ = {isa = PBXBuildFile; fileRef = 88D699B5FDC0F7476374CF07 /* Auth.swift */; };
 		80C001EA5124225A4538240B /* StatusHubApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = DBE4FD566029B00F912457DA /* StatusHubApp.swift */; };
 		99C55A70179E1025B9004EF9 /* RecordControl.swift in Sources */ = {isa = PBXBuildFile; fileRef = FAC9C25A7B946678D80BA77A /* RecordControl.swift */; };
 		A4E6D950656AE1A3B80EECAA /* Push.swift in Sources */ = {isa = PBXBuildFile; fileRef = 835C09DFE3C581C0FCD41116 /* Push.swift */; };
 		A530752A59476C460CE68305 /* HubModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6DD537CFCDEFF1F747C3D8D2 /* HubModel.swift */; };
-		AAB739C371483A58ABEFFC12 /* Auth.swift in Sources */ = {isa = PBXBuildFile; fileRef = 695330199DB90BC0552A61A4 /* Auth.swift */; };
 		B074269468DD14567FC7F3FF /* AssetsMac.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 43113D1E0A8CEB8334CFC02E /* AssetsMac.xcassets */; };
 		B0778EBC2C7F517F88E6662D /* HubVoiceIntent.swift in Sources */ = {isa = PBXBuildFile; fileRef = 630A58399AEBE9A0EB63449B /* HubVoiceIntent.swift */; };
 		B39D666BE8C69D4E75BB31F5 /* HubModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6DD537CFCDEFF1F747C3D8D2 /* HubModel.swift */; };
 		C917F517205EDE3DA975EE4A /* HubVoiceIntent.swift in Sources */ = {isa = PBXBuildFile; fileRef = 630A58399AEBE9A0EB63449B /* HubVoiceIntent.swift */; };
 		C97CE9C67CFCE106140773BB /* Views.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7E727AC7945D69F9313E83AC /* Views.swift */; };
 		D19716A696E535763020C4F4 /* Theme.swift in Sources */ = {isa = PBXBuildFile; fileRef = A3ED88961E8E93D6EBE0EA46 /* Theme.swift */; };
+		D8B3EEDED01AB105C95F173D /* Auth.swift in Sources */ = {isa = PBXBuildFile; fileRef = 88D699B5FDC0F7476374CF07 /* Auth.swift */; };
 		D998A2EA11DB625A5E768785 /* Models.swift in Sources */ = {isa = PBXBuildFile; fileRef = B47214768CCEE8C99EEF5958 /* Models.swift */; };
 		ED30317D3B77A590C83D95BC /* StatusHubApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = DBE4FD566029B00F912457DA /* StatusHubApp.swift */; };
 		EE1E28331D9AE8401BEE3601 /* Push.swift in Sources */ = {isa = PBXBuildFile; fileRef = 835C09DFE3C581C0FCD41116 /* Push.swift */; };
@@ -58,14 +59,15 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		0AD761F7ECC2DBF3FA1641B0 /* RingsWidget.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RingsWidget.swift; sourceTree = "<group>"; };
 		12B2F6A89FA87D30EEC5ED56 /* Info-iOS.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = "Info-iOS.plist"; sourceTree = "<group>"; };
 		43113D1E0A8CEB8334CFC02E /* AssetsMac.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = AssetsMac.xcassets; sourceTree = "<group>"; };
 		630A58399AEBE9A0EB63449B /* HubVoiceIntent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HubVoiceIntent.swift; sourceTree = "<group>"; };
-		695330199DB90BC0552A61A4 /* Auth.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Auth.swift; sourceTree = "<group>"; };
 		6DD537CFCDEFF1F747C3D8D2 /* HubModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HubModel.swift; sourceTree = "<group>"; };
 		7E727AC7945D69F9313E83AC /* Views.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Views.swift; sourceTree = "<group>"; };
 		80B371A0F840BA7F14954FE5 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		835C09DFE3C581C0FCD41116 /* Push.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Push.swift; sourceTree = "<group>"; };
+		88D699B5FDC0F7476374CF07 /* Auth.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Auth.swift; sourceTree = "<group>"; };
 		A3ED88961E8E93D6EBE0EA46 /* Theme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Theme.swift; sourceTree = "<group>"; };
 		AC135E9E04A98CDB11B57AB2 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		AD44A10C47F3ACE73074E7B2 /* StatusHubControls.appex */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = "wrapper.app-extension"; path = StatusHubControls.appex; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -92,6 +94,7 @@
 		46F4A2164300BF712B758B03 /* Shared */ = {
 			isa = PBXGroup;
 			children = (
+				88D699B5FDC0F7476374CF07 /* Auth.swift */,
 				630A58399AEBE9A0EB63449B /* HubVoiceIntent.swift */,
 			);
 			path = Shared;
@@ -100,7 +103,6 @@
 		4F3C15E0045F52C4F298B679 /* Sources */ = {
 			isa = PBXGroup;
 			children = (
-				695330199DB90BC0552A61A4 /* Auth.swift */,
 				6DD537CFCDEFF1F747C3D8D2 /* HubModel.swift */,
 				12B2F6A89FA87D30EEC5ED56 /* Info-iOS.plist */,
 				B47214768CCEE8C99EEF5958 /* Models.swift */,
@@ -131,6 +133,7 @@
 			children = (
 				80B371A0F840BA7F14954FE5 /* Info.plist */,
 				FAC9C25A7B946678D80BA77A /* RecordControl.swift */,
+				0AD761F7ECC2DBF3FA1641B0 /* RingsWidget.swift */,
 			);
 			path = Controls;
 			sourceTree = "<group>";
@@ -271,7 +274,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				2688C061FF28D78494EECACD /* Auth.swift in Sources */,
+				D8B3EEDED01AB105C95F173D /* Auth.swift in Sources */,
 				B39D666BE8C69D4E75BB31F5 /* HubModel.swift in Sources */,
 				C917F517205EDE3DA975EE4A /* HubVoiceIntent.swift in Sources */,
 				D998A2EA11DB625A5E768785 /* Models.swift in Sources */,
@@ -287,7 +290,6 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				AAB739C371483A58ABEFFC12 /* Auth.swift in Sources */,
 				A530752A59476C460CE68305 /* HubModel.swift in Sources */,
 				51DECA2330E0FBC3832EF2A4 /* Models.swift in Sources */,
 				EE1E28331D9AE8401BEE3601 /* Push.swift in Sources */,
@@ -302,8 +304,10 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				7876C764C368F15A396CAEDC /* Auth.swift in Sources */,
 				B0778EBC2C7F517F88E6662D /* HubVoiceIntent.swift in Sources */,
 				99C55A70179E1025B9004EF9 /* RecordControl.swift in Sources */,
+				0E69DD82E7A03FBF6DC8305C /* RingsWidget.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -321,6 +325,7 @@
 		15D69CF5F6C5C70642733FA8 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = StatusHubControls.entitlements;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = Controls/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
@@ -380,6 +385,7 @@
 		4631EDE7C7918506AAB6C77B /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = StatusHubControls.entitlements;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = Controls/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 18.0;

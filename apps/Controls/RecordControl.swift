@@ -16,9 +16,12 @@ struct RecordControl: ControlWidget {
     }
 }
 
+// One widgetkit-extension can host both ControlWidgets and ordinary Widgets, so the rings widget
+// ships here rather than in a target of its own (see RingsWidget.swift for why that matters).
 @main
 struct StatusHubControlsBundle: WidgetBundle {
     var body: some Widget {
         RecordControl()
+        RingsWidget()
     }
 }

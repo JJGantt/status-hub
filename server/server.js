@@ -656,6 +656,22 @@ app.get('/api/status', async (req, res) => {
 const workoutDayCache = new Map();   // date -> { body, at }
 const WORKOUTDAY_BACKSTOP_MS = 15 * 60 * 1000;
 const dirtyWorkoutDay = () => workoutDayCache.clear();
+// Compact feed for the iOS home/lock-screen widget. buildStatus() is heavy (many Supabase reads),
+// so the widget gets only the four numbers it draws rather than the whole dashboard payload — a
+// widget refreshes on its own schedule and shouldn't be shipping tens of KB to render four rings.
+app.get('/api/rings', async (req, res) => {
+  try {
+    const st = await buildStatus();
+    const m = (st.pace && st.pace.macros) || {};
+    const one = (k) => ({ consumed: m[k]?.consumed ?? 0, goal: m[k]?.goal ?? 0, progress: m[k]?.progress ?? 0 });
+    res.json({
+      calories: one('calories'), protein_g: one('protein_g'),
+      carbs_g: one('carbs_g'), fat_g: one('fat_g'),
+      updated: etNowString(),
+    });
+  } catch (e) { res.status(500).json({ error: String(e.message || e) }); }
+});
+
 app.get('/api/workout-day', async (req, res) => {
   try {
     const date = String(req.query.date || '').slice(0, 10);

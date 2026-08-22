@@ -8,12 +8,17 @@ enum Auth {
     static let host = "https://jared-status-hub.fly.dev"
     private static let service = "com.jaredgantt.statushub"
     private static let account = "hubPassword"
+    // Explicit so the widget extension — a different bundle id, hence a different DEFAULT keychain
+    // group — resolves the same item. Deliberately equal to the app's own default group, so the
+    // password stored before this existed is still found and nothing has to be re-entered.
+    private static let accessGroup = "XMH4AVFC78.com.jaredgantt.statushub"
 
     static func savePassword(_ pw: String) {
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
             kSecAttrAccount as String: account,
+            kSecAttrAccessGroup as String: accessGroup,
         ]
         SecItemDelete(query as CFDictionary)
         var add = query
@@ -26,6 +31,7 @@ enum Auth {
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
             kSecAttrAccount as String: account,
+            kSecAttrAccessGroup as String: accessGroup,
             kSecReturnData as String: true,
             kSecMatchLimit as String: kSecMatchLimitOne,
         ]
@@ -40,6 +46,7 @@ enum Auth {
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
             kSecAttrAccount as String: account,
+            kSecAttrAccessGroup as String: accessGroup,
         ]
         SecItemDelete(query as CFDictionary)
     }

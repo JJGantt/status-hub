@@ -18,17 +18,23 @@ function fmtDue(due) {
   return s;
 }
 
+// One row. No checkbox: removing something is a deliberate left-swipe that reveals an X, so it
+// can't happen from a stray tap the way a checkbox could. The X sits UNDER the row and is revealed
+// by sliding the row off it, which is why .row needs an opaque background.
+function row(kind, id, inner) {
+  return `<li class="sw" data-kind="${kind}" data-id="${esc(id)}">` +
+    `<div class="row">${inner}</div>` +
+    `<button class="del" aria-label="delete" tabindex="-1">\u00d7</button></li>`;
+}
+
 function html(d) {
-  const rem = (d.reminders || []).map((r) =>
-    `<li><input class="cb" type="checkbox" data-c="reminder" data-id="${esc(r.id)}" aria-label="complete">` +
-    `<span class="txt">${esc(r.text)}</span>${r.due ? `<span class="due">${esc(fmtDue(r.due))}</span>` : ''}</li>`).join('');
+  const rem = (d.reminders || []).map((r) => row('reminder', r.id,
+    `<span class="txt">${esc(r.text)}</span>${r.due ? `<span class="due">${esc(fmtDue(r.due))}</span>` : ''}`)).join('');
   let out = `<section><h3>Reminders</h3><ul>${rem || '<li class="empty">Nothing due</li>'}</ul>` +
     `<div class="add"><input type="text" placeholder="New reminder" data-add="reminder">` +
     `<input type="datetime-local" data-due="reminder" aria-label="when"></div></section>`;
   for (const l of d.lists || []) {
-    const items = (l.items || []).map((i) =>
-      `<li><input class="cb" type="checkbox" data-c="item" data-id="${esc(i.id)}" aria-label="check off">` +
-      `<span class="txt">${esc(i.text)}</span></li>`).join('');
+    const items = (l.items || []).map((i) => row('item', i.id, `<span class="txt">${esc(i.text)}</span>`)).join('');
     out += `<section><h3>${esc(l.name)}</h3><ul>${items || '<li class="empty">Empty</li>'}</ul>` +
       `<div class="add"><input type="text" placeholder="Add to ${esc(l.name)}" data-add="item" data-list="${esc(l.name)}"></div></section>`;
   }
@@ -57,9 +63,72 @@ async function post(path, body) {
   await load();
 }
 
+// Swipe-to-delete. Pointer events so it works with a finger and a trackpad alike.
+// The gesture commits to an axis on the first few px: if the drag is more vertical than horizontal
+// it is a scroll, and we bail so the list still scrolls normally under the finger.
+const OPEN_PX = 72;        // must match .del width in app.css
+const COMMIT_PX = 34;      // dragged past this on release -> stay open
+
+function closeAll(el, except) {
+  el.querySelectorAll('li.sw.open').forEach((li) => { if (li !== except) li.classList.remove('open'); });
+}
+
+function wireSwipe(el) {
+  el.querySelectorAll('li.sw').forEach((li) => {
+    const row = li.querySelector('.row');
+    let x0 = 0, y0 = 0, dx = 0, axis = null, dragging = false;
+
+    const move = (e) => {
+      if (!dragging) return;
+      dx = e.clientX - x0;
+      if (!axis) {
+        const dy = e.clientY - y0;
+        if (Math.abs(dx) < 6 && Math.abs(dy) < 6) return;      // too small to tell yet
+        axis = Math.abs(dx) > Math.abs(dy) ? 'x' : 'y';
+        if (axis === 'y') return end(e);                        // it's a scroll — let go
+        row.style.transition = 'none';
+      }
+      const base = li.classList.contains('open') ? -OPEN_PX : 0;
+      row.style.transform = `translateX(${Math.max(-OPEN_PX, Math.min(0, base + dx))}px)`;
+    };
+
+    const end = (e) => {
+      if (!dragging) return;
+      dragging = false;
+      try { row.releasePointerCapture(e.pointerId); } catch (_) {}
+      row.removeEventListener('pointermove', move);
+      row.style.transition = '';
+      row.style.transform = '';                                 // hand back to the CSS class
+      if (axis === 'x') {
+        const wasOpen = li.classList.contains('open');
+        const open = wasOpen ? dx < COMMIT_PX : dx < -COMMIT_PX;
+        closeAll(el, li);
+        li.classList.toggle('open', open);
+      }
+      axis = null;
+    };
+
+    row.addEventListener('pointerdown', (e) => {
+      if (e.button != null && e.button !== 0) return;
+      dragging = true; axis = null; dx = 0; x0 = e.clientX; y0 = e.clientY;
+      try { row.setPointerCapture(e.pointerId); } catch (_) {}
+      row.addEventListener('pointermove', move);
+    });
+    row.addEventListener('pointerup', end);
+    row.addEventListener('pointercancel', end);
+
+    li.querySelector('.del').addEventListener('click', () =>
+      post('/api/todos/delete', { kind: li.dataset.kind, id: li.dataset.id }));
+  });
+
+  // Tapping anywhere else puts an open row away.
+  el.addEventListener('pointerdown', (e) => {
+    if (!e.target.closest('li.sw')) closeAll(el);
+  });
+}
+
 function wire(el) {
-  el.querySelectorAll('.cb').forEach((cb) => cb.addEventListener('change', () =>
-    post('/api/todos/complete', { kind: cb.dataset.c, id: cb.dataset.id })));
+  wireSwipe(el);
   el.querySelectorAll('input[data-add]').forEach((inp) => inp.addEventListener('keydown', (e) => {
     if (e.key !== 'Enter') return;
     const text = inp.value.trim();

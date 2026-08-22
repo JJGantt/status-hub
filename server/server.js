@@ -1388,6 +1388,21 @@ app.post('/api/todos/complete', express.json(), async (req, res) => {
     syncBadge().catch(() => {});   // don't make the caller wait on APNs
   } catch (e) { res.status(500).json({ error: String(e.message || e) }); }
 });
+// Delete a reminder or list item. Soft (deleted=true) — the row survives for history, it just stops
+// being listed. Distinct from /complete, which marks something DONE: the pane's swipe-to-X is a
+// removal gesture, not a tick-off, and the two shouldn't be conflated in the data.
+app.post('/api/todos/delete', express.json(), async (req, res) => {
+  try {
+    const b = req.body || {};
+    const id = String(b.id || '');
+    if (!id) return res.status(400).json({ error: 'id required' });
+    const table = b.kind === 'item' ? 'list_items' : 'reminders';
+    await sbWrite(`${table}?id=eq.${encodeURIComponent(id)}`, 'PATCH', { deleted: true, updated: new Date().toISOString() });
+    res.json({ ok: true, badge: await unaddressedReminderCount() });
+    syncBadge().catch(() => {});
+  } catch (e) { res.status(500).json({ error: String(e.message || e) }); }
+});
+
 // Snooze: push a reminder's due time out by N hours from NOW (not from its old due, which may be
 // long past). It stays undone and un-deleted — snoozing is deferral, not completion — but it stops
 // being overdue, so it correctly drops off the badge until it comes round again. The notifications

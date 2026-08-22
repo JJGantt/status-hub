@@ -13,14 +13,13 @@
 // today. Dedupe/log via the notifications table (unique dedupe_key 'weight_reminder:<YYYY-MM-DD>'),
 // so a server restart can't double-send.
 const pace = require('./pace');
-const { localDate, nutritionWindow } = require('./dates');
-const TZ = process.env.TZ_DISPLAY || 'America/New_York';
+const { localDate, nutritionWindow, getTZ } = require('./dates');
 
 const TITLE = '⚖️ Log your weight';
 const BODY = 'Step on the scale before your first meal.';
 
 function nowHM() {  // current wall time HH:MM (24h) in the display timezone
-  return new Date().toLocaleTimeString('en-GB', { timeZone: TZ, hour12: false }).slice(0, 5);
+  return new Date().toLocaleTimeString('en-GB', { timeZone: getTZ(), hour12: false }).slice(0, 5);
 }
 
 function minutesSince4amToHM(min) {  // pace offsets are minutes since 4am local

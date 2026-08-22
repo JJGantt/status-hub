@@ -10,7 +10,7 @@ const { estimateMaintenance, estimateHistory, macroTargets } = require('./lib/ma
 const pace = require('./lib/pace');
 const { computeVolume } = require('./lib/volume');
 const BODY_SVG = require('./lib/bodymap');
-const { DAY_START_HOUR, localDate, nutritionWindow, lastNTrainingDays, dayBucketOf } = require('./lib/dates');
+const { getTZ, setTZ, DAY_START_HOUR, localDate, nutritionWindow, lastNTrainingDays, dayBucketOf } = require('./lib/dates');
 const { buildWorkoutHeatmap } = require('./lib/heatmap');
 const { buildNutritionLog, buildGoalResolver, calorieColor } = require('./lib/nutritionlog');
 const { computeScore } = require('./lib/score');
@@ -21,11 +21,25 @@ const { computeScore } = require('./lib/score');
 const settingsCache = { map: null, at: 0 };
 const SETTINGS_BACKSTOP_MS = 15 * 60 * 1000;
 const dirtySettings = () => { settingsCache.map = null; };
+
+// Upsert one app_settings row. app_settings is keyed, so this needs the merge-duplicates Prefer
+// header — a plain POST on an existing key 409s (which is why sbWrite, having no Prefer, can't
+// be used here). Throws on failure.
+async function putSetting(key, value) {
+  const r = await fetch(`${SUPABASE_URL}/rest/v1/app_settings?on_conflict=key`, {
+    method: 'POST',
+    headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}`,
+               'Content-Type': 'application/json', Prefer: 'resolution=merge-duplicates' },
+    body: JSON.stringify({ key, value, updated_at: new Date().toISOString() }),
+  });
+  if (!r.ok) throw new Error(`settings upsert ${key} -> ${r.status}`);
+}
 async function settingsAll() {
   if (settingsCache.map && Date.now() - settingsCache.at < SETTINGS_BACKSTOP_MS) return settingsCache.map;
   const rows = await sb('app_settings?select=key,value');
   settingsCache.map = Object.fromEntries((rows || []).map((r) => [r.key, r.value]));
   settingsCache.at = Date.now();
+  if (setTZ(settingsCache.map.display_tz)) console.log(`[tz] display timezone -> ${getTZ()}`);
   return settingsCache.map;
 }
 
@@ -105,7 +119,6 @@ const PORT = process.env.PORT || 8080;
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_KEY = process.env.SUPABASE_KEY;
 const HUB_PASSWORD = process.env.HUB_PASSWORD || 'changeme';
-const TZ = process.env.TZ_DISPLAY || 'America/New_York';
 // Cookie token derived from the password — set once per device, never expires (no logout).
 const TOKEN = crypto.createHash('sha256').update('status-hub:' + HUB_PASSWORD).digest('hex');
 // Device token for the Pi/TV kiosk: visiting any page with ?token=<TV_TOKEN> sets the hub
@@ -210,7 +223,7 @@ async function syncStoredTarget(m, today) {
 
 // Current time as minutes into the 4am-origin day, in the display timezone.
 function nowOffsetTZ() {
-  const f = new Intl.DateTimeFormat('en-US', { timeZone: TZ, hour12: false, hour: '2-digit', minute: '2-digit' });
+  const f = new Intl.DateTimeFormat('en-US', { timeZone: getTZ(), hour12: false, hour: '2-digit', minute: '2-digit' });
   const parts = f.formatToParts(new Date());
   const hh = Number(parts.find((p) => p.type === 'hour').value) % 24;
   const mm = Number(parts.find((p) => p.type === 'minute').value);
@@ -221,7 +234,7 @@ function nowOffsetTZ() {
 // are stored as local-naive ISO strings, so rendering into the same shape lets them be compared (and
 // written) as plain strings with no UTC offset math anywhere.
 function etStringAt(d) {
-  const p = new Intl.DateTimeFormat('en-CA', { timeZone: TZ, hour12: false, year: 'numeric', month: '2-digit',
+  const p = new Intl.DateTimeFormat('en-CA', { timeZone: getTZ(), hour12: false, year: 'numeric', month: '2-digit',
     day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' }).formatToParts(d);
   const g = (t) => p.find((x) => x.type === t).value;
   const hh = g('hour') === '24' ? '00' : g('hour');
@@ -708,13 +721,7 @@ app.post('/api/settings', express.json(), async (req, res) => {
     if (!key) return res.status(400).json({ error: 'key required' });
     const value = b.value == null ? '' : String(b.value);
     const prevSurplus = key === 'surplus_cal' ? (await settingsAll()).surplus_cal : null;   // before the write
-    const r = await fetch(`${SUPABASE_URL}/rest/v1/app_settings?on_conflict=key`, {
-      method: 'POST',
-      headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}`,
-                 'Content-Type': 'application/json', Prefer: 'resolution=merge-duplicates' },
-      body: JSON.stringify({ key, value, updated_at: new Date().toISOString() }),
-    });
-    if (!r.ok) throw new Error(`settings upsert -> ${r.status}`);
+    await putSetting(key, value);
     dirtySettings();   // synchronous — a write-then-read client must not race the realtime round-trip
     // A goal sign-flip (bulk↔cut) starts a NEW maintenance phase, seeded with the maintenance measured
     // robustly up to now (= today's synced target − the OLD surplus) and held until the new phase has its
@@ -729,12 +736,7 @@ app.post('/api/settings', express.json(), async (req, res) => {
         const curTarget = trows && trows[0] ? Number(trows[0].calories) : null;
         const seed = (curTarget != null && Number.isFinite(oldS)) ? Math.round(curTarget - oldS) : null;
         const phaseRec = { start: today, seed, sign: newSign, hold: false };
-        await fetch(`${SUPABASE_URL}/rest/v1/app_settings?on_conflict=key`, {
-          method: 'POST',
-          headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}`,
-                     'Content-Type': 'application/json', Prefer: 'resolution=merge-duplicates' },
-          body: JSON.stringify({ key: 'maintenance_phase', value: JSON.stringify(phaseRec), updated_at: new Date().toISOString() }),
-        });
+        await putSetting('maintenance_phase', JSON.stringify(phaseRec));
         dirtySettings();
         console.log(`[phase] goal sign flip ${oldSign}→${newSign}; new phase start=${today} seed=${seed}`);
       }
@@ -745,6 +747,10 @@ app.post('/api/settings', express.json(), async (req, res) => {
 
 // Register a device's APNs token (sent by the native app, authed by x-hub-token). Upsert so a
 // re-launch just refreshes last_seen rather than piling up rows.
+//
+// The phone also reports its IANA timezone here, which is how the hub knows where Jared is. It is
+// the best available proxy: the phone travels with him, and it re-registers on every launch. Stored
+// in app_settings.display_tz and picked up by the next settings read (see settingsAll).
 app.post('/api/register-push', express.json(), async (req, res) => {
   try {
     const token = String((req.body && req.body.token) || '').trim();
@@ -764,6 +770,15 @@ app.post('/api/register-push', express.json(), async (req, res) => {
       body: JSON.stringify(row),
     });
     if (!r.ok) throw new Error(`device_tokens upsert -> ${r.status}`);
+
+    // Follow the phone's timezone. Validated by setTZ (which rejects anything Intl won't accept), and
+    // only written when it actually changed, so this isn't a Supabase write on every app launch.
+    const tz = String((req.body && req.body.tz) || '').trim();
+    if (setTZ(tz)) {                       // false when unchanged or not a real IANA zone
+      console.log(`[tz] phone reports ${tz} — persisting`);
+      try { await putSetting('display_tz', tz); dirtySettings(); }
+      catch (e) { console.log('[tz] persist failed:', e.message); }   // in-memory zone still moved
+    }
     res.json({ ok: true });
   } catch (e) { res.status(500).json({ error: String(e.message || e) }); }
 });
@@ -834,7 +849,7 @@ app.get('/api/nutrition-day', async (req, res) => {
 // (the format nutrition_entries.occurred_at and sets.occurred_at are stored in).
 function nowNaiveLocal() {
   const f = new Intl.DateTimeFormat('en-CA', {
-    timeZone: TZ, hour12: false,
+    timeZone: getTZ(), hour12: false,
     year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit',
   });
   const p = {}; for (const part of f.formatToParts(new Date())) p[part.type] = part.value;

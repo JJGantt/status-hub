@@ -1,6 +1,25 @@
 'use strict';
 // Date helpers in the display timezone, shared by server.js and the builder modules.
-const TZ = process.env.TZ_DISPLAY || 'America/New_York';
+//
+// The zone is MUTABLE and follows Jared, because "4pm" means 4pm wherever he actually is — a
+// reminder set for 4pm should not fire at 1pm because he flew west. The phone reports its IANA zone
+// when it registers for push; the hub persists it in app_settings.display_tz and calls setTZ().
+// Everything time-shaped reads through here, so one value moves reminder firing, the overdue badge,
+// the weight-reminder time and the 4am day boundary together.
+//
+// Note this deliberately does NOT re-interpret stored timestamps. occurred_at values are naive local
+// wall-clock strings written by whichever device did the logging (data-layer's now()), so a meal
+// logged at 8pm in California is stored "20:00" and reads back as 8pm. Moving the zone changes which
+// day boundary those strings are compared against — which is the point — not what they mean.
+let TZ = process.env.TZ_DISPLAY || 'America/New_York';
+const getTZ = () => TZ;
+function setTZ(name) {
+  const tz = String(name || '').trim();
+  if (!tz || tz === TZ) return false;
+  try { new Intl.DateTimeFormat('en-US', { timeZone: tz }); } catch (_) { return false; }  // reject junk
+  TZ = tz;
+  return true;
+}
 
 // A nutrition "day" runs DAY_START_HOUR→DAY_START_HOUR local time, so a late-night
 // snack (before 4am) counts toward the day that just ended. This is a display-only
@@ -10,7 +29,7 @@ const DAY_START_HOUR = 4;
 const MON = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
 function localDate(d = new Date()) {
-  return d.toLocaleDateString('en-CA', { timeZone: TZ }); // YYYY-MM-DD
+  return d.toLocaleDateString('en-CA', { timeZone: TZ }); // YYYY-MM-DD (TZ is read live, not captured)
 }
 // [start, end) occurred_at bounds for the nutrition day currently in progress.
 function nutritionWindow() {
@@ -42,4 +61,4 @@ function dayBucketOf(ts) {
   return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
 }
 
-module.exports = { TZ, DAY_START_HOUR, MON, localDate, nutritionWindow, lastNTrainingDays, dayBucketOf };
+module.exports = { getTZ, setTZ, DAY_START_HOUR, MON, localDate, nutritionWindow, lastNTrainingDays, dayBucketOf };

@@ -663,7 +663,14 @@ app.get('/api/rings', async (req, res) => {
   try {
     const st = await buildStatus();
     const m = (st.pace && st.pace.macros) || {};
-    const one = (k) => ({ consumed: m[k]?.consumed ?? 0, goal: m[k]?.goal ?? 0, progress: m[k]?.progress ?? 0 });
+    // The SAME pace gauge the hub's nutrition card draws — full when on pace, draining with the
+    // clock, with an overflow arc once you're ahead. Deliberately not absolute progress: the widget
+    // has to read as the same instrument as the card, not a second opinion.
+    const one = (k) => ({
+      ring_base: m[k]?.ring_base ?? 0, ring_over: m[k]?.ring_over ?? 0,
+      base_color: m[k]?.base_color ?? '#22c55e', over_color: m[k]?.over_color ?? null,
+      consumed: m[k]?.consumed ?? 0, goal: m[k]?.goal ?? 0, dev_g: m[k]?.dev_g ?? 0,
+    });
     res.json({
       calories: one('calories'), protein_g: one('protein_g'),
       carbs_g: one('carbs_g'), fat_g: one('fat_g'),

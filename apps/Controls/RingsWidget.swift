@@ -9,7 +9,15 @@ import SwiftUI
 // ControlWidgets and ordinary Widgets in one WidgetBundle, so reusing this already-provisioned
 // extension avoids the whole problem.
 
-struct Ring: Decodable { let consumed: Double; let goal: Double; let progress: Double }
+// Mirrors one macro's pace gauge from lib/pace.js. ring_base is the main arc — FULL when you're on
+// pace and draining as the day runs ahead of what you've eaten; ring_over is the overflow arc once
+// you're ahead of pace. Colours come from the server so the widget and the hub card can never drift.
+struct Ring: Decodable {
+    let ring_base: Double
+    let ring_over: Double
+    let base_color: String
+    let over_color: String?
+}
 struct Rings: Decodable { let calories: Ring; let protein_g: Ring; let carbs_g: Ring; let fat_g: Ring }
 
 struct RingsEntry: TimelineEntry {
@@ -44,18 +52,36 @@ struct RingsProvider: TimelineProvider {
     }
 }
 
+private extension Color {
+    /// "#rrggbb" from the server's pace palette.
+    init(hex: String) {
+        let h = hex.hasPrefix("#") ? String(hex.dropFirst()) : hex
+        let v = UInt32(h, radix: 16) ?? 0x22c55e
+        self.init(red: Double((v >> 16) & 0xff) / 255,
+                  green: Double((v >> 8) & 0xff) / 255,
+                  blue: Double(v & 0xff) / 255)
+    }
+}
+
 private struct RingView: View {
-    let label: String, ring: Ring?, color: Color
+    let label: String, ring: Ring?
 
     var body: some View {
-        // Clamp at one full turn: going over goal shouldn't wrap the arc back to looking empty.
-        let p = min(max(ring?.progress ?? 0, 0), 1)
+        let base = min(max(ring?.ring_base ?? 0, 0), 1)
+        let over = min(max(ring?.ring_over ?? 0, 0), 1)
+        let baseColor = Color(hex: ring?.base_color ?? "#22c55e")
         ZStack {
-            Circle().stroke(color.opacity(0.20), lineWidth: 6)
-            Circle()
-                .trim(from: 0, to: p)
-                .stroke(color, style: StrokeStyle(lineWidth: 6, lineCap: .round))
-                .rotationEffect(.degrees(-90))       // start at 12 o'clock, not 3
+            Circle().stroke(Color.primary.opacity(0.14), lineWidth: 6)          // empty track
+            Circle()                                                            // pace arc
+                .trim(from: 0, to: base)
+                .stroke(baseColor, style: StrokeStyle(lineWidth: 6, lineCap: .round))
+                .rotationEffect(.degrees(-90))                                  // start at 12 o'clock
+            if let over_color = ring?.over_color, over > 0 {                    // overflow, one wrap max
+                Circle()
+                    .trim(from: 0, to: over)
+                    .stroke(Color(hex: over_color), style: StrokeStyle(lineWidth: 6, lineCap: .round))
+                    .rotationEffect(.degrees(-90))
+            }
             Text(label).font(.system(size: 11, weight: .bold, design: .rounded)).foregroundStyle(.primary)
         }
         .aspectRatio(1, contentMode: .fit)
@@ -66,11 +92,11 @@ struct RingsWidgetView: View {
     @Environment(\.widgetFamily) private var family
     let entry: RingsEntry
 
-    private var items: [(String, Ring?, Color)] {
-        [("Cal", entry.rings?.calories,  Color(red: 0.13, green: 0.77, blue: 0.37)),
-         ("P",   entry.rings?.protein_g, Color(red: 0.23, green: 0.51, blue: 0.96)),
-         ("C",   entry.rings?.carbs_g,   Color(red: 0.96, green: 0.62, blue: 0.04)),
-         ("F",   entry.rings?.fat_g,     Color(red: 0.65, green: 0.45, blue: 0.96))]
+    // Colour is carried per-ring by the pace data (green on pace -> red behind, amber over), exactly
+    // as on the hub card, so nothing is hard-coded per macro here.
+    private var items: [(String, Ring?)] {
+        [("Cal", entry.rings?.calories), ("P", entry.rings?.protein_g),
+         ("C",   entry.rings?.carbs_g),  ("F", entry.rings?.fat_g)]
     }
 
     var body: some View {
@@ -90,8 +116,8 @@ struct RingsWidgetView: View {
     }
 
     private func ring(_ i: Int) -> some View {
-        let (label, r, color) = items[i]
-        return RingView(label: label, ring: r, color: color)
+        let (label, r) = items[i]
+        return RingView(label: label, ring: r)
     }
 }
 

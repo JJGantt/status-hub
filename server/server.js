@@ -1276,7 +1276,7 @@ async function unaddressedReminderCount() {
 
 async function pushAll(kind, title, body, dedupe_key) {
   const base = { kind, title, body, ...(dedupe_key ? { dedupe_key } : {}) };
-  const style = NOTIFY_STYLE[kind] || {};
+  const style = { ...(NOTIFY_STYLE[kind] || {}) };   // copy: never mutate the shared constant
   const badge = await unaddressedReminderCount();
   if (Number.isInteger(badge)) style.badge = badge;
   if (!apns.configured()) { await sbInsert('notifications', { ...base, ok: false, detail: 'apns not configured' }); return { ok: false, detail: 'apns not configured' }; }

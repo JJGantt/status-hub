@@ -68,13 +68,16 @@ function authToken(env) {
 // time-sensitive breaks through Focus, passive stays quiet in the list. Defaults to iOS's 'active'.
 // `badge` sets the red count on the home-screen icon; pass 0 to clear it. It is ABSOLUTE, not a
 // delta, and iOS only applies it when a push actually arrives — so every push carries the current
-// count rather than only the ones that change it.
+// count rather than only the ones that change it. Omit title AND body for a badge-only update:
+// that switches the push to type 'background', which is the only form iOS honours without an alert
+// (best-effort — iOS throttles background pushes, so treat silent decrements as eventual).
 // Resolves { ok, status, detail } and never rejects.
 function send(deviceToken, { title, body, payload, environment, sound, interruptionLevel, badge } = {}) {
   return new Promise((resolve) => {
     if (!configured(environment)) return resolve({ ok: false, status: 0, detail: 'apns not configured for ' + (environment || ENV) });
     let jwt;
     try { jwt = authToken(environment); } catch (e) { return resolve({ ok: false, status: 0, detail: 'jwt: ' + e.message }); }
+    const silent = !title && !body;   // badge-only update — no alert to show
     let done = false;
     const finish = (r) => { if (done) return; done = true; try { client.close(); } catch (_) {} resolve(r); };
     const client = http2.connect(environment ? hostFor(environment) : HOST);
@@ -85,8 +88,12 @@ function send(deviceToken, { title, body, payload, environment, sound, interrupt
       ':path': `/3/device/${deviceToken}`,
       authorization: `bearer ${jwt}`,
       'apns-topic': BUNDLE_ID,
-      'apns-push-type': 'alert',
-      'apns-priority': '10',
+      // A payload with no alert must go out as 'background', not 'alert'. Sending a badge-only
+      // update as push-type 'alert' is accepted by APNs (200) but silently DISCARDED by iOS —
+      // verified on device: the same badge attached to a visible alert applies, alone it does not.
+      // Background pushes must also be priority 5; APNs rejects 10 for them.
+      'apns-push-type': silent ? 'background' : 'alert',
+      'apns-priority': silent ? '5' : '10',
       'content-type': 'application/json',
     });
     let status = 0, data = '';
@@ -95,12 +102,10 @@ function send(deviceToken, { title, body, payload, environment, sound, interrupt
     req.on('data', (d) => (data += d));
     req.on('end', () => { clearTimeout(t); finish({ ok: status === 200, status, detail: data || '' }); });
     req.on('error', (e) => { clearTimeout(t); finish({ ok: false, status: 0, detail: 'req: ' + e.message }); });
-    // Omitting title AND body makes this a badge-only push: nothing is shown, but the icon count
-    // updates. Note this still goes out as apns-push-type 'alert' (correct per Apple for a payload
-    // carrying badge/alert/sound), so it is NOT subject to the throttling that hits background pushes.
-    const alert = (title || body) ? { alert: { title, body }, sound: sound || 'default' } : {};
-    const aps = { ...alert };
-    if (interruptionLevel) aps['interruption-level'] = interruptionLevel;
+    const aps = silent
+      ? { 'content-available': 1 }                                   // badge-only: nothing displayed
+      : { alert: { title, body }, sound: sound || 'default' };
+    if (!silent && interruptionLevel) aps['interruption-level'] = interruptionLevel;
     if (Number.isInteger(badge)) aps.badge = badge;
     req.end(JSON.stringify({ aps, ...(payload || {}) }));
   });

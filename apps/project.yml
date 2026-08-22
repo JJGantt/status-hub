@@ -31,6 +31,9 @@ targets:
       - path: Sources
       - path: Shared
       - path: Assets.xcassets
+      # APNs sounds must live in the app bundle; the push payload names one by filename.
+      - path: Sounds
+        buildPhase: resources
     entitlements:
       path: StatusHub.entitlements
       properties:

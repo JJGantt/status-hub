@@ -14,6 +14,7 @@
 		51DECA2330E0FBC3832EF2A4 /* Models.swift in Sources */ = {isa = PBXBuildFile; fileRef = B47214768CCEE8C99EEF5958 /* Models.swift */; };
 		58F20A294FB54B942342ABB3 /* StatusHubControls.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = AD44A10C47F3ACE73074E7B2 /* StatusHubControls.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		60AE844C615F02EE05A50C80 /* Views.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7E727AC7945D69F9313E83AC /* Views.swift */; };
+		745EBC9E16BCB0B7808949B4 /* reminder.caf in Resources */ = {isa = PBXBuildFile; fileRef = D45C11A97894E271FE097B5B /* reminder.caf */; };
 		80C001EA5124225A4538240B /* StatusHubApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = DBE4FD566029B00F912457DA /* StatusHubApp.swift */; };
 		99C55A70179E1025B9004EF9 /* RecordControl.swift in Sources */ = {isa = PBXBuildFile; fileRef = FAC9C25A7B946678D80BA77A /* RecordControl.swift */; };
 		A4E6D950656AE1A3B80EECAA /* Push.swift in Sources */ = {isa = PBXBuildFile; fileRef = 835C09DFE3C581C0FCD41116 /* Push.swift */; };
@@ -69,6 +70,7 @@
 		AC135E9E04A98CDB11B57AB2 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		AD44A10C47F3ACE73074E7B2 /* StatusHubControls.appex */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = "wrapper.app-extension"; path = StatusHubControls.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		B47214768CCEE8C99EEF5958 /* Models.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Models.swift; sourceTree = "<group>"; };
+		D45C11A97894E271FE097B5B /* reminder.caf */ = {isa = PBXFileReference; path = reminder.caf; sourceTree = "<group>"; };
 		DBE4FD566029B00F912457DA /* StatusHubApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StatusHubApp.swift; sourceTree = "<group>"; };
 		DE7144970264B4FD475213E8 /* StatusHubMac.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = StatusHubMac.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		EF4C42BEDA65C5384974460A /* StatusHub.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = StatusHub.app; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -118,6 +120,7 @@
 				43113D1E0A8CEB8334CFC02E /* AssetsMac.xcassets */,
 				949CE30CB2642F8013288295 /* Controls */,
 				46F4A2164300BF712B758B03 /* Shared */,
+				F1C581DB520978DD991D147C /* Sounds */,
 				4F3C15E0045F52C4F298B679 /* Sources */,
 				28DDBE315FD7A2196B48531F /* Products */,
 			);
@@ -130,6 +133,14 @@
 				FAC9C25A7B946678D80BA77A /* RecordControl.swift */,
 			);
 			path = Controls;
+			sourceTree = "<group>";
+		};
+		F1C581DB520978DD991D147C /* Sounds */ = {
+			isa = PBXGroup;
+			children = (
+				D45C11A97894E271FE097B5B /* reminder.caf */,
+			);
+			path = Sounds;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -249,6 +260,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				2865661A326AF6F9FE5F6E61 /* Assets.xcassets in Resources */,
+				745EBC9E16BCB0B7808949B4 /* reminder.caf in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

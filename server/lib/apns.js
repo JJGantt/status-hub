@@ -61,8 +61,16 @@ function authToken(env) {
 }
 
 // Send one alert push. `environment` ('sandbox'|'production') selects the gateway per token; omit to
-// use the APNS_ENV default. Resolves { ok, status, detail } and never rejects.
-function send(deviceToken, { title, body, payload, environment } = {}) {
+// use the APNS_ENV default. `sound` is the filename of a sound bundled in the app (see apps/Sounds/,
+// e.g. 'reminder.caf') — the app icon is identical on every notification, so the SOUND is what makes
+// a reminder distinguishable from a weight nudge without looking at the screen. Omit for the system
+// default. `interruptionLevel` ('passive'|'active'|'time-sensitive') controls how hard iOS pushes:
+// time-sensitive breaks through Focus, passive stays quiet in the list. Defaults to iOS's 'active'.
+// `badge` sets the red count on the home-screen icon; pass 0 to clear it. It is ABSOLUTE, not a
+// delta, and iOS only applies it when a push actually arrives — so every push carries the current
+// count rather than only the ones that change it.
+// Resolves { ok, status, detail } and never rejects.
+function send(deviceToken, { title, body, payload, environment, sound, interruptionLevel, badge } = {}) {
   return new Promise((resolve) => {
     if (!configured(environment)) return resolve({ ok: false, status: 0, detail: 'apns not configured for ' + (environment || ENV) });
     let jwt;
@@ -87,7 +95,14 @@ function send(deviceToken, { title, body, payload, environment } = {}) {
     req.on('data', (d) => (data += d));
     req.on('end', () => { clearTimeout(t); finish({ ok: status === 200, status, detail: data || '' }); });
     req.on('error', (e) => { clearTimeout(t); finish({ ok: false, status: 0, detail: 'req: ' + e.message }); });
-    req.end(JSON.stringify({ aps: { alert: { title, body }, sound: 'default' }, ...(payload || {}) }));
+    // Omitting title AND body makes this a badge-only push: nothing is shown, but the icon count
+    // updates. Note this still goes out as apns-push-type 'alert' (correct per Apple for a payload
+    // carrying badge/alert/sound), so it is NOT subject to the throttling that hits background pushes.
+    const alert = (title || body) ? { alert: { title, body }, sound: sound || 'default' } : {};
+    const aps = { ...alert };
+    if (interruptionLevel) aps['interruption-level'] = interruptionLevel;
+    if (Number.isInteger(badge)) aps.badge = badge;
+    req.end(JSON.stringify({ aps, ...(payload || {}) }));
   });
 }
 

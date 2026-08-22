@@ -1249,15 +1249,43 @@ app.post('/api/voice-activity', express.json(), (req, res) => {
 // on its own push environment (sandbox vs production), and logs the result to `notifications`.
 // Push a notification to every registered iOS device; records one `notifications` row (with an optional
 // dedupe_key so a caller can guarantee once-only delivery). Shared by /api/notify and reminder firing.
+// Every notification from this app shows the SAME icon, so the sound is what tells them apart
+// without looking. Sounds are .caf files bundled in the iOS app (apps/Sounds/); an unknown kind
+// falls back to the system default. 'passive' keeps voice acks from buzzing — they're confirmations
+// you'll read later, not things to interrupt you.
+const NOTIFY_STYLE = {
+  reminder: { sound: 'reminder.caf' },
+  voice:    { interruptionLevel: 'passive' },   // confirmations — don't buzz for these
+};
+
+// The home-screen badge = reminders actually awaiting action: not done, not deleted, and either
+// already due or carrying no due date at all. A reminder scheduled for next Tuesday is NOT
+// unaddressed yet, so it doesn't badge until its time arrives. Returns null if the count can't be
+// read, in which case the push simply omits the badge rather than clearing it to a wrong number.
+async function unaddressedReminderCount() {
+  try {
+    const rows = await sb('reminders?done=eq.false&deleted=eq.false&select=due');
+    const nowET = etNowString();
+    return rows.filter((r) => {
+      if (!r.due) return true;                                        // undated to-do — always pending
+      const fire = /T\d/.test(String(r.due)) ? String(r.due) : String(r.due).slice(0, 10) + 'T09:00:00';
+      return fire <= nowET;
+    }).length;
+  } catch (_) { return null; }
+}
+
 async function pushAll(kind, title, body, dedupe_key) {
   const base = { kind, title, body, ...(dedupe_key ? { dedupe_key } : {}) };
+  const style = NOTIFY_STYLE[kind] || {};
+  const badge = await unaddressedReminderCount();
+  if (Number.isInteger(badge)) style.badge = badge;
   if (!apns.configured()) { await sbInsert('notifications', { ...base, ok: false, detail: 'apns not configured' }); return { ok: false, detail: 'apns not configured' }; }
   let tokens = [];
   try { tokens = await sb('device_tokens?platform=eq.ios&select=token,environment'); } catch (_) {}
   if (!tokens.length) { await sbInsert('notifications', { ...base, ok: false, detail: 'no device tokens' }); return { ok: false, detail: 'no device tokens' }; }
   const details = []; let anyOk = false;
   for (const { token, environment } of tokens) {
-    const r = await apns.send(token, { title, body, environment });
+    const r = await apns.send(token, { title, body, environment, ...style });
     if (r.ok) anyOk = true;
     details.push(`${token.slice(0, 8)}=${r.status}${r.ok ? '' : '(' + (r.detail || '').slice(0, 60) + ')'}`);
   }
@@ -1299,6 +1327,7 @@ app.post('/api/todos/complete', express.json(), async (req, res) => {
     const table = b.kind === 'item' ? 'list_items' : 'reminders';
     await sbWrite(`${table}?id=eq.${encodeURIComponent(id)}`, 'PATCH', { done: true, updated: new Date().toISOString() });
     res.json({ ok: true });
+    syncBadge().catch(() => {});   // don't make the caller wait on APNs
   } catch (e) { res.status(500).json({ error: String(e.message || e) }); }
 });
 app.post('/api/todos/add', express.json(), async (req, res) => {
@@ -1379,6 +1408,24 @@ async function remindersTick() {
 setInterval(() => remindersTick().catch((e) => console.log('[reminders] error', e.message)), 60000);
 remindersTick().catch(() => {});
 console.log('[reminders] firing armed');
+
+// ---- badge sync. A reminder can be completed from anywhere — the hub UI, a voice command, the
+// data MCP — and none of those go through this server, so polling the count is the one mechanism
+// that covers every path. Only pushes when the number actually CHANGES, so it's silent no-ops most
+// ticks. Badge-only pushes show nothing; they just correct the icon.
+let lastBadge = null;
+async function syncBadge() {
+  if (!apns.configured()) return;
+  const n = await unaddressedReminderCount();
+  if (!Number.isInteger(n) || n === lastBadge) return;
+  lastBadge = n;
+  let tokens = [];
+  try { tokens = await sb('device_tokens?platform=eq.ios&select=token,environment'); } catch (_) { return; }
+  for (const { token, environment } of tokens) await apns.send(token, { environment, badge: n });
+  console.log(`[badge] -> ${n}`);
+}
+setInterval(() => syncBadge().catch((e) => console.log('[badge] error', e.message)), 60000);
+syncBadge().catch(() => {});
 
 // ---- login page (server-rendered; public, no client modules) ----
 function loginHtml(err) {

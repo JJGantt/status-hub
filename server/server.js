@@ -686,7 +686,11 @@ app.get('/api/rings', async (req, res) => {
     // pace arcs drain and the marker advances without another network call, and, more importantly,
     // the pace maths stays here in lib/pace.js instead of being re-implemented in Swift where the
     // two copies would quietly drift apart.
-    const STEP_MIN = 10, SPAN_MIN = 240;
+    // Span is a straight trade: longer means the arcs keep moving without spending WidgetKit refresh
+    // budget, but the CONSUMED figures stay frozen at fetch time for that whole window. 4 hours made
+    // it look live while showing hours-old numbers. 90 minutes keeps the movement and bounds how
+    // stale the data can get on its own; the app also forces a reload whenever the data changes.
+    const STEP_MIN = 10, SPAN_MIN = 90;
     const frames = [];
     for (let t = 0; t <= SPAN_MIN; t += STEP_MIN) {
       const f = pace.computePace({ consumed, goal, window: P.window, nowOff: (P.nowOff ?? 0) + t });

@@ -17,10 +17,27 @@ import './voiceagent.js';   // shared 'hub' conversation + activity popup (self-
 import './settings.js';     // gear → settings panel (routing mode + trailing-silence); self-skips on TV
 import { mountNavbar } from './navbar.js';   // shared bottom bar (toggle · settings · brain · sparkle)
 
+// A widget can't poll — it draws snapshots WidgetKit schedules, so it only learns about new food or
+// a new set when something reloads its timeline. Inside the iOS app we know the moment the numbers
+// move (this is the live stream that moved them), so nudge the native shell then. Throttled: a
+// reload is cheap but not free, and the stream fires on things the widget doesn't show.
+let lastWidgetSig = null, lastWidgetPush = 0;
+function nudgeWidgets(s){
+ const n = s && s.nutrition; if(!n) return;
+ const sig = [n.calories,n.protein_g,n.carbs_g,n.fat_g].join('|');
+ if(sig === lastWidgetSig) return;                       // nothing the widget shows has changed
+ lastWidgetSig = sig;
+ const now = Date.now();
+ if(now - lastWidgetPush < 60000) return;                // at most once a minute
+ lastWidgetPush = now;
+ try{ window.webkit?.messageHandlers?.reloadWidgets?.postMessage(1); }catch(_){}
+}
+
 // ---- render orchestrator: set shared frame, then each card in order ----
 function render(s){
  if(!s||s.error){return;}
  state.last=s;
+ nudgeWidgets(s);
  litter.render(s);
  feeder.render(s);    // cat feeder tile (no-ops on the TV wall, which omits #feeder)
  surf.render(s);

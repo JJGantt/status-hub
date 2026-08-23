@@ -172,10 +172,17 @@ struct HubWebView {
         // relied on to tell us either, since iOS throttles background pushes and in practice drops
         // them. This is a local call, so the badge updates the instant the row is cleared.
         func userContentController(_ c: WKUserContentController, didReceive message: WKScriptMessage) {
-            guard message.name == "badge", let n = message.body as? NSNumber else { return }
             #if os(iOS)
-            DispatchQueue.main.async {
-                UNUserNotificationCenter.current().setBadgeCount(n.intValue)
+            switch message.name {
+            case "badge":
+                guard let n = message.body as? NSNumber else { return }
+                DispatchQueue.main.async { UNUserNotificationCenter.current().setBadgeCount(n.intValue) }
+            case "reloadWidgets":
+                // The page saw the numbers move. A widget can't notice that on its own — it only
+                // redraws when its timeline is rebuilt — so rebuild it now rather than leaving it
+                // showing whatever it fetched last.
+                DispatchQueue.main.async { WidgetCenter.shared.reloadAllTimelines() }
+            default: break
             }
             #endif
         }
@@ -185,7 +192,8 @@ struct HubWebView {
 
     fileprivate func build(_ coordinator: Coordinator) -> WKWebView {
         let cfg = WKWebViewConfiguration()
-        cfg.userContentController.add(coordinator, name: "badge")   // page -> native badge updates
+        cfg.userContentController.add(coordinator, name: "badge")          // page -> native badge updates
+        cfg.userContentController.add(coordinator, name: "reloadWidgets")  // page -> refresh the widget
         cfg.mediaTypesRequiringUserActionForPlayback = []
         cfg.websiteDataStore = .default()          // persistent cookies → stays signed in across launches
         #if os(iOS)

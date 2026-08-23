@@ -56,13 +56,28 @@ async function load() {
   if (!d || d.error) return;
   el.innerHTML = html(d);
   wire(el);
+  // Also correct the badge whenever the pane is (re)loaded — covers a clear made elsewhere, e.g. by
+  // voice, that this device never saw.
+  fetch('/api/badge').then((r) => r.json()).then((b) => setNativeBadge(b.badge)).catch(() => {});
+}
+
+// Tell the native shell the icon badge count. Inside the iOS app this page IS where reminders get
+// cleared, so nothing else knows it happened — and the server's badge-only push can't carry the news
+// reliably (iOS throttles background pushes and drops them in practice). A direct message to the app
+// updates the icon immediately. No-op in a plain browser.
+function setNativeBadge(n) {
+  if (!Number.isInteger(n)) return;
+  try { window.webkit?.messageHandlers?.badge?.postMessage(n); } catch (_) {}
 }
 
 async function post(path, body) {
   if (busy) return;
   busy = true;
-  try { await fetch(path, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }); }
-  catch (_) { /* leave the row; next load reconciles */ }
+  try {
+    const r = await fetch(path, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+    const j = await r.json().catch(() => null);
+    if (j) setNativeBadge(j.badge);        // the mutation endpoints return the resulting count
+  } catch (_) { /* leave the row; next load reconciles */ }
   finally { busy = false; }
   await load();
 }

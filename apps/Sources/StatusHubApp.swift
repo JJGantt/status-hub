@@ -2,6 +2,7 @@ import SwiftUI
 import WebKit
 #if os(iOS)
 import UIKit
+import UserNotifications      // setBadgeCount, driven by the page via the "badge" message handler
 #elseif os(macOS)
 import AppKit
 #endif
@@ -85,7 +86,7 @@ final class RecordLaunch {
 // NOTE: the native RootView/LoginView/DashboardView (+ HubModel/Models/Views/Theme) below are now
 // superseded by this and unused — left in place pending an explicit OK to remove them.
 struct HubWebView {
-    final class Coordinator: NSObject, WKUIDelegate, WKNavigationDelegate {
+    final class Coordinator: NSObject, WKUIDelegate, WKNavigationDelegate, WKScriptMessageHandler {
         func webView(_ webView: WKWebView,
                      requestMediaCapturePermissionFor origin: WKSecurityOrigin,
                      initiatedByFrame frame: WKFrameInfo,
@@ -164,12 +165,26 @@ struct HubWebView {
             RecordLaunch.shared.fireIfPending()   // statushub://record cold launch → auto-start the voice FAB
         }
         #endif
+
+        // The page tells us the icon badge count directly. Clearing a reminder happens INSIDE the web
+        // view, so natively we'd otherwise never know — and the server's badge-only push can't be
+        // relied on to tell us either, since iOS throttles background pushes and in practice drops
+        // them. This is a local call, so the badge updates the instant the row is cleared.
+        func userContentController(_ c: WKUserContentController, didReceive message: WKScriptMessage) {
+            guard message.name == "badge", let n = message.body as? NSNumber else { return }
+            #if os(iOS)
+            DispatchQueue.main.async {
+                UNUserNotificationCenter.current().setBadgeCount(n.intValue)
+            }
+            #endif
+        }
     }
 
     func makeCoordinator() -> Coordinator { Coordinator() }
 
     fileprivate func build(_ coordinator: Coordinator) -> WKWebView {
         let cfg = WKWebViewConfiguration()
+        cfg.userContentController.add(coordinator, name: "badge")   // page -> native badge updates
         cfg.mediaTypesRequiringUserActionForPlayback = []
         cfg.websiteDataStore = .default()          // persistent cookies → stays signed in across launches
         #if os(iOS)

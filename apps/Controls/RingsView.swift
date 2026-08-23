@@ -70,7 +70,7 @@ private struct RingView: View {
     var compact = false          // Lock Screen / small: drop the totals line, thinner strokes
 
     var body: some View {
-        VStack(spacing: compact ? 0 : 5) {
+        VStack(spacing: compact ? 0 : 10) {   // the totals shouldn't crowd the ring above them
             GeometryReader { geo in
                 let size = min(geo.size.width, geo.size.height)
                 let lwFrac = compact ? 0.085 : 0.09        // thin enough that neighbouring rings don't crowd

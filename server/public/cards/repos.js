@@ -1,8 +1,11 @@
-// Repo picker — start a Claude session on the Mac from the phone.
+// Project picker — start a Claude session on the Mac from the phone.
 //
-// Tapping a repo enqueues a desk command; the Mac's orchestrator opens a Terminal running
-// `claude --remote-control <repo>` and the session shows up in the Claude app, where the actual
+// Tapping one enqueues a desk command; the Mac's orchestrator opens a Terminal running
+// `claude --remote-control <name>` and the session shows up in the Claude app, where the actual
 // work happens. This pane only starts it — a clean session in the right directory, from anywhere.
+//
+// Everything in ~/repos is listed, git checkout or not: the branch chip and dirty dot simply don't
+// render for a plain directory.
 //
 // Self-fetching (NOT part of the status stream), like the todo pane. No-ops where #repospane is
 // absent (kiosk / mac / page).
@@ -11,7 +14,8 @@ import { esc } from '../shared.js';
 let mounted = false;
 let desk = { online: false };
 
-// 'now' / '20m' / '3h' / '5d' — how long ago HEAD was committed.
+// 'now' / '20m' / '3h' / '5d' — how long ago this was last touched (HEAD commit for a repo, the
+// directory's mtime otherwise).
 function ago(iso) {
   if (!iso) return '';
   const s = (Date.now() - new Date(iso).getTime()) / 1000;
@@ -22,7 +26,8 @@ function ago(iso) {
 }
 
 // Nearly everything sits on main, so that chip would just be a column of identical noise — show
-// the branch only when it's something you'd want to know before opening a session there.
+// the branch only when it's something you'd want to know before opening a session there. A
+// non-repo directory has no branch at all and renders the same as a plain `main`.
 const notable = (b) => !!b && b !== 'main' && b !== 'master';
 
 function html(d) {
@@ -31,7 +36,7 @@ function html(d) {
       `<div class="rp-main"><span class="rp-name">${esc(r.name)}</span>` +
       `<span class="rp-meta">${notable(r.branch) ? `<span class="rp-branch">${esc(r.branch)}</span>` : ''}` +
       `${r.dirty ? '<span class="rp-dirty" title="uncommitted changes"></span>' : ''}</span></div>` +
-      `<span class="rp-age">${esc(ago(r.last_commit))}</span>` +
+      `<span class="rp-age">${esc(ago(r.last_active))}</span>` +
     '</li>').join('');
   const off = d.desk && d.desk.online ? '' :
     '<div class="rp-off">Mac is asleep — nothing to launch into</div>';

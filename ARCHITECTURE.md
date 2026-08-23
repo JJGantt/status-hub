@@ -198,9 +198,14 @@ has a fresh heartbeat** (`HEARTBEAT_FRESH_S`).
 
 ## 9. Desk control — launching Mac sessions from the phone
 
-The hub's repo picker (6th phone pane) starts a Claude session on the Mac from anywhere: tap a repo
-→ a Terminal opens there running `claude --remote-control <repo>` → the session is waiting in the
-Claude app, which is where the work actually happens. The hub only *starts* it.
+The hub's repo picker (6th phone pane) starts a Claude session on the Mac from anywhere: tap a
+project → a Terminal opens there running `claude --remote-control <name>` → the session is waiting
+in the Claude app, which is where the work actually happens. The hub only *starts* it.
+
+**Every directory under `~/repos` is listed, not just git checkouts.** Filtering on `.git` hid the
+most active work on the Mac, which can be a working directory that is deliberately not a
+repo. Git is decoration: branch + dirty when present, and `last_active` is the
+HEAD commit date for a repo, the directory's mtime otherwise.
 
 The hub server is on Fly, so it can neither see the Mac's disk nor reach it over the LAN. Supabase
 is the bus; the Mac's orchestrator daemon owns everything local:
@@ -219,9 +224,11 @@ is the bus; the Mac's orchestrator daemon owns everything local:
 - **Terminal has no scriptable "new tab"** — only a Cmd-T keystroke via System Events, which needs
   Accessibility permission a launchd daemon may not hold ("not allowed to send keystrokes (1002)").
   Both launch paths fall back to a plain `do script` new window, which needs only Automation.
-- **Scope:** `REPO_ROOTS` defaults to `~/repos` only. Repos living loose in `~` (`.hammerspoon`,
-  `voice`, `whisper.cpp`) are deliberately out — they're runtime assets or vendor checkouts, not
-  things you open a session in.
+- **Scope:** `REPO_ROOTS` defaults to `~/repos` only. What lives loose in `~` (`.hammerspoon`,
+  `voice`, `whisper.cpp`) is deliberately out — runtime assets and vendor checkouts, not things you
+  open a session in. Projects that were loose in `~` (`health`, `mcp-session`, `data-layer-proxy`)
+  and `CapitalGrilleApp` (a repo nested inside the `~/workspace` scratch drawer) were consolidated
+  into `~/repos` on 2026-08-23 so the picker can see them.
 
 ---
 

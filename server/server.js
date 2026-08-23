@@ -1445,7 +1445,7 @@ const DESK_STALE_S = 90;   // 3 missed 30s beats
 app.get('/api/repos', async (req, res) => {
   try {
     const [repos, presence] = await Promise.all([
-      sb('repos?select=path,name,branch,dirty,last_commit&order=last_commit.desc.nullslast'),
+      sb('repos?select=path,name,branch,dirty,last_active&order=last_active.desc.nullslast'),
       sb('worker_presence?worker=eq.desk&select=last_seen'),
     ]);
     const seen = (presence && presence[0] && presence[0].last_seen) || null;

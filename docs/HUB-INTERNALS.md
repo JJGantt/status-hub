@@ -79,7 +79,7 @@ Supabase ──▶ server.js buildStatus() ──▶ /api/status payload ──�
 
 `nutrition` (Cal/P/C/F pace rings + produce sub-rings) · `nutritionlog` (calorie+weight plot +
 adherence calendar) · `maintviz` (4th phone swipe pane — the maintenance-window viz) · `todo` (5th
-pane — reminders/lists/notes, self-fetches) · `repos` (6th pane — the Mac's repos; tap to launch a
+pane — reminders/lists/notes, self-fetches) · `repos` (6th pane — the Mac's projects; tap to launch a
 Claude session there, self-fetches) · `muscle` (body map + volume gauges) · `workouts`
 (heatmap + day detail) · `litter` · `feeder` · `surf` · `routing` (TV top strip) · `score` (TV right
 column) · `mics` (page voice-liveness strip).
@@ -145,9 +145,14 @@ Voice/MCP writes them (data-layer tools); the hub surfaces them:
 
 ## 6b. Desk control — the repo picker
 
-Start a Claude session on the Mac from the phone: tap a repo, a Terminal opens there running
-`claude --remote-control <repo>`, and the session is waiting in the Claude app. The hub only starts
+Start a Claude session on the Mac from the phone: tap a project, a Terminal opens there running
+`claude --remote-control <name>`, and the session is waiting in the Claude app. The hub only starts
 it; the work happens over Remote Control.
+
+**Every directory in `~/repos` is listed, git checkout or not** — filtering on `.git` hid the most
+active work, which can be a directory that is deliberately not a repo. Git is decoration: the
+branch chip and dirty dot render only when the directory happens to be a checkout, and `last_active`
+falls back to the directory's mtime.
 
 This server is on Fly — it can't see the Mac's filesystem or reach it over the LAN — so Supabase
 carries both directions and the Mac's **voice-orchestrator** daemon owns everything local:

@@ -191,7 +191,7 @@ struct RingsRow: View {
             // Four rings in a row are width-constrained, so this size always has height to spare —
             // which is exactly the room the health bar wanted, and it matches where the bar sits
             // relative to the rings on the wall.
-            VStack(spacing: 8) {
+            VStack(spacing: 14) {   // let the bar breathe above the rings
                 HealthBar(score: score)
                 HStack(spacing: 10) { ForEach(keys, id: \.0) { k in
                     RingView(label: k.0, macro: frame?.macros[k.1], frac: frac) } }

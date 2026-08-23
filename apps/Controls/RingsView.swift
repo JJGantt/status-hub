@@ -137,7 +137,7 @@ public enum RingsLayout { case small, medium, circular, rectangular }
 /// Horizontal twin of the wall's health bar: nutrition then training, laid end to end in one track.
 struct HealthBar: View {
     let score: Score?
-    var height: CGFloat = 7
+    var height: CGFloat = 22   // chunky like the wall's own track; a hairline reads as decoration
 
     var body: some View {
         GeometryReader { geo in

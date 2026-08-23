@@ -243,6 +243,13 @@ is the bus; the Mac's orchestrator daemon owns everything local:
 - **Terminal has no scriptable "new tab"** — only a Cmd-T keystroke via System Events, which needs
   Accessibility permission a launchd daemon may not hold ("not allowed to send keystrokes (1002)").
   Both launch paths fall back to a plain `do script` new window, which needs only Automation.
+- **The workspace-trust prompt has to be pre-accepted** (`orchestrator/src/trust.js`), or the session
+  opens onto "Do you trust the files in this folder?" and waits for a click nobody is there to make —
+  the hub reports success while the session is stuck. Trust is keyed by absolute path in
+  `~/.claude.json`, so it is per-directory (only 3 of 26 were trusted) and **moving a repo resets
+  it**. No CLI flag exists (`-p` skips the dialog only by being non-interactive), so the daemon
+  writes the same state the dialog writes, immediately before launching. Every live Claude session
+  writes that file too, hence the mtime re-check + atomic rename.
 - **Scope:** `REPO_ROOTS` defaults to `~/repos` only. What lives loose in `~` (`.hammerspoon`,
   `voice`, `whisper.cpp`) is deliberately out — runtime assets and vendor checkouts, not things you
   open a session in. Projects that were loose in `~` (`health`, `mcp-session`, `data-layer-proxy`)

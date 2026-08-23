@@ -72,7 +72,7 @@ documents **everything**, not just the hub. Keep it current as pieces change.
 ## 4. Surfaces (all share the web hub codebase)
 
 - **Web hub** — `status-hub/server/public/` (`core.js`, `cards/*`, `app.css`). Desktop `/page` =
-  scrolling rows; phone = swipe panes on `/` (chat · wall · misc · **maint** · **todo**); all off
+  scrolling rows; phone = swipe panes on `/` (chat · wall · misc · **maint** · **todo** · **repos**); all off
   `/api/stream` (SSE). Served by the Node server. (Card/module map: [docs/HUB-INTERNALS.md](docs/HUB-INTERNALS.md).)
 - **`/mic`** — a minimal fullscreen tap-to-talk launcher page (Add-to-Home-Screen web-clip); reuses
   the same recorder + pipeline as the in-app voice FAB.
@@ -114,7 +114,8 @@ End-to-end flow:
   `com.jaredgantt.voice-mac-listener`). **(verify)** Not necessarily loaded — needs mic grant.
 - `orchestrator/` — Mac service (launchd `com.jaredgantt.voice-orchestrator`, `localhost:7682`).
   Injects a transcript into a focused Mac session's live `claude --resume` pty (for non-"hub"
-  focus). This is the **warm-subscription-via-terminal** path.
+  focus). This is the **warm-subscription-via-terminal** path. It also runs **desk control** (§9):
+  publishing `~/repos` and opening terminals when the hub asks.
 - `mcp-voice/` — the voice-control MCP (`set_focus` / `list_sessions`) so voice can switch what
   the wall shows.
 - `firmware/` — ESP32 (PlatformIO). A dumb PCM pump: streams the I2S mic, no on-device logic.
@@ -195,7 +196,36 @@ has a fresh heartbeat** (`HEARTBEAT_FRESH_S`).
 
 ---
 
-## 9. Known cruft / open items
+## 9. Desk control — launching Mac sessions from the phone
+
+The hub's repo picker (6th phone pane) starts a Claude session on the Mac from anywhere: tap a repo
+→ a Terminal opens there running `claude --remote-control <repo>` → the session is waiting in the
+Claude app, which is where the work actually happens. The hub only *starts* it.
+
+The hub server is on Fly, so it can neither see the Mac's disk nor reach it over the LAN. Supabase
+is the bus; the Mac's orchestrator daemon owns everything local:
+
+```
+  orchestrator ──scan ~/repos (60s, change-gated)──▶ repos ──▶ hub lists them
+  hub tap ──INSERT──▶ desk_commands ──realtime──▶ orchestrator ──▶ Terminal + claude --remote-control
+  orchestrator ──beat (30s)──▶ worker_presence('desk') ──▶ hub greys the list out when the Mac sleeps
+```
+
+- **Tables:** `repos` (path PK, branch, dirty, HEAD date) · `desk_commands` (pending → running →
+  done | error | expired). Presence reuses `worker_presence` under `worker='desk'`.
+- **Two guards on the launch path:** the target must be a repo the orchestrator itself published (so
+  a crafted or stale row can't `cd` anywhere else on disk), and commands older than `COMMAND_TTL_S`
+  (120s) expire unrun — a Mac waking from sleep must not open every terminal queued while it was out.
+- **Terminal has no scriptable "new tab"** — only a Cmd-T keystroke via System Events, which needs
+  Accessibility permission a launchd daemon may not hold ("not allowed to send keystrokes (1002)").
+  Both launch paths fall back to a plain `do script` new window, which needs only Automation.
+- **Scope:** `REPO_ROOTS` defaults to `~/repos` only. Repos living loose in `~` (`.hammerspoon`,
+  `voice`, `whisper.cpp`) are deliberately out — they're runtime assets or vendor checkouts, not
+  things you open a session in.
+
+---
+
+## 10. Known cruft / open items
 
 - ⚠️ Delete `voice-pipeline/fly-worker/` — dead orphan that misleads (the real Fly worker is
   `voice-pipeline/server/`).

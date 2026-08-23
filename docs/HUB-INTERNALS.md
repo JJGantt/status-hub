@@ -79,12 +79,13 @@ Supabase ──▶ server.js buildStatus() ──▶ /api/status payload ──�
 
 `nutrition` (Cal/P/C/F pace rings + produce sub-rings) · `nutritionlog` (calorie+weight plot +
 adherence calendar) · `maintviz` (4th phone swipe pane — the maintenance-window viz) · `todo` (5th
-pane — reminders/lists/notes, self-fetches) · `muscle` (body map + volume gauges) · `workouts`
+pane — reminders/lists/notes, self-fetches) · `repos` (6th pane — the Mac's repos; tap to launch a
+Claude session there, self-fetches) · `muscle` (body map + volume gauges) · `workouts`
 (heatmap + day detail) · `litter` · `feeder` · `surf` · `routing` (TV top strip) · `score` (TV right
 column) · `mics` (page voice-liveness strip).
 
 **Surfaces (same code, different chrome):** desktop `/page` = scrolling rows; phone = swipe panes on
-`/` (chat · wall · misc · maint · todo); TV `/tv` = the wall + a voice panel (auth `?token=`); the
+`/` (chat · wall · misc · maint · todo · repos); TV `/tv` = the wall + a voice panel (auth `?token=`); the
 `/mic` page = a minimal fullscreen voice launcher.
 
 ---
@@ -115,10 +116,10 @@ The math lives here; each file has a thorough header. Summary map:
 
 **Read:** `/api/status` (full payload) · `/api/stream` (SSE status) · `/api/voice-stream` (SSE voice
 frames for the kiosk) · `/api/workout-day` · `/api/nutrition-day` · `/api/voice-messages` ·
-`/api/todos` · `/api/attachment`.
+`/api/todos` · `/api/repos` · `/api/repos/cmd/:id` · `/api/attachment`.
 
 **Write:** `/api/settings` (GET/POST) · `/api/log-set` · `/api/log-entry` (POST/DELETE) ·
-`/api/commit-staged` · `/api/feed` · `/api/todos/{add,complete}` · `/api/voice-command` (raw audio →
+`/api/commit-staged` · `/api/feed` · `/api/todos/{add,complete}` · `/api/repos/open` · `/api/voice-command` (raw audio →
 Groq Whisper → enqueue) · `/api/voice-text` (text → enqueue) · `/api/voice-reset` ·
 `/api/voice-activity` · `/api/attach` (photo upload) · `/api/register-push` · `/api/notify` (APNs to
 all devices) · `/api/clientlog`.
@@ -139,6 +140,31 @@ Voice/MCP writes them (data-layer tools); the hub surfaces them:
 - **Reminder firing:** a 60s tick app-pushes any reminder whose local `due` has passed, deduped via a
   `notifications` row keyed `reminder:<id>` (date-only dues fire 9am). Shares `pushAll()` with
   `/api/notify`.
+
+---
+
+## 6b. Desk control — the repo picker
+
+Start a Claude session on the Mac from the phone: tap a repo, a Terminal opens there running
+`claude --remote-control <repo>`, and the session is waiting in the Claude app. The hub only starts
+it; the work happens over Remote Control.
+
+This server is on Fly — it can't see the Mac's filesystem or reach it over the LAN — so Supabase
+carries both directions and the Mac's **voice-orchestrator** daemon owns everything local:
+
+```
+orchestrator ──scan ~/repos (60s)──▶ repos table ──▶ GET /api/repos ──▶ cards/repos.js
+cards/repos.js ──POST /api/repos/open──▶ desk_commands ──realtime──▶ orchestrator ──▶ Terminal
+orchestrator ──beat(30s)──▶ worker_presence(worker='desk') ──▶ the list greys out when the Mac sleeps
+```
+
+- **Card:** `public/cards/repos.js` — 6th phone swipe pane, self-fetching. The age column doubles as
+  launch feedback (blue → green/red) while it polls `/api/repos/cmd/:id`.
+- **Endpoints:** `GET /api/repos` (repos + desk presence) · `POST /api/repos/open` (enqueue) ·
+  `GET /api/repos/cmd/:id` (pending → running → done | error | expired).
+- **Guardrail:** the client's path selects a published ROW; the row's own path is what gets enqueued,
+  so a crafted request can't `cd` anywhere else. The orchestrator re-validates independently, and
+  commands older than 120s expire rather than opening terminals when the Mac wakes.
 
 ---
 

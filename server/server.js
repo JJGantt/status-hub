@@ -703,7 +703,19 @@ app.get('/api/rings', async (req, res) => {
       }
       frames.push({ t, frac: f.fraction, macros });
     }
-    res.json({ step_min: STEP_MIN, frames });
+    // The health bar that sits with the rings on the wall (cards/score.js): one gauge split into a
+    // nutrition and a training contribution. overall = W_TRAIN*training + (1-W_TRAIN)*nutrition, so
+    // each side can fill at most half the bar and the two together reach the overall figure. Sent as
+    // the already-halved fills the bar draws, rather than raw percentages, so the widget doesn't
+    // re-derive the weighting and drift from the wall.
+    const sc = st.score || {};
+    const half = (v) => Math.max(0, Math.min(50, (Number(v) || 0) * 0.5));
+    res.json({
+      step_min: STEP_MIN,
+      score: { nutrition: half(sc.nutrition?.pct), training: half(sc.training?.pct),
+               overall: Math.max(0, Math.min(100, Number(sc.overall) || 0)) },
+      frames,
+    });
   } catch (e) { res.status(500).json({ error: String(e.message || e) }); }
 });
 

@@ -16,13 +16,14 @@ import SwiftUI
 struct RingsEntry: TimelineEntry {
     let date: Date
     let frame: Frame?          // nil = couldn't load (no token yet, offline, hub down)
+    var score: Score? = nil    // health bar; fixed for the fetch, not per-frame
 }
 
 struct RingsProvider: TimelineProvider {
     func placeholder(in context: Context) -> RingsEntry { RingsEntry(date: Date(), frame: nil) }
 
     func getSnapshot(in context: Context, completion: @escaping (RingsEntry) -> Void) {
-        fetch { completion(RingsEntry(date: Date(), frame: $0?.frames.first)) }
+        fetch { completion(RingsEntry(date: Date(), frame: $0?.frames.first, score: $0?.score)) }
     }
 
     // One network fetch yields a few hours of frames, so the arcs keep draining and the marker keeps
@@ -37,7 +38,7 @@ struct RingsProvider: TimelineProvider {
                 return
             }
             let entries = feed.frames.map {
-                RingsEntry(date: now.addingTimeInterval(TimeInterval($0.t) * 60), frame: $0)
+                RingsEntry(date: now.addingTimeInterval(TimeInterval($0.t) * 60), frame: $0, score: feed.score)
             }
             // Refetch once the frames run out — consumed values are stale by then anyway.
             let end = entries.last?.date ?? now.addingTimeInterval(900)
@@ -71,7 +72,7 @@ struct RingsWidgetView: View {
     }
 
     var body: some View {
-        RingsRow(frame: entry.frame, layout: layout)
+        RingsRow(frame: entry.frame, layout: layout, score: entry.score)
             .widgetURL(URL(string: "statushub://open"))   // any host but "record" just opens the app
     }
 }

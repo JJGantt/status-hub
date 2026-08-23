@@ -20,19 +20,20 @@ let json = """
 enum Render {
     static func main() {
         let frame = try! JSONDecoder().decode(Frame.self, from: Data(json.utf8))
+        let score = Score(nutrition: 31.5, training: 22.0, overall: 53.5)
         let outDir = CommandLine.arguments.count > 1 ? CommandLine.arguments[1] : "."
         // Real widget point sizes on a 12 Pro Max.
         MainActor.assumeIsolated {
-            shoot(frame, outDir, "medium",      CGSize(width: 364, height: 172), .medium)
-            shoot(frame, outDir, "small",       CGSize(width: 170, height: 170), .small)
-            shoot(frame, outDir, "rectangular", CGSize(width: 172, height: 76),  .rectangular)
+            shoot(frame, score, outDir, "medium",      CGSize(width: 364, height: 172), .medium)
+            shoot(frame, score, outDir, "small",       CGSize(width: 170, height: 170), .small)
+            shoot(frame, score, outDir, "rectangular", CGSize(width: 172, height: 76),  .rectangular)
         }
     }
 }
 
 @MainActor
-func shoot(_ frame: Frame, _ outDir: String, _ name: String, _ size: CGSize, _ layout: RingsLayout) {
-    let view = RingsRow(frame: frame, layout: layout)
+func shoot(_ frame: Frame, _ score: Score, _ outDir: String, _ name: String, _ size: CGSize, _ layout: RingsLayout) {
+    let view = RingsRow(frame: frame, layout: layout, score: score)
         .padding(.horizontal, 8).padding(.vertical, 6)
         .frame(width: size.width, height: size.height)
         .background(Color(red: 0.082, green: 0.102, blue: 0.125))   // the card's ground

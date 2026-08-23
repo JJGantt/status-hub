@@ -15,7 +15,10 @@ struct Frame: Decodable {
     let frac: Double           // how far through the eating window — drives the marker
     let macros: [String: Macro]
 }
-struct RingsFeed: Decodable { let step_min: Int; let frames: [Frame] }
+/// The wall's health bar (cards/score.js): one gauge, two stacked contributions. Values arrive
+/// already halved — each side fills at most 50% — so the widget never re-derives the weighting.
+struct Score: Decodable { let nutrition: Double; let training: Double; let overall: Double }
+struct RingsFeed: Decodable { let step_min: Int; let score: Score?; let frames: [Frame] }
 
 private extension Color {
     /// "#rrggbb" from the server's pace palette.
@@ -131,9 +134,36 @@ private struct RingView: View {
 /// renderer can ask for any of them.
 public enum RingsLayout { case small, medium, circular, rectangular }
 
+/// Horizontal twin of the wall's health bar: nutrition then training, laid end to end in one track.
+struct HealthBar: View {
+    let score: Score?
+    var height: CGFloat = 7
+
+    var body: some View {
+        GeometryReader { geo in
+            let w = geo.size.width
+            let n = CGFloat((score?.nutrition ?? 0) / 100) * w
+            let t = CGFloat((score?.training ?? 0) / 100) * w
+            ZStack(alignment: .leading) {
+                Capsule().fill(Color(red: 0.055, green: 0.075, blue: 0.094))       // #0e1318 track
+                HStack(spacing: 0) {
+                    Rectangle().fill(Color(red: 0.231, green: 0.510, blue: 0.965)) // #3b82f6 nutrition
+                        .frame(width: n)
+                    Rectangle().fill(Color(red: 0.224, green: 0.827, blue: 0.325)) // #39d353 training
+                        .frame(width: t)
+                }
+                .clipShape(Capsule())
+            }
+            .overlay(Capsule().stroke(Color(red: 0.165, green: 0.200, blue: 0.251), lineWidth: 1))
+        }
+        .frame(height: height)
+    }
+}
+
 struct RingsRow: View {
     let frame: Frame?
     let layout: RingsLayout
+    var score: Score? = nil
 
     private let keys = [("Cal", "calories"), ("P", "protein_g"), ("C", "carbs_g"), ("F", "fat_g")]
 
@@ -158,12 +188,15 @@ struct RingsRow: View {
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         case .medium:
-            // Four rings in a row are width-constrained, so the widget's height always has slack.
-            // Tight spacing buys a little ring size, and centring puts the leftover evenly top and
-            // bottom instead of pooling it under the row.
-            HStack(spacing: 10) { ForEach(keys, id: \.0) { k in
-                RingView(label: k.0, macro: frame?.macros[k.1], frac: frac) } }
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
+            // Four rings in a row are width-constrained, so this size always has height to spare —
+            // which is exactly the room the health bar wanted, and it matches where the bar sits
+            // relative to the rings on the wall.
+            VStack(spacing: 8) {
+                HealthBar(score: score)
+                HStack(spacing: 10) { ForEach(keys, id: \.0) { k in
+                    RingView(label: k.0, macro: frame?.macros[k.1], frac: frac) } }
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
         }
     }
 }

@@ -20,7 +20,12 @@ struct RingsEntry: TimelineEntry {
 }
 
 struct RingsProvider: TimelineProvider {
-    func placeholder(in context: Context) -> RingsEntry { RingsEntry(date: Date(), frame: nil) }
+    // Shown when there is no timeline yet — notably right after an app update invalidates one.
+    // Reaching for the cache keeps it from flashing empty in that window.
+    func placeholder(in context: Context) -> RingsEntry {
+        let c = cached()
+        return RingsEntry(date: Date(), frame: c?.frames.first, score: c?.score)
+    }
 
     func getSnapshot(in context: Context, completion: @escaping (RingsEntry) -> Void) {
         fetch { completion(RingsEntry(date: Date(), frame: $0?.frames.first, score: $0?.score)) }
@@ -46,13 +51,33 @@ struct RingsProvider: TimelineProvider {
         }
     }
 
+    // Last good payload, kept on disk in the extension's own container. A widget refresh runs in the
+    // background and can fail for reasons that have nothing to do with the data — no network on a
+    // timeline expiry, a request that outlives its window. Falling back to the last known values
+    // shows something slightly stale; returning nil blanks the widget entirely, which is worse.
+    private static var cacheURL: URL? {
+        FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)
+            .first?.appendingPathComponent("rings-last.json")
+    }
+
+    private func cached() -> RingsFeed? {
+        guard let u = Self.cacheURL, let d = try? Data(contentsOf: u) else { return nil }
+        return try? JSONDecoder().decode(RingsFeed.self, from: d)
+    }
+
     private func fetch(_ done: @escaping (RingsFeed?) -> Void) {
-        guard let url = URL(string: Auth.host + "/api/rings"), let token = Auth.token() else { return done(nil) }
+        guard let url = URL(string: Auth.host + "/api/rings"), let token = Auth.token() else {
+            return done(cached())
+        }
         var r = URLRequest(url: url)
         r.timeoutInterval = 15
         r.setValue(token, forHTTPHeaderField: "X-Hub-Token")
         URLSession.shared.dataTask(with: r) { data, _, _ in
-            done(data.flatMap { try? JSONDecoder().decode(RingsFeed.self, from: $0) })
+            guard let data, let feed = try? JSONDecoder().decode(RingsFeed.self, from: data) else {
+                return done(self.cached())
+            }
+            if let u = Self.cacheURL { try? data.write(to: u, options: .atomic) }
+            done(feed)
         }.resume()
     }
 }

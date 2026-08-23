@@ -460,16 +460,25 @@ body.tv.phonewall .pane-todo .card{background:#151a20!important;border:1px solid
 .todo ul{list-style:none;margin:0;padding:0}
 .todo li{border-bottom:1px solid #1c232b}
 .todo li:last-child{border-bottom:none}
-/* Swipe-to-clear: .row slides left off a .del button parked underneath it. Two things are load
-   bearing here. .row must be OPAQUE (the card's own background) so the button can't be seen through
-   it — and it must be POSITIONED with a z-index, because an absolutely-positioned element paints
-   above static in-flow content no matter the DOM order, which otherwise leaves the X permanently
-   visible. touch-action:pan-y keeps vertical scrolling native while JS handles the horizontal drag. */
-.todo li.sw{position:relative;overflow:hidden}
-.todo .row{position:relative;z-index:1;display:flex;align-items:center;gap:11px;padding:10px 2px;
-  background:#151a20;transition:transform .18s ease;touch-action:pan-y;will-change:transform}
-.todo li.sw.open .row{transform:translateX(-72px)}
-.todo .del{position:absolute;top:0;right:0;width:72px;height:100%;border:0;padding:0;
+/* Swipe-to-clear, done entirely by the browser. Each row is its own horizontal scroller with
+   scroll-snap, so dragging IS scrolling: momentum, rubber-banding, snap open/shut, and the decision
+   between a horizontal swipe and a vertical list scroll all come free and behave natively. No JS
+   touches the gesture — hand-rolled pointer maths fights the browser and loses.
+
+   What keeps the TEXT still while the X slides in over it: the row is position:sticky at left:0, so
+   it stays pinned to the scrollport while the scroller moves. The button sits just past the row in
+   the content, so scrolling brings it in OVER the row's right end instead of shoving the text away.
+   z-index puts it above the sticky row.
+
+   overscroll-behavior-x:contain stops a swipe that runs out of travel from chaining into the phone's
+   pane swiper behind it. */
+.todo li.sw{overflow:hidden}
+.todo .sc{display:flex;overflow-x:auto;overscroll-behavior-x:contain;
+  scroll-snap-type:x mandatory;scrollbar-width:none;-ms-overflow-style:none}
+.todo .sc::-webkit-scrollbar{display:none}
+.todo .row{position:sticky;left:0;z-index:1;flex:0 0 100%;scroll-snap-align:start;
+  display:flex;align-items:center;gap:11px;padding:10px 2px;background:#151a20}
+.todo .del{flex:0 0 72px;z-index:2;scroll-snap-align:end;border:0;padding:0;
   background:#ef4444;color:#fff;font-size:24px;line-height:1;cursor:pointer;
   display:flex;align-items:center;justify-content:center}
 .todo .del:active{background:#dc2626}

@@ -18,13 +18,17 @@ function fmtDue(due) {
   return s;
 }
 
-// One row. No checkbox: clearing something is a deliberate left-swipe that reveals an X, so it
-// can't happen from a stray tap the way a checkbox could. The X sits UNDER the row and is revealed
-// by sliding the row off it, which is why .row needs an opaque background.
+// One row. No checkbox: clearing something takes a deliberate left-swipe, so it can't happen from a
+// stray tap. The gesture is pure CSS — each row is its own tiny horizontal scroller with scroll-snap
+// (see app.css), so the BROWSER owns the drag physics, momentum, rubber-banding and snapping. There
+// is no pointer maths here, which is the whole point: hand-rolled swipe handling fights the browser
+// and loses. The text itself stays put (the row is sticky) and the X slides in over its right end.
 function row(kind, id, inner) {
   return `<li class="sw" data-kind="${kind}" data-id="${esc(id)}">` +
-    `<div class="row">${inner}</div>` +
-    `<button class="del" aria-label="delete" tabindex="-1">\u00d7</button></li>`;
+    `<div class="sc">` +
+      `<div class="row">${inner}</div>` +
+      `<button class="del" aria-label="clear" tabindex="-1">\u00d7</button>` +
+    `</div></li>`;
 }
 
 function html(d) {
@@ -63,74 +67,22 @@ async function post(path, body) {
   await load();
 }
 
-// Swipe-to-delete. Pointer events so it works with a finger and a trackpad alike.
-// The gesture commits to an axis on the first few px: if the drag is more vertical than horizontal
-// it is a scroll, and we bail so the list still scrolls normally under the finger.
-const OPEN_PX = 72;        // must match .del width in app.css
-const COMMIT_PX = 34;      // dragged past this on release -> stay open
-
+// Tapping elsewhere closes an open row. This is the ONLY scripted part of the gesture — the swipe
+// itself is the browser's own scrolling.
 function closeAll(el, except) {
-  el.querySelectorAll('li.sw.open').forEach((li) => { if (li !== except) li.classList.remove('open'); });
-}
-
-function wireSwipe(el) {
-  el.querySelectorAll('li.sw').forEach((li) => {
-    const row = li.querySelector('.row');
-    let x0 = 0, y0 = 0, dx = 0, axis = null, dragging = false;
-
-    const move = (e) => {
-      if (!dragging) return;
-      dx = e.clientX - x0;
-      if (!axis) {
-        const dy = e.clientY - y0;
-        if (Math.abs(dx) < 6 && Math.abs(dy) < 6) return;      // too small to tell yet
-        axis = Math.abs(dx) > Math.abs(dy) ? 'x' : 'y';
-        if (axis === 'y') return end(e);                        // it's a scroll — let go
-        row.style.transition = 'none';
-      }
-      const base = li.classList.contains('open') ? -OPEN_PX : 0;
-      row.style.transform = `translateX(${Math.max(-OPEN_PX, Math.min(0, base + dx))}px)`;
-    };
-
-    const end = (e) => {
-      if (!dragging) return;
-      dragging = false;
-      try { row.releasePointerCapture(e.pointerId); } catch (_) {}
-      row.removeEventListener('pointermove', move);
-      row.style.transition = '';
-      row.style.transform = '';                                 // hand back to the CSS class
-      if (axis === 'x') {
-        const wasOpen = li.classList.contains('open');
-        const open = wasOpen ? dx < COMMIT_PX : dx < -COMMIT_PX;
-        closeAll(el, li);
-        li.classList.toggle('open', open);
-      }
-      axis = null;
-    };
-
-    row.addEventListener('pointerdown', (e) => {
-      if (e.button != null && e.button !== 0) return;
-      dragging = true; axis = null; dx = 0; x0 = e.clientX; y0 = e.clientY;
-      try { row.setPointerCapture(e.pointerId); } catch (_) {}
-      row.addEventListener('pointermove', move);
-    });
-    row.addEventListener('pointerup', end);
-    row.addEventListener('pointercancel', end);
-
-    // Clears it — the one and only "dealt with" state, same as the notification's Done button and
-    // the voice tools. Soft, so the row survives its recovery window before being purged.
-    li.querySelector('.del').addEventListener('click', () =>
-      post('/api/todos/clear', { kind: li.dataset.kind, id: li.dataset.id }));
-  });
-
-  // Tapping anywhere else puts an open row away.
-  el.addEventListener('pointerdown', (e) => {
-    if (!e.target.closest('li.sw')) closeAll(el);
+  el.querySelectorAll('li.sw .sc').forEach((sc) => {
+    if (sc !== except && sc.scrollLeft) sc.scrollTo({ left: 0, behavior: 'smooth' });
   });
 }
 
 function wire(el) {
-  wireSwipe(el);
+  el.querySelectorAll('li.sw').forEach((li) => {
+    const sc = li.querySelector('.sc');
+    sc.addEventListener('pointerdown', () => closeAll(el, sc));   // only one open at a time
+    li.querySelector('.del').addEventListener('click', () =>
+      post('/api/todos/clear', { kind: li.dataset.kind, id: li.dataset.id }));
+  });
+  el.addEventListener('pointerdown', (e) => { if (!e.target.closest('li.sw')) closeAll(el); });
   el.querySelectorAll('input[data-add]').forEach((inp) => inp.addEventListener('keydown', (e) => {
     if (e.key !== 'Enter') return;
     const text = inp.value.trim();

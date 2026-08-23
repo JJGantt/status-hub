@@ -29,10 +29,13 @@ private extension Color {
 }
 
 /// The on-pace marker: angle 2π·frac measured COUNTER-clockwise from twelve o'clock, matching
-/// cards/nutrition.js tickRings(). It is drawn ACROSS the ring band rather than at fixed fractions —
-/// a stroked Circle sits on radius (size-lineWidth)/2, so the band's centre is at 1-lw/size of the
-/// half-size and it is lw/size wide. Deriving it keeps the tick on the ring whatever the stroke
-/// weight; hard-coded fractions left it floating inside the ring.
+/// cards/nutrition.js tickRings(). Drawn ACROSS the ring band, derived from the stroke width so it
+/// stays on the ring at any weight.
+///
+/// The geometry that matters: SwiftUI's Circle().stroke() does NOT inset the way strokeBorder does —
+/// it straddles the circle inscribed in the frame. So the band runs from (1-lwFrac) to (1+lwFrac) of
+/// the half-size and its CENTRE is at 1.0, not at 1-lwFrac. Centring the tick on 1-lwFrac put it on
+/// the band's inner edge, which is why it kept reading as too far inward.
 private struct PaceMark: Shape {
     let frac: Double
     let lwFrac: Double            // stroke width as a fraction of the view's size
@@ -40,8 +43,8 @@ private struct PaceMark: Shape {
         let c = CGPoint(x: rect.midX, y: rect.midY)
         let half = min(rect.width, rect.height) / 2
         let phi = 2 * Double.pi * frac
-        let mid = 1 - lwFrac                       // centre of the band
-        let reach = (lwFrac / 2) * 1.25            // a touch proud of the band on both sides
+        let mid = 1.0                              // centre of the band (see note above)
+        let reach = lwFrac * 1.15                  // half-band is lwFrac; a touch proud on each side
         let pt = { (f: Double) in
             CGPoint(x: c.x - half * f * sin(phi), y: c.y - half * f * cos(phi))
         }

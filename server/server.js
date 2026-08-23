@@ -1436,6 +1436,47 @@ app.post('/api/todos/add', express.json(), async (req, res) => {
   } catch (e) { res.status(500).json({ error: String(e.message || e) }); }
 });
 
+// ---- desk control: repo picker -> a fresh Claude session on the Mac ----
+// This server can't touch the Mac (it's on Fly), so it only reads what the Mac's orchestrator
+// publishes and enqueues work for it: `repos` is scanned + written there, `desk_commands` is
+// drained there. See voice-pipeline/orchestrator.
+const DESK_STALE_S = 90;   // 3 missed 30s beats
+
+app.get('/api/repos', async (req, res) => {
+  try {
+    const [repos, presence] = await Promise.all([
+      sb('repos?select=path,name,branch,dirty,last_commit&order=last_commit.desc.nullslast'),
+      sb('worker_presence?worker=eq.desk&select=last_seen'),
+    ]);
+    const seen = (presence && presence[0] && presence[0].last_seen) || null;
+    const online = !!seen && (Date.now() - new Date(seen).getTime()) / 1000 <= DESK_STALE_S;
+    res.json({ repos: repos || [], desk: { online, seen } });
+  } catch (e) { res.status(500).json({ error: String(e.message || e) }); }
+});
+
+app.post('/api/repos/open', express.json(), async (req, res) => {
+  try {
+    const target = String((req.body || {}).path || '');
+    // Launch only a path the Mac itself published: the client's string picks a ROW, it never
+    // becomes the command's payload. (The orchestrator independently re-checks the same thing.)
+    const rows = await sb(`repos?path=eq.${encodeURIComponent(target)}&select=path,name`);
+    if (!rows.length) return res.status(400).json({ error: 'unknown repo' });
+    const id = crypto.randomUUID();
+    await sbWrite('desk_commands', 'POST',
+      { id, kind: 'open_session', payload: { path: rows[0].path, name: rows[0].name } });
+    res.json({ id });
+  } catch (e) { res.status(500).json({ error: String(e.message || e) }); }
+});
+
+// Poll target for the launch button: pending -> running -> done | error | expired.
+app.get('/api/repos/cmd/:id', async (req, res) => {
+  try {
+    const rows = await sb(`desk_commands?id=eq.${encodeURIComponent(req.params.id)}&select=status,detail`);
+    if (!rows.length) return res.status(404).json({ error: 'not found' });
+    res.json(rows[0]);
+  } catch (e) { res.status(500).json({ error: String(e.message || e) }); }
+});
+
 // Voice SSE: streams `event: voice` frames ({kind:'message'|'focus', row}) to the /tv panel.
 // Dedicated stream (not /api/stream) so the kiosk gets voice rows without the heavy status frame.
 app.get('/api/voice-stream', (req, res) => {

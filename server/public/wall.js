@@ -98,7 +98,7 @@ if (MAC) {
     adopt('litter', 'misc-litter-slot');
     adopt('surf', 'misc-surf-slot');
 
-    // Three-pane swipe: land on the wall (center). No page-dots — they'd sit over the display.
+    // Multi-pane swipe: land on the wall (index 1). No page-dots — they'd sit over the display.
     const panes = document.getElementById('wallpanes');
     if (panes) requestAnimationFrame(() => { panes.scrollLeft = panes.clientWidth; });
   }

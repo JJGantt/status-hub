@@ -33,10 +33,16 @@ documents **everything**, not just the hub. Keep it current as pieces change.
 | `govee-mcp` | JJGantt/mcp-govee | Govee light control MCP (LAN + cloud) | runs inside workers |
 | `litter-robot` | JJGantt/litter-robot | Litter-Robot 4 auto-resume watcher | Fly `litter-robot-watcher` |
 
-**Fly apps (the only three):**
-- `jared-status-hub` — the hub server (web + TV + APIs + SSE + push scheduler).
+**Fly apps (four; verified 2026-08-23):**
+- `jared-status-hub` — the hub server (web + TV + APIs + SSE + push scheduler). ← `status-hub`
 - `jared-voice` — combined: ESP wake-word + Groq transcription **and** the fallback voice worker.
-- `litter-robot-watcher` — always-on Litter-Robot watcher (Telegram alerts).
+  ← `voice-pipeline/server`
+- `litter-robot-watcher` — always-on Litter-Robot watcher (Telegram alerts). ← `litter-robot`
+- `nutrition-track` — **suspended** since 2026-07-19. ← `~/repos/nutrition-track`
+
+Every Fly-deployed app is built from a repo in `~/repos` on the Mac, so all four are reachable from
+the hub's picker. **Supabase has no edge functions** (verified empty) — nothing runs there; the only
+Supabase-side artifact is the schema, and that's versioned in `data-layer/supabase/migrations/`.
 
 ---
 

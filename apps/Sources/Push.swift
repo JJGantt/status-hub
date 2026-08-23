@@ -2,6 +2,7 @@
 import UIKit
 import WebKit
 import UserNotifications
+import WidgetKit
 
 // APNs push for the native iOS shell. The device token is registered with the hub by a same-origin
 // fetch() INSIDE the authenticated WKWebView, so it rides the hub auth cookie the app already holds —
@@ -143,6 +144,10 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
     // Badge is authoritative from the hub, so re-read it whenever the app comes forward.
     func applicationDidBecomeActive(_ application: UIApplication) {
         HubAPI.refreshBadge()
+        // A placed widget holds a CACHED timeline: reinstalling the app does not refresh it, so new
+        // widget code — or a changed payload shape — keeps rendering against the old cached entries
+        // until the policy date rolls round. Opening the app forces it to regenerate.
+        WidgetCenter.shared.reloadAllTimelines()
     }
 }
 #endif

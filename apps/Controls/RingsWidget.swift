@@ -108,7 +108,7 @@ private struct RingView: View {
         VStack(spacing: 2) {
             GeometryReader { geo in
                 let size = min(geo.size.width, geo.size.height)
-                let lw = size * (compact ? 0.115 : 0.16)      // card is stroke 7 on a d=68 circle
+                let lw = size * (compact ? 0.10 : 0.115)   // thin enough that neighbouring rings don't crowd
                 let base = min(max(macro?.ring_base ?? 0, 0), 1)
                 let over = min(max(macro?.ring_over ?? 0, 0), 1)
                 ZStack {
@@ -176,7 +176,7 @@ struct RingsWidgetView: View {
             default:
                 // One row of four on both Home Screen sizes — a 2x2 wastes the width and forces
                 // vertical padding that squeezes the rings.
-                HStack(spacing: family == .systemSmall ? 4 : 12) {
+                HStack(spacing: family == .systemSmall ? 6 : 16) {
                     ForEach(keys, id: \.0) { row($0, compact: family == .systemSmall) }
                 }
             }

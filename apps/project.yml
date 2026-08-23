@@ -38,6 +38,11 @@ targets:
       path: StatusHub.entitlements
       properties:
         aps-environment: production   # production APNs for distribution (Ad Hoc / TestFlight / App Store) builds
+        # Shared with the widget extension so it can read the hub password and authenticate its own
+        # fetches. Same value as the app's implicit App-ID group, so the already-stored password keeps
+        # resolving. Unlike Time Sensitive, this needs no portal capability.
+        keychain-access-groups:
+          - $(AppIdentifierPrefix)com.jaredgantt.statushub
         # TODO: add `com.apple.developer.usernotifications.time-sensitive: true` here once the
         # Time Sensitive Notifications capability is enabled on the App ID. It is the only way a
         # normal push breaks through a Focus. It canNOT be enabled via the App Store Connect API

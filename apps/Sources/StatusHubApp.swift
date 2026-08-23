@@ -3,6 +3,7 @@ import WebKit
 #if os(iOS)
 import UIKit
 import UserNotifications      // setBadgeCount, driven by the page via the "badge" message handler
+import WidgetKit              // reloadAllTimelines — a placed widget caches its timeline
 #elseif os(macOS)
 import AppKit
 #endif

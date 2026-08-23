@@ -41,8 +41,21 @@ documents **everything**, not just the hub. Keep it current as pieces change.
 - `nutrition-track` — **suspended** since 2026-07-19. ← `~/repos/nutrition-track`
 
 Every Fly-deployed app is built from a repo in `~/repos` on the Mac, so all four are reachable from
-the hub's picker. **Supabase has no edge functions** (verified empty) — nothing runs there; the only
-Supabase-side artifact is the schema, and that's versioned in `data-layer/supabase/migrations/`.
+the hub's picker.
+
+**There are TWO Supabase projects, not one** — a distinction the CLI hides, because it only ever
+talks to the linked one:
+
+| Project | Ref | Used by | Edge functions |
+|---|---|---|---|
+| `life-data` | `felyggqjjhltwokdfhop` | everything in this doc | none |
+| `GolfTracker` | `oumnicnvayqrbfbljgyl` | `GolfTracker*` repos | `golfcourse-search`, `resolve-hole-heights` |
+
+Both edge functions' sources live in `GolfTracker-SwingDetection/supabase/functions/` and are
+committed + pushed; the deployed copies match (they only differ by Supabase's deploy-time TypeScript
+stripping). Nothing runs in Supabase that isn't in a repo. Checking one project and reporting it as
+"Supabase" is the easy mistake here — `supabase functions list` silently scopes to whichever project
+the working directory is linked to.
 
 ---
 

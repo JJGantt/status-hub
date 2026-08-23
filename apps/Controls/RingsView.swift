@@ -70,7 +70,7 @@ private struct RingView: View {
         VStack(spacing: compact ? 0 : 5) {
             GeometryReader { geo in
                 let size = min(geo.size.width, geo.size.height)
-                let lwFrac = compact ? 0.10 : 0.115        // thin enough that neighbouring rings don't crowd
+                let lwFrac = compact ? 0.085 : 0.09        // thin enough that neighbouring rings don't crowd
                 let lw = size * lwFrac
                 let base = min(max(macro?.ring_base ?? 0, 0), 1)
                 let over = min(max(macro?.ring_over ?? 0, 0), 1)
@@ -88,7 +88,9 @@ private struct RingView: View {
                             .rotationEffect(.degrees(-90))
                     }
                     PaceMark(frac: frac, lwFrac: lwFrac)
-                        .stroke(Color.white, style: StrokeStyle(lineWidth: max(1.5, size * 0.05), lineCap: .round))
+                        // Tied to the ring's own weight (the card uses a 2px tick on a 7px ring), so
+                        // thinning the rings doesn't leave a chunky tick behind.
+                        .stroke(Color.white, style: StrokeStyle(lineWidth: max(1.5, size * lwFrac * 0.5), lineCap: .round))
                     VStack(spacing: 0) {
                         Text(label)
                             .font(.system(size: size * 0.24, weight: .semibold, design: .rounded))

@@ -65,7 +65,8 @@ export function render(s) {
       sw += `<line x1="${X(a0).toFixed(1)}" y1="${YW(yA).toFixed(1)}" x2="${X(B).toFixed(1)}" y2="${YW(v.weight_at_end).toFixed(1)}" stroke="#a78bfa" stroke-width="2.2"/>`;
     }
     for (const w of weighins) {
-      const op = Math.max(0.3, 0.35 + 0.65 * (w.rw || 0)), r = 3.2 + 2.6 * (w.rw || 0);
+      // In the window or out of it — the estimator no longer has a recency gradient to shade by.
+      const op = w.inwin ? 0.95 : 0.35, r = w.inwin ? 5.4 : 3.2;
       sw += `<circle cx="${X(w.date).toFixed(1)}" cy="${YW(w.weight).toFixed(1)}" r="${r.toFixed(1)}" fill="#a78bfa" fill-opacity="${op.toFixed(2)}"/>`;
     }
   }
@@ -85,8 +86,8 @@ export function render(s) {
       si += `<rect x="${(X(d.date) - bw / 2).toFixed(1)}" y="${YI(d.calories).toFixed(1)}" width="${bw.toFixed(1)}" height="${(iy1 - YI(d.calories)).toFixed(1)}" fill="url(#mvhatch)" fill-opacity="0.55"/>`;
     } else {
       // Every logged day is real data (no outlier rejection) → always blue. In-window days are
-      // recency-shaded; days before the window start are dim flat blue.
-      const op = d.kept == null ? 0.4 : (0.3 + 0.7 * (d.rw || 0));
+      // solid (they all count equally now); days before the window start are dim.
+      const op = d.kept == null ? 0.4 : 0.9;
       si += `<rect x="${(X(d.date) - bw / 2).toFixed(1)}" y="${YI(d.calories).toFixed(1)}" width="${bw.toFixed(1)}" height="${(iy1 - YI(d.calories)).toFixed(1)}" fill="#3b82f6" fill-opacity="${op.toFixed(2)}"/>`;
     }
   }

@@ -12,16 +12,40 @@
 // so workout calories are deliberately NOT added — that would double-count. Activity is
 // captured by the scale, not estimated.
 //
-// Both the intake average and the weight slope are exponentially weighted by recency
-// (HALF_LIFE_DAYS), so all available history contributes but recent data dominates — no
-// hard cutoff window. Until there is enough *fresh* data to resolve the slow lean-bulk
-// slope, we fall back to a cold-start anchor instead of reporting a confident-but-fake
-// number. The switch is gated on data sufficiency, not a clock.
+// ONE WINDOW, BOTH TERMS. The equation above is an identity over a PERIOD:
+//
+//   (mean intake - maintenance) * N  =  weight change over those same N days * kcal-per-lb
+//
+// so solving it for maintenance is only valid if both sides describe the same days. This used to
+// exponentially weight each side by recency (21-day half-life) instead of windowing them, which
+// looked symmetric but wasn't: a weighted MEAN is driven by where the weight sits (its centre of
+// mass landed ~12 days back), while a weighted regression SLOPE is driven by where the LEVERAGE
+// sits — distance from centre, squared, so out at the edges (~17.5 days back, measuring across a
+// 29-day span). Same half-life in both places, two different periods, and the algebra silently
+// stopped holding. Worst at a bulk<->cut flip, where the two periods stop overlapping at all.
+//
+// So: a fixed WINDOW_DAYS window, no weighting inside it. The window IS the recency control, and
+// once you have one, weighting is not merely unnecessary but wrong — any weighting of the intake
+// mean would have to be mirrored on the weight side, and a change between two endpoints has no
+// middle to weight. Every day in the window counts equally because that is what happened: a
+// calorie eaten 18 days ago moved the measured weight change exactly as much as one eaten
+// yesterday.
+//
+// Window length is not a free choice either. Endpoint noise (~1.1 lb SD per weigh-in) does NOT
+// shrink with a longer window — it is always two endpoints — while the signal grows linearly, so
+// short windows are all noise: at 7 days the smallest rate distinguishable from zero is ~1.6
+// lb/wk, which cannot tell "holding" from "gaining a pound a week". Push the other way and real
+// TDEE drift (BMR rises ~10 kcal/day per pound gained) turns a long window into an average of a
+// moving target. Those two cross around 3-4 weeks.
+//
+// Until there is enough data to fill a window, we fall back to a cold-start anchor instead of
+// reporting a confident-but-fake number. The switch is gated on data sufficiency, not a clock.
 
 const KCAL_PER_LB_LOSS = 3500;   // energy in ~1 lb lost (mostly body fat); only scales the small slope term
 const KCAL_PER_LB_GAIN = 2500;   // effective energy in ~1 lb gained on a lean bulk (muscle/glycogen/water/fat blend)
 const SURPLUS = 150;             // lean-bulk surplus over maintenance (~0.25 lb/week)
-const HALF_LIFE_DAYS = 21;       // older data is down-weighted on this half-life
+const WINDOW_DAYS = 21;          // analysis window, both terms (see the note above on why 3-4 weeks)
+const LEVEL_HALF_DAYS = 3;       // an endpoint "level" averages every weigh-in within +/- this many days
 const ANCHOR_MAINTENANCE = 2500; // cold start: Mar–Apr empirical (~2470) ≈ age-40 Mifflin×1.4 (~2480)
 
 // Macro rules — protein & fat are anchored to BODYWEIGHT (they scale as you grow), carbs
@@ -52,6 +76,7 @@ const roundG = (x) => Math.round(x); // macro grams to the nearest 1 (nearest-5 
 const MIN_ALIGNED_DAYS = 14;     // default min length of the aligned window for a live estimate (a hub setting)
 const STREAK_MAX_GAP = 3;        // a gap longer than this (days) between logged days breaks the tracking streak
 const MIN_WEIGHIN_DAYS = 4;      // distinct weigh-in DAYS needed within the aligned window (same-day reads collapse to 1)
+const MIN_LEVEL_READS = 2;       // weigh-ins each ENDPOINT level must average; one reading is a coin flip, not a level
 const MIN_INTAKE_DAYS = 10;      // distinct intake-logged days needed within the window
 
 function dayIndex(dateStr, todayStr) {
@@ -59,30 +84,37 @@ function dayIndex(dateStr, todayStr) {
   const b = Date.parse(todayStr + 'T12:00:00Z');
   return Math.round((a - b) / 86400000); // <= 0 for past dates, 0 = today
 }
-const recencyWeight = (idx) => Math.pow(2, idx / HALF_LIFE_DAYS); // idx<=0 -> (0,1]
 
-// Recency-weighted least-squares slope of weight vs day-index. Returns lb/day + est. current weight.
-function weightedTrend(points, todayStr) {
-  if (points.length < 2) return null;
-  let sw = 0, swx = 0, swy = 0, swxx = 0, swxy = 0;
-  for (const p of points) {
-    const x = dayIndex(p.date, todayStr), w = recencyWeight(x);
-    sw += w; swx += w * x; swy += w * p.weight; swxx += w * x * x; swxy += w * x * p.weight;
+// 'YYYY-MM-DD' shifted by n days, staying in the same date-only space as dayIndex.
+function addDaysStr(dateStr, n) {
+  const t = Date.parse(dateStr + 'T12:00:00Z') + n * 86400000;
+  return new Date(t).toISOString().slice(0, 10);
+}
+// The weight LEVEL on a given day: the mean of every weigh-in within +/- LEVEL_HALF_DAYS of it.
+// A single reading carries ~1.1 lb of water/gut noise, which would swamp the few pounds a real
+// window is trying to measure, so neither endpoint is ever one number off the scale. Averaging
+// around a date is not recency weighting — it is how you turn a coin flip into a measurement.
+//
+// Peeking a few days either side of the window's start is deliberate and safe: this estimates the
+// level AT that boundary, and weight is continuous across a phase flip even though the slope isn't.
+// Widens if a sparse stretch of weigh-ins leaves the boundary short of MIN_LEVEL_READS: a slightly
+// blurrier endpoint still beats dropping the whole estimate back to the cold-start anchor, which is
+// what a hard +/-3 would do after any week you didn't step on the scale much. `half` is reported so
+// callers can see how blurred it had to get.
+function levelAt(weighDays, dateStr) {
+  for (const half of [LEVEL_HALF_DAYS, 5, 7]) {
+    const near = weighDays.filter((w) => Math.abs(dayIndex(w.date, dateStr)) <= half);
+    if (near.length >= MIN_LEVEL_READS) {
+      return { weight: near.reduce((s, w) => s + w.weight, 0) / near.length, n: near.length, half };
+    }
   }
-  const denom = sw * swxx - swx * swx;
-  if (Math.abs(denom) < 1e-9) return null; // all weigh-ins on one day
-  const slope = (sw * swxy - swx * swy) / denom;
-  const current = (swy - slope * swx) / sw; // intercept at x=0 (today)
-  return { slope, current };
+  return null;
 }
 
-function weightedAvg(days, todayStr) {
-  let sw = 0, swy = 0;
-  for (const d of days) {
-    const w = recencyWeight(dayIndex(d.date, todayStr));
-    sw += w; swy += w * d.calories;
-  }
-  return sw > 0 ? swy / sw : null;
+// Plain arithmetic mean — every logged day in the window counts the same. See the header.
+function plainAvg(days) {
+  if (!days.length) return null;
+  return days.reduce((s, d) => s + d.calories, 0) / days.length;
 }
 
 // weights: [{date:'YYYY-MM-DD', weight:Number}]  (full history, any order)
@@ -136,9 +168,18 @@ function estimateMaintenance({ weights = [], intakeByDay = [], today, surplus = 
   // stay frozen, not backfilled.
   const phaseActive = phase && phase.start && Date.parse(phase.start) <= Date.parse(today);
   if (phaseActive && t0 != null && phase.start > t0) t0 = phase.start;
-  const winWAll = t0 != null ? weighDays.filter((w) => dayIndex(w.date, B) <= 0 && dayIndex(w.date, t0) >= 0) : [];
-  const A = winWAll.length ? winWAll.map((w) => w.date).sort()[0] : null;
-  const winW = A != null ? winWAll.filter((w) => dayIndex(w.date, A) >= 0) : [];
+  // Cap the window at WINDOW_DAYS. The streak may reach back months; beyond ~4 weeks the estimate
+  // is averaging a TDEE that has genuinely moved (see the header), so take the most recent slice.
+  if (t0 != null) {
+    const capStart = addDaysStr(B, -WINDOW_DAYS);
+    if (capStart > t0) t0 = capStart;
+  }
+  // A is the window's START DATE, not the first weigh-in inside it: levelAt() estimates the weight
+  // on whatever date you hand it, so the boundary no longer has to land on a weigh-in day. That
+  // also makes the window exactly WINDOW_DAYS long whenever the data allows, which is what keeps
+  // it congruent with the intake mean taken over the same span.
+  const A = t0;
+  const winW = A != null ? weighDays.filter((w) => dayIndex(w.date, B) <= 0 && dayIndex(w.date, A) >= 0) : [];
   // Every logged day in the aligned window counts — no outlier rejection (see the note at the top).
   const winI = A != null ? intakeByDay.filter((d) => dayIndex(d.date, A) >= 0 && dayIndex(d.date, B) < 0) : [];
 
@@ -152,11 +193,17 @@ function estimateMaintenance({ weights = [], intakeByDay = [], today, surplus = 
 
   let maintenance = null, slope = null, currentWeight = null, source = 'calibrating', avgIntake = null;
   if (enoughWindow && enoughW && enoughI) {
-    const tr = weightedTrend(winW, B);   // recency anchored at B → frozen between weigh-ins
-    const avg = weightedAvg(winI, B);
-    if (tr && avg != null) {
+    // Both terms over [A..B] and nothing else. The rate is level-to-level across the window, so it
+    // answers "how much weight did these exact days add", which is the only question the intake
+    // mean over those same days can be divided by.
+    const lvlA = levelAt(weighDays, A);
+    const lvlB = levelAt(weighDays, B);
+    const avg = plainAvg(winI);
+    const solidEnds = lvlA && lvlB && lvlA.n >= MIN_LEVEL_READS && lvlB.n >= MIN_LEVEL_READS;
+    if (solidEnds && avg != null) {
       avgIntake = avg;
-      slope = tr.slope; currentWeight = tr.current;   // trend intercept = weight at B
+      currentWeight = lvlB.weight;                      // the level at B, not one morning's reading
+      slope = (lvlB.weight - lvlA.weight) / windowLen;   // lb/day across the window
       // Energy balance: intake - maintenance = stored-energy change (slope * kcal-per-lb).
       // So maintenance = intake - slope*kcalPerLb. Gaining (slope>0) => maintenance below intake;
       // losing (slope<0) => the double-negative pushes maintenance above intake.
@@ -202,11 +249,14 @@ function estimateMaintenance({ weights = [], intakeByDay = [], today, surplus = 
     // just the current window) so the client can page back through history; `kept` is the outlier flag
     // within the current window, null outside it. Skipped for the per-day history replay (_viz=false).
     viz: (!_viz || B == null) ? null : {
-      weighins: weighDays.map((w) => ({ date: w.date, weight: w.weight, rw: recencyWeight(dayIndex(w.date, B)) })),
+      // `inwin` replaced a per-point recency weight when the estimator stopped having one. A point
+      // is now simply in the window or out of it, and the chart says so rather than implying a
+      // gradient that no longer exists.
+      weighins: weighDays.map((w) => ({ date: w.date, weight: w.weight,
+                                        inwin: A != null && w.date >= A && w.date <= B })),
       intake: intakeByDay.filter((d) => dayIndex(d.date, today) <= 0)
         .map((d) => ({ date: d.date, calories: d.calories,
-                       kept: winI.includes(d) ? true : null,   // in the current aligned window?
-                       rw: recencyWeight(Math.min(0, dayIndex(d.date, B))) })),
+                       kept: winI.includes(d) ? true : null })),   // in the current aligned window?
       slope_lb_day: slope,
       weight_at_end: currentWeight != null ? Math.round(currentWeight * 10) / 10 : null,
     },
@@ -245,4 +295,4 @@ function estimateHistory({ weights = [], intakeByDay = [], today, surplus = SURP
   return out;
 }
 
-module.exports = { estimateMaintenance, estimateHistory, macroTargets, ANCHOR_MAINTENANCE, SURPLUS, HALF_LIFE_DAYS, KCAL_PER_LB_LOSS, KCAL_PER_LB_GAIN, MIN_ALIGNED_DAYS };
+module.exports = { estimateMaintenance, estimateHistory, macroTargets, ANCHOR_MAINTENANCE, SURPLUS, WINDOW_DAYS, KCAL_PER_LB_LOSS, KCAL_PER_LB_GAIN, MIN_ALIGNED_DAYS };

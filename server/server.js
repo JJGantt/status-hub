@@ -670,8 +670,9 @@ const workoutDayCache = new Map();   // date -> { body, at }
 const WORKOUTDAY_BACKSTOP_MS = 15 * 60 * 1000;
 const dirtyWorkoutDay = () => workoutDayCache.clear();
 // Compact feed for the iOS home/lock-screen widget. buildStatus() is heavy (many Supabase reads),
-// so the widget gets only the four numbers it draws rather than the whole dashboard payload — a
-// widget refreshes on its own schedule and shouldn't be shipping tens of KB to render four rings.
+// so the widget gets only the four numbers it draws rather than the whole dashboard payload.
+// Per-minute frames put it around 37KB, once an hour — the frames dominate, and the alternative
+// (coarser steps) is what made the centre number look stuck.
 app.get('/api/rings', async (req, res) => {
   try {
     const st = await buildStatus();
@@ -688,9 +689,15 @@ app.get('/api/rings', async (req, res) => {
     // two copies would quietly drift apart.
     // Span is a straight trade: longer means the arcs keep moving without spending WidgetKit refresh
     // budget, but the CONSUMED figures stay frozen at fetch time for that whole window. 4 hours made
-    // it look live while showing hours-old numbers. 90 minutes keeps the movement and bounds how
-    // stale the data can get on its own; the app also forces a reload whenever the data changes.
-    const STEP_MIN = 10, SPAN_MIN = 90;
+    // it look live while showing hours-old numbers. An hour keeps the movement and bounds how stale
+    // the data can get on its own; the app also forces a reload whenever the data changes.
+    //
+    // STEP is what the deviation NUMBER moves on, and it was the visible flaw at 10 minutes: the
+    // pace line advances goal/window per minute — about 3 cal/min — so the centre figure sat up to
+    // ~31 cal behind the truth and read as stuck. On the arcs a tenth of a step is invisible; on a
+    // number it isn't. Per-minute frames make it track continuously. WidgetKit pre-renders the whole
+    // timeline and swaps entries at their dates, so 61 frames cost one fetch, not 61.
+    const STEP_MIN = 1, SPAN_MIN = 60;
     const frames = [];
     for (let t = 0; t <= SPAN_MIN; t += STEP_MIN) {
       const f = pace.computePace({ consumed, goal, window: P.window, nowOff: (P.nowOff ?? 0) + t });

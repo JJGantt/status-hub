@@ -162,8 +162,18 @@ function estimateMaintenance({ weights = [], intakeByDay = [], today, surplus = 
       }
     }
   }
-  // Phase boundary: cap the window at the current phase's start so a cut→bulk (or bulk→cut) regime
-  // change isn't averaged into the current trend. Only applies when the phase began on/before `today`,
+  // Phase boundary: cap the window at the current phase's start.
+  //
+  // NOT because a straddled window mixes periods — with endpoint-to-endpoint measurement it doesn't.
+  // The identity only ever uses TOTAL intake and TOTAL weight change over the window, so how they
+  // were distributed inside it is irrelevant: ten days of cutting followed by eleven of bulking
+  // estimates exactly as well as twenty-one flat days. (That WAS a real defect when this fitted a
+  // regression slope, since a straight line through a V-shape describes nothing.)
+  //
+  // The reason is kcal-per-lb. Right after a cut→bulk flip the first pounds back are glycogen and
+  // water — a few hundred kcal/lb, not the 2500 charged here — so the stored-energy term is grossly
+  // overcharged and maintenance comes out far too low. Capping dodges the stretch where the constant
+  // is wrong. Only applies when the phase began on/before `today`,
   // so the per-day history replay (which passes NO phase) is never retroactively changed — past goals
   // stay frozen, not backfilled.
   const phaseActive = phase && phase.start && Date.parse(phase.start) <= Date.parse(today);

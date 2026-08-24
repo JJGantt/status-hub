@@ -73,7 +73,9 @@ export function render(s) {
   // ---- intake panel (y: 200..416) ----
   const iy0 = 200, iy1 = 416;
   const cals = intake.map((d) => d.calories);
-  const svals = rows.flatMap((r) => [r.avg, r.maintenance, r.target]).filter((x) => x != null);
+  // Scale to what's actually drawn: the bars and the two curves. `avg` is still in the payload (the
+  // math line quotes it) but is no longer plotted, so it must not stretch the axis.
+  const svals = rows.flatMap((r) => [r.maintenance, r.target]).filter((x) => x != null);
   const imax = Math.max(...cals, ...svals, 1) * 1.12;
   const YI = (c) => iy1 - (iy1 - iy0) * (c / imax);
   const bw = Math.max(3, Math.min(XBand * 0.68, 26));
@@ -88,8 +90,12 @@ export function render(s) {
       si += `<rect x="${(X(d.date) - bw / 2).toFixed(1)}" y="${YI(d.calories).toFixed(1)}" width="${bw.toFixed(1)}" height="${(iy1 - YI(d.calories)).toFixed(1)}" fill="#3b82f6" fill-opacity="${op.toFixed(2)}"/>`;
     }
   }
-  // historical per-day curves (step: a value holds until the next day's) — avg dashed blue,
-  // maintenance amber, target green. Gaps (calibrating nulls) break the path.
+  // historical per-day curves (step: a value holds until the next day's) — maintenance amber,
+  // target green. Gaps (calibrating nulls) break the path.
+  //
+  // The weighted-average-intake curve used to be drawn here too, dashed blue. It was dropped: blue
+  // was already the intake bars, so the same colour meant two things, and the figure it plotted is
+  // spelled out in the math line underneath. Two lines read better than three.
   const step = (key) => {
     let p = '', pen = false, prevY = null;
     for (const r of rows) {
@@ -103,7 +109,6 @@ export function render(s) {
     return p;
   };
   const curves =
-    `<path d="${step('avg')}" fill="none" stroke="#3b82f6" stroke-width="1.5" stroke-dasharray="5 4"/>` +
     `<path d="${step('maintenance')}" fill="none" stroke="#e6b93d" stroke-width="1.8"/>` +
     `<path d="${step('target')}" fill="none" stroke="#39d353" stroke-width="1.8"/>`;
   // intake y-axis: faint horizontal gridlines at round thousands, labeled in the right gutter. No exact
@@ -152,7 +157,6 @@ export function render(s) {
     '<span><i class="mv-hatchkey"></i>after last weigh-in (unused)</span>' +
     '<span><i style="background:#39d353"></i>target</span>' +
     '<span><i style="background:#e6b93d"></i>maintenance</span>' +
-    '<span><i style="background:#3b82f6;height:3px"></i>weighted avg intake</span>' +
     '</div>' +
     `<div class="mv-math">${esc(`${m.avg_intake ?? '—'} avg − (${v.slope_lb_day != null ? v.slope_lb_day.toFixed(3) : '—'} lb/day × ${v.slope_lb_day > 0 ? 2500 : 3500}) = ${m.maintenance} maintenance → ${m.surplus >= 0 ? '+' : ''}${m.surplus} surplus = ${m.target} target`)}</div>`;
 

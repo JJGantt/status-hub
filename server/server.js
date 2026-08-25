@@ -1340,17 +1340,23 @@ const NOTIFY_STYLE = {
   voice:    { emoji: '🎙️', interruptionLevel: 'passive' },
 };
 
-// The home-screen badge = every OVERDUE item: not cleared, dated, and past its due time — on ANY
-// list. A dated Amazon item counts exactly like a dated todo, because they are the same kind of
-// thing (migration 00056). An undated item never fires and never badges. Snoozing pushes the due
-// date forward, which is a real answer, so it correctly drops off the badge until it comes round.
-// Returns null if the count can't be read — the push then omits the badge rather than clearing it
-// to a wrong number.
+// The home-screen badge = every EXPIRED item: not cleared, dated, and past the moment it was FIRST
+// scheduled for — on ANY list. A dated Amazon item counts exactly like a dated todo, because they
+// are the same kind of thing (migration 00056).
+//
+// Measured against `scheduled_at`, not `due`, and that is the whole point: a repeating item's `due`
+// jumps into the future the instant it fires, so counting `due` would empty the badge at exactly the
+// moment the item became outstanding. Expired means "its moment came and it still hasn't been dealt
+// with", which is true of a one-shot and a repeater alike and stops being true only when the item is
+// cleared. Undated items never badge.
+//
+// Returns null if the count can't be read — the push then omits the badge rather than clearing it to
+// a wrong number.
 async function overdueCount() {
   try {
-    const rows = await sb('list_items?deleted=eq.false&due=not.is.null&select=due');
+    const rows = await sb('list_items?deleted=eq.false&due=not.is.null&select=due,scheduled_at');
     const nowET = etNowString();
-    return rows.filter((r) => dueMoment(r.due) <= nowET).length;
+    return rows.filter((r) => dueMoment(r.scheduled_at || r.due) <= nowET).length;
   } catch (_) { return null; }
 }
 
@@ -1395,12 +1401,19 @@ app.get('/api/todos', async (req, res) => {
   try {
     const [listNames, items, notes] = await Promise.all([
       sb('lists?select=name,emoji&order=name'),
-      sb('list_items?deleted=eq.false&select=id,list_name,text,title,due,repeat_every&order=created.asc'),
+      sb('list_items?deleted=eq.false&select=id,list_name,text,title,due,repeat_every,scheduled_at&order=created.asc'),
       sb('notes?select=name,content&order=name'),
     ]);
     const all = items || [];
     const lists = (listNames || []).map((l) => ({ name: l.name, emoji: l.emoji, items: all.filter((i) => i.list_name === l.name) }));
-    const due = all.filter((i) => i.due).sort((a, b) => dueMoment(a.due) < dueMoment(b.due) ? -1 : 1);
+    // Ordered by the ANCHOR, not by `due`: a repeating item's due jumps into the future the instant it
+    // fires, which would sort it to the bottom exactly when it most needs attention. Longest
+    // outstanding first, then upcoming. `expired` is likewise anchor-based and says nothing about
+    // whether the item repeats.
+    const nowET = etNowString();
+    const due = all.filter((i) => i.due)
+      .map((i) => ({ ...i, expired: dueMoment(i.scheduled_at || i.due) <= nowET }))
+      .sort((a, b) => dueMoment(a.scheduled_at || a.due) < dueMoment(b.scheduled_at || b.due) ? -1 : 1);
     res.json({ lists, due, notes: notes || [] });
   } catch (e) { res.status(500).json({ error: String(e.message || e) }); }
 });
@@ -1485,17 +1498,14 @@ app.post('/api/todos/add', express.json(), async (req, res) => {
     const list = String(b.list || '').trim() || 'todo';
     const due = String(b.due || '').trim() || null;
     const title = String(b.title || '').trim() || null;
-    // Dating an item makes it repeat daily unless told otherwise: a due date means "don't let me
-    // forget this", and a one-shot you happen to miss is gone for good. Repeating keeps asking until
-    // it's cleared, which is one tap. '1 day' not '24 hours' — calendar arithmetic, so a 9am item
-    // stays 9am across DST. Mirrors DEFAULT_REPEAT in data-layer's lists.ts; keep the two in step.
-    // A recurrence with no due has nothing to recur from, so it only applies alongside one.
-    const repeat_every = due
-      ? (b.repeat_every === undefined ? '1 day' : (String(b.repeat_every).trim() || null))
-      : null;
+    // Repeating is opt-in. Dating something does NOT make it recur: the expired state (a passed
+    // scheduled_at, kept until the item is cleared) is the persistent "still needs dealing with"
+    // signal, and a daily re-fire on top of it is noise on every appointment that has simply been
+    // and gone. A recurrence with no due has nothing to recur from, so it only applies alongside one.
+    const repeat_every = due ? (String(b.repeat_every || '').trim() || null) : null;
     const exists = await sb(`lists?name=eq.${encodeURIComponent(list)}&select=name&limit=1`);
     if (!exists.length) await sbWrite('lists', 'POST', { name: list });
-    await sbWrite('list_items', 'POST', { id: crypto.randomUUID(), list_name: list, text, title, due, repeat_every, deleted: false, created: now, updated: now });
+    await sbWrite('list_items', 'POST', { id: crypto.randomUUID(), list_name: list, text, title, due, scheduled_at: due, repeat_every, deleted: false, created: now, updated: now });
     res.json({ ok: true, badge: await overdueCount() });
   } catch (e) { res.status(500).json({ error: String(e.message || e) }); }
 });
@@ -1600,15 +1610,16 @@ function parseRepeat(spec) {
   return n >= 1 ? { n, unit: m[2] } : null;
 }
 
-// The next occurrence strictly after `notBefore`.
+// The next occurrence strictly after `notBefore`, counted from the item's ANCHOR rather than from its
+// current due — see the month-clamp note below for why that distinction matters.
 //
 // Arithmetic is on the WALL-CLOCK components, not on an instant: `due` is local-naive text, so "every
 // day at 9am" must stay 9am across a DST boundary rather than sliding to 8 or 10. Working in UTC
 // getters/setters on a value that is really local is the trick that makes that true — no zone is ever
 // applied, so nothing can shift.
-function advanceDue(due, spec, notBefore) {
+function advanceDue(anchor, spec, notBefore) {
   const per = parseRepeat(spec);
-  const m = String(due || '').match(/^(\d{4})-(\d{2})-(\d{2})(?:T(\d{2}):(\d{2}))?/);
+  const m = String(anchor || '').match(/^(\d{4})-(\d{2})-(\d{2})(?:T(\d{2}):(\d{2}))?/);
   if (!per || !m) return null;
   const hasTime = m[4] != null;
   const pad = (n) => String(n).padStart(2, '0');
@@ -1625,10 +1636,10 @@ function advanceDue(due, spec, notBefore) {
       d.setUTCMonth(d.getUTCMonth() + months);
       const lastDom = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 0)).getUTCDate();
       d.setUTCDate(Math.min(domWanted, lastDom));        // clamp to the real end of a short month
-      // KNOWN WART: the clamp is remembered, because the next advance reads the day-of-month off the
-      // date this one produced. So a monthly item anchored on the 31st becomes the 28th after passing
-      // through a February and stays there. Fixing it properly needs an anchor date stored alongside
-      // the due; not worth a column until a monthly reminder actually exists.
+      // The clamp does NOT accumulate, because every advance starts from `scheduled_at` — the date
+      // the item was FIRST due — rather than from whatever the previous advance produced. A monthly
+      // item anchored on the 31st therefore hits Feb 28 and then March 31, instead of degrading to
+      // the 28th permanently. (This was a known wart until 00060 added the anchor.)
     } else {
       d = new Date(d.getTime() + per.n * REPEAT_MS[per.unit]);
     }
@@ -1696,7 +1707,7 @@ async function dueTick() {
   const nowET = etNowString();
   let rows;
   // Every list, not just todo — "reminder" is a predicate (has a due), not a place.
-  try { rows = await sb('list_items?deleted=eq.false&due=not.is.null&select=id,list_name,text,title,due,repeat_every'); } catch (_) { return; }
+  try { rows = await sb('list_items?deleted=eq.false&due=not.is.null&select=id,list_name,text,title,due,repeat_every,scheduled_at'); } catch (_) { return; }
   if (!rows.length) return;
   // One lookup for the whole tick rather than one per item — a handful of lists, read at most once a
   // minute, and only when something is actually dated.
@@ -1717,7 +1728,7 @@ async function dueTick() {
     // Re-arm a repeating item for its next occurrence. Done AFTER delivery so a failed send leaves the
     // row due and it retries next tick, rather than silently rolling forward and skipping one.
     if (r.repeat_every) {
-      const next = advanceDue(r.due, r.repeat_every, nowET);
+      const next = advanceDue(r.scheduled_at || r.due, r.repeat_every, nowET);
       if (next) {
         await sbWrite(`list_items?id=eq.${encodeURIComponent(r.id)}`, 'PATCH', { due: next, updated: new Date().toISOString() });
         console.log(`[due] ${r.id} repeats every ${r.repeat_every} → next ${next}`);

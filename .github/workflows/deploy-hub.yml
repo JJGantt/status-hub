@@ -1,0 +1,44 @@
+# Deploy the hub to Fly when server code lands on main.
+#
+# This exists so shipping does not depend on any machine of Jared's being awake. The Pi (or the Mac)
+# writes code and pushes; GitHub deploys. Linux runners bill at 1x, so this is effectively free —
+# unlike the iOS job, which needs a macOS runner at 10x.
+name: Deploy hub
+
+on:
+  push:
+    branches: [main]
+    # Only when something that actually ships changed. Docs and the iOS app share this repo, and
+    # redeploying the server because a Swift file moved is wasted minutes and a pointless restart.
+    paths:
+      - 'server/**'
+      - '.github/workflows/deploy-hub.yml'
+  workflow_dispatch: {}      # and by hand, for a redeploy with no code change
+
+concurrency:
+  # A second push while a deploy is in flight should supersede it, not race it onto the same app.
+  group: deploy-hub
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: superfly/flyctl-actions/setup-flyctl@master
+      # fly.toml lives in server/, which is also the build context — deploying from the repo root
+      # would find no config and ship the wrong tree.
+      - run: flyctl deploy --remote-only
+        working-directory: server
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+      - name: Verify it came back up
+        # A green deploy step only means Fly accepted the release. Ask the app itself.
+        run: |
+          for i in $(seq 1 10); do
+            code=$(curl -s -o /dev/null -w '%{http_code}' https://jared-status-hub.fly.dev/healthz || true)
+            echo "attempt $i: healthz=$code"
+            [ "$code" = "200" ] && exit 0
+            sleep 6
+          done
+          echo "hub did not return 200 after deploy"; exit 1

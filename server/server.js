@@ -1394,12 +1394,12 @@ app.post('/api/notify', express.json(), async (req, res) => {
 app.get('/api/todos', async (req, res) => {
   try {
     const [listNames, items, notes] = await Promise.all([
-      sb('lists?select=name&order=name'),
+      sb('lists?select=name,emoji&order=name'),
       sb('list_items?deleted=eq.false&select=id,list_name,text,title,due,repeat_every&order=created.asc'),
       sb('notes?select=name,content&order=name'),
     ]);
     const all = items || [];
-    const lists = (listNames || []).map((l) => ({ name: l.name, items: all.filter((i) => i.list_name === l.name) }));
+    const lists = (listNames || []).map((l) => ({ name: l.name, emoji: l.emoji, items: all.filter((i) => i.list_name === l.name) }));
     const due = all.filter((i) => i.due).sort((a, b) => dueMoment(a.due) < dueMoment(b.due) ? -1 : 1);
     res.json({ lists, due, notes: notes || [] });
   } catch (e) { res.status(500).json({ error: String(e.message || e) }); }
@@ -1644,14 +1644,46 @@ function advanceDue(due, spec, notBefore) {
 //
 // Handlers receive the whole item and the dedupe key. They must be idempotent-safe to skip: the
 // ledger check happens before dispatch, not inside them.
+// A dated item now comes from a named list, so the notification leads with WHICH:
+//
+//     ⏰ Amazon — Order water filter
+//     Order the replacement before the current one runs out
+//
+// One headline, list first, em dash, then what the thing is. The old fixed "Reminder" title carried
+// no information at all — it was only ever there because reminders had no list to come from.
+const listLabel = (name) => {
+  const n = String(name || '').trim();
+  return n ? n.charAt(0).toUpperCase() + n.slice(1) : 'Reminder';
+};
+const notifyHeadline = (item) => `${listLabel(item.list_name)} \u2014 ${itemTitle(item)}`;
+
+// The body carries the DETAIL, and only when there is any: itemTitle() is already the short label
+// (the explicit `title`, or the text up to its first em dash), so repeating the whole text under a
+// headline that says the same thing is just noise. Empty is fine — apns.js only treats a push as
+// silent when title AND body are both absent.
+const NOTIFY_BODY_MAX = 180;
+const itemBody = (item) => {
+  const full = String(item.text || '').trim();
+  const label = itemTitle(item);
+  if (!full || full === label) return '';
+  // When the label was DERIVED from this text (cut at the first em dash), the body is what the cut
+  // removed — not the whole string again with the headline repeated at the front of it.
+  const rest = full.startsWith(label) ? full.slice(label.length).replace(/^\s*[\u2014-]\s*/, '').trim() : full;
+  if (!rest) return '';
+  return rest.length > NOTIFY_BODY_MAX ? rest.slice(0, NOTIFY_BODY_MAX - 1).trimEnd() + '\u2026' : rest;
+};
+
 const DUE_HANDLERS = {
   // category + the row id give the notification its Done / 1 hour / Tomorrow buttons and tell the
   // app which item an action refers to. `reminder_id` keeps its name: the app's notification
   // actions and the APNs category are built around it, and renaming it would break every
   // notification already sitting in Notification Centre on the phone.
   push: (item, dedupeKey) =>
-    pushAll('reminder', 'Reminder', item.title || item.text, dedupeKey,
-            { category: 'REMINDER', payload: { reminder_id: item.id } }),
+    // `emoji` overrides NOTIFY_STYLE.reminder's clock — pushAll merges `extra` over the style, so a
+    // list's own mark wins and a list without one falls back to ⏰ automatically.
+    pushAll('reminder', notifyHeadline(item), itemBody(item), dedupeKey,
+            { category: 'REMINDER', payload: { reminder_id: item.id },
+              ...(item.emoji ? { emoji: item.emoji } : {}) }),
 };
 
 async function dueTick() {
@@ -1659,6 +1691,11 @@ async function dueTick() {
   let rows;
   // Every list, not just todo — "reminder" is a predicate (has a due), not a place.
   try { rows = await sb('list_items?deleted=eq.false&due=not.is.null&select=id,list_name,text,title,due,repeat_every'); } catch (_) { return; }
+  if (!rows.length) return;
+  // One lookup for the whole tick rather than one per item — a handful of lists, read at most once a
+  // minute, and only when something is actually dated.
+  let emojiOf = {};
+  try { for (const l of await sb('lists?select=name,emoji')) emojiOf[l.name] = l.emoji; } catch (_) {}
   for (const r of rows) {
     if (dueMoment(r.due) > nowET) continue;                           // not due yet
     // Scoped to the OCCURRENCE, not just the row: a repeating item fires under the same id again and
@@ -1669,7 +1706,7 @@ async function dueTick() {
     try { if ((await sb(`notifications?dedupe_key=eq.${encodeURIComponent(dk)}&select=id&limit=1`)).length) continue; } catch (_) { continue; }
     const handler = DUE_HANDLERS.push;
     if (handler === DUE_HANDLERS.push && !apns.configured()) continue;   // nothing to deliver through
-    await handler(r, dk);
+    await handler({ ...r, emoji: emojiOf[r.list_name] }, dk);
     console.log(`[due] fired ${r.id} [${r.list_name}] "${String(r.title || r.text).slice(0, 40)}"`);
     // Re-arm a repeating item for its next occurrence. Done AFTER delivery so a failed send leaves the
     // row due and it retries next tick, rather than silently rolling forward and skipping one.

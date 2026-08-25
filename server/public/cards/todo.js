@@ -54,7 +54,8 @@ function html(d) {
     `<input type="datetime-local" data-due="item" aria-label="when"></div></section>`;
   for (const l of d.lists || []) {
     const items = (l.items || []).map((i) => row(i.id, itemInner(i, false))).join('');
-    out += `<section><h3>${esc(l.name)}</h3><ul>${items || '<li class="empty">Empty</li>'}</ul>` +
+    const mark = l.emoji ? `${esc(l.emoji)} ` : '';
+    out += `<section><h3>${mark}${esc(l.name)}</h3><ul>${items || '<li class="empty">Empty</li>'}</ul>` +
       `<div class="add"><input type="text" placeholder="Add to ${esc(l.name)}" data-add="item" data-list="${esc(l.name)}"></div></section>`;
   }
   const notes = (d.notes || []).map((n) =>

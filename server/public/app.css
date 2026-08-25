@@ -452,6 +452,10 @@ body.tv.phonewall .pane-todo .card{background:#151a20!important;border:1px solid
 .repos li.busy::after{color:#3b82f6}
 .repos li.ok::after{color:#39d353}
 .repos li.bad::after{color:#f85149;max-width:55%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+/* Listening for the session's opening message. Red and pulsing like the voice FAB, so a live mic
+   is never ambiguous — the row is recording until it stops on its own or you tap again. */
+.repos li.rec::after{color:#e5484d}
+.repos li.rec{animation:wallpttPulse 1s ease-in-out infinite}
 .repos .rp-off{margin:0 0 10px;padding:8px 10px;border-radius:8px;background:#1a1410;border:1px solid #3a2a18;color:#e6b93d;font-size:13px}
 .repos li.empty{color:#5d6672;font-size:14px}
 .todocard{padding:14px}

@@ -1459,6 +1459,38 @@ app.get('/api/due-widget', async (req, res) => {
   } catch (e) { res.status(500).json({ error: String(e.message || e) }); }
 });
 
+// The repo widget's feed. Mirrors what cards/repos.js decides — which branch is worth showing, how
+// old "old" reads — so the two surfaces can't disagree about the same project.
+const REPOS_WIDGET_MAX = 12;
+function repoAgo(iso) {
+  if (!iso) return '';
+  const s = (Date.now() - new Date(iso).getTime()) / 1000;
+  if (s < 90) return 'now';
+  if (s < 3600) return Math.round(s / 60) + 'm';
+  if (s < 86400) return Math.round(s / 3600) + 'h';
+  return Math.round(s / 86400) + 'd';
+}
+// Nearly everything sits on main, so that chip would be a column of identical noise.
+const notableBranch = (b) => !!b && b !== 'main' && b !== 'master';
+app.get('/api/repos-widget', async (req, res) => {
+  try {
+    const [repos, presence] = await Promise.all([
+      sb(`repos?select=path,name,branch,dirty,last_active&order=last_active.desc.nullslast&limit=${REPOS_WIDGET_MAX}`),
+      sb('worker_presence?worker=eq.desk&select=last_seen'),
+    ]);
+    const seen = (presence && presence[0] && presence[0].last_seen) || null;
+    const online = !!seen && (Date.now() - new Date(seen).getTime()) / 1000 <= DESK_STALE_S;
+    res.json({
+      online,
+      repos: (repos || []).map((r) => ({
+        path: r.path, name: r.name, dirty: !!r.dirty,
+        branch: notableBranch(r.branch) ? r.branch : null,
+        age: repoAgo(r.last_active),
+      })),
+    });
+  } catch (e) { res.status(500).json({ error: String(e.message || e) }); }
+});
+
 app.get('/api/list-widget', async (req, res) => {
   try {
     const name = String(req.query.list || 'todo');
@@ -1566,9 +1598,13 @@ app.post('/api/repos/open', express.json(), async (req, res) => {
     // becomes the command's payload. (The orchestrator independently re-checks the same thing.)
     const rows = await sb(`repos?path=eq.${encodeURIComponent(target)}&select=path,name`);
     if (!rows.length) return res.status(400).json({ error: 'unknown repo' });
+    // The dictated first message. Free text by nature — it is a prompt — so it is NOT validated here;
+    // the orchestrator shell-quotes it when building the command, which is where quoting belongs.
+    // Capped only so a runaway transcription can't produce an unusable command line.
+    const prompt = String((req.body || {}).prompt || '').trim().slice(0, 2000) || null;
     const id = crypto.randomUUID();
     await sbWrite('desk_commands', 'POST',
-      { id, kind: 'open_session', payload: { path: rows[0].path, name: rows[0].name } });
+      { id, kind: 'open_session', payload: { path: rows[0].path, name: rows[0].name, ...(prompt ? { prompt } : {}) } });
     res.json({ id });
   } catch (e) { res.status(500).json({ error: String(e.message || e) }); }
 });

@@ -25,5 +25,6 @@ struct StatusHubControlsBundle: WidgetBundle {
         RecordControl()
         RingsWidget()
         TodoWidget()
+        ReposWidget()
     }
 }

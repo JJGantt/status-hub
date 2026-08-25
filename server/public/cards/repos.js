@@ -10,9 +10,12 @@
 // Self-fetching (NOT part of the status stream), like the todo pane. No-ops where #repospane is
 // absent (kiosk / mac / page).
 import { esc } from '../shared.js';
+import { makeRecorder } from '../voiceagent.js';
 
 let mounted = false;
 let desk = { online: false };
+let recorder = null;      // one shared recorder; only ever one repo is being dictated to
+let armed = null;         // the <li> currently listening
 
 // 'now' / '20m' / '3h' / '5d' — how long ago this was last touched (HEAD commit for a repo, the
 // directory's mtime otherwise).
@@ -57,14 +60,14 @@ async function load() {
 
 // Enqueue, then watch the command row until the Mac reports back. The launch itself is realtime
 // (~1s); the ceiling here only exists so a wedged daemon can't leave the row spinning forever.
-async function launch(li) {
+async function launch(li, prompt) {
   if (li.dataset.say) return;   // a launch is in flight, or its result is still on screen
   const say = (cls, text) => { li.className = cls; li.dataset.say = text; };
-  say('busy', 'Opening…');
+  say('busy', prompt ? 'Opening with your prompt…' : 'Opening…');
   try {
     const r = await (await fetch('/api/repos/open', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ path: li.dataset.path }),
+      body: JSON.stringify({ path: li.dataset.path, ...(prompt ? { prompt } : {}) }),
     })).json();
     if (!r.id) throw new Error(r.error || 'failed');
     for (let i = 0; i < 20; i++) {                       // ~20s ceiling
@@ -80,10 +83,61 @@ async function launch(li) {
   setTimeout(() => { li.className = ''; delete li.dataset.say; }, 4000);
 }
 
+// Tapping a repo DICTATES the session's opening message rather than launching bare. The session is
+// going to want to know what you came for, and saying it while the terminal is still opening beats
+// typing it into a fresh prompt on the Mac afterwards. Tap again to cancel.
+//
+// `dryWhen: () => true` is the whole trick: the recorder then posts to /api/voice-command?dry=1, which
+// transcribes and returns the text INSTEAD of enqueueing it as a voice command — this is a prompt for
+// a session, not something the voice worker should act on.
+function beginDictation(li) {
+  if (armed === li) { cancelDictation(); return; }
+  if (armed) cancelDictation();
+  armed = li;
+  li.className = 'rec';
+  li.dataset.say = 'Listening…';
+  recorder = makeRecorder({
+    autoStop: true,                                  // trailing-silence stop, same as the voice FAB
+    dryWhen: () => true,
+    onStatus: (t) => { if (armed === li && t) li.dataset.say = t; },
+    onTranscript: (text) => {
+      const prompt = String(text || '').trim();
+      armed = null; recorder = null;
+      li.className = ''; delete li.dataset.say;
+      // Nothing said → don't silently open a bare session; the tap was probably a mistake.
+      if (!prompt) { li.className = 'bad'; li.dataset.say = 'Nothing heard'; 
+        setTimeout(() => { li.className = ''; delete li.dataset.say; }, 2500); return; }
+      launch(li, prompt);
+    },
+  });
+  recorder.start();
+}
+
+function cancelDictation() {
+  if (!armed) return;
+  try { recorder && recorder.stop(); } catch (_) {}
+  armed.className = ''; delete armed.dataset.say;
+  armed = null; recorder = null;
+}
+
 function wire(el) {
   el.querySelectorAll('li[data-path]').forEach((li) =>
-    li.addEventListener('click', () => { if (desk.online) launch(li); }));
+    li.addEventListener('click', () => { if (desk.online) beginDictation(li); }));
 }
+
+// Called by the native app when a repo widget row is tapped (statushub://repo/<path>). The widget
+// can't reach a microphone, so it hands the choice over and the recording happens here.
+window.__startRepoSession = async (path) => {
+  const el = document.getElementById('repospane');
+  if (!el) return;
+  try { window.__showPane && window.__showPane('repos'); } catch (_) {}
+  if (!mounted) { mounted = true; }
+  await load();
+  const li = el.querySelector(`li[data-path="${CSS.escape(String(path))}"]`);
+  if (!li) return;
+  li.scrollIntoView({ block: 'center', behavior: 'smooth' });
+  if (desk.online) beginDictation(li);
+};
 
 export function render() {
   if (mounted) return;                                // self-refreshing; not driven by the status stream

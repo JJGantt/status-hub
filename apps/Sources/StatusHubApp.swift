@@ -39,6 +39,12 @@ struct StatusHubApp: App {
                     // statushub://pane/<name> — a widget tapped anywhere but a row. Each widget names
                     // the pane it depicts, so tapping it lands there instead of on whatever pane
                     // happened to be open last.
+                    // statushub://repo/<path> — a repo widget row. The widget has no microphone, so
+                    // it hands the choice over and the app records the opening message.
+                    if url.host == "repo" {
+                        let path = url.path.hasPrefix("/") ? String(url.path.dropFirst()) : url.path
+                        if !path.isEmpty { RepoLaunch.shared.request(path) }
+                    }
                     if url.host == "pane" {
                         let name = url.path.hasPrefix("/") ? String(url.path.dropFirst()) : url.path
                         if !name.isEmpty { PaneLaunch.shared.request(name) }
@@ -75,6 +81,33 @@ struct StatusHubApp: App {
 // Bridges statushub://pane/<name> to the loaded web hub: scrolls the phone's swipe panes to the named
 // one. Same polling shape as RecordLaunch — a cold launch can deliver the URL before the page has
 // mounted the pane machinery.
+// Bridges statushub://repo/<path> to the loaded web hub: lands on the repos pane and starts dictating
+// the opening message for that project. Same polling shape as RecordLaunch — a cold launch can deliver
+// the URL before the page has mounted.
+final class RepoLaunch {
+    static let shared = RepoLaunch()
+    weak var webView: WKWebView?
+    private var pendingPath: String?
+
+    func request(_ path: String) { pendingPath = path; fire() }
+    func fireIfPending() { if pendingPath != nil { fire() } }
+
+    private func fire(retries: Int = 12) {
+        guard let path = pendingPath, let wv = webView else { return }
+        wv.evaluateJavaScript("!!(window.__startRepoSession)") { [weak self] ready, _ in
+            guard let self, self.pendingPath != nil else { return }
+            if (ready as? Bool) == true {
+                self.pendingPath = nil
+                // JSON-encoded: a filesystem path can carry quotes and must never become JS syntax.
+                let arg = String(data: (try? JSONSerialization.data(withJSONObject: [path])) ?? Data(), encoding: .utf8) ?? "[\"\"]"
+                wv.evaluateJavaScript("window.__startRepoSession(\(arg)[0])", completionHandler: nil)
+            } else if retries > 0 {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) { self.fire(retries: retries - 1) }
+            }
+        }
+    }
+}
+
 final class PaneLaunch {
     static let shared = PaneLaunch()
     weak var webView: WKWebView?
@@ -232,6 +265,7 @@ struct HubWebView {
             RecordLaunch.shared.fireIfPending()   // statushub://record cold launch → auto-start the voice FAB
             ItemLaunch.shared.fireIfPending()     // statushub://item/<id> cold launch → open that item
             PaneLaunch.shared.fireIfPending()     // statushub://pane/<name> cold launch → land there
+            RepoLaunch.shared.fireIfPending()     // statushub://repo/<path> cold launch → dictate there
         }
         #endif
 
@@ -274,6 +308,7 @@ struct HubWebView {
         RecordLaunch.shared.webView = wv   // so a statushub://record launch can drive this web view
         ItemLaunch.shared.webView = wv     // …and so can statushub://item/<id>
         PaneLaunch.shared.webView = wv     // …and statushub://pane/<name>
+        RepoLaunch.shared.webView = wv     // …and statushub://repo/<path>
         #endif
         #if os(iOS)
         wv.scrollView.contentInsetAdjustmentBehavior = .never

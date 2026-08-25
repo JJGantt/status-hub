@@ -60,9 +60,15 @@ watcher's job changes from "push at due time" to "wake the app when a reminder i
 schedules the alarm locally." Upside: once set it fires exactly on time with no dependence on
 network or server.
 
-Open design question: which reminders are alarm-grade vs plain push. Likely a flag on `reminders`
-set from Jared's wording ("timer", "alarm", urgency). A soup timer should ring through Focus; "pick
-up dry cleaning" at 2am should not.
+Open design question: which items are alarm-grade vs plain push. Likely a flag on `list_items` set
+from Jared's wording ("timer", "alarm", urgency). A soup timer should ring through Focus; "pick up
+dry cleaning" at 2am should not.
+
+**Where it plugs in:** `DUE_HANDLERS` in `server.js` (added with the reminders merge) is the seam —
+`dueTick` finds due items and dispatches to a named handler instead of calling `pushAll` directly.
+AlarmKit becomes an entry there rather than surgery on the loop. Note the architectural wrinkle still
+stands: AlarmKit schedules on-device, so its "handler" is really "wake the app so it can schedule
+locally", not "deliver now".
 
 Unverified: whether AlarmKit can schedule from a **background** wake (vs only with the app open).
 Not documented either way — needs an on-device test.

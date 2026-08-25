@@ -149,5 +149,18 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
         // until the policy date rolls round. Opening the app forces it to regenerate.
         WidgetCenter.shared.reloadAllTimelines()
     }
+
+    // …and again on the way OUT, which is the half that was missing. Opening the app is the moment a
+    // widget stops being looked at; LEAVING is the moment it starts, and it is also the moment just
+    // after whatever you came in to change. Without this, logging a meal and swiping home left the
+    // rings showing pre-meal numbers: the page-driven nudge (core.js nudgeWidgets) is throttled to
+    // once a minute and only runs while the page is live on the stream, so a change in that last
+    // minute reached the widget only when its own hourly policy came round.
+    //
+    // Cheap enough to do unconditionally — this is an IPC to WidgetKit, not the fetch. The extension
+    // does the work later, on its own schedule.
+    func applicationDidEnterBackground(_ application: UIApplication) {
+        WidgetCenter.shared.reloadAllTimelines()
+    }
 }
 #endif

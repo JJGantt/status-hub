@@ -1340,15 +1340,15 @@ const NOTIFY_STYLE = {
   voice:    { emoji: '🎙️', interruptionLevel: 'passive' },
 };
 
-// The home-screen badge = reminders that are OVERDUE: not done, not deleted, and past their due
-// time. Nothing else counts. Snoozing pushes the due date forward, which is a real answer to the
-// reminder, so it correctly drops off the badge until it comes due again. An undated reminder never
-// fires a push either (remindersTick requires a due), so it has never pinged him and must not badge.
+// The home-screen badge = every OVERDUE item: not cleared, dated, and past its due time — on ANY
+// list. A dated Amazon item counts exactly like a dated todo, because they are the same kind of
+// thing (migration 00056). An undated item never fires and never badges. Snoozing pushes the due
+// date forward, which is a real answer, so it correctly drops off the badge until it comes round.
 // Returns null if the count can't be read — the push then omits the badge rather than clearing it
 // to a wrong number.
-async function unaddressedReminderCount() {
+async function overdueCount() {
   try {
-    const rows = await sb('reminders?deleted=eq.false&due=not.is.null&select=due');
+    const rows = await sb('list_items?deleted=eq.false&due=not.is.null&select=due');
     const nowET = etNowString();
     return rows.filter((r) => dueMoment(r.due) <= nowET).length;
   } catch (_) { return null; }
@@ -1358,7 +1358,7 @@ async function pushAll(kind, title, body, dedupe_key, extra = {}) {
   const base = { kind, title, body, ...(dedupe_key ? { dedupe_key } : {}) };
   const { emoji, ...style } = { ...(NOTIFY_STYLE[kind] || {}), ...extra };   // copy: never mutate the shared constant
   if (emoji && !String(title).startsWith(emoji)) title = `${emoji} ${title}`;
-  const badge = await unaddressedReminderCount();
+  const badge = await overdueCount();
   if (Number.isInteger(badge)) style.badge = badge;
   if (!apns.configured()) { await sbInsert('notifications', { ...base, ok: false, detail: 'apns not configured' }); return { ok: false, detail: 'apns not configured' }; }
   let tokens = [];
@@ -1386,60 +1386,72 @@ app.post('/api/notify', express.json(), async (req, res) => {
   res.json(r);
 });
 
-// ---- minimal reminders / lists / notes surface. Voice/MCP writes them; this is the visual pane. ----
+// ---- lists / notes surface. Voice/MCP writes them; this is the visual pane. ----
+//
+// `due` is sent as a normal field on every item, and `due` collects the dated ones from ALL lists
+// into one soonest-first view. That view is what used to be the reminders table — it is now derived,
+// not stored, so an item appears in it and on its own list at once without being duplicated.
 app.get('/api/todos', async (req, res) => {
   try {
-    const [reminders, listNames, items, notes] = await Promise.all([
-      sb('reminders?deleted=eq.false&select=id,text,due&order=due.asc.nullslast,created.asc'),
+    const [listNames, items, notes] = await Promise.all([
       sb('lists?select=name&order=name'),
-      sb('list_items?deleted=eq.false&select=id,list_name,text&order=created.asc'),
+      sb('list_items?deleted=eq.false&select=id,list_name,text,title,due&order=created.asc'),
       sb('notes?select=name,content&order=name'),
     ]);
-    const lists = (listNames || []).map((l) => ({ name: l.name,
-      items: (items || []).filter((i) => i.list_name === l.name).map((i) => ({ id: i.id, text: i.text })) }));
-    res.json({ reminders: reminders || [], lists, notes: notes || [] });
+    const all = items || [];
+    const lists = (listNames || []).map((l) => ({ name: l.name, items: all.filter((i) => i.list_name === l.name) }));
+    const due = all.filter((i) => i.due).sort((a, b) => dueMoment(a.due) < dueMoment(b.due) ? -1 : 1);
+    res.json({ lists, due, notes: notes || [] });
   } catch (e) { res.status(500).json({ error: String(e.message || e) }); }
 });
 // Compact feed for the iOS to-do widget. Deliberately NOT /api/todos: that one carries every list,
 // every reminder and the full text of every note, and the widget draws one list's item titles.
 //
-// A list item is a single `text` column — the schema has no title/body split. But items written by
-// voice routinely carry the gist, an em dash, then the reasoning ("Replace the Pi thumb drive with a
-// USB SSD — the 32GB one is a corruption risk under 24/7 writes"). A widget row has space for the
-// first half only, so the title is the text up to the first em dash or line break. Derived here, not
-// in Swift, so the hub stays the only thing that decides what a row says.
+// Items carry a real `title` now (migration 00056), so this prefers it and only derives one when it
+// is absent. The derivation is the fallback for everything written before the column existed: items
+// written by voice routinely carry the gist, an em dash, then the reasoning ("Replace the Pi thumb
+// drive with a USB SSD — the 32GB one is a corruption risk under 24/7 writes"), and a widget row has
+// space for the first half only. Either way the hub decides what a row says, not the Swift.
 const LIST_WIDGET_MAX = 12;          // the large family draws ~10; a couple spare costs nothing
-function itemTitle(text) {
-  const first = String(text || '').split('\n')[0];
-  const title = first.split(' — ')[0].trim() || first.trim();
-  return title.length > 90 ? title.slice(0, 89).trimEnd() + '…' : title;
+function itemTitle(row) {
+  const explicit = String(row.title || '').trim();
+  if (explicit) return explicit.length > 90 ? explicit.slice(0, 89).trimEnd() + '…' : explicit;
+  const first = String(row.text || '').split('\n')[0];
+  const derived = first.split(' — ')[0].trim() || first.trim();
+  return derived.length > 90 ? derived.slice(0, 89).trimEnd() + '…' : derived;
 }
 app.get('/api/list-widget', async (req, res) => {
   try {
     const name = String(req.query.list || 'todo');
     const rows = await sb(`list_items?deleted=eq.false&list_name=eq.${encodeURIComponent(name)}` +
-                          `&select=id,text&order=created.asc&limit=${LIST_WIDGET_MAX}`);
-    res.json({ list: name, items: (rows || []).map((r) => ({ id: r.id, title: itemTitle(r.text) })) });
+                          `&select=id,text,title,due&order=created.asc&limit=${LIST_WIDGET_MAX}`);
+    const nowET = etNowString();
+    res.json({ list: name, items: (rows || []).map((r) => ({
+      id: r.id,
+      title: itemTitle(r),
+      // Dated items live on ordinary lists now, so the widget marks the ones that have come due.
+      overdue: !!r.due && dueMoment(r.due) <= nowET,
+    })) });
   } catch (e) { res.status(500).json({ error: String(e.message || e) }); }
 });
 
-// Clear a reminder or list item. There is ONE cleared state — checking off and deleting are the
-// same act — and it's soft, so the row survives for the recovery window before being purged.
+// Clear an item. There is ONE cleared state — checking off and deleting are the same act — and it's
+// soft, so the row survives for the recovery window before being purged. No `kind` any more: dated
+// and undated items live in the same table, so there is only one thing to clear.
 app.post('/api/todos/clear', express.json(), async (req, res) => {
   try {
     const b = req.body || {};
     const id = String(b.id || '');
     if (!id) return res.status(400).json({ error: 'id required' });
-    const table = b.kind === 'item' ? 'list_items' : 'reminders';
-    await sbWrite(`${table}?id=eq.${encodeURIComponent(id)}`, 'PATCH', { deleted: true, updated: new Date().toISOString() });
-    res.json({ ok: true, badge: await unaddressedReminderCount() });
+    await sbWrite(`list_items?id=eq.${encodeURIComponent(id)}`, 'PATCH', { deleted: true, updated: new Date().toISOString() });
+    res.json({ ok: true, badge: await overdueCount() });
     syncBadge().catch(() => {});   // don't make the caller wait on APNs
   } catch (e) { res.status(500).json({ error: String(e.message || e) }); }
 });
-// Snooze: push a reminder's due time out by N hours from NOW (not from its old due, which may be
-// long past). It stays undone and un-deleted — snoozing is deferral, not completion — but it stops
-// being overdue, so it correctly drops off the badge until it comes round again. The notifications
-// dedupe row is cleared too, otherwise the reminder could never fire a second time.
+// Snooze: push an item's due time out by N hours from NOW (not from its old due, which may be long
+// past). It stays un-cleared — snoozing is deferral, not completion — but it stops being overdue, so
+// it correctly drops off the badge until it comes round again. The notifications dedupe row is
+// cleared too, otherwise the item could never fire a second time. Works on any list.
 app.post('/api/todos/snooze', express.json(), async (req, res) => {
   try {
     const b = req.body || {};
@@ -1448,9 +1460,9 @@ app.post('/api/todos/snooze', express.json(), async (req, res) => {
     if (!id) return res.status(400).json({ error: 'id required' });
     if (!Number.isFinite(hours) || hours <= 0 || hours > 24 * 30) return res.status(400).json({ error: 'hours out of range' });
     const due = etStringAt(new Date(Date.now() + hours * 3600 * 1000));
-    await sbWrite(`reminders?id=eq.${encodeURIComponent(id)}`, 'PATCH', { due, updated: new Date().toISOString() });
+    await sbWrite(`list_items?id=eq.${encodeURIComponent(id)}`, 'PATCH', { due, updated: new Date().toISOString() });
     await sbWrite(`notifications?dedupe_key=eq.${encodeURIComponent('reminder:' + id)}`, 'DELETE');
-    res.json({ ok: true, due, badge: await unaddressedReminderCount() });
+    res.json({ ok: true, due, badge: await overdueCount() });
     syncBadge().catch(() => {});
   } catch (e) { res.status(500).json({ error: String(e.message || e) }); }
 });
@@ -1458,7 +1470,7 @@ app.post('/api/todos/snooze', express.json(), async (req, res) => {
 // The app reads this when it comes to the foreground, so the badge is right even if a silent
 // background push never landed.
 app.get('/api/badge', async (req, res) => {
-  const n = await unaddressedReminderCount();
+  const n = await overdueCount();
   res.json({ badge: Number.isInteger(n) ? n : 0 });
 });
 
@@ -1468,17 +1480,15 @@ app.post('/api/todos/add', express.json(), async (req, res) => {
     const text = String(b.text || '').trim();
     if (!text) return res.status(400).json({ error: 'text required' });
     const now = new Date().toISOString();
-    if (b.kind === 'item') {
-      const list = String(b.list || '').trim();
-      if (!list) return res.status(400).json({ error: 'list required' });
-      const exists = await sb(`lists?name=eq.${encodeURIComponent(list)}&select=name&limit=1`);
-      if (!exists.length) await sbWrite('lists', 'POST', { name: list });
-      await sbWrite('list_items', 'POST', { id: crypto.randomUUID(), list_name: list, text, deleted: false, created: now, updated: now });
-    } else {
-      const due = String(b.due || '').trim() || null;
-      await sbWrite('reminders', 'POST', { id: crypto.randomUUID(), text, due, deleted: false, created: now, updated: now });
-    }
-    res.json({ ok: true });
+    // No list named means the default one. A due date is just another field — supplying it is what
+    // makes the item fire, whichever list it lands on.
+    const list = String(b.list || '').trim() || 'todo';
+    const due = String(b.due || '').trim() || null;
+    const title = String(b.title || '').trim() || null;
+    const exists = await sb(`lists?name=eq.${encodeURIComponent(list)}&select=name&limit=1`);
+    if (!exists.length) await sbWrite('lists', 'POST', { name: list });
+    await sbWrite('list_items', 'POST', { id: crypto.randomUUID(), list_name: list, text, title, due, deleted: false, created: now, updated: now });
+    res.json({ ok: true, badge: await overdueCount() });
   } catch (e) { res.status(500).json({ error: String(e.message || e) }); }
 });
 
@@ -1569,24 +1579,46 @@ function dueMoment(due) {
   return /T\d/.test(d) ? d : d.slice(0, 10) + 'T09:00:00';
 }
 
-async function remindersTick() {
-  if (!apns.configured()) return;
+// ---- what happens when a dated item comes due ----
+//
+// The scheduler below finds due items; it does not deliver them. Delivery is a named handler, so a
+// second channel is a new entry here rather than surgery on the loop. Today there is exactly one —
+// APNs — and this seam is worth its ten lines only because the second one is already written down:
+// AlarmKit (docs/TODO.md), which fires on-device and breaks through Focus. Telegram would be a third.
+//
+// Handlers receive the whole item and the dedupe key. They must be idempotent-safe to skip: the
+// ledger check happens before dispatch, not inside them.
+const DUE_HANDLERS = {
+  // category + the row id give the notification its Done / 1 hour / Tomorrow buttons and tell the
+  // app which item an action refers to. `reminder_id` keeps its name: the app's notification
+  // actions and the APNs category are built around it, and renaming it would break every
+  // notification already sitting in Notification Centre on the phone.
+  push: (item, dedupeKey) =>
+    pushAll('reminder', 'Reminder', item.title || item.text, dedupeKey,
+            { category: 'REMINDER', payload: { reminder_id: item.id } }),
+};
+
+async function dueTick() {
   const nowET = etNowString();
   let rows;
-  try { rows = await sb('reminders?deleted=eq.false&due=not.is.null&select=id,text,due'); } catch (_) { return; }
+  // Every list, not just todo — "reminder" is a predicate (has a due), not a place.
+  try { rows = await sb('list_items?deleted=eq.false&due=not.is.null&select=id,list_name,text,title,due'); } catch (_) { return; }
   for (const r of rows) {
     if (dueMoment(r.due) > nowET) continue;                           // not due yet
+    // Key kept as `reminder:<id>` rather than renamed: migration 00056 preserved item ids precisely
+    // so the ledger rows written before the merge still match. Renaming would orphan them and every
+    // already-delivered item would fire again.
     const dk = `reminder:${r.id}`;
     try { if ((await sb(`notifications?dedupe_key=eq.${encodeURIComponent(dk)}&select=id&limit=1`)).length) continue; } catch (_) { continue; }
-    // category + the row id give the notification its Done / 1 hour / Tomorrow buttons and tell the
-    // app which reminder an action refers to.
-    await pushAll('reminder', 'Reminder', r.text, dk, { category: 'REMINDER', payload: { reminder_id: r.id } });
-    console.log(`[reminders] fired ${r.id} "${String(r.text).slice(0, 40)}"`);
+    const handler = DUE_HANDLERS.push;
+    if (handler === DUE_HANDLERS.push && !apns.configured()) continue;   // nothing to deliver through
+    await handler(r, dk);
+    console.log(`[due] fired ${r.id} [${r.list_name}] "${String(r.title || r.text).slice(0, 40)}"`);
   }
 }
-setInterval(() => remindersTick().catch((e) => console.log('[reminders] error', e.message)), 60000);
-remindersTick().catch(() => {});
-console.log('[reminders] firing armed');
+setInterval(() => dueTick().catch((e) => console.log('[due] error', e.message)), 60000);
+dueTick().catch(() => {});
+console.log('[due] firing armed');
 
 // ---- badge sync. A reminder can be completed from anywhere — the hub UI, a voice command, the
 // data MCP — and none of those go through this server, so polling the count is the one mechanism
@@ -1595,7 +1627,7 @@ console.log('[reminders] firing armed');
 let lastBadge = null;
 async function syncBadge() {
   if (!apns.configured()) return;
-  const n = await unaddressedReminderCount();
+  const n = await overdueCount();
   if (!Number.isInteger(n) || n === lastBadge) return;
   lastBadge = n;
   let tokens = [];
@@ -1612,11 +1644,9 @@ syncBadge().catch(() => {});
 const PURGE_AFTER_DAYS = 30;
 async function purgeCleared() {
   const cutoff = new Date(Date.now() - PURGE_AFTER_DAYS * 86400000).toISOString();
-  for (const table of ['reminders', 'list_items']) {
-    try {
-      await sbWrite(`${table}?deleted=eq.true&updated=lt.${encodeURIComponent(cutoff)}`, 'DELETE');
-    } catch (e) { console.log(`[purge] ${table}:`, e.message); }
-  }
+  try {
+    await sbWrite(`list_items?deleted=eq.true&updated=lt.${encodeURIComponent(cutoff)}`, 'DELETE');
+  } catch (e) { console.log('[purge] list_items:', e.message); }
 }
 setInterval(() => purgeCleared().catch(() => {}), 3600000);
 purgeCleared().catch(() => {});

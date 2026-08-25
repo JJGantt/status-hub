@@ -54,7 +54,7 @@ Supabase ──▶ server.js buildStatus() ──▶ /api/status payload ──�
 | `score` | the weekly overall-score gauge | `lib/score` |
 | `generated_at` | payload timestamp | — |
 
-`todos` (reminders/lists/notes) is **not** in this payload — the todo card self-fetches `/api/todos`
+`todos` (lists/notes) is **not** in this payload — the todo card self-fetches `/api/todos`
 (so it isn't rebuilt on every 30s tick). See §6.
 
 ---
@@ -116,12 +116,12 @@ The math lives here; each file has a thorough header. Summary map:
 
 **Read:** `/api/status` (full payload) · `/api/stream` (SSE status) · `/api/voice-stream` (SSE voice
 frames for the kiosk) · `/api/workout-day` · `/api/nutrition-day` · `/api/voice-messages` ·
-`/api/todos` · `/api/repos` · `/api/repos/cmd/:id` · `/api/attachment` · `/api/rings` (the iOS
+`/api/todos` (lists + notes + the derived `due` view) · `/api/badge` · `/api/repos` · `/api/repos/cmd/:id` · `/api/attachment` · `/api/rings` (the iOS
 widget's compact pace feed — a timeline of frames, not a snapshot; see §9b) · `/api/list-widget`
 (one list's item *titles* for the to-do widget; `?list=` defaults to `todo`).
 
 **Write:** `/api/settings` (GET/POST) · `/api/log-set` · `/api/log-entry` (POST/DELETE) ·
-`/api/commit-staged` · `/api/feed` · `/api/todos/{add,complete}` · `/api/repos/open` · `/api/voice-command` (raw audio →
+`/api/commit-staged` · `/api/feed` · `/api/todos/{add,clear,snooze}` · `/api/repos/open` · `/api/voice-command` (raw audio →
 Groq Whisper → enqueue) · `/api/voice-text` (text → enqueue) · `/api/voice-reset` ·
 `/api/voice-activity` · `/api/attach` (photo upload) · `/api/register-push` · `/api/notify` (APNs to
 all devices) · `/api/clientlog`.
@@ -132,7 +132,31 @@ cookie). Everything under the gate requires one of these; `/healthz` and `/login
 
 ---
 
-## 6. Reminders / lists / notes
+## 6. Lists / notes (and what used to be reminders)
+
+**There is no reminders table.** A reminder is an item with a `due` date — nothing else distinguishes
+one (data-layer migration `00056`). The two tables were already the same row shape and differed only
+in that `reminders` had `due` and `list_items` had `list_name`; every behavioural difference followed
+from `due` alone, and an undated reminder already behaved exactly like a to-do. Meanwhile `todo` was
+never special either — it is one row in `lists` beside `grocery` and `Amazon`.
+
+So `due` now lives on `list_items` and **any item on any list can carry one**. A dated Amazon item
+fires and badges identically to a dated to-do; there are no classes of item. "Due" in the pane is a
+derived cross-list *view*, not a stored list, so a dated item shows both there and on its own list
+while being one row.
+
+Consequences worth knowing:
+
+- **Badge** = every overdue item across every list (`overdueCount()`), not just one table's.
+- **The scheduler** (`dueTick`, every 60s) scans `list_items` where `due` is past, dedupes against
+  `notifications.dedupe_key`, and hands off to a **named handler** in `DUE_HANDLERS` rather than
+  calling `pushAll` directly. Only `push` exists today; the seam earns its ten lines because the
+  second handler is already scheduled — AlarmKit ([TODO.md](TODO.md)), which fires on-device and
+  breaks through Focus.
+- **The dedupe key is still `reminder:<id>`.** Migration 00056 preserved item ids precisely so the
+  ledger rows written before the merge still match. Renaming the key would orphan them and every
+  already-delivered item would fire a second time.
+- **`kind` is gone** from `/api/todos/clear` — one table, one thing to clear.
 
 Voice/MCP writes them (data-layer tools); the hub surfaces them:
 - **Card:** `public/cards/todo.js` — the 5th phone swipe pane. Self-fetches `/api/todos` (not part of
@@ -300,10 +324,15 @@ intents) — the `todo` list's item titles, Home Screen families only (`systemSm
 `systemMedium` 5 / `systemLarge` 10; the accessory families are too small for a list, and a ✕ that
 small is a mis-tap waiting to happen).
 
-- **Titles, not bodies.** `list_items` has no title/body split — it's one `text` column — but items
-  written by voice routinely read `gist — reasoning`. `/api/list-widget` cuts at the first em dash or
-  line break and caps at 90 chars, so the hub stays the only thing deciding what a row says. Rows are
-  one line each, which is what makes the row counts above exact rather than hopeful.
+- **Titles, not bodies.** Items carry a real `title` column (migration `00056`), and
+  `/api/list-widget` prefers it. When it's absent the hub derives one — cutting at the first em dash
+  or line break, capped at 90 chars — which covers everything written before the column existed.
+  Either way the hub decides what a row says, not the Swift. Rows are one line each, which is what
+  makes the row counts above exact rather than hopeful.
+- **Overdue rows are marked.** Dated items sit on ordinary lists now, so any row can be overdue; the
+  feed sends a per-item `overdue` flag and the widget paints those amber, matching the pane's due
+  chip. It decodes as optional so a `todo-last.json` cached before the field existed still loads —
+  a fallback cache that fails to decode is a blank widget, which is what it exists to prevent.
 - **Two taps to clear.** A widget has *no gestures* — no swipe, no long press, only `Button`/`Toggle`
   taps. So tapping a row arms it (its ✕ appears) and tapping the ✕ clears it via the same
   `/api/todos/clear` the web pane uses. That preserves the property the pane's left-swipe was chosen

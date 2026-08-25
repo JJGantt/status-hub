@@ -12,7 +12,19 @@ import Foundation
 // the property the web pane's left-swipe was chosen for — no single stray tap can delete anything —
 // with the only mechanism widgets actually offer.
 
-struct TodoItem: Decodable, Identifiable { let id: String; let title: String }
+struct TodoItem: Decodable, Identifiable {
+    let id: String
+    let title: String
+    /// Dated and past its time. Dated items live on ordinary lists now — a reminder is just an item
+    /// with a due date — so any row here can be overdue, not only ones on the to-do list.
+    ///
+    /// Optional rather than defaulted: a defaulted `var` still makes the key REQUIRED when Decodable
+    /// synthesises `init(from:)`, and `todo-last.json` cached by a build that predates this field
+    /// would then fail to decode — turning the offline fallback into a blank widget, which is the
+    /// one thing that cache exists to prevent.
+    private let overdue: Bool?
+    var isOverdue: Bool { overdue == true }
+}
 struct TodoFeed: Decodable { let list: String; let items: [TodoItem] }
 
 // MARK: - Arm state
@@ -112,6 +124,8 @@ public enum TodoLayout {
 }
 
 private let dangerRed = Color(red: 0.937, green: 0.267, blue: 0.267)   // #ef4444
+// Matches the due chip in the web pane (.todo .due), so an overdue row reads the same on both.
+private let overdueAmber = Color(red: 0.902, green: 0.725, blue: 0.239)   // #e6b93d
 
 private struct TodoRowView: View {
     let item: TodoItem
@@ -138,11 +152,11 @@ private struct TodoRowView: View {
     private var label: some View {
         HStack(spacing: 7) {
             Circle()
-                .fill(armed ? dangerRed : mutedText.opacity(0.55))
-                .frame(width: 4, height: 4)
+                .fill(armed ? dangerRed : item.isOverdue ? overdueAmber : mutedText.opacity(0.55))
+                .frame(width: item.isOverdue && !armed ? 5 : 4, height: item.isOverdue && !armed ? 5 : 4)
             Text(item.title)
                 .font(.system(size: layout.titleSize, weight: .medium, design: .rounded))
-                .foregroundStyle(armed ? inkText : inkText.opacity(0.92))
+                .foregroundStyle(armed ? inkText : item.isOverdue ? overdueAmber : inkText.opacity(0.92))
                 .lineLimit(1)
                 .truncationMode(.tail)
             Spacer(minLength: 0)

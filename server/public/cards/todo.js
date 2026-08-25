@@ -1,6 +1,10 @@
-// Reminders / lists / notes — the phone wall's fifth swipe pane. Voice/MCP writes these; this pane shows
-// them and lets you check things off and add. Fetches its own data (NOT part of the status stream), and
+// Lists / notes — the phone wall's fifth swipe pane. Voice/MCP writes these; this pane shows them and
+// lets you check things off and add. Fetches its own data (NOT part of the status stream), and
 // refreshes on mount, after any edit, and on window focus. No-ops where #todopane is absent (kiosk/mac/page).
+//
+// "Due" at the top is a VIEW, not a list: every dated item from every list, soonest first. There is no
+// reminders table any more — a reminder is just an item with a due date (migration 00056) — so a dated
+// Amazon item shows up both here and on Amazon, and clearing it in either place is the same row.
 import { esc } from '../shared.js';
 
 let mounted = false;
@@ -23,22 +27,30 @@ function fmtDue(due) {
 // (see app.css), so the BROWSER owns the drag physics, momentum, rubber-banding and snapping. There
 // is no pointer maths here, which is the whole point: hand-rolled swipe handling fights the browser
 // and loses. The text itself stays put (the row is sticky) and the X slides in over its right end.
-function row(kind, id, inner) {
-  return `<li class="sw" data-kind="${kind}" data-id="${esc(id)}">` +
+function row(id, inner) {
+  return `<li class="sw" data-id="${esc(id)}">` +
     `<div class="sc">` +
       `<div class="row">${inner}</div>` +
       `<button class="del" aria-label="clear" tabindex="-1">\u00d7</button>` +
     `</div></li>`;
 }
 
+// One item's inner markup. `title` is the short label when there is one; the due chip appears on any
+// dated item regardless of list, and says which list when shown in the cross-list Due view.
+function itemInner(i, withList) {
+  const label = (i.title && i.title.trim()) || i.text;
+  const where = withList ? `<span class="where">${esc(i.list_name)}</span>` : '';
+  const due = i.due ? `<span class="due">${esc(fmtDue(i.due))}</span>` : '';
+  return `<span class="txt">${esc(label)}</span>${where}${due}`;
+}
+
 function html(d) {
-  const rem = (d.reminders || []).map((r) => row('reminder', r.id,
-    `<span class="txt">${esc(r.text)}</span>${r.due ? `<span class="due">${esc(fmtDue(r.due))}</span>` : ''}`)).join('');
-  let out = `<section><h3>Reminders</h3><ul>${rem || '<li class="empty">Nothing due</li>'}</ul>` +
-    `<div class="add"><input type="text" placeholder="New reminder" data-add="reminder">` +
-    `<input type="datetime-local" data-due="reminder" aria-label="when"></div></section>`;
+  const due = (d.due || []).map((i) => row(i.id, itemInner(i, true))).join('');
+  let out = `<section><h3>Due</h3><ul>${due || '<li class="empty">Nothing due</li>'}</ul>` +
+    `<div class="add"><input type="text" placeholder="New dated item" data-add="item" data-list="todo">` +
+    `<input type="datetime-local" data-due="item" aria-label="when"></div></section>`;
   for (const l of d.lists || []) {
-    const items = (l.items || []).map((i) => row('item', i.id, `<span class="txt">${esc(i.text)}</span>`)).join('');
+    const items = (l.items || []).map((i) => row(i.id, itemInner(i, false))).join('');
     out += `<section><h3>${esc(l.name)}</h3><ul>${items || '<li class="empty">Empty</li>'}</ul>` +
       `<div class="add"><input type="text" placeholder="Add to ${esc(l.name)}" data-add="item" data-list="${esc(l.name)}"></div></section>`;
   }
@@ -61,7 +73,7 @@ async function load() {
   fetch('/api/badge').then((r) => r.json()).then((b) => setNativeBadge(b.badge)).catch(() => {});
 }
 
-// Tell the native shell the icon badge count. Inside the iOS app this page IS where reminders get
+// Tell the native shell the icon badge count. Inside the iOS app this page IS where items get
 // cleared, so nothing else knows it happened — and the server's badge-only push can't carry the news
 // reliably (iOS throttles background pushes and drops them in practice). A direct message to the app
 // updates the icon immediately. No-op in a plain browser.
@@ -103,17 +115,18 @@ function wire(el) {
     const sc = li.querySelector('.sc');
     sc.addEventListener('pointerdown', () => closeAll(el, sc));   // only one open at a time
     li.querySelector('.del').addEventListener('click', () =>
-      post('/api/todos/clear', { kind: li.dataset.kind, id: li.dataset.id }));
+      post('/api/todos/clear', { id: li.dataset.id }));
   });
   el.addEventListener('pointerdown', (e) => { if (!e.target.closest('li.sw')) closeAll(el); });
   el.querySelectorAll('input[data-add]').forEach((inp) => inp.addEventListener('keydown', (e) => {
     if (e.key !== 'Enter') return;
     const text = inp.value.trim();
     if (!text) return;
-    const kind = inp.dataset.add;
-    const body = { kind, text };
-    if (kind === 'item') body.list = inp.dataset.list;
-    if (kind === 'reminder') { const due = el.querySelector('input[data-due="reminder"]'); if (due && due.value) body.due = due.value; }
+    const body = { text, list: inp.dataset.list };
+    // The Due section's composer has a datetime beside it; every other section's doesn't. Same
+    // endpoint either way — a due date is a field on the item, not a different kind of thing.
+    const due = inp.parentElement.querySelector('input[data-due]');
+    if (due && due.value) { body.due = due.value; due.value = ''; }
     inp.value = '';
     post('/api/todos/add', body);
   }));

@@ -15,7 +15,7 @@ import AppKit
 let json = """
 {"list":"todo","items":[
  {"id":"1","title":"Replace Pi USB thumb drive with a USB SSD (256GB)"},
- {"id":"2","title":"Take care of the insurance and driving stuff"},
+ {"id":"2","title":"Take care of the insurance and driving stuff","overdue":true},
  {"id":"3","title":"Get the ESP flashed and working again"},
  {"id":"4","title":"Hub UI: show when a request was escalated to Opus (e.g. near the tools/commands display at the bottom)"},
  {"id":"5","title":"Hair pills"}]}

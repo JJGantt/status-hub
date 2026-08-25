@@ -104,12 +104,16 @@ the working directory is linked to.
   Shortcut**, and an iOS-18 **Lock Screen / Control Center control** that all open the app straight
   into "listening" (fire the web voice FAB via `RecordLaunch`). No longer just a thin wrapper — see
   [docs/HUB-INTERNALS.md](docs/HUB-INTERNALS.md) §9.
-- **Home / Lock Screen widget** — "Macro Rings": today's Cal/P/C/F **pace** rings (plus the health
-  bar on the medium size), the first surface that is *not* the web hub — native SwiftUI drawing in
-  the same `StatusHubControls` extension as the Record control. It renders from `/api/rings`, a
-  compact feed of **per-minute future frames**, so the arcs drain and the pace marker advances on the
-  Home Screen for an hour per fetch while `lib/pace.js` remains the only place that maths lives. See
-  [docs/HUB-INTERNALS.md](docs/HUB-INTERNALS.md) §9b.
+- **Home Screen widgets** — the only surfaces that are *not* the web hub: native SwiftUI drawing in
+  the same `StatusHubControls` extension as the Record control, each fed by its own compact endpoint
+  so the hub keeps computing and the widget only renders.
+  - **Macro Rings** — today's Cal/P/C/F **pace** rings (plus the health bar on medium), from
+    `/api/rings`: a feed of **per-minute future frames**, so the arcs drain and the pace marker
+    advances on the Home Screen for an hour per fetch while `lib/pace.js` stays the only place that
+    maths lives. Also offered on the Lock Screen (accessory families).
+  - **To-do** — the `todo` list's item titles from `/api/list-widget`, and **interactive**: tap a row
+    to arm it, tap the ✕ to clear it through the same `/api/todos/clear` every other surface uses.
+  - See [docs/HUB-INTERNALS.md](docs/HUB-INTERNALS.md) §9b.
 - **ESP32** — the voice mic (see §5).
 - **iPhone push** — native APNs notifications (see §7).
 

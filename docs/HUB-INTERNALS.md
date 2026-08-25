@@ -117,7 +117,8 @@ The math lives here; each file has a thorough header. Summary map:
 **Read:** `/api/status` (full payload) · `/api/stream` (SSE status) · `/api/voice-stream` (SSE voice
 frames for the kiosk) · `/api/workout-day` · `/api/nutrition-day` · `/api/voice-messages` ·
 `/api/todos` · `/api/repos` · `/api/repos/cmd/:id` · `/api/attachment` · `/api/rings` (the iOS
-widget's compact pace feed — a timeline of frames, not a snapshot; see §9b).
+widget's compact pace feed — a timeline of frames, not a snapshot; see §9b) · `/api/list-widget`
+(one list's item *titles* for the to-do widget; `?list=` defaults to `todo`).
 
 **Write:** `/api/settings` (GET/POST) · `/api/log-set` · `/api/log-entry` (POST/DELETE) ·
 `/api/commit-staged` · `/api/feed` · `/api/todos/{add,complete}` · `/api/repos/open` · `/api/voice-command` (raw audio →
@@ -231,10 +232,11 @@ widgetkit-extension, embedded by the iOS app — §9b). More than a thin wrapper
 
 ---
 
-## 9b. `StatusHubControls` — the Record control + the Macro Rings widget
+## 9b. `StatusHubControls` — the Record control + the widgets
 
 One iOS-18 widgetkit-extension (`apps/Controls/`, bundle `com.jaredgantt.statushub.controls`,
-embedded by the app) hosts **both**, in a single `WidgetBundle` (bottom of `RecordControl.swift`).
+embedded by the app) hosts **all of them** — the Record control, the Macro Rings widget and the
+to-do widget — in a single `WidgetBundle` (bottom of `RecordControl.swift`).
 That is the intended shape — a bundle is meant to carry several widgets and controls — and it also
 avoids a **new bundle id**, which would need a new provisioning profile, which the rejected Xcode
 account session can't issue ([TODO.md](TODO.md) § Blocked on Jared).
@@ -291,4 +293,41 @@ rebuild → reinstall → squint-at-the-phone loop:
 cd apps
 swiftc -O tools/render-rings.swift Controls/RingsView.swift -o /tmp/render && /tmp/render /tmp
 # writes /tmp/{small,medium,rectangular}.png from a real /api/rings response baked into the tool
+```
+
+**To-do widget** (`TodoWidget.swift` = WidgetKit plumbing, `TodoView.swift` = drawing + button
+intents) — the `todo` list's item titles, Home Screen families only (`systemSmall` 6 rows /
+`systemMedium` 5 / `systemLarge` 10; the accessory families are too small for a list, and a ✕ that
+small is a mis-tap waiting to happen).
+
+- **Titles, not bodies.** `list_items` has no title/body split — it's one `text` column — but items
+  written by voice routinely read `gist — reasoning`. `/api/list-widget` cuts at the first em dash or
+  line break and caps at 90 chars, so the hub stays the only thing deciding what a row says. Rows are
+  one line each, which is what makes the row counts above exact rather than hopeful.
+- **Two taps to clear.** A widget has *no gestures* — no swipe, no long press, only `Button`/`Toggle`
+  taps. So tapping a row arms it (its ✕ appears) and tapping the ✕ clears it via the same
+  `/api/todos/clear` the web pane uses. That preserves the property the pane's left-swipe was chosen
+  for — no single stray tap deletes anything — with the only mechanism widgets offer. Tapping an
+  armed row again disarms it; `TapTodoItem` is one *toggling* intent because `Button(intent:)` takes
+  a single concrete type and a ternary over two intent types doesn't compile.
+- **Arm state needs no App Group.** A widget's button intent runs in the *extension's own process* —
+  the same one the timeline provider runs in — so `UserDefaults.standard` is shared ground between
+  them (`ArmStore`). An App Group would mean a new entitlement and a regenerated provisioning
+  profile, i.e. blocked. The arm expires after 20s, and the provider emits a second entry at that
+  expiry so a revealed ✕ closes itself.
+- **No frames.** Unlike the rings, this data doesn't move with the clock, so it's one snapshot per
+  fetch. Freshness comes from reloads: WidgetKit rebuilds the timeline the moment a button is tapped,
+  `applicationDidBecomeActive` covers foregrounding, and `cards/todo.js` posts `reloadWidgets` after
+  any edit in the pane (unthrottled — unlike `core.js`'s macro nudge it only fires on a real tap).
+  The 1-hour policy is just the backstop for a change made elsewhere (voice, the Mac).
+- **Never blank.** Same `todo-last.json` cache fallback as the rings. "Can't reach the hub" and
+  "All clear" are drawn as distinct states — only one of them means you're done.
+
+Its harness is `tools/render-todo.swift` (same idea, `+ Shared/Auth.swift` for the intents' network
+call, `Controls/RingsView.swift` for the shared palette):
+
+```sh
+cd apps
+swiftc -O tools/render-todo.swift Controls/TodoView.swift Controls/RingsView.swift \
+       Shared/Auth.swift -o /tmp/render-todo && /tmp/render-todo /tmp
 ```

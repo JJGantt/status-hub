@@ -52,16 +52,18 @@ open "build/Build/Products/Debug/Status Hub.app"
 
 Bundle id `com.jaredgantt.statushub`, team `XMH4AVFC78`. `StatusHub` (iOS) + `StatusHubMac` share
 `apps/Sources/`; the iOS-18 widget extension (`StatusHubControls`) + the shared `HubVoiceIntent` live
-in `apps/Controls/` + `apps/Shared/`. That one extension carries **both** the Lock-Screen /
-Control-Center **Record** button and the **Macro Rings** home/lock-screen widget (fed by
-`/api/rings`).
+in `apps/Controls/` + `apps/Shared/`. That one extension carries the Lock-Screen / Control-Center
+**Record** button, the **Macro Rings** widget (`/api/rings`) and the interactive **To-do** widget
+(`/api/list-widget`).
 
-Iterating on the widget's layout doesn't need a device — `Controls/RingsView.swift` is WidgetKit-free
-and renders standalone to PNGs:
+Iterating on widget layout doesn't need a device — the drawing files are WidgetKit-free and render
+standalone to PNGs:
 
 ```sh
 cd apps
 swiftc -O tools/render-rings.swift Controls/RingsView.swift -o /tmp/render && /tmp/render /tmp
+swiftc -O tools/render-todo.swift Controls/TodoView.swift Controls/RingsView.swift \
+       Shared/Auth.swift -o /tmp/render-todo && /tmp/render-todo /tmp
 ```
 
 **Full internals map: [docs/HUB-INTERNALS.md](docs/HUB-INTERNALS.md) §9 (app) and §9b (widget).**

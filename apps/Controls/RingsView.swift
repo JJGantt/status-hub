@@ -59,9 +59,10 @@ private struct PaceMark: Shape {
 }
 
 // The card's ground is always dark, so these are explicit rather than semantic: .primary/.secondary
-// resolve against the renderer's colour scheme and came out near-black on the dark card.
-private let inkText  = Color(red: 0.910, green: 0.918, blue: 0.929)   // #e8eaed
-private let mutedText = Color(red: 0.545, green: 0.588, blue: 0.647)  // #8b96a5
+// resolve against the renderer's colour scheme and came out near-black on the dark card. Not
+// file-private: TodoView.swift draws on the same ground and must not fork the palette.
+let inkText  = Color(red: 0.910, green: 0.918, blue: 0.929)   // #e8eaed
+let mutedText = Color(red: 0.545, green: 0.588, blue: 0.647)  // #8b96a5
 
 private struct RingView: View {
     let label: String

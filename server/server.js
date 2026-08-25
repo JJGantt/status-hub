@@ -1400,6 +1400,29 @@ app.get('/api/todos', async (req, res) => {
     res.json({ reminders: reminders || [], lists, notes: notes || [] });
   } catch (e) { res.status(500).json({ error: String(e.message || e) }); }
 });
+// Compact feed for the iOS to-do widget. Deliberately NOT /api/todos: that one carries every list,
+// every reminder and the full text of every note, and the widget draws one list's item titles.
+//
+// A list item is a single `text` column — the schema has no title/body split. But items written by
+// voice routinely carry the gist, an em dash, then the reasoning ("Replace the Pi thumb drive with a
+// USB SSD — the 32GB one is a corruption risk under 24/7 writes"). A widget row has space for the
+// first half only, so the title is the text up to the first em dash or line break. Derived here, not
+// in Swift, so the hub stays the only thing that decides what a row says.
+const LIST_WIDGET_MAX = 12;          // the large family draws ~10; a couple spare costs nothing
+function itemTitle(text) {
+  const first = String(text || '').split('\n')[0];
+  const title = first.split(' — ')[0].trim() || first.trim();
+  return title.length > 90 ? title.slice(0, 89).trimEnd() + '…' : title;
+}
+app.get('/api/list-widget', async (req, res) => {
+  try {
+    const name = String(req.query.list || 'todo');
+    const rows = await sb(`list_items?deleted=eq.false&list_name=eq.${encodeURIComponent(name)}` +
+                          `&select=id,text&order=created.asc&limit=${LIST_WIDGET_MAX}`);
+    res.json({ list: name, items: (rows || []).map((r) => ({ id: r.id, title: itemTitle(r.text) })) });
+  } catch (e) { res.status(500).json({ error: String(e.message || e) }); }
+});
+
 // Clear a reminder or list item. There is ONE cleared state — checking off and deleting are the
 // same act — and it's soft, so the row survives for the recovery window before being purged.
 app.post('/api/todos/clear', express.json(), async (req, res) => {

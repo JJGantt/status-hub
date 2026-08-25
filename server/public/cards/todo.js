@@ -70,6 +70,13 @@ function setNativeBadge(n) {
   try { window.webkit?.messageHandlers?.badge?.postMessage(n); } catch (_) {}
 }
 
+// The to-do widget draws this same list, and a widget only redraws when its timeline is rebuilt. An
+// edit here is a deliberate act, so nudge it straight away — unlike core.js's macro nudge there's
+// nothing to throttle, since this only fires on an actual tap. No-op in a plain browser.
+function reloadNativeWidgets() {
+  try { window.webkit?.messageHandlers?.reloadWidgets?.postMessage(1); } catch (_) {}
+}
+
 async function post(path, body) {
   if (busy) return;
   busy = true;
@@ -79,6 +86,7 @@ async function post(path, body) {
     if (j) setNativeBadge(j.badge);        // the mutation endpoints return the resulting count
   } catch (_) { /* leave the row; next load reconciles */ }
   finally { busy = false; }
+  reloadNativeWidgets();
   await load();
 }
 

@@ -18,7 +18,7 @@ import Foundation
 // checking off are the same act here, as everywhere else in this system. Two taps also means no single
 // stray tap can clear anything, which is the property the web pane's left-swipe was chosen for.
 
-struct TodoItem: Decodable, Identifiable {
+struct TodoItem: Codable, Identifiable {
     let id: String
     let title: String
     let list: String?
@@ -35,7 +35,50 @@ struct TodoItem: Decodable, Identifiable {
     var isExpired: Bool { expired == true }
     var isRepeating: Bool { repeating == true }
 }
-struct TodoFeed: Decodable { let items: [TodoItem] }
+struct TodoFeed: Codable { let items: [TodoItem] }
+
+// MARK: - Cache
+//
+// The last good payload, on disk in the extension's own container. Two jobs:
+//
+//  1. Never blank. A background refresh can fail for reasons that have nothing to do with the data —
+//     no network on a timeline expiry, a request that outlives its window — and a slightly stale list
+//     beats an empty one.
+//  2. Keep taps INSTANT. WidgetKit rebuilds the timeline after every button press, and if that
+//     rebuild goes to the network the widget sits on its old frame until the round-trip finishes.
+//     Opening a row's options needs no server data whatsoever, so it must never pay for one.
+enum TodoCache {
+    static var url: URL? {
+        FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)
+            .first?.appendingPathComponent("due-last.json")
+    }
+
+    static func load() -> TodoFeed? {
+        guard let u = url, let d = try? Data(contentsOf: u) else { return nil }
+        return try? JSONDecoder().decode(TodoFeed.self, from: d)
+    }
+
+    static func save(_ data: Data) {
+        guard let u = url else { return }
+        try? data.write(to: u, options: .atomic)
+    }
+
+    /// How long since it was last written, or nil if there is nothing cached.
+    static func age() -> TimeInterval? {
+        guard let u = url,
+              let m = (try? FileManager.default.attributesOfItem(atPath: u.path))?[.modificationDate] as? Date
+        else { return nil }
+        return Date().timeIntervalSince(m)
+    }
+
+    /// Drop a row locally after it has been cleared on the server. The write already succeeded, so
+    /// the next rebuild can redraw from cache without waiting on a fetch to learn what we just did.
+    static func remove(id: String) {
+        guard let feed = load() else { return }
+        let kept = TodoFeed(items: feed.items.filter { $0.id != id })
+        if let d = try? JSONEncoder().encode(kept) { save(d) }
+    }
+}
 
 // MARK: - Arm state
 //
@@ -99,6 +142,7 @@ struct ClearTodoItem: AppIntent {
     // that was just cleared.
     func perform() async throws -> some IntentResult {
         await TodoAPI.clear(id: id)
+        TodoCache.remove(id: id)   // so the rebuild can redraw instantly, without a round-trip
         ArmStore.disarm()
         return .result()
     }

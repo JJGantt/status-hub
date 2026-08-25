@@ -1485,8 +1485,14 @@ app.post('/api/todos/add', express.json(), async (req, res) => {
     const list = String(b.list || '').trim() || 'todo';
     const due = String(b.due || '').trim() || null;
     const title = String(b.title || '').trim() || null;
-    // Only honoured alongside a due — a recurrence with no first occurrence has nothing to recur from.
-    const repeat_every = due ? (String(b.repeat_every || '').trim() || null) : null;
+    // Dating an item makes it repeat daily unless told otherwise: a due date means "don't let me
+    // forget this", and a one-shot you happen to miss is gone for good. Repeating keeps asking until
+    // it's cleared, which is one tap. '1 day' not '24 hours' — calendar arithmetic, so a 9am item
+    // stays 9am across DST. Mirrors DEFAULT_REPEAT in data-layer's lists.ts; keep the two in step.
+    // A recurrence with no due has nothing to recur from, so it only applies alongside one.
+    const repeat_every = due
+      ? (b.repeat_every === undefined ? '1 day' : (String(b.repeat_every).trim() || null))
+      : null;
     const exists = await sb(`lists?name=eq.${encodeURIComponent(list)}&select=name&limit=1`);
     if (!exists.length) await sbWrite('lists', 'POST', { name: list });
     await sbWrite('list_items', 'POST', { id: crypto.randomUUID(), list_name: list, text, title, due, repeat_every, deleted: false, created: now, updated: now });

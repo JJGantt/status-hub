@@ -262,7 +262,7 @@ is the bus; the Mac's orchestrator daemon owns everything local:
   writes that file too, hence the mtime re-check + atomic rename.
 - **Scope:** `REPO_ROOTS` defaults to `~/repos` only. What lives loose in `~` (`.hammerspoon`,
   `voice`, `whisper.cpp`) is deliberately out — runtime assets and vendor checkouts, not things you
-  open a session in. Projects that were loose in `~` (`health`, `mcp-session`, `data-layer-proxy`)
+  open a session in. Projects that were loose in `~` (`health`, `mcp-session`)
   and `CapitalGrilleApp` (a repo nested inside the `~/workspace` scratch drawer) were consolidated
   into `~/repos` on 2026-08-23 so the picker can see them.
 

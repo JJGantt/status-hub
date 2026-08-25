@@ -2,39 +2,50 @@ import SwiftUI
 import AppIntents
 import Foundation
 
-// The to-do widget's DRAWING and its BUTTONS, deliberately free of any WidgetKit dependency so it
+// The due widget's DRAWING and its BUTTONS, deliberately free of any WidgetKit dependency so it
 // compiles and renders on its own — see tools/render-todo.swift. Same split as RingsView.swift, and
 // for the same reason: row density is the whole design question here, and rebuilding onto a phone to
 // count how many rows fit is a slow way to find out.
 //
-// The interaction: a widget has no gestures at all — no swipe, no long press, only Button and Toggle
-// taps. So clearing is two taps: tap a row to ARM it (its ✕ appears), tap the ✕ to clear. That keeps
-// the property the web pane's left-swipe was chosen for — no single stray tap can delete anything —
-// with the only mechanism widgets actually offer.
+// WHAT IT SHOWS: everything with a due date, from every list, ordered by when it was FIRST scheduled.
+// Not one list at a time — "what needs dealing with" is never confined to a single list. Items whose
+// moment has passed are EXPIRED and painted so; expiry is judged from the anchor (`scheduled_at`), so
+// a repeating item stays expired after firing rather than resetting itself back to upcoming. Whether
+// an item repeats is orthogonal — it only governs whether the notification comes again.
+//
+// THE INTERACTION: a widget has no gestures at all — no swipe, no long press, only Button and Toggle
+// taps. So tapping a row opens its two options in place: open it in the app, or clear it. Clearing and
+// checking off are the same act here, as everywhere else in this system. Two taps also means no single
+// stray tap can clear anything, which is the property the web pane's left-swipe was chosen for.
 
 struct TodoItem: Decodable, Identifiable {
     let id: String
     let title: String
-    /// Dated and past its time. Dated items live on ordinary lists now — a reminder is just an item
-    /// with a due date — so any row here can be overdue, not only ones on the to-do list.
+    let list: String?
+    let emoji: String?
+    /// Its originally-scheduled moment has passed and it hasn't been cleared. Says nothing about
+    /// whether the item repeats — a one-shot and a repeater expire identically.
     ///
     /// Optional rather than defaulted: a defaulted `var` still makes the key REQUIRED when Decodable
-    /// synthesises `init(from:)`, and `todo-last.json` cached by a build that predates this field
-    /// would then fail to decode — turning the offline fallback into a blank widget, which is the
-    /// one thing that cache exists to prevent.
-    private let overdue: Bool?
-    var isOverdue: Bool { overdue == true }
+    /// synthesises `init(from:)`, and a `todo-last.json` cached by a build predating these fields
+    /// would then fail to decode — turning the offline fallback into a blank widget, which is the one
+    /// thing that cache exists to prevent.
+    private let expired: Bool?
+    private let repeating: Bool?
+    var isExpired: Bool { expired == true }
+    var isRepeating: Bool { repeating == true }
 }
-struct TodoFeed: Decodable { let list: String; let items: [TodoItem] }
+struct TodoFeed: Decodable { let items: [TodoItem] }
 
 // MARK: - Arm state
 //
-// Which row is showing its ✕. This does NOT need an App Group: a widget's Button intent runs in the
-// widget extension's own process, the same process the timeline provider runs in, so the extension's
-// own defaults are shared ground between the two. (An App Group would mean a new entitlement, hence a
-// regenerated provisioning profile — the thing the rejected Xcode account can't currently issue.)
+// Which row has its options open. This does NOT need an App Group: a widget's Button intent runs in
+// the widget extension's own process, the same process the timeline provider runs in, so the
+// extension's own defaults are shared ground between the two. (An App Group would mean a new
+// entitlement, hence a regenerated provisioning profile — the thing the rejected Xcode account can't
+// currently issue.)
 enum ArmStore {
-    /// An armed row auto-disarms after this long, so a ✕ left open on the Home Screen doesn't sit
+    /// An armed row closes itself after this long, so options left open on the Home Screen don't sit
     /// there indefinitely waiting to be brushed. The provider schedules an entry at the expiry.
     static let ttl: TimeInterval = 20
     private static let idKey = "todo.armedID"
@@ -59,13 +70,13 @@ enum ArmStore {
 // MARK: - Intents
 //
 // isDiscoverable = false on both: they are widget plumbing, and without it they'd be offered as
-// actions in Shortcuts, where "Select to-do item" is noise at best.
+// actions in Shortcuts, where "Select item" is noise at best.
 
-/// Tapping a row TOGGLES its ✕. One intent rather than an arm/disarm pair because `Button(intent:)`
-/// takes one concrete type — a ternary over two intent types doesn't typecheck — and because backing
-/// out should be a tap on the very row you just tapped, not a hunt for empty space.
+/// Tapping a row TOGGLES its options. One intent rather than an open/close pair because
+/// `Button(intent:)` takes one concrete type — a ternary over two intent types doesn't typecheck —
+/// and because backing out should be a tap on the very row you just tapped, not a hunt for empty space.
 struct TapTodoItem: AppIntent {
-    static var title: LocalizedStringResource = "Select to-do item"
+    static var title: LocalizedStringResource = "Select item"
     static var isDiscoverable: Bool = false
     @Parameter(title: "id") var id: String
     init() {}
@@ -77,14 +88,14 @@ struct TapTodoItem: AppIntent {
 }
 
 struct ClearTodoItem: AppIntent {
-    static var title: LocalizedStringResource = "Clear to-do item"
+    static var title: LocalizedStringResource = "Clear item"
     static var isDiscoverable: Bool = false
     @Parameter(title: "id") var id: String
     init() {}
     init(id: String) { self.id = id }
 
     // Awaited, not fired and forgotten: WidgetKit rebuilds the timeline as soon as perform() returns,
-    // and that rebuild re-fetches the list. Returning early would race the write and redraw the row
+    // and that rebuild re-fetches the feed. Returning early would race the write and redraw the row
     // that was just cleared.
     func perform() async throws -> some IntentResult {
         await TodoAPI.clear(id: id)
@@ -94,8 +105,8 @@ struct ClearTodoItem: AppIntent {
 }
 
 enum TodoAPI {
-    /// The same soft clear the web pane uses (`/api/todos/clear`, kind "item") — one cleared state
-    /// across every surface, and the row survives its recovery window.
+    /// The same soft clear every other surface uses (`/api/todos/clear`) — checking off and deleting
+    /// are one act, and the row survives its recovery window either way.
     static func clear(id: String) async {
         guard let url = URL(string: Auth.host + "/api/todos/clear"), let token = Auth.token() else { return }
         var r = URLRequest(url: url)
@@ -103,7 +114,7 @@ enum TodoAPI {
         r.timeoutInterval = 15
         r.setValue(token, forHTTPHeaderField: "X-Hub-Token")
         r.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        r.httpBody = try? JSONSerialization.data(withJSONObject: ["kind": "item", "id": id])
+        r.httpBody = try? JSONSerialization.data(withJSONObject: ["id": id])
         _ = try? await URLSession.shared.data(for: r)
     }
 }
@@ -116,16 +127,18 @@ public enum TodoLayout {
     case small, medium, large
 
     /// How many rows fit — measured with the render harness at real point sizes, not guessed. Each
-    /// row is one line: titles only, never the body text after the em dash, so row height is fixed
-    /// and the count is exact rather than a hope.
+    /// row is one line: titles only, never the body text, so row height is fixed and the count is
+    /// exact rather than a hope.
     var rows: Int { switch self { case .small: 6; case .medium: 5; case .large: 10 } }
     var titleSize: CGFloat { switch self { case .small: 11; case .medium: 13; case .large: 14 } }
     var rowGap: CGFloat { switch self { case .small: 5; case .medium: 7; case .large: 11 } }
+    /// The small family has no width to spare for the list's mark next to the text.
+    var showsList: Bool { self != .small }
 }
 
 private let dangerRed = Color(red: 0.937, green: 0.267, blue: 0.267)   // #ef4444
-// Matches the due chip in the web pane (.todo .due), so an overdue row reads the same on both.
-private let overdueAmber = Color(red: 0.902, green: 0.725, blue: 0.239)   // #e6b93d
+// Matches the due chip in the web pane (.todo .due), so an expired row reads the same on both.
+private let expiredAmber = Color(red: 0.902, green: 0.725, blue: 0.239)   // #e6b93d
 
 private struct TodoRowView: View {
     let item: TodoItem
@@ -137,6 +150,18 @@ private struct TodoRowView: View {
             Button(intent: TapTodoItem(id: item.id)) { label }
                 .buttonStyle(.plain)
             if armed {
+                // Open it in the app, showing the full body. A Button carrying an openAppWhenRun
+                // intent rather than a SwiftUI Link: Link draws as a missing-content placeholder
+                // under ImageRenderer, so the layout couldn't be checked with the render harness —
+                // and the Record control already proves the intent route works from this extension.
+                Button(intent: OpenTodoItem(id: item.id)) {
+                    Text("\u{203A}")   // a plain caret; U+2197 resolves to an emoji presentation
+                        .font(.system(size: layout.titleSize + 6, weight: .bold, design: .rounded))
+                        .foregroundStyle(inkText)
+                        .frame(width: 28, height: layout.titleSize + 9)
+                        .background(Capsule().fill(inkText.opacity(0.18)))
+                }
+                .buttonStyle(.plain)
                 Button(intent: ClearTodoItem(id: item.id)) {
                     Text("\u{00d7}")
                         .font(.system(size: layout.titleSize + 4, weight: .bold, design: .rounded))
@@ -150,15 +175,28 @@ private struct TodoRowView: View {
     }
 
     private var label: some View {
-        HStack(spacing: 7) {
-            Circle()
-                .fill(armed ? dangerRed : item.isOverdue ? overdueAmber : mutedText.opacity(0.55))
-                .frame(width: item.isOverdue && !armed ? 5 : 4, height: item.isOverdue && !armed ? 5 : 4)
+        HStack(spacing: 6) {
+            // The list's own emoji stands in for the bullet — it says where the item lives without
+            // spending a chip's worth of width on the list name.
+            if let e = item.emoji, layout.showsList, !e.isEmpty {
+                Text(e).font(.system(size: layout.titleSize - 1))
+            } else {
+                Circle()
+                    .fill(armed ? dangerRed : item.isExpired ? expiredAmber : mutedText.opacity(0.55))
+                    .frame(width: item.isExpired && !armed ? 5 : 4,
+                           height: item.isExpired && !armed ? 5 : 4)
+            }
             Text(item.title)
-                .font(.system(size: layout.titleSize, weight: .medium, design: .rounded))
-                .foregroundStyle(armed ? inkText : item.isOverdue ? overdueAmber : inkText.opacity(0.92))
+                .font(.system(size: layout.titleSize,
+                              weight: item.isExpired ? .semibold : .medium, design: .rounded))
+                .foregroundStyle(armed ? inkText : item.isExpired ? expiredAmber : inkText.opacity(0.92))
                 .lineLimit(1)
                 .truncationMode(.tail)
+            if item.isRepeating {
+                Text("\u{21bb}")
+                    .font(.system(size: layout.titleSize - 2))
+                    .foregroundStyle(mutedText)
+            }
             Spacer(minLength: 0)
         }
         .contentShape(Rectangle())   // the whole row is the target, not just the glyphs
@@ -174,14 +212,19 @@ struct TodoListView: View {
         let items = feed?.items ?? []
         let shown = Array(items.prefix(layout.rows))
         let hidden = items.count - shown.count
+        let expiredCount = items.filter { $0.isExpired }.count
 
         VStack(alignment: .leading, spacing: layout.rowGap) {
             HStack(spacing: 5) {
-                Text((feed?.list ?? "to-do").uppercased())
+                Text("DUE")
                     .font(.system(size: 10, weight: .bold, design: .rounded))
                     .foregroundStyle(mutedText)
                     .tracking(0.8)
-                if !items.isEmpty {
+                if expiredCount > 0 {
+                    Text("\(expiredCount) expired")
+                        .font(.system(size: 10, weight: .bold, design: .rounded))
+                        .foregroundStyle(expiredAmber)
+                } else if !items.isEmpty {
                     Text(String(items.count))
                         .font(.system(size: 10, weight: .bold, design: .rounded))
                         .foregroundStyle(mutedText.opacity(0.8))
@@ -190,13 +233,13 @@ struct TodoListView: View {
             }
 
             if feed == nil {
-                // Distinct from an empty list on purpose: "nothing to show" and "couldn't load" are
+                // Distinct from an empty feed on purpose: "nothing to show" and "couldn't load" are
                 // different facts, and only one of them means you're done.
                 Text("Can\u{2019}t reach the hub")
                     .font(.system(size: layout.titleSize, weight: .medium, design: .rounded))
                     .foregroundStyle(mutedText)
             } else if shown.isEmpty {
-                Text("All clear")
+                Text("Nothing due")
                     .font(.system(size: layout.titleSize, weight: .medium, design: .rounded))
                     .foregroundStyle(mutedText)
             } else {

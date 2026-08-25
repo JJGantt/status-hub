@@ -489,6 +489,19 @@ body.tv.phonewall .pane-todo .card{background:#151a20!important;border:1px solid
 .todo .where{font-size:11px;color:#8b96a5;background:#0e1318;border:1px solid #222a33;
   border-radius:6px;padding:1px 6px;white-space:nowrap}
 .todo .rep{font-size:13px;color:#8b96a5;white-space:nowrap}
+/* Expired = its originally-scheduled moment has passed and it hasn't been dealt with. Independent of
+   whether it repeats: a repeater that has fired is just as outstanding as a one-shot that has. */
+.todo li.sw.exp .txt{color:#e6b93d;font-weight:600}
+.todo li.sw.exp .due{color:#e6b93d}
+.todo .expcount{color:#e6b93d;font-size:12px;font-weight:600;margin-left:6px}
+/* The full text, collapsed until the row is tapped. The widget and these rows only ever show the
+   title, so this is where the rest of it lives. */
+.todo li.sw .body{display:none;padding:2px 2px 9px 2px;font-size:14px;line-height:1.4;color:#8b96a5;white-space:pre-wrap}
+.todo li.sw.open .body{display:block}
+.todo li.sw.has-body .row{cursor:pointer}
+/* Brief highlight when the app jumps here from a widget tap, so the row you asked for is obvious. */
+@keyframes todoflash{from{background:#1d2733}to{background:transparent}}
+.todo li.sw.flash{animation:todoflash 1.6s ease-out}
 .todo .add{display:flex;gap:8px;margin-top:9px;flex-wrap:wrap}
 .todo .add input[type=text]{flex:1 1 150px;min-width:0;background:#0e1318;border:1px solid #222a33;border-radius:8px;padding:9px 11px;color:#e6ebf2;font-size:15px}
 .todo .add input[type=datetime-local]{background:#0e1318;border:1px solid #222a33;border-radius:8px;padding:8px;color:#8b96a5;font-size:13px}

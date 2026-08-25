@@ -1433,6 +1433,32 @@ function itemTitle(row) {
   const derived = first.split(' — ')[0].trim() || first.trim();
   return derived.length > 90 ? derived.slice(0, 89).trimEnd() + '…' : derived;
 }
+// The widget's feed: every dated item, across every list, anchor-ordered. This replaces the
+// per-list widget feed — one surface showing everything that has a time on it, rather than one list
+// at a time, because "what needs dealing with" is never confined to a single list.
+app.get('/api/due-widget', async (req, res) => {
+  try {
+    const [rows, listRows] = await Promise.all([
+      sb('list_items?deleted=eq.false&due=not.is.null&select=id,list_name,text,title,due,scheduled_at,repeat_every&order=scheduled_at.asc'),
+      sb('lists?select=name,emoji'),
+    ]);
+    const emojiOf = {};
+    for (const l of listRows || []) emojiOf[l.name] = l.emoji;
+    const nowET = etNowString();
+    const items = (rows || []).slice(0, LIST_WIDGET_MAX).map((r) => ({
+      id: r.id,
+      title: itemTitle(r),
+      list: r.list_name,
+      emoji: emojiOf[r.list_name] || null,
+      // Anchor-based, so a repeating item stays expired after it fires instead of resetting itself.
+      expired: dueMoment(r.scheduled_at || r.due) <= nowET,
+      when: r.scheduled_at || r.due,
+      repeating: !!r.repeat_every,
+    }));
+    res.json({ items });
+  } catch (e) { res.status(500).json({ error: String(e.message || e) }); }
+});
+
 app.get('/api/list-widget', async (req, res) => {
   try {
     const name = String(req.query.list || 'todo');

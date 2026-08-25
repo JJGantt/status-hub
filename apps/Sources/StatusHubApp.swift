@@ -29,7 +29,13 @@ struct StatusHubApp: App {
                 // Opened via statushub://record (a home-screen shortcut) → fire the same voice FAB the
                 // user would tap, so it lands straight in "listening".
                 .onOpenURL { url in
-                    if url.scheme == "statushub", url.host == "record" { RecordLaunch.shared.request() }
+                    guard url.scheme == "statushub" else { return }
+                    if url.host == "record" { RecordLaunch.shared.request() }
+                    // statushub://item/<id> — the widget's "open this one". The id is the path.
+                    if url.host == "item" {
+                        let id = url.path.hasPrefix("/") ? String(url.path.dropFirst()) : url.path
+                        if !id.isEmpty { ItemLaunch.shared.request(id) }
+                    }
                 }
             #endif
             #if os(macOS)
@@ -56,6 +62,33 @@ struct StatusHubApp: App {
 // voice FAB the user would tap, so the app opens straight into "listening". Polls until the page has mounted
 // the recorder (window.__startVoiceCommand), so it works on a cold launch too (the URL can arrive before
 // the web content finishes loading).
+// Bridges an "open this item" launch (the widget's ↗ option, or statushub://item/<id>) to the loaded
+// web hub: asks the to-do pane to show that item in full, body and all. Same polling shape as
+// RecordLaunch — the request can arrive before the web content has mounted on a cold launch.
+final class ItemLaunch {
+    static let shared = ItemLaunch()
+    weak var webView: WKWebView?
+    private var pendingID: String?
+
+    func request(_ id: String) { pendingID = id; fire() }
+    func fireIfPending() { if pendingID != nil { fire() } }
+
+    private func fire(retries: Int = 12) {
+        guard let id = pendingID, let wv = webView else { return }
+        wv.evaluateJavaScript("!!(window.__showItem)") { [weak self] ready, _ in
+            guard let self, self.pendingID != nil else { return }
+            if (ready as? Bool) == true {
+                self.pendingID = nil
+                // JSON-encoded so an id can never break out of the string literal.
+                let arg = String(data: (try? JSONSerialization.data(withJSONObject: [id])) ?? Data(), encoding: .utf8) ?? "[\"\"]"
+                wv.evaluateJavaScript("window.__showItem(\(arg)[0])", completionHandler: nil)
+            } else if retries > 0 {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) { self.fire(retries: retries - 1) }
+            }
+        }
+    }
+}
+
 final class RecordLaunch {
     static let shared = RecordLaunch()
     weak var webView: WKWebView?
@@ -164,6 +197,7 @@ struct HubWebView {
         func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
             PushManager.shared.attach(webView)
             RecordLaunch.shared.fireIfPending()   // statushub://record cold launch → auto-start the voice FAB
+            ItemLaunch.shared.fireIfPending()     // statushub://item/<id> cold launch → open that item
         }
         #endif
 
@@ -204,6 +238,7 @@ struct HubWebView {
         wv.navigationDelegate = coordinator
         #if os(iOS)
         RecordLaunch.shared.webView = wv   // so a statushub://record launch can drive this web view
+        ItemLaunch.shared.webView = wv     // …and so can statushub://item/<id>
         #endif
         #if os(iOS)
         wv.scrollView.contentInsetAdjustmentBehavior = .never

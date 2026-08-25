@@ -1,9 +1,9 @@
 import WidgetKit
 import SwiftUI
 
-// Home Screen widget: the `todo` list's item titles, each clearable in two taps. The WidgetKit half
-// only — the drawing and the button intents live in TodoView.swift so they can be rendered without a
-// device (tools/render-todo.swift).
+// Home Screen widget: everything with a due date, from every list, anchor-ordered and flagged when
+// expired. The WidgetKit half only — the drawing and the button intents live in TodoView.swift so
+// they can be rendered without a device (tools/render-todo.swift).
 //
 // Much simpler than the rings widget, and deliberately so: that one ships an hour of per-minute
 // frames because pace DRAINS with the clock and a widget can't tick. A to-do list doesn't move on its
@@ -49,7 +49,7 @@ struct TodoProvider: TimelineProvider {
     // nothing to do with the data, and a slightly stale list beats a blank one.
     private static var cacheURL: URL? {
         FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)
-            .first?.appendingPathComponent("todo-last.json")
+            .first?.appendingPathComponent("due-last.json")
     }
 
     private func cached() -> TodoFeed? {
@@ -58,7 +58,7 @@ struct TodoProvider: TimelineProvider {
     }
 
     private func fetch(_ done: @escaping (TodoFeed?) -> Void) {
-        guard let url = URL(string: Auth.host + "/api/list-widget?list=todo"), let token = Auth.token() else {
+        guard let url = URL(string: Auth.host + "/api/due-widget"), let token = Auth.token() else {
             return done(cached())
         }
         var r = URLRequest(url: url)
@@ -96,14 +96,14 @@ struct TodoWidgetView: View {
 
 struct TodoWidget: Widget {
     var body: some WidgetConfiguration {
-        StaticConfiguration(kind: "com.jaredgantt.statushub.todo", provider: TodoProvider()) { entry in
+        StaticConfiguration(kind: "com.jaredgantt.statushub.due", provider: TodoProvider()) { entry in
             TodoWidgetView(entry: entry)
                 .containerBackground(.fill.tertiary, for: .widget)
         }
-        .configurationDisplayName("To-do")
-        .description("Your to-do list. Tap a row to reveal its \u{00d7}, tap that to clear it.")
-        // Home Screen only. The accessory families are too small for a list, and a ✕ that small on
-        // the Lock Screen is a mis-tap waiting to happen.
+        .configurationDisplayName("Due")
+        .description("Everything with a due date, soonest-scheduled first. Tap a row for its options.")
+        // Home Screen only. The accessory families are too small for a list, and option buttons that
+        // small on the Lock Screen are a mis-tap waiting to happen.
         .supportedFamilies([.systemSmall, .systemMedium, .systemLarge])
     }
 }

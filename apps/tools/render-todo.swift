@@ -6,19 +6,20 @@ import AppKit
 // code the widget draws with — so what comes out is what ships. Twin of tools/render-rings.swift.
 //
 //   swiftc -O tools/render-todo.swift Controls/TodoView.swift Controls/RingsView.swift \
-//          Shared/Auth.swift -o /tmp/render-todo && /tmp/render-todo <outdir>
+//          Shared/Auth.swift Shared/OpenTodoItem.swift -o /tmp/render-todo && /tmp/render-todo <outdir>
 //
 // (RingsView comes along for the shared palette; Auth for the intents' network call.)
 
-// Real titles, as /api/list-widget derives them from the live list — including the long ones, which
-// are the only ones that prove the truncation behaves.
+// A realistic mix: expired and upcoming, across lists, one repeating. The expired ones are the point
+// — they are what the colouring and the anchor ordering exist for.
 let json = """
-{"list":"todo","items":[
- {"id":"1","title":"Replace Pi USB thumb drive with a USB SSD (256GB)"},
- {"id":"2","title":"Take care of the insurance and driving stuff","overdue":true},
- {"id":"3","title":"Get the ESP flashed and working again"},
- {"id":"4","title":"Hub UI: show when a request was escalated to Opus (e.g. near the tools/commands display at the bottom)"},
- {"id":"5","title":"Hair pills"}]}
+{"items":[
+ {"id":"1","title":"Order water filter","list":"Amazon","emoji":"\u{1F4E6}","expired":true,"repeating":false},
+ {"id":"2","title":"Take care of the insurance and driving stuff","list":"todo","emoji":"\u{1F4CB}","expired":true,"repeating":false},
+ {"id":"3","title":"Evening vitamins","list":"todo","emoji":"\u{1F4CB}","expired":true,"repeating":true},
+ {"id":"4","title":"Get the ESP flashed and working again","list":"todo","emoji":"\u{1F4CB}","expired":false,"repeating":false},
+ {"id":"5","title":"Milk and eggs","list":"grocery","emoji":"\u{1F6D2}","expired":false,"repeating":false},
+ {"id":"6","title":"Replace Pi USB thumb drive with a USB SSD (256GB)","list":"todo","emoji":"\u{1F4CB}","expired":false,"repeating":false}]}
 """
 
 @main

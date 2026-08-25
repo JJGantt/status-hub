@@ -27,33 +27,50 @@ function fmtDue(due) {
 // (see app.css), so the BROWSER owns the drag physics, momentum, rubber-banding and snapping. There
 // is no pointer maths here, which is the whole point: hand-rolled swipe handling fights the browser
 // and loses. The text itself stays put (the row is sticky) and the X slides in over its right end.
-function row(id, inner) {
-  return `<li class="sw" data-id="${esc(id)}">` +
+function row(id, inner, body = '', expired = false) {
+  // The body is rendered but collapsed. Only rows whose text says more than their title carry one —
+  // expanding a row to reveal exactly what was already on it would be a dead gesture.
+  const detail = body ? `<div class="body">${esc(body)}</div>` : '';
+  return `<li class="sw${expired ? ' exp' : ''}${body ? ' has-body' : ''}" data-id="${esc(id)}">` +
     `<div class="sc">` +
       `<div class="row">${inner}</div>` +
       `<button class="del" aria-label="clear" tabindex="-1">\u00d7</button>` +
-    `</div></li>`;
+    `</div>${detail}</li>`;
 }
 
 // One item's inner markup. `title` is the short label when there is one; the due chip appears on any
 // dated item regardless of list, and says which list when shown in the cross-list Due view.
+function itemLabel(i) { return (i.title && i.title.trim()) || i.text; }
+
 function itemInner(i, withList) {
-  const label = (i.title && i.title.trim()) || i.text;
+  const label = itemLabel(i);
   const where = withList ? `<span class="where">${esc(i.list_name)}</span>` : '';
-  const due = i.due ? `<span class="due">${esc(fmtDue(i.due))}</span>` : '';
+  // Shows the ANCHOR, not the next firing time: a repeating item's due jumps into the future the
+  // moment it fires, and the useful fact is when it was first supposed to happen.
+  const when = i.scheduled_at || i.due;
+  const due = when ? `<span class="due">${esc(fmtDue(when))}</span>` : '';
   // The glyph carries the fact; the period is in its title so a tap-and-hold reveals it without
   // spending row width that the text needs more.
   const rep = i.repeat_every ? `<span class="rep" title="every ${esc(i.repeat_every)}">\u21bb</span>` : '';
   return `<span class="txt">${esc(label)}</span>${where}${due}${rep}`;
 }
 
+// Full text is only worth revealing when it says more than the label already does.
+function bodyFor(i) {
+  const full = String(i.text || '').trim();
+  return full && full !== itemLabel(i) ? full : '';
+}
+
 function html(d) {
-  const due = (d.due || []).map((i) => row(i.id, itemInner(i, true))).join('');
-  let out = `<section><h3>Due</h3><ul>${due || '<li class="empty">Nothing due</li>'}</ul>` +
+  const list = d.due || [];
+  const expired = list.filter((i) => i.expired).length;
+  const due = list.map((i) => row(i.id, itemInner(i, true), bodyFor(i), i.expired)).join('');
+  const count = expired ? `<span class="expcount">${expired} expired</span>` : '';
+  let out = `<section><h3>Due ${count}</h3><ul>${due || '<li class="empty">Nothing due</li>'}</ul>` +
     `<div class="add"><input type="text" placeholder="New dated item" data-add="item" data-list="todo">` +
     `<input type="datetime-local" data-due="item" aria-label="when"></div></section>`;
   for (const l of d.lists || []) {
-    const items = (l.items || []).map((i) => row(i.id, itemInner(i, false))).join('');
+    const items = (l.items || []).map((i) => row(i.id, itemInner(i, false), bodyFor(i), i.expired)).join('');
     const mark = l.emoji ? `${esc(l.emoji)} ` : '';
     out += `<section><h3>${mark}${esc(l.name)}</h3><ul>${items || '<li class="empty">Empty</li>'}</ul>` +
       `<div class="add"><input type="text" placeholder="Add to ${esc(l.name)}" data-add="item" data-list="${esc(l.name)}"></div></section>`;
@@ -118,6 +135,15 @@ function wire(el) {
   el.querySelectorAll('li.sw').forEach((li) => {
     const sc = li.querySelector('.sc');
     sc.addEventListener('pointerdown', () => closeAll(el, sc));   // only one open at a time
+    // Tap opens the full text; the left-swipe still clears. Two different gestures for two different
+    // acts, so revealing detail can never be mistaken for checking something off. Guarded on the
+    // swipe having stayed put, or the tap that ends a drag would also toggle the body.
+    if (li.classList.contains('has-body')) {
+      li.querySelector('.row').addEventListener('click', () => {
+        if (sc.scrollLeft) return;
+        li.classList.toggle('open');
+      });
+    }
     li.querySelector('.del').addEventListener('click', () =>
       post('/api/todos/clear', { id: li.dataset.id }));
   });
@@ -135,6 +161,20 @@ function wire(el) {
     post('/api/todos/add', body);
   }));
 }
+
+// Called by the native app when a widget row's › option is tapped (statushub://item/<id> →
+// ItemLaunch). Brings that item into view and opens its full text — the widget only ever had room
+// for the title, so "open it" has to mean "show me the rest".
+window.__showItem = async (id) => {
+  const el = document.getElementById('todopane');
+  if (!el) return;
+  if (!mounted) { mounted = true; await load(); } else { await load(); }
+  const li = el.querySelector(`li.sw[data-id="${CSS.escape(String(id))}"]`);
+  if (!li) return;
+  li.classList.add('open', 'flash');
+  li.scrollIntoView({ block: 'center', behavior: 'smooth' });
+  setTimeout(() => li.classList.remove('flash'), 1600);
+};
 
 export function render() {
   if (mounted) return;                              // self-refreshing; not driven by the status stream

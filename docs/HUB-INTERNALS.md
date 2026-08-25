@@ -157,6 +157,18 @@ Consequences worth knowing:
   ledger rows written before the merge still match. Renaming the key would orphan them and every
   already-delivered item would fire a second time.
 - **`kind` is gone** from `/api/todos/clear` — one table, one thing to clear.
+- **Repeats** live in `repeat_every` (`'1 day'`, `'2 hours'`, `'1 month'`, …). One nullable column,
+  not a boolean plus a period: null already means "one-shot", and a second field carrying the same
+  fact is a second field that can contradict it — the shape migration `00053` removed when `done` and
+  `deleted` both meant "dealt with". `advanceDue()` computes the next occurrence on the **wall-clock
+  components** rather than an instant, so "every day at 9am" survives a DST boundary; it skips whole
+  missed windows (a daily item unfired for three days comes due once, not three times) and clamps
+  month-ends (Jan 31 + 1 month → Feb 28, not Mar 3). Re-arming happens *after* delivery, so a failed
+  send leaves the row due and retries rather than rolling forward and skipping an occurrence.
+- **The dedupe key is `reminder:<id>:<due>`** — scoped to the occurrence, not the row. A repeating
+  item fires under one id repeatedly, so the id alone would suppress everything after the first
+  occurrence. It also makes snooze self-cleaning: moving the due is already a new key, so the endpoint
+  no longer deletes the old ledger row by hand.
 
 Voice/MCP writes them (data-layer tools); the hub surfaces them:
 - **Card:** `public/cards/todo.js` — the 5th phone swipe pane. Self-fetches `/api/todos` (not part of

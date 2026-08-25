@@ -488,6 +488,7 @@ body.tv.phonewall .pane-todo .card{background:#151a20!important;border:1px solid
    would otherwise be rootless. Muted: it's provenance, not the point of the row. */
 .todo .where{font-size:11px;color:#8b96a5;background:#0e1318;border:1px solid #222a33;
   border-radius:6px;padding:1px 6px;white-space:nowrap}
+.todo .rep{font-size:13px;color:#8b96a5;white-space:nowrap}
 .todo .add{display:flex;gap:8px;margin-top:9px;flex-wrap:wrap}
 .todo .add input[type=text]{flex:1 1 150px;min-width:0;background:#0e1318;border:1px solid #222a33;border-radius:8px;padding:9px 11px;color:#e6ebf2;font-size:15px}
 .todo .add input[type=datetime-local]{background:#0e1318;border:1px solid #222a33;border-radius:8px;padding:8px;color:#8b96a5;font-size:13px}

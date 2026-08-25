@@ -41,7 +41,10 @@ function itemInner(i, withList) {
   const label = (i.title && i.title.trim()) || i.text;
   const where = withList ? `<span class="where">${esc(i.list_name)}</span>` : '';
   const due = i.due ? `<span class="due">${esc(fmtDue(i.due))}</span>` : '';
-  return `<span class="txt">${esc(label)}</span>${where}${due}`;
+  // The glyph carries the fact; the period is in its title so a tap-and-hold reveals it without
+  // spending row width that the text needs more.
+  const rep = i.repeat_every ? `<span class="rep" title="every ${esc(i.repeat_every)}">\u21bb</span>` : '';
+  return `<span class="txt">${esc(label)}</span>${where}${due}${rep}`;
 }
 
 function html(d) {

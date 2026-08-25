@@ -36,6 +36,13 @@ struct StatusHubApp: App {
                         let id = url.path.hasPrefix("/") ? String(url.path.dropFirst()) : url.path
                         if !id.isEmpty { ItemLaunch.shared.request(id) }
                     }
+                    // statushub://pane/<name> — a widget tapped anywhere but a row. Each widget names
+                    // the pane it depicts, so tapping it lands there instead of on whatever pane
+                    // happened to be open last.
+                    if url.host == "pane" {
+                        let name = url.path.hasPrefix("/") ? String(url.path.dropFirst()) : url.path
+                        if !name.isEmpty { PaneLaunch.shared.request(name) }
+                    }
                 }
             #endif
             #if os(macOS)
@@ -65,6 +72,32 @@ struct StatusHubApp: App {
 // Bridges an "open this item" launch (the widget's ↗ option, or statushub://item/<id>) to the loaded
 // web hub: asks the to-do pane to show that item in full, body and all. Same polling shape as
 // RecordLaunch — the request can arrive before the web content has mounted on a cold launch.
+// Bridges statushub://pane/<name> to the loaded web hub: scrolls the phone's swipe panes to the named
+// one. Same polling shape as RecordLaunch — a cold launch can deliver the URL before the page has
+// mounted the pane machinery.
+final class PaneLaunch {
+    static let shared = PaneLaunch()
+    weak var webView: WKWebView?
+    private var pendingName: String?
+
+    func request(_ name: String) { pendingName = name; fire() }
+    func fireIfPending() { if pendingName != nil { fire() } }
+
+    private func fire(retries: Int = 12) {
+        guard let name = pendingName, let wv = webView else { return }
+        wv.evaluateJavaScript("!!(window.__showPane)") { [weak self] ready, _ in
+            guard let self, self.pendingName != nil else { return }
+            if (ready as? Bool) == true {
+                self.pendingName = nil
+                let safe = name.filter { $0.isLowercase && $0.isLetter }
+                wv.evaluateJavaScript("window.__showPane('\(safe)')", completionHandler: nil)
+            } else if retries > 0 {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) { self.fire(retries: retries - 1) }
+            }
+        }
+    }
+}
+
 final class ItemLaunch {
     static let shared = ItemLaunch()
     weak var webView: WKWebView?
@@ -198,6 +231,7 @@ struct HubWebView {
             PushManager.shared.attach(webView)
             RecordLaunch.shared.fireIfPending()   // statushub://record cold launch → auto-start the voice FAB
             ItemLaunch.shared.fireIfPending()     // statushub://item/<id> cold launch → open that item
+            PaneLaunch.shared.fireIfPending()     // statushub://pane/<name> cold launch → land there
         }
         #endif
 
@@ -239,6 +273,7 @@ struct HubWebView {
         #if os(iOS)
         RecordLaunch.shared.webView = wv   // so a statushub://record launch can drive this web view
         ItemLaunch.shared.webView = wv     // …and so can statushub://item/<id>
+        PaneLaunch.shared.webView = wv     // …and statushub://pane/<name>
         #endif
         #if os(iOS)
         wv.scrollView.contentInsetAdjustmentBehavior = .never

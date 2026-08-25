@@ -1,6 +1,9 @@
 import SwiftUI
 import AppIntents
 import Foundation
+#if canImport(WidgetKit)
+import WidgetKit   // only to nudge a redraw mid-clear; the drawing below stays WidgetKit-free
+#endif
 
 // The due widget's DRAWING and its BUTTONS, deliberately free of any WidgetKit dependency so it
 // compiles and renders on its own — see tools/render-todo.swift. Same split as RingsView.swift, and
@@ -93,6 +96,7 @@ enum ArmStore {
     static let ttl: TimeInterval = 20
     private static let idKey = "todo.armedID"
     private static let atKey = "todo.armedAt"
+    private static let pendingKey = "todo.clearingID"
 
     static func arm(_ id: String) {
         UserDefaults.standard.set(id, forKey: idKey)
@@ -102,6 +106,15 @@ enum ArmStore {
         UserDefaults.standard.removeObject(forKey: idKey)
         UserDefaults.standard.removeObject(forKey: atKey)
     }
+    /// The row whose clear is in flight. Rendered as "clearing…" so the tap isn't a dead second while
+    /// the POST is out — a widget cannot show a spinner, and it keeps drawing its previous frame until
+    /// the intent returns, so without this the ✕ looks ignored.
+    static func clearing() -> String? { UserDefaults.standard.string(forKey: pendingKey) }
+    static func setClearing(_ id: String?) {
+        if let id { UserDefaults.standard.set(id, forKey: pendingKey) }
+        else { UserDefaults.standard.removeObject(forKey: pendingKey) }
+    }
+
     /// The armed row and when it was armed — nil once it has aged past `ttl`.
     static func armed(now: Date = Date()) -> (id: String, at: Date)? {
         guard let id = UserDefaults.standard.string(forKey: idKey) else { return nil }
@@ -141,8 +154,17 @@ struct ClearTodoItem: AppIntent {
     // and that rebuild re-fetches the feed. Returning early would race the write and redraw the row
     // that was just cleared.
     func perform() async throws -> some IntentResult {
+        // Paint "clearing…" BEFORE going to the network. The request can't be fired and forgotten —
+        // a widget extension may be suspended the moment perform() returns, and without an App Group
+        // there's no background URLSession to survive it, so the write has to be awaited. Awaiting it
+        // silently is what made the tap feel dead, hence the interim state.
+        ArmStore.setClearing(id)
+        #if canImport(WidgetKit)
+        WidgetCenter.shared.reloadTimelines(ofKind: "com.jaredgantt.statushub.due")
+        #endif
         await TodoAPI.clear(id: id)
-        TodoCache.remove(id: id)   // so the rebuild can redraw instantly, without a round-trip
+        TodoCache.remove(id: id)   // so the rebuild redraws the row gone, with no second round-trip
+        ArmStore.setClearing(nil)
         ArmStore.disarm()
         return .result()
     }
@@ -187,9 +209,30 @@ private let expiredAmber = Color(red: 0.902, green: 0.725, blue: 0.239)   // #e6
 private struct TodoRowView: View {
     let item: TodoItem
     let armed: Bool
+    let clearing: Bool
     let layout: TodoLayout
 
     var body: some View {
+        if clearing {
+            // No buttons: the outcome is already decided, and offering an action that can't be taken
+            // back would be a lie.
+            HStack(spacing: 6) {
+                Text(item.title)
+                    .font(.system(size: layout.titleSize, weight: .medium, design: .rounded))
+                    .foregroundStyle(mutedText)
+                    .strikethrough(true, color: mutedText)
+                    .lineLimit(1).truncationMode(.tail)
+                Text("clearing\u{2026}")
+                    .font(.system(size: layout.titleSize - 2, weight: .semibold, design: .rounded))
+                    .foregroundStyle(mutedText.opacity(0.8))
+                Spacer(minLength: 0)
+            }
+        } else {
+            content
+        }
+    }
+
+    private var content: some View {
         HStack(spacing: 6) {
             Button(intent: TapTodoItem(id: item.id)) { label }
                 .buttonStyle(.plain)
@@ -250,6 +293,7 @@ private struct TodoRowView: View {
 struct TodoListView: View {
     let feed: TodoFeed?
     let armed: String?
+    var clearing: String? = nil
     let layout: TodoLayout
 
     var body: some View {
@@ -288,7 +332,8 @@ struct TodoListView: View {
                     .foregroundStyle(mutedText)
             } else {
                 ForEach(shown) { item in
-                    TodoRowView(item: item, armed: item.id == armed, layout: layout)
+                    TodoRowView(item: item, armed: item.id == armed,
+                                clearing: item.id == clearing, layout: layout)
                 }
                 if hidden > 0 {
                     Text("+\(hidden) more")

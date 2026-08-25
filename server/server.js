@@ -1483,7 +1483,12 @@ app.post('/api/todos/clear', express.json(), async (req, res) => {
     const id = String(b.id || '');
     if (!id) return res.status(400).json({ error: 'id required' });
     await sbWrite(`list_items?id=eq.${encodeURIComponent(id)}`, 'PATCH', { deleted: true, updated: new Date().toISOString() });
-    res.json({ ok: true, badge: await overdueCount() });
+    // Answer on the WRITE, not on a recount. This used to await overdueCount() before responding,
+    // which meant a second sequential Supabase round-trip from Fly on the one path a person is
+    // actually watching — the widget's ✕ can't redraw until this returns. Nothing needed that
+    // number here: the pane re-reads /api/badge after every load anyway, and syncBadge() pushes the
+    // authoritative count to the devices a moment later.
+    res.json({ ok: true });
     syncBadge().catch(() => {});   // don't make the caller wait on APNs
   } catch (e) { res.status(500).json({ error: String(e.message || e) }); }
 });

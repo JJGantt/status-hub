@@ -33,14 +33,15 @@ enum RenderTodo {
             shoot(feed, nil,   outDir, "todo-medium",      CGSize(width: 364, height: 172), .medium)
             shoot(feed, "2",   outDir, "todo-medium-armed", CGSize(width: 364, height: 172), .medium)
             shoot(feed, nil,   outDir, "todo-large",       CGSize(width: 364, height: 382), .large)
+            shoot(feed, nil,   outDir, "todo-clearing",    CGSize(width: 364, height: 172), .medium, clearing: "2")
         }
     }
 }
 
 @MainActor
 func shoot(_ feed: TodoFeed, _ armed: String?, _ outDir: String, _ name: String,
-           _ size: CGSize, _ layout: TodoLayout) {
-    let view = TodoListView(feed: feed, armed: armed, layout: layout)
+           _ size: CGSize, _ layout: TodoLayout, clearing: String? = nil) {
+    let view = TodoListView(feed: feed, armed: armed, clearing: clearing, layout: layout)
         .padding(.horizontal, 12).padding(.vertical, 11)
         .frame(width: size.width, height: size.height)
         .background(Color(red: 0.082, green: 0.102, blue: 0.125))   // the card's ground

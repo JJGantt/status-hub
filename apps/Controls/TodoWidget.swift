@@ -13,7 +13,8 @@ import SwiftUI
 struct TodoEntry: TimelineEntry {
     let date: Date
     let feed: TodoFeed?        // nil = couldn't load (no token yet, offline, hub down)
-    let armed: String?         // the row currently showing its ✕
+    let armed: String?         // the row currently showing its options
+    var clearing: String? = nil   // the row whose clear is in flight
 }
 
 struct TodoProvider: TimelineProvider {
@@ -47,20 +48,25 @@ struct TodoProvider: TimelineProvider {
         let build: (TodoFeed?) -> Void = { feed in
             let now = Date()
             var entries = [TodoEntry]()
+            let clearing = ArmStore.clearing()
             if let a = ArmStore.armed(now: now) {
                 // Two entries so the options close themselves: open now, closed the moment the arm
                 // expires. Without this they'd sit open until something else rebuilt the timeline.
-                entries.append(TodoEntry(date: now, feed: feed, armed: a.id))
-                entries.append(TodoEntry(date: a.at.addingTimeInterval(ArmStore.ttl), feed: feed, armed: nil))
+                entries.append(TodoEntry(date: now, feed: feed, armed: a.id, clearing: clearing))
+                entries.append(TodoEntry(date: a.at.addingTimeInterval(ArmStore.ttl), feed: feed,
+                                         armed: nil, clearing: clearing))
             } else {
-                entries.append(TodoEntry(date: now, feed: feed, armed: nil))
+                entries.append(TodoEntry(date: now, feed: feed, armed: nil, clearing: clearing))
             }
             completion(Timeline(entries: entries, policy: .after(now.addingTimeInterval(3600))))
         }
 
         // A live arm means this rebuild came from a tap: redraw locally whatever the cache's age.
         // Otherwise a recent cache still spares the round-trip on the rapid tap/untap sequence.
-        let armed = ArmStore.armed() != nil
+        // A clear in flight must NEVER go to the network: this rebuild exists purely to paint the
+        // interim "clearing…" row, and fetching would make it wait on the very request it is meant to
+        // be covering for.
+        let armed = ArmStore.armed() != nil || ArmStore.clearing() != nil
         let fresh = (TodoCache.age() ?? .greatestFiniteMagnitude) < Self.cacheGoodFor
         if let cached = TodoCache.load(), armed || fresh { return build(cached) }
         fetch(build)
@@ -98,10 +104,11 @@ struct TodoWidgetView: View {
     }
 
     var body: some View {
-        TodoListView(feed: entry.feed, armed: entry.armed, layout: layout)
+        TodoListView(feed: entry.feed, armed: entry.armed, clearing: entry.clearing, layout: layout)
             // Rows are buttons and take their own taps; this catches the header and the space below
-            // the last row, so there is still somewhere to tap that opens the app.
-            .widgetURL(URL(string: "statushub://open"))
+            // the last row. It lands on the to-do pane specifically — opening the app to whatever was
+            // last on screen makes a tap on THIS widget feel like it did nothing.
+            .widgetURL(URL(string: "statushub://pane/todo"))
     }
 }
 

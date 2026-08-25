@@ -98,7 +98,8 @@ struct RingsWidgetView: View {
 
     var body: some View {
         RingsRow(frame: entry.frame, layout: layout, score: entry.score)
-            .widgetURL(URL(string: "statushub://open"))   // any host but "record" just opens the app
+            // Lands on the wall, where the nutrition card these rings mirror actually lives.
+            .widgetURL(URL(string: "statushub://pane/wall"))
     }
 }
 

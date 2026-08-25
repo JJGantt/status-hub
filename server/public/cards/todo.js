@@ -116,7 +116,10 @@ async function post(path, body) {
   try {
     const r = await fetch(path, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
     const j = await r.json().catch(() => null);
-    if (j) setNativeBadge(j.badge);        // the mutation endpoints return the resulting count
+    // Some mutation endpoints return the resulting count; /clear deliberately doesn't (it answers on
+    // the write so the widget can redraw sooner). setNativeBadge ignores a non-integer, and load()
+    // re-reads /api/badge immediately after, so either way the badge lands correct.
+    if (j) setNativeBadge(j.badge);
   } catch (_) { /* leave the row; next load reconciles */ }
   finally { busy = false; }
   reloadNativeWidgets();
@@ -169,6 +172,9 @@ window.__showItem = async (id) => {
   const el = document.getElementById('todopane');
   if (!el) return;
   if (!mounted) { mounted = true; await load(); } else { await load(); }
+  // Land on the pane that holds it before hunting for the row — scrollIntoView inside a pane that
+  // isn't the visible one does nothing useful.
+  try { window.__showPane && window.__showPane('todo'); } catch (_) {}
   const li = el.querySelector(`li.sw[data-id="${CSS.escape(String(id))}"]`);
   if (!li) return;
   li.classList.add('open', 'flash');

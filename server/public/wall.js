@@ -101,5 +101,17 @@ if (MAC) {
     // Multi-pane swipe: land on the wall (index 1). No page-dots — they'd sit over the display.
     const panes = document.getElementById('wallpanes');
     if (panes) requestAnimationFrame(() => { panes.scrollLeft = panes.clientWidth; });
+
+    // Jump to a named pane. The native app calls this when a widget is tapped, so each widget lands
+    // on the part of the hub it actually depicts rather than on whatever pane was last open — the
+    // due widget is useless if tapping it drops you on the chat pane.
+    window.__showPane = (name) => {
+      if (!panes) return false;
+      const el = panes.querySelector(`.pane-${String(name).replace(/[^a-z]/g, '')}`);
+      if (!el) return false;
+      // scroll-snap owns the physics; setting scrollLeft to the pane's offset lands it exactly.
+      panes.scrollTo({ left: el.offsetLeft, behavior: 'smooth' });
+      return true;
+    };
   }
 }

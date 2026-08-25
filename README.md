@@ -51,5 +51,17 @@ open "build/Build/Products/Debug/Status Hub.app"
 ```
 
 Bundle id `com.jaredgantt.statushub`, team `XMH4AVFC78`. `StatusHub` (iOS) + `StatusHubMac` share
-`apps/Sources/`; the iOS-18 Lock-Screen/Control-Center control (`StatusHubControls`) + the shared
-`HubVoiceIntent` live in `apps/Controls/` + `apps/Shared/`.
+`apps/Sources/`; the iOS-18 widget extension (`StatusHubControls`) + the shared `HubVoiceIntent` live
+in `apps/Controls/` + `apps/Shared/`. That one extension carries **both** the Lock-Screen /
+Control-Center **Record** button and the **Macro Rings** home/lock-screen widget (fed by
+`/api/rings`).
+
+Iterating on the widget's layout doesn't need a device — `Controls/RingsView.swift` is WidgetKit-free
+and renders standalone to PNGs:
+
+```sh
+cd apps
+swiftc -O tools/render-rings.swift Controls/RingsView.swift -o /tmp/render && /tmp/render /tmp
+```
+
+**Full internals map: [docs/HUB-INTERNALS.md](docs/HUB-INTERNALS.md) §9 (app) and §9b (widget).**

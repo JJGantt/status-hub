@@ -4,7 +4,7 @@ Central reference for the whole ecosystem (hub UI, voice pipeline, data layer, d
 hosting). Lives in the `status-hub` repo because that's the most active/central repo, but it
 documents **everything**, not just the hub. Keep it current as pieces change.
 
-> Verified state as of 2026-08-20. Lines marked **(verify)** are inferred and worth re-checking.
+> Verified state as of 2026-08-24. Lines marked **(verify)** are inferred and worth re-checking.
 > For the hub UI's own internals (payload contract, module/card map, domain engine, API + settings
 > catalog), see **[docs/HUB-INTERNALS.md](docs/HUB-INTERNALS.md)** — this file is the ecosystem view.
 
@@ -104,6 +104,12 @@ the working directory is linked to.
   Shortcut**, and an iOS-18 **Lock Screen / Control Center control** that all open the app straight
   into "listening" (fire the web voice FAB via `RecordLaunch`). No longer just a thin wrapper — see
   [docs/HUB-INTERNALS.md](docs/HUB-INTERNALS.md) §9.
+- **Home / Lock Screen widget** — "Macro Rings": today's Cal/P/C/F **pace** rings (plus the health
+  bar on the medium size), the first surface that is *not* the web hub — native SwiftUI drawing in
+  the same `StatusHubControls` extension as the Record control. It renders from `/api/rings`, a
+  compact feed of **per-minute future frames**, so the arcs drain and the pace marker advances on the
+  Home Screen for an hour per fetch while `lib/pace.js` remains the only place that maths lives. See
+  [docs/HUB-INTERNALS.md](docs/HUB-INTERNALS.md) §9b.
 - **ESP32** — the voice mic (see §5).
 - **iPhone push** — native APNs notifications (see §7).
 

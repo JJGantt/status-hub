@@ -4,7 +4,7 @@ How the hub UI is actually built: the data flow, the payload contract, the modul
 engine, and the full API + settings surface. Read `ARCHITECTURE.md` first for the ecosystem view;
 this is the map for working *inside* `status-hub` itself.
 
-> Freshness: 2026-08-20. The individual code files carry detailed header comments — this doc is the
+> Freshness: 2026-08-24. The individual code files carry detailed header comments — this doc is the
 > connective tissue (structure, contracts, catalogs) that no single file holds.
 
 ---
@@ -116,7 +116,8 @@ The math lives here; each file has a thorough header. Summary map:
 
 **Read:** `/api/status` (full payload) · `/api/stream` (SSE status) · `/api/voice-stream` (SSE voice
 frames for the kiosk) · `/api/workout-day` · `/api/nutrition-day` · `/api/voice-messages` ·
-`/api/todos` · `/api/repos` · `/api/repos/cmd/:id` · `/api/attachment`.
+`/api/todos` · `/api/repos` · `/api/repos/cmd/:id` · `/api/attachment` · `/api/rings` (the iOS
+widget's compact pace feed — a timeline of frames, not a snapshot; see §9b).
 
 **Write:** `/api/settings` (GET/POST) · `/api/log-set` · `/api/log-entry` (POST/DELETE) ·
 `/api/commit-staged` · `/api/feed` · `/api/todos/{add,complete}` · `/api/repos/open` · `/api/voice-command` (raw audio →
@@ -206,8 +207,9 @@ orchestrator ──beat(30s)──▶ worker_presence(worker='desk') ──▶ t
 
 ## 9. Native app (`apps/`)
 
-XcodeGen (`project.yml`) → `StatusHub` (iOS) + `StatusHubMac` + `StatusHubControls` (iOS-18 control
-extension). More than a thin wrapper now:
+XcodeGen (`project.yml`) → three targets: **`StatusHub`** (iOS 17+), **`StatusHubMac`** (macOS 13+,
+shares `Sources/` + `Shared/Auth.swift` only), and **`StatusHubControls`** (iOS 18+
+widgetkit-extension, embedded by the iOS app — §9b). More than a thin wrapper now:
 
 - **`HubWebView`** (StatusHubApp.swift): WKWebView over `Auth.host`, seeds the `hub` cookie from the
   Keychain password; grants webview media capture; bridges JS dialogs to native alerts.
@@ -216,4 +218,77 @@ extension). More than a thin wrapper now:
   (Shared/, `openAppWhenRun`) drives it from a **Siri/Spotlight App Shortcut** (RecordIntent.swift) and
   the **Lock Screen / Control Center control** (Controls/RecordControl.swift). `HUB_APP` compile flag
   guards the app-only `RecordLaunch` call so the extension links without WebKit.
+- **Page → native bridge** (`userContentController`): the page posts `badge` (icon badge count, set
+  the instant a reminder is cleared *inside* the web view — a background push can't be relied on) and
+  `reloadWidgets` (§9b).
+- **Auth sharing** (`Shared/Auth.swift`): the hub password lives in the Keychain; `token()` derives
+  the same `sha256("status-hub:"+password)` the web cookie uses and sends it as `X-Hub-Token`. The
+  access group is written out explicitly (`XMH4AVFC78.com.jaredgantt.statushub`, declared in **both**
+  targets' entitlements) because the extension has a different bundle id and so a different *default*
+  keychain group — it is deliberately equal to the app's own implicit group, so the password stored
+  before the extension existed still resolves and nothing has to be re-entered.
 - **Build/install:** see the root `README.md` (xcodegen → xcodebuild → `devicectl device install`).
+
+---
+
+## 9b. `StatusHubControls` — the Record control + the Macro Rings widget
+
+One iOS-18 widgetkit-extension (`apps/Controls/`, bundle `com.jaredgantt.statushub.controls`,
+embedded by the app) hosts **both**, in a single `WidgetBundle` (bottom of `RecordControl.swift`).
+That is the intended shape — a bundle is meant to carry several widgets and controls — and it also
+avoids a **new bundle id**, which would need a new provisioning profile, which the rejected Xcode
+account session can't issue ([TODO.md](TODO.md) § Blocked on Jared).
+
+**Record control** (`RecordControl.swift`) — a Lock Screen / Control Center button. It runs
+`HubVoiceIntent`, so it needs none of the app's code: `openAppWhenRun` opens the app and `perform()`
+executes *in the app process*, where `HUB_APP` is defined and `RecordLaunch` fires the web voice FAB.
+
+**Macro Rings widget** (`RingsWidget.swift` = WidgetKit plumbing, `RingsView.swift` = drawing) —
+today's Cal/P/C/F **pace** rings, drawn to match the hub's nutrition card. Not absolute progress: a
+ring is full when on pace, drains as the clock runs ahead of what's been eaten, and grows an overflow
+arc once ahead; the white tick is where the arc would end if you were exactly on pace. Families:
+
+| Family | Layout |
+|---|---|
+| `systemSmall` | 2×2 grid of rings (a row of four would leave a square widget two-thirds empty) |
+| `systemMedium` | health bar on top, then a row of four rings with `consumed / goal` under each |
+| `accessoryCircular` | calories only |
+| `accessoryRectangular` | four compact rings in a row |
+
+Tapping opens `statushub://open` — any host but `record` just opens the app.
+
+- **The server does the maths.** Every drawn value comes precomputed from `GET /api/rings`: arc
+  lengths (`ring_base`/`ring_over`), colours, the signed deviation number, the marker position
+  (`frac`), and the health-bar fills. `lib/pace.js` and `cards/score.js` stay the only implementations
+  — the Swift never re-derives them, so the widget can't quietly drift from the wall. The health-bar
+  values arrive **already halved** (each side fills at most 50%) so the weighting isn't re-derived
+  either.
+- **Frames, not a clock.** A widget renders a static snapshot; it cannot tick. So `/api/rings` returns
+  **61 per-minute frames** (`STEP_MIN = 1`, `SPAN_MIN = 60`, ≈37KB) and `getTimeline` maps frame `t`
+  to an entry dated `now + t` minutes. WidgetKit pre-renders the whole timeline and swaps entries at
+  their dates, so the arcs drain and the marker advances for an hour on **one** fetch — 61 frames cost
+  one refresh, not 61. Per-minute is deliberate: the pace line moves ~3 cal/min, so a 10-minute step
+  left the centre number up to ~31 cal behind and read as stuck (`b39c498`). Span is the other half of
+  the trade — longer means less network, but `consumed` stays frozen at fetch time for that whole
+  window, so an hour bounds how stale it can get on its own (`79a6941`, down from 4h).
+- **Freshness.** A placed widget holds a *cached* timeline, so two things force a rebuild early:
+  `applicationDidBecomeActive` (Push.swift — also covers "new widget code after a reinstall doesn't
+  render until the old policy date rolls round") and the page itself — `core.js` `nudgeWidgets()`
+  watches the SSE stream and posts `reloadWidgets` to the native shell when the four macro totals
+  actually change, throttled to once a minute.
+- **Never blank.** The last good payload is written to `rings-last.json` in the extension's caches
+  directory and served whenever a fetch fails — no token yet, offline, or a background refresh that
+  outlives its window. Slightly stale beats an empty widget (`378191a`).
+- **Lock Screen caveat.** iOS renders the accessory families in a flattened tint, so the pace
+  *colours* don't survive there — arc lengths and the tick do.
+
+**Render harness** (`apps/tools/render-rings.swift`) — `RingsView.swift` is deliberately
+WidgetKit-free so it compiles standalone on macOS. The harness draws the **same** views at real
+device point sizes to PNGs, so ring geometry can be iterated without a
+rebuild → reinstall → squint-at-the-phone loop:
+
+```sh
+cd apps
+swiftc -O tools/render-rings.swift Controls/RingsView.swift -o /tmp/render && /tmp/render /tmp
+# writes /tmp/{small,medium,rectangular}.png from a real /api/rings response baked into the tool
+```

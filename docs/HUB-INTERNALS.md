@@ -176,7 +176,7 @@ Consequences worth knowing:
 - **The dedupe key is `reminder:<id>:<due>`** — scoped to the occurrence, not the row. A repeating
   item fires under one id repeatedly, so the id alone would suppress everything after the first
   occurrence. It also makes snooze self-cleaning: moving the due is already a new key, so the endpoint
-  no longer deletes the old ledger row by hand.
+  never has to delete the old ledger row by hand.
 
 Voice/MCP writes them (data-layer tools); the hub surfaces them:
 - **Card:** `public/cards/todo.js` — the 5th phone swipe pane. Self-fetches `/api/todos` (not part of

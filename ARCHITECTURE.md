@@ -102,7 +102,7 @@ the working directory is linked to.
   seeds the auth cookie from the Keychain password (`Auth.swift`) and adds **push** (`Push.swift`) —
   **plus native voice entry points**: a `statushub://record` URL scheme, a Siri/Spotlight **App
   Shortcut**, and an iOS-18 **Lock Screen / Control Center control** that all open the app straight
-  into "listening" (fire the web voice FAB via `RecordLaunch`). No longer just a thin wrapper — see
+  into "listening" (fire the web voice FAB via `RecordLaunch`). More than a thin wrapper — see
   [docs/HUB-INTERNALS.md](docs/HUB-INTERNALS.md) §9.
 - **Home Screen widgets** — the only surfaces that are *not* the web hub: native SwiftUI drawing in
   the same `StatusHubControls` extension as the Record control, each fed by its own compact endpoint
@@ -292,6 +292,26 @@ is the bus; the Mac's orchestrator daemon owns everything local:
 
 ## 11. Getting a build onto the phone
 
+**From the Mac, build locally — do not dispatch Actions for this.** The Mac has Xcode, an Apple
+Development identity, and the phone paired over Wi-Fi, so the round trip is about ninety seconds:
+
+    cd ~/repos/status-hub/apps && xcodegen generate
+    xcodebuild -project StatusHub.xcodeproj -scheme StatusHub -configuration Debug \
+      -destination 'generic/platform=iOS' -derivedDataPath /tmp/sh-devbuild \
+      -allowProvisioningUpdates \
+      -authenticationKeyPath ~/.appstoreconnect/private_keys/AuthKey_P8Y337A8RC.p8 \
+      -authenticationKeyID P8Y337A8RC \
+      -authenticationKeyIssuerID 141a8ead-b829-4e58-b9ff-b8c95f8c4ed9 \
+      DEVELOPMENT_TEAM=XMH4AVFC78 CODE_SIGN_STYLE=Automatic build
+    xcrun devicectl device install app --device "Jared's iPhone" \
+      /tmp/sh-devbuild/Build/Products/Debug-iphoneos/StatusHub.app
+
+A development-signed build expires after 7 days and then refuses to launch, so this is for iterating;
+TestFlight is what makes a build stick.
+
+**Everything below is the route for when the Mac is unreachable**, where a macOS runner is the only
+machine that can compile. It bills at 10x, so dispatch it deliberately.
+
 There is no way to *push* an iOS app to an iPhone. Apple has no remote-install channel for a normal
 (non-MDM, non-supervised) device, so every route ends either in a tap on the phone or in a machine
 that the phone is already paired with. What follows is the route that needs neither TestFlight nor
@@ -312,9 +332,8 @@ any public hosting.
        ssh jaredgantt@Jareds-MacBook-Air.local \
          'xcrun devicectl device install app --device "Jared’s iPhone" /tmp/StatusHub.ipa'
 
-   `gh` is not installed on the laptop, which is why the download happens on the Pi and the `.ipa`
-   is copied over. `xcrun devicectl list devices` shows whether the phone is currently reachable —
-   `available (paired)` means this will work; if it is offline, wait or wake the phone.
+   `xcrun devicectl list devices` shows whether the phone is reachable — `available (paired)` means
+   this will work; if it is offline, wait or wake it.
 
 The fallback, if the laptop is asleep, is an `itms-services://` OTA link — but that needs the `.ipa`
 and a manifest on HTTPS that iOS's `installd` can fetch **without cookies** (it does not share

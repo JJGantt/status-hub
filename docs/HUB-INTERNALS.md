@@ -262,6 +262,17 @@ on a lone document. If the bridge never appears — an older hub, no pane machin
 
 `statushub://pane/reports` also works with no extra wiring, since `__showPane` resolves panes by
 class name.
+### It is read on a phone
+
+The tool description states the target explicitly — portrait, ~390px of usable width — because a
+model given no dimensions writes for a desktop column and the result arrives as slivers. Tables are
+capped at 2-3 short columns, SVG must carry a `viewBox` and `width="100%"`, and nothing gets a fixed
+pixel width.
+
+The stylesheet has to cooperate: a `display:block` table with `width:100%` squeezes its columns to
+fit rather than overflowing, which is what produced the unreadable first one. `width:auto` with
+`min-width:100%` lets it fill a narrow screen *and* grow past it, and a `min-width` on cells makes it
+scroll rather than shrink to a word per line.
 
 ### The CSP is load-bearing
 

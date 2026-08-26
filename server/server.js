@@ -700,8 +700,8 @@ code{background:var(--code);padding:1.5px 5px;border-radius:4px;font-size:13.5px
  font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
 pre{background:var(--code);padding:13px 14px;border-radius:9px;overflow-x:auto;font-size:13px;line-height:1.5}
 pre code{background:none;padding:0;font-size:inherit}
-table{border-collapse:collapse;width:100%;margin:0 0 16px;font-size:14.5px;display:block;overflow-x:auto}
-th,td{border:1px solid var(--line);padding:7px 10px;text-align:left;vertical-align:top}
+table{border-collapse:collapse;width:auto;min-width:100%;margin:0 0 16px;font-size:14.5px;display:block;overflow-x:auto;-webkit-overflow-scrolling:touch}
+th,td{border:1px solid var(--line);padding:7px 10px;text-align:left;vertical-align:top;min-width:92px}
 th{background:var(--code);font-weight:600}
 blockquote{margin:0 0 14px;padding-left:14px;border-left:3px solid var(--line);color:var(--mut)}
 img,svg{max-width:100%;height:auto}

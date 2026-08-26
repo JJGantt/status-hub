@@ -219,6 +219,22 @@ orchestrator ──beat(30s)──▶ worker_presence(worker='desk') ──▶ t
 
 ---
 
+### Which session holds follow-ups
+
+`/api/sessions` returns `focus` — the session id a SPOKEN follow-up would land in — and the panel
+marks that row. It is resolved the same way the MCP resolves it, through the `desk_focus` row's
+`command_id` to the session that command created, so what the panel shows and what a follow-up
+actually does cannot drift apart.
+
+It is worth showing because it is not guessable. The pointer follows **the last thing dispatched by
+voice**, not the session you are looking at and not the one that spoke most recently — deliberately,
+so a dictated follow-up can never land in whatever you happen to be typing in. The cost is that the
+session you have in mind and the one that will receive your words can differ silently.
+
+`focus` is legitimately null: the pointer outlives the session it named, so once that session is
+closed a follow-up has nowhere to go. The panel says so outright rather than leaving no row marked,
+which is indistinguishable from the marker failing to render.
+
 ## 6c. Reports — a session's HTML write-up
 
 A session dispatched from the phone or by voice answers in its transcript as usual; that is what

@@ -46,10 +46,17 @@ function sessionsHtml(s) {
   const res = s.resident || [], ev = s.evicted || [], q = s.queued || [];
   if (!res.length && !ev.length && !q.length) return '';
 
+  // Which session a SPOKEN follow-up lands in. Worth showing because it is not guessable: it follows
+  // the last thing dispatched by voice, not whatever you are looking at or whatever spoke most
+  // recently — so the session you have in mind and the one that will receive your words can differ,
+  // silently, and you only find out afterwards.
+  const focus = s.focus || null;
   const line = (x, live) =>
-    `<li class="sess${live ? ' live' : ''}" data-id="${esc(x.id)}">` +
+    `<li class="sess${live ? ' live' : ''}${x.id === focus ? ' focus' : ''}" data-id="${esc(x.id)}">` +
       `<div class="sess-main">` +
-        `<span class="sess-repo">${esc(x.repo)}</span>` +
+        `<span class="sess-repo">${esc(x.repo)}` +
+          (x.id === focus ? '<span class="sess-focus" title="a spoken follow-up goes here">follow-ups</span>' : '') +
+        `</span>` +
         `<span class="sess-say">${esc((x.last_reply || x.prompt || '').replace(/\s+/g, ' ').slice(0, 90))}</span>` +
       `</div>` +
       `<div class="sess-act">` +
@@ -61,7 +68,13 @@ function sessionsHtml(s) {
 
   let out = '<div class="sessions"><h3>Sessions';
   if (q.length) out += `<span class="sess-q">${q.length} queued</span>`;
-  out += '</h3><ul>';
+  out += '</h3>';
+  // The pointer outlives the session it named, so it can resolve to nothing at all. Say that plainly
+  // rather than leaving no row marked, which looks the same as not having rendered the marker.
+  if (!focus && (res.length || ev.length)) {
+    out += '<div class="sess-nofocus">No session is holding follow-ups \u2014 say which one, or start something.</div>';
+  }
+  out += '<ul>';
   out += res.map((x) => line(x, true)).join('');
   out += ev.map((x) => line(x, false)).join('');
   out += q.map((x) =>

@@ -964,3 +964,7 @@ body.tv:not(.phonewall) .ai-act-tool .ai-act-txt{font-size:29px}
 body.tv:not(.phonewall) .ai-act-model{font-size:22px;padding:4px 16px;border-width:2px}
 @keyframes ai-blink{50%{opacity:.35}}
 @media (max-width:640px){.ai-act{left:12px;bottom:66px;max-width:calc(100vw - 24px)}}
+.sess-focus{margin-left:7px;padding:1px 6px;border-radius:9px;background:rgba(91,141,239,.18);
+ color:#7ea6ff;font-size:10px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;vertical-align:middle}
+li.sess.focus{box-shadow:inset 2px 0 0 #5b8def;padding-left:8px;margin-left:-8px}
+.sess-nofocus{margin:0 0 8px;font-size:12px;line-height:1.4;color:#6b7686}

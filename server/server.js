@@ -1714,16 +1714,29 @@ app.get('/api/repos', async (req, res) => {
 // and on which repo — answered by selecting rows rather than by any separate bookkeeping.
 app.get('/api/sessions', async (req, res) => {
   try {
-    const [sessions, queue] = await Promise.all([
+    const [sessions, queue, focusRows] = await Promise.all([
       sb('desk_sessions?select=*&order=last_seen.desc'),
       sb('desk_queue?claimed=is.null&select=*&order=created.asc'),
+      sb('desk_focus?id=eq.current&select=command_id'),
     ]);
+    // Which session a spoken follow-up would land in. Resolved the same way the MCP resolves it —
+    // through the COMMAND that created the session, never "the busiest session" — so what the panel
+    // shows and what a follow-up actually does cannot drift apart.
+    //
+    // Null is a real and useful answer, not a gap: the pointer survives the session it named, so
+    // after that session is closed a follow-up has nowhere to go. Showing nothing marked is how you
+    // find that out before speaking, rather than after.
+    const focusCmd = (focusRows || [])[0]?.command_id || null;
+    const focus = focusCmd
+      ? ((sessions || []).find((s) => s.command_id === focusCmd)?.id || null)
+      : null;
     res.json({
       // Resident = running now, reachable over Remote Control. Evicted = closed to free the machine
       // but resumable with full context, which is the distinction the panel has to make obvious.
       resident: (sessions || []).filter((s) => s.status === 'resident'),
       evicted: (sessions || []).filter((s) => s.status === 'evicted'),
       queued: queue || [],
+      focus,
     });
   } catch (e) { res.status(500).json({ error: String(e.message || e) }); }
 });

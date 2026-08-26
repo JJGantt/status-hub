@@ -70,6 +70,13 @@
 
     <!-- HEALTH BAR — overall score as a vertical gauge on the far right (painted by cards/score.js) -->
     <div class="healthbar" id="healthbar"></div>
+    <!-- ROW 3 — persistent footer: live voice activity on the left, and on the right the session a
+         spoken follow-up would land in. A real grid row rather than an overlay, so the cards above
+         shrink to fit it instead of being covered by it. -->
+    <div class="tv-footrow">
+      <div class="tv-foot-act" id="tv-act"></div>
+      <div class="tv-foot-follow" id="tv-follow"></div>
+    </div>
   </div>
 
   <!-- ASIDE: compact voice column — the live hub voice conversation. -->

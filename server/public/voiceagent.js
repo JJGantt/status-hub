@@ -350,7 +350,10 @@ export function initActivityBar() {
     '<div class="ai-act-prompt"></div>' +
     '<div class="ai-act-row"><span class="ai-act-dot"></span><span class="ai-act-txt"></span>' +
       '<span class="ai-act-model"></span></div>';
-  document.body.appendChild(bar);
+  // On the wall this lives in the footer's reserved lane rather than floating over a card; the phone
+  // has no such lane and keeps the popup. Same element and same states either way — only the mount
+  // point differs, so nothing downstream has to know which surface it is on.
+  (document.getElementById('tv-act') || document.body).appendChild(bar);
   const txt = bar.querySelector('.ai-act-txt');
   const prm = bar.querySelector('.ai-act-prompt');
   const mdl = bar.querySelector('.ai-act-model');

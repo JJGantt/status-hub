@@ -8,6 +8,7 @@ import * as muscle from './cards/muscle.js';
 import * as workouts from './cards/workouts.js';
 import * as nutritionlog from './cards/nutritionlog.js';
 import * as routing from './cards/routing.js';   // TV voice-column routing panel (no-ops on phone)
+import * as deskfoot from './cards/deskfoot.js';  // TV footer: which session takes a follow-up (no-ops on phone)
 import * as score from './cards/score.js';       // TV overall-score health bar (no-ops on phone)
 import * as mics from './cards/mics.js';         // page voice-liveness card (no-ops on the TV wall)
 import * as maintviz from './cards/maintviz.js'; // phone-wall maintenance-window pane (no-ops elsewhere)
@@ -52,6 +53,7 @@ function render(s){
  maintviz.render(s);   // phone-wall maintenance-window pane (fourth swipe pane)
  todo.render(s);       // phone-wall lists/notes pane (fifth swipe pane; self-fetches)
  repos.render(s);      // phone-wall repo picker (sixth swipe pane; self-fetches)
+ deskfoot.render(s);   // TV footer follow-up target
  reports.render(s);    // phone-wall reports pane (seventh swipe pane; self-fetches)
 }
 

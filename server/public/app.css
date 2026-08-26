@@ -383,7 +383,7 @@ body.tv ::-webkit-scrollbar{width:0!important;height:0!important;display:none!im
 body.tv,body.tv .card,body.tv .tv-shell,body.tv .tv-voice,body.tv .tv-hudcard{background:#000!important}
 body.tv .card{border:none}
 body.tv .rows{flex:1 1 auto;min-width:0;max-width:none;margin:0;padding:10px;height:100vh;overflow:hidden;
-  display:grid;gap:10px;grid-template-columns:280px 1fr 1fr 1fr 60px;grid-template-rows:auto minmax(0,1fr);}
+  display:grid;gap:10px;grid-template-columns:280px 1fr 1fr 1fr 60px;grid-template-rows:auto minmax(0,1fr) auto;}
 body.tv .card{overflow:hidden;min-height:0;min-width:0}
 body.tv .rows .fit{display:flex;flex-direction:column;padding:10px 12px;height:100%;overflow:hidden;min-height:0;gap:6px}
 /* hide card titles entirely — content is self-evident, and it buys vertical room */
@@ -392,10 +392,10 @@ body.tv .card h2{display:none}
    content that is no longer there — measured: natural height is 64px, chips 43px. 76px keeps a
    little breathing room without the dead band. It is a MINIMUM, so the row still grows if the
    litter card's content ever needs more. */
-body.tv .statusrow{grid-column:1/5;grid-row:1;min-height:76px}
+body.tv .statusrow{grid-column:1/5;grid-row:1;min-height:68px}
 /* HEALTH BAR — overall score as a tall vertical gauge in the far-right column. Two stacked fill colours:
    nutrition (bottom) + training (top), each capped at its 50% half, together reaching the overall %. */
-body.tv .healthbar{grid-column:5;grid-row:1/-1;display:flex;flex-direction:column;align-items:center;padding:8px 4px;min-height:0;min-width:0;position:relative}
+body.tv .healthbar{grid-column:5;grid-row:1/3;display:flex;flex-direction:column;align-items:center;padding:8px 4px;min-height:0;min-width:0;position:relative}
 /* floating score delta: a transient pill at the fill line, right-anchored so it grows left (never off-screen), rising + fading */
 body.tv .hb-delta{position:absolute;right:2px;z-index:6;padding:2px 7px;border-radius:9px;font-size:17px;font-weight:700;
   line-height:1;white-space:nowrap;pointer-events:none;box-shadow:0 2px 8px rgba(0,0,0,.5);animation:hbDelta 2s ease-out forwards}
@@ -973,3 +973,28 @@ body.tv:not(.phonewall) .ai-act-model{font-size:22px;padding:4px 16px;border-wid
 li.sess.focus{box-shadow:inset 2px 0 0 #5b8def;padding-left:8px;margin-left:-8px}
 .sess-nofocus{margin:0 0 8px;font-size:12px;line-height:1.4;color:#6b7686}
 .sess-in{margin-left:6px;font-size:11px;font-weight:500;color:#6b7686}
+
+/* ---- TV footer row (tv.html ROW 3) ------------------------------------------------------------
+   Persistent, so the wall always answers "what is being worked on" without waiting for a popup. Left
+   holds the live voice activity — the same .ai-act element the phone floats, mounted here instead so
+   it occupies a reserved lane rather than covering a card. Right is pinned to the session a spoken
+   follow-up would land in. It is a grid row, so the cards above shrink to fit rather than sitting
+   underneath it. */
+.tv-footrow{display:none}                                   /* phone dashboard has its own chrome */
+body.tv:not(.phonewall):not(.mac) .tv-footrow{grid-column:1/6;grid-row:3;display:flex;
+  align-items:center;gap:16px;min-width:0;min-height:52px;padding:0 4px}
+body.tv:not(.phonewall) .tv-foot-act{flex:1 1 auto;min-width:0;display:flex;align-items:center}
+body.tv:not(.phonewall) .tv-foot-follow{flex:none}
+
+/* The follow-up target. Repo name only — the wall is read at a glance, and the fuller label belongs
+   on the phone panel. Absent entirely when nothing holds follow-ups: an empty box is worse than no
+   box on a display nobody interacts with. */
+.tv-follow-box{display:inline-flex;align-items:baseline;gap:12px;padding:7px 18px;
+  border:2px solid rgba(126,166,255,.5);border-radius:12px;background:rgba(126,166,255,.07)}
+.tv-follow-box .fb-k{font-size:15px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:#5c6675}
+.tv-follow-box .fb-v{font-size:26px;font-weight:600;color:#7ea6ff;white-space:nowrap}
+
+/* On the wall the activity element stops floating and sits in the lane the footer reserves. */
+body.tv:not(.phonewall) #tv-act .ai-act{position:static;left:auto;bottom:auto;max-width:100%;
+  width:100%;box-shadow:none;transform:none;opacity:1;background:transparent;border:0;padding:0}
+body.tv:not(.phonewall) #tv-act .ai-act:not(.show){visibility:hidden}

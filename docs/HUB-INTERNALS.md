@@ -326,7 +326,17 @@ The visible consequence: **charts must be inline `<svg>`** — no chart library,
 URLs. The `publish_report` tool description states this, so the model does not discover it by having
 a chart silently fail to render.
 
-## 6d. Confirming a deploy actually shipped
+## 6d. Deploying, and confirming it shipped
+
+**`server/deploy.sh`, from whichever machine changed the code.** Both machines have `flyctl`
+authenticated. There is no GitHub Actions workflow for the hub any more — it was removed 2026-08-26
+after an Actions outage stopped push triggers firing silently (pushes succeeded and shipped nothing)
+and the recovering backlog replayed out of order, deploying an older commit over newer live code.
+Actions now covers iOS only, where a macOS runner is genuinely required.
+
+The script deploys and then verifies, because those are different things:
+
+
 
 `GET /healthz` returns `ok <commit>` — the 7-char SHA stamped in by `flyctl deploy --env COMMIT=…`.
 It is public, so checking costs nothing:
@@ -336,11 +346,9 @@ curl -s https://jared-status-hub.fly.dev/healthz     # -> ok 64ac2ca
 git rev-parse --short origin/main                    # must match for server/ changes
 ```
 
-**After pushing anything under `server/`, check it.** A push whose workflow never fired is
-indistinguishable from a successful one — the push succeeds, the commit is on `origin/main`, and
-nothing anywhere says the running app is older. That happened twice on 2026-08-26 during a GitHub
-Actions outage; both were only caught by accident. When they differ, `gh workflow run deploy-hub.yml
---ref main` ships it, and `workflow_dispatch` keeps working when push triggers do not.
+`COMMIT` is stamped in at deploy time, so a deploy that did not happen is visible rather than
+indistinguishable from one that did — the failure that motivated all of this. `deploy.sh` polls
+`/healthz` after shipping and exits non-zero if the running commit never becomes the one it built.
 
 `pull-repos` also logs `DEPLOY DRIFT` when the two disagree, as a passive backstop.
 

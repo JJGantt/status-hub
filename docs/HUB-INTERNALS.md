@@ -231,7 +231,7 @@ writes a self-contained HTML page, it lands as a push notification, and tapping 
 | the instruction to publish | `REPORT_DIRECTIVE`, appended to the prompt by `pi-desk` and the Mac orchestrator |
 | the notification | `reportTick()` here, every 20s |
 | the page | `GET /report/:id`; every report at `GET /reports` |
-| the way in | a `reports \u2192` link on the repo picker's "Start a session" header |
+| the way in | its own swipe pane (`pane-reports`, `cards/reports.js`), fed by `GET /api/reports` |
 
 **Why the directive lives in the prompt and not in `CLAUDE.md`:** it should apply to dispatched work
 only. A session opened by hand at the keyboard has no business filing reports at you. Making it

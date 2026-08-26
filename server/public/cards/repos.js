@@ -93,9 +93,7 @@ function html(d) {
     '<div class="rp-off">Neither machine is reachable — nothing to launch into</div>';
   return sessionsHtml(d.sessions) +
     `<div class="repos${(m.pi || m.mac) ? '' : ' off'}${m.pi ? '' : ' no-pi'}${m.mac ? '' : ' no-mac'}">` +
-    // Reports are what dispatched sessions hand back, so their index belongs with the launcher
-    // rather than in a pane of its own — you come here to send work out and to read what came back.
-    `<h3>Start a session<a class="rp-reports" href="/reports">reports \u2192</a></h3>${off}` +
+    `<h3>Start a session</h3>${off}` +
     `<ul>${rows || '<li class="empty">No repos published</li>'}</ul></div>`;
 }
 

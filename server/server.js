@@ -731,6 +731,16 @@ ${r.html || ''}
 </body></html>`);
 });
 
+// The index as JSON, for the phone's reports pane. `html` is deliberately not selected: a list of a
+// hundred reports would otherwise carry every page's full markup to a screen that renders none of it.
+app.get('/api/reports', async (req, res) => {
+  try {
+    res.json(await sb('reports?select=id,title,summary,repo,created&order=created.desc&limit=100'));
+  } catch (_) {
+    res.status(502).json({ error: 'could not read reports' });
+  }
+});
+
 // Every report, newest first — the way back to something you read last week.
 app.get('/reports', async (req, res) => {
   let rows = [];

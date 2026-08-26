@@ -50,6 +50,37 @@ constant. Falls back to Eastern when unknown.
 
 ## Not started
 
+### Voice → "go build this" (Jared's, 2026-08-25 — the shape he wants)
+
+**The goal in one line:** one spoken command sends a feature off to be built on a repo, autonomously,
+and he can walk away from it.
+
+The always-on voice pipeline already transcribes and routes. The missing piece is a **data-layer MCP
+tool** — `start_session(repo, prompt)` — that the router can call. It enqueues a `desk_commands` row
+exactly like the hub's repo picker does, and `pi-desk` picks it up.
+
+- **The router can stay Sonnet.** It is doing traffic direction, not the work. It only has to spot
+  "in my status-hub repo, do the following…", pull out the repo name, and pass the rest through.
+- **Send the transcript verbatim.** Strip the addressing preamble ("hey, in my X repo, send this
+  prompt"), then forward what he actually said, unsummarised. The session on the other end is a
+  capable model; it does not need the request pre-digested, and summarising is where intent is lost.
+- **Default to the Pi, always — even when the Mac is awake.** This is the deliberate inversion of the
+  current fallback rule, and the reason is the point of the whole feature: work started by voice is
+  long-running, and closing the laptop must not kill it. The Mac stays preferred only for iOS, where
+  the local compile loop is worth having (see the Pi's own CLAUDE.md).
+
+**Open: how to surface that something is running.** He wants a subtle, ambient indicator — that
+background work is in flight, and on which repo. Remote Control is the way to *look inside* a session;
+this is the lighter question of knowing one exists at all. Candidates, unresolved:
+- a strip on the phone wall / TV wall listing live sessions and their repos
+- the Projects widget marking a repo that has a session running
+- `worker_presence`-style rows per live session, so any surface can read them
+
+`pi-desk` already names its tmux sessions `hub-<repo>-<id>`, so the live set is enumerable on the Pi
+(`tmux ls`) without inventing new bookkeeping — that is probably the cheapest source of truth.
+
+
+
 ### AlarmKit — the real alarm
 Breaks silent mode **and** Focus, full-screen stop/snooze UI, Lock Screen + Watch. iOS 26+ only;
 device confirmed on **26.6**, so it's available. One-time permission prompt, no Apple approval

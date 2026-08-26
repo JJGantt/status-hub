@@ -209,7 +209,10 @@ branch chip and dirty dot render only when the directory happens to be a checkou
 falls back to the directory's mtime.
 
 This server is on Fly — it can't see the Mac's filesystem or reach it over the LAN — so Supabase
-carries both directions and the Mac's **voice-orchestrator** daemon owns everything local:
+carries both directions and a daemon on the target machine owns everything local: the Mac's
+**voice-orchestrator** (Terminal tabs) and the Pi's **pi-desk** (tmux, so a session outlives the
+laptop closing). A command reaches the Pi when the hub targets it explicitly, or when it is
+untargeted and the Mac's presence has gone stale.
 
 ```
 orchestrator ──scan ~/repos (60s)──▶ repos table ──▶ GET /api/repos ──▶ cards/repos.js
@@ -369,7 +372,7 @@ if the running commit never becomes the one it built.
 | `voice_muted` | Global mute (PTT/FAB) — silences Mac mic + ESP. |
 | `voice_speak_replies` | Read the reply aloud. |
 | `wakefree_pause_s` / `voiceid_threshold` / `voiceprint` | Wake-free endpointing + speaker-ID (ESP). |
-| `phone_silence_s` | Trailing-silence cutoff for the phone recorder. |
+| `phone_silence_s` / `mac_silence_s` / `esp_silence_s` | Trailing-silence cutoff, per capture source. |
 | `agent_mode` / `agent_cwd` | Full-agent (coding) mode toggle + working dir for the worker. |
 | `weight_reminder_enabled` / `_mode` / `_time` | The daily weigh-in push (On/Off, Manual/Dynamic, time). |
 | `push_enabled` | Master push toggle. |
@@ -523,7 +526,7 @@ call, `Controls/RingsView.swift` for the shared palette):
 ```sh
 cd apps
 swiftc -O tools/render-todo.swift Controls/TodoView.swift Controls/RingsView.swift \
-       Shared/Auth.swift -o /tmp/render-todo && /tmp/render-todo /tmp
+       Shared/Auth.swift Shared/OpenTodoItem.swift -o /tmp/render-todo && /tmp/render-todo /tmp
 ```
 
 **Projects widget** (`ReposWidget.swift` = WidgetKit plumbing, `ReposView.swift` = drawing +

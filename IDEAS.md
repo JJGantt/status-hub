@@ -1,10 +1,12 @@
 # Status Hub — Ideas & Roadmap
 
-Running backlog for the Status Hub product (web hub + iOS app + macOS app, all over the
-one `/api/status` contract). Raw ideas go in the **Inbox**; once shaped, they move into a
-section below. Architecture principle: **server computes, clients render** — logic and
-derived display values (colors, labels, formatted strings, pace state) live in the hub
-payload; the clients only paint.
+Raw ideas, unfiltered: drop them in the **Inbox**, and move them into a section below once
+shaped. Nothing here is a commitment or a status — an item may already be built, dropped, or
+overtaken. **[docs/TODO.md](docs/TODO.md) is the tracked open work**; this file is upstream of it.
+
+Architecture principle, since it constrains what any of these can look like: **server computes,
+clients render** — logic and derived display values (colors, labels, formatted strings, pace state)
+live in the hub payload; the clients only paint.
 
 ---
 

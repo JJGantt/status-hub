@@ -1,0 +1,45 @@
+# See and register the iPhones an Ad Hoc build is allowed to install on.
+#
+# Deliberately a LINUX runner: this is pure REST against App Store Connect, no Xcode involved, so it
+# bills at 1x and costs effectively nothing. Run it freely. The expensive macOS archive should only
+# ever start once this says the target phone is registered and ENABLED — an Ad Hoc .ipa bakes the
+# device list into its provisioning profile, so building first and registering after produces a file
+# that installs nowhere and has to be built again.
+name: iOS devices
+
+on:
+  workflow_dispatch:
+    inputs:
+      action:
+        description: 'list, or register a new phone'
+        type: choice
+        options: [list, register]
+        default: list
+      udid:
+        description: 'UDID to register — 8hex-16hex. Plug the phone into the Mac and run: xcrun xctrace list devices'
+        type: string
+        default: ''
+      name:
+        description: 'A label for the device'
+        type: string
+        default: 'iPhone'
+
+jobs:
+  devices:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      ASC_KEY_ID: P8Y337A8RC
+      ASC_ISSUER_ID: 141a8ead-b829-4e58-b9ff-b8c95f8c4ed9
+      ASC_KEY_P8: ${{ secrets.ASC_KEY_P8 }}
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Register
+        if: inputs.action == 'register'
+        run: node apps/tools/asc.mjs register "${{ inputs.udid }}" "${{ inputs.name }}"
+
+      # Always list, including straight after a register, so the run's log ends with the actual
+      # state of the account rather than with a claim about it.
+      - name: List
+        run: node apps/tools/asc.mjs devices

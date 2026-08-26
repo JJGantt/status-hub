@@ -219,6 +219,43 @@ orchestrator ──beat(30s)──▶ worker_presence(worker='desk') ──▶ t
 
 ---
 
+## 6c. Reports — a session's HTML write-up
+
+A session dispatched from the phone or by voice answers in its transcript as usual; that is what
+Remote Control shows and none of this touches it. A **report** is a second, richer output: the model
+writes a self-contained HTML page, it lands as a push notification, and tapping it opens the page.
+
+| piece | where |
+|---|---|
+| `publish_report(title, summary, html)` | data-layer MCP (`src/reports.ts`) — writes a `reports` row |
+| the instruction to publish | `REPORT_DIRECTIVE`, appended to the prompt by `pi-desk` and the Mac orchestrator |
+| the notification | `reportTick()` here, every 20s |
+| the page | `GET /report/:id`; every report at `GET /reports` |
+
+**Why the directive lives in the prompt and not in `CLAUDE.md`:** it should apply to dispatched work
+only. A session opened by hand at the keyboard has no business filing reports at you. Making it
+optional later is a flag on the command rather than an edit to a file both machines share.
+
+**Why `reports.notified` is a column and not an in-memory set:** the hub restarts on every deploy. An
+in-memory ledger would either re-announce every past report or lose whatever was mid-flight. The flag
+is also set when the push *fails* — `pushAll` has already logged that to `notifications`, and leaving
+it false would re-buzz the phone every 20 seconds once APNs recovered.
+
+### The CSP is load-bearing
+
+The HTML was written by a model and is opened inside the app's WKWebView, which is already
+authenticated to this hub. Served plainly, script in that document would be same-origin with the
+dashboard and could call `/api/*` — clearing todos, opening sessions — with Jared's own cookie.
+
+So `/report/:id` sends a CSP that both sandboxes the response into an opaque origin **and** blocks
+scripts outright via `default-src 'none'`. Two independent mechanisms, because this is the only place
+in the system where untrusted markup meets an authenticated origin.
+
+The visible consequence: **charts must be inline `<svg>`** — no chart library, no CDN `<link>`, no
+`<script>`. Inline `<style>` and style attributes do work, and images work as `data:` or `https:`
+URLs. The `publish_report` tool description states this, so the model does not discover it by having
+a chart silently fail to render.
+
 ## 7. `app_settings` catalog (flat key/value)
 
 | Key | Controls |

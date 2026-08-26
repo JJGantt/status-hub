@@ -41,6 +41,11 @@ struct StatusHubApp: App {
                     // happened to be open last.
                     // statushub://repo/<path> — a repo widget row. The widget has no microphone, so
                     // it hands the choice over and the app records the opening message.
+                    // statushub://report/<id> — tapping a report's notification.
+                    if url.host == "report" {
+                        let id = url.path.hasPrefix("/") ? String(url.path.dropFirst()) : url.path
+                        if !id.isEmpty { ReportLaunch.shared.request(id) }
+                    }
                     if url.host == "repo" {
                         let path = url.path.hasPrefix("/") ? String(url.path.dropFirst()) : url.path
                         if !path.isEmpty { RepoLaunch.shared.request(path) }
@@ -105,6 +110,32 @@ final class RepoLaunch {
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) { self.fire(retries: retries - 1) }
             }
         }
+    }
+}
+
+// statushub://report/<id> — a write-up published by a dispatched session, opened from its push.
+//
+// Unlike the other bridges this is a NAVIGATION rather than a call into the page: a report is its own
+// document at its own URL, served sandboxed with its own CSP. Back-swipe returns to the dashboard,
+// which is why the web view enables back/forward gestures.
+final class ReportLaunch {
+    static let shared = ReportLaunch()
+    weak var webView: WKWebView?
+    private var pendingId: String?
+
+    func request(_ id: String) { pendingId = id; fire() }
+    func fireIfPending() { if pendingId != nil { fire() } }
+
+    private func fire() {
+        guard let id = pendingId, let wv = webView else { return }   // no web view yet → stay pending
+        // Report ids are uuids. Anything else did not come from us and is not going into a URL.
+        let safe = id.filter { $0.isHexDigit || $0 == "-" }
+        guard !safe.isEmpty, let url = URL(string: Auth.host + "/report/" + safe) else {
+            pendingId = nil
+            return
+        }
+        pendingId = nil
+        wv.load(URLRequest(url: url))
     }
 }
 
@@ -266,6 +297,7 @@ struct HubWebView {
             ItemLaunch.shared.fireIfPending()     // statushub://item/<id> cold launch → open that item
             PaneLaunch.shared.fireIfPending()     // statushub://pane/<name> cold launch → land there
             RepoLaunch.shared.fireIfPending()     // statushub://repo/<path> cold launch → dictate there
+            ReportLaunch.shared.fireIfPending()   // statushub://report/<id> cold launch → open it
         }
         #endif
 
@@ -302,6 +334,9 @@ struct HubWebView {
         cfg.allowsInlineMediaPlayback = true       // iOS-only knob
         #endif
         let wv = WKWebView(frame: .zero, configuration: cfg)
+        // A report is the first thing in this app you navigate AWAY from the dashboard to read,
+        // so leaving it has to be possible without hunting for a control.
+        wv.allowsBackForwardNavigationGestures = true
         wv.uiDelegate = coordinator
         wv.navigationDelegate = coordinator
         #if os(iOS)
@@ -309,6 +344,7 @@ struct HubWebView {
         ItemLaunch.shared.webView = wv     // …and so can statushub://item/<id>
         PaneLaunch.shared.webView = wv     // …and statushub://pane/<name>
         RepoLaunch.shared.webView = wv     // …and statushub://repo/<path>
+        ReportLaunch.shared.webView = wv   // …and statushub://report/<id>
         #endif
         #if os(iOS)
         wv.scrollView.contentInsetAdjustmentBehavior = .never

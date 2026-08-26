@@ -126,6 +126,12 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
     func userNotificationCenter(_ center: UNUserNotificationCenter,
                                 didReceive response: UNNotificationResponse,
                                 withCompletionHandler completionHandler: @escaping () -> Void) {
+        // A published report: tapping the banner opens that page. Checked before the reminder guard,
+        // which returns early on any notification without a reminder_id.
+        if let rid = response.notification.request.content.userInfo["report_id"] as? String {
+            ReportLaunch.shared.request(rid)
+            return completionHandler()
+        }
         guard let id = response.notification.request.content.userInfo["reminder_id"] as? String else {
             return completionHandler()
         }

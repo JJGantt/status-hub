@@ -1583,11 +1583,17 @@ app.get('/api/repos', async (req, res) => {
   try {
     const [repos, presence] = await Promise.all([
       sb('repos?select=path,name,branch,dirty,last_active&order=last_active.desc.nullslast'),
-      sb('worker_presence?worker=eq.desk&select=last_seen'),
+      sb('worker_presence?worker=in.(desk,pi-desk)&select=worker,last_seen'),
     ]);
-    const seen = (presence && presence[0] && presence[0].last_seen) || null;
-    const online = !!seen && (Date.now() - new Date(seen).getTime()) / 1000 <= DESK_STALE_S;
-    res.json({ repos: repos || [], desk: { online, seen } });
+    const fresh = (w) => {
+      const row = (presence || []).find((p) => p.worker === w);
+      const t = row && row.last_seen;
+      return !!t && (Date.now() - new Date(t).getTime()) / 1000 <= DESK_STALE_S;
+    };
+    // Reported per machine so each button can be enabled on its own: the Pi is nearly always up while
+    // the Mac sleeps, and one `online` flag could not express that.
+    const desk = { online: fresh('desk'), seen: ((presence || []).find((p) => p.worker === 'desk') || {}).last_seen || null };
+    res.json({ repos: repos || [], desk, machines: { mac: fresh('desk'), pi: fresh('pi-desk') } });
   } catch (e) { res.status(500).json({ error: String(e.message || e) }); }
 });
 
@@ -1632,18 +1638,23 @@ app.post('/api/sessions/:action', express.json(), async (req, res) => {
 
 app.post('/api/repos/open', express.json(), async (req, res) => {
   try {
-    const target = String((req.body || {}).path || '');
-    // Launch only a path the Mac itself published: the client's string picks a ROW, it never
-    // becomes the command's payload. (The orchestrator independently re-checks the same thing.)
-    const rows = await sb(`repos?path=eq.${encodeURIComponent(target)}&select=path,name`);
+    const wantPath = String((req.body || {}).path || '');
+    // Launch only a path the machine itself published: the client's string picks a ROW, it never
+    // becomes the command's payload. (Each consumer independently re-checks the same thing.)
+    const rows = await sb(`repos?path=eq.${encodeURIComponent(wantPath)}&select=path,name`);
     if (!rows.length) return res.status(400).json({ error: 'unknown repo' });
     // The dictated first message. Free text by nature — it is a prompt — so it is NOT validated here;
     // the orchestrator shell-quotes it when building the command, which is where quoting belongs.
     // Capped only so a runaway transcription can't produce an unusable command line.
     const prompt = String((req.body || {}).prompt || '').trim().slice(0, 2000) || null;
+    // Which machine runs it. The Pi is the default deliberately: work dispatched this way is
+    // long-running, and it must not die because a laptop lid closed. 'mac' is chosen explicitly —
+    // by the voice router, or by tapping the Apple button in the pane — and is worth choosing for
+    // iOS work, where the local compile loop is the whole advantage.
+    const machine = String((req.body || {}).target || '').toLowerCase() === 'mac' ? 'mac' : 'pi';
     const id = crypto.randomUUID();
     await sbWrite('desk_commands', 'POST',
-      { id, kind: 'open_session', payload: { path: rows[0].path, name: rows[0].name, ...(prompt ? { prompt } : {}) } });
+      { id, kind: 'open_session', payload: { path: rows[0].path, name: rows[0].name, target: machine, ...(prompt ? { prompt } : {}) } });
     res.json({ id });
   } catch (e) { res.status(500).json({ error: String(e.message || e) }); }
 });

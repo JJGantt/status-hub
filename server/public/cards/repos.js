@@ -14,6 +14,7 @@ import { makeRecorder } from '../voiceagent.js';
 
 let mounted = false;
 let desk = { online: false };
+let machines = { mac: false, pi: false };
 let recorder = null;      // one shared recorder; only ever one repo is being dictated to
 let armed = null;         // the <li> currently listening
 
@@ -70,17 +71,29 @@ function sessionsHtml(s) {
 }
 
 function html(d) {
+  // Two targets, revealed on tap rather than shown always: the row is a list of projects first, and a
+  // launcher second. Tapping picks the project; the second tap picks the machine AND starts recording,
+  // so choosing a machine is never a separate decision from saying what you want done.
+  const targets =
+    `<span class="rp-go">` +
+      `<button class="rp-t" data-target="pi" title="Run on the Pi">\u{1F353}</button>` +
+      `<button class="rp-t" data-target="mac" title="Run on the Mac">\u{1F34E}</button>` +
+    `</span>`;
   const rows = (d.repos || []).map((r) =>
     `<li data-path="${esc(r.path)}">` +
       `<div class="rp-main"><span class="rp-name">${esc(r.name)}</span>` +
       `<span class="rp-meta">${notable(r.branch) ? `<span class="rp-branch">${esc(r.branch)}</span>` : ''}` +
       `${r.dirty ? '<span class="rp-dirty" title="uncommitted changes"></span>' : ''}</span></div>` +
-      `<span class="rp-age">${esc(ago(r.last_active))}</span>` +
+      `<span class="rp-age">${esc(ago(r.last_active))}</span>` + targets +
     '</li>').join('');
-  const off = d.desk && d.desk.online ? '' :
-    '<div class="rp-off">Mac is asleep — nothing to launch into</div>';
+  // Only warn when NOTHING can take the work. The Mac being asleep is normal and no longer blocking,
+  // since the Pi is the default target — saying "Mac is asleep" then would be alarming about nothing.
+  const m = d.machines || {};
+  const off = (m.pi || m.mac) ? '' :
+    '<div class="rp-off">Neither machine is reachable — nothing to launch into</div>';
   return sessionsHtml(d.sessions) +
-    `<div class="repos${d.desk && d.desk.online ? '' : ' off'}"><h3>Start a session</h3>${off}` +
+    `<div class="repos${(m.pi || m.mac) ? '' : ' off'}${m.pi ? '' : ' no-pi'}${m.mac ? '' : ' no-mac'}">` +
+    `<h3>Start a session</h3>${off}` +
     `<ul>${rows || '<li class="empty">No repos published</li>'}</ul></div>`;
 }
 
@@ -94,20 +107,21 @@ async function load() {
   // a failure to read them must not blank the project list, which is the pane's primary job.
   try { d.sessions = await (await fetch('/api/sessions')).json(); } catch (_) { d.sessions = null; }
   desk = d.desk || { online: false };
+  machines = d.machines || { mac: desk.online, pi: false };
   el.innerHTML = html(d);
   wire(el);
 }
 
 // Enqueue, then watch the command row until the Mac reports back. The launch itself is realtime
 // (~1s); the ceiling here only exists so a wedged daemon can't leave the row spinning forever.
-async function launch(li, prompt) {
+async function launch(li, prompt, target) {
   if (li.dataset.say) return;   // a launch is in flight, or its result is still on screen
   const say = (cls, text) => { li.className = cls; li.dataset.say = text; };
-  say('busy', prompt ? 'Opening with your prompt…' : 'Opening…');
+  say('busy', `Opening on the ${target === 'mac' ? 'Mac' : 'Pi'}…`);
   try {
     const r = await (await fetch('/api/repos/open', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ path: li.dataset.path, ...(prompt ? { prompt } : {}) }),
+      body: JSON.stringify({ path: li.dataset.path, target, ...(prompt ? { prompt } : {}) }),
     })).json();
     if (!r.id) throw new Error(r.error || 'failed');
     for (let i = 0; i < 20; i++) {                       // ~20s ceiling
@@ -130,12 +144,12 @@ async function launch(li, prompt) {
 // `dryWhen: () => true` is the whole trick: the recorder then posts to /api/voice-command?dry=1, which
 // transcribes and returns the text INSTEAD of enqueueing it as a voice command — this is a prompt for
 // a session, not something the voice worker should act on.
-function beginDictation(li) {
+function beginDictation(li, target) {
   if (armed === li) { cancelDictation(); return; }
   if (armed) cancelDictation();
   armed = li;
   li.className = 'rec';
-  li.dataset.say = 'Listening…';
+  li.dataset.say = target === 'mac' ? 'Listening… \u2192 Mac' : 'Listening… \u2192 Pi';
   recorder = makeRecorder({
     autoStop: true,                                  // trailing-silence stop, same as the voice FAB
     dryWhen: () => true,
@@ -147,7 +161,7 @@ function beginDictation(li) {
       // Nothing said → don't silently open a bare session; the tap was probably a mistake.
       if (!prompt) { li.className = 'bad'; li.dataset.say = 'Nothing heard'; 
         setTimeout(() => { li.className = ''; delete li.dataset.say; }, 2500); return; }
-      launch(li, prompt);
+      launch(li, prompt, target);
     },
   });
   recorder.start();
@@ -180,8 +194,23 @@ function wire(el) {
       e.stopPropagation();
       sessionAction(b.closest('li.sess'), b.dataset.act);
     }));
-  el.querySelectorAll('li[data-path]').forEach((li) =>
-    li.addEventListener('click', () => { if (desk.online) beginDictation(li); }));
+  el.querySelectorAll('li[data-path]').forEach((li) => {
+    li.addEventListener('click', () => {
+      // First tap opens the machine choice; tapping the row again closes it. Only one row at a time,
+      // so the pane never shows two half-made decisions.
+      const open = li.classList.contains('pick');
+      el.querySelectorAll('li[data-path].pick').forEach((o) => o.classList.remove('pick'));
+      if (!open) li.classList.add('pick');
+    });
+    li.querySelectorAll('.rp-t').forEach((b) =>
+      b.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const target = b.dataset.target;
+        if (!machines[target]) return;   // that machine is not reachable; do not queue into a void
+        li.classList.remove('pick');
+        beginDictation(li, target);
+      }));
+  });
 }
 
 // Called by the native app when a repo widget row is tapped (statushub://repo/<path>). The widget
@@ -195,7 +224,7 @@ window.__startRepoSession = async (path) => {
   const li = el.querySelector(`li[data-path="${CSS.escape(String(path))}"]`);
   if (!li) return;
   li.scrollIntoView({ block: 'center', behavior: 'smooth' });
-  if (desk.online) beginDictation(li);
+  beginDictation(li, machines.pi ? 'pi' : 'mac');
 };
 
 export function render() {

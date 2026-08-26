@@ -76,8 +76,11 @@ Supabase ──▶ server.js buildStatus() ──▶ /api/status payload ──�
 | `tv.js` | TV/kiosk-only: the voice-conversation panel + session terminal layered on the wall. |
 | `mic.js` | The `/mic` standalone launcher page's script (its own recorder, reuses `voiceagent`). |
 
-The activity popup (`.ai-act`, shared by the page view, the phone wall and the TV kiosk) renders the
-`activity` frames the worker pushes to `/api/voice-activity`: `working` (the prompt, once per command),
+The activity element (`.ai-act`) renders the
+`activity` frames the worker pushes to `/api/voice-activity`. One element, two mount points: it floats
+as a popup on the page view and the phone wall, and on the TV kiosk it mounts into the footer row's
+reserved lane (`#tv-act`) so it occupies space rather than covering a card. Same states either way.
+The frames are: `working` (the prompt, once per command),
 `tool` (each tool call + args), `escalate`, and `done`. **`escalate` is the Sonnet→Opus hop**: the worker
 sends one when a hub turn leaves the fast path (it needed a full-access tool, or Sonnet errored), and the
 bar shows it as its own violet row *and* lights an `OPUS` chip that persists for the rest of the run —
@@ -358,6 +361,31 @@ indistinguishable from one that did. `deploy.sh` polls `/healthz` after shipping
 if the running commit never becomes the one it built.
 
 `pull-repos` also logs `DEPLOY DRIFT` when the two disagree, as a passive backstop.
+
+## 6e. The wall's footer row, and why the machine never sleeps
+
+`tv.html`'s third grid row — a real row in `body.tv .rows`, not an overlay, so the cards above shrink
+to fit it. Adding it meant pinning the health bar's `grid-row` from `1/-1` to `1/3`, or it would have
+swallowed the new row.
+
+Left is the activity lane (`#tv-act`, §3). Right is `cards/deskfoot.js`: the repo name of whichever
+session a spoken follow-up would land in, rendered only when there is one. The frame is permanent so
+an empty lane reads as reserved space rather than as a gap.
+
+**The phone loads this same markup**, so `#tv-act` exists there too and the activity element mounts
+into it. The row is `display:contents` on the phone rather than `display:none` — a `display:none`
+parent hides its descendants whatever they do, which silently killed the phone's tool-call overlay.
+
+### The Fly machine does not auto-stop
+
+`server/fly.toml` sets `auto_stop_machines = false` and `min_machines_running = 1`. Leave it that way.
+
+`fly launch`'s defaults suspend an app when traffic goes quiet, and this one has a wall display
+depending on it around the clock. Every suspend/resume cost a visible reload: `.xinitrc` on the Pi
+polls the hub every ten seconds and kills Chromium on the unreachable-then-reachable edge — a
+self-heal so a deploy never leaves a stale error page up — so each wake blinked the wall, most often
+during idle periods, which is exactly when nothing appears to be happening. It also put a cold start
+in front of opening the dashboard on the phone.
 
 ## 7. `app_settings` catalog (flat key/value)
 

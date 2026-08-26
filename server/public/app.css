@@ -414,7 +414,7 @@ body.tv.phonewall{height:100vh;overflow:hidden}
 body.tv.phonewall .tv-shell{position:relative;top:0;left:0;transform-origin:top left}  /* width/height/scale set by wall.js; lives INSIDE the center swipe pane (fixed would pin it over the pane scroller) */
 
 /* ===== phone wall: three swipeable panes — [chat] [wall] [misc], landing on the wall ===== */
-body.tv:not(.phonewall) .pane-chat,body.tv:not(.phonewall) .pane-misc,body.tv:not(.phonewall) .pane-maint,body.tv:not(.phonewall) .pane-todo,body.tv:not(.phonewall) .pane-repos{display:none}  /* kiosk: shell only */
+body.tv:not(.phonewall) .pane-chat,body.tv:not(.phonewall) .pane-misc,body.tv:not(.phonewall) .pane-maint,body.tv:not(.phonewall) .pane-todo,body.tv:not(.phonewall) .pane-repos,body.tv:not(.phonewall) .pane-reports{display:none}  /* kiosk: shell only */
 body.tv.phonewall .wallpanes{display:flex;overflow-x:auto;overflow-y:hidden;scroll-snap-type:x mandatory;scrollbar-width:none;height:100vh;height:100dvh}
 body.tv.phonewall .wallpanes::-webkit-scrollbar{display:none}
 body.tv.phonewall .pane{flex:0 0 100vw;min-width:0;scroll-snap-align:start;scroll-snap-stop:always}
@@ -431,6 +431,13 @@ body.tv.phonewall .pane-repos{padding:12px 12px 70px;overflow-y:auto}
 body.tv.phonewall .pane-repos .card{background:#151a20!important;border:1px solid #222a33;border-radius:12px}
 body.tv.phonewall .pane-todo{padding:12px 12px 70px;overflow-y:auto}
 body.tv.phonewall .pane-todo .card{background:#151a20!important;border:1px solid #222a33;border-radius:12px}
+/* Reports pane. Unlike the other panes it must be able to hand its whole height to a report, so the
+   pane itself does not scroll and does not pad — the list scrolls inside the card, and an open report
+   scrolls inside its own frame. */
+body.tv.phonewall .pane-reports{padding:12px 12px 70px;overflow:hidden;display:flex}
+body.tv.phonewall .pane-reports .card{flex:1 1 auto;min-height:0;display:flex;flex-direction:column;
+  background:#151a20!important;border:1px solid #222a33;border-radius:12px;overflow:hidden}
+body.tv.phonewall .pane-reports .reportscard>div{flex:1 1 auto;min-height:0;display:flex;flex-direction:column;overflow-y:auto}
 /* Repo picker — tap a repo to open a remote-controlled Claude session on the Mac. */
 .reposcard{padding:14px}
 .repos h3{margin:0 0 8px;font-size:12px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:#8b96a5}
@@ -467,6 +474,27 @@ body.tv.phonewall .pane-todo .card{background:#151a20!important;border:1px solid
 .sessions .sess-btn.ghost{background:transparent;color:#5d6672;padding:5px 8px}
 .sessions .sess-btn:active{background:#2a333f}
 .sessions li.queued .sess-repo,.sessions li.queued .sess-say{color:#5d6672}
+/* Reports — the write-ups dispatched sessions hand back. List, then the report itself in a sandboxed
+   frame that fills the card, so reading one and getting back out never leaves the hub. */
+.reportscard{padding:14px}
+.reports h3{margin:0 0 8px;font-size:12px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:#8b96a5}
+.reports ul{list-style:none;margin:0;padding:0}
+.reports li{padding:12px 2px;border-bottom:1px solid #1c232b;cursor:pointer;-webkit-tap-highlight-color:transparent}
+.reports li:last-child{border-bottom:none}
+.reports li:active{background:#0e1318}
+.reports .rpt-top{display:flex;align-items:baseline;gap:10px}
+.reports .rpt-title{flex:1 1 auto;min-width:0;font-size:16px;font-weight:600;color:#e6ebf2}
+.reports .rpt-age{flex:0 0 auto;font-size:12px;color:#5d6672}
+.reports .rpt-repo{margin-top:2px;font-size:12px;color:#8b96a5}
+.reports .rpt-sum{margin-top:3px;font-size:13.5px;line-height:1.45;color:#9aa5b3}
+.reports .rpt-empty{font-size:13.5px;line-height:1.5;color:#5d6672}
+/* Reader: a bar to get back, then the report itself. The card is already flex-column and clipped, so
+   the frame takes whatever height is left. */
+.rpt-reader{flex:1 1 auto;min-height:0;display:flex;flex-direction:column;margin:-14px}
+.rpt-bar{flex:0 0 auto;display:flex;align-items:center;gap:10px;padding:10px 12px;border-bottom:1px solid #222a33}
+.rpt-back{background:none;border:0;padding:0;color:#5b8def;font-size:15px;cursor:pointer}
+.rpt-bar-title{flex:1 1 auto;min-width:0;font-size:13px;color:#8b96a5;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.rpt-frame{flex:1 1 auto;min-height:0;width:100%;border:0;background:#fff}
 .sessions li.busy{opacity:.5;pointer-events:none}
 .repos .rp-age{flex:0 0 auto;font-size:12px;color:#8b96a5}
 /* Launch feedback replaces the age column: blue while the Mac works, then green or red. */
@@ -587,7 +615,7 @@ body.tv.mac .pane-chat{display:flex;flex-direction:column;flex:0 0 var(--macchat
   padding:0;background:#0c1015;border-right:1px solid #1b222b;position:relative}
 body.tv.mac.chatcollapsed .pane-chat{flex-basis:0;border-right:none;overflow:hidden}
 body.tv.mac .pane-wall{flex:1 1 auto;min-width:0;position:relative;height:100%;overflow:hidden}
-body.tv.mac .pane-misc,body.tv.mac .pane-maint,body.tv.mac .pane-todo,body.tv.mac .pane-repos{display:none}
+body.tv.mac .pane-misc,body.tv.mac .pane-maint,body.tv.mac .pane-todo,body.tv.mac .pane-repos,body.tv.mac .pane-reports{display:none}
 body.tv.mac .tv-shell{position:absolute;transform-origin:top left}   /* size/scale/offset set by wall.js */
 body.tv.mac .rows{height:100%}
 body.tv.mac .tv-voice{display:none}                        /* chat is the side panel now */
@@ -936,15 +964,3 @@ body.tv:not(.phonewall) .ai-act-tool .ai-act-txt{font-size:29px}
 body.tv:not(.phonewall) .ai-act-model{font-size:22px;padding:4px 16px;border-width:2px}
 @keyframes ai-blink{50%{opacity:.35}}
 @media (max-width:640px){.ai-act{left:12px;bottom:66px;max-width:calc(100vw - 24px)}}
-
-/* ---- reports pane (cards/reports.js) ---- */
-.reports h3{margin:0 0 10px;font-size:12px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:#8b96a5}
-.reports ul{list-style:none;margin:0;padding:0}
-.reports li{padding:11px 0;border-bottom:1px solid rgba(255,255,255,.07);cursor:pointer}
-.reports li:last-child{border-bottom:0}
-.rep-top{display:flex;align-items:baseline;gap:8px}
-.rep-title{flex:1;font-size:15px;font-weight:600;color:#e6ebf2;line-height:1.3}
-.rep-age{font-size:11px;color:#6b7686;flex:none}
-.rep-sum{margin-top:3px;font-size:13px;line-height:1.45;color:#9aa6b6}
-.rep-repo{margin-top:4px;font-size:11px;color:#5b8def}
-.rep-empty{font-size:13px;line-height:1.5;color:#6b7686}

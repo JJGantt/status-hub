@@ -231,7 +231,8 @@ writes a self-contained HTML page, it lands as a push notification, and tapping 
 | the instruction to publish | `REPORT_DIRECTIVE`, appended to the prompt by `pi-desk` and the Mac orchestrator |
 | the notification | `reportTick()` here, every 20s |
 | the page | `GET /report/:id`; every report at `GET /reports` |
-| the way in | its own swipe pane (`pane-reports`, `cards/reports.js`), fed by `GET /api/reports` |
+| the way in | the **Reports pane** — the last swipe pane, right after the repo launcher |
+| the pane's data | `GET /api/reports` (list only; `html` is never selected) → `cards/reports.js` |
 
 **Why the directive lives in the prompt and not in `CLAUDE.md`:** it should apply to dispatched work
 only. A session opened by hand at the keyboard has no business filing reports at you. Making it
@@ -241,6 +242,26 @@ optional later is a flag on the command rather than an edit to a file both machi
 in-memory ledger would either re-announce every past report or lose whatever was mid-flight. The flag
 is also set when the push *fails* — `pushAll` has already logged that to `notifications`, and leaving
 it false would re-buzz the phone every 20 seconds once APNs recovered.
+
+### Where you read them
+
+Reports get their own pane rather than a link inside another card. They sit next to the repo
+launcher because it is one loop seen from both ends — that pane sends work out, this one is what
+came back — and because a report is something you go looking for days later, which needs a
+destination, not a link buried in a header.
+
+The pane lists reports and opens one in a **sandboxed iframe filling the card**. Same document and
+the same CSP either way (the `sandbox` directive gives an opaque origin whether the response is a
+frame or a top-level page), so nothing is given up — but getting back to the list is a button
+instead of a full reload of the hub and its event stream.
+
+A notification tap lands in the same place. `ReportLaunch` polls for `window.__showReport` and hands
+the id to the pane, so tapping a push puts you inside the app beside every other report rather than
+on a lone document. If the bridge never appears — an older hub, no pane machinery — it navigates to
+`/report/:id` outright; that fallback is why the web view enables back/forward gestures.
+
+`statushub://pane/reports` also works with no extra wiring, since `__showPane` resolves panes by
+class name.
 
 ### The CSP is load-bearing
 

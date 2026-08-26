@@ -735,7 +735,7 @@ ${r.html || ''}
 // hundred reports would otherwise carry every page's full markup to a screen that renders none of it.
 app.get('/api/reports', async (req, res) => {
   try {
-    res.json(await sb('reports?select=id,title,summary,repo,created&order=created.desc&limit=100'));
+    res.json({ reports: await sb('reports?select=id,title,summary,repo,created&order=created.desc&limit=100') || [] });
   } catch (_) {
     res.status(502).json({ error: 'could not read reports' });
   }

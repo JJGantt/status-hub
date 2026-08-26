@@ -115,9 +115,13 @@ final class RepoLaunch {
 
 // statushub://report/<id> — a write-up published by a dispatched session, opened from its push.
 //
-// Unlike the other bridges this is a NAVIGATION rather than a call into the page: a report is its own
-// document at its own URL, served sandboxed with its own CSP. Back-swipe returns to the dashboard,
-// which is why the web view enables back/forward gestures.
+// Preferred path: hand it to the hub's Reports pane, which opens the report in a sandboxed frame. You
+// then land INSIDE the app, on the pane that lists every other report, so backing out of the one you
+// were sent is a button rather than a reload of the whole dashboard.
+//
+// Fallback: navigate the web view to /report/<id> outright. That is what happens if the page never
+// mounts the bridge — an older hub, or the pane machinery absent — and it is why the web view enables
+// back/forward gestures: a top-level report has to be escapable too.
 final class ReportLaunch {
     static let shared = ReportLaunch()
     weak var webView: WKWebView?
@@ -126,16 +130,26 @@ final class ReportLaunch {
     func request(_ id: String) { pendingId = id; fire() }
     func fireIfPending() { if pendingId != nil { fire() } }
 
-    private func fire() {
+    private func fire(retries: Int = 12) {
         guard let id = pendingId, let wv = webView else { return }   // no web view yet → stay pending
         // Report ids are uuids. Anything else did not come from us and is not going into a URL.
         let safe = id.filter { $0.isHexDigit || $0 == "-" }
-        guard !safe.isEmpty, let url = URL(string: Auth.host + "/report/" + safe) else {
-            pendingId = nil
-            return
+        guard !safe.isEmpty else { pendingId = nil; return }
+        wv.evaluateJavaScript("!!(window.__showReport)") { [weak self] ready, _ in
+            guard let self, self.pendingId != nil else { return }
+            if (ready as? Bool) == true {
+                self.pendingId = nil
+                wv.evaluateJavaScript("window.__showReport('\(safe)')", completionHandler: nil)
+            } else if retries > 0 {
+                // Cold launch: the push can arrive before the page has mounted. Same poll as RepoLaunch.
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) { self.fire(retries: retries - 1) }
+            } else if let url = URL(string: Auth.host + "/report/" + safe) {
+                self.pendingId = nil
+                wv.load(URLRequest(url: url))
+            } else {
+                self.pendingId = nil
+            }
         }
-        pendingId = nil
-        wv.load(URLRequest(url: url))
     }
 }
 

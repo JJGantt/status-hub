@@ -1,0 +1,141 @@
+# Build the iOS app and upload it to TestFlight, from a borrowed Mac.
+#
+# This is the only part of the stack that genuinely cannot run on the Pi — Xcode is macOS-only — so
+# GitHub rents a real Mac for it. Nothing about it needs Jared's laptop.
+#
+# TRIGGERED DELIBERATELY, never on push. macOS runners bill at a 10x multiplier, which puts a free
+# allowance at roughly 16-25 builds a month; auto-building every merge would spend that in days on
+# commits that never touched Swift. A tag names a build you can find again later; the manual dispatch
+# is for "I want one now" — and the Pi can fire either on its own.
+name: iOS TestFlight
+
+on:
+  push:
+    tags: ['ios-*']
+  workflow_dispatch:
+    inputs:
+      notes:
+        description: 'What changed (shown to testers)'
+        type: string
+        default: ''
+
+concurrency:
+  group: ios-testflight
+  cancel-in-progress: false    # never kill a half-finished upload
+
+jobs:
+  testflight:
+    runs-on: macos-latest
+    timeout-minutes: 45
+
+    env:
+      ASC_KEY_ID: P8Y337A8RC
+      ASC_ISSUER_ID: 141a8ead-b829-4e58-b9ff-b8c95f8c4ed9
+      TEAM_ID: XMH4AVFC78
+
+    steps:
+      - uses: actions/checkout@v5
+
+      # A keychain of our own, unlocked, and made the default. Using the runner's login keychain
+      # works right up until it doesn't — it can be locked mid-build, and xcodebuild's failure when
+      # it can't reach a signing identity is opaque.
+      - name: Import the signing certificate
+        env:
+          P12: ${{ secrets.IOS_DIST_P12 }}
+          P12_PASSWORD: ${{ secrets.IOS_DIST_P12_PASSWORD }}
+        run: |
+          KEYCHAIN=build.keychain
+          KEYCHAIN_PASSWORD=$(uuidgen)
+          echo "$P12" | base64 --decode > /tmp/dist.p12
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
+          security default-keychain -s "$KEYCHAIN"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
+          # No auto-lock: a long archive can outlive the default timeout and fail at the signing step.
+          security set-keychain-settings -t 3600 -u "$KEYCHAIN"
+          security import /tmp/dist.p12 -k "$KEYCHAIN" -P "$P12_PASSWORD" \
+            -T /usr/bin/codesign -T /usr/bin/security
+          # Without this, codesign triggers a GUI authorisation prompt that nothing can answer.
+          security set-key-partition-list -S apple-tool:,apple:,codesign: \
+            -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN" >/dev/null
+          rm -f /tmp/dist.p12
+          echo "identities:"; security find-identity -v -p codesigning "$KEYCHAIN"
+
+      # The same .p8 that created the certificate. xcodebuild uses it to fetch (or create)
+      # provisioning profiles via -allowProvisioningUpdates, which is what makes this work without an
+      # interactive developer-account login — the exact thing that is broken on the laptop.
+      - name: Install the App Store Connect key
+        env:
+          ASC_KEY_P8: ${{ secrets.ASC_KEY_P8 }}
+        run: |
+          mkdir -p ~/.appstoreconnect/private_keys ~/private_keys
+          printf '%s' "$ASC_KEY_P8" > ~/.appstoreconnect/private_keys/AuthKey_${ASC_KEY_ID}.p8
+          # altool looks in ~/private_keys as well depending on version; cheap to satisfy both.
+          cp ~/.appstoreconnect/private_keys/AuthKey_${ASC_KEY_ID}.p8 ~/private_keys/
+          chmod 600 ~/.appstoreconnect/private_keys/*.p8 ~/private_keys/*.p8
+
+      - name: Generate the Xcode project
+        working-directory: apps
+        run: brew install xcodegen >/dev/null && xcodegen generate
+
+      # TestFlight rejects a build number it has already seen, and project.yml pins
+      # CURRENT_PROJECT_VERSION to "1". The run number is monotonic per workflow, so it can never
+      # collide with itself — overriding here rather than editing the file keeps the repo clean.
+      - name: Archive
+        working-directory: apps
+        run: |
+          xcodebuild -project StatusHub.xcodeproj -scheme StatusHub \
+            -configuration Release -destination 'generic/platform=iOS' \
+            -archivePath /tmp/StatusHub.xcarchive \
+            -allowProvisioningUpdates \
+            -authenticationKeyPath ~/.appstoreconnect/private_keys/AuthKey_${ASC_KEY_ID}.p8 \
+            -authenticationKeyID "$ASC_KEY_ID" \
+            -authenticationKeyIssuerID "$ASC_ISSUER_ID" \
+            DEVELOPMENT_TEAM="$TEAM_ID" \
+            CURRENT_PROJECT_VERSION=${{ github.run_number }} \
+            archive 2>&1 | tail -40
+
+      - name: Export the ipa
+        run: |
+          cat > /tmp/ExportOptions.plist <<PLIST
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0"><dict>
+            <key>method</key><string>app-store-connect</string>
+            <key>teamID</key><string>${TEAM_ID}</string>
+            <key>uploadSymbols</key><true/>
+            <key>signingStyle</key><string>automatic</string>
+            <key>destination</key><string>export</string>
+          </dict></plist>
+          PLIST
+          xcodebuild -exportArchive \
+            -archivePath /tmp/StatusHub.xcarchive \
+            -exportPath /tmp/export \
+            -exportOptionsPlist /tmp/ExportOptions.plist \
+            -allowProvisioningUpdates \
+            -authenticationKeyPath ~/.appstoreconnect/private_keys/AuthKey_${ASC_KEY_ID}.p8 \
+            -authenticationKeyID "$ASC_KEY_ID" \
+            -authenticationKeyIssuerID "$ASC_ISSUER_ID" 2>&1 | tail -30
+          ls -la /tmp/export
+
+      - name: Upload to TestFlight
+        run: |
+          IPA=$(ls /tmp/export/*.ipa | head -1)
+          echo "uploading $IPA"
+          # validate-app first: it catches a bad entitlement or a duplicate build number in seconds,
+          # rather than after the whole upload has gone across the wire.
+          xcrun altool --validate-app -f "$IPA" -t ios \
+            --apiKey "$ASC_KEY_ID" --apiIssuer "$ASC_ISSUER_ID" 2>&1 | tail -15
+          xcrun altool --upload-app -f "$IPA" -t ios \
+            --apiKey "$ASC_KEY_ID" --apiIssuer "$ASC_ISSUER_ID" 2>&1 | tail -15
+
+      # Keep the ipa and the archive on a failure so the next attempt starts from evidence rather
+      # than from a re-run. dSYMs live in the archive and are what makes a crash report readable.
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ios-build-${{ github.run_number }}
+          path: |
+            /tmp/export/*.ipa
+            /tmp/StatusHub.xcarchive/dSYMs
+          retention-days: 14
+          if-no-files-found: warn

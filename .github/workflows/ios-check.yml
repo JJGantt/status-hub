@@ -1,0 +1,85 @@
+# Compile the iOS app and render the widget layouts, without shipping anything.
+#
+# This is the loop the Pi cannot run locally. Swift is just text, so the Pi can write iOS code fine —
+# what it can't do is find out whether that code COMPILES, or look at what a widget actually draws.
+# Both of those needed a Mac today, and this borrows one for a few minutes instead.
+#
+# Two things come back:
+#   - whether it builds (a compile error costs minutes here instead of a failed TestFlight upload)
+#   - PNGs of every widget family, uploaded as artifacts
+#
+# That second one matters more than it sounds. The render harnesses (tools/render-*.swift) exist
+# precisely so widget layout can be judged without a device; running them here means a machine with
+# no screen can still SEE what it built. Download the artifact and look at it.
+#
+# Builds for the SIMULATOR deliberately: that needs no code signing at all, so this job touches no
+# certificates and no secrets, and is markedly faster than an archive.
+name: iOS check
+
+on:
+  # Dispatch-only, and manual. macOS runners bill at 10x, so a job that fires on every push to a repo
+  # this active would eat the monthly allowance in days — mostly on commits that never touched Swift.
+  # The Pi can trigger this itself with `gh workflow run ios-check.yml` when it wants to look.
+  workflow_dispatch:
+    inputs:
+      render_only:
+        description: 'Skip the app build, just render the widget PNGs (much faster)'
+        type: boolean
+        default: false
+
+concurrency:
+  group: ios-check
+  cancel-in-progress: true    # a newer check supersedes an older one; nothing is shipped either way
+
+jobs:
+  check:
+    runs-on: macos-latest
+    timeout-minutes: 30       # a hung xcodebuild must not quietly drain the allowance
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Show the toolchain
+        run: |
+          echo "Xcode: $(xcodebuild -version | head -1)"
+          echo "Swift: $(swift --version 2>&1 | head -1)"
+
+      # The drawing files are WidgetKit-free by design, so they compile standalone on macOS. This is
+      # the same command documented in each harness's header — if it ever stops matching, the header
+      # is the thing to fix.
+      - name: Render the widget layouts
+        working-directory: apps
+        run: |
+          mkdir -p /tmp/shots
+          swiftc -O tools/render-rings.swift Controls/RingsView.swift \
+            -o /tmp/render-rings && /tmp/render-rings /tmp/shots
+          swiftc -O tools/render-todo.swift Controls/TodoView.swift Controls/RingsView.swift \
+            Shared/Auth.swift Shared/OpenTodoItem.swift \
+            -o /tmp/render-todo && /tmp/render-todo /tmp/shots
+          swiftc -O tools/render-repos.swift Controls/ReposView.swift Controls/RingsView.swift \
+            Shared/Auth.swift Shared/OpenTodoItem.swift \
+            -o /tmp/render-repos && /tmp/render-repos /tmp/shots
+          ls -la /tmp/shots
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: widget-layouts
+          path: /tmp/shots/*.png
+          retention-days: 14
+
+      - name: Generate the Xcode project
+        if: ${{ !inputs.render_only }}
+        working-directory: apps
+        run: brew install xcodegen >/dev/null && xcodegen generate
+
+      # Simulator destination: no signing, no provisioning, no secrets. This answers "does it
+      # compile", which is the question the Pi actually can't answer for itself.
+      - name: Build for the simulator
+        if: ${{ !inputs.render_only }}
+        working-directory: apps
+        run: |
+          xcodebuild -project StatusHub.xcodeproj -scheme StatusHub \
+            -configuration Debug -sdk iphonesimulator \
+            -destination 'generic/platform=iOS Simulator' \
+            CODE_SIGNING_ALLOWED=NO \
+            build 2>&1 | tail -40

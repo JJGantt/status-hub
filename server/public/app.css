@@ -388,7 +388,11 @@ body.tv .card{overflow:hidden;min-height:0;min-width:0}
 body.tv .rows .fit{display:flex;flex-direction:column;padding:10px 12px;height:100%;overflow:hidden;min-height:0;gap:6px}
 /* hide card titles entirely — content is self-evident, and it buys vertical room */
 body.tv .card h2{display:none}
-body.tv .statusrow{grid-column:1/5;grid-row:1;min-height:108px}
+/* 108px was sized for a surf card that is display:none further down, so the row reserved 44px for
+   content that is no longer there — measured: natural height is 64px, chips 43px. 76px keeps a
+   little breathing room without the dead band. It is a MINIMUM, so the row still grows if the
+   litter card's content ever needs more. */
+body.tv .statusrow{grid-column:1/5;grid-row:1;min-height:76px}
 /* HEALTH BAR — overall score as a tall vertical gauge in the far-right column. Two stacked fill colours:
    nutrition (bottom) + training (top), each capped at its 50% half, together reaching the overall %. */
 body.tv .healthbar{grid-column:5;grid-row:1/-1;display:flex;flex-direction:column;align-items:center;padding:8px 4px;min-height:0;min-width:0;position:relative}

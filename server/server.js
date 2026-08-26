@@ -396,6 +396,22 @@ async function buildStatus() {
   const surplus = await surplusCal();   // current surplus/deficit setting
   const routing = await routingConfig();   // agent model / thinking / runner / wake (TV routing panel)
 
+  // The session a spoken follow-up would land in — shown on the TV strip so the answer is ambient
+  // rather than something you have to open a pane to learn. Resolved exactly as the MCP resolves it,
+  // through desk_focus.command_id to the session that command created, so the wall and the behaviour
+  // cannot disagree. Null when the pointer names a session that has since been closed, which is a
+  // real state and is rendered as such.
+  let deskFocus = null;
+  try {
+    const [fRows, sRows] = await Promise.all([
+      sb('desk_focus?id=eq.current&select=command_id'),
+      sb('desk_sessions?status=eq.resident&select=id,repo,label,command_id'),
+    ]);
+    const cmd = (fRows || [])[0]?.command_id || null;
+    const hit = cmd ? (sRows || []).find((r) => r.command_id === cmd) : null;
+    if (hit) deskFocus = { id: hit.id, repo: hit.repo, label: hit.label || null };
+  } catch (_) { /* the strip simply shows nothing rather than failing the whole payload */ }
+
   // ---- mic / worker liveness ----
   // Mics beacon voice_presence.alive_at every 30s WHILE audio frames are flowing (not merely while the
   // process exists); workers heartbeat worker_presence.last_seen every 10s. Stale = down. The Mac mic is
@@ -505,7 +521,8 @@ async function buildStatus() {
     }
   }
   return { today, litter, feeder, surf, nutrition, maintenance, pace: paceData, volume, heatmap, nutrition_log,
-    last_set_at, session_start_at, rep_watcher, routing, mics, score, generated_at: new Date().toISOString() };
+    last_set_at, session_start_at, rep_watcher, routing, mics, score, desk_focus: deskFocus,
+    generated_at: new Date().toISOString() };
 }
 
 // ---- realtime push: recompute + push to all connected browsers on any DB change ----

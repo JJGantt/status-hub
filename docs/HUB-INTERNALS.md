@@ -219,6 +219,22 @@ orchestrator ──beat(30s)──▶ worker_presence(worker='desk') ──▶ t
 
 ---
 
+### Naming a session
+
+Every name a session already has is derived from its checkout — the tmux id (`hub-status-hub-mta8y3ik`),
+the Remote Control name (`status-hub-mta8y3ik`) and Claude Code's own derived name (`status-hub-9c`)
+are all repo plus a timestamp suffix. None describes the work, so several jobs in one repo are
+indistinguishable in any list.
+
+`start_session` therefore takes a `label` — three to six words naming the WORK — written by the router
+at dispatch, the only moment the request exists as language. `desk_sessions.label` and
+`desk_queue.label` carry it (a queued job can wait a long time and must not lose its name). The panel
+and the TV strip show the label and fall back to the repo.
+
+One trap: `pi-desk`'s reconcile tick upserts with `resolution=merge-duplicates`, so any column it
+sends overwrites — omitting `label` there would blank it on the next tick, which is why it is carried
+through explicitly rather than left out.
+
 ### Which session holds follow-ups
 
 `/api/sessions` returns `focus` — the session id a SPOKEN follow-up would land in — and the panel

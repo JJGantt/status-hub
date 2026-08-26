@@ -54,7 +54,8 @@ function sessionsHtml(s) {
   const line = (x, live) =>
     `<li class="sess${live ? ' live' : ''}${x.id === focus ? ' focus' : ''}" data-id="${esc(x.id)}">` +
       `<div class="sess-main">` +
-        `<span class="sess-repo">${esc(x.repo)}` +
+        `<span class="sess-repo">${esc(x.label || x.repo)}` +
+        (x.label && x.repo && x.label !== x.repo ? `<span class="sess-in">${esc(x.repo)}</span>` : '') +
           (x.id === focus ? '<span class="sess-focus" title="a spoken follow-up goes here">follow-ups</span>' : '') +
         `</span>` +
         `<span class="sess-say">${esc((x.last_reply || x.prompt || '').replace(/\s+/g, ' ').slice(0, 90))}</span>` +

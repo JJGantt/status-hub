@@ -326,6 +326,24 @@ The visible consequence: **charts must be inline `<svg>`** — no chart library,
 URLs. The `publish_report` tool description states this, so the model does not discover it by having
 a chart silently fail to render.
 
+## 6d. Confirming a deploy actually shipped
+
+`GET /healthz` returns `ok <commit>` — the 7-char SHA stamped in by `flyctl deploy --env COMMIT=…`.
+It is public, so checking costs nothing:
+
+```
+curl -s https://jared-status-hub.fly.dev/healthz     # -> ok 64ac2ca
+git rev-parse --short origin/main                    # must match for server/ changes
+```
+
+**After pushing anything under `server/`, check it.** A push whose workflow never fired is
+indistinguishable from a successful one — the push succeeds, the commit is on `origin/main`, and
+nothing anywhere says the running app is older. That happened twice on 2026-08-26 during a GitHub
+Actions outage; both were only caught by accident. When they differ, `gh workflow run deploy-hub.yml
+--ref main` ships it, and `workflow_dispatch` keeps working when push triggers do not.
+
+`pull-repos` also logs `DEPLOY DRIFT` when the two disagree, as a passive backstop.
+
 ## 7. `app_settings` catalog (flat key/value)
 
 | Key | Controls |

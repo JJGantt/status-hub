@@ -628,7 +628,11 @@ function getCookie(req, name) {
 // Web uses the 'hub' cookie; the native app sends the same derived token as a header.
 const authed = (req) => getCookie(req, 'hub') === TOKEN || req.headers['x-hub-token'] === TOKEN;
 
-app.get('/healthz', (req, res) => res.send('ok'));  // public (before auth gate)
+// Public (before the auth gate). Reports the commit this instance is RUNNING, which is the only way
+// to tell a deploy that shipped from one that silently never ran — a push whose workflow never fired
+// looks identical to a successful one from the outside, and did exactly that twice on 2026-08-26.
+// COMMIT is stamped at deploy time; 'dev' locally.
+app.get('/healthz', (req, res) => res.type('text').send('ok ' + (process.env.COMMIT || 'dev')));
 app.get('/login', (req, res) => res.type('html').send(loginHtml()));
 app.post('/login', (req, res) => {
   if ((req.body.password || '') === HUB_PASSWORD) {

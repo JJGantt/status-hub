@@ -28,7 +28,9 @@ jobs:
       - uses: superfly/flyctl-actions/setup-flyctl@master
       # fly.toml lives in server/, which is also the build context — deploying from the repo root
       # would find no config and ship the wrong tree.
-      - run: flyctl deploy --remote-only
+      # Stamp the commit into the running app so /healthz can be compared against origin/main.
+      # Without it there is no way to distinguish a deploy that shipped from one that never ran.
+      - run: flyctl deploy --remote-only --env COMMIT=${GITHUB_SHA::7}
         working-directory: server
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}

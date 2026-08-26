@@ -6,9 +6,13 @@ primary_region = "iad"
 [http_service]
   internal_port = 8080
   force_https = true
-  auto_stop_machines = "suspend"
+  # A wall display depends on this around the clock, so it does not get to sleep. Suspending saved
+  # nothing real — the Pi kiosk polls constantly anyway — and cost a visible reload every time:
+  # .xinitrc kills Chromium when the hub goes unreachable-then-reachable, so each wake blinked the
+  # wall. It also put a cold start in front of opening the dashboard on the phone.
+  auto_stop_machines = false
   auto_start_machines = true
-  min_machines_running = 0
+  min_machines_running = 1
 
 [[vm]]
   size = "shared-cpu-1x"

@@ -4,8 +4,9 @@ How the hub UI is actually built: the data flow, the payload contract, the modul
 engine, and the full API + settings surface. Read `ARCHITECTURE.md` first for the ecosystem view;
 this is the map for working *inside* `status-hub` itself.
 
-> Freshness: 2026-08-24. The individual code files carry detailed header comments — this doc is the
-> connective tissue (structure, contracts, catalogs) that no single file holds.
+> The individual code files carry detailed header comments — this doc is the connective tissue
+> (structure, contracts, catalogs) that no single file holds. `CLAUDE.md` covers what to know
+> *before* editing anything here.
 
 ---
 
@@ -86,15 +87,17 @@ command finishes. Only these four states survive the relay; anything else is coe
 **Cards (`public/cards/`)** — each exports `render(s)` and paints from its `s.*` slice:
 
 `nutrition` (Cal/P/C/F pace rings + produce sub-rings) · `nutritionlog` (calorie+weight plot +
-adherence calendar) · `maintviz` (4th phone swipe pane — the maintenance-window viz) · `todo` (5th
-pane — reminders/lists/notes, self-fetches) · `repos` (6th pane — the Mac's projects; tap to launch a
-Claude session there, self-fetches) · `muscle` (body map + volume gauges) · `workouts`
-(heatmap + day detail) · `litter` · `feeder` · `surf` · `routing` (TV top strip) · `score` (TV right
-column) · `mics` (page voice-liveness strip).
+adherence calendar) · `maintviz` (the maintenance-window viz) · `todo` (dated items / lists / notes,
+self-fetches) · `repos` (the Mac's projects; tap to launch a Claude session there, self-fetches) ·
+`reports` (a dispatched session's write-ups, self-fetches — §6c) · `muscle` (body map + volume
+gauges) · `workouts` (heatmap + day detail) · `litter` · `feeder` · `surf` · `routing` (TV top strip)
+· `deskfoot` (which session holds follow-ups, TV footer — §6b) · `score` (TV right column) · `mics`
+(page voice-liveness strip).
 
 **Surfaces (same code, different chrome):** desktop `/page` = scrolling rows; phone = swipe panes on
-`/` (chat · wall · misc · maint · todo · repos); TV `/tv` = the wall + a voice panel (auth `?token=`); the
-`/mic` page = a minimal fullscreen voice launcher.
+`/`, in markup order in `public/tv.html` — chat · wall · misc · maint · todo · repos · reports,
+landing on the wall; TV `/tv` = the wall + a voice panel (auth `?token=`); the `/mic` page = a
+minimal fullscreen voice launcher.
 
 ---
 
@@ -120,23 +123,30 @@ The math lives here; each file has a thorough header. Summary map:
 
 ## 5. API surface (`server.js`)
 
-**Pages:** `/` · `/tv` (wall) · `/page` (desktop dashboard) · `/mic` (voice launcher) · `/login` · `/healthz`.
+**Pages:** `/` · `/tv` (both serve the wall) · `/page` (desktop dashboard) · `/mic` (voice launcher) ·
+`/reports` + `/report/:id` (§6c) · `/login` · `/healthz`.
 
 **Read:** `/api/status` (full payload) · `/api/stream` (SSE status) · `/api/voice-stream` (SSE voice
 frames for the kiosk) · `/api/workout-day` · `/api/nutrition-day` · `/api/voice-messages` ·
-`/api/todos` (lists + notes + the derived `due` view) · `/api/badge` · `/api/repos` · `/api/repos/cmd/:id` · `/api/attachment` · `/api/rings` (the iOS
-widget's compact pace feed — a timeline of frames, not a snapshot; see §9b) · `/api/list-widget`
-(one list's item *titles* for the to-do widget; `?list=` defaults to `todo`).
+`/api/todos` (lists + notes + the derived `due` view) · `/api/badge` · `/api/repos` ·
+`/api/repos/cmd/:id` · `/api/sessions` (live desk sessions + the follow-up `focus`) · `/api/reports`
+(list only — `html` is never selected) · `/api/attachment`.
+
+**Widget feeds** (compact, one per widget — §9b): `/api/rings` (a timeline of per-minute pace frames,
+not a snapshot) · `/api/due-widget` (every dated item across every list) · `/api/repos-widget` (the
+Mac's projects + desk presence). `/api/list-widget` returns one list's item titles and is the
+per-list feed `/api/due-widget` replaced; nothing reads it.
 
 **Write:** `/api/settings` (GET/POST) · `/api/log-set` · `/api/log-entry` (POST/DELETE) ·
-`/api/commit-staged` · `/api/feed` · `/api/todos/{add,clear,snooze}` · `/api/repos/open` · `/api/voice-command` (raw audio →
-Groq Whisper → enqueue) · `/api/voice-text` (text → enqueue) · `/api/voice-reset` ·
-`/api/voice-activity` · `/api/attach` (photo upload) · `/api/register-push` · `/api/notify` (APNs to
-all devices) · `/api/clientlog`.
+`/api/commit-staged` · `/api/feed` · `/api/todos/{add,clear,snooze}` · `/api/repos/open` ·
+`/api/sessions/:action` · `/api/voice-command` (raw audio → Groq Whisper → enqueue) ·
+`/api/voice-text` (text → enqueue) · `/api/voice-reset` · `/api/voice-activity` · `/api/attach`
+(photo upload) · `/api/register-push` · `/api/notify` (APNs to all devices) · `/api/clientlog`.
 
 **Auth:** the hub password → `sha256("status-hub:"+password)`; sent as the `hub` cookie (web) or the
 `X-Hub-Token` header (native app). The kiosk authenticates via `?token=<TV_TOKEN>` (also seeds the
-cookie). Everything under the gate requires one of these; `/healthz` and `/login` are public.
+cookie). The gate is one `app.use` and it protects **everything defined below it**, static assets
+included; `/healthz` and `/login` are declared above it and are public.
 
 ---
 
@@ -161,9 +171,6 @@ Consequences worth knowing:
   calling `pushAll` directly. Only `push` exists today; the seam earns its ten lines because the
   second handler is already scheduled — AlarmKit ([TODO.md](TODO.md)), which fires on-device and
   breaks through Focus.
-- **The dedupe key is still `reminder:<id>`.** Migration 00056 preserved item ids precisely so the
-  ledger rows written before the merge still match. Renaming the key would orphan them and every
-  already-delivered item would fire a second time.
 - **`kind` is gone** from `/api/todos/clear` — one table, one thing to clear.
 - **Repeats** live in `repeat_every` (`'1 day'`, `'2 hours'`, `'1 month'`, …). One nullable column,
   not a boolean plus a period: null already means "one-shot", and a second field carrying the same
@@ -176,16 +183,17 @@ Consequences worth knowing:
 - **The dedupe key is `reminder:<id>:<due>`** — scoped to the occurrence, not the row. A repeating
   item fires under one id repeatedly, so the id alone would suppress everything after the first
   occurrence. It also makes snooze self-cleaning: moving the due is already a new key, so the endpoint
-  never has to delete the old ledger row by hand.
+  never has to delete the old ledger row by hand. The `reminder:` prefix stays because migration
+  `00056` preserved item ids so that ledger rows written before the merge still match — rename it and
+  every already-delivered item fires again.
 
 Voice/MCP writes them (data-layer tools); the hub surfaces them:
 - **Card:** `public/cards/todo.js` — the 5th phone swipe pane. Self-fetches `/api/todos` (not part of
   the status stream), refreshes on mount / after edits / on focus.
-- **Endpoints:** `GET /api/todos` (reminders + lists+items + notes) · `POST /api/todos/complete` ·
-  `POST /api/todos/add` (service-key writes; list add auto-creates the list).
-- **Reminder firing:** a 60s tick app-pushes any reminder whose local `due` has passed, deduped via a
-  `notifications` row keyed `reminder:<id>` (date-only dues fire 9am). Shares `pushAll()` with
-  `/api/notify`.
+- **Endpoints:** `GET /api/todos` (lists + items + notes + the derived due view) ·
+  `POST /api/todos/add` (service-key writes; adding to an unknown list auto-creates it) ·
+  `POST /api/todos/clear` · `POST /api/todos/snooze`. There is one cleared state and it is soft —
+  checking off and deleting are the same act, and the row survives a recovery window.
 
 ---
 
@@ -329,17 +337,13 @@ a chart silently fail to render.
 ## 6d. Deploying, and confirming it shipped
 
 **`server/deploy.sh`, from whichever machine changed the code.** Both machines have `flyctl`
-authenticated. There is no GitHub Actions workflow for the hub any more — it was removed 2026-08-26
-after an Actions outage stopped push triggers firing silently (pushes succeeded and shipped nothing)
-and the recovering backlog replayed out of order, deploying an older commit over newer live code.
-Actions now covers iOS only, where a macOS runner is genuinely required.
+authenticated, and both pull every 15 minutes, so neither ships a stale tree. `.github/workflows/`
+covers iOS only, where a macOS runner is genuinely required — nothing there deploys the server, so a
+push on its own ships nothing.
 
-The script deploys and then verifies, because those are different things:
-
-
-
-`GET /healthz` returns `ok <commit>` — the 7-char SHA stamped in by `flyctl deploy --env COMMIT=…`.
-It is public, so checking costs nothing:
+The script deploys and then verifies, because those are different things. `GET /healthz` returns
+`ok <commit>` — the 7-char SHA stamped in by `flyctl deploy --env COMMIT=…`. It is public, so
+checking costs nothing:
 
 ```
 curl -s https://jared-status-hub.fly.dev/healthz     # -> ok 64ac2ca
@@ -347,8 +351,8 @@ git rev-parse --short origin/main                    # must match for server/ ch
 ```
 
 `COMMIT` is stamped in at deploy time, so a deploy that did not happen is visible rather than
-indistinguishable from one that did — the failure that motivated all of this. `deploy.sh` polls
-`/healthz` after shipping and exits non-zero if the running commit never becomes the one it built.
+indistinguishable from one that did. `deploy.sh` polls `/healthz` after shipping and exits non-zero
+if the running commit never becomes the one it built.
 
 `pull-repos` also logs `DEPLOY DRIFT` when the two disagree, as a passive backstop.
 
@@ -412,8 +416,8 @@ widgetkit-extension, embedded by the iOS app — §9b). More than a thin wrapper
 ## 9b. `StatusHubControls` — the Record control + the widgets
 
 One iOS-18 widgetkit-extension (`apps/Controls/`, bundle `com.jaredgantt.statushub.controls`,
-embedded by the app) hosts **all of them** — the Record control, the Macro Rings widget and the
-to-do widget — in a single `WidgetBundle` (bottom of `RecordControl.swift`).
+embedded by the app) hosts **all of them** — the Record control, the Macro Rings widget, the Due
+widget and the Projects widget — in a single `WidgetBundle` (bottom of `RecordControl.swift`).
 That is the intended shape — a bundle is meant to carry several widgets and controls — and it also
 avoids a **new bundle id**, which would need a new provisioning profile, which the rejected Xcode
 account session can't issue ([TODO.md](TODO.md) § Blocked on Jared).
@@ -472,37 +476,45 @@ swiftc -O tools/render-rings.swift Controls/RingsView.swift -o /tmp/render && /t
 # writes /tmp/{small,medium,rectangular}.png from a real /api/rings response baked into the tool
 ```
 
-**To-do widget** (`TodoWidget.swift` = WidgetKit plumbing, `TodoView.swift` = drawing + button
-intents) — the `todo` list's item titles, Home Screen families only (`systemSmall` 6 rows /
-`systemMedium` 5 / `systemLarge` 10; the accessory families are too small for a list, and a ✕ that
-small is a mis-tap waiting to happen).
+**Due widget** (`TodoWidget.swift` = WidgetKit plumbing, `TodoView.swift` = drawing + button
+intents) — **everything with a due date, from every list**, ordered by when it was first scheduled.
+Not one list at a time: "what needs dealing with" is never confined to a single list, which is why
+`/api/due-widget` replaced the per-list feed. Home Screen families only (`systemSmall` 6 rows /
+`systemMedium` 5 / `systemLarge` 10 — measured with the render harness, not guessed; the accessory
+families are too small for a list).
 
-- **Titles, not bodies.** Items carry a real `title` column (migration `00056`), and
-  `/api/list-widget` prefers it. When it's absent the hub derives one — cutting at the first em dash
-  or line break, capped at 90 chars — which covers everything written before the column existed.
-  Either way the hub decides what a row says, not the Swift. Rows are one line each, which is what
-  makes the row counts above exact rather than hopeful.
-- **Overdue rows are marked.** Dated items sit on ordinary lists now, so any row can be overdue; the
-  feed sends a per-item `overdue` flag and the widget paints those amber, matching the pane's due
-  chip. It decodes as optional so a `todo-last.json` cached before the field existed still loads —
-  a fallback cache that fails to decode is a blank widget, which is what it exists to prevent.
-- **Two taps to clear.** A widget has *no gestures* — no swipe, no long press, only `Button`/`Toggle`
-  taps. So tapping a row arms it (its ✕ appears) and tapping the ✕ clears it via the same
-  `/api/todos/clear` the web pane uses. That preserves the property the pane's left-swipe was chosen
-  for — no single stray tap deletes anything — with the only mechanism widgets offer. Tapping an
-  armed row again disarms it; `TapTodoItem` is one *toggling* intent because `Button(intent:)` takes
-  a single concrete type and a ternary over two intent types doesn't compile.
+- **Titles, not bodies.** Items carry a real `title` column (migration `00056`) and the feed prefers
+  it; when it is absent the hub derives one — cutting at the first em dash or line break, capped at
+  90 chars. Either way the hub decides what a row says, not the Swift. Rows are one line each, which
+  is what makes the row counts above exact.
+- **Expiry comes from the anchor.** The feed flags an item `expired` from `scheduled_at`, not `due`,
+  so a repeating item stays expired after it fires instead of resetting itself to upcoming. Whether
+  it repeats is orthogonal and only governs whether the notification comes again.
+- **Decode-optional flags.** `expired` and `repeating` are optional rather than defaulted: a
+  defaulted `var` still makes the key required in the synthesised `init(from:)`, so a `due-last.json`
+  written by an older build would fail to decode and turn the offline fallback into a blank widget —
+  the one thing that cache exists to prevent.
+- **Two taps.** A widget has *no gestures* — no swipe, no long press, only `Button`/`Toggle` taps. So
+  tapping a row opens its two options in place: **open it in the app** (`OpenTodoItem`, which runs in
+  the app process via `openAppWhenRun` and lands on the item) or **clear it** via the same
+  `/api/todos/clear` every other surface uses. No single stray tap clears anything, which is the
+  property the web pane's left-swipe was chosen for. `TapTodoItem` is one *toggling* intent because
+  `Button(intent:)` takes a single concrete type and a ternary over two intent types doesn't compile.
+- **The clear must be awaited.** A widget extension can be suspended the moment `perform()` returns,
+  and without an App Group there is no background `URLSession` to outlive it. Awaiting silently made
+  the tap feel dead, so `ClearTodoItem` paints a "clearing…" state first, then awaits, then removes
+  the row from the cache so the rebuild redraws it gone with no second round-trip.
 - **Arm state needs no App Group.** A widget's button intent runs in the *extension's own process* —
   the same one the timeline provider runs in — so `UserDefaults.standard` is shared ground between
   them (`ArmStore`). An App Group would mean a new entitlement and a regenerated provisioning
   profile, i.e. blocked. The arm expires after 20s, and the provider emits a second entry at that
-  expiry so a revealed ✕ closes itself.
+  expiry so revealed options close themselves.
 - **No frames.** Unlike the rings, this data doesn't move with the clock, so it's one snapshot per
   fetch. Freshness comes from reloads: WidgetKit rebuilds the timeline the moment a button is tapped,
   `applicationDidBecomeActive` covers foregrounding, and `cards/todo.js` posts `reloadWidgets` after
   any edit in the pane (unthrottled — unlike `core.js`'s macro nudge it only fires on a real tap).
   The 1-hour policy is just the backstop for a change made elsewhere (voice, the Mac).
-- **Never blank.** Same `todo-last.json` cache fallback as the rings. "Can't reach the hub" and
+- **Never blank.** Same cache fallback as the rings (`due-last.json`). "Can't reach the hub" and
   "All clear" are drawn as distinct states — only one of them means you're done.
 
 Its harness is `tools/render-todo.swift` (same idea, `+ Shared/Auth.swift` for the intents' network
@@ -513,3 +525,23 @@ cd apps
 swiftc -O tools/render-todo.swift Controls/TodoView.swift Controls/RingsView.swift \
        Shared/Auth.swift -o /tmp/render-todo && /tmp/render-todo /tmp
 ```
+
+**Projects widget** (`ReposWidget.swift` = WidgetKit plumbing, `ReposView.swift` = drawing +
+intents) — the Mac's projects from `/api/repos-widget`, most recently touched first, mirroring the
+repos pane (§6b): a branch chip only when the branch is worth knowing, a dot when the checkout is
+dirty, and the whole list greyed when desk presence is stale. Home Screen families only.
+
+- **A tap does not launch a session.** Opening a bare session leaves you typing the actual request
+  into a fresh prompt afterwards, so a tap dictates the session's **first message** instead. A widget
+  extension has no microphone, so it hands the choice to the app (`statushub://repo/<path>`) and the
+  recording happens on the repos pane.
+- **Two taps, and the confirm matters more here.** Tap a row to select, tap ▶ to hand over. This one
+  starts a process on a real machine; a stray tap that opens a terminal is worse than one that opens
+  options. Same extension-local `UserDefaults` arm store, same 20s expiry with a second timeline
+  entry so the confirm retracts itself.
+- **A rebuild is not always a fetch.** Selecting a row is local state; making it wait on an HTTPS
+  round-trip is what made the first interactive widget feel broken. A cached payload under 60s old
+  (or any armed state) backs the redraw. The refresh policy is 30 minutes — the list is the Mac's own
+  scan and only moves when work happens.
+
+Harness: `tools/render-repos.swift`.

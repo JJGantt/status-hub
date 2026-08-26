@@ -986,6 +986,13 @@ body.tv:not(.phonewall):not(.mac) .tv-footrow{grid-column:1/6;grid-row:3;display
   border:2px solid #38465a;border-radius:14px}
 body.tv:not(.phonewall) .tv-foot-act{flex:1 1 auto;min-width:0;display:flex;align-items:center}
 body.tv:not(.phonewall) .tv-foot-follow{flex:none}
+/* The PHONE loads this same markup, so #tv-act exists there too and the activity bar mounts into it.
+   display:none on the row would hide the bar with it — which silently killed the phone's tool-call
+   overlay. display:contents removes the row and its wrapper from layout while leaving the bar in the
+   flow, so it keeps the position:fixed float it has always had on the phone. */
+body.tv.phonewall .tv-footrow,body.tv.mac .tv-footrow,
+body.tv.phonewall .tv-foot-act,body.tv.mac .tv-foot-act{display:contents}
+body.tv.phonewall .tv-foot-follow,body.tv.mac .tv-foot-follow{display:none}
 
 /* The follow-up target. Repo name only — the wall is read at a glance, and the fuller label belongs
    on the phone panel. Absent entirely when nothing holds follow-ups: an empty box is worse than no

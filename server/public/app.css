@@ -433,7 +433,8 @@ body.tv.phonewall .pane-todo{padding:12px 12px 70px;overflow-y:auto}
 body.tv.phonewall .pane-todo .card{background:#151a20!important;border:1px solid #222a33;border-radius:12px}
 /* Repo picker — tap a repo to open a remote-controlled Claude session on the Mac. */
 .reposcard{padding:14px}
-.repos h3{margin:0 0 8px;font-size:12px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:#8b96a5}
+.repos h3{display:flex;align-items:baseline;justify-content:space-between;margin:0 0 8px;font-size:12px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:#8b96a5}
+.rp-reports{font-size:11px;font-weight:600;letter-spacing:.03em;text-transform:none;color:#5b8def;text-decoration:none}
 .repos ul{list-style:none;margin:0;padding:0}
 .repos li{display:flex;align-items:center;gap:10px;padding:11px 2px;border-bottom:1px solid #1c232b}
 .repos li:last-child{border-bottom:none}

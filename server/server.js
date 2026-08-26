@@ -1591,6 +1591,45 @@ app.get('/api/repos', async (req, res) => {
   } catch (e) { res.status(500).json({ error: String(e.message || e) }); }
 });
 
+// Live and parked Claude sessions on the Pi. This is the ambient indicator: what is being worked on,
+// and on which repo — answered by selecting rows rather than by any separate bookkeeping.
+app.get('/api/sessions', async (req, res) => {
+  try {
+    const [sessions, queue] = await Promise.all([
+      sb('desk_sessions?select=*&order=last_seen.desc'),
+      sb('desk_queue?claimed=is.null&select=*&order=created.asc'),
+    ]);
+    res.json({
+      // Resident = running now, reachable over Remote Control. Evicted = closed to free the machine
+      // but resumable with full context, which is the distinction the panel has to make obvious.
+      resident: (sessions || []).filter((s) => s.status === 'resident'),
+      evicted: (sessions || []).filter((s) => s.status === 'evicted'),
+      queued: queue || [],
+    });
+  } catch (e) { res.status(500).json({ error: String(e.message || e) }); }
+});
+
+// Act on one: 'end' closes it for good, 'resume' brings an evicted one back, 'forget' drops the row
+// without touching the machine (the transcript stays on disk; it just stops being offered).
+app.post('/api/sessions/:action', express.json(), async (req, res) => {
+  try {
+    const action = String(req.params.action || '');
+    const id = String((req.body || {}).id || '');
+    if (!id) return res.status(400).json({ error: 'id required' });
+    if (action === 'forget') {
+      await sbWrite(`desk_sessions?id=eq.${encodeURIComponent(id)}`, 'DELETE');
+      return res.json({ ok: true });
+    }
+    const kind = action === 'resume' ? 'resume_session' : action === 'end' ? 'end_session' : null;
+    if (!kind) return res.status(400).json({ error: 'unknown action' });
+    // Routed through desk_commands like everything else, because this server is on Fly and cannot
+    // reach the Pi directly — Supabase carries both directions.
+    const cmdId = crypto.randomUUID();
+    await sbWrite('desk_commands', 'POST', { id: cmdId, kind, payload: { session: id, target: 'pi' } });
+    res.json({ id: cmdId });
+  } catch (e) { res.status(500).json({ error: String(e.message || e) }); }
+});
+
 app.post('/api/repos/open', express.json(), async (req, res) => {
   try {
     const target = String((req.body || {}).path || '');

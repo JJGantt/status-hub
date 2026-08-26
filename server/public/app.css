@@ -445,6 +445,29 @@ body.tv.phonewall .pane-todo .card{background:#151a20!important;border:1px solid
 .repos .rp-meta{flex:0 0 auto;display:flex;align-items:center;gap:6px}
 .repos .rp-branch{font-size:12px;color:#8b96a5}
 .repos .rp-dirty{width:7px;height:7px;border-radius:50%;background:#e6b93d}
+/* Sessions panel — live and parked Claude sessions on the Pi, above the project list.
+   A live row is marked by a green dot; a parked one offers `resume` instead. The two are drawn
+   differently on purpose: tapping something expecting it to be live and finding it isn't is the
+   confusion this avoids. */
+.sessions{margin:0 0 16px}
+.sessions h3{display:flex;align-items:center;gap:8px;margin:0 0 8px;font-size:13px;font-weight:700;
+  letter-spacing:.4px;text-transform:uppercase;color:#8b96a5}
+.sessions .sess-q{font-size:11px;font-weight:600;color:#e6b93d;text-transform:none;letter-spacing:0}
+.sessions ul{list-style:none;margin:0;padding:0}
+.sessions li.sess{display:flex;align-items:center;gap:10px;padding:9px 2px;border-bottom:1px solid #1c232b}
+.sessions .sess-main{flex:1 1 auto;min-width:0}
+.sessions .sess-repo{display:block;font-size:15px;color:#e6ebf2;font-weight:600}
+.sessions .sess-say{display:block;font-size:12px;color:#8b96a5;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.sessions li.sess:not(.live) .sess-repo{color:#8b96a5}
+.sessions .sess-act{flex:0 0 auto;display:flex;align-items:center;gap:6px}
+/* Steady, not pulsing: it means "open and reachable", not "actively working". */
+.sessions .sess-dot{width:8px;height:8px;border-radius:50%;background:#39d353;display:inline-block}
+.sessions .sess-btn{background:#1a222c;border:1px solid #2a333f;border-radius:7px;color:#e6ebf2;
+  font-size:12px;padding:5px 10px;cursor:pointer}
+.sessions .sess-btn.ghost{background:transparent;color:#5d6672;padding:5px 8px}
+.sessions .sess-btn:active{background:#2a333f}
+.sessions li.queued .sess-repo,.sessions li.queued .sess-say{color:#5d6672}
+.sessions li.busy{opacity:.5;pointer-events:none}
 .repos .rp-age{flex:0 0 auto;font-size:12px;color:#8b96a5}
 /* Launch feedback replaces the age column: blue while the Mac works, then green or red. */
 .repos li[data-say] .rp-age{display:none}

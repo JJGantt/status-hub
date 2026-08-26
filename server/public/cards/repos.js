@@ -33,6 +33,42 @@ function ago(iso) {
 // non-repo directory has no branch at all and renders the same as a plain `main`.
 const notable = (b) => !!b && b !== 'main' && b !== 'master';
 
+// Live and parked sessions, above the project list. This is the "is something being worked on"
+// question, and it belongs here because the answer is always about a repo.
+//
+// The two states are deliberately drawn differently rather than as one list with a label: a RESIDENT
+// session is open on the Pi and reachable in the Claude app right now, an EVICTED one was closed to
+// free the machine and has to be resumed first. Confusing them means tapping something expecting it
+// to be live and finding it isn't.
+function sessionsHtml(s) {
+  if (!s) return '';
+  const res = s.resident || [], ev = s.evicted || [], q = s.queued || [];
+  if (!res.length && !ev.length && !q.length) return '';
+
+  const line = (x, live) =>
+    `<li class="sess${live ? ' live' : ''}" data-id="${esc(x.id)}">` +
+      `<div class="sess-main">` +
+        `<span class="sess-repo">${esc(x.repo)}</span>` +
+        `<span class="sess-say">${esc((x.last_reply || x.prompt || '').replace(/\s+/g, ' ').slice(0, 90))}</span>` +
+      `</div>` +
+      `<div class="sess-act">` +
+        (live ? '<span class="sess-dot" title="open on the Pi"></span>'
+              : `<button class="sess-btn" data-act="resume">resume</button>`) +
+        `<button class="sess-btn ghost" data-act="${live ? 'end' : 'forget'}">${live ? 'close' : '\u00d7'}</button>` +
+      `</div>` +
+    '</li>';
+
+  let out = '<div class="sessions"><h3>Sessions';
+  if (q.length) out += `<span class="sess-q">${q.length} queued</span>`;
+  out += '</h3><ul>';
+  out += res.map((x) => line(x, true)).join('');
+  out += ev.map((x) => line(x, false)).join('');
+  out += q.map((x) =>
+    `<li class="sess queued"><div class="sess-main"><span class="sess-repo">${esc(x.repo)}</span>` +
+    `<span class="sess-say">waiting for a slot</span></div></li>`).join('');
+  return out + '</ul></div>';
+}
+
 function html(d) {
   const rows = (d.repos || []).map((r) =>
     `<li data-path="${esc(r.path)}">` +
@@ -43,7 +79,8 @@ function html(d) {
     '</li>').join('');
   const off = d.desk && d.desk.online ? '' :
     '<div class="rp-off">Mac is asleep — nothing to launch into</div>';
-  return `<div class="repos${d.desk && d.desk.online ? '' : ' off'}"><h3>Start a session</h3>${off}` +
+  return sessionsHtml(d.sessions) +
+    `<div class="repos${d.desk && d.desk.online ? '' : ' off'}"><h3>Start a session</h3>${off}` +
     `<ul>${rows || '<li class="empty">No repos published</li>'}</ul></div>`;
 }
 
@@ -53,6 +90,9 @@ async function load() {
   let d;
   try { d = await (await fetch('/api/repos')).json(); } catch (_) { return; }
   if (!d || d.error) return;
+  // Fetched alongside rather than folded into /api/repos: sessions change on their own schedule and
+  // a failure to read them must not blank the project list, which is the pane's primary job.
+  try { d.sessions = await (await fetch('/api/sessions')).json(); } catch (_) { d.sessions = null; }
   desk = d.desk || { online: false };
   el.innerHTML = html(d);
   wire(el);
@@ -120,7 +160,26 @@ function cancelDictation() {
   armed = null; recorder = null;
 }
 
+async function sessionAction(li, act) {
+  const id = li.dataset.id;
+  li.classList.add('busy');
+  try {
+    await fetch('/api/sessions/' + act, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id }),
+    });
+  } catch (_) { /* the next load reconciles */ }
+  // Resume and close are enacted on the Pi asynchronously, so give it a moment before re-reading
+  // rather than showing a state the machine has not reached yet.
+  setTimeout(load, act === 'forget' ? 200 : 2500);
+}
+
 function wire(el) {
+  el.querySelectorAll('li.sess .sess-btn').forEach((b) =>
+    b.addEventListener('click', (e) => {
+      e.stopPropagation();
+      sessionAction(b.closest('li.sess'), b.dataset.act);
+    }));
   el.querySelectorAll('li[data-path]').forEach((li) =>
     li.addEventListener('click', () => { if (desk.online) beginDictation(li); }));
 }

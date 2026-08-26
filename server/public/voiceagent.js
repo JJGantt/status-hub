@@ -3,7 +3,8 @@
 //   1. A full-height conversation card at the end of the hub (#ai-log): type, talk, reset.
 //   2. A fixed quick-add mic FAB (bottom-right) for a one-off voice command without scrolling.
 //   3. A bottom activity bar (bottom-left, sized to never touch the FAB) that shows live progress —
-//      Listening / Transcribing / Thinking, then each tool call WITH its arguments as it runs.
+//      Listening / Transcribing / Thinking, then each tool call WITH its arguments as it runs, plus the
+//      Sonnet→Opus escalation when a turn leaves the fast path (its own row + a sticky OPUS chip).
 // Tool-call rows (role='tool') are surfaced ONLY in the activity bar, never in the conversation
 // thread. All skipped on the TV wall (no mic; it renders the conversation itself via tv.js).
 import { esc, localNowNaive } from './shared.js';
@@ -64,7 +65,9 @@ function boot() {
     if (msg.kind === 'activity') {                 // live progress, pushed direct from the worker (low-latency)
       const a = msg.row || {};
       if ((a.focus || 'hub') !== 'hub') return;
-      if (a.state === 'done') activity.done(a.text); else activity.tool(a.text);
+      if (a.state === 'done') activity.done(a.text);
+      else if (a.state === 'escalate') activity.escalate(a.text);   // Sonnet handed off to Opus mid-run
+      else activity.tool(a.text);
       return;
     }
     if (msg.kind !== 'message') return;
@@ -345,32 +348,43 @@ export function initActivityBar() {
   // A quoted "what you said" line (filled after transcription) stacked above the live status row.
   bar.innerHTML =
     '<div class="ai-act-prompt"></div>' +
-    '<div class="ai-act-row"><span class="ai-act-dot"></span><span class="ai-act-txt"></span></div>';
+    '<div class="ai-act-row"><span class="ai-act-dot"></span><span class="ai-act-txt"></span>' +
+      '<span class="ai-act-model"></span></div>';
   document.body.appendChild(bar);
   const txt = bar.querySelector('.ai-act-txt');
   const prm = bar.querySelector('.ai-act-prompt');
-  const STATES = ['ai-act-rec', 'ai-act-busy', 'ai-act-tool', 'ai-act-done', 'ai-act-err'];
+  const mdl = bar.querySelector('.ai-act-model');
+  const STATES = ['ai-act-rec', 'ai-act-busy', 'ai-act-tool', 'ai-act-esc', 'ai-act-done', 'ai-act-err'];
   let hideT = null;
   function setPrompt(text) {
     const t = (text || '').trim();
     prm.textContent = t ? '“' + t + '”' : '';
     bar.classList.toggle('has-prompt', !!t);     // persists across status changes; cleared on hide/reset
   }
+  // Which model is running this turn. Only set when a run LEAVES the default fast path (Sonnet→Opus),
+  // and — like the prompt line — it stays up for every later tool row, so the escalation is still
+  // visible when the hop itself has scrolled by. Cleared on hide/reset, i.e. per command.
+  function setModel(name) {
+    mdl.textContent = name || '';
+    bar.classList.toggle('has-model', !!name);
+  }
   function show(text, kind, sticky) {
     txt.textContent = text || '';
     bar.classList.remove(...STATES);
     bar.classList.add('show', 'ai-act-' + (kind || 'busy'));
     clearTimeout(hideT);
-    if (!sticky) hideT = setTimeout(() => { bar.classList.remove('show'); setPrompt(''); }, 3500);
+    if (!sticky) hideT = setTimeout(() => { bar.classList.remove('show'); setPrompt(''); setModel(''); }, 3500);
   }
   return {
     prompt(t) { setPrompt(t); },                  // the transcribed command; stays up for the whole run
-    rec(t) { setPrompt(''); show(t || 'Listening…', 'rec', true); },
+    rec(t) { setPrompt(''); setModel(''); show(t || 'Listening…', 'rec', true); },
     busy(t) { show(t, 'busy', true); },          // Transcribing… / Thinking…
     tool(t) { show('⚙ ' + (t || 'tool'), 'tool', true); },
+    // The Sonnet→Opus hop: announced on its own row, then remembered as the OPUS chip.
+    escalate(t) { setModel('Opus'); show('⤴ ' + (t || 'Escalated to Opus'), 'esc', true); },
     done(t) { show(t ? '✓ ' + t : 'Done ✓', 'done', false); },
     err(t) { show(t, 'err', false); },
-    clear() { clearTimeout(hideT); bar.classList.remove('show'); setPrompt(''); },
+    clear() { clearTimeout(hideT); bar.classList.remove('show'); setPrompt(''); setModel(''); },
   };
 }
 

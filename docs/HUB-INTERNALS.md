@@ -75,6 +75,14 @@ Supabase ──▶ server.js buildStatus() ──▶ /api/status payload ──�
 | `tv.js` | TV/kiosk-only: the voice-conversation panel + session terminal layered on the wall. |
 | `mic.js` | The `/mic` standalone launcher page's script (its own recorder, reuses `voiceagent`). |
 
+The activity popup (`.ai-act`, shared by the page view, the phone wall and the TV kiosk) renders the
+`activity` frames the worker pushes to `/api/voice-activity`: `working` (the prompt, once per command),
+`tool` (each tool call + args), `escalate`, and `done`. **`escalate` is the Sonnet→Opus hop**: the worker
+sends one when a hub turn leaves the fast path (it needed a full-access tool, or Sonnet errored), and the
+bar shows it as its own violet row *and* lights an `OPUS` chip that persists for the rest of the run —
+later tool rows replace the text, but the fact that this turn changed models stays on screen until the
+command finishes. Only these four states survive the relay; anything else is coerced to `tool`.
+
 **Cards (`public/cards/`)** — each exports `render(s)` and paints from its `s.*` slice:
 
 `nutrition` (Cal/P/C/F pace rings + produce sub-rings) · `nutritionlog` (calorie+weight plot +

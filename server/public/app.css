@@ -990,9 +990,8 @@ body.tv:not(.phonewall) .tv-foot-follow{flex:none}
 /* The follow-up target. Repo name only — the wall is read at a glance, and the fuller label belongs
    on the phone panel. Absent entirely when nothing holds follow-ups: an empty box is worse than no
    box on a display nobody interacts with. */
-.tv-follow-box{display:inline-block;padding:7px 20px;border:2px solid rgba(126,166,255,.5);
-  border-radius:12px;background:rgba(126,166,255,.07);font-size:26px;font-weight:600;color:#7ea6ff;
-  white-space:nowrap}
+.tv-follow-box{display:inline-block;padding:2px 0 2px 22px;border-left:2px solid #38465a;
+  font-size:26px;font-weight:600;color:#7ea6ff;white-space:nowrap}
 
 /* On the wall the activity element stops floating and sits in the lane the footer reserves. */
 body.tv:not(.phonewall) #tv-act .ai-act{position:static;left:auto;bottom:auto;max-width:100%;

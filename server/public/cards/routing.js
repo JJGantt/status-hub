@@ -19,24 +19,18 @@ export function render(s) {
   const m = s.mics || {};
   const liveWorker = m.workers && (m.workers.mac ? 'Mac' : m.workers.pi ? 'Pi' : m.workers.fly ? 'Fly' : null);
   const UP = '#39d353', DOWN = '#f85149';
-  // The session a spoken follow-up lands in, above the chips. It is the one piece of state here you
-  // cannot infer by looking at anything else — it follows the last thing dispatched by VOICE, not the
-  // session on screen and not the one that spoke last, so without showing it the session you have in
-  // mind and the one that will receive your words can differ silently.
+  // The session a spoken follow-up would land in, as a small box on the SAME line as the chips —
+  // it takes the empty space in the middle of the strip rather than adding a row, because the strip's
+  // height is fixed by the cards either side of it.
   //
-  // Nothing dispatched, or a pointer left over from a closed session, is a real state and says so.
+  // Rendered only when there is one. The pointer outlives the session it named, and an empty box or
+  // the word "none" would be noise on a wall you glance at.
   const f = s.desk_focus;
-  const name = f ? (f.label || f.repo || f.id) : null;
-  const focusRow =
-    '<div class="tv-focus' + (f ? ' on' : '') + '">' +
-      '<span class="tf-l">Follow-ups</span>' +
-      '<span class="tf-v">' + (name ? esc(name) : 'none') + '</span>' +
-      (f && f.label && f.repo && f.label !== f.repo ? '<span class="tf-r">' + esc(f.repo) + '</span>' : '') +
-    '</div>';
+  const box = f ? '<span class="tv-sess">' + esc(f.repo || f.id) + '</span>' : '';
 
   el.innerHTML =
     '<div class="devstrip">' +
-      focusRow +
+      box +
       '<div class="devchips">' +
         chip('AO', r.wake ? 'On' : 'Off', r.wake ? '#39d353' : '#5c6675') +  // AO = always-on (wake-free) voice
         chip('INJ', r.inject ? 'On' : 'Off', r.inject ? '#39d353' : '#5c6675') +  // INJ = voice-inject mode

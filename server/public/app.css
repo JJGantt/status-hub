@@ -968,12 +968,9 @@ body.tv:not(.phonewall) .ai-act-model{font-size:22px;padding:4px 16px;border-wid
  color:#7ea6ff;font-size:10px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;vertical-align:middle}
 li.sess.focus{box-shadow:inset 2px 0 0 #5b8def;padding-left:8px;margin-left:-8px}
 .sess-nofocus{margin:0 0 8px;font-size:12px;line-height:1.4;color:#6b7686}
-/* ---- TV strip: which session takes a spoken follow-up (cards/routing.js) ---- */
-.tv-focus{display:flex;align-items:baseline;gap:7px;margin:0 0 7px;padding-bottom:6px;
- border-bottom:1px solid rgba(255,255,255,.07);min-width:0}
-.tv-focus .tf-l{flex:none;font-size:10px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:#5c6675}
-.tv-focus .tf-v{flex:1;min-width:0;font-size:15px;font-weight:600;color:#5c6675;
- overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.tv-focus.on .tf-v{color:#7ea6ff}
-.tv-focus .tf-r{flex:none;font-size:11px;color:#5c6675}
 .sess-in{margin-left:6px;font-size:11px;font-weight:500;color:#6b7686}
+/* Focused-session box on the TV strip (cards/routing.js). Inline with the chips and sized to their
+   line height, so it fills the strip's empty middle without changing the row's height. */
+.tv-sess{flex:none;margin-right:auto;padding:3px 10px;border:1px solid rgba(126,166,255,.45);
+ border-radius:6px;color:#7ea6ff;font-size:13px;font-weight:600;line-height:1.2;
+ white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:200px}

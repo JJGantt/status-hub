@@ -237,6 +237,11 @@ through explicitly rather than left out.
 
 ### Which session holds follow-ups
 
+The TV strip shows it as a small outlined box carrying the **repo name**, inline with the liveness
+chips so it uses the strip's empty middle without changing the row height — the cards either side fix
+that height. It renders only when a session is actually holding follow-ups; an empty box or the word
+"none" is noise on a wall you glance at. The phone panel is where the fuller form lives.
+
 `/api/sessions` returns `focus` — the session id a SPOKEN follow-up would land in — and the panel
 marks that row. It is resolved the same way the MCP resolves it, through the `desk_focus` row's
 `command_id` to the session that command created, so what the panel shows and what a follow-up

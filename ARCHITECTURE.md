@@ -208,9 +208,14 @@ has a fresh heartbeat** (`HEARTBEAT_FRESH_S`).
   `pushAll()` fan-out with `/api/notify`.
 - **APNs key** lives in Fly secrets on `jared-status-hub` (`APNS_KEY_ID`, `APNS_KEY_P8`,
   `APNS_ENV`) — **not** in Supabase. Key file stashed at `~/.appstoreconnect/private_keys/`.
-- **Sandbox vs production:** dev (Xcode) builds → sandbox tokens; TestFlight/App Store builds →
-  production tokens. The per-token `environment` lets both coexist. **(TODO: TestFlight build —
-  needs paid Developer Program + ASC Issuer ID.)**
+- **Sandbox vs production:** dev (Xcode) builds → sandbox tokens; Ad Hoc / TestFlight / App Store
+  builds → production tokens. The per-token `environment` lets both coexist.
+- **This is the trap when building the app anywhere other than CI.** The laptop's keychain holds
+  only an *Apple Development* identity, so a build made there must declare
+  `aps-environment=development` and registers a **sandbox** token — which the hub, sending to the
+  production gateway, cannot deliver to (`BadDeviceToken`). The distribution certificate that keeps
+  `aps-environment=production` exists only in the `status-hub` repo's GitHub secrets, so any build
+  meant to receive real notifications has to be archived by `ios-adhoc.yml` or `ios-testflight.yml`.
 
 ---
 
@@ -274,9 +279,44 @@ is the bus; the Mac's orchestrator daemon owns everything local:
   `voice-pipeline/server/`).
 - ✅ Pi worker is live (`voice-worker.service`, 2026-06-22) — middle-priority fallback, both
   routing modes. (`mac-listener` plist on the Mac is still the one `(verify)` item below.)
-- 🔜 **TestFlight migration** (longevity). Push works *now* on an Ad Hoc production build (~1yr).
-  The only blocker to permanent TestFlight is **Jared creating the App Store Connect app record**
-  (the ASC API can't create apps); after that Claude uploads + finishes. The App-Store `.ipa` and the
-  production entitlement are already prepared.
+- 🔜 **TestFlight migration** (longevity). Push works *now* on an Ad Hoc production build, and
+  since 2026-08-26 that build is a workflow rather than a manual affair — see **Getting a build onto
+  the phone** below. The remaining blocker to permanent TestFlight is **Jared creating the App Store
+  Connect app record** (the ASC API can't create apps); after that Claude uploads + finishes. The
+  App-Store `.ipa` and the production entitlement are already prepared. TestFlight is about
+  *longevity* — an Ad Hoc profile expires after a year and the app then refuses to launch.
 - **(verify)** `mac-listener` launchd state (mic permission).
 - Wake word README says `hey_jarvis`; deployed value is `hey_rhasspy`.
+
+---
+
+## 11. Getting a build onto the phone
+
+There is no way to *push* an iOS app to an iPhone. Apple has no remote-install channel for a normal
+(non-MDM, non-supervised) device, so every route ends either in a tap on the phone or in a machine
+that the phone is already paired with. What follows is the route that needs neither TestFlight nor
+any public hosting.
+
+1. **`ios-devices.yml`** (Linux, 1x, effectively free) — lists the UDIDs registered with Apple, and
+   registers new ones. Run it *first*. An Ad Hoc `.ipa` bakes the device list into its embedded
+   profile at signing time, so a phone registered afterwards cannot install a build made before, and
+   the failure shows up on the device as a bare "Unable to Install".
+2. **`ios-adhoc.yml`** (macOS, 10x — deliberate dispatch only) — archives, exports with method
+   `release-testing`, and prints what the resulting profile is actually signed for. Comes back as
+   the `statushub-adhoc-<run>` artifact.
+3. **Install it from the laptop.** The phone is paired to the laptop over Wi-Fi, so this needs no
+   cable and no interaction on the phone at all:
+
+       gh run download <run-id> -R JJGantt/status-hub -n statushub-adhoc-<run> -D ipa
+       scp ipa/export/StatusHub.ipa jaredgantt@Jareds-MacBook-Air.local:/tmp/
+       ssh jaredgantt@Jareds-MacBook-Air.local \
+         'xcrun devicectl device install app --device "Jared’s iPhone" /tmp/StatusHub.ipa'
+
+   `gh` is not installed on the laptop, which is why the download happens on the Pi and the `.ipa`
+   is copied over. `xcrun devicectl list devices` shows whether the phone is currently reachable —
+   `available (paired)` means this will work; if it is offline, wait or wake the phone.
+
+The fallback, if the laptop is asleep, is an `itms-services://` OTA link — but that needs the `.ipa`
+and a manifest on HTTPS that iOS's `installd` can fetch **without cookies** (it does not share
+Safari's session), which the hub's auth gate would have to be opened up for. The pairing route
+avoids all of that, so prefer it.

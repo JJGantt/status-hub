@@ -1,0 +1,146 @@
+# Build an Ad Hoc .ipa — a build that installs on Jared's own registered devices, with no TestFlight.
+#
+# Same rented Mac and same signing as ios-testflight.yml; the only real differences are the export
+# method and that nothing is uploaded to Apple. The .ipa comes back as an artifact, and something
+# with a cable or a Wi-Fi pairing to the phone (normally the laptop, via
+# `xcrun devicectl device install app`) puts it on the device. That last hop is why this is worth
+# having: it is the only route onto an iPhone that needs no TestFlight app and no public hosting.
+#
+# WHY NOT just build this on the laptop, which also has Xcode and is free? Because the laptop's
+# keychain only holds an *Apple Development* identity. A development-signed build has to declare
+# aps-environment=development, which registers a SANDBOX push token — and the hub sends to
+# production APNs, so every notification to that build would fail with BadDeviceToken. The
+# distribution certificate that keeps aps-environment=production lives only in this repo's secrets,
+# so the archive has to happen here.
+#
+# TRIGGERED DELIBERATELY. macOS runners bill at a 10x multiplier and round up to the minute, so this
+# is roughly as expensive as a TestFlight build. It is not a thing to fire on every push.
+name: iOS Ad Hoc
+
+on:
+  workflow_dispatch:
+    inputs:
+      notes:
+        description: 'What this build is for (recorded in the run only)'
+        type: string
+        default: ''
+
+concurrency:
+  group: ios-adhoc
+  cancel-in-progress: false
+
+jobs:
+  adhoc:
+    runs-on: macos-latest
+    timeout-minutes: 45
+
+    env:
+      ASC_KEY_ID: P8Y337A8RC
+      ASC_ISSUER_ID: 141a8ead-b829-4e58-b9ff-b8c95f8c4ed9
+      TEAM_ID: XMH4AVFC78
+
+    steps:
+      - uses: actions/checkout@v5
+
+      # An Ad Hoc profile embeds the list of device UDIDs at signing time, so a phone that is not
+      # registered when this runs cannot install the result no matter what happens later. Checking
+      # here costs a second and turns a silent "Unable to Install" on the phone into a clear failure.
+      - name: Check the phone is registered
+        env:
+          ASC_KEY_P8: ${{ secrets.ASC_KEY_P8 }}
+        run: node apps/tools/asc.mjs devices
+
+      - name: Import the signing certificate
+        env:
+          P12: ${{ secrets.IOS_DIST_P12 }}
+          P12_PASSWORD: ${{ secrets.IOS_DIST_P12_PASSWORD }}
+        run: |
+          KEYCHAIN=build.keychain
+          KEYCHAIN_PASSWORD=$(uuidgen)
+          echo "$P12" | base64 --decode > /tmp/dist.p12
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
+          security default-keychain -s "$KEYCHAIN"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
+          security set-keychain-settings -t 3600 -u "$KEYCHAIN"
+          security import /tmp/dist.p12 -k "$KEYCHAIN" -P "$P12_PASSWORD" \
+            -T /usr/bin/codesign -T /usr/bin/security
+          security set-key-partition-list -S apple-tool:,apple:,codesign: \
+            -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN" >/dev/null
+          rm -f /tmp/dist.p12
+          echo "identities:"; security find-identity -v -p codesigning "$KEYCHAIN"
+
+      - name: Install the App Store Connect key
+        env:
+          ASC_KEY_P8: ${{ secrets.ASC_KEY_P8 }}
+        run: |
+          mkdir -p ~/.appstoreconnect/private_keys
+          printf '%s' "$ASC_KEY_P8" > ~/.appstoreconnect/private_keys/AuthKey_${ASC_KEY_ID}.p8
+          chmod 600 ~/.appstoreconnect/private_keys/*.p8
+
+      - name: Generate the Xcode project
+        working-directory: apps
+        run: brew install xcodegen >/dev/null && xcodegen generate
+
+      - name: Archive
+        working-directory: apps
+        run: |
+          xcodebuild -project StatusHub.xcodeproj -scheme StatusHub \
+            -configuration Release -destination 'generic/platform=iOS' \
+            -archivePath /tmp/StatusHub.xcarchive \
+            -allowProvisioningUpdates \
+            -authenticationKeyPath ~/.appstoreconnect/private_keys/AuthKey_${ASC_KEY_ID}.p8 \
+            -authenticationKeyID "$ASC_KEY_ID" \
+            -authenticationKeyIssuerID "$ASC_ISSUER_ID" \
+            DEVELOPMENT_TEAM="$TEAM_ID" \
+            CURRENT_PROJECT_VERSION=${{ github.run_number }} \
+            archive 2>&1 | tail -40
+
+      # 'release-testing' is what Xcode 15.3+ renamed the old 'ad-hoc' method to. The TestFlight
+      # workflow next door already uses the new-style 'app-store-connect' name, so this toolchain
+      # is new enough to want the new spelling here too.
+      - name: Export the ipa
+        run: |
+          cat > /tmp/ExportOptions.plist <<PLIST
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0"><dict>
+            <key>method</key><string>release-testing</string>
+            <key>teamID</key><string>${TEAM_ID}</string>
+            <key>signingStyle</key><string>automatic</string>
+            <key>destination</key><string>export</string>
+            <key>compileBitcode</key><false/>
+          </dict></plist>
+          PLIST
+          xcodebuild -exportArchive \
+            -archivePath /tmp/StatusHub.xcarchive \
+            -exportPath /tmp/export \
+            -exportOptionsPlist /tmp/ExportOptions.plist \
+            -allowProvisioningUpdates \
+            -authenticationKeyPath ~/.appstoreconnect/private_keys/AuthKey_${ASC_KEY_ID}.p8 \
+            -authenticationKeyID "$ASC_KEY_ID" \
+            -authenticationKeyIssuerID "$ASC_ISSUER_ID" 2>&1 | tail -30
+          ls -la /tmp/export
+
+      # Prove the .ipa really is Ad Hoc and really lists the phone, before anyone tries to install
+      # it. An App Store-signed .ipa looks identical from the outside and fails only on the device.
+      - name: Show what the build is signed for
+        run: |
+          IPA=$(ls /tmp/export/*.ipa | head -1)
+          cd /tmp && rm -rf peek && mkdir peek && cd peek && unzip -q "$IPA"
+          PROFILE=$(ls Payload/*.app/embedded.mobileprovision | head -1)
+          security cms -D -i "$PROFILE" > /tmp/profile.plist
+          echo "profile: $(/usr/libexec/PlistBuddy -c 'Print :Name' /tmp/profile.plist)"
+          echo "expires: $(/usr/libexec/PlistBuddy -c 'Print :ExpirationDate' /tmp/profile.plist)"
+          echo "aps-environment: $(/usr/libexec/PlistBuddy -c 'Print :Entitlements:aps-environment' /tmp/profile.plist 2>/dev/null || echo none)"
+          echo "provisioned devices:"
+          /usr/libexec/PlistBuddy -c 'Print :ProvisionedDevices' /tmp/profile.plist 2>/dev/null || echo "  NONE — this is not an Ad Hoc build"
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: statushub-adhoc-${{ github.run_number }}
+          path: |
+            /tmp/export/*.ipa
+            /tmp/StatusHub.xcarchive/dSYMs
+          retention-days: 14
+          if-no-files-found: warn

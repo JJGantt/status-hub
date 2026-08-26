@@ -47,7 +47,9 @@ function listHtml(rows) {
 // Open one in place. The iframe is created fresh each time rather than reused: reports are static
 // documents, and a fresh frame means the previous one's scroll position can't bleed into the next.
 function openReport(el, id, title) {
-  const safe = String(id).replace(/[^0-9a-fA-F-]/g, '');
+  // Percent-encoded, not filtered to uuid characters: `reports.id` is a text primary key, and a
+  // publisher that wrote its own id would otherwise have the id silently mangled into a 404.
+  const safe = encodeURIComponent(String(id || ''));
   if (!safe) return;
   el.innerHTML =
     '<div class="rpt-reader">' +

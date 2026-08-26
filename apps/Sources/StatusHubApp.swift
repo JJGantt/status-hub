@@ -132,18 +132,21 @@ final class ReportLaunch {
 
     private func fire(retries: Int = 12) {
         guard let id = pendingId, let wv = webView else { return }   // no web view yet → stay pending
-        // Report ids are uuids. Anything else did not come from us and is not going into a URL.
-        let safe = id.filter { $0.isHexDigit || $0 == "-" }
-        guard !safe.isEmpty else { pendingId = nil; return }
+        // `reports.id` is a text primary key, usually a uuid but not guaranteed to be one, so it is
+        // ENCODED rather than filtered — stripping characters would turn a valid id into a 404.
+        guard !id.isEmpty else { pendingId = nil; return }
         wv.evaluateJavaScript("!!(window.__showReport)") { [weak self] ready, _ in
             guard let self, self.pendingId != nil else { return }
             if (ready as? Bool) == true {
                 self.pendingId = nil
-                wv.evaluateJavaScript("window.__showReport('\(safe)')", completionHandler: nil)
+                // JSON-encoded: an id is data and must never become JS syntax. Same shape as RepoLaunch.
+                let arg = String(data: (try? JSONSerialization.data(withJSONObject: [id])) ?? Data(), encoding: .utf8) ?? "[\"\"]"
+                wv.evaluateJavaScript("window.__showReport(\(arg)[0])", completionHandler: nil)
             } else if retries > 0 {
                 // Cold launch: the push can arrive before the page has mounted. Same poll as RepoLaunch.
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) { self.fire(retries: retries - 1) }
-            } else if let url = URL(string: Auth.host + "/report/" + safe) {
+            } else if let esc = id.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed),
+                      let url = URL(string: Auth.host + "/report/" + esc) {
                 self.pendingId = nil
                 wv.load(URLRequest(url: url))
             } else {

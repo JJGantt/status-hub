@@ -5,8 +5,8 @@
 // at and not the one that spoke most recently. Without it, the session you have in mind and the one
 // that will receive your words can differ silently.
 //
-// Repo name only. The wall is read from across a room; the label and last reply belong on the phone
-// panel where there is room to read them.
+// The repo name and nothing else — no caption. The box IS the statement: something is holding
+// follow-ups, and it is this. A word explaining that is text on a wall nobody reads from a chair.
 import { esc } from '../shared.js';
 
 export function render(s) {
@@ -16,7 +16,5 @@ export function render(s) {
   // Nothing dispatched, or a pointer left over from a session since closed. Render nothing at all —
   // an empty box on a display nobody interacts with is worse than no box.
   if (!f) { el.innerHTML = ''; return; }
-  el.innerHTML =
-    '<span class="tv-follow-box"><span class="fb-k">Follow-ups</span>' +
-    '<span class="fb-v">' + esc(f.repo || f.id) + '</span></span>';
+  el.innerHTML = '<span class="tv-follow-box">' + esc(f.repo || f.id) + '</span>';
 }

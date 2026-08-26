@@ -11,7 +11,8 @@ documents **everything**, not just the hub. Keep it current as pieces change.
 
 ## 1. Guiding principles
 
-- **The Mac is the primary hub.** 95% of work happens here; the primary voice worker runs here.
+- **The Mac is the primary hub.** 95% of work happens here. The voice *worker* is the exception —
+  the Pi claims first, so voice-started work outlives the laptop closing (§6).
 - **Supabase (cloud Postgres) is the single source of truth** for all life data. Everything
   reads/writes Supabase; nothing else is authoritative.
 - **One web codebase, many surfaces.** The web hub (desktop / phone / TV) is one codebase, and the
@@ -182,31 +183,38 @@ Multiple machines run the **same** `worker.py`; only one processes each request.
 heartbeats into `worker_presence`; a worker only claims a request if **no higher-priority worker
 has a fresh heartbeat** (`HEARTBEAT_FRESH_S`).
 
-| Worker | `WORKER_ID` | Where | Priority | Runner | Status |
-|---|---|---|---|---|---|
-| **Mac** | `mac` | launchd on the Mac | highest (`mac,pi`) | `claude -p` (subscription) | ✅ live, primary |
-| **Pi** | `pi` | systemd `voice-worker.service` | middle (`mac,pi,fly`) | `claude -p` (subscription) | ✅ live, fallback |
-| **Fly** | `fly` | inside `jared-voice` | lowest (`mac,pi,fly`) | Anthropic API (no subscription login) | ✅ live, fallback |
+`worker/run.sh` sets `WORKER_PRIORITY=pi,mac,fly` on every machine, so the order is **Pi → Mac →
+Fly**: the Pi claims whenever it is up, and the Mac is the fallback. That inversion is deliberate —
+work started by voice can run long, and closing the laptop must not kill it. (`worker.py`'s own
+in-file default is `mac,pi`, which applies only if something starts it without `run.sh`.)
+
+| Worker | `WORKER_ID` | Where | Runner |
+|---|---|---|---|
+| **Pi** | `pi` | systemd `voice-worker.service` | `claude -p` (subscription) |
+| **Mac** | `mac` | launchd `com.jaredgantt.voice-worker` | `claude -p` (subscription) |
+| **Fly** | `fly` | inside `jared-voice` | Anthropic API (no subscription login) |
+
+A **live hub context window overrides priority**: it stays pinned to the worker that owns it until
+the window resets or that worker goes silent, so a conversation isn't lost to a needless switch.
 
 - **Claiming latency:** a **Supabase realtime listener** (`RealtimeWaker` in `worker.py`) wakes the
   loop the instant a `voice_requests` row is INSERTed; a short poll (`IDLE_POLL_S`, ~15s) is the
   backstop, and the claim socket is recycled every ~5 min to beat realtime half-open death.
-- **Model routing — single dynamic route (2026-08 overhaul):** the old two-route / "brain" button /
-  custom model+thinking+runner selection is **gone**. Every hub command runs **Sonnet first** (a fast
-  first-responder given only SAFE read/actuator tools via `--allowedTools`; the gated data-WRITE tools
-  are absent, so in `-p` mode it's *denied* them and physically can't corrupt data). If the turn needs
-  a gated write — it emits `__ESCALATE__`, or attempts a gated tool and is denied — it re-runs on a
-  **fresh Opus** with the full toolset. Hub turns use **fresh runs with the recent conversation
-  replayed** from `voice_messages` (no shared `--resume` session — that caused model/schema
-  cross-contamination); only full-agent (coding) mode keeps a `--resume` CLI session. The `tier` field
-  and the `set_model`/`set_thinking`/`set_runner` voice tools were removed with this.
+- **Model routing — one dynamic route.** Every hub command runs **Sonnet first**, given only the SAFE
+  read/actuator tools via `--allowedTools`; the gated data-WRITE tools are absent from that list, so
+  in `-p` mode Sonnet can see them and is *denied* them. If the turn needs one — it emits
+  `__ESCALATE__`, or attempts a gated tool and is denied — it re-runs on a **fresh Opus** with the
+  full toolset. Hub turns are fresh runs with the recent conversation replayed from `voice_messages`;
+  only full-agent (coding) mode keeps a `--resume` CLI session, because a shared one let two models
+  cross-contaminate each other's context. `voice_requests.tier` is still written by every capture
+  path and read by nothing. Full detail: `voice-pipeline/docs/ROUTING.md`.
 - **Subscription vs API key:** `claude -p` (subscription) must NOT have `ANTHROPIC_API_KEY` in its
   environment or the CLI silently bills the API instead — so `run_claude` strips it for that
   subprocess; the SDK path keeps it. (The service env carries the key so `sdk` mode works.)
 - **The Pi:** runs `worker.py` via systemd `voice-worker.service` (env in `~/.voice-worker.env`),
-  code cloned at `~/repos/voice-pipeline`, venv at `worker/.venv`. `git pull` + `sudo systemctl
-  restart voice-worker` to update. Heartbeats as the middle-priority fallback; claims when the Mac
-  is down.
+  from the checkout at **`~/voice-pipeline`**, venv at `~/voice-pipeline/.venv-worker`. There is a
+  *second* clone at `~/repos/voice-pipeline` that the service does not use — pulling that one changes
+  nothing. `git pull` in `~/voice-pipeline` + `sudo systemctl restart voice-worker` to update.
 
 ---
 

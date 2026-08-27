@@ -304,10 +304,12 @@ is the bus; the daemon on each machine owns everything local:
 - **A prompt reaches the Mac through a file, never the typed command line.** `do script` writes into
   the tab's tty, and a tty accepts **1024 bytes** and silently discards the rest: a 2500-character
   dispatch arrived as exactly 1024 characters, cut mid-word, leaving the shell on an unterminated
-  quote and no session — with the command recorded as `done`. The same ceiling applies to typed
-  follow-ups, which have no file to read from (the text goes to Claude Code's composer, and
-  `do script` always appends a return, so chunks would submit separately), so one over ~900
-  characters is refused and saved rather than half-delivered.
+  quote and no session — with the command recorded as `done`. A **follow-up** cannot use the shell
+  (it goes to Claude Code's composer), so over ~900 characters — or with any newline, which an
+  AppleScript string literal cannot hold — it is stashed in `~/.claude-desk-prompts/` and the session
+  is told to read it, **echo it back verbatim first**, then act. The echo is what keeps the words in
+  the session rather than in a file nobody opens, which is why the file is disposable and swept after
+  a day. The Pi needs none of this: tmux carries 3000 characters into a pane intact.
 - **Two guards on the launch path:** the target must be a repo the orchestrator itself published (so
   a crafted or stale row can't `cd` anywhere else on disk), and commands older than `COMMAND_TTL_S`
   (120s) expire unrun — a Mac waking from sleep must not open every terminal queued while it was out.

@@ -39,14 +39,6 @@ Worth adding at the same time: a push when one is recorded. Failing "loudly" cur
 spoken reply says so at that moment — which is enough when Jared is listening and nothing at all
 when the failure comes from a machine dying later.
 
-## A long follow-up cannot reach a Mac session
-
-Over ~900 characters it is refused and saved (see the tty ceiling in ARCHITECTURE.md §9). The Pi is
-unaffected — tmux does not type through a tty buffer. Fixing it properly means injecting into the
-session some other way than typing; there is no partial fix, since `do script` submits every chunk.
-
----
-
 ## Timezone — reminders still assume Eastern
 
 **Logging is already correct** and needs nothing: commit `7672ce4` (data-layer, Jul 4) removed the

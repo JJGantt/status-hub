@@ -348,6 +348,11 @@ There is no way to *push* an iOS app to an iPhone. Apple has no remote-install c
 that the phone is already paired with. What follows is the route that needs neither TestFlight nor
 any public hosting.
 
+`ios-check.yml` is the fourth workflow and the one that runs most: it compiles the app and renders the
+widget layouts to PNGs without shipping anything, so a machine with no Xcode can still find out
+whether its Swift builds and what the widgets look like. `gh run download <id> -D shots` pulls the
+images back.
+
 1. **`ios-devices.yml`** (Linux, 1x, effectively free) — lists the UDIDs registered with Apple, and
    registers new ones. Run it *first*. An Ad Hoc `.ipa` bakes the device list into its embedded
    profile at signing time, so a phone registered afterwards cannot install a build made before, and

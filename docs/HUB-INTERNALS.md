@@ -448,6 +448,16 @@ widgetkit-extension, embedded by the iOS app — §9b). More than a thin wrapper
 
 ---
 
+The remaining Swift in `apps/Sources/` is the pre-webview native UI, still compiled and still used by
+the widgets' data path:
+
+| file | holds |
+|---|---|
+| `HubModel.swift` | `HubModel` — fetches `/api/status`, publishes it to the SwiftUI views |
+| `Models.swift` | the payload decoded: `Status`, `Litter`, `Macros`, `Nutrition` |
+| `Views.swift` | the shared card vocabulary — `CardBox`, `StatRow`, `MacroTile`, `LitterCard` |
+| `Theme.swift` | a `Color` extension; the palette both the app and the widgets draw from |
+
 ## 9b. `StatusHubControls` — the Record control + the widgets
 
 One iOS-18 widgetkit-extension (`apps/Controls/`, bundle `com.jaredgantt.statushub.controls`,

@@ -265,7 +265,12 @@ The hub's repo picker (and the Projects widget) starts a Claude session from any
 is where the work actually happens. The hub only *starts* it.
 
 **Two consumers, one queue.** The Mac's orchestrator opens a Terminal tab; the Pi's `pi-desk` runs
-the same job in tmux, so a session survives the laptop closing. A command goes to the Pi when the hub
+the same job in tmux, so a session survives the laptop closing. Both publish the same two facts on a
+30s tick — whether the session is still up, and the FINAL message of its last turn — so the follow-up
+pointer and the sessions panel describe a Mac session as accurately as a Pi one. Only the Pi manages
+sessions beyond that (residency cap, eviction, resume): that exists because a headless 4GB machine
+has to decide what to close, and on the Mac the tabs are visible and Jared closes them himself. A Mac
+session that goes away is `ended`, not `evicted` — nothing can bring a closed tab back. A command goes to the Pi when the hub
 targets it explicitly, or when it has no target and the Mac's presence is stale — the staleness check
 is what makes the Pi a fallback rather than a race for untargeted work. The Pi clones from GitHub and
 pulls before every session, because it has no local checkout to be authoritative.
@@ -285,7 +290,24 @@ is the bus; the daemon on each machine owns everything local:
 ```
 
 - **Tables:** `repos` (path PK, branch, dirty, HEAD date) · `desk_commands` (pending → running →
-  done | error | expired). Presence reuses `worker_presence` under `worker='desk'`.
+  done | error | expired) · `desk_dead_letters` (everything that never ran). Presence reuses
+  `worker_presence` under `worker='desk'` / `'pi-desk'`.
+- **Nothing dispatched is ever dropped.** The queue has no way to fail: a command written for a
+  machine that is asleep is claimed by nobody and expires unread, while the caller has already been
+  told a session started. So every entry point — the MCP, the repo picker, the sessions panel — checks
+  the target machine is beating *before* it writes, and anything that still fails (expired, errored,
+  or claimed by a machine that then stopped) is kept whole in `desk_dead_letters` with its payload.
+  A dictated prompt is minutes of speech nobody can repeat; the launch is the cheap part.
+  Deliberately **not** a retry queue — work that could not run when it was asked for has usually
+  stopped being wanted by the time the machine returns. `GET /api/failures` lists them,
+  `POST /api/failures/:id/{retry,dismiss}` acts on one.
+- **A prompt reaches the Mac through a file, never the typed command line.** `do script` writes into
+  the tab's tty, and a tty accepts **1024 bytes** and silently discards the rest: a 2500-character
+  dispatch arrived as exactly 1024 characters, cut mid-word, leaving the shell on an unterminated
+  quote and no session — with the command recorded as `done`. The same ceiling applies to typed
+  follow-ups, which have no file to read from (the text goes to Claude Code's composer, and
+  `do script` always appends a return, so chunks would submit separately), so one over ~900
+  characters is refused and saved rather than half-delivered.
 - **Two guards on the launch path:** the target must be a repo the orchestrator itself published (so
   a crafted or stale row can't `cd` anywhere else on disk), and commands older than `COMMAND_TTL_S`
   (120s) expire unrun — a Mac waking from sleep must not open every terminal queued while it was out.

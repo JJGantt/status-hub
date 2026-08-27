@@ -226,12 +226,30 @@ orchestrator ──beat(30s)──▶ worker_presence(worker='desk') ──▶ t
 - **Card:** `public/cards/repos.js` — 6th phone swipe pane, self-fetching. The age column doubles as
   launch feedback (blue → green/red) while it polls `/api/repos/cmd/:id`.
 - **Endpoints:** `GET /api/repos` (repos + desk presence) · `POST /api/repos/open` (enqueue) ·
-  `GET /api/repos/cmd/:id` (pending → running → done | error | expired).
+  `GET /api/repos/cmd/:id` (pending → running → done | error | expired) · `GET /api/failures` +
+  `POST /api/failures/:id/{retry,dismiss}` (commands that never ran).
+- **A launch is refused, not queued, when its machine is asleep** — 409 with a `saved` id. The
+  payload lands in `desk_dead_letters` instead of a `desk_commands` row nobody will claim. Same for
+  the sessions panel's end/resume, which now also target the machine that OWNS the session (read from
+  its `worker`) rather than always the Pi.
 - **Guardrail:** the client's path selects a published ROW; the row's own path is what gets enqueued,
   so a crafted request can't `cd` anywhere else. The orchestrator re-validates independently, and
   commands older than 120s expire rather than opening terminals when the Mac wakes.
 
 ---
+
+### The last thing a session said
+
+`desk_sessions.last_reply` is the FINAL message of a turn, with `reply_at` for when it landed and
+`working` for whether a newer turn is in flight — a reply is final only when `working` is false. It is
+read from the transcript rather than inferred: Claude Code writes one record per content block, each
+carrying the message's `stop_reason`, and a turn ends with `end_turn`. "The last assistant text" is
+not the same thing — mid-turn that is a half-written thought.
+
+Both machines publish it through one shared module (`voice-pipeline/orchestrator/src/transcripts.js`),
+which also finds the transcript a launch just created. Its `readTail` stats the path first and reads
+only regular files: a row written before the tty had its own column carries a device path, and
+`readFileSync` on a tty blocks the process for ever waiting for terminal input.
 
 ### Naming a session
 
@@ -269,6 +287,11 @@ session you have in mind and the one that will receive your words can differ sil
 `focus` is legitimately null: the pointer outlives the session it named, so once that session is
 closed a follow-up has nowhere to go. The panel says so outright rather than leaving no row marked,
 which is indistinguishable from the marker failing to render.
+
+That depends on both machines reporting honestly, which is why each reconciles its own sessions every
+30s — the Mac by looking for a `claude` process on the tab's tty (the tab outlives the process, so
+"is the tab open" is the wrong question). Without it a Mac row stayed `resident` for ever and the
+pointer kept naming a Terminal tab closed hours earlier.
 
 ## 6c. Reports — a session's HTML write-up
 

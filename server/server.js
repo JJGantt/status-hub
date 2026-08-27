@@ -1712,6 +1712,30 @@ app.post('/api/todos/add', express.json(), async (req, res) => {
 // publishes and enqueues work for it: `repos` is scanned + written there, `desk_commands` is
 // drained there. See voice-pipeline/orchestrator.
 const DESK_STALE_S = 90;   // 3 missed 30s beats
+const DESK_WORKER = { pi: 'pi-desk', mac: 'desk' };
+
+/** Is the machine that would run this actually beating right now? */
+async function machineAwake(machine) {
+  try {
+    const rows = await sb(`worker_presence?worker=eq.${DESK_WORKER[machine]}&select=last_seen`);
+    const t = rows?.[0]?.last_seen;
+    return !!t && (Date.now() - new Date(t).getTime()) / 1000 <= DESK_STALE_S;
+  } catch { return false; }   // cannot tell → treat as down, and keep the command rather than lose it
+}
+
+/**
+ * Keep a command that could not run.
+ *
+ * A dispatched prompt is often minutes of dictated speech that cannot be repeated, so a machine
+ * being asleep must never silently swallow one: the payload is parked, and the caller is told it did
+ * not run. Deliberately not a retry queue — see migration 00067.
+ */
+async function deadLetter(kind, payload, machine, reason) {
+  const id = crypto.randomUUID();
+  const ok = await sbInsert('desk_dead_letters',
+    { id, kind, payload, machine, reason, source: 'hub' });
+  return ok ? id : null;
+}
 
 app.get('/api/repos', async (req, res) => {
   try {
@@ -1775,10 +1799,23 @@ app.post('/api/sessions/:action', express.json(), async (req, res) => {
     }
     const kind = action === 'resume' ? 'resume_session' : action === 'end' ? 'end_session' : null;
     if (!kind) return res.status(400).json({ error: 'unknown action' });
+    // The machine that OWNS the session, read from its row. Hardcoding 'pi' sent every Mac session's
+    // command to a consumer that rejects the id, while the Mac's never saw it at all.
+    const rows = await sb(`desk_sessions?id=eq.${encodeURIComponent(id)}&select=worker`);
+    if (!rows.length) return res.status(404).json({ error: 'no such session' });
+    const machine = rows[0].worker === 'desk' ? 'mac' : 'pi';
+    if (machine === 'mac' && kind === 'resume_session') {
+      return res.status(400).json({ error: 'Mac sessions are not parked and cannot be resumed' });
+    }
+    const payload = { session: id, target: machine };
+    if (!(await machineAwake(machine))) {
+      const saved = await deadLetter(kind, payload, machine, `the ${machine === 'mac' ? 'Mac' : 'Pi'} is not responding`);
+      return res.status(409).json({ error: `the ${machine === 'mac' ? 'Mac' : 'Pi'} is not responding`, saved });
+    }
     // Routed through desk_commands like everything else, because this server is on Fly and cannot
-    // reach the Pi directly — Supabase carries both directions.
+    // reach either machine directly — Supabase carries both directions.
     const cmdId = crypto.randomUUID();
-    await sbWrite('desk_commands', 'POST', { id: cmdId, kind, payload: { session: id, target: 'pi' } });
+    await sbWrite('desk_commands', 'POST', { id: cmdId, kind, payload });
     res.json({ id: cmdId });
   } catch (e) { res.status(500).json({ error: String(e.message || e) }); }
 });
@@ -1799,10 +1836,66 @@ app.post('/api/repos/open', express.json(), async (req, res) => {
     // by the voice router, or by tapping the Apple button in the pane — and is worth choosing for
     // iOS work, where the local compile loop is the whole advantage.
     const machine = String((req.body || {}).target || '').toLowerCase() === 'mac' ? 'mac' : 'pi';
+    const payload = { path: rows[0].path, name: rows[0].name, target: machine, ...(prompt ? { prompt } : {}) };
+    // A command written for a machine that is asleep is claimed by nobody and expires unread. Say so
+    // now, and keep the prompt, rather than reporting a launch that will never happen.
+    if (!(await machineAwake(machine))) {
+      const saved = await deadLetter('open_session', payload, machine, `the ${machine === 'mac' ? 'Mac' : 'Pi'} is not responding`);
+      return res.status(409).json({ error: `the ${machine === 'mac' ? 'Mac' : 'Pi'} is not responding`, saved });
+    }
     const id = crypto.randomUUID();
-    await sbWrite('desk_commands', 'POST',
-      { id, kind: 'open_session', payload: { path: rows[0].path, name: rows[0].name, target: machine, ...(prompt ? { prompt } : {}) } });
+    await sbWrite('desk_commands', 'POST', { id, kind: 'open_session', payload });
     res.json({ id });
+  } catch (e) { res.status(500).json({ error: String(e.message || e) }); }
+});
+
+// ---- commands that never ran ---------------------------------------------
+// Everything that could not be dispatched — machine asleep, expired unrun, launch errored, claimed
+// by a machine that then died — lands in desk_dead_letters with its whole payload. This is the
+// plumbing a retry button reads; nothing here decides anything on its own, because a prompt that
+// fires hours late is worse than one that never fired.
+app.get('/api/failures', async (req, res) => {
+  try {
+    const all = String(req.query.all || '') === '1';
+    const filter = all ? '' : '&retried=is.null&dismissed=is.null';
+    res.json({ failures: await sb(`desk_dead_letters?select=*${filter}&order=created.desc&limit=50`) });
+  } catch (e) { res.status(500).json({ error: String(e.message || e) }); }
+});
+
+// Re-dispatch one, unchanged, if its machine is up now. The saved row is stamped rather than
+// deleted, so what was retried and when stays visible.
+app.post('/api/failures/:id/retry', express.json(), async (req, res) => {
+  try {
+    const id = String(req.params.id || '');
+    const rows = await sb(`desk_dead_letters?id=eq.${encodeURIComponent(id)}&select=*`);
+    if (!rows.length) return res.status(404).json({ error: 'no such saved command' });
+    const row = rows[0];
+    if (row.retried) return res.status(409).json({ error: 'already retried' });
+    const machine = row.machine === 'mac' ? 'mac' : 'pi';
+    if (!(await machineAwake(machine))) {
+      return res.status(409).json({ error: `the ${machine === 'mac' ? 'Mac' : 'Pi'} is still not responding` });
+    }
+    const cmdId = crypto.randomUUID();
+    await sbWrite('desk_commands', 'POST',
+      { id: cmdId, kind: row.kind, payload: { ...row.payload, target: machine } });
+    await sbWrite(`desk_dead_letters?id=eq.${encodeURIComponent(id)}`, 'PATCH',
+      { retried: new Date().toISOString(), retry_command_id: cmdId });
+    // A re-sent dispatch is the session being talked to again, exactly as a fresh one would be.
+    if (row.kind === 'open_session' || row.kind === 'resume_session') {
+      // PATCH, not an upsert: the single 'current' row is created by the migration and always there,
+      // and a plain POST onto an existing primary key is a 409.
+      await sbWrite('desk_focus?id=eq.current', 'PATCH',
+        { command_id: cmdId, session_id: null, machine, updated: new Date().toISOString() });
+    }
+    res.json({ id: cmdId });
+  } catch (e) { res.status(500).json({ error: String(e.message || e) }); }
+});
+
+app.post('/api/failures/:id/dismiss', express.json(), async (req, res) => {
+  try {
+    await sbWrite(`desk_dead_letters?id=eq.${encodeURIComponent(String(req.params.id || ''))}`, 'PATCH',
+      { dismissed: new Date().toISOString() });
+    res.json({ ok: true });
   } catch (e) { res.status(500).json({ error: String(e.message || e) }); }
 });
 

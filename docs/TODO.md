@@ -25,6 +25,28 @@ only bites when an entitlement or bundle id changes.
 
 ---
 
+## Failed dispatches have no surface yet
+
+The plumbing is done: anything that could not run is kept whole in `desk_dead_letters`, and
+`GET /api/failures` + `POST /api/failures/:id/{retry,dismiss}` are live. Nothing renders it — a
+saved prompt is currently only visible by asking the API.
+
+What it needs: a row in the sessions pane when the list is non-empty (count + the label or first
+words of each), a retry button per entry, and a dismiss. Retry re-dispatches the payload unchanged
+and points follow-ups at the new session; it refuses while the machine is still down.
+
+Worth adding at the same time: a push when one is recorded. Failing "loudly" currently means the
+spoken reply says so at that moment — which is enough when Jared is listening and nothing at all
+when the failure comes from a machine dying later.
+
+## A long follow-up cannot reach a Mac session
+
+Over ~900 characters it is refused and saved (see the tty ceiling in ARCHITECTURE.md §9). The Pi is
+unaffected — tmux does not type through a tty buffer. Fixing it properly means injecting into the
+session some other way than typing; there is no partial fix, since `do script` submits every chunk.
+
+---
+
 ## Timezone — reminders still assume Eastern
 
 **Logging is already correct** and needs nothing: commit `7672ce4` (data-layer, Jul 4) removed the

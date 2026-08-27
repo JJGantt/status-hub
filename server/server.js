@@ -1846,9 +1846,6 @@ app.post('/api/sessions/:action', express.json(), async (req, res) => {
     // The machine that OWNS the session, read from its row. Hardcoding 'pi' sent every Mac session's
     // command to a consumer that rejects the id, while the Mac's never saw it at all.
     const machine = rowsFull[0].worker === 'desk' ? 'mac' : 'pi';
-    if (machine === 'mac' && kind === 'resume_session') {
-      return res.status(400).json({ error: 'Mac sessions are not parked and cannot be resumed' });
-    }
     const payload = { session: id, target: machine };
     if (!(await machineAwake(machine))) {
       const saved = await deadLetter(kind, payload, machine, `the ${machine === 'mac' ? 'Mac' : 'Pi'} is not responding`);

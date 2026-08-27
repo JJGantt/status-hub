@@ -238,6 +238,18 @@ orchestrator ──beat(30s)──▶ worker_presence(worker='desk') ──▶ t
 
 ---
 
+### Sessions nobody dispatched
+
+`desk_sessions` also carries the sessions Jared opened himself on the Mac — a `claude` process in a
+Terminal tab, found by the orchestrator rather than announced by anything. `origin` separates them
+(`adopted` vs `dispatched`), and they get the same liveness and last-reply treatment, so the panel
+describes everything running rather than only what was sent.
+
+**Adoption never touches `desk_focus`.** The follow-up pointer follows work handed over; the session
+he is typing in at that moment is exactly what a dictated follow-up must not land in. Adopted rows
+are also pruned a week after they end — every terminal opened becomes one — while dispatched rows
+stay, being a record of what was asked for.
+
 ### The last thing a session said
 
 `desk_sessions.last_reply` is the FINAL message of a turn, with `reply_at` for when it landed and

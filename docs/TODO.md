@@ -25,18 +25,6 @@ only bites when an entitlement or bundle id changes.
 
 ---
 
-## Two things left half-done in the session work
-
-**`pi-desk` does not follow a `/clear`.** The Mac's tick rebinds a session to its new transcript when
-one starts (`fresherTranscript` in `voice-pipeline/orchestrator/src/discover.js`); the Pi still points
-at the file the session started with, so a cleared Pi session reports the conversation it used to be
-having. Same ~15 lines.
-
-**The Fly worker image is behind.** `jared-voice` bundles `worker/worker.py`, so the capture-hold /
-fullest-capture rules and `follow_up` on the fast path reach it only on the next deploy of that app.
-That worker runs only when the Mac and the Pi are both down, which is why it was not worth restarting
-the wake-word server for.
-
 ## Failed dispatches have no surface yet
 
 The plumbing is done: anything that could not run is kept whole in `desk_dead_letters`, and

@@ -250,6 +250,19 @@ he is typing in at that moment is exactly what a dictated follow-up must not lan
 are also pruned a week after they end — every terminal opened becomes one — while dispatched rows
 stay, being a record of what was asked for.
 
+### Numbering, and moving a session
+
+`/api/sessions` stamps each active session with `n`: resident and evicted rows, oldest first, from 1.
+**That rule is duplicated in `data-layer/src/desk.ts` (`numberSessions`) and the two must agree** —
+it is how "move session three to the Mac" resolves to the same row the pane is showing. The number is
+not identity: ending one renumbers the rest, which is the price of it being short enough to say.
+
+`POST /api/sessions/transfer` hands a session to the other machine. The row says which machine it is
+on now (`worker`), so the destination is implied. Two paths, matching the voice tool exactly: if the
+source machine is up it closes the session and flushes the mirror first; if it is not, the
+destination resumes from what was already mirrored and the old row is marked `transferred`. The
+button is disabled for a session with no `claude_session_id`, since there is no transcript to carry.
+
 ### The last thing a session said
 
 `desk_sessions.last_reply` is the FINAL message of a turn, with `reply_at` for when it landed and

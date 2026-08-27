@@ -292,6 +292,18 @@ is the bus; the daemon on each machine owns everything local:
 - **Tables:** `repos` (path PK, branch, dirty, HEAD date) · `desk_commands` (pending → running →
   done | error | expired) · `desk_dead_letters` (everything that never ran). Presence reuses
   `worker_presence` under `worker='desk'` / `'pi-desk'`.
+- **A session can be moved to the other machine, conversation and all.** Both machines mirror the
+  tail of every transcript to the `transcripts` bucket at the end of each turn, so a session is
+  always pickable up elsewhere — including when the machine that ran it is asleep, which is the
+  usual reason for asking. A transfer is claimed by the machine GIVING IT UP: it closes the session,
+  flushes the mirror, then asks the destination to resume. One writer at a time, always — `--resume`
+  on a live transcript forks the conversation into two copies with one id. When the source is
+  unreachable there is nothing to close, so the destination resumes from the mirror as of the last
+  completed turn. `transfer_session` by voice, the `→ Pi` / `→ Mac` button in the pane.
+- **Sessions are numbered so they can be named out loud.** Active sessions, oldest first, from 1 —
+  the same rule in `data-layer/src/desk.ts` (`numberSessions`) and in `/api/sessions`, because
+  "session three" has to mean one thing. `end`, `resume` and `transfer` all take a number, a repo
+  name, or an id; an ambiguous name is answered with the choices rather than a guess.
 - **Nothing dispatched is ever dropped.** The queue has no way to fail: a command written for a
   machine that is asleep is claimed by nobody and expires unread, while the caller has already been
   told a session started. So every entry point — the MCP, the repo picker, the sessions panel — checks

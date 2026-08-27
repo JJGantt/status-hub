@@ -471,6 +471,12 @@ body.tv.phonewall .pane-reports .reportscard>div{flex:1 1 auto;min-height:0;disp
 .sessions .sess-say{display:block;font-size:12px;color:#8b96a5;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .sessions li.sess:not(.live) .sess-repo{color:#8b96a5}
 .sessions .sess-act{flex:0 0 auto;display:flex;align-items:center;gap:6px}
+/* The number you say out loud, and the machine it is on. Both are identity, so they read before the
+   name rather than after it. */
+.sessions .sess-n{display:inline-block;min-width:17px;margin-right:7px;padding:1px 5px;border-radius:5px;
+  background:#1a222c;border:1px solid #2a333f;color:#8b96a5;font-size:11px;font-weight:700;text-align:center}
+.sessions .sess-where{margin-left:6px;font-size:10px;font-weight:700;letter-spacing:.3px;color:#5d6672;
+  text-transform:uppercase}
 /* Steady, not pulsing: it means "open and reachable", not "actively working". */
 .sessions .sess-dot{width:8px;height:8px;border-radius:50%;background:#39d353;display:inline-block}
 .sessions .sess-btn{background:#1a222c;border:1px solid #2a333f;border-radius:7px;color:#e6ebf2;

@@ -51,18 +51,28 @@ function sessionsHtml(s) {
   // recently — so the session you have in mind and the one that will receive your words can differ,
   // silently, and you only find out afterwards.
   const focus = s.focus || null;
+  // The NUMBER is the point of showing it: it is how a session gets named out loud ("move session
+  // three to the Mac"), and it has to be the same number the voice tools resolve — the server derives
+  // both from one rule. The machine chip is here for the same reason: "the other machine" only means
+  // something if you can see which one it is on.
   const line = (x, live) =>
     `<li class="sess${live ? ' live' : ''}${x.id === focus ? ' focus' : ''}" data-id="${esc(x.id)}">` +
       `<div class="sess-main">` +
-        `<span class="sess-repo">${esc(x.label || x.repo)}` +
+        `<span class="sess-repo">` +
+        (x.n ? `<span class="sess-n">${x.n}</span>` : '') +
+        `${esc(x.label || x.repo)}` +
         (x.label && x.repo && x.label !== x.repo ? `<span class="sess-in">${esc(x.repo)}</span>` : '') +
+          `<span class="sess-where">${x.worker === 'desk' ? 'Mac' : 'Pi'}</span>` +
           (x.id === focus ? '<span class="sess-focus" title="a spoken follow-up goes here">follow-ups</span>' : '') +
         `</span>` +
         `<span class="sess-say">${esc((x.last_reply || x.prompt || '').replace(/\s+/g, ' ').slice(0, 90))}</span>` +
       `</div>` +
       `<div class="sess-act">` +
-        (live ? '<span class="sess-dot" title="open on the Pi"></span>'
+        (live ? '<span class="sess-dot" title="open and reachable"></span>'
               : `<button class="sess-btn" data-act="resume">resume</button>`) +
+        (x.claude_session_id
+          ? `<button class="sess-btn" data-act="transfer" title="close it here and resume it there with its whole conversation">\u2192 ${x.worker === 'desk' ? 'Pi' : 'Mac'}</button>`
+          : '') +
         `<button class="sess-btn ghost" data-act="${live ? 'end' : 'forget'}">${live ? 'close' : '\u00d7'}</button>` +
       `</div>` +
     '</li>';
@@ -197,9 +207,10 @@ async function sessionAction(li, act) {
       body: JSON.stringify({ id }),
     });
   } catch (_) { /* the next load reconciles */ }
-  // Resume and close are enacted on the Pi asynchronously, so give it a moment before re-reading
-  // rather than showing a state the machine has not reached yet.
-  setTimeout(load, act === 'forget' ? 200 : 2500);
+  // Resume, close and transfer are enacted on a machine asynchronously, so give it a moment before
+  // re-reading rather than showing a state the machine has not reached yet. A transfer is the slowest
+  // of them: it closes a session, uploads the last of the transcript and resumes it elsewhere.
+  setTimeout(load, act === 'forget' ? 200 : act === 'transfer' ? 6000 : 2500);
 }
 
 function wire(el) {

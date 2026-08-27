@@ -1775,11 +1775,19 @@ app.get('/api/sessions', async (req, res) => {
     const focus = focusCmd
       ? ((sessions || []).find((s) => s.command_id === focusCmd)?.id || null)
       : null;
+    // The number Jared says out loud. THE RULE IS SHARED WITH `numberSessions` IN data-layer's
+    // desk.ts and both have to agree, or "session three" means one thing to the pane and another to
+    // the voice tools: every active session, oldest first, numbered from 1.
+    const numbered = new Map((sessions || [])
+      .filter((s) => s.status === 'resident' || s.status === 'evicted')
+      .sort((a, b) => new Date(a.started).getTime() - new Date(b.started).getTime())
+      .map((s, i) => [s.id, i + 1]));
+    const withN = (s) => ({ ...s, n: numbered.get(s.id) || null });
     res.json({
       // Resident = running now, reachable over Remote Control. Evicted = closed to free the machine
       // but resumable with full context, which is the distinction the panel has to make obvious.
-      resident: (sessions || []).filter((s) => s.status === 'resident'),
-      evicted: (sessions || []).filter((s) => s.status === 'evicted'),
+      resident: (sessions || []).filter((s) => s.status === 'resident').map(withN),
+      evicted: (sessions || []).filter((s) => s.status === 'evicted').map(withN),
       queued: queue || [],
       focus,
     });
@@ -1797,13 +1805,41 @@ app.post('/api/sessions/:action', express.json(), async (req, res) => {
       await sbWrite(`desk_sessions?id=eq.${encodeURIComponent(id)}`, 'DELETE');
       return res.json({ ok: true });
     }
+    const rowsFull = await sb(`desk_sessions?id=eq.${encodeURIComponent(id)}&select=*`);
+    if (!rowsFull.length) return res.status(404).json({ error: 'no such session' });
+
+    // Hand it to the other machine, carrying the conversation. Same two paths as the voice tool, and
+    // they have to stay the same: the source closes and flushes when it is up, and when it is not,
+    // the destination resumes from what was already mirrored. (data-layer's transferSession.)
+    if (action === 'transfer') {
+      const row = rowsFull[0];
+      const from = row.worker === 'desk' ? 'mac' : 'pi';
+      const to = from === 'mac' ? 'pi' : 'mac';
+      if (!row.claude_session_id) return res.status(400).json({ error: 'no transcript recorded for that session' });
+      if (!(await machineAwake(to))) {
+        const saved = await deadLetter('transfer_session', { session: id, target: from, to }, to,
+                                       `the ${to === 'mac' ? 'Mac' : 'Pi'} is not responding`);
+        return res.status(409).json({ error: `the ${to === 'mac' ? 'Mac' : 'Pi'} is not responding`, saved });
+      }
+      const cmdId = crypto.randomUUID();
+      if (await machineAwake(from)) {
+        await sbWrite('desk_commands', 'POST',
+          { id: cmdId, kind: 'transfer_session', payload: { session: id, target: from, to } });
+      } else {
+        await sbWrite('desk_commands', 'POST', { id: cmdId, kind: 'resume_mirrored',
+          payload: { target: to, claude_session_id: row.claude_session_id, repo: row.repo,
+                     label: row.label || null, origin: row.origin || 'dispatched', from } });
+        await sbWrite(`desk_sessions?id=eq.${encodeURIComponent(id)}`, 'PATCH',
+          { status: 'transferred', ended: new Date().toISOString(), working: false });
+      }
+      return res.json({ id: cmdId, to });
+    }
+
     const kind = action === 'resume' ? 'resume_session' : action === 'end' ? 'end_session' : null;
     if (!kind) return res.status(400).json({ error: 'unknown action' });
     // The machine that OWNS the session, read from its row. Hardcoding 'pi' sent every Mac session's
     // command to a consumer that rejects the id, while the Mac's never saw it at all.
-    const rows = await sb(`desk_sessions?id=eq.${encodeURIComponent(id)}&select=worker`);
-    if (!rows.length) return res.status(404).json({ error: 'no such session' });
-    const machine = rows[0].worker === 'desk' ? 'mac' : 'pi';
+    const machine = rowsFull[0].worker === 'desk' ? 'mac' : 'pi';
     if (machine === 'mac' && kind === 'resume_session') {
       return res.status(400).json({ error: 'Mac sessions are not parked and cannot be resumed' });
     }

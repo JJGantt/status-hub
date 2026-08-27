@@ -267,10 +267,10 @@ is where the work actually happens. The hub only *starts* it.
 **Two consumers, one queue.** The Mac's orchestrator opens a Terminal tab; the Pi's `pi-desk` runs
 the same job in tmux, so a session survives the laptop closing. Both publish the same two facts on a
 30s tick — whether the session is still up, and the FINAL message of its last turn — so the follow-up
-pointer and the sessions panel describe a Mac session as accurately as a Pi one. Only the Pi manages
-sessions beyond that (residency cap, eviction, resume): that exists because a headless 4GB machine
-has to decide what to close, and on the Mac the tabs are visible and Jared closes them himself. A Mac
-session that goes away is `ended`, not `evicted` — nothing can bring a closed tab back. A command goes to the Pi when the hub
+pointer and the sessions panel describe a Mac session as accurately as a Pi one. Only the Pi bounds
+what it holds (a residency cap, and eviction to make room): that exists because a headless 4GB
+machine has to decide what to close, and on the Mac the tabs are visible and Jared closes them
+himself. Closing and resuming work identically on both. A command goes to the Pi when the hub
 targets it explicitly, or when it has no target and the Mac's presence is stale — the staleness check
 is what makes the Pi a fallback rather than a race for untargeted work. The Pi clones from GitHub and
 pulls before every session, because it has no local checkout to be authoritative.
@@ -300,10 +300,21 @@ is the bus; the daemon on each machine owns everything local:
   on a live transcript forks the conversation into two copies with one id. When the source is
   unreachable there is nothing to close, so the destination resumes from the mirror as of the last
   completed turn. `transfer_session` by voice, the `→ Pi` / `→ Mac` button in the pane.
-- **Sessions are numbered so they can be named out loud.** Active sessions, oldest first, from 1 —
-  the same rule in `data-layer/src/desk.ts` (`numberSessions`) and in `/api/sessions`, because
-  "session three" has to mean one thing. `end`, `resume` and `transfer` all take a number, a repo
-  name, or an id; an ambiguous name is answered with the choices rather than a guess.
+- **Sessions are numbered so they can be named out loud.** Active sessions, **most recent first,
+  from 1** — the same rule in `data-layer/src/desk.ts` (`numberSessions`) and in `/api/sessions`,
+  because "session three" has to mean one thing. The number is a position in the current list, never
+  identity: closing one renumbers the rest, which is what keeps it 1..N over what is actually open.
+  `end`, `resume` and `transfer` all take a number, a repo name, or an id; an ambiguous name is
+  answered with the choices rather than a guess.
+- **Two closed states, and they are about what can be done.** `evicted` is parked WITH its
+  transcript, so it resumes with the whole conversation — a new tab on the Mac, a new tmux session on
+  the Pi. `ended` means no transcript was ever bound (it never wrote one, or adoption never matched
+  it), so there is nothing to bring back. `transferred` means the conversation continues in another
+  row on the other machine.
+- **Nothing is kept for ever.** One retention rule, in `pi-desk` on the always-on machine: closed
+  sessions (`ended`/`transferred`) go at 7 days, parked (`evicted`) at 14, the `desk_commands` log at
+  30, and `voice_requests` — the raw captures — at 7. Dropping a row does not destroy a conversation;
+  the transcript stays on disk and resumes by id. Dead letters are exempt.
 - **Nothing dispatched is ever dropped.** The queue has no way to fail: a command written for a
   machine that is asleep is claimed by nobody and expires unread, while the caller has already been
   told a session started. So every entry point — the MCP, the repo picker, the sessions panel — checks

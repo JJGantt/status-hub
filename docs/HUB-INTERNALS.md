@@ -246,22 +246,26 @@ Terminal tab, found by the orchestrator rather than announced by anything. `orig
 describes everything running rather than only what was sent.
 
 **Adoption never touches `desk_focus`.** The follow-up pointer follows work handed over; the session
-he is typing in at that moment is exactly what a dictated follow-up must not land in. Adopted rows
-are also pruned a week after they end — every terminal opened becomes one — while dispatched rows
-stay, being a record of what was asked for.
+he is typing in at that moment is exactly what a dictated follow-up must not land in.
+
+Retention is not per-origin: `sweepRetention` in `pi-desk` drops closed sessions at 7 days and parked
+ones at 14, whoever made them.
 
 ### Numbering, and moving a session
 
-`/api/sessions` stamps each active session with `n`: resident and evicted rows, oldest first, from 1.
-**That rule is duplicated in `data-layer/src/desk.ts` (`numberSessions`) and the two must agree** —
-it is how "move session three to the Mac" resolves to the same row the pane is showing. The number is
-not identity: ending one renumbers the rest, which is the price of it being short enough to say.
+`/api/sessions` stamps each active session with `n`: resident and evicted rows, **most recent first**,
+from 1. **That rule is duplicated in `data-layer/src/desk.ts` (`numberSessions`) and the two must
+agree** — it is how "move session three to the Mac" resolves to the same row the pane is showing.
+The number is a position, not identity: closing one renumbers the rest, which is the price of it
+being short enough to say. Sorting by `last_seen` also floats running sessions above parked ones with
+no second rule — a resident row is touched every reconcile tick, a parked one stopped being touched
+when it closed.
 
 `POST /api/sessions/transfer` hands a session to the other machine. The row says which machine it is
 on now (`worker`), so the destination is implied. Two paths, matching the voice tool exactly: if the
 source machine is up it closes the session and flushes the mirror first; if it is not, the
 destination resumes from what was already mirrored and the old row is marked `transferred`. The
-button is disabled for a session with no `claude_session_id`, since there is no transcript to carry.
+button is absent for a session with no `claude_session_id`, since there is no transcript to carry.
 
 ### The last thing a session said
 

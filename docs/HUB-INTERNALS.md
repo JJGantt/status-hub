@@ -381,11 +381,15 @@ parent hides its descendants whatever they do, which silently killed the phone's
 `server/fly.toml` sets `auto_stop_machines = false` and `min_machines_running = 1`. Leave it that way.
 
 `fly launch`'s defaults suspend an app when traffic goes quiet, and this one has a wall display
-depending on it around the clock. Every suspend/resume cost a visible reload: `.xinitrc` on the Pi
-polls the hub every ten seconds and kills Chromium on the unreachable-then-reachable edge — a
-self-heal so a deploy never leaves a stale error page up — so each wake blinked the wall, most often
-during idle periods, which is exactly when nothing appears to be happening. It also put a cold start
-in front of opening the dashboard on the phone.
+depending on it around the clock. Suspending put a cold start in front of every phone visit and made
+the hub briefly unreachable on each wake, which the Pi's reachability watchdog is built to react to.
+
+That watchdog (`~/scripts/hub-reach-watch.sh`, started by `.xinitrc`) kills Chromium once the hub has
+been unreachable and comes back, because Chromium otherwise sits on its own error page and the
+relaunch loop never fires. It requires **three consecutive failed checks**, not one: a single failed
+5s curl on a Wi-Fi machine is a blip, and reloading for it blinked the wall every few minutes with
+nothing in any log to explain it. Both edges are logged under `kiosk-xinit`, so an unexplained reload
+is traceable rather than guessed at.
 
 ## 7. `app_settings` catalog (flat key/value)
 

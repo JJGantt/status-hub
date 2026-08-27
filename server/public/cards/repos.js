@@ -70,6 +70,7 @@ function sessionsHtml(s) {
       `<div class="sess-act">` +
         (live ? '<span class="sess-dot" title="open and reachable"></span>'
               : `<button class="sess-btn" data-act="resume">resume</button>`) +
+        `<button class="sess-btn ghost" data-act="rename">name</button>` +
         (x.claude_session_id
           ? `<button class="sess-btn" data-act="transfer" title="close it here and resume it there with its whole conversation">\u2192 ${x.worker === 'desk' ? 'Pi' : 'Mac'}</button>`
           : '') +
@@ -200,17 +201,23 @@ function cancelDictation() {
 
 async function sessionAction(li, act) {
   const id = li.dataset.id;
+  // The name is asked for before anything is sent, so a cancelled prompt does nothing at all.
+  let name;
+  if (act === 'rename') {
+    name = prompt('Name');
+    if (!name || !name.trim()) return;
+  }
   li.classList.add('busy');
   try {
     await fetch('/api/sessions/' + act, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id }),
+      body: JSON.stringify(name ? { id, name: name.trim() } : { id }),
     });
   } catch (_) { /* the next load reconciles */ }
   // Resume, close and transfer are enacted on a machine asynchronously, so give it a moment before
   // re-reading rather than showing a state the machine has not reached yet. A transfer is the slowest
   // of them: it closes a session, uploads the last of the transcript and resumes it elsewhere.
-  setTimeout(load, act === 'forget' ? 200 : act === 'transfer' ? 6000 : 2500);
+  setTimeout(load, act === 'forget' ? 200 : act === 'transfer' ? 6000 : act === 'rename' ? 1200 : 2500);
 }
 
 function wire(el) {

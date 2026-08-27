@@ -1841,6 +1841,22 @@ app.post('/api/sessions/:action', express.json(), async (req, res) => {
       return res.json({ id: cmdId, to });
     }
 
+    // Name the session itself when it is running — `/rename` typed into it, the same command Jared
+    // would — and always set the row, so the pane changes now rather than a tick later. A parked
+    // session has no process to type into and takes the name in the row alone.
+    if (action === 'rename') {
+      const row = rowsFull[0];
+      const name = String((req.body || {}).name || '').replace(/[\r\n]+/g, ' ').trim().slice(0, 60);
+      if (!name) return res.status(400).json({ error: 'name required' });
+      await sbWrite(`desk_sessions?id=eq.${encodeURIComponent(id)}`, 'PATCH', { label: name });
+      const from = row.worker === 'desk' ? 'mac' : 'pi';
+      if (row.status !== 'resident' || !(await machineAwake(from))) return res.json({ name, live: false });
+      const cmdId = crypto.randomUUID();
+      await sbWrite('desk_commands', 'POST',
+        { id: cmdId, kind: 'rename_session', payload: { session: id, name, target: from } });
+      return res.json({ id: cmdId, name, live: true });
+    }
+
     const kind = action === 'resume' ? 'resume_session' : action === 'end' ? 'end_session' : null;
     if (!kind) return res.status(400).json({ error: 'unknown action' });
     // The machine that OWNS the session, read from its row. Hardcoding 'pi' sent every Mac session's

@@ -1772,15 +1772,21 @@ app.get('/api/sessions', async (req, res) => {
     // after that session is closed a follow-up has nowhere to go. Showing nothing marked is how you
     // find that out before speaking, rather than after.
     const focusCmd = (focusRows || [])[0]?.command_id || null;
+    // RESIDENT ONLY, because that is what a follow-up can actually reach: `followUp` refuses when the
+    // session it points at is not running, saves the words and says so. Marking a closed session as
+    // holding follow-ups said the opposite of what would happen — and the wall strip, which has
+    // always filtered on resident, disagreed with the pane about the same pointer.
     const focus = focusCmd
-      ? ((sessions || []).find((s) => s.command_id === focusCmd)?.id || null)
+      ? ((sessions || []).find((s) => s.command_id === focusCmd && s.status === 'resident')?.id || null)
       : null;
     // The number Jared says out loud. THE RULE IS SHARED WITH `numberSessions` IN data-layer's
     // desk.ts and both have to agree, or "session three" means one thing to the pane and another to
-    // the voice tools: every active session, oldest first, numbered from 1.
+    // the voice tools: active sessions only, most recent first, numbered from 1. The number is a
+    // position in the current list rather than identity — closing one renumbers the rest, which is
+    // what keeps it 1..N over what is actually open.
     const numbered = new Map((sessions || [])
       .filter((s) => s.status === 'resident' || s.status === 'evicted')
-      .sort((a, b) => new Date(a.started).getTime() - new Date(b.started).getTime())
+      .sort((a, b) => new Date(b.last_seen).getTime() - new Date(a.last_seen).getTime())
       .map((s, i) => [s.id, i + 1]));
     const withN = (s) => ({ ...s, n: numbered.get(s.id) || null });
     res.json({

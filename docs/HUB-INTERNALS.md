@@ -438,7 +438,8 @@ is traceable rather than guessed at.
 | `voice_inject_mode` | Mac-mic speech injected into the focused window (ESP off). |
 | `voice_muted` | Global mute (PTT/FAB) — silences Mac mic + ESP. |
 | `voice_speak_replies` | Read the reply aloud. |
-| `wakefree_pause_s` / `voiceid_threshold` / `voiceprint` | Wake-free endpointing + speaker-ID (ESP). |
+| `voiceid_threshold` / `voiceprint` | Wake-free speaker-ID — the "it's Jared" bar and the exemplar bank. |
+| `wakefree_pause_s` | ESP only, and only until its voiceprint loads. Wake-free endpoints on Jared's verified presence, with a pause tolerance that scales with utterance length — neither mic consults this. |
 | `phone_silence_s` / `mac_silence_s` / `esp_silence_s` | Trailing-silence cutoff, per capture source. |
 | `agent_mode` / `agent_cwd` | Full-agent (coding) mode toggle + working dir for the worker. |
 | `weight_reminder_enabled` / `_mode` / `_time` | The daily weigh-in push (On/Off, Manual/Dynamic, time). |

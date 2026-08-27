@@ -70,7 +70,7 @@ export async function open() {
       '</div>' +
       '<label class="settings-row"><span>Voice-match threshold<br><small>lower = more permissive</small></span>' +
         '<input class="settings-num" type="number" min="0.1" max="0.9" step="0.05" inputmode="decimal" data-key="voiceid_threshold" value="' + wfThresh + '"></label>' +
-      '<label class="settings-row"><span>End-of-command pause (s)</span>' +
+      '<label class="settings-row"><span>End-of-command pause (s)<br><small>ESP fallback only — wake-free ends on your voice</small></span>' +
         '<input class="settings-num" type="number" min="0.5" max="6" step="0.5" inputmode="decimal" data-key="wakefree_pause_s" value="' + wfPause + '"></label>' +
 
       '<div class="settings-sec">Voice inject mode</div>' +

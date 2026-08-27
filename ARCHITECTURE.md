@@ -306,6 +306,9 @@ is the bus; the daemon on each machine owns everything local:
   identity: closing one renumbers the rest, which is what keeps it 1..N over what is actually open.
   `end`, `resume` and `transfer` all take a number, a repo name, or an id; an ambiguous name is
   answered with the choices rather than a guess.
+- **A session can be named**, by voice (`rename_session`) or from the pane. The name is sent as
+  `/rename` into the live session, so it is the session's own name — tab title included — and comes
+  back through the transcript rather than living only in our row.
 - **Two closed states, and they are about what can be done.** `evicted` is parked WITH its
   transcript, so it resumes with the whole conversation — a new tab on the Mac, a new tmux session on
   the Pi. `ended` means no transcript was ever bound (it never wrote one, or adoption never matched

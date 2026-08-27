@@ -267,6 +267,18 @@ source machine is up it closes the session and flushes the mirror first; if it i
 destination resumes from what was already mirrored and the old row is marked `transferred`. The
 button is absent for a session with no `claude_session_id`, since there is no transcript to carry.
 
+### Naming one
+
+`POST /api/sessions/rename` sets `desk_sessions.label` at once, and — when the session is running —
+enqueues `rename_session`, which the owning machine delivers as `/rename <name>` typed into the
+session. That is the same command Jared would type, so Claude Code renames itself, its terminal tab
+changes, and it writes the `custom-title` record the reconcile tick reads back. A parked session takes
+the label alone; the name reaches the session only if it is resumed.
+
+Writing the `custom-title` record ourselves also works for anything that reads the transcript, but a
+running session never re-reads its own file and would keep the old tab title — which is why it goes
+through the command instead.
+
 ### The last thing a session said
 
 `desk_sessions.last_reply` is the FINAL message of a turn, with `reply_at` for when it landed and

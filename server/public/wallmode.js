@@ -16,6 +16,8 @@ if (HERE === PAGES.standard || HERE === PAGES.sessions) {
     try { want = JSON.parse(e.data)?.routing?.wall; } catch { return; }
     const to = PAGES[want];
     // A reload of the page already showing is not a switch; it would restart the wall every frame.
-    if (to && to !== HERE) location.replace(to);
+    // The query string comes along: the kiosk authenticates with ?token=, which seeds a cookie, and
+    // carrying it means the switch still works on a browser whose cookie was cleared.
+    if (to && to !== HERE) location.replace(to + location.search);
   });
 }

@@ -167,6 +167,16 @@ twice — `numberSessions` in `data-layer/src/desk.ts` and in `/api/sessions` �
 agree**, or "session three" means one thing to the pane and another to the voice tools. Ordering by
 `last_seen` also floats running sessions above parked ones without a second rule.
 
+A session can be named three ways, and `resolveSession` takes any of them: **the number** (digits or
+spoken — "3", "fifth", "the third session"), **the repo** ("status-hub"), or **words from its name**
+("golf", "session management"). Running sessions are matched first and the full list is only the
+fallback, because parked ones linger for a fortnight and otherwise crowd every name — "golf" matched
+a live session and a closed one from days ago; "status-hub" matched twelve. An ambiguous name is
+still answered with the numbered choices rather than a guess.
+
+Nothing about this is known to the SESSION itself. A session has no idea it is number three; the
+number is computed when the list is read, from the rows, by whoever is reading.
+
 The number is a POSITION, not identity: closing one renumbers the rest. That is what keeps the list
 1..N over what is actually open, instead of counting upward for ever.
 

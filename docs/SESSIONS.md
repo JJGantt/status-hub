@@ -224,7 +224,20 @@ the complete capture was discarded as its duplicate.
 
 ---
 
-## 10. Checking it is alive
+## 10. Where it is surfaced
+
+| surface | what it shows | interaction |
+|---|---|---|
+| phone pane (`cards/repos.js`) | everything: running, parked, queued, numbers, machine, last reply | full — start, name, transfer, resume, close |
+| the wall's footer (`cards/deskfoot.js`) | only the session holding follow-ups | none |
+| **TV session focus** (`/tv-session-focus`) | being built: the active sessions, nothing else | none — voice only |
+| voice (`get_sessions`) | the numbered list, and what each last said | every verb |
+
+The phone card is the complex one and stays that way — it is the surface with a keyboard and a
+pointer. Everything else is glanceable and driven by voice, which is why sessions need numbers and
+names that can be said out loud.
+
+## 11. Checking it is alive
 
 Function, not liveness — ask it to do something and see whether it did:
 

@@ -147,12 +147,16 @@ const DASHBOARD_HTML = fs.readFileSync(path.join(__dirname, 'public', 'index.htm
 // Inject the body-map SVG just like the dashboard so the muscle map renders identically.
 const TV_HTML = fs.readFileSync(path.join(__dirname, 'public', 'tv.html'), 'utf8')
   .replace('<!--BODY_SVG-->', BODY_SVG);
-// The SECOND wall, served at /tv2. It starts as a byte-identical copy of tv.html and is where the
-// always-on, no-interaction display is being built — the one that has to read from across a room and,
-// eventually, from a watch. It is a separate FILE rather than a mode flag so the wall the Pi is
-// showing today cannot be disturbed by work on it; the two share their scripts until something has to
-// diverge, and whatever diverges gets split at that point.
-const TV2_HTML = fs.readFileSync(path.join(__dirname, 'public', 'tv2.html'), 'utf8')
+// THE SECOND WALL — "TV session focus", at /tv-session-focus.
+//
+// There are two walls now and they must never be confused: `tv.html` is the one the Pi is showing,
+// and it is not to be changed while this exists. This one began as a byte-identical copy and is being
+// stripped down around the SESSIONS list — an always-on, no-interaction display that has to read from
+// across a room, and eventually from a watch.
+//
+// A separate FILE rather than a mode flag, so work here cannot disturb the live wall. They share
+// their scripts until something has to diverge, and whatever diverges gets split at that point.
+const TV_FOCUS_HTML = fs.readFileSync(path.join(__dirname, 'public', 'tv-session-focus.html'), 'utf8')
   .replace('<!--BODY_SVG-->', BODY_SVG);
 // Minimal home-screen "Voice" launcher (Add to Home Screen → standalone fullscreen tap-to-talk button).
 const MIC_HTML = fs.readFileSync(path.join(__dirname, 'public', 'mic.html'), 'utf8');
@@ -673,9 +677,9 @@ app.get(['/', '/tv'], (req, res) => {
   res.setHeader('Cache-Control', 'no-cache');
   res.type('html').send(TV_HTML);
 });
-app.get('/tv2', (req, res) => {
+app.get('/tv-session-focus', (req, res) => {
   res.setHeader('Cache-Control', 'no-cache');
-  res.type('html').send(TV2_HTML);
+  res.type('html').send(TV_FOCUS_HTML);
 });
 app.get('/page', (req, res) => {
   res.setHeader('Cache-Control', 'no-cache');

@@ -415,11 +415,15 @@ async function buildStatus() {
   let deskFocus = null;
   try {
     const [fRows, sRows] = await Promise.all([
-      sb('desk_focus?id=eq.current&select=command_id'),
+      sb('desk_focus?id=eq.current&select=command_id,session_id'),
       sb('desk_sessions?status=eq.resident&select=id,repo,label,command_id'),
     ]);
-    const cmd = (fRows || [])[0]?.command_id || null;
-    const hit = cmd ? (sRows || []).find((r) => r.command_id === cmd) : null;
+    // `session_id` is a session Jared named deliberately and wins over `command_id`, which is only
+    // the last thing dispatched. Same order as `focusedSession` in data-layer.
+    const f = (fRows || [])[0] || {};
+    const hit = f.session_id ? (sRows || []).find((r) => r.id === f.session_id)
+              : f.command_id ? (sRows || []).find((r) => r.command_id === f.command_id)
+              : null;
     if (hit) deskFocus = { id: hit.id, repo: hit.repo, label: hit.label || null };
   } catch (_) { /* the strip simply shows nothing rather than failing the whole payload */ }
 
@@ -1777,7 +1781,7 @@ app.get('/api/sessions', async (req, res) => {
     const [sessions, queue, focusRows] = await Promise.all([
       sb('desk_sessions?select=*&order=last_seen.desc'),
       sb('desk_queue?claimed=is.null&select=*&order=created.asc'),
-      sb('desk_focus?id=eq.current&select=command_id'),
+      sb('desk_focus?id=eq.current&select=command_id,session_id'),
     ]);
     // Which session a spoken follow-up would land in. Resolved the same way the MCP resolves it —
     // through the COMMAND that created the session, never "the busiest session" — so what the panel
@@ -1786,14 +1790,17 @@ app.get('/api/sessions', async (req, res) => {
     // Null is a real and useful answer, not a gap: the pointer survives the session it named, so
     // after that session is closed a follow-up has nowhere to go. Showing nothing marked is how you
     // find that out before speaking, rather than after.
-    const focusCmd = (focusRows || [])[0]?.command_id || null;
     // RESIDENT ONLY, because that is what a follow-up can actually reach: `followUp` refuses when the
     // session it points at is not running, saves the words and says so. Marking a closed session as
     // holding follow-ups said the opposite of what would happen — and the wall strip, which has
     // always filtered on resident, disagreed with the pane about the same pointer.
-    const focus = focusCmd
-      ? ((sessions || []).find((s) => s.command_id === focusCmd && s.status === 'resident')?.id || null)
-      : null;
+    //
+    // A session Jared focused deliberately (`session_id`) outranks the last dispatch (`command_id`).
+    const fp = (focusRows || [])[0] || {};
+    const focusRow = fp.session_id ? (sessions || []).find((s) => s.id === fp.session_id)
+                   : fp.command_id ? (sessions || []).find((s) => s.command_id === fp.command_id)
+                   : null;
+    const focus = focusRow && focusRow.status === 'resident' ? focusRow.id : null;
     // The number Jared says out loud. THE RULE IS SHARED WITH `numberSessions` IN data-layer's
     // desk.ts and both have to agree, or "session three" means one thing to the pane and another to
     // the voice tools: active sessions only, most recent first, numbered from 1. The number is a

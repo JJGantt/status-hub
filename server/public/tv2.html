@@ -1,0 +1,125 @@
+<!doctype html><html><head><meta charset=utf-8>
+<meta name=viewport content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>Status Hub · TV</title>
+<link rel="stylesheet" href="app.css">
+<!-- core.js renders the REAL hub cards from /api/stream into the .rows below (same as the main hub). -->
+<script type="module" src="core.js"></script>
+<!-- tv.js layers the compact voice-conversation panel + session terminal on top. -->
+<script type="module" src="tv.js"></script>
+<!-- wall.js: on a phone-sized viewport, scale the whole 1920×1080 shell to fit (phone "wall mode"). -->
+<script type="module" src="wall.js"></script>
+<!-- expand.js: phone-wall expand icons → full-screen section sheets (nutrition / workouts). -->
+<script type="module" src="expand.js"></script>
+</head><body class="tv">
+<!-- wallpanes: on the PHONE this is a three-pane swipe — [chat] [wall] [misc] — landing on the wall.
+     On the big-screen kiosk the side panes are display:none and only the shell renders. -->
+<div class="wallpanes" id="wallpanes">
+
+<section class="pane pane-chat">
+  <div class="ai-shell">
+    <div class="ai-head"><span class="ai-mode" id="ai-mode" title="Active conversation mode">Hub</span><button class="ai-reset" id="ai-reset" type="button" title="Start a fresh conversation">Reset context</button></div>
+    <div class="ai-log" id="ai-log"></div>
+    <div class="ai-input">
+      <button class="ai-mic" id="ai-mic" type="button" aria-label="Tap to talk"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="2" width="6" height="12" rx="3"></rect><path d="M5 11a7 7 0 0 0 14 0"></path><line x1="12" y1="18" x2="12" y2="22"></line></svg></button>
+      <input class="ai-text" id="ai-text" type="text" placeholder="Message…" autocomplete="off">
+      <button class="ai-send" id="ai-send" type="button">Send</button>
+    </div>
+    <div class="ai-status" id="ai-status"></div>
+  </div>
+</section>
+
+<section class="pane pane-wall">
+<!-- tv-shell: the full hub dashboard (main) + a compact voice column (aside). -->
+<div class="tv-shell">
+
+  <!-- MAIN: the entire real hub — identical markup to index.html so every card renders the same. -->
+  <div class="rows">
+    <!-- ROW 1 — status strip across the top: devices (litter) + agent routing + surf forecast -->
+    <div class="row-card statusrow">
+      <div class="card statuscard"><div class="fit" id="litter"><h2>Litter-Robot</h2><div class=big>…</div></div></div>
+      <div class="card statuscard tv-routecard"><div class="fit" id="tv-routing"></div></div>
+      <div class="card statuscard tv-surfcard"><div class="fit" id="surf"><h2>Surf</h2><div class=big>…</div></div></div>
+    </div>
+
+    <!-- COL 1 — calorie + macro rings, stacked vertically in their own column -->
+    <div class="row-card ringrow">
+      <div class="card ringcard"><div class="fit"><div id="nutrition"><h2>Today · Nutrition</h2><div class=big>…</div></div></div></div>
+    </div>
+
+    <!-- COL 2 — nutrition: calorie heatmap (top, mirrors the sets heatmap) · food list (mid) · cal/weight plot (bottom) -->
+    <div class="row-card nutrow">
+      <div class="card nutcard"><div class="fit" id="nutritionlog">
+        <div id="nutheat" class="nutheat"></div>
+        <div class="detailpanel nutfoods"><div id="nutinfo"></div></div>
+        <div id="nutplot" class="nutplot"></div>
+      </div></div>
+    </div>
+
+    <!-- COL 3 — muscle: body map (top 25%) + volume bars (bottom 75%) -->
+    <div class="row-card musclerow">
+      <div class="card musmap"><div class="fit" id="body"><h2>Muscle Map · 7-Day</h2><!--BODY_SVG--></div></div>
+      <div class="card musvol"><div class="fit" id="volume"><h2>Muscle Volume · 7-Day</h2><div>…</div></div></div>
+      <div class="card musdetail"><div class="fit detailpanel"><div id="bodyinfo"></div></div></div>
+    </div>
+
+    <!-- COL 4 — workout: sets heatmap (top) + tapped-day set list -->
+    <div class="row-card workoutrow">
+      <div class="card wkheat"><div class="fit" id="workouts"><h2>Workout Volume</h2><div id="heatwrap"></div><div id="resttimer" class="resttimer"></div></div></div>
+      <div class="card wkdetail"><div class="fit detailpanel"><div id="heatinfo"></div></div></div>
+    </div>
+
+    <!-- HEALTH BAR — overall score as a vertical gauge on the far right (painted by cards/score.js) -->
+    <div class="healthbar" id="healthbar"></div>
+    <!-- ROW 3 — persistent footer: live voice activity on the left, and on the right the session a
+         spoken follow-up would land in. A real grid row rather than an overlay, so the cards above
+         shrink to fit it instead of being covered by it. -->
+    <div class="tv-footrow">
+      <div class="tv-foot-act" id="tv-act"></div>
+      <div class="tv-foot-follow" id="tv-follow"></div>
+    </div>
+  </div>
+
+  <!-- ASIDE: compact voice column — the live hub voice conversation. -->
+  <aside class="tv-voice">
+    <header class="tv-voice-head"><span class="tv-focus-label">Conversation</span></header>
+    <div class="tv-convo-log" id="tv-log"></div>
+  </aside>
+
+</div>
+</section>
+
+<section class="pane pane-misc">
+  <!-- litter + surf cards are MOVED here from the shell by wall.js on the phone (they already exist
+       in the shell markup; two elements can't share an id). Feeder + mics render here directly. -->
+  <div class="misc-slot" id="misc-litter-slot"></div>
+  <div class="card statuscard"><div class="fit" id="feeder"><h2>Cat Feeder</h2><div class=big>…</div></div></div>
+  <div class="card statuscard"><div class="fit" id="mics"><h2>Voice System</h2><div class=big>…</div></div></div>
+  <div class="misc-slot" id="misc-surf-slot"></div>
+</section>
+
+<section class="pane pane-maint">
+  <!-- maintenance-window visualization: the data the adaptive calorie target is based on
+       (cards/maintviz.js renders it from the stream's maintenance.viz). Phone swipe pane only. -->
+  <div class="card maintcard"><div id="maintviz"></div></div>
+</section>
+
+<section class="pane pane-todo">
+  <!-- lists (+ notes), with dated items surfaced in a Due view. Voice/MCP writes them; cards/todo.js renders + edits. Phone pane only. -->
+  <div class="card todocard"><div id="todopane"></div></div>
+</section>
+
+<section class="pane pane-repos">
+  <!-- the Mac's repos (published by the orchestrator). Tap one to open a remote-controlled Claude
+       session there and pick it up in the Claude app. cards/repos.js. Phone pane only. -->
+  <div class="card reposcard"><div id="repospane"></div></div>
+</section>
+
+<section class="pane pane-reports">
+  <!-- the write-ups those sessions hand back when they finish. Sits next to the launcher because it
+       is the same loop seen from the other end: repos sends work out, this is what returns.
+       cards/reports.js. Phone pane only. -->
+  <div class="card reportscard"><div id="reportspane"></div></div>
+</section>
+
+</div>
+</body></html>

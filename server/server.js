@@ -1808,12 +1808,14 @@ app.get('/api/sessions', async (req, res) => {
     // Not by `last_seen` — every row is touched by its reconcile tick every 30s, so that order
     // reshuffles between reads and a number said out loud can resolve to a different session by the
     // time the sentence finishes. `started` never changes.
+    // RUNNING FIRST, then parked, newest first within each — the number is the POSITION IN THE LIST,
+    // which is where "the second session" comes from, and every surface draws running above parked.
+    const rank = (s) => (s.status === 'resident' ? 0 : 1);
+    const byStarted = (a, b) => new Date(b.started).getTime() - new Date(a.started).getTime();
     const numbered = new Map((sessions || [])
       .filter((s) => s.status === 'resident' || s.status === 'evicted')
-      .sort((a, b) => new Date(b.started).getTime() - new Date(a.started).getTime())
+      .sort((a, b) => rank(a) - rank(b) || byStarted(a, b))
       .map((s, i) => [s.id, i + 1]));
-    // The pane reads in the same order, so the badges ascend down each group.
-    const byStarted = (a, b) => new Date(b.started).getTime() - new Date(a.started).getTime();
     const withN = (s) => ({ ...s, n: numbered.get(s.id) || null });
     res.json({
       // Resident = running now, reachable over Remote Control. Evicted = closed to free the machine

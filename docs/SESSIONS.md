@@ -162,7 +162,11 @@ session never re-reads its own file, so its terminal tab keeps the old title.
 
 ### Numbering
 
-Active sessions (resident + evicted), **newest first by `started`, numbered from 1**. The rule is
+Active sessions, **running first and then parked, newest first within each, numbered from 1** — which
+is to say: the position in the list on screen. That is where "the second session" comes from; he reads
+it off a surface and says it, and `get_sessions` hands the agent the same list in the same order.
+Numbering the two groups together by age alone put the running sessions at 12 and 13 while parked ones
+held 1–11, so the badges read 12, 13, 1, 2, 3 down the pane and the second row was not session two. The rule is
 implemented twice — `numberSessions` in `data-layer/src/desk.ts` and in `/api/sessions` — and **the
 two must agree**, or "session three" means one thing to the pane and another to the voice tools.
 

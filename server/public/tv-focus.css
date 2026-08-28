@@ -6,31 +6,23 @@ body.tv .sessrow{grid-column:2/5;grid-row:2;display:flex;flex-direction:column;m
 body.tv .sesscard{flex:1 1 auto;min-height:0}
 
 /* TABS — one per running session, across the top. Sized to be read from a couch, not tapped:
-   nothing here is interactive. The number is the point of the tab (it is how a session is named
-   out loud), so it reads first and stays legible on its own. */
-.sf-tabs{display:flex;gap:10px;flex-wrap:wrap;align-items:stretch;flex:0 0 auto;padding-bottom:10px;
-  border-bottom:1px solid #1c232b;margin-bottom:12px}
-.sf-tab{display:flex;align-items:center;gap:10px;padding:9px 14px;border-radius:11px;
-  background:#141a21;border:1px solid #232c36;min-width:0}
-.sf-tab .sf-n{font-size:20px;font-weight:800;color:#5d6672;line-height:1}
-.sf-tab .sf-name{font-size:20px;font-weight:600;color:#8b96a5;white-space:nowrap;overflow:hidden;
-  text-overflow:ellipsis;max-width:22ch}
-.sf-tab .sf-where{font-size:12px;font-weight:700;letter-spacing:.4px;color:#4a535f;text-transform:uppercase}
-/* the one holding follow-ups: what a spoken command lands in, so it is the loudest thing up here */
-.sf-tab.on{background:#16243a;border-color:#2f5b96}
-.sf-tab.on .sf-n{color:#8ab4f8}
-.sf-tab.on .sf-name{color:#e6ebf2}
-/* mid-turn: a live dot, same green as the sessions pane uses for "open and reachable" */
+   nothing here is interactive. White on black with a thin border; no fills, no tints. */
+.sf-tabs{display:flex;gap:12px;flex-wrap:wrap;align-items:stretch;flex:0 0 auto;padding-bottom:12px;
+  border-bottom:1px solid #333;margin-bottom:14px}
+.sf-tab{display:flex;align-items:center;gap:12px;padding:10px 16px;border:1px solid #444;background:none;min-width:0}
+.sf-tab .sf-n{font-size:22px;font-weight:700;color:#fff;line-height:1}
+.sf-tab .sf-name{font-size:22px;font-weight:600;color:#fff;white-space:nowrap;overflow:hidden;
+  text-overflow:ellipsis;max-width:24ch}
+.sf-tab .sf-where{font-size:14px;font-weight:600;letter-spacing:.4px;color:#fff;text-transform:uppercase}
+/* the one holding follow-ups: a brighter border, nothing else */
+.sf-tab.on{border-color:#fff;border-width:2px;padding:9px 15px}
+/* mid-turn */
 .sf-dot{width:9px;height:9px;border-radius:50%;background:#39d353;flex:0 0 auto}
-.sf-dot.idle{background:#2a3340}
+.sf-dot.idle{background:#555}
 
 /* BODY — the focused session's last completed answer, at reading-across-a-room size. */
 .sf-body{flex:1 1 auto;min-height:0;display:flex;flex-direction:column;overflow:hidden}
-.sf-head{display:flex;align-items:baseline;gap:12px;flex:0 0 auto;margin-bottom:10px}
-.sf-head .sf-title{font-size:22px;font-weight:700;color:#e6ebf2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.sf-head .sf-meta{font-size:14px;color:#5d6672;white-space:nowrap}
-.sf-reply{flex:1 1 auto;min-height:0;overflow:hidden;font-size:26px;line-height:1.45;color:#c8d2de;
-  white-space:pre-wrap;
-  /* fade the overflow rather than scroll: nothing here can be scrolled, so a hard cut reads as a bug */
-  mask-image:linear-gradient(#000 82%,transparent 100%);
-  -webkit-mask-image:linear-gradient(#000 82%,transparent 100%)}
+.sf-head{display:flex;align-items:baseline;gap:14px;flex:0 0 auto;margin-bottom:12px}
+.sf-head .sf-title{font-size:24px;font-weight:700;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sf-head .sf-meta{font-size:16px;color:#888;white-space:nowrap}
+.sf-reply{flex:1 1 auto;min-height:0;overflow:hidden;font-size:27px;line-height:1.45;color:#fff;white-space:pre-wrap}

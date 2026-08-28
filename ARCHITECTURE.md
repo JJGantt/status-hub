@@ -260,6 +260,10 @@ the window resets or that worker goes silent, so a conversation isn't lost to a 
 
 ## 9. Desk control — launching sessions from the phone
 
+> The session system in full — data model, verbs, invariants, constants, gaps — is
+> **[docs/SESSIONS.md](docs/SESSIONS.md)**. This section is the summary.
+
+
 The hub's repo picker (and the Projects widget) starts a Claude session from anywhere: tap a project
 → a session opens there running `claude --remote-control <name>` → it waits in the Claude app, which
 is where the work actually happens. The hub only *starts* it.

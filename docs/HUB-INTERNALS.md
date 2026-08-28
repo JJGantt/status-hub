@@ -238,6 +238,9 @@ orchestrator ──beat(30s)──▶ worker_presence(worker='desk') ──▶ t
 
 ---
 
+> Sessions have a document of their own: **[SESSIONS.md](SESSIONS.md)** covers the whole system.
+> What follows is the hub's part in it.
+
 ### Sessions nobody dispatched
 
 `desk_sessions` also carries the sessions Jared opened himself on the Mac — a `claude` process in a

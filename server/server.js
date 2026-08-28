@@ -109,6 +109,9 @@ async function routingConfig() {
   return {
     wake: ['1', 'true', 'on', 'yes'].includes(String(s.wakefree_enabled ?? '0').toLowerCase()),
     inject: ['1', 'true', 'on', 'yes'].includes(String(s.voice_inject_mode ?? '0').toLowerCase()),
+    // Which wall the TV should be showing. The kiosk cannot be told to navigate from outside — it is
+    // a browser on a machine nothing can reach — so the page watches this and goes there itself.
+    wall: String(s.wall_mode ?? 'standard').toLowerCase() === 'sessions' ? 'sessions' : 'standard',
   };
 }
 const { buildVariants } = require('./lib/variants');

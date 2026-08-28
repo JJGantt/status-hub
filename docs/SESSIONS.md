@@ -111,6 +111,7 @@ attaches to tmux over SSH and starts one by hand, which is not tracked.
 | tool / action | who claims it | what happens |
 |---|---|---|
 | `start_session` | target machine | pull, launch, publish the row |
+| `focus_session` | — | points the follow-up pointer at a session that already exists |
 | `follow_up` | machine owning the focused session | text typed into the live session |
 | `rename_session` | owning machine | `/rename <name>` typed in — the session renames itself |
 | `end_session` | owning machine | close the tab / tmux session, park the row |
@@ -120,6 +121,30 @@ attaches to tmux over SSH and starts one by hand, which is not tracked.
 
 All seven are on the fast path (`SAFE_TOOLS`): they route prompts and manage what is running, and
 none of them invents a value.
+
+### Focus — how a session gets spoken to
+
+`desk_focus` has two sources and they mean different things:
+
+- **`command_id`** — set automatically by a dispatch. "Start a session in X" points the follow-up
+  there, because that is obviously what he is now talking to.
+- **`session_id`** — set by `focus_session`, deliberately: "focus the status-hub session". It CLEARS
+  `command_id` and wins over it everywhere the pointer is read.
+
+Focusing is what makes voice-only surfaces work. Without it the pointer only ever named the last
+dispatch, so there was no way to go back to something — and on a wall or a watch there is no other
+way to say which of five sessions is meant.
+
+**Focusing is itself a handoff.** `follow_up` normally demands an explicit phrase ("send a follow-up",
+"tell it to"), because the mic hears the whole room and forwarding ambient speech into a session is
+the failure that rule prevents. Naming a session removes the ambiguity, so everything said after a
+focus in the same turn goes to that session with no phrase required. That is the point: he talks to
+it as though it were the same assistant he always talks to, says "you" about things another session
+said, and never has to think about the handoff happening underneath.
+
+The addressing directive in `worker.py` carries the same rule, and it has to: it tells the model that
+development talk naming no destination belongs to a session that has already heard him. After a
+focus, the destination IS named.
 
 ### Naming, in order of authority
 

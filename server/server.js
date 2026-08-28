@@ -1803,19 +1803,23 @@ app.get('/api/sessions', async (req, res) => {
     const focus = focusRow && focusRow.status === 'resident' ? focusRow.id : null;
     // The number Jared says out loud. THE RULE IS SHARED WITH `numberSessions` IN data-layer's
     // desk.ts and both have to agree, or "session three" means one thing to the pane and another to
-    // the voice tools: active sessions only, most recent first, numbered from 1. The number is a
-    // position in the current list rather than identity — closing one renumbers the rest, which is
-    // what keeps it 1..N over what is actually open.
+    // the voice tools: active sessions only, NEWEST FIRST BY `started`, numbered from 1.
+    //
+    // Not by `last_seen` — every row is touched by its reconcile tick every 30s, so that order
+    // reshuffles between reads and a number said out loud can resolve to a different session by the
+    // time the sentence finishes. `started` never changes.
     const numbered = new Map((sessions || [])
       .filter((s) => s.status === 'resident' || s.status === 'evicted')
-      .sort((a, b) => new Date(b.last_seen).getTime() - new Date(a.last_seen).getTime())
+      .sort((a, b) => new Date(b.started).getTime() - new Date(a.started).getTime())
       .map((s, i) => [s.id, i + 1]));
+    // The pane reads in the same order, so the badges ascend down each group.
+    const byStarted = (a, b) => new Date(b.started).getTime() - new Date(a.started).getTime();
     const withN = (s) => ({ ...s, n: numbered.get(s.id) || null });
     res.json({
       // Resident = running now, reachable over Remote Control. Evicted = closed to free the machine
       // but resumable with full context, which is the distinction the panel has to make obvious.
-      resident: (sessions || []).filter((s) => s.status === 'resident').map(withN),
-      evicted: (sessions || []).filter((s) => s.status === 'evicted').map(withN),
+      resident: (sessions || []).filter((s) => s.status === 'resident').sort(byStarted).map(withN),
+      evicted: (sessions || []).filter((s) => s.status === 'evicted').sort(byStarted).map(withN),
       queued: queue || [],
       focus,
     });

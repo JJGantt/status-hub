@@ -162,10 +162,16 @@ session never re-reads its own file, so its terminal tab keeps the old title.
 
 ### Numbering
 
-Active sessions (resident + evicted), **most recent first, numbered from 1**. The rule is implemented
-twice — `numberSessions` in `data-layer/src/desk.ts` and in `/api/sessions` — and **the two must
-agree**, or "session three" means one thing to the pane and another to the voice tools. Ordering by
-`last_seen` also floats running sessions above parked ones without a second rule.
+Active sessions (resident + evicted), **newest first by `started`, numbered from 1**. The rule is
+implemented twice — `numberSessions` in `data-layer/src/desk.ts` and in `/api/sessions` — and **the
+two must agree**, or "session three" means one thing to the pane and another to the voice tools.
+
+**It is ordered by `started` because that never changes.** `last_seen` was the obvious reading of
+"most recent" and it made the numbers unusable: every row is touched by its reconcile tick every 30s,
+so the order reshuffled between two reads seconds apart — measured, with two sessions sharing a
+timestamp to the second, and caught when "focus the first session" landed on a session that had
+become first while the sentence was being processed. A number said out loud has to still mean the
+same session when it is resolved, and that is several seconds later.
 
 A session can be named three ways, and `resolveSession` takes any of them: **the number** (digits or
 spoken — "3", "fifth", "the third session"), **the repo** ("status-hub"), or **words from its name**

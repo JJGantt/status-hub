@@ -2,6 +2,8 @@
 <meta name=viewport content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
 <title>Status Hub · TV</title>
 <link rel="stylesheet" href="app.css">
+<!-- Only this page: the session wall's own layout and panel. app.css is shared and unmodified. -->
+<link rel="stylesheet" href="tv-focus.css">
 <!-- core.js renders the REAL hub cards from /api/stream into the .rows below (same as the main hub). -->
 <script type="module" src="core.js"></script>
 <!-- tv.js layers the compact voice-conversation panel + session terminal on top. -->
@@ -10,6 +12,8 @@
 <script type="module" src="wall.js"></script>
 <!-- expand.js: phone-wall expand icons → full-screen section sheets (nutrition / workouts). -->
 <script type="module" src="expand.js"></script>
+<!-- tv-focus.js: the session tabs + the focused session's last answer. -->
+<script type="module" src="tv-focus.js"></script>
 </head><body class="tv">
 <!-- wallpanes: on the PHONE this is a three-pane swipe — [chat] [wall] [misc] — landing on the wall.
      On the big-screen kiosk the side panes are display:none and only the shell renders. -->
@@ -46,26 +50,14 @@
       <div class="card ringcard"><div class="fit"><div id="nutrition"><h2>Today · Nutrition</h2><div class=big>…</div></div></div></div>
     </div>
 
-    <!-- COL 2 — nutrition: calorie heatmap (top, mirrors the sets heatmap) · food list (mid) · cal/weight plot (bottom) -->
-    <div class="row-card nutrow">
-      <div class="card nutcard"><div class="fit" id="nutritionlog">
-        <div id="nutheat" class="nutheat"></div>
-        <div class="detailpanel nutfoods"><div id="nutinfo"></div></div>
-        <div id="nutplot" class="nutplot"></div>
+    <!-- SESSIONS — the point of this wall. Tabs across the top of the freed space, and beneath them
+         the last completed answer from whichever session is in focus. Painted by tv-focus.js, which
+         only this page loads; the live wall shares none of it. -->
+    <div class="row-card sessrow">
+      <div class="card sesscard"><div class="fit">
+        <div class="sf-tabs" id="sf-tabs"></div>
+        <div class="sf-body" id="sf-body"></div>
       </div></div>
-    </div>
-
-    <!-- COL 3 — muscle: body map (top 25%) + volume bars (bottom 75%) -->
-    <div class="row-card musclerow">
-      <div class="card musmap"><div class="fit" id="body"><h2>Muscle Map · 7-Day</h2><!--BODY_SVG--></div></div>
-      <div class="card musvol"><div class="fit" id="volume"><h2>Muscle Volume · 7-Day</h2><div>…</div></div></div>
-      <div class="card musdetail"><div class="fit detailpanel"><div id="bodyinfo"></div></div></div>
-    </div>
-
-    <!-- COL 4 — workout: sets heatmap (top) + tapped-day set list -->
-    <div class="row-card workoutrow">
-      <div class="card wkheat"><div class="fit" id="workouts"><h2>Workout Volume</h2><div id="heatwrap"></div><div id="resttimer" class="resttimer"></div></div></div>
-      <div class="card wkdetail"><div class="fit detailpanel"><div id="heatinfo"></div></div></div>
     </div>
 
     <!-- HEALTH BAR — overall score as a vertical gauge on the far right (painted by cards/score.js) -->

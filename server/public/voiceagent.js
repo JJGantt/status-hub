@@ -26,11 +26,13 @@ function setMode(mode) {
   if (el) { el.textContent = activeMode === 'agent' ? 'Agent' : 'Hub'; el.classList.toggle('is-agent', activeMode === 'agent'); }
 }
 
-// Boot everywhere EXCEPT the big-screen kiosk (≥1400px; it has tv.js's own panel and no input). The
-// PHONE wall now hosts the chat pane, so it boots too. (body.phonewall isn't set yet at import time —
-// wall.js loads after core.js's import graph — so test the same viewport predicate wall.js uses.)
-// The Mac app (body.mac, set in shared.js) ALSO hosts the interactive chat side panel at any width.
-if (!document.body.classList.contains('tv') || window.innerWidth < 1400 || document.body.classList.contains('mac')) boot();
+// The big-screen kiosk (≥1400px, and not the Mac app) has tv.js's own panel and no input; everything
+// else — the page view, the PHONE wall (which hosts the chat pane), the Mac app's chat side panel —
+// boots the interactive client. body.phonewall isn't set yet at import time (wall.js loads after
+// core.js's import graph), so this is the same viewport predicate wall.js uses; body.mac is set in
+// shared.js. The same predicate picks the activity bar's mount point below.
+const KIOSK = document.body.classList.contains('tv') && !document.body.classList.contains('mac') && window.innerWidth >= 1400;
+if (!KIOSK) boot();
 
 function boot() {
   const activity = activityBar();
@@ -350,10 +352,15 @@ export function initActivityBar() {
     '<div class="ai-act-prompt"></div>' +
     '<div class="ai-act-row"><span class="ai-act-dot"></span><span class="ai-act-txt"></span>' +
       '<span class="ai-act-model"></span></div>';
-  // On the wall this lives in the footer's reserved lane rather than floating over a card; the phone
-  // has no such lane and keeps the popup. Same element and same states either way — only the mount
-  // point differs, so nothing downstream has to know which surface it is on.
-  (document.getElementById('tv-act') || document.body).appendChild(bar);
+  // On the kiosk this lives in the footer's reserved lane rather than floating over a card. The phone
+  // and the Mac app load the same markup, so #tv-act exists there too — but it sits inside .tv-shell,
+  // which wall.js transform-scales to fit the screen, and a transformed ancestor both scales a
+  // descendant's text and becomes the containing block for its position:fixed. Mounted there, the
+  // phone's popup rendered at about a third of its size, pinned inside the shell. So off the kiosk it
+  // goes on <body>, outside the scaled shell, and keeps its float. Same element and same states either
+  // way — only the mount point differs, so nothing downstream has to know which surface it is on.
+  const lane = KIOSK && document.getElementById('tv-act');
+  (lane || document.body).appendChild(bar);
   const txt = bar.querySelector('.ai-act-txt');
   const prm = bar.querySelector('.ai-act-prompt');
   const mdl = bar.querySelector('.ai-act-model');

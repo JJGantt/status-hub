@@ -78,8 +78,10 @@ Supabase ──▶ server.js buildStatus() ──▶ /api/status payload ──�
 
 The activity element (`.ai-act`) renders the
 `activity` frames the worker pushes to `/api/voice-activity`. One element, two mount points: it floats
-as a popup on the page view and the phone wall, and on the TV kiosk it mounts into the footer row's
-reserved lane (`#tv-act`) so it occupies space rather than covering a card. Same states either way.
+as a popup on the page view, the phone wall and the Mac app, and on the TV kiosk it mounts into the
+footer row's reserved lane (`#tv-act`) so it occupies space rather than covering a card. The choice is
+made by `voiceagent.js`'s kiosk predicate, not by whether `#tv-act` exists — §6e says why. Same states
+either way.
 The frames are: `working` (the prompt, once per command),
 `tool` (each tool call + args), `escalate`, and `done`. **`escalate` is the Sonnet→Opus hop**: the worker
 sends one when a hub turn leaves the fast path (it needed a full-access tool, or Sonnet errored), and the
@@ -439,9 +441,14 @@ Left is the activity lane (`#tv-act`, §3). Right is `cards/deskfoot.js`: the re
 session a spoken follow-up would land in, rendered only when there is one. The frame is permanent so
 an empty lane reads as reserved space rather than as a gap.
 
-**The phone loads this same markup**, so `#tv-act` exists there too and the activity element mounts
-into it. The row is `display:contents` on the phone rather than `display:none` — a `display:none`
-parent hides its descendants whatever they do, which silently killed the phone's tool-call overlay.
+**The phone and the Mac app load this same markup**, so `#tv-act` exists there too — but the lane is
+inside `.tv-shell`, which `wall.js` transform-scales to fit the screen, and a transformed ancestor
+scales its descendants' text *and* becomes the containing block for their `position:fixed`. Mounting
+the activity element into the lane wherever `#tv-act` existed rendered the phone's popup at about a
+third of its size, pinned inside the shell. So `voiceagent.js` mounts into the lane only on the kiosk
+(`body.tv`, not `body.mac`, ≥1400px — the predicate `wall.js` uses, since `body.phonewall` is not set
+yet when the bar is created) and onto `<body>` everywhere else, and the row is simply `display:none`
+off the kiosk.
 
 ### The Fly machine does not auto-stop
 

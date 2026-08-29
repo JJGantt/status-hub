@@ -38,7 +38,7 @@ documents **everything**, not just the hub. Keep it current as pieces change.
 - `jared-status-hub` — the hub server (web + TV + APIs + SSE + push scheduler). ← `status-hub`
 - `jared-voice` — combined: ESP wake-word + Groq transcription **and** the fallback voice worker.
   ← `voice-pipeline/server`
-- `litter-robot-watcher` — always-on Litter-Robot watcher (Telegram alerts). ← `litter-robot`
+- `litter-robot-watcher` — always-on Litter-Robot watcher (alerts via the hub's app push). ← `litter-robot`
 - `nutrition-track` — **suspended**. ← `~/repos/nutrition-track`
 
 Every Fly-deployed app is built from a repo in `~/repos` on the Mac, so all four are reachable from
@@ -254,7 +254,6 @@ the window resets or that worker goes silent, so a conversation isn't lost to a 
 - **Groq** — `whisper-large-v3-turbo` STT (key is a Fly secret on `jared-voice`).
 - **Anthropic** — Claude subscription (`claude -p`) + Agent SDK (API credit) for the workers.
 - **Apple** — APNs (push) + App Store Connect (ASC key on disk; Issuer ID not yet recorded).
-- **Telegram** — `@jaredpi_bot` for ad-hoc messages (used by the litter-robot watcher).
 
 ---
 

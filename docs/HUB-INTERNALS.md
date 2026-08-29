@@ -111,7 +111,7 @@ The math lives here; each file has a thorough header. Summary map:
 | Module | What it derives |
 |---|---|
 | `maintenance.js` | Adaptive TDEE via energy balance (avg intake − trend·kcal/lb), the dynamic calorie+macro goal, and the **goal-phase** logic (window bounded by a bulk↔cut sign flip, with a seed held until the new phase has data). Also `estimateHistory` (per-day replay for the viz). |
-| `pace.js` | Within-day intake pacing — the eating window (derived from history), and each macro's drain/refill fill + green→red/amber color vs the expected-by-now line. |
+| `pace.js` | Within-day intake pacing — the eating window (median first/last meal over the last **two weeks** of logs, IQR-trimmed), and each macro's drain/refill fill + green→red/amber color vs the expected-by-now line. |
 | `nutritionlog.js` | The calorie/weight dual-axis plot, the diverging-color adherence calendar, and `buildGoalResolver` (per-day calorie goal, respecting stored targets + phases). |
 | `volume.js` | Weekly per-muscle fractional-set volume (primary=1.0, secondary=0.5) vs the ~10–20 sets/week target. |
 | `bodymap.js` | The front/back body SVG (viewBox 0 0 72 93); volume colors paint onto it. |

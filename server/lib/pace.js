@@ -34,7 +34,7 @@ function median(xs) {
 const DEFAULT_START = offsetFromHM(8, 0);   // 8:00am
 const DEFAULT_END = offsetFromHM(22, 0);    // 10:00pm
 const MIN_DAYS_FOR_WINDOW = 7;
-const RECENCY_DAYS = 21;                    // only consider the last 21 days of history
+const RECENCY_DAYS = 14;                    // only consider the last 14 days (two weeks) of history
 // Breakfast share of daily calories. Research-grounded (~25% is a typical/recommended
 // breakfast fraction). Used to shift the window start earlier so the expected curve has
 // drained ~one breakfast's worth by the typical first-meal time.

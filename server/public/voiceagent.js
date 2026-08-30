@@ -97,7 +97,7 @@ function boot() {
 // so a dictated command joins the text box and sends WITH the photos, not ahead of them.
 // Exported so the wall-mode push-to-talk button (wall.js) can reuse the exact same pipeline.
 export function makeRecorder({ onStatus, onActive, quick, autoStop, dryWhen, onTranscript }) {
-  let recording = false, rec = null, chunks = [], stream = null, maxTimer = null;
+  let recording = false, rec = null, chunks = [], stream = null;
   let actx = null, vadTimer = null;
   const pickMime = () => {
     for (const m of ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4', 'audio/ogg'])
@@ -125,7 +125,7 @@ export function makeRecorder({ onStatus, onActive, quick, autoStop, dryWhen, onT
         else if (spoke) { if (!silence) silence = now; else if (now - silence >= HANG_MS) stop(); }  // trailing silence → send
         else if (now - t0 > GRACE_MS) stop();                          // pressed but never spoke → give up
       }, 60);
-    } catch (_) { /* no Web Audio → falls back to tap-to-stop + the 60s cap */ }
+    } catch (_) { /* no Web Audio → falls back to tap-to-stop */ }
   }
   function stopVAD() {
     if (vadTimer) { clearInterval(vadTimer); vadTimer = null; }
@@ -150,12 +150,13 @@ export function makeRecorder({ onStatus, onActive, quick, autoStop, dryWhen, onT
     rec.start(); recording = true; onActive(true);
     muteOthers(true);   // mute every other listener (Mac + ESP) while this explicit command records
     onStatus(autoStop ? 'Listening…' : 'Listening… tap to send', 'rec');
-    maxTimer = setTimeout(() => stop(), 60000);
+    // No duration cap. A recording ends when HE stops talking (the VAD below) or taps again —
+    // never on a clock. A wall-clock cap cut long instructions off mid-sentence.
     if (autoStop) startVAD();
   }
   function stop() {
     if (!recording) return;
-    recording = false; onActive(false); clearTimeout(maxTimer); stopVAD();
+    recording = false; onActive(false); stopVAD();
     try { if (rec && rec.state !== 'inactive') rec.stop(); } catch (_) {}
   }
   async function upload(mime) {

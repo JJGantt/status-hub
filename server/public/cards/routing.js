@@ -5,9 +5,9 @@
 
 export function render(s) {
   const r = s && s.routing;
-  // Always-on state rides a body class (green border on / red off) — it replaced the AO chip this
-  // card used to show. On the TV it paints the PERSISTENT footer row (.tv-footrow), so the state is
-  // readable while idle; elsewhere it paints the floating activity popup when that is visible.
+  // Always-on state rides a body class that colors the TV wall's PERSISTENT footer row border
+  // (green on / red off) — it replaced the AO chip this card used to show. TV footer ONLY: no other
+  // surface indicates it (the phone popup's border stays its normal gray).
   if (r) {
     document.body.classList.toggle('ao-on', !!r.wake);
     document.body.classList.toggle('ao-off', !r.wake);

@@ -141,8 +141,8 @@ End-to-end flow:
 ```
   ESP32 mic ──wss──▶ jared-voice (Fly)              Supabase                Mac/Fly worker
   (or Mac mic,        ├ openWakeWord ("Hey Rhasspy")  voice_requests  ◀──┐    claims request
-   or web mic FAB)    ├ capture utterance             (the queue)        │    ├ claude -p (subscription)
-                      └ Groq whisper-large-v3-turbo ──▶ INSERT ──────────┘    │  or warm Agent SDK
+   or web mic FAB)    ├ capture utterance             (the queue)        │    ├ warm Agent SDK (subscription)
+                      └ Groq whisper-large-v3-turbo ──▶ INSERT ──────────┘    │  or claude -p (escalation)
                                                                               ├ runs MCP tools (data/voice/govee)
    hub UI ◀── SSE ◀── status-hub ◀── voice_messages ◀───────────────────────┘  writes the reply
 ```
@@ -190,8 +190,8 @@ in-file default is `mac,pi`, which applies only if something starts it without `
 
 | Worker | `WORKER_ID` | Where | Runner |
 |---|---|---|---|
-| **Pi** | `pi` | systemd `voice-worker.service` | `claude -p` (subscription) |
-| **Mac** | `mac` | launchd `com.jaredgantt.voice-worker` | `claude -p` (subscription) |
+| **Pi** | `pi` | systemd `voice-worker.service` | warm Agent SDK + `claude -p` (subscription) |
+| **Mac** | `mac` | launchd `com.jaredgantt.voice-worker` | warm Agent SDK + `claude -p` (subscription) |
 | **Fly** | `fly` | inside `jared-voice` | Anthropic API (no subscription login) |
 
 A **live hub context window overrides priority**: it stays pinned to the worker that owns it until
@@ -201,16 +201,16 @@ the window resets or that worker goes silent, so a conversation isn't lost to a 
   loop the instant a `voice_requests` row is INSERTed; a short poll (`IDLE_POLL_S`, ~15s) is the
   backstop, and the claim socket is recycled every ~5 min to beat realtime half-open death.
 - **Model routing — one dynamic route.** Every hub command runs **Sonnet first**, given only the SAFE
-  read/actuator tools via `--allowedTools`; the gated data-WRITE tools are absent from that list, so
-  in `-p` mode Sonnet can see them and is *denied* them. If the turn needs one — it emits
+  read/actuator tools (`allowed_tools` on the warm SDK client); the gated data-WRITE tools are absent
+  from that list, so Sonnet can see them and is *denied* them. If the turn needs one — it emits
   `__ESCALATE__`, or attempts a gated tool and is denied — it re-runs on a **fresh Opus** with the
   full toolset. Hub turns are fresh runs with the recent conversation replayed from `voice_messages`;
   only full-agent (coding) mode keeps a `--resume` CLI session, because a shared one let two models
   cross-contaminate each other's context. `voice_requests.tier` is still written by every capture
   path and read by nothing. Full detail: `voice-pipeline/docs/ROUTING.md`.
-- **Subscription vs API key:** `claude -p` (subscription) must NOT have `ANTHROPIC_API_KEY` in its
-  environment or the CLI silently bills the API instead — so `run_claude` strips it for that
-  subprocess; the SDK path keeps it. (The service env carries the key so `sdk` mode works.)
+- **Subscription vs API key:** the CLI and the Agent SDK silently prefer `ANTHROPIC_API_KEY` over
+  the subscription login, so `worker.py` pops it from the environment at import and no subprocess can
+  inherit it. Only the `ApiRunner` — the funded fallback, and Fly's runner — reads the held key.
 - **The Pi:** runs `worker.py` via systemd `voice-worker.service` (env in `~/.voice-worker.env`),
   from the checkout at **`~/voice-pipeline`**, venv at `~/voice-pipeline/.venv-worker`. There is a
   *second* clone at `~/repos/voice-pipeline` that the service does not use — pulling that one changes
@@ -252,7 +252,8 @@ the window resets or that worker goes silent, so a conversation isn't lost to a 
 - **Fly.io** — hosting (3 apps above). CLI `fly`, authed as jaredgantt@gmail.com.
 - **Supabase** — Postgres + realtime (source of truth).
 - **Groq** — `whisper-large-v3-turbo` STT (key is a Fly secret on `jared-voice`).
-- **Anthropic** — Claude subscription (`claude -p`) + Agent SDK (API credit) for the workers.
+- **Anthropic** — Claude subscription (warm Agent SDK + `claude -p`) for the workers; the Console API
+  key funds the fallback `ApiRunner` and Fly.
 - **Apple** — APNs (push) + App Store Connect (ASC key on disk; Issuer ID not yet recorded).
 
 ---

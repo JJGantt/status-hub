@@ -1,11 +1,18 @@
 // Routing/liveness panel — TV top status strip. Routing is fixed now (standard Sonnet→Opus), so this
-// shows always-on + inject state and the mic/worker liveness from the dashboard stream. Reuses the
-// litter card's devstrip + devchip markup so it matches. Paints #tv-routing; no-ops where absent (phone).
+// shows inject state and the mic/worker liveness from the dashboard stream. Reuses the litter card's
+// devstrip + devchip markup so it matches. Paints #tv-routing; the chips no-op where absent (phone),
+// but the always-on border paint below runs on EVERY surface.
 
 export function render(s) {
+  const r = s && s.routing;
+  // Always-on state lives on the activity bar's border (green = on, red = off) on every surface —
+  // it replaced the AO chip this card used to show.
+  if (r) for (const bar of document.querySelectorAll('.ai-act')) {
+    bar.classList.toggle('ao-on', !!r.wake);
+    bar.classList.toggle('ao-off', !r.wake);
+  }
   const el = document.getElementById('tv-routing');
   if (!el) return;
-  const r = s && s.routing;
   if (!r) { el.innerHTML = ''; return; }
   const chip = (label, val, color) =>
     '<span class="devchip"><span class="dc-l">' + label + '</span>' +
@@ -19,7 +26,6 @@ export function render(s) {
   el.innerHTML =
     '<div class="devstrip">' +
       '<div class="devchips">' +
-        chip('AO', r.wake ? 'On' : 'Off', r.wake ? '#39d353' : '#5c6675') +  // AO = always-on (wake-free) voice
         chip('INJ', r.inject ? 'On' : 'Off', r.inject ? '#39d353' : '#5c6675') +  // INJ = voice-inject mode
         chip('ESP', m.esp ? 'Up' : 'Down', m.esp ? UP : DOWN) +
         chip('Mac', m.mac ? 'Up' : 'Down', m.mac ? UP : DOWN) +

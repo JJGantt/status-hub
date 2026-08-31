@@ -946,6 +946,9 @@ body.tv .hmonths{margin-left:0;font-size:11px}
   border-radius:12px;padding:8px 13px;font-size:13px;color:#c2cad4;box-shadow:0 6px 20px rgba(0,0,0,.4);
   opacity:0;transform:translateY(6px);transition:opacity .2s,transform .2s;pointer-events:none;overflow:hidden}
 .ai-act.show{opacity:1;transform:translateY(0)}
+/* Always-on voice state rides the bar's border on every surface (replaces the TV strip's AO chip). */
+.ai-act.ao-on{border-color:rgba(57,211,83,.65)}
+.ai-act.ao-off{border-color:rgba(248,81,73,.8)}
 .ai-act-row{display:flex;align-items:center;gap:9px;min-width:0;white-space:nowrap}
 .ai-act-txt{flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis}
 /* The transcribed prompt that kicked off this run — quoted, muted, sits above the live status.

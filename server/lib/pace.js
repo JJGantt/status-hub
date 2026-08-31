@@ -140,31 +140,46 @@ function overColor(devNorm) {  // devNorm > 0: amber -> orange (over pace = tren
   return hslToHex(45 - 20 * t, 0.9, 0.5);
 }
 
-function macroPace(consumed, goal, frac) {
+// Staged meals are food that exists but has not been eaten: they never move `consumed`, so every
+// number and every committed arc below reads exactly as it would with nothing staged. What they add
+// is a SECOND set of arc ends — where the arcs would land if the staged meals were committed — and
+// the colors the ring would take there. The client draws only the span between the two, so the
+// staged contribution is a separate piece sitting past the real one.
+const clamp01 = (v) => Math.max(0, Math.min(1, v));
+const r3 = (v) => Math.round(v * 1000) / 1000;
+
+function macroPace(consumed, goal, frac, staged) {
   const expected = goal * frac;
   const dev = consumed - expected;                 // grams off the pace line (signed)
   const devNorm = goal > 0 ? dev / goal : 0;        // normalized by goal -> consistent all day
+  const stg = Math.max(0, Number(staged) || 0);
+  const devNormS = goal > 0 ? (dev + stg) / goal : 0;   // where the pace would sit if staged were eaten
   return {
     consumed: Math.round(consumed),
     goal: Math.round(goal),
     expected: Math.round(expected),
     dev_g: Math.round(dev),                          // signed grams off pace -> center number
     progress: goal > 0 ? Math.round((consumed / goal) * 1000) / 1000 : 0, // absolute, for the bars
-    ring_base: Math.round(Math.max(0, Math.min(1, 1 + devNorm)) * 1000) / 1000, // main arc: full=on-pace, drains
-    ring_over: Math.round(Math.max(0, Math.min(1, devNorm)) * 1000) / 1000,     // overflow arc (one wrap max visual)
+    ring_base: r3(clamp01(1 + devNorm)),             // main arc: full=on-pace, drains
+    ring_over: r3(clamp01(devNorm)),                 // overflow arc (one wrap max visual)
     base_color: devNorm <= 0 ? underColor(devNorm) : '#22c55e',
     over_color: devNorm > 0 ? overColor(devNorm) : null,
+    staged: Math.round(stg),                         // 0 when nothing is staged
+    ring_staged_base: stg > 0 ? r3(clamp01(1 + devNormS)) : null,   // arc ENDS if committed, not lengths
+    ring_staged_over: stg > 0 ? r3(clamp01(devNormS)) : null,
+    staged_base_color: stg > 0 ? (devNormS <= 0 ? underColor(devNormS) : '#22c55e') : null,
+    staged_over_color: stg > 0 && devNormS > 0 ? overColor(devNormS) : null,
   };
 }
 
-function computePace({ consumed, goal, window, nowOff }) {
+function computePace({ consumed, goal, staged, window, nowOff }) {
   let frac;
   if (nowOff <= window.startMin) frac = 0;
   else if (nowOff >= window.endMin) frac = 1;
   else frac = (nowOff - window.startMin) / (window.endMin - window.startMin);
   const macros = {};
   for (const k of ['calories', 'protein_g', 'carbs_g', 'fat_g']) {
-    macros[k] = macroPace((consumed || {})[k] || 0, (goal || {})[k] || 0, frac);
+    macros[k] = macroPace((consumed || {})[k] || 0, (goal || {})[k] || 0, frac, (staged || {})[k] || 0);
   }
   return { window, nowOff, fraction: Math.round(frac * 100) / 100, macros };
 }

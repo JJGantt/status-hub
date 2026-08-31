@@ -43,7 +43,7 @@ Supabase ──▶ server.js buildStatus() ──▶ /api/status payload ──�
 |---|---|---|
 | `today` | the 4am-origin day string everything is scoped to | `lib/dates.nutritionWindow()` |
 | `nutrition` | Today·Nutrition card (Cal/P/C/F pace rings + produce) | intake rollup + `lib/pace` |
-| `pace` | the drain/refill state + colors for the rings | `lib/pace.computePace()` |
+| `pace` | the drain/refill state + colors for the rings, and the staged-meal arcs | `lib/pace.computePace()` |
 | `maintenance` | the calorie-target card + the maintenance-window viz | `lib/maintenance` (§4) |
 | `nutrition_log` | calorie-adherence calendar + calorie/weight trend plot | `lib/nutritionlog` |
 | `volume` | per-muscle weekly volume gauges + the body map colors | `lib/volume` + `lib/bodymap` |
@@ -113,11 +113,20 @@ The math lives here; each file has a thorough header. Summary map:
 | Module | What it derives |
 |---|---|
 | `maintenance.js` | Adaptive TDEE via energy balance (avg intake − trend·kcal/lb), the dynamic calorie+macro goal, and the **goal-phase** logic (window bounded by a bulk↔cut sign flip, with a seed held until the new phase has data). Also `estimateHistory` (per-day replay for the viz). |
-| `pace.js` | Within-day intake pacing — the eating window (median first/last meal over the last **two weeks** of logs, IQR-trimmed), and each macro's drain/refill fill + green→red/amber color vs the expected-by-now line. |
+| `pace.js` | Within-day intake pacing — the eating window (median first/last meal over the last **two weeks** of logs, IQR-trimmed), each macro's drain/refill fill + green→red/amber color vs the expected-by-now line, and the staged-meal arcs (below). |
 | `nutritionlog.js` | The calorie/weight dual-axis plot, the diverging-color adherence calendar, and `buildGoalResolver` (per-day calorie goal, respecting stored targets + phases). |
 | `volume.js` | Weekly per-muscle fractional-set volume (primary=1.0, secondary=0.5) vs the ~10–20 sets/week target. |
 | `bodymap.js` | The front/back body SVG (viewBox 0 0 72 93); volume colors paint onto it. |
 | `heatmap.js` | Per-day set-count heatmap laid out as week columns. |
+
+**Staged meals on the rings.** A staged meal (`nutrition_entries.staged = true`) is food that exists
+but has not been eaten, so it never touches `consumed`: every number, and the whole committed arc,
+reads exactly as it would with nothing staged. `computePace()` takes the staged totals separately and
+adds a second set of arc **ends** — `ring_staged_base` / `ring_staged_over`, with the
+`staged_*_color` the ring would take at that pace. The clients draw only the span between the two,
+held clear of the committed arc's round cap, so the contribution reads as a detached piece sitting
+past the real one, in the color the ring would become if it were committed. Staged rows carry no day
+(they belong to whichever day they are eaten on), so the query that sums them has no window filter.
 | `score.js` | Weekly overall score = 0.5·training + 0.5·nutrition. |
 | `variants.js` | Exercise equipment variants + YouTube how-to links. |
 | `dates.js` | The 4am-origin "day" + display-timezone helpers (`TZ_DISPLAY`, default America/New_York). |
@@ -549,7 +558,8 @@ executes *in the app process*, where `HUB_APP` is defined and `RecordLaunch` fir
 **Macro Rings widget** (`RingsWidget.swift` = WidgetKit plumbing, `RingsView.swift` = drawing) —
 today's Cal/P/C/F **pace** rings, drawn to match the hub's nutrition card. Not absolute progress: a
 ring is full when on pace, drains as the clock runs ahead of what's been eaten, and grows an overflow
-arc once ahead; the white tick is where the arc would end if you were exactly on pace. Families:
+arc once ahead; the white tick is where the arc would end if you were exactly on pace, and a detached
+piece past the arc is a staged meal's contribution. Families:
 
 | Family | Layout |
 |---|---|
@@ -561,8 +571,8 @@ arc once ahead; the white tick is where the arc would end if you were exactly on
 Tapping opens `statushub://open` — any host but `record` just opens the app.
 
 - **The server does the maths.** Every drawn value comes precomputed from `GET /api/rings`: arc
-  lengths (`ring_base`/`ring_over`), colours, the signed deviation number, the marker position
-  (`frac`), and the health-bar fills. `lib/pace.js` and `cards/score.js` stay the only implementations
+  lengths (`ring_base`/`ring_over`, plus the staged ends `ring_staged_base`/`ring_staged_over`),
+  colours, the signed deviation number, the marker position (`frac`), and the health-bar fills. `lib/pace.js` and `cards/score.js` stay the only implementations
   — the Swift never re-derives them, so the widget can't quietly drift from the wall. The health-bar
   values arrive **already halved** (each side fills at most 50%) so the weighting isn't re-derived
   either.

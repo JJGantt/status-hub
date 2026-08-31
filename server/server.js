@@ -349,8 +349,11 @@ async function fetchStatusRows(win, week, histStart, heatStart) {
   const key = [win.start, win.end, week[0], histStart, heatStart, nutLogStart].join('|');
   if (!rowCache.dirty && rowCache.rows && rowCache.key === key
       && Date.now() - rowCache.at < ROWCACHE_BACKSTOP_MS) return rowCache.rows;
-  const [entries, setRows, weightRows, histRows, muscleRows, heatRows, catalogRows, nutLogRows, targetRows, surfRows] = await Promise.all([
+  const [entries, stagedEntries, setRows, weightRows, histRows, muscleRows, heatRows, catalogRows, nutLogRows, targetRows, surfRows] = await Promise.all([
     sb(`nutrition_entries?occurred_at=gte.${win.start}&occurred_at=lt.${win.end}&staged=eq.false&select=calories,protein_g,carbs_g,fat_g,veg_g,dark_green_g,fruit_g`),
+    // Staged meals carry no day: they are pending until committed, so there is no window to filter on
+    // and every staged row belongs to whatever day it is eaten on. Sum them all.
+    sb('nutrition_entries?staged=eq.true&select=calories,protein_g,carbs_g,fat_g'),
     sb(`sets?occurred_at=gte.${week[0]}T00:00:00&select=occurred_at,exercise,muscles_override`),
     sb('weight_log?select=date,weight_lbs&order=date.asc'),
     sbRange(`nutrition_entries?occurred_at=gte.${histStart}T00:00:00&staged=eq.false&select=occurred_at,calories&order=occurred_at`),
@@ -361,7 +364,7 @@ async function fetchStatusRows(win, week, histStart, heatStart) {
     sb('nutrition_targets?select=date,calories&order=date.asc'),
     sb('surf_snapshots?select=slug,water_temp,captured_at,rows&order=captured_at.desc&limit=1'),
   ]);
-  rowCache.rows = { entries, setRows, weightRows, histRows, muscleRows, heatRows, catalogRows, nutLogRows, targetRows, surfRows };
+  rowCache.rows = { entries, stagedEntries, setRows, weightRows, histRows, muscleRows, heatRows, catalogRows, nutLogRows, targetRows, surfRows };
   rowCache.key = key; rowCache.at = Date.now(); rowCache.dirty = false;
   return rowCache.rows;
 }
@@ -373,7 +376,7 @@ async function buildStatus() {
   const histStart = localDate(new Date(Date.now() - 210 * 86400000)); // intake history for the maintenance trend + per-day replay (viz paging)
   const heatStart = localDate(new Date(Date.now() - 140 * 86400000)); // ~20 weeks for the workout volume heatmap
 
-  const [{ entries, setRows, weightRows, histRows, muscleRows, heatRows, catalogRows, nutLogRows, targetRows, surfRows }, deviceRows, presenceRows, workerRows] = await Promise.all([
+  const [{ entries, stagedEntries, setRows, weightRows, histRows, muscleRows, heatRows, catalogRows, nutLogRows, targetRows, surfRows }, deviceRows, presenceRows, workerRows] = await Promise.all([
     fetchStatusRows(win, week, histStart, heatStart),
     sb('device_status?select=*'),
     sb('voice_presence?select=source,alive_at'),
@@ -465,9 +468,16 @@ async function buildStatus() {
 
   // ---- gamified intake pacing (drain bars) ----
   const eatWindow = pace.deriveWindow((histRows || []).map((r) => r.occurred_at));
+  // What is staged but not eaten. Kept OUT of `nutrition` and out of `consumed` — it is what the day
+  // would become, never what it is — and handed to the pace math separately so the rings can draw it
+  // as a piece past the real arc.
+  const stagedSum = (k) => Math.round((stagedEntries || []).reduce((a, e) => a + (Number(e[k]) || 0), 0));
+  const stagedMacros = { calories: stagedSum('calories'), protein_g: stagedSum('protein_g'),
+                         carbs_g: stagedSum('carbs_g'), fat_g: stagedSum('fat_g') };
   const paceData = pace.computePace({
     consumed: { calories: nutrition.calories, protein_g: nutrition.protein_g, carbs_g: nutrition.carbs_g, fat_g: nutrition.fat_g },
     goal: maintenance.target_macros,
+    staged: stagedMacros,
     window: eatWindow,
     nowOff: nowOffsetTZ(),
   });
@@ -831,8 +841,8 @@ app.get('/api/rings', async (req, res) => {
     const P = st.pace || {};
     const m = P.macros || {};
     const KEYS = ['calories', 'protein_g', 'carbs_g', 'fat_g'];
-    const consumed = {}, goal = {};
-    for (const k of KEYS) { consumed[k] = m[k]?.consumed ?? 0; goal[k] = m[k]?.goal ?? 0; }
+    const consumed = {}, goal = {}, staged = {};
+    for (const k of KEYS) { consumed[k] = m[k]?.consumed ?? 0; goal[k] = m[k]?.goal ?? 0; staged[k] = m[k]?.staged ?? 0; }
 
     // A widget renders a STATIC snapshot — it can't tick a clock the way the hub card does. So the
     // server returns a series of future frames and WidgetKit steps through them on schedule. The
@@ -852,7 +862,7 @@ app.get('/api/rings', async (req, res) => {
     const STEP_MIN = 1, SPAN_MIN = 60;
     const frames = [];
     for (let t = 0; t <= SPAN_MIN; t += STEP_MIN) {
-      const f = pace.computePace({ consumed, goal, window: P.window, nowOff: (P.nowOff ?? 0) + t });
+      const f = pace.computePace({ consumed, goal, staged, window: P.window, nowOff: (P.nowOff ?? 0) + t });
       const macros = {};
       for (const k of KEYS) {
         const x = f.macros[k];
@@ -860,6 +870,8 @@ app.get('/api/rings', async (req, res) => {
           consumed: x.consumed, goal: x.goal, dev_g: x.dev_g,
           ring_base: x.ring_base, ring_over: x.ring_over,
           base_color: x.base_color, over_color: x.over_color,
+          ring_staged_base: x.ring_staged_base, ring_staged_over: x.ring_staged_over,
+          staged_base_color: x.staged_base_color, staged_over_color: x.staged_over_color,
           // Matches the card's own rule for the number under the glyph (cards/nutrition.js tickRings).
           dev_color: x.dev_g < 0 ? '#f87171' : x.dev_g > 0 ? (x.over_color || '#22c55e') : '#22c55e',
         };

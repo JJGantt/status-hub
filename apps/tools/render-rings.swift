@@ -7,13 +7,14 @@ import AppKit
 //
 //   swiftc -O tools/render-rings.swift Controls/RingsView.swift -o /tmp/render && /tmp/render <outdir>
 
-// Real values, taken from a live /api/rings response.
+// Real values, taken from a live /api/rings response — with a meal staged, so the render exercises
+// the staged piece past each arc as well as the arcs themselves.
 let json = """
 {"t":0,"frac":0.4,"macros":{
- "calories":{"consumed":480,"goal":2600,"dev_g":-563,"ring_base":0.783,"ring_over":0,"base_color":"#dfcf20","over_color":null,"dev_color":"#f87171"},
- "protein_g":{"consumed":45,"goal":177,"dev_g":-26,"ring_base":0.853,"ring_over":0,"base_color":"#acdf20","over_color":null,"dev_color":"#f87171"},
- "carbs_g":{"consumed":69,"goal":313,"dev_g":-57,"ring_base":0.818,"ring_over":0,"base_color":"#c7df20","over_color":null,"dev_color":"#f87171"},
- "fat_g":{"consumed":18,"goal":87,"dev_g":-17,"ring_base":0.803,"ring_over":0,"base_color":"#d4df20","over_color":null,"dev_color":"#f87171"}}}
+ "calories":{"consumed":480,"goal":2600,"dev_g":-563,"ring_base":0.783,"ring_over":0,"base_color":"#dfcf20","over_color":null,"dev_color":"#f87171","ring_staged_base":0.899,"ring_staged_over":0,"staged_base_color":"#81df20","staged_over_color":null},
+ "protein_g":{"consumed":45,"goal":177,"dev_g":-26,"ring_base":0.853,"ring_over":0,"base_color":"#acdf20","over_color":null,"dev_color":"#f87171","ring_staged_base":0.938,"ring_staged_over":0,"staged_base_color":"#5bdf20","staged_over_color":null},
+ "carbs_g":{"consumed":69,"goal":313,"dev_g":-57,"ring_base":0.818,"ring_over":0,"base_color":"#c7df20","over_color":null,"dev_color":"#f87171","ring_staged_base":0.93,"ring_staged_over":0,"staged_base_color":"#63df20","staged_over_color":null},
+ "fat_g":{"consumed":18,"goal":87,"dev_g":-17,"ring_base":0.803,"ring_over":0,"base_color":"#d4df20","over_color":null,"dev_color":"#f87171","ring_staged_base":0.92,"ring_staged_over":0,"staged_base_color":"#6ddf20","staged_over_color":null}}}
 """
 
 @main

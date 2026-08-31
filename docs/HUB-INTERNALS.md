@@ -127,6 +127,12 @@ adds a second set of arc **ends** — `ring_staged_base` / `ring_staged_over`, w
 held clear of the committed arc's round cap, so the contribution reads as a detached piece sitting
 past the real one, in the color the ring would become if it were committed. Staged rows carry no day
 (they belong to whichever day they are eaten on), so the query that sums them has no window filter.
+
+**Drain rate.** `pace.window_hours` and `pace.per_hour` (per macro) are the slope of the pace line —
+the day's goal spread evenly across the eating window, i.e. how fast the rings drain with nothing
+logged. Constant for the day; it moves only when the window or the goal moves. Nothing draws it yet:
+it is computed and shipped (on `buildStatus()` and on `/api/rings`, once per response rather than per
+frame) so a surface can pick it up without re-deriving it.
 | `score.js` | Weekly overall score = 0.5·training + 0.5·nutrition. |
 | `variants.js` | Exercise equipment variants + YouTube how-to links. |
 | `dates.js` | The 4am-origin "day" + display-timezone helpers (`TZ_DISPLAY`, default America/New_York). |

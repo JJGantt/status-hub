@@ -887,6 +887,8 @@ app.get('/api/rings', async (req, res) => {
     const half = (v) => Math.max(0, Math.min(50, (Number(v) || 0) * 0.5));
     res.json({
       step_min: STEP_MIN,
+      // Constant for the day, so it rides once on the response rather than on all 61 frames.
+      window_hours: P.window_hours, per_hour: P.per_hour,
       score: { nutrition: half(sc.nutrition?.pct), training: half(sc.training?.pct),
                overall: Math.max(0, Math.min(100, Number(sc.overall) || 0)) },
       frames,

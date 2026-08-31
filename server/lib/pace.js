@@ -172,16 +172,33 @@ function macroPace(consumed, goal, frac, staged) {
   };
 }
 
+const MACRO_KEYS = ['calories', 'protein_g', 'carbs_g', 'fat_g'];
+
+// The slope of the pace line: the day's goal spread evenly across the eating window, which is also
+// the rate the rings drain at with nothing logged. Constant for the whole day — it moves only when
+// the window or the goal moves, never with the clock. Calories to the unit, grams to a tenth.
+function perHour(goal, window) {
+  const hours = (window.endMin - window.startMin) / 60;
+  const out = {};
+  for (const k of MACRO_KEYS) {
+    const g = (goal || {})[k] || 0;
+    const r = hours > 0 ? g / hours : 0;
+    out[k] = k === 'calories' ? Math.round(r) : Math.round(r * 10) / 10;
+  }
+  return out;
+}
+
 function computePace({ consumed, goal, staged, window, nowOff }) {
   let frac;
   if (nowOff <= window.startMin) frac = 0;
   else if (nowOff >= window.endMin) frac = 1;
   else frac = (nowOff - window.startMin) / (window.endMin - window.startMin);
   const macros = {};
-  for (const k of ['calories', 'protein_g', 'carbs_g', 'fat_g']) {
+  for (const k of MACRO_KEYS) {
     macros[k] = macroPace((consumed || {})[k] || 0, (goal || {})[k] || 0, frac, (staged || {})[k] || 0);
   }
-  return { window, nowOff, fraction: Math.round(frac * 100) / 100, macros };
+  return { window, window_hours: Math.round(((window.endMin - window.startMin) / 60) * 100) / 100,
+           per_hour: perHour(goal, window), nowOff, fraction: Math.round(frac * 100) / 100, macros };
 }
 
 // "8:00a–10:00p" style label from the offsets.
@@ -218,4 +235,4 @@ function computeFill(consumed, goals) {
   return out;
 }
 
-module.exports = { deriveWindow, computePace, computeFill, offsetFromHM, windowLabel };
+module.exports = { deriveWindow, computePace, computeFill, perHour, offsetFromHM, windowLabel };

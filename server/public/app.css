@@ -946,9 +946,10 @@ body.tv .hmonths{margin-left:0;font-size:11px}
   border-radius:12px;padding:8px 13px;font-size:13px;color:#c2cad4;box-shadow:0 6px 20px rgba(0,0,0,.4);
   opacity:0;transform:translateY(6px);transition:opacity .2s,transform .2s;pointer-events:none;overflow:hidden}
 .ai-act.show{opacity:1;transform:translateY(0)}
-/* Always-on voice state rides the bar's border on every surface (replaces the TV strip's AO chip). */
-.ai-act.ao-on{border-color:rgba(57,211,83,.65)}
-.ai-act.ao-off{border-color:rgba(248,81,73,.8)}
+/* Always-on voice state (body.ao-on/.ao-off, replaces the TV strip's AO chip): colors the floating
+   activity popup's border where it floats; the TV wall's persistent version is on .tv-footrow below. */
+body.ao-on .ai-act{border-color:rgba(57,211,83,.65)}
+body.ao-off .ai-act{border-color:rgba(248,81,73,.8)}
 .ai-act-row{display:flex;align-items:center;gap:9px;min-width:0;white-space:nowrap}
 .ai-act-txt{flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis}
 /* The transcribed prompt that kicked off this run — quoted, muted, sits above the live status.
@@ -993,6 +994,10 @@ li.sess.focus{box-shadow:inset 2px 0 0 #5b8def;padding-left:8px;margin-left:-8px
 body.tv:not(.phonewall):not(.mac) .tv-footrow{grid-column:1/6;grid-row:3;display:flex;
   align-items:center;gap:16px;min-width:0;min-height:64px;padding:12px 26px;
   border:2px solid #38465a;border-radius:14px}
+/* The footer row's border is the always-on indicator on the wall — persistent, unlike the popup.
+   Selectors repeat the row's full chain so they outrank its base border without !important. */
+body.tv:not(.phonewall):not(.mac).ao-on .tv-footrow{border-color:rgba(57,211,83,.65)}
+body.tv:not(.phonewall):not(.mac).ao-off .tv-footrow{border-color:rgba(248,81,73,.85)}
 body.tv:not(.phonewall) .tv-foot-act{flex:1 1 auto;min-width:0;display:flex;align-items:center}
 body.tv:not(.phonewall) .tv-foot-follow{flex:none}
 

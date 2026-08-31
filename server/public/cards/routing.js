@@ -5,11 +5,12 @@
 
 export function render(s) {
   const r = s && s.routing;
-  // Always-on state lives on the activity bar's border (green = on, red = off) on every surface —
-  // it replaced the AO chip this card used to show.
-  if (r) for (const bar of document.querySelectorAll('.ai-act')) {
-    bar.classList.toggle('ao-on', !!r.wake);
-    bar.classList.toggle('ao-off', !r.wake);
+  // Always-on state rides a body class (green border on / red off) — it replaced the AO chip this
+  // card used to show. On the TV it paints the PERSISTENT footer row (.tv-footrow), so the state is
+  // readable while idle; elsewhere it paints the floating activity popup when that is visible.
+  if (r) {
+    document.body.classList.toggle('ao-on', !!r.wake);
+    document.body.classList.toggle('ao-off', !r.wake);
   }
   const el = document.getElementById('tv-routing');
   if (!el) return;

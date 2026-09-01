@@ -4,7 +4,11 @@
 /* The freed space: columns 2-4 of the wall grid, where nutrition, muscle and workout cards were. */
 body.tv .calrow{grid-column:2/5;grid-row:2;display:flex;flex-direction:column;min-width:0;min-height:0}
 body.tv .calcard{flex:1 1 auto;min-height:0}
-body.tv .calcard .fit{height:100%;display:flex;gap:22px;min-height:0}
+/* A ROW, said out loud. The shared `body.tv .rows .fit` rule (app.css) is flex-direction:column
+   and it matches this card too, so leaving the direction unstated is not "the flex default" —
+   it is column. That turned the day's `flex:0 0 380px` into 380px of HEIGHT and put the timeline
+   across the top as a band instead of down the left as a column. */
+body.tv .calcard .fit{height:100%;display:flex;flex-direction:row;gap:22px;min-height:0}
 
 /* DAY TIMELINE — today on hour slots, couch-readable, with the now-line inside the current hour. */
 .cw-day{flex:0 0 380px;display:flex;flex-direction:column;min-height:0;overflow:hidden}

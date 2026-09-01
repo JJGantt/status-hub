@@ -1,0 +1,24 @@
+<!doctype html><html><head><meta charset=utf-8>
+<meta name=viewport content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>Status Hub · Calendar</title>
+<link rel="stylesheet" href="app.css">
+<!-- Only this page: the calendar's own layout. app.css is shared (base colors + navbar) and unmodified. -->
+<link rel="stylesheet" href="calendar.css">
+<!-- calendar.js paints the server-computed month grid from /api/calendar. -->
+<script type="module" src="calendar.js"></script>
+</head><body class="cal">
+<div class="calpage" id="calpage">
+  <header class="cal-head">
+    <button class="cal-nav" id="cal-prev" type="button" aria-label="Previous month">&#8249;</button>
+    <h1 class="cal-title" id="cal-title"></h1>
+    <button class="cal-nav" id="cal-next" type="button" aria-label="Next month">&#8250;</button>
+  </header>
+  <div class="cal-main">
+    <div class="cal-gridwrap">
+      <div class="cal-dow" id="cal-dow"></div>
+      <div class="cal-grid" id="cal-grid"></div>
+    </div>
+    <aside class="cal-agenda" id="cal-agenda"></aside>
+  </div>
+</div>
+</body></html>

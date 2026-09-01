@@ -111,7 +111,10 @@ async function routingConfig() {
     inject: ['1', 'true', 'on', 'yes'].includes(String(s.voice_inject_mode ?? '0').toLowerCase()),
     // Which wall the TV should be showing. The kiosk cannot be told to navigate from outside — it is
     // a browser on a machine nothing can reach — so the page watches this and goes there itself.
-    wall: String(s.wall_mode ?? 'standard').toLowerCase() === 'sessions' ? 'sessions' : 'standard',
+    wall: (() => {
+      const w = String(s.wall_mode ?? 'standard').toLowerCase();
+      return ['sessions', 'calendar'].includes(w) ? w : 'standard';
+    })(),
   };
 }
 const { buildVariants } = require('./lib/variants');
@@ -152,7 +155,8 @@ const TV_HTML = fs.readFileSync(path.join(__dirname, 'public', 'tv.html'), 'utf8
   .replace('<!--BODY_SVG-->', BODY_SVG);
 // THE SECOND WALL — "TV session focus", at /tv-session-focus.
 //
-// There are two walls now and they must never be confused: `tv.html` is the one the Pi is showing,
+// There are three walls now (this, tv.html, tv-calendar.html) and they must never be confused:
+// `tv.html` is the one the Pi is showing,
 // and it is not to be changed while this exists. This one began as a byte-identical copy and is being
 // stripped down around the SESSIONS list — an always-on, no-interaction display that has to read from
 // across a room, and eventually from a watch.
@@ -163,6 +167,12 @@ const TV_FOCUS_HTML = fs.readFileSync(path.join(__dirname, 'public', 'tv-session
   .replace('<!--BODY_SVG-->', BODY_SVG);
 // Minimal home-screen "Voice" launcher (Add to Home Screen → standalone fullscreen tap-to-talk button).
 const MIC_HTML = fs.readFileSync(path.join(__dirname, 'public', 'mic.html'), 'utf8');
+// THE CALENDAR, twice. /calendar is the phone/desktop page — standalone like mic.html, navbar,
+// tappable days. /tv-calendar is THE THIRD WALL: the session wall's frame (status strip, rings,
+// health bar, footer, voice column) with the freed middle holding a day timeline + month grid(s),
+// so wallmode.js can put it on the TV when wall_mode says 'calendar'.
+const CAL_HTML = fs.readFileSync(path.join(__dirname, 'public', 'calendar.html'), 'utf8');
+const TV_CAL_HTML = fs.readFileSync(path.join(__dirname, 'public', 'tv-calendar.html'), 'utf8');
 
 const app = express();
 app.use(express.urlencoded({ extended: false }));
@@ -705,6 +715,16 @@ app.get('/page', (req, res) => {
 app.get('/mic', (req, res) => {
   res.setHeader('Cache-Control', 'no-cache');
   res.type('html').send(MIC_HTML);
+});
+// Two pages on purpose: wallmode.js switches only kiosk paths, so a spoken "put the calendar on
+// the TV" moves /tv-calendar and never yanks a phone sitting on /calendar.
+app.get('/calendar', (req, res) => {
+  res.setHeader('Cache-Control', 'no-cache');
+  res.type('html').send(CAL_HTML);
+});
+app.get('/tv-calendar', (req, res) => {
+  res.setHeader('Cache-Control', 'no-cache');
+  res.type('html').send(TV_CAL_HTML);
 });
 
 // ---- reports: a dispatched session's HTML write-up of finished work -------------------------
@@ -1672,6 +1692,185 @@ app.get('/api/list-widget', async (req, res) => {
       // Dated items live on ordinary lists now, so the widget marks the ones that have come due.
       overdue: !!r.due && dueMoment(r.due) <= nowET,
     })) });
+  } catch (e) { res.status(500).json({ error: String(e.message || e) }); }
+});
+
+// ---- calendar: a month of dated items as a finished grid, for /calendar and the calendar wall ----
+//
+// The whole grid is computed HERE — week rows, day cells, per-item chip colors, time labels — and the
+// client only paints it. Read-only by design: writes stay with voice/MCP and the todo pane, which is
+// what keeps this away from the reminder dedupe key and the scheduled_at anchor entirely.
+//
+// Only the FUTURE is dense: clearing an item is a soft delete (purged after 30 days) and a repeater
+// stores only its next `due`, so past days are naturally sparse. That matches what the surface is
+// for — what's coming — and is why there is no attempt at a history view here.
+//
+// Chip colors are hashed from the list name, not assigned by row order, so a list keeps its color
+// when lists are added or removed. Collisions are possible and acceptable at this list count.
+const CAL_COLORS = ['#e5484d', '#f76b15', '#ffb224', '#46a758', '#12a594',
+                    '#0091ff', '#6e56cf', '#d6409f', '#b0e64c', '#00b8d9'];
+function listColor(name) {
+  let h = 5381;
+  for (const c of String(name || '')) h = ((h * 33) ^ c.charCodeAt(0)) >>> 0;
+  return CAL_COLORS[h % CAL_COLORS.length];
+}
+// '...THH:MM' → '9a' / '3:30p'; date-only → null (an all-day chip). Same compaction as the todo
+// pane's fmtDue, minus the date half.
+function calTimeLabel(occ) {
+  const m = String(occ).match(/T(\d{2}):(\d{2})/);
+  if (!m) return null;
+  const h = +m[1]; const mm = m[2]; const h12 = h % 12 || 12;
+  return `${h12}${mm === '00' ? '' : ':' + mm}${h < 12 ? 'a' : 'p'}`;
+}
+// Every occurrence of one item whose DAY falls inside [startKey, endKey] (inclusive 'YYYY-MM-DD'
+// bounds). The stored `due` is the only real row; the rest are projections stepped with the exact
+// advanceDue the scheduler re-arms with, so the grid can never disagree with what will actually fire.
+// Minute/hour repeaters are deliberately not projected — "every 30 minutes" as a month of chips is
+// noise — they show once, on their current due day, carrying the repeat mark.
+function calOccurrences(item, startKey, endKey) {
+  const dayOf = (s) => String(s).slice(0, 10);
+  const out = [];
+  if (dayOf(item.due) >= startKey && dayOf(item.due) <= endKey) out.push(item.due);
+  const per = parseRepeat(item.repeat_every);
+  if (per && per.unit !== 'minute' && per.unit !== 'hour') {
+    let occ = item.due;
+    for (let guard = 0; guard < 400; guard++) {
+      occ = advanceDue(item.scheduled_at || item.due, item.repeat_every, dueMoment(occ));
+      if (!occ || dayOf(occ) > endKey) break;
+      if (dayOf(occ) >= startKey) out.push(occ);
+    }
+  }
+  return out;
+}
+// Two callers, one endpoint. The PHONE page pages one month at a time (?month=YYYY-MM). The WALL
+// (?wall=1) instead gets `calendar_months` months from the current one — the count is an
+// app_settings key so voice can resize the view ("show the full year") the same way it switches
+// walls — plus `dayline`, the server-laid-out timeline of today for the wall's day column.
+app.get('/api/calendar', async (req, res) => {
+  try {
+    const nowET = etNowString();
+    const todayKey = nowET.slice(0, 10);
+    const wall = req.query.wall === '1';
+    let count = 1;
+    if (wall) {
+      let s = {};
+      try { s = await settingsAll(); } catch (_) {}
+      const n = Number(s.calendar_months);
+      count = Number.isInteger(n) && n >= 1 && n <= 12 ? n : 1;
+    }
+    const startYm = wall || !/^\d{4}-(0[1-9]|1[0-2])$/.test(String(req.query.month || ''))
+      ? todayKey.slice(0, 7) : String(req.query.month);
+    const [y0, mo0] = startYm.split('-').map(Number);
+
+    // All month math in UTC getters over naive components — the advanceDue trick — so no zone ever
+    // shifts a wall-clock date. Each grid runs Sunday-aligned from before the 1st to after the last.
+    const DAY = 86400000;
+    const pad = (n) => String(n).padStart(2, '0');
+    const keyOf = (ms) => { const d = new Date(ms); return `${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())}`; };
+    const bounds = [];
+    for (let k = 0; k < count; k++) {
+      const first = Date.UTC(y0, mo0 - 1 + k, 1);
+      const last = Date.UTC(y0, mo0 + k, 0);
+      bounds.push({ first, gridStart: first - new Date(first).getUTCDay() * DAY, gridEnd: last + (6 - new Date(last).getUTCDay()) * DAY });
+    }
+    // One expansion over the whole span; every month's grid then reads from the same day buckets.
+    const startKey = keyOf(bounds[0].gridStart); const endKey = keyOf(bounds[count - 1].gridEnd);
+
+    const [listRows, rows] = await Promise.all([
+      sb('lists?select=name,emoji'),
+      sb('list_items?deleted=eq.false&due=not.is.null&select=id,list_name,text,title,due,repeat_every,scheduled_at'),
+    ]);
+    const emojiOf = {};
+    for (const l of listRows || []) emojiOf[l.name] = l.emoji;
+
+    const byDay = {};
+    for (const r of rows || []) {
+      for (const occ of calOccurrences(r, startKey, endKey)) {
+        (byDay[occ.slice(0, 10)] ??= []).push({
+          _occ: occ,   // sort key only, stripped below — date-only sorts before any 'T…' same-day
+          id: r.id,
+          title: itemTitle(r),
+          list: r.list_name,
+          emoji: emojiOf[r.list_name] || null,
+          color: listColor(r.list_name),
+          time: calTimeLabel(occ),
+          // `past`: this occurrence's moment has gone by (dims the chip). `expired`: the item itself
+          // is overdue and uncleared — anchor-based like every other surface, and only on the stored
+          // occurrence, never on a projection.
+          past: dueMoment(occ) <= nowET,
+          expired: occ === r.due && dueMoment(r.scheduled_at || r.due) <= nowET,
+          repeating: !!r.repeat_every,
+        });
+      }
+    }
+    for (const k of Object.keys(byDay)) {
+      byDay[k].sort((a, b) => (a._occ < b._occ ? -1 : 1));
+      for (const it of byDay[k]) delete it._occ;
+    }
+
+    const ymStr = (yy, mm) => { const d = new Date(Date.UTC(yy, mm - 1, 1)); return `${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}`; };
+    const months = bounds.map((b, k) => {
+      const ym = keyOf(b.first).slice(0, 7);
+      const weeks = [];
+      for (let ms = b.gridStart; ms <= b.gridEnd; ms += 7 * DAY) {
+        const week = [];
+        for (let i = 0; i < 7; i++) {
+          const date = keyOf(ms + i * DAY);
+          const d = new Date(ms + i * DAY);
+          week.push({
+            date,
+            day: d.getUTCDate(),
+            label: d.toLocaleDateString('en-US', { timeZone: 'UTC', weekday: 'short', month: 'short', day: 'numeric' }),
+            inMonth: date.slice(0, 7) === ym,
+            today: date === todayKey,
+            items: byDay[date] || [],
+          });
+        }
+        weeks.push(week);
+      }
+      return {
+        month: ym,
+        label: new Date(b.first).toLocaleDateString('en-US', { timeZone: 'UTC', month: 'long', year: 'numeric' }),
+        prev: ymStr(y0, mo0 + k - 1),
+        next: ymStr(y0, mo0 + k + 1),
+        weeks,
+      };
+    });
+
+    // The wall's day column: today's items laid onto hour slots, with the now-line's position
+    // computed here (which hour row, and how far down it). Hour range covers at least 7a–10p and
+    // stretches to hold the current hour and any item outside it.
+    let dayline = null;
+    if (wall) {
+      const todayItems = byDay[todayKey] || [];
+      const allday = todayItems.filter((i) => !i.time);
+      const timed = todayItems.filter((i) => i.time);
+      const hourOf = (t) => { const m = String(t).match(/^(\d+)(?::\d+)?([ap])$/); let h = +m[1] % 12; if (m[2] === 'p') h += 12; return h; };
+      const nowH = +nowET.slice(11, 13); const nowM = +nowET.slice(14, 16);
+      let lo = Math.min(7, nowH, ...timed.map((i) => hourOf(i.time)));
+      let hi = Math.max(22, nowH, ...timed.map((i) => hourOf(i.time)));
+      const hours = [];
+      for (let h = lo; h <= hi; h++) {
+        hours.push({
+          label: `${h % 12 || 12}${h < 12 ? 'a' : 'p'}`,
+          items: timed.filter((i) => hourOf(i.time) === h),
+          now: h === nowH ? Math.round((nowM / 60) * 100) : null,
+        });
+      }
+      const todayCell = months[0].weeks.flat().find((c) => c.date === todayKey);
+      dayline = { date: todayKey, label: todayCell ? todayCell.label : todayKey, allday, hours };
+    }
+
+    res.json({
+      today: todayKey,
+      dow: ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'],
+      count,
+      // How many mini-month columns the wall lays the grid out in — geometry is decided here, not
+      // in the client, like every other display value.
+      cols: count === 1 ? 1 : count <= 4 ? 2 : count <= 6 ? 3 : 4,
+      months,
+      ...(dayline ? { dayline } : {}),
+    });
   } catch (e) { res.status(500).json({ error: String(e.message || e) }); }
 });
 

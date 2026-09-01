@@ -17,6 +17,8 @@ const SWAP = '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke
   '<path d="M16 3l4 4-4 4M20 7H8M8 21l-4-4 4-4M4 17h12"></path></svg>';
 const CAMERA = '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
   '<path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2Z"></path><circle cx="12" cy="13" r="4"></circle></svg>';
+const CAL = '<svg viewBox="0 0 24 24" width="21" height="21" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+  '<rect x="3" y="4" width="18" height="18" rx="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>';
 
 export function mountNavbar() {
   if (document.querySelector('.navbar')) return;          // once per page
@@ -46,8 +48,11 @@ export function mountNavbar() {
   gear.className = 'nav-gear'; gear.type = 'button'; gear.setAttribute('aria-label', 'Settings');
   gear.innerHTML = GEAR; gear.addEventListener('click', () => openSettings());
 
+  // The standalone calendar page: its left side is just the way back to the wall — chat and misc
+  // aren't sections here, so their buttons would be dead.
+  const onCal = location.pathname === '/calendar';
   const left = document.createElement('div'); left.className = 'navbar-grp';
-  if (!onWall) {
+  if (!onWall && !onCal) {
     // /page (desktop use): chat + status live as rows here; the buttons scroll to them, and the
     // toggle returns to the wall. The PHONE wall needs none of this — chat/misc are swipe panes.
     const goSection = (cls) => {
@@ -69,6 +74,20 @@ export function mountNavbar() {
     tog.setAttribute('aria-label', 'Back to the wall');
     tog.onclick = () => { location.href = '/'; };
     left.appendChild(chat); left.appendChild(tog);
+  }
+  if (onCal) {
+    const tog = document.createElement('button');
+    tog.className = 'nav-toggle'; tog.type = 'button'; tog.innerHTML = SWAP;
+    tog.setAttribute('aria-label', 'Back to the wall');
+    tog.onclick = () => { location.href = '/'; };
+    left.appendChild(tog);
+  } else {
+    // Everywhere the navbar mounts except the calendar itself: the way IN to the calendar.
+    const cal = document.createElement('button');
+    cal.className = 'nav-toggle'; cal.type = 'button'; cal.innerHTML = CAL;
+    cal.setAttribute('aria-label', 'Calendar');
+    cal.onclick = () => { location.href = '/calendar'; };
+    left.appendChild(cal);
   }
   left.appendChild(gear);
   const right = document.createElement('div'); right.className = 'navbar-grp';

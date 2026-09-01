@@ -1,0 +1,52 @@
+/* The calendar wall — everything this page needs that the shared wall does not have.
+   Loaded ONLY by tv-calendar.html, so app.css and the other walls stay untouched. */
+
+/* The freed space: columns 2-4 of the wall grid, where nutrition, muscle and workout cards were. */
+body.tv .calrow{grid-column:2/5;grid-row:2;display:flex;flex-direction:column;min-width:0;min-height:0}
+body.tv .calcard{flex:1 1 auto;min-height:0}
+body.tv .calcard .fit{height:100%;display:flex;gap:22px;min-height:0}
+
+/* DAY TIMELINE — today on hour slots, couch-readable, with the now-line inside the current hour. */
+.cw-day{flex:0 0 380px;display:flex;flex-direction:column;min-height:0;overflow:hidden}
+.cw-dayhead{font-size:24px;font-weight:700;color:#fff;flex:0 0 auto;margin-bottom:10px}
+.cw-allday{display:flex;flex-direction:column;gap:5px;flex:0 0 auto;margin-bottom:8px}
+.cw-hours{flex:1 1 auto;min-height:0;display:flex;flex-direction:column;overflow:hidden}
+.cw-hour{flex:1 1 0;min-height:0;display:flex;gap:10px;border-top:1px solid #222a33;position:relative;padding:2px 0}
+.cw-hour.cur{background:rgba(0,145,255,.06)}
+.cw-hl{flex:0 0 34px;font-size:13px;color:#8b96a5;line-height:1;padding-top:2px;font-variant-numeric:tabular-nums}
+.cw-hitems{flex:1 1 auto;min-width:0;display:flex;flex-direction:column;gap:3px;overflow:hidden}
+.cw-now{position:absolute;left:0;right:0;height:2px;background:#0091ff;box-shadow:0 0 6px #0091ff}
+.cw-now::before{content:'';position:absolute;left:-1px;top:-3px;width:8px;height:8px;border-radius:50%;background:#0091ff}
+
+/* chips — shared look between the timeline and the big month */
+.cw-chip{display:flex;gap:6px;align-items:baseline;font-size:15px;line-height:1.3;min-width:0;
+  padding:2px 7px 2px 8px;border-left:4px solid var(--c);background:#0e1318;border-radius:5px}
+.cw-t{color:#8b96a5;flex:0 0 auto;font-size:13px}
+.cw-l{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0;color:#e8eaed}
+.cw-r{color:#8b96a5;flex:0 0 auto;font-size:13px}
+.cw-chip.past{opacity:.45}
+.cw-chip.exp .cw-l{color:#e5484d}
+
+/* MONTHS — one big month with chips, or `calendar_months` minis with dots; the column count comes
+   from the payload (`cols`) and is set inline by tv-calendar.js. */
+.cw-months{flex:1 1 auto;min-width:0;min-height:0;display:grid;gap:14px}
+.cw-month{display:flex;flex-direction:column;min-height:0;min-width:0}
+.cw-month h3{margin:0 0 8px;font-size:20px;font-weight:700;color:#fff;flex:0 0 auto}
+.cw-month.mini h3{font-size:16px;margin-bottom:5px}
+.cw-dow{display:grid;grid-template-columns:repeat(7,1fr);gap:5px;margin-bottom:5px;flex:0 0 auto}
+.cw-dow span{text-align:center;font-size:13px;color:#8b96a5;text-transform:uppercase;letter-spacing:.05em}
+.cw-grid{flex:1 1 auto;min-height:0;display:grid;grid-template-columns:repeat(7,1fr);grid-auto-rows:1fr;gap:5px}
+.cw-cell{background:#0e1318;border:1px solid #222a33;border-radius:9px;min-width:0;min-height:0;
+  padding:5px;display:flex;flex-direction:column;gap:3px;overflow:hidden}
+.cw-cell.out{opacity:.35}
+.cw-daynum{font-size:15px;font-weight:600;color:#cfd8e3;align-self:flex-end;width:26px;height:26px;
+  border-radius:50%;display:grid;place-items:center;flex:0 0 auto}
+.cw-cell.today .cw-daynum{background:#0091ff;color:#fff}
+.cw-chips{display:flex;flex-direction:column;gap:3px;min-height:0;overflow:hidden}
+.cw-month.big .cw-chip{font-size:13.5px;padding:1px 5px 1px 6px;border-left-width:3px}
+.cw-month.big .cw-t{font-size:11.5px}
+/* minis: number + dots only */
+.cw-month.mini .cw-cell{padding:2px;gap:1px;border-radius:6px;align-items:center}
+.cw-month.mini .cw-daynum{align-self:center;font-size:12px;width:20px;height:20px}
+.cw-dots{display:flex;gap:2px;justify-content:center;flex-wrap:wrap}
+.cw-dots i{width:5px;height:5px;border-radius:50%;display:block}

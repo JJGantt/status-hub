@@ -65,16 +65,23 @@ every item that was already delivered.
 Its CSP (`default-src 'none'` plus sandbox) is the only thing between that markup and an origin
 already authenticated as Jared. Charts must be inline `<svg>` — no `<script>`, no CDN link.
 
-## There are two walls, and one of them is live
+## There are three walls, and one of them is live
 
 `public/tv.html` (`/` and `/tv`) is the wall the Pi is showing on the TV. **Do not change it** while
-the second one exists.
+the others exist.
 
 `public/tv-session-focus.html` (`/tv-session-focus`) is the second — "TV session focus" — begun as a
 byte-identical copy and being stripped down around the sessions list: always-on, no interaction,
-readable across a room and eventually on a watch. Mold that one. They share `core.js` / `tv.js` /
-`wall.js` today, so a change to those hits BOTH; split whatever needs to differ at the moment it
-needs to differ.
+readable across a room and eventually on a watch. Mold that one.
+
+`public/tv-calendar.html` (`/tv-calendar`) is the third — the calendar wall — the session wall's
+frame (status strip · rings · health bar · footer · voice column) with the freed middle painted by
+`tv-calendar.js` from `/api/calendar?wall=1`: a day timeline plus `calendar_months` months of grid.
+Display-only; voice switches to it and sizes it via `set_wall`. The phone's interactive calendar is
+`public/calendar.html` at `/calendar` — a separate standalone page, not a wall.
+
+The walls share `core.js` / `tv.js` / `wall.js` / `wallmode.js`, so a change to those hits ALL of
+them; split whatever needs to differ at the moment it needs to differ.
 
 ## Where a fact goes
 

@@ -88,16 +88,15 @@ Unverified: whether AlarmKit can schedule from a **background** wake (vs only wi
 Not documented either way — needs an on-device test.
 
 ### The Pi / TV wall second mode
-**Jared's original request, still untouched.** Everything built so far has been the phone half.
+Partly landed as two of the walls: the sessions wall (`/tv-session-focus`) is where a long answer
+can actually be read, and the calendar wall (`/tv-calendar`) puts every dated item on the TV. Still
+open from the original request: *undated* lists and general text on a wall, and the **automatic**
+mode entry — switching when a turn used only read tools and no write tools ("this was a question,
+not an action"). Today switching is explicit voice only (`set_wall`).
 
-Wanted: reserve space on the wall for reminders, lists, and general text — including a place to
-actually *read* a response when he asks a question ("what did I do last for chest press?"). Today
-that answer flashes at the bottom of the wall and disappears.
-
-Shape discussed: keep the current nutrition/workout display as the default, add a **second mode**
-that makes room for a text pane. Entered either by explicit voice command ("show me this on the
-display") or **automatically when a turn used only read tools and no write tools** — Jared's own
-proposed heuristic for "this was a question, not an action."
+Also queued from the same conversation (2026-09-01): condense the standard wall into a denser
+default that includes calendar components, and slim the rings/health bar on the non-standard walls —
+they stay on every wall, but smaller.
 
 ### Sounds for the other notification kinds
 Only the reminder bell (`apps/Sounds/reminder.caf`) was auditioned and chosen. Weight reminders and

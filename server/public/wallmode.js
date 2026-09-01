@@ -4,12 +4,13 @@
 // setting and moves itself. Both walls load this; whichever one is up notices when `wall_mode` names
 // the other and goes there.
 //
-// ONLY ON THE TV. `/` serves the same markup to the phone app, and a spoken "switch the TV" must not
-// yank the phone to another page — so this acts only on the two kiosk paths.
-const PAGES = { standard: '/tv', sessions: '/tv-session-focus' };
+// ONLY ON THE TV. `/` serves the same markup to the phone app (and /calendar the same as
+// /tv-calendar), and a spoken "switch the TV" must not yank the phone to another page — so this
+// acts only on the kiosk paths.
+const PAGES = { standard: '/tv', sessions: '/tv-session-focus', calendar: '/tv-calendar' };
 const HERE = location.pathname;
 
-if (HERE === PAGES.standard || HERE === PAGES.sessions) {
+if (Object.values(PAGES).includes(HERE)) {
   const es = new EventSource('/api/stream');
   es.addEventListener('message', (e) => {
     let want;

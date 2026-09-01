@@ -68,12 +68,15 @@ Supabase ──▶ server.js buildStatus() ──▶ /api/status payload ──�
 |---|---|
 | `core.js` | Boot: opens the SSE stream, is the render orchestrator (calls every card's `render(s)`), then inits the layout. |
 | `shared.js` | Shared helpers (`esc`, `state`, local-time formatting) + the `state.last` cache. |
-| `navbar.js` | Bottom bar: settings gear + the single voice FAB (`wfab-fast`). Exposes `window.__startVoiceCommand` for the native launcher. |
+| `navbar.js` | Bottom bar: settings gear, the calendar link (on `/calendar` itself, a back-to-the-wall toggle instead) + the single voice FAB (`wfab-fast`). Exposes `window.__startVoiceCommand` for the native launcher. |
 | `voiceagent.js` | The in-app conversation pipeline: `makeRecorder` (mic → `/api/voice-command`), the activity popup, the conversation card. |
 | `settings.js` | The gear panel — reads/writes `app_settings` via `/api/settings` (§7). |
 | `wall.js` | Phone "wall mode": scales the 1920×1080 `/tv` shell to fit a phone; drives the swipe panes. |
 | `expand.js` | Phone-wall expand icons → full-screen section sheets. |
 | `tv.js` | TV/kiosk-only: the voice-conversation panel + session terminal layered on the wall. |
+| `wallmode.js` | Follows `app_settings.wall_mode` so voice can switch the TV between the walls. Acts only on kiosk paths (`/tv`, `/tv-session-focus`, `/tv-calendar`), never on the phone's `/`. |
+| `calendar.js` | The `/calendar` page: paints the server-computed month grid + day agenda from `/api/calendar`; tap a day, page months. Read-only — writes stay with voice and the todo pane. |
+| `tv-calendar.js` | The calendar wall's middle (only `tv-calendar.html` loads it): day timeline + month grid(s) from `/api/calendar?wall=1`. Display-only. |
 | `mic.js` | The `/mic` standalone launcher page's script (its own recorder, reuses `voiceagent`). |
 
 The activity element (`.ai-act`) renders the
@@ -102,7 +105,8 @@ gauges) · `workouts` (heatmap + day detail) · `litter` · `feeder` · `surf` �
 **Surfaces (same code, different chrome):** desktop `/page` = scrolling rows; phone = swipe panes on
 `/`, in markup order in `public/tv.html` — chat · wall · misc · maint · todo · repos · reports,
 landing on the wall; TV `/tv` = the wall + a voice panel (auth `?token=`); the `/mic` page = a
-minimal fullscreen voice launcher.
+minimal fullscreen voice launcher; `/calendar` = the standalone calendar page (navbar's calendar
+button gets there); `/tv-calendar` = the calendar wall (§ CLAUDE.md's walls note).
 
 ---
 
@@ -149,12 +153,15 @@ frame) so a surface can pick it up without re-deriving it.
 
 ## 5. API surface (`server.js`)
 
-**Pages:** `/` · `/tv` (both serve the wall) · `/page` (desktop dashboard) · `/mic` (voice launcher) ·
-`/reports` + `/report/:id` (§6c) · `/login` · `/healthz`.
+**Pages:** `/` · `/tv` (both serve the wall) · `/tv-session-focus` (sessions wall) · `/tv-calendar`
+(calendar wall) · `/calendar` (phone/desktop calendar) · `/page` (desktop dashboard) · `/mic` (voice
+launcher) · `/reports` + `/report/:id` (§6c) · `/login` · `/healthz`.
 
 **Read:** `/api/status` (full payload) · `/api/stream` (SSE status) · `/api/voice-stream` (SSE voice
 frames for the kiosk) · `/api/workout-day` · `/api/nutrition-day` · `/api/voice-messages` ·
-`/api/todos` (lists + notes + the derived `due` view) · `/api/badge` · `/api/repos` ·
+`/api/todos` (lists + notes + the derived `due` view) · `/api/calendar` (month grid(s) of every
+dated item, repeats expanded with the scheduler's own `advanceDue`; `?month=` pages, `?wall=1` adds
+the day timeline and reads `calendar_months` for the spread) · `/api/badge` · `/api/repos` ·
 `/api/repos/cmd/:id` · `/api/sessions` (live desk sessions + the follow-up `focus`) · `/api/reports`
 (list only — `html` is never selected) · `/api/attachment`.
 

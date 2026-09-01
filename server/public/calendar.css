@@ -1,0 +1,55 @@
+/* The phone/desktop calendar page — everything it needs that app.css does not have. Loaded ONLY by
+   calendar.html (the TV wall has its own tv-calendar.css). Phone-first: compact grid with color
+   dots, agenda below; from 900px the cells grow chips and the agenda moves beside the grid. */
+
+body.cal{padding:12px}
+.calpage{max-width:1240px;margin:0 auto;padding-bottom:70px}   /* clear the 58px fixed navbar */
+
+.cal-head{display:flex;align-items:center;gap:10px;margin:2px 2px 12px}
+.cal-title{font-size:20px;font-weight:700;margin:0;flex:1;text-align:center}
+.cal-nav{width:38px;height:38px;border-radius:10px;border:1px solid #222a33;background:#151a20;
+  color:#cfd8e3;font-size:22px;line-height:1;display:grid;place-items:center}
+
+.cal-dow{display:grid;grid-template-columns:repeat(7,1fr);gap:4px;margin-bottom:4px}
+.cal-dow span{text-align:center;font-size:11px;color:#8b96a5;text-transform:uppercase;letter-spacing:.05em}
+.cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:4px}
+.cal-cell{background:#151a20;border:1px solid #222a33;border-radius:10px;min-height:52px;padding:4px;
+  display:flex;flex-direction:column;align-items:center;gap:3px;min-width:0}
+.cal-cell.out{opacity:.35}
+.cal-daynum{font-size:13px;font-weight:600;width:22px;height:22px;border-radius:50%;display:grid;place-items:center}
+.cal-cell.today .cal-daynum{background:#0091ff;color:#fff}
+.cal-cell.sel{border-color:#8b96a5}
+
+/* phone: dots carry the day's list colors; chips exist in the markup but only render wide */
+.cal-chips{display:none}
+.cal-dots{display:flex;gap:3px;flex-wrap:wrap;justify-content:center}
+.cal-dots i{width:6px;height:6px;border-radius:50%;display:block}
+
+.cal-agenda{margin-top:14px}
+.cal-agenda section{background:#151a20;border:1px solid #222a33;border-radius:12px;padding:12px 14px;margin-bottom:10px}
+.cal-agenda h3{margin:0 0 8px;font-size:14px;color:#8b96a5;font-weight:600}
+.cal-agenda h3.today{color:#0091ff}
+.cal-ag-item{display:flex;align-items:baseline;gap:10px;padding:7px 0 7px 10px;border-left:3px solid var(--c)}
+.ag-t{flex:0 0 46px;font-size:13px;color:#8b96a5;font-variant-numeric:tabular-nums}
+.ag-l{flex:1;font-size:15px;min-width:0;overflow-wrap:anywhere}
+.ag-w{font-size:12px;color:#8b96a5;white-space:nowrap}
+.cal-ag-item.past{opacity:.5}
+.cal-ag-item.exp .ag-l{color:#e5484d}
+.cc-r{color:#8b96a5;font-size:12px}
+
+@media (min-width:900px){
+  .cal-main{display:flex;gap:12px;align-items:flex-start}
+  .cal-gridwrap{flex:1 1 auto;min-width:0}
+  .cal-agenda{flex:0 0 320px;margin-top:0}
+  .cal-cell{min-height:96px;align-items:stretch}
+  .cal-daynum{align-self:flex-end}
+  .cal-dots{display:none}
+  .cal-chips{display:flex;flex-direction:column;gap:3px;overflow:hidden;min-height:0}
+  .cal-chip{display:flex;gap:5px;align-items:baseline;font-size:12px;line-height:1.25;
+    padding:2px 5px 2px 6px;border-left:3px solid var(--c);background:#0e1318;border-radius:4px;min-width:0}
+  .cc-t{color:#8b96a5;flex:0 0 auto;font-size:11px}
+  .cc-l{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
+  .cal-chip .cc-r{flex:0 0 auto}
+  .cal-chip.past{opacity:.5}
+  .cal-chip.exp .cc-l{color:#e5484d}
+}

@@ -681,6 +681,32 @@ app.post('/login', (req, res) => {
   res.type('html').send(loginHtml('Wrong password'));
 });
 
+// Public, unauthenticated, and deliberately ABOVE the auth gate: Google has to fetch these
+// as an anonymous crawler. Behind the gate it gets the login page and every check fails.
+//
+// Why the hub hosts them at all: publishing an OAuth app to production (which the Gmail
+// integration needs, because an app left in "Testing" is issued refresh tokens Google
+// revokes after 7 days) requires a homepage, privacy policy and terms on a domain verified
+// in Search Console. fly.dev is on the Public Suffix List, so jared-status-hub.fly.dev is a
+// registrable domain we control -- no domain purchase needed.
+//
+// GSC_VERIFICATION holds the filename Search Console issues, e.g. "google<hex>.html". Matching
+// on it rather than answering any /google*.html means this cannot be used by anyone else to
+// claim the domain in their own Search Console.
+if (process.env.GSC_VERIFICATION) {
+  app.get(`/${process.env.GSC_VERIFICATION}`, (req, res) =>
+    res.type('text').send(`google-site-verification: ${process.env.GSC_VERIFICATION}`));
+}
+
+for (const doc of ['privacy', 'terms']) {
+  app.get(`/${doc}`, (req, res) => {
+    const file = path.join(__dirname, 'legal', `${doc}.html`);
+    if (!fs.existsSync(file)) return res.status(404).type('text').send('not found');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.type('html').send(fs.readFileSync(file, 'utf8'));
+  });
+}
+
 // Auth gate — everything below requires the cookie (or x-hub-token header). The browser
 // sends the cookie on same-origin module/css fetches automatically, so static assets are
 // served behind this gate too.

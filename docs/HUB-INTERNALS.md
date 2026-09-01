@@ -160,7 +160,7 @@ frame) so a surface can pick it up without re-deriving it.
 
 **Pages:** `/` · `/tv` (both serve the wall) · `/tv-session-focus` (sessions wall) · `/tv-calendar`
 (calendar wall) · `/calendar` (phone/desktop calendar) · `/page` (desktop dashboard) · `/mic` (voice
-launcher) · `/reports` + `/report/:id` (§6c) · `/login` · `/healthz`.
+launcher) · `/reports` + `/report/:id` (§6c) · `/login` · `/healthz` · `/privacy` · `/terms`.
 
 **Read:** `/api/status` (full payload) · `/api/stream` (SSE status) · `/api/voice-stream` (SSE voice
 frames for the kiosk) · `/api/workout-day` · `/api/nutrition-day` · `/api/voice-messages` ·
@@ -184,7 +184,10 @@ per-list feed `/api/due-widget` replaced; nothing reads it.
 **Auth:** the hub password → `sha256("status-hub:"+password)`; sent as the `hub` cookie (web) or the
 `X-Hub-Token` header (native app). The kiosk authenticates via `?token=<TV_TOKEN>` (also seeds the
 cookie). The gate is one `app.use` and it protects **everything defined below it**, static assets
-included; `/healthz` and `/login` are declared above it and are public.
+included. Declared **above** it, and therefore public: `/healthz`, `/login`, `/privacy`,
+`/terms`, and the Search Console verification file named by `GSC_VERIFICATION`. The legal pages
+and the verification file have to be anonymous — Google fetches them as an unauthenticated
+crawler, and behind the gate it would get the login page and fail every check.
 
 ---
 

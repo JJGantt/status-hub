@@ -14,12 +14,23 @@ which returns `ok <7-char sha>` from the `COMMIT` stamped in at deploy time — 
 thing separating "shipped" from "silently didn't". `.github/workflows/` is iOS-only; nothing there
 touches the server. `fly.toml` lives in `server/`, which is also the build context.
 
+`Dockerfile` **enumerates what it copies** — `server.js`, `lib`, `public`, `legal`. A new
+top-level directory under `server/` is not in the image until it is added there, and nothing
+catches that: the build succeeds, `/healthz` reports the right sha, and the files are simply
+absent at request time. Curl the new path after deploying, not just `/healthz`.
+
     curl -s https://jared-status-hub.fly.dev/healthz     # ok <sha>
 
 ## The auth gate is positional
 
-One `app.use` in `server.js` gates everything **defined below it**; `/healthz` and `/login` sit above
-it and are public. A new route added near the top of the file is world-readable.
+One `app.use` in `server.js` gates everything **defined below it**. Public, because they are
+declared above it: `/healthz`, `/login`, `/privacy`, `/terms`, and the Search Console verification
+file named by `GSC_VERIFICATION`. A new route added near the top of the file is world-readable.
+
+The legal pages and the verification file are deliberately public: Google fetches them as an
+anonymous crawler while verifying the domain and reviewing the OAuth app, and behind the gate it
+gets the login page instead. They exist because publishing that OAuth app to production is what
+stops Google revoking the Gmail refresh token every 7 days.
 
 ## The day starts at 4am, in `TZ_DISPLAY`
 

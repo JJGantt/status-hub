@@ -32,6 +32,8 @@ documents **everything**, not just the hub. Keep it current as pieces change.
 | `voice-pipeline` | (private) | ESP wake-word → transcription → worker → Supabase | Fly `jared-voice` (+ Mac launchd) |
 | `data-layer` | JJGantt/data-layer | Supabase schema (migrations) + the `data` MCP | Supabase `felyggqjjhltwokdfhop` |
 | `govee-mcp` | JJGantt/mcp-govee | Govee light control MCP (LAN + cloud) | runs inside workers |
+| `messages-mcp` | JJGantt/messages-mcp | iMessage/SMS read + send MCP | Mac only (stdio) |
+| `gmail-mcp` | JJGantt/gmail-mcp | Gmail read/label/draft/send MCP | anywhere (stdio) |
 | `litter-robot` | JJGantt/litter-robot | Litter-Robot 4 auto-resume watcher | Fly `litter-robot-watcher` |
 
 **Fly apps (four):**
@@ -60,10 +62,53 @@ the working directory is linked to.
 
 ---
 
+## 2b. Messaging — email and iMessage
+
+Two MCP servers, split because their availability differs and nothing can change that.
+
+**`messages-mcp` is Mac-only and always will be.** Reading is a read-only SQLite open of
+`~/Library/Messages/chat.db`; sending is AppleScript to Messages.app. Neither exists on the Pi or
+on Fly, so anything touching iMessage needs this Mac awake and signed in. Two traps live in that
+database and the server exists mostly to absorb them: `message.text` is NULL on about a third of
+rows with the real content in `attributedBody` (an NSAttributedString typedstream, decoded through
+Apple's own `NSUnarchiver`), and senders are raw phone numbers rather than names.
+
+Contact names merge the Mac's local AddressBook **and** Google Contacts via the People API,
+because neither is complete — measured here, 16 of 27 local handles were absent from Google and
+183 Google handles were absent locally. It reads the refresh token from `gmail-mcp/.env` rather
+than storing a second copy; missing credentials degrade to local-only.
+
+Sending to a **group** requires `chat_id`, not a handle — a group has no single participant to
+address, so it is reached by conversation guid.
+
+**`gmail-mcp` has no machine dependency.** It is HTTPS against the Gmail API with a stored refresh
+token, so it runs on the Mac, the Pi or Fly identically and works while all of them are asleep.
+Scopes are `gmail.modify` (read/label/draft/**send** — Google's own description) and
+`contacts.readonly`. `mail.google.com` and `gmail.settings.*` are deliberately not requested, so
+nothing here can delete mail past the trash or change filters, forwarding or send-as.
+
+The OAuth app lives in Google Cloud project `status-hub-507320` and is published **in production,
+unverified**. That is not cosmetic: an external app left in *Testing* is issued refresh tokens
+Google revokes after 7 days. Production requires a homepage, privacy policy and terms on a
+Search-Console-verified domain, which is why the hub serves `/privacy`, `/terms` and the
+verification file publicly — `fly.dev` is on the Public Suffix List, so `jared-status-hub.fly.dev`
+counts as a registrable domain and no domain purchase was needed.
+
+Neither server watches for anything. They are on-demand tools; nothing reacts to a message or a
+mail arriving, and nothing is mirrored off the Mac.
+
+---
+
 ## 3. Data layer — Supabase (source of truth)
 
 - Project `felyggqjjhltwokdfhop` ("life-data"). Service-role key in `data-layer/src/client.ts`.
 - The **`data` MCP** (`data-layer/dist/mcp.js`) is how Claude reads/writes life data.
+- **RLS** is on for every table. `00042` covered the 38 that existed then and `00074` the three
+  added since (`reports`, `workset_reports`, `set_watcher`); tables created by SQL migration
+  default to RLS **off**, so a new migration has to enable it or the table is reachable with the
+  anon key — which is public, since it ships inside the Workset watch app. `workset_reports` and
+  `set_watcher` carry policies granting anon exactly what that app does; everything else has no
+  policy at all, which denies anon outright while service_role bypasses RLS as usual.
 - **Realtime** is on. The `supabase_realtime` publication includes (at least): `voice_requests`,
   `voice_messages`, `voice_focus`, `voice_sessions`, `device_status`, `nutrition_entries`, `sets`,
   `desk_commands`. The hub server, the voice worker and the Mac orchestrator subscribe.

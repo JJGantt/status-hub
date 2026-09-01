@@ -141,10 +141,9 @@ function overColor(devNorm) {  // devNorm > 0: amber -> orange (over pace = tren
 }
 
 // Staged meals are food that exists but has not been eaten: they never move `consumed`, so every
-// number and every committed arc below reads exactly as it would with nothing staged. What they add
-// is a SECOND set of arc ends — where the arcs would land if the staged meals were committed — and
-// the colors the ring would take there. The client draws only the span between the two, so the
-// staged contribution is a separate piece sitting past the real one.
+// number and every arc below reads exactly as it would with nothing staged. All they add is
+// `staged_mark` — one position on the circle, where the arc would END if they were committed — which
+// the clients draw as a second tick beside the white pace one.
 const clamp01 = (v) => Math.max(0, Math.min(1, v));
 const r3 = (v) => Math.round(v * 1000) / 1000;
 
@@ -165,10 +164,9 @@ function macroPace(consumed, goal, frac, staged) {
     base_color: devNorm <= 0 ? underColor(devNorm) : '#22c55e',
     over_color: devNorm > 0 ? overColor(devNorm) : null,
     staged: Math.round(stg),                         // 0 when nothing is staged
-    ring_staged_base: stg > 0 ? r3(clamp01(1 + devNormS)) : null,   // arc ENDS if committed, not lengths
-    ring_staged_over: stg > 0 ? r3(clamp01(devNormS)) : null,
-    staged_base_color: stg > 0 ? (devNormS <= 0 ? underColor(devNormS) : '#22c55e') : null,
-    staged_over_color: stg > 0 && devNormS > 0 ? overColor(devNormS) : null,
+    // Where the arc would end if the staged meals were committed, as a position around the circle.
+    // Past full it is the OVERFLOW position — the ring wraps, and so does the tick.
+    staged_mark: stg > 0 ? r3(devNormS > 0 ? Math.min(1, devNormS) : clamp01(1 + devNormS)) : null,
   };
 }
 

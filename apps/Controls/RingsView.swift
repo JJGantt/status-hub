@@ -9,10 +9,9 @@ struct Macro: Decodable {
     let consumed: Double, goal: Double, dev_g: Double
     let ring_base: Double, ring_over: Double
     let base_color: String, over_color: String?, dev_color: String
-    // Staged (cooked/planned but not eaten) food. Never folded into `consumed` or the arcs above —
-    // these are where the arcs would END, and the colors the ring would take, if it were committed.
-    var ring_staged_base: Double? = nil, ring_staged_over: Double? = nil
-    var staged_base_color: String? = nil, staged_over_color: String? = nil
+    // Staged (cooked/planned but not eaten) food. Never folded into `consumed` or the arcs above:
+    // just the position the arc would END at if it were committed, drawn as a second tick.
+    var staged_mark: Double? = nil
 }
 struct Frame: Decodable {
     let t: Int                 // minutes from the fetch
@@ -35,25 +34,26 @@ private extension Color {
     }
 }
 
-/// The on-pace marker: angle 2π·frac measured COUNTER-clockwise from twelve o'clock, matching
-/// cards/nutrition.js tickRings(). Drawn ACROSS the ring band, derived from the stroke width so it
-/// stays on the ring at any weight.
+/// A tick across the ring band at `pos` turns CLOCKWISE from twelve o'clock — the way the arcs
+/// themselves run, matching markPts() in cards/nutrition.js. The pace tick is therefore drawn at
+/// 1-frac: where the arc ends with nothing logged. Derived from the stroke width so it stays on the
+/// ring at any weight.
 ///
 /// The geometry that matters: SwiftUI's Circle().stroke() does NOT inset the way strokeBorder does —
 /// it straddles the circle inscribed in the frame. So the band runs from (1-lwFrac) to (1+lwFrac) of
 /// the half-size and its CENTRE is at 1.0, not at 1-lwFrac. Centring the tick on 1-lwFrac put it on
 /// the band's inner edge, which is why it kept reading as too far inward.
 private struct PaceMark: Shape {
-    let frac: Double
+    let pos: Double
     let lwFrac: Double            // stroke width as a fraction of the view's size
     func path(in rect: CGRect) -> Path {
         let c = CGPoint(x: rect.midX, y: rect.midY)
         let half = min(rect.width, rect.height) / 2
-        let phi = 2 * Double.pi * frac
+        let phi = 2 * Double.pi * pos
         let mid = 1.0                              // centre of the band (see note above)
         let reach = lwFrac * 1.15                  // half-band is lwFrac; a touch proud on each side
         let pt = { (f: Double) in
-            CGPoint(x: c.x - half * f * sin(phi), y: c.y - half * f * cos(phi))
+            CGPoint(x: c.x + half * f * sin(phi), y: c.y - half * f * cos(phi))
         }
         var p = Path()
         p.move(to: pt(mid - reach))
@@ -62,37 +62,12 @@ private struct PaceMark: Shape {
     }
 }
 
-/// A staged meal's contribution: the span between where the ring is and where it would be if the
-/// meal were committed, drawn in the color it would then be and held clear of the eaten arc so the
-/// two never read as one fill. Mirrors paintStaged() in cards/nutrition.js.
-private struct StagedArc: View {
-    let from: Double, to: Double
-    let hex: String?
-    let lw: CGFloat
-    let lwFrac: Double            // stroke width as a fraction of the view's size
-    private let gap = 0.014       // clear track between the two pieces, as a fraction of the circle
-    private let minPiece = 0.005  // a small staged meal shrinks to the round cap rather than vanishing
-
-    var body: some View {
-        let span = to - from
-        // A round cap overshoots its end by half the stroke width; the circle's length is π·size, so
-        // that is lwFrac/2π of a turn at each of the two facing ends.
-        let clear = gap + 2 * (lwFrac / (2 * Double.pi))
-        if let hex = hex, span > minPiece {
-            let len = max(minPiece, span - clear)
-            Circle()
-                .trim(from: to - len, to: to)
-                .stroke(Color(hex: hex), style: StrokeStyle(lineWidth: lw, lineCap: .round))
-                .rotationEffect(.degrees(-90))
-        }
-    }
-}
-
 // The card's ground is always dark, so these are explicit rather than semantic: .primary/.secondary
 // resolve against the renderer's colour scheme and came out near-black on the dark card. Not
 // file-private: TodoView.swift draws on the same ground and must not fork the palette.
 let inkText  = Color(red: 0.910, green: 0.918, blue: 0.929)   // #e8eaed
 let mutedText = Color(red: 0.545, green: 0.588, blue: 0.647)  // #8b96a5
+let stagedTick = Color(red: 0.133, green: 0.827, blue: 0.933)  // #22d3ee — matches cards/nutrition.js
 
 private struct RingView: View {
     let label: String
@@ -115,20 +90,22 @@ private struct RingView: View {
                         .stroke(Color(hex: macro?.base_color ?? "#22c55e"),
                                 style: StrokeStyle(lineWidth: lw, lineCap: .round))
                         .rotationEffect(.degrees(-90))
-                    StagedArc(from: base, to: min(max(macro?.ring_staged_base ?? 0, 0), 1),
-                              hex: macro?.staged_base_color, lw: lw, lwFrac: lwFrac)
                     if let oc = macro?.over_color, over > 0 {
                         Circle()
                             .trim(from: 0, to: over)
                             .stroke(Color(hex: oc), style: StrokeStyle(lineWidth: lw, lineCap: .round))
                             .rotationEffect(.degrees(-90))
                     }
-                    StagedArc(from: over, to: min(max(macro?.ring_staged_over ?? 0, 0), 1),
-                              hex: macro?.staged_over_color, lw: lw, lwFrac: lwFrac)
-                    PaceMark(frac: frac, lwFrac: lwFrac)
+                    PaceMark(pos: 1 - frac, lwFrac: lwFrac)
                         // Tied to the ring's own weight (the card uses a 2px tick on a 7px ring), so
                         // thinning the rings doesn't leave a chunky tick behind.
                         .stroke(Color.white, style: StrokeStyle(lineWidth: max(1.5, size * lwFrac * 0.5), lineCap: .round))
+                    // Where the arc would end with the staged meal eaten. Cyan is the one hue no ring
+                    // state can take (they run red→green plus amber), so it never reads as a fill.
+                    if let sm = macro?.staged_mark {
+                        PaceMark(pos: sm, lwFrac: lwFrac)
+                            .stroke(stagedTick, style: StrokeStyle(lineWidth: max(1.5, size * lwFrac * 0.5), lineCap: .round))
+                    }
                     VStack(spacing: 0) {
                         Text(label)
                             .font(.system(size: size * 0.24, weight: .semibold, design: .rounded))

@@ -870,8 +870,7 @@ app.get('/api/rings', async (req, res) => {
           consumed: x.consumed, goal: x.goal, dev_g: x.dev_g,
           ring_base: x.ring_base, ring_over: x.ring_over,
           base_color: x.base_color, over_color: x.over_color,
-          ring_staged_base: x.ring_staged_base, ring_staged_over: x.ring_staged_over,
-          staged_base_color: x.staged_base_color, staged_over_color: x.staged_over_color,
+          staged_mark: x.staged_mark,
           // Matches the card's own rule for the number under the glyph (cards/nutrition.js tickRings).
           dev_color: x.dev_g < 0 ? '#f87171' : x.dev_g > 0 ? (x.over_color || '#22c55e') : '#22c55e',
         };

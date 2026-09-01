@@ -3,9 +3,8 @@
 // ring fill + marker every second (smooth, no 30s round-trip). Each ring's arc = (1-frac)+progress;
 // it drains over the window and fills as you log. White marker = the (1-frac) zero-food baseline.
 //
-// Staged meals extend the ring without touching it: the eaten arc keeps its exact length and color,
-// and a detached piece is drawn past its end, running to where the arc WOULD end and painted the
-// color the ring WOULD be, had the staged meal been committed.
+// A staged meal never touches the arc. It gets a second tick — cyan, the one hue no ring ever takes —
+// at the position the arc would END if it were committed.
 import { state } from '../shared.js';
 
 const RC = 2 * Math.PI * 34; // ring circumference (r=34)
@@ -18,6 +17,9 @@ function hslToHex(h, s, l) {
  const to = (v) => Math.round((v + m) * 255).toString(16).padStart(2, '0');
  return '#' + to(r) + to(g) + to(b);
 }
+// The staged tick's color. The rings sweep hue 0-120 (red->green) plus amber overflow, and the pace
+// tick owns white, so cyan is the one thing on the card that can never be mistaken for a ring state.
+const STAGED = '#22d3ee';
 const SCALE = 0.4; // devNorm magnitude that saturates the color (matches lib/pace.js)
 const underColor = (dn) => hslToHex(120 * (1 - Math.max(0, Math.min(1, -dn / SCALE))), 0.75, 0.5); // green→red as you fall behind
 const overColor = (dn) => hslToHex(45 - 20 * Math.max(0, Math.min(1, dn / SCALE)), 0.9, 0.5);       // amber→orange when ahead
@@ -31,10 +33,9 @@ export function render(s) {
    '<svg viewBox="0 0 80 80">' +
    '<circle cx="40" cy="40" r="34" fill="none" stroke="#0e1318" stroke-width="7" />' +
    '<circle class="ring-base" cx="40" cy="40" r="34" fill="none" stroke-width="7" stroke-linecap="round" transform="rotate(-90 40 40)" stroke-dasharray="0 ' + RC + '" />' +
-   '<circle class="ring-staged" cx="40" cy="40" r="34" fill="none" stroke-width="7" stroke-linecap="round" transform="rotate(-90 40 40)" style="display:none" />' +
    '<circle class="ring-over" cx="40" cy="40" r="34" fill="none" stroke-width="7" stroke-linecap="round" transform="rotate(-90 40 40)" style="display:none" />' +
-   '<circle class="ring-over-staged" cx="40" cy="40" r="34" fill="none" stroke-width="7" stroke-linecap="round" transform="rotate(-90 40 40)" style="display:none" />' +
    '<line class="ring-mark" stroke="#e8eaed" stroke-width="2" stroke-linecap="round" />' +
+   '<line class="ring-staged-mark" stroke="' + STAGED + '" stroke-width="2" stroke-linecap="round" style="display:none" />' +
    '<text x="40" y="37" text-anchor="middle" class="rg">' + glyph + '</text>' +
    '<text x="40" y="54" text-anchor="middle" class="rd"></text>' +
    '</svg>' +
@@ -94,22 +95,15 @@ function miniGroup(produce) {
  }).join('') + '</div>';
 }
 
-// The staged piece: an arc segment ending exactly where the ring would end if the staged meals were
-// committed, held clear of the eaten arc by GAP so the two never read as one fill. Drawn on top of
-// the arc it extends, so its own color is never blended with the one underneath.
-const GAP = 3;        // arc units (~5°) of clear track between the eaten arc and the staged piece
-const CAP = 3.5;      // half the stroke width: a round cap overshoots each end by this much, so a
-                      // piece that merely started GAP later would still butt against the arc's cap
-const MIN_PIECE = 1;  // a small staged meal shrinks to the round cap rather than disappearing
-function paintStaged(el, from, to, color) {
- if (!el) return;
- const span = to - from;
- if (!color || span <= 0.5) { el.style.display = 'none'; return; }
- const len = Math.max(MIN_PIECE, span - GAP - 2 * CAP);
- el.setAttribute('stroke', color);
- el.setAttribute('stroke-dasharray', len.toFixed(2) + ' ' + (RC - len).toFixed(2));
- el.setAttribute('stroke-dashoffset', (len - to).toFixed(2));   // anchor the piece's END at `to`
- el.style.display = '';
+// A tick across the ring band, positioned the way the ARCS run: turns clockwise from twelve o'clock.
+// (The pace tick is therefore at 1-frac — where the arc ends with nothing logged — not at frac.)
+function markPts(pos) {
+ const a = 2 * Math.PI * pos, p = (r) => [(40 + r * Math.sin(a)).toFixed(2), (40 - r * Math.cos(a)).toFixed(2)];
+ return [...p(29), ...p(39.5)];
+}
+function setMark(el, pos) {
+ const [x1, y1, x2, y2] = markPts(pos);
+ el.setAttribute('x1', x1); el.setAttribute('y1', y1); el.setAttribute('x2', x2); el.setAttribute('y2', y2);
 }
 
 // live tick: recompute the pace position from the browser clock + the (fixed-for-the-day) window
@@ -117,9 +111,6 @@ function tickRings() {
  const P = state.last && state.last.pace; if (!P || !P.window) return;
  const w = P.window, off = nowOffsetMin();
  const frac = off <= w.startMin ? 0 : off >= w.endMin ? 1 : (off - w.startMin) / (w.endMin - w.startMin);
- const phi = 2 * Math.PI * frac; // marker: CCW from top
- const pt = (r) => [(40 - r * Math.sin(phi)).toFixed(2), (40 - r * Math.cos(phi)).toFixed(2)];
- const [ix, iy] = pt(29), [ox, oy] = pt(39.5);
  document.querySelectorAll('#nutrition .ring').forEach((el) => {
   const m = (P.macros || {})[el.dataset.macro]; if (!m) return;
   const goal = m.goal || 0, consumed = m.consumed || 0;
@@ -129,17 +120,15 @@ function tickRings() {
   const ba = el.querySelector('.ring-base'); ba.setAttribute('stroke-dasharray', base + ' ' + (RC - base)); ba.setAttribute('stroke', dn <= 0 ? underColor(dn) : '#22c55e');
   const oa = el.querySelector('.ring-over');
   if (over > 0) { oa.setAttribute('stroke-dasharray', over + ' ' + (RC - over)); oa.setAttribute('stroke', overColor(dn)); oa.style.display = ''; } else oa.style.display = 'none';
-  const stg = m.staged || 0;
-  if (stg > 0) {
-   const dn2 = goal > 0 ? (consumed + stg - goal * frac) / goal : 0;   // the pace it would be at, committed
-   const base2 = Math.max(0, Math.min(1, 1 + dn2)) * RC, over2 = Math.max(0, Math.min(1, dn2)) * RC;
-   paintStaged(el.querySelector('.ring-staged'), base, base2, dn2 <= 0 ? underColor(dn2) : '#22c55e');
-   paintStaged(el.querySelector('.ring-over-staged'), over, over2, dn2 > 0 ? overColor(dn2) : null);
-  } else {
-   el.querySelector('.ring-staged').style.display = 'none';
-   el.querySelector('.ring-over-staged').style.display = 'none';
-  }
-  const mk = el.querySelector('.ring-mark'); mk.setAttribute('x1', ix); mk.setAttribute('y1', iy); mk.setAttribute('x2', ox); mk.setAttribute('y2', oy);
+  setMark(el.querySelector('.ring-mark'), 1 - frac);
+  // Staged: the same tick in cyan, where the arc would end if the meal were committed. Past full it
+  // sits on the overflow lap, exactly where the overflow arc would reach.
+  const stg = m.staged || 0, sm = el.querySelector('.ring-staged-mark');
+  if (stg > 0 && goal > 0) {
+   const dn2 = (consumed + stg - goal * frac) / goal;
+   setMark(sm, dn2 > 0 ? Math.min(1, dn2) : Math.max(0, 1 + dn2));
+   sm.style.display = '';
+  } else sm.style.display = 'none';
   const rd = el.querySelector('.rd'); rd.textContent = (dev > 0 ? '+' : '') + dev; rd.setAttribute('fill', dev < 0 ? '#f87171' : dev > 0 ? overColor(dn) : '#22c55e');
  });
 }

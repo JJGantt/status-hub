@@ -120,13 +120,19 @@ The math lives here; each file has a thorough header. Summary map:
 | `heatmap.js` | Per-day set-count heatmap laid out as week columns. |
 
 **Staged meals on the rings.** A staged meal (`nutrition_entries.staged = true`) is food that exists
-but has not been eaten, so it never touches `consumed`: every number, and the whole committed arc,
-reads exactly as it would with nothing staged. `computePace()` takes the staged totals separately and
-adds a second set of arc **ends** — `ring_staged_base` / `ring_staged_over`, with the
-`staged_*_color` the ring would take at that pace. The clients draw only the span between the two,
-held clear of the committed arc's round cap, so the contribution reads as a detached piece sitting
-past the real one, in the color the ring would become if it were committed. Staged rows carry no day
-(they belong to whichever day they are eaten on), so the query that sums them has no window filter.
+but has not been eaten, so it never touches `consumed`: every number, and the whole arc, reads
+exactly as it would with nothing staged. `computePace()` takes the staged totals separately and adds
+one number per macro — `staged_mark`, the position the arc would END at if the meal were committed
+(the overflow position once that is past full, since the ring wraps). The clients draw it as a second
+tick beside the white pace one, in cyan `#22d3ee`: the rings sweep hue 0–120 plus amber overflow and
+the pace tick owns white, so cyan is the only mark that can never read as a ring state. Staged rows
+carry no day (they belong to whichever day they are eaten on), so the query that sums them has no
+window filter.
+
+**Tick positions run with the arcs.** `markPts()` (card) and `PaceMark` (widget) both take turns
+**clockwise from twelve**, the direction the arcs fill. The pace tick is drawn at `1 - frac` — where
+the arc ends with nothing logged — which is the same point as `frac` counter-clockwise; the staged
+tick is a genuine arc position and would land mirrored if fed to the older convention.
 
 **Drain rate.** `pace.window_hours` and `pace.per_hour` (per macro) are the slope of the pace line —
 the day's goal spread evenly across the eating window, i.e. how fast the rings drain with nothing
@@ -564,8 +570,8 @@ executes *in the app process*, where `HUB_APP` is defined and `RecordLaunch` fir
 **Macro Rings widget** (`RingsWidget.swift` = WidgetKit plumbing, `RingsView.swift` = drawing) —
 today's Cal/P/C/F **pace** rings, drawn to match the hub's nutrition card. Not absolute progress: a
 ring is full when on pace, drains as the clock runs ahead of what's been eaten, and grows an overflow
-arc once ahead; the white tick is where the arc would end if you were exactly on pace, and a detached
-piece past the arc is a staged meal's contribution. Families:
+arc once ahead; the white tick is where the arc would end if you were exactly on pace, and a cyan one
+is where it would end with a staged meal eaten. Families:
 
 | Family | Layout |
 |---|---|
@@ -577,8 +583,8 @@ piece past the arc is a staged meal's contribution. Families:
 Tapping opens `statushub://open` — any host but `record` just opens the app.
 
 - **The server does the maths.** Every drawn value comes precomputed from `GET /api/rings`: arc
-  lengths (`ring_base`/`ring_over`, plus the staged ends `ring_staged_base`/`ring_staged_over`),
-  colours, the signed deviation number, the marker position (`frac`), and the health-bar fills. `lib/pace.js` and `cards/score.js` stay the only implementations
+  lengths (`ring_base`/`ring_over`), colours, the signed deviation number, the marker positions
+  (`frac` and `staged_mark`), and the health-bar fills. `lib/pace.js` and `cards/score.js` stay the only implementations
   — the Swift never re-derives them, so the widget can't quietly drift from the wall. The health-bar
   values arrive **already halved** (each side fills at most 50%) so the weighting isn't re-derived
   either.

@@ -12,6 +12,17 @@ import { esc, localNowNaive } from './shared.js';
 let phoneHangMs = 3000;   // phone trailing-silence (ms) for the FAB VAD; overridden by the phone_silence_s setting
 let resetMs = 30 * 60 * 1000;   // context-reset idle gap (ms) = session_reset_s. A message arriving after a gap
                                 // this long means the agent reset its context, so the shown thread resets too.
+// How long a FINISHED row — the reply, or an error — holds on the activity bar before it hides. The
+// running states (Listening / Thinking / each tool call) are sticky and ignore this entirely; only the
+// terminal row is on a timer. A new command still clears it immediately, because show() resets the
+// pending timeout on every call, so this is a ceiling and never a floor.
+let activityHoldMs = 60 * 1000;
+// The interactive client (boot(), below) and the kiosk (tv.js) each already fetch /api/settings, so the
+// module that owns the bar takes the value from them rather than making a third request of its own.
+export function applyActivitySettings(s) {
+  const n = parseFloat((s || {}).activity_hold_s);
+  if (Number.isFinite(n) && n > 0) activityHoldMs = n * 1000;
+}
 let _activityBar = null;        // shared activity-popup singleton — declared up here so boot() (below) can call activityBar() without a TDZ error
 let _card = null;               // the conversation card (null on pages without it)
 let activeMode = 'hub';         // which mode's conversation the panel shows — follows agent_mode, live
@@ -55,6 +66,7 @@ function boot() {
   fetch('/api/settings').then((r) => r.json()).then((s) => {
     const n = parseFloat(s.phone_silence_s); if (Number.isFinite(n) && n > 0) phoneHangMs = n * 1000;
     const rs = parseFloat(s.session_reset_s); if (Number.isFinite(rs) && rs > 0) resetMs = rs * 1000;
+    applyActivitySettings(s);
     setMode(['1', 'true', 'on', 'yes'].includes(String(s.agent_mode ?? '0').toLowerCase()) ? 'agent' : 'hub');
   }).catch(() => {});
 
@@ -384,7 +396,7 @@ export function initActivityBar() {
     bar.classList.remove(...STATES);
     bar.classList.add('show', 'ai-act-' + (kind || 'busy'));
     clearTimeout(hideT);
-    if (!sticky) hideT = setTimeout(() => { bar.classList.remove('show'); setPrompt(''); setModel(''); }, 3500);
+    if (!sticky) hideT = setTimeout(() => { bar.classList.remove('show'); setPrompt(''); setModel(''); }, activityHoldMs);
   }
   return {
     prompt(t) { setPrompt(t); },                  // the transcribed command; stays up for the whole run

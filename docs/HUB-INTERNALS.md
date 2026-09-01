@@ -91,6 +91,11 @@ sends one when a hub turn leaves the fast path (it needed a full-access tool, or
 bar shows it as its own violet row *and* lights an `OPUS` chip that persists for the rest of the run —
 later tool rows replace the text, but the fact that this turn changed models stays on screen until the
 command finishes. Only these four states survive the relay; anything else is coerced to `tool`.
+The running states hold indefinitely; only a TERMINAL row (`done`, or a client-side error) is on a
+timer, and it holds for `activity_hold_s` (default 60s) so a reply is still on screen well after the
+turn ends. Any new frame clears it early — `show()` resets the pending timeout on every call — so the
+setting is a ceiling, never a floor. Both surfaces read it from the `/api/settings` fetch they already
+make (`voiceagent.js`'s `boot()`, `tv.js`'s), handing it to `applyActivitySettings`.
 
 **Cards (`public/cards/`)** — each exports `render(s)` and paints from its `s.*` slice:
 
@@ -501,6 +506,7 @@ is traceable rather than guessed at.
 | `maintenance_min_days` | Aligned-window length before adaptive maintenance goes live (Settings "calibration window"). |
 | `maintenance_phase` | JSON `{start, seed, sign, hold}` — the current goal phase (§4). Written on a `surplus_cal` sign flip. |
 | `session_reset_s` | Idle gap before the hub voice conversation resets context. |
+| `activity_hold_s` | Seconds a finished activity row (the reply, or an error) holds on the bar. Default 60. |
 | `wakefree_enabled` | Always-on (wake-free) voice on/off. |
 | `voice_inject_mode` | Mac-mic speech injected into the focused window (ESP off). |
 | `voice_muted` | Global mute (PTT/FAB) — silences Mac mic + ESP. |

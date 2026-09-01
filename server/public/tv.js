@@ -2,7 +2,7 @@
 // main hub). This module adds ONLY the compact voice column: a minimal live conversation panel for the hub
 // thread, plus the bottom-strip emission feed. It reads /api/voice-stream (event: voice {kind,row}).
 import { esc } from './shared.js';
-import { activityBar } from './voiceagent.js';
+import { activityBar, applyActivitySettings } from './voiceagent.js';
 
 // ---------------------------------------------------------------------------
 // Conversation panel — hub voice_messages, oldest→newest. user = blue, assistant = gray. No role labels.
@@ -100,4 +100,5 @@ voice.addEventListener('voice', (e) => {
 // Pick up the active mode on load, then backfill that mode's thread.
 fetch('/api/settings').then((r) => r.json()).then((s) => {
   activeMode = ['1', 'true', 'on', 'yes'].includes(String(s.agent_mode ?? '0').toLowerCase()) ? 'agent' : 'hub';
+  applyActivitySettings(s);
 }).catch(() => {}).finally(() => backfill());

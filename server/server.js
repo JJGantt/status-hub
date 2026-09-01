@@ -2338,7 +2338,7 @@ function advanceDue(anchor, spec, notBefore) {
 // The scheduler below finds due items; it does not deliver them. Delivery is a named handler, so a
 // second channel is a new entry here rather than surgery on the loop. Today there is exactly one —
 // APNs — and this seam is worth its ten lines only because the second one is already written down:
-// AlarmKit (docs/TODO.md), which fires on-device and breaks through Focus. Telegram would be a third.
+// AlarmKit (docs/TODO.md), which fires on-device and breaks through Focus.
 //
 // Handlers receive the whole item and the dedupe key. They must be idempotent-safe to skip: the
 // ledger check happens before dispatch, not inside them.

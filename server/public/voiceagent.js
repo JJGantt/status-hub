@@ -24,6 +24,7 @@ export function applyActivitySettings(s) {
   if (Number.isFinite(n) && n > 0) activityHoldMs = n * 1000;
 }
 let _activityBar = null;        // shared activity-popup singleton — declared up here so boot() (below) can call activityBar() without a TDZ error
+let _outboxBusy = false;        // photo-outbox reentrancy latch — up here for the same reason: boot() runs runPhotoOutbox()
 let _card = null;               // the conversation card (null on pages without it)
 let activeMode = 'hub';         // which mode's conversation the panel shows — follows agent_mode, live
 
@@ -307,7 +308,6 @@ function beaconOutboxError(err, item) {                 // surface a failure the
   } catch (_) {}
 }
 
-let _outboxBusy = false;
 // Drive every queued photo to completion. onStatus(text, kind) surfaces progress: kind 'busy' | 'done' | 'wait'.
 export async function runPhotoOutbox(onStatus) {
   if (_outboxBusy) return;                             // one processor at a time; the loop re-reads so mid-run enqueues are still caught

@@ -79,7 +79,7 @@ async function loadNutDay(date){
  const tok=++nutReq;
  let j; try{ j=await (await fetch('/api/nutrition-day?date='+date)).json(); }catch(_){ return; }
  if(tok!==nutReq)return; // a newer cell was selected mid-flight — drop this stale response
- const ni=document.getElementById('nutinfo');
+ const ni=document.getElementById('nutinfo'); if(!ni)return;   // page without the nutrition log card
  const sp=ni.closest('.detailpanel'), atTop=!sp||sp.scrollTop<60; // newest entries render on top now
  // Selected-day summary band — compact one-liner: DOW + date, then measured/goal for cal + each
  // macro, using THIS day's own stored targets (each day has its own dynamic goal + bodyweight macros).

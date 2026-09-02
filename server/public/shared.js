@@ -38,21 +38,26 @@ const SILENT_MS = 75000;          // 3 missed pings — the socket is not delive
 const streams = new Set();        // every stream on the page, for the staleness bar below
 
 export function liveStream(url, listeners, { onOpen } = {}) {
-  let es = null, lastAt = Date.now(), rebuilt = false, reloading = false;
-  const self = { age: () => Date.now() - lastAt, close(){ streams.delete(self); try{ es.close(); }catch(_){} } };
-  const seen = () => { lastAt = Date.now(); rebuilt = false; };
+  // TWO clocks, deliberately. `seenAt` is the last frame from anywhere and never resets on its own —
+  // it is what the staleness bar and the kiosk watchdog read, so "nothing has arrived in five minutes"
+  // stays true across a rebuild. `windowAt` restarts with each socket, giving a fresh one a full window
+  // to prove itself. Sharing one clock would have let every rebuild wipe the evidence, so a page that
+  // never recovers would have looked freshly connected forever.
+  let es = null, seenAt = Date.now(), windowAt = Date.now(), rebuilt = false, reloading = false;
+  const self = { age: () => Date.now() - seenAt, close(){ streams.delete(self); try{ es.close(); }catch(_){} } };
+  const seen = () => { seenAt = windowAt = Date.now(); rebuilt = false; };
   function open(){
     es = new EventSource(url);
     es.addEventListener('ping', seen);
     es.addEventListener('open', () => { seen(); if (onOpen) onOpen(); });
     for (const [name, fn] of Object.entries(listeners))
       es.addEventListener(name, (e) => { seen(); fn(e); });
-    lastAt = Date.now();          // give the new socket a full window to prove itself
+    windowAt = Date.now();
   }
   open();
   streams.add(self);
   setInterval(() => {
-    if (self.age() < SILENT_MS) return;
+    if (Date.now() - windowAt < SILENT_MS) return;
     if (!rebuilt) { rebuilt = true; try{ es.close(); }catch(_){} open(); return; }
     // The rebuild is deaf too, so the page itself is the problem and only a reload clears it. Three
     // things have to hold first. A backgrounded tab is SUPPOSED to be suspended. Reloading out from

@@ -519,6 +519,24 @@ relaunch loop never fires. It requires **three consecutive failed checks**, not 
 nothing in any log to explain it. Both edges are logged under `kiosk-xinit`, so an unexplained reload
 is traceable rather than guessed at.
 
+### Three layers recover a frozen wall, and they are deliberately ordered
+
+A wall showing an old frame is the hardest kiosk fault to notice, because it looks identical to a
+working one — the cards hold their last frame and the rest/session clocks keep counting off local
+intervals. So recovery is staged, each layer covering the previous one's failure:
+
+| Layer | Fires at | Covers |
+|---|---|---|
+| `liveStream()` in `shared.js` (§1) | rebuild at 75s of silence, self-reload at 150s | a half-open socket — the common case |
+| `kiosk-health.py` `'stale'` verdict (Pi) | 300s of silence, 3 consecutive checks | the page's own watchdog being what broke |
+| `hub-reach-watch.sh` (Pi) | 3 failed reachability checks, reloads on the down→up edge | the hub actually being gone |
+
+The middle layer reads `window.__hubStreamAge()` over CDP — it is the only signal that separates "JS
+is running fine" from "JS is running fine over data that stopped." It is gated on the hub answering,
+because a stale wall during an outage is the truth, and killing Chromium then drops the `.xinitrc`
+loop onto its reachability gate and leaves a black screen instead of a stale one. That case belongs
+to the third layer, which is why the second one declines it.
+
 ## 7. `app_settings` catalog (flat key/value)
 
 | Key | Controls |

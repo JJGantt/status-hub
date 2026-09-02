@@ -75,8 +75,8 @@ Supabase ──▶ server.js buildStatus() ──▶ /api/status payload ──�
 | `expand.js` | Phone-wall expand icons → full-screen section sheets. |
 | `tv.js` | TV/kiosk-only: the voice-conversation panel + session terminal layered on the wall. |
 | `wallmode.js` | Follows `app_settings.wall_mode` so voice can switch the TV between the walls. Acts only on kiosk paths (`/tv`, `/tv-session-focus`, `/tv-calendar`), never on the phone's `/`. |
-| `calendar.js` | The `/calendar` page: paints the server-computed month grid + day agenda from `/api/calendar`; tap a day, page months. Read-only — writes stay with voice and the todo pane. |
-| `tv-calendar.js` | The calendar wall's middle (only `tv-calendar.html` loads it): day timeline + month grid(s) from `/api/calendar?wall=1`. Display-only. |
+| `calendar.js` | The `/calendar` page: paints the server-computed month grid + day agenda from `/api/calendar`; tap a day, page months. Read-only — writes stay with voice and the todo pane. Re-reads on an `/api/list-stream` push, never on a timer. |
+| `tv-calendar.js` | The calendar wall's middle (only `tv-calendar.html` loads it): day timeline + month grid(s) from `/api/calendar?wall=1`. Display-only. Re-reads on an `/api/list-stream` push; the now-line it moves itself against the clock (each hour row carries its 24h number), re-reading only when the date rolls or the hour leaves the served range. |
 | `mic.js` | The `/mic` standalone launcher page's script (its own recorder, reuses `voiceagent`). |
 
 The activity element (`.ai-act`) renders the
@@ -163,7 +163,8 @@ frame) so a surface can pick it up without re-deriving it.
 launcher) · `/reports` + `/report/:id` (§6c) · `/login` · `/healthz` · `/privacy` · `/terms`.
 
 **Read:** `/api/status` (full payload) · `/api/stream` (SSE status) · `/api/voice-stream` (SSE voice
-frames for the kiosk) · `/api/workout-day` · `/api/nutrition-day` · `/api/voice-messages` ·
+frames for the kiosk) · `/api/list-stream` (SSE, one bodiless `lists` event whenever a dated item or
+a list changes — the calendar surfaces' push path, separate from the status frame they don't render) · `/api/workout-day` · `/api/nutrition-day` · `/api/voice-messages` ·
 `/api/todos` (lists + notes + the derived `due` view) · `/api/calendar` (month grid(s) of every
 dated item, repeats expanded with the scheduler's own `advanceDue`; `?month=` pages, `?wall=1` adds
 the day timeline and reads `calendar_months` for the spread) · `/api/badge` · `/api/repos` ·

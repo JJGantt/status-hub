@@ -141,6 +141,14 @@ const supa = createClient(SUPABASE_URL, SUPABASE_KEY, {
   auth: { persistSession: false },
   realtime: { transport: WebSocket },
 });
+// SSE heartbeat, on every stream. It has to be a NAMED EVENT rather than the `: keepalive` comment
+// it used to be, because a comment is invisible to the client: EventSource surfaces no callback for
+// one, so the page cannot tell a silent-but-healthy stream from a dead one. A `ping` event is the
+// same cost on the wire and lets shared.js judge liveness by whether frames actually arrive — which
+// matters most on the voice and list streams, where hours can legitimately pass with no data.
+// No existing consumer sees it: named events never reach `onmessage` or an unrelated addEventListener.
+const PING = 'event: ping\ndata: {}\n\n';
+
 const sseClients = new Set();
 // Separate SSE pool for the /tv voice-conversation panel — these get raw voice_messages /
 // voice_focus rows, not the assembled status frame, so they don't carry the heavy status payload.
@@ -1341,7 +1349,7 @@ app.get('/api/stream', async (req, res) => {
   res.flushHeaders();
   sseClients.add(res);
   try { res.write('data: ' + JSON.stringify(await buildStatus()) + '\n\n'); } catch {}
-  const ka = setInterval(() => { try { res.write(': keepalive\n\n'); } catch {} }, 25000);  // SSE heartbeat (proxy idle)
+  const ka = setInterval(() => { try { res.write(PING); } catch {} }, 25000);
   req.on('close', () => { clearInterval(ka); sseClients.delete(res); });
 });
 
@@ -2260,7 +2268,7 @@ app.get('/api/voice-stream', (req, res) => {
             Connection: 'keep-alive', 'X-Accel-Buffering': 'no' });
   res.flushHeaders();
   voiceClients.add(res);
-  const ka = setInterval(() => { try { res.write(': keepalive\n\n'); } catch {} }, 25000);
+  const ka = setInterval(() => { try { res.write(PING); } catch {} }, 25000);
   req.on('close', () => { clearInterval(ka); voiceClients.delete(res); });
 });
 
@@ -2272,7 +2280,7 @@ app.get('/api/list-stream', (req, res) => {
             Connection: 'keep-alive', 'X-Accel-Buffering': 'no' });
   res.flushHeaders();
   listClients.add(res);
-  const ka = setInterval(() => { try { res.write(': keepalive\n\n'); } catch {} }, 25000);
+  const ka = setInterval(() => { try { res.write(PING); } catch {} }, 25000);
   req.on('close', () => { clearInterval(ka); listClients.delete(res); });
 });
 

@@ -15,6 +15,85 @@ if (MAC && document.body) document.body.classList.add('mac');
 // (you can't reassign another module's exported binding, but you can mutate a shared object).
 export const state = { last: null };
 
+// ---------------------------------------------------------------- live streams
+//
+// An EventSource that notices when it has gone deaf.
+//
+// The failure this exists for: a stream can go HALF-OPEN — `readyState` stays OPEN, no `error` ever
+// fires, and nothing arrives again. The browser only retries a connection it saw CLOSE, so a socket
+// that merely stops delivering is never reconnected. On 2026-09-02 the TV wall sat on a ten-minute-old
+// frame exactly that way while the server pushed every 30s, and it looked perfectly alive because the
+// rest clock is a local interval. Nothing in the page could tell.
+//
+// So liveness is judged the only way it can be — by whether frames actually ARRIVE. Every stream is
+// kept audible by a server-side `ping` event every 25s (see PING in server.js), so silence past three
+// of those is a fault rather than a quiet house. That is what makes this work on the voice and list
+// streams too, where hours can legitimately pass with no data of their own.
+//
+// On silence the socket is rebuilt. If the REBUILT one is deaf as well, the page itself is wedged and
+// only a reload cures it.
+//
+// `listeners` is {eventName: fn}. `onOpen` fires on every (re)connect, including the first.
+const SILENT_MS = 75000;          // 3 missed pings — the socket is not delivering
+const streams = new Set();        // every stream on the page, for the staleness bar below
+
+export function liveStream(url, listeners, { onOpen } = {}) {
+  let es = null, lastAt = Date.now(), rebuilt = false, reloading = false;
+  const self = { age: () => Date.now() - lastAt, close(){ streams.delete(self); try{ es.close(); }catch(_){} } };
+  const seen = () => { lastAt = Date.now(); rebuilt = false; };
+  function open(){
+    es = new EventSource(url);
+    es.addEventListener('ping', seen);
+    es.addEventListener('open', () => { seen(); if (onOpen) onOpen(); });
+    for (const [name, fn] of Object.entries(listeners))
+      es.addEventListener(name, (e) => { seen(); fn(e); });
+    lastAt = Date.now();          // give the new socket a full window to prove itself
+  }
+  open();
+  streams.add(self);
+  setInterval(() => {
+    if (self.age() < SILENT_MS) return;
+    if (!rebuilt) { rebuilt = true; try{ es.close(); }catch(_){} open(); return; }
+    // The rebuild is deaf too, so the page itself is the problem and only a reload clears it. Three
+    // things have to hold first. A backgrounded tab is SUPPOSED to be suspended. Reloading out from
+    // under something being typed throws the text away. And a reload into an unreachable hub lands on
+    // the browser's error page, where there is no JS left to ever come back — the same trap .xinitrc
+    // gates the kiosk launch against. Stale data under a red bar beats an error page, so reload only
+    // once the server has answered.
+    if (document.hidden || reloading) return;
+    const a = document.activeElement;
+    if (a && (a.tagName === 'INPUT' || a.tagName === 'TEXTAREA' || a.isContentEditable)) return;
+    reloading = true;
+    fetch('/healthz', { cache: 'no-store' })
+      .then((r) => { if (r.ok) location.reload(); else reloading = false; })
+      .catch(() => { reloading = false; });
+  }, 5000);
+  return self;
+}
+
+// The staleness hairline: 3px along the top edge of the viewport, on every page that opens a stream.
+//
+// Painted from a LOCAL timer and never from a render, because a render is precisely what stops
+// happening — anything drawn off the status frame can only ever report that things were fine when it
+// was last drawn. Invisible while frames arrive (no pixels, no layout shift, nothing to tune out).
+// Amber once a stream has been silent long enough that the watchdog is rebuilding it; red once the
+// rebuild has failed too, which means the hub is genuinely unreachable rather than merely quiet.
+(function staleBar(){
+  const bar = document.createElement('div');
+  bar.className = 'stalebar';
+  const mount = () => document.body.appendChild(bar);
+  if (document.body) mount(); else document.addEventListener('DOMContentLoaded', mount);
+  // Also the number the Pi's kiosk watchdog reads over CDP. It can already see a renderer that won't
+  // run JS; this is the case it cannot see — JS running fine over data that stopped arriving.
+  const worstAge = () => { let w = 0; for (const s of streams) w = Math.max(w, s.age()); return w; };
+  window.__hubStreamAge = () => (streams.size ? worstAge() : 0);
+  setInterval(() => {
+    const worst = worstAge();
+    bar.classList.toggle('stale', streams.size > 0 && worst >= SILENT_MS);
+    bar.classList.toggle('dead',  streams.size > 0 && worst >= SILENT_MS * 2);
+  }, 1000);
+})();
+
 export function esc(s){return String(s).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;');}
 // This device's own current wall clock, naive (no offset) — "YYYY-MM-DDTHH:MM:SS", matching exactly
 // how sets/nutrition_entries.occurred_at is stored. Sent with every write so the logged time is

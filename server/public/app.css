@@ -1007,3 +1007,10 @@ body.tv:not(.phonewall) .tv-foot-follow{flex:none}
 body.tv:not(.phonewall) #tv-act .ai-act{position:static;left:auto;bottom:auto;max-width:100%;
   width:100%;box-shadow:none;transform:none;opacity:1;background:transparent;border:0;padding:0}
 body.tv:not(.phonewall) #tv-act .ai-act:not(.show){visibility:hidden}
+
+/* Stream-staleness hairline — see liveStream/staleBar in shared.js. Zero-visibility while the page is
+   receiving; the transition is what makes it read as a state change rather than a rendering glitch. */
+.stalebar{position:fixed;top:0;left:0;right:0;height:3px;z-index:9999;pointer-events:none;
+ background:transparent;transition:background .4s ease}
+.stalebar.stale{background:#f59e0b}
+.stalebar.dead{background:#ef4444}

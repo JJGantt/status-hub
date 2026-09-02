@@ -1,5 +1,5 @@
 // Bootstrapping: SSE → render orchestrator, then the layout init.
-import { TOUCH, state } from './shared.js';
+import { TOUCH, state, liveStream } from './shared.js';
 import * as litter from './cards/litter.js';
 import * as feeder from './cards/feeder.js';
 import * as surf from './cards/surf.js';
@@ -57,8 +57,8 @@ function render(s){
  reports.render(s);    // phone-wall reports pane (seventh swipe pane; self-fetches)
 }
 
-const es=new EventSource('/api/stream');
-es.onmessage=e=>{try{render(JSON.parse(e.data));}catch(_){}};
+// liveStream, not a bare EventSource: this is the stream whose silent death froze the wall.
+liveStream('/api/stream',{message:e=>{try{render(JSON.parse(e.data));}catch(_){}}});
 
 // ---- layout ----
 // desktop = plain document-flow rows that scroll (defined in index.html / app.css; nothing to init).

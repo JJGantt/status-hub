@@ -7,12 +7,13 @@
 // ONLY ON THE TV. `/` serves the same markup to the phone app (and /calendar the same as
 // /tv-calendar), and a spoken "switch the TV" must not yank the phone to another page — so this
 // acts only on the kiosk paths.
+import { liveStream } from './shared.js';
+
 const PAGES = { standard: '/tv', sessions: '/tv-session-focus', calendar: '/tv-calendar' };
 const HERE = location.pathname;
 
 if (Object.values(PAGES).includes(HERE)) {
-  const es = new EventSource('/api/stream');
-  es.addEventListener('message', (e) => {
+  liveStream('/api/stream', { message: (e) => {
     let want;
     try { want = JSON.parse(e.data)?.routing?.wall; } catch { return; }
     const to = PAGES[want];
@@ -20,5 +21,5 @@ if (Object.values(PAGES).includes(HERE)) {
     // The query string comes along: the kiosk authenticates with ?token=, which seeds a cookie, and
     // carrying it means the switch still works on a browser whose cookie was cleared.
     if (to && to !== HERE) location.replace(to + location.search);
-  });
+  } });
 }

@@ -7,7 +7,7 @@
 //      Sonnet→Opus escalation when a turn leaves the fast path (its own row + a sticky OPUS chip).
 // Tool-call rows (role='tool') are surfaced ONLY in the activity bar, never in the conversation
 // thread. All skipped on the TV wall (no mic; it renders the conversation itself via tv.js).
-import { esc, localNowNaive } from './shared.js';
+import { esc, localNowNaive, liveStream } from './shared.js';
 
 let phoneHangMs = 3000;   // phone trailing-silence (ms) for the FAB VAD; overridden by the phone_silence_s setting
 let resetMs = 30 * 60 * 1000;   // context-reset idle gap (ms) = session_reset_s. A message arriving after a gap
@@ -71,8 +71,7 @@ function boot() {
   }).catch(() => {});
 
   // One voice stream feeds the conversation, the activity bar, and the live mode switch.
-  const sse = new EventSource('/api/voice-stream');
-  sse.addEventListener('voice', (e) => {
+  liveStream('/api/voice-stream', { voice: (e) => {
     let msg; try { msg = JSON.parse(e.data); } catch (_) { return; }
     if (msg.kind === 'reset') { if (_card) _card.clear(); activity.clear(); return; }
     if (msg.kind === 'mode') { setMode(msg.row && msg.row.agent ? 'agent' : 'hub'); return; }  // toggle flipped → switch thread
@@ -90,16 +89,13 @@ function boot() {
     if ((row.mode || 'hub') !== activeMode) return;   // only the ACTIVE mode's messages land in the panel
     if (row.role === 'tool') return;               // (tools now arrive as 'activity', never as messages)
     if (_card) _card.upsert(row);                  // user/assistant → conversation
-  });
-  // The conversation must reflect the active mode's thread live, from ANY source — so resync on every
-  // (re)connect AND whenever the view returns to the foreground. EventSource silently suspends when a
-  // mobile browser backgrounds and never replays missed messages; without this the thread goes stale
-  // (showing only what THIS device sent) until a manual refresh. backfill() is idempotent (full rebuild),
-  // and 'open' fires on the first connect too, so it covers initial load as well.
-  if (_card) {
-    sse.addEventListener('open', () => _card.backfill());
-    document.addEventListener('visibilitychange', () => { if (!document.hidden) _card.backfill(); });
-  }
+  } }, { onOpen: () => { if (_card) _card.backfill(); } });
+  // The conversation must reflect the active mode's thread live, from ANY source — hence the onOpen
+  // resync above (every reconnect, including the watchdog's rebuild and the first connect) plus this
+  // one on returning to the foreground. A mobile browser silently suspends the stream when backgrounded
+  // and never replays what it missed; without these the thread shows only what THIS device sent until a
+  // manual refresh. backfill() is idempotent — a full rebuild — so resyncing costs nothing.
+  if (_card) document.addEventListener('visibilitychange', () => { if (!document.hidden) _card.backfill(); });
 }
 
 // A self-contained recorder: getUserMedia → MediaRecorder → upload to /api/voice-command.

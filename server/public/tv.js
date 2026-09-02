@@ -1,7 +1,7 @@
 // /tv kiosk voice layer. The full hub dashboard is rendered by core.js from /api/stream (same cards as the
 // main hub). This module adds ONLY the compact voice column: a minimal live conversation panel for the hub
 // thread, plus the bottom-strip emission feed. It reads /api/voice-stream (event: voice {kind,row}).
-import { esc } from './shared.js';
+import { esc, liveStream } from './shared.js';
 import { activityBar, applyActivitySettings } from './voiceagent.js';
 
 // ---------------------------------------------------------------------------
@@ -81,8 +81,7 @@ function playPop() { try { popSound.currentTime = 0; popSound.play().catch(() =>
 // ---------------------------------------------------------------------------
 // Voice stream. (core.js owns /api/stream for the dashboard cards.)
 // ---------------------------------------------------------------------------
-const voice = new EventSource('/api/voice-stream');
-voice.addEventListener('voice', (e) => {
+liveStream('/api/voice-stream', { voice: (e) => {
   let msg; try { msg = JSON.parse(e.data); } catch (_) { return; }
   if (msg.kind === 'activity') {
     const a = msg.row || {};
@@ -95,7 +94,7 @@ voice.addEventListener('voice', (e) => {
   else if (msg.kind === 'mode') { activeMode = msg.row && msg.row.agent ? 'agent' : 'hub'; backfill(); }  // toggle flipped → show that mode's thread
   else if (msg.kind === 'message') upsert(msg.row);
   else if (msg.kind === 'reset') { log.innerHTML = ''; seen.clear(); activity.clear(); }
-});
+} });
 
 // Pick up the active mode on load, then backfill that mode's thread.
 fetch('/api/settings').then((r) => r.json()).then((s) => {

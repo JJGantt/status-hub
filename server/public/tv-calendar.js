@@ -5,7 +5,7 @@
 //
 // The server ships finished geometry — hour rows, the now-line's row and percentage, chip colors,
 // mini-grid column count — so this file only lays markup into the two panels.
-import { esc } from './shared.js';
+import { esc, liveStream } from './shared.js';
 
 function chip(it) {
   const cls = 'cw-chip' + (it.past ? ' past' : '') + (it.expired ? ' exp' : '');
@@ -96,10 +96,10 @@ async function load() {
 }
 
 // Dated items arrive by PUSH. The hub subscribes to list_items/lists in Supabase realtime and emits
-// `lists` here the moment either changes, so a reminder added by voice is on the wall as it is
-// spoken. EventSource reconnects on its own, so a dropped connection costs the gap and nothing more.
-const es = new EventSource('/api/list-stream');
-es.addEventListener('lists', load);
+// `lists` here the moment either changes, so a reminder added by voice is on the wall as it is spoken.
+// This is a wall — nobody is standing at it to notice a dead stream — so it goes through liveStream,
+// which judges the connection by whether the server's `ping` keeps arriving.
+liveStream('/api/list-stream', { lists: load });
 
 load();
 tick();

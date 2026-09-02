@@ -5,7 +5,7 @@
 // The TV has its own wall page (tv-calendar.html + tv-calendar.js); this one is the interactive
 // surface — navbar, month paging, tap a day to see it in the agenda. Not on the status stream (it
 // renders none of it); it takes `/api/list-stream`, which pushes when a dated item changes.
-import { esc } from './shared.js';
+import { esc, liveStream } from './shared.js';
 import { mountNavbar } from './navbar.js';
 
 let month = null;   // 'YYYY-MM' in view; null = let the server pick the current one
@@ -76,7 +76,7 @@ document.getElementById('cal-grid').addEventListener('click', (e) => {
 window.addEventListener('focus', load);
 // Voice edits arrive by push — the hub emits `lists` off its Supabase realtime subscription the
 // moment a dated item or a list changes. `load()` re-reads whatever month is in view, so paging is
-// preserved. EventSource handles its own reconnection.
-const es = new EventSource('/api/list-stream');
-es.addEventListener('lists', load);
+// preserved. liveStream rather than a bare EventSource: this stream can legitimately carry no data
+// for hours, so only the server's `ping` distinguishes quiet from dead.
+liveStream('/api/list-stream', { lists: load });
 load();

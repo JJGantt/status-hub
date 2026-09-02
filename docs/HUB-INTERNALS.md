@@ -32,6 +32,23 @@ Supabase ──▶ server.js buildStatus() ──▶ /api/status payload ──�
 - **Realtime:** the server subscribes to Supabase realtime on the tables that must invalidate the
   cached payload (nutrition, sets, app_settings, voice_*), so a voice/MCP write reflects in seconds
   rather than waiting for the tick.
+- **Every stream goes through `liveStream()` (shared.js), never a bare `EventSource`.** An SSE
+  connection can go half-open — `readyState` stays OPEN, no `error` fires, nothing arrives again —
+  and the browser only retries a connection it saw CLOSE, so nothing reconnects it. A wall in that
+  state looks perfectly healthy: cards hold their last frame and the rest/session clocks keep
+  counting, because those are local intervals. `liveStream` judges the connection by whether frames
+  ARRIVE: rebuild the socket after 75s of silence, and if the rebuilt one is deaf too, reload the
+  page — but only once `/healthz` answers, since reloading into an unreachable hub lands on the
+  browser error page where no JS is left to recover (the trap `.xinitrc` gates the kiosk against).
+- **The heartbeat is a `ping` EVENT, not a comment.** Every stream writes `event: ping` every 25s
+  (`PING` in server.js). It used to be a `: keepalive` comment, which no client can observe — leaving
+  no way to tell quiet from dead on `/api/voice-stream` and `/api/list-stream`, where hours can pass
+  with no data. Named events never reach `onmessage`, so nothing else sees it.
+- **Staleness is visible:** a 3px hairline along the top edge (`.stalebar`), invisible while frames
+  arrive, amber while the watchdog is rebuilding, red once the rebuild has failed too. It is painted
+  from a local timer and NEVER from `render(s)`, because a render is exactly what stops happening.
+  `window.__hubStreamAge()` exposes the same number to the Pi's `kiosk-health.py`, which can already
+  see a renderer that won't run JS but not one running fine over data that stopped.
 
 ---
 
@@ -67,7 +84,7 @@ Supabase ──▶ server.js buildStatus() ──▶ /api/status payload ──�
 | File | Role |
 |---|---|
 | `core.js` | Boot: opens the SSE stream, is the render orchestrator (calls every card's `render(s)`), then inits the layout. |
-| `shared.js` | Shared helpers (`esc`, `state`, local-time formatting) + the `state.last` cache. |
+| `shared.js` | Shared helpers (`esc`, `state`, local-time formatting) + the `state.last` cache, `liveStream()` (every SSE connection on every page), and the staleness hairline. |
 | `navbar.js` | Bottom bar: settings gear, the calendar link (on `/calendar` itself, a back-to-the-wall toggle instead) + the single voice FAB (`wfab-fast`). Exposes `window.__startVoiceCommand` for the native launcher. |
 | `voiceagent.js` | The in-app conversation pipeline: `makeRecorder` (mic → `/api/voice-command`), the activity popup, the conversation card. |
 | `settings.js` | The gear panel — reads/writes `app_settings` via `/api/settings` (§7). |

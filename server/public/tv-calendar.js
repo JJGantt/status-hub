@@ -46,6 +46,42 @@ function miniMonth(m) {
   return `<div class="cw-month mini"><h3>${esc(m.label)}</h3><div class="cw-grid">${cells}</div></div>`;
 }
 
+// The served day column, kept after render so the now-line can move without asking the server again.
+let dayline = null;
+
+const pad = (n) => String(n).padStart(2, '0');
+const dateKey = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+
+// Put the line where the clock is. Returns false when the current hour has no row, which means the
+// range the server laid out no longer covers now — a real change, not something to paper over.
+function moveNow(now) {
+  const rows = document.querySelectorAll('#cw-day .cw-hour');
+  const i = dayline.hours.findIndex((x) => x.h === now.getHours());
+  const row = rows[i];
+  const old = document.querySelector('.cw-now');
+  if (old) old.remove();
+  if (i < 0 || !row) return false;
+  rows.forEach((r) => r.classList.remove('cur'));
+  row.classList.add('cur');
+  const el = document.createElement('div');
+  el.className = 'cw-now';
+  el.style.top = `${Math.round((now.getMinutes() / 60) * 100)}%`;
+  row.appendChild(el);
+  return true;
+}
+
+// The one thing this page works out for itself, and it is not a poll: nothing is fetched and no
+// state is inspected. A clock hand has to tick, and the only alternative is the server pushing a
+// frame every minute to announce what time it is. It re-aims at the next exact minute each pass, so
+// it cannot drift. The two cases that are NOT just the clock moving — the day rolling over, and the
+// hour leaving the rendered range — are changes to what the server laid out, so those re-read.
+function tick() {
+  const now = new Date();
+  setTimeout(tick, 60000 - (now.getSeconds() * 1000 + now.getMilliseconds()));
+  if (!dayline) return;
+  if (dateKey(now) !== dayline.date || !moveNow(now)) load();
+}
+
 async function load() {
   const day = document.getElementById('cw-day');
   const mon = document.getElementById('cw-months');
@@ -53,10 +89,16 @@ async function load() {
   let d;
   try { d = await (await fetch('/api/calendar?wall=1')).json(); } catch (_) { return; }
   if (!d || d.error || !d.months) return;
+  dayline = d.dayline || null;
   day.innerHTML = d.dayline ? dayHtml(d.dayline) : '';
   mon.style.gridTemplateColumns = `repeat(${d.cols}, 1fr)`;
   mon.innerHTML = d.count === 1 ? bigMonth(d.months[0], d.dow) : d.months.map(miniMonth).join('');
 }
 
+// Dated items arrive by PUSH. The hub subscribes to list_items/lists in Supabase realtime and emits
+// `lists` here the moment either changes, so a reminder added by voice is on the wall as it is
+// spoken. EventSource reconnects on its own, so a dropped connection costs the gap and nothing more.
+new EventSource('/api/list-stream').addEventListener('lists', load);
+
 load();
-setInterval(load, 60000);
+tick();

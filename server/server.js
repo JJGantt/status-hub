@@ -145,6 +145,10 @@ const sseClients = new Set();
 // Separate SSE pool for the /tv voice-conversation panel — these get raw voice_messages /
 // voice_focus rows, not the assembled status frame, so they don't carry the heavy status payload.
 const voiceClients = new Set();
+// Third pool, same reasoning as the voice one: the calendar surfaces need to know that a dated item
+// changed, and nothing else. They are not on the status frame (they render none of it) and building
+// one to say "something moved" would ship the whole dashboard to a page showing a month grid.
+const listClients = new Set();
 
 // Dashboard HTML, read once from disk with the muscle-map SVG injected at the placeholder.
 const DASHBOARD_HTML = fs.readFileSync(path.join(__dirname, 'public', 'index.html'), 'utf8')
@@ -580,6 +584,15 @@ function pushVoice(kind, row) {
   for (const res of voiceClients) { try { res.write(frame); } catch {} }
 }
 
+// Tell every open calendar surface that dated items changed, so it re-reads /api/calendar. The
+// signal carries no payload on purpose: what each surface needs back differs (the wall wants
+// `calendar_months` months plus today's timeline, the phone wants whichever month it has paged to),
+// so the fetch that follows is the only thing that knows what to ask for.
+function pushLists() {
+  const frame = 'event: lists\ndata: {}\n\n';
+  for (const res of listClients) { try { res.write(frame); } catch {} }
+}
+
 // Last time ANY realtime event arrived. The socket can sit reporting SUBSCRIBED while
 // delivering nothing — it has done exactly that on the voice server and the Mac
 // listener, and the only symptom is that things stop appearing. Nothing in the client
@@ -630,6 +643,13 @@ function startRealtime() {
         pushVoice('mode', { agent });
       }
     })
+    // Dated items and the lists that colour them. Nothing cached depends on these and the status
+    // frame carries none of them, so this is a notify-only subscription: the calendar surfaces
+    // re-read and nobody else does any work.
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'list_items' },
+      () => { seen(); pushLists(); })
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'lists' },
+      () => { seen(); pushLists(); })
     // Voice pipeline: stream inserts/updates straight to the /tv conversation panel. INSERT and
     // UPDATE both carry the new row in `payload.new` (UPDATE = a streamed row flipping done=true).
     .on('postgres_changes', { event: '*', schema: 'public', table: 'voice_messages' },
@@ -1878,6 +1898,7 @@ app.get('/api/calendar', async (req, res) => {
       const hours = [];
       for (let h = lo; h <= hi; h++) {
         hours.push({
+          h,   // 24h number: the wall matches the clock against this to move the now-line itself
           label: `${h % 12 || 12}${h < 12 ? 'a' : 'p'}`,
           items: timed.filter((i) => hourOf(i.time) === h),
           now: h === nowH ? Math.round((nowM / 60) * 100) : null,
@@ -2241,6 +2262,18 @@ app.get('/api/voice-stream', (req, res) => {
   voiceClients.add(res);
   const ka = setInterval(() => { try { res.write(': keepalive\n\n'); } catch {} }, 25000);
   req.on('close', () => { clearInterval(ka); voiceClients.delete(res); });
+});
+
+// Calendar SSE: one `event: lists` frame whenever a dated item or a list changes. Dedicated stream
+// (not /api/stream) so the standalone /calendar page does not have to take a full status frame on
+// connect just to learn about a reminder.
+app.get('/api/list-stream', (req, res) => {
+  res.set({ 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache',
+            Connection: 'keep-alive', 'X-Accel-Buffering': 'no' });
+  res.flushHeaders();
+  listClients.add(res);
+  const ka = setInterval(() => { try { res.write(': keepalive\n\n'); } catch {} }, 25000);
+  req.on('close', () => { clearInterval(ka); listClients.delete(res); });
 });
 
 app.listen(PORT, '0.0.0.0', () => {

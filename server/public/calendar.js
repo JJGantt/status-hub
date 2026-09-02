@@ -3,8 +3,8 @@
 // the todo pane do the writing; this surface only shows what has a date on it.
 //
 // The TV has its own wall page (tv-calendar.html + tv-calendar.js); this one is the interactive
-// surface — navbar, month paging, tap a day to see it in the agenda. Self-fetching like the todo
-// pane (not on the status stream), refreshed on focus and a slow poll so voice edits appear.
+// surface — navbar, month paging, tap a day to see it in the agenda. Not on the status stream (it
+// renders none of it); it takes `/api/list-stream`, which pushes when a dated item changes.
 import { esc } from './shared.js';
 import { mountNavbar } from './navbar.js';
 
@@ -74,7 +74,8 @@ document.getElementById('cal-grid').addEventListener('click', (e) => {
   render();
 });
 window.addEventListener('focus', load);
-// Slow poll: voice edits land within a minute of being spoken. The view stays on whatever month was
-// paged to.
-setInterval(load, 60000);
+// Voice edits arrive by push — the hub emits `lists` off its Supabase realtime subscription the
+// moment a dated item or a list changes. `load()` re-reads whatever month is in view, so paging is
+// preserved. EventSource handles its own reconnection.
+new EventSource('/api/list-stream').addEventListener('lists', load);
 load();

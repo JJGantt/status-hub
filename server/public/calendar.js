@@ -77,5 +77,6 @@ window.addEventListener('focus', load);
 // Voice edits arrive by push — the hub emits `lists` off its Supabase realtime subscription the
 // moment a dated item or a list changes. `load()` re-reads whatever month is in view, so paging is
 // preserved. EventSource handles its own reconnection.
-new EventSource('/api/list-stream').addEventListener('lists', load);
+const es = new EventSource('/api/list-stream');
+es.addEventListener('lists', load);
 load();

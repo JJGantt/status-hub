@@ -98,7 +98,8 @@ async function load() {
 // Dated items arrive by PUSH. The hub subscribes to list_items/lists in Supabase realtime and emits
 // `lists` here the moment either changes, so a reminder added by voice is on the wall as it is
 // spoken. EventSource reconnects on its own, so a dropped connection costs the gap and nothing more.
-new EventSource('/api/list-stream').addEventListener('lists', load);
+const es = new EventSource('/api/list-stream');
+es.addEventListener('lists', load);
 
 load();
 tick();

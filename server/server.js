@@ -351,6 +351,40 @@ function buildSurf(row) {
   };
 }
 
+// ---- surf history: the whole hourly archive, for the card's heatmap ----
+// surf_hours is ~2,000 rows and grows by 24 a day. It is deliberately NOT in the 30s broadcast
+// payload: that frame goes to every connected surface on every tick, and this would multiply it by
+// an order of magnitude to redraw a grid that changes twice a day.
+//
+// Sent as one string, one character per hour from t0, rather than an array of objects: the digits
+// are indices into SURF_RATING_SCALE and '.' is an hour with no reading, which keeps a 2,000-hour
+// archive around 2KB instead of ~100KB of JSON. The client indexes into the same scale, so the
+// heatmap and the rest of the card paint a rating the same colour.
+const SURF_RATING_SCALE = ['FLAT','VERY_POOR','POOR','POOR_TO_FAIR','FAIR','FAIR_TO_GOOD','GOOD','EPIC'];
+let surfHistCache = { at: 0, body: null };
+const dirtySurfHist = () => { surfHistCache = { at: 0, body: null }; };
+
+app.get('/api/surf/history', async (req, res) => {
+  try {
+    if (surfHistCache.body) return res.json(surfHistCache.body);
+    const rows = await sbRange('surf_hours?select=ts,rk&order=ts.asc');
+    if (!rows.length) return res.json({ t0: null, v: '', scale: SURF_RATING_SCALE });
+    const idx = new Map(rows.map(r => [r.ts, SURF_RATING_SCALE.indexOf(r.rk)]));
+    const t0 = rows[0].ts, tN = rows[rows.length - 1].ts;
+    let v = '';
+    for (let t = t0; t <= tN; t += 3600) {
+      const i = idx.get(t);
+      v += (i === undefined || i < 0) ? '.' : String(i);
+    }
+    const body = { t0, v, scale: SURF_RATING_SCALE, colors: SURF_RATING_SCALE.map(ratingColor),
+                   labels: SURF_RATING_SCALE.map(ratingLabel) };
+    surfHistCache = { at: Date.now(), body };
+    res.json(body);
+  } catch (_) {
+    res.status(502).json({ error: 'could not read surf history' });
+  }
+});
+
 // ---- dashboard source-row cache ------------------------------------------------------------
 // The 30s broadcast tick exists to advance clock-derived fields (pace drain, session clock) — but
 // the DB rows it renders only change on writes, and realtime already announces every write. So the
@@ -630,7 +664,9 @@ function startRealtime() {
     .on('postgres_changes', { event: '*', schema: 'public', table: 'nutrition_targets' }, changed)
     .on('postgres_changes', { event: '*', schema: 'public', table: 'exercise_catalog' }, changed)
     .on('postgres_changes', { event: '*', schema: 'public', table: 'exercise_muscles' }, changed)
-    .on('postgres_changes', { event: '*', schema: 'public', table: 'surf_snapshots' }, changed)
+    // A new snapshot changes both the card's current reading and the heatmap behind it.
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'surf_snapshots' },
+      (p) => { dirtySurfHist(); changed(p); })
     // The rep watcher, so setting it appears at once rather than on the next periodic
     // frame. Its whole value is confirming BEFORE a set that sets are being logged as
     // the right thing, and a delay there defeats the purpose. workset_reports is NOT

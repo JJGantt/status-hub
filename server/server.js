@@ -422,78 +422,6 @@ function surfBand(rk) {
 let surfHistCache = { at: 0, body: null };
 const dirtySurfHist = () => { surfHistCache = { at: 0, body: null }; };
 
-app.get('/api/surf/history', async (req, res) => {
-  try {
-    if (surfHistCache.body) return res.json(surfHistCache.body);
-    const rows = await sbRange('surf_hours?select=ts,rk,s_min,s_max,s_plus,s_raw_max,water_f&order=ts.asc');
-    if (!rows.length) return res.json({ t0: null, hours: 0 });
-
-    const nowH = Math.floor(Date.now() / 3600000) * 3600;
-    const ahead = Math.max(0, rows[rows.length - 1].ts - nowH);
-    // Snap the start back to local midnight. Cutting at now-2*ahead lands on an arbitrary hour, so
-    // the first day column held only part of its hours and rendered as a stub.
-    const etHour = (ts) => +new Intl.DateTimeFormat('en-US', {
-      hour: 'numeric', hour12: false, timeZone: 'America/New_York' }).format(new Date(ts * 1000)) % 24;
-    const rough = nowH - 2 * ahead;
-    const from = rough - etHour(rough) * 3600;
-    const win = rows.filter((r) => r.ts >= from);
-    if (!win.length) return res.json({ t0: null, hours: 0 });
-
-    const t0 = win[0].ts, tN = win[win.length - 1].ts;
-    const hours = Math.floor((tN - t0) / 3600) + 1;
-    const by = new Map(win.map((r) => [r.ts, r]));
-
-    // Forecast water is a different claim from a measurement, so it is a separate series rather
-    // than backfilled into the gap after now.
-    let fc = [];
-    try {
-      fc = await sbRange(`water_readings?select=ts,water_f&station=eq.open-meteo` +
-                         `&ts=gte.${new Date(t0 * 1000).toISOString()}&order=ts.asc`);
-    } catch (_) { /* the grids are still worth drawing without it */ }
-    const fcBy = new Map(fc.map((r) => [Math.floor(Date.parse(r.ts) / 3600000) * 3600, r.water_f]));
-
-    // Distinct size bands present in this window, ordered by real height where we have it and by
-    // the label for rows predating 00083.
-    const combos = new Map();
-    for (const r of win) {
-      if (r.s_max == null) continue;
-      const key = `${r.s_min}|${r.s_max}|${r.s_plus ? 1 : 0}`;
-      const mag = r.s_raw_max == null ? null : r.s_raw_max;
-      const prev = combos.get(key);
-      if (!prev) combos.set(key, { min: r.s_min, max: r.s_max, plus: !!r.s_plus, mag });
-      else if (mag != null) prev.mag = prev.mag == null ? mag : Math.max(prev.mag, mag);
-    }
-    const order = [...combos.entries()].sort((a, b) => {
-      const ka = a[1].mag ?? (a[1].max + (a[1].plus ? .5 : 0));
-      const kb = b[1].mag ?? (b[1].max + (b[1].plus ? .5 : 0));
-      return ka - kb || a[1].max - b[1].max || (a[1].plus ? 1 : 0) - (b[1].plus ? 1 : 0);
-    });
-    const sizeIdx = new Map(order.map(([k], i) => [k, i]));
-    const sizeColors = sizeRamp(order.length);
-    const sizeLabels = order.map(([, v]) => `${v.min}\u2013${v.max}${v.plus ? '+' : ''} ft`);
-
-    let rating = '', size = '';
-    const water = [], waterFc = [];
-    for (let t = t0, i = 0; i < hours; t += 3600, i++) {
-      const r = by.get(t);
-      const b = r ? surfBand(r.rk) : null;
-      rating += b == null ? '.' : String(b);
-      const sk = r && r.s_max != null ? sizeIdx.get(`${r.s_min}|${r.s_max}|${r.s_plus ? 1 : 0}`) : undefined;
-      size += sk == null ? '.' : sk.toString(36);      // base36 so more than ten bands still fit one char
-      water.push(r && r.water_f != null ? Math.round(r.water_f * 10) / 10 : null);
-      const f = fcBy.get(t);
-      waterFc.push(f == null ? null : Math.round(f * 10) / 10);
-    }
-
-    const body = { t0, hours, rating, size, water, waterFc,
-                   bandColors: SURF_BAND_COLORS, bandLabels: SURF_BAND_LABELS,
-                   sizeColors, sizeLabels };
-    surfHistCache = { at: Date.now(), body };
-    res.json(body);
-  } catch (_) {
-    res.status(502).json({ error: 'could not read surf history' });
-  }
-});
 
 // ---- dashboard source-row cache ------------------------------------------------------------
 // The 30s broadcast tick exists to advance clock-derived fields (pace drain, session clock) — but
@@ -1016,6 +944,81 @@ ${r.html || ''}
 
 // The index as JSON, for the phone's reports pane. `html` is deliberately not selected: a list of a
 // hundred reports would otherwise carry every page's full markup to a screen that renders none of it.
+// Sits below the auth gate on purpose: it was briefly above it, which left the whole surf
+// archive readable by anyone with the URL.
+app.get('/api/surf/history', async (req, res) => {
+  try {
+    if (surfHistCache.body) return res.json(surfHistCache.body);
+    const rows = await sbRange('surf_hours?select=ts,rk,s_min,s_max,s_plus,s_raw_max,water_f&order=ts.asc');
+    if (!rows.length) return res.json({ t0: null, hours: 0 });
+
+    const nowH = Math.floor(Date.now() / 3600000) * 3600;
+    const ahead = Math.max(0, rows[rows.length - 1].ts - nowH);
+    // Snap the start back to local midnight. Cutting at now-2*ahead lands on an arbitrary hour, so
+    // the first day column held only part of its hours and rendered as a stub.
+    const etHour = (ts) => +new Intl.DateTimeFormat('en-US', {
+      hour: 'numeric', hour12: false, timeZone: 'America/New_York' }).format(new Date(ts * 1000)) % 24;
+    const rough = nowH - 2 * ahead;
+    const from = rough - etHour(rough) * 3600;
+    const win = rows.filter((r) => r.ts >= from);
+    if (!win.length) return res.json({ t0: null, hours: 0 });
+
+    const t0 = win[0].ts, tN = win[win.length - 1].ts;
+    const hours = Math.floor((tN - t0) / 3600) + 1;
+    const by = new Map(win.map((r) => [r.ts, r]));
+
+    // Forecast water is a different claim from a measurement, so it is a separate series rather
+    // than backfilled into the gap after now.
+    let fc = [];
+    try {
+      fc = await sbRange(`water_readings?select=ts,water_f&station=eq.open-meteo` +
+                         `&ts=gte.${new Date(t0 * 1000).toISOString()}&order=ts.asc`);
+    } catch (_) { /* the grids are still worth drawing without it */ }
+    const fcBy = new Map(fc.map((r) => [Math.floor(Date.parse(r.ts) / 3600000) * 3600, r.water_f]));
+
+    // Distinct size bands present in this window, ordered by real height where we have it and by
+    // the label for rows predating 00083.
+    const combos = new Map();
+    for (const r of win) {
+      if (r.s_max == null) continue;
+      const key = `${r.s_min}|${r.s_max}|${r.s_plus ? 1 : 0}`;
+      const mag = r.s_raw_max == null ? null : r.s_raw_max;
+      const prev = combos.get(key);
+      if (!prev) combos.set(key, { min: r.s_min, max: r.s_max, plus: !!r.s_plus, mag });
+      else if (mag != null) prev.mag = prev.mag == null ? mag : Math.max(prev.mag, mag);
+    }
+    const order = [...combos.entries()].sort((a, b) => {
+      const ka = a[1].mag ?? (a[1].max + (a[1].plus ? .5 : 0));
+      const kb = b[1].mag ?? (b[1].max + (b[1].plus ? .5 : 0));
+      return ka - kb || a[1].max - b[1].max || (a[1].plus ? 1 : 0) - (b[1].plus ? 1 : 0);
+    });
+    const sizeIdx = new Map(order.map(([k], i) => [k, i]));
+    const sizeColors = sizeRamp(order.length);
+    const sizeLabels = order.map(([, v]) => `${v.min}\u2013${v.max}${v.plus ? '+' : ''} ft`);
+
+    let rating = '', size = '';
+    const water = [], waterFc = [];
+    for (let t = t0, i = 0; i < hours; t += 3600, i++) {
+      const r = by.get(t);
+      const b = r ? surfBand(r.rk) : null;
+      rating += b == null ? '.' : String(b);
+      const sk = r && r.s_max != null ? sizeIdx.get(`${r.s_min}|${r.s_max}|${r.s_plus ? 1 : 0}`) : undefined;
+      size += sk == null ? '.' : sk.toString(36);      // base36 so more than ten bands still fit one char
+      water.push(r && r.water_f != null ? Math.round(r.water_f * 10) / 10 : null);
+      const f = fcBy.get(t);
+      waterFc.push(f == null ? null : Math.round(f * 10) / 10);
+    }
+
+    const body = { t0, hours, rating, size, water, waterFc,
+                   bandColors: SURF_BAND_COLORS, bandLabels: SURF_BAND_LABELS,
+                   sizeColors, sizeLabels };
+    surfHistCache = { at: Date.now(), body };
+    res.json(body);
+  } catch (_) {
+    res.status(502).json({ error: 'could not read surf history' });
+  }
+});
+
 app.get('/api/reports', async (req, res) => {
   try {
     res.json({ reports: await sb('reports?select=id,title,summary,repo,created&order=created.desc&limit=100') || [] });

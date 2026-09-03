@@ -354,33 +354,82 @@ function buildSurf(row, waterRow) {
   };
 }
 
-// ---- surf history: the whole hourly archive, for the card's heatmap ----
-// surf_hours is ~2,000 rows and grows by 24 a day. It is deliberately NOT in the 30s broadcast
-// payload: that frame goes to every connected surface on every tick, and this would multiply it by
-// an order of magnitude to redraw a grid that changes twice a day.
+// ---- surf history: rating, size and water for the card's grids ----
+// surf_hours grows by 24 rows a day. This is deliberately NOT in the 30s broadcast payload: that
+// frame goes to every connected surface on every tick, and this would multiply it by an order of
+// magnitude to redraw grids that change twice a day.
 //
-// Sent as one string, one character per hour from t0, rather than an array of objects: the digits
-// are indices into SURF_RATING_SCALE and '.' is an hour with no reading, which keeps a 2,000-hour
-// archive around 2KB instead of ~100KB of JSON. The client indexes into the same scale, so the
-// heatmap and the rest of the card paint a rating the same colour.
+// Window: twice as much history as forecast, matching the near view in surf-report/plots.py. The
+// whole archive would be a couple of pixels per column on a phone.
+//
+// Rating and size travel as strings, one character per hour from t0 — a band index, or '.' for an
+// hour with no reading. That keeps ~700 hours near 1KB rather than tens of KB of JSON objects.
+//
+// Rating bands are a judgment, not a magnitude: red at or below Poor, yellow Poor-Fair, green Fair,
+// blue Good, purple Epic. Everything at or below Poor is one band because the difference between
+// Very Poor and Poor never changes whether it is worth going. Size stays a sequential blue ramp
+// because it really is a magnitude.
 const SURF_RATING_SCALE = ['FLAT','VERY_POOR','POOR','POOR_TO_FAIR','FAIR','FAIR_TO_GOOD','GOOD','EPIC'];
+const SURF_BAND_COLORS  = ['#ff3b30', '#ffcc00', '#34c759', '#0a84ff', '#af52de'];
+const SURF_BAND_LABELS  = ['Poor or below', 'Poor\u2013Fair', 'Fair', 'Good', 'Epic'];
+const SURF_SIZE_COLORS  = ['#86b6ef', '#3987e5', '#1c5cab', '#0d366b'];
+const SURF_SIZE_LABELS  = ['0\u20131 ft', '1\u20132 ft', '2\u20133 ft', '3\u20134 ft'];
+
+// An unknown key is dropped, never guessed.
+function surfBand(rk) {
+  const i = SURF_RATING_SCALE.indexOf(rk);
+  if (i < 0) return null;
+  if (i <= SURF_RATING_SCALE.indexOf('POOR')) return 0;
+  if (i === SURF_RATING_SCALE.indexOf('POOR_TO_FAIR')) return 1;
+  if (i <= SURF_RATING_SCALE.indexOf('FAIR_TO_GOOD')) return 2;
+  if (i === SURF_RATING_SCALE.indexOf('GOOD')) return 3;
+  return 4;
+}
+
 let surfHistCache = { at: 0, body: null };
 const dirtySurfHist = () => { surfHistCache = { at: 0, body: null }; };
 
 app.get('/api/surf/history', async (req, res) => {
   try {
     if (surfHistCache.body) return res.json(surfHistCache.body);
-    const rows = await sbRange('surf_hours?select=ts,rk&order=ts.asc');
-    if (!rows.length) return res.json({ t0: null, v: '', scale: SURF_RATING_SCALE });
-    const idx = new Map(rows.map(r => [r.ts, SURF_RATING_SCALE.indexOf(r.rk)]));
-    const t0 = rows[0].ts, tN = rows[rows.length - 1].ts;
-    let v = '';
-    for (let t = t0; t <= tN; t += 3600) {
-      const i = idx.get(t);
-      v += (i === undefined || i < 0) ? '.' : String(i);
+    const rows = await sbRange('surf_hours?select=ts,rk,s_max,water_f&order=ts.asc');
+    if (!rows.length) return res.json({ t0: null, hours: 0 });
+
+    const nowH = Math.floor(Date.now() / 3600000) * 3600;
+    const ahead = Math.max(0, rows[rows.length - 1].ts - nowH);
+    const from = nowH - 2 * ahead;
+    const win = rows.filter((r) => r.ts >= from);
+    if (!win.length) return res.json({ t0: null, hours: 0 });
+
+    const t0 = win[0].ts, tN = win[win.length - 1].ts;
+    const hours = Math.floor((tN - t0) / 3600) + 1;
+    const by = new Map(win.map((r) => [r.ts, r]));
+
+    // Forecast water is a different claim from a measurement, so it is a separate series rather
+    // than backfilled into the gap after now.
+    let fc = [];
+    try {
+      fc = await sbRange(`water_readings?select=ts,water_f&station=eq.open-meteo` +
+                         `&ts=gte.${new Date(t0 * 1000).toISOString()}&order=ts.asc`);
+    } catch (_) { /* the grids are still worth drawing without it */ }
+    const fcBy = new Map(fc.map((r) => [Math.floor(Date.parse(r.ts) / 3600000) * 3600, r.water_f]));
+
+    let rating = '', size = '';
+    const water = [], waterFc = [];
+    for (let t = t0, i = 0; i < hours; t += 3600, i++) {
+      const r = by.get(t);
+      const b = r ? surfBand(r.rk) : null;
+      rating += b == null ? '.' : String(b);
+      const sm = r && r.s_max != null ? Math.round(r.s_max) - 1 : null;
+      size += (sm == null || sm < 0 || sm > 3) ? '.' : String(sm);
+      water.push(r && r.water_f != null ? Math.round(r.water_f * 10) / 10 : null);
+      const f = fcBy.get(t);
+      waterFc.push(f == null ? null : Math.round(f * 10) / 10);
     }
-    const body = { t0, v, scale: SURF_RATING_SCALE, colors: SURF_RATING_SCALE.map(ratingColor),
-                   labels: SURF_RATING_SCALE.map(ratingLabel) };
+
+    const body = { t0, hours, rating, size, water, waterFc,
+                   bandColors: SURF_BAND_COLORS, bandLabels: SURF_BAND_LABELS,
+                   sizeColors: SURF_SIZE_COLORS, sizeLabels: SURF_SIZE_LABELS };
     surfHistCache = { at: Date.now(), body };
     res.json(body);
   } catch (_) {

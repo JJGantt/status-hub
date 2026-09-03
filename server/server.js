@@ -293,14 +293,6 @@ const SURF_RATING_LABEL = {
 };
 const ratingColor = (k) => SURF_RATING_COLOR[k] || '#8b96a5';
 const ratingLabel = (k) => SURF_RATING_LABEL[k] || k || '—';
-const etDate    = (ts) => new Date(ts*1000).toLocaleDateString('en-CA', { timeZone:'America/New_York' });
-const etWeekday = (ts) => new Date(ts*1000).toLocaleDateString('en-US', { weekday:'short', timeZone:'America/New_York' });
-const etHour    = (ts) => (+new Date(ts*1000).toLocaleString('en-US', { hour:'numeric', hour12:false, timeZone:'America/New_York' })) % 24;
-const hourLabel = (h) => h === 0 ? '12a' : h < 12 ? h + 'a' : h === 12 ? '12p' : (h - 12) + 'p';
-const windShort = (h) => {
-  const t = { Offshore:'Off', Onshore:'On', 'Cross-shore':'Cross' }[h.wType] || '';
-  return h.wSpd != null ? `${t} ${Math.round(h.wSpd)}`.trim() : '—';
-};
 
 // ---- Litter-Robot display state -------------------------------------------------------------
 // The robot is held in Sleep Mode and the Fly watcher fires every clean itself, so the robot's own
@@ -355,37 +347,9 @@ function buildLitter(row) {
 function buildSurf(row, waterRow) {
   if (!row || !Array.isArray(row.rows) || !row.rows.length) return null;
   const rows = row.rows;
-  const byDay = new Map();
-  for (const h of rows) { const d = etDate(h.ts); (byDay.get(d) || byDay.set(d, []).get(d)).push(h); }
-  // Aggregate a time-of-day bucket (inclusive ET hour range) -> best rating + size span.
-  const bucket = (all, lo, hi) => {
-    const b = all.filter(h => { const e = etHour(h.ts); return e >= lo && e <= hi; });
-    if (!b.length) return null;
-    const best = b.reduce((a, c) => ((c.rv ?? -1) > (a.rv ?? -1) ? c : a), b[0]);
-    const mins = b.map(h => h.sMin).filter(Number.isFinite);
-    const maxs = b.map(h => h.sMax).filter(Number.isFinite);
-    return {
-      ratingLabel: ratingLabel(best.rk), ratingColor: ratingColor(best.rk),
-      hMin: mins.length ? Math.min(...mins) : null,
-      hMax: maxs.length ? Math.max(...maxs) : null,
-    };
-  };
-  const days = [...byDay.values()].slice(0, 7).map((all) => {
-    const daylight = all.filter(h => { const e = etHour(h.ts); return e >= 8 && e <= 20; })
-                        .sort((a, b) => a.ts - b.ts);
-    return {
-      weekday: etWeekday(all[0].ts),
-      midday: bucket(all, 10, 14),     // 10a–2p
-      late: bucket(all, 16, 19),       // 4p–7p
-      hours: daylight.map(h => ({
-        t: hourLabel(etHour(h.ts)),
-        ratingLabel: ratingLabel(h.rk), ratingColor: ratingColor(h.rk),
-        hMin: h.sMin, hMax: h.sMax,
-        wind: windShort(h),
-        airF: h.aT != null ? Math.round(h.aT) : null,
-      })),
-    };
-  });
+  // Nearest hour to now, for the card's header strip. The per-day breakdown that used to live here
+  // is gone: the two grids show every hour of every day, so a seven-row summary of the same data
+  // was a second, coarser answer to a question already answered above it.
   const now = Date.now() / 1000;
   const cur = rows.reduce((a, b) => (Math.abs(b.ts - now) < Math.abs(a.ts - now) ? b : a), rows[0]);
   // Measured buoy reading when there is one; Surfline's daily figure only as a fallback.
@@ -394,13 +358,12 @@ function buildSurf(row, waterRow) {
     spot: row.slug || 'mayport-poles',
     capturedAt: row.captured_at,
     waterTempF: waterRow ? Math.round(waterRow.water_f)
-                        : (wt ? Math.round((wt.min + wt.max) / 2) : null),
+                         : (wt ? Math.round((wt.min + wt.max) / 2) : null),
     waterMeasured: !!waterRow,
     current: cur ? {
       ratingLabel: ratingLabel(cur.rk), ratingColor: ratingColor(cur.rk),
       hMin: cur.sMin, hMax: cur.sMax, airF: cur.aT != null ? Math.round(cur.aT) : null,
     } : null,
-    days,
   };
 }
 

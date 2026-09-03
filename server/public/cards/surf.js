@@ -5,8 +5,6 @@
 import { state } from '../shared.js';
 
 const SPOT_LABEL = { 'mayport-poles': 'Poles' };
-const open = new Set();   // weekdays currently expanded (persists across SSE re-renders)
-let bound = false;
 
 const ftRange = (a, b) =>
   (a == null || b == null) ? '—' : (a === b ? `${a} ft` : `${a}–${b} ft`);
@@ -197,47 +195,6 @@ export function render(s) {
       chip('Air', (cur.airF != null ? cur.airF + '°' : '—'), '#eab308') +
     '</div>';
 
-  const hourRow = (h) =>
-    '<div class=surfhr>' +
-      '<span class=sh-t>' + h.t + '</span>' +
-      '<span class=sh-rt style="color:' + h.ratingColor + '">' + h.ratingLabel + '</span>' +
-      '<span class=sh-ft>' + ftRange(h.hMin, h.hMax) + '</span>' +
-      '<span class=sh-w>' + (h.wind || '—') + '</span>' +
-      '<span class=sh-air>' + (h.airF != null ? h.airF + '°' : '—') + '</span>' +
-    '</div>';
-
-  const bucketCell = (b) =>
-    '<span class=sr-buck>' +
-      (b
-        ? '<span class=sr-rt style="color:' + b.ratingColor + '">' + b.ratingLabel + '</span>' +
-          '<span class=sr-ft>' + ftRange(b.hMin, b.hMax) + '</span>'
-        : '<span class=sr-rt style="color:#8b96a5">—</span>') +
-    '</span>';
-
-  const dayRow = (d) => {
-    const isOpen = open.has(d.weekday);
-    const row =
-      '<div class="surfrow' + (isOpen ? ' open' : '') + '" data-day="' + d.weekday + '">' +
-        '<span class=sr-x>' + (isOpen ? '▾' : '▸') + '</span>' +
-        '<span class=sr-wd>' + d.weekday + '</span>' +
-        bucketCell(d.midday) +
-        bucketCell(d.late) +
-      '</div>';
-    if (!isOpen) return row;
-    const hours = (d.hours && d.hours.length)
-      ? '<div class=surfhr-head><span>Time</span><span>Cond</span><span>Surf</span><span>Wind</span><span>Air</span></div>'
-        + d.hours.map(hourRow).join('')
-      : '<div class=surfhr-empty>No daytime hours</div>';
-    return row + '<div class=surfhours>' + hours + '</div>';
-  };
-
-  const header =
-    '<div class=surfhead>' +
-      '<span></span><span></span>' +
-      '<span class=sh-col>10a–2p</span>' +
-      '<span class=sh-col>4–7p</span>' +
-    '</div>';
-
   // Keys are built from the bands actually present in the window. One that advertises a level the
   // grid does not contain sends you looking for a colour that is not there, and the nearest one you
   // find is a different level.
@@ -262,19 +219,9 @@ export function render(s) {
       keys + '<div class=surfwater><canvas id=surfwater></canvas></div>'
     : '';
 
-  el.innerHTML = head + heat + '<div class=surfdays>' + header + (S.days || []).map(dayRow).join('') + '</div>';
+  el.innerHTML = head + heat;
   loadHistory(S.capturedAt);
   paintGrids(el.querySelector('#surfgrids'));
   paintWater(el.querySelector('#surfwater'));
 
-  if (!bound) {
-    bound = true;
-    el.addEventListener('click', (e) => {
-      const row = e.target.closest('.surfrow');
-      if (!row || !el.contains(row)) return;
-      const day = row.dataset.day;
-      if (open.has(day)) open.delete(day); else open.add(day);
-      render(state.last);   // re-paint from the latest payload with new expand state
-    });
-  }
 }

@@ -21,16 +21,13 @@ func hueColor(_ t: Double) -> Color {
 func litterColor(_ v: Double?) -> Color { v == nil ? .muted : hueColor((90 - v!) / 20) }   // 90%→green, 70%→red
 func drawerColor(_ v: Double?) -> Color { v == nil ? .muted : hueColor((v! - 75) / 20) }   // 75%→green, 95%→red
 
-let statusLabel: [String: String] = [
-    "READY": "Ready", "CLEAN_CYCLE": "Cleaning", "CAT_SENSOR_INTERRUPTED": "Stuck (auto-resuming)",
-    "PAUSED": "Paused", "CAT_DETECTED": "Cat detected", "CAT_SENSOR_TIMING": "Waiting (post-cat)",
-    "CLEAN_CYCLE_COMPLETE": "Cycle complete", "DRAWER_FULL": "Drawer full!", "OFFLINE": "Offline", "OFF": "Off",
-]
-let statusColorMap: [String: UInt32] = [
-    "READY": 0x3b82f6, "CLEAN_CYCLE": 0xeab308, "CAT_SENSOR_INTERRUPTED": 0xf97316,
-    "PAUSED": 0xf97316, "DRAWER_FULL": 0xef4444, "OFFLINE": 0xef4444, "OFF": 0x556677,
-]
-func statusColor(_ s: String) -> Color { Color(hex: statusColorMap[s] ?? 0x8b96a5) }
+// "#rrggbb" from the payload -> Color. Device state colours are computed server-side so the card,
+// the walls and this app cannot drift apart.
+func hexColor(_ s: String?) -> Color {
+    guard let hex = s?.trimmingCharacters(in: CharacterSet(charactersIn: "#")),
+          let v = UInt32(hex, radix: 16) else { return .muted }
+    return Color(hex: v)
+}
 
 // Workout label → accent color (push red, pull green, legs blue, full body white, else purple).
 func dayColor(_ label: String?) -> Color {

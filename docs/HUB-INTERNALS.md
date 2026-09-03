@@ -65,7 +65,7 @@ Supabase ──▶ server.js buildStatus() ──▶ /api/status payload ──�
 | `nutrition_log` | calorie-adherence calendar + calorie/weight trend plot | `lib/nutritionlog` |
 | `volume` | per-muscle weekly volume gauges + the body map colors | `lib/volume` + `lib/bodymap` |
 | `heatmap` | GitHub-style workout heatmap | `lib/heatmap` |
-| `litter` / `feeder` / `surf` | those device/status cards | Supabase rows (`device_status`, snapshots) |
+| `litter` / `feeder` / `surf` | those device/status cards | Supabase rows (`device_status`, snapshots); litter through `buildLitter` |
 | `rep_watcher` | what the Apple-Watch rep watcher is logging as | `sets`/watcher state |
 | `last_set_at` / `session_start_at` | the rest clock + "since last set" | derived from `sets` |
 | `routing` / `mics` | voice liveness strip (ESP/Mac/Pi + always-on/inject) | `voice_presence`, `worker_presence`, `app_settings` |
@@ -123,6 +123,17 @@ self-fetches) · `repos` (the Mac's projects; tap to launch a Claude session the
 gauges) · `workouts` (heatmap + day detail) · `litter` · `feeder` · `surf` · `routing` (TV top strip)
 · `deskfoot` (which session holds follow-ups, TV footer — §6b) · `score` (TV right column) · `mics`
 (page voice-liveness strip).
+
+**The litter card's state is the server's** (`buildLitter` in `server.js`). The robot is held in
+Sleep Mode and the Fly watcher fires every clean itself, so the robot's own `status` is not the
+state of the box — it reads `READY` through a queued clean, a phantom weight, a 30-minute lockout,
+and a watcher that stopped reporting an hour ago. `buildLitter` folds that `status` together with
+the driver state the watcher publishes in `device_status.data` (`sleeping`, `clean_pending`,
+`clean_due_at`, `locked_out`, `scale_stuck`, `last_visit_at`, …) and the row's own age, worst-first,
+into one `state` + `label` + `color` the card, the walls and the iOS `LitterCard` all just paint.
+A row older than 25 minutes (the watcher refreshes every 10) is `STALE`, because a dead watcher and
+an idle robot otherwise look identical. `SELF_CYCLING` means the robot left sleep mode: it is
+cycling on its own and nothing here is driving it.
 
 **Surfaces (same code, different chrome):** desktop `/page` = scrolling rows; phone = swipe panes on
 `/`, in markup order in `public/tv.html` — chat · wall · misc · maint · todo · repos · reports,

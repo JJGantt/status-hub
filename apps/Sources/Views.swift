@@ -52,12 +52,12 @@ struct MacroTile: View {
 struct LitterCard: View {
     let litter: Litter?
     var body: some View {
-        let st = litter?.status ?? "OFFLINE"
         CardBox(title: "Litter-Robot") {
             HStack(spacing: 10) {
-                Circle().fill(statusColor(st)).frame(width: 12, height: 12)
-                Text(statusLabel[st] ?? st).font(.title2.bold())
+                Circle().fill(hexColor(litter?.color)).frame(width: 12, height: 12)
+                Text(litter?.label ?? "—").font(.title2.bold())
             }
+            StatRow(label: "Used", value: litter?.used_ago ?? "—", color: .primary)
             StatRow(label: "Litter level", value: pctText(litter?.litter_level_pct), color: litterColor(litter?.litter_level_pct))
             StatRow(label: "Waste drawer", value: pctText(litter?.waste_drawer_pct), color: drawerColor(litter?.waste_drawer_pct))
         }

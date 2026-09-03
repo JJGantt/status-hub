@@ -9,7 +9,12 @@ struct Status: Codable {
 }
 
 struct Litter: Codable {
-    let status: String?
+    // state/label/color are the server's verdict over the robot's status AND what the watcher is
+    // doing with it (a queued clean, a lockout, a watcher gone quiet) — see buildLitter in server.js.
+    let state: String?
+    let label: String?
+    let color: String?
+    let used_ago: String?
     let litter_level_pct: Double?
     let waste_drawer_pct: Double?
     let updated_at: String?

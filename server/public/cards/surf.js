@@ -16,6 +16,7 @@ const ftRange = (a, b) =>
 // Fetched once and refetched only when a new snapshot lands (capturedAt moves), because it is ~2KB
 // and changes twice a day, while this card re-renders on every 30s broadcast.
 const GRID_H = 86;         // per grid; both are drawn on one canvas so they sit flush
+const DOW_H = 13;          // weekday-letter strip above the grids, same canvas so it stays aligned
 const WATER_H = 54;
 let hist = null, histFor = null, histPending = false;
 
@@ -54,17 +55,32 @@ function paintGrids(cv) {
   if (!hist || !cv) return;
   const { cols, byDay } = grid();
   const dpr = window.devicePixelRatio || 1;
-  const w = cv.clientWidth || 320, H = GRID_H * 2;
+  const w = cv.clientWidth || 320, H = DOW_H + GRID_H * 2;
   cv.width = Math.round(w * dpr); cv.height = Math.round(H * dpr);
   const g = cv.getContext('2d'); g.setTransform(dpr, 0, 0, dpr, 0, 0);
   g.clearRect(0, 0, w, H);
   const cw = w / cols.length, ch = GRID_H / 24;
 
+  // Weekday letter over each column, on the same canvas as the grids so it cannot drift out of
+  // alignment with them the way a separately-laid-out HTML row could.
+  g.font = '9px system-ui, -apple-system, sans-serif';
+  g.textAlign = 'center'; g.textBaseline = 'middle';
+  g.fillStyle = '#8b96a5';
+  const skip = cw < 9 ? Math.ceil(9 / cw) : 1;      // thin columns get every Nth letter, not a smear
+  cols.forEach((k, x) => {
+    if (x % skip) return;
+    // Midday avoids the key being shifted a day by a DST-edge parse; +6 %7 turns Sun-first into
+    // Mon-first so the string reads MTWTFSS.
+    const dow = (new Date(k + 'T12:00:00').getDay() + 6) % 7;
+    g.fillText('MTWTFSS'[dow], (x + .5) * cw, DOW_H / 2);
+  });
+  g.textAlign = 'start'; g.textBaseline = 'alphabetic';
+
   cols.forEach((k, x) => {
     const c = byDay.get(k);
     for (let h = 0; h < 24; h++) {
       // hour 0 at the bottom of each grid, so the morning band reads as a horizontal stripe
-      const y = GRID_H - (h + 1) * ch;
+      const y = DOW_H + GRID_H - (h + 1) * ch;
       const rb = c.r[h], sb = c.s[h];
       g.fillStyle = rb === '.' ? '#1a222b' : (hist.bandColors[+rb] || '#1a222b');
       g.fillRect(x * cw, y, Math.ceil(cw) + .5, Math.ceil(ch) + .5);
@@ -76,13 +92,13 @@ function paintGrids(cv) {
   // 8a and 8p on cell boundaries, so a line coincides with the hour it names rather than floating
   // half a row off it.
   g.strokeStyle = 'rgba(255,255,255,.55)'; g.lineWidth = 1;
-  for (const base of [0, GRID_H]) {
+  for (const base of [DOW_H, DOW_H + GRID_H]) {
     for (const h of [8, 20]) {
       const y = base + GRID_H - h * ch;
       g.beginPath(); g.moveTo(0, y); g.lineTo(w, y); g.stroke();
       // Label from the same y the line is stroked at, on the rating grid only — a label that
       // drifts off its line misreads as a different hour, and twice over is just clutter.
-      if (base === 0) {
+      if (base === DOW_H) {
         const lab = cv.parentElement &&
                     cv.parentElement.querySelector('.surfheat-ax [data-h="' + h + '"]');
         if (lab) lab.style.top = (100 * y / H).toFixed(2) + '%';
@@ -91,12 +107,12 @@ function paintGrids(cv) {
   }
   // Seam between the grids, and today.
   g.strokeStyle = 'rgba(255,255,255,.85)'; g.lineWidth = 1;
-  g.beginPath(); g.moveTo(0, GRID_H + .5); g.lineTo(w, GRID_H + .5); g.stroke();
+  g.beginPath(); g.moveTo(0, DOW_H + GRID_H + .5); g.lineTo(w, DOW_H + GRID_H + .5); g.stroke();
   const ti = cols.indexOf(dayKey(new Date()));
   if (ti >= 0) {
     g.strokeStyle = '#ffffff'; g.lineWidth = 1.5;
     const x = (ti + .5) * cw;
-    g.beginPath(); g.moveTo(x, 0); g.lineTo(x, H); g.stroke();
+    g.beginPath(); g.moveTo(x, DOW_H); g.lineTo(x, H); g.stroke();
   }
 }
 

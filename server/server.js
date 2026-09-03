@@ -700,6 +700,9 @@ async function buildStatus() {
   } catch (_) { /* watcher is a nicety; never fail the dashboard over it */ }
 
   const last_set_at = (heatRows && heatRows.length) ? heatRows[heatRows.length - 1].occurred_at : null;
+  // Sets logged so far in the current 4am-origin day — the same figure the day-detail panel heads
+  // its list with, carried on the payload so the rest-timer block can show it without a second read.
+  const sets_today = (heatRows || []).reduce((n, r) => n + (dayBucketOf(r.occurred_at) === today ? 1 : 0), 0);
   // session_start_at: the first set of the trailing run where consecutive sets are <=20min apart. The
   // client shows (now - session_start) as the session clock while the last set is <20min old, and lets
   // it reset to zero once a 20min gap opens (the session ended). A >20min gap breaks the run, so a new
@@ -714,7 +717,7 @@ async function buildStatus() {
     }
   }
   return { today, litter, feeder, surf, nutrition, maintenance, pace: paceData, volume, heatmap, nutrition_log,
-    last_set_at, session_start_at, rep_watcher, routing, mics, score, desk_focus: deskFocus,
+    last_set_at, session_start_at, sets_today, rep_watcher, routing, mics, score, desk_focus: deskFocus,
     generated_at: new Date().toISOString() };
 }
 

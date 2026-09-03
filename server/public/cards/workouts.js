@@ -24,12 +24,13 @@ export function render(s){
  else if(s.today)selectDay(s.today);      // default the day detail to today's sets
  tickRest();
 }
-// Two live clocks driven off the set log, both counting up:
+// Two live clocks driven off the set log, both counting up, plus today's tally:
 //  - SINCE LAST SET (left, always): time since the LAST set. mm:ss when recent, then coarse (Hh Mm /
 //    Dd Hh). Green while active, amber past 5 min, dimmed once the session is over.
-//  - SESSION (right, only while active): total time since the FIRST set of the current session — a run
+//  - SESSION (middle, only while active): total time since the FIRST set of the current session — a run
 //    of sets each within 20min of the previous. Once 20min pass with no new set the session is over and
 //    this side disappears (resets to zero); the next set starts a fresh session.
+//  - SETS (right, always): `sets_today` off the payload — sets in the current 4am day, small.
 const SESSION_GAP_S=20*60;          // a >20min gap between sets ends the session
 function fmtSince(s){
  if(s<3600) return Math.floor(s/60)+':'+String(Math.floor(s%60)).padStart(2,'0');
@@ -67,13 +68,17 @@ function tickRest(){
  // left — since last set (always)
  let html='<div class="rt-side rt-left"><div class=rt-label>Since last set</div>'+
    '<div class=rt-time>'+fmtSince(rest)+'</div></div>';
- // right — session total (only while a session is live)
+ // middle — session total (only while a session is live)
  if(active){
    const startAt=d.session_start_at||lastAt;
    const sess=Math.max(0,(now-wallClockMs(startAt))/1000);
-   html+='<div class="rt-side rt-right"><div class=rt-label>Session</div>'+
+   html+='<div class="rt-side rt-mid"><div class=rt-label>Session</div>'+
      '<div class="rt-time rt-session">'+fmtSession(sess)+'</div></div>';
  }
+ // right — sets logged so far today (server-counted, 4am day). Deliberately small: it is a tally,
+ // not a clock, so it holds the far edge without competing with the digits beside it.
+ html+='<div class="rt-side rt-right"><div class=rt-label>Sets</div>'+
+   '<div class="rt-time rt-count">'+(d.sets_today||0)+'</div></div>';
  // The rep watcher, under the clocks: what the watch's counted sets are being logged
  // as right now. Only useful BEFORE a set, so it sits where the eye already goes.
  const rw=(state.last||{}).rep_watcher;

@@ -89,11 +89,11 @@ function paintGrids(cv) {
     }
   });
 
-  // 8a and 8p on cell boundaries, so a line coincides with the hour it names rather than floating
+  // 8a and 4p on cell boundaries, so a line coincides with the hour it names rather than floating
   // half a row off it.
   g.strokeStyle = 'rgba(255,255,255,.55)'; g.lineWidth = 1;
   for (const base of [DOW_H, DOW_H + GRID_H]) {
-    for (const h of [8, 20]) {
+    for (const h of [8, 16]) {
       const y = base + GRID_H - h * ch;
       g.beginPath(); g.moveTo(0, y); g.lineTo(w, y); g.stroke();
       // Label from the same y the line is stroked at, on the rating grid only — a label that
@@ -231,7 +231,7 @@ export function render(s) {
   // each, which leaves nowhere for a key between them.
   const heat = hist
     ? '<div class=surfheat><canvas id=surfgrids></canvas>' +
-      '<div class=surfheat-ax><span data-h=20>8p</span><span data-h=8>8a</span></div></div>' +
+      '<div class=surfheat-ax><span data-h=16>4p</span><span data-h=8>8a</span></div></div>' +
       keys + '<div class=surfwater><canvas id=surfwater></canvas></div>'
     : '';
 

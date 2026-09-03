@@ -115,14 +115,9 @@ body.ss-open .navbar{z-index:2001}
 .surfheat{position:relative;margin-top:12px;border-radius:7px;overflow:hidden;background:#0b0f13}
 .surfheat canvas{display:block;width:100%;height:185px}
 .surfwater{margin-top:8px;border-radius:7px;overflow:hidden;background:#0b0f13}
-.surfwater canvas{display:block;width:100%;height:54px}
+.surfwater canvas{display:block;width:100%;height:68px}
 /* Hour labels sit on the canvas rather than in a gutter — the grid is the content and a card is
    narrow enough that an axis column would cost more width than the labels are worth. */
-.surfheat-ax{position:absolute;inset:0;pointer-events:none}
-/* `top` is set by paintHeat from the same y it strokes the line at — no percentages here, or the
-   label and its line drift apart the moment the canvas height changes. */
-.surfheat-ax span{position:absolute;left:4px;transform:translateY(-50%);font-size:9px;z-index:1;
-  color:rgba(255,255,255,.8);letter-spacing:.03em;text-shadow:0 1px 2px rgba(0,0,0,.9)}
 .surfkey{display:flex;flex-wrap:wrap;gap:10px 14px;margin-top:7px;padding:0 2px}
 .surfkey .sk-i{display:flex;align-items:center;gap:5px;font-size:10px;color:#8b96a5}
 .surfkey .sk-sw{width:9px;height:9px;border-radius:2px;display:inline-block}

@@ -302,7 +302,7 @@ const windShort = (h) => {
   return h.wSpd != null ? `${t} ${Math.round(h.wSpd)}`.trim() : '—';
 };
 
-function buildSurf(row) {
+function buildSurf(row, waterRow) {
   if (!row || !Array.isArray(row.rows) || !row.rows.length) return null;
   const rows = row.rows;
   const byDay = new Map();
@@ -338,11 +338,14 @@ function buildSurf(row) {
   });
   const now = Date.now() / 1000;
   const cur = rows.reduce((a, b) => (Math.abs(b.ts - now) < Math.abs(a.ts - now) ? b : a), rows[0]);
+  // Measured buoy reading when there is one; Surfline's daily figure only as a fallback.
   const wt = row.water_temp || null;
   return {
     spot: row.slug || 'mayport-poles',
     capturedAt: row.captured_at,
-    waterTempF: wt ? Math.round((wt.min + wt.max) / 2) : null,
+    waterTempF: waterRow ? Math.round(waterRow.water_f)
+                        : (wt ? Math.round((wt.min + wt.max) / 2) : null),
+    waterMeasured: !!waterRow,
     current: cur ? {
       ratingLabel: ratingLabel(cur.rk), ratingColor: ratingColor(cur.rk),
       hMin: cur.sMin, hMax: cur.sMax, airF: cur.aT != null ? Math.round(cur.aT) : null,
@@ -405,7 +408,7 @@ async function fetchStatusRows(win, week, histStart, heatStart) {
   const key = [win.start, win.end, week[0], histStart, heatStart, nutLogStart].join('|');
   if (!rowCache.dirty && rowCache.rows && rowCache.key === key
       && Date.now() - rowCache.at < ROWCACHE_BACKSTOP_MS) return rowCache.rows;
-  const [entries, stagedEntries, setRows, weightRows, histRows, muscleRows, heatRows, catalogRows, nutLogRows, targetRows, surfRows] = await Promise.all([
+  const [entries, stagedEntries, setRows, weightRows, histRows, muscleRows, heatRows, catalogRows, nutLogRows, targetRows, surfRows, waterRows] = await Promise.all([
     sb(`nutrition_entries?occurred_at=gte.${win.start}&occurred_at=lt.${win.end}&staged=eq.false&select=calories,protein_g,carbs_g,fat_g,veg_g,dark_green_g,fruit_g`),
     // Staged meals carry no day: they are pending until committed, so there is no window to filter on
     // and every staged row belongs to whatever day it is eaten on. Sum them all.
@@ -419,8 +422,15 @@ async function fetchStatusRows(win, week, histStart, heatStart) {
     sbRange(`nutrition_entries?occurred_at=gte.${nutLogStart}T00:00:00&staged=eq.false&select=occurred_at,calories,protein_g,fat_g&order=occurred_at`),
     sb('nutrition_targets?select=date,calories&order=date.asc'),
     sb('surf_snapshots?select=slug,water_temp,captured_at,rows&order=captured_at.desc&limit=1'),
+    // Measured water temperature. Surfline's own value is not tied to any instrument and drifts —
+    // it read ~4F above two independent stations for five straight days in late August before
+    // snapping back — so the card shows the buoy instead. See surf-report's README.
+    // Deliberately NOT in the realtime publication: the collector re-ingests NDBC's whole 45-day
+    // window hourly, so subscribing would fire thousands of events to refresh a number that moves a
+    // tenth of a degree an hour. The 15-min rowCache backstop is the right granularity here.
+    sb('water_readings?select=ts,water_f&station=eq.41112&order=ts.desc&limit=1'),
   ]);
-  rowCache.rows = { entries, stagedEntries, setRows, weightRows, histRows, muscleRows, heatRows, catalogRows, nutLogRows, targetRows, surfRows };
+  rowCache.rows = { entries, stagedEntries, setRows, weightRows, histRows, muscleRows, heatRows, catalogRows, nutLogRows, targetRows, surfRows, waterRows };
   rowCache.key = key; rowCache.at = Date.now(); rowCache.dirty = false;
   return rowCache.rows;
 }
@@ -432,7 +442,7 @@ async function buildStatus() {
   const histStart = localDate(new Date(Date.now() - 210 * 86400000)); // intake history for the maintenance trend + per-day replay (viz paging)
   const heatStart = localDate(new Date(Date.now() - 140 * 86400000)); // ~20 weeks for the workout volume heatmap
 
-  const [{ entries, stagedEntries, setRows, weightRows, histRows, muscleRows, heatRows, catalogRows, nutLogRows, targetRows, surfRows }, deviceRows, presenceRows, workerRows] = await Promise.all([
+  const [{ entries, stagedEntries, setRows, weightRows, histRows, muscleRows, heatRows, catalogRows, nutLogRows, targetRows, surfRows, waterRows }, deviceRows, presenceRows, workerRows] = await Promise.all([
     fetchStatusRows(win, week, histStart, heatStart),
     sb('device_status?select=*'),
     sb('voice_presence?select=source,alive_at'),
@@ -441,7 +451,7 @@ async function buildStatus() {
 
   const litter = (deviceRows || []).find((d) => d.device !== 'cat-feeder') || null;
   const feeder = (deviceRows || []).find((d) => d.device === 'cat-feeder') || null;
-  const surf = buildSurf((surfRows || [])[0]);
+  const surf = buildSurf((surfRows || [])[0], (waterRows || [])[0]);
 
   const sum = (k) => (entries || []).reduce((a, e) => a + (Number(e[k]) || 0), 0);
   const nutrition = {

@@ -75,6 +75,8 @@ The scoring itself is built and live (`lib/score.js`, data-layer `00085`-`00087`
 - **The phone's todo pane has no health bar at all**, so there is no gold on it. Jared's call
   whether that pane should grow one — it is a new surface there, not a colour change.
 - **`important` is score-only.** It does not change the push. Deliberate for now.
+- **Completed items are kept forever.** Only deleted ones are purged (30 days). If the calendar ever
+  gets heavy, the fix is to bound what the calendar QUERIES, not to start deleting history.
 - **Series editing is all-or-nothing.** `remove_from_list` with `series` clears what is left; there
   is no "make it every other day instead" short of clearing and re-adding.
 - **Nothing tops a series up.** A month-long daily item simply runs out, which is a re-up prompt

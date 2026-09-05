@@ -125,9 +125,9 @@ There is likewise **no `repeat_every` column** (`00085`/`00086`). Recurrence is 
 scheduling request writes one dated row per occurrence, sharing a `series_id`. Nothing advances a
 `due` any more, so `due` and `scheduled_at` always agree.
 
-`task_events` is the completion ledger behind the health bar's task band — written by trigger
-whenever a dated item is cleared, and deliberately outliving the item, which the hub purges 30 days
-after clearing.
+`list_items.completed_at` is what the health bar's task band scores from. A completed item is not
+deleted: it leaves every active surface but stays on the **calendar**, ticked and struck through.
+Deleting is a separate act that scores nothing.
 
 **System tables (machine plumbing, not life data):**
 - `voice_requests` — the voice command queue (enqueue → worker claims → done).

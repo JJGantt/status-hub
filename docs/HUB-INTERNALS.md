@@ -165,14 +165,16 @@ costs, and anything left sitting overdue drains for as long as it sits. Effects 
 nothing over the same seven days the other two bands look back over, so a hit's *size* is what
 decides how long it is felt.
 
-Two asymmetries are deliberate and are the first things a reader will want to "fix":
+Only **completing** scores. Deleting is worth nothing either way — it is a thing he decided not to
+do, not a thing he failed at — so calling off a whole series is free and needs no special case.
 
-- **The open-item drain is unbounded.** Ignoring something for a week is not ignoring it for a day,
-  and a floor would say it was. It always has a bounded exit, because dealing with the item replaces
-  the whole accumulated drain with one floored late completion.
-- **Clearing something before it goes live is worth zero, not full marks.** Otherwise calling off a
-  month-long series would pay out thirty completions. This is also what makes a single removal verb
-  workable — see §6.
+One asymmetry is deliberate and is the first thing a reader will want to "fix": **the open-item
+drain is unbounded.** Ignoring something for a week is not ignoring it for a day, and a floor would
+say it was. It always has a bounded exit, because completing the item replaces the whole accumulated
+drain with one floored late completion.
+
+Its inputs are ordinary `list_items` rows, not a ledger: a completed item persists, so it is its own
+record. (`task_events` existed for one afternoon and was dropped in `00089` for exactly that reason.)
 
 Every constant is in one block at the top of `score.js`; `TASK_RATE` (completions/day that holds the
 band full) is the one that sets the scale, and the rest follow from it.
@@ -276,24 +278,34 @@ Consequences worth knowing:
   ledger rows written before the merge still match — rename it and every already-delivered item
   fires again.
 
-### Clearing a dated item is the scoring event
+### Done and deleted are different acts
 
-Dated items feed the health bar's **gold band** (§4). The `list_items_task_event` trigger records
-every clear of a dated item in `task_events`, and the hub scores from that plus whatever is still
-open and overdue. Three things follow that are easy to undo by accident:
+An item has two ways off a list and they are not variants of each other:
+
+| | what it means | where it goes | score |
+|---|---|---|---|
+| `completed_at` set | he did it | off the active lists, **stays on the calendar** | earns the gold band |
+| `deleted = true` | he is not going to do it | gone; purged after 30 days | nothing |
+
+Everything active — the pane, the widgets, the badge, `dueTick`, the drain — asks for
+`deleted = false AND completed_at IS NULL`. The **calendar** is the one surface that also draws
+completed items, with a tick and a struck-through label, because watching the day fill in with what
+got finished is the second half of the reward.
+
+The endpoints mirror that: `POST /api/todos/complete` (also takes `undo`) and `POST /api/todos/clear`.
+
+**This was tried the other way round first and failed.** One verb, with the clock deciding whether a
+removal counted as a completion, on the reasoning that "remove", "delete" and "check off" are not
+separable in speech. The failure was immediate and was not the one predicted: with no completion
+verb to land on, *"take the shirt off the list and put it back up at 1 for the dryer"* routed to
+`set_due` and simply moved the item — two instructions collapsed into one reschedule. Distinct
+outcomes need distinct verbs. Do not re-merge them.
+
+Two more things that are easy to undo by accident:
 
 - **`list_items` invalidates the row cache.** Its realtime handler calls `dirtyRows()` and
   `broadcast()`, not just `pushLists()`. Without that a completion would not reach the bar until the
   15-minute backstop — the one moment the reward is supposed to land.
-- **There is still exactly one way to remove an item, and the clock decides what it meant.** Clearing
-  something not yet live scores nothing; clearing something overdue scores it. A second verb for
-  cancelling was considered and rejected: "remove", "delete", "check off" and "done" are not
-  separable in how a request arrives, so a model choosing between two tools mis-routes them
-  indefinitely, silently awarding or withholding points. Do not add one without solving that.
-- **The ledger records every clear, including of a future item; the scoring rule is what ignores
-  those.** Keeping the record complete and the judgement in one place (`lib/score.js`) is what lets
-  the thresholds be retuned without a migration.
-
 - **Overdue rows escalate in colour** with a server-computed `heat` (1–3). The gold band floors at
   zero, so once it is pinned there a second neglected item cannot show on the bar at all — the bar
   shows what has been earned, the row shows what is owed.

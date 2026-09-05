@@ -17,9 +17,11 @@ import WidgetKit   // only to nudge a redraw mid-clear; the drawing below stays 
 // migration 00085) — there are more of these on other days; this one will not come back.
 //
 // THE INTERACTION: a widget has no gestures at all — no swipe, no long press, only Button and Toggle
-// taps. So tapping a row opens its two options in place: open it in the app, or clear it. Clearing and
-// checking off are the same act here, as everywhere else in this system. Two taps also means no single
-// stray tap can clear anything, which is the property the web pane's left-swipe was chosen for.
+// taps. So tapping a row opens its options in place: open it in the app, mark it DONE, or delete it.
+// Done and delete are different acts and always have been on this surface too — done keeps the item
+// (it stays on the calendar) and scores; delete is for something he is not going to do. Two taps
+// also means no single stray tap can finish or lose anything, which is the property the web pane's
+// left-swipe was chosen for.
 
 struct TodoItem: Codable, Identifiable {
     let id: String
@@ -143,8 +145,30 @@ struct TapTodoItem: AppIntent {
     }
 }
 
+/// Mark done — the common case, and the one that earns him the points. Structurally identical to
+/// ClearTodoItem; only the endpoint differs.
+struct CompleteTodoItem: AppIntent {
+    static var title: LocalizedStringResource = "Complete item"
+    static var isDiscoverable: Bool = false
+    @Parameter(title: "id") var id: String
+    init() {}
+    init(id: String) { self.id = id }
+
+    func perform() async throws -> some IntentResult {
+        ArmStore.setClearing(id)
+        #if canImport(WidgetKit)
+        WidgetCenter.shared.reloadTimelines(ofKind: "com.jaredgantt.statushub.due")
+        #endif
+        await TodoAPI.complete(id: id)
+        TodoCache.remove(id: id)
+        ArmStore.setClearing(nil)
+        ArmStore.disarm()
+        return .result()
+    }
+}
+
 struct ClearTodoItem: AppIntent {
-    static var title: LocalizedStringResource = "Clear item"
+    static var title: LocalizedStringResource = "Delete item"
     static var isDiscoverable: Bool = false
     @Parameter(title: "id") var id: String
     init() {}
@@ -171,10 +195,14 @@ struct ClearTodoItem: AppIntent {
 }
 
 enum TodoAPI {
-    /// The same soft clear every other surface uses (`/api/todos/clear`) — checking off and deleting
-    /// are one act, and the row survives its recovery window either way.
-    static func clear(id: String) async {
-        guard let url = URL(string: Auth.host + "/api/todos/clear"), let token = Auth.token() else { return }
+    /// Mark done (`/api/todos/complete`) — the item stays, carrying its completion time, and scores.
+    static func complete(id: String) async { await post("/api/todos/complete", id: id) }
+    /// Delete (`/api/todos/clear`) — soft, so the row survives its recovery window, but it scores
+    /// nothing and leaves no record that the thing happened.
+    static func clear(id: String) async { await post("/api/todos/clear", id: id) }
+
+    private static func post(_ path: String, id: String) async {
+        guard let url = URL(string: Auth.host + path), let token = Auth.token() else { return }
         var r = URLRequest(url: url)
         r.httpMethod = "POST"
         r.timeoutInterval = 15
@@ -203,6 +231,7 @@ public enum TodoLayout {
 }
 
 private let dangerRed = Color(red: 0.937, green: 0.267, blue: 0.267)   // #ef4444
+private let doneGreen = Color(red: 0.184, green: 0.620, blue: 0.310)  // #2f9e4f — matches the web pane's ✓
 // Matches the due chip in the web pane (.todo .due), so an expired row reads the same on both.
 private let expiredAmber = Color(red: 0.902, green: 0.725, blue: 0.239)   // #e6b93d
 
@@ -247,6 +276,14 @@ private struct TodoRowView: View {
                         .foregroundStyle(inkText)
                         .frame(width: 28, height: layout.titleSize + 9)
                         .background(Capsule().fill(inkText.opacity(0.18)))
+                }
+                .buttonStyle(.plain)
+                Button(intent: CompleteTodoItem(id: item.id)) {
+                    Text("\u{2713}")
+                        .font(.system(size: layout.titleSize + 4, weight: .bold, design: .rounded))
+                        .foregroundStyle(.white)
+                        .frame(width: 28, height: layout.titleSize + 9)
+                        .background(Capsule().fill(doneGreen))
                 }
                 .buttonStyle(.plain)
                 Button(intent: ClearTodoItem(id: item.id)) {

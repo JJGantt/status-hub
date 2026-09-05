@@ -8,10 +8,11 @@
 import { esc, liveStream } from './shared.js';
 
 function chip(it) {
-  const cls = 'cw-chip' + (it.past ? ' past' : '') + (it.expired ? ' exp' : '');
+  const cls = 'cw-chip' + (it.done ? ' done' : it.past ? ' past' : '') + (it.expired ? ' exp' : '');
   const t = it.time ? `<span class="cw-t">${esc(it.time)}</span>` : '';
   const rep = it.repeating ? '<span class="cw-r">↻</span>' : '';
-  return `<span class="${cls}" style="--c:${esc(it.color)}">${t}<span class="cw-l">${esc(it.title)}</span>${rep}</span>`;
+  const done = it.done ? '<span class="cw-d">\u2713</span>' : '';
+  return `<span class="${cls}" style="--c:${esc(it.color)}">${done}${t}<span class="cw-l">${esc(it.title)}</span>${rep}</span>`;
 }
 
 function dayHtml(dl) {

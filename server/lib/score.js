@@ -33,15 +33,14 @@
 //   the same seven days the other two bands look back over, so a hit's SIZE decides how long it is
 //   felt — no separate recovery rule.
 //
-//   Two asymmetries are deliberate:
-//     · The drain on an open item is UNBOUNDED. Ignoring something for a week is not the same as
-//       ignoring it for a day, and a floor would say it was. It always has a bounded exit, since
-//       dealing with the item replaces the whole accumulated drain with one floored late completion.
-//     · An item cleared BEFORE it goes live is worth zero, not full marks. That is what lets a
-//       future series be called off for free, and it is also what makes one removal verb workable:
-//       "remove", "delete", "check off" and "done" all mean the same thing, and WHEN it happened
-//       decides what it counted for. Rewarding an early clear would make killing a month-long
-//       series pay out thirty completions.
+//   Only COMPLETING scores. Deleting an item is worth nothing in either direction — it is a thing he
+//   decided not to do, not a thing he failed at — so calling off a whole series costs nothing and
+//   needs no special case. The two are different verbs precisely so that neither has to be guessed
+//   at from the clock.
+//
+//   The drain on an open item is UNBOUNDED, deliberately. Ignoring something for a week is not the
+//   same as ignoring it for a day, and a floor would say it was. It always has a bounded exit, since
+//   completing the item replaces the whole accumulated drain with one floored late completion.
 
 const TARGET = 14;
 const W_PRO = 0.35, W_CAL = 0.35, W_FAT = 0.30;     // nutrition macro weights (sum 1); carbs derived, not scored
@@ -132,15 +131,6 @@ function taskDeadline(occurrence) {
   if (at == null) return null;
   return isTimed(occurrence) ? at : at + DAY + DAY_START_HOUR * HOUR;
 }
-// When it starts counting. Before this it can be cleared for nothing — that is what makes calling
-// off a future series free.
-function taskLiveFrom(occurrence) {
-  const at = naive(occurrence);
-  if (at == null) return null;
-  return isTimed(occurrence) ? naive(String(occurrence).slice(0, 10)) + DAY_START_HOUR * HOUR
-                             : at + DAY_START_HOUR * HOUR;
-}
-
 // +1 on time, sliding through 0 at LATE_ZERO and down to its floor at LATE_FLOOR.
 function completionValue(lateMs) {
   const grace = TASK_GRACE_MIN * MIN, zero = TASK_LATE_ZERO_H * HOUR, floor = TASK_LATE_FLOOR_H * HOUR;
@@ -151,8 +141,10 @@ function completionValue(lateMs) {
 }
 
 /**
- * events:    [{ occurrence, completed_at, priority }] — cleared dated items, from `task_events`.
- * open:      [{ scheduled_at|due, priority }]         — dated items still on a list.
+ * events:    [{ scheduled_at|due, completed_at, priority }] — items marked DONE. These are ordinary
+ *            `list_items` rows carrying a `completed_at`, not a separate ledger: a completed item
+ *            persists (it still draws on the calendar), so it is its own record.
+ * open:      [{ scheduled_at|due, priority }]               — dated items still outstanding.
  * nowLocal:  naive local wall-clock string.
  */
 function tasksScore({ events = [], open = [], nowLocal }) {
@@ -161,11 +153,10 @@ function tasksScore({ events = [], open = [], nowLocal }) {
   let earned = 0, drained = 0, completed = 0, overdue = 0;
 
   for (const e of events) {
-    const done = naive(e.completed_at), deadline = taskDeadline(e.occurrence), live = taskLiveFrom(e.occurrence);
+    const done = naive(e.completed_at), deadline = taskDeadline(e.scheduled_at || e.due);
     if (done == null || deadline == null) continue;
     const age = now - done;
     if (age > TASK_DECAY_DAYS * DAY) continue;                     // fallen out of the window
-    if (done < live) continue;                                     // cleared before it counted for anything
     const weight = Math.max(0, 1 - age / (TASK_DECAY_DAYS * DAY));
     earned += weight * completionValue(done - deadline) * (1 + (Number(e.priority) || 0));
     completed++;
@@ -215,4 +206,4 @@ function computeScore({ volume, days = [], surplus = 0, taskEvents = [], openTas
   };
 }
 
-module.exports = { computeScore, tasksScore, taskDeadline, taskLiveFrom, completionValue };
+module.exports = { computeScore, tasksScore, taskDeadline, completionValue };

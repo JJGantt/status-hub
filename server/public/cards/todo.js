@@ -22,11 +22,17 @@ function fmtDue(due) {
   return s;
 }
 
-// One row. No checkbox: clearing something takes a deliberate left-swipe, so it can't happen from a
-// stray tap. The gesture is pure CSS — each row is its own tiny horizontal scroller with scroll-snap
-// (see app.css), so the BROWSER owns the drag physics, momentum, rubber-banding and snapping. There
-// is no pointer maths here, which is the whole point: hand-rolled swipe handling fights the browser
-// and loses. The text itself stays put (the row is sticky) and the X slides in over its right end.
+// One row. No checkbox: finishing or deleting something takes a deliberate left-swipe, so it can't
+// happen from a stray tap. The gesture is pure CSS — each row is its own tiny horizontal scroller
+// with scroll-snap (see app.css), so the BROWSER owns the drag physics, momentum, rubber-banding and
+// snapping. There is no pointer maths here, which is the whole point: hand-rolled swipe handling
+// fights the browser and loses. The text stays put (the row is sticky) and the buttons slide in.
+//
+// ONE swipe reveals TWO buttons — ✓ done and ✕ delete — rather than a second gesture in the opposite
+// direction. A right-swipe would have to start the scroller pre-scrolled, which means scripting a
+// position on every render and losing the property that makes this reliable. Revealing a choice
+// costs nothing and keeps the physics the browser's. ✓ sits nearer the text because it is the
+// common case; ✕ is further out, which is the right amount of extra deliberateness for a delete.
 function row(id, inner, body = '', expired = false, heat = 0) {
   // The body is rendered but collapsed. Only rows whose text says more than their title carry one —
   // expanding a row to reveal exactly what was already on it would be a dead gesture.
@@ -38,7 +44,8 @@ function row(id, inner, body = '', expired = false, heat = 0) {
   return `<li class="sw${expired ? ' exp' : ''}${hot}${body ? ' has-body' : ''}" data-id="${esc(id)}">` +
     `<div class="sc">` +
       `<div class="row">${inner}</div>` +
-      `<button class="del" aria-label="clear" tabindex="-1">\u00d7</button>` +
+      `<button class="done" aria-label="done" tabindex="-1">\u2713</button>` +
+      `<button class="del" aria-label="delete" tabindex="-1">\u00d7</button>` +
     `</div>${detail}</li>`;
 }
 
@@ -141,15 +148,17 @@ function wire(el) {
   el.querySelectorAll('li.sw').forEach((li) => {
     const sc = li.querySelector('.sc');
     sc.addEventListener('pointerdown', () => closeAll(el, sc));   // only one open at a time
-    // Tap opens the full text; the left-swipe still clears. Two different gestures for two different
-    // acts, so revealing detail can never be mistaken for checking something off. Guarded on the
-    // swipe having stayed put, or the tap that ends a drag would also toggle the body.
+    // Tap opens the full text; the swipe reveals the buttons. Two different gestures, so revealing
+    // detail can never be mistaken for finishing something. Guarded on the swipe having stayed put,
+    // or the tap that ends a drag would also toggle the body.
     if (li.classList.contains('has-body')) {
       li.querySelector('.row').addEventListener('click', () => {
         if (sc.scrollLeft) return;
         li.classList.toggle('open');
       });
     }
+    li.querySelector('.done').addEventListener('click', () =>
+      post('/api/todos/complete', { id: li.dataset.id }));
     li.querySelector('.del').addEventListener('click', () =>
       post('/api/todos/clear', { id: li.dataset.id }));
   });

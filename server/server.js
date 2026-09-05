@@ -465,11 +465,12 @@ async function fetchStatusRows(win, week, histStart, heatStart) {
     // window hourly, so subscribing would fire thousands of events to refresh a number that moves a
     // tenth of a degree an hour. The 15-min rowCache backstop is the right granularity here.
     sb('water_readings?select=ts,water_f&station=eq.41112&order=ts.desc&limit=1'),
-    // The gold band's two inputs. Completions are a ledger that outlives its items (they get purged
-    // at 30 days); the drain is derived live from whatever is still open and dated, so there is no
-    // stored penalty to fall out of step with the list.
-    sb(`task_events?completed_at=gte.${taskWindowStart}T00:00:00&select=occurrence,completed_at,priority`),
-    sb('list_items?deleted=eq.false&due=not.is.null&select=scheduled_at,due,priority'),
+    // The gold band's two inputs, both ordinary `list_items` rows. A completed item persists — it
+    // still draws on the calendar — so it is its own record and there is no separate ledger. The
+    // drain is derived live from whatever is still outstanding, so there is no stored penalty to
+    // fall out of step with the list.
+    sb(`list_items?deleted=eq.false&completed_at=gte.${taskWindowStart}T00:00:00&due=not.is.null&select=scheduled_at,due,completed_at,priority`),
+    sb('list_items?deleted=eq.false&completed_at=is.null&due=not.is.null&select=scheduled_at,due,priority'),
   ]);
   rowCache.rows = { entries, stagedEntries, setRows, weightRows, histRows, muscleRows, heatRows, catalogRows, nutLogRows, targetRows, surfRows, waterRows, taskEventRows, openTaskRows };
   rowCache.key = key; rowCache.at = Date.now(); rowCache.dirty = false;
@@ -1770,7 +1771,7 @@ const NOTIFY_STYLE = {
 // a wrong number.
 async function overdueCount() {
   try {
-    const rows = await sb('list_items?deleted=eq.false&due=not.is.null&select=due,scheduled_at');
+    const rows = await sb('list_items?deleted=eq.false&completed_at=is.null&due=not.is.null&select=due,scheduled_at');
     const nowET = etNowString();
     return rows.filter((r) => dueMoment(r.scheduled_at || r.due) <= nowET).length;
   } catch (_) { return null; }
@@ -1829,7 +1830,7 @@ app.get('/api/todos', async (req, res) => {
   try {
     const [listNames, items, notes] = await Promise.all([
       sb('lists?select=name,emoji&order=name'),
-      sb('list_items?deleted=eq.false&select=id,list_name,text,title,due,scheduled_at,priority,series_id&order=created.asc'),
+      sb('list_items?deleted=eq.false&completed_at=is.null&select=id,list_name,text,title,due,scheduled_at,priority,series_id&order=created.asc'),
       sb('notes?select=name,content&order=name'),
     ]);
     const all = items || [];
@@ -1864,7 +1865,7 @@ function itemTitle(row) {
 app.get('/api/due-widget', async (req, res) => {
   try {
     const [rows, listRows] = await Promise.all([
-      sb('list_items?deleted=eq.false&due=not.is.null&select=id,list_name,text,title,due,scheduled_at,priority,series_id&order=scheduled_at.asc'),
+      sb('list_items?deleted=eq.false&completed_at=is.null&due=not.is.null&select=id,list_name,text,title,due,scheduled_at,priority,series_id&order=scheduled_at.asc'),
       sb('lists?select=name,emoji'),
     ]);
     const emojiOf = {};
@@ -1920,7 +1921,7 @@ app.get('/api/repos-widget', async (req, res) => {
 app.get('/api/list-widget', async (req, res) => {
   try {
     const name = String(req.query.list || 'todo');
-    const rows = await sb(`list_items?deleted=eq.false&list_name=eq.${encodeURIComponent(name)}` +
+    const rows = await sb(`list_items?deleted=eq.false&completed_at=is.null&list_name=eq.${encodeURIComponent(name)}` +
                           `&select=id,text,title,due&order=created.asc&limit=${LIST_WIDGET_MAX}`);
     const nowET = etNowString();
     res.json({ list: name, items: (rows || []).map((r) => ({
@@ -2003,7 +2004,10 @@ app.get('/api/calendar', async (req, res) => {
 
     const [listRows, rows] = await Promise.all([
       sb('lists?select=name,emoji'),
-      sb('list_items?deleted=eq.false&due=not.is.null&select=id,list_name,text,title,due,scheduled_at,priority,series_id'),
+      // The one surface that draws COMPLETED items as well as outstanding ones. Seeing a day fill in
+      // with things that got done is half the point of marking them done; every other surface is a
+      // list of what is left, and a finished item on it is noise.
+      sb('list_items?deleted=eq.false&due=not.is.null&select=id,list_name,text,title,due,scheduled_at,priority,series_id,completed_at'),
     ]);
     const emojiOf = {};
     for (const l of listRows || []) emojiOf[l.name] = l.emoji;
@@ -2022,7 +2026,9 @@ app.get('/api/calendar', async (req, res) => {
           // `past`: this occurrence's moment has gone by (dims the chip). `expired`: it is overdue
           // and uncleared, which is also what is draining his score for as long as it stays that way.
           past: dueMoment(occ) <= nowET,
-          expired: dueMoment(r.scheduled_at || r.due) <= nowET,
+          // A completed item is never expired — it happened. `done` is what the chip paints on.
+          done: !!r.completed_at,
+          expired: !r.completed_at && dueMoment(r.scheduled_at || r.due) <= nowET,
           repeating: !!r.series_id,
         });
       }
@@ -2102,6 +2108,21 @@ app.get('/api/calendar', async (req, res) => {
 // Clear an item. There is ONE cleared state — checking off and deleting are the same act — and it's
 // soft, so the row survives for the recovery window before being purged. No `kind` any more: dated
 // and undated items live in the same table, so there is only one thing to clear.
+// Mark done. Distinct from /clear, which deletes: this one keeps the item (the calendar draws it as
+// something that happened) and moves the health bar's gold band. Every surface that can finish a
+// task calls this — the pane's ✓ swipe, the widget's Done, and voice through the data MCP.
+app.post('/api/todos/complete', express.json(), async (req, res) => {
+  try {
+    const b = req.body || {};
+    const id = String(b.id || '');
+    if (!id) return res.status(400).json({ error: 'id required' });
+    const now = new Date().toISOString();
+    await sbWrite(`list_items?id=eq.${encodeURIComponent(id)}`, 'PATCH',
+      { completed_at: b.undo ? null : etNowString(), updated: now });
+    res.json({ ok: true });
+    syncBadge().catch(() => {});   // don't make the caller wait on APNs
+  } catch (e) { res.status(500).json({ error: String(e.message || e) }); }
+});
 app.post('/api/todos/clear', express.json(), async (req, res) => {
   try {
     const b = req.body || {};
@@ -2545,7 +2566,7 @@ async function dueTick() {
   const nowET = etNowString();
   let rows;
   // Every list, not just todo — "reminder" is a predicate (has a due), not a place.
-  try { rows = await sb('list_items?deleted=eq.false&due=not.is.null&select=id,list_name,text,title,due,scheduled_at,priority,series_id'); } catch (_) { return; }
+  try { rows = await sb('list_items?deleted=eq.false&completed_at=is.null&due=not.is.null&select=id,list_name,text,title,due,scheduled_at,priority,series_id'); } catch (_) { return; }
   if (!rows.length) return;
   // One lookup for the whole tick rather than one per item — a handful of lists, read at most once a
   // minute, and only when something is actually dated.

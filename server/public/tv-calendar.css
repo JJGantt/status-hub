@@ -67,7 +67,9 @@ body.tv .calcard .fit{height:100%;display:flex;flex-direction:row;gap:22px;min-h
    score does not. `potential` is what you can still get and is drawn hollow to say it has not
    happened yet; `earned` and `lost` are solid because they already have. */
 .cw-sc{flex:0 0 auto;margin-left:6px;font-size:13px;font-weight:800;font-variant-numeric:tabular-nums}
-.cw-sc.k-earned{color:#39d353}
+/* `earned` only ever appears on a completed chip, which is dim and struck through — so it takes the
+   same muted treatment rather than a colour of its own. */
+.cw-sc.k-earned{color:#8b96a5}
 .cw-sc.k-lost{color:#fff}
 .cw-sc.k-potential{color:#ffd75e;font-weight:700;opacity:.85;
   border:1px solid rgba(255,215,94,.55);border-radius:4px;padding:0 4px;font-size:12px}

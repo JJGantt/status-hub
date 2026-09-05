@@ -41,8 +41,10 @@ body.tv .calcard .fit{height:100%;display:flex;flex-direction:row;gap:22px;min-h
    must never be dimmed — stacking them washed the red out to 45% and made an overdue item read as
    a finished one. `done` is dim plus a strike. A chip gets exactly one of the three. */
 .cw-chip.past,.cw-dchip.past{opacity:.45}
-.cw-chip.exp,.cw-dchip.exp{opacity:1;border-left-color:#e5484d;background:#2a1416}
-.cw-chip.exp .cw-l,.cw-dchip.exp .cw-l{color:#ff6b70;font-weight:700}
+.cw-chip.exp,.cw-dchip.exp{opacity:1;border-left-color:#ff1111;background:#5c0a0e;
+  box-shadow:0 0 10px rgba(255,20,20,.45), inset 0 0 0 1px rgba(255,40,40,.5)}
+.cw-chip.exp .cw-l,.cw-dchip.exp .cw-l{color:#ff2323;font-weight:800;
+  text-shadow:0 0 10px rgba(255,30,30,.95),0 0 22px rgba(255,0,0,.6)}
 /* Done: dimmed and struck through. No tick — the strike already says it, and a glyph costs width
    that the side-by-side chips need more. */
 .cw-chip.done,.cw-dchip.done{opacity:.5}

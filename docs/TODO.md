@@ -69,9 +69,12 @@ constant. Falls back to Eastern when unknown.
 The scoring itself is built and live (`lib/score.js`, data-layer `00085`-`00087`; how it works is in
 [HUB-INTERNALS.md](HUB-INTERNALS.md) §4 and §6). What is left:
 
-- **The constants are first guesses.** `TASK_RATE = 2` (completions/day that holds the band full)
-  sets the scale and everything else follows from it; the late-completion curve and drain rate are
-  in the same block. They want a week of real use before they mean anything.
+- **The constants want a week of real use.** `TASK_RATE = 8` sets the amplitude (one normal task
+  ~3.5% of the band); the late-completion curve and the drain rate are in the same block.
+- **What happens below empty is undecided.** The level floors at zero today, so a badly neglected
+  week and a catastrophically neglected one look the same once the band is drained. Whether that
+  should carry a further consequence — bleeding into the other bands, or a separate marker — is
+  deliberately open, not overlooked.
 - **The phone's todo pane has no health bar at all**, so there is no gold on it. Jared's call
   whether that pane should grow one — it is a new surface there, not a colour change.
 - **`important` is score-only.** It does not change the push. Deliberate for now.

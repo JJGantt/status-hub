@@ -165,6 +165,24 @@ costs, and anything left sitting overdue drains for as long as it sits. Effects 
 nothing over the same seven days the other two bands look back over, so a hit's *size* is what
 decides how long it is felt.
 
+**The band is a bounded queue, not a running total.** It was a window sum with the cap applied only
+to the *display*, and the number underneath ran uncapped — so a heavy week banked surplus that
+silently held the bar full afterwards, and one neglected item dug a hole several completions had to
+fill before anything moved at all. The bar was describing a number that was not the number.
+
+Now completions are admitted to a fixed-capacity queue, each still aging out linearly on its own
+clock. When admitting one would pass FULL, the **oldest** credits are pushed out to make room.
+Draining works from the same end and stops at empty. So:
+
+- The level can never exceed FULL or fall below zero, as *state* and not just as a rendering.
+- **Work done while the bar is full still counts** — the newest always lands. An earlier attempt
+  capped by refusing the surplus instead, which meant effort at full was worth literally nothing.
+- Digging out of neglect shows on the first completion, because there is no debt below zero.
+
+A burst does persist longer than steady work, since the queue holds the most *recent* effort and a
+burst's contents are all fresh. That is not a buffer — both hit zero the same number of days after
+the last activity — it is just more work being worth more.
+
 Only **completing** scores. Deleting is worth nothing either way — it is a thing he decided not to
 do, not a thing he failed at — so calling off a whole series is free and needs no special case.
 
@@ -184,16 +202,19 @@ badge. `dueTick`'s `closeExempt()` marks them done once their moment has gone, u
 deadline, so an all-day one closes at the end of its day rather than at 9am when it notified. Their
 `done` flag is suppressed on the calendar — passing is not an achievement.
 
-One asymmetry is deliberate and is the first thing a reader will want to "fix": **the open-item
-drain is unbounded.** Ignoring something for a week is not ignoring it for a day, and a floor would
-say it was. It always has a bounded exit, because completing the item replaces the whole accumulated
-drain with one floored late completion.
+**The drain rate is constant per overdue item and never stops**, so ignoring something for a week
+costs more than ignoring it for a day. What bounds it is the floor at zero, not a cap on the item —
+that distinction is the whole reason the queue exists.
 
 Its inputs are ordinary `list_items` rows, not a ledger: a completed item persists, so it is its own
 record. (`task_events` existed for one afternoon and was dropped in `00089` for exactly that reason.)
 
-Every constant is in one block at the top of `score.js`; `TASK_RATE` (completions/day that holds the
-band full) is the one that sets the scale, and the rest follow from it.
+Every constant is in one block at the top of `score.js`. **`TASK_RATE` is the amplitude knob** —
+completions/day that holds the band full — and `TASK_FULL_UNITS` derives from it, so one ordinary
+on-time completion is worth `1 / (RATE · DECAY_DAYS / 2)` of the band. At 8 that is ~3.5%, about
+1.2 points of the overall bar: putting a shirt in the dryer should barely register, and filling the
+gold should take a genuinely busy week, the same way 14 sets on every muscle keeps training hard to
+fill.
 
 **Staged meals on the rings.** A staged meal (`nutrition_entries.staged = true`) is food that exists
 but has not been eaten, so it never touches `consumed`: every number, and the whole arc, reads

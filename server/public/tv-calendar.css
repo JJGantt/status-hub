@@ -17,7 +17,11 @@ body.tv .calcard .fit{height:100%;display:flex;flex-direction:row;gap:22px;min-h
 .cw-hours{flex:1 1 auto;min-height:0;display:flex;flex-direction:column;overflow:hidden}
 .cw-hour{flex:1 1 0;min-height:0;display:flex;gap:10px;border-top:1px solid #222a33;position:relative;padding:2px 0}
 .cw-hour.cur{background:rgba(0,145,255,.06)}
-.cw-hl{flex:0 0 34px;font-size:13px;color:#8b96a5;line-height:1;padding-top:2px;font-variant-numeric:tabular-nums}
+/* The hour number is read from across the room, so it is sized for that and not for the chips
+   beside it. Right-aligned so 9 and 10 share an edge and the chips start at one column. */
+.cw-hl{flex:0 0 46px;font-size:30px;font-weight:700;color:#cfd8e3;line-height:1;padding-top:1px;
+  text-align:right;font-variant-numeric:tabular-nums}
+.cw-hour.cur .cw-hl{color:#0091ff}
 /* Two fixed half-hour lines per hour. Equal heights, always both present: the SECOND line is
    reserved for :30-:59, so a 4:30 item sits on the lower line even when 4:00 is empty. That is the
    only thing saying which half of the hour a chip is in, now that chips carry no time. */

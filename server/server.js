@@ -2101,7 +2101,9 @@ app.get('/api/calendar', async (req, res) => {
         const inHour = timed.filter((i) => clockOf(i.time).h === h);
         hours.push({
           h,   // 24h number: the wall matches the clock against this to move the now-line itself
-          label: `${h % 12 || 12}${h < 12 ? 'a' : 'p'}`,
+          // Just the number. The spine runs in order from morning to night, so am/pm is never in
+          // doubt, and dropping the letter is what buys the digit enough size to read across a room.
+          label: String(h % 12 || 12),
           // Each hour is two lines: :00-:29 and :30-:59. The second is RESERVED for the back half of
           // the hour, so a 4:30 item sits on it even when nothing is at 4:00 — the line a chip
           // occupies is what says which half of the hour it is in, since the chips carry no time of

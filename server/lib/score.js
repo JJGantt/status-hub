@@ -38,6 +38,12 @@
 //   needs no special case. The two are different verbs precisely so that neither has to be guessed
 //   at from the clock.
 //
+//   EXEMPT items (priority < 0) are invisible to all of this. A work shift or an appointment happens
+//   at a time but owes nothing, so there is nothing to earn for "completing" one and penalising him
+//   for not ticking one off is worse than useless. They are skipped on both sides — no credit, no
+//   drain — which is why this is a branch rather than a zero multiplier: a multiplier of zero would
+//   still let them count as overdue.
+//
 //   The drain on an open item is UNBOUNDED, deliberately. Ignoring something for a week is not the
 //   same as ignoring it for a day, and a floor would say it was. It always has a bounded exit, since
 //   completing the item replaces the whole accumulated drain with one floored late completion.
@@ -122,6 +128,8 @@ function naive(s) {
   return Date.UTC(+m[1], +m[2] - 1, +m[3], +(m[4] || 0), +(m[5] || 0), +(m[6] || 0));
 }
 const isTimed = (s) => /T\d/.test(String(s || ''));
+/** priority -1: on the schedule, but not a task. Scores nothing and can never be overdue. */
+const isExempt = (i) => (Number(i && i.priority) || 0) < 0;
 
 // An untimed item is on time any moment before its day ends, so its deadline is the NEXT day's 4am
 // origin. A timed one is its own moment. (Untimed items still FIRE at 9am — when it notifies and
@@ -153,6 +161,7 @@ function tasksScore({ events = [], open = [], nowLocal }) {
   let earned = 0, drained = 0, completed = 0, overdue = 0;
 
   for (const e of events) {
+    if (isExempt(e)) continue;                                     // nothing was owed, so nothing is earned
     const done = naive(e.completed_at), deadline = taskDeadline(e.scheduled_at || e.due);
     if (done == null || deadline == null) continue;
     const age = now - done;
@@ -163,6 +172,7 @@ function tasksScore({ events = [], open = [], nowLocal }) {
   }
 
   for (const o of open) {
+    if (isExempt(o)) continue;                                     // an appointment cannot be "late"
     const deadline = taskDeadline(o.scheduled_at || o.due);
     if (deadline == null) continue;
     const late = now - deadline - TASK_GRACE_MIN * MIN;

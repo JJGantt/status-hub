@@ -18,23 +18,33 @@ body.tv .calcard .fit{height:100%;display:flex;flex-direction:row;gap:22px;min-h
 .cw-hour{flex:1 1 0;min-height:0;display:flex;gap:10px;border-top:1px solid #222a33;position:relative;padding:2px 0}
 .cw-hour.cur{background:rgba(0,145,255,.06)}
 .cw-hl{flex:0 0 34px;font-size:13px;color:#8b96a5;line-height:1;padding-top:2px;font-variant-numeric:tabular-nums}
+/* Two fixed half-hour lines per hour. Equal heights, always both present: the SECOND line is
+   reserved for :30-:59, so a 4:30 item sits on the lower line even when 4:00 is empty. That is the
+   only thing saying which half of the hour a chip is in, now that chips carry no time. */
 .cw-hitems{flex:1 1 auto;min-width:0;display:flex;flex-direction:column;gap:3px;overflow:hidden}
+.cw-half{flex:1 1 0;min-height:0;min-width:0;display:flex;gap:4px;align-items:stretch;overflow:hidden}
 .cw-now{position:absolute;left:0;right:0;height:2px;background:#0091ff;box-shadow:0 0 6px #0091ff}
 .cw-now::before{content:'';position:absolute;left:-1px;top:-3px;width:8px;height:8px;border-radius:50%;background:#0091ff}
 
-/* chips — shared look between the timeline and the big month */
+/* chips in a MONTH cell — stacked, and each carries its own time */
 .cw-chip{display:flex;gap:6px;align-items:baseline;font-size:15px;line-height:1.3;min-width:0;
   padding:2px 7px 2px 8px;border-left:4px solid var(--c);background:#0e1318;border-radius:5px}
 .cw-t{color:#8b96a5;flex:0 0 auto;font-size:13px}
 .cw-l{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0;color:#e8eaed}
 .cw-r{color:#8b96a5;flex:0 0 auto;font-size:13px}
-.cw-chip.past{opacity:.45}
-.cw-chip.exp .cw-l{color:#e5484d}
-/* Done reads as an achievement, not as something faded out — the wall's whole job here is showing
-   the day fill in with what actually got finished. */
-.cw-chip.done{opacity:1}
-.cw-chip.done .cw-l{color:#8b96a5;text-decoration:line-through}
-.cw-chip.done .cw-d{color:#39d353;font-weight:700;margin-right:3px}
+.cw-chip.past,.cw-dchip.past{opacity:.45}
+.cw-chip.exp .cw-l,.cw-dchip.exp .cw-l{color:#e5484d}
+/* Done: dimmed and struck through. No tick — the strike already says it, and a glyph costs width
+   that the side-by-side chips need more. */
+.cw-chip.done,.cw-dchip.done{opacity:.5}
+.cw-chip.done .cw-l,.cw-dchip.done .cw-l{color:#8b96a5;text-decoration:line-through}
+
+/* chips on the DAY TIMELINE — side by side, sharing the line's width equally. flex:1 1 0 with
+   min-width:0 is what makes one chip span the line and three split it into thirds, ellipsising
+   rather than wrapping or pushing each other out. */
+.cw-dchip{flex:1 1 0;min-width:0;display:flex;align-items:center;font-size:15px;line-height:1.2;
+  padding:2px 6px 2px 7px;border-left:4px solid var(--c);background:#0e1318;border-radius:5px}
+.cw-more{flex:0 0 auto;align-self:center;font-size:13px;font-weight:700;color:#8b96a5;padding:0 2px}
 
 /* MONTHS — one big month with chips, or `calendar_months` minis with dots; the column count comes
    from the payload (`cols`) and is set inline by tv-calendar.js. */

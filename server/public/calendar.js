@@ -16,8 +16,7 @@ function chip(it) {
   const cls = 'cal-chip' + (it.done ? ' done' : it.past ? ' past' : '') + (it.expired ? ' exp' : '');
   const t = it.time ? `<span class="cc-t">${esc(it.time)}</span>` : '';
   const rep = it.repeating ? '<span class="cc-r">↻</span>' : '';
-  const done = it.done ? '<span class="cc-d">\u2713</span>' : '';
-  return `<span class="${cls}" style="--c:${esc(it.color)}">${done}${t}<span class="cc-l">${esc(it.title)}</span>${rep}</span>`;
+  return `<span class="${cls}" style="--c:${esc(it.color)}">${t}<span class="cc-l">${esc(it.title)}</span>${rep}</span>`;
 }
 
 function agendaRow(it) {
@@ -26,7 +25,7 @@ function agendaRow(it) {
   const rep = it.repeating ? ' <span class="cc-r">↻</span>' : '';
   const list = `${it.emoji ? esc(it.emoji) + ' ' : ''}${esc(it.list)}`;
   return `<div class="${cls}" style="--c:${esc(it.color)}">` +
-    `<span class="ag-t">${t}</span><span class="ag-l">${it.done ? '\u2713 ' : ''}${esc(it.title)}${rep}</span><span class="ag-w">${list}</span></div>`;
+    `<span class="ag-t">${t}</span><span class="ag-l">${esc(it.title)}${rep}</span><span class="ag-w">${list}</span></div>`;
 }
 
 // The agenda shows the selected day (today by default) — items or not; an empty day is just its

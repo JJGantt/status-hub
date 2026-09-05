@@ -13,7 +13,7 @@ const BODY_SVG = require('./lib/bodymap');
 const { getTZ, setTZ, DAY_START_HOUR, localDate, nutritionWindow, lastNTrainingDays, dayBucketOf } = require('./lib/dates');
 const { buildWorkoutHeatmap } = require('./lib/heatmap');
 const { buildNutritionLog, buildGoalResolver, calorieColor } = require('./lib/nutritionlog');
-const { computeScore } = require('./lib/score');
+const { computeScore, taskDeadline } = require('./lib/score');
 
 // Settings cache: app_settings is read several times per status build but only changes on explicit
 // writes, which the realtime subscription announces (→ dirtySettings). One whole-table fetch serves
@@ -1771,9 +1771,11 @@ const NOTIFY_STYLE = {
 // a wrong number.
 async function overdueCount() {
   try {
-    const rows = await sb('list_items?deleted=eq.false&completed_at=is.null&due=not.is.null&select=due,scheduled_at');
+    const rows = await sb('list_items?deleted=eq.false&completed_at=is.null&due=not.is.null&select=due,scheduled_at,priority');
     const nowET = etNowString();
-    return rows.filter((r) => dueMoment(r.scheduled_at || r.due) <= nowET).length;
+    // Exempt items (a shift, an appointment) owe nothing, so they can never be overdue and must
+    // never badge — a red count he cannot clear by doing anything is just noise.
+    return rows.filter((r) => (r.priority || 0) >= 0 && dueMoment(r.scheduled_at || r.due) <= nowET).length;
   } catch (_) { return null; }
 }
 
@@ -1960,6 +1962,15 @@ function calTimeLabel(occ) {
   const h = +m[1]; const mm = m[2]; const h12 = h % 12 || 12;
   return `${h12}${mm === '00' ? '' : ':' + mm}${h < 12 ? 'a' : 'p'}`;
 }
+// Chips on one half-hour line sit side by side and share its width, so the number that fits is a
+// property of the column, not of the data — which makes it the server's to decide. Anything past the
+// cap becomes a count, so a hidden item is still visible AS hidden.
+const DAYLINE_MAX_PER_HALF = 3;
+const dayHalf = (items) => ({
+  items: items.slice(0, DAYLINE_MAX_PER_HALF),
+  more: Math.max(0, items.length - DAYLINE_MAX_PER_HALF),
+});
+
 // The occurrences of one item falling inside [startKey, endKey] (inclusive 'YYYY-MM-DD' bounds) —
 // which is now at most one, its own `due`. A recurring thing is materialised as an independent row
 // per occurrence (data-layer migration 00085), so the grid reads real rows rather than projecting
@@ -2026,9 +2037,11 @@ app.get('/api/calendar', async (req, res) => {
           // `past`: this occurrence's moment has gone by (dims the chip). `expired`: it is overdue
           // and uncleared, which is also what is draining his score for as long as it stays that way.
           past: dueMoment(occ) <= nowET,
-          // A completed item is never expired — it happened. `done` is what the chip paints on.
-          done: !!r.completed_at,
-          expired: !r.completed_at && dueMoment(r.scheduled_at || r.due) <= nowET,
+          // `done` means he finished a task. An exempt item closes itself when its moment passes,
+          // which is not the same thing and must not read as an achievement — it just becomes past.
+          done: !!r.completed_at && (r.priority || 0) >= 0,
+          exempt: (r.priority || 0) < 0,
+          expired: !r.completed_at && (r.priority || 0) >= 0 && dueMoment(r.scheduled_at || r.due) <= nowET,
           repeating: !!r.series_id,
         });
       }
@@ -2075,16 +2088,26 @@ app.get('/api/calendar', async (req, res) => {
       const todayItems = byDay[todayKey] || [];
       const allday = todayItems.filter((i) => !i.time);
       const timed = todayItems.filter((i) => i.time);
-      const hourOf = (t) => { const m = String(t).match(/^(\d+)(?::\d+)?([ap])$/); let h = +m[1] % 12; if (m[2] === 'p') h += 12; return h; };
+      const clockOf = (t) => {
+        const m = String(t).match(/^(\d+)(?::(\d+))?([ap])$/);
+        let h = +m[1] % 12; if (m[3] === 'p') h += 12;
+        return { h, m: +(m[2] || 0) };
+      };
       const nowH = +nowET.slice(11, 13); const nowM = +nowET.slice(14, 16);
-      let lo = Math.min(7, nowH, ...timed.map((i) => hourOf(i.time)));
-      let hi = Math.max(22, nowH, ...timed.map((i) => hourOf(i.time)));
+      let lo = Math.min(7, nowH, ...timed.map((i) => clockOf(i.time).h));
+      let hi = Math.max(22, nowH, ...timed.map((i) => clockOf(i.time).h));
       const hours = [];
       for (let h = lo; h <= hi; h++) {
+        const inHour = timed.filter((i) => clockOf(i.time).h === h);
         hours.push({
           h,   // 24h number: the wall matches the clock against this to move the now-line itself
           label: `${h % 12 || 12}${h < 12 ? 'a' : 'p'}`,
-          items: timed.filter((i) => hourOf(i.time) === h),
+          // Each hour is two lines: :00-:29 and :30-:59. The second is RESERVED for the back half of
+          // the hour, so a 4:30 item sits on it even when nothing is at 4:00 — the line a chip
+          // occupies is what says which half of the hour it is in, since the chips carry no time of
+          // their own. Splitting the row this way also doubles capacity without making a busy hour
+          // physically taller, which would misread as the day running longer than it does.
+          halves: [0, 1].map((half) => dayHalf(inHour.filter((i) => (clockOf(i.time).m >= 30 ? 1 : 0) === half))),
           now: h === nowH ? Math.round((nowM / 60) * 100) : null,
         });
       }
@@ -2587,6 +2610,29 @@ async function dueTick() {
     // Nothing to re-arm. Every occurrence of a recurring thing is its own row with its own due
     // (data-layer migration 00085), so each one fires once and then stays put — which is also what
     // lets it sit there visibly overdue and drain the score until it is dealt with.
+  }
+  await closeExempt(nowET);
+}
+
+// Exempt items close themselves once their moment has gone. A shift is not something he finishes;
+// it is something that happens and is then over, and leaving it on the list would make him tidy up
+// after his own calendar. Uses the SCORING deadline rather than the firing time, so an all-day
+// exempt item closes at the end of its day instead of at 9am when it notified.
+async function closeExempt(nowET) {
+  const now = Date.parse(nowET.replace(' ', 'T') + 'Z');
+  let rows;
+  try {
+    rows = await sb('list_items?deleted=eq.false&completed_at=is.null&due=not.is.null&priority=lt.0'
+                    + '&select=id,due,scheduled_at,title,text');
+  } catch (_) { return; }
+  for (const r of rows || []) {
+    const deadline = taskDeadline(r.scheduled_at || r.due);
+    if (deadline == null || deadline > now) continue;
+    try {
+      await sbWrite(`list_items?id=eq.${encodeURIComponent(r.id)}`, 'PATCH',
+        { completed_at: etNowString(), updated: new Date().toISOString() });
+      console.log(`[due] closed exempt ${r.id} "${String(r.title || r.text).slice(0, 40)}"`);
+    } catch (e) { console.log('[due] closeExempt:', e.message); }
   }
 }
 setInterval(() => dueTick().catch((e) => console.log('[due] error', e.message)), 60000);

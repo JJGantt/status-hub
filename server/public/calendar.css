@@ -34,7 +34,7 @@ body.cal{padding:12px}
 .ag-l{flex:1;font-size:15px;min-width:0;overflow-wrap:anywhere}
 .ag-w{font-size:12px;color:#8b96a5;white-space:nowrap}
 .cal-ag-item.past{opacity:.5}
-.cal-ag-item.done{opacity:1}
+.cal-ag-item.done{opacity:.5}
 .cal-ag-item.done .ag-l{color:#8b96a5;text-decoration:line-through}
 .cal-ag-item.exp .ag-l{color:#e5484d}
 .cc-r{color:#8b96a5;font-size:12px}
@@ -54,9 +54,7 @@ body.cal{padding:12px}
   .cal-chip .cc-r{flex:0 0 auto}
   .cal-chip.past{opacity:.5}
   .cal-chip.exp .cc-l{color:#e5484d}
-  /* Done reads as an achievement, not as something faded out: full opacity, a green tick, and the
-     label struck through so the day visibly fills in with what got finished. */
-  .cal-chip.done{opacity:1}
+  /* Done: dimmed and struck through. The strike carries it; no glyph. */
+  .cal-chip.done{opacity:.5}
   .cal-chip.done .cc-l{color:#8b96a5;text-decoration:line-through}
-  .cal-chip.done .cc-d{color:#39d353;font-weight:700;margin-right:3px}
 }

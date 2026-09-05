@@ -7,21 +7,36 @@
 // mini-grid column count — so this file only lays markup into the two panels.
 import { esc, liveStream } from './shared.js';
 
+// A chip in a MONTH cell, where nothing else says when it is — so it carries its time.
 function chip(it) {
   const cls = 'cw-chip' + (it.done ? ' done' : it.past ? ' past' : '') + (it.expired ? ' exp' : '');
   const t = it.time ? `<span class="cw-t">${esc(it.time)}</span>` : '';
   const rep = it.repeating ? '<span class="cw-r">↻</span>' : '';
-  const done = it.done ? '<span class="cw-d">\u2713</span>' : '';
-  return `<span class="${cls}" style="--c:${esc(it.color)}">${done}${t}<span class="cw-l">${esc(it.title)}</span>${rep}</span>`;
+  return `<span class="${cls}" style="--c:${esc(it.color)}">${t}<span class="cw-l">${esc(it.title)}</span>${rep}</span>`;
+}
+
+// A chip on the DAY TIMELINE, where the line it sits on already says the time — so it carries none,
+// and no repeat glyph either. Both were spending width that several chips now share between them.
+function dayChip(it) {
+  const cls = 'cw-dchip' + (it.done ? ' done' : it.past ? ' past' : '') + (it.expired ? ' exp' : '');
+  return `<span class="${cls}" style="--c:${esc(it.color)}"><span class="cw-l">${esc(it.title)}</span></span>`;
+}
+
+// One half-hour line. The server decides how many chips fit and hands back the rest as a count, so a
+// hidden item is still visible AS hidden rather than silently dropped.
+function halfLine(half) {
+  const more = half.more ? `<span class="cw-more">+${half.more}</span>` : '';
+  return `<div class="cw-half">${half.items.map(dayChip).join('')}${more}</div>`;
 }
 
 function dayHtml(dl) {
   const allday = dl.allday.length
-    ? `<div class="cw-allday">${dl.allday.map(chip).join('')}</div>` : '';
+    ? `<div class="cw-allday">${dl.allday.map(dayChip).join('')}</div>` : '';
   const hours = dl.hours.map((h) => {
     const now = h.now !== null ? `<div class="cw-now" style="top:${h.now}%"></div>` : '';
     return `<div class="cw-hour${h.now !== null ? ' cur' : ''}">` +
-      `<span class="cw-hl">${esc(h.label)}</span><div class="cw-hitems">${h.items.map(chip).join('')}</div>${now}</div>`;
+      `<span class="cw-hl">${esc(h.label)}</span>` +
+      `<div class="cw-hitems">${h.halves.map(halfLine).join('')}</div>${now}</div>`;
   }).join('');
   return `<div class="cw-dayhead">${esc(dl.label)}</div>${allday}<div class="cw-hours">${hours}</div>`;
 }

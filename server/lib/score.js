@@ -57,7 +57,12 @@ const EARLY_WEIGHT = 0.5; // ahead-of-pace-but-under-target overage counts at ha
 const W_TODAY = 0.5;                                 // today's weight within nutrition
 
 // ---- task band tuning. Everything adjustable about the gold band is in this block. ----
-const TASK_RATE = 2;          // on-time completions/day that HOLDS the band full once it is there
+// On-time completions/day that HOLDS the band full. This is the amplitude knob: one ordinary
+// completion is worth 1/(RATE·DECAY/2) of the band, so raising it makes each task move the bar less.
+// 8 puts a single normal task at ~3.6% of the band (~1.2 points of the overall bar) — deliberately
+// small, because putting a shirt in the dryer should barely register. Filling the gold is meant to
+// take a genuinely busy week, the same way 14 sets on every muscle makes the training band hard.
+const TASK_RATE = 8;
 const TASK_DECAY_DAYS = 7;    // a completion's effect fades linearly to nothing over this
 const TASK_GRACE_MIN = 30;    // still "on time" this long past the deadline
 const TASK_LATE_ZERO_H = 4;   // lateness at which a completion is worth nothing

@@ -302,4 +302,4 @@ function computeScore({ volume, days = [], surplus = 0, taskEvents = [], openTas
   };
 }
 
-module.exports = { computeScore, tasksScore, taskDeadline, completionValue };
+module.exports = { computeScore, tasksScore, taskDeadline, completionValue, TASK_GRACE_MIN };

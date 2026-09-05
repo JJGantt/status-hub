@@ -13,7 +13,7 @@ const BODY_SVG = require('./lib/bodymap');
 const { getTZ, setTZ, DAY_START_HOUR, localDate, nutritionWindow, lastNTrainingDays, dayBucketOf } = require('./lib/dates');
 const { buildWorkoutHeatmap } = require('./lib/heatmap');
 const { buildNutritionLog, buildGoalResolver, calorieColor } = require('./lib/nutritionlog');
-const { computeScore, taskDeadline } = require('./lib/score');
+const { computeScore, taskDeadline, TASK_GRACE_MIN } = require('./lib/score');
 
 // Settings cache: app_settings is read several times per status build but only changes on explicit
 // writes, which the realtime subscription announces (→ dirtySettings). One whole-table fetch serves
@@ -1822,10 +1822,12 @@ app.post('/api/notify', express.json(), async (req, res) => {
 // Computed here rather than in the cards because three surfaces draw these rows and a rule they each
 // re-derive is a rule they will eventually disagree about.
 function overdueHeat(item, nowLocal) {
+  const st = chipState(item, nowLocal);
+  if (st === 'upcoming') return 0;
+  if (st === 'grace') return 1;                    // due, but still free — warm, not hot
   const at = dueMoment(item.scheduled_at || item.due);
-  if (!at || at > nowLocal) return 0;
   const hrs = (Date.parse(nowLocal.replace(' ', 'T') + 'Z') - Date.parse(at.replace(' ', 'T') + 'Z')) / 3600000;
-  return hrs >= 72 ? 3 : hrs >= 24 ? 2 : 1;
+  return hrs >= 72 ? 4 : hrs >= 24 ? 3 : 2;
 }
 
 app.get('/api/todos', async (req, res) => {
@@ -1965,6 +1967,30 @@ function calTimeLabel(occ) {
 // Chips on one half-hour line sit side by side and share its width, so the number that fits is a
 // property of the column, not of the data — which makes it the server's to decide. Anything past the
 // cap becomes a count, so a hidden item is still visible AS hidden.
+// due -> grace (still on time, costs nothing) -> expired (draining). One place, so the calendar and
+// the pane cannot disagree about when something starts costing.
+function chipState(item, nowLocal) {
+  const at = dueMoment(item.scheduled_at || item.due);
+  if (!at || at > nowLocal) return 'upcoming';
+  return etStringAt(new Date(Date.parse(at.replace(' ', 'T') + 'Z') + TASK_GRACE_MIN * 60000)) > nowLocal
+    ? 'grace' : 'expired';
+}
+
+// When the next chip changes state, so a wall can re-read exactly then instead of polling. Without
+// it nothing re-renders as time passes: the minute tick only moves the now-line, so an item would
+// silently go overdue and keep its old colour until some unrelated edit touched the lists.
+function nextChipTransition(rows, nowLocal) {
+  let next = null;
+  for (const r of rows || []) {
+    if (r.completed_at) continue;
+    const at = dueMoment(r.scheduled_at || r.due);
+    if (!at) continue;
+    const graceEnd = etStringAt(new Date(Date.parse(at.replace(' ', 'T') + 'Z') + TASK_GRACE_MIN * 60000));
+    for (const m of [at, graceEnd]) if (m > nowLocal && (next === null || m < next)) next = m;
+  }
+  return next;
+}
+
 const DAYLINE_MAX_PER_HALF = 3;
 const dayHalf = (items) => ({
   items: items.slice(0, DAYLINE_MAX_PER_HALF),
@@ -2041,7 +2067,12 @@ app.get('/api/calendar', async (req, res) => {
           // which is not the same thing and must not read as an achievement — it just becomes past.
           done: !!r.completed_at && (r.priority || 0) >= 0,
           exempt: (r.priority || 0) < 0,
-          expired: !r.completed_at && (r.priority || 0) >= 0 && dueMoment(r.scheduled_at || r.due) <= nowET,
+          // Three states, and they line up with what the SCORE is doing rather than with the clock
+          // alone: `grace` is due-but-still-free (the 30 minutes that score as on time), `expired` is
+          // past that and actively draining. Colouring them the same made a chip go red while it was
+          // still costing nothing, and gave no signal at the moment the cost actually starts.
+          grace: !r.completed_at && (r.priority || 0) >= 0 && chipState(r, nowET) === 'grace',
+          expired: !r.completed_at && (r.priority || 0) >= 0 && chipState(r, nowET) === 'expired',
           repeating: !!r.series_id,
         });
       }
@@ -2126,6 +2157,7 @@ app.get('/api/calendar', async (req, res) => {
       cols: count === 1 ? 1 : count <= 4 ? 2 : count <= 6 ? 3 : 4,
       months,
       ...(dayline ? { dayline } : {}),
+      next_transition: nextChipTransition(rows, nowET),
     });
   } catch (e) { res.status(500).json({ error: String(e.message || e) }); }
 });

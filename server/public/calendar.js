@@ -13,14 +13,14 @@ let sel = null;     // selected day 'YYYY-MM-DD'
 let data = null;    // the served month: { month, label, prev, next, weeks } (+ today/dow beside it)
 
 function chip(it) {
-  const cls = 'cal-chip' + (it.done ? ' done' : it.expired ? ' exp' : it.past ? ' past' : '');
+  const cls = 'cal-chip' + (it.done ? ' done' : it.expired ? ' exp' : it.grace ? ' grace' : it.past ? ' past' : '');
   const t = it.time ? `<span class="cc-t">${esc(it.time)}</span>` : '';
   const rep = it.repeating ? '<span class="cc-r">↻</span>' : '';
   return `<span class="${cls}" style="--c:${esc(it.color)}">${t}<span class="cc-l">${esc(it.title)}</span>${rep}</span>`;
 }
 
 function agendaRow(it) {
-  const cls = 'cal-ag-item' + (it.done ? ' done' : it.expired ? ' exp' : it.past ? ' past' : '');
+  const cls = 'cal-ag-item' + (it.done ? ' done' : it.expired ? ' exp' : it.grace ? ' grace' : it.past ? ' past' : '');
   const t = it.time ? esc(it.time) : '';
   const rep = it.repeating ? ' <span class="cc-r">↻</span>' : '';
   const list = `${it.emoji ? esc(it.emoji) + ' ' : ''}${esc(it.list)}`;

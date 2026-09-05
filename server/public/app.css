@@ -562,9 +562,10 @@ body.tv.phonewall .pane-reports .reportscard>div{flex:1 1 auto;min-height:0;disp
    it is pinned there a second neglected item looks the same as the first — the row has to carry it. */
 .todo li.sw.exp .txt{color:#e6b93d;font-weight:600}
 .todo li.sw.exp .due{color:#e6b93d}
-.todo li.sw.heat2 .txt,.todo li.sw.heat2 .due{color:#f59e42}
-.todo li.sw.heat3 .txt,.todo li.sw.heat3 .due{color:#e5484d}
-.todo li.sw.heat3 .txt{font-weight:700}
+.todo li.sw.heat2 .txt,.todo li.sw.heat2 .due{color:#ff6b70}
+.todo li.sw.heat3 .txt,.todo li.sw.heat3 .due{color:#ff3b3b}
+.todo li.sw.heat4 .txt,.todo li.sw.heat4 .due{color:#ff1f1f}
+.todo li.sw.heat3 .txt,.todo li.sw.heat4 .txt{font-weight:700}
 .todo li.sw .imp{color:#e6b93d;font-weight:700;margin-right:5px}
 .todo .expcount{color:#e6b93d;font-size:12px;font-weight:600;margin-left:6px}
 /* The full text, collapsed until the row is tapped. The widget and these rows only ever show the

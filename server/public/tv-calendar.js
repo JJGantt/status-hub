@@ -7,9 +7,11 @@
 // mini-grid column count — so this file only lays markup into the two panels.
 import { esc, liveStream } from './shared.js';
 
+let nextTransition = null;   // when the next chip changes state, from the server
+
 // A chip in a MONTH cell, where nothing else says when it is — so it carries its time.
 function chip(it) {
-  const cls = 'cw-chip' + (it.done ? ' done' : it.expired ? ' exp' : it.past ? ' past' : '');
+  const cls = 'cw-chip' + (it.done ? ' done' : it.expired ? ' exp' : it.grace ? ' grace' : it.past ? ' past' : '');
   const t = it.time ? `<span class="cw-t">${esc(it.time)}</span>` : '';
   const rep = it.repeating ? '<span class="cw-r">↻</span>' : '';
   return `<span class="${cls}" style="--c:${esc(it.color)}">${t}<span class="cw-l">${esc(it.title)}</span>${rep}</span>`;
@@ -18,7 +20,7 @@ function chip(it) {
 // A chip on the DAY TIMELINE, where the line it sits on already says the time — so it carries none,
 // and no repeat glyph either. Both were spending width that several chips now share between them.
 function dayChip(it) {
-  const cls = 'cw-dchip' + (it.done ? ' done' : it.expired ? ' exp' : it.past ? ' past' : '');
+  const cls = 'cw-dchip' + (it.done ? ' done' : it.expired ? ' exp' : it.grace ? ' grace' : it.past ? ' past' : '');
   return `<span class="${cls}" style="--c:${esc(it.color)}"><span class="cw-l">${esc(it.title)}</span></span>`;
 }
 
@@ -95,7 +97,16 @@ function tick() {
   const now = new Date();
   setTimeout(tick, 60000 - (now.getSeconds() * 1000 + now.getMilliseconds()));
   if (!dayline) return;
+  // Chips change state on their own as time passes — due, then past grace and draining — and the
+  // server says when the next one does. Without this the tick only moved the now-line, so something
+  // went overdue and kept its old colour until an unrelated edit happened to touch the lists.
+  if (nextTransition && localStamp(now) >= nextTransition) return load();
   if (dateKey(now) !== dayline.date || !moveNow(now)) load();
+}
+// Local wall-clock 'YYYY-MM-DDTHH:MM', the same shape the server compares against.
+function localStamp(d) {
+  const p = (n) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`;
 }
 
 async function load() {
@@ -106,6 +117,7 @@ async function load() {
   try { d = await (await fetch('/api/calendar?wall=1')).json(); } catch (_) { return; }
   if (!d || d.error || !d.months) return;
   dayline = d.dayline || null;
+  nextTransition = d.next_transition || null;
   day.innerHTML = d.dayline ? dayHtml(d.dayline) : '';
   mon.style.gridTemplateColumns = `repeat(${d.cols}, 1fr)`;
   mon.innerHTML = d.count === 1 ? bigMonth(d.months[0], d.dow) : d.months.map(miniMonth).join('');

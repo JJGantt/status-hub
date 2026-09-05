@@ -40,7 +40,7 @@ function row(id, inner, body = '', expired = false, heat = 0) {
   // `heat` comes from the server (1-3, escalating with how long it has been overdue). It exists
   // because the health bar's gold band floors at zero: once it is pinned there, a second neglected
   // item cannot show on the bar at all, so the row is what carries the growing cost.
-  const hot = heat > 1 ? ` heat${heat}` : '';
+  const hot = heat > 1 ? ` heat${heat}` : '';   // 1 is the free grace window; 2+ is actually costing
   return `<li class="sw${expired ? ' exp' : ''}${hot}${body ? ' has-body' : ''}" data-id="${esc(id)}">` +
     `<div class="sc">` +
       `<div class="row">${inner}</div>` +

@@ -44,6 +44,10 @@ body.tv .calcard .fit{height:100%;display:flex;flex-direction:row;gap:22px;min-h
 /* A solid red block with WHITE text. Red on red was unreadable — the fill and the label were
    fighting for the same signal, and the label lost. The fill carries the alarm; the text just has
    to be legible against it. */
+/* Due, but still inside the grace window — it costs nothing yet. Amber says "now", red says
+   "this is costing you", which is the distinction the score actually makes. */
+.cw-chip.grace,.cw-dchip.grace{opacity:1;border-left-color:#e6b93d;background:#4a3a0d}
+.cw-chip.grace .cw-l,.cw-dchip.grace .cw-l{color:#ffd75e;font-weight:700}
 .cw-chip.exp,.cw-dchip.exp{opacity:1;border-left-color:#ff4d4d;background:#cc0d16;
   box-shadow:0 0 12px rgba(255,25,25,.5)}
 .cw-chip.exp .cw-l,.cw-dchip.exp .cw-l{color:#fff;font-weight:800}

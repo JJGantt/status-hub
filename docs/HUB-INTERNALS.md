@@ -155,6 +155,27 @@ The math lives here; each file has a thorough header. Summary map:
 | `volume.js` | Weekly per-muscle fractional-set volume (primary=1.0, secondary=0.5) vs the ~10–20 sets/week target. |
 | `bodymap.js` | The front/back body SVG (viewBox 0 0 72 93); volume colors paint onto it. |
 | `heatmap.js` | Per-day set-count heatmap laid out as week columns. |
+| `score.js` | The health bar: `(training + nutrition + tasks)/3`, each band capped at a third. |
+
+**The task band starts empty and is earned.** Nutrition and training measure how well a thing is
+going; the gold band measures whether dated list items get done. It has no neutral baseline on
+purpose — a baseline would remove the only incentive the band exists to create, which is scheduling
+things in the first place. Completing on time earns full value, later earns less and eventually
+costs, and anything left sitting overdue drains for as long as it sits. Effects fade linearly to
+nothing over the same seven days the other two bands look back over, so a hit's *size* is what
+decides how long it is felt.
+
+Two asymmetries are deliberate and are the first things a reader will want to "fix":
+
+- **The open-item drain is unbounded.** Ignoring something for a week is not ignoring it for a day,
+  and a floor would say it was. It always has a bounded exit, because dealing with the item replaces
+  the whole accumulated drain with one floored late completion.
+- **Clearing something before it goes live is worth zero, not full marks.** Otherwise calling off a
+  month-long series would pay out thirty completions. This is also what makes a single removal verb
+  workable — see §6.
+
+Every constant is in one block at the top of `score.js`; `TASK_RATE` (completions/day that holds the
+band full) is the one that sets the scale, and the rest follow from it.
 
 **Staged meals on the rings.** A staged meal (`nutrition_entries.staged = true`) is food that exists
 but has not been eaten, so it never touches `consumed`: every number, and the whole arc, reads
@@ -194,7 +215,7 @@ launcher) · `/reports` + `/report/:id` (§6c) · `/login` · `/healthz` · `/pr
 frames for the kiosk) · `/api/list-stream` (SSE, one bodiless `lists` event whenever a dated item or
 a list changes — the calendar surfaces' push path, separate from the status frame they don't render) · `/api/workout-day` · `/api/nutrition-day` · `/api/voice-messages` ·
 `/api/todos` (lists + notes + the derived `due` view) · `/api/calendar` (month grid(s) of every
-dated item, repeats expanded with the scheduler's own `advanceDue`; `?month=` pages, `?wall=1` adds
+dated item — every occurrence is a real row, so nothing is projected; `?month=` pages, `?wall=1` adds
 the day timeline and reads `calendar_months` for the spread) · `/api/badge` · `/api/repos` ·
 `/api/repos/cmd/:id` · `/api/sessions` (live desk sessions + the follow-up `focus`) · `/api/reports`
 (list only — `html` is never selected) · `/api/attachment`.
@@ -242,20 +263,40 @@ Consequences worth knowing:
   second handler is already scheduled — AlarmKit ([TODO.md](TODO.md)), which fires on-device and
   breaks through Focus.
 - **`kind` is gone** from `/api/todos/clear` — one table, one thing to clear.
-- **Repeats** live in `repeat_every` (`'1 day'`, `'2 hours'`, `'1 month'`, …). One nullable column,
-  not a boolean plus a period: null already means "one-shot", and a second field carrying the same
-  fact is a second field that can contradict it — the shape migration `00053` removed when `done` and
-  `deleted` both meant "dealt with". `advanceDue()` computes the next occurrence on the **wall-clock
-  components** rather than an instant, so "every day at 9am" survives a DST boundary; it skips whole
-  missed windows (a daily item unfired for three days comes due once, not three times) and clamps
-  month-ends (Jan 31 + 1 month → Feb 28, not Mar 3). Re-arming happens *after* delivery, so a failed
-  send leaves the row due and retries rather than rolling forward and skipping an occurrence.
-- **The dedupe key is `reminder:<id>:<due>`** — scoped to the occurrence, not the row. A repeating
-  item fires under one id repeatedly, so the id alone would suppress everything after the first
-  occurrence. It also makes snooze self-cleaning: moving the due is already a new key, so the endpoint
-  never has to delete the old ledger row by hand. The `reminder:` prefix stays because migration
-  `00056` preserved item ids so that ledger rows written before the merge still match — rename it and
-  every already-delivered item fires again.
+- **Recurrence is materialised, not stored.** There is no `repeat_every` column (data-layer
+  `00085`/`00086`). `add_to_list`'s `repeat_every` is an instruction executed once: it writes one
+  dated row per occurrence out to `repeat_until` (default a month), all sharing a `series_id`. So
+  `dueTick` re-arms nothing, and the calendar reads real rows instead of projecting future ones —
+  a projected chip was a drawing of an item that did not exist and could not be tapped or cleared.
+  `remove_from_list` with `series` clears what is left of one.
+- **The dedupe key is `reminder:<id>:<due>`** — scoped to the occurrence, not the row. Each
+  occurrence is its own row now, so the id alone would nearly do, except that **snooze** moves `due`
+  on an existing row and must be allowed to fire again at its new moment; including the due gets
+  that for free. The `reminder:` prefix stays because migration `00056` preserved item ids so that
+  ledger rows written before the merge still match — rename it and every already-delivered item
+  fires again.
+
+### Clearing a dated item is the scoring event
+
+Dated items feed the health bar's **gold band** (§4). The `list_items_task_event` trigger records
+every clear of a dated item in `task_events`, and the hub scores from that plus whatever is still
+open and overdue. Three things follow that are easy to undo by accident:
+
+- **`list_items` invalidates the row cache.** Its realtime handler calls `dirtyRows()` and
+  `broadcast()`, not just `pushLists()`. Without that a completion would not reach the bar until the
+  15-minute backstop — the one moment the reward is supposed to land.
+- **There is still exactly one way to remove an item, and the clock decides what it meant.** Clearing
+  something not yet live scores nothing; clearing something overdue scores it. A second verb for
+  cancelling was considered and rejected: "remove", "delete", "check off" and "done" are not
+  separable in how a request arrives, so a model choosing between two tools mis-routes them
+  indefinitely, silently awarding or withholding points. Do not add one without solving that.
+- **The ledger records every clear, including of a future item; the scoring rule is what ignores
+  those.** Keeping the record complete and the judgement in one place (`lib/score.js`) is what lets
+  the thresholds be retuned without a migration.
+
+- **Overdue rows escalate in colour** with a server-computed `heat` (1–3). The gold band floors at
+  zero, so once it is pinned there a second neglected item cannot show on the bar at all — the bar
+  shows what has been earned, the row shows what is owed.
 
 Voice/MCP writes them (data-layer tools); the hub surfaces them:
 - **Card:** `public/cards/todo.js` — the 5th phone swipe pane. Self-fetches `/api/todos` (not part of
@@ -692,9 +733,9 @@ families are too small for a list).
   it; when it is absent the hub derives one — cutting at the first em dash or line break, capped at
   90 chars. Either way the hub decides what a row says, not the Swift. Rows are one line each, which
   is what makes the row counts above exact.
-- **Expiry comes from the anchor.** The feed flags an item `expired` from `scheduled_at`, not `due`,
-  so a repeating item stays expired after it fires instead of resetting itself to upcoming. Whether
-  it repeats is orthogonal and only governs whether the notification comes again.
+- **Expiry comes from the anchor.** The feed flags an item `expired` from `scheduled_at`, which now
+  always equals `due` — nothing advances a due date any more. `repeating` says the item is one of a
+  materialised series, not that it will come back.
 - **Decode-optional flags.** `expired` and `repeating` are optional rather than defaulted: a
   defaulted `var` still makes the key required in the synthesised `init(from:)`, so a `due-last.json`
   written by an older build would fail to decode and turn the offline fallback into a blank widget —

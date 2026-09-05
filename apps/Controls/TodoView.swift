@@ -12,9 +12,9 @@ import WidgetKit   // only to nudge a redraw mid-clear; the drawing below stays 
 //
 // WHAT IT SHOWS: everything with a due date, from every list, ordered by when it was FIRST scheduled.
 // Not one list at a time — "what needs dealing with" is never confined to a single list. Items whose
-// moment has passed are EXPIRED and painted so; expiry is judged from the anchor (`scheduled_at`), so
-// a repeating item stays expired after firing rather than resetting itself back to upcoming. Whether
-// an item repeats is orthogonal — it only governs whether the notification comes again.
+// moment has passed are EXPIRED and painted so, and an expired item is also draining his score for as
+// long as it stays that way. `repeating` marks one occurrence of a materialised series (data-layer
+// migration 00085) — there are more of these on other days; this one will not come back.
 //
 // THE INTERACTION: a widget has no gestures at all — no swipe, no long press, only Button and Toggle
 // taps. So tapping a row opens its two options in place: open it in the app, or clear it. Clearing and

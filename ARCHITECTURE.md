@@ -121,6 +121,14 @@ There is **no `reminders` table** — a reminder is a `list_items` row with a `d
 on any list can carry one (data-layer migrations `00056`/`00057`). Anything still reaching for a
 `reminders` table is reading a dropped one.
 
+There is likewise **no `repeat_every` column** (`00085`/`00086`). Recurrence is materialised: one
+scheduling request writes one dated row per occurrence, sharing a `series_id`. Nothing advances a
+`due` any more, so `due` and `scheduled_at` always agree.
+
+`task_events` is the completion ledger behind the health bar's task band — written by trigger
+whenever a dated item is cleared, and deliberately outliving the item, which the hub purges 30 days
+after clearing.
+
 **System tables (machine plumbing, not life data):**
 - `voice_requests` — the voice command queue (enqueue → worker claims → done).
 - `voice_messages` — the shared "hub" conversation thread shown on every surface.
@@ -163,7 +171,9 @@ Produce tracking rides on nutrition rather than its own table: `nutrition_entrie
 - **Home Screen widgets** — the only surfaces that are *not* the web hub: native SwiftUI drawing in
   the same `StatusHubControls` extension as the Record control, each fed by its own compact endpoint
   so the hub keeps computing and the widget only renders.
-  - **Macro Rings** — today's Cal/P/C/F **pace** rings (plus the health bar on medium), from
+  - **Macro Rings** — today's Cal/P/C/F **pace** rings (plus the health bar on medium — three bands:
+    nutrition, training, tasks, each sent pre-divided so the widget never re-derives the weighting),
+    from
     `/api/rings`: a feed of **per-minute future frames**, so the arcs drain and the pace marker
     advances on the Home Screen for an hour per fetch while `lib/pace.js` stays the only place that
     maths lives. Also offered on the Lock Screen (accessory families).

@@ -53,7 +53,9 @@ body.cal{padding:12px}
   .cc-l{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
   .cal-chip .cc-r{flex:0 0 auto}
   .cal-chip.past{opacity:.5}
-  .cal-chip.exp .cc-l{color:#e5484d}
+  /* Overdue is never dimmed — see tv-calendar.css. One of past / exp / done, never a stack. */
+  .cal-chip.exp{opacity:1}
+  .cal-chip.exp .cc-l{color:#ff6b70;font-weight:700}
   /* Done: dimmed and struck through. The strike carries it; no glyph. */
   .cal-chip.done{opacity:.5}
   .cal-chip.done .cc-l{color:#8b96a5;text-decoration:line-through}

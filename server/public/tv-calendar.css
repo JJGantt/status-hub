@@ -36,8 +36,13 @@ body.tv .calcard .fit{height:100%;display:flex;flex-direction:row;gap:22px;min-h
 .cw-t{color:#8b96a5;flex:0 0 auto;font-size:13px}
 .cw-l{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0;color:#e8eaed}
 .cw-r{color:#8b96a5;flex:0 0 auto;font-size:13px}
+/* THREE mutually exclusive states, and the order matters. `past` dims something that has simply
+   been and gone; `exp` is outstanding AND overdue, which is the loudest thing on the timeline and
+   must never be dimmed — stacking them washed the red out to 45% and made an overdue item read as
+   a finished one. `done` is dim plus a strike. A chip gets exactly one of the three. */
 .cw-chip.past,.cw-dchip.past{opacity:.45}
-.cw-chip.exp .cw-l,.cw-dchip.exp .cw-l{color:#e5484d}
+.cw-chip.exp,.cw-dchip.exp{opacity:1;border-left-color:#e5484d;background:#2a1416}
+.cw-chip.exp .cw-l,.cw-dchip.exp .cw-l{color:#ff6b70;font-weight:700}
 /* Done: dimmed and struck through. No tick — the strike already says it, and a glyph costs width
    that the side-by-side chips need more. */
 .cw-chip.done,.cw-dchip.done{opacity:.5}

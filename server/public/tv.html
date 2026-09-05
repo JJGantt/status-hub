@@ -106,7 +106,10 @@
 </section>
 
 <section class="pane pane-todo">
-  <!-- lists (+ notes), with dated items surfaced in a Due view. Voice/MCP writes them; cards/todo.js renders + edits. Phone pane only. -->
+  <!-- Today's timeline first — the phone's copy of the wall's day column, same endpoint and same
+       chip states (cards/day.js). Then the lists themselves, with dated items surfaced in a Due
+       view. Voice/MCP writes them; cards/todo.js renders + edits. Phone pane only. -->
+  <div class="card daycardwrap"><div id="daycard"></div></div>
   <div class="card todocard"><div id="todopane"></div></div>
 </section>
 

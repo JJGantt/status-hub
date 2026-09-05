@@ -2027,6 +2027,10 @@ app.get('/api/calendar', async (req, res) => {
     const nowET = etNowString();
     const todayKey = nowET.slice(0, 10);
     const wall = req.query.wall === '1';
+    // The phone's day card wants the timeline and nothing else. Same computation — the day buckets
+    // come out of the month expansion either way — but it does not ship a month of grid it will not
+    // draw. One endpoint, so the two surfaces cannot disagree about a chip's state.
+    const dayOnly = req.query.day === '1';
     let count = 1;
     if (wall) {
       let s = {};
@@ -2127,7 +2131,7 @@ app.get('/api/calendar', async (req, res) => {
     // computed here (which hour row, and how far down it). Hour range covers at least 7a–10p and
     // stretches to hold the current hour and any item outside it.
     let dayline = null;
-    if (wall) {
+    if (wall || dayOnly) {
       const todayItems = byDay[todayKey] || [];
       const allday = todayItems.filter((i) => !i.time);
       const timed = todayItems.filter((i) => i.time);
@@ -2160,6 +2164,7 @@ app.get('/api/calendar', async (req, res) => {
       dayline = { date: todayKey, label: todayCell ? todayCell.label : todayKey, allday, hours };
     }
 
+    if (dayOnly) return res.json({ today: todayKey, dayline, next_transition: nextChipTransition(rows, nowET) });
     res.json({
       today: todayKey,
       dow: ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'],

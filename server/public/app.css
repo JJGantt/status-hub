@@ -1014,3 +1014,36 @@ body.tv:not(.phonewall) #tv-act .ai-act:not(.show){visibility:hidden}
  background:transparent;transition:background .4s ease}
 .stalebar.stale{background:#f59e0b}
 .stalebar.dead{background:#ef4444}
+
+/* ===== DAY CARD — today's timeline on the phone, the wall's day column at phone scale.
+   Same server-laid-out hours and half-hour lines (cards/day.js reads the same endpoint), so a chip's
+   state here and on the wall can never disagree. The spine runs 7a-10p whatever is on it, which is
+   taller than a card, so the hours scroll inside the card and it opens centred on now. ===== */
+body.tv.phonewall .pane-todo .daycardwrap{padding:12px 14px 14px;flex:0 0 auto}
+.dc-head{font-size:16px;font-weight:700;color:#e6ebf2;margin:0 0 10px}
+.dc-allday{display:flex;gap:4px;margin:0 0 8px}
+.dc-hours{max-height:46vh;overflow-y:auto;-webkit-overflow-scrolling:touch}
+.dc-hour{display:flex;gap:8px;min-height:44px;border-top:1px solid #222a33;position:relative;padding:2px 0}
+.dc-hour.cur{background:rgba(0,145,255,.06)}
+/* The hour is the thing you look for, so it is sized for that and right-aligned, exactly as on the
+   wall. Bare integer: the spine runs in order, so am/pm was never in doubt. */
+.dc-hl{flex:0 0 26px;font-size:19px;font-weight:700;color:#cfd8e3;line-height:1;padding-top:2px;
+  text-align:right;font-variant-numeric:tabular-nums}
+.dc-hour.cur .dc-hl{color:#0091ff}
+.dc-items{flex:1 1 auto;min-width:0;display:flex;flex-direction:column;gap:3px;overflow:hidden}
+.dc-half{flex:1 1 0;min-height:0;min-width:0;display:flex;gap:4px;overflow:hidden}
+.dc-chip{flex:1 1 0;min-width:0;display:flex;align-items:center;font-size:13px;line-height:1.2;
+  padding:2px 6px 2px 7px;border-left:3px solid var(--c);background:#0e1318;border-radius:5px}
+.dc-l{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0;color:#e8eaed}
+.dc-more{flex:0 0 auto;align-self:center;font-size:11px;font-weight:700;color:#8b96a5;padding:0 2px}
+/* Four mutually exclusive states, matching the wall: past has been and gone, grace is due but still
+   free, exp is overdue and draining, done is dim with a strike. A chip gets exactly one. */
+.dc-chip.past{opacity:.45}
+.dc-chip.grace{border-left-color:#e6b93d;background:#4a3a0d}
+.dc-chip.grace .dc-l{color:#ffd75e;font-weight:700}
+.dc-chip.exp{border-left-color:#ff4d4d;background:#cc0d16}
+.dc-chip.exp .dc-l{color:#fff;font-weight:800}
+.dc-chip.done{opacity:.5}
+.dc-chip.done .dc-l{color:#8b96a5;text-decoration:line-through}
+.dc-now{position:absolute;left:0;right:0;height:2px;background:#0091ff;box-shadow:0 0 6px #0091ff}
+.dc-now::before{content:'';position:absolute;left:-1px;top:-3px;width:8px;height:8px;border-radius:50%;background:#0091ff}

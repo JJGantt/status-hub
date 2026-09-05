@@ -2037,7 +2037,11 @@ function chipScore(item, nowLocal, state) {
   return { value: -(draining / (TASK_DRAIN_FULL_H * 3600000)) * mult, kind: 'lost' };
 }
 
-const DAYLINE_MAX_PER_HALF = 3;
+// Two chips to a half-hour line, each at a fixed half width whether or not there is a second one.
+// Letting a lone chip stretch made the line's shape depend on how busy it happened to be, so a
+// glance could not tell one item from two without reading it. A fixed grid reads at a distance.
+// Anything past the cap becomes a count, so a hidden item is still visible AS hidden.
+const DAYLINE_MAX_PER_HALF = 2;
 const dayHalf = (items) => ({
   items: items.slice(0, DAYLINE_MAX_PER_HALF),
   more: Math.max(0, items.length - DAYLINE_MAX_PER_HALF),

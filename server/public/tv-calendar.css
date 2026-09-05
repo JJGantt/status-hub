@@ -63,8 +63,12 @@ body.tv .calcard .fit{height:100%;display:flex;flex-direction:row;gap:22px;min-h
 /* chips on the DAY TIMELINE — side by side, sharing the line's width equally. flex:1 1 0 with
    min-width:0 is what makes one chip span the line and three split it into thirds, ellipsising
    rather than wrapping or pushing each other out. */
-.cw-dchip{flex:1 1 0;min-width:0;display:flex;align-items:center;font-size:15px;line-height:1.2;
+.cw-dchip{flex:0 0 calc(50% - 2px);min-width:0;display:flex;align-items:center;font-size:15px;line-height:1.2;
   padding:2px 6px 2px 7px;border-left:4px solid var(--c);background:#0e1318;border-radius:5px}
+/* A lone chip still takes half the line — the line's shape should not depend on how busy it is, or a
+   glance cannot tell one item from two without reading. When a +N is present the pair gives it room,
+   which is the only case the half is not exactly half. */
+.cw-half:has(.cw-more) .cw-dchip{flex-basis:calc((100% - 34px) / 2)}
 .cw-more{flex:0 0 auto;align-self:center;font-size:13px;font-weight:700;color:#8b96a5;padding:0 2px}
 /* The number sits at the chip's right edge and never squeezes the title — the title ellipsises, the
    score does not. `potential` is what you can still get and is drawn hollow to say it has not

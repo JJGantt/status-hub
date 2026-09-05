@@ -65,6 +65,22 @@ a widget and its button intents share `UserDefaults.standard`, since they are on
 `apps/tools/render-*.swift` compiles them standalone and writes PNGs at real device point sizes.
 Importing WidgetKit there costs the whole iterate-without-a-device loop.
 
+## A dated item with a past `due` pushes to his phone within 60 seconds
+
+`dueTick` scans every 60s and app-pushes anything overdue. So inserting a test item with a due time
+in the past does not simulate an overdue item — it **sends Jared a real notification** with fake
+content, and there is no way to unsend it. It happened: three test items named "Costing me",
+"Important slip" and "Still worth it" arrived on his phone while the per-item scoring was being
+checked.
+
+Test the scoring instead of the database. `lib/score.js` is pure — `tasksScore`, `completionValue`
+and `taskDeadline` take plain objects and a `nowLocal` string, so every state (overdue, in grace,
+late, drained to zero) is reachable with no rows at all. When a row genuinely is needed, give it a
+**future** due and set `completed_at` or `deleted` directly rather than letting its moment pass.
+
+Clearing up afterwards means the item AND its ledger row: `notifications.dedupe_key` keeps a
+`reminder:<id>:<due>` entry per delivery, and deleting the item leaves that behind.
+
 ## Do not rename the reminder dedupe key
 
 `reminder:<id>:<due>` in `notifications.dedupe_key`. Item ids were preserved through the

@@ -67,12 +67,14 @@ const TASK_DECAY_DAYS = 7;    // a completion's effect fades linearly to nothing
 const TASK_GRACE_MIN = 30;    // still "on time" this long past the deadline
 const TASK_LATE_ZERO_H = 4;   // lateness at which a completion is worth nothing
 const TASK_LATE_FLOOR_H = 24; // lateness at which a completion is worth its full negative
-const TASK_DRAIN_FULL_H = 24; // overdue hours per unit of drain — the drain does NOT stop there
+const TASK_DRAIN_FULL_H = 24; // an overdue item drains one unit per this many hours, forever
 const DAY_START_HOUR = 4;     // the display day's 4am origin, shared with lib/dates.js
+const TASK_STEP_H = 1;        // replay granularity
 
-// With a linear decay a steady R completions/day settles at R·DECAY/2 weighted units, so that is
-// what "full" has to mean for the band to be reachable and holdable at the intended rate.
+// One ordinary on-time completion is worth 1 unit, so FULL is how many of those the band holds.
 const TASK_FULL_UNITS = TASK_RATE * TASK_DECAY_DAYS / 2;
+// A steady TASK_RATE completions a day, each aging out linearly over TASK_DECAY_DAYS, settles at
+// RATE·DAYS/2 — which is what FULL is, so the band is exactly reachable and holdable at that rate.
 
 // Quadratic falloff on an ABSOLUTE deviation: 1 at dev 0, 0 once |dev| >= tol. Small misses barely
 // register; big ones bite (3× the deviation ≈ 9× the penalty).
@@ -154,44 +156,105 @@ function completionValue(lateMs) {
 }
 
 /**
- * events:    [{ scheduled_at|due, completed_at, priority }] — items marked DONE. These are ordinary
- *            `list_items` rows carrying a `completed_at`, not a separate ledger: a completed item
- *            persists (it still draws on the calendar), so it is its own record.
+ * The gold band is a BOUNDED QUEUE of decaying completions, replayed forward.
+ *
+ * It was a window sum, and that could not honour its own limits: the total ran uncapped while only
+ * the DISPLAY was clamped to 0-100%, so a heavy week banked surplus that silently held the bar full
+ * afterwards, and a neglected item dug an invisible hole that several completions had to fill before
+ * anything moved. The bar was describing a number that was not the number.
+ *
+ * The fix is a queue with a fixed capacity rather than a cap applied at the end. Each completion is
+ * admitted with a credit and still ages out linearly over TASK_DECAY_DAYS on its own clock, so the
+ * decay is unchanged. When admitting one would take the level past FULL, the OLDEST credits are
+ * pushed out to make room — the newest work always lands, and what falls off the far end is gone
+ * for good rather than waiting above the ceiling as a buffer.
+ *
+ * Draining works the same way from the same end: an overdue item removes credit for as long as it
+ * stays overdue, and when there is nothing left to remove the level is simply zero. That is what
+ * "cannot empty past 0%" has to mean — otherwise neglect accrues as a debt nobody can see, and
+ * digging out of it starts below the bottom of the bar.
+ *
+ * A late completion whose value has gone negative is applied as a drain, not admitted as a negative
+ * credit: it takes something away, it does not sit in the queue waiting to age.
+ *
+ * completed: [{ scheduled_at|due, completed_at, priority }] — items marked done.
  * open:      [{ scheduled_at|due, priority }]               — dated items still outstanding.
  * nowLocal:  naive local wall-clock string.
  */
 function tasksScore({ events = [], open = [], nowLocal }) {
   const now = naive(nowLocal);
-  if (now == null) return { pct: 0, units: 0, earned: 0, drained: 0, overdue: 0, completed: 0 };
-  let earned = 0, drained = 0, completed = 0, overdue = 0;
+  const empty = { pct: 0, level: 0, units: 0, earned: 0, drained: 0, overdue: 0, completed: 0 };
+  if (now == null) return empty;
 
+  const start = now - TASK_DECAY_DAYS * DAY;                       // nothing older can still count
+  const stepMs = TASK_STEP_H * HOUR;
+  const decayWindow = TASK_DECAY_DAYS * DAY;
+  const weightAt = (credit, t) => Math.max(0, 1 - (t - credit.at) / decayWindow);
+
+  const landings = [];
   for (const e of events) {
-    if (isExempt(e)) continue;                                     // nothing was owed, so nothing is earned
+    if (isExempt(e)) continue;                                     // nothing owed, so nothing earned
     const done = naive(e.completed_at), deadline = taskDeadline(e.scheduled_at || e.due);
-    if (done == null || deadline == null) continue;
-    const age = now - done;
-    if (age > TASK_DECAY_DAYS * DAY) continue;                     // fallen out of the window
-    const weight = Math.max(0, 1 - age / (TASK_DECAY_DAYS * DAY));
-    earned += weight * completionValue(done - deadline) * (1 + (Number(e.priority) || 0));
-    completed++;
+    if (done == null || deadline == null || done < start || done > now) continue;
+    landings.push({ at: done, amount: completionValue(done - deadline) * (1 + (Number(e.priority) || 0)) });
   }
+  landings.sort((a, b) => a.at - b.at);
 
+  // An outstanding item drains at a steady rate for as long as it is overdue. The rate is constant;
+  // it is the TOTAL that grew without bound before, and the floor is what bounds it now.
+  const drains = [];
   for (const o of open) {
-    if (isExempt(o)) continue;                                     // an appointment cannot be "late"
+    if (isExempt(o)) continue;                                     // an appointment cannot be late
     const deadline = taskDeadline(o.scheduled_at || o.due);
     if (deadline == null) continue;
-    const late = now - deadline - TASK_GRACE_MIN * MIN;
-    if (late <= 0) continue;                                       // not overdue: costs nothing yet
-    // No floor. A thing ignored for a week is not a thing ignored for a day, and clamping would say
-    // it was. Dealing with it is always the bounded way out.
-    drained += -(late / (TASK_DRAIN_FULL_H * HOUR)) * (1 + (Number(o.priority) || 0));
-    overdue++;
+    drains.push({ from: deadline + TASK_GRACE_MIN * MIN, rate: (1 + (Number(o.priority) || 0)) });
   }
 
-  const units = earned + drained;
+  const credits = [];                                              // oldest first
+  const levelAt = (t) => credits.reduce((sum, c) => sum + c.credit * weightAt(c, t), 0);
+  // Take `want` off the level at time t, oldest credits first — the same end things fall off.
+  // Returns what was actually removed, which is less than asked for once the queue is empty.
+  const takeOldest = (want, t) => {
+    let left = want;
+    for (const c of credits) {
+      if (left <= 1e-9) break;
+      const w = weightAt(c, t);
+      if (w <= 0 || c.credit <= 0) continue;
+      const removable = c.credit * w;
+      const take = Math.min(removable, left);
+      c.credit -= take / w;
+      left -= take;
+    }
+    return want - left;
+  };
+
+  let earned = 0, drained = 0, li = 0;
+  for (let t = start; t <= now; t += stepMs) {
+    const stepEnd = Math.min(t + stepMs, now);
+    while (li < landings.length && landings[li].at <= stepEnd) {
+      const L = landings[li];
+      if (L.amount >= 0) {
+        credits.push({ at: L.at, credit: L.amount });
+        const over = levelAt(L.at) - TASK_FULL_UNITS;
+        // Full: the newest still lands, the oldest is pushed out to make room for it.
+        earned += over > 0 ? Math.max(0, L.amount - takeOldest(over, L.at)) : L.amount;
+      } else {
+        drained -= takeOldest(-L.amount, L.at);                    // a very late one takes away
+      }
+      li++;
+    }
+    let rate = 0;
+    for (const d of drains) if (d.from < stepEnd) rate += d.rate;
+    if (rate > 0) drained -= takeOldest(rate * ((stepEnd - t) / DAY), stepEnd);
+    while (credits.length && credits[0].credit <= 1e-9) credits.shift();
+  }
+
+  const level = Math.max(0, Math.min(TASK_FULL_UNITS, levelAt(now)));
   return {
-    pct: Math.max(0, Math.min(1, units / TASK_FULL_UNITS)),
-    units, earned, drained, overdue, completed,
+    pct: TASK_FULL_UNITS > 0 ? level / TASK_FULL_UNITS : 0,
+    level, units: level, earned, drained,
+    overdue: drains.filter((d) => d.from < now).length,
+    completed: landings.length,
   };
 }
 

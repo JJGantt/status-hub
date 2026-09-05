@@ -186,3 +186,37 @@ export function dualPlot(calPts,wPts,maintPts,targetPts){
  ov+='</div>';
  return '<div class=nplot-wrap>'+s+ov+'</div>';
 }
+
+// ---- pick up a new deploy without being asked ----
+//
+// Nothing reloaded a page when the server shipped a new version. The wall and the phone kept running
+// whatever JS and CSS they loaded, sometimes for days, so a fix looked like it had not landed and the
+// only cure was reloading by hand — which on the wall means a voice command and on the phone means
+// force-quitting the app.
+//
+// `/healthz` already reports the commit the server is running, so the page remembers what it started
+// against and reloads when that changes. It is a text response with no database behind it, so the
+// poll is cheap enough to be boring.
+//
+// The guards are the same three the staleness recovery uses, for the same reasons: a hidden tab is
+// supposed to be idle, reloading out from under something being typed throws the text away, and a
+// reload is pointless if the answer never came. Failing all three just means waiting for the next
+// pass — a stale page is always better than a lost one.
+const BUILD_POLL_MS = 120000;
+if (typeof window !== 'undefined' && typeof fetch === 'function') {
+  let seen = null;
+  const check = async () => {
+    let now;
+    try { now = (await (await fetch('/healthz', { cache: 'no-store' })).text()).trim(); }
+    catch (_) { return; }
+    if (!now.startsWith('ok ')) return;
+    if (seen === null) { seen = now; return; }
+    if (now === seen) return;
+    if (document.hidden) return;                      // let a backgrounded tab stay asleep
+    const a = document.activeElement;
+    if (a && (a.tagName === 'INPUT' || a.tagName === 'TEXTAREA' || a.isContentEditable)) return;
+    location.reload();
+  };
+  setInterval(check, BUILD_POLL_MS);
+  check();
+}

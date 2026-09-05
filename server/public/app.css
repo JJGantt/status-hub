@@ -1017,12 +1017,11 @@ body.tv:not(.phonewall) #tv-act .ai-act:not(.show){visibility:hidden}
 
 /* ===== DAY CARD — today's timeline on the phone, the wall's day column at phone scale.
    Same server-laid-out hours and half-hour lines (cards/day.js reads the same endpoint), so a chip's
-   state here and on the wall can never disagree. The spine runs 7a-10p whatever is on it, which is
-   taller than a card, so the hours scroll inside the card and it opens centred on now. ===== */
+   state here and on the wall can never disagree. The WHOLE day is drawn — the pane scrolls, so there
+   is no reason to give the phone less of it than the wall shows. ===== */
 body.tv.phonewall .pane-todo .daycardwrap{padding:12px 14px 14px;flex:0 0 auto}
 .dc-head{font-size:16px;font-weight:700;color:#e6ebf2;margin:0 0 10px}
 .dc-allday{display:flex;gap:4px;margin:0 0 8px}
-.dc-hours{max-height:46vh;overflow-y:auto;-webkit-overflow-scrolling:touch}
 .dc-hour{display:flex;gap:8px;min-height:44px;border-top:1px solid #222a33;position:relative;padding:2px 0}
 .dc-hour.cur{background:rgba(0,145,255,.06)}
 /* The hour is the thing you look for, so it is sized for that and right-aligned, exactly as on the

@@ -1,6 +1,7 @@
 // Today's timeline — the phone's version of the wall's day column. Same endpoint, same server-laid-out
-// hours and half-hour lines, same chip states; only the sizing differs. Painted into #daycard, and it
-// no-ops where that element is absent (the TV wall draws its own from tv-calendar.js).
+// hours and half-hour lines, same chip states; only the sizing differs. The whole day is drawn, since
+// the pane scrolls. Painted into #daycard, and it no-ops where that element is absent (the TV wall
+// draws its own from tv-calendar.js).
 //
 // It fetches for itself rather than riding the status frame: the frame carries no dated items, and
 // this is the same data the lists pane below it self-fetches.

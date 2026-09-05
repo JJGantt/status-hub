@@ -73,7 +73,6 @@ body.tv .calcard .fit{height:100%;display:flex;flex-direction:row;gap:22px;min-h
 .cw-sc.k-lost{color:#fff}
 .cw-sc.k-potential{color:#ffd75e;font-weight:700;opacity:.85;
   border:1px solid rgba(255,215,94,.55);border-radius:4px;padding:0 4px;font-size:12px}
-.cw-dchip.done .cw-sc.k-earned{color:#8b96a5}
 
 /* MONTHS — one big month with chips, or `calendar_months` minis with dots; the column count comes
    from the payload (`cols`) and is set inline by tv-calendar.js. */

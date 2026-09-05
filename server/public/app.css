@@ -1039,7 +1039,8 @@ body.tv.phonewall .pane-todo .daycardwrap{padding:12px 14px 14px;flex:0 0 auto}
 .dc-sc{flex:0 0 auto;margin-left:5px;font-size:11px;font-weight:800;font-variant-numeric:tabular-nums}
 /* `earned` only ever appears on a completed chip, which is dim and struck through — so it takes the
    same muted treatment rather than a colour of its own. */
-.dc-sc.k-earned{color:#8b96a5}
+.dc-sc.k-earned.pos{color:#39d353}
+.dc-sc.k-earned.neg{color:#ff4d4d}
 .dc-sc.k-lost{color:#fff}
 .dc-sc.k-potential{color:#ffd75e;font-weight:700;opacity:.85;
   border:1px solid rgba(255,215,94,.55);border-radius:4px;padding:0 3px;font-size:10px}
@@ -1050,7 +1051,7 @@ body.tv.phonewall .pane-todo .daycardwrap{padding:12px 14px 14px;flex:0 0 auto}
 .dc-chip.grace .dc-l{color:#ffd75e;font-weight:700}
 .dc-chip.exp{border-left-color:#ff4d4d;background:#cc0d16}
 .dc-chip.exp .dc-l{color:#fff;font-weight:800}
-.dc-chip.done{opacity:.5}
-.dc-chip.done .dc-l{color:#8b96a5;text-decoration:line-through}
+.dc-chip.done{opacity:1}
+.dc-chip.done .dc-l{color:#8b96a5;text-decoration:line-through;opacity:.55}
 .dc-now{position:absolute;left:0;right:0;height:2px;background:#0091ff;box-shadow:0 0 6px #0091ff}
 .dc-now::before{content:'';position:absolute;left:-1px;top:-3px;width:8px;height:8px;border-radius:50%;background:#0091ff}

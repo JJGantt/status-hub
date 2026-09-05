@@ -22,7 +22,7 @@ function chip(it) {
 function dayChip(it) {
   const cls = 'cw-dchip' + (it.done ? ' done' : it.expired ? ' exp' : it.grace ? ' grace' : it.past ? ' past' : '');
   // The server decides both the number and which kind it is; this only paints it.
-  const sc = it.score ? `<span class="cw-sc k-${esc(it.score_kind)}">${esc(it.score)}</span>` : '';
+  const sc = it.score ? `<span class="cw-sc k-${esc(it.score_kind)} ${esc(it.score_sign)}">${esc(it.score)}</span>` : '';
   return `<span class="${cls}" style="--c:${esc(it.color)}"><span class="cw-l">${esc(it.title)}</span>${sc}</span>`;
 }
 

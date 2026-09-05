@@ -54,8 +54,11 @@ body.tv .calcard .fit{height:100%;display:flex;flex-direction:row;gap:22px;min-h
 .cw-chip.exp .cw-t{color:rgba(255,255,255,.85)}
 /* Done: dimmed and struck through. No tick — the strike already says it, and a glyph costs width
    that the side-by-side chips need more. */
-.cw-chip.done,.cw-dchip.done{opacity:.5}
-.cw-chip.done .cw-l,.cw-dchip.done .cw-l{color:#8b96a5;text-decoration:line-through}
+/* The TASK reads as done — muted and struck through — but its SCORE does not. Dimming the whole
+   chip took the number down with it, and the number is the part that says "this was worth
+   something". So the opacity lives on the label, never on the chip. */
+.cw-chip.done,.cw-dchip.done{opacity:1}
+.cw-chip.done .cw-l,.cw-dchip.done .cw-l{color:#8b96a5;text-decoration:line-through;opacity:.55}
 
 /* chips on the DAY TIMELINE — side by side, sharing the line's width equally. flex:1 1 0 with
    min-width:0 is what makes one chip span the line and three split it into thirds, ellipsising
@@ -69,7 +72,8 @@ body.tv .calcard .fit{height:100%;display:flex;flex-direction:row;gap:22px;min-h
 .cw-sc{flex:0 0 auto;margin-left:6px;font-size:13px;font-weight:800;font-variant-numeric:tabular-nums}
 /* `earned` only ever appears on a completed chip, which is dim and struck through — so it takes the
    same muted treatment rather than a colour of its own. */
-.cw-sc.k-earned{color:#8b96a5}
+.cw-sc.k-earned.pos{color:#39d353}
+.cw-sc.k-earned.neg{color:#ff4d4d}
 .cw-sc.k-lost{color:#fff}
 .cw-sc.k-potential{color:#ffd75e;font-weight:700;opacity:.85;
   border:1px solid rgba(255,215,94,.55);border-radius:4px;padding:0 4px;font-size:12px}

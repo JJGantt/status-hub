@@ -2054,7 +2054,9 @@ function scoreFields(item, nowLocal) {
   const sc = chipScore(item, nowLocal, chipState(item, nowLocal));
   if (!sc || Math.abs(sc.value) < 0.05) return {};
   const n = Math.round(Math.abs(sc.value) * 10) / 10;
-  return { score: (sc.value > 0 ? '+' : '\u2212') + n.toFixed(1), score_kind: sc.kind };
+  // Sign rides separately so the clients colour on it without parsing the string back apart.
+  return { score: (sc.value > 0 ? '+' : '\u2212') + n.toFixed(1), score_kind: sc.kind,
+           score_sign: sc.value > 0 ? 'pos' : 'neg' };
 }
 
 function calOccurrences(item, startKey, endKey) {

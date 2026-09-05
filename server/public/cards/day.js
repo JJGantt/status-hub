@@ -15,7 +15,7 @@ let nextTransition = null;   // when the next chip changes state — the server 
 function chip(it) {
   const cls = 'dc-chip' + (it.done ? ' done' : it.expired ? ' exp' : it.grace ? ' grace' : it.past ? ' past' : '');
   // The server decides both the number and which kind it is; this only paints it.
-  const sc = it.score ? `<span class="dc-sc k-${esc(it.score_kind)}">${esc(it.score)}</span>` : '';
+  const sc = it.score ? `<span class="dc-sc k-${esc(it.score_kind)} ${esc(it.score_sign)}">${esc(it.score)}</span>` : '';
   return `<span class="${cls}" style="--c:${esc(it.color)}"><span class="dc-l">${esc(it.title)}</span>${sc}</span>`;
 }
 

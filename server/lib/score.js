@@ -183,11 +183,16 @@ function completionValue(lateMs) {
  */
 function tasksScore({ events = [], open = [], nowLocal }) {
   const now = naive(nowLocal);
-  const empty = { pct: 0, level: 0, units: 0, earned: 0, drained: 0, overdue: 0, completed: 0 };
+  const empty = { pct: 0, level: 0, units: 0, earned: 0, drained: 0, overdue: 0, completed: 0,
+                  drain_per_day: 0, drain_per_hour: 0, drain_next_hour_pct: 0 };
   if (now == null) return empty;
 
-  const start = now - TASK_DECAY_DAYS * DAY;                       // nothing older can still count
   const stepMs = TASK_STEP_H * HOUR;
+  // Anchored to the CLOCK hour, not to `now`. Stepping back from now would put the grid at whatever
+  // minute the payload happened to be built at, so the quantisation boundary would slide on every
+  // rebuild and the level would jitter between two neighbouring values. Flooring pins it: the drain
+  // lands on the hour, every rebuild agrees, and only the final partial step tracks the live clock.
+  const start = Math.floor((now - TASK_DECAY_DAYS * DAY) / stepMs) * stepMs;
   const decayWindow = TASK_DECAY_DAYS * DAY;
   const weightAt = (credit, t) => Math.max(0, 1 - (t - credit.at) / decayWindow);
 
@@ -250,9 +255,18 @@ function tasksScore({ events = [], open = [], nowLocal }) {
   }
 
   const level = Math.max(0, Math.min(TASK_FULL_UNITS, levelAt(now)));
+  // What the next hour costs at the current rate, if nothing changes. Surfaced rather than derived
+  // by a caller so there is one answer to "how fast am I bleeding" — and so it cannot drift from the
+  // rate the replay above actually applied.
+  const liveRate = drains.reduce((r, d) => r + (d.from < now ? d.rate : 0), 0);
+  const perHour = liveRate / 24;
   return {
     pct: TASK_FULL_UNITS > 0 ? level / TASK_FULL_UNITS : 0,
     level, units: level, earned, drained,
+    drain_per_day: liveRate,
+    drain_per_hour: perHour,
+    // Capped by what is actually there: at 0.4 units left, the next hour cannot cost more than that.
+    drain_next_hour_pct: TASK_FULL_UNITS > 0 ? Math.min(level, perHour) / TASK_FULL_UNITS : 0,
     overdue: drains.filter((d) => d.from < now).length,
     completed: landings.length,
   };
@@ -269,6 +283,10 @@ function computeScore({ volume, days = [], surplus = 0, taskEvents = [], openTas
       pct: pct(k.pct), units: Math.round(k.units * 100) / 100,
       earned: Math.round(k.earned * 100) / 100, drained: Math.round(k.drained * 100) / 100,
       overdue: k.overdue, completed: k.completed,
+      // What the next hour costs at the current rate. Carried on the payload rather than left to a
+      // client to derive, so every surface that ever shows it agrees with the replay that applied it.
+      drain_per_day: Math.round(k.drain_per_day * 100) / 100,
+      drain_next_hour_pct: pct(k.drain_next_hour_pct),
     },
     training: { pct: pct(t.pct), points: t.points, target: t.target },
     nutrition: {

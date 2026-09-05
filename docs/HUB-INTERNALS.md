@@ -168,6 +168,22 @@ decides how long it is felt.
 Only **completing** scores. Deleting is worth nothing either way — it is a thing he decided not to
 do, not a thing he failed at — so calling off a whole series is free and needs no special case.
 
+`priority` carries three values, and the third is a kind rather than a weight:
+
+| | | |
+|---|---|---|
+| `1` | important | counts double, both directions |
+| `0` | normal | the default |
+| `-1` | **exempt** | scores nothing, never badges, closes itself when its moment passes |
+
+Exempt is for things that are on the schedule but are not tasks — a shift, an appointment, a
+reservation. Nothing is owed, so there is nothing to earn for "completing" one and penalising him
+for not ticking one off is worse than useless. `tasksScore` **branches** on it rather than relying on
+`1 + priority` arriving at zero: a zero multiplier would still let the item count as overdue and
+badge. `dueTick`'s `closeExempt()` marks them done once their moment has gone, using the SCORING
+deadline, so an all-day one closes at the end of its day rather than at 9am when it notified. Their
+`done` flag is suppressed on the calendar — passing is not an achievement.
+
 One asymmetry is deliberate and is the first thing a reader will want to "fix": **the open-item
 drain is unbounded.** Ignoring something for a week is not ignoring it for a day, and a floor would
 say it was. It always has a bounded exit, because completing the item replaces the whole accumulated
@@ -309,6 +325,25 @@ Two more things that are easy to undo by accident:
 - **Overdue rows escalate in colour** with a server-computed `heat` (1–3). The gold band floors at
   zero, so once it is pinned there a second neglected item cannot show on the bar at all — the bar
   shows what has been earned, the row shows what is owed.
+
+### The wall's day timeline
+
+`/api/calendar?wall=1` ships `dayline` fully laid out. Each hour is **two half-hour lines**, and the
+second is *reserved* for `:30`–`:59` — a 4:30 item sits on the lower line even when 4:00 is empty,
+because that placement is the only thing saying which half of the hour it is in: day chips carry no
+time label and no repeat glyph, both of which were spending width that several chips now share.
+
+Chips on a line sit **side by side** and split it equally (`flex:1 1 0`), so one spans the line and
+three take thirds. How many fit is a property of the column rather than of the data, which makes it
+the server's call: `DAYLINE_MAX_PER_HALF` caps them and the remainder rides along as `more`, drawn
+as `+N` — a hidden item stays visible *as* hidden.
+
+Splitting the row was chosen over letting busy hours grow taller. Height standing for something
+other than time makes a packed hour read as the day running longer than it does.
+
+The hour label is the bare integer at 30px bold. The spine runs in order from morning to night, so
+am/pm was never ambiguous, and dropping the letter is what buys the digit enough width to read from
+across the room.
 
 Voice/MCP writes them (data-layer tools); the hub surfaces them:
 - **Card:** `public/cards/todo.js` — the 5th phone swipe pane. Self-fetches `/api/todos` (not part of

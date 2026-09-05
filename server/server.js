@@ -1964,9 +1964,6 @@ function calTimeLabel(occ) {
   const h = +m[1]; const mm = m[2]; const h12 = h % 12 || 12;
   return `${h12}${mm === '00' ? '' : ':' + mm}${h < 12 ? 'a' : 'p'}`;
 }
-// Chips on one half-hour line sit side by side and share its width, so the number that fits is a
-// property of the column, not of the data — which makes it the server's to decide. Anything past the
-// cap becomes a count, so a hidden item is still visible AS hidden.
 // Add minutes to a local-naive stamp WITHOUT going near a timezone. Date.parse of a naive string
 // treats it as UTC, and formatting the result back through etStringAt then applies the display zone
 // on top — a double conversion that moved a 13:59 deadline to 10:29. UTC getters over naive

@@ -64,6 +64,84 @@ constant. Falls back to Eastern when unknown.
 
 ## Not started
 
+### Task scoring — a third band on the health bar
+
+Designed, agreed, not built. The health bar becomes thirds: nutrition, training, and **tasks**
+(gold, `#e6b93d`), where the task band is earned by completing dated list items and drained by
+neglecting them. Its purpose is to make scheduling something and then doing it feel like it paid.
+
+**The band starts empty and is earned.** Not a percentage of tasks completed, and no neutral
+baseline — with nothing scheduled the gold is simply absent. A baseline would remove the only
+incentive the band exists to create, which is putting things on the list in the first place.
+
+Completing on time is worth full value; completing progressively later is worth less and eventually
+negative; anything past due and untouched drains continuously with no action needed. Every effect
+fades linearly to nothing over seven days, matching the rolling week the nutrition and training
+bands already look back over — so a hit's size, not a separate rule, decides how long it is felt.
+An item marked important counts more in both directions and changes nothing else (not the push).
+
+**Untimed vs timed.** A date-only `due` is on time any moment before the day ends (the 4am
+boundary); a timed one is on time until its moment plus a short grace. Date-only items already
+*fire* at 9am (`dueMoment`) — the firing time and the deadline are different questions about the
+same value, and that is deliberate.
+
+#### There is exactly one way to remove an item, and the clock decides what it means
+
+Removing an item that is **not yet due** scores nothing. Removing one that is **already past due**
+scores it. That single rule is what makes one verb sufficient.
+
+The attractive alternative — a `complete` verb beside a `cancel`/`delete` verb — does not survive
+contact with speech. "Remove", "delete", "clear", "check off", "done" and "scratch that" are not
+separable in how a request actually arrives, so a model choosing between two tools will mis-route
+them indefinitely, and the mis-route silently awards or withholds points. Making the *timing* carry
+the meaning removes the choice entirely: nothing has to be disambiguated because nothing is
+ambiguous. It also answers the case that motivated wanting a second verb — putting something on the
+list, learning it is moot, and taking it off — which is free, because it was never overdue.
+
+Do not reintroduce a second removal verb without solving that routing problem first.
+
+#### Recurrence is materialised, not a repeating row
+
+`repeat_every` goes away. "Every day for the next month" is a scheduling instruction executed once,
+producing thirty independent dated items; nothing downstream knows they share an origin except a
+series id carried on the rows.
+
+This is what makes scoring tractable. A repeating row's `due` marches into the future the instant it
+fires, so "which occurrence was just completed" has no answer without an occurrence ledger, and its
+`scheduled_at` sits permanently in the past, so a naive drain would bleed forever from an item that
+is working correctly. Materialised occurrences have neither problem — every item is a one-shot.
+
+Consequences that are deliberate, not oversights:
+
+- **A missed series compounds.** Seven skipped days is seven separate drains, not one. They are
+  separate events and behave separately.
+- **The instruction must carry a horizon.** "Every day" alone has no stopping point, and a
+  background job quietly topping the list up forever is the kind of thing that breaks silently.
+  Absent a horizon it takes a default month, and the items are visible so the commitment is too.
+  Running out is a re-up prompt, not a failure.
+- **The list gains bulk.** The todo pane needs a near horizon by default rather than every
+  materialised row, and the series id is what lets the pane collapse a series and lets the whole
+  thing be killed in one go. It is also what keeps item resolution exact: the model reads a due list
+  scoped to today and overdue and passes an id, rather than matching on a title.
+
+The existing `repeat_every` users (`AFF`, `TOLLS`) get materialised once and the column dropped.
+Leaving both mechanisms running is how two ways of expressing recurrence end up disagreeing.
+
+#### Storage
+
+Completions need a ledger of their own. Cleared items are hard-purged after 30 days
+(`purgeCleared`), so a score read off the item row would silently shift when the purge ran. The
+drain is the opposite — it is derived live from open dated items and never stored.
+
+#### Surfaces
+
+The bar renders in three places and all three need the third band: the TV wall (vertical), the
+portrait phone-wall (horizontal, a **separate** CSS layout in `app.css`), and the iOS widget
+(`Controls/RingsView.swift`, which caps at two-thirds until it is updated). `cards/score.js` already
+floats a delta pill whenever the overall moves, so the reward animation needs nothing new.
+
+The phone's todo pane has no health bar at all; adding one there is a separate decision.
+
 ### AlarmKit — the real alarm
 Breaks silent mode **and** Focus, full-screen stop/snooze UI, Lock Screen + Watch. iOS 26+ only;
 device confirmed on **26.6**, so it's available. One-time permission prompt, no Apple approval

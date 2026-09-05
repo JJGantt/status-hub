@@ -27,11 +27,15 @@ function fmtDue(due) {
 // (see app.css), so the BROWSER owns the drag physics, momentum, rubber-banding and snapping. There
 // is no pointer maths here, which is the whole point: hand-rolled swipe handling fights the browser
 // and loses. The text itself stays put (the row is sticky) and the X slides in over its right end.
-function row(id, inner, body = '', expired = false) {
+function row(id, inner, body = '', expired = false, heat = 0) {
   // The body is rendered but collapsed. Only rows whose text says more than their title carry one —
   // expanding a row to reveal exactly what was already on it would be a dead gesture.
   const detail = body ? `<div class="body">${esc(body)}</div>` : '';
-  return `<li class="sw${expired ? ' exp' : ''}${body ? ' has-body' : ''}" data-id="${esc(id)}">` +
+  // `heat` comes from the server (1-3, escalating with how long it has been overdue). It exists
+  // because the health bar's gold band floors at zero: once it is pinned there, a second neglected
+  // item cannot show on the bar at all, so the row is what carries the growing cost.
+  const hot = heat > 1 ? ` heat${heat}` : '';
+  return `<li class="sw${expired ? ' exp' : ''}${hot}${body ? ' has-body' : ''}" data-id="${esc(id)}">` +
     `<div class="sc">` +
       `<div class="row">${inner}</div>` +
       `<button class="del" aria-label="clear" tabindex="-1">\u00d7</button>` +
@@ -45,14 +49,13 @@ function itemLabel(i) { return (i.title && i.title.trim()) || i.text; }
 function itemInner(i, withList) {
   const label = itemLabel(i);
   const where = withList ? `<span class="where">${esc(i.list_name)}</span>` : '';
-  // Shows the ANCHOR, not the next firing time: a repeating item's due jumps into the future the
-  // moment it fires, and the useful fact is when it was first supposed to happen.
   const when = i.scheduled_at || i.due;
   const due = when ? `<span class="due">${esc(fmtDue(when))}</span>` : '';
-  // The glyph carries the fact; the period is in its title so a tap-and-hold reveals it without
-  // spending row width that the text needs more.
-  const rep = i.repeat_every ? `<span class="rep" title="every ${esc(i.repeat_every)}">\u21bb</span>` : '';
-  return `<span class="txt">${esc(label)}</span>${where}${due}${rep}`;
+  // One of a recurring set. Every occurrence is its own row, so this says "there are more of these",
+  // not "this one will come back".
+  const rep = i.series_id ? '<span class="rep">\u21bb</span>' : '';
+  const imp = i.priority > 0 ? '<span class="imp">!</span>' : '';
+  return `${imp}<span class="txt">${esc(label)}</span>${where}${due}${rep}`;
 }
 
 // Full text is only worth revealing when it says more than the label already does.
@@ -64,7 +67,7 @@ function bodyFor(i) {
 function html(d) {
   const list = d.due || [];
   const expired = list.filter((i) => i.expired).length;
-  const due = list.map((i) => row(i.id, itemInner(i, true), bodyFor(i), i.expired)).join('');
+  const due = list.map((i) => row(i.id, itemInner(i, true), bodyFor(i), i.expired, i.heat || 0)).join('');
   const count = expired ? `<span class="expcount">${expired} expired</span>` : '';
   let out = `<section><h3>Due ${count}</h3><ul>${due || '<li class="empty">Nothing due</li>'}</ul>` +
     `<div class="add"><input type="text" placeholder="New dated item" data-add="item" data-list="todo">` +

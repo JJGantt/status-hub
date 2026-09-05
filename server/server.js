@@ -440,10 +440,11 @@ const dirtyRows = () => { rowCache.dirty = true; };
 
 async function fetchStatusRows(win, week, histStart, heatStart) {
   const nutLogStart = localDate(new Date(Date.now() - 86 * 86400000));
-  const key = [win.start, win.end, week[0], histStart, heatStart, nutLogStart].join('|');
+  const taskWindowStart = localDate(new Date(Date.now() - 8 * 86400000));  // an effect is gone at 7 days; a day's slack costs nothing
+  const key = [win.start, win.end, week[0], histStart, heatStart, nutLogStart, taskWindowStart].join('|');
   if (!rowCache.dirty && rowCache.rows && rowCache.key === key
       && Date.now() - rowCache.at < ROWCACHE_BACKSTOP_MS) return rowCache.rows;
-  const [entries, stagedEntries, setRows, weightRows, histRows, muscleRows, heatRows, catalogRows, nutLogRows, targetRows, surfRows, waterRows] = await Promise.all([
+  const [entries, stagedEntries, setRows, weightRows, histRows, muscleRows, heatRows, catalogRows, nutLogRows, targetRows, surfRows, waterRows, taskEventRows, openTaskRows] = await Promise.all([
     sb(`nutrition_entries?occurred_at=gte.${win.start}&occurred_at=lt.${win.end}&staged=eq.false&select=calories,protein_g,carbs_g,fat_g,veg_g,dark_green_g,fruit_g`),
     // Staged meals carry no day: they are pending until committed, so there is no window to filter on
     // and every staged row belongs to whatever day it is eaten on. Sum them all.
@@ -464,8 +465,13 @@ async function fetchStatusRows(win, week, histStart, heatStart) {
     // window hourly, so subscribing would fire thousands of events to refresh a number that moves a
     // tenth of a degree an hour. The 15-min rowCache backstop is the right granularity here.
     sb('water_readings?select=ts,water_f&station=eq.41112&order=ts.desc&limit=1'),
+    // The gold band's two inputs. Completions are a ledger that outlives its items (they get purged
+    // at 30 days); the drain is derived live from whatever is still open and dated, so there is no
+    // stored penalty to fall out of step with the list.
+    sb(`task_events?completed_at=gte.${taskWindowStart}T00:00:00&select=occurrence,completed_at,priority`),
+    sb('list_items?deleted=eq.false&due=not.is.null&select=scheduled_at,due,priority'),
   ]);
-  rowCache.rows = { entries, stagedEntries, setRows, weightRows, histRows, muscleRows, heatRows, catalogRows, nutLogRows, targetRows, surfRows, waterRows };
+  rowCache.rows = { entries, stagedEntries, setRows, weightRows, histRows, muscleRows, heatRows, catalogRows, nutLogRows, targetRows, surfRows, waterRows, taskEventRows, openTaskRows };
   rowCache.key = key; rowCache.at = Date.now(); rowCache.dirty = false;
   return rowCache.rows;
 }
@@ -477,7 +483,7 @@ async function buildStatus() {
   const histStart = localDate(new Date(Date.now() - 210 * 86400000)); // intake history for the maintenance trend + per-day replay (viz paging)
   const heatStart = localDate(new Date(Date.now() - 140 * 86400000)); // ~20 weeks for the workout volume heatmap
 
-  const [{ entries, stagedEntries, setRows, weightRows, histRows, muscleRows, heatRows, catalogRows, nutLogRows, targetRows, surfRows, waterRows }, deviceRows, presenceRows, workerRows] = await Promise.all([
+  const [{ entries, stagedEntries, setRows, weightRows, histRows, muscleRows, heatRows, catalogRows, nutLogRows, targetRows, surfRows, waterRows, taskEventRows, openTaskRows }, deviceRows, presenceRows, workerRows] = await Promise.all([
     fetchStatusRows(win, week, histStart, heatStart),
     sb('device_status?select=*'),
     sb('voice_presence?select=source,alive_at'),
@@ -617,7 +623,12 @@ async function buildStatus() {
     return { date: d, isToday: d === today, fraction: paceData.fraction, cal: a.cal, protein: a.protein, fat: a.fat,
              calGoal, proteinFloor: mt.protein_g, fatTarget: mt.fat_g };
   });
-  const score = computeScore({ volume, days: scoreDays, surplus });   // surplus signs the goal-aware calorie scoring
+  // surplus signs the goal-aware calorie scoring; the task inputs are the gold band's ledger and the
+  // still-open dated items it drains from.
+  const score = computeScore({
+    volume, days: scoreDays, surplus,
+    taskEvents: taskEventRows || [], openTasks: openTaskRows || [], nowLocal: etNowString(),
+  });
 
   // The rep watcher: what the Apple Watch app's counted sets are currently being
   // logged as. Shown under the rest clock so it is visible at a glance whether a set
@@ -735,11 +746,13 @@ function startRealtime() {
         pushVoice('mode', { agent });
       }
     })
-    // Dated items and the lists that colour them. Nothing cached depends on these and the status
-    // frame carries none of them, so this is a notify-only subscription: the calendar surfaces
-    // re-read and nobody else does any work.
+    // Dated items and the lists that colour them. `list_items` DOES feed the status frame now — the
+    // health bar's gold band is earned by clearing dated items and drained by leaving them — so a
+    // change has to invalidate the row cache and rebuild, not merely notify the calendar surfaces.
+    // Without the rebuild a completion would not show on the bar until the 15-minute backstop, which
+    // is the one moment the reward is supposed to land.
     .on('postgres_changes', { event: '*', schema: 'public', table: 'list_items' },
-      () => { seen(); pushLists(); })
+      () => { seen(); dirtyRows(); pushLists(); broadcast(); })
     .on('postgres_changes', { event: '*', schema: 'public', table: 'lists' },
       () => { seen(); pushLists(); })
     // Voice pipeline: stream inserts/updates straight to the /tv conversation panel. INSERT and
@@ -1110,18 +1123,19 @@ app.get('/api/rings', async (req, res) => {
       }
       frames.push({ t, frac: f.fraction, macros });
     }
-    // The health bar that sits with the rings on the wall (cards/score.js): one gauge split into a
-    // nutrition and a training contribution. overall = W_TRAIN*training + (1-W_TRAIN)*nutrition, so
-    // each side can fill at most half the bar and the two together reach the overall figure. Sent as
-    // the already-halved fills the bar draws, rather than raw percentages, so the widget doesn't
-    // re-derive the weighting and drift from the wall.
+    // The health bar that sits with the rings on the wall (cards/score.js): one gauge split three
+    // ways — nutrition, training, tasks — since overall = (n + t + k)/3, so each can fill at most a
+    // third and together they reach the overall figure. Sent as the already-divided fills the bar
+    // draws, rather than raw percentages, so the widget doesn't re-derive the weighting and drift
+    // from the wall.
     const sc = st.score || {};
-    const half = (v) => Math.max(0, Math.min(50, (Number(v) || 0) * 0.5));
+    const third = (v) => Math.max(0, Math.min(100 / 3, (Number(v) || 0) / 3));
     res.json({
       step_min: STEP_MIN,
       // Constant for the day, so it rides once on the response rather than on all 61 frames.
       window_hours: P.window_hours, per_hour: P.per_hour,
-      score: { nutrition: half(sc.nutrition?.pct), training: half(sc.training?.pct),
+      score: { nutrition: third(sc.nutrition?.pct), training: third(sc.training?.pct),
+               tasks: third(sc.tasks?.pct),
                overall: Math.max(0, Math.min(100, Number(sc.overall) || 0)) },
       frames,
     });
@@ -1799,22 +1813,31 @@ app.post('/api/notify', express.json(), async (req, res) => {
 // `due` is sent as a normal field on every item, and `due` collects the dated ones from ALL lists
 // into one soonest-first view. That view is what used to be the reminders table — it is now derived,
 // not stored, so an item appears in it and on its own list at once without being duplicated.
+// How hard an overdue row should read: 0 not overdue, then escalating. The health bar cannot carry
+// this on its own — the gold band floors at zero, so once it is pinned there a second neglected item
+// looks identical to the first. The bar shows what has been earned; the row shows what is owed.
+// Computed here rather than in the cards because three surfaces draw these rows and a rule they each
+// re-derive is a rule they will eventually disagree about.
+function overdueHeat(item, nowLocal) {
+  const at = dueMoment(item.scheduled_at || item.due);
+  if (!at || at > nowLocal) return 0;
+  const hrs = (Date.parse(nowLocal.replace(' ', 'T') + 'Z') - Date.parse(at.replace(' ', 'T') + 'Z')) / 3600000;
+  return hrs >= 72 ? 3 : hrs >= 24 ? 2 : 1;
+}
+
 app.get('/api/todos', async (req, res) => {
   try {
     const [listNames, items, notes] = await Promise.all([
       sb('lists?select=name,emoji&order=name'),
-      sb('list_items?deleted=eq.false&select=id,list_name,text,title,due,repeat_every,scheduled_at&order=created.asc'),
+      sb('list_items?deleted=eq.false&select=id,list_name,text,title,due,scheduled_at,priority,series_id&order=created.asc'),
       sb('notes?select=name,content&order=name'),
     ]);
     const all = items || [];
     const lists = (listNames || []).map((l) => ({ name: l.name, emoji: l.emoji, items: all.filter((i) => i.list_name === l.name) }));
-    // Ordered by the ANCHOR, not by `due`: a repeating item's due jumps into the future the instant it
-    // fires, which would sort it to the bottom exactly when it most needs attention. Longest
-    // outstanding first, then upcoming. `expired` is likewise anchor-based and says nothing about
-    // whether the item repeats.
+    // Longest outstanding first, then upcoming.
     const nowET = etNowString();
     const due = all.filter((i) => i.due)
-      .map((i) => ({ ...i, expired: dueMoment(i.scheduled_at || i.due) <= nowET }))
+      .map((i) => ({ ...i, expired: dueMoment(i.scheduled_at || i.due) <= nowET, heat: overdueHeat(i, nowET) }))
       .sort((a, b) => dueMoment(a.scheduled_at || a.due) < dueMoment(b.scheduled_at || b.due) ? -1 : 1);
     res.json({ lists, due, notes: notes || [] });
   } catch (e) { res.status(500).json({ error: String(e.message || e) }); }
@@ -1841,7 +1864,7 @@ function itemTitle(row) {
 app.get('/api/due-widget', async (req, res) => {
   try {
     const [rows, listRows] = await Promise.all([
-      sb('list_items?deleted=eq.false&due=not.is.null&select=id,list_name,text,title,due,scheduled_at,repeat_every&order=scheduled_at.asc'),
+      sb('list_items?deleted=eq.false&due=not.is.null&select=id,list_name,text,title,due,scheduled_at,priority,series_id&order=scheduled_at.asc'),
       sb('lists?select=name,emoji'),
     ]);
     const emojiOf = {};
@@ -1852,10 +1875,11 @@ app.get('/api/due-widget', async (req, res) => {
       title: itemTitle(r),
       list: r.list_name,
       emoji: emojiOf[r.list_name] || null,
-      // Anchor-based, so a repeating item stays expired after it fires instead of resetting itself.
       expired: dueMoment(r.scheduled_at || r.due) <= nowET,
+      heat: overdueHeat(r, nowET),
+      priority: r.priority || 0,
       when: r.scheduled_at || r.due,
-      repeating: !!r.repeat_every,
+      repeating: !!r.series_id,
     }));
     res.json({ items });
   } catch (e) { res.status(500).json({ error: String(e.message || e) }); }
@@ -1935,25 +1959,14 @@ function calTimeLabel(occ) {
   const h = +m[1]; const mm = m[2]; const h12 = h % 12 || 12;
   return `${h12}${mm === '00' ? '' : ':' + mm}${h < 12 ? 'a' : 'p'}`;
 }
-// Every occurrence of one item whose DAY falls inside [startKey, endKey] (inclusive 'YYYY-MM-DD'
-// bounds). The stored `due` is the only real row; the rest are projections stepped with the exact
-// advanceDue the scheduler re-arms with, so the grid can never disagree with what will actually fire.
-// Minute/hour repeaters are deliberately not projected — "every 30 minutes" as a month of chips is
-// noise — they show once, on their current due day, carrying the repeat mark.
+// The occurrences of one item falling inside [startKey, endKey] (inclusive 'YYYY-MM-DD' bounds) —
+// which is now at most one, its own `due`. A recurring thing is materialised as an independent row
+// per occurrence (data-layer migration 00085), so the grid reads real rows rather than projecting
+// future ones from a repeat rule. That is what lets a chip on a future day be tapped, cleared, or
+// scored: a projection was a drawing of an item that did not exist yet.
 function calOccurrences(item, startKey, endKey) {
-  const dayOf = (s) => String(s).slice(0, 10);
-  const out = [];
-  if (dayOf(item.due) >= startKey && dayOf(item.due) <= endKey) out.push(item.due);
-  const per = parseRepeat(item.repeat_every);
-  if (per && per.unit !== 'minute' && per.unit !== 'hour') {
-    let occ = item.due;
-    for (let guard = 0; guard < 400; guard++) {
-      occ = advanceDue(item.scheduled_at || item.due, item.repeat_every, dueMoment(occ));
-      if (!occ || dayOf(occ) > endKey) break;
-      if (dayOf(occ) >= startKey) out.push(occ);
-    }
-  }
-  return out;
+  const day = String(item.due).slice(0, 10);
+  return day >= startKey && day <= endKey ? [item.due] : [];
 }
 // Two callers, one endpoint. The PHONE page pages one month at a time (?month=YYYY-MM). The WALL
 // (?wall=1) instead gets `calendar_months` months from the current one — the count is an
@@ -1975,8 +1988,7 @@ app.get('/api/calendar', async (req, res) => {
       ? todayKey.slice(0, 7) : String(req.query.month);
     const [y0, mo0] = startYm.split('-').map(Number);
 
-    // All month math in UTC getters over naive components — the advanceDue trick — so no zone ever
-    // shifts a wall-clock date. Each grid runs Sunday-aligned from before the 1st to after the last.
+    // All month math in UTC getters over naive components, so no zone ever shifts a wall-clock date. Each grid runs Sunday-aligned from before the 1st to after the last.
     const DAY = 86400000;
     const pad = (n) => String(n).padStart(2, '0');
     const keyOf = (ms) => { const d = new Date(ms); return `${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())}`; };
@@ -1991,7 +2003,7 @@ app.get('/api/calendar', async (req, res) => {
 
     const [listRows, rows] = await Promise.all([
       sb('lists?select=name,emoji'),
-      sb('list_items?deleted=eq.false&due=not.is.null&select=id,list_name,text,title,due,repeat_every,scheduled_at'),
+      sb('list_items?deleted=eq.false&due=not.is.null&select=id,list_name,text,title,due,scheduled_at,priority,series_id'),
     ]);
     const emojiOf = {};
     for (const l of listRows || []) emojiOf[l.name] = l.emoji;
@@ -2007,12 +2019,11 @@ app.get('/api/calendar', async (req, res) => {
           emoji: emojiOf[r.list_name] || null,
           color: listColor(r.list_name),
           time: calTimeLabel(occ),
-          // `past`: this occurrence's moment has gone by (dims the chip). `expired`: the item itself
-          // is overdue and uncleared — anchor-based like every other surface, and only on the stored
-          // occurrence, never on a projection.
+          // `past`: this occurrence's moment has gone by (dims the chip). `expired`: it is overdue
+          // and uncleared, which is also what is draining his score for as long as it stays that way.
           past: dueMoment(occ) <= nowET,
-          expired: occ === r.due && dueMoment(r.scheduled_at || r.due) <= nowET,
-          repeating: !!r.repeat_every,
+          expired: dueMoment(r.scheduled_at || r.due) <= nowET,
+          repeating: !!r.series_id,
         });
       }
     }
@@ -2143,14 +2154,15 @@ app.post('/api/todos/add', express.json(), async (req, res) => {
     const list = String(b.list || '').trim() || 'todo';
     const due = String(b.due || '').trim() || null;
     const title = String(b.title || '').trim() || null;
-    // Repeating is opt-in. Dating something does NOT make it recur: the expired state (a passed
-    // scheduled_at, kept until the item is cleared) is the persistent "still needs dealing with"
-    // signal, and a daily re-fire on top of it is noise on every appointment that has simply been
-    // and gone. A recurrence with no due has nothing to recur from, so it only applies alongside one.
-    const repeat_every = due ? (String(b.repeat_every || '').trim() || null) : null;
+    // Importance is score-only: an important item earns more for being done on time and drains more
+    // for being ignored, and notifies exactly like anything else.
+    const priority = Number(b.priority) > 0 ? 1 : 0;
     const exists = await sb(`lists?name=eq.${encodeURIComponent(list)}&select=name&limit=1`);
     if (!exists.length) await sbWrite('lists', 'POST', { name: list });
-    await sbWrite('list_items', 'POST', { id: crypto.randomUUID(), list_name: list, text, title, due, scheduled_at: due, repeat_every, deleted: false, created: now, updated: now });
+    // This surface writes one item. Recurrence is materialised rather than stored (data-layer
+    // migration 00085), so "every day" is a scheduling instruction that expands to one row per
+    // occurrence — which is `add_to_list`'s job, not a text box's.
+    await sbWrite('list_items', 'POST', { id: crypto.randomUUID(), list_name: list, text, title, due, scheduled_at: due, priority, deleted: false, created: now, updated: now });
     res.json({ ok: true, badge: await overdueCount() });
   } catch (e) { res.status(500).json({ error: String(e.message || e) }); }
 });
@@ -2478,61 +2490,6 @@ function dueMoment(due) {
   return /T\d/.test(d) ? d : d.slice(0, 10) + 'T09:00:00';
 }
 
-// ---- recurrence ----
-//
-// '<n> <unit>' — '1 day', '2 hours', '1 month'. Null/unparseable means one-shot; there is no separate
-// is_repeating flag, because a second field carrying the same fact is a second field that can
-// contradict it (see migration 00058).
-const REPEAT_MS = { minute: 60000, hour: 3600000, day: 86400000, week: 604800000 };
-function parseRepeat(spec) {
-  const m = String(spec || '').trim().toLowerCase().match(/^(\d+)\s*(minute|hour|day|week|month|year)s?$/);
-  if (!m) return null;
-  const n = Number(m[1]);
-  return n >= 1 ? { n, unit: m[2] } : null;
-}
-
-// The next occurrence strictly after `notBefore`, counted from the item's ANCHOR rather than from its
-// current due — see the month-clamp note below for why that distinction matters.
-//
-// Arithmetic is on the WALL-CLOCK components, not on an instant: `due` is local-naive text, so "every
-// day at 9am" must stay 9am across a DST boundary rather than sliding to 8 or 10. Working in UTC
-// getters/setters on a value that is really local is the trick that makes that true — no zone is ever
-// applied, so nothing can shift.
-function advanceDue(anchor, spec, notBefore) {
-  const per = parseRepeat(spec);
-  const m = String(anchor || '').match(/^(\d{4})-(\d{2})-(\d{2})(?:T(\d{2}):(\d{2}))?/);
-  if (!per || !m) return null;
-  const hasTime = m[4] != null;
-  const pad = (n) => String(n).padStart(2, '0');
-  const fmt = (d) => {
-    const day = `${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())}`;
-    return hasTime ? `${day}T${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())}` : day;
-  };
-  let d = new Date(Date.UTC(+m[1], +m[2] - 1, +m[3], +(m[4] || 0), +(m[5] || 0)));
-  const domWanted = d.getUTCDate();
-  const step = () => {
-    if (per.unit === 'month' || per.unit === 'year') {
-      const months = per.unit === 'year' ? per.n * 12 : per.n;
-      d.setUTCDate(1);                                   // avoid Jan 31 + 1 month landing in March
-      d.setUTCMonth(d.getUTCMonth() + months);
-      const lastDom = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 0)).getUTCDate();
-      d.setUTCDate(Math.min(domWanted, lastDom));        // clamp to the real end of a short month
-      // The clamp does NOT accumulate, because every advance starts from `scheduled_at` — the date
-      // the item was FIRST due — rather than from whatever the previous advance produced. A monthly
-      // item anchored on the 31st therefore hits Feb 28 and then March 31, instead of degrading to
-      // the 28th permanently. (This was a known wart until 00060 added the anchor.)
-    } else {
-      d = new Date(d.getTime() + per.n * REPEAT_MS[per.unit]);
-    }
-  };
-  // Skip whole missed windows rather than firing once per window. A daily item that went unfired for
-  // three days (server asleep, machine suspended) should come due once, tomorrow — not three times in
-  // a row the moment the hub wakes up. The guard bounds a pathological spec.
-  let guard = 0;
-  do { step(); } while (dueMoment(fmt(d)) <= notBefore && ++guard < 2000);
-  return fmt(d);
-}
-
 // ---- what happens when a dated item comes due ----
 //
 // The scheduler below finds due items; it does not deliver them. Delivery is a named handler, so a
@@ -2588,7 +2545,7 @@ async function dueTick() {
   const nowET = etNowString();
   let rows;
   // Every list, not just todo — "reminder" is a predicate (has a due), not a place.
-  try { rows = await sb('list_items?deleted=eq.false&due=not.is.null&select=id,list_name,text,title,due,repeat_every,scheduled_at'); } catch (_) { return; }
+  try { rows = await sb('list_items?deleted=eq.false&due=not.is.null&select=id,list_name,text,title,due,scheduled_at,priority,series_id'); } catch (_) { return; }
   if (!rows.length) return;
   // One lookup for the whole tick rather than one per item — a handful of lists, read at most once a
   // minute, and only when something is actually dated.
@@ -2596,25 +2553,19 @@ async function dueTick() {
   try { for (const l of await sb('lists?select=name,emoji')) emojiOf[l.name] = l.emoji; } catch (_) {}
   for (const r of rows) {
     if (dueMoment(r.due) > nowET) continue;                           // not due yet
-    // Scoped to the OCCURRENCE, not just the row: a repeating item fires under the same id again and
-    // again, so a key of `reminder:<id>` alone would suppress every occurrence after the first. Adding
-    // the due makes each occurrence its own ledger entry. It also means a snooze — which moves `due` —
-    // gets a fresh key for free, instead of having to delete the old ledger row by hand.
+    // Scoped to the occurrence rather than the row. Each occurrence is its own row now, so the id
+    // alone would do — except for snoozing, which moves `due` on an existing row and must be allowed
+    // to fire again at its new moment. Including the due gets that for free instead of needing the
+    // old ledger row deleted by hand. Do not shorten this key: see the note in CLAUDE.md.
     const dk = `reminder:${r.id}:${r.due}`;
     try { if ((await sb(`notifications?dedupe_key=eq.${encodeURIComponent(dk)}&select=id&limit=1`)).length) continue; } catch (_) { continue; }
     const handler = DUE_HANDLERS.push;
     if (handler === DUE_HANDLERS.push && !apns.configured()) continue;   // nothing to deliver through
     await handler({ ...r, emoji: emojiOf[r.list_name] }, dk);
     console.log(`[due] fired ${r.id} [${r.list_name}] "${String(r.title || r.text).slice(0, 40)}"`);
-    // Re-arm a repeating item for its next occurrence. Done AFTER delivery so a failed send leaves the
-    // row due and it retries next tick, rather than silently rolling forward and skipping one.
-    if (r.repeat_every) {
-      const next = advanceDue(r.scheduled_at || r.due, r.repeat_every, nowET);
-      if (next) {
-        await sbWrite(`list_items?id=eq.${encodeURIComponent(r.id)}`, 'PATCH', { due: next, updated: new Date().toISOString() });
-        console.log(`[due] ${r.id} repeats every ${r.repeat_every} → next ${next}`);
-      }
-    }
+    // Nothing to re-arm. Every occurrence of a recurring thing is its own row with its own due
+    // (data-layer migration 00085), so each one fires once and then stays put — which is also what
+    // lets it sit there visibly overdue and drain the score until it is dealt with.
   }
 }
 setInterval(() => dueTick().catch((e) => console.log('[due] error', e.message)), 60000);

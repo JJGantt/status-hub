@@ -20,7 +20,11 @@ struct Frame: Decodable {
 }
 /// The wall's health bar (cards/score.js): one gauge, two stacked contributions. Values arrive
 /// already halved — each side fills at most 50% — so the widget never re-derives the weighting.
-struct Score: Decodable { let nutrition: Double; let training: Double; let overall: Double }
+struct Score: Decodable {
+    let nutrition: Double; let training: Double; let overall: Double
+    /// Absent on a payload from a hub deployed before the task band existed; nothing to draw then.
+    let tasks: Double?
+}
 struct RingsFeed: Decodable { let step_min: Int; let score: Score?; let frames: [Frame] }
 
 private extension Color {
@@ -146,7 +150,9 @@ private struct RingView: View {
 /// renderer can ask for any of them.
 public enum RingsLayout { case small, medium, circular, rectangular }
 
-/// Horizontal twin of the wall's health bar: nutrition then training, laid end to end in one track.
+/// Horizontal twin of the wall's health bar: nutrition, training, then tasks, laid end to end in one
+/// track. The hub sends each already divided by three (its share of the whole gauge), so the
+/// weighting lives in one place and this cannot drift from the wall.
 struct HealthBar: View {
     let score: Score?
     var height: CGFloat = 18   // weighty enough to read as a gauge, not so thick it crowds the rings
@@ -156,6 +162,7 @@ struct HealthBar: View {
             let w = geo.size.width
             let n = CGFloat((score?.nutrition ?? 0) / 100) * w
             let t = CGFloat((score?.training ?? 0) / 100) * w
+            let k = CGFloat((score?.tasks ?? 0) / 100) * w
             ZStack(alignment: .leading) {
                 Capsule().fill(Color(red: 0.055, green: 0.075, blue: 0.094))       // #0e1318 track
                 HStack(spacing: 0) {
@@ -163,6 +170,8 @@ struct HealthBar: View {
                         .frame(width: n)
                     Rectangle().fill(Color(red: 0.224, green: 0.827, blue: 0.325)) // #39d353 training
                         .frame(width: t)
+                    Rectangle().fill(Color(red: 0.902, green: 0.725, blue: 0.239)) // #e6b93d tasks
+                        .frame(width: k)
                 }
                 .clipShape(Capsule())
             }

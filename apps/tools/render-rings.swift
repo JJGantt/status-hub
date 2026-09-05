@@ -21,7 +21,7 @@ let json = """
 enum Render {
     static func main() {
         let frame = try! JSONDecoder().decode(Frame.self, from: Data(json.utf8))
-        let score = Score(nutrition: 31.5, training: 22.0, overall: 53.5)
+        let score = Score(nutrition: 24.0, training: 17.0, overall: 53.0, tasks: 12.0)
         let outDir = CommandLine.arguments.count > 1 ? CommandLine.arguments[1] : "."
         // Real widget point sizes on a 12 Pro Max.
         MainActor.assumeIsolated {

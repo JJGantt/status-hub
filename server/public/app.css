@@ -389,9 +389,10 @@ body.tv .hb-delta.down{color:#fff;background:#e5484d}
 @keyframes hbDelta{0%{opacity:0;transform:translateY(8px)}12%{opacity:1}100%{opacity:0;transform:translateY(-46px)}}
 body.tv .hb-track{flex:1 1 auto;width:38px;position:relative;background:#0e1318;border:2px solid #2a3340;border-radius:20px;overflow:hidden;min-height:0}
 body.tv .hb-fill{position:absolute;left:0;right:0;transition:height .6s ease,bottom .6s ease,width .6s ease,left .6s ease}
-/* vertical bar (landscape): fills stack bottom-up, sized from the --nfill/--tfill vars (each 0–50) */
+/* vertical bar (landscape): fills stack bottom-up, sized from the --nfill/--tfill/--kfill vars (each 0–33.3) */
 body.tv .hb-nutr{background:#3b82f6;bottom:0;height:calc(var(--nfill,0)*1%)}              /* nutrition contribution */
 body.tv .hb-train{background:#39d353;bottom:calc(var(--nfill,0)*1%);height:calc(var(--tfill,0)*1%)}  /* training contribution */
+body.tv .hb-task{background:#e6b93d;bottom:calc((var(--nfill,0) + var(--tfill,0))*1%);height:calc(var(--kfill,0)*1%)}  /* tasks contribution */
 /* 10-segment divisions (bold black): 9 internal dividers at 10%..90%. Drawing the 3px line at the BOTTOM of
    each band puts marks at 0,10,..,90 from the bottom — so there's NO line at the very top (the 100%/full edge),
    and the 0 line tucks under the rounded bottom. */
@@ -552,8 +553,14 @@ body.tv.phonewall .pane-reports .reportscard>div{flex:1 1 auto;min-height:0;disp
 .todo .rep{font-size:13px;color:#8b96a5;white-space:nowrap}
 /* Expired = its originally-scheduled moment has passed and it hasn't been dealt with. Independent of
    whether it repeats: a repeater that has fired is just as outstanding as a one-shot that has. */
+/* Overdue rows escalate with age (server sends `heat`, 1-3). The gold band floors at zero, so once
+   it is pinned there a second neglected item looks the same as the first — the row has to carry it. */
 .todo li.sw.exp .txt{color:#e6b93d;font-weight:600}
 .todo li.sw.exp .due{color:#e6b93d}
+.todo li.sw.heat2 .txt,.todo li.sw.heat2 .due{color:#f59e42}
+.todo li.sw.heat3 .txt,.todo li.sw.heat3 .due{color:#e5484d}
+.todo li.sw.heat3 .txt{font-weight:700}
+.todo li.sw .imp{color:#e6b93d;font-weight:700;margin-right:5px}
 .todo .expcount{color:#e6b93d;font-size:12px;font-weight:600;margin-left:6px}
 /* The full text, collapsed until the row is tapped. The widget and these rows only ever show the
    title, so this is where the rest of it lives. */
@@ -695,11 +702,12 @@ body.tv.wallportrait .ringrow .mring svg{max-width:none;width:100%;height:100%;m
 body.tv.wallportrait .ringrow .mring .micon{transform:scale(1.5);transform-origin:40px 40px}
 body.tv.wallportrait .ringrow .mring circle{stroke-width:6}
 
-/* health bar: horizontal, full width, thin — fills left→right from the same --nfill/--tfill vars */
+/* health bar: horizontal, full width, thin — fills left→right from the same --nfill/--tfill/--kfill vars */
 body.tv.wallportrait .healthbar{flex-direction:row;align-items:stretch;padding:2px;min-height:0}
 body.tv.wallportrait .hb-track{flex:1 1 auto;width:auto;height:auto;border-radius:25px}
 body.tv.wallportrait .hb-nutr{left:0;top:0;bottom:auto;height:100%;width:calc(var(--nfill,0)*1%)}
 body.tv.wallportrait .hb-train{left:calc(var(--nfill,0)*1%);top:0;bottom:auto;height:100%;width:calc(var(--tfill,0)*1%)}
+body.tv.wallportrait .hb-task{left:calc((var(--nfill,0) + var(--tfill,0))*1%);top:0;bottom:auto;height:100%;width:calc(var(--kfill,0)*1%)}
 body.tv.wallportrait .hb-track::after{background:repeating-linear-gradient(to right,#000 0,#000 3px,transparent 3px,transparent 10%)}
 
 /* muscle section: the front+back figures SIDE BY SIDE (front left, back right) on the left, volume bars

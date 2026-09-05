@@ -1,5 +1,5 @@
 'use strict';
-// Overall weekly score = 0.5·Training + 0.5·Nutrition.
+// Overall weekly score = (Training + Nutrition + Tasks) / 3.
 //
 // TRAINING% = Σ[ min(s,14) + 0.5·max(0,s−14) ] / (14·N muscles) over the rolling-week clipped per-muscle
 //   sets. Under-target drags 1:1, over rewards at ½, 14 everywhere = 100%, all-over > 100%.
@@ -24,6 +24,25 @@
 //   Past completed days use the full target as pace (fraction = 1); an unlogged day = 0. TODAY's pace is
 //   prorated to the elapsed eating-window fraction. Nutrition% = 0.5·today + 0.5·past6avg.
 
+//
+// TASKS% — the gold band. Starts EMPTY and is earned by completing dated list items; there is no
+//   neutral baseline, because a baseline would remove the only incentive the band exists to create,
+//   which is putting things on the list in the first place. Completing on time earns full value,
+//   completing progressively later earns less and eventually costs, and anything left sitting
+//   overdue drains continuously for as long as it sits. Every effect fades linearly to nothing over
+//   the same seven days the other two bands look back over, so a hit's SIZE decides how long it is
+//   felt — no separate recovery rule.
+//
+//   Two asymmetries are deliberate:
+//     · The drain on an open item is UNBOUNDED. Ignoring something for a week is not the same as
+//       ignoring it for a day, and a floor would say it was. It always has a bounded exit, since
+//       dealing with the item replaces the whole accumulated drain with one floored late completion.
+//     · An item cleared BEFORE it goes live is worth zero, not full marks. That is what lets a
+//       future series be called off for free, and it is also what makes one removal verb workable:
+//       "remove", "delete", "check off" and "done" all mean the same thing, and WHEN it happened
+//       decides what it counted for. Rewarding an early clear would make killing a month-long
+//       series pay out thirty completions.
+
 const TARGET = 14;
 const W_PRO = 0.35, W_CAL = 0.35, W_FAT = 0.30;     // nutrition macro weights (sum 1); carbs derived, not scored
 const PRO_TOL = 50;     // protein: grams BEHIND pace at which the score hits 0 (under only; over is free)
@@ -31,7 +50,19 @@ const CAL_TOL = 750;    // calories: kcal off pace (either direction) at which t
 const FAT_TOL = 25;     // fat: grams off pace (either direction) at which the score hits 0
 const EARLY_WEIGHT = 0.5; // ahead-of-pace-but-under-target overage counts at half
 const W_TODAY = 0.5;                                 // today's weight within nutrition
-const W_TRAIN = 0.5;                                 // training's weight in the overall blend
+
+// ---- task band tuning. Everything adjustable about the gold band is in this block. ----
+const TASK_RATE = 2;          // on-time completions/day that HOLDS the band full once it is there
+const TASK_DECAY_DAYS = 7;    // a completion's effect fades linearly to nothing over this
+const TASK_GRACE_MIN = 30;    // still "on time" this long past the deadline
+const TASK_LATE_ZERO_H = 4;   // lateness at which a completion is worth nothing
+const TASK_LATE_FLOOR_H = 24; // lateness at which a completion is worth its full negative
+const TASK_DRAIN_FULL_H = 24; // overdue hours per unit of drain — the drain does NOT stop there
+const DAY_START_HOUR = 4;     // the display day's 4am origin, shared with lib/dates.js
+
+// With a linear decay a steady R completions/day settles at R·DECAY/2 weighted units, so that is
+// what "full" has to mean for the band to be reachable and holdable at the intended rate.
+const TASK_FULL_UNITS = TASK_RATE * TASK_DECAY_DAYS / 2;
 
 // Quadratic falloff on an ABSOLUTE deviation: 1 at dev 0, 0 once |dev| >= tol. Small misses barely
 // register; big ones bite (3× the deviation ≈ 9× the penalty).
@@ -80,12 +111,96 @@ function nutritionScore(days) {
   return { pct: p, today: todayPct, pastAvg, days: scored };
 }
 
-function computeScore({ volume, days = [], surplus = 0 }) {
+// ---- tasks ----
+//
+// Naive local wall-clock strings throughout ('YYYY-MM-DD' or 'YYYY-MM-DDTHH:MM[:SS]'), parsed as if
+// UTC so differences are exact wall-clock arithmetic with no DST step. What matters here is how late
+// the CLOCK said something was, which is what he experienced.
+const MIN = 60000, HOUR = 3600000, DAY = 86400000;
+function naive(s) {
+  const m = /^(\d{4})-(\d{2})-(\d{2})(?:[T ](\d{2}):(\d{2})(?::(\d{2}))?)?/.exec(String(s || ''));
+  if (!m) return null;
+  return Date.UTC(+m[1], +m[2] - 1, +m[3], +(m[4] || 0), +(m[5] || 0), +(m[6] || 0));
+}
+const isTimed = (s) => /T\d/.test(String(s || ''));
+
+// An untimed item is on time any moment before its day ends, so its deadline is the NEXT day's 4am
+// origin. A timed one is its own moment. (Untimed items still FIRE at 9am — when it notifies and
+// when it is late are different questions about the same value.)
+function taskDeadline(occurrence) {
+  const at = naive(occurrence);
+  if (at == null) return null;
+  return isTimed(occurrence) ? at : at + DAY + DAY_START_HOUR * HOUR;
+}
+// When it starts counting. Before this it can be cleared for nothing — that is what makes calling
+// off a future series free.
+function taskLiveFrom(occurrence) {
+  const at = naive(occurrence);
+  if (at == null) return null;
+  return isTimed(occurrence) ? naive(String(occurrence).slice(0, 10)) + DAY_START_HOUR * HOUR
+                             : at + DAY_START_HOUR * HOUR;
+}
+
+// +1 on time, sliding through 0 at LATE_ZERO and down to its floor at LATE_FLOOR.
+function completionValue(lateMs) {
+  const grace = TASK_GRACE_MIN * MIN, zero = TASK_LATE_ZERO_H * HOUR, floor = TASK_LATE_FLOOR_H * HOUR;
+  if (lateMs <= grace) return 1;
+  if (lateMs <= zero) return 1 - (lateMs - grace) / (zero - grace);
+  if (lateMs >= floor) return -1;
+  return -((lateMs - zero) / (floor - zero));
+}
+
+/**
+ * events:    [{ occurrence, completed_at, priority }] — cleared dated items, from `task_events`.
+ * open:      [{ scheduled_at|due, priority }]         — dated items still on a list.
+ * nowLocal:  naive local wall-clock string.
+ */
+function tasksScore({ events = [], open = [], nowLocal }) {
+  const now = naive(nowLocal);
+  if (now == null) return { pct: 0, units: 0, earned: 0, drained: 0, overdue: 0, completed: 0 };
+  let earned = 0, drained = 0, completed = 0, overdue = 0;
+
+  for (const e of events) {
+    const done = naive(e.completed_at), deadline = taskDeadline(e.occurrence), live = taskLiveFrom(e.occurrence);
+    if (done == null || deadline == null) continue;
+    const age = now - done;
+    if (age > TASK_DECAY_DAYS * DAY) continue;                     // fallen out of the window
+    if (done < live) continue;                                     // cleared before it counted for anything
+    const weight = Math.max(0, 1 - age / (TASK_DECAY_DAYS * DAY));
+    earned += weight * completionValue(done - deadline) * (1 + (Number(e.priority) || 0));
+    completed++;
+  }
+
+  for (const o of open) {
+    const deadline = taskDeadline(o.scheduled_at || o.due);
+    if (deadline == null) continue;
+    const late = now - deadline - TASK_GRACE_MIN * MIN;
+    if (late <= 0) continue;                                       // not overdue: costs nothing yet
+    // No floor. A thing ignored for a week is not a thing ignored for a day, and clamping would say
+    // it was. Dealing with it is always the bounded way out.
+    drained += -(late / (TASK_DRAIN_FULL_H * HOUR)) * (1 + (Number(o.priority) || 0));
+    overdue++;
+  }
+
+  const units = earned + drained;
+  return {
+    pct: Math.max(0, Math.min(1, units / TASK_FULL_UNITS)),
+    units, earned, drained, overdue, completed,
+  };
+}
+
+function computeScore({ volume, days = [], surplus = 0, taskEvents = [], openTasks = [], nowLocal = null }) {
   const t = trainingScore(volume);
   const n = nutritionScore(days);
-  const overall = W_TRAIN * t.pct + (1 - W_TRAIN) * n.pct;
+  const k = tasksScore({ events: taskEvents, open: openTasks, nowLocal });
+  const overall = (t.pct + n.pct + k.pct) / 3;
   return {
     overall: pct(overall),
+    tasks: {
+      pct: pct(k.pct), units: Math.round(k.units * 100) / 100,
+      earned: Math.round(k.earned * 100) / 100, drained: Math.round(k.drained * 100) / 100,
+      overdue: k.overdue, completed: k.completed,
+    },
     training: { pct: pct(t.pct), points: t.points, target: t.target },
     nutrition: {
       pct: pct(n.pct), today: pct(n.today), past_avg: pct(n.pastAvg),
@@ -100,4 +215,4 @@ function computeScore({ volume, days = [], surplus = 0 }) {
   };
 }
 
-module.exports = { computeScore };
+module.exports = { computeScore, tasksScore, taskDeadline, taskLiveFrom, completionValue };

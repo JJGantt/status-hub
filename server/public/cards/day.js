@@ -13,10 +13,13 @@ let nextTransition = null;   // when the next chip changes state — the server 
 // No time on the chip and no repeat glyph: the line it sits on already says the time, and several
 // chips share that line's width. Exactly the wall's reasoning, at phone scale.
 function chip(it) {
-  const cls = 'dc-chip' + (it.done ? ' done' : it.expired ? ' exp' : it.grace ? ' grace' : it.past ? ' past' : '');
+  const cls = 'dc-chip' + (it.exempt ? ' exempt' : '') + (it.done ? ' done' : it.expired ? ' exp' : it.grace ? ' grace' : it.past ? ' past' : '');
   // The server decides both the number and which kind it is; this only paints it.
   const sc = it.score ? `<span class="dc-sc k-${esc(it.score_kind)} ${esc(it.score_sign)}">${esc(it.score)}</span>` : '';
-  return `<span class="${cls}" style="--c:${esc(it.color)}"><span class="dc-l">${esc(it.title)}</span>${sc}</span>`;
+  // Important carries the same amber ! the lists pane uses; exempt goes hollow, because it is
+  // not a thing to do — it is a thing that is simply on the schedule.
+  const imp = it.priority > 0 ? `<span class="dc-imp">!</span>` : '';
+  return `<span class="${cls}" style="--c:${esc(it.color)}">${imp}<span class="dc-l">${esc(it.title)}</span>${sc}</span>`;
 }
 
 // One half-hour line. The second is reserved for :30-:59, so a 4:30 item sits on the lower line even

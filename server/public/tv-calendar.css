@@ -101,3 +101,10 @@ body.tv .calcard .fit{height:100%;display:flex;flex-direction:row;gap:22px;min-h
 .cw-month.mini .cw-daynum{align-self:center;font-size:12px;width:20px;height:20px}
 .cw-dots{display:flex;gap:2px;justify-content:center;flex-wrap:wrap}
 .cw-dots i{width:5px;height:5px;border-radius:50%;display:block}
+
+/* EXEMPT — hollow. A solid chip reads as something to do; an outline reads as something that is
+   simply on the schedule. It never scores, never goes amber or red, and closes itself when its
+   moment passes, so it should not look like a task sitting there undone. */
+.cw-chip.exempt,.cw-dchip.exempt{background:transparent;border:1px solid var(--c);border-left-width:3px}
+/* IMPORTANT — the same amber ! the lists pane uses, so both surfaces speak one language. */
+.cw-imp{flex:0 0 auto;color:#e6b93d;font-weight:800;margin-right:4px}

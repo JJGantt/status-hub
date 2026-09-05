@@ -63,3 +63,10 @@ body.cal{padding:12px}
   .cal-chip.done{opacity:.5}
   .cal-chip.done .cc-l{color:#8b96a5;text-decoration:line-through}
 }
+
+/* EXEMPT — hollow. A solid chip reads as something to do; an outline reads as something that is
+   simply on the schedule. It never scores, never goes amber or red, and closes itself when its
+   moment passes, so it should not look like a task sitting there undone. */
+.cal-chip.exempt{background:transparent;border:1px solid var(--c);border-left-width:3px}
+/* IMPORTANT — the same amber ! the lists pane uses, so both surfaces speak one language. */
+.cc-imp{flex:0 0 auto;color:#e6b93d;font-weight:800;margin-right:4px}

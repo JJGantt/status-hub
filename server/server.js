@@ -2134,6 +2134,7 @@ app.get('/api/calendar', async (req, res) => {
           // still costing nothing, and gave no signal at the moment the cost actually starts.
           grace: !r.completed_at && (r.priority || 0) >= 0 && chipState(r, nowET) === 'grace',
           expired: !r.completed_at && (r.priority || 0) >= 0 && chipState(r, nowET) === 'expired',
+          priority: r.priority || 0,
           ...scoreFields(r, nowET),
           repeating: !!r.series_id,
         });

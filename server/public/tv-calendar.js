@@ -11,19 +11,23 @@ let nextTransition = null;   // when the next chip changes state, from the serve
 
 // A chip in a MONTH cell, where nothing else says when it is — so it carries its time.
 function chip(it) {
-  const cls = 'cw-chip' + (it.done ? ' done' : it.expired ? ' exp' : it.grace ? ' grace' : it.past ? ' past' : '');
+  const cls = 'cw-chip' + (it.exempt ? ' exempt' : '') + (it.done ? ' done' : it.expired ? ' exp' : it.grace ? ' grace' : it.past ? ' past' : '');
   const t = it.time ? `<span class="cw-t">${esc(it.time)}</span>` : '';
   const rep = it.repeating ? '<span class="cw-r">↻</span>' : '';
-  return `<span class="${cls}" style="--c:${esc(it.color)}">${t}<span class="cw-l">${esc(it.title)}</span>${rep}</span>`;
+  const imp = it.priority > 0 ? '<span class="cw-imp">!</span>' : '';
+  return `<span class="${cls}" style="--c:${esc(it.color)}">${t}${imp}<span class="cw-l">${esc(it.title)}</span>${rep}</span>`;
 }
 
 // A chip on the DAY TIMELINE, where the line it sits on already says the time — so it carries none,
 // and no repeat glyph either. Both were spending width that several chips now share between them.
 function dayChip(it) {
-  const cls = 'cw-dchip' + (it.done ? ' done' : it.expired ? ' exp' : it.grace ? ' grace' : it.past ? ' past' : '');
+  const cls = 'cw-dchip' + (it.exempt ? ' exempt' : '') + (it.done ? ' done' : it.expired ? ' exp' : it.grace ? ' grace' : it.past ? ' past' : '');
   // The server decides both the number and which kind it is; this only paints it.
   const sc = it.score ? `<span class="cw-sc k-${esc(it.score_kind)} ${esc(it.score_sign)}">${esc(it.score)}</span>` : '';
-  return `<span class="${cls}" style="--c:${esc(it.color)}"><span class="cw-l">${esc(it.title)}</span>${sc}</span>`;
+  // Important carries the same amber ! the lists pane uses; exempt goes hollow, because it is
+  // not a thing to do — it is a thing that is simply on the schedule.
+  const imp = it.priority > 0 ? `<span class="cw-imp">!</span>` : '';
+  return `<span class="${cls}" style="--c:${esc(it.color)}">${imp}<span class="cw-l">${esc(it.title)}</span>${sc}</span>`;
 }
 
 // One half-hour line. The server decides how many chips fit and hands back the rest as a count, so a

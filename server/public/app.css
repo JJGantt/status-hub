@@ -1055,3 +1055,10 @@ body.tv.phonewall .pane-todo .daycardwrap{padding:12px 14px 14px;flex:0 0 auto}
 .dc-chip.done .dc-l{color:#8b96a5;text-decoration:line-through;opacity:.55}
 .dc-now{position:absolute;left:0;right:0;height:2px;background:#0091ff;box-shadow:0 0 6px #0091ff}
 .dc-now::before{content:'';position:absolute;left:-1px;top:-3px;width:8px;height:8px;border-radius:50%;background:#0091ff}
+
+/* EXEMPT — hollow. A solid chip reads as something to do; an outline reads as something that is
+   simply on the schedule. It never scores, never goes amber or red, and closes itself when its
+   moment passes, so it should not look like a task sitting there undone. */
+.dc-chip.exempt{background:transparent;border:1px solid var(--c);border-left-width:3px}
+/* IMPORTANT — the same amber ! the lists pane uses, so both surfaces speak one language. */
+.dc-imp{flex:0 0 auto;color:#e6b93d;font-weight:800;margin-right:4px}

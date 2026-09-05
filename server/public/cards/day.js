@@ -14,7 +14,9 @@ let nextTransition = null;   // when the next chip changes state — the server 
 // chips share that line's width. Exactly the wall's reasoning, at phone scale.
 function chip(it) {
   const cls = 'dc-chip' + (it.done ? ' done' : it.expired ? ' exp' : it.grace ? ' grace' : it.past ? ' past' : '');
-  return `<span class="${cls}" style="--c:${esc(it.color)}"><span class="dc-l">${esc(it.title)}</span></span>`;
+  // The server decides both the number and which kind it is; this only paints it.
+  const sc = it.score ? `<span class="dc-sc k-${esc(it.score_kind)}">${esc(it.score)}</span>` : '';
+  return `<span class="${cls}" style="--c:${esc(it.color)}"><span class="dc-l">${esc(it.title)}</span>${sc}</span>`;
 }
 
 // One half-hour line. The second is reserved for :30-:59, so a 4:30 item sits on the lower line even

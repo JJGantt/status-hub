@@ -21,7 +21,9 @@ function chip(it) {
 // and no repeat glyph either. Both were spending width that several chips now share between them.
 function dayChip(it) {
   const cls = 'cw-dchip' + (it.done ? ' done' : it.expired ? ' exp' : it.grace ? ' grace' : it.past ? ' past' : '');
-  return `<span class="${cls}" style="--c:${esc(it.color)}"><span class="cw-l">${esc(it.title)}</span></span>`;
+  // The server decides both the number and which kind it is; this only paints it.
+  const sc = it.score ? `<span class="cw-sc k-${esc(it.score_kind)}">${esc(it.score)}</span>` : '';
+  return `<span class="${cls}" style="--c:${esc(it.color)}"><span class="cw-l">${esc(it.title)}</span>${sc}</span>`;
 }
 
 // One half-hour line. The server decides how many chips fit and hands back the rest as a count, so a

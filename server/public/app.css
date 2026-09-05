@@ -1035,6 +1035,13 @@ body.tv.phonewall .pane-todo .daycardwrap{padding:12px 14px 14px;flex:0 0 auto}
   padding:2px 6px 2px 7px;border-left:3px solid var(--c);background:#0e1318;border-radius:5px}
 .dc-l{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0;color:#e8eaed}
 .dc-more{flex:0 0 auto;align-self:center;font-size:11px;font-weight:700;color:#8b96a5;padding:0 2px}
+/* Score at the chip's right edge. Hollow means potential (not yet happened); solid means realised. */
+.dc-sc{flex:0 0 auto;margin-left:5px;font-size:11px;font-weight:800;font-variant-numeric:tabular-nums}
+.dc-sc.k-earned{color:#39d353}
+.dc-sc.k-lost{color:#fff}
+.dc-sc.k-potential{color:#ffd75e;font-weight:700;opacity:.85;
+  border:1px solid rgba(255,215,94,.55);border-radius:4px;padding:0 3px;font-size:10px}
+.dc-chip.done .dc-sc.k-earned{color:#8b96a5}
 /* Four mutually exclusive states, matching the wall: past has been and gone, grace is due but still
    free, exp is overdue and draining, done is dim with a strike. A chip gets exactly one. */
 .dc-chip.past{opacity:.45}

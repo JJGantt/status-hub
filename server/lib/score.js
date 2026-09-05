@@ -302,4 +302,7 @@ function computeScore({ volume, days = [], surplus = 0, taskEvents = [], openTas
   };
 }
 
-module.exports = { computeScore, tasksScore, taskDeadline, completionValue, TASK_GRACE_MIN };
+// Exported so the calendar can label a chip with the same numbers the band is actually scored on.
+// One definition, so a chip cannot claim a value the band would not give it.
+module.exports = { computeScore, tasksScore, taskDeadline, completionValue,
+                   TASK_GRACE_MIN, TASK_LATE_ZERO_H, TASK_DRAIN_FULL_H };

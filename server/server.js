@@ -13,7 +13,7 @@ const BODY_SVG = require('./lib/bodymap');
 const { getTZ, setTZ, DAY_START_HOUR, localDate, nutritionWindow, lastNTrainingDays, dayBucketOf } = require('./lib/dates');
 const { buildWorkoutHeatmap } = require('./lib/heatmap');
 const { buildNutritionLog, buildGoalResolver, calorieColor } = require('./lib/nutritionlog');
-const { computeScore, taskDeadline, TASK_GRACE_MIN } = require('./lib/score');
+const { computeScore, taskDeadline, completionValue, TASK_GRACE_MIN, TASK_LATE_ZERO_H, TASK_DRAIN_FULL_H } = require('./lib/score');
 
 // Settings cache: app_settings is read several times per status build but only changes on explicit
 // writes, which the realtime subscription announces (→ dirtySettings). One whole-table fetch serves
@@ -2003,6 +2003,40 @@ function nextChipTransition(rows, nowLocal) {
   return next;
 }
 
+// What an item is worth, as a number to put on its chip. ONE number, and its sign says which kind it
+// is — which is the rule the band already follows: a negative has always already happened, while a
+// positive is only potential until the thing is actually done.
+//
+//   completed            what it landed at        realised   (+1, or negative if very late)
+//   overdue, <4h late    what it is still worth   POTENTIAL  (doing it now still pays)
+//   overdue, >=4h        what it has cost so far  realised   (completing it can no longer pay)
+//   upcoming / grace     nothing — it costs nothing yet and the full +1 is still there
+//   exempt               nothing — it never scores in either direction
+//
+// The switch at LATE_ZERO_H is where those two swap importance: before it, "you can still get 0.86"
+// is the useful fact; after it, the only useful fact is what it is taking.
+//
+// The overdue figure is the item's OWN accrued cost at its rate, not its clamped effect on the band.
+// Those differ once the band bottoms out — but an item still pinning the band at zero is still
+// costing him everything he earns, so its own rate is the truer statement of what it is doing.
+function chipScore(item, nowLocal, state) {
+  const mult = 1 + Math.max(0, Number(item.priority) || 0);
+  if ((item.priority || 0) < 0) return null;                       // exempt
+  const deadline = taskDeadline(item.scheduled_at || item.due);
+  if (deadline == null) return null;
+  const ms = (stamp) => Date.parse(String(stamp).replace(' ', 'T') + 'Z');
+  if (item.completed_at) {
+    return { value: completionValue(ms(item.completed_at) - deadline) * mult, kind: 'earned' };
+  }
+  if (state !== 'expired') return null;                            // upcoming or still in grace
+  const late = ms(nowLocal) - deadline;
+  if (late < TASK_LATE_ZERO_H * 3600000) {
+    return { value: completionValue(late) * mult, kind: 'potential' };
+  }
+  const draining = late - TASK_GRACE_MIN * 60000;
+  return { value: -(draining / (TASK_DRAIN_FULL_H * 3600000)) * mult, kind: 'lost' };
+}
+
 const DAYLINE_MAX_PER_HALF = 3;
 const dayHalf = (items) => ({
   items: items.slice(0, DAYLINE_MAX_PER_HALF),
@@ -2014,6 +2048,15 @@ const dayHalf = (items) => ({
 // per occurrence (data-layer migration 00085), so the grid reads real rows rather than projecting
 // future ones from a repeat rule. That is what lets a chip on a future day be tapped, cleared, or
 // scored: a projection was a drawing of an item that did not exist yet.
+// Rendered here, not in the cards: three surfaces draw these chips and a format they each re-derive
+// is a format they will eventually disagree about.
+function scoreFields(item, nowLocal) {
+  const sc = chipScore(item, nowLocal, chipState(item, nowLocal));
+  if (!sc || Math.abs(sc.value) < 0.05) return {};
+  const n = Math.round(Math.abs(sc.value) * 10) / 10;
+  return { score: (sc.value > 0 ? '+' : '\u2212') + n.toFixed(1), score_kind: sc.kind };
+}
+
 function calOccurrences(item, startKey, endKey) {
   const day = String(item.due).slice(0, 10);
   return day >= startKey && day <= endKey ? [item.due] : [];
@@ -2089,6 +2132,7 @@ app.get('/api/calendar', async (req, res) => {
           // still costing nothing, and gave no signal at the moment the cost actually starts.
           grace: !r.completed_at && (r.priority || 0) >= 0 && chipState(r, nowET) === 'grace',
           expired: !r.completed_at && (r.priority || 0) >= 0 && chipState(r, nowET) === 'expired',
+          ...scoreFields(r, nowET),
           repeating: !!r.series_id,
         });
       }

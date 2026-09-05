@@ -63,6 +63,15 @@ body.tv .calcard .fit{height:100%;display:flex;flex-direction:row;gap:22px;min-h
 .cw-dchip{flex:1 1 0;min-width:0;display:flex;align-items:center;font-size:15px;line-height:1.2;
   padding:2px 6px 2px 7px;border-left:4px solid var(--c);background:#0e1318;border-radius:5px}
 .cw-more{flex:0 0 auto;align-self:center;font-size:13px;font-weight:700;color:#8b96a5;padding:0 2px}
+/* The number sits at the chip's right edge and never squeezes the title — the title ellipsises, the
+   score does not. `potential` is what you can still get and is drawn hollow to say it has not
+   happened yet; `earned` and `lost` are solid because they already have. */
+.cw-sc{flex:0 0 auto;margin-left:6px;font-size:13px;font-weight:800;font-variant-numeric:tabular-nums}
+.cw-sc.k-earned{color:#39d353}
+.cw-sc.k-lost{color:#fff}
+.cw-sc.k-potential{color:#ffd75e;font-weight:700;opacity:.85;
+  border:1px solid rgba(255,215,94,.55);border-radius:4px;padding:0 4px;font-size:12px}
+.cw-dchip.done .cw-sc.k-earned{color:#8b96a5}
 
 /* MONTHS — one big month with chips, or `calendar_months` minis with dots; the column count comes
    from the payload (`cols`) and is set inline by tv-calendar.js. */

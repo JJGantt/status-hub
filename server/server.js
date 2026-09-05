@@ -1967,13 +1967,25 @@ function calTimeLabel(occ) {
 // Chips on one half-hour line sit side by side and share its width, so the number that fits is a
 // property of the column, not of the data — which makes it the server's to decide. Anything past the
 // cap becomes a count, so a hidden item is still visible AS hidden.
+// Add minutes to a local-naive stamp WITHOUT going near a timezone. Date.parse of a naive string
+// treats it as UTC, and formatting the result back through etStringAt then applies the display zone
+// on top — a double conversion that moved a 13:59 deadline to 10:29. UTC getters over naive
+// components is the same trick the month math uses: no zone is ever applied, so nothing can shift.
+function plusMinutes(naiveLocal, mins) {
+  const m = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::(\d{2}))?/.exec(String(naiveLocal || ''));
+  if (!m) return naiveLocal;
+  const d = new Date(Date.UTC(+m[1], +m[2] - 1, +m[3], +m[4], +m[5], +(m[6] || 0)) + mins * 60000);
+  const p = (n) => String(n).padStart(2, '0');
+  return `${d.getUTCFullYear()}-${p(d.getUTCMonth() + 1)}-${p(d.getUTCDate())}`
+       + `T${p(d.getUTCHours())}:${p(d.getUTCMinutes())}:${p(d.getUTCSeconds())}`;
+}
+
 // due -> grace (still on time, costs nothing) -> expired (draining). One place, so the calendar and
 // the pane cannot disagree about when something starts costing.
 function chipState(item, nowLocal) {
   const at = dueMoment(item.scheduled_at || item.due);
   if (!at || at > nowLocal) return 'upcoming';
-  return etStringAt(new Date(Date.parse(at.replace(' ', 'T') + 'Z') + TASK_GRACE_MIN * 60000)) > nowLocal
-    ? 'grace' : 'expired';
+  return plusMinutes(at, TASK_GRACE_MIN) > nowLocal ? 'grace' : 'expired';
 }
 
 // When the next chip changes state, so a wall can re-read exactly then instead of polling. Without
@@ -1985,7 +1997,7 @@ function nextChipTransition(rows, nowLocal) {
     if (r.completed_at) continue;
     const at = dueMoment(r.scheduled_at || r.due);
     if (!at) continue;
-    const graceEnd = etStringAt(new Date(Date.parse(at.replace(' ', 'T') + 'Z') + TASK_GRACE_MIN * 60000));
+    const graceEnd = plusMinutes(at, TASK_GRACE_MIN);
     for (const m of [at, graceEnd]) if (m > nowLocal && (next === null || m < next)) next = m;
   }
   return next;

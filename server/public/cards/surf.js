@@ -17,6 +17,17 @@ const GRID_H = 86;         // per grid; both are drawn on one canvas so they sit
 const DOW_H = 13;          // weekday-letter strip above the grids, same canvas so it stays aligned
 const WATER_H = 68;
 const PAD_L = 26;          // left gutter for axis labels, so nothing is written over the data
+
+// The plots hold the whole archive and scroll horizontally; the card lands at the right-hand end,
+// showing the window the server marks with `defaultT0`. The gutter is its own canvas OUTSIDE the
+// scroller, so the hour and temperature labels stay put while the data slides under them — the
+// reason the plot canvases have no left padding of their own.
+//
+// Held as a distance from the RIGHT edge, not the left, and it survives the re-render on every 30s
+// broadcast (this card rebuilds its innerHTML) — a reader mid-scroll would otherwise be thrown back
+// to today twice a minute. Measuring from the right also means 0 keeps following today as the
+// forecast extends, where a remembered scrollLeft would slide off the end.
+let scrollEnd = 0;
 let hist = null, histFor = null, histPending = false;
 
 function loadHistory(capturedAt) {
@@ -48,18 +59,38 @@ function grid() {
   return { cols, byDay };
 }
 
-// Canvas rather than ~1,300 rects: this is a phone surface and the grids are pure colour with no
-// per-cell interaction to hang off the DOM.
-function paintGrids(cv) {
-  if (!hist || !cv) return;
+// Day columns and the pixel geometry the two plots share. The column width is chosen so the
+// default window exactly fills the visible strip — everything older is off to the left, reachable
+// only by scrolling, and the card looks unchanged until someone does.
+function layout(viewW) {
   const { cols, byDay } = grid();
-  const dpr = window.devicePixelRatio || 1;
-  const w = cv.clientWidth || 320, H = DOW_H + GRID_H * 2;
-  cv.width = Math.round(w * dpr); cv.height = Math.round(H * dpr);
-  const g = cv.getContext('2d'); g.setTransform(dpr, 0, 0, dpr, 0, 0);
-  g.clearRect(0, 0, w, H);
-  const plotW = w - PAD_L;
-  const cw = plotW / cols.length, ch = GRID_H / 24;
+  const dT0 = hist.defaultT0 == null ? hist.t0 : hist.defaultT0;
+  const di = Math.max(0, cols.indexOf(dayKey(new Date(dT0 * 1000))));
+  const cw = viewW / Math.max(1, cols.length - di);
+  return { cols, byDay, cw, totalW: cw * cols.length };
+}
+
+// Backing store at device resolution, CSS box at the size asked for. The archive only grows, so the
+// plot canvas only gets wider; capping the total device width trades sharpness for a canvas that
+// still draws, rather than one the browser refuses to allocate and leaves blank.
+function fitCanvas(cv, w, h) {
+  const dpr = Math.min(window.devicePixelRatio || 1, 16384 / Math.max(1, w));
+  cv.style.width = w + 'px'; cv.style.height = h + 'px';
+  cv.width = Math.round(w * dpr); cv.height = Math.round(h * dpr);
+  const g = cv.getContext('2d');
+  g.setTransform(dpr, 0, 0, dpr, 0, 0);
+  g.clearRect(0, 0, w, h);
+  return g;
+}
+
+// Canvas rather than ~1,300 rects: this is a phone surface and the grids are pure colour with no
+// per-cell interaction to hang off the DOM. `cv` scrolls inside its box; `ax` is the gutter canvas
+// pinned beside it, so the hour labels stay readable however far back the data is dragged.
+function paintGrids(cv, ax, viewW) {
+  if (!hist || !cv) return;
+  const { cols, byDay, cw, totalW } = layout(viewW);
+  const H = DOW_H + GRID_H * 2, ch = GRID_H / 24;
+  const g = fitCanvas(cv, totalW, H);
 
   // Weekday letter over each column, on the same canvas as the grids so it cannot drift out of
   // alignment with them the way a separately-laid-out HTML row could.
@@ -72,7 +103,7 @@ function paintGrids(cv) {
     // Midday avoids the key being shifted a day by a DST-edge parse; +6 %7 turns Sun-first into
     // Mon-first so the string reads MTWTFSS.
     const dow = (new Date(k + 'T12:00:00').getDay() + 6) % 7;
-    g.fillText('MTWTFSS'[dow], PAD_L + (x + .5) * cw, DOW_H / 2);
+    g.fillText('MTWTFSS'[dow], (x + .5) * cw, DOW_H / 2);
   });
   g.textAlign = 'start'; g.textBaseline = 'alphabetic';
 
@@ -83,36 +114,29 @@ function paintGrids(cv) {
       const y = DOW_H + GRID_H - (h + 1) * ch;
       const rb = c.r[h], sb = c.s[h];
       g.fillStyle = rb === '.' ? '#1a222b' : (hist.bandColors[parseInt(rb, 36)] || '#1a222b');
-      g.fillRect(PAD_L + x * cw, y, Math.ceil(cw) + .5, Math.ceil(ch) + .5);
+      g.fillRect(x * cw, y, Math.ceil(cw) + .5, Math.ceil(ch) + .5);
       g.fillStyle = sb === '.' ? '#1a222b' : (hist.sizeColors[parseInt(sb, 36)] || '#1a222b');
-      g.fillRect(PAD_L + x * cw, GRID_H + y, Math.ceil(cw) + .5, Math.ceil(ch) + .5);
+      g.fillRect(x * cw, GRID_H + y, Math.ceil(cw) + .5, Math.ceil(ch) + .5);
     }
   });
 
   // 8a and 4p on cell boundaries, so a line coincides with the hour it names rather than floating
-  // half a row off it.
-  // Guides on both grids, with their labels in the left gutter rather than over the data — the same
-  // reason the weekday letters sit above rather than on top.
-  g.font = '9px system-ui, -apple-system, sans-serif';
-  g.textBaseline = 'middle';
+  // half a row off it. Guides on both grids; their labels live on the gutter canvas.
   for (const base of [DOW_H, DOW_H + GRID_H]) {
-    for (const [h, txt] of [[8, '8a'], [16, '4p']]) {
+    for (const h of [8, 16]) {
       const y = base + GRID_H - h * ch;
       g.strokeStyle = 'rgba(255,255,255,.55)'; g.lineWidth = 1;
-      g.beginPath(); g.moveTo(PAD_L, y); g.lineTo(w, y); g.stroke();
-      g.fillStyle = '#8b96a5'; g.textAlign = 'right';
-      g.fillText(txt, PAD_L - 5, y);
+      g.beginPath(); g.moveTo(0, y); g.lineTo(totalW, y); g.stroke();
     }
   }
-  g.textAlign = 'start';
   // Seam between the grids, and today.
   g.strokeStyle = 'rgba(255,255,255,.85)'; g.lineWidth = 1;
-  g.beginPath(); g.moveTo(PAD_L, DOW_H + GRID_H + .5); g.lineTo(w, DOW_H + GRID_H + .5); g.stroke();
+  g.beginPath(); g.moveTo(0, DOW_H + GRID_H + .5); g.lineTo(totalW, DOW_H + GRID_H + .5); g.stroke();
   const now = new Date();
   const ti = cols.indexOf(dayKey(now));
   if (ti >= 0) {
     g.strokeStyle = '#ffffff'; g.lineWidth = 1.5;
-    const x = PAD_L + (ti + .5) * cw;
+    const x = (ti + .5) * cw;
     g.beginPath(); g.moveTo(x, DOW_H); g.lineTo(x, H); g.stroke();
     // Crossbar at the current time. y runs from midnight at the grid's floor upward, the same
     // mapping the 8a/4p guides use, so hour + minutes lands on the instant rather than the cell.
@@ -123,21 +147,27 @@ function paintGrids(cv) {
       g.beginPath(); g.moveTo(x - cw * .45, y); g.lineTo(x + cw * .45, y); g.stroke();
     }
   }
+
+  if (!ax) return;
+  const a = fitCanvas(ax, PAD_L, H);
+  a.font = '9px system-ui, -apple-system, sans-serif';
+  a.textBaseline = 'middle'; a.textAlign = 'right'; a.fillStyle = '#8b96a5';
+  for (const base of [DOW_H, DOW_H + GRID_H])
+    for (const [h, txt] of [[8, '8a'], [16, '4p']])
+      a.fillText(txt, PAD_L - 5, base + GRID_H - h * ch);
 }
 
 // Water: measured up to now, forecast beyond it. Two series, because a prediction and a reading are
-// different claims and must not be drawn as one line.
-function paintWater(cv) {
+// different claims and must not be drawn as one line. Same width and same scroll offset as the
+// grids above, so a vertical read through both lands on one hour.
+function paintWater(cv, ax, viewW) {
   if (!hist || !cv) return;
-  const dpr = window.devicePixelRatio || 1;
-  const w = cv.clientWidth || 320;
-  cv.width = Math.round(w * dpr); cv.height = Math.round(WATER_H * dpr);
-  const g = cv.getContext('2d'); g.setTransform(dpr, 0, 0, dpr, 0, 0);
-  g.clearRect(0, 0, w, WATER_H);
+  const { totalW } = layout(viewW);
+  const g = fitCanvas(cv, totalW, WATER_H);
   const vals = hist.water.concat(hist.waterFc).filter(v => v != null);
   if (!vals.length) return;
   const lo = Math.floor(Math.min(...vals)) - 1, hi = Math.ceil(Math.max(...vals)) + 1;
-  const X = (i) => PAD_L + (i / (hist.hours - 1)) * (w - PAD_L);
+  const X = (i) => (i / (hist.hours - 1)) * totalW;
   const Y = (v) => WATER_H - 6 - ((v - lo) / (hi - lo)) * (WATER_H - 14);
 
   // Horizontal grid labelled in the gutter. Without it the trace has shape but no scale: a reader
@@ -147,16 +177,11 @@ function paintWater(cv) {
   // and they collide, which is worse than a coarser grid.
   let step = 2;
   while ((hi - lo) / step > 4) step += 2;
-  g.font = '9px system-ui, -apple-system, sans-serif';
-  g.textBaseline = 'middle'; g.textAlign = 'right';
   for (let v = Math.ceil(lo / step) * step; v <= hi; v += step) {
     const y = Y(v);
     g.strokeStyle = 'rgba(255,255,255,.10)'; g.lineWidth = 1;
-    g.beginPath(); g.moveTo(PAD_L, y); g.lineTo(w, y); g.stroke();
-    g.fillStyle = '#8b96a5';
-    g.fillText(v + '\u00b0', PAD_L - 5, y);
+    g.beginPath(); g.moveTo(0, y); g.lineTo(totalW, y); g.stroke();
   }
-  g.textAlign = 'start';
 
   const line = (arr, color, dash) => {
     g.strokeStyle = color; g.lineWidth = 1.4; g.setLineDash(dash); g.beginPath();
@@ -170,6 +195,29 @@ function paintWater(cv) {
   line(hist.water, '#6aa6c8', []);
   line(hist.waterFc, '#6aa6c8', [3, 2]);
 
+  if (!ax) return;
+  const a = fitCanvas(ax, PAD_L, WATER_H);
+  a.font = '9px system-ui, -apple-system, sans-serif';
+  a.textBaseline = 'middle'; a.textAlign = 'right'; a.fillStyle = '#8b96a5';
+  for (let v = Math.ceil(lo / step) * step; v <= hi; v += step)
+    a.fillText(v + '\u00b0', PAD_L - 5, Y(v));
+}
+
+// The grids and the water trace are one timeline, so dragging either moves the other. Mirroring
+// only when the value differs is what stops the two boxes driving each other in a loop.
+function syncScroll(el) {
+  const boxes = [...el.querySelectorAll('.surfscroll')];
+  if (!boxes.length) return;
+  const max = Math.max(0, boxes[0].scrollWidth - boxes[0].clientWidth);
+  const at = Math.max(0, max - scrollEnd);
+  for (const b of boxes) {
+    b.scrollLeft = at;
+    b.addEventListener('scroll', () => {
+      scrollEnd = Math.max(0, b.scrollWidth - b.clientWidth - b.scrollLeft);
+      const x = b.scrollLeft;
+      for (const o of boxes) if (o !== b && o.scrollLeft !== x) o.scrollLeft = x;
+    }, { passive: true });
+  }
 }
 
 export function render(s) {
@@ -212,16 +260,29 @@ export function render(s) {
       keyRow(hist.size, hist.sizeColors, hist.sizeLabels)
     : '';
   // Grids first, then both keys, then water — grids butt together so a column is the same day in
-  // each, which leaves nowhere for a key between them.
+  // each, which leaves nowhere for a key between them. Each plot is a gutter canvas beside a
+  // scrolling box, not one canvas: see paintGrids.
   const heat = hist
-    ? '<div class=surfheat><canvas id=surfgrids></canvas>' +
-      '</div>' +
-      keys + '<div class=surfwater><canvas id=surfwater></canvas></div>'
+    ? '<div class=surfheat><canvas class=surfax id=surfgridax></canvas>' +
+      '<div class=surfscroll><canvas id=surfgrids></canvas></div></div>' +
+      keys +
+      '<div class=surfwater><canvas class=surfax id=surfwaterax></canvas>' +
+      '<div class=surfscroll><canvas id=surfwater></canvas></div></div>'
     : '';
 
   el.innerHTML = head + heat;
   loadHistory(S.capturedAt);
-  paintGrids(el.querySelector('#surfgrids'));
-  paintWater(el.querySelector('#surfwater'));
+  // Width the gutters first. A canvas with no CSS width is 300px wide, and both plots are flex rows
+  // whose scrolling half is whatever the gutter leaves — measure before that and every strip gets a
+  // different width, which puts the two timelines out of step with each other.
+  for (const ax of el.querySelectorAll('.surfax')) ax.style.width = PAD_L + 'px';
+  const box = el.querySelector('.surfscroll');
+  const viewW = box ? box.clientWidth : 0;
+  // Zero means the card is hidden — the kiosk drops surf from its top strip. Painting it anyway
+  // costs the Pi ~4,000 fills every broadcast for something nobody can see, at a made-up width.
+  if (!viewW) return;
+  paintGrids(el.querySelector('#surfgrids'), el.querySelector('#surfgridax'), viewW);
+  paintWater(el.querySelector('#surfwater'), el.querySelector('#surfwaterax'), viewW);
+  syncScroll(el);
 
 }

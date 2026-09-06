@@ -257,7 +257,9 @@ a list changes — the calendar surfaces' push path, separate from the status fr
 dated item — every occurrence is a real row, so nothing is projected; `?month=` pages, `?wall=1` adds
 the day timeline and reads `calendar_months` for the spread) · `/api/badge` · `/api/repos` ·
 `/api/repos/cmd/:id` · `/api/sessions` (live desk sessions + the follow-up `focus`) · `/api/reports`
-(list only — `html` is never selected) · `/api/attachment`.
+(list only — `html` is never selected) · `/api/surf/history` (the whole hourly archive as one
+character per hour; `defaultT0` marks the window the card lands on before it is scrolled back) ·
+`/api/attachment`.
 
 **Widget feeds** (compact, one per widget — §9b): `/api/rings` (a timeline of per-minute pace frames,
 not a snapshot) · `/api/due-widget` (every dated item across every list) · `/api/repos-widget` (the

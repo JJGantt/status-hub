@@ -112,10 +112,17 @@ body.ss-open .navbar{z-index:2001}
 .feed-next .feed-st{color:#22c55e}
 .feed-next .feed-sp{color:#9fe6b6}
 /* Surf card: 7-day outlook as expandable rows (two time-of-day buckets per day) */
-.surfheat{position:relative;margin-top:12px;border-radius:7px;overflow:hidden;background:#0b0f13}
-.surfheat canvas{display:block;width:100%;height:185px}
-.surfwater{margin-top:8px;border-radius:7px;overflow:hidden;background:#0b0f13}
-.surfwater canvas{display:block;width:100%;height:68px}
+/* Each plot is a fixed gutter canvas beside a horizontally scrolling one. The scrolling canvas is
+   sized in JS (cards/surf.js) — wide enough for the whole archive — and both boxes are scrolled
+   together, so the strips stay on one timeline. No scrollbar: it would sit over the water trace. */
+.surfheat{position:relative;margin-top:12px;border-radius:7px;overflow:hidden;background:#0b0f13;display:flex}
+.surfwater{margin-top:8px;border-radius:7px;overflow:hidden;background:#0b0f13;display:flex}
+.surfheat canvas{display:block;height:185px}
+.surfwater canvas{display:block;height:68px}
+.surfax{flex:0 0 auto}
+.surfscroll{flex:1 1 auto;min-width:0;overflow-x:auto;overflow-y:hidden;
+            scrollbar-width:none;-webkit-overflow-scrolling:touch;overscroll-behavior-x:contain}
+.surfscroll::-webkit-scrollbar{display:none}
 .surfkey{display:flex;flex-wrap:wrap;gap:10px 14px;margin-top:7px;padding:0 2px}
 .surfkey .sk-i{display:flex;align-items:center;gap:5px;font-size:10px;color:#8b96a5}
 .surfkey .sk-sw{width:9px;height:9px;border-radius:2px;display:inline-block}

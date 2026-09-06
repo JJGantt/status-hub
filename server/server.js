@@ -956,8 +956,6 @@ ${r.html || ''}
 </body></html>`);
 });
 
-// The index as JSON, for the phone's reports pane. `html` is deliberately not selected: a list of a
-// hundred reports would otherwise carry every page's full markup to a screen that renders none of it.
 // Sits below the auth gate on purpose: it was briefly above it, which left the whole surf
 // archive readable by anyone with the URL.
 app.get('/api/surf/history', async (req, res) => {
@@ -968,14 +966,19 @@ app.get('/api/surf/history', async (req, res) => {
 
     const nowH = Math.floor(Date.now() / 3600000) * 3600;
     const ahead = Math.max(0, rows[rows.length - 1].ts - nowH);
-    // Snap the start back to local midnight. Cutting at now-2*ahead lands on an arbitrary hour, so
-    // the first day column held only part of its hours and rendered as a stub.
     const etHour = (ts) => +new Intl.DateTimeFormat('en-US', {
       hour: 'numeric', hour12: false, timeZone: 'America/New_York' }).format(new Date(ts * 1000)) % 24;
-    const rough = nowH - 2 * ahead;
-    const from = rough - etHour(rough) * 3600;
+    // The whole archive, because the card scrolls back through it. Both ends of a window have to
+    // land on local midnight: the client buckets hours into day columns by local date, so a start
+    // part-way through a day renders as a stub column. Forward at the archive's start (snapping
+    // back would invent empty hours before the first reading), back at the default view's.
+    const first = rows[0].ts, fh = etHour(first);
+    const from = fh === 0 ? first : first + (24 - fh) * 3600;
     const win = rows.filter((r) => r.ts >= from);
     if (!win.length) return res.json({ t0: null, hours: 0 });
+    // Where the card sits before anyone scrolls — the window this endpoint used to serve whole.
+    const rough = nowH - 2 * ahead;
+    const defaultT0 = Math.max(from, rough - etHour(rough) * 3600);
 
     const t0 = win[0].ts, tN = win[win.length - 1].ts;
     const hours = Math.floor((tN - t0) / 3600) + 1;
@@ -1023,7 +1026,7 @@ app.get('/api/surf/history', async (req, res) => {
       waterFc.push(f == null ? null : Math.round(f * 10) / 10);
     }
 
-    const body = { t0, hours, rating, size, water, waterFc,
+    const body = { t0, hours, defaultT0, rating, size, water, waterFc,
                    bandColors: SURF_BAND_COLORS, bandLabels: SURF_BAND_LABELS,
                    sizeColors, sizeLabels };
     surfHistCache = { at: Date.now(), body };
@@ -1033,6 +1036,8 @@ app.get('/api/surf/history', async (req, res) => {
   }
 });
 
+// The index as JSON, for the phone's reports pane. `html` is deliberately not selected: a list of a
+// hundred reports would otherwise carry every page's full markup to a screen that renders none of it.
 app.get('/api/reports', async (req, res) => {
   try {
     res.json({ reports: await sb('reports?select=id,title,summary,repo,created&order=created.desc&limit=100') || [] });

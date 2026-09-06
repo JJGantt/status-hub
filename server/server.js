@@ -113,7 +113,7 @@ async function routingConfig() {
     // a browser on a machine nothing can reach — so the page watches this and goes there itself.
     wall: (() => {
       const w = String(s.wall_mode ?? 'standard').toLowerCase();
-      return ['sessions', 'calendar'].includes(w) ? w : 'standard';
+      return ['sessions', 'calendar', 'home'].includes(w) ? w : 'standard';
     })(),
   };
 }
@@ -185,6 +185,10 @@ const MIC_HTML = fs.readFileSync(path.join(__dirname, 'public', 'mic.html'), 'ut
 // so wallmode.js can put it on the TV when wall_mode says 'calendar'.
 const CAL_HTML = fs.readFileSync(path.join(__dirname, 'public', 'calendar.html'), 'utf8');
 const TV_CAL_HTML = fs.readFileSync(path.join(__dirname, 'public', 'tv-calendar.html'), 'utf8');
+// THE FOURTH WALL — "home", at /tv-home. The aggregate the standard wall is becoming: the shared
+// frame around today's timeline, the three heat maps, and the newest session's last answer. It is
+// meant to take over `/`; until it does, tv.html keeps the TV and this is reached deliberately.
+const TV_HOME_HTML = fs.readFileSync(path.join(__dirname, 'public', 'tv-home.html'), 'utf8');
 
 const app = express();
 app.use(express.urlencoded({ extended: false }));
@@ -859,6 +863,10 @@ app.get(['/', '/tv'], (req, res) => {
 app.get('/tv-session-focus', (req, res) => {
   res.setHeader('Cache-Control', 'no-cache');
   res.type('html').send(TV_FOCUS_HTML);
+});
+app.get('/tv-home', (req, res) => {
+  res.setHeader('Cache-Control', 'no-cache');
+  res.type('html').send(TV_HOME_HTML);
 });
 app.get('/page', (req, res) => {
   res.setHeader('Cache-Control', 'no-cache');

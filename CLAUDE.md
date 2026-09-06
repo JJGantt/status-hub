@@ -92,23 +92,41 @@ every item that was already delivered.
 Its CSP (`default-src 'none'` plus sandbox) is the only thing between that markup and an origin
 already authenticated as Jared. Charts must be inline `<svg>` — no `<script>`, no CDN link.
 
-## There are three walls, and one of them is live
+## There are four walls, and one of them is live
 
 `public/tv.html` (`/` and `/tv`) is the wall the Pi is showing on the TV. **Do not change it** while
 the others exist.
 
-`public/tv-session-focus.html` (`/tv-session-focus`) is the second — "TV session focus" — begun as a
+`public/tv-session-focus.html` (`/tv-session-focus`) is "TV session focus" — begun as a
 byte-identical copy and being stripped down around the sessions list: always-on, no interaction,
-readable across a room and eventually on a watch. Mold that one.
+readable across a room and eventually on a watch.
 
-`public/tv-calendar.html` (`/tv-calendar`) is the third — the calendar wall — the session wall's
-frame (status strip · rings · health bar · footer · voice column) with the freed middle painted by
-`tv-calendar.js` from `/api/calendar?wall=1`: a day timeline plus `calendar_months` months of grid.
-Display-only; voice switches to it and sizes it via `set_wall`. The phone's interactive calendar is
+`public/tv-calendar.html` (`/tv-calendar`) is the calendar wall — the shared frame (status strip ·
+rings · health bar · footer · voice column) with the freed middle painted by `tv-calendar.js` from
+`/api/calendar?wall=1`: a day timeline plus `calendar_months` months of grid. Display-only; voice
+switches to it and sizes it via `set_wall`. The phone's interactive calendar is
 `public/calendar.html` at `/calendar` — a separate standalone page, not a wall.
 
-The walls share `core.js` / `tv.js` / `wall.js` / `wallmode.js`, so a change to those hits ALL of
-them; split whatever needs to differ at the moment it needs to differ.
+`public/tv-home.html` (`/tv-home`) is the **home wall, and it is the one being built**. Mold this
+one. It is the aggregate meant to take `/` from `tv.html`: the same frame around three columns —
+today's day column (the calendar wall's, same module), the three heat maps stacked with the strip
+that belongs to each (nutrition totals vs target, the rest/session clocks, surf), and the newest
+session's last answer. `tv-home.js` + `tv-home.css` are its own; everything else on it is a shared
+card that `core.js` already paints, which is why the page is mostly markup.
+
+When it takes over, `tv.html` becomes the HEALTH wall — the deep nutrition/muscle/workout surface
+that no longer fits on a wall meant to be glanced at.
+
+The walls share `core.js` / `tv.js` / `wall.js` / `wallmode.js` / `cards/*`, so a change to those
+hits ALL of them; split whatever needs to differ at the moment it needs to differ.
+
+## The day column is one module
+
+`cards/dayline.js` draws it everywhere — the calendar wall beside its months, the home wall's middle
+column, and the phone's lists pane (`#daycard`, which it mounts itself). Surfaces differ in CSS size
+and in which endpoint feeds them (`?day=1` alone, `?wall=1` when the same payload also carries the
+months, handed back through `onload`), never in markup. There were two copies of this and they had
+already drifted to different class names for the same chip and two separate clocks.
 
 ## Where a fact goes
 

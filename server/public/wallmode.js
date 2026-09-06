@@ -9,7 +9,7 @@
 // acts only on the kiosk paths.
 import { liveStream } from './shared.js';
 
-const PAGES = { standard: '/tv', sessions: '/tv-session-focus', calendar: '/tv-calendar' };
+const PAGES = { standard: '/tv', sessions: '/tv-session-focus', calendar: '/tv-calendar', home: '/tv-home' };
 const HERE = location.pathname;
 
 if (Object.values(PAGES).includes(HERE)) {

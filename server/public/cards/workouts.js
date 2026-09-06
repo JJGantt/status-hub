@@ -97,6 +97,9 @@ function markHeatCell(date){
  document.querySelectorAll('#heatwrap .hcell').forEach(c=>c.classList.toggle('hsel',c.dataset.date===date));
 }
 async function loadHeatDay(date){
+ // A surface can take the heatmap without the day-detail panel — the home wall shows the map and
+ // the clocks and has no room for a set list. Bail before the fetch, not after it.
+ if(!document.getElementById('heatinfo'))return;
  const tok=++heatReq;
  let j; try{ j=await (await fetch('/api/workout-day?date='+date)).json(); }catch(_){ return; }
  if(tok!==heatReq)return; // a newer cell was selected mid-flight — drop this stale response
@@ -202,15 +205,20 @@ function openSetEditor(id,name,w0,r0){
  });
 }
 
+// The rest clock ticks wherever the strip is. It is a clock, not an interaction, so it does not
+// belong behind the binding guard below — the home wall has the strip and none of the handlers, and
+// hanging the interval off them froze it at whatever the last status frame happened to compute.
+if(document.getElementById('resttimer'))setInterval(tickRest,1000);
+
 (function(){
- const wk=document.getElementById('workouts'); let scrub=false;
- if(!wk)return; // page without the workout card (e.g. /page after consolidation) — nothing to bind
+ const wk=document.getElementById('workouts'), hi=document.getElementById('heatinfo'); let scrub=false;
+ if(!wk||!hi)return; // surface without the interactive heatmap + day detail — nothing to bind
  const cellAt=(x,y)=>{const el=document.elementFromPoint(x,y);return el&&el.closest?el.closest('.hcell'):null;};
  wk.addEventListener('pointerdown',e=>{const c=e.target.closest('.hcell');if(!c||!c.dataset.date)return;scrub=true;selectDay(c.dataset.date);e.preventDefault();e.stopPropagation();/* don't let it become a card-drag */});
  document.addEventListener('pointermove',e=>{if(!scrub)return;const c=cellAt(e.clientX,e.clientY);if(c&&c.dataset.date)selectDay(c.dataset.date);});
  document.addEventListener('pointerup',()=>{scrub=false;});
  // day detail: tap a set to edit it; "+ set" button to repeat the last set
- document.getElementById('heatinfo').addEventListener('click',e=>{
+ hi.addEventListener('click',e=>{
   const setEl=e.target.closest('[data-set]');
   if(setEl){ e.stopPropagation();
    const dex=setEl.closest('.dex'); const name=dex?dex.querySelector('.dex-n').textContent:'Set';
@@ -220,5 +228,4 @@ function openSetEditor(id,name,w0,r0){
   const ex=lastHeatExercises&&lastHeatExercises[+btn.dataset.rep];
   if(ex)openRepModal(ex);
  });
- setInterval(tickRest,1000); // live rest clock
 })();

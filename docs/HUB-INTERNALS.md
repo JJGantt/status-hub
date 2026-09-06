@@ -91,9 +91,11 @@ Supabase ──▶ server.js buildStatus() ──▶ /api/status payload ──�
 | `wall.js` | Phone "wall mode": scales the 1920×1080 `/tv` shell to fit a phone; drives the swipe panes. |
 | `expand.js` | Phone-wall expand icons → full-screen section sheets. |
 | `tv.js` | TV/kiosk-only: the voice-conversation panel + session terminal layered on the wall. |
-| `wallmode.js` | Follows `app_settings.wall_mode` so voice can switch the TV between the walls. Acts only on kiosk paths (`/tv`, `/tv-session-focus`, `/tv-calendar`), never on the phone's `/`. |
+| `wallmode.js` | Follows `app_settings.wall_mode` so voice can switch the TV between the walls. Acts only on kiosk paths (`/tv`, `/tv-session-focus`, `/tv-calendar`, `/tv-home`), never on the phone's `/`. |
 | `calendar.js` | The `/calendar` page: paints the server-computed month grid + day agenda from `/api/calendar`; tap a day, page months. Read-only — writes stay with voice and the todo pane. Re-reads on an `/api/list-stream` push, never on a timer. |
-| `tv-calendar.js` | The calendar wall's middle (only `tv-calendar.html` loads it): day timeline + month grid(s) from `/api/calendar?wall=1`. Display-only. Re-reads on an `/api/list-stream` push; the now-line it moves itself against the clock (each hour row carries its 24h number), re-reading only when the date rolls or the hour leaves the served range. |
+| `cards/dayline.js` | THE day column, on every surface that has one — the calendar wall, the home wall, the phone's lists pane. Owns the fetch, the clock and the reload rules: it re-reads on an `/api/list-stream` push and when the server says a chip changes state, and otherwise just moves the now-line against the clock (each hour row carries its 24h number). Mounts `#daycard` itself; the walls mount their column, because they choose the endpoint. |
+| `tv-calendar.js` | The calendar wall's middle (only `tv-calendar.html` loads it): the month grid(s) out of the `/api/calendar?wall=1` payload that `dayline.js` fetched for the column beside them. Display-only. |
+| `tv-home.js` | The home wall's own middle (only `tv-home.html` loads it): mounts the day column, and polls `/api/sessions` for the newest session's last answer. Display-only. |
 | `mic.js` | The `/mic` standalone launcher page's script (its own recorder, reuses `voiceagent`). |
 
 The activity element (`.ai-act`) renders the
@@ -136,8 +138,8 @@ an idle robot otherwise look identical. `SELF_CYCLING` means the robot left slee
 cycling on its own and nothing here is driving it.
 
 **Surfaces (same code, different chrome):** desktop `/page` = scrolling rows; phone = swipe panes on
-`/`, in markup order in `public/tv.html` — chat · wall · misc · maint · todo · repos · reports,
-landing on the wall; TV `/tv` = the wall + a voice panel (auth `?token=`); the `/mic` page = a
+`/`, in markup order in the wall page it loads — `tv.html` is chat · wall · misc · maint · todo ·
+repos · reports, landing on the wall; TV `/tv` = the wall + a voice panel (auth `?token=`); the `/mic` page = a
 minimal fullscreen voice launcher; `/calendar` = the standalone calendar page (navbar's calendar
 button gets there); `/tv-calendar` = the calendar wall (§ CLAUDE.md's walls note).
 
@@ -247,7 +249,7 @@ frame) so a surface can pick it up without re-deriving it.
 ## 5. API surface (`server.js`)
 
 **Pages:** `/` · `/tv` (both serve the wall) · `/tv-session-focus` (sessions wall) · `/tv-calendar`
-(calendar wall) · `/calendar` (phone/desktop calendar) · `/page` (desktop dashboard) · `/mic` (voice
+(calendar wall) · `/tv-home` (home wall — the aggregate meant to take `/`) · `/calendar` (phone/desktop calendar) · `/page` (desktop dashboard) · `/mic` (voice
 launcher) · `/reports` + `/report/:id` (§6c) · `/login` · `/healthz` · `/privacy` · `/terms`.
 
 **Read:** `/api/status` (full payload) · `/api/stream` (SSE status) · `/api/voice-stream` (SSE voice

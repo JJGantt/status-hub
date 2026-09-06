@@ -52,8 +52,11 @@ export function render(s){
  const heatHtml=
   '<div class=hmonths>'+monthRow+'</div>'+
   '<div class=hbody><div class=hdows>'+dowLabels+'</div><div class=heat>'+grid+'</div></div>';
- if(heatEl&&plotEl){ heatEl.innerHTML=heatHtml; plotEl.innerHTML=plotBlock; } // split (TV)
- else if(wrap){ wrap.innerHTML=heatHtml+plotBlock; }                          // combined (desktop)
+ // Each panel paints if the page has it, so a surface can take the heatmap alone — the home wall
+ // shows it with no plot and no food list. #nutwrap is the desktop's combined fallback.
+ if(heatEl)heatEl.innerHTML=heatHtml;
+ if(plotEl)plotEl.innerHTML=plotBlock;
+ if(!heatEl&&!plotEl&&wrap)wrap.innerHTML=heatHtml+plotBlock;
  if(nutSelDate){ markNutCell(nutSelDate); if(nutSelDate===s.today)loadNutDay(nutSelDate); } // live-refresh today's log
  else if(s.today)selectNutDay(s.today); // default the detail panel to today's log on first load
 }
@@ -87,7 +90,10 @@ async function loadNutDay(date){
  const DOW=['SU','M','TU','W','TH','F','SA'][dt.getDay()];
  const dshort=(dt.getMonth()+1)+'/'+dt.getDate();
  const dayband=(inner)=>'<div class=nutday><span class=nd-date>'+DOW+' '+dshort+'</span>'+inner+'</div>';
- if(!j.entries||!j.entries.length){ ni.innerHTML=dayband('')+'<div class=bi-none>No food logged</div>'; return; }
+ // `data-band` asks for the summary line ONLY — the wall wants the day's totals under its heatmap,
+ // not an entry list it has no room for and nobody can tap.
+ const bandOnly=ni.dataset.band!==undefined;
+ if(!j.entries||!j.entries.length){ ni.innerHTML=dayband('')+(bandOnly?'':'<div class=bi-none>No food logged</div>'); return; }
  const tm=j.target_macros||{};
  const seg=(v,goal,lbl)=>'<span class=nd-seg><b>'+v+'</b>'+(goal!=null?'<span class=nd-goal>/'+goal+'</span>':'')+' '+lbl+'</span>';
  let h=dayband(
@@ -95,6 +101,7 @@ async function loadNutDay(date){
    seg(mn(j.total_protein), tm.protein_g!=null?tm.protein_g:null, 'P')+
    seg(mn(j.total_carbs), tm.carbs_g!=null?tm.carbs_g:null, 'C')+
    seg(mn(j.total_fat), tm.fat_g!=null?tm.fat_g:null, 'F'));
+ if(bandOnly){ ni.innerHTML=h; return; }
  j.entries.forEach((e,i)=>{
   const t=fmtTime(e.occurred_at);
   const ings=Array.isArray(e.ingredients)?e.ingredients:null;

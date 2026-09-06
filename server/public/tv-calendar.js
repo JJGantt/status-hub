@@ -3,11 +3,13 @@
 // writing AND the view-changing (wall_mode / calendar_months are app_settings, and the payload
 // follows them). Only tv-calendar.html loads this; the other walls share none of it.
 //
-// The server ships finished geometry — hour rows, the now-line's row and percentage, chip colors,
-// mini-grid column count — so this file only lays markup into the two panels.
-import { esc, liveStream } from './shared.js';
-
-let nextTransition = null;   // when the next chip changes state, from the server
+// The day column is NOT here — it is cards/dayline.js, the one module every surface draws it with.
+// This page hands that module the endpoint it needs and takes the months out of the same response.
+//
+// The server ships finished geometry — hour rows, chip colors, mini-grid column count — so this file
+// only lays markup into the two panels.
+import { esc } from './shared.js';
+import { mount } from './cards/dayline.js';
 
 // A chip in a MONTH cell, where nothing else says when it is — so it carries its time.
 function chip(it) {
@@ -16,37 +18,6 @@ function chip(it) {
   const rep = it.repeating ? '<span class="cw-r">↻</span>' : '';
   const imp = it.priority > 0 ? '<span class="cw-imp">!</span>' : '';
   return `<span class="${cls}" style="--c:${esc(it.color)}">${t}${imp}<span class="cw-l">${esc(it.title)}</span>${rep}</span>`;
-}
-
-// A chip on the DAY TIMELINE, where the line it sits on already says the time — so it carries none,
-// and no repeat glyph either. Both were spending width that several chips now share between them.
-function dayChip(it) {
-  const cls = 'cw-dchip' + (it.exempt ? ' exempt' : '') + (it.done ? ' done' : it.expired ? ' exp' : it.grace ? ' grace' : it.past ? ' past' : '');
-  // The server decides both the number and which kind it is; this only paints it.
-  const sc = it.score ? `<span class="cw-sc k-${esc(it.score_kind)} ${esc(it.score_sign)}">${esc(it.score)}</span>` : '';
-  // Important carries the same amber ! the lists pane uses; exempt goes hollow, because it is
-  // not a thing to do — it is a thing that is simply on the schedule.
-  const imp = it.priority > 0 ? `<span class="cw-imp">!</span>` : '';
-  return `<span class="${cls}" style="--c:${esc(it.color)}">${imp}<span class="cw-l">${esc(it.title)}</span>${sc}</span>`;
-}
-
-// One half-hour line. The server decides how many chips fit and hands back the rest as a count, so a
-// hidden item is still visible AS hidden rather than silently dropped.
-function halfLine(half) {
-  const more = half.more ? `<span class="cw-more">+${half.more}</span>` : '';
-  return `<div class="cw-half">${half.items.map(dayChip).join('')}${more}</div>`;
-}
-
-function dayHtml(dl) {
-  const allday = dl.allday.length
-    ? `<div class="cw-allday">${dl.allday.map(dayChip).join('')}</div>` : '';
-  const hours = dl.hours.map((h) => {
-    const now = h.now !== null ? `<div class="cw-now" style="top:${h.now}%"></div>` : '';
-    return `<div class="cw-hour${h.now !== null ? ' cur' : ''}">` +
-      `<span class="cw-hl">${esc(h.label)}</span>` +
-      `<div class="cw-hitems">${h.halves.map(halfLine).join('')}</div>${now}</div>`;
-  }).join('');
-  return `<div class="cw-dayhead">${esc(dl.label)}</div>${allday}<div class="cw-hours">${hours}</div>`;
 }
 
 // One month, full size — chips in the cells. Used when the wall shows a single month.
@@ -70,70 +41,15 @@ function miniMonth(m) {
   return `<div class="cw-month mini"><h3>${esc(m.label)}</h3><div class="cw-grid">${cells}</div></div>`;
 }
 
-// The served day column, kept after render so the now-line can move without asking the server again.
-let dayline = null;
-
-const pad = (n) => String(n).padStart(2, '0');
-const dateKey = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
-
-// Put the line where the clock is. Returns false when the current hour has no row, which means the
-// range the server laid out no longer covers now — a real change, not something to paper over.
-function moveNow(now) {
-  const rows = document.querySelectorAll('#cw-day .cw-hour');
-  const i = dayline.hours.findIndex((x) => x.h === now.getHours());
-  const row = rows[i];
-  const old = document.querySelector('.cw-now');
-  if (old) old.remove();
-  if (i < 0 || !row) return false;
-  rows.forEach((r) => r.classList.remove('cur'));
-  row.classList.add('cur');
-  const el = document.createElement('div');
-  el.className = 'cw-now';
-  el.style.top = `${Math.round((now.getMinutes() / 60) * 100)}%`;
-  row.appendChild(el);
-  return true;
-}
-
-// The one thing this page works out for itself, and it is not a poll: nothing is fetched and no
-// state is inspected. A clock hand has to tick, and the only alternative is the server pushing a
-// frame every minute to announce what time it is. It re-aims at the next exact minute each pass, so
-// it cannot drift. The two cases that are NOT just the clock moving — the day rolling over, and the
-// hour leaving the rendered range — are changes to what the server laid out, so those re-read.
-function tick() {
-  const now = new Date();
-  setTimeout(tick, 60000 - (now.getSeconds() * 1000 + now.getMilliseconds()));
-  if (!dayline) return;
-  // Chips change state on their own as time passes — due, then past grace and draining — and the
-  // server says when the next one does. Without this the tick only moved the now-line, so something
-  // went overdue and kept its old colour until an unrelated edit happened to touch the lists.
-  if (nextTransition && localStamp(now) >= nextTransition) return load();
-  if (dateKey(now) !== dayline.date || !moveNow(now)) load();
-}
-// Local wall-clock 'YYYY-MM-DDTHH:MM', the same shape the server compares against.
-function localStamp(d) {
-  const p = (n) => String(n).padStart(2, '0');
-  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`;
-}
-
-async function load() {
-  const day = document.getElementById('cw-day');
+// The months, out of the payload the day column fetched for its own reasons. One request feeds both
+// panels, which is why this page mounts the column with `?wall=1` instead of letting it default.
+function months(d) {
   const mon = document.getElementById('cw-months');
-  if (!day || !mon) return;
-  let d;
-  try { d = await (await fetch('/api/calendar?wall=1')).json(); } catch (_) { return; }
-  if (!d || d.error || !d.months) return;
-  dayline = d.dayline || null;
-  nextTransition = d.next_transition || null;
-  day.innerHTML = d.dayline ? dayHtml(d.dayline) : '';
+  if (!mon || !d.months) return;
   mon.style.gridTemplateColumns = `repeat(${d.cols}, 1fr)`;
   mon.innerHTML = d.count === 1 ? bigMonth(d.months[0], d.dow) : d.months.map(miniMonth).join('');
 }
 
-// Dated items arrive by PUSH. The hub subscribes to list_items/lists in Supabase realtime and emits
-// `lists` here the moment either changes, so a reminder added by voice is on the wall as it is spoken.
-// This is a wall — nobody is standing at it to notice a dead stream — so it goes through liveStream,
-// which judges the connection by whether the server's `ping` keeps arriving.
-liveStream('/api/list-stream', { lists: load });
-
-load();
-tick();
+// The module owns the fetching, the clock and the reload rules — including the push subscription
+// that puts a spoken reminder on the wall as it is said, which reloads the months with it.
+mount(document.getElementById('cw-day'), { url: '/api/calendar?wall=1', onload: months });

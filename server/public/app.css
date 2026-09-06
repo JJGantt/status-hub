@@ -1022,54 +1022,82 @@ body.tv:not(.phonewall) #tv-act .ai-act:not(.show){visibility:hidden}
 .stalebar.stale{background:#f59e0b}
 .stalebar.dead{background:#ef4444}
 
-/* ===== DAY CARD — today's timeline on the phone, the wall's day column at phone scale.
-   Same server-laid-out hours and half-hour lines (cards/day.js reads the same endpoint), so a chip's
-   state here and on the wall can never disagree. The WHOLE day is drawn — the pane scrolls, so there
-   is no reason to give the phone less of it than the wall shows. ===== */
-body.tv.phonewall .pane-todo .daycardwrap{padding:12px 14px 14px;flex:0 0 auto}
-.dc-head{font-size:16px;font-weight:700;color:#e6ebf2;margin:0 0 10px}
-.dc-allday{display:flex;gap:4px;margin:0 0 8px}
-.dc-hour{display:flex;gap:8px;min-height:44px;border-top:1px solid #222a33;position:relative;padding:2px 0}
-.dc-hour.cur{background:rgba(0,145,255,.06)}
-/* The hour is the thing you look for, so it is sized for that and right-aligned, exactly as on the
-   wall. Bare integer: the spine runs in order, so am/pm was never in doubt. */
-.dc-hl{flex:0 0 26px;font-size:19px;font-weight:700;color:#cfd8e3;line-height:1;padding-top:2px;
+/* ===== THE DAY COLUMN — today's dated items on hour rows, with a line where the clock is.
+   ONE set of rules, because there is one module drawing it (cards/dayline.js): the calendar wall
+   beside its months, the home wall's middle column, and the phone's lists pane. Sizes below are the
+   WALL's — read from a couch — and #daycard shrinks them for the phone at the bottom of this block.
+   The wall's column width lives with each wall, since that is a property of the wall, not the day. */
+.cw-dayhead{font-size:24px;font-weight:700;color:#fff;flex:0 0 auto;margin-bottom:10px}
+.cw-allday{display:flex;flex-direction:column;gap:5px;flex:0 0 auto;margin-bottom:8px}
+.cw-hours{flex:1 1 auto;min-height:0;display:flex;flex-direction:column;overflow:hidden}
+.cw-hour{flex:1 1 0;min-height:0;display:flex;gap:10px;border-top:1px solid #222a33;position:relative;padding:2px 0}
+.cw-hour.cur{background:rgba(0,145,255,.06)}
+/* The hour number is read from across the room, so it is sized for that and not for the chips
+   beside it. Right-aligned so 9 and 10 share an edge and the chips start at one column. */
+.cw-hl{flex:0 0 46px;font-size:30px;font-weight:700;color:#cfd8e3;line-height:1;padding-top:1px;
   text-align:right;font-variant-numeric:tabular-nums}
-.dc-hour.cur .dc-hl{color:#0091ff}
-.dc-items{flex:1 1 auto;min-width:0;display:flex;flex-direction:column;gap:3px;overflow:hidden}
-.dc-half{flex:1 1 0;min-height:0;min-width:0;display:flex;gap:4px;overflow:hidden}
-.dc-chip{flex:0 0 calc(50% - 2px);min-width:0;display:flex;align-items:center;font-size:13px;line-height:1.2;
-  padding:2px 6px 2px 7px;border-left:3px solid var(--c);background:#0e1318;border-radius:5px}
-.dc-l{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0;color:#e8eaed}
-/* A lone chip still takes half the line — the line's shape should not depend on how busy it is, or a
-   glance cannot tell one item from two without reading. When a +N is present the pair gives it room,
-   which is the only case the half is not exactly half. */
-.dc-half:has(.dc-more) .dc-chip{flex-basis:calc((100% - 34px) / 2)}
-.dc-more{flex:0 0 auto;align-self:center;font-size:11px;font-weight:700;color:#8b96a5;padding:0 2px}
-/* Score at the chip's right edge. Hollow means potential (not yet happened); solid means realised. */
-.dc-sc{flex:0 0 auto;margin-left:5px;font-size:11px;font-weight:800;font-variant-numeric:tabular-nums}
+.cw-hour.cur .cw-hl{color:#0091ff}
+/* Two fixed half-hour lines per hour. Equal heights, always both present: the SECOND line is
+   reserved for :30-:59, so a 4:30 item sits on the lower line even when 4:00 is empty. That is the
+   only thing saying which half of the hour a chip is in, now that chips carry no time. */
+.cw-hitems{flex:1 1 auto;min-width:0;display:flex;flex-direction:column;gap:3px;overflow:hidden}
+.cw-half{flex:1 1 0;min-height:0;min-width:0;display:flex;gap:4px;align-items:stretch;overflow:hidden}
+.cw-now{position:absolute;left:0;right:0;height:2px;background:#0091ff;box-shadow:0 0 6px #0091ff}
+.cw-now::before{content:'';position:absolute;left:-1px;top:-3px;width:8px;height:8px;border-radius:50%;background:#0091ff}
+
+/* chips on the DAY TIMELINE — side by side, sharing the line's width equally. A lone chip still
+   takes half the line: the line's shape should not depend on how busy it is, or a glance cannot tell
+   one item from two without reading. When a +N is present the pair gives it room, which is the only
+   case the half is not exactly half. */
+.cw-dchip{flex:0 0 calc(50% - 2px);min-width:0;display:flex;align-items:center;font-size:15px;line-height:1.2;
+  padding:2px 6px 2px 7px;border-left:4px solid var(--c);background:#0e1318;border-radius:5px}
+.cw-half:has(.cw-more) .cw-dchip{flex-basis:calc((100% - 34px) / 2)}
+.cw-more{flex:0 0 auto;align-self:center;font-size:13px;font-weight:700;color:#8b96a5;padding:0 2px}
+/* Shared with the month chips on the calendar wall — one language for a title and an important
+   marker, wherever a dated item is drawn. */
+.cw-l{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0;color:#e8eaed}
+.cw-imp{flex:0 0 auto;color:#e6b93d;font-weight:800;margin-right:4px}
+/* The number sits at the chip's right edge and never squeezes the title — the title ellipsises, the
+   score does not. `potential` is what you can still get and is drawn hollow to say it has not
+   happened yet; `earned` and `lost` are solid because they already have. */
+.cw-sc{flex:0 0 auto;margin-left:6px;font-size:13px;font-weight:800;font-variant-numeric:tabular-nums}
 /* `earned` only ever appears on a completed chip, which is dim and struck through — so it takes the
    same muted treatment rather than a colour of its own. */
-.dc-sc.k-earned.pos{color:#39d353}
-.dc-sc.k-earned.neg{color:#ff4d4d}
-.dc-sc.k-lost{color:#fff}
-.dc-sc.k-potential{color:#ffd75e;font-weight:700;opacity:.85;
-  border:1px solid rgba(255,215,94,.55);border-radius:4px;padding:0 3px;font-size:10px}
-/* Four mutually exclusive states, matching the wall: past has been and gone, grace is due but still
-   free, exp is overdue and draining, done is dim with a strike. A chip gets exactly one. */
-.dc-chip.past{opacity:.45}
-.dc-chip.grace{border-left-color:#e6b93d;background:#4a3a0d}
-.dc-chip.grace .dc-l{color:#ffd75e;font-weight:700}
-.dc-chip.exp{border-left-color:#ff4d4d;background:#cc0d16}
-.dc-chip.exp .dc-l{color:#fff;font-weight:800}
-.dc-chip.done{opacity:1}
-.dc-chip.done .dc-l{color:#8b96a5;text-decoration:line-through;opacity:.55}
-.dc-now{position:absolute;left:0;right:0;height:2px;background:#0091ff;box-shadow:0 0 6px #0091ff}
-.dc-now::before{content:'';position:absolute;left:-1px;top:-3px;width:8px;height:8px;border-radius:50%;background:#0091ff}
-
+.cw-sc.k-earned.pos{color:#39d353}
+.cw-sc.k-earned.neg{color:#ff4d4d}
+.cw-sc.k-lost{color:#fff}
+.cw-sc.k-potential{color:#ffd75e;font-weight:700;opacity:.85;
+  border:1px solid rgba(255,215,94,.55);border-radius:4px;padding:0 4px;font-size:12px}
+/* FOUR mutually exclusive states, and the order matters. `past` dims something that has simply been
+   and gone; `exp` is outstanding AND overdue, which is the loudest thing on the timeline and must
+   never be dimmed — stacking them washed the red out to 45% and made an overdue item read as a
+   finished one. `grace` is due but still free: amber says "now", red says "this is costing you",
+   which is the distinction the score actually makes. `done` is dim plus a strike — on the LABEL, not
+   the chip, because dimming the whole chip took the score down with it and the score is the part
+   that says this was worth something. A chip gets exactly one of the four. */
+.cw-dchip.past{opacity:.45}
+.cw-dchip.grace{opacity:1;border-left-color:#e6b93d;background:#4a3a0d}
+.cw-dchip.grace .cw-l{color:#ffd75e;font-weight:700}
+.cw-dchip.exp{opacity:1;border-left-color:#ff4d4d;background:#cc0d16;box-shadow:0 0 12px rgba(255,25,25,.5)}
+.cw-dchip.exp .cw-l{color:#fff;font-weight:800}
+.cw-dchip.done{opacity:1}
+.cw-dchip.done .cw-l{color:#8b96a5;text-decoration:line-through;opacity:.55}
 /* EXEMPT — hollow. A solid chip reads as something to do; an outline reads as something that is
    simply on the schedule. It never scores, never goes amber or red, and closes itself when its
    moment passes, so it should not look like a task sitting there undone. */
-.dc-chip.exempt{background:transparent;border:1px solid var(--c);border-left-width:3px}
-/* IMPORTANT — the same amber ! the lists pane uses, so both surfaces speak one language. */
-.dc-imp{flex:0 0 auto;color:#e6b93d;font-weight:800;margin-right:4px}
+.cw-dchip.exempt{background:transparent;border:1px solid var(--c);border-left-width:3px}
+
+/* PHONE (#daycard, the lists pane) — the same markup at hand-held size. The whole day is drawn and
+   the pane scrolls, so the hours take their natural height instead of splitting a fixed column. */
+body.tv.phonewall .pane-todo .daycardwrap{padding:12px 14px 14px;flex:0 0 auto}
+#daycard .cw-dayhead{font-size:16px;color:#e6ebf2;margin:0 0 10px}
+#daycard .cw-allday{flex-direction:row;gap:4px;margin:0 0 8px}
+#daycard .cw-hours{display:block;overflow:visible}
+#daycard .cw-hour{flex:0 0 auto;min-height:44px;gap:8px}
+#daycard .cw-hl{flex-basis:26px;font-size:19px;padding-top:2px}
+#daycard .cw-half{align-items:stretch}
+#daycard .cw-dchip{font-size:13px;border-left-width:3px}
+#daycard .cw-dchip.exp{box-shadow:none}
+#daycard .cw-more{font-size:11px}
+#daycard .cw-sc{margin-left:5px;font-size:11px}
+#daycard .cw-sc.k-potential{padding:0 3px;font-size:10px}

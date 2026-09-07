@@ -428,6 +428,14 @@ function surfBand(rk) {
   return 4;
 }
 
+// Realtime is the fast path; this is the floor under it. A `surf_snapshots` event is a SINGLE
+// delivery, and the socket drops them — CHANNEL_ERROR and half-open silence are both routine
+// (`REALTIME_SILENCE_LIMIT_MS` exists for exactly that). Without an age check one missed event froze
+// the whole surf history at whatever the process built on boot, with no way back but a redeploy: on
+// 2026-09-07 the card served a 16-hour-old body and the measured water trace simply stopped at the
+// previous evening. Every other cache here already reconciles on a backstop; this was the only one
+// that could not.
+const SURFHIST_BACKSTOP_MS = 15 * 60 * 1000;
 let surfHistCache = { at: 0, body: null };
 const dirtySurfHist = () => { surfHistCache = { at: 0, body: null }; };
 
@@ -992,8 +1000,9 @@ ${r.html || ''}
 // archive readable by anyone with the URL.
 app.get('/api/surf/history', async (req, res) => {
   try {
-    if (surfHistCache.body) return res.json(surfHistCache.body);
-    const rows = await sbRange('surf_hours?select=ts,rk,s_min,s_max,s_plus,s_raw_max,water_f&order=ts.asc');
+    if (surfHistCache.body && Date.now() - surfHistCache.at < SURFHIST_BACKSTOP_MS)
+      return res.json(surfHistCache.body);
+    const rows = await sbRange('surf_hours?select=ts,rk,s_min,s_max,s_plus,s_raw_max&order=ts.asc');
     if (!rows.length) return res.json({ t0: null, hours: 0 });
 
     const nowH = Math.floor(Date.now() / 3600000) * 3600;
@@ -1016,14 +1025,31 @@ app.get('/api/surf/history', async (req, res) => {
     const hours = Math.floor((tN - t0) / 3600) + 1;
     const by = new Map(win.map((r) => [r.ts, r]));
 
-    // Forecast water is a different claim from a measurement, so it is a separate series rather
-    // than backfilled into the gap after now.
-    let fc = [];
+    // Both water series come from `water_readings`, read at request time. The measured trace used to
+    // ride on `surf_hours.water_f`, which surf-report's materialize step fills — so it could only
+    // advance when a Surfline capture ran, every 3h, and the top of that hour races the buoy pull
+    // that feeds it. The reading itself is half-hourly and owes nothing to Surfline, so tying its
+    // freshness to a forecast scrape put the card hours behind a source that was already current.
+    const sinceT0 = `&ts=gte.${new Date(t0 * 1000).toISOString()}&order=ts.asc`;
+    let meas = [], fc = [];
     try {
-      fc = await sbRange(`water_readings?select=ts,water_f&station=eq.open-meteo` +
-                         `&ts=gte.${new Date(t0 * 1000).toISOString()}&order=ts.asc`);
+      // Forecast water is a different claim from a measurement, so it stays a separate series rather
+      // than being backfilled into the gap after now.
+      [meas, fc] = await Promise.all([
+        sbRange(`water_readings?select=ts,water_f&station=eq.41112${sinceT0}`),
+        sbRange(`water_readings?select=ts,water_f&station=eq.open-meteo${sinceT0}`),
+      ]);
     } catch (_) { /* the grids are still worth drawing without it */ }
-    const fcBy = new Map(fc.map((r) => [Math.floor(Date.parse(r.ts) / 3600000) * 3600, r.water_f]));
+    // Mean of every reading inside the hour, matching how plots.py draws the same buoy.
+    const hourOfTs = (r) => Math.floor(Date.parse(r.ts) / 3600000) * 3600;
+    const measAcc = new Map();
+    for (const r of meas) {
+      if (r.water_f == null) continue;
+      const a = measAcc.get(hourOfTs(r)) || [0, 0];
+      a[0] += r.water_f; a[1]++;
+      measAcc.set(hourOfTs(r), a);
+    }
+    const fcBy = new Map(fc.map((r) => [hourOfTs(r), r.water_f]));
 
     // Distinct size bands present in this window, ordered by real height where we have it and by
     // the label for rows predating 00083.
@@ -1053,7 +1079,8 @@ app.get('/api/surf/history', async (req, res) => {
       rating += b == null ? '.' : String(b);
       const sk = r && r.s_max != null ? sizeIdx.get(`${r.s_min}|${r.s_max}|${r.s_plus ? 1 : 0}`) : undefined;
       size += sk == null ? '.' : sk.toString(36);      // base36 so more than ten bands still fit one char
-      water.push(r && r.water_f != null ? Math.round(r.water_f * 10) / 10 : null);
+      const m = measAcc.get(t);
+      water.push(m ? Math.round((m[0] / m[1]) * 10) / 10 : null);
       const f = fcBy.get(t);
       waterFc.push(f == null ? null : Math.round(f * 10) / 10);
     }

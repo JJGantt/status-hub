@@ -11,8 +11,9 @@ const ftRange = (a, b) =>
 
 // ---- history grids ----------------------------------------------------------------------------
 // /api/surf/history returns strings, one char per hour, not arrays of rows — see the server comment.
-// Fetched once and refetched only when a new snapshot lands (capturedAt moves), because it is ~2KB
-// and changes twice a day, while this card re-renders on every 30s broadcast.
+// Refetched when a new snapshot lands (capturedAt moves) or when the copy ages out, never on the
+// 30s broadcast that re-renders this card: the whole archive is one response, and redrawing grids
+// does not require re-reading them.
 const GRID_H = 86;         // per grid; both are drawn on one canvas so they sit flush
 const DOW_H = 13;          // weekday-letter strip above the grids, same canvas so it stays aligned
 const WATER_H = 68;
@@ -28,14 +29,22 @@ const PAD_L = 26;          // left gutter for axis labels, so nothing is written
 // to today twice a minute. Measuring from the right also means 0 keeps following today as the
 // forecast extends, where a remembered scrollLeft would slide off the end.
 let scrollEnd = 0;
-let hist = null, histFor = null, histPending = false;
+let hist = null, histFor = null, histPending = false, histAt = 0;
+
+// `capturedAt` alone is not enough to decide the copy is current. It moves with the Surfline
+// capture, every 3h, but the water trace is a half-hourly buoy reading that advances independently
+// — so a card left open all day held a water series hours behind a source that had moved many
+// times. The age check is what picks those up; it matches the server's own cache floor, so a
+// refetch inside the window is answered from memory rather than costing a rebuild.
+const HIST_MAX_AGE_MS = 15 * 60 * 1000;
 
 function loadHistory(capturedAt) {
-  if (histPending || histFor === capturedAt) return;
+  if (histPending) return;
+  if (hist && histFor === capturedAt && Date.now() - histAt < HIST_MAX_AGE_MS) return;
   histPending = true;
   fetch('/api/surf/history')
     .then(r => r.ok ? r.json() : null)
-    .then(j => { if (j && j.hours) { hist = j; histFor = capturedAt; render(state.last); } })
+    .then(j => { if (j && j.hours) { hist = j; histFor = capturedAt; histAt = Date.now(); render(state.last); } })
     .catch(() => {})
     .finally(() => { histPending = false; });
 }

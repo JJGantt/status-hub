@@ -107,6 +107,13 @@ body.tv .hw-recent .rc-name{font-size:17px;line-height:1.15;font-weight:700;colo
   min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 body.tv .hw-recent .rc-when{margin-left:auto;flex:0 0 auto;font-size:14px;color:#5c6675;
   font-variant-numeric:tabular-nums}
+/* A staged meal takes that same slot, in the amber the entry list already marks staged rows with —
+   .stagedbadge's colours at wall size, since a 9px pill is unreadable from a couch. The one thing on
+   this column that is not grey, which is what makes "not eaten yet" register before the word is
+   read. */
+body.tv .hw-recent .rc-staged{font-size:12px;font-weight:700;letter-spacing:.08em;color:#d6c042;
+  background:rgba(214,192,66,.13);border:1px solid rgba(214,192,66,.4);border-radius:5px;
+  padding:1px 6px;align-self:center}
 /* The rhythm does the separating. Inside a reading everything is tight — 3px around the ×, 3px
    before a unit — and between readings the gap is ten times that. `40 × 12  40 × 12` ran together
    when the two spacings were only 2:1, and the fix is proportion, not a rule or a box between them. */

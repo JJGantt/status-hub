@@ -1308,7 +1308,7 @@ app.get('/api/nutrition-day', async (req, res) => {
     const hh = String(DAY_START_HOUR).padStart(2, '0');
     const next = localDate(new Date(Date.parse(date + 'T12:00:00Z') + 86400000));
     const isToday = date === nutritionWindow().day;
-    const SEL = 'id,occurred_at,name,calories,protein_g,carbs_g,fat_g,ingredients,staged';
+    const SEL = 'id,occurred_at,name,calories,protein_g,carbs_g,fat_g,ingredients,staged,logged';
     const today = nutritionWindow().day;
     const [committed, stagedRows, targetRows, allIntake, weightRows, surplus] = await Promise.all([
       sbRange(`nutrition_entries?occurred_at=gte.${date}T${hh}:00:00&occurred_at=lt.${next}T${hh}:00:00&staged=eq.false&select=${SEL}&order=occurred_at`),
@@ -1328,6 +1328,15 @@ app.get('/api/nutrition-day', async (req, res) => {
     total_cal = Math.round(total_cal);
     // Newest first: staged meals on top, then committed entries reverse-chronologically.
     const entries = (stagedRows || []).concat(committed.slice().reverse());
+    // The most recent ADDITION to the log, staged or eaten — what the home wall's recent line shows.
+    // Ordered by `logged` (when the row was written) rather than occurred_at: a staged meal's
+    // occurred_at is the moment it was staged and means nothing about when it will be eaten, and a
+    // meal logged now for this morning would otherwise never be the newest thing. Both columns are
+    // naive-local strings in the same format, so they sort as text.
+    const addedAt = (e) => String(e.logged || e.occurred_at || '').slice(0, 19);
+    const recent = entries.length
+      ? entries.reduce((a, e) => (addedAt(e) > addedAt(a) ? e : a))
+      : null;
     // This day's GOAL via the SAME cluster-aware resolver the calendar + plot use, so the header
     // agrees with them: active run → maintenance+surplus (or stored target); an older cut →
     // maintenance−deficit; untracked → maintenance.
@@ -1344,7 +1353,7 @@ app.get('/api/nutrition-day', async (req, res) => {
       total_cal, total_protein: Math.round(total_protein),
       total_carbs: Math.round(total_carbs), total_fat: Math.round(total_fat),
       target_cal, target_macros, delta_color,
-      entries,
+      entries, recent,
     };
     nutDayCache.set(cacheKey, { body, at: Date.now() });
     res.json(body);

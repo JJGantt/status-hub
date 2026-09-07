@@ -103,12 +103,12 @@ async function loadNutDay(date){
    seg(mn(j.total_fat), tm.fat_g!=null?tm.fat_g:null, 'F'));
  if(bandOnly){
   ni.innerHTML=h;
-  // The most recently LOGGED item, into its own element when a surface has one. Not entries[0]:
-  // staged meals sort above the committed ones and a staged meal has not been eaten yet, so it is
-  // not the last thing logged.
+  // The last thing ADDED to the log, into its own element when a surface has one — staged or eaten,
+  // whichever row was written most recently. The server picks it (`recent`), because entries[0] is
+  // not it either way round: staged rows sort above the committed ones regardless of age.
   const nr=document.getElementById('nutrecent');
   if(nr){
-   const e=j.entries.find(x=>!x.staged);
+   const e=j.recent;
    // Not macroChips: those bake the value and its unit into one string inside a pill. Here they are
    // separate spans so a surface can weight the number and the unit differently, and the time is not
    // one of them — it says WHEN, not what, so it sits with the name rather than among the macros.
@@ -120,9 +120,14 @@ async function loadNutDay(date){
    // wall that means they cannot be the faintest thing in the row. The grams are dropped — every one
    // of these three is in grams, so the g was three characters saying nothing.
    const macro=(v,l)=>val(v,l,'rc-m');
+   // A staged row's occurred_at is when it was STAGED, not when it will be eaten, so the time slot
+   // says STAGED instead — the same word the entry list marks those rows with. It takes the slot
+   // rather than sitting beside a time, because a staged meal has no eating time to print.
+   const when=e&&e.staged
+    ?'<span class="rc-when rc-staged">STAGED</span>'
+    :(e&&fmtTime(e.occurred_at)?'<span class=rc-when>'+fmtTime(e.occurred_at)+'</span>':'');
    nr.innerHTML=e
-    ?'<div class=rc-top><span class=rc-name>'+esc(e.name||'—')+'</span>'+
-       (fmtTime(e.occurred_at)?'<span class=rc-when>'+fmtTime(e.occurred_at)+'</span>':'')+'</div>'+
+    ?'<div class=rc-top><span class=rc-name>'+esc(e.name||'—')+'</span>'+when+'</div>'+
      '<div class=rc-vals>'+val(mn(e.calories),'kcal')+macro(mn(e.protein_g),'P')+
        macro(mn(e.carbs_g),'C')+macro(mn(e.fat_g),'F')+'</div>'
     :'';

@@ -111,9 +111,9 @@ async function loadHeatDay(date){
   const ex=(j.exercises||[]).find(e=>e.name===j.recent);
   // Same shape as the nutrition row beside it — name, then values with the number carrying the
   // weight and everything around it muted. No pills: spacing separates the sets.
-  const set=(st)=>'<span class=rc-set>'+(st.weight_lbs===0
-    ?'<span class=rc-v>BW</span>'
-    :'<span class=rc-v>'+st.weight_lbs+'</span><span class=rc-u>lb</span>')+
+  // No `lb`: every set on this row is in pounds and the unit repeated four times is four times
+  // nothing. Weight × reps, and the separation between sets is spacing (see tv-home.css).
+  const set=(st)=>'<span class=rc-set><span class=rc-v>'+(st.weight_lbs===0?'BW':st.weight_lbs)+'</span>'+
     '<span class=rc-x>×</span><span class=rc-v>'+st.reps+'</span></span>';
   hi.innerHTML=ex?'<div class=rc-top><span class=rc-name>'+esc(ex.name)+'</span></div>'+
     '<div class=rc-vals>'+ex.sets.map(set).join('')+'</div>':'';

@@ -114,12 +114,17 @@ async function loadNutDay(date){
    // one of them — it says WHEN, not what, so it sits with the name rather than among the macros.
    // Wrapped as one span per reading: the row's gap separates READINGS, so leaving the value and its
    // unit as loose siblings put that same gap between "719" and "kcal" and broke the pair apart.
-   const val=(v,u)=>'<span class=rc-set><span class=rc-v>'+v+'</span><span class=rc-u>'+u+'</span></span>';
+   const val=(v,u,cls)=>'<span class=rc-set><span class=rc-v>'+v+'</span><span class='+(cls||'rc-u')+'>'+u+'</span></span>';
+   // P/C/F are marked differently from kcal on purpose. `kcal` is the UNIT of the number before it
+   // and can be inferred; the letters say WHICH macro a number is, so they have to be read, and on a
+   // wall that means they cannot be the faintest thing in the row. The grams are dropped — every one
+   // of these three is in grams, so the g was three characters saying nothing.
+   const macro=(v,l)=>val(v,l,'rc-m');
    nr.innerHTML=e
     ?'<div class=rc-top><span class=rc-name>'+esc(e.name||'—')+'</span>'+
        (fmtTime(e.occurred_at)?'<span class=rc-when>'+fmtTime(e.occurred_at)+'</span>':'')+'</div>'+
-     '<div class=rc-vals>'+val(mn(e.calories),'kcal')+val(mn(e.protein_g),'g P')+
-       val(mn(e.carbs_g),'g C')+val(mn(e.fat_g),'g F')+'</div>'
+     '<div class=rc-vals>'+val(mn(e.calories),'kcal')+macro(mn(e.protein_g),'P')+
+       macro(mn(e.carbs_g),'C')+macro(mn(e.fat_g),'F')+'</div>'
     :'';
   }
   return;

@@ -41,7 +41,7 @@ export function render(s){
  // CALORIE-ADHERENCE CALENDAR (reuse heatmap layout/classes); color = intake/target ratio (diverging)
  const monthRow=(N.months||[]).map(m=>'<div class=hm>'+m+'</div>').join('');
  const grid=(N.weeks||[]).map(col=>'<div class=hcol>'+col.map(d=>{
-   const bg=d.has?d.color:'#2a313a';
+   const bg=d.has?d.color:'#000';   // no intake logged that day → black
    const out=d.today?';outline:1.5px solid #e8eaed;outline-offset:-1px':'';
    const cur=d.has?';cursor:pointer':'';
    const data=d.has?' data-ndate="'+d.date+'"':'';

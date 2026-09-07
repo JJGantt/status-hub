@@ -6,7 +6,7 @@ let lastHeatExercises=null; // exercises for the open day-detail (for the repeat
 
 export function render(s){
  const H=s.heatmap||{weeks:[],months:[]};
- const HC=['#2a313a','#0e4429','#006d32','#26a641','#39d353']; // [0]=empty (visible vs the card bg)
+ const HC=['#000','#0e4429','#006d32','#26a641','#39d353']; // [0]=a day with no sets, black
  const monthRow=(H.months||[]).map(m=>'<div class=hm>'+m+'</div>').join('');
  const grid=(H.weeks||[]).map(col=>'<div class=hcol>'+col.map(d=>{
    const bg=d.level<0?'transparent':HC[d.level];

@@ -290,17 +290,10 @@ const etNowString = () => etStringAt(new Date());
 // ---- assemble dashboard data ----
 // ---- surf: latest Surfline snapshot -> current + 7-day per-day rollup ----
 // Data is collected by the Pi (repo JJGantt/surf-report) into surf_snapshots.
-// Surfline's canonical rating palette (their default :root --conditions* scale).
-const SURF_RATING_COLOR = {
-  FLAT:'#4d8ba7', NONE:'#4d8ba7', VERY_POOR:'#98a2af', POOR:'#408fff',
-  POOR_TO_FAIR:'#30d2e8', FAIR:'#1ad64c', FAIR_TO_GOOD:'#ffcd1e',
-  GOOD:'#ff8900', EPIC:'#d54530',
-};
 const SURF_RATING_LABEL = {
   FLAT:'Flat', NONE:'Flat', VERY_POOR:'Very Poor', POOR:'Poor', POOR_TO_FAIR:'Poor–Fair',
   FAIR:'Fair', FAIR_TO_GOOD:'Fair–Good', GOOD:'Good', EPIC:'Epic',
 };
-const ratingColor = (k) => SURF_RATING_COLOR[k] || '#8b96a5';
 const ratingLabel = (k) => SURF_RATING_LABEL[k] || k || '—';
 
 // ---- Litter-Robot display state -------------------------------------------------------------
@@ -370,7 +363,10 @@ function buildSurf(row, waterRow) {
                          : (wt ? Math.round((wt.min + wt.max) / 2) : null),
     waterMeasured: !!waterRow,
     current: cur ? {
-      ratingLabel: ratingLabel(cur.rk), ratingColor: ratingColor(cur.rk),
+      // The dot wears the same band colour the grid and the key below it paint this rating, NOT
+      // Surfline's own scale — those disagree (Surfline paints POOR blue, the band palette red),
+      // and two colours for one rating in one card reads as two different readings.
+      ratingLabel: ratingLabel(cur.rk), ratingColor: SURF_BAND_COLORS[surfBand(cur.rk)] || '#8b96a5',
       hMin: cur.sMin, hMax: cur.sMax, airF: cur.aT != null ? Math.round(cur.aT) : null,
     } : null,
   };

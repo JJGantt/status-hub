@@ -20,7 +20,14 @@ body.tv .hw-daycard .cw-day{flex:1 1 auto;min-height:0;display:flex;flex-directi
 
    Rows stop sharing the column equally and take exactly what the drum gives them, so `flex` must not
    fight the inline height. --face is cos of the row's angle: 1 on the axis, 0 at the rim. */
-body.tv .hw-daycard .cw-day.dial .cw-hours{overflow:hidden}
+body.tv .hw-daycard .cw-day.dial .cw-hours{overflow:hidden;flex:1 1 auto}
+/* The date is lifted OUT of the flow. The axis is the middle of the hours box, so any header above
+   it pushes the whole dial down — 44px of heading put the now-line 25px below the middle of the
+   column, which is exactly the lopsidedness you see rather than a fault in the projection. Overlaid
+   it costs nothing: the rows it covers are 1-9px slivers twelve hours from now. */
+body.tv .hw-daycard .cw-day.dial{padding-top:0}
+body.tv .hw-daycard .cw-day.dial .cw-dayhead{position:absolute;top:0;left:0;z-index:2;margin:0;
+  pointer-events:none}
 /* border-box, and no padding: the projection writes an exact pixel height per row, and the default
    content-box added its 2px padding and 1px border on top of that. Four pixels a row is nothing to
    look at and eleven pixels of drift across the column, which is the now-line missing the axis. */

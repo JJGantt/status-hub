@@ -389,6 +389,11 @@ Rows must be `box-sizing:border-box` with no padding: the projection writes an e
 row, and content-box adds the padding and border on top of it — four pixels a row, eleven across the
 column, which is the now-line missing the axis it is supposed to define.
 
+Nothing may sit above the hours box in the flow, for the same reason. The axis is the middle of that
+box, so a 44px date heading above it put the line 25px below the middle of the column — measurably
+lopsided, and read as a fault in the projection rather than in the layout. The date is absolutely
+positioned over the top instead, where the rows are 1-9px slivers twelve hours out.
+
 Chips on a line sit **side by side** and split it equally (`flex:1 1 0`), so one spans the line and
 three take thirds. How many fit is a property of the column rather than of the data, which makes it
 the server's call: `DAYLINE_MAX_PER_HALF` caps them and the remainder rides along as `more`, drawn

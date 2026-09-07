@@ -10,10 +10,6 @@ const { estimateMaintenance, estimateHistory, macroTargets } = require('./lib/ma
 const pace = require('./lib/pace');
 const { computeVolume } = require('./lib/volume');
 const BODY_SVG = require('./lib/bodymap');
-// Weeks of heat map the HOME wall shows. Fewer than the health wall's 20, because the muscle column
-// runs beside them there. Month labels use this table when a slice starts mid-month.
-const HOME_HEAT_WEEKS = 15;
-const MON_ABBR = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 const { getTZ, setTZ, DAY_START_HOUR, localDate, nutritionWindow, lastNTrainingDays, dayBucketOf } = require('./lib/dates');
 const { buildWorkoutHeatmap } = require('./lib/heatmap');
 const { buildNutritionLog, buildGoalResolver, calorieColor } = require('./lib/nutritionlog');
@@ -623,22 +619,6 @@ async function buildStatus() {
   // ---- nutrition log: calorie-adherence calendar (per-day historical targets) + calorie/weight trend ----
   const nutrition_log = buildNutritionLog(nutLogRows || [], weights, maintenance.target, maintenance.maintenance, today, targetRows || [], 20, surplus, 150, paceData.fraction);
 
-  // ---- narrower heat maps, for the home wall only ----
-  // The home wall runs the two heat maps beside the muscle column, so it shows fewer weeks: the cells
-  // are fluid (`.hcell{width:100%}`), so taking width from the column would shrink every square rather
-  // than drop the oldest ones. Sliced here rather than in the card because the cards are shared by all
-  // four walls and the health wall still wants the full span.
-  //
-  // `months` is parallel to `weeks` and labels a column only where the month changes, so a slice can
-  // begin on an unlabelled column; the first one is relabelled from its own first day.
-  const trimHeat = (h, n) => {
-    const weeks = h.weeks.slice(-n);
-    const months = h.months.slice(-n);
-    if (weeks.length && !months[0]) months[0] = MON_ABBR[Number(weeks[0][0].date.slice(5, 7)) - 1];
-    return { weeks, months };          // only what differs — the card spreads it over the full object
-  };
-  const heatmap_home = trimHeat(heatmap, HOME_HEAT_WEEKS);
-  const nutrition_log_home = trimHeat(nutrition_log, HOME_HEAT_WEEKS);
 
   // ---- overall score (0.5·training + 0.5·nutrition over the rolling week) ----
   const { goalForDay } = buildGoalResolver({ rows: nutLogRows || [], weights, targets: targetRows || [], today, surplus, fallbackMaint: maintenance.maintenance });
@@ -697,7 +677,6 @@ async function buildStatus() {
     }
   }
   return { today, litter, feeder, surf, nutrition, maintenance, pace: paceData, volume, heatmap, nutrition_log,
-    heatmap_home, nutrition_log_home,
     last_set_at, session_start_at, sets_today, rep_watcher, routing, mics, score, desk_focus: deskFocus,
     generated_at: new Date().toISOString() };
 }

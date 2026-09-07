@@ -5,10 +5,7 @@ let heatSelDate=null, heatReq=0;
 let lastHeatExercises=null; // exercises for the open day-detail (for the repeat-set popup)
 
 export function render(s){
- // The home wall runs this beside the muscle column and the server sends it a shorter span; every
- // other wall gets the full one. Selection only — both were computed server-side.
- const HOME=document.body.classList.contains('homewall');
- const H=Object.assign({weeks:[],months:[]},s.heatmap,HOME&&s.heatmap_home||{});
+ const H=s.heatmap||{weeks:[],months:[]};
  const HC=['#000','#0e4429','#006d32','#26a641','#39d353']; // [0]=a day with no sets, black
  const monthRow=(H.months||[]).map(m=>'<div class=hm>'+m+'</div>').join('');
  const grid=(H.weeks||[]).map(col=>'<div class=hcol>'+col.map(d=>{

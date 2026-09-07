@@ -61,3 +61,14 @@ body.tv .hw-sess-where{font-size:15px;color:#8b96a5;font-weight:600}
    than one you have to walk over to read the end of. */
 body.tv .hw-sess-reply{flex:1 1 auto;min-height:0;overflow-y:auto;white-space:pre-wrap;
   font-size:19px;line-height:1.45;color:#c7cdd6}
+
+/* ===== PHONE, PORTRAIT ==============================================================================
+   wall.js scales this same shell into the phone's wall pane, and in portrait app.css reflows the grid
+   to two columns (status · health bar · rings stacked, then content). Every row has to be PLACED in
+   that grid: the landscape rules above put these three in columns 2, 3 and 4, and a two-column grid
+   answers that by growing implicit columns until the whole wall is off the side of the screen with
+   nothing visible but a corner of it. Same arrangement as landscape, folded — today beside the heat
+   maps, the session's answer full width underneath. ===== */
+body.tv.wallportrait .hw-dayrow{grid-column:1;grid-row:4}
+body.tv.wallportrait .hw-heatrow{grid-column:2;grid-row:4}
+body.tv.wallportrait .hw-sessrow{grid-column:1/3;grid-row:5}

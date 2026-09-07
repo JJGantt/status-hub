@@ -11,31 +11,50 @@ import { mount } from './cards/dayline.js';
 mount(document.getElementById('cw-day'));
 
 const REFRESH_MS = 5000;
+const LIST_MAX = 5;      // enough to see what is running without the list becoming the column
 
 /**
- * Which session this shows: the newest RUNNING one, falling back to the newest closed-but-resumable
- * one when nothing is running.
+ * Which session the panel opens: the FOCUSED one — the session a spoken follow-up lands in, so what
+ * the wall is showing and what he is about to talk to are the same session.
  *
- * Newest by `started`, which is also how every surface numbers them out loud — so "session one" and
- * the panel agree. Not by `last_seen`: a reconcile tick touches every row every 30s, so that order
- * reshuffles between reads and the panel would swap sessions on its own.
+ * `focus` is null when nothing has been dispatched or focused, or when the pointer names a session
+ * that has since closed; then it falls back to the newest running one, so the panel says something
+ * rather than nothing. The list marks whichever is being shown — one highlight meaning "this is the
+ * answer below", never a second one claiming to mean focus, which the footer already carries.
  */
-const newest = (d) => (d.resident || [])[0] || (d.evicted || [])[0] || null;
+const shown = (d) => (d.resident || []).find((s) => s.id === d.focus) || (d.resident || [])[0]
+  || (d.evicted || [])[0] || null;
+
+// Running first, then parked, newest first within each — `n` is the number he says out loud, worked
+// out by the server so every surface counts the same way. Ordering the list by it means "the second
+// session" points at the second line.
+const listed = (d) => [...(d.resident || []), ...(d.evicted || [])]
+  .sort((a, b) => (a.n || 99) - (b.n || 99)).slice(0, LIST_MAX);
+
+const name = (s) => s.custom_title || s.label || s.repo;
 
 function render(d) {
+  const list = document.getElementById('hw-sess-list');
   const head = document.getElementById('hw-sess-head');
   const reply = document.getElementById('hw-sess-reply');
-  if (!head || !reply) return;
-  const s = newest(d);
+  if (!list || !head || !reply) return;
+  const on = shown(d);
+
+  list.innerHTML = listed(d).map((s) =>
+    `<div class="hw-row${on && s.id === on.id ? ' on' : ''}${s.status === 'resident' ? '' : ' parked'}">` +
+      `<span class="hw-sess-dot${s.working ? '' : ' idle'}"></span>` +
+      `<span class="hw-row-n">${s.n ?? ''}</span>` +
+      `<span class="hw-row-name">${esc(name(s))}</span>` +
+      `<span class="hw-row-where">${s.worker === 'desk' ? 'Mac' : 'Pi'}</span>` +
+    '</div>').join('');
+
   // Nothing running and nothing parked is a real state, and an empty panel is its honest rendering.
-  if (!s) { head.innerHTML = ''; reply.textContent = ''; return; }
-  head.innerHTML =
-    `<span class="hw-sess-dot${s.working ? '' : ' idle'}"></span>` +
-    `<span class="hw-sess-name">${esc(s.custom_title || s.label || s.repo)}</span>` +
-    `<span class="hw-sess-where">${esc(s.repo)} · ${s.worker === 'desk' ? 'Mac' : 'Pi'}</span>`;
+  if (!on) { head.innerHTML = ''; reply.textContent = ''; return; }
+  head.innerHTML = `<span class="hw-sess-name">${esc(name(on))}</span>` +
+    `<span class="hw-sess-where">${esc(on.repo)} · ${on.worker === 'desk' ? 'Mac' : 'Pi'}</span>`;
   // textContent, not innerHTML: a reply is a model's prose and may hold anything that looks like
   // markup. The panel scrolls rather than truncating — however long the answer is, it is the answer.
-  reply.textContent = (s.last_reply || '').trim();
+  reply.textContent = (on.last_reply || '').trim();
 }
 
 async function load() {

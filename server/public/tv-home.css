@@ -3,13 +3,16 @@
 
    The wall grid is `280px 1fr 1fr 1fr 60px` (app.css). Rings keep column 1 and the health bar keeps
    column 5, which leaves exactly three for this wall's three: today, the heat maps, the session. */
+/* The day column is 380px on the calendar wall and it is 380px here — it is the SAME column, and a
+   1fr share of the grid made it ~507px, which reads as a different, emptier thing. The width it
+   gives up goes to the two columns beside it. */
+body.tv .rows{grid-template-columns:280px 380px 1fr 1fr 60px}
 body.tv .hw-dayrow{grid-column:2;grid-row:2;display:flex;flex-direction:column;min-width:0;min-height:0}
 body.tv .hw-heatrow{grid-column:3;grid-row:2;display:flex;flex-direction:column;min-width:0;min-height:0}
 body.tv .hw-sessrow{grid-column:4;grid-row:2;display:flex;flex-direction:column;min-width:0;min-height:0}
 body.tv .hw-daycard,body.tv .hw-heatcard,body.tv .hw-sesscard{flex:1 1 auto;min-height:0}
 
-/* COL 2 — the day. Full width of its column, unlike the calendar wall where it is a fixed 380px
-   strip beside the months. */
+/* COL 2 — the day, filling a column sized to it above. */
 body.tv .hw-daycard .cw-day{flex:1 1 auto;min-height:0;display:flex;flex-direction:column;overflow:hidden}
 
 /* COL 3 — three heat maps down one column. Each block is heatmap + the strip that belongs to it,
@@ -47,9 +50,25 @@ body.tv .hw-heatcard .hw-surf .fit{padding:0;height:auto;gap:0}
 body.tv .hw-heatcard .hw-surf .surfkey,body.tv .hw-heatcard .hw-surf .surfwater{display:none}
 body.tv .hw-heatcard .hw-surf .surfheat{margin-top:8px}
 
-/* COL 4 — the newest session and its last answer. */
+/* COL 4 — what is running, then the focused one's last answer.
+   The list is every live session, capped at five, in the order voice numbers them. The row showing
+   its answer below is the lit one; the footer already says which session takes a follow-up, so this
+   highlight means "this is what is open", not "this is focused". */
 body.tv .hw-sesscard .fit{gap:12px}
-body.tv .hw-sess-head{flex:0 0 auto;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+body.tv .hw-sess-list{flex:0 0 auto;display:flex;flex-direction:column;gap:6px}
+body.tv .hw-sess-list:empty{display:none}
+body.tv .hw-row{display:flex;align-items:center;gap:10px;min-width:0;padding:6px 10px;
+  border:1px solid #222a33;border-radius:8px}
+body.tv .hw-row.on{border-color:#fff;background:#0e1318}
+body.tv .hw-row.parked{opacity:.5}
+body.tv .hw-row-n{font-size:17px;font-weight:700;color:#8b96a5;flex:0 0 auto;font-variant-numeric:tabular-nums}
+body.tv .hw-row-name{font-size:17px;font-weight:600;color:#c7cdd6;min-width:0;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+body.tv .hw-row.on .hw-row-name{color:#fff}
+body.tv .hw-row-where{font-size:12px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;
+  color:#5c6675;margin-left:auto;flex:0 0 auto}
+body.tv .hw-sess-head{flex:0 0 auto;display:flex;align-items:center;gap:10px;flex-wrap:wrap;
+  border-top:1px solid #222a33;padding-top:12px}
 body.tv .hw-sess-head:empty{display:none}
 body.tv .hw-sess-dot{width:12px;height:12px;border-radius:50%;background:#39d353;flex:0 0 auto;
   box-shadow:0 0 10px rgba(57,211,83,.7)}

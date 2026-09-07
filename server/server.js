@@ -854,12 +854,23 @@ app.use((req, res, next) => {
   res.redirect('/login');
 });
 
-// Wall view is the DEFAULT everywhere — both '/' and '/tv' serve it (the app loads '/'; the Pi loads '/tv').
-// The full detail page moves to '/page'. Each view's bottom-bar toggle flips between them. no-cache so a
-// deploy is never masked by a stale cached page.
-app.get(['/', '/tv'], (req, res) => {
+// `/` AND `/tv` ARE NOT THE SAME PAGE, and this is the one thing to know before changing a wall.
+//
+// `/tv` is the TV — the Pi's kiosk loads it, and it serves whichever wall is being built. `/` is the
+// PHONE: the iOS app loads it, wall.js scales the shell into a swipe pane and wraps its own pages
+// around it. They shared one route until the home wall took over the TV, and the phone came along
+// with it uninvited — a wall reflowed for a phone in portrait is a different piece of work from the
+// wall itself, and pointing one route at a new file does not do it.
+//
+// So a new wall goes on `/tv` and `/` stays where it is until the phone side is actually done.
+// The full detail page is '/page'. no-cache so a deploy is never masked by a stale cached page.
+app.get('/tv', (req, res) => {
   res.setHeader('Cache-Control', 'no-cache');
   res.type('html').send(TV_HTML);
+});
+app.get('/', (req, res) => {
+  res.setHeader('Cache-Control', 'no-cache');
+  res.type('html').send(TV_HEALTH_HTML);
 });
 app.get('/tv-session-focus', (req, res) => {
   res.setHeader('Cache-Control', 'no-cache');

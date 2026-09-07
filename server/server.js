@@ -160,6 +160,10 @@ const voiceClients = new Set();
 // changed, and nothing else. They are not on the status frame (they render none of it) and building
 // one to say "something moved" would ship the whole dashboard to a page showing a month grid.
 const listClients = new Set();
+// Wall clients watching live session activity. Its own channel, like listClients: a wall wants tool
+// calls the instant they happen and nothing else, so it should not take a full status frame to get
+// them, and the standalone pages should not receive them at all.
+const sessionClients = new Set();
 
 // Dashboard HTML, read once from disk with the muscle-map SVG injected at the placeholder.
 const DASHBOARD_HTML = fs.readFileSync(path.join(__dirname, 'public', 'index.html'), 'utf8')
@@ -698,6 +702,14 @@ function pushVoice(kind, row) {
 function pushLists() {
   const frame = 'event: lists\ndata: {}\n\n';
   for (const res of listClients) { try { res.write(frame); } catch {} }
+}
+
+// What a session is doing RIGHT NOW, keyed by session id so each one draws on its own line.
+// Transient by design — nothing is stored. A tool call is only interesting while it is happening,
+// and the durable half of a turn (`last_reply`) goes to the database on its own path.
+function pushSession(row) {
+  const frame = 'event: session\ndata: ' + JSON.stringify(row) + '\n\n';
+  for (const res of sessionClients) { try { res.write(frame); } catch {} }
 }
 
 // Last time ANY realtime event arrived. The socket can sit reporting SUBSCRIBED while
@@ -1747,6 +1759,25 @@ app.post('/api/voice-reset', async (req, res) => {
 // Low-latency activity push from the Mac worker: transient "what Jarvis is doing right now" events
 // (each tool call + args, and a done marker) relayed straight to the SSE clients, bypassing the
 // Supabase-realtime hop so the on-screen activity bar tracks the run in real time. Not persisted.
+// Live session activity, pushed by the orchestrator on BOTH machines the moment a transcript grows.
+// The same shape as /api/voice-activity and for the same reason: the machine running the work knows
+// what it is doing, so it says so, rather than the hub asking on a timer. Nothing here is stored —
+// the orchestrator writes `last_reply` to Supabase separately, for durability, off this path.
+//
+//   state 'tool'  — a tool call, `text` is its one-line description
+//   state 'done'  — the turn finished, `text` is the reply (truncated for the row it lands on)
+app.post('/api/session-activity', express.json(), (req, res) => {
+  const b = req.body || {};
+  const session = String(b.session || '');
+  if (!session) return res.status(400).json({ error: 'session required' });
+  pushSession({
+    session,
+    state: b.state === 'done' ? 'done' : 'tool',
+    text: String(b.text || '').slice(0, 400),
+  });
+  res.status(204).end();
+});
+
 app.post('/api/voice-activity', express.json(), (req, res) => {
   const b = req.body || {};
   pushVoice('activity', {
@@ -2621,6 +2652,16 @@ app.get('/api/list-stream', (req, res) => {
   listClients.add(res);
   const ka = setInterval(() => { try { res.write(PING); } catch {} }, 25000);
   req.on('close', () => { clearInterval(ka); listClients.delete(res); });
+});
+
+// Session SSE: one `event: session` frame per tool call or finished turn, from either machine.
+app.get('/api/session-stream', (req, res) => {
+  res.set({ 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache',
+            Connection: 'keep-alive', 'X-Accel-Buffering': 'no' });
+  res.flushHeaders();
+  sessionClients.add(res);
+  const ka = setInterval(() => { try { res.write(PING); } catch {} }, 25000);
+  req.on('close', () => { clearInterval(ka); sessionClients.delete(res); });
 });
 
 app.listen(PORT, '0.0.0.0', () => {

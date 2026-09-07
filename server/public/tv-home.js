@@ -3,7 +3,7 @@
 //
 // DISPLAY ONLY, like every wall. Nothing here is interactive and nothing here writes — voice starts
 // sessions, voice focuses them, and this is where the answer comes back.
-import { esc } from './shared.js';
+import { esc, liveStream } from './shared.js';
 import { mount } from './cards/dayline.js';
 
 // The month grid is the calendar wall's; this column takes the day on its own, which is what
@@ -33,7 +33,26 @@ const listed = (d) => [...(d.resident || []), ...(d.evicted || [])]
 
 const name = (s) => s.custom_title || s.label || s.repo;
 
+// What each session is doing right now, keyed by id and held between polls: `/api/sessions` knows
+// nothing about tool calls, so a re-render would wipe the line the moment the list refreshed.
+// Transient by nature — the last thing said is the only thing worth a row's second line, and it is
+// replaced, never accumulated.
+const activity = new Map();   // session id -> { state, text }
+
+function rowActivity(s) {
+  const a = activity.get(s.id);
+  // The line is ALWAYS rendered, empty or not. Growing a row when a tool fires and collapsing it when
+  // one stops would make the whole list jump every few seconds, which is unreadable across a room.
+  if (!a) return '<span class="hw-row-act idle"></span>';
+  return `<span class="hw-row-act ${a.state === 'done' ? 'done' : 'tool'}">${esc(a.text)}</span>`;
+}
+
+let last = null;   // the most recent /api/sessions payload, so an activity frame can repaint alone
+
 function render(d) {
+  if (d) last = d;
+  d = last;
+  if (!d) return;
   const list = document.getElementById('hw-sess-list');
   const head = document.getElementById('hw-sess-head');
   const reply = document.getElementById('hw-sess-reply');
@@ -42,10 +61,13 @@ function render(d) {
 
   list.innerHTML = listed(d).map((s) =>
     `<div class="hw-row${on && s.id === on.id ? ' on' : ''}${s.status === 'resident' ? '' : ' parked'}">` +
-      `<span class="hw-sess-dot${s.working ? '' : ' idle'}"></span>` +
-      `<span class="hw-row-n">${s.n ?? ''}</span>` +
-      `<span class="hw-row-name">${esc(name(s))}</span>` +
-      `<span class="hw-row-where">${s.worker === 'desk' ? 'Mac' : 'Pi'}</span>` +
+      '<div class="hw-row-top">' +
+        `<span class="hw-sess-dot${s.working ? '' : ' idle'}"></span>` +
+        `<span class="hw-row-n">${s.n ?? ''}</span>` +
+        `<span class="hw-row-name">${esc(name(s))}</span>` +
+        `<span class="hw-row-where">${s.worker === 'desk' ? 'Mac' : 'Pi'}</span>` +
+      '</div>' +
+      rowActivity(s) +
     '</div>').join('');
 
   // Nothing running and nothing parked is a real state, and an empty panel is its honest rendering.
@@ -63,4 +85,16 @@ async function load() {
 }
 
 load();
+// The poll is now a BACKSTOP, not the mechanism. Tool calls and finished turns arrive by push the
+// moment they happen; this catches what a dropped frame or a reconnect would otherwise lose, and
+// carries the things no event announces — a session dying, the focus moving, the numbering changing.
 setInterval(load, REFRESH_MS);
+
+// Live activity from either machine. A finished turn repaints immediately with the reply it carries,
+// rather than waiting for the poll to fetch a `last_reply` that has already been written.
+liveStream('/api/session-stream', { session: (e) => {
+  let a;
+  try { a = JSON.parse(e.data); } catch { return; }
+  activity.set(a.session, { state: a.state, text: a.text });
+  if (a.state === 'done') load(); else render(null);
+} });

@@ -57,8 +57,9 @@ body.tv .hw-heatcard .hw-surf .surfheat{margin-top:8px}
 body.tv .hw-sesscard .fit{gap:12px}
 body.tv .hw-sess-list{flex:0 0 auto;display:flex;flex-direction:column;gap:6px}
 body.tv .hw-sess-list:empty{display:none}
-body.tv .hw-row{display:flex;align-items:center;gap:10px;min-width:0;padding:6px 10px;
+body.tv .hw-row{display:flex;flex-direction:column;gap:3px;min-width:0;padding:6px 10px;
   border:1px solid #222a33;border-radius:8px}
+body.tv .hw-row-top{display:flex;align-items:center;gap:10px;min-width:0}
 body.tv .hw-row.on{border-color:#fff;background:#0e1318}
 body.tv .hw-row.parked{opacity:.5}
 body.tv .hw-row-n{font-size:17px;font-weight:700;color:#8b96a5;flex:0 0 auto;font-variant-numeric:tabular-nums}
@@ -67,6 +68,17 @@ body.tv .hw-row-name{font-size:17px;font-weight:600;color:#c7cdd6;min-width:0;
 body.tv .hw-row.on .hw-row-name{color:#fff}
 body.tv .hw-row-where{font-size:12px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;
   color:#5c6675;margin-left:auto;flex:0 0 auto}
+/* The activity line under every name. It is ALWAYS here, holding its height whether or not anything
+   is streaming through it — a row that grows on a tool call and shrinks when one stops makes the
+   whole list jump every few seconds, which cannot be read from across a room.
+   Teal for a tool call: the palette already spends green on alive, amber on due, red on overdue and
+   blue on the clock, so a machine working needs a colour that is none of those and still reads as
+   motion. A finished turn hands the line over to the reply itself, in the muted body colour, because
+   it is an answer now and not an action. */
+body.tv .hw-row-act{display:block;min-height:19px;font-size:14px;line-height:19px;min-width:0;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-variant-numeric:tabular-nums}
+body.tv .hw-row-act.tool{color:#4fd1c5}
+body.tv .hw-row-act.done{color:#8b96a5}
 body.tv .hw-sess-head{flex:0 0 auto;display:flex;align-items:center;gap:10px;flex-wrap:wrap;
   border-top:1px solid #222a33;padding-top:12px}
 body.tv .hw-sess-head:empty{display:none}

@@ -311,7 +311,7 @@ The phone card is the complex one and stays that way — it is the surface with 
 pointer. Everything else is glanceable and driven by voice, which is why sessions need numbers and
 names that can be said out loud.
 
-## 11. Checking it is alive
+## 12. Checking it is alive
 
 Function, not liveness — ask it to do something and see whether it did:
 

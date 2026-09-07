@@ -54,11 +54,74 @@ export function dayHtml(dl) {
  * where the same payload also carries the months. `onload` hands that whole payload back, so a page
  * wanting more out of the response gets it without a second fetch.
  */
-export function mount(el, { url = '/api/calendar?day=1', centre = false, onload = null } = {}) {
+export function mount(el, { url = '/api/calendar?day=1', centre = false, onload = null, dial = false } = {}) {
   if (!el) return;
-  const col = { el, url, centre, onload, dl: null, next: null };
+  const col = { el, url, centre, onload, dial, dl: null, next: null };
   columns.push(col);
+  if (dial) {
+    el.classList.add('dial');
+    // The projection is a function of the container's height, so it has to be recomputed when that
+    // changes. Nothing else here cares about resize: equal rows in a flex column handle it alone.
+    window.addEventListener('resize', () => project(col));
+  }
   load(col);
+}
+
+/**
+ * Lay the hours out as a DIAL — the day printed on a drum turning behind the glass, seen edge-on.
+ *
+ * This is the actual projection rather than a shrinking effect made to look like one. Put the drum's
+ * axis at the middle of the column and let one hour subtend a fixed angle: an hour `d` hours from now
+ * sits at angle θ = (d / SPAN)·90°, its position is R·sin θ and its apparent height is what is left
+ * between its own two edges. Two things fall out of that for free, which is why it is worth doing
+ * properly:
+ *
+ *   · NOW IS ALWAYS THE CENTRE. sin 0 = 0, so the current moment lands on the axis by construction —
+ *     there is no offset to compute and nothing to keep in sync as the clock moves.
+ *   · THE ROWS ALWAYS FILL THE COLUMN EXACTLY. The edges are ±90°, sin of which is ±1, so the first
+ *     and last hour land on the top and bottom of the box however many hours are in between.
+ *
+ * Everything shrinks continuously toward both edges; nothing is a plateau. The hour numbers scale
+ * and fade with cos θ, which is the same foreshortening a real drum would show and is what makes it
+ * read as turning rather than as a list with small ends.
+ */
+const SPAN = 12;                 // hours from the centre to the edge of the drum — a whole day across
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+
+function project(col) {
+  if (!col.dial || !col.dl) return;
+  const box = col.el.querySelector('.cw-hours');
+  const rows = box ? box.querySelectorAll('.cw-hour') : null;
+  if (!box || !rows || !rows.length) return;
+  const H = box.clientHeight;
+  if (!H) return;
+  const R = H / 2;
+  const now = new Date();
+  const nowT = now.getHours() + now.getMinutes() / 60;
+  const angle = (t) => clamp((t - nowT) / SPAN, -1, 1) * (Math.PI / 2);
+  const y = (t) => R + R * Math.sin(angle(t));
+
+  col.dl.hours.forEach((hr, i) => {
+    const row = rows[i];
+    if (!row) return;
+    // `t`, not `h`: the window crosses midnight, so the same hour number appears at both ends and
+    // only the timeline position can be angled off. It falls back to `h` for a plain day.
+    const at = hr.t === undefined ? hr.h : hr.t;
+    const top = y(at), bottom = y(at + 1);
+    const h = Math.max(0, bottom - top);
+    row.style.height = `${h}px`;
+    // Foreshortening, from the middle of the hour — the face of the drum turning away from you.
+    const face = Math.cos(angle(at + 0.5));
+    row.style.setProperty('--face', face.toFixed(3));
+    // Below about a line of text there is no room for anything but the hour, and below that not even
+    // that. Said in classes so the CSS decides what survives at each size, not this file.
+    row.classList.toggle('thin', h < 34);
+    row.classList.toggle('sliver', h < 15);
+    // The now-line, in pixels rather than a percentage of the row: within one hour the projection is
+    // not linear, and at the centre — where the eye actually is — that error is largest.
+    const line = row.querySelector('.cw-now');
+    if (line) line.style.top = `${R - top}px`;
+  });
 }
 
 async function load(col) {
@@ -73,6 +136,7 @@ async function load(col) {
   // unrelated edit happened to touch the lists.
   col.next = d.next_transition || null;
   col.el.innerHTML = dayHtml(d.dayline);
+  project(col);
   if (col.centre) centreOnNow(col.el);
 }
 
@@ -118,6 +182,13 @@ function tick() {
   setTimeout(tick, 60000 - (now.getSeconds() * 1000 + now.getMilliseconds()));
   for (const col of columns) {
     if (!col.dl || !col.el.isConnected) continue;
+    // A dial re-projects instead of moving a line: every row's size depends on the clock, not just
+    // the marker, and the hours it lays out never leave the range because it holds all of them.
+    if (col.dial) {
+      if ((col.next && stamp(now) >= col.next) || dateKey(now) !== col.dl.date) load(col);
+      else project(col);
+      continue;
+    }
     if ((col.next && stamp(now) >= col.next) || dateKey(now) !== col.dl.date || !moveNow(col, now)) load(col);
   }
 }

@@ -15,6 +15,40 @@ body.tv .hw-daycard,body.tv .hw-heatcard,body.tv .hw-sesscard{flex:1 1 auto;min-
 /* COL 2 — the day, filling a column sized to it above. */
 body.tv .hw-daycard .cw-day{flex:1 1 auto;min-height:0;display:flex;flex-direction:column;overflow:hidden}
 
+/* THE DAY AS A DIAL — see project() in cards/dayline.js for the projection itself. Every row's
+   height is written inline from it; this only says what survives at each size.
+
+   Rows stop sharing the column equally and take exactly what the drum gives them, so `flex` must not
+   fight the inline height. --face is cos of the row's angle: 1 on the axis, 0 at the rim. */
+body.tv .hw-daycard .cw-day.dial .cw-hours{overflow:hidden}
+/* border-box, and no padding: the projection writes an exact pixel height per row, and the default
+   content-box added its 2px padding and 1px border on top of that. Four pixels a row is nothing to
+   look at and eleven pixels of drift across the column, which is the now-line missing the axis. */
+body.tv .hw-daycard .cw-day.dial .cw-hour{flex:0 0 auto;min-height:0;overflow:hidden;
+  box-sizing:border-box;padding:0;opacity:calc(.35 + .65 * var(--face, 1))}
+/* The hour number foreshortens with the face. Numbers on a real drum get smaller as it turns away,
+   and that shrinking is what reads as rotation — a column of same-sized numbers in shrinking rows
+   reads as a squashed list instead. */
+body.tv .hw-daycard .cw-day.dial .cw-hl{font-size:calc(13px + 19px * var(--face, 1));
+  align-self:center;padding-top:0}
+/* Past the point where a chip cannot be read, the row keeps its colour and loses its words: the
+   chips flatten to bars, which still say how much is there and which list it belongs to. A sliver
+   is only a band of colour, and the hour number goes with the rest — it cannot be read at 12px of
+   row height and it is the least surprising thing on a dial, where position already says the time. */
+body.tv .hw-daycard .cw-day.dial .cw-hour.thin .cw-l,
+body.tv .hw-daycard .cw-day.dial .cw-hour.thin .cw-sc,
+body.tv .hw-daycard .cw-day.dial .cw-hour.thin .cw-imp{display:none}
+body.tv .hw-daycard .cw-day.dial .cw-hour.thin .cw-dchip{border-left-width:0;background:var(--c);
+  border-radius:2px;min-height:3px}
+body.tv .hw-daycard .cw-day.dial .cw-hour.sliver .cw-hl{visibility:hidden}
+body.tv .hw-daycard .cw-day.dial .cw-hour.sliver .cw-hitems{gap:1px}
+/* The axis. The now-line is inside its own row and lands here by construction, but the drum needs a
+   fixed edge to turn against or there is nothing saying the middle is the middle. */
+body.tv .hw-daycard .cw-day.dial .cw-hours::after{content:'';position:absolute;left:0;right:0;
+  top:50%;border-top:1px solid rgba(255,255,255,.10);pointer-events:none}
+body.tv .hw-daycard .cw-day.dial{position:relative}
+body.tv .hw-daycard .cw-day.dial .cw-hours{position:relative}
+
 /* COL 3 — three heat maps down one column. Each block is heatmap + the strip that belongs to it,
    and the blocks share the height evenly rather than the first one taking what it likes. */
 /* Each block takes the height its own content needs and the slack goes BETWEEN them. Equal thirds

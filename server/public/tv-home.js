@@ -6,9 +6,10 @@
 import { esc, liveStream } from './shared.js';
 import { mount } from './cards/dayline.js';
 
-// The month grid is the calendar wall's; this column takes the day on its own, which is what
-// `?day=1` serves.
-mount(document.getElementById('cw-day'));
+// The month grid is the calendar wall's; this column takes the day on its own. `full=1` for the
+// whole clock rather than 7a-10p, because the dial centres on now and needs something to show in
+// both directions — by evening the short range has nothing left below the line.
+mount(document.getElementById('cw-day'), { url: '/api/calendar?day=1&full=1', dial: true });
 
 const REFRESH_MS = 5000;
 const LIST_MAX = 5;      // enough to see what is running without the list becoming the column

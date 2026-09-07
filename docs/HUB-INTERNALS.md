@@ -257,7 +257,8 @@ frames for the kiosk) · `/api/list-stream` (SSE, one bodiless `lists` event whe
 a list changes — the calendar surfaces' push path, separate from the status frame they don't render) · `/api/workout-day` · `/api/nutrition-day` · `/api/voice-messages` ·
 `/api/todos` (lists + notes + the derived `due` view) · `/api/calendar` (month grid(s) of every
 dated item — every occurrence is a real row, so nothing is projected; `?month=` pages, `?wall=1` adds
-the day timeline and reads `calendar_months` for the spread) · `/api/badge` · `/api/repos` ·
+the day timeline and reads `calendar_months` for the spread, `?day=1` is the timeline alone and
+`&full=1` makes it a rolling ±12h window instead of a calendar day — see the dial below) · `/api/badge` · `/api/repos` ·
 `/api/repos/cmd/:id` · `/api/sessions` (live desk sessions + the follow-up `focus`) ·
 `/api/session-stream` (SSE, one `session` frame per tool call or finished turn, pushed by the
 orchestrator on either machine — see SESSIONS.md §10) · `/api/reports`
@@ -359,6 +360,34 @@ Two more things that are easy to undo by accident:
 second is *reserved* for `:30`–`:59` — a 4:30 item sits on the lower line even when 4:00 is empty,
 because that placement is the only thing saying which half of the hour it is in: day chips carry no
 time label and no repeat glyph, both of which were spending width that several chips now share.
+
+**`?day=1&full=1` returns a rolling window, not a day**: twelve hours either side of the current
+hour, crossing midnight in both directions, each carrying `t` — hours from today's midnight, which
+may be negative or past 24. That is the coordinate the dial angles off, and it is what lets a client
+draw a continuous timeline without knowing anything about dates.
+
+### The dial (`cards/dayline.js` `project()`, home wall only)
+
+The home wall draws the day as a drum turning behind the glass rather than as a list. It is the real
+projection, not a shrinking effect: an hour `d` hours from now sits at θ = (d / 12)·90°, its position
+is `R·sin θ`, and its height is whatever is left between its own two edges. Two properties fall out
+of that, which is the reason to do it properly rather than taper the rows by hand:
+
+- **now is the centre**, because sin 0 = 0 — nothing has to be offset or kept in sync as the clock moves;
+- **the rows fill the column exactly**, because the ends are at ±90° and sin of that is ±1.
+
+The hour numbers scale and fade with `cos θ`, which is the foreshortening a real drum shows and is
+what makes it read as turning rather than as a list with small ends. Rows past the point where a
+chip can be read (`.thin`, `.sliver`) drop the words and keep the colour, so a busy hour at the rim
+is still visibly busy.
+
+**A calendar day cannot feed this** — that is what `full=1` exists for. Tried with one day, by 21:30
+the dial had 21½ hours crushed above the line and 2½ below it, the column half empty. The window is
+symmetric by construction whatever time it is.
+
+Rows must be `box-sizing:border-box` with no padding: the projection writes an exact pixel height per
+row, and content-box adds the padding and border on top of it — four pixels a row, eleven across the
+column, which is the now-line missing the axis it is supposed to define.
 
 Chips on a line sit **side by side** and split it equally (`flex:1 1 0`), so one spans the line and
 three take thirds. How many fit is a property of the column rather than of the data, which makes it

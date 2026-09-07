@@ -2137,6 +2137,7 @@ app.get('/api/calendar', async (req, res) => {
     // come out of the month expansion either way — but it does not ship a month of grid it will not
     // draw. One endpoint, so the two surfaces cannot disagree about a chip's state.
     const dayOnly = req.query.day === '1';
+    const full = req.query.full === '1';
     let count = 1;
     if (wall) {
       let s = {};
@@ -2249,12 +2250,28 @@ app.get('/api/calendar', async (req, res) => {
         return { h, m: +(m[2] || 0) };
       };
       const nowH = +nowET.slice(11, 13); const nowM = +nowET.slice(14, 16);
-      let lo = Math.min(7, nowH, ...timed.map((i) => clockOf(i.time).h));
-      let hi = Math.max(22, nowH, ...timed.map((i) => clockOf(i.time).h));
+      // `full` asks for a ROLLING WINDOW instead of a calendar day: WINDOW hours either side of the
+      // current hour, crossing midnight in both directions. It exists for the dial, which puts now
+      // at the middle of the column — a day cannot feed that, because by evening there is almost
+      // nothing below the line and the whole morning is crushed above it. A window always has as
+      // much on one side as the other. Only that surface asks; the calendar wall and the phone keep
+      // the day they were built around.
+      const WINDOW = 12;
+      const dayMs = 86400000;
+      const baseMs = Date.parse(`${todayKey}T00:00:00Z`);
+      const loT = full ? nowH - WINDOW : Math.min(7, nowH, ...timed.map((i) => clockOf(i.time).h));
+      const hiT = full ? nowH + WINDOW : Math.max(22, nowH, ...timed.map((i) => clockOf(i.time).h));
       const hours = [];
-      for (let h = lo; h <= hi; h++) {
-        const inHour = timed.filter((i) => clockOf(i.time).h === h);
+      for (let t = loT; t <= hiT; t++) {
+        // `t` is hours from TODAY's midnight and may be negative or past 24. The client projects on
+        // it directly, which is what lets a continuous timeline be drawn without it knowing dates.
+        const dayOff = Math.floor(t / 24);
+        const h = ((t % 24) + 24) % 24;
+        const onDay = dayOff === 0 ? timed
+          : (byDay[keyOf(baseMs + dayOff * dayMs)] || []).filter((i) => i.time);
+        const inHour = onDay.filter((i) => clockOf(i.time).h === h);
         hours.push({
+          t,   // position on the timeline; the dial angles every row off this
           h,   // 24h number: the wall matches the clock against this to move the now-line itself
           // Just the number. The spine runs in order from morning to night, so am/pm is never in
           // doubt, and dropping the letter is what buys the digit enough size to read across a room.
@@ -2265,7 +2282,7 @@ app.get('/api/calendar', async (req, res) => {
           // their own. Splitting the row this way also doubles capacity without making a busy hour
           // physically taller, which would misread as the day running longer than it does.
           halves: [0, 1].map((half) => dayHalf(inHour.filter((i) => (clockOf(i.time).m >= 30 ? 1 : 0) === half))),
-          now: h === nowH ? Math.round((nowM / 60) * 100) : null,
+          now: t === nowH ? Math.round((nowM / 60) * 100) : null,
         });
       }
       const todayCell = months[0].weeks.flat().find((c) => c.date === todayKey);

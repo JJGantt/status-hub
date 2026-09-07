@@ -38,6 +38,25 @@
 .devchip .dc-l{font-size:12px;color:#8b96a5}
 .devchip .dc-v{font-size:15px;font-weight:700}
 .devchip .dc-v .dot{width:9px;height:9px;margin-right:6px}
+/* ===== Routing / liveness strip (#tv-routing) =====
+   Yes/no facts are BARE lit labels, not chips with an "Up"/"Off" word beside them: five words of value
+   text was most of the strip's width, and none of it said anything the colour did not. What that frees
+   is the machine readout (MEM/SWP/SES), which does carry values and so keeps a chip. */
+.rt-row{display:flex;align-items:center;gap:10px}
+.rt-flag{font-size:14px;font-weight:800;letter-spacing:.08em;color:#4b535e;padding:0 1px}
+.rt-flag.on{color:#39d353}
+/* Down is RED, not merely dim, for anything whose job is to be up — an off toggle and a dead mic must
+   not look the same. INJ passes bad=false precisely because off is its normal state. */
+.rt-flag.bad{color:#f85149}
+.rt-sep{width:1px;height:20px;background:#232b35;flex:0 0 1px}
+.rt-chip{display:inline-flex;align-items:baseline;gap:6px;background:#0e1318;border:1px solid #222a33;
+  border-radius:8px;padding:5px 11px;white-space:nowrap}
+.rt-chip .rt-k{font-size:12px;color:#8b96a5;letter-spacing:.04em}
+.rt-chip .rt-v{font-size:15px;font-weight:700;color:#39d353}
+.rt-chip.rt-warn .rt-v{color:#e3b341}
+.rt-chip.rt-crit .rt-v{color:#f85149}
+.rt-chip.rt-crit{border-color:#5c2626}
+
 /* Routing/liveness strip (#tv-routing): keep all 9 chips on ONE line — never wrap. Compact chips; if a
    narrow viewport (portrait phone wall) still can't fit them, scroll horizontally instead of stacking. */
 /* Keep the routing strip to ONE line (never wrap). Natural chip sizes — NOT equal columns. */
@@ -55,6 +74,12 @@ body.tv.phonewall #tv-routing .devchips{width:100%;justify-content:space-between
 body.tv.phonewall #tv-routing .devchip{padding:4px 2px;gap:5px}
 body.tv.phonewall #tv-routing .devchip .dc-l{font-size:24px}
 body.tv.phonewall #tv-routing .devchip .dc-v{font-size:26px}
+/* phone wall: the same size-up, for the strip's current pieces. */
+body.tv.phonewall #tv-routing .rt-row{gap:6px}
+body.tv.phonewall #tv-routing .rt-flag{font-size:24px}
+body.tv.phonewall #tv-routing .rt-chip{padding:4px 4px;gap:4px}
+body.tv.phonewall #tv-routing .rt-chip .rt-k{font-size:19px}
+body.tv.phonewall #tv-routing .rt-chip .rt-v{font-size:22px}
 
 /* ===== Expandable sections (phone wall): a minimal corner icon opens nutrition / workouts full-screen ===== */
 /* the corner glyph lives INSIDE the CSS-scaled wall shell (~0.36×), so it's sized generously to stay tappable

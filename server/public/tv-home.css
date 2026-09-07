@@ -6,10 +6,11 @@
 /* The day column is 380px on the calendar wall and it is 380px here — it is the SAME column, and a
    1fr share of the grid made it ~507px, which reads as a different, emptier thing. The width it
    gives up goes to the two columns beside it. */
-/* The muscle column is paid for by a slice off each neighbour rather than by one of them: the day
-   column gives 24px, the rings 20px, and weighting the heat column over the sessions column takes
-   the rest from there. Nothing loses enough to change what it can show. */
-body.tv .rows{grid-template-columns:260px 356px 1.17fr 0.83fr 60px}
+/* Unchanged from before the muscle column: widening this column is what oversized surf under it and
+   took width off the sessions column. The column pays for itself instead — the home wall's heat maps
+   run 15 weeks to the health wall's 20, which makes them narrower at the same cell size and leaves
+   the muscle column its 112px inside the width the heat column already had. */
+body.tv .rows{grid-template-columns:280px 380px 1fr 1fr 60px}
 body.tv .hw-dayrow{grid-column:2;grid-row:2;display:flex;flex-direction:column;min-width:0;min-height:0}
 body.tv .hw-heatrow{grid-column:3;grid-row:2;display:flex;flex-direction:column;min-width:0;min-height:0}
 body.tv .hw-sessrow{grid-column:4;grid-row:2;display:flex;flex-direction:column;min-width:0;min-height:0}
@@ -72,7 +73,10 @@ body.tv .hw-block{flex:0 0 auto;min-height:0;display:flex;flex-direction:column;
    fluid and have no height of their own to hold it open. The stack keeps the space-between that
    `.fit` used to give these two blocks directly. */
 body.tv .hw-heattop{flex:1 1 auto;min-width:0;min-height:0;display:flex;align-items:stretch;gap:10px}
-body.tv .hw-heatstack{flex:1 1 auto;min-width:0;min-height:0;display:flex;flex-direction:column;gap:6px;justify-content:space-between}
+/* gap 2, not 6: the two blocks measure 611px of content against 608px of column, and `.fit` clips
+   what does not fit WITHOUT any error — the way the workout block's 'Last set' strip disappeared
+   once before. The slack is deliberately in the gap, where losing it costs nothing. */
+body.tv .hw-heatstack{flex:1 1 auto;min-width:0;min-height:0;display:flex;flex-direction:column;gap:2px;justify-content:space-between}
 /* Deliberately narrow: muscle.js stacks the figure into a front/back pair, each a 36x93 window, so the
    column sits near 1:5. The two rules under it are the health wall's `.musmap .figstack` pair pointed
    at this container — the fills come from app.css and volume.muscle_colors, so the map means the same

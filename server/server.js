@@ -10,6 +10,12 @@ const { estimateMaintenance, estimateHistory, macroTargets } = require('./lib/ma
 const pace = require('./lib/pace');
 const { computeVolume } = require('./lib/volume');
 const BODY_SVG = require('./lib/bodymap');
+// Weeks of heat map the HOME wall shows, against the health wall's 20. Trimming is what makes the two
+// maps NARROWER at an unchanged cell size, and that freed width is the muscle column beside them --
+// the point is never to show less, it is to not widen the column (which oversizes surf under it and
+// robs the sessions column). Cells are fluid, so a trim only helps if the stack keeps its cell size.
+const HOME_HEAT_WEEKS = 15;
+const MON_ABBR = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 const { getTZ, setTZ, DAY_START_HOUR, localDate, nutritionWindow, lastNTrainingDays, dayBucketOf } = require('./lib/dates');
 const { buildWorkoutHeatmap } = require('./lib/heatmap');
 const { buildNutritionLog, buildGoalResolver, calorieColor } = require('./lib/nutritionlog');
@@ -499,7 +505,7 @@ async function buildStatus() {
     fetchStatusRows(win, week, histStart, heatStart),
     sb('device_status?select=*'),
     sb('voice_presence?select=source,alive_at'),
-    sb('worker_presence?select=worker,last_seen'),
+    sb('worker_presence?select=worker,last_seen,info'),
   ]);
 
   const litter = buildLitter((deviceRows || []).find((d) => d.device !== 'cat-feeder') || null);
@@ -565,6 +571,22 @@ async function buildStatus() {
     esp: freshFor(aliveBy.esp),
     mac: freshFor(aliveBy[routing.wake ? 'mac-wakefree' : 'mac-listener']),
     workers: { mac: freshFor(beatBy.mac), pi: freshFor(beatBy.pi), fly: freshFor(beatBy.fly) },
+    // The Pi's own resources, as pi-desk sees them (it publishes them on its 30s heartbeat). On the
+    // wall so the machine is not invisible until it falls over: it OOM-killed sessions daily for days
+    // while every indicator up here stayed green, because none of them was about the machine.
+    // Thresholds live here rather than in the card, so the colour cannot disagree between surfaces —
+    // swap's amber is deliberately well under pi-desk's own 70% refuse-to-launch ceiling.
+    host: (() => {
+      const row = (workerRows || []).find((r) => r.worker === 'pi-desk');
+      const i = (row && row.info) || {};
+      if (!freshFor(row && row.last_seen) || i.mem_pct == null) return null;
+      const band = (v, warn, crit) => (v >= crit ? 'crit' : v >= warn ? 'warn' : 'ok');
+      return {
+        mem: i.mem_pct, mem_state: band(i.mem_pct, 80, 92),
+        swap: i.swap_pct ?? null, swap_state: i.swap_pct == null ? 'ok' : band(i.swap_pct, 40, 70),
+        sessions: i.sessions ?? null, session_max: i.session_max ?? null,
+      };
+    })(),
   };
   const minAlignedDays = await maintenanceMinDays();
   const phase = await maintenancePhase();   // caps the live window at the current goal phase; NOT passed to
@@ -619,6 +641,17 @@ async function buildStatus() {
   // ---- nutrition log: calorie-adherence calendar (per-day historical targets) + calorie/weight trend ----
   const nutrition_log = buildNutritionLog(nutLogRows || [], weights, maintenance.target, maintenance.maintenance, today, targetRows || [], 20, surplus, 150, paceData.fraction);
 
+
+  // `months` is parallel to `weeks` and labels a column only where the month changes, so a slice can
+  // begin on an unlabelled column; the first is relabelled from its own first day.
+  const trimHeat = (h, n) => {
+    const weeks = h.weeks.slice(-n);
+    const months = h.months.slice(-n);
+    if (weeks.length && !months[0]) months[0] = MON_ABBR[Number(weeks[0][0].date.slice(5, 7)) - 1];
+    return { weeks, months };          // only what differs — the card spreads it over the full object
+  };
+  const heatmap_home = trimHeat(heatmap, HOME_HEAT_WEEKS);
+  const nutrition_log_home = trimHeat(nutrition_log, HOME_HEAT_WEEKS);
 
   // ---- overall score (0.5·training + 0.5·nutrition over the rolling week) ----
   const { goalForDay } = buildGoalResolver({ rows: nutLogRows || [], weights, targets: targetRows || [], today, surplus, fallbackMaint: maintenance.maintenance });
@@ -677,6 +710,7 @@ async function buildStatus() {
     }
   }
   return { today, litter, feeder, surf, nutrition, maintenance, pace: paceData, volume, heatmap, nutrition_log,
+    heatmap_home, nutrition_log_home,
     last_set_at, session_start_at, sets_today, rep_watcher, routing, mics, score, desk_focus: deskFocus,
     generated_at: new Date().toISOString() };
 }

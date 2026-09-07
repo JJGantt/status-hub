@@ -72,13 +72,15 @@ body.tv .hw-heatcard .hcell{border-radius:2px}
    clocks. ONE treatment for both — the nutrition band's inset panel — so the column reads as two of
    the same thing rather than a panel and a bare row. */
 body.tv .hw-strip{flex:0 0 auto;min-height:0}
-body.tv .hw-heatcard .nutday{margin:0;padding:6px 12px}
+/* Black behind the two strips, keeping their outline. The wall is black, so an inset fill made them
+   read as objects sitting on it; the border alone is enough to say where they begin and end. */
+body.tv .hw-heatcard .nutday{margin:0;padding:6px 12px;background:#000}
 /* The band's date goes: the day column two columns left already says which day this is, in a much
    larger hand. Repeating it here spends the strip's leading edge on the least surprising fact on
    the wall. */
 body.tv .hw-heatcard .nd-date{display:none}
 body.tv .hw-heatcard #resttimer{margin:0;padding:6px 12px;gap:18px;justify-content:flex-start;
-  background:#11171e;border:1px solid #222a33;border-radius:10px;flex-wrap:nowrap}
+  background:#000;border:1px solid #222a33;border-radius:10px;flex-wrap:nowrap}
 /* Label beside value, not above it. Stacked, two facts cost two rows of height for no gain — the
    label is the small half and never needed a line of its own. */
 body.tv .hw-heatcard #resttimer .rt-side{flex-direction:row;align-items:baseline;gap:7px;text-align:left}
@@ -143,6 +145,9 @@ body.tv .hw-heatcard .hw-surf{border-top:1px solid #222a33;padding-top:4px}
 body.tv .hw-heatcard .hw-surf .fit{padding:0;height:auto;gap:0}
 body.tv .hw-heatcard .hw-surf .devstrip,body.tv .hw-heatcard .hw-surf .surfkey{display:none}
 body.tv .hw-heatcard .hw-surf .surfheat{margin-top:0}
+/* Scoped to this column: the same card is adopted whole into the phone's misc pane, whose panels are
+   not on a black ground. */
+body.tv .hw-heatcard .hw-surf .surfwater{background:#000}
 
 /* COL 4 — what is running, then the focused one's last answer.
    The list is every live session, capped at five, in the order voice numbers them. The row showing

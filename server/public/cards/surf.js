@@ -162,7 +162,7 @@ function paintGrids(cv, ax, viewW) {
 // grids above, so a vertical read through both lands on one hour.
 function paintWater(cv, ax, viewW) {
   if (!hist || !cv) return;
-  const { totalW } = layout(viewW);
+  const { cols, cw, totalW } = layout(viewW);
   const g = fitCanvas(cv, totalW, WATER_H);
   const vals = hist.water.concat(hist.waterFc).filter(v => v != null);
   if (!vals.length) return;
@@ -181,6 +181,16 @@ function paintWater(cv, ax, viewW) {
     const y = Y(v);
     g.strokeStyle = 'rgba(255,255,255,.10)'; g.lineWidth = 1;
     g.beginPath(); g.moveTo(0, y); g.lineTo(totalW, y); g.stroke();
+  }
+
+  // The same white marker the grids above carry, continued down through the trace — the two are one
+  // timeline, so the eye should be able to drop straight from today's column onto the temperature at
+  // it. Drawn BEFORE the series: it is a reference, and a reading it covers is a reading lost.
+  const ti = cols.indexOf(dayKey(new Date()));
+  if (ti >= 0) {
+    g.strokeStyle = '#ffffff'; g.lineWidth = 1.5;
+    const x = (ti + .5) * cw;
+    g.beginPath(); g.moveTo(x, 0); g.lineTo(x, WATER_H); g.stroke();
   }
 
   const line = (arr, color, dash) => {

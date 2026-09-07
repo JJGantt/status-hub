@@ -327,6 +327,10 @@ per-set value, e.g. Curls→biceps 1.0, Rows→biceps 0.5).
 - **LOCKED: default 14 effective sets/week for every muscle, each independently adjustable.**
   Implementation: per-muscle target config (Supabase, defaults to 14); adjusting a muscle is a
   write action (same pattern as the editable surplus).
+  *Shipped as the `TARGETS` map in `server/lib/volume.js`, not Supabase — a code constant until a
+  write action exists.* Jared has since lowered abs, obliques, lower back (`erectors`) and hip
+  flexors to 8. So the live system is no longer uniform: the "uniform, NOT a per-muscle spread"
+  reasoning above is why the DEFAULT is one number, not a claim that every muscle still sits on it.
 - **Hard 7-day rolling window, no decay** — set counts fully for 7 days then drops off; this is
   what enables the "about to expire tomorrow" gray preview. (Not recency-weighted — goal is fixed.)
 

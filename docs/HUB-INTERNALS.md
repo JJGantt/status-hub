@@ -154,7 +154,7 @@ The math lives here; each file has a thorough header. Summary map:
 | `maintenance.js` | Adaptive TDEE via energy balance (avg intake − trend·kcal/lb), the dynamic calorie+macro goal, and the **goal-phase** logic (window bounded by a bulk↔cut sign flip, with a seed held until the new phase has data). Also `estimateHistory` (per-day replay for the viz). |
 | `pace.js` | Within-day intake pacing — the eating window (median first/last meal over the last **two weeks** of logs, IQR-trimmed), each macro's drain/refill fill + green→red/amber color vs the expected-by-now line, and the staged-meal arcs (below). |
 | `nutritionlog.js` | The calorie/weight dual-axis plot, the diverging-color adherence calendar, and `buildGoalResolver` (per-day calorie goal, respecting stored targets + phases). |
-| `volume.js` | Weekly per-muscle fractional-set volume (primary=1.0, secondary=0.5) vs the ~10–20 sets/week target. |
+| `volume.js` | Weekly per-muscle fractional-set volume (primary=1.0, secondary=0.5) vs that muscle's weekly set target — `TARGET_DEFAULT` 14, with the `TARGETS` overrides below it. |
 | `bodymap.js` | The front/back body SVG (viewBox 0 0 72 93); volume colors paint onto it. |
 | `heatmap.js` | Per-day set-count heatmap laid out as week columns. |
 | `score.js` | The health bar: `(training + nutrition + tasks)/3`, each band capped at a third. |
@@ -215,8 +215,8 @@ Every constant is in one block at the top of `score.js`. **`TASK_RATE` is the am
 completions/day that holds the band full — and `TASK_FULL_UNITS` derives from it, so one ordinary
 on-time completion is worth `1 / (RATE · DECAY_DAYS / 2)` of the band. At 8 that is ~3.5%, about
 1.2 points of the overall bar: putting a shirt in the dryer should barely register, and filling the
-gold should take a genuinely busy week, the same way 14 sets on every muscle keeps training hard to
-fill.
+gold should take a genuinely busy week, the same way hitting every muscle's set target keeps training
+hard to fill.
 
 **Staged meals on the rings.** A staged meal (`nutrition_entries.staged = true`) is food that exists
 but has not been eaten, so it never touches `consumed`: every number, and the whole arc, reads

@@ -4,9 +4,11 @@ const { dayBucketOf } = require('./dates');
 // Weekly per-muscle training volume for the gamified workout gauges.
 //
 // Volume = Σ (set × contribution) over a trailing 7 training days (bucketed on the DAY_START_HOUR
-// 4am boundary, same as nutrition — so the day rolls over at 4am, not midnight), per muscle. Target is a
-// uniform 14 effective sets/week (research-honest; no per-muscle spread — see IDEAS), each
-// independently adjustable later. We also surface "about to drop off", in two urgency tiers.
+// 4am boundary, same as nutrition — so the day rolls over at 4am, not midnight), per muscle. Target is
+// 14 effective sets/week for most muscles, with per-muscle overrides in TARGETS below. Every consumer
+// reads the per-muscle `target` off this payload — the score's training band sums these rather than
+// multiplying one constant — so an override here is the whole change.
+// We also surface "about to drop off", in two urgency tiers.
 // Because the window is a fixed set of day-buckets that only slides at the 4am rollover, nothing
 // drops DURING today — the soonest a bucket can leave is the next rollover. So the tiers are:
 //   • drop_tomorrow  — volume on the OLDEST bucket (window[0]); leaves at the next 4am → gone TOMORROW (urgent).
@@ -17,6 +19,14 @@ const { dayBucketOf } = require('./dates');
 // Server computes everything (sets, target, fill, drop-off, color); clients only render.
 
 const TARGET_DEFAULT = 14;
+// Per-muscle overrides on TARGET_DEFAULT — the muscles Jared set a lower weekly goal for. A caller's
+// explicit `targets` argument still wins over these.
+const TARGETS = {
+  abs: 8,
+  obliques: 8,
+  erectors: 8,        // "Lower back"
+  hip_flexors: 8,
+};
 // Per-bout hard clip (junk-volume guard): a muscle earns at most CAP adjusted sets within a single
 // training bout. A bout is a run of sets with no gap longer than BOUT_GAP_MS (so a second session
 // hours later is a FRESH bout with its own cap — it's added frequency, not junk). Beyond the cap the
@@ -114,7 +124,7 @@ function computeVolume(setRows, muscleRows, window, targets) {
       const sets = Math.round((total[slug] || 0) * 10) / 10;
       const drop_tomorrow = Math.round((dropTmrw[slug] || 0) * 10) / 10;   // oldest bucket, gone tomorrow (urgent)
       const drop_day_after = Math.round((dropAfter[slug] || 0) * 10) / 10; // 2nd-oldest, gone the day after
-      const target = (targets && targets[slug]) || TARGET_DEFAULT;
+      const target = (targets && targets[slug]) || TARGETS[slug] || TARGET_DEFAULT;
       const ratio = target > 0 ? sets / target : 0;
       const today = Math.round((todayRaw[slug] || 0) * 10) / 10;   // today's adjusted sets ("+N" badge, persists all day)
       const recency = (todayRaw[slug] || 0) > 0 ? "today"          // last day-bucket this muscle was worked
@@ -141,7 +151,7 @@ function computeVolume(setRows, muscleRows, window, targets) {
   // Per-muscle colors for the (granular vulovix) body map: each region maps to one muscle.
   const muscle_colors = {};
   for (const g of GROUPS) for (const [slug] of g.muscles) {
-    const target = (targets && targets[slug]) || TARGET_DEFAULT;
+    const target = (targets && targets[slug]) || TARGETS[slug] || TARGET_DEFAULT;
     muscle_colors[slug] = volColor(target > 0 ? (total[slug] || 0) / target : 0);
   }
 

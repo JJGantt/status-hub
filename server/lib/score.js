@@ -1,8 +1,9 @@
 'use strict';
 // Overall weekly score = (Training + Nutrition + Tasks) / 3.
 //
-// TRAINING% = Σ[ min(s,14) + 0.5·max(0,s−14) ] / (14·N muscles) over the rolling-week clipped per-muscle
-//   sets. Under-target drags 1:1, over rewards at ½, 14 everywhere = 100%, all-over > 100%.
+// TRAINING% = Σ[ min(s,t) + 0.5·max(0,s−t) ] / Σt over the rolling-week clipped per-muscle sets,
+//   where t is THAT muscle's own weekly target from lib/volume.js (14 for most, lower for a few).
+//   Under-target drags 1:1, over rewards at ½, every muscle at its target = 100%, all-over > 100%.
 //
 // NUTRITION% — three components per day (carbs are DERIVED from calories, so not scored separately):
 //   Day% = 0.35·protein + 0.35·calories + 0.30·fat        (no gate — a single bad macro just costs its
@@ -48,7 +49,6 @@
 //   same as ignoring it for a day, and a floor would say it was. It always has a bounded exit, since
 //   completing the item replaces the whole accumulated drain with one floored late completion.
 
-const TARGET = 14;
 const W_PRO = 0.35, W_CAL = 0.35, W_FAT = 0.30;     // nutrition macro weights (sum 1); carbs derived, not scored
 const PRO_TOL = 50;     // protein: grams BEHIND pace at which the score hits 0 (under only; over is free)
 const CAL_TOL = 750;    // calories: kcal off pace (either direction) at which the score hits 0
@@ -61,7 +61,7 @@ const W_TODAY = 0.5;                                 // today's weight within nu
 // completion is worth 1/(RATE·DECAY/2) of the band, so raising it makes each task move the bar less.
 // 8 puts a single normal task at ~3.6% of the band (~1.2 points of the overall bar) — deliberately
 // small, because putting a shirt in the dryer should barely register. Filling the gold is meant to
-// take a genuinely busy week, the same way 14 sets on every muscle makes the training band hard.
+// take a genuinely busy week, the same way hitting every muscle's set target makes training hard.
 const TASK_RATE = 8;
 const TASK_DECAY_DAYS = 7;    // a completion's effect fades linearly to nothing over this
 const TASK_GRACE_MIN = 30;    // still "on time" this long past the deadline
@@ -94,10 +94,16 @@ const calorieScore = (actual, pace, target) => quadAbs(twoSidedDev(actual, pace,
 const fatScore = (actual, pace, target) => quadAbs(twoSidedDev(actual, pace, target), FAT_TOL);
 const pct = (x) => Math.round(x * 1000) / 10;
 
+// Each muscle carries its OWN target on the volume payload, so the band's denominator is the sum of
+// those targets, not one constant times the muscle count. Lower a muscle's target in lib/volume.js and
+// both sides move together: its sets saturate sooner AND the total needed drops by the same amount.
 function trainingScore(volume) {
   const muscles = (volume && volume.groups || []).flatMap((g) => g.muscles);
-  const points = muscles.reduce((sum, m) => sum + Math.min(m.sets, TARGET) + 0.5 * Math.max(0, m.sets - TARGET), 0);
-  const target = TARGET * muscles.length;
+  const points = muscles.reduce((sum, m) => {
+    const t = Number(m.target) || 0;
+    return sum + Math.min(m.sets, t) + 0.5 * Math.max(0, m.sets - t);
+  }, 0);
+  const target = muscles.reduce((sum, m) => sum + (Number(m.target) || 0), 0);
   return { pct: target > 0 ? points / target : 0, points: Math.round(points * 10) / 10, target };
 }
 

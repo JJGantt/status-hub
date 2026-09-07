@@ -230,8 +230,14 @@ function tvStackFigures(){
   const ex=e.target.closest('.ex'); if(ex){setSel({kind:'exercise',key:ex.dataset.ex});return;}
   // the box itself is not a dismiss target — re-tap the same muscle (or ✕ on the wall) to close it
  });
- // volume card: sort toggle + clickable/hoverable rows
+ // volume card: sort toggle + clickable/hoverable rows.
+ // Guarded like bodyEl above, and for a reason that is easy to miss: a surface can carry the body map
+ // WITHOUT the volume list — the home wall runs the map as a thin column and has no room for the list.
+ // Unguarded, that combination walked past the bodyEl check straight into this null, and because this
+ // is module-init the throw aborted the rest of core.js's import graph, blanking cards that have
+ // nothing to do with muscle. It cost the live wall its components on 2026-09-07.
  const volEl=document.getElementById('volume');
+ if(!volEl)return;
  volEl.addEventListener('click',e=>{
   const opt=e.target.closest('.vs-opt'); if(opt){VOLSORT=opt.dataset.sort;localStorage.setItem('volsort',VOLSORT);renderVolume();return;}
   const row=e.target.closest('.vrow'); if(row&&row.dataset.mus){toggleSel({kind:'muscle',key:row.dataset.mus});return;}

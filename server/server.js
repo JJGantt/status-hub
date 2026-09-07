@@ -179,6 +179,9 @@ const DASHBOARD_HTML = fs.readFileSync(path.join(__dirname, 'public', 'index.htm
 // Injects the body-map SVG like the health wall does. It is ONE 72x93 figure here too; cards/muscle.js
 // splits it into the stacked front/back pair itself (tvStackFigures) on any wall, so this wall only has
 // to give it a column to be thin in.
+// Injects the body map like the health wall does: this wall runs it as a thin column beside its two
+// heat maps. It is ONE 72x93 figure here too — cards/muscle.js splits it into the stacked front/back
+// pair itself, so the wall only has to give it a column to be thin in.
 const TV_HTML = fs.readFileSync(path.join(__dirname, 'public', 'tv-home.html'), 'utf8')
   .replace('<!--BODY_SVG-->', BODY_SVG);
 // THE HEALTH WALL, at /tv-health. What used to be the default: nutrition, the muscle map and volume

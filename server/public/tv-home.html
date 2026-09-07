@@ -15,7 +15,7 @@
 <script type="module" src="expand.js"></script>
 <!-- tv-home.js: this wall's own middle — mounts the day column and paints the session panel. -->
 <script type="module" src="tv-home.js"></script>
-</head><body class="tv">
+</head><body class="tv homewall">
 <!-- THE HOME WALL — the default, at `/` and `/tv`. The frame every wall shares (status strip · rings
      · health bar · footer · voice column) around three columns: today's timeline, the heat maps, and
      the newest session's last answer. The deep nutrition/muscle/workout surface it replaced is the
@@ -64,15 +64,26 @@
          same grammar would be a lie. -->
     <div class="row-card hw-heatrow">
       <div class="card hw-heatcard"><div class="fit">
-        <div class="hw-block">
-          <div id="nutheat" class="nutheat"></div>
-          <div class="hw-strip" id="nutinfo" data-band></div>
-          <div class="hw-recent" id="nutrecent"></div>
-        </div>
-        <div class="hw-block">
-          <div id="heatwrap"></div>
-          <div class="hw-strip" id="resttimer"></div>
-          <div class="hw-recent" id="heatinfo" data-recent></div>
+        <!-- The two week-grained heat maps, with the muscle column running the height of BOTH. Surf
+             stays below at full width: its columns are hours of one day, not weeks. -->
+        <div class="hw-heattop">
+          <div class="hw-heatstack">
+            <div class="hw-block">
+              <div id="nutheat" class="nutheat"></div>
+              <div class="hw-strip" id="nutinfo" data-band></div>
+              <div class="hw-recent" id="nutrecent"></div>
+            </div>
+            <div class="hw-block">
+              <div id="heatwrap"></div>
+              <div class="hw-strip" id="resttimer"></div>
+              <div class="hw-recent" id="heatinfo" data-recent></div>
+            </div>
+          </div>
+          <!-- One figure; cards/muscle.js splits it into the stacked front/back pair and paints each
+               region from volume.muscle_colors, exactly as on the health wall. #bodyinfo is present
+               but hidden — the selection handlers write to it and this wall cannot show a panel. -->
+          <div class="hw-body" id="body"><!--BODY_SVG--></div>
+          <div id="bodyinfo" hidden></div>
         </div>
         <!-- Surf is its OWN card inside the column, unlike the two above it: on a phone wall.js
              adopts it into the misc pane, and it does that by moving the nearest `.card` — which

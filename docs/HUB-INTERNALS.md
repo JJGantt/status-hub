@@ -32,6 +32,12 @@ Supabase ──▶ server.js buildStatus() ──▶ /api/status payload ──�
 - **Realtime:** the server subscribes to Supabase realtime on the tables that must invalidate the
   cached payload (nutrition, sets, app_settings, voice_*), so a voice/MCP write reflects in seconds
   rather than waiting for the tick.
+- **Realtime invalidation is a fast path, never a cache's only refresh.** Every server-side cache
+  needs an age check too. Events get dropped — CHANNEL_ERROR and half-open silence are both routine,
+  which is what `REALTIME_SILENCE_LIMIT_MS` and the socket recycle exist for — and a cache that only
+  clears on an event serves whatever it built on boot, forever, with a redeploy the only way out.
+  `/api/surf/history` shipped that way and froze the surf card for 16 hours. Every cache here now
+  pairs `dirty*()` with a `*_BACKSTOP_MS` age check; add both when you add a cache.
 - **Every stream goes through `liveStream()` (shared.js), never a bare `EventSource`.** An SSE
   connection can go half-open — `readyState` stays OPEN, no `error` fires, nothing arrives again —
   and the browser only retries a connection it saw CLOSE, so nothing reconnects it. A wall in that

@@ -389,6 +389,16 @@ Rows must be `box-sizing:border-box` with no padding: the projection writes an e
 row, and content-box adds the padding and border on top of it — four pixels a row, eleven across the
 column, which is the now-line missing the axis it is supposed to define.
 
+**The now-line belongs to the column, not to an hour.** The payload marks the hour containing now and
+draws the marker inside it, which is right for a list and wrong for a drum: that row slides, so the
+marker slides with it, out of the row's `overflow:hidden` and out of sight a few minutes after every
+hour. `project()` drops those and puts a single line on the box at the axis. For the same reason it
+recomputes `.cur` from the live clock every tick rather than trusting the payload's — the server
+decides that once, at fetch time, and the dial only re-fetches when the hour rolls.
+
+That re-fetch is required, not an optimisation: the window is centred on the hour it was built for,
+so without it the dial drifts an hour off its own data every hour.
+
 Nothing may sit above the hours box in the flow, for the same reason. The axis is the middle of that
 box, so a 44px date heading above it put the line 25px below the middle of the column — measurably
 lopsided, and read as a fault in the projection rather than in the layout. The date is absolutely

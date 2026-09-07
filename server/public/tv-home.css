@@ -49,10 +49,9 @@ body.tv .hw-daycard .cw-day.dial .cw-hour.thin .cw-dchip{border-left-width:0;bac
   border-radius:2px;min-height:3px}
 body.tv .hw-daycard .cw-day.dial .cw-hour.sliver .cw-hl{visibility:hidden}
 body.tv .hw-daycard .cw-day.dial .cw-hour.sliver .cw-hitems{gap:1px}
-/* The axis. The now-line is inside its own row and lands here by construction, but the drum needs a
-   fixed edge to turn against or there is nothing saying the middle is the middle. */
-body.tv .hw-daycard .cw-day.dial .cw-hours::after{content:'';position:absolute;left:0;right:0;
-  top:50%;border-top:1px solid rgba(255,255,255,.10);pointer-events:none}
+/* The server draws a marker inside whichever hour contains now. On the dial that hour is a moving
+   row, so its marker moves with it — project() drops those and puts one line on the BOX, at the
+   axis, where it belongs: the line does not move, the day moves past it. */
 body.tv .hw-daycard .cw-day.dial{position:relative}
 body.tv .hw-daycard .cw-day.dial .cw-hours{position:relative}
 

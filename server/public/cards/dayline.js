@@ -101,6 +101,20 @@ function project(col) {
   const angle = (t) => clamp((t - nowT) / SPAN, -1, 1) * (Math.PI / 2);
   const y = (t) => R + R * Math.sin(angle(t));
 
+  // THE AXIS IS A PROPERTY OF THE COLUMN, not of an hour. It never moves; the day moves past it. The
+  // server's marker is a child of the hour it falls in, which is right for a list and wrong here —
+  // as that hour slides upward the marker goes with it, out of the row's overflow and out of sight.
+  // That is how the line disappeared a few minutes into every hour.
+  let axis = box.querySelector(':scope > .cw-now');
+  if (!axis) {
+    // The shared markup's in-row marker is removed rather than hidden. Left in place it is a second
+    // element answering to `.cw-now` on this surface, and the first one in document order at that —
+    // which is what anything measuring the line finds.
+    box.querySelectorAll('.cw-hour .cw-now').forEach((el) => el.remove());
+    axis = document.createElement('div'); axis.className = 'cw-now'; box.appendChild(axis);
+  }
+  axis.style.top = `${R}px`;
+
   col.dl.hours.forEach((hr, i) => {
     const row = rows[i];
     if (!row) return;
@@ -117,10 +131,10 @@ function project(col) {
     // that. Said in classes so the CSS decides what survives at each size, not this file.
     row.classList.toggle('thin', h < 34);
     row.classList.toggle('sliver', h < 15);
-    // The now-line, in pixels rather than a percentage of the row: within one hour the projection is
-    // not linear, and at the centre — where the eye actually is — that error is largest.
-    const line = row.querySelector('.cw-now');
-    if (line) line.style.top = `${R - top}px`;
+    // Which hour is the current one is worked out here every tick, not taken from the payload. The
+    // server decides it once, at fetch time, and the dial only re-fetches when the hour rolls — so
+    // between those it was lighting whichever hour happened to be current when it last loaded.
+    row.classList.toggle('cur', nowT >= at && nowT < at + 1);
   });
 }
 
@@ -136,6 +150,7 @@ async function load(col) {
   // unrelated edit happened to touch the lists.
   col.next = d.next_transition || null;
   col.el.innerHTML = dayHtml(d.dayline);
+  col.hour = new Date().getHours();   // which hour this window was built around
   project(col);
   if (col.centre) centreOnNow(col.el);
 }
@@ -185,7 +200,9 @@ function tick() {
     // A dial re-projects instead of moving a line: every row's size depends on the clock, not just
     // the marker, and the hours it lays out never leave the range because it holds all of them.
     if (col.dial) {
-      if ((col.next && stamp(now) >= col.next) || dateKey(now) !== col.dl.date) load(col);
+      // The window the server built is centred on the hour it was asked for, so it has to be asked
+      // again when the hour rolls — otherwise the dial drifts an hour off its own data every hour.
+      if ((col.next && stamp(now) >= col.next) || dateKey(now) !== col.dl.date || now.getHours() !== col.hour) load(col);
       else project(col);
       continue;
     }

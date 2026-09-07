@@ -40,15 +40,16 @@ body.tv .hw-heatcard #resttimer .rt-side{gap:1px}
 /* The rep watcher is a before-a-set prompt for someone standing at the bar, not wall furniture. */
 body.tv .hw-heatcard #resttimer .rt-watcher{display:none}
 
-/* Surf: the card's own head chips, then the grids. No keys — the colours are a ramp and the block
-   has a third of a column, so the legend would cost more room than it explains. No water trace
-   either: it is a line chart, not a heat map, and the temperature it plots is already a chip above.
-   All of this is scoped to the column, because the same card is adopted whole into the phone's misc
-   pane, where there is room for the legend and the trace and they should come back. */
+/* Surf on this wall is the two grids and the water trace under them — the same pair the phone shows,
+   and nothing else. The card's head strip goes: every number on it (rating, size now, water, air) is
+   already somewhere in the picture below it, so it spends a fifth of the block restating it in
+   words. The colour keys go for the same reason the other two heat maps have none here.
+   Scoped to the column, because this same card is adopted whole into the phone's misc pane, where
+   there is room for the head and the legend and they should stay. */
 body.tv .hw-heatcard .hw-surf{border-top:1px solid #222a33;padding-top:12px}
 body.tv .hw-heatcard .hw-surf .fit{padding:0;height:auto;gap:0}
-body.tv .hw-heatcard .hw-surf .surfkey,body.tv .hw-heatcard .hw-surf .surfwater{display:none}
-body.tv .hw-heatcard .hw-surf .surfheat{margin-top:8px}
+body.tv .hw-heatcard .hw-surf .devstrip,body.tv .hw-heatcard .hw-surf .surfkey{display:none}
+body.tv .hw-heatcard .hw-surf .surfheat{margin-top:0}
 
 /* COL 4 — what is running, then the focused one's last answer.
    The list is every live session, capped at five, in the order voice numbers them. The row showing

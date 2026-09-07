@@ -258,7 +258,9 @@ a list changes — the calendar surfaces' push path, separate from the status fr
 `/api/todos` (lists + notes + the derived `due` view) · `/api/calendar` (month grid(s) of every
 dated item — every occurrence is a real row, so nothing is projected; `?month=` pages, `?wall=1` adds
 the day timeline and reads `calendar_months` for the spread) · `/api/badge` · `/api/repos` ·
-`/api/repos/cmd/:id` · `/api/sessions` (live desk sessions + the follow-up `focus`) · `/api/reports`
+`/api/repos/cmd/:id` · `/api/sessions` (live desk sessions + the follow-up `focus`) ·
+`/api/session-stream` (SSE, one `session` frame per tool call or finished turn, pushed by the
+orchestrator on either machine — see SESSIONS.md §10) · `/api/reports`
 (list only — `html` is never selected) · `/api/surf/history` (the whole hourly archive as one
 character per hour; `defaultT0` marks the window the card lands on before it is scrolled back) ·
 `/api/attachment`.

@@ -40,7 +40,8 @@ config change ON the Pi by dispatching a session to it.
 | Piece | Where | Does |
 |---|---|---|
 | `orchestrator/src/commands.js` | Mac (launchd) | drains the queue, opens Terminal tabs |
-| `orchestrator/src/deskSessions.js` | Mac, every 30s | adopts, reports liveness + last reply, mirrors |
+| `orchestrator/src/deskSessions.js` | Mac, every 30s | adopts, reports liveness, mirrors, starts watchers |
+| `orchestrator/src/sessionWatch.js` | both, on file events | watches live transcripts: pushes tool calls + finished turns |
 | `orchestrator/src/discover.js` | Mac | finds sessions nobody dispatched |
 | `orchestrator/src/mirror.js` | both | uploads/downloads transcripts for a handover |
 | `orchestrator/src/transcripts.js` | both | reads a transcript: final reply, working, title |
@@ -243,7 +244,8 @@ the complete capture was discarded as its duplicate.
 
 | | value | why |
 |---|---|---|
-| reconcile tick | 30s | both machines: liveness, last reply, mirror |
+| reconcile tick | 30s | both machines: liveness, mirror, and the BACKSTOP for last reply |
+| session watch | on file events | `sessionWatch.js`: tool calls and finished turns, pushed as they land |
 | `COMMAND_TTL_S` | 120s | a command older than this expires unrun (and is kept) |
 | `CLAIM_STALE_S` | 900s | a claim held this long is treated as abandoned |
 | `LAUNCH_GRACE_S` | 90s | a new session is not declared dead before this |
@@ -269,13 +271,40 @@ the complete capture was discarded as its duplicate.
 
 ---
 
-## 10. Where it is surfaced
+## 10. Live activity
+
+A turn's reply is written to the transcript the instant Claude Code finishes it, and for a long time
+nothing noticed until the next reconcile tick — up to 30s of an answer sitting on disk while a wall
+showed the previous one. The file changing is an event, so `sessionWatch.js` watches it on both
+machines and pushes what it sees straight to the hub:
+
+    transcript append ─ fs.watch ─▶ sessionWatch ─┬─ tool_use  ─▶ POST /api/session-activity ─▶ SSE ─▶ wall
+                                                  └─ end_turn  ─┬─ POST /api/session-activity ─▶ SSE ─▶ wall
+                                                                └─ patch desk_sessions.last_reply  (durable)
+
+Note that the database write is no longer in the delivery path. It still happens, because the reply
+has to outlive the moment, but the wall hears from the machine that has the answer rather than
+waiting for a round trip through Postgres.
+
+Only what is NEW is read — these transcripts reach tens of megabytes, so the watcher keeps a byte
+offset and a trailing partial line. A watcher starts at the file's current end, never at zero, or
+attaching to a running session would replay its whole history as though it were happening now.
+
+**The tick still does both of these jobs**, and that is deliberate rather than leftover. Liveness
+cannot be event-driven — nothing fires when a process stops existing — and `fs.watch` genuinely drops
+events, since FSEvents coalesces on macOS and inotify misses under load. So the tick is the net, not
+the mechanism. The same is true one layer up: the wall keeps a 5s poll of `/api/sessions` behind the
+push, because a session dying, the focus moving and the numbering changing announce themselves to
+nobody.
+
+## 11. Where it is surfaced
 
 | surface | what it shows | interaction |
 |---|---|---|
 | phone pane (`cards/repos.js`) | everything: running, parked, queued, numbers, machine, last reply | full — start, name, transfer, resume, close |
 | the wall's footer (`cards/deskfoot.js`) | only the session holding follow-ups | none |
 | **TV session focus** (`/tv-session-focus`) | being built: the active sessions, nothing else | none — voice only |
+| the home wall (`/tv`, `tv-home.js`) | up to five, each with a live line of what it is doing; the focused one's full reply below | none — voice only |
 | voice (`get_sessions`) | the numbered list, and what each last said | every verb |
 
 The phone card is the complex one and stays that way — it is the surface with a keyboard and a

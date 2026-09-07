@@ -109,8 +109,14 @@ async function loadHeatDay(date){
  // exactly as the full panel draws it. The wall has room for a line, not a workout.
  if(hi.dataset.recent!==undefined){
   const ex=(j.exercises||[]).find(e=>e.name===j.recent);
-  hi.innerHTML=ex?'<div class=wk-recent><div class=dex-n>'+esc(ex.name)+'</div>'+
-    '<div class=dex-sets>'+ex.sets.map(st=>'<span class=dset>'+(st.weight_lbs===0?'BW':(st.weight_lbs+' lb'))+' × '+st.reps+'</span>').join('')+'</div></div>':'';
+  // Same shape as the nutrition row beside it — name, then values with the number carrying the
+  // weight and everything around it muted. No pills: spacing separates the sets.
+  const set=(st)=>'<span class=rc-set>'+(st.weight_lbs===0
+    ?'<span class=rc-v>BW</span>'
+    :'<span class=rc-v>'+st.weight_lbs+'</span><span class=rc-u>lb</span>')+
+    '<span class=rc-x>×</span><span class=rc-v>'+st.reps+'</span></span>';
+  hi.innerHTML=ex?'<div class=rc-top><span class=rc-name>'+esc(ex.name)+'</span></div>'+
+    '<div class=rc-vals>'+ex.sets.map(set).join('')+'</div>':'';
   return;
  }
  const sp=hi.closest('.detailpanel'), stick=sp&&(sp.scrollHeight-sp.scrollTop-sp.clientHeight<60); // keep pinned to newest if already at bottom

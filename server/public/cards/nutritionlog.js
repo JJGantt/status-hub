@@ -109,8 +109,18 @@ async function loadNutDay(date){
   const nr=document.getElementById('nutrecent');
   if(nr){
    const e=j.entries.find(x=>!x.staged);
-   nr.innerHTML=e?'<div class=nut-recent><div class=dex-n>'+esc(e.name||'—')+'</div>'+
-     '<div class=dex-macros>'+macroChips(e)+(fmtTime(e.occurred_at)?'<span class=dset>'+fmtTime(e.occurred_at)+'</span>':'')+'</div></div>':'';
+   // Not macroChips: those bake the value and its unit into one string inside a pill. Here they are
+   // separate spans so a surface can weight the number and the unit differently, and the time is not
+   // one of them — it says WHEN, not what, so it sits with the name rather than among the macros.
+   // Wrapped as one span per reading: the row's gap separates READINGS, so leaving the value and its
+   // unit as loose siblings put that same gap between "719" and "kcal" and broke the pair apart.
+   const val=(v,u)=>'<span class=rc-set><span class=rc-v>'+v+'</span><span class=rc-u>'+u+'</span></span>';
+   nr.innerHTML=e
+    ?'<div class=rc-top><span class=rc-name>'+esc(e.name||'—')+'</span>'+
+       (fmtTime(e.occurred_at)?'<span class=rc-when>'+fmtTime(e.occurred_at)+'</span>':'')+'</div>'+
+     '<div class=rc-vals>'+val(mn(e.calories),'kcal')+val(mn(e.protein_g),'g P')+
+       val(mn(e.carbs_g),'g C')+val(mn(e.fat_g),'g F')+'</div>'
+    :'';
   }
   return;
  }

@@ -101,7 +101,19 @@ async function loadNutDay(date){
    seg(mn(j.total_protein), tm.protein_g!=null?tm.protein_g:null, 'P')+
    seg(mn(j.total_carbs), tm.carbs_g!=null?tm.carbs_g:null, 'C')+
    seg(mn(j.total_fat), tm.fat_g!=null?tm.fat_g:null, 'F'));
- if(bandOnly){ ni.innerHTML=h; return; }
+ if(bandOnly){
+  ni.innerHTML=h;
+  // The most recently LOGGED item, into its own element when a surface has one. Not entries[0]:
+  // staged meals sort above the committed ones and a staged meal has not been eaten yet, so it is
+  // not the last thing logged.
+  const nr=document.getElementById('nutrecent');
+  if(nr){
+   const e=j.entries.find(x=>!x.staged);
+   nr.innerHTML=e?'<div class=nut-recent><div class=dex-n>'+esc(e.name||'—')+'</div>'+
+     '<div class=dex-macros>'+macroChips(e)+(fmtTime(e.occurred_at)?'<span class=dset>'+fmtTime(e.occurred_at)+'</span>':'')+'</div></div>':'';
+  }
+  return;
+ }
  j.entries.forEach((e,i)=>{
   const t=fmtTime(e.occurred_at);
   const ings=Array.isArray(e.ingredients)?e.ingredients:null;

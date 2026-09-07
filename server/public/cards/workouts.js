@@ -65,8 +65,10 @@ function tickRest(){
  const rest=Math.max(0,(now-wallClockMs(lastAt))/1000);   // wall-clock seconds since the last set
  const active=rest<=SESSION_GAP_S;
  el.className='resttimer'+(!active?' stale':(rest>=300?' cool':''));
+ // Label then value, on one line. Stacked they cost twice the height for the same two facts, and
+ // the label is the small half — there is no arrangement where it needs its own row.
  // left — since last set (always)
- let html='<div class="rt-side rt-left"><div class=rt-label>Since last set</div>'+
+ let html='<div class="rt-side rt-left"><div class=rt-label>Last set</div>'+
    '<div class=rt-time>'+fmtSince(rest)+'</div></div>';
  // middle — session total (only while a session is live)
  if(active){
@@ -97,13 +99,20 @@ function markHeatCell(date){
  document.querySelectorAll('#heatwrap .hcell').forEach(c=>c.classList.toggle('hsel',c.dataset.date===date));
 }
 async function loadHeatDay(date){
- // A surface can take the heatmap without the day-detail panel — the home wall shows the map and
- // the clocks and has no room for a set list. Bail before the fetch, not after it.
+ // A surface can take the heatmap without the day-detail panel. Bail before the fetch, not after it.
  if(!document.getElementById('heatinfo'))return;
  const tok=++heatReq;
  let j; try{ j=await (await fetch('/api/workout-day?date='+date)).json(); }catch(_){ return; }
  if(tok!==heatReq)return; // a newer cell was selected mid-flight — drop this stale response
  const hi=document.getElementById('heatinfo');
+ // `data-recent` asks for ONE exercise: the one whose set was logged last, with its whole grouping,
+ // exactly as the full panel draws it. The wall has room for a line, not a workout.
+ if(hi.dataset.recent!==undefined){
+  const ex=(j.exercises||[]).find(e=>e.name===j.recent);
+  hi.innerHTML=ex?'<div class=wk-recent><div class=dex-n>'+esc(ex.name)+'</div>'+
+    '<div class=dex-sets>'+ex.sets.map(st=>'<span class=dset>'+(st.weight_lbs===0?'BW':(st.weight_lbs+' lb'))+' × '+st.reps+'</span>').join('')+'</div></div>':'';
+  return;
+ }
  const sp=hi.closest('.detailpanel'), stick=sp&&(sp.scrollHeight-sp.scrollTop-sp.clientHeight<60); // keep pinned to newest if already at bottom
  if(!j.exercises||!j.exercises.length){ hi.innerHTML='<div class=heath>'+date+'</div><div class=bi-none>No sets logged</div>'; lastHeatExercises=null; return; }
  lastHeatExercises=j.exercises;

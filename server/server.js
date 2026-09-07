@@ -1189,7 +1189,11 @@ app.get('/api/workout-day', async (req, res) => {
     const rows = await sbRange(`sets?occurred_at=gte.${date}T00:00:00&occurred_at=lte.${date}T23:59:59&select=id,occurred_at,exercise,weight_lbs,reps&order=occurred_at`);
     const order = [], byEx = {};
     for (const r of rows) { if (!byEx[r.exercise]) { byEx[r.exercise] = []; order.push(r.exercise); } byEx[r.exercise].push({ id: r.id, weight_lbs: r.weight_lbs, reps: r.reps }); }
-    const body = { date, total: rows.length, exercises: order.map((n) => ({ name: n, sets: byEx[n] })) };
+    // Which exercise was logged LAST, by the clock — not the group that appears last, which is the
+    // one whose FIRST set came latest. Going back to an earlier exercise for another set has to move
+    // this, or the wall shows the wrong grouping for the set that just happened.
+    const recent = rows.length ? rows[rows.length - 1].exercise : null;
+    const body = { date, total: rows.length, recent, exercises: order.map((n) => ({ name: n, sets: byEx[n] })) };
     workoutDayCache.set(date, { body, at: Date.now() });
     res.json(body);
   } catch (e) { res.status(500).json({ error: String(e.message || e) }); }

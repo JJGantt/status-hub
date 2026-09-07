@@ -20,25 +20,41 @@ body.tv .hw-daycard .cw-day{flex:1 1 auto;min-height:0;display:flex;flex-directi
 /* Each block takes the height its own content needs and the slack goes BETWEEN them. Equal thirds
    looked tidier in the abstract and was wrong in practice: the two week-grids are shorter than the
    surf grids, so thirds left dead air under the first two and clipped the last one. */
-body.tv .hw-heatcard .fit{gap:14px;justify-content:space-between}
-body.tv .hw-block{flex:0 0 auto;min-height:0;display:flex;flex-direction:column;gap:6px}
+body.tv .hw-heatcard .fit{gap:6px;justify-content:space-between}
+body.tv .hw-block{flex:0 0 auto;min-height:0;display:flex;flex-direction:column;gap:4px}
 /* Surf's columns are hours of one day; the two above it are whole weeks. The rule under it (below,
    with the rest of the surf block) says they are not the same axis, so nobody reads across them. */
 body.tv .hw-heatcard .heat,body.tv .hw-heatcard #heatwrap,body.tv .hw-heatcard .nutheat{min-height:0}
 body.tv .hw-heatcard .hbody{flex:1 1 auto;min-height:0}
 body.tv .hw-heatcard .hcell{border-radius:2px}
 
-/* The strips under the first two heat maps, sized to match each other — the day's totals against
-   target, and the rest/session clocks. Same height, same weight, so the column reads as one thing. */
-body.tv .hw-strip,body.tv .hw-heatcard #resttimer{flex:0 0 auto;min-height:0}
-body.tv .hw-heatcard .nutday{margin:0;padding:6px 0 0;border-top:1px solid #1b222b}
-body.tv .hw-heatcard #resttimer{padding:6px 0 0;margin:0;border-top:1px solid #1b222b;background:none;gap:10px}
-body.tv .hw-heatcard #resttimer .rt-time{font-size:21px}
-body.tv .hw-heatcard #resttimer .rt-count{font-size:15px}
-body.tv .hw-heatcard #resttimer .rt-label{font-size:10px;letter-spacing:.1em}
-body.tv .hw-heatcard #resttimer .rt-side{gap:1px}
+/* The strip under each of the first two heat maps: the day's totals against target, and the rest
+   clocks. ONE treatment for both — the nutrition band's inset panel — so the column reads as two of
+   the same thing rather than a panel and a bare row. */
+body.tv .hw-strip{flex:0 0 auto;min-height:0}
+body.tv .hw-heatcard .nutday{margin:0;padding:6px 12px}
+body.tv .hw-heatcard #resttimer{margin:0;padding:6px 12px;gap:18px;justify-content:flex-start;
+  background:#11171e;border:1px solid #222a33;border-radius:10px;flex-wrap:nowrap}
+/* Label beside value, not above it. Stacked, two facts cost two rows of height for no gain — the
+   label is the small half and never needed a line of its own. */
+body.tv .hw-heatcard #resttimer .rt-side{flex-direction:row;align-items:baseline;gap:7px;text-align:left}
+body.tv .hw-heatcard #resttimer .rt-right{margin-left:auto}
+body.tv .hw-heatcard #resttimer .rt-label{font-size:15px;letter-spacing:0;text-transform:none;
+  font-weight:800;color:#8b96a5}
+body.tv .hw-heatcard #resttimer .rt-time{font-size:26px}
+body.tv .hw-heatcard #resttimer .rt-count{font-size:26px}
 /* The rep watcher is a before-a-set prompt for someone standing at the bar, not wall furniture. */
 body.tv .hw-heatcard #resttimer .rt-watcher{display:none}
+
+/* Under each strip, the last thing logged — a meal, and the exercise a set just went onto. Equal
+   height for both whether or not either has anything in it, so the two blocks stay level and the
+   column does not shuffle when a set is logged. */
+body.tv .hw-recent{flex:0 0 auto;min-height:46px;padding:0 2px;min-width:0;overflow:hidden}
+body.tv .hw-recent .dex-n{font-size:17px;line-height:1.15;font-weight:700;color:#e6eaf0;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+body.tv .hw-recent .dex-sets,body.tv .hw-recent .dex-macros{margin-top:2px;display:flex;gap:6px;
+  flex-wrap:nowrap;overflow:hidden}
+body.tv .hw-recent .dset{flex:0 0 auto}
 
 /* Surf on this wall is the two grids and the water trace under them — the same pair the phone shows,
    and nothing else. The card's head strip goes: every number on it (rating, size now, water, air) is
@@ -46,7 +62,7 @@ body.tv .hw-heatcard #resttimer .rt-watcher{display:none}
    words. The colour keys go for the same reason the other two heat maps have none here.
    Scoped to the column, because this same card is adopted whole into the phone's misc pane, where
    there is room for the head and the legend and they should stay. */
-body.tv .hw-heatcard .hw-surf{border-top:1px solid #222a33;padding-top:12px}
+body.tv .hw-heatcard .hw-surf{border-top:1px solid #222a33;padding-top:4px}
 body.tv .hw-heatcard .hw-surf .fit{padding:0;height:auto;gap:0}
 body.tv .hw-heatcard .hw-surf .devstrip,body.tv .hw-heatcard .hw-surf .surfkey{display:none}
 body.tv .hw-heatcard .hw-surf .surfheat{margin-top:0}

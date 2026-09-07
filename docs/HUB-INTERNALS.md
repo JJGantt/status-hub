@@ -138,8 +138,8 @@ an idle robot otherwise look identical. `SELF_CYCLING` means the robot left slee
 cycling on its own and nothing here is driving it.
 
 **Surfaces (same code, different chrome):** desktop `/page` = scrolling rows; phone = swipe panes on
-`/`, in markup order in the wall page it loads — `tv.html` is chat · wall · misc · maint · todo ·
-repos · reports, landing on the wall; TV `/tv` = the wall + a voice panel (auth `?token=`); the `/mic` page = a
+`/`, in markup order in the wall page it loads — `tv-home.html` is chat · wall · misc · maint · todo
+· repos · reports, landing on the wall; TV `/tv` = the wall + a voice panel (auth `?token=`); the `/mic` page = a
 minimal fullscreen voice launcher; `/calendar` = the standalone calendar page (navbar's calendar
 button gets there); `/tv-calendar` = the calendar wall (§ CLAUDE.md's walls note).
 
@@ -248,8 +248,8 @@ frame) so a surface can pick it up without re-deriving it.
 
 ## 5. API surface (`server.js`)
 
-**Pages:** `/` · `/tv` (both serve the wall) · `/tv-session-focus` (sessions wall) · `/tv-calendar`
-(calendar wall) · `/tv-home` (home wall — the aggregate meant to take `/`) · `/calendar` (phone/desktop calendar) · `/page` (desktop dashboard) · `/mic` (voice
+**Pages:** `/` · `/tv` (both serve the home wall, the default) · `/tv-health` (health wall — what
+used to be the default) · `/tv-session-focus` (sessions wall) · `/tv-calendar` (calendar wall) · `/calendar` (phone/desktop calendar) · `/page` (desktop dashboard) · `/mic` (voice
 launcher) · `/reports` + `/report/:id` (§6c) · `/login` · `/healthz` · `/privacy` · `/terms`.
 
 **Read:** `/api/status` (full payload) · `/api/stream` (SSE status) · `/api/voice-stream` (SSE voice
@@ -611,7 +611,7 @@ if the running commit never becomes the one it built.
 
 ## 6e. The wall's footer row, and why the machine never sleeps
 
-`tv.html`'s third grid row — a real row in `body.tv .rows`, not an overlay, so the cards above shrink
+the wall's third grid row — a real row in `body.tv .rows`, not an overlay, so the cards above shrink
 to fit it. Adding it meant pinning the health bar's `grid-row` from `1/-1` to `1/3`, or it would have
 swallowed the new row.
 

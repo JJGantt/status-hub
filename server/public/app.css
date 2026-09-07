@@ -987,7 +987,7 @@ li.sess.focus{box-shadow:inset 2px 0 0 #5b8def;padding-left:8px;margin-left:-8px
 .sess-nofocus{margin:0 0 8px;font-size:12px;line-height:1.4;color:#6b7686}
 .sess-in{margin-left:6px;font-size:11px;font-weight:500;color:#6b7686}
 
-/* ---- TV footer row (tv.html ROW 3) ------------------------------------------------------------
+/* ---- TV footer row (every wall's ROW 3) ------------------------------------------------------------
    Persistent, so the wall always answers "what is being worked on" without waiting for a popup. Left
    holds the live voice activity — the same .ai-act element the phone floats, mounted here instead so
    it occupies a reserved lane rather than covering a card. Right is pinned to the session a spoken

@@ -92,33 +92,43 @@ every item that was already delivered.
 Its CSP (`default-src 'none'` plus sandbox) is the only thing between that markup and an origin
 already authenticated as Jared. Charts must be inline `<svg>` — no `<script>`, no CDN link.
 
-## There are four walls, and one of them is live
+## There are four walls, and the default is the one being molded
 
-`public/tv.html` (`/` and `/tv`) is the wall the Pi is showing on the TV. **Do not change it** while
-the others exist.
+`public/tv-home.html` (`/` and `/tv`) is the **home wall — the default, and what the TV is showing**.
+The shared frame (status strip · rings · health bar · footer · voice column) around three columns:
+today's day column, the three heat maps stacked with the strip that belongs to each (nutrition
+totals vs target, the rest/session clocks, surf), and the newest session's last answer. `tv-home.js`
++ `tv-home.css` are its own; everything else on it is a shared card `core.js` already paints, which
+is why the page is mostly markup. This is the one to shape.
 
-`public/tv-session-focus.html` (`/tv-session-focus`) is "TV session focus" — begun as a
-byte-identical copy and being stripped down around the sessions list: always-on, no interaction,
-readable across a room and eventually on a watch.
+`public/tv-health.html` (`/tv-health`) is the health wall — what used to be the default, and still
+the only place nutrition, the muscle map, the volume bars and the workout heatmap are on one screen,
+each with the detail panel its heatmap fills. Too much to glance at from a couch, which is why it
+gave up `/`.
 
-`public/tv-calendar.html` (`/tv-calendar`) is the calendar wall — the shared frame (status strip ·
-rings · health bar · footer · voice column) with the freed middle painted by `tv-calendar.js` from
-`/api/calendar?wall=1`: a day timeline plus `calendar_months` months of grid. Display-only; voice
-switches to it and sizes it via `set_wall`. The phone's interactive calendar is
-`public/calendar.html` at `/calendar` — a separate standalone page, not a wall.
+`public/tv-session-focus.html` (`/tv-session-focus`) is the sessions wall: always-on, no interaction,
+stripped down around the sessions list so it reads across a room and eventually on a watch.
 
-`public/tv-home.html` (`/tv-home`) is the **home wall, and it is the one being built**. Mold this
-one. It is the aggregate meant to take `/` from `tv.html`: the same frame around three columns —
-today's day column (the calendar wall's, same module), the three heat maps stacked with the strip
-that belongs to each (nutrition totals vs target, the rest/session clocks, surf), and the newest
-session's last answer. `tv-home.js` + `tv-home.css` are its own; everything else on it is a shared
-card that `core.js` already paints, which is why the page is mostly markup.
+`public/tv-calendar.html` (`/tv-calendar`) is the calendar wall — the shared frame with the freed
+middle painted by `tv-calendar.js`: a day timeline plus `calendar_months` months of grid.
+Display-only. The phone's interactive calendar is `public/calendar.html` at `/calendar` — a separate
+standalone page, not a wall.
 
-When it takes over, `tv.html` becomes the HEALTH wall — the deep nutrition/muscle/workout surface
-that no longer fits on a wall meant to be glanced at.
+Voice picks between them with `set_wall`, which writes `app_settings.wall_mode`; `wallmode.js` maps
+that to a path and the kiosk navigates itself, because nothing can reach in and navigate it. Modes
+are `standard` (the home wall — `home` is accepted as a second word for it and stored as `standard`),
+`health`, `sessions`, `calendar`.
 
-The walls share `core.js` / `tv.js` / `wall.js` / `wallmode.js` / `cards/*`, so a change to those
-hits ALL of them; split whatever needs to differ at the moment it needs to differ.
+**A wall is a FILE, not a mode flag**, so work on one cannot disturb another. They share `core.js` /
+`tv.js` / `wall.js` / `wallmode.js` / `cards/*`, so a change to those hits ALL of them; split
+whatever needs to differ at the moment it needs to differ. If you are reshaping the default into
+something you cannot verify in one pass, copy it to a new file and swap `/` when it is good — that
+is how the home wall was built.
+
+**On a phone, `wall.js` moves cards out of the shell into the misc pane** (`misc-litter-slot`,
+`misc-surf-slot`) by moving the nearest enclosing `.card`. A card sharing a `.card` wrapper with its
+neighbours takes them along: surf has a `.card` of its own inside the home wall's heat column purely
+so that adopting it does not carry the whole column into the pane.
 
 ## The day column is one module
 

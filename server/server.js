@@ -113,7 +113,10 @@ async function routingConfig() {
     // a browser on a machine nothing can reach — so the page watches this and goes there itself.
     wall: (() => {
       const w = String(s.wall_mode ?? 'standard').toLowerCase();
-      return ['sessions', 'calendar', 'home'].includes(w) ? w : 'standard';
+      // 'home' is a second word for the default wall, not a fourth wall — voice reaches it either
+      // way and one value is stored, so nothing has to decide which of two names is current.
+      if (w === 'home') return 'standard';
+      return ['sessions', 'calendar', 'health'].includes(w) ? w : 'standard';
     })(),
   };
 }
@@ -161,34 +164,32 @@ const listClients = new Set();
 // Dashboard HTML, read once from disk with the muscle-map SVG injected at the placeholder.
 const DASHBOARD_HTML = fs.readFileSync(path.join(__dirname, 'public', 'index.html'), 'utf8')
   .replace('<!--BODY_SVG-->', BODY_SVG);
-// /tv serves the SAME real hub dashboard (core.js + cards over /api/stream) plus a voice column.
-// Inject the body-map SVG just like the dashboard so the muscle map renders identically.
-const TV_HTML = fs.readFileSync(path.join(__dirname, 'public', 'tv.html'), 'utf8')
+// THE DEFAULT WALL — the home wall, at `/` and `/tv`. The aggregate: the shared frame (status strip,
+// rings, health bar, footer, voice column) around today's day column, the three heat maps, and the
+// newest session's last answer. `tv-home.js` + `tv-home.css` are its own; every other card on it is
+// one core.js already paints.
+const TV_HTML = fs.readFileSync(path.join(__dirname, 'public', 'tv-home.html'), 'utf8');
+// THE HEALTH WALL, at /tv-health. What used to be the default: nutrition, the muscle map and volume
+// bars, the workout heatmap, each with the detail panel its heatmap fills. Too much to glance at,
+// which is why the home wall took `/` from it, and still the only place all of it is on one screen.
+// Injects the body-map SVG at its placeholder — this is the wall with the muscle map.
+const TV_HEALTH_HTML = fs.readFileSync(path.join(__dirname, 'public', 'tv-health.html'), 'utf8')
   .replace('<!--BODY_SVG-->', BODY_SVG);
-// THE SECOND WALL — "TV session focus", at /tv-session-focus.
+// THE SESSIONS WALL, at /tv-session-focus — always-on, no interaction, stripped down around the
+// sessions list so it reads from across a room and eventually from a watch.
 //
-// There are three walls now (this, tv.html, tv-calendar.html) and they must never be confused:
-// `tv.html` is the one the Pi is showing,
-// and it is not to be changed while this exists. This one began as a byte-identical copy and is being
-// stripped down around the SESSIONS list — an always-on, no-interaction display that has to read from
-// across a room, and eventually from a watch.
-//
-// A separate FILE rather than a mode flag, so work here cannot disturb the live wall. They share
-// their scripts until something has to diverge, and whatever diverges gets split at that point.
+// Every wall is a separate FILE rather than a mode flag, so work on one cannot disturb another. They
+// share their scripts until something has to diverge, and whatever diverges gets split at that point.
 const TV_FOCUS_HTML = fs.readFileSync(path.join(__dirname, 'public', 'tv-session-focus.html'), 'utf8')
   .replace('<!--BODY_SVG-->', BODY_SVG);
 // Minimal home-screen "Voice" launcher (Add to Home Screen → standalone fullscreen tap-to-talk button).
 const MIC_HTML = fs.readFileSync(path.join(__dirname, 'public', 'mic.html'), 'utf8');
 // THE CALENDAR, twice. /calendar is the phone/desktop page — standalone like mic.html, navbar,
-// tappable days. /tv-calendar is THE THIRD WALL: the session wall's frame (status strip, rings,
-// health bar, footer, voice column) with the freed middle holding a day timeline + month grid(s),
-// so wallmode.js can put it on the TV when wall_mode says 'calendar'.
+// tappable days. /tv-calendar is THE CALENDAR WALL: the shared frame (status strip, rings, health
+// bar, footer, voice column) with the freed middle holding a day timeline + month grid(s), so
+// wallmode.js can put it on the TV when wall_mode says 'calendar'.
 const CAL_HTML = fs.readFileSync(path.join(__dirname, 'public', 'calendar.html'), 'utf8');
 const TV_CAL_HTML = fs.readFileSync(path.join(__dirname, 'public', 'tv-calendar.html'), 'utf8');
-// THE FOURTH WALL — "home", at /tv-home. The aggregate the standard wall is becoming: the shared
-// frame around today's timeline, the three heat maps, and the newest session's last answer. It is
-// meant to take over `/`; until it does, tv.html keeps the TV and this is reached deliberately.
-const TV_HOME_HTML = fs.readFileSync(path.join(__dirname, 'public', 'tv-home.html'), 'utf8');
 
 const app = express();
 app.use(express.urlencoded({ extended: false }));
@@ -864,9 +865,9 @@ app.get('/tv-session-focus', (req, res) => {
   res.setHeader('Cache-Control', 'no-cache');
   res.type('html').send(TV_FOCUS_HTML);
 });
-app.get('/tv-home', (req, res) => {
+app.get('/tv-health', (req, res) => {
   res.setHeader('Cache-Control', 'no-cache');
-  res.type('html').send(TV_HOME_HTML);
+  res.type('html').send(TV_HEALTH_HTML);
 });
 app.get('/page', (req, res) => {
   res.setHeader('Cache-Control', 'no-cache');

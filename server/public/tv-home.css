@@ -19,9 +19,8 @@ body.tv .hw-daycard .cw-day{flex:1 1 auto;min-height:0;display:flex;flex-directi
    surf grids, so thirds left dead air under the first two and clipped the last one. */
 body.tv .hw-heatcard .fit{gap:14px;justify-content:space-between}
 body.tv .hw-block{flex:0 0 auto;min-height:0;display:flex;flex-direction:column;gap:6px}
-/* Surf's columns are hours of one day; the two above it are whole weeks. The rule says they are not
-   the same axis, so nobody reads across them. */
-body.tv .hw-surf{border-top:1px solid #222a33;padding-top:12px}
+/* Surf's columns are hours of one day; the two above it are whole weeks. The rule under it (below,
+   with the rest of the surf block) says they are not the same axis, so nobody reads across them. */
 body.tv .hw-heatcard .heat,body.tv .hw-heatcard #heatwrap,body.tv .hw-heatcard .nutheat{min-height:0}
 body.tv .hw-heatcard .hbody{flex:1 1 auto;min-height:0}
 body.tv .hw-heatcard .hcell{border-radius:2px}
@@ -40,9 +39,13 @@ body.tv .hw-heatcard #resttimer .rt-watcher{display:none}
 
 /* Surf: the card's own head chips, then the grids. No keys — the colours are a ramp and the block
    has a third of a column, so the legend would cost more room than it explains. No water trace
-   either: it is a line chart, not a heat map, and the temperature it plots is already a chip above. */
-body.tv .hw-surf .surfkey,body.tv .hw-surf .surfwater{display:none}
-body.tv .hw-surf .surfheat{margin-top:8px}
+   either: it is a line chart, not a heat map, and the temperature it plots is already a chip above.
+   All of this is scoped to the column, because the same card is adopted whole into the phone's misc
+   pane, where there is room for the legend and the trace and they should come back. */
+body.tv .hw-heatcard .hw-surf{border-top:1px solid #222a33;padding-top:12px}
+body.tv .hw-heatcard .hw-surf .fit{padding:0;height:auto;gap:0}
+body.tv .hw-heatcard .hw-surf .surfkey,body.tv .hw-heatcard .hw-surf .surfwater{display:none}
+body.tv .hw-heatcard .hw-surf .surfheat{margin-top:8px}
 
 /* COL 4 — the newest session and its last answer. */
 body.tv .hw-sesscard .fit{gap:12px}

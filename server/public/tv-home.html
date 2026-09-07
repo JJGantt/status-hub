@@ -16,10 +16,10 @@
 <!-- tv-home.js: this wall's own middle — mounts the day column and paints the session panel. -->
 <script type="module" src="tv-home.js"></script>
 </head><body class="tv">
-<!-- THE HOME WALL — the aggregate. The frame every wall shares (status strip · rings · health bar ·
-     footer · voice column) around three columns: today's timeline, the heat maps, and the newest
-     session's last answer. The deep nutrition/muscle/workout surface it replaces is the HEALTH wall
-     at /tv-health; this one keeps only what a glance from across the room can use. -->
+<!-- THE HOME WALL — the default, at `/` and `/tv`. The frame every wall shares (status strip · rings
+     · health bar · footer · voice column) around three columns: today's timeline, the heat maps, and
+     the newest session's last answer. The deep nutrition/muscle/workout surface it replaced is the
+     HEALTH wall at /tv-health; this one keeps only what a glance from across the room can use. -->
 <div class="wallpanes" id="wallpanes">
 
 <section class="pane pane-chat">
@@ -72,8 +72,11 @@
           <div id="heatwrap"></div>
           <div id="resttimer"></div>
         </div>
-        <div class="hw-block hw-surf">
-          <div id="surf"><h2>Surf</h2><div class=big>…</div></div>
+        <!-- Surf is its OWN card inside the column, unlike the two above it: on a phone wall.js
+             adopts it into the misc pane, and it does that by moving the nearest `.card` — which
+             was this whole column until surf had one of its own. -->
+        <div class="hw-block hw-surf card">
+          <div class="fit" id="surf"><h2>Surf</h2><div class=big>…</div></div>
         </div>
       </div></div>
     </div>
@@ -108,9 +111,11 @@
 </section>
 
 <section class="pane pane-misc">
-  <!-- litter is MOVED here from the shell by wall.js on the phone (it already exists in the shell
-       markup; two elements can't share an id). Feeder + mics render here directly. Surf is not
-       adopted on this wall — it is in the heat column, where the phone can see it too. -->
+  <!-- litter + surf are MOVED here from the shell by wall.js on the phone (they already exist in the
+       shell markup; two elements can't share an id). Feeder + mics render here directly. Surf is
+       adopted even though the shell has a place for it: in the scaled wall it is a thumbnail, and
+       this pane is where it is actually read on a phone. -->
+  <div class="misc-slot" id="misc-surf-slot"></div>
   <div class="card statuscard"><div class="fit" id="feeder"><h2>Cat Feeder</h2><div class=big>…</div></div></div>
   <div class="misc-slot" id="misc-litter-slot"></div>
   <div class="card statuscard"><div class="fit" id="mics"><h2>Voice System</h2><div class=big>…</div></div></div>

@@ -346,7 +346,10 @@ function buildLitter(row) {
     used_ago: agoShort(usedAgo), cleaned_ago: agoShort(cleanedAgo) };
 }
 
-function buildSurf(row, waterRow) {
+// The header strip carries the rating and the current size, nothing else. Water and air both had
+// chips here and no longer do; the water panel below the grids answers the first in far more detail
+// than a single number could, which is what made the chip redundant rather than merely crowded.
+function buildSurf(row) {
   if (!row || !Array.isArray(row.rows) || !row.rows.length) return null;
   const rows = row.rows;
   // Nearest hour to now, for the card's header strip. The per-day breakdown that used to live here
@@ -354,20 +357,15 @@ function buildSurf(row, waterRow) {
   // was a second, coarser answer to a question already answered above it.
   const now = Date.now() / 1000;
   const cur = rows.reduce((a, b) => (Math.abs(b.ts - now) < Math.abs(a.ts - now) ? b : a), rows[0]);
-  // Measured buoy reading when there is one; Surfline's daily figure only as a fallback.
-  const wt = row.water_temp || null;
   return {
     spot: row.slug || 'mayport-poles',
     capturedAt: row.captured_at,
-    waterTempF: waterRow ? Math.round(waterRow.water_f)
-                         : (wt ? Math.round((wt.min + wt.max) / 2) : null),
-    waterMeasured: !!waterRow,
     current: cur ? {
       // The dot wears the same band colour the grid and the key below it paint this rating, NOT
       // Surfline's own scale — those disagree (Surfline paints POOR blue, the band palette red),
       // and two colours for one rating in one card reads as two different readings.
       ratingLabel: ratingLabel(cur.rk), ratingColor: SURF_BAND_COLORS[surfBand(cur.rk)] || '#8b96a5',
-      hMin: cur.sMin, hMax: cur.sMax, airF: cur.aT != null ? Math.round(cur.aT) : null,
+      hMin: cur.sMin, hMax: cur.sMax,
     } : null,
   };
 }
@@ -457,7 +455,7 @@ async function fetchStatusRows(win, week, histStart, heatStart) {
   const key = [win.start, win.end, week[0], histStart, heatStart, nutLogStart, taskWindowStart].join('|');
   if (!rowCache.dirty && rowCache.rows && rowCache.key === key
       && Date.now() - rowCache.at < ROWCACHE_BACKSTOP_MS) return rowCache.rows;
-  const [entries, stagedEntries, setRows, weightRows, histRows, muscleRows, heatRows, catalogRows, nutLogRows, targetRows, surfRows, waterRows, taskEventRows, openTaskRows] = await Promise.all([
+  const [entries, stagedEntries, setRows, weightRows, histRows, muscleRows, heatRows, catalogRows, nutLogRows, targetRows, surfRows, taskEventRows, openTaskRows] = await Promise.all([
     sb(`nutrition_entries?occurred_at=gte.${win.start}&occurred_at=lt.${win.end}&staged=eq.false&select=calories,protein_g,carbs_g,fat_g,veg_g,dark_green_g,fruit_g`),
     // Staged meals carry no day: they are pending until committed, so there is no window to filter on
     // and every staged row belongs to whatever day it is eaten on. Sum them all.
@@ -470,14 +468,7 @@ async function fetchStatusRows(win, week, histStart, heatStart) {
     sb('exercise_catalog?select=name,equipment'),
     sbRange(`nutrition_entries?occurred_at=gte.${nutLogStart}T00:00:00&staged=eq.false&select=occurred_at,calories,protein_g,fat_g&order=occurred_at`),
     sb('nutrition_targets?select=date,calories&order=date.asc'),
-    sb('surf_snapshots?select=slug,water_temp,captured_at,rows&order=captured_at.desc&limit=1'),
-    // Measured water temperature. Surfline's own value is not tied to any instrument and drifts —
-    // it read ~4F above two independent stations for five straight days in late August before
-    // snapping back — so the card shows the buoy instead. See surf-report's README.
-    // Deliberately NOT in the realtime publication: the collector re-ingests NDBC's whole 45-day
-    // window hourly, so subscribing would fire thousands of events to refresh a number that moves a
-    // tenth of a degree an hour. The 15-min rowCache backstop is the right granularity here.
-    sb('water_readings?select=ts,water_f&station=eq.41112&order=ts.desc&limit=1'),
+    sb('surf_snapshots?select=slug,captured_at,rows&order=captured_at.desc&limit=1'),
     // The gold band's two inputs, both ordinary `list_items` rows. A completed item persists — it
     // still draws on the calendar — so it is its own record and there is no separate ledger. The
     // drain is derived live from whatever is still outstanding, so there is no stored penalty to
@@ -485,7 +476,7 @@ async function fetchStatusRows(win, week, histStart, heatStart) {
     sb(`list_items?deleted=eq.false&completed_at=gte.${taskWindowStart}T00:00:00&due=not.is.null&select=scheduled_at,due,completed_at,priority`),
     sb('list_items?deleted=eq.false&completed_at=is.null&due=not.is.null&select=scheduled_at,due,priority'),
   ]);
-  rowCache.rows = { entries, stagedEntries, setRows, weightRows, histRows, muscleRows, heatRows, catalogRows, nutLogRows, targetRows, surfRows, waterRows, taskEventRows, openTaskRows };
+  rowCache.rows = { entries, stagedEntries, setRows, weightRows, histRows, muscleRows, heatRows, catalogRows, nutLogRows, targetRows, surfRows, taskEventRows, openTaskRows };
   rowCache.key = key; rowCache.at = Date.now(); rowCache.dirty = false;
   return rowCache.rows;
 }
@@ -497,7 +488,7 @@ async function buildStatus() {
   const histStart = localDate(new Date(Date.now() - 210 * 86400000)); // intake history for the maintenance trend + per-day replay (viz paging)
   const heatStart = localDate(new Date(Date.now() - 140 * 86400000)); // ~20 weeks for the workout volume heatmap
 
-  const [{ entries, stagedEntries, setRows, weightRows, histRows, muscleRows, heatRows, catalogRows, nutLogRows, targetRows, surfRows, waterRows, taskEventRows, openTaskRows }, deviceRows, presenceRows, workerRows] = await Promise.all([
+  const [{ entries, stagedEntries, setRows, weightRows, histRows, muscleRows, heatRows, catalogRows, nutLogRows, targetRows, surfRows, taskEventRows, openTaskRows }, deviceRows, presenceRows, workerRows] = await Promise.all([
     fetchStatusRows(win, week, histStart, heatStart),
     sb('device_status?select=*'),
     sb('voice_presence?select=source,alive_at'),
@@ -506,7 +497,7 @@ async function buildStatus() {
 
   const litter = buildLitter((deviceRows || []).find((d) => d.device !== 'cat-feeder') || null);
   const feeder = (deviceRows || []).find((d) => d.device === 'cat-feeder') || null;
-  const surf = buildSurf((surfRows || [])[0], (waterRows || [])[0]);
+  const surf = buildSurf((surfRows || [])[0]);
 
   const sum = (k) => (entries || []).reduce((a, e) => a + (Number(e[k]) || 0), 0);
   const nutrition = {

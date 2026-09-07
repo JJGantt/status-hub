@@ -257,9 +257,7 @@ export function render(s) {
       '<span class=devname>Surf · ' + name + '</span>' +
       chip('', '<span class=dot style="background:' + (cur.ratingColor || '#8b96a5') + '"></span>' +
         (cur.ratingLabel || '—'), '#e6eaf0') +
-      chip('Now', ftRange(cur.hMin, cur.hMax), '#e6eaf0') +
-      chip('Water', (S.waterTempF != null ? S.waterTempF + '°' : '—'), '#6aa6c8') +
-      chip('Air', (cur.airF != null ? cur.airF + '°' : '—'), '#eab308') +
+      chip('', ftRange(cur.hMin, cur.hMax), '#e6eaf0') +
     '</div>';
 
   // Keys are built from the bands actually present in the window. One that advertises a level the

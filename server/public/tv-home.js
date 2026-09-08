@@ -1,5 +1,5 @@
 // The home wall's own middle. Everything else on this page is a shared card that core.js already
-// paints; only two things are this wall's: the day column it mounts, and the session panel.
+// paints; only two things are this wall's: the day columns it mounts, and the session panel.
 //
 // DISPLAY ONLY, like every wall. Nothing here is interactive and nothing here writes — voice starts
 // sessions, voice focuses them, and this is where the answer comes back.
@@ -9,10 +9,20 @@ import { mount } from './cards/dayline.js';
 // The month grid is the calendar wall's; this column takes the day on its own. `full=1` for the
 // whole clock rather than 7a-10p, because the dial centres on now and needs something to show in
 // both directions — by evening the short range has nothing left below the line.
-mount(document.getElementById('cw-day'), { url: '/api/calendar?day=1&full=1', dial: true });
+//
+// `ahead=6` carries the six days after today in the SAME response, painted into the column beside
+// it. One fetch and one reload for both: they answer one question between them, and two of them
+// re-reading on their own clocks is two chances to be showing different days at the same moment.
+mount(document.getElementById('cw-day'), {
+  url: '/api/calendar?day=1&full=1&ahead=6',
+  dial: true,
+  ahead: document.getElementById('cw-week'),
+});
 
 const REFRESH_MS = 5000;
-const LIST_MAX = 5;      // enough to see what is running without the list becoming the column
+// Three, not five. The list is a glance at what is running; the room it was taking above the answer
+// is worth more to the answer, which is the thing on this column actually read word by word.
+const LIST_MAX = 3;
 
 /**
  * Which session the panel opens: the FOCUSED one — the session a spoken follow-up lands in, so what

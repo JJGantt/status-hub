@@ -119,9 +119,9 @@ discover level two until level one has arrived. Served raw that is a round trip 
 | `tv.js` | TV/kiosk-only: the voice-conversation panel + session terminal layered on the wall. |
 | `wallmode.js` | Follows `app_settings.wall_mode` so voice can switch the TV between the walls. Acts only on kiosk paths (`/tv`, `/tv-session-focus`, `/tv-calendar`, `/tv-home`), never on the phone's `/`. |
 | `calendar.js` | The `/calendar` page: paints the server-computed month grid + day agenda from `/api/calendar`; tap a day, page months. Read-only — writes stay with voice and the todo pane. Re-reads on an `/api/list-stream` push, never on a timer. |
-| `cards/dayline.js` | THE day column, on every surface that has one — the calendar wall, the home wall, the phone's lists pane. Owns the fetch, the clock and the reload rules: it re-reads on an `/api/list-stream` push and when the server says a chip changes state, and otherwise just moves the now-line against the clock (each hour row carries its 24h number). Mounts `#daycard` itself; the walls mount their column, because they choose the endpoint. |
+| `cards/dayline.js` | THE day column, on every surface that has one — and the home wall's look-ahead beside it, painted from the same response into the element `mount` was given as `ahead` — the calendar wall, the home wall, the phone's lists pane. Owns the fetch, the clock and the reload rules: it re-reads on an `/api/list-stream` push and when the server says a chip changes state, and otherwise just moves the now-line against the clock (each hour row carries its 24h number). Mounts `#daycard` itself; the walls mount their column, because they choose the endpoint. |
 | `tv-calendar.js` | The calendar wall's middle (only `tv-calendar.html` loads it): the month grid(s) out of the `/api/calendar?wall=1` payload that `dayline.js` fetched for the column beside them. Display-only. |
-| `tv-home.js` | The home wall's own middle (only `tv-home.html` loads it): mounts the day column, and polls `/api/sessions` for the newest session's last answer. Display-only. |
+| `tv-home.js` | The home wall's own middle (only `tv-home.html` loads it): mounts the day column and the look-ahead column beside it, and polls `/api/sessions` for the newest session's last answer. Display-only. |
 | `mic.js` | The `/mic` standalone launcher page's script (its own recorder, reuses `voiceagent`). |
 
 The activity element (`.ai-act`) renders the
@@ -334,7 +334,8 @@ grows, so it is fetched once by the one surface that can scroll through it) · `
 `/api/todos` (lists + notes + the derived `due` view) · `/api/calendar` (month grid(s) of every
 dated item — every occurrence is a real row, so nothing is projected; `?month=` pages, `?wall=1` adds
 the day timeline and reads `calendar_months` for the spread, `?day=1` is the timeline alone and
-`&full=1` makes it a rolling ±12h window instead of a calendar day — see the dial below) · `/api/badge` · `/api/repos` ·
+`&full=1` makes it a rolling ±12h window instead of a calendar day — see the dial below, and
+`&ahead=N` adds the N days after today as `ahead`) · `/api/badge` · `/api/repos` ·
 `/api/repos/cmd/:id` · `/api/sessions` (live desk sessions + the follow-up `focus`) ·
 `/api/session-stream` (SSE, one `session` frame per tool call or finished turn, pushed by the
 orchestrator on either machine — see SESSIONS.md §10) · `/api/reports`
@@ -471,6 +472,25 @@ time label and no repeat glyph, both of which were spending width that several c
 hour, crossing midnight in both directions, each carrying `t` — hours from today's midnight, which
 may be negative or past 24. That is the coordinate the dial angles off, and it is what lets a client
 draw a continuous timeline without knowing anything about dates.
+
+### The look-ahead (`?ahead=N`, home wall only)
+
+`ahead` is the N days AFTER today, in order, each with `dow`, `day`, a `month` on the day the number
+resets, its `items`, and the `more` the box could not hold. The server caps at
+`LOOKAHEAD_MAX_PER_DAY` for the same reason it caps a half-line: the box is a sixth of a column of
+known height, so how many chips fit is a fixed number, and two surfaces deciding it separately is two
+surfaces that will disagree about which item got dropped.
+
+Three things about it that are not obvious from the payload:
+
+- **The expansion window is widened to reach it.** `byDay` is built over the month grids' span, which
+  ends on the Saturday after the month's last day — and therefore ON that day when the month ends on
+  a Saturday. The look-ahead then runs off the end of it, so `endKey` takes whichever of the two
+  reaches further. Without that, a month ending on a Saturday shows six empty boxes.
+- **It is a list, not a timeline.** Hour rows for a day nobody is living in yet would spend the box
+  drawing empty hours; at a day's remove the question is only what is on the day.
+- **Its chips carry their time**, which the day column's never do — there is no hour row under them
+  to say it. That is `chip(it, true)`, the one place the second argument is passed.
 
 ### The dial (`cards/dayline.js` `project()`, home wall only)
 

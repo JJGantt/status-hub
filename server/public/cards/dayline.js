@@ -13,9 +13,10 @@ import { esc, liveStream } from '../shared.js';
 // surface on screen — so a list is the right shape and the tick can just walk it.
 const columns = [];
 
-// No time on the chip and no repeat glyph: the line it sits on already says the time, and several
-// chips share that line's width. Both were spending room the chips need more.
-function chip(it) {
+// No repeat glyph, and no time unless the surface asks: on the day column the line a chip sits on
+// already says the time, and several chips share that line's width. Both were spending room the
+// chips need more.
+function chip(it, withTime) {
   const cls = 'cw-dchip' + (it.exempt ? ' exempt' : '') +
     (it.done ? ' done' : it.expired ? ' exp' : it.grace ? ' grace' : it.past ? ' past' : '');
   // The server decides both the number and which kind it is; this only paints it.
@@ -23,7 +24,11 @@ function chip(it) {
   // Important carries the same amber ! the lists pane uses; exempt goes hollow, because it is
   // not a thing to do — it is a thing that is simply on the schedule.
   const imp = it.priority > 0 ? '<span class="cw-imp">!</span>' : '';
-  return `<span class="${cls}" style="--c:${esc(it.color)}">${imp}<span class="cw-l">${esc(it.title)}</span>${sc}</span>`;
+  // The look-ahead asks for the time ON the chip: its box is a whole day, so nothing else there says
+  // when. The day column never does — the hour row a chip sits on already said it, and repeating it
+  // spends the width the title needs.
+  const tm = withTime && it.time ? `<span class="cw-t">${esc(it.time)}</span>` : '';
+  return `<span class="${cls}" style="--c:${esc(it.color)}">${imp}${tm}<span class="cw-l">${esc(it.title)}</span>${sc}</span>`;
 }
 
 // One half-hour line. The second is reserved for :30-:59, so a 4:30 item sits on the lower line even
@@ -32,7 +37,7 @@ function chip(it) {
 // visible AS hidden rather than silently dropped.
 function halfLine(half) {
   const more = half.more ? `<span class="cw-more">+${half.more}</span>` : '';
-  return `<div class="cw-half">${half.items.map(chip).join('')}${more}</div>`;
+  return `<div class="cw-half">${half.items.map((it) => chip(it)).join('')}${more}</div>`;
 }
 
 // Chips per line — what the CSS lays out side by side, and the same number the server caps a half at.
@@ -56,7 +61,7 @@ function hourItems(hr, merged) {
 
 export function dayHtml(dl) {
   const allday = dl.allday.length
-    ? `<div class="cw-allday">${dl.allday.map(chip).join('')}</div>` : '';
+    ? `<div class="cw-allday">${dl.allday.map((it) => chip(it)).join('')}</div>` : '';
   const hours = dl.hours.map((h) => {
     const now = h.now !== null ? `<div class="cw-now" style="top:${h.now}%"></div>` : '';
     return `<div class="cw-hour${h.now !== null ? ' cur' : ''}">` +
@@ -66,16 +71,40 @@ export function dayHtml(dl) {
   return `<div class="cw-dayhead">${esc(dl.label)}</div>${allday}<div class="cw-hours">${hours}</div>`;
 }
 
+// ONE DAY OF THE LOOK-AHEAD — which day it is, then what is on it. A list, not a timeline: at a
+// day's remove the useful fact is what is on the day, and hour rows for a day nobody is living in
+// yet would spend the whole box drawing empty hours.
+function aheadDay(d) {
+  // The +N goes in the HEADER, not under the chips. It is a fact about the day rather than a fourth
+  // item, the header has the width spare, and a box sized for exactly three chips has no room for a
+  // line under them — put it there and it is simply clipped, which is a hidden item hidden twice.
+  const more = d.more ? `<span class="cw-more">+${d.more}</span>` : '';
+  // The month rides with the number only where the server says it does — the day it resets.
+  const mo = d.month ? `<span class="cw-wmo">${esc(d.month)}</span>` : '';
+  return '<div class="cw-wday">' +
+    `<div class="cw-wh"><span class="cw-wdow">${esc(d.dow)}</span>` +
+      `<span class="cw-wnum">${d.day}</span>${mo}${more}</div>` +
+    `<div class="cw-witems">${d.items.map((it) => chip(it, true)).join('')}</div>` +
+  '</div>';
+}
+
+export function aheadHtml(days) { return (days || []).map(aheadDay).join(''); }
+
 /**
  * Mount a day column on an element and keep it live.
  *
  * `url` is whichever calendar view this surface needs — `?day=1` for a column on its own, `?wall=1`
  * where the same payload also carries the months. `onload` hands that whole payload back, so a page
  * wanting more out of the response gets it without a second fetch.
+ *
+ * `ahead` is a second element for the look-ahead days, painted from the SAME response and by the
+ * same reload — the two columns are one answer to one question, and a look-ahead fetching on its own
+ * is two clocks and two chances to be showing different days at the same moment.
  */
-export function mount(el, { url = '/api/calendar?day=1', centre = false, onload = null, dial = false } = {}) {
+export function mount(el, { url = '/api/calendar?day=1', centre = false, onload = null, dial = false,
+                            ahead = null } = {}) {
   if (!el) return;
-  const col = { el, url, centre, onload, dial, dl: null, next: null };
+  const col = { el, url, centre, onload, dial, ahead, dl: null, next: null };
   columns.push(col);
   if (dial) {
     el.classList.add('dial');
@@ -214,6 +243,7 @@ async function load(col) {
   try { d = await (await fetch(col.url)).json(); } catch (_) { return; }
   if (!d || d.error) return;
   if (col.onload) col.onload(d);
+  if (col.ahead && d.ahead) col.ahead.innerHTML = aheadHtml(d.ahead);
   if (!d.dayline) return;
   col.dl = d.dayline;
   // When the next chip changes state on its own — comes due, leaves grace, starts draining. Without

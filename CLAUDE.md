@@ -95,11 +95,15 @@ already authenticated as Jared. Charts must be inline `<svg>` — no `<script>`,
 ## There are four walls, and the default is the one being molded
 
 `public/tv-home.html` (`/` and `/tv`) is the **home wall — the default, and what the TV is showing**.
-The shared frame (status strip · rings · health bar · footer · voice column) around three columns:
-today's day column, the three heat maps stacked with the strip that belongs to each (nutrition
-totals vs target, the rest/session clocks, surf), and the newest session's last answer. `tv-home.js`
-+ `tv-home.css` are its own; everything else on it is a shared card `core.js` already paints, which
-is why the page is mostly markup. This is the one to shape.
+The shared frame (status strip · rings · health bar · footer · voice column) around four columns:
+today's day column, the six days after it, the three heat maps stacked with the strip that belongs
+to each (nutrition totals vs target, the rest/session clocks, surf), and the newest session's last
+answer. `tv-home.js` + `tv-home.css` are its own; everything else on it is a shared card `core.js`
+already paints, which is why the page is mostly markup. This is the one to shape.
+
+Its grid is SIX columns, declared in `tv-home.css` — which means the spans app.css writes for its
+five are wrong here and are overridden alongside it: the status strip reaches column 6, the footer
+column 7, and the health bar sits in 6. Add a column and those three are what silently misplace.
 
 `public/tv-health.html` (`/tv-health`) is the health wall — what used to be the default, and still
 the only place nutrition, the muscle map, the volume bars and the workout heatmap are on one screen,
@@ -137,6 +141,16 @@ column, and the phone's lists pane (`#daycard`, which it mounts itself). Surface
 and in which endpoint feeds them (`?day=1` alone, `?wall=1` when the same payload also carries the
 months, handed back through `onload`), never in markup. There were two copies of this and they had
 already drifted to different class names for the same chip and two separate clocks.
+
+The home wall's **look-ahead** — the six days after today — is drawn by the same module, from the
+same response (`&ahead=6`) and by the same reload, into a second element handed to `mount` as
+`ahead`. One fetch and one clock for both: they are one answer to one question, and a look-ahead
+re-reading on its own is two surfaces that can be showing different days at the same moment.
+
+It is a LIST, not a timeline, and that is the whole design: today is a dial because he is inside it
+and the question is how much of it is left, while a day at a remove only has to say what is on it.
+The chips are the day column's own — same colours, same states — but they carry their time, because
+no hour row underneath is saying it.
 
 ## Where a fact goes
 

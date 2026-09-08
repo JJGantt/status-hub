@@ -2304,6 +2304,12 @@ const dayHalf = (items) => ({
   more: Math.max(0, items.length - DAYLINE_MAX_PER_HALF),
 });
 
+// A look-ahead day's box holds this many chips, and the rest become its +N. Decided here rather than
+// in the wall for the same reason the half-line's cap is: the box is a sixth of a column of known
+// height, so how many chips fit is a fixed number, and two surfaces working it out separately is two
+// surfaces that will eventually disagree about which item was the one dropped.
+const LOOKAHEAD_MAX_PER_DAY = 3;
+
 // The occurrences of one item falling inside [startKey, endKey] (inclusive 'YYYY-MM-DD' bounds) —
 // which is now at most one, its own `due`. A recurring thing is materialised as an independent row
 // per occurrence (data-layer migration 00085), so the grid reads real rows rather than projecting
@@ -2359,8 +2365,18 @@ app.get('/api/calendar', async (req, res) => {
       const last = Date.UTC(y0, mo0 + k, 0);
       bounds.push({ first, gridStart: first - new Date(first).getUTCDay() * DAY, gridEnd: last + (6 - new Date(last).getUTCDay()) * DAY });
     }
+    // `ahead=N` asks for the N days AFTER today as well, each with what is on it — the home wall's
+    // look-ahead column. It can reach past the last month's grid, which ends on the Saturday after
+    // the month's last day and so ends ON that day when the month ends on a Saturday. Widening the
+    // expansion window is the whole fix: the month grids read from their own bounds, so the extra
+    // day buckets cost nothing to anyone who did not ask for them.
+    const aheadDays = Math.max(0, Math.min(14, Math.trunc(Number(req.query.ahead)) || 0));
+    const todayMs = Date.parse(`${todayKey}T00:00:00Z`);
     // One expansion over the whole span; every month's grid then reads from the same day buckets.
-    const startKey = keyOf(bounds[0].gridStart); const endKey = keyOf(bounds[count - 1].gridEnd);
+    const startKey = keyOf(bounds[0].gridStart);
+    const gridEndKey = keyOf(bounds[count - 1].gridEnd);
+    const aheadEndKey = keyOf(todayMs + aheadDays * DAY);
+    const endKey = aheadEndKey > gridEndKey ? aheadEndKey : gridEndKey;
 
     const [listRows, rows] = await Promise.all([
       sb('lists?select=name,emoji'),
@@ -2489,7 +2505,32 @@ app.get('/api/calendar', async (req, res) => {
       dayline = { date: todayKey, label: todayCell ? todayCell.label : todayKey, allday, hours };
     }
 
-    if (dayOnly) return res.json({ today: todayKey, dayline, next_transition: nextChipTransition(rows, nowET) });
+    // THE LOOK-AHEAD — the days after today, one box each, in order. The dial answers "what is left
+    // today" and cannot answer "what is coming", because a window centred on now only ever reaches a
+    // few hours into tomorrow. This is the other half of that question, and it is a list rather than
+    // a timeline: at a day's remove the useful fact is what is on the day, not where in it.
+    let ahead = null;
+    if (aheadDays) {
+      ahead = [];
+      for (let k = 1; k <= aheadDays; k++) {
+        const d = new Date(todayMs + k * DAY);
+        const date = keyOf(todayMs + k * DAY);
+        const items = byDay[date] || [];
+        ahead.push({
+          date,
+          dow: d.toLocaleDateString('en-US', { timeZone: 'UTC', weekday: 'short' }),
+          day: d.getUTCDate(),
+          // First of the month gets its month said; nothing else does. Six weekday names running
+          // forward already fix where you are, and the one place that stops being true is the day
+          // the number resets.
+          month: d.getUTCDate() === 1 ? d.toLocaleDateString('en-US', { timeZone: 'UTC', month: 'short' }) : null,
+          items: items.slice(0, LOOKAHEAD_MAX_PER_DAY),
+          more: Math.max(0, items.length - LOOKAHEAD_MAX_PER_DAY),
+        });
+      }
+    }
+
+    if (dayOnly) return res.json({ today: todayKey, dayline, ...(ahead ? { ahead } : {}), next_transition: nextChipTransition(rows, nowET) });
     res.json({
       today: todayKey,
       dow: ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'],
@@ -2499,6 +2540,7 @@ app.get('/api/calendar', async (req, res) => {
       cols: count === 1 ? 1 : count <= 4 ? 2 : count <= 6 ? 3 : 4,
       months,
       ...(dayline ? { dayline } : {}),
+      ...(ahead ? { ahead } : {}),
       next_transition: nextChipTransition(rows, nowET),
     });
   } catch (e) { res.status(500).json({ error: String(e.message || e) }); }

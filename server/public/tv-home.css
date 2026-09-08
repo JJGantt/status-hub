@@ -1,20 +1,34 @@
 /* The home wall — everything this page needs that the shared wall frame does not have.
    Loaded ONLY by tv-home.html, so app.css and the other walls stay untouched.
 
-   The wall grid is `280px 1fr 1fr 1fr 60px` (app.css). Rings keep column 1 and the health bar keeps
-   column 5, which leaves exactly three for this wall's three: today, the heat maps, the session. */
-/* The day column is 380px on the calendar wall and it is 380px here — it is the SAME column, and a
-   1fr share of the grid made it ~507px, which reads as a different, emptier thing. The width it
-   gives up goes to the two columns beside it. */
-/* Unchanged from before the muscle column: widening this column is what oversized surf under it and
-   took width off the sessions column. The column pays for itself instead — the home wall's heat maps
-   run 15 weeks to the health wall's 20, which makes them narrower at the same cell size and leaves
-   the muscle column its 112px inside the width the heat column already had. */
-body.tv .rows{grid-template-columns:280px 380px 1fr 1fr 60px}
+   SIX columns: rings · today · the six days after it · the heat maps · the sessions · the health
+   bar. app.css's five (`280px 1fr 1fr 1fr 60px`) are replaced outright, and so are the spans that
+   were written for five — the status strip and the footer reach one column further right, and the
+   health bar is column 6. Miss either and the strip stops short of the health bar while the footer
+   runs under it.
+
+   WHERE THE LOOK-AHEAD'S WIDTH CAME FROM. Not the heat maps: that column measures within a few
+   pixels of its content already, and `.fit` clips what does not fit with no error at all. It came
+   from the two either side, which had it to give — the sessions column was 570px carrying one
+   19px paragraph, and the day column loses 40px it was spending on chip width it did not need. */
+/* The day column is 380px on the calendar wall and it is 340px here. It stopped being the same
+   column when the look-ahead arrived beside it: what the width was buying was room for two chips
+   on a half-line, and 340 still holds those. A 1fr share of the grid made it ~507px, which reads as
+   a different, emptier thing — the change is downward for a reason, not drift. */
+/* The heat column is unchanged from before the muscle column and unchanged again by this: widening
+   it is what oversized surf under it and took width off the sessions column. It pays for itself
+   instead — the home wall's heat maps run 15 weeks to the health wall's 20, which makes them
+   narrower at the same cell size and leaves the muscle column its 112px inside the width it had. */
+body.tv .rows{grid-template-columns:280px 340px 200px 1fr 400px 60px}
+body.tv .statusrow{grid-column:1/6}
+body.tv .healthbar{grid-column:6}
+/* Same selector app.css uses, so equal specificity and this one wins by coming after it. */
+body.tv:not(.phonewall):not(.mac) .tv-footrow{grid-column:1/7}
 body.tv .hw-dayrow{grid-column:2;grid-row:2;display:flex;flex-direction:column;min-width:0;min-height:0}
-body.tv .hw-heatrow{grid-column:3;grid-row:2;display:flex;flex-direction:column;min-width:0;min-height:0}
-body.tv .hw-sessrow{grid-column:4;grid-row:2;display:flex;flex-direction:column;min-width:0;min-height:0}
-body.tv .hw-daycard,body.tv .hw-heatcard,body.tv .hw-sesscard{flex:1 1 auto;min-height:0}
+body.tv .hw-weekrow{grid-column:3;grid-row:2;display:flex;flex-direction:column;min-width:0;min-height:0}
+body.tv .hw-heatrow{grid-column:4;grid-row:2;display:flex;flex-direction:column;min-width:0;min-height:0}
+body.tv .hw-sessrow{grid-column:5;grid-row:2;display:flex;flex-direction:column;min-width:0;min-height:0}
+body.tv .hw-daycard,body.tv .hw-weekcard,body.tv .hw-heatcard,body.tv .hw-sesscard{flex:1 1 auto;min-height:0}
 
 /* COL 2 — the day, filling a column sized to it above. */
 body.tv .hw-daycard .cw-day{flex:1 1 auto;min-height:0;display:flex;flex-direction:column;overflow:hidden}
@@ -81,6 +95,12 @@ body.tv .hw-daycard .cw-day.dial .cw-hour.thin .cw-sc,
 body.tv .hw-daycard .cw-day.dial .cw-hour.thin .cw-imp{display:none}
 body.tv .hw-daycard .cw-day.dial .cw-hour.thin .cw-dchip{border-left-width:0;background:var(--c);
   border-radius:2px;min-height:3px}
+/* A FLATTENED CHIP HAS NO LABEL, and the strike through the label was a completed item's only mark
+   of being completed — `done` deliberately does not dim the chip, because dimming took the score
+   down with it. So at bar size a finished thing painted the same full-strength colour as one still
+   waiting, which is the one reading a bar must not give. It dims instead, at the value `past`
+   already uses for something that has been and gone. */
+body.tv .hw-daycard .cw-day.dial .cw-hour.thin .cw-dchip.done{opacity:.45}
 body.tv .hw-daycard .cw-day.dial .cw-hour.sliver .cw-hl{visibility:hidden}
 body.tv .hw-daycard .cw-day.dial .cw-hour.sliver .cw-hitems{gap:1px}
 /* The server draws a marker inside whichever hour contains now. On the dial that hour is a moving
@@ -89,7 +109,58 @@ body.tv .hw-daycard .cw-day.dial .cw-hour.sliver .cw-hitems{gap:1px}
 body.tv .hw-daycard .cw-day.dial{position:relative}
 body.tv .hw-daycard .cw-day.dial .cw-hours{position:relative}
 
-/* COL 3 — three heat maps down one column. Each block is heatmap + the strip that belongs to it,
+/* ===== COL 3 — THE LOOK-AHEAD: the six days after today, a box each =====================
+   The dial's grammar does not extend here. Today is a timeline because he is inside it and the
+   question is how much of it is left; a day at a remove is a LIST, because the question is only
+   what is on it. Hour rows for Thursday would spend the whole box drawing empty hours.
+
+   Every day keeps its box whether or not anything is on it, and the six share the column equally.
+   An empty Thursday is a fact worth reading, and a column that sized itself to what happened to be
+   booked would move every other day's box the moment one item was added. */
+body.tv .hw-weekcard .fit{padding:8px 6px;gap:0}
+/* THE EVENT TEXT IS SIZED OFF THE DIAL. The hour number at the axis is `13px + 19px * --face` with
+   --face 1, so 32px is the size of the biggest thing in the column beside this one — but 32px in a
+   200px box holds about eleven characters, and a look-ahead where every title ellipsises has stopped
+   answering the question it was added for. This is the size at which a real title fits AND three of
+   them fit down the box; it is the largest number both of those allow, not a taste. */
+body.tv .cw-week{--wk-size:21px;flex:1 1 auto;min-height:0;display:flex;flex-direction:column;gap:5px}
+/* A bordered box, the same 1px #222a33 the session rows use. The rest of this wall separates things
+   typographically and this one cannot: six lists running down a 200px column need an edge saying
+   where one day stops and the next starts, or the last chip of Wednesday reads as the first of
+   Thursday. */
+body.tv .cw-wday{flex:1 1 0;min-height:0;display:flex;flex-direction:column;gap:3px;overflow:hidden;
+  border:1px solid #222a33;border-radius:8px;padding:3px 6px 4px}
+/* WHICH DAY, in the dial's own hand: the number is what a glance lands on, sized and coloured like
+   an hour number on the drum, with the weekday beside it saying what kind of number it is. The two
+   columns then read as one clock at two scales rather than as a dial and an unrelated list. */
+body.tv .cw-wh{flex:0 0 auto;display:flex;align-items:baseline;gap:7px;min-width:0}
+body.tv .cw-wdow{font-size:15px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;
+  color:#8b96a5;flex:0 0 auto}
+body.tv .cw-wnum{font-size:21px;font-weight:700;color:#cfd8e3;line-height:1;
+  font-variant-numeric:tabular-nums;flex:0 0 auto}
+/* Only on the day the number resets, which is the one day six weekday names running forward stop
+   being enough to place you. */
+body.tv .cw-wmo{font-size:13px;font-weight:700;color:#5c6675;flex:0 0 auto}
+body.tv .cw-witems{flex:1 1 auto;min-height:0;display:flex;flex-direction:column;gap:3px;
+  overflow:hidden;justify-content:flex-start}
+/* Chips STACK, full width. On the timeline a chip takes half a line whether or not it has a
+   neighbour, because there the line's shape is what says how busy the hour is — here the box is a
+   whole day, there is no second half to reserve, and a half-width chip in a 200px column would hold
+   about four characters. */
+body.tv .cw-witems .cw-dchip{flex:0 0 auto;width:100%;min-height:0;font-size:var(--wk-size);
+  line-height:1.15;padding:2px 5px 2px 6px;border-left-width:3px}
+/* The time leads the title, muted and smaller — it is what the hour row said on the timeline, and
+   it is metadata about the item rather than part of its name. tabular so a column of them lines up.
+   An all-day item simply has none, and its title starts at the chip's edge. */
+body.tv .cw-witems .cw-t{flex:0 0 auto;margin-right:6px;font-size:.78em;font-weight:700;
+  color:#8b96a5;font-variant-numeric:tabular-nums}
+/* The +N rides at the right of the header. calc, not em: it is not inside a chip, so an em would
+   resolve against the inherited body size rather than against the chip text it belongs with. */
+body.tv .cw-wh .cw-more{margin-left:auto;align-self:baseline;padding:0;
+  font-size:calc(var(--wk-size) * .78)}
+body.tv .cw-witems .cw-sc,body.tv .cw-witems .cw-sc.k-potential{font-size:.78em}
+
+/* COL 4 — three heat maps down one column. Each block is heatmap + the strip that belongs to it,
    and the blocks share the height evenly rather than the first one taking what it likes. */
 /* Each block takes the height its own content needs and the slack goes BETWEEN them. Equal thirds
    looked tidier in the abstract and was wrong in practice: the two week-grids are shorter than the
@@ -215,8 +286,8 @@ body.tv .hw-heatcard .hw-surf .surfheat{margin-top:0}
    not on a black ground. */
 body.tv .hw-heatcard .hw-surf .surfwater{background:#000}
 
-/* COL 4 — what is running, then the focused one's last answer.
-   The list is every live session, capped at five, in the order voice numbers them. The row showing
+/* COL 5 — what is running, then the focused one's last answer.
+   The list is every live session, capped at three, in the order voice numbers them. The row showing
    its answer below is the lit one; the footer already says which session takes a follow-up, so this
    highlight means "this is what is open", not "this is focused". */
 body.tv .hw-sesscard .fit{gap:12px}
@@ -267,4 +338,8 @@ body.tv .hw-sess-reply{flex:1 1 auto;min-height:0;overflow-y:auto;white-space:pr
    maps, the session's answer full width underneath. ===== */
 body.tv.wallportrait .hw-dayrow{grid-column:1;grid-row:4}
 body.tv.wallportrait .hw-heatrow{grid-column:2;grid-row:4}
-body.tv.wallportrait .hw-sessrow{grid-column:1/3;grid-row:5}
+/* The look-ahead takes half of the row the answer used to have to itself, rather than a seventh row
+   the portrait template does not define — an implicit row would size itself and push the wall off
+   the bottom of the phone. */
+body.tv.wallportrait .hw-weekrow{grid-column:1;grid-row:5}
+body.tv.wallportrait .hw-sessrow{grid-column:2;grid-row:5}

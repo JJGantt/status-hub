@@ -8,8 +8,8 @@
 <script type="module" src="dist/tv-home.js"></script>
 </head><body class="tv homewall">
 <!-- THE HOME WALL — the default, at `/` and `/tv`. The frame every wall shares (status strip · rings
-     · health bar · footer · voice column) around three columns: today's timeline, the heat maps, and
-     the newest session's last answer. The deep nutrition/muscle/workout surface it replaced is the
+     · health bar · footer · voice column) around four columns: today's timeline, the six days
+     after it, the heat maps, and the newest session's last answer. The deep nutrition/muscle/workout surface it replaced is the
      HEALTH wall at /tv-health; this one keeps only what a glance from across the room can use. -->
 <div class="wallpanes" id="wallpanes">
 
@@ -49,7 +49,16 @@
       <div class="card hw-daycard"><div class="fit"><div class="cw-day" id="cw-day"></div></div></div>
     </div>
 
-    <!-- COL 3 — the heat maps, stacked. Each carries the strip that belongs to it: the day's totals
+    <!-- COL 3 — THE LOOK-AHEAD: the six days after today, a box each, painted from the same
+         /api/calendar response as the column beside it (cards/dayline.js). The dial answers what is
+         left today and cannot answer what is coming — a window centred on now reaches only a few
+         hours into tomorrow — so this is the other half of the same question, in the other grammar:
+         a list of what is ON each day rather than a timeline of where in it. -->
+    <div class="row-card hw-weekrow">
+      <div class="card hw-weekcard"><div class="fit"><div class="cw-week" id="cw-week"></div></div></div>
+    </div>
+
+    <!-- COL 4 — the heat maps, stacked. Each carries the strip that belongs to it: the day's totals
          against target under nutrition, the rest/session clocks under workouts. Surf sits below both
          behind a rule, because its columns are HOURS OF ONE DAY where theirs are whole weeks — the
          same grammar would be a lie. -->
@@ -85,7 +94,7 @@
       </div></div>
     </div>
 
-    <!-- COL 4 — what is running, and what the focused one last said. The list is numbered the way
+    <!-- COL 5 — what is running, and what the focused one last said. The list is numbered the way
          voice numbers them, so "the second session" is the second line. Display-only: voice starts
          them, voice focuses them, and this is where the answer lands. -->
     <div class="row-card hw-sessrow">

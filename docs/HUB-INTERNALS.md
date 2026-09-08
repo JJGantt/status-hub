@@ -277,10 +277,19 @@ record. (`task_events` existed for one afternoon and was dropped in `00089` for 
 
 Every constant is in one block at the top of `score.js`. **`TASK_RATE` is the amplitude knob** —
 completions/day that holds the band full — and `TASK_FULL_UNITS` derives from it, so one ordinary
-on-time completion is worth `1 / (RATE · DECAY_DAYS / 2)` of the band. At 8 that is ~3.5%, about
-1.2 points of the overall bar: putting a shirt in the dryer should barely register, and filling the
-gold should take a genuinely busy week, the same way hitting every muscle's set target keeps training
-hard to fill.
+on-time completion is worth `1 / (RATE · DECAY_DAYS / 2)` of the band. At 2.5 that is ~11.4%, about
+3.8 points of the overall bar.
+
+Set it from the rate there is actually something to earn against. A day here carries two or three
+dated items, so a rate above that leaves the gold unreachable no matter how well the day goes, and a
+band that cannot be filled measures nothing — which is what 8 did. 2.5 is the rate at which three
+ordinary completions a day fill the gold over a week *with something typically sitting overdue*; the
+drain is budgeted into the number rather than assumed away. Three a day and nothing overdue fills it
+in four.
+
+`TASK_RATE` moves the drain with it, since an overdue item removes units from the same pool. That
+keeps one invariant that does not depend on the rate: **an item left overdue for a day cancels
+exactly one on-time completion.** Change the amplitude and that trade stays where it is.
 
 **Staged meals on the rings.** A staged meal (`nutrition_entries.staged = true`) is food that exists
 but has not been eaten, so it never touches `consumed`: every number, and the whole arc, reads

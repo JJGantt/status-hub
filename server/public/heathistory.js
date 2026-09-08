@@ -36,14 +36,6 @@ export function withHistory(live, key, el, today) {
   return Object.assign({}, live, { weeks: pre.weeks.concat(live.weeks || []), months });
 }
 
-// Repaint a heat grid without losing where it is scrolled to. The card rebuilds its innerHTML on
-// every frame; without this a frame arriving while he is reading March would snap him back to it.
-export function paintHeat(el, html) {
-  const left = el.scrollLeft;
-  el.innerHTML = html;
-  if (left) el.scrollLeft = left;
-}
-
 // Pin a grid to its newest column — the right edge. Called on open, and again when history lands
 // and widens it.
 export function pinRight(el) {

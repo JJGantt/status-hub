@@ -1,8 +1,8 @@
 // Nutrition Log card: combined dual-axis calorie+weight plot (weekly game) + calorie-adherence
 // calendar (daily game), with inline day detail + click/drag-scrub selection. Every entry row
 // expands to its ingredient breakdown + actions (log-again / change-quantity / delete).
-import { esc, dualPlot, state, localNowNaive } from '../shared.js';
-import { withHistory, paintHeat } from '../heathistory.js';
+import { esc, dualPlot, state, localNowNaive, paintScrolled } from '../shared.js';
+import { withHistory } from '../heathistory.js';
 
 const CAL_COLOR='#3b82f6', W_COLOR='#a78bfa';
 let nutSelDate=null, nutReq=0;
@@ -60,9 +60,9 @@ export function render(s){
   '<div class=hbody><div class=hdows>'+dowLabels+'</div><div class=heat>'+grid+'</div></div>';
  // Each panel paints if the page has it, so a surface can take the heatmap alone — the home wall
  // shows it with no plot and no food list. #nutwrap is the desktop's combined fallback.
- if(heatEl)paintHeat(heatEl,heatHtml);
+ if(heatEl)paintScrolled(heatEl,heatHtml);
  if(plotEl)plotEl.innerHTML=plotBlock;
- if(!heatEl&&!plotEl&&wrap)paintHeat(wrap,heatHtml+plotBlock);
+ if(!heatEl&&!plotEl&&wrap)paintScrolled(wrap,heatHtml+plotBlock);
  if(nutSelDate){ markNutCell(nutSelDate); if(nutSelDate===s.today)loadNutDay(nutSelDate); } // live-refresh today's log
  else if(s.today)selectNutDay(s.today); // default the detail panel to today's log on first load
 }

@@ -108,6 +108,22 @@ export function liveStream(url, listeners, { onOpen } = {}) {
   }, 1000);
 })();
 
+// Repaint a host whose content scrolls sideways, without throwing away where it is scrolled to.
+// Cards rebuild their innerHTML on every SSE frame; without this, a frame arriving while he is
+// reading back through June would snap him to whatever end the fresh markup starts at.
+// `sel` finds the scroller inside the host when it isn't the host itself; `stick` keeps a view that
+// was already at the newest edge pinned there as new days arrive.
+export function paintScrolled(host, html, { sel = null, stick = false } = {}) {
+  const find = (h) => (sel ? h.querySelector(sel) : h);
+  const before = find(host);
+  const left = before ? before.scrollLeft : 0;
+  const wasAtEnd = before ? before.scrollWidth - left - before.clientWidth < 2 : true;
+  host.innerHTML = html;
+  const after = find(host);
+  if (after) after.scrollLeft = (stick && wasAtEnd) ? after.scrollWidth : left;
+  return after;
+}
+
 export function esc(s){return String(s).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;');}
 // This device's own current wall clock, naive (no offset) — "YYYY-MM-DDTHH:MM:SS", matching exactly
 // how sets/nutrition_entries.occurred_at is stored. Sent with every write so the logged time is

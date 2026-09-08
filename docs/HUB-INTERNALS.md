@@ -109,13 +109,13 @@ discover level two until level one has arrived. Served raw that is a round trip 
 | File | Role |
 |---|---|
 | `core.js` | Boot: opens the SSE stream, is the render orchestrator (calls every card's `render(s)`), then inits the layout. |
-| `shared.js` | Shared helpers (`esc`, `state`, local-time formatting) + the `state.last` cache, `liveStream()` (every SSE connection on every page), and the staleness hairline. |
+| `shared.js` | Shared helpers (`esc`, `state`, local-time formatting) + the `state.last` cache, `liveStream()` (every SSE connection on every page), the staleness hairline, and `paintScrolled()` — how a card rebuilds sideways-scrolling content each frame without throwing away where it is scrolled to. |
 | `navbar.js` | Bottom bar: settings gear, the calendar link (on `/calendar` itself, a back-to-the-wall toggle instead) + the single voice FAB (`wfab-fast`). Exposes `window.__startVoiceCommand` for the native launcher. |
 | `voiceagent.js` | The in-app conversation pipeline: `makeRecorder` (mic → `/api/voice-command`), the activity popup, the conversation card. |
 | `settings.js` | The gear panel — reads/writes `app_settings` via `/api/settings` (§7). |
 | `wall.js` | Phone "wall mode": scales the 1920×1080 `/tv` shell to fit a phone; drives the swipe panes. |
 | `expand.js` | Phone-wall expand icons → full-screen section sheets. On open it re-runs the two cards (so their grid picks up the sheet's fixed cell size and its history), loads `heathistory.js`, and pins the grid to its newest column. |
-| `heathistory.js` | The heat-grid columns older than the status frame carries — fetched once from `/api/heat-history` and drawn only inside the sheet. Also `paintHeat()`, which is how a card rebuilds a grid without throwing away where it is scrolled to. |
+| `heathistory.js` | The heat-grid columns older than the status frame carries — fetched once from `/api/heat-history` and drawn only inside the sheet. |
 | `tv.js` | TV/kiosk-only: the voice-conversation panel + session terminal layered on the wall. |
 | `wallmode.js` | Follows `app_settings.wall_mode` so voice can switch the TV between the walls. Acts only on kiosk paths (`/tv`, `/tv-session-focus`, `/tv-calendar`, `/tv-home`), never on the phone's `/`. |
 | `calendar.js` | The `/calendar` page: paints the server-computed month grid + day agenda from `/api/calendar`; tap a day, page months. Read-only — writes stay with voice and the todo pane. Re-reads on an `/api/list-stream` push, never on a timer. |
@@ -145,7 +145,7 @@ make (`voiceagent.js`'s `boot()`, `tv.js`'s), handing it to `applyActivitySettin
 **Cards (`public/cards/`)** — each exports `render(s)` and paints from its `s.*` slice:
 
 `nutrition` (Cal/P/C/F pace rings + produce sub-rings) · `nutritionlog` (calorie+weight plot +
-adherence calendar) · `maintviz` (the maintenance-window viz) · `todo` (dated items / lists / notes,
+adherence calendar) · `maintviz` (the maintenance-window viz — the whole history at a fixed density, dragged by hand) · `todo` (dated items / lists / notes,
 self-fetches) · `repos` (the Mac's projects; tap to launch a Claude session there, self-fetches) ·
 `reports` (a dispatched session's write-ups, self-fetches — §6c) · `muscle` (body map + volume
 gauges) · `workouts` (heatmap + day detail) · `litter` · `feeder` · `surf` · `routing` (TV top strip)

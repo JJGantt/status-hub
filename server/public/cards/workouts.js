@@ -1,7 +1,7 @@
 // Workout Volume card: GitHub-style heatmap with inline day detail + click/drag-scrub selection,
 // defaulting to today; plus a rest timer (time since last set, hidden once past 5 min).
-import { state, esc, localNowNaive } from '../shared.js';
-import { withHistory, paintHeat } from '../heathistory.js';
+import { state, esc, localNowNaive, paintScrolled } from '../shared.js';
+import { withHistory } from '../heathistory.js';
 let heatSelDate=null, heatReq=0;
 let lastHeatExercises=null; // exercises for the open day-detail (for the repeat-set popup)
 
@@ -25,7 +25,7 @@ export function render(s){
    return '<div class=hcell'+click+' title="'+d.date+': '+d.count+' set'+(d.count===1?'':'s')+'" style="background:'+bg+out+cur+'"></div>';
  }).join('')+'</div>').join('');
  const dowLabels=['','Mon','','Wed','','Fri',''].map(x=>'<div class=hd>'+x+'</div>').join('');
- paintHeat(hw,
+ paintScrolled(hw,
   '<div class=hmonths>'+monthRow+'</div>'+
   '<div class=hbody><div class=hdows>'+dowLabels+'</div><div class=heat>'+grid+'</div></div>');
  if(heatSelDate){ markHeatCell(heatSelDate); if(heatSelDate===s.today)loadHeatDay(heatSelDate); } // live-refresh today's sets

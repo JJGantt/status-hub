@@ -630,13 +630,12 @@ body.tv.phonewall .pane-reports .reportscard>div{flex:1 1 auto;min-height:0;disp
 .todo .empty{color:#5c6675;font-size:14px;padding:8px 2px}
 .maintcard svg{width:100%;height:auto;display:block}
 .mv-head{display:flex;align-items:flex-start;justify-content:space-between;gap:10px}
-.mv-nav{display:flex;gap:8px}
-.mv-arr{width:34px;height:34px;border-radius:9px;border:1px solid #2a3340;background:#0e1318;color:#cfd8e3;
-  font-size:19px;line-height:1;display:flex;align-items:center;justify-content:center;cursor:pointer}
-.mv-arr:disabled{opacity:.35;cursor:default}
 .mv-title{font-size:16px;font-weight:700;color:#e6edf3}
 .mv-sub{font-size:12px;color:#8b96a5;margin:3px 0 10px}
 .mv-note{font-size:13px;color:#8b96a5;margin-top:8px}
+.mv-scroll{overflow-x:auto;overflow-y:hidden;-webkit-overflow-scrolling:touch;
+  overscroll-behavior-x:contain}   /* the pane itself is a horizontal swipe — don't hand it the gesture */
+.mv-scroll svg{height:auto;display:block}   /* width is set inline, one screen per VB_MIN of viewBox */
 .mv-leg{display:flex;flex-wrap:wrap;gap:5px 16px;margin-top:8px;font-size:11.5px;color:#8b96a5}
 .mv-leg i{display:inline-block;width:12px;height:12px;border-radius:3px;vertical-align:-2px;margin-right:5px}
 .mv-leg .mv-hatchkey{display:inline-block;width:12px;height:12px;border-radius:3px;vertical-align:-2px;margin-right:5px;

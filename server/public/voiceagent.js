@@ -26,6 +26,8 @@ export function applyActivitySettings(s) {
 let _activityBar = null;        // shared activity-popup singleton — declared up here so boot() (below) can call activityBar() without a TDZ error
 let _outboxBusy = false;        // photo-outbox reentrancy latch — up here for the same reason: boot() runs runPhotoOutbox()
 let _card = null;               // the conversation card (null on pages without it)
+let micStream = null;           // the page's one held microphone — see holdMic(); up here for the same reason
+let micPending = null;          // an in-flight getUserMedia, so concurrent callers share one acquisition
 let activeMode = 'hub';         // which mode's conversation the panel shows — follows agent_mode, live
 
 // Switch the panel to a mode's conversation: reload its thread + update the on-screen indicator. Hub and
@@ -43,6 +45,7 @@ function setMode(mode) {
 if (!KIOSK) boot();
 
 function boot() {
+  holdMic();                       // the microphone is open for as long as the hub is on screen
   const activity = activityBar();
   // Heard-you pop. The UI plays it ITSELF the instant the words land on screen — synced to the paint.
   const popSound = new Audio('/pop.m4a');
@@ -98,6 +101,43 @@ function boot() {
   // and never replays what it missed; without these the thread shows only what THIS device sent until a
   // manual refresh. backfill() is idempotent — a full rebuild — so resyncing costs nothing.
   if (_card) document.addEventListener('visibilitychange', () => { if (!document.hidden) _card.backfill(); });
+}
+
+// ONE microphone, held for as long as the hub is on screen.
+//
+// iOS takes up to two seconds to hand over a capture device — measured at 2,017ms on his phone from the
+// tap to the first captured frame — and acquiring per recording put that wait between every tap and the
+// red fill. So the hub warms the stream when the page comes up and keeps it, and a recording is just a
+// MediaRecorder over a device that is already open.
+//
+// Released the moment the page is hidden, and re-warmed when it comes back: iOS interrupts a
+// backgrounded capture anyway, and the recording indicator has no business staying lit over another app.
+// A track can also end under us (another app takes the mic, the OS interrupts) — hence the readyState
+// check rather than trusting the reference.
+// (`micStream`/`micPending` are declared at the top of the file with the rest of boot()'s state — boot()
+// runs above this point, and a `let` it touches would still be in the temporal dead zone here.)
+function micLive() { return micStream && micStream.getTracks().some((t) => t.readyState === 'live'); }
+function mic() {
+  if (micLive()) return Promise.resolve(micStream);
+  micStream = null;
+  if (!micPending) {
+    micPending = navigator.mediaDevices.getUserMedia({ audio: true })
+      .then((s) => { micStream = s; return s; })
+      .finally(() => { micPending = null; });
+  }
+  return micPending;
+}
+function releaseMic() {
+  const s = micStream; micStream = null;
+  if (s) s.getTracks().forEach((t) => t.stop());
+  if (micPending) micPending.then((p) => p.getTracks().forEach((t) => t.stop())).catch(() => {});
+}
+// Called by every surface that can record (the hub's boot, and the /mic web-clip).
+export function holdMic() {
+  const warm = () => { if (document.visibilityState === 'visible') mic().catch(() => {}); };
+  warm();
+  document.addEventListener('visibilitychange', () => (document.hidden ? releaseMic() : warm()));
+  window.addEventListener('pagehide', releaseMic);
 }
 
 // TEMPORARY. Every pointer event and every recorder state change, reported to the hub's log, because
@@ -203,9 +243,9 @@ export function makeRecorder({ onStatus = () => {}, onState = () => {}, quick, a
     arming = true; onState('armed');          // the tap is acknowledged here, not when the mic opens
     trace('start:arming');
     let s;
-    try { s = await navigator.mediaDevices.getUserMedia({ audio: true }); }
+    try { s = await mic(); }     // already open in the normal case, so this resolves in the same tick
     catch (_) { arming = false; onState('idle'); onStatus('Mic permission denied', 'err'); return; }
-    if (!arming) { s.getTracks().forEach((t) => t.stop()); return; }   // tapped again while arming → cancelled
+    if (!arming) return;         // tapped again while arming → cancelled; the mic stays warm for the next one
     arming = false; stream = s;
     const mime = pickMime();
     chunks = []; heardSpeech = false; vadRan = false;
@@ -236,9 +276,10 @@ export function makeRecorder({ onStatus = () => {}, onState = () => {}, quick, a
     try { if (live) rec.stop(); } catch (_) {}
     if (!live) release();          // no onstop is coming, so let go of the mic here instead
   }
-  function release() {
-    if (stream) { stream.getTracks().forEach((t) => t.stop()); stream = null; }
-  }
+  // The page owns the microphone (see mic() above), so a finished recording drops its reference and
+  // leaves the device open for the next tap. Stopping the tracks here is what used to make every tap
+  // pay the acquisition cost again.
+  function release() { stream = null; }
   async function upload(mime) {
     trace('upload:begin');
     try { await send(mime); } finally { sending = false; onState('idle'); trace('upload:end'); }

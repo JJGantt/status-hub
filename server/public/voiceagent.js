@@ -7,7 +7,7 @@
 //      Sonnet→Opus escalation when a turn leaves the fast path (its own row + a sticky OPUS chip).
 // Tool-call rows (role='tool') are surfaced ONLY in the activity bar, never in the conversation
 // thread. All skipped on the TV wall (no mic; it renders the conversation itself via tv.js).
-import { esc, localNowNaive, liveStream } from './shared.js';
+import { esc, localNowNaive, liveStream, KIOSK } from './shared.js';
 
 let phoneHangMs = 3000;   // phone trailing-silence (ms) for the FAB VAD; overridden by the phone_silence_s setting
 let resetMs = 30 * 60 * 1000;   // context-reset idle gap (ms) = session_reset_s. A message arriving after a gap
@@ -38,16 +38,16 @@ function setMode(mode) {
   if (el) { el.textContent = activeMode === 'agent' ? 'Agent' : 'Hub'; el.classList.toggle('is-agent', activeMode === 'agent'); }
 }
 
-// The big-screen kiosk (≥1400px, and not the Mac app) has tv.js's own panel and no input; everything
-// else — the page view, the PHONE wall (which hosts the chat pane), the Mac app's chat side panel —
-// boots the interactive client. body.phonewall isn't set yet at import time (wall.js loads after
-// core.js's import graph), so this is the same viewport predicate wall.js uses; body.mac is set in
-// shared.js. The same predicate picks the activity bar's mount point below.
-const KIOSK = document.body.classList.contains('tv') && !document.body.classList.contains('mac') && window.innerWidth >= 1400;
+// The kiosk has tv.js's own voice layer and no input; everything else boots the interactive client.
+// KIOSK also picks the activity bar's mount point below.
 if (!KIOSK) boot();
 
 function boot() {
   const activity = activityBar();
+  // Heard-you pop. The UI plays it ITSELF the instant the words land on screen — synced to the paint.
+  const popSound = new Audio('/pop.m4a');
+  popSound.preload = 'auto';
+  const playPop = () => { try { popSound.currentTime = 0; popSound.play().catch(() => {}); } catch (_) {} };
   _card = initCard();                // null if the conversation card isn't on this page
   setMode('hub');                    // default indicator until settings load
 
@@ -79,6 +79,7 @@ function boot() {
     if (msg.kind === 'activity') {                 // live progress, pushed direct from the worker (low-latency)
       const a = msg.row || {};
       if ((a.focus || 'hub') !== 'hub') return;
+      if (a.state === 'working') playPop();        // his words just landed on screen
       if (a.state === 'done') activity.done(a.text);
       else if (a.state === 'escalate') activity.escalate(a.text);   // Sonnet handed off to Opus mid-run
       else activity.tool(a.text);

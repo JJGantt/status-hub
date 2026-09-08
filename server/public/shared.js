@@ -11,6 +11,15 @@ export const TOUCH = matchMedia('(pointer: coarse)').matches; // phone/tablet: t
 export const MAC = new URLSearchParams(location.search).get('mode') === 'mac';
 if (MAC && document.body) document.body.classList.add('mac');
 
+// The big-screen kiosk: display-only, no input, its own voice layer (tv.js). Everything else — the page
+// view, the PHONE wall, the Mac app's side panel — boots the interactive client in voiceagent.js instead.
+// It lives here, in the first-loaded dependency-free module, because two modules decide opposite halves of
+// the same question with it and they must not be able to disagree. body.phonewall is not set yet at import
+// time (wall.js loads after core.js's import graph), so this is the viewport predicate wall.js uses;
+// body.mac is set just above.
+export const KIOSK = document.body.classList.contains('tv')
+  && !document.body.classList.contains('mac') && window.innerWidth >= 1400;
+
 // latest status frame — one writer (core's render). Held on an object so importers see updates
 // (you can't reassign another module's exported binding, but you can mutate a shared object).
 export const state = { last: null };

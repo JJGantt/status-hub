@@ -397,7 +397,7 @@ body.tv ::-webkit-scrollbar{width:0!important;height:0!important;display:none!im
 /* ===== TV wall: FOUR columns (rings | nutrition | muscle | workout) + voice. Pure black, minimal. =====
    Col widths: rings narrow (fits the big rings) · nutrition == workout (so their heatmaps match) ·
    muscle shrunk ~75% · the freed width goes to the voice column. */
-body.tv,body.tv .card,body.tv .tv-shell,body.tv .tv-voice,body.tv .tv-hudcard{background:#000!important}
+body.tv,body.tv .card,body.tv .tv-shell,body.tv .tv-hudcard{background:#000!important}
 body.tv .card{border:none}
 body.tv .rows{flex:1 1 auto;min-width:0;max-width:none;margin:0;padding:10px;height:100vh;overflow:hidden;
   display:grid;gap:10px;grid-template-columns:280px 1fr 1fr 1fr 60px;grid-template-rows:auto minmax(0,1fr) auto;}
@@ -641,13 +641,12 @@ body.tv.phonewall .pane-misc .devchip .dc-l{font-size:12px}
 body.tv.phonewall .pane-misc .devchip .dc-v{font-size:15px}
 body.tv.phonewall .pane-misc .devchip .dc-v .dot{width:9px;height:9px;margin-right:6px}
 body.tv.phonewall .rows{height:100%}
-body.tv.phonewall .tv-voice{height:100%}
 
 /* ===== MAC APP (body.tv.mac, from ?mode=mac): the landscape wall rendered INTERACTIVELY. Layout is a
    docked VS-Code-style chat side panel + the scaled dashboard; cursor + clicks are ON (undoing the kiosk),
-   and the shared bottom navbar (settings gear + voice) sits below the panes. The chat moves OUT of the wall
-   (the in-wall .tv-voice column is hidden) into the side panel; device chips already ride the wall's status
-   row, so the misc pane is dropped. wall.js scales .tv-shell into .pane-wall. ===== */
+   and the shared bottom navbar (settings gear + voice) sits below the panes. The chat is the side panel;
+   device chips already ride the wall's status row, so the misc pane is dropped. wall.js scales .tv-shell
+   into .pane-wall. ===== */
 body.tv.mac{cursor:auto}
 body.tv.mac *{cursor:auto!important}                       /* undo the kiosk's cursor:none */
 body.tv.mac .wallpanes{display:flex;flex-direction:row;height:calc(100vh - 58px);overflow:hidden}
@@ -658,7 +657,6 @@ body.tv.mac .pane-wall{flex:1 1 auto;min-width:0;position:relative;height:100%;o
 body.tv.mac .pane-misc,body.tv.mac .pane-maint,body.tv.mac .pane-todo,body.tv.mac .pane-repos,body.tv.mac .pane-reports{display:none}
 body.tv.mac .tv-shell{position:absolute;transform-origin:top left}   /* size/scale/offset set by wall.js */
 body.tv.mac .rows{height:100%}
-body.tv.mac .tv-voice{display:none}                        /* chat is the side panel now */
 /* chat sidebar chrome (VS-Code-ish column: header · scrolling log · input · status) */
 body.tv.mac .pane-chat .ai-shell{height:100%;display:flex;flex-direction:column;min-height:0}
 body.tv.mac .pane-chat .ai-head{padding:11px 14px;border-bottom:1px solid #1b222b;flex:0 0 auto}
@@ -704,8 +702,7 @@ body:not(.tv):not(.touch) .rows{padding-bottom:70px}
 /* PORTRAIT wall mode (spec): a condensed glance that fits one screen; controls live OUTSIDE the scaled
    canvas. Stack: status (full) → rings horizontal (full) → nutrition heatmap+list | workout heatmap+list
    (side by side) → muscle map+bars (glued to bottom) → horizontal health bar. A fixed bottom bar holds the
-   buttons: settings + exit left, brain + sparkle right. Voice column + trend plot + emit strip dropped. */
-body.tv.wallportrait .tv-voice,
+   buttons: settings + exit left, brain + sparkle right. Trend plot + emit strip dropped. */
 body.tv.wallportrait #nutplot,body.tv.wallportrait .hb-delta{display:none}
 body.tv.wallportrait .rows{
   grid-template-columns:1fr 1fr;
@@ -762,7 +759,6 @@ body.tv.wallportrait .musmap .figstack svg{width:50%;height:100%}
 /* ---- TV route v1 (minimal rebuild): top status strip + left ring column ONLY. Other panels are
    HIDDEN, not deleted — each card keeps mounting safely (core.js renders them unconditionally) so we
    can bring them back one at a time without breaking the rings. ---- */
-body.tv .tv-voice{display:none}                              /* historical chat — removed */
 body.tv .statusrow .tv-surfcard{display:none}                /* surf out of the strip for now */
 body.tv .statusrow .fit{justify-content:center}
 /* top-strip agent routing card: sized to its content so the litter card fills the rest of the strip */
@@ -877,20 +873,6 @@ body.tv.phonewall .dex{padding:6px 0}
 body.tv .hdows{display:none}
 body.tv .hmonths{margin-left:0;font-size:11px}
 /* VOICE column — compact, fixed width, near-black, its own border. */
-.tv-voice{flex:0 0 540px;display:flex;flex-direction:column;min-width:0;height:100vh;
-  background:#080b0e;border-left:1px solid #11161c;position:relative;overflow:hidden}
-.tv-voice-head{display:flex;align-items:center;gap:10px;padding:16px 20px;border-bottom:1px solid #11161c;flex:0 0 auto}
-.tv-focus-label{font-size:14px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:#9aa6b4}
-/* conversation log — minimal two-color chat (user blue / assistant gray), no role labels. */
-.tv-convo-log{flex:1 1 auto;overflow-y:auto;padding:16px;display:flex;flex-direction:column;gap:8px;scroll-behavior:smooth;min-height:0}
-/* minimal conversation — no chat bubbles; user vs assistant by alignment + color only. */
-.tv-msg{max-width:92%}
-.tv-msg-text{font-size:14px;line-height:1.45;padding:2px 0;white-space:pre-wrap;word-break:break-word;background:none;border:0;border-radius:0}
-.tv-msg-user{align-self:flex-end}
-.tv-msg-user .tv-msg-text{color:#6ea8ff;text-align:right}      /* you — accent blue, right */
-.tv-msg-assistant{align-self:flex-start}
-.tv-msg-assistant .tv-msg-text{color:#c2cad4}                  /* assistant — light gray, left */
-.tv-caret{animation:tvblink 1s steps(2,start) infinite;color:#5c6675}
 @keyframes tvblink{50%{opacity:0}}
 
 /* ===================== Conversation (shared 'hub' thread) =====================
@@ -951,12 +933,6 @@ body.tv .hmonths{margin-left:0;font-size:11px}
 .ai-worker{display:block;margin-top:2px;font-size:10px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:#566070}
 .ai-worker-pi{color:#d9a13c}
 .ai-worker-fly{color:#a78bfa}
-.tv-msg-imgs{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:4px}
-.tv-msg-user .tv-msg-imgs{justify-content:flex-end}
-.tv-msg-imgs img{max-width:120px;max-height:120px;border-radius:8px;border:1px solid #232a33;display:block}
-.tv-worker{display:block;margin-top:1px;font-size:9px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:#566070}
-.tv-worker-pi{color:#d9a13c}
-.tv-worker-fly{color:#a78bfa}
 /* settings panel (gear) */
 .settings-back{position:fixed;inset:0;z-index:3000;background:rgba(0,0,0,.55);display:grid;place-items:center;padding:16px}   /* above the section sheet too */
 .settings-panel{width:min(420px,100%);max-height:86vh;overflow:auto;background:#11161c;border:1px solid #283039;border-radius:16px;padding:18px 18px 20px;box-shadow:0 18px 50px rgba(0,0,0,.6)}

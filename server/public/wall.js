@@ -8,8 +8,8 @@ const PHONE = window.innerWidth < 1400;
 const BAR = 58;   // height (px) reserved at the bottom for the shared control bar
 
 // Mac app: scale the 1920×1080 wall into the area BESIDE the chat side panel (pane-wall), at any width.
-// The chat lives in the docked side panel (pane-chat), so the in-wall voice column (.tv-voice) is hidden
-// by CSS and the dashboard fills the shell. Re-fits on window resize and on 'macfit' (sidebar collapse/drag).
+// The chat lives in the docked side panel (pane-chat) and the dashboard fills the shell. Re-fits on
+// window resize and on 'macfit' (sidebar collapse/drag).
 if (MAC) {
   const shell = document.querySelector('.tv-shell');
   const host = document.querySelector('.pane-wall');

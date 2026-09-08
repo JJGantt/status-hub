@@ -15,6 +15,10 @@ const BODY_SVG = require('./lib/bodymap');
 // the point is never to show less, it is to not widen the column (which oversizes surf under it and
 // robs the sessions column). Cells are fluid, so a trim only helps if the stack keeps its cell size.
 const HOME_HEAT_WEEKS = 15;
+// Weeks of heat grid carried in the status frame. The frame is re-pushed on every realtime event,
+// so this window is fixed; everything older is served on demand by /api/heat-history, which splits
+// its prefix at exactly this boundary.
+const HEAT_WEEKS = 20;
 const MON_ABBR = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 const { getTZ, setTZ, DAY_START_HOUR, localDate, nutritionWindow, lastNTrainingDays, dayBucketOf } = require('./lib/dates');
 const { buildWorkoutHeatmap } = require('./lib/heatmap');
@@ -499,7 +503,7 @@ async function buildStatus() {
   const today = win.day;
   const week = lastNTrainingDays(7);
   const histStart = localDate(new Date(Date.now() - 210 * 86400000)); // intake history for the maintenance trend + per-day replay (viz paging)
-  const heatStart = localDate(new Date(Date.now() - 140 * 86400000)); // ~20 weeks for the workout volume heatmap
+  const heatStart = localDate(new Date(Date.now() - HEAT_WEEKS * 7 * 86400000)); // the frame's workout heatmap window
 
   const [{ entries, stagedEntries, setRows, weightRows, histRows, muscleRows, heatRows, catalogRows, nutLogRows, targetRows, surfRows, taskEventRows, openTaskRows }, deviceRows, presenceRows, workerRows] = await Promise.all([
     fetchStatusRows(win, week, histStart, heatStart),
@@ -636,10 +640,10 @@ async function buildStatus() {
   volume.exercise_variants = buildVariants(catalogRows || []); // exercise → equipment variants + YouTube how-to links
 
   // ---- workout volume heatmap (GitHub-contribution style) ----
-  const heatmap = buildWorkoutHeatmap(heatRows, 20, today); // 20 weeks + 4am `today`, matching the nutrition heatmap
+  const heatmap = buildWorkoutHeatmap(heatRows, HEAT_WEEKS, today); // 4am `today`, matching the nutrition heatmap
 
   // ---- nutrition log: calorie-adherence calendar (per-day historical targets) + calorie/weight trend ----
-  const nutrition_log = buildNutritionLog(nutLogRows || [], weights, maintenance.target, maintenance.maintenance, today, targetRows || [], 20, surplus, 150, paceData.fraction);
+  const nutrition_log = buildNutritionLog(nutLogRows || [], weights, maintenance.target, maintenance.maintenance, today, targetRows || [], HEAT_WEEKS, surplus, 150, paceData.fraction);
 
 
   // `months` is parallel to `weeks` and labels a column only where the month changes, so a slice can
@@ -766,7 +770,7 @@ function startRealtime() {
   // subscriptions (weight_log … surf_snapshots) exist for the cache: without them an edit would sit
   // invisible until the 15-min backstop refetch.
   const seen = () => { lastRealtimeEvent = Date.now(); };
-  const changed = () => { seen(); dirtyRows(); dirtyNutDay(); dirtyWorkoutDay(); broadcast(); };
+  const changed = () => { seen(); dirtyRows(); dirtyNutDay(); dirtyWorkoutDay(); dirtyHeatHistory(); broadcast(); };
   hubChannel = supa.channel('hub-changes')
     // device_status is fetched live per build (not cached) — its routine ~2-min state mirrors must
     // rebuild the frame but must NOT drag the heavy cached queries along. Plain broadcast only.
@@ -1251,6 +1255,80 @@ app.get('/api/workout-day', async (req, res) => {
     const recent = rows.length ? rows[rows.length - 1].exercise : null;
     const body = { date, total: rows.length, recent, exercises: order.map((n) => ({ name: n, sets: byEx[n] })) };
     workoutDayCache.set(date, { body, at: Date.now() });
+    res.json(body);
+  } catch (e) { res.status(500).json({ error: String(e.message || e) }); }
+});
+
+// ---- heat-grid history, for the phone's expanded sheet ----
+// The status frame carries a fixed HEAT_WEEKS window because it is re-pushed on every realtime
+// event, and history only grows — so everything older is fetched once, on demand, by the one surface
+// that can scroll back through it.
+//
+// This returns the older PREFIX, not the whole grid: the client draws it in front of the live window
+// it already has, which keeps that window authoritative. Today's cell and any edit still arrive on
+// the frame as they always did, with no cell-by-cell merging to get wrong.
+//
+// `join_month` is the label the live window's FIRST column takes once a prefix sits in front of it.
+// It is only ever different from the one on the frame: months label a column when the month changes
+// from the column to its left, and on the frame that column has nothing to its left.
+const heatHistCache = { body: null, at: 0 };
+const HEATHIST_BACKSTOP_MS = 15 * 60 * 1000;
+const dirtyHeatHistory = () => { heatHistCache.body = null; };
+
+// Week columns from the one containing `first` through the one containing `today`, Sunday-aligned
+// exactly as the builders align them.
+function weeksSpanning(first, today) {
+  if (!first || first > today) return 0;
+  const sunday = (ds) => { const d = new Date(ds + 'T12:00:00Z'); return d.getTime() - d.getUTCDay() * 86400000; };
+  return Math.round((sunday(today) - sunday(first)) / (7 * 86400000)) + 1;
+}
+// Split a full-span grid into what the frame does NOT carry. Empty when the whole history already
+// fits inside the window, which is the nutrition calendar's case today.
+function heatPrefix(full) {
+  const extra = full.weeks.length - HEAT_WEEKS;
+  if (extra <= 0) return { weeks: [], months: [], join_month: null };
+  return { weeks: full.weeks.slice(0, extra), months: full.months.slice(0, extra), join_month: full.months[extra] };
+}
+
+app.get('/api/heat-history', async (req, res) => {
+  try {
+    if (heatHistCache.body && Date.now() - heatHistCache.at < HEATHIST_BACKSTOP_MS) return res.json(heatHistCache.body);
+    const today = nutritionWindow().day;
+    const [firstSet, firstNut] = await Promise.all([
+      sb('sets?select=occurred_at&order=occurred_at.asc&limit=1'),
+      sb('nutrition_entries?staged=eq.false&select=occurred_at&order=occurred_at.asc&limit=1'),
+    ]);
+    const setWeeks = weeksSpanning(firstSet[0] && dayBucketOf(firstSet[0].occurred_at), today);
+    const nutWeeks = weeksSpanning(firstNut[0] && dayBucketOf(firstNut[0].occurred_at), today);
+
+    // Nothing older than the window on either map — say so without reading a row of history.
+    const empty = { weeks: [], months: [], join_month: null };
+    if (setWeeks <= HEAT_WEEKS && nutWeeks <= HEAT_WEEKS) {
+      const body = { today, window_weeks: HEAT_WEEKS, heatmap: empty, nutrition_log: empty };
+      heatHistCache.body = body; heatHistCache.at = Date.now();
+      return res.json(body);
+    }
+
+    // The nutrition calendar's colour is intake against that day's GOAL, which is maintenance-derived
+    // and phase-aware. Those numbers come off buildStatus() rather than being recomputed here, so a
+    // day cannot be one colour on the card and another in the expanded view.
+    const st = nutWeeks > HEAT_WEEKS ? await buildStatus() : null;
+    const [setRows, nutRows, weightRows, targetRows] = await Promise.all([
+      setWeeks > HEAT_WEEKS ? sbRange('sets?select=occurred_at&order=occurred_at') : [],
+      st ? sbRange('nutrition_entries?staged=eq.false&select=occurred_at,calories,protein_g,fat_g&order=occurred_at') : [],
+      st ? sb('weight_log?select=date,weight_lbs&order=date.asc') : [],
+      st ? sb('nutrition_targets?select=date,calories&order=date.asc') : [],
+    ]);
+
+    const heatmap = setWeeks > HEAT_WEEKS ? heatPrefix(buildWorkoutHeatmap(setRows, setWeeks, today)) : empty;
+    let nutrition_log = empty;
+    if (st) {
+      const weights = (weightRows || []).map((r) => ({ date: String(r.date).slice(0, 10), weight: Number(r.weight_lbs) }));
+      nutrition_log = heatPrefix(buildNutritionLog(nutRows, weights, st.maintenance.target, st.maintenance.maintenance,
+        today, targetRows || [], nutWeeks, await surplusCal(), 150, st.pace.fraction));
+    }
+    const body = { today, window_weeks: HEAT_WEEKS, heatmap, nutrition_log };
+    heatHistCache.body = body; heatHistCache.at = Date.now();
     res.json(body);
   } catch (e) { res.status(500).json({ error: String(e.message || e) }); }
 });

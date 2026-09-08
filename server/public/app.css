@@ -108,7 +108,19 @@ body.tv.phonewall #tv-routing .rt-chip .rt-v{font-size:22px}
 .sectsheet .dset{font-size:10.5px!important}
 .sectsheet .dayband,.sectsheet .bi-none{font-size:13px!important}
 body.ss-open .navbar{z-index:2001}
-.sectsheet .heat .hcell{width:17px;height:17px}          /* bigger cells → easy to tap the day you want */
+/* Expanded view: the grid lays out at its NATURAL width and the wrap scrolls, instead of squeezing
+   every column into the phone's width. Cells are a fixed 17px — big enough to tap the day you want —
+   so the sets map can run back through the history the status frame doesn't carry (heathistory.js).
+   MUST out-specify the `body.tv` heatmap block further down, which does the opposite on purpose:
+   there the grid is fluid so the calorie and sets maps fill their equal wall columns at identical
+   cell sizes. `body.tv` is on every surface the sheet exists on, so `.sectsheet` alone loses. */
+body.tv .sectsheet .hmonths,body.tv .sectsheet .hbody,body.tv .sectsheet .heat{flex:0 0 auto;width:max-content}
+body.tv .sectsheet .hcol,body.tv .sectsheet .hm{flex:0 0 17px;width:17px;min-width:17px}
+body.tv .sectsheet .hcell{width:17px!important;height:17px!important;max-width:none!important;flex:0 0 auto!important}
+/* the wall is a swipe-through of full-screen panes, so a grid scrolled to its end must not hand the
+   rest of the gesture to the pane underneath */
+.sectsheet[data-sec="nut"] #nutheat,.sectsheet[data-sec="wk"] #workouts #heatwrap{
+  overscroll-behavior-x:contain;-webkit-overflow-scrolling:touch}
 .sectsheet .expand-btn{display:none}                     /* the host's own corner icon travels with it — hide it inside the sheet */
 .sectsheet .card h2,.sectsheet #workouts h2{display:none}
 /* NUTRITION: #nutritionlog = heat (top) + full-day totals & food list (scroll) + trend plot (kept, bottom) */

@@ -2,6 +2,7 @@
 // calendar (daily game), with inline day detail + click/drag-scrub selection. Every entry row
 // expands to its ingredient breakdown + actions (log-again / change-quantity / delete).
 import { esc, dualPlot, state, localNowNaive } from '../shared.js';
+import { withHistory, paintHeat } from '../heathistory.js';
 
 const CAL_COLOR='#3b82f6', W_COLOR='#a78bfa';
 let nutSelDate=null, nutReq=0;
@@ -10,7 +11,7 @@ const expandedIds=new Set(); // entry ids whose ingredient breakdown is open —
 
 export function render(s){
  // Shorter calendar on the home wall (it shares its column with the muscle map); see workouts.js.
- const N=s.nutrition_log&&Object.assign({},s.nutrition_log,
+ let N=s.nutrition_log&&Object.assign({},s.nutrition_log,
    document.body.classList.contains('homewall')&&s.nutrition_log_home||{});
  // Desktop renders heatmap+plot together into #nutwrap. The TV wall splits them so the food
  // list can sit BETWEEN them: heatmap → #nutheat (top), plot → #nutplot (bottom).
@@ -18,6 +19,9 @@ export function render(s){
  const heatEl=document.getElementById('nutheat');
  const plotEl=document.getElementById('nutplot');
  if(!N){ if(wrap)wrap.innerHTML=''; if(heatEl)heatEl.innerHTML=''; if(plotEl)plotEl.innerHTML=''; return; }
+ // In the expanded sheet the calendar carries whatever history predates the frame's window in front
+ // of it. See heathistory.js — today there is none, since intake logging starts inside the window.
+ N=withHistory(N,'nutrition_log',heatEl||wrap,s.today);
  // COMBINED PLOT: smoothed 7d cal avg (left axis) + raw daily weight (right axis) + maintenance ref line.
  const calPts=(N.cal_series||[]).map(p=>({date:p.date,v:p.avg}));
  const wPts=(N.weight_series||[]).map(p=>({date:p.date,v:p.w}));
@@ -56,9 +60,9 @@ export function render(s){
   '<div class=hbody><div class=hdows>'+dowLabels+'</div><div class=heat>'+grid+'</div></div>';
  // Each panel paints if the page has it, so a surface can take the heatmap alone — the home wall
  // shows it with no plot and no food list. #nutwrap is the desktop's combined fallback.
- if(heatEl)heatEl.innerHTML=heatHtml;
+ if(heatEl)paintHeat(heatEl,heatHtml);
  if(plotEl)plotEl.innerHTML=plotBlock;
- if(!heatEl&&!plotEl&&wrap)wrap.innerHTML=heatHtml+plotBlock;
+ if(!heatEl&&!plotEl&&wrap)paintHeat(wrap,heatHtml+plotBlock);
  if(nutSelDate){ markNutCell(nutSelDate); if(nutSelDate===s.today)loadNutDay(nutSelDate); } // live-refresh today's log
  else if(s.today)selectNutDay(s.today); // default the detail panel to today's log on first load
 }
@@ -173,7 +177,13 @@ function selectNutDay(date){ if(date===nutSelDate)return; nutSelDate=date; markN
  const nl=document.getElementById('nutritionlog'); let scrub=false;
  if(!nl)return; // page without the nutrition-log card (e.g. /page after consolidation) — nothing to bind
  const cellAt=(x,y)=>{const el=document.elementFromPoint(x,y);return el&&el.closest?el.closest('.hcell'):null;};
- nl.addEventListener('pointerdown',e=>{const c=e.target.closest('.hcell');if(!c||!c.dataset.ndate)return;scrub=true;selectNutDay(c.dataset.ndate);e.preventDefault();e.stopPropagation();});
+ // See workouts.js: in the expanded sheet the grid scrolls, so a touch drag is the browser's and the
+ // tap arrives as a click. Elsewhere the drag stays a scrub.
+ const scrollable=(c)=>!!c.closest('.sectsheet.open');
+ nl.addEventListener('pointerdown',e=>{const c=e.target.closest('.hcell');if(!c||!c.dataset.ndate)return;
+  if(e.pointerType!=='mouse'&&scrollable(c))return;
+  scrub=true;selectNutDay(c.dataset.ndate);e.preventDefault();e.stopPropagation();});
+ nl.addEventListener('click',e=>{const c=e.target.closest('.hcell');if(c&&c.dataset.ndate)selectNutDay(c.dataset.ndate);});
  document.addEventListener('pointermove',e=>{if(!scrub)return;const c=cellAt(e.clientX,e.clientY);if(c&&c.dataset.ndate)selectNutDay(c.dataset.ndate);});
  document.addEventListener('pointerup',()=>{scrub=false;});
  // event-delegated clicks on the day-detail: expansion action row + ingredient expand/collapse

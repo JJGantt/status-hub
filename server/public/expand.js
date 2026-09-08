@@ -4,11 +4,17 @@
 // and the list's buttons keep working — the point of expanding is to make those EASIER to use, not disable
 // them. Elements are moved (and restored on close) so the live render + all handlers stay intact.
 
+import { state } from './shared.js';
+import * as workouts from './cards/workouts.js';
+import * as nutritionlog from './cards/nutritionlog.js';
+import { loadHistory, onHistoryLoaded, pinRight } from './heathistory.js';
+
 const SECTIONS = {
   // `icon` = element the corner glyph is placed on. `move` = ordered elements pulled into the sheet body
   // (their event delegation + listeners travel with them). Restored to their exact spots on close.
-  nut: { icon: '#nutritionlog', move: ['#nutritionlog'], title: 'Nutrition' },
-  wk:  { icon: '#workouts',     move: ['#workouts', '#heatinfo'], title: 'Workouts' },
+  // `heat` = the scroll container holding that section's grid, pinned to its newest column on open.
+  nut: { icon: '#nutritionlog', move: ['#nutritionlog'], title: 'Nutrition', heat: '#nutheat' },
+  wk:  { icon: '#workouts',     move: ['#workouts', '#heatinfo'], title: 'Workouts', heat: '#heatwrap' },
 };
 
 // corner "expand" glyph (diagonal arrows). Big in the SVG because it lives INSIDE the ~0.36×-scaled wall
@@ -19,6 +25,20 @@ const ICON = '<svg viewBox="0 0 24 24" width="46" height="46" fill="none" stroke
 
 let sheet = null;
 let restore = [];
+let openKey = null;
+
+// The sheet is the only surface wide enough to scroll a grid, so it is what pays for the history
+// fetch — once per page, the first time one is opened.
+onHistoryLoaded(() => { if (openKey) repaint(openKey); });
+
+// Cards paint from the last frame, so re-running them is how the grid picks up the sheet (its
+// history, and the cell size the sheet gives it). Then pin to the newest column: scrollLeft 0 is
+// the OLDEST week, which is not where anyone opens a heatmap to look.
+function repaint(key) {
+  if (state.last) { workouts.render(state.last); nutritionlog.render(state.last); }
+  const el = document.querySelector(SECTIONS[key].heat);
+  if (el) requestAnimationFrame(() => pinRight(el));
+}
 
 function ensureSheet() {
   if (sheet) return;
@@ -44,7 +64,8 @@ function openSheet(key) {
   restore = els.map((el) => { const a = document.createComment('ss'); el.before(a); return { el, a }; });
   els.forEach((el) => body.appendChild(el));
   document.body.classList.add('ss-open');
-  requestAnimationFrame(() => sheet.classList.add('open'));
+  openKey = key;
+  requestAnimationFrame(() => { sheet.classList.add('open'); repaint(key); loadHistory(); });
 }
 
 function closeSheet() {
@@ -53,6 +74,8 @@ function closeSheet() {
   restore = [];
   sheet.classList.remove('open');
   document.body.classList.remove('ss-open');
+  openKey = null;
+  if (state.last) { workouts.render(state.last); nutritionlog.render(state.last); }  // back to the frame's window
 }
 
 function mount() {

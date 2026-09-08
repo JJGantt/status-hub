@@ -70,7 +70,7 @@ Supabase ──▶ server.js buildStatus() ──▶ /api/status payload ──�
 | `maintenance` | the calorie-target card + the maintenance-window viz | `lib/maintenance` (§4) |
 | `nutrition_log` | calorie-adherence calendar + calorie/weight trend plot | `lib/nutritionlog` |
 | `volume` | per-muscle weekly volume gauges + the body map colors | `lib/volume` + `lib/bodymap` |
-| `heatmap` | GitHub-style workout heatmap | `lib/heatmap` |
+| `heatmap` | GitHub-style workout heatmap, a fixed `HEAT_WEEKS` window | `lib/heatmap` |
 | `litter` / `feeder` / `surf` | those device/status cards | Supabase rows (`device_status`, snapshots); litter through `buildLitter` |
 | `rep_watcher` | what the Apple-Watch rep watcher is logging as | `sets`/watcher state |
 | `last_set_at` / `session_start_at` | the rest clock + "since last set" | derived from `sets` |
@@ -114,7 +114,8 @@ discover level two until level one has arrived. Served raw that is a round trip 
 | `voiceagent.js` | The in-app conversation pipeline: `makeRecorder` (mic → `/api/voice-command`), the activity popup, the conversation card. |
 | `settings.js` | The gear panel — reads/writes `app_settings` via `/api/settings` (§7). |
 | `wall.js` | Phone "wall mode": scales the 1920×1080 `/tv` shell to fit a phone; drives the swipe panes. |
-| `expand.js` | Phone-wall expand icons → full-screen section sheets. |
+| `expand.js` | Phone-wall expand icons → full-screen section sheets. On open it re-runs the two cards (so their grid picks up the sheet's fixed cell size and its history), loads `heathistory.js`, and pins the grid to its newest column. |
+| `heathistory.js` | The heat-grid columns older than the status frame carries — fetched once from `/api/heat-history` and drawn only inside the sheet. Also `paintHeat()`, which is how a card rebuilds a grid without throwing away where it is scrolled to. |
 | `tv.js` | TV/kiosk-only: the voice-conversation panel + session terminal layered on the wall. |
 | `wallmode.js` | Follows `app_settings.wall_mode` so voice can switch the TV between the walls. Acts only on kiosk paths (`/tv`, `/tv-session-focus`, `/tv-calendar`, `/tv-home`), never on the phone's `/`. |
 | `calendar.js` | The `/calendar` page: paints the server-computed month grid + day agenda from `/api/calendar`; tap a day, page months. Read-only — writes stay with voice and the todo pane. Re-reads on an `/api/list-stream` push, never on a timer. |
@@ -219,7 +220,7 @@ The math lives here; each file has a thorough header. Summary map:
 | `nutritionlog.js` | The calorie/weight dual-axis plot, the diverging-color adherence calendar, and `buildGoalResolver` (per-day calorie goal, respecting stored targets + phases). |
 | `volume.js` | Weekly per-muscle fractional-set volume (primary=1.0, secondary=0.5) vs that muscle's weekly set target — `TARGET_DEFAULT` 14, with the `TARGETS` overrides below it. |
 | `bodymap.js` | The front/back body SVG (viewBox 0 0 72 93); volume colors paint onto it. |
-| `heatmap.js` | Per-day set-count heatmap laid out as week columns. |
+| `heatmap.js` | Per-day set-count heatmap laid out as week columns. Shade is an **absolute** count — one level per 6 sets, topping out at 25+ — so a colour means the same thing in every window and on every surface. |
 | `score.js` | The health bar: `(training + nutrition + tasks)/3`, each band capped at a third. |
 
 **The task band starts empty and is earned.** Nutrition and training measure how well a thing is
@@ -317,7 +318,10 @@ launcher) · `/reports` + `/report/:id` (§6c) · `/login` · `/healthz` · `/pr
 
 **Read:** `/api/status` (full payload) · `/api/stream` (SSE status) · `/api/voice-stream` (SSE voice
 frames for the kiosk) · `/api/list-stream` (SSE, one bodiless `lists` event whenever a dated item or
-a list changes — the calendar surfaces' push path, separate from the status frame they don't render) · `/api/workout-day` · `/api/nutrition-day` · `/api/voice-messages` ·
+a list changes — the calendar surfaces' push path, separate from the status frame they don't render) · `/api/workout-day` · `/api/nutrition-day` ·
+`/api/heat-history` (the heat-grid weeks OLDER than the frame's `HEAT_WEEKS` window, as a prefix the
+expanded sheet draws in front of it — the frame is re-pushed on every realtime event and history only
+grows, so it is fetched once by the one surface that can scroll through it) · `/api/voice-messages` ·
 `/api/todos` (lists + notes + the derived `due` view) · `/api/calendar` (month grid(s) of every
 dated item — every occurrence is a real row, so nothing is projected; `?month=` pages, `?wall=1` adds
 the day timeline and reads `calendar_months` for the spread, `?day=1` is the timeline alone and

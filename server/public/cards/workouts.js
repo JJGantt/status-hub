@@ -1,14 +1,18 @@
 // Workout Volume card: GitHub-style heatmap with inline day detail + click/drag-scrub selection,
 // defaulting to today; plus a rest timer (time since last set, hidden once past 5 min).
 import { state, esc, localNowNaive } from '../shared.js';
+import { withHistory, paintHeat } from '../heathistory.js';
 let heatSelDate=null, heatReq=0;
 let lastHeatExercises=null; // exercises for the open day-detail (for the repeat-set popup)
 
 export function render(s){
  // Shorter span on the home wall, where this runs beside the muscle column. Selection only — both
  // spans were computed server-side.
- const H=Object.assign({weeks:[],months:[]},s.heatmap,
-   document.body.classList.contains('homewall')&&s.heatmap_home||{});
+ const hw=document.getElementById('heatwrap'); if(!hw)return;
+ // In the expanded sheet the grid carries its full history in front of the live window; everywhere
+ // else it is the window the frame ships. See heathistory.js.
+ const H=withHistory(Object.assign({weeks:[],months:[]},s.heatmap,
+   document.body.classList.contains('homewall')&&s.heatmap_home||{}),'heatmap',hw,s.today);
  // Six steps, one per level from lib/heatmap.js: [0]=a day with no sets, black; then 1-6, 7-12,
  // 13-18, 19-24, 25+ sets.
  const HC=['#000','#0e4429','#006d32','#158c3a','#26a641','#39d353'];
@@ -21,10 +25,9 @@ export function render(s){
    return '<div class=hcell'+click+' title="'+d.date+': '+d.count+' set'+(d.count===1?'':'s')+'" style="background:'+bg+out+cur+'"></div>';
  }).join('')+'</div>').join('');
  const dowLabels=['','Mon','','Wed','','Fri',''].map(x=>'<div class=hd>'+x+'</div>').join('');
- const hw=document.getElementById('heatwrap'); if(!hw)return;
- hw.innerHTML=
+ paintHeat(hw,
   '<div class=hmonths>'+monthRow+'</div>'+
-  '<div class=hbody><div class=hdows>'+dowLabels+'</div><div class=heat>'+grid+'</div></div>';
+  '<div class=hbody><div class=hdows>'+dowLabels+'</div><div class=heat>'+grid+'</div></div>');
  if(heatSelDate){ markHeatCell(heatSelDate); if(heatSelDate===s.today)loadHeatDay(heatSelDate); } // live-refresh today's sets
  else if(s.today)selectDay(s.today);      // default the day detail to today's sets
  tickRest();
@@ -234,7 +237,16 @@ if(document.getElementById('resttimer'))setInterval(tickRest,1000);
  const wk=document.getElementById('workouts'), hi=document.getElementById('heatinfo'); let scrub=false;
  if(!wk||!hi)return; // surface without the interactive heatmap + day detail — nothing to bind
  const cellAt=(x,y)=>{const el=document.elementFromPoint(x,y);return el&&el.closest?el.closest('.hcell'):null;};
- wk.addEventListener('pointerdown',e=>{const c=e.target.closest('.hcell');if(!c||!c.dataset.date)return;scrub=true;selectDay(c.dataset.date);e.preventDefault();e.stopPropagation();/* don't let it become a card-drag */});
+ // Scrubbing and scrolling both want a horizontal drag. Outside the sheet the grid can't scroll, so
+ // the drag is a scrub and preventDefault keeps it from becoming a card-drag. Inside the sheet the
+ // grid scrolls, so a touch drag belongs to the browser and the tap arrives as a click instead.
+ const scrollable=(c)=>!!c.closest('.sectsheet.open');
+ wk.addEventListener('pointerdown',e=>{const c=e.target.closest('.hcell');if(!c||!c.dataset.date)return;
+  if(e.pointerType!=='mouse'&&scrollable(c))return;
+  scrub=true;selectDay(c.dataset.date);e.preventDefault();e.stopPropagation();/* don't let it become a card-drag */});
+ // Idempotent — selectDay no-ops on the day pointerdown already picked, so this only ever fires for
+ // the taps the branch above hands back to the browser.
+ wk.addEventListener('click',e=>{const c=e.target.closest('.hcell');if(c&&c.dataset.date)selectDay(c.dataset.date);});
  document.addEventListener('pointermove',e=>{if(!scrub)return;const c=cellAt(e.clientX,e.clientY);if(c&&c.dataset.date)selectDay(c.dataset.date);});
  document.addEventListener('pointerup',()=>{scrub=false;});
  // day detail: tap a set to edit it; "+ set" button to repeat the last set

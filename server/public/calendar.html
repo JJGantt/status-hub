@@ -4,8 +4,9 @@
 <link rel="stylesheet" href="app.css">
 <!-- Only this page: the calendar's own layout. app.css is shared (base colors + navbar) and unmodified. -->
 <link rel="stylesheet" href="calendar.css">
-<!-- calendar.js paints the server-computed month grid from /api/calendar. -->
-<script type="module" src="calendar.js"></script>
+<!-- One bundle per page, built by build.js from public/pages/calendar.js — that file
+     lists the modules this page runs, and is where you add or remove one. -->
+<script type="module" src="dist/calendar.js"></script>
 </head><body class="cal">
 <div class="calpage" id="calpage">
   <header class="cal-head">

@@ -4,18 +4,9 @@
 <link rel="stylesheet" href="app.css">
 <!-- Only this page: the calendar wall's own layout and panel. app.css is shared and unmodified. -->
 <link rel="stylesheet" href="tv-calendar.css">
-<!-- core.js renders the REAL hub cards from /api/stream into the .rows below (same as the main hub). -->
-<script type="module" src="core.js"></script>
-<!-- tv.js layers the compact voice-conversation panel + session terminal on top. -->
-<script type="module" src="tv.js"></script>
-<!-- wall.js: on a phone-sized viewport, scale the whole 1920×1080 shell to fit (phone "wall mode"). -->
-<script type="module" src="wall.js"></script>
-<!-- wallmode.js: follow the wall_mode setting, so the TV can be switched between walls by voice. -->
-<script type="module" src="wallmode.js"></script>
-<!-- expand.js: phone-wall expand icons → full-screen section sheets (nutrition / workouts). -->
-<script type="module" src="expand.js"></script>
-<!-- tv-calendar.js: the day timeline + the month grid(s), from /api/calendar?wall=1. -->
-<script type="module" src="tv-calendar.js"></script>
+<!-- One bundle per page, built by build.js from public/pages/tv-calendar.js — that file
+     lists the modules this page runs, and is where you add or remove one. -->
+<script type="module" src="dist/tv-calendar.js"></script>
 </head><body class="tv">
 <!-- wallpanes: on the PHONE this is a three-pane swipe — [chat] [wall] [misc] — landing on the wall.
      On the big-screen kiosk the side panes are display:none and only the shell renders. -->

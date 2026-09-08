@@ -1257,9 +1257,14 @@ app.get('/api/workout-day', async (req, res) => {
 
 // ---- app settings (voice routing mode + per-device trailing-silence). Read by the worker + devices;
 // edited from the hub settings panel. Returns/accepts a flat {key: value} map. ----
+// Settings a browser has no use for. `voiceprint` is a 24KB base64 exemplar bank for speaker ID: the
+// voice pipeline reads it from app_settings directly with the service key and it has never been read
+// by any client here, but it was 92% of this response, fetched twice on every cold load.
+const SETTINGS_SERVER_ONLY = new Set(['voiceprint']);
 app.get('/api/settings', async (req, res) => {
   try {
-    res.json(await settingsAll());   // realtime-invalidated cache — see settingsAll()
+    const all = await settingsAll();   // realtime-invalidated cache — see settingsAll()
+    res.json(Object.fromEntries(Object.entries(all).filter(([k]) => !SETTINGS_SERVER_ONLY.has(k))));
   } catch (e) { res.status(500).json({ error: String(e.message || e) }); }
 });
 // TEMPORARY. The voice button's stop tap misbehaves only on his phone, so the phone reports what it
@@ -2553,11 +2558,22 @@ app.get('/api/sessions', async (req, res) => {
       .sort((a, b) => rank(a) - rank(b) || byStarted(a, b))
       .map((s, i) => [s.id, i + 1]));
     const withN = (s) => ({ ...s, n: numbered.get(s.id) || null });
+    // One line of what the session last said, for the rows that only ever show one line. The repos
+    // pane cuts `last_reply` to 90 characters for every row it lists; sending the whole reply so it
+    // can be thrown away cost 155KB of a 242KB response over 95 parked sessions, which is most of
+    // what a phone downloads on a cold load.
+    const SAY = 120;
+    const say = (s) => (s.last_reply || s.prompt || '').replace(/\s+/g, ' ').slice(0, SAY);
+    // The full reply still goes to every row that can render it in full: everything resident, plus
+    // the newest parked one, which is what the home wall falls back to when nothing is running.
+    const brief = (s) => { const { last_reply, prompt, ...rest } = withN(s); return { ...rest, say: say(s) }; };
+    const evicted = (sessions || []).filter((s) => s.status === 'evicted').sort(byStarted);
     res.json({
       // Resident = running now, reachable over Remote Control. Evicted = closed to free the machine
       // but resumable with full context, which is the distinction the panel has to make obvious.
-      resident: (sessions || []).filter((s) => s.status === 'resident').sort(byStarted).map(withN),
-      evicted: (sessions || []).filter((s) => s.status === 'evicted').sort(byStarted).map(withN),
+      resident: (sessions || []).filter((s) => s.status === 'resident').sort(byStarted)
+        .map((s) => ({ ...withN(s), say: say(s) })),
+      evicted: evicted.map((s, i) => (i === 0 ? { ...withN(s), say: say(s) } : brief(s))),
       queued: queue || [],
       focus,
     });

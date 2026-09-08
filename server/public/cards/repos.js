@@ -65,7 +65,7 @@ function sessionsHtml(s) {
           `<span class="sess-where">${x.worker === 'desk' ? 'Mac' : 'Pi'}</span>` +
           (x.id === focus ? '<span class="sess-focus" title="a spoken follow-up goes here">follow-ups</span>' : '') +
         `</span>` +
-        `<span class="sess-say">${esc((x.last_reply || x.prompt || '').replace(/\s+/g, ' ').slice(0, 90))}</span>` +
+        `<span class="sess-say">${esc((x.say || '').slice(0, 90))}</span>` +
       `</div>` +
       `<div class="sess-act">` +
         (live ? '<span class="sess-dot" title="open and reachable"></span>'

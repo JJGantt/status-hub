@@ -86,6 +86,9 @@ export function mount(el, { url = '/api/calendar?day=1', centre = false, onload 
  * read as turning rather than as a list with small ends.
  */
 const SPAN = 12;                 // hours from the centre to the edge of the drum — a whole day across
+// The shortest chip that can still hold a word: 10px of text on 1.2 lines inside 4px of the chip's
+// own padding. Below it the row flattens to bars.
+const CHIP_MIN = 17;
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 
 function project(col) {
@@ -127,14 +130,29 @@ function project(col) {
     // Foreshortening, from the middle of the hour — the face of the drum turning away from you.
     const face = Math.cos(angle(at + 0.5));
     row.style.setProperty('--face', face.toFixed(3));
-    // Below about a line of text there is no room for anything but the hour, and below that not even
-    // that. Said in classes so the CSS decides what survives at each size, not this file.
-    row.classList.toggle('thin', h < 34);
+    // Below a readable hour number there is no room for one, and the row becomes a band of colour.
+    // Said in classes so the CSS decides what survives at each size, not this file.
     row.classList.toggle('sliver', h < 15);
     // Which hour is the current one is worked out here every tick, not taken from the payload. The
     // server decides it once, at fetch time, and the dial only re-fetches when the hour rolls — so
     // between those it was lighting whichever hour happened to be current when it last loaded.
     row.classList.toggle('cur', nowT >= at && nowT < at + 1);
+  });
+
+  // WHETHER WORDS FIT IS A PROPERTY OF THE CHIP, NOT OF THE ROW. An hour with something in only one
+  // of its two half-lines gives that half nearly the whole row (the empty one keeps a sliver — see
+  // tv-home.css), so a lone item stays legible about twice as far from now as a busy hour's do. A
+  // single row-height threshold could not tell those apart, and flattened both to bars at the same
+  // distance: 4pm went wordless from 12:30 onward with an empty :30 line spending half its height.
+  //
+  // The height is READ BACK from the layout rather than recomputed from the CSS's paddings and gaps,
+  // which is why this is a second pass over the same rows — pass one has to have been applied first.
+  // Nothing here feeds back into it: a half's height comes from the row, not from what is in it.
+  rows.forEach((row) => {
+    const half = row.querySelector('.cw-half:not(:empty)');
+    const ch = half ? half.clientHeight : 0;
+    row.style.setProperty('--chiph', `${ch}px`);
+    row.classList.toggle('thin', ch < CHIP_MIN);
   });
 }
 

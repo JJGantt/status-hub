@@ -42,6 +42,21 @@ body.tv .hw-daycard .cw-day.dial .cw-hour{flex:0 0 auto;min-height:0;overflow:hi
    reads as a squashed list instead. */
 body.tv .hw-daycard .cw-day.dial .cw-hl{font-size:calc(13px + 19px * var(--face, 1));
   align-self:center;padding-top:0}
+/* An EMPTY half-line keeps a sliver of the row rather than half of it. Both halves are always drawn
+   — the lower one is what says an item is at :30 — but a few hours out an hour is only 30-odd pixels
+   here, and an empty half taking half of that is the whole difference between a chip with words on
+   it and a bar of colour. The sliver still places the occupied half in its own half of the hour. */
+body.tv .hw-daycard .cw-day.dial .cw-half:empty{flex:0 0 6px}
+/* The chip's words foreshorten with the row, the way the hour number does. --chiph is the height the
+   half-line actually got, measured in project(); 4px of that is the chip's own padding, and 1.25
+   leaves the descenders room. Capped at the 15px a chip is on every other surface, so the hours
+   around now look like the day column rather than a blown-up version of it. */
+body.tv .hw-daycard .cw-day.dial .cw-dchip,
+body.tv .hw-daycard .cw-day.dial .cw-more{
+  font-size:clamp(10px, calc((var(--chiph, 26px) - 4px) / 1.25), 15px)}
+/* Relative, so the score and the +N ride the title down instead of overrunning a shrunk chip. */
+body.tv .hw-daycard .cw-day.dial .cw-sc,
+body.tv .hw-daycard .cw-day.dial .cw-sc.k-potential{font-size:.82em}
 /* Past the point where a chip cannot be read, the row keeps its colour and loses its words: the
    chips flatten to bars, which still say how much is there and which list it belongs to. A sliver
    is only a band of colour, and the hour number goes with the rest — it cannot be read at 12px of

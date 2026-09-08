@@ -2203,17 +2203,59 @@ function chipState(item, nowLocal) {
   return plusMinutes(at, TASK_GRACE_MIN) > nowLocal ? 'grace' : 'expired';
 }
 
-// When the next chip changes state, so a wall can re-read exactly then instead of polling. Without
-// it nothing re-renders as time passes: the minute tick only moves the now-line, so an item would
+// How far ahead to look for the next change in a chip's NUMBER. Past four hours late an item is in
+// the slow half of its drain, where the figure moves by a tenth every couple of hours; probing
+// further buys a re-read nothing else would have missed. Every day column re-reads on its own well
+// inside this — the dial when the hour rolls, the others when the now-line leaves the rendered range.
+const SCORE_LOOKAHEAD_MIN = 6 * 60;
+
+// The client's clock is minute-precision ('YYYY-MM-DDTHH:MM', see cards/dayline.js `stamp`) and it
+// compares these as strings, so a stamp carrying seconds is one it cannot match until the minute
+// AFTER the one meant — which is why grace used to end a minute late while the due moment, having no
+// seconds on it, landed on time. Cutting every candidate to the minute makes them all exact.
+const toMinute = (s) => (s ? String(s).slice(0, 16) : s);
+
+/**
+ * When this item's chip would show a DIFFERENT NUMBER, or null if not within the lookahead.
+ *
+ * Everything else about a chip changes in steps whose moments are known — it comes due, it leaves
+ * grace, it expires. The number does not. From the end of grace it slides continuously, and it is
+ * the one thing on the chip that claims to describe THIS moment: complete it now and get this. So
+ * it was the one thing with no transition of its own, and it was only ever re-read when something
+ * unrelated forced a re-read. On the wall that meant the hour boundary, which is how a task thirty
+ * minutes past its grace still offered the full +1.0 that completing it would no longer have earned.
+ *
+ * Found by asking `scoreFields` rather than by inverting it. Within each regime the rendered value
+ * moves one way only, and the two regimes disagree in both sign and kind, so "renders what it
+ * renders now" is true up to some moment and false from there on — which is exactly what makes a
+ * binary search over the minute exact rather than approximate. Inverting the curve instead would put
+ * a second copy of it here, to drift from the first the next time the tuning block is touched.
+ */
+function nextScoreChange(item, nowLocal) {
+  const shownAt = (mins) => JSON.stringify(scoreFields(item, plusMinutes(nowLocal, mins)));
+  const now = shownAt(0);
+  if (shownAt(SCORE_LOOKAHEAD_MIN) === now) return null;
+  let lo = 0, hi = SCORE_LOOKAHEAD_MIN;          // invariant: shownAt(lo) === now, shownAt(hi) !== now
+  while (hi - lo > 1) {
+    const mid = (lo + hi) >> 1;
+    if (shownAt(mid) === now) lo = mid; else hi = mid;
+  }
+  return toMinute(plusMinutes(nowLocal, hi));
+}
+
+// When the next chip changes, so a wall can re-read exactly then instead of polling. Without it
+// nothing re-renders as time passes: the minute tick only moves the now-line, so an item would
 // silently go overdue and keep its old colour until some unrelated edit touched the lists.
 function nextChipTransition(rows, nowLocal) {
   let next = null;
+  const consider = (m) => { if (m && m > nowLocal && (next === null || m < next)) next = m; };
   for (const r of rows || []) {
-    if (r.completed_at) continue;
+    if (r.completed_at) continue;                // a finished item's chip is settled; nothing moves
     const at = dueMoment(r.scheduled_at || r.due);
     if (!at) continue;
-    const graceEnd = plusMinutes(at, TASK_GRACE_MIN);
-    for (const m of [at, graceEnd]) if (m > nowLocal && (next === null || m < next)) next = m;
+    consider(toMinute(at));                      // it comes due
+    consider(toMinute(plusMinutes(at, TASK_GRACE_MIN)));   // it stops being free
+    consider(nextScoreChange(r, nowLocal));      // its number moves
   }
   return next;
 }

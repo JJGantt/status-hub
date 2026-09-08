@@ -403,7 +403,37 @@ Everything active — the pane, the widgets, the badge, `dueTick`, the drain —
 completed items, with a tick and a struck-through label, because watching the day fill in with what
 got finished is the second half of the reward.
 
-The endpoints mirror that: `POST /api/todos/complete` (also takes `undo`) and `POST /api/todos/clear`.
+The endpoints mirror that: `POST /api/todos/complete` (also takes `undo` and `at`) and
+`POST /api/todos/clear`.
+
+### `at` — a completion that did not happen just now
+
+`completed_at` is not a bookkeeping stamp, it is the entire input to what the completion is worth:
+full value inside the 30-minute grace, sliding to nothing by four hours, negative by a day. So a
+thing finished at 10:15 and reported at two in the afternoon scored as four hours late, and the only
+truthful option was not to report it at all. `at` says when it actually happened; omitting it stamps
+the clock, which is what the pane's ✓ swipe, the widget's Done and every ordinary completion do.
+
+`lib/score.js` `completionStamp` decides what is acceptable, and it lives there rather than beside
+the route because the rule is the band's:
+
+- **A zone on it is refused, not converted.** The band measures `completed_at` against `due` as naive
+  wall-clock arithmetic — that is what makes a lateness one he experienced rather than one an offset
+  invented. `score.js` has no timezone to convert with, so accepting a `Z` would mean guessing an
+  offset, and a guessed offset puts a completion an hour from the deadline it is scored against.
+- **The future is refused.** The replay walks up to now and skips anything past it, so a future stamp
+  would take the item off every active surface and earn nothing — from the outside, identical to the
+  band being broken. Refusing it is the only way that failure is visible.
+- **The distant past is allowed.** Older than the 7-day decay window it earns nothing, but that is
+  the decay working on a true record, not a bad input.
+
+The data layer writes this column directly rather than through the hub, so `lists.checkCompletedAt`
+enforces the same rule at that door. Two doors, one column; keep them saying the same thing.
+
+Voice is the surface that uses this — the model works out the absolute time from the item's own
+`due` (which `get_due` hands it) and passes it. There is no time parsing anywhere in the path, and
+none should be added: `at` takes an exact stamp precisely so that no layer has to guess at what
+"fifteen minutes after it started" meant.
 
 **This was tried the other way round first and failed.** One verb, with the clock deciding whether a
 removal counted as a completion, on the reasoning that "remove", "delete" and "check off" are not

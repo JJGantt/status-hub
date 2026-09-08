@@ -2,7 +2,7 @@
 // bottom-right voice FAB. Tap → listen (VAD auto-stops) → transcribe → enqueue. Shows the transcribed
 // command + a "Sent" confirmation, then resets. The reply itself runs on the hub (and is spoken if
 // speak-replies is on); this page is purely a fast launcher.
-import { makeRecorder } from './voiceagent.js';
+import { makeRecorder, bindTap } from './voiceagent.js';
 
 const btn = document.getElementById('micbtn');
 const statusEl = document.getElementById('status');
@@ -17,8 +17,7 @@ function scheduleReset() {
 
 const rec = makeRecorder({
   quick: true, autoStop: true,
-  onActive: (a) => btn.classList.toggle('rec', a),
-  onBusy: (x) => btn.classList.toggle('sending', x),
+  onState: (s) => { btn.classList.toggle('rec', s === 'rec'); btn.classList.toggle('armed', s === 'armed'); },
   onStatus: (t, kind) => {
     clearTimeout(resetTimer);
     if (kind === 'rec') { setStatus(t || 'Listening…'); echoEl.textContent = ''; }
@@ -31,6 +30,6 @@ const rec = makeRecorder({
   },
 });
 
-btn.addEventListener('click', () => rec.toggle());
+bindTap(btn, () => rec.toggle());
 // tapping anywhere on the empty page also toggles, so you don't have to hit the circle exactly.
-document.body.addEventListener('click', (e) => { if (e.target === document.body) rec.toggle(); });
+document.body.addEventListener('pointerdown', (e) => { if (e.target === document.body) rec.toggle(); });

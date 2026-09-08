@@ -99,13 +99,29 @@ function boot() {
   if (_card) document.addEventListener('visibilitychange', () => { if (!document.hidden) _card.backfill(); });
 }
 
+// A tap fires on pointerdown, not on click: click lands when the finger LIFTS, and the gap between the
+// two is long enough to read as an unresponsive button — 90ms for a mouse press, more for a finger.
+// The click still arrives afterwards (preventDefault on pointerdown does not reliably suppress it), and
+// on a toggle a second call would undo the first, so it is swallowed. Only a click with no pointerdown
+// in front of it and no click count — keyboard Enter or Space — is allowed through.
+export function bindTap(el, fn) {
+  let fromPointer = false;
+  el.addEventListener('pointerdown', (e) => { e.preventDefault(); fromPointer = true; fn(); });
+  el.addEventListener('click', (e) => {
+    if (fromPointer || e.detail !== 0) { fromPointer = false; return; }
+    fn();
+  });
+}
+
 // A self-contained recorder: getUserMedia → MediaRecorder → upload to /api/voice-command.
 // quick=true marks a one-off quick-add (the FAB) so the server tags it for a terse reply.
 // dryWhen (optional): checked at upload time — when true, the server only transcribes (?dry=1) and the
 // text goes to onTranscript instead of enqueueing. The chat composer uses this while photos are pending,
 // so a dictated command joins the text box and sends WITH the photos, not ahead of them.
 // Exported so the wall-mode push-to-talk button (wall.js) can reuse the exact same pipeline.
-export function makeRecorder({ onStatus = () => {}, onActive = () => {}, onBusy = () => {}, quick, autoStop, dryWhen, onTranscript }) {
+// onState reports the button's one visual state: 'armed' (tapped — the mic is opening, or the clip is
+// on its way up), 'rec' (actually capturing) or 'idle'. Callers paint it; nothing else infers it.
+export function makeRecorder({ onStatus = () => {}, onState = () => {}, quick, autoStop, dryWhen, onTranscript }) {
   let recording = false, rec = null, chunks = [], stream = null;
   let arming = false;                 // tapped, mic not open yet — see start()
   let sending = false;                // stopped, clip still on its way up — see stop()
@@ -167,10 +183,10 @@ export function makeRecorder({ onStatus = () => {}, onActive = () => {}, onBusy 
   // `arming` is set synchronously, before the await, so a second tap can only ever be a stop.
   async function start() {
     if (recording || arming || sending) return;
-    arming = true; onActive(true);
+    arming = true; onState('armed');          // the tap is acknowledged here, not when the mic opens
     let s;
     try { s = await navigator.mediaDevices.getUserMedia({ audio: true }); }
-    catch (_) { arming = false; onActive(false); onStatus('Mic permission denied', 'err'); return; }
+    catch (_) { arming = false; onState('idle'); onStatus('Mic permission denied', 'err'); return; }
     if (!arming) { s.getTracks().forEach((t) => t.stop()); return; }   // tapped again while arming → cancelled
     arming = false; stream = s;
     const mime = pickMime();
@@ -178,7 +194,7 @@ export function makeRecorder({ onStatus = () => {}, onActive = () => {}, onBusy 
     rec = new MediaRecorder(stream, mime ? { mimeType: mime } : undefined);
     rec.ondataavailable = (e) => { if (e.data && e.data.size) chunks.push(e.data); };
     rec.onstop = () => upload(mime);
-    rec.start(); recording = true; onActive(true);
+    rec.start(); recording = true; onState('rec');   // capturing for real now — full fill
     muteOthers(true);   // mute every other listener (Mac + ESP) while this explicit command records
     onStatus(autoStop ? 'Listening…' : 'Listening… tap to send', 'rec');
     // No duration cap. A recording ends when HE stops talking (the VAD below) or taps again —
@@ -187,16 +203,16 @@ export function makeRecorder({ onStatus = () => {}, onActive = () => {}, onBusy 
   }
   function stop() {
     // Tapped again before the mic ever opened: cancel the arming rather than fall through as a no-op.
-    if (arming) { arming = false; onActive(false); onStatus('', 'clear'); return; }
+    if (arming) { arming = false; onState('idle'); onStatus('', 'clear'); return; }
     if (!recording) return;
-    recording = false; onActive(false); stopVAD();
+    recording = false; stopVAD();
     const live = rec && rec.state !== 'inactive';
     // The tap that ends a recording has to land visibly too. Stopping is instant, but the clip then
     // spends a second or two being uploaded and transcribed with nothing on the button to show for it,
     // which read as a dropped press — and the retap, on a toggle, started a WHOLE NEW recording. So the
     // button holds an in-flight state and taps do nothing until upload() clears it (see toggle()).
     // The flag is only armed when a stop event is actually coming, so it can never strand the button.
-    if (live) { sending = true; onBusy(true); }
+    if (live) { sending = true; onState('armed'); } else onState('idle');
     try { if (live) rec.stop(); } catch (_) {}
     if (!live) release();          // no onstop is coming, so let go of the mic here instead
   }
@@ -204,7 +220,7 @@ export function makeRecorder({ onStatus = () => {}, onActive = () => {}, onBusy 
     if (stream) { stream.getTracks().forEach((t) => t.stop()); stream = null; }
   }
   async function upload(mime) {
-    try { await send(mime); } finally { sending = false; onBusy(false); }
+    try { await send(mime); } finally { sending = false; onState('idle'); }
   }
   async function send(mime) {
     release();
@@ -648,12 +664,12 @@ function initCard() {
   // whole thing (text + photos) goes when Send is tapped. Empty tray → fire-and-forget as always.
   const cardRec = makeRecorder({
     onStatus: (t, kind) => { if (kind !== 'prompt') setStatus(t); },
-    onActive: (a) => micBtn.classList.toggle('ai-rec', a),
-    onBusy: (x) => micBtn.classList.toggle('ai-sending', x),
+    onState: (s) => { micBtn.classList.toggle('ai-rec', s === 'rec');
+                      micBtn.classList.toggle('ai-armed', s === 'armed'); },
     dryWhen: () => attItems.length > 0,
     onTranscript: (t) => { textEl.value = (textEl.value.trim() ? textEl.value.trim() + ' ' : '') + t; },
   });
-  micBtn.addEventListener('click', () => cardRec.toggle());
+  bindTap(micBtn, () => cardRec.toggle());
 
   return { upsert, clear, backfill, optimistic, setPendingPath, dropPending };
 }

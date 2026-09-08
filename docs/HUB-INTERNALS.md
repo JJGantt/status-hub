@@ -149,6 +149,31 @@ cycling on its own and nothing here is driving it.
 minimal fullscreen voice launcher; `/calendar` = the standalone calendar page (navbar's calendar
 button gets there); `/tv-calendar` = the calendar wall (§ CLAUDE.md's walls note).
 
+### The voice button has three states, and a tap lands on `pointerdown`
+
+`makeRecorder` reports one state through `onState` — `armed`, `rec`, `idle` — and every caller paints
+exactly that. `armed` is both "tapped, mic still opening" and "stopped, clip still uploading": a ring,
+no fill. `rec` is the full fill, and it means audio is genuinely being captured, nothing less.
+
+Both of those exist because a tap that shows nothing gets repeated, and this control is a toggle, so
+a repeated tap is a state change nobody asked for. `getUserMedia` takes a beat (longer once the page
+has been backgrounded) and the upload takes a second or two, and each of those windows used to look
+identical to a dead button. `arming` and `sending` are set synchronously so the second tap can only
+ever be a stop, or nothing.
+
+The handler is on `pointerdown`, not `click`: click fires when the finger LIFTS, ~90ms later for a
+mouse press and more for a finger. The click still arrives afterwards — `preventDefault` on
+`pointerdown` does not reliably suppress it — so `bindTap` swallows it, and lets through only a click
+with no `pointerdown` in front of it and `detail === 0`, which is a keyboard Enter or Space.
+
+The VAD's noise floor is the quietest frame heard so far, tracked across the whole recording, not the
+mean of an opening calibration window. A window assumes a pause before speaking; talk immediately and
+your own voice sets the threshold above itself, so the clip never registers as speech — no
+trailing-silence stop, just a hang until the grace timer gives up. That floor is also what makes it
+safe to DROP a clip the VAD watched end to end without once crossing it. Dropping matters because
+Whisper does not return an empty string for silence: it invents a plausible phrase — "Thank you." is
+the usual one — and the worker then acts on it as a command.
+
 ---
 
 ## 4. The domain engine (`lib/`)

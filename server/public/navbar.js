@@ -3,7 +3,7 @@
 // the single voice button — one dynamic route (Sonnet handles the simple stuff, escalates to Opus
 // when it needs to) — tap-to-talk, driving the shared activity popup.
 // Mounted once per page by core.js.
-import { makeRecorder, activityBar, enqueuePhoto, pendingPhotoCount } from './voiceagent.js';
+import { makeRecorder, activityBar, enqueuePhoto, pendingPhotoCount, bindTap } from './voiceagent.js';
 import { open as openSettings } from './settings.js';
 
 const CHAT = '<svg viewBox="0 0 24 24" width="21" height="21" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
@@ -36,9 +36,9 @@ export function mountNavbar() {
     const b = document.createElement('button');
     b.className = 'wfab ' + cls; b.type = 'button'; b.setAttribute('aria-label', label);
     b.innerHTML = svg;
-    const rec = makeRecorder({ onStatus, onActive: (a) => b.classList.toggle('rec', a),
-      onBusy: (x) => b.classList.toggle('sending', x), quick: true, autoStop: true });
-    b.addEventListener('click', () => rec.toggle());
+    const rec = makeRecorder({ onStatus, quick: true, autoStop: true,
+      onState: (s) => { b.classList.toggle('rec', s === 'rec'); b.classList.toggle('armed', s === 'armed'); } });
+    bindTap(b, () => rec.toggle());
     // The native app (opened via statushub://record from a home-screen shortcut) calls this to start the
     // exact same recorder without an on-screen tap — so it lands straight in "listening", like pressing it.
     if (cls === 'wfab-fast') window.__startVoiceCommand = () => rec.start();

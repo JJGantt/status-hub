@@ -18,10 +18,12 @@
     width:62vmin;height:62vmin;max-width:340px;max-height:340px;border-radius:50%;
     background:radial-gradient(circle at 50% 38%,#2a3140,#12161d);
     box-shadow:0 0 0 1px #2a3340,0 20px 60px rgba(0,0,0,.5);
-    display:flex;align-items:center;justify-content:center;transition:transform .12s,box-shadow .3s}
+    display:flex;align-items:center;justify-content:center;transition:transform .12s;touch-action:manipulation}
   .mic-btn:active{transform:scale(.96)}
   .mic-btn svg{width:44%;height:44%;color:#c4b5fd}
   .mic-btn.rec{box-shadow:0 0 0 2px #8b5cf6,0 0 60px 8px rgba(139,92,246,.55);animation:pulse 1.3s ease-in-out infinite}
+  /* tapped, not capturing: the ring without the glow — see makeRecorder's 'armed' state */
+  .mic-btn.armed{box-shadow:0 0 0 2px #8b5cf6}
   @keyframes pulse{0%,100%{transform:scale(1)}50%{transform:scale(1.04)}}
   .status{font-size:20px;font-weight:600;color:#e6ebf2;text-align:center;min-height:26px}
   .status.err{color:#f0836b}

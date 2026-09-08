@@ -139,11 +139,12 @@ function project(col) {
     row.classList.toggle('cur', nowT >= at && nowT < at + 1);
   });
 
-  // WHETHER WORDS FIT IS A PROPERTY OF THE CHIP, NOT OF THE ROW. An hour with something in only one
-  // of its two half-lines gives that half nearly the whole row (the empty one keeps a sliver — see
-  // tv-home.css), so a lone item stays legible about twice as far from now as a busy hour's do. A
-  // single row-height threshold could not tell those apart, and flattened both to bars at the same
-  // distance: 4pm went wordless from 12:30 onward with an empty :30 line spending half its height.
+  // WHETHER WORDS FIT IS A PROPERTY OF THE CHIP, NOT OF THE ROW. An hour is two half-lines however
+  // little is in it, and once the row is tight an occupied half keeps a chip's worth of height at
+  // the empty one's expense (the floor is in tv-home.css) — so a lone item stays legible about twice
+  // as far from now as a busy hour's do. A single row-height threshold could not tell those apart
+  // and flattened both at the same distance: 4pm went wordless from 12:30 onward, its empty :30 line
+  // spending half the row saying nothing.
   //
   // The height is READ BACK from the layout rather than recomputed from the CSS's paddings and gaps,
   // which is why this is a second pass over the same rows — pass one has to have been applied first.

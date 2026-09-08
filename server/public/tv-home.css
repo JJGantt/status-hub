@@ -42,11 +42,21 @@ body.tv .hw-daycard .cw-day.dial .cw-hour{flex:0 0 auto;min-height:0;overflow:hi
    reads as a squashed list instead. */
 body.tv .hw-daycard .cw-day.dial .cw-hl{font-size:calc(13px + 19px * var(--face, 1));
   align-self:center;padding-top:0}
-/* An EMPTY half-line keeps a sliver of the row rather than half of it. Both halves are always drawn
-   — the lower one is what says an item is at :30 — but a few hours out an hour is only 30-odd pixels
-   here, and an empty half taking half of that is the whole difference between a chip with words on
-   it and a bar of colour. The sliver still places the occupied half in its own half of the hour. */
-body.tv .hw-daycard .cw-day.dial .cw-half:empty{flex:0 0 6px}
+/* THE EMPTY HALF GIVES UP ITS SHARE ONLY UNDER PRESSURE. Both half-lines are always drawn and both
+   normally take half the row, because the lower one is what says an item is at :30 — and around now
+   the rows are 50-60px, which is room enough to show that. Further out an hour is 30-odd pixels, and
+   there an empty half taking half of it is the whole difference between a chip with words on it and
+   a bar of colour.
+
+   So rather than a threshold, one floor: an occupied half whose neighbour is empty will not go below
+   one chip's height (15px of text on 1.2 lines inside the chip's 4px of padding) while that neighbour
+   still has room to give. Above that floor the two stay equal and the :00 / :30 split reads; below
+   it the empty one shrinks away, and it does so continuously — at the crossover the occupied half is
+   already exactly the floor, so nothing jumps as an hour recedes. `100% - 3px` is the row's own
+   height less the gap, which stops the floor from claiming more than the row has when the row is
+   down to a band of colour anyway. */
+body.tv .hw-daycard .cw-day.dial .cw-hitems:has(.cw-half:empty) .cw-half:not(:empty){
+  min-height:min(22px, 100% - 3px)}
 /* The chip's words foreshorten with the row, the way the hour number does. --chiph is the height the
    half-line actually got, measured in project(); 4px of that is the chip's own padding, and 1.25
    leaves the descenders room. Capped at the 15px a chip is on every other surface, so the hours

@@ -449,15 +449,22 @@ be read it goes `.thin` and drops the words for a bar of its colour, so a busy h
 still visibly busy; `.sliver` takes the hour number too.
 
 **`.thin` is decided from the half-line's measured height, not the row's.** An hour is two half-lines
-whatever is in it, so a row-height threshold flattened a lone item at the same distance as a pair —
-and on the dial the empty half was spending half of an already-small row saying nothing. On this
-surface an empty half keeps a 6px sliver (`.cw-half:empty` in `tv-home.css`), enough to still place
-the occupied one in its own half of the hour, and `project()` reads the occupied half's
-`clientHeight` back out of the layout in a second pass over the rows — hence two loops, and hence a
-`--chiph` the CSS sizes the chip's text from. Reading it back rather than recomputing it here is
-deliberate: the paddings and gaps live in the CSS, and a copy of them in JS drifts. It is safe
-because a half's height comes from the row, never from what is in it, so nothing `.thin` does feeds
-back into the measurement.
+whatever is in it, so a row-height threshold flattened a lone item at the same distance as a pair.
+`project()` reads the occupied half's `clientHeight` back out of the layout in a second pass over the
+rows — hence two loops, and hence a `--chiph` the CSS sizes the chip's text from. Reading it back
+rather than recomputing it here is deliberate: the paddings and gaps live in the CSS, and a copy of
+them in JS drifts. It is safe because a half's height comes from the row, never from what is in it,
+so nothing `.thin` does feeds back into the measurement.
+
+**An empty half gives up its share only under pressure.** Both halves normally take half the row, so
+around now — where rows are 50-60px — the `:30` line is visibly there and the split reads. Further
+out the row is 30-odd pixels and an empty half is spending half of it saying nothing, which is the
+whole difference between a chip with words and a bar of colour. Rather than a second threshold, the
+CSS puts one floor under it: an occupied half whose neighbour is empty will not go below one chip's
+height while that neighbour still has room to give (`.cw-hitems:has(.cw-half:empty)` in
+`tv-home.css`). Above the floor the halves stay equal; below it the empty one shrinks away, and
+continuously — at the crossover the occupied half is *already* exactly the floor, so nothing jumps as
+an hour recedes. In practice the split survives about four hours either side of now.
 
 **A calendar day cannot feed this** — that is what `full=1` exists for. Tried with one day, by 21:30
 the dial had 21½ hours crushed above the line and 2½ below it, the column half empty. The window is

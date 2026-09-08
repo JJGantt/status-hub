@@ -129,6 +129,19 @@ Also queued from the same conversation (2026-09-01): condense the standard wall 
 default that includes calendar components, and slim the rings/health bar on the non-standard walls —
 they stay on every wall, but smaller.
 
+### The dial's date header sits on top of the oldest hours
+`.cw-dayhead` on the home wall is absolutely positioned over the top-left of the day column, because
+putting it in the flow moves the axis off the middle of the box and the now-line stops being centred
+(the reasoning is in `tv-home.css` where the rule is). It covers about 34px, which is always the four
+oldest hours in the window, and the fourth of those is tall enough to hold an item — so a completed
+10a chip, already flattened to a colour bar at that distance, showed through "Tue, Sep 8" as a stray
+fragment of colour and read as a rendering fault (2026-09-08).
+
+Giving the header a background is not the fix: that hides the item outright, which is worse than
+clipping it. Something that keeps the axis centred is: the date in the empty hour gutter, a smaller
+header, or reserving the same height at the bottom of the box so the middle stays the middle.
+Jared's call which.
+
 ### Sounds for the other notification kinds
 Only the reminder bell (`apps/Sounds/reminder.caf`) was auditioned and chosen. Weight reminders and
 voice acks still use the system default. `NOTIFY_STYLE` in `server/server.js` is where a kind's sound

@@ -85,6 +85,25 @@ Supabase ──▶ server.js buildStatus() ──▶ /api/status payload ──�
 
 ## 3. Client modules & cards (`public/`)
 
+### A page loads ONE script, and it is built
+
+Every page has a single `<script type=module src="dist/<page>.js">`. That bundle is built by
+`build.js` (esbuild) from `public/pages/<page>.js`, which lists the modules that page runs, in order.
+**To add or remove a module from a page, edit that entry file** — a new `<script>` tag in the HTML is
+not how a module gets loaded any more.
+
+The bundle is built inside the Docker image, not committed, so what a machine serves cannot be stale
+against the source it was built from. Locally, `npm run build` before `npm start`.
+
+One bundle PER PAGE, never one per entry module. Several pages share `core.js`, `shared.js` and
+`voiceagent.js`, and those hold state that must exist exactly once on a page — the activity-popup
+singleton, the held microphone, the `KIOSK` verdict. Separate bundles that shared a module would each
+get their own copy of it, and two `KIOSK` verdicts is two halves of one decision disagreeing.
+
+Why it is bundled at all: the client is 26 modules in a three-level import graph, and a browser cannot
+discover level two until level one has arrived. Served raw that is a round trip per level — about
+420ms of waiting on cellular before any of it runs, for about 100KB of code.
+
 **Top-level modules:**
 
 | File | Role |
@@ -148,6 +167,19 @@ cycling on its own and nothing here is driving it.
 · repos · reports, landing on the wall; TV `/tv` = the wall + a voice panel (auth `?token=`); the `/mic` page = a
 minimal fullscreen voice launcher; `/calendar` = the standalone calendar page (navbar's calendar
 button gets there); `/tv-calendar` = the calendar wall (§ CLAUDE.md's walls note).
+
+### The microphone is held open, not acquired per recording
+
+`holdMic()` warms one `getUserMedia` stream when a recording surface comes up and keeps it for as long
+as the page is visible; a recording is a MediaRecorder over a device that is already open. iOS takes up
+to two seconds to hand over a capture device — 2,017ms measured on his phone — and acquiring per
+recording put that wait between every tap and the red fill. Warm, it is 1ms.
+
+It is released when the page is hidden and re-warmed when it returns: iOS interrupts a backgrounded
+capture anyway, and the recording indicator should not stay lit over another app. A track can also end
+under us when something else takes the mic, so possession is decided by `readyState`, never by holding
+a reference. `micStream`/`micPending` are declared at the top of the file with the rest of `boot()`'s
+state, because `boot()` runs above them and a `let` it reaches would be in the temporal dead zone.
 
 ### The voice button has three states, and a tap lands on `pointerdown`
 

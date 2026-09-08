@@ -444,9 +444,20 @@ of that, which is the reason to do it properly rather than taper the rows by han
 - **the rows fill the column exactly**, because the ends are at ±90° and sin of that is ±1.
 
 The hour numbers scale and fade with `cos θ`, which is the foreshortening a real drum shows and is
-what makes it read as turning rather than as a list with small ends. Rows past the point where a
-chip can be read (`.thin`, `.sliver`) drop the words and keep the colour, so a busy hour at the rim
-is still visibly busy.
+what makes it read as turning rather than as a list with small ends. Past the point where a chip can
+be read it goes `.thin` and drops the words for a bar of its colour, so a busy hour at the rim is
+still visibly busy; `.sliver` takes the hour number too.
+
+**`.thin` is decided from the half-line's measured height, not the row's.** An hour is two half-lines
+whatever is in it, so a row-height threshold flattened a lone item at the same distance as a pair —
+and on the dial the empty half was spending half of an already-small row saying nothing. On this
+surface an empty half keeps a 6px sliver (`.cw-half:empty` in `tv-home.css`), enough to still place
+the occupied one in its own half of the hour, and `project()` reads the occupied half's
+`clientHeight` back out of the layout in a second pass over the rows — hence two loops, and hence a
+`--chiph` the CSS sizes the chip's text from. Reading it back rather than recomputing it here is
+deliberate: the paddings and gaps live in the CSS, and a copy of them in JS drifts. It is safe
+because a half's height comes from the row, never from what is in it, so nothing `.thin` does feeds
+back into the measurement.
 
 **A calendar day cannot feed this** — that is what `full=1` exists for. Tried with one day, by 21:30
 the dial had 21½ hours crushed above the line and 2½ below it, the column half empty. The window is

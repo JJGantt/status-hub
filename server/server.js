@@ -1262,6 +1262,16 @@ app.get('/api/settings', async (req, res) => {
     res.json(await settingsAll());   // realtime-invalidated cache — see settingsAll()
   } catch (e) { res.status(500).json({ error: String(e.message || e) }); }
 });
+// TEMPORARY. The voice button's stop tap misbehaves only on his phone, so the phone reports what it
+// actually saw — every pointer event and every state change — into this log. Read it with
+// `fly logs -a jared-status-hub | grep tap`. Delete this route and its caller once that is understood.
+app.post('/api/tapdebug', express.json({ limit: '8kb' }), (req, res) => {
+  const ua = String(req.headers['user-agent'] || '');
+  const surface = ua.includes('StatusHub') ? 'app' : /iPhone|iPad/.test(ua) ? 'ios-safari' : 'other';
+  console.log('[tap]', surface, JSON.stringify(req.body));
+  res.json({ ok: true });
+});
+
 app.post('/api/settings', express.json(), async (req, res) => {
   try {
     const b = req.body || {};

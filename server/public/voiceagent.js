@@ -99,6 +99,17 @@ function boot() {
   if (_card) document.addEventListener('visibilitychange', () => { if (!document.hidden) _card.backfill(); });
 }
 
+// TEMPORARY. Every pointer event and every recorder state change, reported to the hub's log, because
+// the stop tap misbehaves only on his phone and nothing here can see that. `fly logs | grep tap`.
+// Delete this and /api/tapdebug once the stop path is understood.
+function trace(ev, extra) {
+  try {
+    const body = JSON.stringify({ ev, ...(extra || {}), ms: Math.round(performance.now()) });
+    if (navigator.sendBeacon) navigator.sendBeacon('/api/tapdebug', new Blob([body], { type: 'application/json' }));
+    else fetch('/api/tapdebug', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body, keepalive: true });
+  } catch (_) {}
+}
+
 // A tap fires on pointerdown, not on click: click lands when the finger LIFTS, and the gap between the
 // two is long enough to read as an unresponsive button — 90ms for a mouse press, more for a finger.
 // The click still arrives afterwards (preventDefault on pointerdown does not reliably suppress it), and
@@ -106,11 +117,16 @@ function boot() {
 // in front of it and no click count — keyboard Enter or Space — is allowed through.
 export function bindTap(el, fn) {
   let fromPointer = false;
-  el.addEventListener('pointerdown', (e) => { e.preventDefault(); fromPointer = true; fn(); });
+  el.addEventListener('pointerdown', (e) => {
+    trace('pointerdown', { type: e.pointerType, id: e.pointerId, primary: e.isPrimary });
+    e.preventDefault(); fromPointer = true; fn();
+  });
   el.addEventListener('click', (e) => {
+    trace('click', { detail: e.detail, fromPointer });
     if (fromPointer || e.detail !== 0) { fromPointer = false; return; }
     fn();
   });
+  el.addEventListener('pointercancel', () => trace('pointercancel'));
 }
 
 // A self-contained recorder: getUserMedia → MediaRecorder → upload to /api/voice-command.
@@ -157,8 +173,8 @@ export function makeRecorder({ onStatus = () => {}, onState = () => {}, quick, a
         if (rms < floor) floor = rms;
         const thr = Math.max(floor * 2.5, 0.02);
         if (rms >= thr) { spoke = true; heardSpeech = true; silence = 0; }   // speaking
-        else if (spoke) { if (!silence) silence = now; else if (now - silence >= HANG_MS) stop(); }  // trailing silence → send
-        else if (now - t0 > GRACE_MS) stop();                          // pressed but never spoke → give up (upload() drops it)
+        else if (spoke) { if (!silence) silence = now; else if (now - silence >= HANG_MS) { trace('vad:silence'); stop(); } }  // trailing silence → send
+        else if (now - t0 > GRACE_MS) { trace('vad:grace'); stop(); }   // pressed but never spoke → give up (upload() drops it)
       }, 60);
       vadRan = true;
     } catch (_) { /* no Web Audio → falls back to tap-to-stop */ }
@@ -184,6 +200,7 @@ export function makeRecorder({ onStatus = () => {}, onState = () => {}, quick, a
   async function start() {
     if (recording || arming || sending) return;
     arming = true; onState('armed');          // the tap is acknowledged here, not when the mic opens
+    trace('start:arming');
     let s;
     try { s = await navigator.mediaDevices.getUserMedia({ audio: true }); }
     catch (_) { arming = false; onState('idle'); onStatus('Mic permission denied', 'err'); return; }
@@ -195,6 +212,7 @@ export function makeRecorder({ onStatus = () => {}, onState = () => {}, quick, a
     rec.ondataavailable = (e) => { if (e.data && e.data.size) chunks.push(e.data); };
     rec.onstop = () => upload(mime);
     rec.start(); recording = true; onState('rec');   // capturing for real now — full fill
+    trace('start:recording', { mime });
     muteOthers(true);   // mute every other listener (Mac + ESP) while this explicit command records
     onStatus(autoStop ? 'Listening…' : 'Listening… tap to send', 'rec');
     // No duration cap. A recording ends when HE stops talking (the VAD below) or taps again —
@@ -212,6 +230,7 @@ export function makeRecorder({ onStatus = () => {}, onState = () => {}, quick, a
     // which read as a dropped press — and the retap, on a toggle, started a WHOLE NEW recording. So the
     // button holds an in-flight state and taps do nothing until upload() clears it (see toggle()).
     // The flag is only armed when a stop event is actually coming, so it can never strand the button.
+    trace('stop:enter', { live, recState: rec ? rec.state : null });
     if (live) { sending = true; onState('armed'); } else onState('idle');
     try { if (live) rec.stop(); } catch (_) {}
     if (!live) release();          // no onstop is coming, so let go of the mic here instead
@@ -220,7 +239,8 @@ export function makeRecorder({ onStatus = () => {}, onState = () => {}, quick, a
     if (stream) { stream.getTracks().forEach((t) => t.stop()); stream = null; }
   }
   async function upload(mime) {
-    try { await send(mime); } finally { sending = false; onState('idle'); }
+    trace('upload:begin');
+    try { await send(mime); } finally { sending = false; onState('idle'); trace('upload:end'); }
   }
   async function send(mime) {
     release();
@@ -256,7 +276,12 @@ export function makeRecorder({ onStatus = () => {}, onState = () => {}, quick, a
       }
     } catch (_) { onStatus('Send failed', 'err'); }
   }
-  return { toggle() { if (sending) return; (recording || arming) ? stop() : start(); }, start, stop };
+  return {
+    toggle() {
+      trace('toggle', { recording, arming, sending, recState: rec ? rec.state : null });
+      if (sending) return;
+      (recording || arming) ? stop() : start();
+    }, start, stop };
 }
 
 // ---- bottom activity bar -------------------------------------------------

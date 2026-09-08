@@ -2557,23 +2557,31 @@ app.get('/api/sessions', async (req, res) => {
       .filter((s) => s.status === 'resident' || s.status === 'evicted')
       .sort((a, b) => rank(a) - rank(b) || byStarted(a, b))
       .map((s, i) => [s.id, i + 1]));
-    const withN = (s) => ({ ...s, n: numbered.get(s.id) || null });
+    // Only the fields something renders. A desk_sessions row carries transcript paths, command ids and
+    // five timestamps that no surface here reads — 97 rows of them was most of what was left of this
+    // response after the replies came out of it. Adding a field to a session view means adding it here.
+    const withN = (s) => ({
+      id: s.id, n: numbered.get(s.id) || null,
+      label: s.label, custom_title: s.custom_title, repo: s.repo,
+      worker: s.worker, status: s.status, working: s.working,
+      claude_session_id: s.claude_session_id,      // presence of a transcript = the transfer button
+    });
     // One line of what the session last said, for the rows that only ever show one line. The repos
     // pane cuts `last_reply` to 90 characters for every row it lists; sending the whole reply so it
     // can be thrown away cost 155KB of a 242KB response over 95 parked sessions, which is most of
     // what a phone downloads on a cold load.
     const SAY = 120;
     const say = (s) => (s.last_reply || s.prompt || '').replace(/\s+/g, ' ').slice(0, SAY);
-    // The full reply still goes to every row that can render it in full: everything resident, plus
-    // the newest parked one, which is what the home wall falls back to when nothing is running.
-    const brief = (s) => { const { last_reply, prompt, ...rest } = withN(s); return { ...rest, say: say(s) }; };
+    const brief = (s) => ({ ...withN(s), say: say(s) });
+    // The whole reply goes only to rows something can render in full: everything resident, plus the
+    // newest parked one, which is what the home wall falls back to when nothing is running.
+    const full = (s) => ({ ...brief(s), last_reply: s.last_reply });
     const evicted = (sessions || []).filter((s) => s.status === 'evicted').sort(byStarted);
     res.json({
       // Resident = running now, reachable over Remote Control. Evicted = closed to free the machine
       // but resumable with full context, which is the distinction the panel has to make obvious.
-      resident: (sessions || []).filter((s) => s.status === 'resident').sort(byStarted)
-        .map((s) => ({ ...withN(s), say: say(s) })),
-      evicted: evicted.map((s, i) => (i === 0 ? { ...withN(s), say: say(s) } : brief(s))),
+      resident: (sessions || []).filter((s) => s.status === 'resident').sort(byStarted).map(full),
+      evicted: evicted.map((s, i) => (i === 0 ? full(s) : brief(s))),
       queued: queue || [],
       focus,
     });

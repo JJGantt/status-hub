@@ -105,9 +105,10 @@ function boot() {
 // text goes to onTranscript instead of enqueueing. The chat composer uses this while photos are pending,
 // so a dictated command joins the text box and sends WITH the photos, not ahead of them.
 // Exported so the wall-mode push-to-talk button (wall.js) can reuse the exact same pipeline.
-export function makeRecorder({ onStatus = () => {}, onActive = () => {}, quick, autoStop, dryWhen, onTranscript }) {
+export function makeRecorder({ onStatus = () => {}, onActive = () => {}, onBusy = () => {}, quick, autoStop, dryWhen, onTranscript }) {
   let recording = false, rec = null, chunks = [], stream = null;
   let arming = false;                 // tapped, mic not open yet — see start()
+  let sending = false;                // stopped, clip still on its way up — see stop()
   let heardSpeech = false;            // the VAD crossed its threshold at least once this recording
   let vadRan = false;                 // the VAD actually got a Web Audio graph (it can't on every browser)
   let actx = null, vadTimer = null;
@@ -125,15 +126,20 @@ export function makeRecorder({ onStatus = () => {}, onActive = () => {}, quick, 
       const an = actx.createAnalyser(); an.fftSize = 1024;
       actx.createMediaStreamSource(stream).connect(an);
       const buf = new Uint8Array(an.fftSize), t0 = performance.now();
-      let base = 0, baseN = 0, spoke = false, silence = 0;
-      const CAL_MS = 350, HANG_MS = phoneHangMs, GRACE_MS = Math.max(8000, phoneHangMs + 3000);   // trailing-silence from the phone_silence_s setting
+      let floor = Infinity, spoke = false, silence = 0;
+      const HANG_MS = phoneHangMs, GRACE_MS = Math.max(8000, phoneHangMs + 3000);   // trailing-silence from the phone_silence_s setting
       vadTimer = setInterval(() => {
         if (!recording) return;
         an.getByteTimeDomainData(buf);
         let s = 0; for (let i = 0; i < buf.length; i++) { const d = (buf[i] - 128) / 128; s += d * d; }
         const rms = Math.sqrt(s / buf.length), now = performance.now();
-        if (now - t0 < CAL_MS) { base += rms; baseN++; return; }       // calibrate the ambient noise floor first
-        const thr = Math.max((baseN ? base / baseN : 0.01) * 2.5, 0.02);
+        // The noise floor is the QUIETEST frame heard so far, tracked for the whole recording. It used
+        // to be the mean of an opening 350ms calibration window, which assumed a pause before speaking:
+        // talk immediately and his own voice set the threshold above itself, so the clip never counted
+        // as speech — no trailing-silence stop, just a hang until the grace timer gave up. A minimum
+        // needs no such pause, because the gaps between words are themselves near the floor.
+        if (rms < floor) floor = rms;
+        const thr = Math.max(floor * 2.5, 0.02);
         if (rms >= thr) { spoke = true; heardSpeech = true; silence = 0; }   // speaking
         else if (spoke) { if (!silence) silence = now; else if (now - silence >= HANG_MS) stop(); }  // trailing silence → send
         else if (now - t0 > GRACE_MS) stop();                          // pressed but never spoke → give up (upload() drops it)
@@ -160,7 +166,7 @@ export function makeRecorder({ onStatus = () => {}, onActive = () => {}, quick, 
   // an empty clip — which it transcribes as "Thank you." rather than as nothing.
   // `arming` is set synchronously, before the await, so a second tap can only ever be a stop.
   async function start() {
-    if (recording || arming) return;
+    if (recording || arming || sending) return;
     arming = true; onActive(true);
     let s;
     try { s = await navigator.mediaDevices.getUserMedia({ audio: true }); }
@@ -185,6 +191,12 @@ export function makeRecorder({ onStatus = () => {}, onActive = () => {}, quick, 
     if (!recording) return;
     recording = false; onActive(false); stopVAD();
     const live = rec && rec.state !== 'inactive';
+    // The tap that ends a recording has to land visibly too. Stopping is instant, but the clip then
+    // spends a second or two being uploaded and transcribed with nothing on the button to show for it,
+    // which read as a dropped press — and the retap, on a toggle, started a WHOLE NEW recording. So the
+    // button holds an in-flight state and taps do nothing until upload() clears it (see toggle()).
+    // The flag is only armed when a stop event is actually coming, so it can never strand the button.
+    if (live) { sending = true; onBusy(true); }
     try { if (live) rec.stop(); } catch (_) {}
     if (!live) release();          // no onstop is coming, so let go of the mic here instead
   }
@@ -192,6 +204,9 @@ export function makeRecorder({ onStatus = () => {}, onActive = () => {}, quick, 
     if (stream) { stream.getTracks().forEach((t) => t.stop()); stream = null; }
   }
   async function upload(mime) {
+    try { await send(mime); } finally { sending = false; onBusy(false); }
+  }
+  async function send(mime) {
     release();
     muteOthers(false);   // FAB done with the mic → the other listeners resume
     const dry = typeof dryWhen === 'function' && dryWhen();
@@ -225,7 +240,7 @@ export function makeRecorder({ onStatus = () => {}, onActive = () => {}, quick, 
       }
     } catch (_) { onStatus('Send failed', 'err'); }
   }
-  return { toggle() { (recording || arming) ? stop() : start(); }, start, stop };
+  return { toggle() { if (sending) return; (recording || arming) ? stop() : start(); }, start, stop };
 }
 
 // ---- bottom activity bar -------------------------------------------------
@@ -634,6 +649,7 @@ function initCard() {
   const cardRec = makeRecorder({
     onStatus: (t, kind) => { if (kind !== 'prompt') setStatus(t); },
     onActive: (a) => micBtn.classList.toggle('ai-rec', a),
+    onBusy: (x) => micBtn.classList.toggle('ai-sending', x),
     dryWhen: () => attItems.length > 0,
     onTranscript: (t) => { textEl.value = (textEl.value.trim() ? textEl.value.trim() + ' ' : '') + t; },
   });

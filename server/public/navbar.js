@@ -36,7 +36,8 @@ export function mountNavbar() {
     const b = document.createElement('button');
     b.className = 'wfab ' + cls; b.type = 'button'; b.setAttribute('aria-label', label);
     b.innerHTML = svg;
-    const rec = makeRecorder({ onStatus, onActive: (a) => b.classList.toggle('rec', a), quick: true, autoStop: true });
+    const rec = makeRecorder({ onStatus, onActive: (a) => b.classList.toggle('rec', a),
+      onBusy: (x) => b.classList.toggle('sending', x), quick: true, autoStop: true });
     b.addEventListener('click', () => rec.toggle());
     // The native app (opened via statushub://record from a home-screen shortcut) calls this to start the
     // exact same recorder without an on-screen tap — so it lands straight in "listening", like pressing it.

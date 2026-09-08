@@ -18,6 +18,7 @@ function scheduleReset() {
 const rec = makeRecorder({
   quick: true, autoStop: true,
   onActive: (a) => btn.classList.toggle('rec', a),
+  onBusy: (x) => btn.classList.toggle('sending', x),
   onStatus: (t, kind) => {
     clearTimeout(resetTimer);
     if (kind === 'rec') { setStatus(t || 'Listening…'); echoEl.textContent = ''; }

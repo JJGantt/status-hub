@@ -10,9 +10,11 @@ function buildWorkoutHeatmap(rows, weeks = 18, today = localDate(new Date(Date.n
   const anchor = new Date(today + 'T12:00:00Z');
   const dow = anchor.getUTCDay(); // 0=Sun .. 6=Sat
   const startMs = anchor.getTime() - dow * 86400000 - (weeks - 1) * 7 * 86400000;
-  // self-scaling intensity: your busiest day = brightest, the rest scale relative to it
-  let maxCount = 0; for (const k in counts) if (k <= today && counts[k] > maxCount) maxCount = counts[k];
-  const level = (c) => (c <= 0 ? 0 : Math.min(4, Math.max(1, Math.ceil((4 * c) / (maxCount || 1)))));
+  // Absolute intensity: one shade per 6 sets, topping out at 25+. Fixed cutoffs, so a color means
+  // the same set count in every window and on every surface. Scaling to the window's busiest day
+  // instead let one outlier compress everything else — a 47-set day pushed 59% of days onto a
+  // single shade and left the brightest green all but unreachable.
+  const level = (c) => (c <= 0 ? 0 : Math.min(5, Math.ceil(c / 6)));
   const cols = [], months = [];
   let prevMon = -1;
   for (let w = 0; w < weeks; w++) {
@@ -27,7 +29,7 @@ function buildWorkoutHeatmap(rows, weeks = 18, today = localDate(new Date(Date.n
     prevMon = m;
     cols.push(col);
   }
-  return { weeks: cols, months, maxCount };
+  return { weeks: cols, months };
 }
 
 module.exports = { buildWorkoutHeatmap };

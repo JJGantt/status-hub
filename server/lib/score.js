@@ -161,6 +161,60 @@ function completionValue(lateMs) {
   return -((lateMs - zero) / (floor - zero));
 }
 
+// How far ahead of the caller's own clock a completion stamp may still be accepted. Two machines
+// write these — the hub from Fly and the data layer from whichever host ran the tool — and their
+// clocks are not the same clock. Without a tolerance a phone running a minute fast would have an
+// ordinary "done, now" rejected as time travel. Far below TASK_GRACE_MIN, so it cannot change what
+// anything scores; a stamp inside it that is still fractionally ahead is simply skipped by the
+// replay below until the clock reaches it, and the next rebuild picks it up.
+const STAMP_SKEW_MS = 2 * MIN;
+
+/**
+ * Normalise a caller-supplied completion time into a stamp the band can actually read.
+ *
+ * Completing something "now" needs none of this — the writer stamps its own clock. This is for the
+ * other case: saying WHEN it was done, after the fact ("I finished that at 10:15"). The time is the
+ * entire input to what the completion is worth, so a caller that knows it better than the clock does
+ * has to be able to say so, and what it says has to be checked before it reaches the column.
+ *
+ * TIMEZONE. `completed_at` is compared against `due` as naive wall-clock arithmetic — that is what
+ * makes a lateness one he actually experienced rather than one an offset invented — so a stamp
+ * carrying a `Z` or a `+HH:MM` is rejected rather than converted. This module never learns a
+ * timezone, so converting here would be guessing at an offset, and guessing is precisely how a
+ * completion lands an hour from the deadline it is scored against.
+ *
+ * THE FUTURE is rejected for a different reason, and it is the one worth stating: the replay walks
+ * up to `now` and skips any completion past it. Storing a future stamp would take the item off every
+ * active surface while earning nothing at all — from the outside, indistinguishable from the band
+ * being broken. Better to refuse it than to lose it silently.
+ *
+ * THE DISTANT PAST is NOT rejected. A completion older than TASK_DECAY_DAYS earns nothing, but that
+ * is the decay doing its job on a true record of something that happened, not a bad input.
+ *
+ * `reason` is for the caller that has to explain the refusal — an API body, or a model composing a
+ * reply. Returns { ok: true, value } or { ok: false, reason }.
+ */
+function completionStamp(at, nowLocal) {
+  const raw = String(at == null ? '' : at).trim();
+  if (!raw) return { ok: false, reason: 'a completion time is required' };
+  // Anchored at BOTH ends, unlike naive() — which is a lenient reader of stamps already in the
+  // database and would happily take the 'Z' off the end of one this has to turn away.
+  const m = /^(\d{4}-\d{2}-\d{2})(?:[T ](\d{2}):(\d{2})(?::(\d{2}))?)?$/.exec(raw);
+  if (!m) {
+    return { ok: false, reason: 'expected local wall clock YYYY-MM-DDTHH:MM (or YYYY-MM-DD), with no timezone' };
+  }
+  const value = m[2] == null ? m[1] : `${m[1]}T${m[2]}:${m[3]}:${m[4] || '00'}`;
+  const t = naive(value);
+  // Date.UTC ROLLS OVER out-of-range components, so month 13 and day 45 both parse to a real instant
+  // in the wrong month. Only the round trip catches that.
+  if (t == null || new Date(t).toISOString().slice(0, 19) !== (m[2] == null ? `${value}T00:00:00` : value)) {
+    return { ok: false, reason: 'not a real date' };
+  }
+  const now = naive(nowLocal);
+  if (now != null && t > now + STAMP_SKEW_MS) return { ok: false, reason: 'is in the future' };
+  return { ok: true, value };
+}
+
 /**
  * The gold band is a BOUNDED QUEUE of decaying completions, replayed forward.
  *
@@ -310,5 +364,5 @@ function computeScore({ volume, days = [], surplus = 0, taskEvents = [], openTas
 
 // Exported so the calendar can label a chip with the same numbers the band is actually scored on.
 // One definition, so a chip cannot claim a value the band would not give it.
-module.exports = { computeScore, tasksScore, taskDeadline, completionValue,
+module.exports = { computeScore, tasksScore, taskDeadline, completionValue, completionStamp,
                    TASK_GRACE_MIN, TASK_LATE_ZERO_H, TASK_DRAIN_FULL_H };

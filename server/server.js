@@ -23,7 +23,7 @@ const MON_ABBR = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep',
 const { getTZ, setTZ, DAY_START_HOUR, localDate, nutritionWindow, lastNTrainingDays, dayBucketOf } = require('./lib/dates');
 const { buildWorkoutHeatmap } = require('./lib/heatmap');
 const { buildNutritionLog, buildGoalResolver, calorieColor } = require('./lib/nutritionlog');
-const { computeScore, taskDeadline, completionValue, TASK_GRACE_MIN, TASK_LATE_ZERO_H, TASK_DRAIN_FULL_H } = require('./lib/score');
+const { computeScore, taskDeadline, completionValue, completionStamp, TASK_GRACE_MIN, TASK_LATE_ZERO_H, TASK_DRAIN_FULL_H } = require('./lib/score');
 
 // Settings cache: app_settings is read several times per status build but only changes on explicit
 // writes, which the realtime subscription announces (→ dirtySettings). One whole-table fetch serves
@@ -2468,15 +2468,30 @@ app.get('/api/calendar', async (req, res) => {
 // Mark done. Distinct from /clear, which deletes: this one keeps the item (the calendar draws it as
 // something that happened) and moves the health bar's gold band. Every surface that can finish a
 // task calls this — the pane's ✓ swipe, the widget's Done, and voice through the data MCP.
+//
+// `at` says WHEN it was done, for the case where that is not now — "I finished that at 10:15", or
+// finishing a 10am thing a quarter of an hour in. Omitting it stamps the clock, which is what every
+// button on every surface does and what almost every completion is. The value is a local wall-clock
+// reading in the same shape `due` is stored in; completionStamp is what decides that, because the
+// band is what has to read it back.
 app.post('/api/todos/complete', express.json(), async (req, res) => {
   try {
     const b = req.body || {};
     const id = String(b.id || '');
     if (!id) return res.status(400).json({ error: 'id required' });
+    let completedAt = null;
+    if (!b.undo) {
+      if (b.at == null || b.at === '') completedAt = etNowString();
+      else {
+        const s = completionStamp(b.at, etNowString());
+        if (!s.ok) return res.status(400).json({ error: `at ${s.reason}` });
+        completedAt = s.value;
+      }
+    }
     const now = new Date().toISOString();
     await sbWrite(`list_items?id=eq.${encodeURIComponent(id)}`, 'PATCH',
-      { completed_at: b.undo ? null : etNowString(), updated: now });
-    res.json({ ok: true });
+      { completed_at: completedAt, updated: now });
+    res.json({ ok: true, completed_at: completedAt });
     syncBadge().catch(() => {});   // don't make the caller wait on APNs
   } catch (e) { res.status(500).json({ error: String(e.message || e) }); }
 });

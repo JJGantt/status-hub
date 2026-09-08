@@ -105,8 +105,11 @@ function boot() {
 // text goes to onTranscript instead of enqueueing. The chat composer uses this while photos are pending,
 // so a dictated command joins the text box and sends WITH the photos, not ahead of them.
 // Exported so the wall-mode push-to-talk button (wall.js) can reuse the exact same pipeline.
-export function makeRecorder({ onStatus, onActive, quick, autoStop, dryWhen, onTranscript }) {
+export function makeRecorder({ onStatus = () => {}, onActive = () => {}, quick, autoStop, dryWhen, onTranscript }) {
   let recording = false, rec = null, chunks = [], stream = null;
+  let arming = false;                 // tapped, mic not open yet — see start()
+  let heardSpeech = false;            // the VAD crossed its threshold at least once this recording
+  let vadRan = false;                 // the VAD actually got a Web Audio graph (it can't on every browser)
   let actx = null, vadTimer = null;
   const pickMime = () => {
     for (const m of ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4', 'audio/ogg'])
@@ -116,6 +119,7 @@ export function makeRecorder({ onStatus, onActive, quick, autoStop, dryWhen, onT
   // Voice-activity auto-stop (FAB): once speech begins, end + send on a short trailing silence — the
   // "return to baseline" behavior the ESP/server use, so the quick mic is press-once with no second tap.
   function startVAD() {
+    stopVAD();                       // never leave a previous interval or context running
     try {
       actx = new (window.AudioContext || window.webkitAudioContext)(); if (actx.resume) actx.resume();
       const an = actx.createAnalyser(); an.fftSize = 1024;
@@ -130,10 +134,11 @@ export function makeRecorder({ onStatus, onActive, quick, autoStop, dryWhen, onT
         const rms = Math.sqrt(s / buf.length), now = performance.now();
         if (now - t0 < CAL_MS) { base += rms; baseN++; return; }       // calibrate the ambient noise floor first
         const thr = Math.max((baseN ? base / baseN : 0.01) * 2.5, 0.02);
-        if (rms >= thr) { spoke = true; silence = 0; }                  // speaking
+        if (rms >= thr) { spoke = true; heardSpeech = true; silence = 0; }   // speaking
         else if (spoke) { if (!silence) silence = now; else if (now - silence >= HANG_MS) stop(); }  // trailing silence → send
-        else if (now - t0 > GRACE_MS) stop();                          // pressed but never spoke → give up
+        else if (now - t0 > GRACE_MS) stop();                          // pressed but never spoke → give up (upload() drops it)
       }, 60);
+      vadRan = true;
     } catch (_) { /* no Web Audio → falls back to tap-to-stop */ }
   }
   function stopVAD() {
@@ -147,12 +152,23 @@ export function makeRecorder({ onStatus, onActive, quick, autoStop, dryWhen, onT
     fetch('/api/settings', { method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ key: 'voice_muted', value: on ? '1' : '0' }) }).catch(() => {});
   }
+  // A tap has to LOOK live from the instant it lands. getUserMedia takes a beat on a phone — longer
+  // after the page has been backgrounded — and `recording` only flipped once it resolved, so the button
+  // sat unchanged through that window, the press read as dropped, and the retap started a SECOND capture
+  // on top of the first. Both then shared one `chunks`/`vadTimer`/`actx`: the orphaned VAD stopped the
+  // live recording on its own clock and the orphaned stream held the mic open, so what reached Groq was
+  // an empty clip — which it transcribes as "Thank you." rather than as nothing.
+  // `arming` is set synchronously, before the await, so a second tap can only ever be a stop.
   async function start() {
-    if (recording) return;
-    try { stream = await navigator.mediaDevices.getUserMedia({ audio: true }); }
-    catch (_) { onStatus('Mic permission denied', 'err'); return; }
+    if (recording || arming) return;
+    arming = true; onActive(true);
+    let s;
+    try { s = await navigator.mediaDevices.getUserMedia({ audio: true }); }
+    catch (_) { arming = false; onActive(false); onStatus('Mic permission denied', 'err'); return; }
+    if (!arming) { s.getTracks().forEach((t) => t.stop()); return; }   // tapped again while arming → cancelled
+    arming = false; stream = s;
     const mime = pickMime();
-    chunks = [];
+    chunks = []; heardSpeech = false; vadRan = false;
     rec = new MediaRecorder(stream, mime ? { mimeType: mime } : undefined);
     rec.ondataavailable = (e) => { if (e.data && e.data.size) chunks.push(e.data); };
     rec.onstop = () => upload(mime);
@@ -164,19 +180,34 @@ export function makeRecorder({ onStatus, onActive, quick, autoStop, dryWhen, onT
     if (autoStop) startVAD();
   }
   function stop() {
+    // Tapped again before the mic ever opened: cancel the arming rather than fall through as a no-op.
+    if (arming) { arming = false; onActive(false); onStatus('', 'clear'); return; }
     if (!recording) return;
     recording = false; onActive(false); stopVAD();
-    try { if (rec && rec.state !== 'inactive') rec.stop(); } catch (_) {}
+    const live = rec && rec.state !== 'inactive';
+    try { if (live) rec.stop(); } catch (_) {}
+    if (!live) release();          // no onstop is coming, so let go of the mic here instead
+  }
+  function release() {
+    if (stream) { stream.getTracks().forEach((t) => t.stop()); stream = null; }
   }
   async function upload(mime) {
-    if (stream) { stream.getTracks().forEach((t) => t.stop()); stream = null; }
+    release();
     muteOthers(false);   // FAB done with the mic → the other listeners resume
+    const dry = typeof dryWhen === 'function' && dryWhen();
     const blob = new Blob(chunks, { type: mime || 'audio/webm' });
     chunks = [];
-    if (!blob.size) { onStatus('', 'clear'); return; }
+    // Nothing worth sending: no bytes at all, or the VAD watched the whole clip and never once crossed
+    // the noise floor. Uploading silence is worse than uploading nothing, because Whisper does not
+    // return an empty string for it — it invents a plausible phrase ("Thank you."), and the worker then
+    // acts on that. A dictation caller is told, so it can leave its own "nothing heard" state.
+    if (!blob.size || (autoStop && vadRan && !heardSpeech)) {
+      if (dry && typeof onTranscript === 'function') onTranscript('');
+      onStatus('', 'clear');
+      return;
+    }
     onStatus('Transcribing…', 'busy');
     try {
-      const dry = typeof dryWhen === 'function' && dryWhen();
       const qp = new URLSearchParams();
       if (dry) qp.set('dry', '1');
       if (quick) qp.set('quick', '1');
@@ -194,7 +225,7 @@ export function makeRecorder({ onStatus, onActive, quick, autoStop, dryWhen, onT
       }
     } catch (_) { onStatus('Send failed', 'err'); }
   }
-  return { toggle() { recording ? stop() : start(); }, start, stop };
+  return { toggle() { (recording || arming) ? stop() : start(); }, start, stop };
 }
 
 // ---- bottom activity bar -------------------------------------------------

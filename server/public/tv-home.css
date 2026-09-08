@@ -96,21 +96,28 @@ body.tv .hw-heatcard .hcell{border-radius:2px}
 body.tv .hw-strip{flex:0 0 auto;min-height:0}
 /* Black behind the two strips, keeping their outline. The wall is black, so an inset fill made them
    read as objects sitting on it; the border alone is enough to say where they begin and end. */
-body.tv .hw-heatcard .nutday{margin:0;padding:6px 12px;background:#000}
+/* Same one-line rule as the rest timer under it: this band carries four figures and grows a digit
+   whenever a total crosses a thousand. */
+body.tv .hw-heatcard .nutday{margin:0;padding:6px 10px;background:#000;flex-wrap:nowrap;white-space:nowrap}
 /* The band's date goes: the day column two columns left already says which day this is, in a much
    larger hand. Repeating it here spends the strip's leading edge on the least surprising fact on
    the wall. */
 body.tv .hw-heatcard .nd-date{display:none}
-body.tv .hw-heatcard #resttimer{margin:0;padding:6px 12px;gap:18px;justify-content:flex-start;
+body.tv .hw-heatcard #resttimer{margin:0;padding:6px 10px;gap:12px;justify-content:flex-start;
   background:#000;border:1px solid #222a33;border-radius:10px;flex-wrap:nowrap}
 /* Label beside value, not above it. Stacked, two facts cost two rows of height for no gain — the
    label is the small half and never needed a line of its own. */
-body.tv .hw-heatcard #resttimer .rt-side{flex-direction:row;align-items:baseline;gap:7px;text-align:left}
+body.tv .hw-heatcard #resttimer .rt-side{flex-direction:row;align-items:baseline;gap:6px;text-align:left;
+  min-width:0;white-space:nowrap}
 body.tv .hw-heatcard #resttimer .rt-right{margin-left:auto}
-body.tv .hw-heatcard #resttimer .rt-label{font-size:15px;letter-spacing:0;text-transform:none;
-  font-weight:800;color:#8b96a5}
-body.tv .hw-heatcard #resttimer .rt-time{font-size:26px}
-body.tv .hw-heatcard #resttimer .rt-count{font-size:26px}
+/* ONE LINE, always. flex-wrap:nowrap above only stops the three groups dropping to a second row; the
+   label text wrapped inside its own box independently, which is how "Last set" became "Last"/"set".
+   Both clocks are the same width whatever they read, but a session crossing an hour adds a digit to
+   each — the sizes below are set so 13:11 fits the 424px strip, not so 3:11 just about does. */
+body.tv .hw-heatcard #resttimer .rt-label{font-size:14px;letter-spacing:0;text-transform:none;
+  font-weight:800;color:#8b96a5;white-space:nowrap}
+body.tv .hw-heatcard #resttimer .rt-time{font-size:22px;white-space:nowrap}
+body.tv .hw-heatcard #resttimer .rt-count{font-size:22px;white-space:nowrap}
 /* The rep watcher is a before-a-set prompt for someone standing at the bar, not wall furniture. */
 body.tv .hw-heatcard #resttimer .rt-watcher{display:none}
 

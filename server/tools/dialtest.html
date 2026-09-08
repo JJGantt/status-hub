@@ -1,0 +1,70 @@
+<!-- The dial's geometry bench. The home wall's day column at its real size, fed a stubbed payload
+     with the clock frozen, so every shape an hour can take is reachable without touching real data
+     — which matters here, because a dated item with a past due pushes a real notification.
+
+       python3 -m http.server 8901 --bind 127.0.0.1 --directory server
+       http://127.0.0.1:8901/tools/dialtest.html?case=split&hour=16
+
+     `case` picks what is in the hour: `onehalf` two items at :00, `split` one at :00 and one at :30,
+     `over` one at :00 and two at :30, `heavy` two and two. `hour` moves that hour up and down the
+     drum, which is how the merge crossover gets swept — the row shrinks as it recedes from the
+     frozen 09:45. -->
+<!doctype html><html><head><meta charset="utf-8">
+<link rel="stylesheet" href="/public/app.css"><link rel="stylesheet" href="/public/tv-home.css">
+<style>
+  html,body{margin:0;background:#000}
+  /* The wall's real geometry: a 380px column, 882px of hours box. */
+  #stage{position:fixed;left:0;top:0;width:380px;height:800px;display:flex;flex-direction:column}
+  .card{flex:1 1 auto;min-height:0;display:flex;flex-direction:column;padding:0}
+  .fit{flex:1 1 auto;min-height:0;display:flex;flex-direction:column}
+</style></head>
+<body class="tv"><div class="rows"><div class="row-card hw-dayrow" id="stage">
+  <div class="card hw-daycard"><div class="fit"><div class="cw-day" id="cw-day"></div></div></div>
+</div></div>
+<script>
+  // Stub the endpoint before the module runs, and freeze the clock at 09:45 so the projection puts
+  // 4pm exactly where the wall had it.
+  window.__CASE = new URLSearchParams(location.search).get('case') || 'split';
+  const RealDate = Date;
+  const FIXED = new RealDate(2026, 8, 8, 9, 45, 0);
+  class FakeDate extends RealDate {
+    constructor(...a){ super(...(a.length ? a : [FIXED.getTime()])); }
+    static now(){ return FIXED.getTime(); }
+  }
+  window.Date = FakeDate;
+
+  const at = (t, ...titles) => titles.map((title, n) => ({
+    id: 't' + t + n, title, time: t, color: '#e05aa8', priority: 0,
+    done: false, past: false, grace: false, expired: false, exempt: false,
+  }));
+  // 4pm holds the case under test; 12pm is the untouched control from the live wall.
+  // `hour` moves the pair under test up and down the drum, which is how the crossover gets swept.
+  const HOUR = +(new URLSearchParams(location.search).get('hour') || 16);
+  const CASES = {
+    split:   [at('4p', 'AFF'), at('4:30p', 'tolls')],                       // one each side
+    over:    [at('4p', 'AFF'), at('4:30p', 'tolls', 'dentist')],            // one + two
+    heavy:   [at('4p', 'AFF', 'gym'), at('4:30p', 'tolls', 'dentist')],     // two + two
+    onehalf: [at('4p', 'AFF', 'tolls'), []],                                // today's real shape
+  };
+  const half = (items) => ({ items: items.slice(0,2), more: Math.max(0, items.length - 2) });
+  window.fetch = async (url) => {
+    if (String(url).includes('list-stream')) return new Response('', {status:200});
+    const [a, b] = CASES[window.__CASE];
+    const hours = [];
+    for (let t = 9 - 12; t <= 9 + 12; t++) {
+      const h = ((t % 24) + 24) % 24;
+      const hv = h === HOUR ? [half(a), half(b)]
+               : h === 12 && HOUR !== 12 ? [half(at('12p','epoxy')), half([])]
+               : [half([]), half([])];
+      hours.push({ t, h, label: String(h % 12 || 12), halves: hv, now: t === 9 ? 75 : null });
+    }
+    return new Response(JSON.stringify({ today:'2026-09-08',
+      dayline: { date:'2026-09-08', label:'Tue, Sep 8', allday: [], hours } }),
+      { headers: { 'content-type': 'application/json' } });
+  };
+</script>
+<script type="module">
+  import { mount } from '/public/cards/dayline.js';
+  mount(document.getElementById('cw-day'), { url: '/api/calendar?day=1&full=1', dial: true });
+</script>
+</body></html>

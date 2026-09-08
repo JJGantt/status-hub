@@ -35,6 +35,25 @@ function halfLine(half) {
   return `<div class="cw-half">${half.items.map(chip).join('')}${more}</div>`;
 }
 
+// Chips per line — what the CSS lays out side by side, and the same number the server caps a half at.
+const PER_LINE = 2;
+
+// An hour's items: its two half-lines, or ONE merged line carrying both halves' chips side by side.
+//
+// Merging throws away the :00 / :30 distinction, which the two lines exist to carry — but only the
+// dial ever asks for it, and only where two lines would each be too short to hold a word. There the
+// choice is not between "when" and "what", it is between one chip that says both and two bars that
+// say neither. Anything past the line's width becomes the +N, counting the halves' own overflow too.
+function hourItems(hr, merged) {
+  if (!merged) return hr.halves.map(halfLine).join('');
+  const all = hr.halves.flatMap((x) => x.items);
+  const more = hr.halves.reduce((n, x) => n + x.more, 0) + Math.max(0, all.length - PER_LINE);
+  // The second line stays, empty. It is what the floor in tv-home.css takes its room from, so the
+  // merged chip lands at exactly the height a lone item's does — drop it and the chip stretches the
+  // whole row, which puts FATTER chips further from now than at the axis and reads backwards.
+  return halfLine({ items: all.slice(0, PER_LINE), more }) + '<div class="cw-half"></div>';
+}
+
 export function dayHtml(dl) {
   const allday = dl.allday.length
     ? `<div class="cw-allday">${dl.allday.map(chip).join('')}</div>` : '';
@@ -42,7 +61,7 @@ export function dayHtml(dl) {
     const now = h.now !== null ? `<div class="cw-now" style="top:${h.now}%"></div>` : '';
     return `<div class="cw-hour${h.now !== null ? ' cur' : ''}">` +
       `<span class="cw-hl">${esc(h.label)}</span>` +
-      `<div class="cw-hitems">${h.halves.map(halfLine).join('')}</div>${now}</div>`;
+      `<div class="cw-hitems">${hourItems(h, false)}</div>${now}</div>`;
   }).join('');
   return `<div class="cw-dayhead">${esc(dl.label)}</div>${allday}<div class="cw-hours">${hours}</div>`;
 }
@@ -87,7 +106,9 @@ export function mount(el, { url = '/api/calendar?day=1', centre = false, onload 
  */
 const SPAN = 12;                 // hours from the centre to the edge of the drum — a whole day across
 // The shortest chip that can still hold a word: 10px of text on 1.2 lines inside 4px of the chip's
-// own padding. Below it the row flattens to bars.
+// own padding. Below it the row flattens to bars. The height a chip WANTS is not here — it is
+// `--chip-full` in tv-home.css, read back below, because the CSS floors on it too and one number
+// with two definitions is one number that drifts.
 const CHIP_MIN = 17;
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 
@@ -149,7 +170,38 @@ function project(col) {
   // The height is READ BACK from the layout rather than recomputed from the CSS's paddings and gaps,
   // which is why this is a second pass over the same rows — pass one has to have been applied first.
   // Nothing here feeds back into it: a half's height comes from the row, not from what is in it.
-  rows.forEach((row) => {
+  // Read once, not per row: both are the same for every hour in the column.
+  const gap = parseFloat(getComputedStyle(box.querySelector('.cw-hitems') || box).rowGap) || 0;
+  const chipFull = parseFloat(getComputedStyle(col.el).getPropertyValue('--chip-full')) || 0;
+
+  rows.forEach((row, i) => {
+    const hr = col.dl.hours[i];
+    const box2 = row.querySelector('.cw-hitems');
+    if (!hr || !box2) return;
+
+    // TWO SHORT LINES ARE WORSE THAN ONE. An hour with something in BOTH halves cannot borrow from a
+    // neighbour the way a lone item can — the halves simply split the row — so once the row is short
+    // enough they both shrink under a full chip, and further out the hour goes wordless with items
+    // sitting in it. Below that point the two lines become one and the chips sit side by side,
+    // exactly as two items in the same half already do; anything past the line's width rides along
+    // as the +N, the halves' own overflow counted in.
+    //
+    // The threshold is the SAME one the CSS floors an occupied half at, and deliberately so: an hour
+    // splits its row while both halves can hold a full chip, and stops when they cannot. Above it
+    // nothing changes and the line a chip sits on still says which half of the hour it is in; below
+    // it that placement is what gets spent, because a chip that says WHAT beats two that say only
+    // WHEN. Cheaper than it sounds at the crossover — the merged chip is the same size the split
+    // ones just were, so what changes there is the number of lines, not the look of a chip.
+    //
+    // Every input is invariant to the outcome — the box's height comes from the row, the gap and the
+    // floor from the stylesheet — so the decision cannot oscillate with what it last drew, which
+    // measuring the halves themselves would.
+    const merged = hr.halves.every((x) => x.items.length) && (box2.clientHeight - gap) / 2 < chipFull;
+    if (merged !== (row.dataset.merged === '1')) {
+      box2.innerHTML = hourItems(hr, merged);
+      row.dataset.merged = merged ? '1' : '0';
+    }
+
     const half = row.querySelector('.cw-half:not(:empty)');
     const ch = half ? half.clientHeight : 0;
     row.style.setProperty('--chiph', `${ch}px`);

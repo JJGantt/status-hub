@@ -49,14 +49,19 @@ body.tv .hw-daycard .cw-day.dial .cw-hl{font-size:calc(13px + 19px * var(--face,
    a bar of colour.
 
    So rather than a threshold, one floor: an occupied half whose neighbour is empty will not go below
-   one chip's height (15px of text on 1.2 lines inside the chip's 4px of padding) while that neighbour
-   still has room to give. Above that floor the two stay equal and the :00 / :30 split reads; below
-   it the empty one shrinks away, and it does so continuously — at the crossover the occupied half is
-   already exactly the floor, so nothing jumps as an hour recedes. `100% - 3px` is the row's own
-   height less the gap, which stops the floor from claiming more than the row has when the row is
-   down to a band of colour anyway. */
+   one full chip while that neighbour still has room to give. Above the floor the two stay equal and
+   the :00 / :30 split reads; below it the empty one shrinks away, and it does so continuously — at
+   the crossover the occupied half is already exactly the floor, so nothing jumps as an hour recedes.
+   `100% - 3px` is the row's own height less the gap, which stops the floor claiming more than the
+   row has once the row is down to a band of colour anyway.
+
+   --chip-full is what a chip wants: 15px of text on 1.2 lines inside its 4px of padding. It is
+   declared rather than written into the rule because project() floors on the same number when it
+   decides whether an hour's two lines can still hold a chip each or must merge into one, and it
+   reads it back from here. One number, one definition. */
+body.tv .hw-daycard .cw-day.dial{--chip-full:22px}
 body.tv .hw-daycard .cw-day.dial .cw-hitems:has(.cw-half:empty) .cw-half:not(:empty){
-  min-height:min(22px, 100% - 3px)}
+  min-height:min(var(--chip-full), 100% - 3px)}
 /* The chip's words foreshorten with the row, the way the hour number does. --chiph is the height the
    half-line actually got, measured in project(); 4px of that is the chip's own padding, and 1.25
    leaves the descenders room. Capped at the 15px a chip is on every other surface, so the hours

@@ -456,15 +456,32 @@ rather than recomputing it here is deliberate: the paddings and gaps live in the
 them in JS drifts. It is safe because a half's height comes from the row, never from what is in it,
 so nothing `.thin` does feeds back into the measurement.
 
-**An empty half gives up its share only under pressure.** Both halves normally take half the row, so
-around now — where rows are 50-60px — the `:30` line is visibly there and the split reads. Further
-out the row is 30-odd pixels and an empty half is spending half of it saying nothing, which is the
-whole difference between a chip with words and a bar of colour. Rather than a second threshold, the
-CSS puts one floor under it: an occupied half whose neighbour is empty will not go below one chip's
-height while that neighbour still has room to give (`.cw-hitems:has(.cw-half:empty)` in
-`tv-home.css`). Above the floor the halves stay equal; below it the empty one shrinks away, and
-continuously — at the crossover the occupied half is *already* exactly the floor, so nothing jumps as
-an hour recedes. In practice the split survives about four hours either side of now.
+**An hour keeps its two half-lines only while both can hold a chip.** One number decides it —
+`--chip-full`, declared on the dial in `tv-home.css` and read back by `project()`, so the CSS floor
+and the JS decision cannot drift apart. Around now, where rows are 50-60px, both halves clear it and
+the `:00` / `:30` placement reads normally. Below that the row cannot give two full chips, and which
+way it gives depends on what is in it:
+
+- **one half occupied** — it takes what it needs from the empty one, which shrinks away
+  (`.cw-hitems:has(.cw-half:empty)` in `tv-home.css`);
+- **both halves occupied** — there is nothing to borrow, so the two lines *merge* into one and the
+  chips sit side by side, exactly as two items in the same half already do. Overflow past the line's
+  two chips becomes the `+N`, counting each half's own `more` in. The merged line keeps an empty
+  second half so the same floor applies to it — without that the chip stretches the whole row, and
+  hours further from now end up with fatter chips than the ones at the axis.
+
+Both are continuous at the crossover: the occupied half is *already* exactly the floor when the
+regime changes, so what changes is the number of lines, never the size of a chip. In practice the
+split survives about four hours either side of now, and a merged hour keeps its words out to about
+nine. Below `CHIP_MIN` there is no room for words at all and the row goes `.thin`.
+
+The decision reads the box's height, the gap and the floor — none of which depend on what it last
+drew, unlike measuring the halves themselves, so it cannot oscillate against its own output.
+
+**`server/tools/dialtest.html` is the bench for all of this**: the column at its real size, a stubbed
+payload, and a frozen clock, with `?case=` choosing what is in the hour and `?hour=` sliding it up
+and down the drum. It is deliberately outside `public/`, so it is not in the image. Use it rather
+than real rows — a dated item with a past `due` pushes a real notification.
 
 **A calendar day cannot feed this** — that is what `full=1` exists for. Tried with one day, by 21:30
 the dial had 21½ hours crushed above the line and 2½ below it, the column half empty. The window is

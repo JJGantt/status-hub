@@ -108,6 +108,11 @@ function tickRest(){
 // (tv-home.css), so one property carries the type, the gaps and the rules between sets together.
 // Stepped rather than solved for: the padding either side of a set does not scale with the glyphs
 // exactly, so the ratio of widths is not the ratio of sizes.
+// The wall's short forms, for names long enough to crowd the muscle counts off the row beside them.
+// Jared's words — an entry here is one he asked for, not one this file invented. Everything else
+// draws its full name, and a long one that is not listed is handled by the name fit instead.
+const EX_SHORT={ 'Romanian Deadlifts':'RDL' };
+
 function fitRow(el,base,min){
  if(!el)return;
  let fs=base; el.style.setProperty('--rcfs',fs+'px');
@@ -146,15 +151,27 @@ async function loadHeatDay(date){
   // colour. The wall dropped the volume bars for the body map, which says WHERE but not HOW MUCH —
   // this puts the number back on the one exercise that is on screen. It rides the name's row rather
   // than adding one: the column's height is spent to the pixel (see tv-home.css).
-  hi.innerHTML=ex?'<div class=rc-top><span class=rc-name>'+esc(ex.name)+'</span>'+exerciseVolumeChips(ex.name)+'</div>'+
-    '<div class="rc-vals rc-sets">'+setsHtml(false)+'</div>':'';
+  // The set COUNT closes the row, held off from the sets by a rule twice the weight of the ones
+  // between them: five readings are hard to count at a glance and the tally is the thing being
+  // counted, so it is stated rather than counted. It keeps its size while the sets shrink.
+  hi.innerHTML=ex?'<div class=rc-top><span class=rc-name>'+esc(EX_SHORT[ex.name]||ex.name)+'</span>'+exerciseVolumeChips(ex.name)+'</div>'+
+    '<div class="rc-vals rc-sets">'+setsHtml(false)+'<span class=rc-count>'+ex.sets.length+'</span></div>':'';
   const sr=hi.querySelector('.rc-sets');
   fitRow(sr,16,9);
   // Past ~9 sets the row is still over at the floor, and 8px on a wall is not a number anyone reads.
   // Repeated weights are what is left to spend: dropping them buys about a third of the width back,
   // and only then, so a normal five-set row is never written in the shorthand.
-  if(sr&&sr.scrollWidth>sr.clientWidth+1){ sr.innerHTML=setsHtml(true); fitRow(sr,16,9); }
-  fitRow(hi.querySelector('.rc-mus'),15,9);
+  if(sr&&sr.scrollWidth>sr.clientWidth+1){
+   sr.innerHTML=setsHtml(true)+'<span class=rc-count>'+ex.sets.length+'</span>'; fitRow(sr,16,9);
+  }
+  // The name row shrinks in the other order: the counts give way first, and only once they are at
+  // their floor does the NAME come down — it is the row's subject, and a long one (Overhead Tricep
+  // Extension) is exactly when the counts beside it have the least room.
+  const nameEl=hi.querySelector('.rc-name'), musEl=hi.querySelector('.rc-mus');
+  fitRow(musEl,15,9);
+  for(let nfs=17; musEl&&nfs>13&&musEl.scrollWidth>musEl.clientWidth+1; ){
+   nameEl.style.fontSize=(--nfs)+'px'; fitRow(musEl,15,9);
+  }
   return;
  }
  const sp=hi.closest('.detailpanel'), stick=sp&&(sp.scrollHeight-sp.scrollTop-sp.clientHeight<60); // keep pinned to newest if already at bottom

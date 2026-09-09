@@ -2549,14 +2549,25 @@ app.get('/api/calendar', async (req, res) => {
       dayline = { date: todayKey, label: todayCell ? todayCell.label : todayKey, allday, hours };
     }
 
-    // THE LOOK-AHEAD — the days after today, one box each, in order. The dial answers "what is left
-    // today" and cannot answer "what is coming", because a window centred on now only ever reaches a
-    // few hours into tomorrow. This is the other half of that question, and it is a list rather than
-    // a timeline: at a day's remove the useful fact is what is on the day, not where in it.
+    // THE LOOK-AHEAD — one box per day, in order, and it STARTS AT TODAY. It is a list rather than a
+    // timeline: the useful fact about a day you are not inside is what is on it, not where in it.
+    //
+    // It used to start at tomorrow, on the reasoning that the dial already had today. The dial does
+    // not. The dial is a rolling window centred on now and it foreshortens hard, so its READABLE band
+    // is roughly -9h to +8h — narrower than the +-12h it spans, and far narrower than a day. Just
+    // after midnight that band ends around breakfast, so an item at noon sat on a ONE-PIXEL row and
+    // everything later was outside the window entirely: the day rolled over and its whole contents
+    // left the wall.
+    //
+    // A threshold would close most of that gap — hold today in the list until the dial reaches it —
+    // and it was rejected twice over. It still drops the day at a moment the dial cannot yet read,
+    // and the hour it turns on is a function of the column's height and CHIP_MIN, so it goes quietly
+    // wrong the next time either moves. Starting at today costs one day off the far end and needs no
+    // number at all.
     let ahead = null;
     if (aheadDays) {
       ahead = [];
-      for (let k = 1; k <= aheadDays; k++) {
+      for (let k = 0; k < aheadDays; k++) {
         const d = new Date(todayMs + k * DAY);
         const date = keyOf(todayMs + k * DAY);
         const items = byDay[date] || [];

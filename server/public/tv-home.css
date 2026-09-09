@@ -11,15 +11,29 @@
    pixels of its content already, and `.fit` clips what does not fit with no error at all. It came
    from the two either side, which had it to give — the sessions column was 570px carrying one
    19px paragraph, and the day column loses 40px it was spending on chip width it did not need. */
-/* The day column is 380px on the calendar wall and it is 340px here. It stopped being the same
+/* The day column is 380px on the calendar wall and it is 363px here. It stopped being the same
    column when the look-ahead arrived beside it: what the width was buying was room for two chips
-   on a half-line, and 340 still holds those. A 1fr share of the grid made it ~507px, which reads as
+   on a half-line, and this still holds those. A 1fr share of the grid made it ~507px, which reads as
    a different, emptier thing — the change is downward for a reason, not drift. */
+/* THE RINGS COLUMN IS SIZED BY THE RING, and the ring is sized by HEIGHT — four of them plus the
+   produce row share the column's height, so each lands near 194px whatever the column's width is.
+   At 280px that left 33px of dead ground either side of every ring, which read as a gap between
+   this column and the day beside it rather than as padding inside it. 244px leaves 13, which is
+   padding. Any narrower and the ring becomes width-limited and starts shrinking instead.
+   The 36px that frees goes to the two calendar columns in proportion, and NOT to the heat column:
+   that one's width is pinned by the squareness of its cells (see .hw-heatstack). `1fr` therefore
+   has to come out the same, which is why these three still sum to 820. */
 /* The heat column is unchanged from before the muscle column and unchanged again by this: widening
    it is what oversized surf under it and took width off the sessions column. It pays for itself
    instead — the home wall's heat maps run 15 weeks to the health wall's 20, which makes them
    narrower at the same cell size and leaves the muscle column its 112px inside the width it had. */
-body.tv .rows{grid-template-columns:280px 340px 200px 1fr 400px 60px}
+body.tv .rows{grid-template-columns:244px 363px 213px 1fr 400px 60px}
+/* The three produce rings are ONE ring wide between them, not the full column. They are a secondary
+   reading — grams of veg and fruit against a fixed goal, no clock, no pace — and drawn the width of
+   the four gauges above them they claimed to be a fifth row of the same importance. 190 is just
+   under where the arithmetic balances: shrinking them gives their height back to the four rings,
+   which grow to about 194, so the two end up the same width by construction rather than by luck. */
+body.tv .ringrow .ringmini{max-width:190px}
 body.tv .statusrow{grid-column:1/6}
 body.tv .healthbar{grid-column:6}
 /* Same selector app.css uses, so equal specificity and this one wins by coming after it. */

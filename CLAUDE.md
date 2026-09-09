@@ -96,9 +96,9 @@ already authenticated as Jared. Charts must be inline `<svg>` — no `<script>`,
 
 `public/tv-home.html` (`/` and `/tv`) is the **home wall — the default, and what the TV is showing**.
 The shared frame (status strip · rings · health bar · footer · voice column) around four columns:
-today's day column, the six days after it, the three heat maps stacked with the strip that belongs
-to each (nutrition totals vs target, the rest/session clocks, surf), and the newest session's last
-answer. `tv-home.js` + `tv-home.css` are its own; everything else on it is a shared card `core.js`
+today's day column, the six days after it, the weekly weigh-in plot over the three heat maps stacked
+with the strip that belongs to each (nutrition totals vs target, the rest/session clocks, surf), and
+the newest session's last answer. `tv-home.js` + `tv-home.css` are its own; everything else on it is a shared card `core.js`
 already paints, which is why the page is mostly markup. This is the one to shape.
 
 Its grid is SIX columns, declared in `tv-home.css` — which means the spans app.css writes for its
@@ -122,6 +122,14 @@ Voice picks between them with `set_wall`, which writes `app_settings.wall_mode`;
 that to a path and the kiosk navigates itself, because nothing can reach in and navigate it. Modes
 are `standard` (the home wall — `home` is accepted as a second word for it and stored as `standard`),
 `health`, `sessions`, `calendar`.
+
+The weigh-in plot above the heat maps is aligned to their week columns, and that alignment is the
+whole chart: `cards/weightweeks.js` insets its box by half a column at each end so x runs from the
+first column's centre to the last's, all in CSS calc from `--cols` and the grid's gap. Change the
+gap in `.heat` and `--hgap` in `tv-home.css` has to move with it. It also has no height of its own to
+spend — the column was already exactly full — so the two maps pay for it by letting their cells stop
+being square. Narrowing the grid instead would shorten the maps too, and it would take the fifteen
+weeks the plot is aligned to.
 
 **A wall is a FILE, not a mode flag**, so work on one cannot disturb another. They share `core.js` /
 `tv.js` / `wall.js` / `wallmode.js` / `cards/*`, so a change to those hits ALL of them; split

@@ -71,6 +71,7 @@ Supabase ──▶ server.js buildStatus() ──▶ /api/status payload ──�
 | `nutrition_log` | calorie-adherence calendar + calorie/weight trend plot | `lib/nutritionlog` |
 | `volume` | per-muscle weekly volume gauges + the body map colors | `lib/volume` + `lib/bodymap` |
 | `heatmap` | GitHub-style workout heatmap, a fixed `HEAT_WEEKS` window | `lib/heatmap` |
+| `weight_plot` | the home wall's weekly weigh-in average, one point per heat-map week column | `lib/weightplot` |
 | `litter` / `feeder` / `surf` | those device/status cards | Supabase rows (`device_status`, snapshots); litter through `buildLitter` |
 | `rep_watcher` | what the Apple-Watch rep watcher is logging as | `sets`/watcher state |
 | `last_set_at` / `session_start_at` | the rest clock + "since last set" | derived from `sets` |
@@ -148,7 +149,8 @@ make (`voiceagent.js`'s `boot()`, `tv.js`'s), handing it to `applyActivitySettin
 adherence calendar) · `maintviz` (the maintenance-window viz — the whole history at a fixed density, dragged by hand) · `todo` (dated items / lists / notes,
 self-fetches) · `repos` (the Mac's projects; tap to launch a Claude session there, self-fetches) ·
 `reports` (a dispatched session's write-ups, self-fetches — §6c) · `muscle` (body map + volume
-gauges) · `workouts` (heatmap + day detail) · `litter` · `feeder` · `surf` · `routing` (TV top strip)
+gauges) · `workouts` (heatmap + day detail) · `weightweeks` (home-wall weekly weigh-in plot) ·
+`litter` · `feeder` · `surf` · `routing` (TV top strip)
 · `deskfoot` (which session holds follow-ups, TV footer — §6b) · `score` (TV right column) · `mics`
 (page voice-liveness strip).
 
@@ -221,6 +223,7 @@ The math lives here; each file has a thorough header. Summary map:
 | `volume.js` | Weekly per-muscle fractional-set volume (primary=1.0, secondary=0.5) vs that muscle's weekly set target — `TARGET_DEFAULT` 14, with the `TARGETS` overrides below it. |
 | `bodymap.js` | The front/back body SVG (viewBox 0 0 72 93); volume colors paint onto it. |
 | `heatmap.js` | Per-day set-count heatmap laid out as week columns. Shade is an **absolute** count — one level per 6 sets, topping out at 25+ — so a colour means the same thing in every window and on every surface. |
+| `weightplot.js` | The mean of each week's weigh-ins, on the same Sunday-anchored columns as the two heat maps, plus the three axis values. Points carry x/y as fractions of the plot box; a week with no reading is `null` and the line breaks across it. Built at `HOME_HEAT_WEEKS`, since the plot means nothing away from the columns it is aligned to. |
 | `score.js` | The health bar: `(training + nutrition + tasks)/3`, each band capped at a third. |
 
 **The task band starts empty and is earned.** Nutrition and training measure how well a thing is

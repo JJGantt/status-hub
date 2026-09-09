@@ -31,13 +31,13 @@ function buildWeightPlot(weights, weeks, today) {
   // One weigh-in, or a window that never moved, has no range to divide by — and three labels reading
   // the same number say nothing. Half a pound either side puts that value on the middle line.
   if (hi - lo < 0.2) { lo = Math.round((lo - 0.5) * 10) / 10; hi = Math.round((hi + 0.5) * 10) / 10; }
-  const r3 = (v) => Math.round(v * 1000) / 1000;
+  const r5 = (v) => Math.round(v * 100000) / 100000;   // the column pitch is ~28px; 3 places drifts a fifth of one
   const mid = (lo + hi) / 2;
   return {
     points: cols.map((c, i) => ({
       week: c.week, n: c.n, avg: c.avg,
-      x: weeks > 1 ? r3(i / (weeks - 1)) : 0.5,
-      y: c.avg == null ? null : r3((hi - c.avg) / (hi - lo)),
+      x: weeks > 1 ? r5(i / (weeks - 1)) : 0.5,
+      y: c.avg == null ? null : r5((hi - c.avg) / (hi - lo)),
     })),
     axis: [{ v: hi.toFixed(1), y: 0 }, { v: mid.toFixed(1), y: 0.5 }, { v: lo.toFixed(1), y: 1 }],
   };

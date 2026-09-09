@@ -153,7 +153,10 @@ body.tv .hw-daycard .cw-day.dial .cw-dkrow{height:var(--dkrow, 26px);display:fle
    hour is simply the dial's own, in the dial's hand. */
 body.tv .hw-daycard .cw-day.dial .cw-dkh{flex:0 0 46px;text-align:right;font-size:15px;
   font-weight:700;color:#4a545f;font-variant-numeric:tabular-nums}
-body.tv .hw-daycard .cw-day.dial .cw-dock .cw-dchip{flex:1 1 auto;min-width:0;
+/* The items box `.cw-hitems` would be, so the chip's own half-width basis measures against the same
+   container it will measure against on the dial. */
+body.tv .hw-daycard .cw-day.dial .cw-dkitems{flex:1 1 auto;min-width:0;display:flex}
+body.tv .hw-daycard .cw-day.dial .cw-dock .cw-dchip{min-width:0;
   font-size:max(10px, calc((var(--dkrow, 26px) - 4px) / 1.25))}
 body.tv .hw-daycard .cw-day.dial .cw-hour.sliver .cw-hitems{gap:1px}
 /* The server draws a marker inside whichever hour contains now. On the dial that hour is a moving

@@ -285,8 +285,13 @@ function paintDock(col) {
     if (ch) rowH = ch;
   }
 
+  // The row mirrors `.cw-hour` exactly — gutter, then an items box the chip takes HALF of. A chip's
+  // 50% is a percentage of its flex container, so the box has to be there: hang the chip off the row
+  // itself and 50% is measured against a container 56px wider, which is a chip that changes width at
+  // the moment it is picked up.
   const html = waiting.map((it) =>
-    `<div class="cw-dkrow"><span class="cw-dkh">${esc(it.time || '')}</span>${chip(it, false)}</div>`
+    `<div class="cw-dkrow"><span class="cw-dkh">${esc(it.time || '')}</span>` +
+    `<div class="cw-dkitems">${chip(it, false)}</div></div>`
   ).join('');
   if (!el) { el = document.createElement('div'); el.className = 'cw-dock'; col.el.appendChild(el); }
   el.style.setProperty('--dkrow', `${Math.round(rowH)}px`);

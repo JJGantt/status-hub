@@ -154,9 +154,10 @@ in the expanded sheet, and the phone's surf card still labels its hours.
 The surf grids are ruled the same way, and the ink says what a mark MEANS. **Black is fixed
 structure**: a 1px line at each Saturday -> Sunday boundary (Sunday-aligned, like the week columns
 above), which is what makes a day countable now that the letters are gone. **White is live**: the
-now-line with its crossbar, and the dashed line a week out. The noon guide is white at 35% because it
-is a reference rather than a marker, and there is no rule between the two grids at all — ratings run
-red through green and size runs blues, so the boundary draws itself.
+now-line and its crossbar, the only white mark left, plus the noon guide at 70% carrying the hour
+axis. There is no rule between the two grids at all — ratings run red through green and size runs
+blues, so the boundary draws itself. A dashed line seven days out used to count the columns off
+against today; the week rules do that better, per column edge instead of once, and it is gone.
 
 **A wall is a FILE, not a mode flag**, so work on one cannot disturb another. They share `core.js` /
 `tv.js` / `wall.js` / `wallmode.js` / `cards/*`, so a change to those hits ALL of them; split

@@ -2172,7 +2172,13 @@ app.get('/api/list-widget', async (req, res) => {
 // when lists are added or removed. Collisions are possible and acceptable at this list count.
 const CAL_COLORS = ['#e5484d', '#f76b15', '#ffb224', '#46a758', '#12a594',
                     '#0091ff', '#6e56cf', '#d6409f', '#b0e64c', '#00b8d9'];
+// A list can also be PINNED to a colour, which then wins over the hash. The hash exists so nobody
+// has to choose, not to stop anyone choosing — and `todo` carries most of what is ever on a day, so
+// it is the one worth naming. Keyed lowercase; the hash still covers everything else.
+const CAL_COLOR_PINNED = { todo: '#ffd60a' };
 function listColor(name) {
+  const pinned = CAL_COLOR_PINNED[String(name || '').toLowerCase()];
+  if (pinned) return pinned;
   let h = 5381;
   for (const c of String(name || '')) h = ((h * 33) ^ c.charCodeAt(0)) >>> 0;
   return CAL_COLORS[h % CAL_COLORS.length];

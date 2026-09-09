@@ -2309,11 +2309,41 @@ const dayHalf = (items) => ({
 // height, so how many chips fit is a fixed number, and two surfaces working it out separately is two
 // surfaces that will eventually disagree about which item was the one dropped.
 //
-// FIVE is what the box holds, and it holds exactly five: 19.25px a chip plus 3px of gap is 108.25
-// against the 108.9 the box has under its header. Nothing is left over, which is deliberate — this
-// column exists because the wall is short of room, so a box with a spare strip under a full day is
-// a box that is not doing its job. A sixth needs 130 and there is nowhere to find it.
-const LOOKAHEAD_MAX_PER_DAY = 5;
+// HOW A LOOK-AHEAD DAY'S BOX IS LAID OUT. The box is a sixth of a column of known height, so this is
+// geometry and it is decided here, the way the month grid's `cols` is — a client working it out
+// separately is a client that will eventually disagree about which item got dropped.
+//
+// The box holds a grid of `rows × cols` chips, each row an equal share of its height, so the chips
+// grow and shrink to FILL it rather than sitting at a fixed size above a spare strip. Two steps,
+// and the reason there are only two:
+//
+//   1-4 items    4 rows, one column   — four filling the box is the CEILING. Nothing is bigger than
+//                                       that however empty the day, or one item alone is a banner.
+//   5-6 items    n rows, one column   — shrink rather than drop one, down to ~12px at six.
+//   7-10 items   2 columns, ceil(n/2) rows, text capped at the five-row size — read across then
+//                                       down, the way text is. Titles truncate; nothing else fits.
+//
+// WHY THE SECOND COLUMN STARTS AT SEVEN and not at six. A six-item day in one column holds every
+// title WHOLE and fills the box; in two it holds four characters of each and leaves two rows empty,
+// because six items need three rows of two and the chips cannot grow into the other two — an 85px
+// chip has no use for 28px of text. Two truncated columns above a gap is worse than one full
+// column, so the split waits until one column would be under ~12px, which is at seven.
+//
+// Ten is the cap; the rest become the day's +N.
+const LOOKAHEAD_ROWS = 5;                 // rows at the small end of a single column
+const LOOKAHEAD_ROWS_MIN = 4;             // the ceiling: chips never larger than four filling the box
+const LOOKAHEAD_ONE_COL_MAX = 6;          // most a single column can hold and still show a title
+const LOOKAHEAD_MAX_PER_DAY = LOOKAHEAD_ROWS * 2;
+
+// The grid one day's chips are laid out in — geometry, so it is decided here.
+function aheadGrid(n) {
+  const cols = n > LOOKAHEAD_ONE_COL_MAX ? 2 : 1;
+  return {
+    cols,
+    rows: cols === 2 ? Math.min(LOOKAHEAD_ROWS, Math.ceil(n / cols))
+                     : Math.max(LOOKAHEAD_ROWS_MIN, n),
+  };
+}
 
 // The occurrences of one item falling inside [startKey, endKey] (inclusive 'YYYY-MM-DD' bounds) —
 // which is now at most one, its own `due`. A recurring thing is materialised as an independent row
@@ -2521,6 +2551,7 @@ app.get('/api/calendar', async (req, res) => {
         const d = new Date(todayMs + k * DAY);
         const date = keyOf(todayMs + k * DAY);
         const items = byDay[date] || [];
+        const shown = items.slice(0, LOOKAHEAD_MAX_PER_DAY);
         ahead.push({
           date,
           dow: d.toLocaleDateString('en-US', { timeZone: 'UTC', weekday: 'short' }),
@@ -2529,8 +2560,9 @@ app.get('/api/calendar', async (req, res) => {
           // forward already fix where you are, and the one place that stops being true is the day
           // the number resets.
           month: d.getUTCDate() === 1 ? d.toLocaleDateString('en-US', { timeZone: 'UTC', month: 'short' }) : null,
-          items: items.slice(0, LOOKAHEAD_MAX_PER_DAY),
+          items: shown,
           more: Math.max(0, items.length - LOOKAHEAD_MAX_PER_DAY),
+          ...aheadGrid(shown.length),
         });
       }
     }

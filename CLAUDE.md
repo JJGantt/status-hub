@@ -152,6 +152,11 @@ and the question is how much of it is left, while a day at a remove only has to 
 The chips are the day column's own — same colours, same states — but they carry their time, because
 no hour row underneath is saying it.
 
+**A day's box is a grid that fills itself.** The server ships `rows` and `cols` per day and the
+chips take the box between them, so four items are read at 20px, five at 15, six at 12, and seven
+or more break into two columns. Nothing is a fixed size, because a fixed size in a box of unknown
+fullness is a spare strip under every busy day. The table is in `docs/HUB-INTERNALS.md`.
+
 ## Where a fact goes
 
 `ARCHITECTURE.md` is the ecosystem view — it covers voice-pipeline, data-layer, devices and hosting

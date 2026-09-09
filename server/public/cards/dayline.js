@@ -81,7 +81,13 @@ function aheadDay(d) {
   const more = d.more ? `<span class="cw-more">+${d.more}</span>` : '';
   // The month rides with the number only where the server says it does — the day it resets.
   const mo = d.month ? `<span class="cw-wmo">${esc(d.month)}</span>` : '';
-  return '<div class="cw-wday">' +
+  // The grid is the server's: rows and columns are geometry, and the chips size themselves off the
+  // row count, so this is the one number the box's whole appearance turns on.
+  // `data-cols` as well as the custom property: CSS can lay the grid out from `--cols`, but it
+  // cannot BRANCH on one, and a second column needs a rule of its own — its chips are limited by
+  // their width, not by the row height the font is otherwise derived from.
+  return `<div class="cw-wday" data-cols="${d.cols || 1}" ` +
+    `style="--rows:${d.rows || 4};--cols:${d.cols || 1}">` +
     `<div class="cw-wh"><span class="cw-wdow">${esc(d.dow)}</span>` +
       `<span class="cw-wnum">${d.day}</span>${mo}${more}</div>` +
     `<div class="cw-witems">${d.items.map((it) => chip(it, true)).join('')}</div>` +

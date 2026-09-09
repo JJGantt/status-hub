@@ -481,13 +481,32 @@ resets, its `items`, and the `more` the box could not hold. The server caps at
 known height, so how many chips fit is a fixed number, and two surfaces deciding it separately is two
 surfaces that will disagree about which item got dropped.
 
-**The number is five because five is what the box holds to the pixel** — 19.25px a chip plus 3px of
-gap is 108.25 against 108.9. That is not slack management for its own sake: this column exists
-because the wall is short of room, so a full day with a spare strip under it is a box not doing its
-job. The 1px of chip padding in `tv-home.css` is what buys the fifth; at the day column's 2px it is
-four chips and 14px of nothing, and 14 is not enough for a fifth, which needs 24. The chip TEXT is
-15px in both places regardless — that is what makes the two columns the same items at two
-distances, and it is the air around the text that gives, not the text.
+**A day's box is a grid, and the chips size themselves to fill it.** `aheadGrid()` ships `rows` and
+`cols` per day, the rows are `1fr`, and the chip's font is derived from the row it landed in — so no
+box ever has a spare strip under it. This column exists because the wall is short of room; a fixed
+chip size sitting in a box of unknown fullness is what leaves 14px of nothing under a full day.
+
+| items | grid | text |
+|---|---|---|
+| 1–4 | 4 rows × 1 | 20px — the **ceiling**; nothing is bigger, or one item alone is a banner |
+| 5 | 5 rows × 1 | 15px — the day column's own chip size |
+| 6 | 6 rows × 1 | 12px — the **floor** for a full-width title |
+| 7–10 | ⌈n/2⌉ rows × 2 | 15px, titles truncate |
+
+Two things there are not obvious:
+
+- **The second column starts at seven, not six.** Six in one column holds every title WHOLE and
+  fills the box; six in two columns holds four characters of each and leaves two rows empty, because
+  three rows of two cannot grow into the other two — an 85px chip has no use for 28px of text. Two
+  truncated columns above a gap is worse than one full column.
+- **A two-column chip is limited by its WIDTH, not its row**, so `[data-cols="2"]` caps the font at
+  the five-row size. That is the one place a pixel number is written out rather than derived: the
+  calc can see the row's height and cannot see the chip's width.
+
+The font comes from `100cqh` on `.cw-witems` (`container-type:size`), so it is the same division the
+row heights already are rather than a copy of the box's height that drifts the moment anything above
+it changes. `--rows` is inherited from the day box; `data-cols` exists because CSS can lay a grid out
+from a custom property but cannot branch on one.
 
 Three things about it that are not obvious from the payload:
 

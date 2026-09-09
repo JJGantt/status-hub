@@ -140,6 +140,10 @@ open from the original request: *undated* lists and general text on a wall, and 
 mode entry — switching when a turn used only read tools and no write tools ("this was a question,
 not an action"). Today switching is explicit voice only (`set_wall`).
 
+Undated items now include his NOTES (data-layer 00092): list items whose `text` is a paragraph
+rather than a line. So this is not a wall of one-liners, and whatever draws it has to decide what a
+long body does at TV distance.
+
 Also queued from the same conversation (2026-09-01): condense the standard wall into a denser
 default that includes calendar components, and slim the rings/health bar on the non-standard walls —
 they stay on every wall, but smaller.

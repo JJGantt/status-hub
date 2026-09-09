@@ -77,13 +77,13 @@ function html(d) {
   const due = list.map((i) => row(i.id, itemInner(i, true), bodyFor(i), i.expired, i.heat || 0)).join('');
   const count = expired ? `<span class="expcount">${expired} expired</span>` : '';
   let out = `<section><h3>Due ${count}</h3><ul>${due || '<li class="empty">Nothing due</li>'}</ul>` +
-    `<div class="add"><input type="text" placeholder="New dated item" data-add="item" data-list="todo">` +
+    `<div class="add"><input type="text" placeholder="New dated item" data-add="item" data-list="l_todo">` +
     `<input type="datetime-local" data-due="item" aria-label="when"></div></section>`;
   for (const l of d.lists || []) {
     const items = (l.items || []).map((i) => row(i.id, itemInner(i, false), bodyFor(i), i.expired)).join('');
     const mark = l.emoji ? `${esc(l.emoji)} ` : '';
     out += `<section><h3>${mark}${esc(l.name)}</h3><ul>${items || '<li class="empty">Empty</li>'}</ul>` +
-      `<div class="add"><input type="text" placeholder="Add to ${esc(l.name)}" data-add="item" data-list="${esc(l.name)}"></div></section>`;
+      `<div class="add"><input type="text" placeholder="Add to ${esc(l.name)}" data-add="item" data-list="${esc(l.id)}"></div></section>`;
   }
   return `<div class="todo">${out}</div>`;
 }
@@ -164,7 +164,9 @@ function wire(el) {
     if (e.key !== 'Enter') return;
     const text = inp.value.trim();
     if (!text) return;
-    const body = { text, list: inp.dataset.list };
+    // The composer carries the list's ID, not its name — the server will not create a list, so this
+    // has to be an id that already exists, and it came from the same payload that drew the section.
+    const body = { text, list_id: inp.dataset.list };
     // The Due section's composer has a datetime beside it; every other section's doesn't. Same
     // endpoint either way — a due date is a field on the item, not a different kind of thing.
     const due = inp.parentElement.querySelector('input[data-due]');

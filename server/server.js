@@ -2055,11 +2055,13 @@ function overdueHeat(item, nowLocal) {
 app.get('/api/todos', async (req, res) => {
   try {
     const [listNames, items] = await Promise.all([
-      sb('lists?select=name,emoji&order=name'),
-      sb('list_items?deleted=eq.false&completed_at=is.null&select=id,list_name,text,title,due,scheduled_at,priority,series_id&order=created.asc'),
+      sb('lists?select=id,name,emoji&order=name'),
+      sb('list_items?deleted=eq.false&completed_at=is.null&select=id,list_id,list_name,text,title,due,scheduled_at,priority,series_id&order=created.asc'),
     ]);
     const all = items || [];
-    const lists = (listNames || []).map((l) => ({ name: l.name, emoji: l.emoji, items: all.filter((i) => i.list_name === l.name) }));
+    // Grouped by `list_id`, and the id is sent on so the composer can post it back. `list_name` is a
+    // derived copy (data-layer 00094) — fine to display, never the thing to match or write on.
+    const lists = (listNames || []).map((l) => ({ id: l.id, name: l.name, emoji: l.emoji, items: all.filter((i) => i.list_id === l.id) }));
     // Longest outstanding first, then upcoming.
     const nowET = etNowString();
     const due = all.filter((i) => i.due)
@@ -2685,18 +2687,21 @@ app.post('/api/todos/add', express.json(), async (req, res) => {
     const now = new Date().toISOString();
     // No list named means the default one. A due date is just another field — supplying it is what
     // makes the item fire, whichever list it lands on.
-    const list = String(b.list || '').trim() || 'todo';
+    const list_id = String(b.list_id || '').trim() || 'l_todo';
     const due = String(b.due || '').trim() || null;
     const title = String(b.title || '').trim() || null;
     // Importance is score-only: an important item earns more for being done on time and drains more
     // for being ignored, and notifies exactly like anything else.
     const priority = Number(b.priority) > 0 ? 1 : 0;
-    const exists = await sb(`lists?name=eq.${encodeURIComponent(list)}&select=name&limit=1`);
-    if (!exists.length) await sbWrite('lists', 'POST', { name: list });
+    // This surface does NOT create lists. It used to, on any unrecognised name — the same silent fork
+    // the data layer removed in 00094, and worse here, because this match was case-SENSITIVE where the
+    // tools' was not. Composers post an id that came from this same payload, so a miss is a bug.
+    const exists = await sb(`lists?id=eq.${encodeURIComponent(list_id)}&select=id&limit=1`);
+    if (!exists.length) return res.status(404).json({ error: `no list with id ${list_id}` });
     // This surface writes one item. Recurrence is materialised rather than stored (data-layer
     // migration 00085), so "every day" is a scheduling instruction that expands to one row per
     // occurrence — which is `add_to_list`'s job, not a text box's.
-    await sbWrite('list_items', 'POST', { id: crypto.randomUUID(), list_name: list, text, title, due, scheduled_at: due, priority, deleted: false, created: now, updated: now });
+    await sbWrite('list_items', 'POST', { id: crypto.randomUUID(), list_id, text, title, due, scheduled_at: due, priority, deleted: false, created: now, updated: now });
     res.json({ ok: true, badge: await overdueCount() });
   } catch (e) { res.status(500).json({ error: String(e.message || e) }); }
 });

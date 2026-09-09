@@ -1084,13 +1084,21 @@ body.tv:not(.phonewall) #tv-act .ai-act:not(.show){visibility:hidden}
 /* FOUR mutually exclusive states, and the order matters. `past` dims something that has simply been
    and gone; `exp` is outstanding AND overdue, which is the loudest thing on the timeline and must
    never be dimmed — stacking them washed the red out to 45% and made an overdue item read as a
-   finished one. `grace` is due but still free: amber says "now", red says "this is costing you",
-   which is the distinction the score actually makes. `done` is dim plus a strike — on the LABEL, not
-   the chip, because dimming the whole chip took the score down with it and the score is the part
-   that says this was worth something. A chip gets exactly one of the four. */
+   finished one. `done` is dim plus a strike — on the LABEL, not the chip, because dimming the whole
+   chip took the score down with it and the score is the part that says this was worth something.
+   A chip gets exactly one of the four.
+
+   `grace` — due, but inside the 30 minutes that still score as on time — HAS NO STYLE OF ITS OWN,
+   and that is deliberate. On this surface the now-line runs through the hour the chip is sitting in,
+   so the timeline already says which item is happening; an amber fill only repeated it, in the one
+   colour a list is now using for its own identity. Red still arrives on its own the moment the item
+   starts costing something, which is the transition worth a colour.
+
+   IT STILL NEEDS ITS BRANCH IN dayline.js. The classes are an if/else chain and a grace item is also
+   `past` — its moment HAS gone by. Delete the branch to tidy up the empty state and grace items fall
+   through to `.past` and dim to 45%, so something still live and still free reads as finished. The
+   state does work here; it just does not paint. */
 .cw-dchip.past{opacity:.45}
-.cw-dchip.grace{opacity:1;border-left-color:#e6b93d;background:#4a3a0d}
-.cw-dchip.grace .cw-l{color:#ffd75e;font-weight:700}
 .cw-dchip.exp{opacity:1;border-left-color:#ff4d4d;background:#cc0d16;box-shadow:0 0 12px rgba(255,25,25,.5)}
 .cw-dchip.exp .cw-l{color:#fff;font-weight:800}
 .cw-dchip.done{opacity:1}

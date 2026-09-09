@@ -146,8 +146,10 @@ body.tv .hw-daycard .cw-day.dial .cw-hour.sliver .cw-hl{visibility:hidden}
 body.tv .hw-daycard .cw-day.dial{position:relative}
 body.tv .hw-daycard .cw-day.dial .cw-dock{position:absolute;left:0;right:0;bottom:0;z-index:2;
   background:#000;display:flex;flex-direction:column}
+/* No rule between rows. The dial rules its hours off because each one is a slice of time; these are
+   a queue, and a border here reads as the dial's grid showing through the thing covering it. */
 body.tv .hw-daycard .cw-day.dial .cw-dkrow{height:var(--dkrow, 26px);display:flex;gap:10px;
-  align-items:center;overflow:hidden;border-top:1px solid #222a33}
+  align-items:center;overflow:hidden}
 /* The hour is in the gutter in BOTH states — it never moves. Waiting, it is dimmed and keeps its
    am/pm, because at a distance from now an 8 is genuinely ambiguous; once the dial reaches it the
    hour is simply the dial's own, in the dial's hand. */

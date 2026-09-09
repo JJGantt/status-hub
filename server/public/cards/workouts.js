@@ -119,12 +119,14 @@ async function loadHeatDay(date){
   const ex=(j.exercises||[]).find(e=>e.name===j.recent);
   // Same shape as the nutrition row beside it — name, then values with the number carrying the
   // weight and everything around it muted. No pills: spacing separates the sets.
-  // No `lb`: every set on this row is in pounds and the unit repeated four times is four times
-  // nothing. Weight × reps, and the separation between sets is spacing (see tv-home.css).
-  const set=(st)=>'<span class=rc-set><span class=rc-v>'+(st.weight_lbs===0?'BW':st.weight_lbs)+'</span>'+
+  // No `lb`: every set on this row is in pounds and the unit repeated five times is five times
+  // nothing. Weight × reps — the weight carries its own class because it is drawn SMALLER than the
+  // reps beside it (see tv-home.css), and the sets are ruled apart rather than spaced apart, which
+  // is what lets five of them fit.
+  const set=(st)=>'<span class=rc-set><span class="rc-v rc-w">'+(st.weight_lbs===0?'BW':st.weight_lbs)+'</span>'+
     '<span class=rc-x>×</span><span class=rc-v>'+st.reps+'</span></span>';
   hi.innerHTML=ex?'<div class=rc-top><span class=rc-name>'+esc(ex.name)+'</span></div>'+
-    '<div class=rc-vals>'+ex.sets.map(set).join('')+'</div>':'';
+    '<div class="rc-vals rc-sets">'+ex.sets.map(set).join('')+'</div>':'';
   return;
  }
  const sp=hi.closest('.detailpanel'), stick=sp&&(sp.scrollHeight-sp.scrollTop-sp.clientHeight<60); // keep pinned to newest if already at bottom

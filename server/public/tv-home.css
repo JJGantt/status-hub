@@ -342,6 +342,18 @@ body.tv .hw-recent .rc-staged{font-size:12px;font-weight:700;letter-spacing:.08e
    before a unit — and between readings the gap is ten times that. `40 × 12  40 × 12` ran together
    when the two spacings were only 2:1, and the fix is proportion, not a rule or a box between them. */
 body.tv .hw-recent .rc-vals{display:flex;gap:30px;margin-top:4px;white-space:nowrap;overflow:hidden}
+/* THE SET ROW IS THE EXCEPTION, and it has to be: five working sets is ordinary and the rhythm above
+   fits four, then clips the fifth halfway through — which reads as damage rather than as a list that
+   ran out. Two things buy the room. The sets are RULED apart instead of spaced apart: a hairline
+   separates at a third of the distance a gap needs, and unlike a gap it does not have to grow when
+   the numbers do. And the weight is drawn smaller than the reps, because the rep count is what the
+   glance is for — the load is the thing you already knew when you loaded the bar. */
+body.tv .hw-recent .rc-sets{gap:0}
+body.tv .hw-recent .rc-sets .rc-set{padding:0 10px}
+body.tv .hw-recent .rc-sets .rc-set:first-child{padding-left:0}
+body.tv .hw-recent .rc-sets .rc-set:last-child{padding-right:0}
+body.tv .hw-recent .rc-sets .rc-set+.rc-set{border-left:1px solid rgba(255,255,255,.18)}
+body.tv .hw-recent .rc-w{font-size:13px}
 body.tv .hw-recent .rc-set{flex:0 0 auto}
 body.tv .hw-recent .rc-v{font-size:16px;font-weight:700;color:#c7cdd6;font-variant-numeric:tabular-nums}
 body.tv .hw-recent .rc-u{font-size:16px;font-weight:400;color:#5c6675;margin-left:3px}

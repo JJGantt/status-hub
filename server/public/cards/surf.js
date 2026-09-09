@@ -177,6 +177,18 @@ function paintGrids(cv, ax, viewW) {
       g.beginPath(); g.moveTo(x - cw * .45, y); g.lineTo(x + cw * .45, y); g.stroke();
     }
   }
+  // A WEEK OUT, dashed. Dropping the weekday letters took with them the one thing they were good
+  // for — working out which column is which day — so this puts it back with a single mark instead
+  // of one per column: today is solid, seven days on is dashed, and every other day is counted off
+  // between them. Dashed rather than solid because it names a DATE and the solid line names now;
+  // two marks that mean different things must not be drawn the same.
+  const wi = wall ? cols.indexOf(dayKey(new Date(Date.now() + 7 * 86400000))) : -1;
+  if (wi >= 0) {
+    g.strokeStyle = '#ffffff'; g.lineWidth = 1.5; g.setLineDash([4, 4]);
+    const x = (wi + .5) * cw;
+    g.beginPath(); g.moveTo(x, dowH); g.lineTo(x, H); g.stroke();
+    g.setLineDash([]);
+  }
 
   // The gutter is still SIZED on a wall even though nothing is written in it: the water plot below
   // has one for its temperatures, and the two are one timeline — a grid inset by a different amount
@@ -225,6 +237,14 @@ function paintWater(cv, ax, viewW) {
     g.strokeStyle = '#ffffff'; g.lineWidth = 1.5;
     const x = (ti + .5) * cw;
     g.beginPath(); g.moveTo(x, 0); g.lineTo(x, WATER_H); g.stroke();
+  }
+  // Both marks continue down here, for the same reason the solid one does: this is one timeline.
+  const wi = onWall() ? cols.indexOf(dayKey(new Date(Date.now() + 7 * 86400000))) : -1;
+  if (wi >= 0) {
+    g.strokeStyle = '#ffffff'; g.lineWidth = 1.5; g.setLineDash([4, 4]);
+    const x = (wi + .5) * cw;
+    g.beginPath(); g.moveTo(x, 0); g.lineTo(x, WATER_H); g.stroke();
+    g.setLineDash([]);
   }
 
   const line = (arr, color, dash) => {

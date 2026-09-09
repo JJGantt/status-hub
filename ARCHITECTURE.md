@@ -117,6 +117,9 @@ mail arriving, and nothing is mirrored off the Mac.
 `workout_sessions`, `exercises`, `exercise_sets`, `health_profile`, `lists`, `list_items`,
 `recipes`, `surf_snapshots`, plus the system tables below.
 
+A list is keyed by `lists.id` ('l_grocery'), not by its name; `list_items.list_id` is the reference
+and `list_items.list_name` is a derived copy maintained by trigger (data-layer `00094`).
+
 There is **no `reminders` table and no `notes` table** — both were dissolved into `list_items`. A
 reminder is a row with a `due` date, and any item on any list can carry one (data-layer migrations
 `00056`/`00057`); a note is an undated row on the `notes` *list*, its name in `title` and its body in

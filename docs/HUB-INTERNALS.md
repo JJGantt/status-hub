@@ -381,6 +381,16 @@ fires and badges identically to a dated to-do; there are no classes of item. "Du
 derived cross-list *view*, not a stored list, so a dated item shows both there and on its own list
 while being one row.
 
+**A list is addressed by its id** (data-layer `00094`). `lists.id` is the key ('l_grocery'),
+`list_items.list_id` the reference, and `list_name` on an item is a DERIVED copy kept by trigger —
+draw it, never match or write on it. Grouping items by name would break the moment a list is renamed,
+which is now a rename rather than a re-parenting of every row.
+
+That also removed a fork this surface owned: `/api/todos/add` used to create a list on any
+unrecognised name, matching case-sensitively, so `Grocery` made a second list where the data-layer
+tools resolved it to `grocery`. Composers post the id they were drawn with, and the endpoint 404s on
+anything else.
+
 **There is no notes table either** (data-layer `00092`/`00093`). A note was the same row shape with
 capability removed — `(name, content, updated)` against an item's `(title, text, updated)`, minus a
 due date, a priority, completion, soft delete, and a seat in the realtime publication. It is now an
@@ -627,7 +637,8 @@ Voice/MCP writes them (data-layer tools); the hub surfaces them:
 - **Card:** `public/cards/todo.js` — the 5th phone swipe pane. Self-fetches `/api/todos` (not part of
   the status stream), refreshes on mount / after edits / on focus.
 - **Endpoints:** `GET /api/todos` (lists + items + the derived due view) ·
-  `POST /api/todos/add` (service-key writes; adding to an unknown list auto-creates it) ·
+  `POST /api/todos/add` (service-key writes; takes a `list_id` and **404s** on one that does not
+  exist — this surface creates no lists) ·
   `POST /api/todos/clear` · `POST /api/todos/snooze`. Checking off and deleting are **different
   acts** (data-layer `00088`) — see "Done and deleted are different acts" above. Both are soft; a
   cleared row survives a recovery window.

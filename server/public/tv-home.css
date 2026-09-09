@@ -131,12 +131,14 @@ body.tv .hw-daycard .cw-day.dial .cw-hours{position:relative}
    An empty Thursday is a fact worth reading, and a column that sized itself to what happened to be
    booked would move every other day's box the moment one item was added. */
 body.tv .hw-weekcard .fit{padding:8px 6px;gap:0}
-/* THE EVENT TEXT IS SIZED OFF THE DIAL. The hour number at the axis is `13px + 19px * --face` with
-   --face 1, so 32px is the size of the biggest thing in the column beside this one — but 32px in a
-   200px box holds about eleven characters, and a look-ahead where every title ellipsises has stopped
-   answering the question it was added for. This is the size at which a real title fits AND three of
-   them fit down the box; it is the largest number both of those allow, not a taste. */
-body.tv .cw-week{--wk-size:21px;flex:1 1 auto;min-height:0;display:flex;flex-direction:column;gap:5px}
+/* THE EVENT TEXT IS THE DIAL'S CHIP TEXT, exactly. A chip on the day column is
+   `clamp(10px, …, 15px)` and it is at that cap around now, so an event here is the same size as an
+   event in the hour he is standing in. That is the point: the two columns are the same items at two
+   distances, and a size of their own would make them two different kinds of thing.
+   It is NOT the hour number's 32px. That is the biggest thing in the column beside this one, and in
+   a 200px box it holds about eleven characters — a look-ahead where every title ellipsises has
+   stopped answering the question it was added for. */
+body.tv .cw-week{--wk-size:15px;flex:1 1 auto;min-height:0;display:flex;flex-direction:column;gap:5px}
 /* A bordered box, the same 1px #222a33 the session rows use. The rest of this wall separates things
    typographically and this one cannot: six lists running down a 200px column need an edge saying
    where one day stops and the next starts, or the last chip of Wednesday reads as the first of

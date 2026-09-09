@@ -56,6 +56,12 @@ function buildWeightPlot(weights, weeks, today) {
     cols.push({ week: day(i * 7), n: 0, avg: v === null ? null : round1(v), imputed: v !== null });
   }
 
+  // THE FIRST COLUMN IS NEVER DRAWN. The three axis values are written over the left end of the plot
+  // — there is no gutter to put them in without insetting the data, and insetting the data is the
+  // one thing this chart cannot do — so the first column's width is what they are written on. The
+  // week still counts as an anchor for interpolating the second, it just carries no point.
+  if (cols.length) cols[0] = { week: cols[0].week, n: 0, avg: null, imputed: false };
+
   const drawn = cols.filter((c) => c.avg != null).map((c) => c.avg);
   if (!drawn.length) return null;
   const min = Math.min(...drawn), max = Math.max(...drawn);

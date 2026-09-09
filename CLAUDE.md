@@ -126,10 +126,16 @@ are `standard` (the home wall — `home` is accepted as a second word for it and
 The weigh-in plot above the heat maps is aligned to their week columns, and that alignment is the
 whole chart: `cards/weightweeks.js` insets its box by half a column at each end so x runs from the
 first column's centre to the last's, all in CSS calc from `--cols` and the grid's gap. Change the
-gap in `.heat` and `--hgap` in `tv-home.css` has to move with it. It also has no height of its own to
-spend — the column was already exactly full — so the two maps pay for it by letting their cells stop
-being square. Narrowing the grid instead would shorten the maps too, and it would take the fifteen
-weeks the plot is aligned to.
+gap in `.heat` and `--hgap` in `tv-home.css` has to move with it. Its first column is deliberately
+blank: the three axis values are written over the left end of the plot, because a gutter for them
+would inset the data and being uninset is the entire point.
+
+It also has no height of its own to spend — the column was already exactly full — so the plot's 68px
+came off the heat maps. A cell takes its height from its WIDTH, so squaring them again meant
+narrowing the grid by the same proportion: `.hw-heatstack` is a fixed 359px, and the sum behind that
+number is in `tv-home.css`. The 65px it frees goes to the muscle column, which is why those figures
+are drawn `preserveAspectRatio="none"` — at that width a 36:93 figure no longer fills its box, and
+`meet` leaves the other half of the artwork showing beside it.
 
 **A wall is a FILE, not a mode flag**, so work on one cannot disturb another. They share `core.js` /
 `tv.js` / `wall.js` / `wallmode.js` / `cards/*`, so a change to those hits ALL of them; split

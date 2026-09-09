@@ -199,10 +199,15 @@ function tvStackFigures(){
  const svg=host.querySelector('svg.bodysvg'); if(!svg||host.dataset.split)return;
  host.dataset.split='1';
  const inner=svg.innerHTML;
+ // The home wall gives this column whatever width its heat maps do not need, which is more than a
+ // 36:93 figure can use at that height — and 'meet' then centres the figure and leaves the NEXT
+ // half of the artwork showing beside it, since the viewBox window no longer fills the viewport.
+ // 'none' fills it instead: the column is wider than the figure is, and the figure takes the width.
+ const pa=document.body.classList.contains('homewall')?'none':'xMidYMid meet';
  const wrap=document.createElement('div'); wrap.className='figstack';
  wrap.innerHTML=
-   '<svg viewBox="0 0 36 93" preserveAspectRatio="xMidYMid meet" class="bodysvg figfront">'+inner+'</svg>'+
-   '<svg viewBox="36 0 36 93" preserveAspectRatio="xMidYMid meet" class="bodysvg figback">'+inner+'</svg>';
+   '<svg viewBox="0 0 36 93" preserveAspectRatio="'+pa+'" class="bodysvg figfront">'+inner+'</svg>'+
+   '<svg viewBox="36 0 36 93" preserveAspectRatio="'+pa+'" class="bodysvg figback">'+inner+'</svg>';
  svg.replaceWith(wrap);
 }
 

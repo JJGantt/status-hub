@@ -281,7 +281,13 @@ body.tv .hw-strip{flex:0 0 auto;min-height:0}
    read as objects sitting on it; the border alone is enough to say where they begin and end. */
 /* Same one-line rule as the rest timer under it: this band carries four figures and grows a digit
    whenever a total crosses a thousand. */
-body.tv .hw-heatcard .nutday{margin:0;padding:6px 10px;background:#000;flex-wrap:nowrap;white-space:nowrap}
+/* One line at 359px, not the 424 this column used to be: the band carries four readings and grows a
+   digit whenever a total crosses a thousand, and `.fit` clips a line too long WITHOUT any error —
+   what you see is the last figure losing its unit, which reads as a smaller number rather than as
+   damage. Sized so the four fit with a digit's slack. */
+body.tv .hw-heatcard .nutday{margin:0;padding:6px 10px;background:#000;flex-wrap:nowrap;
+  white-space:nowrap;gap:9px}
+body.tv .hw-heatcard .nd-seg{font-size:13px}
 /* The band's date goes: the day column two columns left already says which day this is, in a much
    larger hand. Repeating it here spends the strip's leading edge on the least surprising fact on
    the wall. */

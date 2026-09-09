@@ -163,21 +163,21 @@ function paintGrids(cv, ax, viewW) {
   g.strokeStyle = 'rgba(255,255,255,.85)'; g.lineWidth = 1;
   g.beginPath(); g.moveTo(0, dowH + GRID_H + .5); g.lineTo(totalW, dowH + GRID_H + .5); g.stroke();
 
-  // WEEK TICKS, on the seam. The columns are days, and past the width of a couple of weeks nothing
-  // says where one week ends — the weekday letters are the phone's, and the wall drops them. The
-  // seam is the one line the two grids share, so a mark on it belongs to neither and interrupts
-  // neither picture. Weeks break Saturday -> Sunday, the same Sunday alignment the week columns of
-  // the two heat maps above this card are built on (server.js), so a tick lines up with a column
-  // edge in the map above rather than landing mid-cell.
-  // DARK, not white: the seam is already a white line and the size grid below it is pale blue, so a
-  // white tick has nothing to sit against on the lower half — it reads as a mark on the rating grid
-  // alone. Black reads on every colour either grid uses, and cutting the seam is what makes it read
-  // as a division rather than a smudge.
-  g.strokeStyle = 'rgba(0,0,0,.75)'; g.lineWidth = 2;
+  // WEEK SEPARATORS. The columns are days, and past the width of a couple of weeks nothing says
+  // where one week ends — the weekday letters are the phone's, and the wall drops them. A black
+  // line at each Saturday -> Sunday boundary cuts the window into weeks, which is what makes a
+  // column countable: the eye lands on a week and counts days inside it rather than counting cells
+  // from the now-line. Weeks break on Sunday, the same alignment server.js builds the nutrition and
+  // workout week columns on, so a separator lines up with a column edge in the maps above it.
+  // BLACK and 1px. Black is the one ink that reads on every colour either grid uses — white was
+  // tried and vanishes against the pale blue size grid below the seam, which is also already a
+  // white line. 1px is enough at that contrast; heavier starts taking cells off the picture.
+  // The grids only, not the water trace under them: the now-line continues down there because it is
+  // one mark on one timeline, where seven separators would be clutter over a sparse trace.
+  g.strokeStyle = '#000'; g.lineWidth = 1;
   cols.forEach((k, x) => {
     if (new Date(k + 'T12:00:00').getDay()) return;   // 0 = Sunday, the column a week opens on
-    g.beginPath();
-    g.moveTo(x * cw, dowH + GRID_H - 6); g.lineTo(x * cw, dowH + GRID_H + 6); g.stroke();
+    g.beginPath(); g.moveTo(x * cw, dowH); g.lineTo(x * cw, H); g.stroke();
   });
   const now = new Date();
   const ti = cols.indexOf(dayKey(now));

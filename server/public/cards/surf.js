@@ -104,7 +104,7 @@ function fitCanvas(cv, w, h) {
 }
 
 // A wall is read from a couch. Anything a reader can get from POSITION alone is not worth the pixels
-// at that distance — the weekday letters over the columns and the 8a/4p labels beside them both go,
+// at that distance — the weekday letters over the columns and the noon label beside them both go,
 // while the guide lines they named stay, because the line is the thing that was doing the work. What
 // keeps its labels is the one axis no colour or placement can carry: the water temperature.
 const onWall = () => document.body.classList.contains('tv');
@@ -150,18 +150,21 @@ function paintGrids(cv, ax, viewW) {
     }
   });
 
-  // 8a and 4p on cell boundaries, so a line coincides with the hour it names rather than floating
-  // half a row off it. Guides on both grids; their labels live on the gutter canvas.
+  // NOON, on a cell boundary so the line coincides with the hour it names rather than floating half
+  // a row off it. Guides on both grids; their label lives on the gutter canvas.
+  // One line, not the 8a/4p pair it replaced: with the weeks now ruled vertically an hour is placed
+  // by which side of noon it falls on inside a week box, and the second guide was only bracketing a
+  // band the eye already had. Dim, because it is a reference and the data is what should be read —
+  // an alpha rather than a half-pixel width, which would be a thin bright line on his phone at
+  // devicePixelRatio 3 and a dim one on the 1080p kiosk, i.e. a different mark per surface.
   for (const base of [dowH, dowH + GRID_H]) {
-    for (const h of [8, 16]) {
-      const y = base + GRID_H - h * ch;
-      g.strokeStyle = 'rgba(255,255,255,.55)'; g.lineWidth = 1;
-      g.beginPath(); g.moveTo(0, y); g.lineTo(totalW, y); g.stroke();
-    }
+    const y = base + GRID_H - 12 * ch;
+    g.strokeStyle = 'rgba(255,255,255,.35)'; g.lineWidth = 1;
+    g.beginPath(); g.moveTo(0, y); g.lineTo(totalW, y); g.stroke();
   }
-  // Seam between the grids, and today.
-  g.strokeStyle = 'rgba(255,255,255,.85)'; g.lineWidth = 1;
-  g.beginPath(); g.moveTo(0, dowH + GRID_H + .5); g.lineTo(totalW, dowH + GRID_H + .5); g.stroke();
+  // NO SEAM between the grids. The two palettes do not overlap — ratings are red through green, size
+  // is blues — so the boundary draws itself, and a rule there was one more white line competing with
+  // the only two marks that have to win: now, and a week out.
 
   // WEEK SEPARATORS. The columns are days, and past the width of a couple of weeks nothing says
   // where one week ends — the weekday letters are the phone's, and the wall drops them. A black
@@ -170,8 +173,8 @@ function paintGrids(cv, ax, viewW) {
   // from the now-line. Weeks break on Sunday, the same alignment server.js builds the nutrition and
   // workout week columns on, so a separator lines up with a column edge in the maps above it.
   // BLACK and 1px. Black is the one ink that reads on every colour either grid uses — white was
-  // tried and vanishes against the pale blue size grid below the seam, which is also already a
-  // white line. 1px is enough at that contrast; heavier starts taking cells off the picture.
+  // tried and vanishes against the pale blue size grid on the lower half. 1px is enough at that
+  // contrast; heavier starts taking cells off the picture.
   // The grids only, not the water trace under them: the now-line continues down there because it is
   // one mark on one timeline, where seven separators would be clutter over a sparse trace.
   g.strokeStyle = '#000'; g.lineWidth = 1;
@@ -186,7 +189,7 @@ function paintGrids(cv, ax, viewW) {
     const x = (ti + .5) * cw;
     g.beginPath(); g.moveTo(x, dowH); g.lineTo(x, H); g.stroke();
     // Crossbar at the current time. y runs from midnight at the grid's floor upward, the same
-    // mapping the 8a/4p guides use, so hour + minutes lands on the instant rather than the cell.
+    // mapping the noon guide uses, so hour + minutes lands on the instant rather than the cell.
     const hNow = hourOf(now) + now.getMinutes() / 60;
     g.lineWidth = 2;
     for (const base of [dowH, dowH + GRID_H]) {
@@ -216,7 +219,7 @@ function paintGrids(cv, ax, viewW) {
   a.font = '9px system-ui, -apple-system, sans-serif';
   a.textBaseline = 'middle'; a.textAlign = 'right'; a.fillStyle = '#8b96a5';
   for (const base of [DOW_H, DOW_H + GRID_H])
-    for (const [h, txt] of [[8, '8a'], [16, '4p']])
+    for (const [h, txt] of [[12, '12p']])
       a.fillText(txt, PAD_L - 5, base + GRID_H - h * ch);
 }
 

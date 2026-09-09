@@ -144,12 +144,19 @@ are drawn `preserveAspectRatio="none"` — at that width a 36:93 figure no longe
 
 **A wall drops every label a reader could infer, and this is deliberate.** No month row over the two
 week heat maps (`.hmonths` is hidden in `tv-home.css`), no weekday letters over the surf grids and no
-8a/4p labels beside them (`onWall()` in `cards/surf.js`). At couch distance a 9-11px string is not
+noon label beside them (`onWall()` in `cards/surf.js`). At couch distance a 9-11px string is not
 read, and what those said — which end is old, roughly where in the week a column falls — the columns
 already say. The guide LINES they named all stay: the line was doing the work, not the word. Two
 things keep their numbers, because no colour or placement can carry them: the water temperature and
 the weigh-in plot's three values. The markup and the phone are untouched — the month row still paints
 in the expanded sheet, and the phone's surf card still labels its hours.
+
+The surf grids are ruled the same way, and the ink says what a mark MEANS. **Black is fixed
+structure**: a 1px line at each Saturday -> Sunday boundary (Sunday-aligned, like the week columns
+above), which is what makes a day countable now that the letters are gone. **White is live**: the
+now-line with its crossbar, and the dashed line a week out. The noon guide is white at 35% because it
+is a reference rather than a marker, and there is no rule between the two grids at all — ratings run
+red through green and size runs blues, so the boundary draws itself.
 
 **A wall is a FILE, not a mode flag**, so work on one cannot disturb another. They share `core.js` /
 `tv.js` / `wall.js` / `wallmode.js` / `cards/*`, so a change to those hits ALL of them; split

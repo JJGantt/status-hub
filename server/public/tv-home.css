@@ -95,26 +95,21 @@ body.tv .hw-daycard .cw-day.dial .cw-hl{font-size:calc(13px + 19px * var(--face,
 body.tv .hw-daycard .cw-day.dial{--chip-full:22px}
 body.tv .hw-daycard .cw-day.dial .cw-hitems:has(.cw-half:empty) .cw-half:not(:empty){
   min-height:min(var(--chip-full), 100% - 3px)}
-/* The chip's words foreshorten with the row, the way the hour number does. --chiph is the height the
-   half-line actually got, measured in project(); 4px of that is the chip's own padding, and 1.25
-   leaves the descenders room. Capped at the 15px a chip is on every other surface, so the hours
-   around now look like the day column rather than a blown-up version of it. */
+/* THE TEXT IS WHATEVER ITS ROW LEFT IT — the same rule the look-ahead runs on. --chiph is the height
+   the half-line actually got, measured in project(); take off the chip's own 4px of padding, divide
+   by the 1.25 line-height, and that is the largest text the row can hold. So the words foreshorten
+   with the row the way the hour number does, and the hours around now are read at whatever their
+   height affords rather than at a number chosen in advance.
+   No upper bound. There was one, at 15px, and all it did was hold the type still while the box kept
+   growing: the tallest rows are the ones nearest now, so the chips actually being read were the ones
+   drawing a block half again the height of their text. The floor stays — below it a row is `.thin`
+   and has no words at all. */
 body.tv .hw-daycard .cw-day.dial .cw-dchip,
 body.tv .hw-daycard .cw-day.dial .cw-more{
-  font-size:clamp(10px, calc((var(--chiph, 26px) - 4px) / 1.25), 15px)}
+  font-size:max(10px, calc((var(--chiph, 26px) - 4px) / 1.25))}
 /* Relative, so the score and the +N ride the title down instead of overrunning a shrunk chip. */
 body.tv .hw-daycard .cw-day.dial .cw-sc,
 body.tv .hw-daycard .cw-day.dial .cw-sc.k-potential{font-size:.82em}
-/* A CHIP IS THE SIZE OF ITS WORDS, not the size of its hour. Halves stretch their children, so a
-   chip took the whole half's height — which tracks the row exactly as long as the font does. It
-   stops tracking at the 15px cap above: past `--chiph` 22.75 the type holds still and the box keeps
-   growing, so the rows nearest now — the tall ones, the ones being read — drew a 27px block around
-   18px of text. Sizing to content and centring puts that difference back where it belongs, as air
-   between chips rather than air inside one.
-   Only where a chip HAS words. A `.thin` row has its label hidden and is held open by a min-height
-   instead, so content-sizing there would make the chip taller than the row it lives in. */
-body.tv .hw-daycard .cw-day.dial .cw-hour:not(.thin) .cw-dchip,
-body.tv .hw-daycard .cw-day.dial .cw-hour:not(.thin) .cw-more{align-self:center}
 /* PAST THE POINT WHERE A CHIP CAN BE READ IT LOSES ITS WORDS AND NOTHING ELSE. Same dark fill, same
    4px coloured left edge, same radius — a chip with no room for a title, which is what it is.
 
@@ -193,10 +188,10 @@ body.tv .cw-witems{flex:1 1 0;min-height:0;overflow:hidden;container-type:size;
    row can hold. Four items are read at 20px, five at 15px, six at 12px, and every one of those
    boxes is full — which is the whole reason the row count comes from the server rather than a
    fixed size sitting in a box of unknown fullness.
-   Fifteen is not a coincidence: it is what a chip on the day column is capped at, so a five-item
-   day is the same size as an event in the hour he is standing in. The four-item ceiling is the most
-   a box can give before one lone item becomes a banner, and twelve at six items is the floor — past
-   it a title stops being readable across a room and a second column is the better answer. */
+   The day column beside it works the same way — its text is whatever the hour row left it — so the
+   two read as one language without either being pinned to a number. The four-item ceiling is the
+   most a box can give before one lone item becomes a banner, and twelve at six items is the floor —
+   past it a title stops being readable across a room and a second column is the better answer. */
 body.tv .cw-witems .cw-dchip{min-width:0;min-height:0;line-height:1.15;
   padding:1px 5px 1px 6px;border-left-width:3px;
   --fit:calc((((100cqh - (var(--rows, 4) - 1) * 3px) / var(--rows, 4)) - 2px) / 1.15);

@@ -162,6 +162,23 @@ function paintGrids(cv, ax, viewW) {
   // Seam between the grids, and today.
   g.strokeStyle = 'rgba(255,255,255,.85)'; g.lineWidth = 1;
   g.beginPath(); g.moveTo(0, dowH + GRID_H + .5); g.lineTo(totalW, dowH + GRID_H + .5); g.stroke();
+
+  // WEEK TICKS, on the seam. The columns are days, and past the width of a couple of weeks nothing
+  // says where one week ends — the weekday letters are the phone's, and the wall drops them. The
+  // seam is the one line the two grids share, so a mark on it belongs to neither and interrupts
+  // neither picture. Weeks break Saturday -> Sunday, the same Sunday alignment the week columns of
+  // the two heat maps above this card are built on (server.js), so a tick lines up with a column
+  // edge in the map above rather than landing mid-cell.
+  // DARK, not white: the seam is already a white line and the size grid below it is pale blue, so a
+  // white tick has nothing to sit against on the lower half — it reads as a mark on the rating grid
+  // alone. Black reads on every colour either grid uses, and cutting the seam is what makes it read
+  // as a division rather than a smudge.
+  g.strokeStyle = 'rgba(0,0,0,.75)'; g.lineWidth = 2;
+  cols.forEach((k, x) => {
+    if (new Date(k + 'T12:00:00').getDay()) return;   // 0 = Sunday, the column a week opens on
+    g.beginPath();
+    g.moveTo(x * cw, dowH + GRID_H - 6); g.lineTo(x * cw, dowH + GRID_H + 6); g.stroke();
+  });
   const now = new Date();
   const ti = cols.indexOf(dayKey(now));
   if (ti >= 0) {

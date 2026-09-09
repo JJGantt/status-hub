@@ -225,6 +225,44 @@ body.tv .hw-heatcard .heat,body.tv .hw-heatcard #heatwrap,body.tv .hw-heatcard .
 body.tv .hw-heatcard .hbody{flex:1 1 auto;min-height:0}
 body.tv .hw-heatcard .hcell{border-radius:2px}
 
+/* THE WEEKLY WEIGH-IN PLOT, above both maps — geometry in cards/weightweeks.js. --cols is written
+   onto this element by the card; --hgap must stay equal to the gap in `.heat`, since half of it is
+   what the plot box is inset by at each end to land on the first and last column centres. */
+body.tv .hw-heatcard .hw-wplot{flex:0 0 68px;min-height:0;position:relative;--hgap:2.5px;
+  --half:calc((100% - (var(--cols) - 1) * var(--hgap)) / (2 * var(--cols)))}
+body.tv .hw-heatcard .wp-plot{position:absolute;top:0;bottom:0;left:var(--half);right:var(--half)}
+/* overflow visible: the top and bottom axis lines ARE the extreme readings, so they sit on the very
+   edge of the box and half of each stroke is outside it. */
+body.tv .hw-heatcard .wp-plot svg{display:block;width:100%;height:100%;overflow:visible}
+body.tv .hw-heatcard .wp-grid{stroke:rgba(255,255,255,.10);stroke-width:1}
+body.tv .hw-heatcard .wp-line{fill:none;stroke:#a78bfa;stroke-width:1.6;stroke-linejoin:round;
+  stroke-linecap:round}
+body.tv .hw-heatcard .wp-dot{position:absolute;width:3.5px;height:3.5px;margin:-1.75px 0 0 -1.75px;
+  border-radius:50%;background:#a78bfa}
+/* The three values, over the plot rather than beside it: a gutter would inset the data and the whole
+   point is that it is NOT inset. They sit at the left, which is the oldest week — the one end where
+   covering a point costs least — and the shadow is what keeps them readable where they do. */
+body.tv .hw-heatcard .wp-lab{position:absolute;left:0;font-size:11px;font-weight:700;color:#8b96a5;
+  font-variant-numeric:tabular-nums;line-height:1;pointer-events:none;
+  text-shadow:0 0 4px #000,0 0 4px #000,0 0 2px #000}
+body.tv .hw-heatcard .wp-lab0{top:0}
+body.tv .hw-heatcard .wp-lab1{top:50%;transform:translateY(-50%)}
+body.tv .hw-heatcard .wp-lab2{bottom:0}
+
+/* WHAT PAID FOR THE PLOT'S HEIGHT. The column was already exactly full, and the cells are sized by
+   WIDTH (`aspect-ratio:1` in app.css) — so the only way to shorten a map without narrowing the grid,
+   which is the 15 weeks the plot is aligned to, is to let the cells stop being square. They flatten
+   by about a fifth and the maps keep their full span.
+   It takes a definite height all the way down to `.hcol`: every box between the stack and the cells
+   sized itself off their aspect ratio, so a shorter stack just overflowed and `.fit` clipped it with
+   no error at all. */
+body.tv .hw-heatcard .hw-heatstack .hw-block{flex:1 1 auto}
+body.tv .hw-heatcard .nutheat,body.tv .hw-heatcard #heatwrap{display:flex;flex-direction:column;
+  flex:1 1 auto;min-height:0}
+/* The month row is now a flex item beside a shrinking grid, and it must not be what shrinks: it is
+   13px of text, and there is nothing in it to give. */
+body.tv .hw-heatcard .hmonths{flex:0 0 auto}
+
 /* The strip under each of the first two heat maps: the day's totals against target, and the rest
    clocks. ONE treatment for both — the nutrition band's inset panel — so the column reads as two of
    the same thing rather than a panel and a bare row. */

@@ -22,6 +22,7 @@ const HEAT_WEEKS = 20;
 const MON_ABBR = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 const { getTZ, setTZ, DAY_START_HOUR, localDate, nutritionWindow, lastNTrainingDays, dayBucketOf } = require('./lib/dates');
 const { buildWorkoutHeatmap } = require('./lib/heatmap');
+const { buildWeightPlot } = require('./lib/weightplot');
 const { buildNutritionLog, buildGoalResolver, calorieColor } = require('./lib/nutritionlog');
 const { computeScore, taskDeadline, completionValue, completionStamp, TASK_GRACE_MIN, TASK_LATE_ZERO_H, TASK_DRAIN_FULL_H } = require('./lib/score');
 
@@ -656,6 +657,9 @@ async function buildStatus() {
   };
   const heatmap_home = trimHeat(heatmap, HOME_HEAT_WEEKS);
   const nutrition_log_home = trimHeat(nutrition_log, HOME_HEAT_WEEKS);
+  // Built at the HOME window because the home wall is the only surface that draws it: the plot is
+  // meaningless away from the columns it is aligned to, so there is no full-window version to trim.
+  const weight_plot = buildWeightPlot(weights, HOME_HEAT_WEEKS, today);
 
   // ---- overall score (0.5·training + 0.5·nutrition over the rolling week) ----
   const { goalForDay } = buildGoalResolver({ rows: nutLogRows || [], weights, targets: targetRows || [], today, surplus, fallbackMaint: maintenance.maintenance });
@@ -714,7 +718,7 @@ async function buildStatus() {
     }
   }
   return { today, litter, feeder, surf, nutrition, maintenance, pace: paceData, volume, heatmap, nutrition_log,
-    heatmap_home, nutrition_log_home,
+    heatmap_home, nutrition_log_home, weight_plot,
     last_set_at, session_start_at, sets_today, rep_watcher, routing, mics, score, desk_focus: deskFocus,
     generated_at: new Date().toISOString() };
 }

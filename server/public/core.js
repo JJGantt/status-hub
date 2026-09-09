@@ -7,6 +7,7 @@ import * as nutrition from './cards/nutrition.js';
 import * as muscle from './cards/muscle.js';
 import * as workouts from './cards/workouts.js';
 import * as nutritionlog from './cards/nutritionlog.js';
+import * as weightweeks from './cards/weightweeks.js'; // home-wall weekly weigh-in plot over the heat columns (no-ops elsewhere)
 import * as routing from './cards/routing.js';   // TV voice-column routing panel (no-ops on phone)
 import * as deskfoot from './cards/deskfoot.js';  // TV footer: which session takes a follow-up (no-ops on phone)
 import * as score from './cards/score.js';       // TV overall-score health bar (no-ops on phone)
@@ -47,6 +48,7 @@ function render(s){
  nutrition.render(s);
  workouts.render(s);
  nutritionlog.render(s);
+ weightweeks.render(s);  // home-wall weekly weigh-in plot (no-ops where there is no #weightweeks)
  muscle.render(s);     // paints the body map from volume colors + re-applies volume sort/selection
  routing.render(s);    // TV-only routing panel (model/thinking/runner/voice + liveness chips)
  score.render(s);      // TV-only overall-score health bar (right column)

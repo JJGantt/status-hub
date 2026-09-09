@@ -103,35 +103,45 @@ function fitCanvas(cv, w, h) {
   return g;
 }
 
+// A wall is read from a couch. Anything a reader can get from POSITION alone is not worth the pixels
+// at that distance — the weekday letters over the columns and the 8a/4p labels beside them both go,
+// while the guide lines they named stay, because the line is the thing that was doing the work. What
+// keeps its labels is the one axis no colour or placement can carry: the water temperature.
+const onWall = () => document.body.classList.contains('tv');
+
 // Canvas rather than ~1,300 rects: this is a phone surface and the grids are pure colour with no
 // per-cell interaction to hang off the DOM. `cv` scrolls inside its box; `ax` is the gutter canvas
 // pinned beside it, so the hour labels stay readable however far back the data is dragged.
 function paintGrids(cv, ax, viewW) {
   if (!hist || !cv) return;
+  const wall = onWall();
+  const dowH = wall ? 0 : DOW_H;
   const { cols, byDay, cw, totalW } = layout(viewW);
-  const H = DOW_H + GRID_H * 2, ch = GRID_H / 24;
+  const H = dowH + GRID_H * 2, ch = GRID_H / 24;
   const g = fitCanvas(cv, totalW, H);
 
   // Weekday letter over each column, on the same canvas as the grids so it cannot drift out of
   // alignment with them the way a separately-laid-out HTML row could.
-  g.font = '9px system-ui, -apple-system, sans-serif';
-  g.textAlign = 'center'; g.textBaseline = 'middle';
-  g.fillStyle = '#8b96a5';
-  const skip = cw < 9 ? Math.ceil(9 / cw) : 1;      // thin columns get every Nth letter, not a smear
-  cols.forEach((k, x) => {
-    if (x % skip) return;
-    // Midday avoids the key being shifted a day by a DST-edge parse; +6 %7 turns Sun-first into
-    // Mon-first so the string reads MTWTFSS.
-    const dow = (new Date(k + 'T12:00:00').getDay() + 6) % 7;
-    g.fillText('MTWTFSS'[dow], (x + .5) * cw, DOW_H / 2);
-  });
-  g.textAlign = 'start'; g.textBaseline = 'alphabetic';
+  if (!wall) {
+    g.font = '9px system-ui, -apple-system, sans-serif';
+    g.textAlign = 'center'; g.textBaseline = 'middle';
+    g.fillStyle = '#8b96a5';
+    const skip = cw < 9 ? Math.ceil(9 / cw) : 1;    // thin columns get every Nth letter, not a smear
+    cols.forEach((k, x) => {
+      if (x % skip) return;
+      // Midday avoids the key being shifted a day by a DST-edge parse; +6 %7 turns Sun-first into
+      // Mon-first so the string reads MTWTFSS.
+      const dow = (new Date(k + 'T12:00:00').getDay() + 6) % 7;
+      g.fillText('MTWTFSS'[dow], (x + .5) * cw, DOW_H / 2);
+    });
+    g.textAlign = 'start'; g.textBaseline = 'alphabetic';
+  }
 
   cols.forEach((k, x) => {
     const c = byDay.get(k);
     for (let h = 0; h < 24; h++) {
       // hour 0 at the bottom of each grid, so the morning band reads as a horizontal stripe
-      const y = DOW_H + GRID_H - (h + 1) * ch;
+      const y = dowH + GRID_H - (h + 1) * ch;
       const rb = c.r[h], sb = c.s[h];
       g.fillStyle = rb === '.' ? '#1a222b' : (hist.bandColors[parseInt(rb, 36)] || '#1a222b');
       g.fillRect(x * cw, y, Math.ceil(cw) + .5, Math.ceil(ch) + .5);
@@ -142,7 +152,7 @@ function paintGrids(cv, ax, viewW) {
 
   // 8a and 4p on cell boundaries, so a line coincides with the hour it names rather than floating
   // half a row off it. Guides on both grids; their labels live on the gutter canvas.
-  for (const base of [DOW_H, DOW_H + GRID_H]) {
+  for (const base of [dowH, dowH + GRID_H]) {
     for (const h of [8, 16]) {
       const y = base + GRID_H - h * ch;
       g.strokeStyle = 'rgba(255,255,255,.55)'; g.lineWidth = 1;
@@ -151,25 +161,29 @@ function paintGrids(cv, ax, viewW) {
   }
   // Seam between the grids, and today.
   g.strokeStyle = 'rgba(255,255,255,.85)'; g.lineWidth = 1;
-  g.beginPath(); g.moveTo(0, DOW_H + GRID_H + .5); g.lineTo(totalW, DOW_H + GRID_H + .5); g.stroke();
+  g.beginPath(); g.moveTo(0, dowH + GRID_H + .5); g.lineTo(totalW, dowH + GRID_H + .5); g.stroke();
   const now = new Date();
   const ti = cols.indexOf(dayKey(now));
   if (ti >= 0) {
     g.strokeStyle = '#ffffff'; g.lineWidth = 1.5;
     const x = (ti + .5) * cw;
-    g.beginPath(); g.moveTo(x, DOW_H); g.lineTo(x, H); g.stroke();
+    g.beginPath(); g.moveTo(x, dowH); g.lineTo(x, H); g.stroke();
     // Crossbar at the current time. y runs from midnight at the grid's floor upward, the same
     // mapping the 8a/4p guides use, so hour + minutes lands on the instant rather than the cell.
     const hNow = hourOf(now) + now.getMinutes() / 60;
     g.lineWidth = 2;
-    for (const base of [DOW_H, DOW_H + GRID_H]) {
+    for (const base of [dowH, dowH + GRID_H]) {
       const y = base + GRID_H - hNow * ch;
       g.beginPath(); g.moveTo(x - cw * .45, y); g.lineTo(x + cw * .45, y); g.stroke();
     }
   }
 
+  // The gutter is still SIZED on a wall even though nothing is written in it: the water plot below
+  // has one for its temperatures, and the two are one timeline — a grid inset by a different amount
+  // than the trace under it puts a vertical read on two different hours.
   if (!ax) return;
   const a = fitCanvas(ax, PAD_L, H);
+  if (wall) return;
   a.font = '9px system-ui, -apple-system, sans-serif';
   a.textBaseline = 'middle'; a.textAlign = 'right'; a.fillStyle = '#8b96a5';
   for (const base of [DOW_H, DOW_H + GRID_H])

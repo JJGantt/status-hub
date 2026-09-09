@@ -214,13 +214,13 @@ body.tv .hw-heattop{flex:1 1 auto;min-width:0;min-height:0;display:flex;align-it
 /* WIDTH IS WHAT MAKES THE CELLS SQUARE, because a cell is sized by its width and takes its height
    from that. Once the weigh-in plot took 68px off the column the maps had to get shorter, so the
    grid has to get NARROWER by the same proportion or the cells stop being square:
-     stack height 611.6 - plot 68 - 2 gaps = 539.6 for the two blocks
-     each block spends 118.9 on its month row, strip, recent line and gaps -> 14 cells of room
-     cell = (539.6 - 237.8) / 14 = 21.6   ->   grid = 15*21.6 + 14*2.5 = 359
+     stack height 624.6 - plot 68 - 2 gaps = 552.6 for the two blocks
+     the two blocks spend 179 on their strips, recent lines and gaps -> 14 cells of room
+     cell = (552.6 - 179) / 14 = 24.5   ->   grid = 15*24.5 + 14*2.5 = 403
    The 65px that frees goes to the muscle column, which is the only other thing on this row. Change
    anything in that sum — the plot's height, a strip, the number of weeks — and this number is wrong
    and the cells go back to rectangles. */
-body.tv .hw-heatstack{flex:0 0 359px;min-width:0;min-height:0;display:flex;flex-direction:column;gap:2px;justify-content:space-between}
+body.tv .hw-heatstack{flex:0 0 403px;min-width:0;min-height:0;display:flex;flex-direction:column;gap:2px;justify-content:space-between}
 /* Deliberately narrow: muscle.js stacks the figure into a front/back pair, each a 36x93 window, so the
    column sits near 1:5. The two rules under it are the health wall's `.musmap .figstack` pair pointed
    at this container — the fills come from app.css and volume.muscle_colors, so the map means the same
@@ -236,6 +236,12 @@ body.tv .hw-body .figstack svg{flex:1 1 0;width:100%;height:50%;min-height:0;dis
 body.tv .hw-heatcard .heat,body.tv .hw-heatcard #heatwrap,body.tv .hw-heatcard .nutheat{min-height:0}
 body.tv .hw-heatcard .hbody{flex:1 1 auto;min-height:0}
 body.tv .hw-heatcard .hcell{border-radius:2px}
+/* No month row on either map. At couch distance a 11px month abbreviation is not read, and the two
+   things it was there for — which end is old and roughly how far back the window goes — are already
+   carried by the columns themselves. Dropping it gives each map 13px of height, which is what put
+   the cells back up to 24px. The markup stays: both cards still write it, and the expanded sheet
+   (outside this card) still shows it. */
+body.tv .hw-heatcard .hmonths{display:none}
 
 /* THE WEEKLY WEIGH-IN PLOT, above both maps — geometry in cards/weightweeks.js. --cols is written
    onto this element by the card; --hgap must stay equal to the gap in `.heat`, since half of it is
@@ -281,13 +287,13 @@ body.tv .hw-strip{flex:0 0 auto;min-height:0}
    read as objects sitting on it; the border alone is enough to say where they begin and end. */
 /* Same one-line rule as the rest timer under it: this band carries four figures and grows a digit
    whenever a total crosses a thousand. */
-/* One line at 359px, not the 424 this column used to be: the band carries four readings and grows a
+/* One line at 403px, not the 424 this column used to be: the band carries four readings and grows a
    digit whenever a total crosses a thousand, and `.fit` clips a line too long WITHOUT any error —
    what you see is the last figure losing its unit, which reads as a smaller number rather than as
-   damage. Sized so the four fit with a digit's slack. */
+   damage. Sized so the four fit with room for a digit more. */
 body.tv .hw-heatcard .nutday{margin:0;padding:6px 10px;background:#000;flex-wrap:nowrap;
   white-space:nowrap;gap:9px}
-body.tv .hw-heatcard .nd-seg{font-size:13px}
+body.tv .hw-heatcard .nd-seg{font-size:14px}
 /* The band's date goes: the day column two columns left already says which day this is, in a much
    larger hand. Repeating it here spends the strip's leading edge on the least surprising fact on
    the wall. */

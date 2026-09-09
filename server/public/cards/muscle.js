@@ -74,12 +74,15 @@ function volIndex(){const ix={};((state.last&&state.last.volume&&state.last.volu
 // ONLY THE NUMBER TAKES THE COLOUR. The name is grey, bright for a primary mover and dim for a
 // synergist, in the payload's own contribution order — two readings on two channels. Colouring the
 // name as well spent the same channel twice and left nothing to say which kind of muscle it is.
-export function exerciseVolumeChips(name){
+// `short` swaps in the abbreviated labels the health wall's TV volume list already uses. The caller
+// asks for them when the full names cannot hold a readable size — five names at 10px is worse than
+// five abbreviations at 13.
+export function exerciseVolumeChips(name,short){
  const ix=volIndex(), list=exMuscleList(name);
  if(!list.length)return '';
  return '<span class=rc-mus>'+list.map(e=>{const m=ix[e.muscle]; if(!m)return '';
   return '<span class="rc-m-i'+(e.contribution>=1?'':' sec')+'">'+
-   '<span class=rc-m-lab>'+esc(m.label)+'</span>'+
+   '<span class=rc-m-lab>'+esc(short?shortLabel(m.label):m.label)+'</span>'+
    '<span class=rc-m-n style="color:'+m.color+'">'+m.sets+'</span></span>';}).join('')+'</span>';
 }
 function muscleExList(slug){return ((state.last&&state.last.volume&&state.last.volume.muscle_exercises)||{})[slug]||[];}

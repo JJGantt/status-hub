@@ -116,7 +116,7 @@ const EX_SHORT={ 'Romanian Deadlifts':'RDL' };
 function fitRow(el,base,min){
  if(!el)return;
  let fs=base; el.style.setProperty('--rcfs',fs+'px');
- while(fs>min&&el.scrollWidth>el.clientWidth+1){ fs-=0.5; el.style.setProperty('--rcfs',fs+'px'); }
+ while(fs>min&&el.scrollWidth>el.clientWidth+0.5){ fs-=0.5; el.style.setProperty('--rcfs',fs+'px'); }
 }
 
 function fmtLbs(n){ const v=Number(n)||0; return Number.isInteger(v)?String(v):v.toFixed(1); }
@@ -161,17 +161,22 @@ async function loadHeatDay(date){
   // Past ~9 sets the row is still over at the floor, and 8px on a wall is not a number anyone reads.
   // Repeated weights are what is left to spend: dropping them buys about a third of the width back,
   // and only then, so a normal five-set row is never written in the shorthand.
-  if(sr&&sr.scrollWidth>sr.clientWidth+1){
+  if(sr&&sr.scrollWidth>sr.clientWidth+0.5){
    sr.innerHTML=setsHtml(true)+'<span class=rc-count>'+ex.sets.length+'</span>'; fitRow(sr,16,9);
   }
-  // The name row shrinks in the other order: the counts give way first, and only once they are at
-  // their floor does the NAME come down — it is the row's subject, and a long one (Overhead Tricep
-  // Extension) is exactly when the counts beside it have the least room.
-  const nameEl=hi.querySelector('.rc-name'), musEl=hi.querySelector('.rc-mus');
-  fitRow(musEl,15,9);
-  for(let nfs=17; musEl&&nfs>13&&musEl.scrollWidth>musEl.clientWidth+1; ){
-   nameEl.style.fontSize=(--nfs)+'px'; fitRow(musEl,15,9);
+  // The name row gives way in three stages, cheapest first. Full muscle names shrink to 12px, which
+  // is as small as a name on a wall is worth setting; below that the SAME list swaps to the short
+  // forms and shrinks again; only then does the exercise name itself come down. Four or five
+  // muscles is what forces it — Reverse Lunges has four, Ring-Assisted Squats five and a long name.
+  const nameEl=hi.querySelector('.rc-name');
+  const over=(el)=>el&&el.scrollWidth>el.clientWidth+0.5;
+  let musEl=hi.querySelector('.rc-mus');
+  fitRow(musEl,15,12);
+  if(over(musEl)){
+   musEl.outerHTML=exerciseVolumeChips(ex.name,true);
+   musEl=hi.querySelector('.rc-mus'); fitRow(musEl,15,9);
   }
+  for(let nfs=17; nfs>13&&over(musEl); ){ nameEl.style.fontSize=(--nfs)+'px'; fitRow(musEl,15,9); }
   return;
  }
  const sp=hi.closest('.detailpanel'), stick=sp&&(sp.scrollHeight-sp.scrollTop-sp.clientHeight<60); // keep pinned to newest if already at bottom

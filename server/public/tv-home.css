@@ -138,7 +138,7 @@ body.tv .hw-weekcard .fit{padding:8px 6px;gap:0}
    It is NOT the hour number's 32px. That is the biggest thing in the column beside this one, and in
    a 200px box it holds about eleven characters — a look-ahead where every title ellipsises has
    stopped answering the question it was added for. */
-body.tv .cw-week{--wk-size:15px;flex:1 1 auto;min-height:0;display:flex;flex-direction:column;gap:5px}
+body.tv .cw-week{--wk-size:15px;flex:1 1 auto;min-height:0;display:flex;flex-direction:column;gap:4px}
 /* A bordered box, the same 1px #222a33 the session rows use. The rest of this wall separates things
    typographically and this one cannot: six lists running down a 200px column need an edge saying
    where one day stops and the next starts, or the last chip of Wednesday reads as the first of
@@ -162,8 +162,15 @@ body.tv .cw-witems{flex:1 1 auto;min-height:0;display:flex;flex-direction:column
    neighbour, because there the line's shape is what says how busy the hour is — here the box is a
    whole day, there is no second half to reserve, and a half-width chip in a 200px column would hold
    about four characters. */
+/* 1px of vertical padding, not the day column's 2. THE BOX IS FILLED TO THE PIXEL and that is the
+   point of the number: five chips at 19.25px plus four 3px gaps is 108.25 against the 108.9 the box
+   has, so a full day has no dead strip under it. At 2px it was 4 chips and 14px of nothing, and
+   there is no third option — the fifth chip needs 24 and 14 was all there was.
+   The TEXT does not move: it is the day column's 15px either way, which is what makes the two
+   columns the same items at two distances. What gives is 2px of air around it, and 2px of air is a
+   cheaper thing to spend than a whole day's fifth item. */
 body.tv .cw-witems .cw-dchip{flex:0 0 auto;width:100%;min-height:0;font-size:var(--wk-size);
-  line-height:1.15;padding:2px 5px 2px 6px;border-left-width:3px}
+  line-height:1.15;padding:1px 5px 1px 6px;border-left-width:3px}
 /* The time leads the title, muted and smaller — it is what the hour row said on the timeline, and
    it is metadata about the item rather than part of its name. tabular so a column of them lines up.
    An all-day item simply has none, and its title starts at the chip's edge. */

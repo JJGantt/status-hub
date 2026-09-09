@@ -2309,9 +2309,11 @@ const dayHalf = (items) => ({
 // height, so how many chips fit is a fixed number, and two surfaces working it out separately is two
 // surfaces that will eventually disagree about which item was the one dropped.
 //
-// FOUR is what the box holds at the chip size the day column uses: 21px a chip plus 3px of gap
-// against the ~108px the box has left under its header. A fifth needs 117px and simply clips.
-const LOOKAHEAD_MAX_PER_DAY = 4;
+// FIVE is what the box holds, and it holds exactly five: 19.25px a chip plus 3px of gap is 108.25
+// against the 108.9 the box has under its header. Nothing is left over, which is deliberate — this
+// column exists because the wall is short of room, so a box with a spare strip under a full day is
+// a box that is not doing its job. A sixth needs 130 and there is nowhere to find it.
+const LOOKAHEAD_MAX_PER_DAY = 5;
 
 // The occurrences of one item falling inside [startKey, endKey] (inclusive 'YYYY-MM-DD' bounds) —
 // which is now at most one, its own `due`. A recurring thing is materialised as an independent row

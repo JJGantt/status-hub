@@ -481,6 +481,14 @@ resets, its `items`, and the `more` the box could not hold. The server caps at
 known height, so how many chips fit is a fixed number, and two surfaces deciding it separately is two
 surfaces that will disagree about which item got dropped.
 
+**The number is five because five is what the box holds to the pixel** — 19.25px a chip plus 3px of
+gap is 108.25 against 108.9. That is not slack management for its own sake: this column exists
+because the wall is short of room, so a full day with a spare strip under it is a box not doing its
+job. The 1px of chip padding in `tv-home.css` is what buys the fifth; at the day column's 2px it is
+four chips and 14px of nothing, and 14 is not enough for a fifth, which needs 24. The chip TEXT is
+15px in both places regardless — that is what makes the two columns the same items at two
+distances, and it is the air around the text that gives, not the text.
+
 Three things about it that are not obvious from the payload:
 
 - **The expansion window is widened to reach it.** `byDay` is built over the month grids' span, which

@@ -10,6 +10,9 @@
 // from --cols and --hgap, so it tracks whatever width the column ends up at — and inside it x runs
 // 0..100% from the first centre to the last. Nothing measures anything.
 //
+// A week nobody weighed in is filled in by the server (straight line across the gap) and arrives
+// with `imputed` set, so the trace is continuous and only the dots say what was measured.
+//
 // The line is an SVG stretched with preserveAspectRatio="none", which distorts anything drawn in it:
 // strokes stay true only because of vector-effect, and text would be squashed outright. So the dots
 // and the labels are HTML on top, positioned by the same percentages.
@@ -35,7 +38,9 @@ export function render(s) {
  const grid = W.axis.map((a) =>
   '<line class=wp-grid x1="0" x2="100" y1="' + pc(a.y) + '" y2="' + pc(a.y) + '" ' +
   'vector-effect="non-scaling-stroke" />').join('');
- const dots = P.filter((p) => p.y != null).map((p) =>
+ // A dot marks a week that was WEIGHED. An imputed week has the line drawn through it and nothing
+ // else — the absence of a point is the whole statement, and it needs no key to be read.
+ const dots = P.filter((p) => p.y != null && !p.imputed).map((p) =>
   '<i class=wp-dot style="left:' + pc(p.x) + '%;top:' + pc(p.y) + '%" ' +
   'title="' + p.week + ': ' + p.avg + ' (' + p.n + ')"></i>').join('');
  const labs = W.axis.map((a, i) =>

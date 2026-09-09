@@ -416,11 +416,12 @@ body.tv .hw-recent .rc-u{font-size:16px;font-weight:400;color:#5c6675;margin-lef
 body.tv .hw-recent .rc-m{font-size:16px;font-weight:700;color:#8b96a5;margin-left:4px}
 body.tv .hw-recent .rc-x{font-size:16px;font-weight:400;color:#5c6675;margin:0 3px}
 
-/* Beside the exercise name: the muscles it trains, each with its weekly set count, in that muscle's
-   own volume colour. The colour IS the reading against target — the same volColor the body map next
-   to it is painted with — so the number can be bare: 15 in green means 15 sets and on target, and a
-   red 4 needs no `/14` to say it is behind. Primary movers full-strength, synergists at 62%, which
-   is the same primary/secondary dimming the health wall's exercise panel uses.
+/* Beside the exercise name: the muscles it trains, each with its weekly set count. THE NUMBER
+   carries the volume colour — the same volColor the body map next to it is painted with — so it can
+   be bare: 15 in green means 15 sets and on target, and a red 4 needs no `/14` to say it is behind.
+   THE NAME carries the other reading, in grey: bright for a primary mover, dim for a synergist. Two
+   facts, two channels; painting the name in the volume colour too spent one channel on both and the
+   primary/secondary split had nowhere left to show.
    They sit on the NAME's row, pushed right: the block's height is spent to the pixel (the cell-size
    sum at the top of this file), so a third line here would shorten both heat maps. */
 /* Pushed right by a margin, NOT by justify-content: when the list is too wide, an end-justified flex
@@ -432,9 +433,10 @@ body.tv .hw-recent .rc-mus{flex:0 1 auto;margin-left:auto;display:flex;align-ite
 /* The name holds its width and the chips give way, because the name is the thing being reported. */
 body.tv #heatinfo .rc-name{flex:0 0 auto}
 body.tv .hw-recent .rc-m-i{flex:0 0 auto;display:inline-flex;align-items:baseline;gap:4px}
-body.tv .hw-recent .rc-m-i.sec{opacity:.62}
+body.tv .hw-recent .rc-m-i .rc-m-lab{color:#c7cdd6}
+body.tv .hw-recent .rc-m-i.sec .rc-m-lab{color:#6b7686}
 body.tv .hw-recent .rc-m-i{gap:calc(var(--rcfs,15px) * .27)}
-body.tv .hw-recent .rc-m-lab{font-size:calc(var(--rcfs,15px) * .8);font-weight:600;letter-spacing:.01em;opacity:.8}
+body.tv .hw-recent .rc-m-lab{font-size:calc(var(--rcfs,15px) * .8);font-weight:600;letter-spacing:.01em}
 body.tv .hw-recent .rc-m-n{font-size:var(--rcfs,15px);font-weight:700;font-variant-numeric:tabular-nums}
 
 /* A mark before the name, which both indents the row and says which of the two it is without a word.

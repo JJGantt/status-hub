@@ -105,6 +105,16 @@ body.tv .hw-daycard .cw-day.dial .cw-more{
 /* Relative, so the score and the +N ride the title down instead of overrunning a shrunk chip. */
 body.tv .hw-daycard .cw-day.dial .cw-sc,
 body.tv .hw-daycard .cw-day.dial .cw-sc.k-potential{font-size:.82em}
+/* A CHIP IS THE SIZE OF ITS WORDS, not the size of its hour. Halves stretch their children, so a
+   chip took the whole half's height — which tracks the row exactly as long as the font does. It
+   stops tracking at the 15px cap above: past `--chiph` 22.75 the type holds still and the box keeps
+   growing, so the rows nearest now — the tall ones, the ones being read — drew a 27px block around
+   18px of text. Sizing to content and centring puts that difference back where it belongs, as air
+   between chips rather than air inside one.
+   Only where a chip HAS words. A `.thin` row has its label hidden and is held open by a min-height
+   instead, so content-sizing there would make the chip taller than the row it lives in. */
+body.tv .hw-daycard .cw-day.dial .cw-hour:not(.thin) .cw-dchip,
+body.tv .hw-daycard .cw-day.dial .cw-hour:not(.thin) .cw-more{align-self:center}
 /* PAST THE POINT WHERE A CHIP CAN BE READ IT LOSES ITS WORDS AND NOTHING ELSE. Same dark fill, same
    4px coloured left edge, same radius — a chip with no room for a title, which is what it is.
 

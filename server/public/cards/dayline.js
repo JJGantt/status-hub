@@ -108,9 +108,9 @@ export function aheadHtml(days) { return (days || []).map(aheadDay).join(''); }
  * is two clocks and two chances to be showing different days at the same moment.
  */
 export function mount(el, { url = '/api/calendar?day=1', centre = false, onload = null, dial = false,
-                            ahead = null } = {}) {
+                            ahead = null, dock = false } = {}) {
   if (!el) return;
-  const col = { el, url, centre, onload, dial, ahead, dl: null, next: null };
+  const col = { el, url, centre, onload, dial, ahead, dock, dl: null, next: null, today: null };
   columns.push(col);
   if (dial) {
     el.classList.add('dial');
@@ -242,6 +242,55 @@ function project(col) {
     row.style.setProperty('--chiph', `${ch}px`);
     row.classList.toggle('thin', ch < CHIP_MIN);
   });
+  paintDock(col);   // which items are already legible is exactly what was just decided
+}
+
+// THE DOCK — today's items the dial cannot show yet, held at the bottom of the column until it can.
+//
+// The dial is a rolling window centred on now and it foreshortens hard, so being INSIDE the window
+// is not the same as being readable: at half past midnight a noon item sat on a one-pixel row. That
+// is why membership is decided here rather than on the server — `.thin` is a measured outcome of the
+// projection, and only this pass knows it.
+//
+// A dock row is built to become a dial row without moving. Same gutter for the hour, same left edge
+// for the chip, and the height of the dial's last readable row — so when the drum turns far enough
+// the item is already where it is going to be, and all that changes is that its hour stops being
+// greyed. The dock is only as tall as it needs to be: with nothing waiting there is no dock at all
+// and the dial has its whole column back.
+function paintDock(col) {
+  if (!col.dock) return;
+  let el = col.el.querySelector('.cw-dock');
+  const day = col.today;
+  if (!day || !day.items || !col.dl) { if (el) el.remove(); return; }
+
+  // Everything already sitting on a row with room for words. Rows and payload hours are the same
+  // list in the same order, so the ids line up without matching on anything.
+  const rows = [...col.el.querySelectorAll('.cw-hour')];
+  const legible = new Set();
+  (col.dl.hours || []).forEach((hr, i) => {
+    if (!rows[i] || rows[i].classList.contains('thin')) return;
+    (hr.halves || []).forEach((h) => (h.items || []).forEach((it) => legible.add(it.id)));
+  });
+
+  // Still to come today, and not legible yet. A past item is not waiting for anything.
+  const waiting = day.items.filter((it) => !it.past && !legible.has(it.id));
+  if (!waiting.length) { if (el) el.remove(); return; }
+
+  // The height it will land at: the last row that can still hold words. Falling back to CHIP_MIN
+  // only matters before the first projection has run.
+  let rowH = CHIP_MIN;
+  for (const r of rows) {
+    if (r.classList.contains('thin')) continue;
+    const ch = parseFloat(r.style.getPropertyValue('--chiph'));
+    if (ch) rowH = ch;
+  }
+
+  const html = waiting.map((it) =>
+    `<div class="cw-dkrow"><span class="cw-dkh">${esc(it.time || '')}</span>${chip(it, false)}</div>`
+  ).join('');
+  if (!el) { el = document.createElement('div'); el.className = 'cw-dock'; col.el.appendChild(el); }
+  el.style.setProperty('--dkrow', `${Math.round(rowH)}px`);
+  if (el.innerHTML !== html) el.innerHTML = html;
 }
 
 async function load(col) {
@@ -249,7 +298,11 @@ async function load(col) {
   try { d = await (await fetch(col.url)).json(); } catch (_) { return; }
   if (!d || d.error) return;
   if (col.onload) col.onload(d);
-  if (col.ahead && d.ahead) col.ahead.innerHTML = aheadHtml(d.ahead);
+  // With a dock, the response's FIRST ahead day is today: it feeds the dock and the look-ahead
+  // column takes the days after it. One request answers both, so the two cannot disagree about
+  // which day it is.
+  col.today = col.dock && d.ahead ? d.ahead[0] : null;
+  if (col.ahead && d.ahead) col.ahead.innerHTML = aheadHtml(col.dock ? d.ahead.slice(1) : d.ahead);
   if (!d.dayline) return;
   col.dl = d.dayline;
   // When the next chip changes state on its own — comes due, leaves grace, starts draining. Without
@@ -259,6 +312,7 @@ async function load(col) {
   col.el.innerHTML = dayHtml(d.dayline);
   col.hour = new Date().getHours();   // which hour this window was built around
   project(col);
+  paintDock(col);
   if (col.centre) centreOnNow(col.el);
 }
 

@@ -8,8 +8,8 @@
 <script type="module" src="dist/tv-home.js"></script>
 </head><body class="tv homewall">
 <!-- THE HOME WALL — the default, at `/` and `/tv`. The frame every wall shares (status strip · rings
-     · health bar · footer · voice column) around four columns: today's timeline, the six-day list it
-     starts, the heat maps, and the newest session's last answer. The deep nutrition/muscle/workout surface it replaced is the
+     · health bar · footer · voice column) around four columns: today's timeline, the six days after
+     it, the heat maps, and the newest session's last answer. The deep nutrition/muscle/workout surface it replaced is the
      HEALTH wall at /tv-health; this one keeps only what a glance from across the room can use. -->
 <div class="wallpanes" id="wallpanes">
 
@@ -49,14 +49,12 @@
       <div class="card hw-daycard"><div class="fit"><div class="cw-day" id="cw-day"></div></div></div>
     </div>
 
-    <!-- COL 3 — THE LOOK-AHEAD: six days, a box each, STARTING WITH TODAY, painted from the same
+    <!-- COL 3 — THE LOOK-AHEAD: the six days after today, a box each, painted from the same
          /api/calendar response as the column beside it (cards/dayline.js). It is the other half of
          the question the dial asks, in the other grammar: a list of what is ON each day rather than
          a timeline of where in it.
-         Today is in BOTH on purpose. The dial is a rolling window centred on now and it foreshortens,
-         so what it can actually be read for is roughly -9h to +8h — which just after midnight ends
-         around breakfast. Start this list at tomorrow and a day's whole contents leave the wall the
-         moment it becomes today. See the look-ahead builder in server.js. -->
+         The response asks for SEVEN days: the first one back is today, and it feeds the dock at the
+         bottom of the dial rather than a box here. See paintDock in cards/dayline.js. -->
     <div class="row-card hw-weekrow">
       <div class="card hw-weekcard"><div class="fit"><div class="cw-week" id="cw-week"></div></div></div>
     </div>

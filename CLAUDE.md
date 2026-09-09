@@ -101,7 +101,7 @@ already authenticated as Jared. Charts must be inline `<svg>` — no `<script>`,
 
 `public/tv-home.html` (`/` and `/tv`) is the **home wall — the default, and what the TV is showing**.
 The shared frame (status strip · rings · health bar · footer · voice column) around four columns:
-today's day column, the six-day list it starts, the weekly weigh-in plot over the three heat maps stacked
+today's day column, the six days after it, the weekly weigh-in plot over the three heat maps stacked
 with the strip that belongs to each (nutrition totals vs target, the rest/session clocks, surf), and
 the newest session's last answer. `tv-home.js` + `tv-home.css` are its own; everything else on it is a shared card `core.js`
 already paints, which is why the page is mostly markup. This is the one to shape.
@@ -175,12 +175,22 @@ and in which endpoint feeds them (`?day=1` alone, `?wall=1` when the same payloa
 months, handed back through `onload`), never in markup. There were two copies of this and they had
 already drifted to different class names for the same chip and two separate clocks.
 
-The home wall's **look-ahead** — six days STARTING WITH TODAY — is drawn by the same module, from the
-same response (`&ahead=6`) and by the same reload, into a second element handed to `mount` as
-`ahead`. Today is in both columns deliberately: the dial is a rolling window centred on now and it
-foreshortens hard, so its readable band is roughly -9h to +8h. Starting the list at tomorrow left a
-day's whole contents off the wall between midnight and mid-morning — the dial could not read them and
-the list no longer carried them. One fetch and one clock for both: they are one answer to one question, and a look-ahead
+The home wall's **look-ahead** — the six days after today — is drawn by the same module, from the
+same response (`&ahead=7`) and by the same reload, into a second element handed to `mount` as
+`ahead`. The response asks for SEVEN days because the first one back is today: it feeds the **dock**
+and the look-ahead column draws the six after it.
+
+**The dock** is today's items the dial cannot show yet, held at the bottom of the dial column until
+it can (`paintDock` in `cards/dayline.js`). The dial is a rolling window centred on now and it
+foreshortens hard, so being inside the +-12h window is not the same as being readable — just past
+midnight a noon item sat on a ONE-PIXEL row while its 4pm and 10pm siblings were outside the window
+altogether, and the whole of that day was invisible the moment it began. Membership is therefore
+decided in the client, after `project()` measures: an item is docked when it is still ahead and not
+on a row with room for words (`.thin`). A dock row is built to BECOME a dial row without moving —
+same 46px hour gutter, same 10px gap, and the height of the dial's last readable row — so the only
+thing that changes when the drum reaches it is that its hour stops being greyed. The dock covers the
+dial's tail rather than shortening it, and it is only as tall as it needs to be: nothing waiting, no
+dock at all. One fetch and one clock for both: they are one answer to one question, and a look-ahead
 re-reading on its own is two surfaces that can be showing different days at the same moment.
 
 It is a LIST, not a timeline, and that is the whole design: today is a dial because he is inside it

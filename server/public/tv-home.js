@@ -14,9 +14,12 @@ import { mount } from './cards/dayline.js';
 // it. One fetch and one reload for both: they answer one question between them, and two of them
 // re-reading on their own clocks is two chances to be showing different days at the same moment.
 mount(document.getElementById('cw-day'), {
-  url: '/api/calendar?day=1&full=1&ahead=6',
+  // SEVEN, not six. The first day back is TODAY and it feeds the dock at the bottom of the dial
+  // (see paintDock in cards/dayline.js); the look-ahead column draws the six after it.
+  url: '/api/calendar?day=1&full=1&ahead=7',
   dial: true,
   ahead: document.getElementById('cw-week'),
+  dock: true,
 });
 
 const REFRESH_MS = 5000;

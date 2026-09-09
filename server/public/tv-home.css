@@ -134,6 +134,27 @@ body.tv .hw-daycard .cw-day.dial .cw-hour.thin .cw-dchip{min-height:3px}
    there is no score either, so here it can dim, at the value `past` already uses. */
 body.tv .hw-daycard .cw-day.dial .cw-hour.thin .cw-dchip.done{opacity:.45}
 body.tv .hw-daycard .cw-day.dial .cw-hour.sliver .cw-hl{visibility:hidden}
+/* THE DOCK — today's items the dial cannot show yet, held at the bottom until it can. Built by
+   paintDock() in cards/dayline.js, which is where the reasoning is.
+   It COVERS the dial's tail rather than shortening it: the rows underneath are the most foreshortened
+   ones, a pixel or two tall and carrying no words, so the column loses nothing it could read. And it
+   is only as tall as it needs to be — no waiting items, no dock, and the dial has the lot back.
+   The row is built to become a dial row without moving: `--dkrow` is the height of the dial's last
+   readable row, the gutter is the hour column's 46px, and the 10px after it is `.cw-hour`'s gap. Get
+   any of those wrong and the item jumps at the moment it is picked up, which is the one thing this
+   is for. */
+body.tv .hw-daycard .cw-day.dial{position:relative}
+body.tv .hw-daycard .cw-day.dial .cw-dock{position:absolute;left:0;right:0;bottom:0;z-index:2;
+  background:#000;display:flex;flex-direction:column}
+body.tv .hw-daycard .cw-day.dial .cw-dkrow{height:var(--dkrow, 26px);display:flex;gap:10px;
+  align-items:center;overflow:hidden;border-top:1px solid #222a33}
+/* The hour is in the gutter in BOTH states — it never moves. Waiting, it is dimmed and keeps its
+   am/pm, because at a distance from now an 8 is genuinely ambiguous; once the dial reaches it the
+   hour is simply the dial's own, in the dial's hand. */
+body.tv .hw-daycard .cw-day.dial .cw-dkh{flex:0 0 46px;text-align:right;font-size:15px;
+  font-weight:700;color:#4a545f;font-variant-numeric:tabular-nums}
+body.tv .hw-daycard .cw-day.dial .cw-dock .cw-dchip{flex:1 1 auto;min-width:0;
+  font-size:max(10px, calc((var(--dkrow, 26px) - 4px) / 1.25))}
 body.tv .hw-daycard .cw-day.dial .cw-hour.sliver .cw-hitems{gap:1px}
 /* The server draws a marker inside whichever hour contains now. On the dial that hour is a moving
    row, so its marker moves with it — project() drops those and puts one line on the BOX, at the

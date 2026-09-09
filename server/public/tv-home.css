@@ -91,20 +91,28 @@ body.tv .hw-daycard .cw-day.dial .cw-more{
 /* Relative, so the score and the +N ride the title down instead of overrunning a shrunk chip. */
 body.tv .hw-daycard .cw-day.dial .cw-sc,
 body.tv .hw-daycard .cw-day.dial .cw-sc.k-potential{font-size:.82em}
-/* Past the point where a chip cannot be read, the row keeps its colour and loses its words: the
-   chips flatten to bars, which still say how much is there and which list it belongs to. A sliver
-   is only a band of colour, and the hour number goes with the rest — it cannot be read at 12px of
-   row height and it is the least surprising thing on a dial, where position already says the time. */
+/* PAST THE POINT WHERE A CHIP CAN BE READ IT LOSES ITS WORDS AND NOTHING ELSE. Same dark fill, same
+   4px coloured left edge, same radius — a chip with no room for a title, which is what it is.
+
+   It used to invert instead: border off, `background:var(--c)`, a solid slab of the list's colour.
+   The intent was to keep the item visible once it was only a few pixels tall, and it did — but it
+   made a DIFFERENT OBJECT out of it. The colour that marks a chip's left edge everywhere else
+   flooded its whole width, so the top of the dial read as a stack of coloured bars belonging to no
+   family on the wall, sitting directly above chips they were supposed to be the small version of.
+   Worse, it put the loudest thing in the column on the hours furthest from now: a saturated slab
+   twelve hours out against a bordered chip at the axis, which is the dial's own emphasis backwards.
+
+   A 4px edge on a 5px row is a speck, and that is the honest amount of ink for something half a day
+   away — the rows near the axis are the ones being read, and the far ones only have to not look
+   broken. */
 body.tv .hw-daycard .cw-day.dial .cw-hour.thin .cw-l,
 body.tv .hw-daycard .cw-day.dial .cw-hour.thin .cw-sc,
 body.tv .hw-daycard .cw-day.dial .cw-hour.thin .cw-imp{display:none}
-body.tv .hw-daycard .cw-day.dial .cw-hour.thin .cw-dchip{border-left-width:0;background:var(--c);
-  border-radius:2px;min-height:3px}
-/* A FLATTENED CHIP HAS NO LABEL, and the strike through the label was a completed item's only mark
-   of being completed — `done` deliberately does not dim the chip, because dimming took the score
-   down with it. So at bar size a finished thing painted the same full-strength colour as one still
-   waiting, which is the one reading a bar must not give. It dims instead, at the value `past`
-   already uses for something that has been and gone. */
+body.tv .hw-daycard .cw-day.dial .cw-hour.thin .cw-dchip{min-height:3px}
+/* Hiding the label takes the strike with it, and the strike is a completed item's only mark of
+   being completed — `done` deliberately does not dim the chip itself, because dimming took the
+   score down with it and the score is the part saying this was worth something. With no label
+   there is no score either, so here it can dim, at the value `past` already uses. */
 body.tv .hw-daycard .cw-day.dial .cw-hour.thin .cw-dchip.done{opacity:.45}
 body.tv .hw-daycard .cw-day.dial .cw-hour.sliver .cw-hl{visibility:hidden}
 body.tv .hw-daycard .cw-day.dial .cw-hour.sliver .cw-hitems{gap:1px}

@@ -504,8 +504,15 @@ of that, which is the reason to do it properly rather than taper the rows by han
 
 The hour numbers scale and fade with `cos θ`, which is the foreshortening a real drum shows and is
 what makes it read as turning rather than as a list with small ends. Past the point where a chip can
-be read it goes `.thin` and drops the words for a bar of its colour, so a busy hour at the rim is
-still visibly busy; `.sliver` takes the hour number too.
+be read it goes `.thin` and drops its words — **and nothing else**: same fill, same 4px coloured
+left edge, a chip with no room for a title. `.sliver` takes the hour number too.
+
+`.thin` used to invert the chip instead — border off, the list's colour flooding the whole width —
+to keep a few-pixel item visible. It is an attractive idea and it is wrong: the colour that marks a
+chip's left edge everywhere else became its entire body, so the rim of the dial read as coloured
+bars belonging to no family on the wall, directly above the chips they were the small version of.
+It also put the loudest mark in the column on the hours furthest from now, which is the dial's
+emphasis backwards. Legibility at the rim is not worth a second visual language.
 
 **`.thin` is decided from the half-line's measured height, not the row's.** An hour is two half-lines
 whatever is in it, so a row-height threshold flattened a lone item at the same distance as a pair.

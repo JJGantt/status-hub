@@ -151,13 +151,22 @@ things keep their numbers, because no colour or placement can carry them: the wa
 the weigh-in plot's three values. The markup and the phone are untouched — the month row still paints
 in the expanded sheet, and the phone's surf card still labels its hours.
 
+**The heat column's bottom card is surf AND weather**, side by side: the surf plots narrowed to the
+heat-map width (403px) so their day columns line up with the week columns above, and `cards/weather.js`
+in the width that frees, under the muscle figures. Narrowing did not squeeze the surf columns — the
+default window in `/api/surf/history` came down to three weeks with it, so a day is still ~18px. On
+the phone `wall.js` adopts the whole `.card`, so weather goes with it and the two stack instead
+(`app.css` sizes that; `tv-home.css` re-lays them as a row).
+
 The surf grids are ruled the same way, and the ink says what a mark MEANS. **Black is fixed
 structure**: a 1px line at each Saturday -> Sunday boundary (Sunday-aligned, like the week columns
-above), which is what makes a day countable now that the letters are gone. **White is live**: the
-now-line and its crossbar, the only white mark left, plus the noon guide at 70% carrying the hour
-axis. There is no rule between the two grids at all — ratings run red through green and size runs
-blues, so the boundary draws itself. A dashed line seven days out used to count the columns off
-against today; the week rules do that better, per column edge instead of once, and it is gone.
+above), which is what makes a day countable now that the letters are gone. **White is the hour axis
+and now**, graded so the eye always knows which line it is on: the now-line and its crossbar solid,
+noon at 70%, 6a and 6p at 35%. There is no rule between the two grids at all — ratings run red
+through green and size runs blues, so the boundary draws itself. A dashed line seven days out used
+to count the columns off against today; the week rules do that better, per column edge instead of
+once, and it is gone. The rain grid beside it follows every one of these rules, because they are one
+card describing one week.
 
 **A wall is a FILE, not a mode flag**, so work on one cannot disturb another. They share `core.js` /
 `tv.js` / `wall.js` / `wallmode.js` / `cards/*`, so a change to those hits ALL of them; split

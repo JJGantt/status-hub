@@ -23,6 +23,7 @@ const MON_ABBR = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep',
 const { getTZ, setTZ, DAY_START_HOUR, localDate, nutritionWindow, lastNTrainingDays, dayBucketOf } = require('./lib/dates');
 const { buildWorkoutHeatmap } = require('./lib/heatmap');
 const { buildWeightPlot } = require('./lib/weightplot');
+const { getWeather } = require('./lib/weather');
 const { buildNutritionLog, buildGoalResolver, calorieColor } = require('./lib/nutritionlog');
 const { computeScore, taskDeadline, completionValue, completionStamp, TASK_GRACE_MIN, TASK_LATE_ZERO_H, TASK_DRAIN_FULL_H } = require('./lib/score');
 
@@ -717,7 +718,7 @@ async function buildStatus() {
       else break;
     }
   }
-  return { today, litter, feeder, surf, nutrition, maintenance, pace: paceData, volume, heatmap, nutrition_log,
+  return { today, litter, feeder, surf, weather: getWeather(), nutrition, maintenance, pace: paceData, volume, heatmap, nutrition_log,
     heatmap_home, nutrition_log_home, weight_plot,
     last_set_at, session_start_at, sets_today, rep_watcher, routing, mics, score, desk_focus: deskFocus,
     generated_at: new Date().toISOString() };
@@ -1054,8 +1055,11 @@ app.get('/api/surf/history', async (req, res) => {
     const from = fh === 0 ? first : first + (24 - fh) * 3600;
     const win = rows.filter((r) => r.ts >= from);
     if (!win.length) return res.json({ t0: null, hours: 0 });
-    // Where the card sits before anyone scrolls — the window this endpoint used to serve whole.
-    const rough = nowH - 2 * ahead;
+    // Where the card sits before anyone scrolls. Twelve days back plus whatever Surfline forecasts
+    // ahead (about nine) is three weeks, which is what fills the wall's grid box at ~18px per day
+    // now that weather has taken the right-hand third of the card. Widen this and the columns get
+    // narrower rather than the card getting wider; the day is the unit that has to stay readable.
+    const rough = nowH - 12 * 86400;
     const defaultT0 = Math.max(from, rough - etHour(rough) * 3600);
 
     const t0 = win[0].ts, tN = win[win.length - 1].ts;

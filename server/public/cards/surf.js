@@ -158,10 +158,16 @@ function paintGrids(cv, ax, viewW) {
   // only horizontal reference left on the grids, so it carries the whole hour axis on its own.
   // An alpha rather than a half-pixel width, which would be a thin bright line on his phone at
   // devicePixelRatio 3 and a dim one on the 1080p kiosk, i.e. a different mark per surface.
+  // Three levels, and the hierarchy is the point: noon is the axis, the two sixes bracket the
+  // daylight either side of it, and each is dimmer than the mark above it in importance — now (solid
+  // white), noon (70%), six (35%). At 45% the sixes start reading as equals of noon and the eye
+  // stops knowing which line it is on.
   for (const base of [dowH, dowH + GRID_H]) {
-    const y = base + GRID_H - 12 * ch;
-    g.strokeStyle = 'rgba(255,255,255,.7)'; g.lineWidth = 1;
-    g.beginPath(); g.moveTo(0, y); g.lineTo(totalW, y); g.stroke();
+    for (const [h, alpha] of [[6, .35], [12, .7], [18, .35]]) {
+      const y = base + GRID_H - h * ch;
+      g.strokeStyle = `rgba(255,255,255,${alpha})`; g.lineWidth = 1;
+      g.beginPath(); g.moveTo(0, y); g.lineTo(totalW, y); g.stroke();
+    }
   }
   // NO SEAM between the grids. The two palettes do not overlap — ratings are red through green, size
   // is blues — so the boundary draws itself, and a rule there was one more white line competing with

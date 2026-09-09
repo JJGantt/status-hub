@@ -3,6 +3,7 @@ import { TOUCH, state, liveStream } from './shared.js';
 import * as litter from './cards/litter.js';
 import * as feeder from './cards/feeder.js';
 import * as surf from './cards/surf.js';
+import * as weather from './cards/weather.js';  // rain-chance grid beside surf (no-ops where there is no #weather)
 import * as nutrition from './cards/nutrition.js';
 import * as muscle from './cards/muscle.js';
 import * as workouts from './cards/workouts.js';
@@ -45,6 +46,7 @@ function render(s){
  litter.render(s);
  feeder.render(s);    // cat feeder tile (no-ops on the TV wall, which omits #feeder)
  surf.render(s);
+ weather.render(s);
  nutrition.render(s);
  workouts.render(s);
  nutritionlog.render(s);

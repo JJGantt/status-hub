@@ -434,7 +434,16 @@ body.tv #heatinfo .rc-name::before{
    words. The colour keys go for the same reason the other two heat maps have none here.
    Scoped to the column, because this same card is adopted whole into the phone's misc pane, where
    there is room for the head and the legend and they should stay. */
-body.tv .hw-heatcard .hw-surf{border-top:1px solid #222a33;padding-top:4px}
+/* THE CARD IS TWO PLOTS SIDE BY SIDE HERE. The surf grids narrow to the heat-map width above them,
+   so their day columns line up with the week columns of the two maps rather than running past them,
+   and the rain grid takes the width that frees — landing under the muscle column, the only other
+   thing on that side. Narrowing does not squeeze the surf columns: the server's default window came
+   down to three weeks with it (`/api/surf/history`), so a day is still ~18px.
+   Scoped to this column because the same card is adopted whole into the phone's misc pane, where
+   the pair stacks instead (app.css). */
+body.tv .hw-heatcard .hw-surf{border-top:1px solid #222a33;padding-top:4px;flex-direction:row;gap:10px}
+body.tv .hw-heatcard .hw-surf > #surf{flex:0 0 403px;min-width:0}
+body.tv .hw-heatcard .hw-surf > #weather{flex:1 1 auto;min-width:0;height:auto;margin-top:0}
 body.tv .hw-heatcard .hw-surf .fit{padding:0;height:auto;gap:0}
 body.tv .hw-heatcard .hw-surf .devstrip,body.tv .hw-heatcard .hw-surf .surfkey{display:none}
 body.tv .hw-heatcard .hw-surf .surfheat{margin-top:0}

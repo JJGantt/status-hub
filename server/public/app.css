@@ -163,6 +163,16 @@ body.tv .sectsheet .hcell{width:17px!important;height:17px!important;max-width:n
 .surfkey{display:flex;flex-wrap:wrap;gap:10px 14px;margin-top:7px;padding:0 2px}
 .surfkey .sk-i{display:flex;align-items:center;gap:5px;font-size:10px;color:#8b96a5}
 .surfkey .sk-sw{width:9px;height:9px;border-radius:2px;display:inline-block}
+
+/* RAIN CHANCE (cards/weather.js) — the seven days ahead as hours x days, in the surf card. Sized
+   here for a phone, where it sits UNDER the surf plots at full width; the wall re-lays it beside
+   them (tv-home.css) and hands it the card's height instead. */
+#weather{display:flex;flex-direction:column;gap:4px;min-width:0;height:220px;margin-top:10px}
+.wx-grid{flex:1 1 auto;min-height:0;border-radius:7px;overflow:hidden;background:#0b0f13}
+.wx-grid canvas{display:block}
+/* The peak sits under its own column, so the row is seven equal cells with one of them filled. */
+.wx-peak{display:flex;padding:0 1px;font-variant-numeric:tabular-nums}
+.wx-peak span{flex:1 1 0;text-align:center;font-size:15px;font-weight:700;color:#52d3d8}
 /* MOBILE: rows become vertically-stacked pages — no fixed heights, no inner scroll. */
 body.touch .row-card{flex-direction:column}
 body.touch .detailpanel{height:auto;overflow:visible}

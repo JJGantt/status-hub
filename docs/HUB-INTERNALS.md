@@ -101,9 +101,10 @@ One bundle PER PAGE, never one per entry module. Several pages share `core.js`, 
 singleton, the held microphone, the `KIOSK` verdict. Separate bundles that shared a module would each
 get their own copy of it, and two `KIOSK` verdicts is two halves of one decision disagreeing.
 
-Why it is bundled at all: the client is 26 modules in a three-level import graph, and a browser cannot
-discover level two until level one has arrived. Served raw that is a round trip per level — about
-420ms of waiting on cellular before any of it runs, for about 100KB of code.
+Why it is bundled at all: the client is dozens of modules in a three-level import graph, and a browser
+cannot discover level two until level one has arrived. Served raw that is a full round trip per level
+before any of it runs — measured at about 420ms on a phone-class connection, for a payload whose bytes
+were never the problem.
 
 **Top-level modules:**
 
@@ -117,7 +118,7 @@ discover level two until level one has arrived. Served raw that is a round trip 
 | `wall.js` | Phone "wall mode": scales the 1920×1080 `/tv` shell to fit a phone; drives the swipe panes. |
 | `expand.js` | Phone-wall expand icons → full-screen section sheets. On open it re-runs the two cards (so their grid picks up the sheet's fixed cell size and its history), loads `heathistory.js`, and pins the grid to its newest column. |
 | `heathistory.js` | The heat-grid columns older than the status frame carries — fetched once from `/api/heat-history` and drawn only inside the sheet. |
-| `tv.js` | TV/kiosk-only: the voice-conversation panel + session terminal layered on the wall. |
+| `tv.js` | KIOSK ONLY, and the guard matters: the activity popup and the heard-you pop, off `/api/voice-stream`. Every other surface boots `voiceagent.js`, which drives the same popup from the same stream — running both left the phone holding a second EventSource open for the life of the page. |
 | `wallmode.js` | Follows `app_settings.wall_mode` so voice can switch the TV between the walls. Acts only on kiosk paths (`/tv`, `/tv-session-focus`, `/tv-calendar`, `/tv-home`), never on the phone's `/`. |
 | `calendar.js` | The `/calendar` page: paints the server-computed month grid + day agenda from `/api/calendar`; tap a day, page months. Read-only — writes stay with voice and the todo pane. Re-reads on an `/api/list-stream` push, never on a timer. |
 | `cards/dayline.js` | THE day column, on every surface that has one — and the home wall's look-ahead beside it, painted from the same response into the element `mount` was given as `ahead` — the calendar wall, the home wall, the phone's lists pane. Owns the fetch, the clock and the reload rules: it re-reads on an `/api/list-stream` push and when the server says a chip changes state, and otherwise just moves the now-line against the clock (each hour row carries its 24h number). Mounts `#daycard` itself; the walls mount their column, because they choose the endpoint. |
@@ -728,6 +729,15 @@ which also finds the transcript a launch just created. Its `readTail` stats the 
 only regular files: a row written before the tty had its own column carries a device path, and
 `readFileSync` on a tty blocks the process for ever waiting for terminal input.
 
+**`/api/sessions` does not ship every column, and `last_reply` mostly is not one of them.** The
+response is an explicit projection — `id`, `n`, `label`, `custom_title`, `repo`, `worker`, `status`,
+`working`, `claude_session_id` — plus `say`, a 120-character one-liner, which is all the repos pane
+renders per row. The whole `last_reply` goes only to rows something can show in full: everything
+resident, and the newest parked one, which is what the home wall falls back to when nothing is
+running. **Adding a field to a session view means adding it to that projection**, or it arrives
+`undefined`. Ninety-odd parked sessions carrying their full replies and five unread timestamps each
+made this a 242KB response; it is 39KB.
+
 ### Naming a session
 
 Every name a session already has is derived from its checkout — the tmux id (`hub-status-hub-mta8y3ik`),
@@ -915,6 +925,11 @@ loop onto its reachability gate and leaves a black screen instead of a stale one
 to the third layer, which is why the second one declines it.
 
 ## 7. `app_settings` catalog (flat key/value)
+
+`GET /api/settings` returns this map **minus `voiceprint`** — 24KB of base64 exemplar bank that no
+client here reads, and 92% of the response before it came out. The voice pipeline reads that key from
+`app_settings` directly with the service key. `settingsAll()` still hands everything to server-side
+callers; only the HTTP response is filtered.
 
 | Key | Controls |
 |---|---|

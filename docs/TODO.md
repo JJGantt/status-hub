@@ -62,6 +62,21 @@ constant. Falls back to Eastern when unknown.
 
 ---
 
+## Deployed on purpose, and meant to come out
+
+### `/api/tapdebug` — the voice button's tap tracer
+
+`server.js` has a route that logs whatever the client posts to it, and `voiceagent.js` posts every
+pointer event and recorder state change to it. It exists because the button's behaviour was only
+reproducible on Jared's phone, and reading `fly logs -a jared-status-hub | grep tap` is the only way
+to see what that device actually did.
+
+It has already earned its keep — it is what showed the freeze was in the page, not the recorder. The
+one use left is confirming the Lock Screen / Control Center Record control reaches the web recorder in
+the build installed on his phone: that control fires `window.__startVoiceCommand()` rather than a
+touch, so it logs `start:arming` with **no `pointerdown` in front of it**. Once that is seen, delete
+the route and the `trace()` calls.
+
 ## Not started
 
 ### Task band — tuning, and the surfaces it has not reached

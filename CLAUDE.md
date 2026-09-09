@@ -14,10 +14,15 @@ which returns `ok <7-char sha>` from the `COMMIT` stamped in at deploy time — 
 thing separating "shipped" from "silently didn't". `.github/workflows/` is iOS-only; nothing there
 touches the server. `fly.toml` lives in `server/`, which is also the build context.
 
-`Dockerfile` **enumerates what it copies** — `server.js`, `lib`, `public`, `legal`. A new
+`Dockerfile` **enumerates what it copies** — `server.js`, `build.js`, `lib`, `public`, `legal`. A new
 top-level directory under `server/` is not in the image until it is added there, and nothing
 catches that: the build succeeds, `/healthz` reports the right sha, and the files are simply
 absent at request time. Curl the new path after deploying, not just `/healthz`.
+
+It also **builds the client** (`npm run build`, esbuild) before pruning dev dependencies, because
+`public/dist` is generated and not committed. Nothing has to be rebuilt by hand before deploying, and
+a bundle cannot be stale against the source it shipped with. Locally, `npm run build` once before
+`npm start`.
 
     curl -s https://jared-status-hub.fly.dev/healthz     # ok <sha>
 
@@ -151,6 +156,11 @@ in the expanded sheet, and the phone's surf card still labels its hours.
 whatever needs to differ at the moment it needs to differ. If you are reshaping the default into
 something you cannot verify in one pass, copy it to a new file and swap `/` when it is good — that
 is how the home wall was built.
+
+Each page loads **one** `<script src="dist/<page>.js">`, built from `public/pages/<page>.js` — which
+lists the modules that page runs, in order. **That entry file is where a module is added or removed**;
+a new `<script>` tag in the HTML will not load. A new *card* needs nothing, since `core.js` already
+imports it and the bundler follows the graph.
 
 **On a phone, `wall.js` moves cards out of the shell into the misc pane** (`misc-litter-slot`,
 `misc-surf-slot`) by moving the nearest enclosing `.card`. A card sharing a `.card` wrapper with its

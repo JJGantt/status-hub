@@ -144,8 +144,13 @@ body.tv .hw-daycard .cw-day.dial .cw-hour.sliver .cw-hl{visibility:hidden}
    any of those wrong and the item jumps at the moment it is picked up, which is the one thing this
    is for. */
 body.tv .hw-daycard .cw-day.dial{position:relative}
+/* ONE rule, at the boundary — not between the rows. It is a touch brighter than the hour separators
+   above it (#222a33) so it reads as the edge of the dial rather than as one more hour, and it is the
+   only line the dock draws. With the chips dimmed alongside it, the two say different halves of the
+   same thing: the line says where the dial stops, the dimming says these are not live yet. */
 body.tv .hw-daycard .cw-day.dial .cw-dock{position:absolute;left:0;right:0;bottom:0;z-index:2;
-  background:#000;display:flex;flex-direction:column}
+  background:#000;display:flex;flex-direction:column;border-top:1px solid #313d4a}
+body.tv .hw-daycard .cw-day.dial .cw-dock .cw-dchip{opacity:.78}
 /* No rule between rows. The dial rules its hours off because each one is a slice of time; these are
    a queue, and a border here reads as the dial's grid showing through the thing covering it. */
 body.tv .hw-daycard .cw-day.dial .cw-dkrow{height:var(--dkrow, 26px);display:flex;gap:10px;

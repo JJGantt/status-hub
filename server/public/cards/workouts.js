@@ -2,6 +2,7 @@
 // defaulting to today; plus a rest timer (time since last set, hidden once past 5 min).
 import { state, esc, localNowNaive, paintScrolled } from '../shared.js';
 import { withHistory } from '../heathistory.js';
+import { exerciseVolumeChips } from './muscle.js';
 let heatSelDate=null, heatReq=0;
 let lastHeatExercises=null; // exercises for the open day-detail (for the repeat-set popup)
 
@@ -101,6 +102,18 @@ function tickRest(){
  el.innerHTML=html;
 }
 
+// Shrink a row's type until it fits rather than letting it clip. Neither list here is bounded — a
+// sixth working set, a five-muscle compound — and a list cut off mid-character reads as damage,
+// where the same list a size smaller reads as a list. Everything on these rows is sized off `--rcfs`
+// (tv-home.css), so one property carries the type, the gaps and the rules between sets together.
+// Stepped rather than solved for: the padding either side of a set does not scale with the glyphs
+// exactly, so the ratio of widths is not the ratio of sizes.
+function fitRow(el,base,min){
+ if(!el)return;
+ let fs=base; el.style.setProperty('--rcfs',fs+'px');
+ while(fs>min&&el.scrollWidth>el.clientWidth+1){ fs-=0.5; el.style.setProperty('--rcfs',fs+'px'); }
+}
+
 function fmtLbs(n){ const v=Number(n)||0; return Number.isInteger(v)?String(v):v.toFixed(1); }
 
 function markHeatCell(date){
@@ -123,10 +136,25 @@ async function loadHeatDay(date){
   // nothing. Weight × reps — the weight carries its own class because it is drawn SMALLER than the
   // reps beside it (see tv-home.css), and the sets are ruled apart rather than spaced apart, which
   // is what lets five of them fit.
-  const set=(st)=>'<span class=rc-set><span class="rc-v rc-w">'+(st.weight_lbs===0?'BW':st.weight_lbs)+'</span>'+
+  const set=(st,carry)=>'<span class=rc-set>'+
+    (carry?'':'<span class="rc-v rc-w">'+(st.weight_lbs===0?'BW':st.weight_lbs)+'</span>')+
     '<span class=rc-x>×</span><span class=rc-v>'+st.reps+'</span></span>';
-  hi.innerHTML=ex?'<div class=rc-top><span class=rc-name>'+esc(ex.name)+'</span></div>'+
-    '<div class="rc-vals rc-sets">'+ex.sets.map(set).join('')+'</div>':'';
+  // `elide` is the last resort below: a set drops its weight when it matches the set before it, so a
+  // long run at one load reads `BW × 12  × 10  × 8` instead of restating the load nine times.
+  const setsHtml=(elide)=>ex.sets.map((st,i)=>set(st,elide&&i>0&&ex.sets[i-1].weight_lbs===st.weight_lbs)).join('');
+  // Beside the name, what this exercise feeds: each muscle's WEEKLY sets in that muscle's volume
+  // colour. The wall dropped the volume bars for the body map, which says WHERE but not HOW MUCH —
+  // this puts the number back on the one exercise that is on screen. It rides the name's row rather
+  // than adding one: the column's height is spent to the pixel (see tv-home.css).
+  hi.innerHTML=ex?'<div class=rc-top><span class=rc-name>'+esc(ex.name)+'</span>'+exerciseVolumeChips(ex.name)+'</div>'+
+    '<div class="rc-vals rc-sets">'+setsHtml(false)+'</div>':'';
+  const sr=hi.querySelector('.rc-sets');
+  fitRow(sr,16,9);
+  // Past ~9 sets the row is still over at the floor, and 8px on a wall is not a number anyone reads.
+  // Repeated weights are what is left to spend: dropping them buys about a third of the width back,
+  // and only then, so a normal five-set row is never written in the shorthand.
+  if(sr&&sr.scrollWidth>sr.clientWidth+1){ sr.innerHTML=setsHtml(true); fitRow(sr,16,9); }
+  fitRow(hi.querySelector('.rc-mus'),15,9);
   return;
  }
  const sp=hi.closest('.detailpanel'), stick=sp&&(sp.scrollHeight-sp.scrollTop-sp.clientHeight<60); // keep pinned to newest if already at bottom

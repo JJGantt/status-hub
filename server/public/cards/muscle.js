@@ -63,6 +63,22 @@ function muscleForId(id){
 let SEL=null; // {kind:'muscle'|'exercise', key}
 let VOLSORT=localStorage.getItem('volsort')||'need';
 
+// Slug → the muscle's row off the volume payload (label, weekly sets, target, colour). The groups
+// are the shipped shape; this is the index into them.
+function volIndex(){const ix={};((state.last&&state.last.volume&&state.last.volume.groups)||[]).forEach(g=>g.muscles.forEach(m=>ix[m.muscle]=m));return ix;}
+// The muscles an exercise trains, each carrying its WEEKLY set count in that muscle's own volume
+// colour — the home wall's stand-in for the volume bars it has no room for, drawn beside the last
+// exercise logged. Primary movers read full-strength, synergists dimmed, in the payload's own
+// contribution order. Colour is the server's `volColor` of sets/target, so a number here and the
+// same muscle on the body map beside it are the same green.
+export function exerciseVolumeChips(name){
+ const ix=volIndex(), list=exMuscleList(name);
+ if(!list.length)return '';
+ return '<span class=rc-mus>'+list.map(e=>{const m=ix[e.muscle]; if(!m)return '';
+  return '<span class="rc-m-i'+(e.contribution>=1?'':' sec')+'" style="color:'+m.color+'">'+
+   '<span class=rc-m-lab>'+esc(TV?shortLabel(m.label):m.label)+'</span>'+
+   '<span class=rc-m-n>'+m.sets+'</span></span>';}).join('')+'</span>';
+}
 function muscleExList(slug){return ((state.last&&state.last.volume&&state.last.volume.muscle_exercises)||{})[slug]||[];}
 function exMuscleList(name){return ((state.last&&state.last.volume&&state.last.volume.exercise_muscles)||{})[name]||[];}
 // highlight maps: slug -> 1 (primary) / 2 (secondary)

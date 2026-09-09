@@ -398,17 +398,44 @@ body.tv .hw-recent .rc-vals{display:flex;gap:30px;margin-top:4px;white-space:now
    separates at a third of the distance a gap needs, and unlike a gap it does not have to grow when
    the numbers do. And the weight is drawn smaller than the reps, because the rep count is what the
    glance is for — the load is the thing you already knew when you loaded the bar. */
+/* And when even that is not enough — a sixth set, a seventh — the row SHRINKS instead of clipping:
+   cards/workouts.js steps `--rcfs` down until the whole list fits. Everything on the row is
+   proportional to it, so the rhythm above survives the shrink; only the type gets smaller. */
 body.tv .hw-recent .rc-sets{gap:0}
-body.tv .hw-recent .rc-sets .rc-set{padding:0 10px}
+body.tv .hw-recent .rc-sets .rc-set{padding:0 calc(var(--rcfs,16px) * .625)}
 body.tv .hw-recent .rc-sets .rc-set:first-child{padding-left:0}
 body.tv .hw-recent .rc-sets .rc-set:last-child{padding-right:0}
 body.tv .hw-recent .rc-sets .rc-set+.rc-set{border-left:1px solid rgba(255,255,255,.18)}
+body.tv .hw-recent .rc-sets .rc-v{font-size:var(--rcfs,16px)}
+body.tv .hw-recent .rc-sets .rc-x{font-size:var(--rcfs,16px);margin:0 calc(var(--rcfs,16px) * .19)}
+body.tv .hw-recent .rc-sets .rc-w{font-size:calc(var(--rcfs,16px) * .8125)}
 body.tv .hw-recent .rc-w{font-size:13px}
 body.tv .hw-recent .rc-set{flex:0 0 auto}
 body.tv .hw-recent .rc-v{font-size:16px;font-weight:700;color:#c7cdd6;font-variant-numeric:tabular-nums}
 body.tv .hw-recent .rc-u{font-size:16px;font-weight:400;color:#5c6675;margin-left:3px}
 body.tv .hw-recent .rc-m{font-size:16px;font-weight:700;color:#8b96a5;margin-left:4px}
 body.tv .hw-recent .rc-x{font-size:16px;font-weight:400;color:#5c6675;margin:0 3px}
+
+/* Beside the exercise name: the muscles it trains, each with its weekly set count, in that muscle's
+   own volume colour. The colour IS the reading against target — the same volColor the body map next
+   to it is painted with — so the number can be bare: 15 in green means 15 sets and on target, and a
+   red 4 needs no `/14` to say it is behind. Primary movers full-strength, synergists at 62%, which
+   is the same primary/secondary dimming the health wall's exercise panel uses.
+   They sit on the NAME's row, pushed right: the block's height is spent to the pixel (the cell-size
+   sum at the top of this file), so a third line here would shorten both heat maps. */
+/* Pushed right by a margin, NOT by justify-content: when the list is too wide, an end-justified flex
+   row overflows to its LEFT — off the readable edge, taking the primary mover with it, and
+   scrollWidth cannot even see it to trigger the shrink. Overflowing rightwards is measurable, so the
+   fit loop catches it and it never happens. */
+body.tv .hw-recent .rc-mus{flex:0 1 auto;margin-left:auto;display:flex;align-items:baseline;
+  gap:calc(var(--rcfs,15px) * .73);min-width:0;overflow:hidden;white-space:nowrap}
+/* The name holds its width and the chips give way, because the name is the thing being reported. */
+body.tv #heatinfo .rc-name{flex:0 0 auto}
+body.tv .hw-recent .rc-m-i{flex:0 0 auto;display:inline-flex;align-items:baseline;gap:4px}
+body.tv .hw-recent .rc-m-i.sec{opacity:.62}
+body.tv .hw-recent .rc-m-i{gap:calc(var(--rcfs,15px) * .27)}
+body.tv .hw-recent .rc-m-lab{font-size:calc(var(--rcfs,15px) * .8);font-weight:600;letter-spacing:.01em;opacity:.8}
+body.tv .hw-recent .rc-m-n{font-size:var(--rcfs,15px);font-weight:700;font-variant-numeric:tabular-nums}
 
 /* A mark before the name, which both indents the row and says which of the two it is without a word.
    Flat white silhouettes, the way the ring glyphs are drawn (cards/nutrition.js ICONS), so they hold

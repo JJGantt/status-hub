@@ -1,4 +1,4 @@
-// Lists / notes — the phone wall's fifth swipe pane. Voice/MCP writes these; this pane shows them and
+// Lists — the phone wall's fifth swipe pane. Voice/MCP writes these; this pane shows them and
 // lets you check things off and add. Fetches its own data (NOT part of the status stream), and
 // refreshes on mount, after any edit, and on window focus. No-ops where #todopane is absent (kiosk/mac/page).
 //
@@ -85,9 +85,6 @@ function html(d) {
     out += `<section><h3>${mark}${esc(l.name)}</h3><ul>${items || '<li class="empty">Empty</li>'}</ul>` +
       `<div class="add"><input type="text" placeholder="Add to ${esc(l.name)}" data-add="item" data-list="${esc(l.name)}"></div></section>`;
   }
-  const notes = (d.notes || []).map((n) =>
-    `<details><summary>${esc(n.name)}</summary><pre>${esc(n.content || '')}</pre></details>`).join('');
-  if (notes) out += `<section><h3>Notes</h3>${notes}</section>`;
   return `<div class="todo">${out}</div>`;
 }
 

@@ -115,11 +115,12 @@ mail arriving, and nothing is mirrored off the Mac.
 
 **Key tables:** `weight_log`, `nutrition_entries`, `nutrition_targets`, `sets`,
 `workout_sessions`, `exercises`, `exercise_sets`, `health_profile`, `lists`, `list_items`,
-`notes`, `recipes`, `wines`, `surf_snapshots`, plus the system tables below.
+`recipes`, `surf_snapshots`, plus the system tables below.
 
-There is **no `reminders` table** — a reminder is a `list_items` row with a `due` date, and any item
-on any list can carry one (data-layer migrations `00056`/`00057`). Anything still reaching for a
-`reminders` table is reading a dropped one.
+There is **no `reminders` table and no `notes` table** — both were dissolved into `list_items`. A
+reminder is a row with a `due` date, and any item on any list can carry one (data-layer migrations
+`00056`/`00057`); a note is an undated row on the `notes` *list*, its name in `title` and its body in
+`text` (`00092`/`00093`). Anything still reaching for either table is reading a dropped one.
 
 There is likewise **no `repeat_every` column** (`00085`/`00086`). Recurrence is materialised: one
 scheduling request writes one dated row per occurrence, sharing a `series_id`. Nothing advances a

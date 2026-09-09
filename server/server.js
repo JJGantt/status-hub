@@ -2033,7 +2033,7 @@ app.post('/api/notify', express.json(), async (req, res) => {
   res.json(r);
 });
 
-// ---- lists / notes surface. Voice/MCP writes them; this is the visual pane. ----
+// ---- lists surface. Voice/MCP writes them; this is the visual pane. ----
 //
 // `due` is sent as a normal field on every item, and `due` collects the dated ones from ALL lists
 // into one soonest-first view. That view is what used to be the reminders table — it is now derived,
@@ -2054,10 +2054,9 @@ function overdueHeat(item, nowLocal) {
 
 app.get('/api/todos', async (req, res) => {
   try {
-    const [listNames, items, notes] = await Promise.all([
+    const [listNames, items] = await Promise.all([
       sb('lists?select=name,emoji&order=name'),
       sb('list_items?deleted=eq.false&completed_at=is.null&select=id,list_name,text,title,due,scheduled_at,priority,series_id&order=created.asc'),
-      sb('notes?select=name,content&order=name'),
     ]);
     const all = items || [];
     const lists = (listNames || []).map((l) => ({ name: l.name, emoji: l.emoji, items: all.filter((i) => i.list_name === l.name) }));
@@ -2066,11 +2065,11 @@ app.get('/api/todos', async (req, res) => {
     const due = all.filter((i) => i.due)
       .map((i) => ({ ...i, expired: dueMoment(i.scheduled_at || i.due) <= nowET, heat: overdueHeat(i, nowET) }))
       .sort((a, b) => dueMoment(a.scheduled_at || a.due) < dueMoment(b.scheduled_at || b.due) ? -1 : 1);
-    res.json({ lists, due, notes: notes || [] });
+    res.json({ lists, due });
   } catch (e) { res.status(500).json({ error: String(e.message || e) }); }
 });
-// Compact feed for the iOS to-do widget. Deliberately NOT /api/todos: that one carries every list,
-// every reminder and the full text of every note, and the widget draws one list's item titles.
+// Compact feed for the iOS to-do widget. Deliberately NOT /api/todos: that one carries every list
+// and the full body of every item, and the widget draws one list's item titles.
 //
 // Items carry a real `title` now (migration 00056), so this prefers it and only derives one when it
 // is absent. The derivation is the fallback for everything written before the column existed: items

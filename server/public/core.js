@@ -14,7 +14,7 @@ import * as score from './cards/score.js';       // TV overall-score health bar 
 import * as mics from './cards/mics.js';         // page voice-liveness card (no-ops on the TV wall)
 import * as maintviz from './cards/maintviz.js'; // phone-wall maintenance-window pane (no-ops elsewhere)
 import './cards/dayline.js';                     // the day column, wherever one is on the page — self-driving
-import * as todo from './cards/todo.js';         // phone-wall lists/notes pane (no-ops elsewhere)
+import * as todo from './cards/todo.js';         // phone-wall lists pane (no-ops elsewhere)
 import * as repos from './cards/repos.js';       // phone-wall repo picker → Claude session on the Mac (no-ops elsewhere)
 import * as reports from './cards/reports.js';   // phone-wall reports pane — what dispatched sessions hand back (no-ops elsewhere)
 import './voiceagent.js';   // shared 'hub' conversation + activity popup (self-skips on the TV wall)
@@ -54,7 +54,7 @@ function render(s){
  score.render(s);      // TV-only overall-score health bar (right column)
  mics.render(s);       // page-only voice-liveness card (TV shows the same data in the routing strip)
  maintviz.render(s);   // phone-wall maintenance-window pane (fourth swipe pane)
- todo.render(s);       // phone-wall lists/notes pane (fifth swipe pane; self-fetches)
+ todo.render(s);       // phone-wall lists pane (fifth swipe pane; self-fetches)
  repos.render(s);      // phone-wall repo picker (sixth swipe pane; self-fetches)
  deskfoot.render(s);   // TV footer follow-up target
  reports.render(s);    // phone-wall reports pane (seventh swipe pane; self-fetches)

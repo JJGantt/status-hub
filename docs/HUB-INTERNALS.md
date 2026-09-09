@@ -79,7 +79,7 @@ Supabase ──▶ server.js buildStatus() ──▶ /api/status payload ──�
 | `score` | the weekly overall-score gauge | `lib/score` |
 | `generated_at` | payload timestamp | — |
 
-`todos` (lists/notes) is **not** in this payload — the todo card self-fetches `/api/todos`
+`todos` (lists) is **not** in this payload — the todo card self-fetches `/api/todos`
 (so it isn't rebuilt on every 30s tick). See §6.
 
 ---
@@ -146,7 +146,7 @@ make (`voiceagent.js`'s `boot()`, `tv.js`'s), handing it to `applyActivitySettin
 **Cards (`public/cards/`)** — each exports `render(s)` and paints from its `s.*` slice:
 
 `nutrition` (Cal/P/C/F pace rings + produce sub-rings) · `nutritionlog` (calorie+weight plot +
-adherence calendar) · `maintviz` (the maintenance-window viz — the whole history at a fixed density, dragged by hand) · `todo` (dated items / lists / notes,
+adherence calendar) · `maintviz` (the maintenance-window viz — the whole history at a fixed density, dragged by hand) · `todo` (dated items / lists,
 self-fetches) · `repos` (the Mac's projects; tap to launch a Claude session there, self-fetches) ·
 `reports` (a dispatched session's write-ups, self-fetches — §6c) · `muscle` (body map + volume
 gauges) · `workouts` (heatmap + day detail) · `weightweeks` (home-wall weekly weigh-in plot) ·
@@ -334,7 +334,7 @@ a list changes — the calendar surfaces' push path, separate from the status fr
 `/api/heat-history` (the heat-grid weeks OLDER than the frame's `HEAT_WEEKS` window, as a prefix the
 expanded sheet draws in front of it — the frame is re-pushed on every realtime event and history only
 grows, so it is fetched once by the one surface that can scroll through it) · `/api/voice-messages` ·
-`/api/todos` (lists + notes + the derived `due` view) · `/api/calendar` (month grid(s) of every
+`/api/todos` (lists + the derived `due` view) · `/api/calendar` (month grid(s) of every
 dated item — every occurrence is a real row, so nothing is projected; `?month=` pages, `?wall=1` adds
 the day timeline and reads `calendar_months` for the spread, `?day=1` is the timeline alone and
 `&full=1` makes it a rolling ±12h window instead of a calendar day — see the dial below, and
@@ -367,7 +367,7 @@ crawler, and behind the gate it would get the login page and fail every check.
 
 ---
 
-## 6. Lists / notes (and what used to be reminders)
+## 6. Lists (and what used to be reminders, and notes)
 
 **There is no reminders table.** A reminder is an item with a `due` date — nothing else distinguishes
 one (data-layer migration `00056`). The two tables were already the same row shape and differed only
@@ -379,6 +379,14 @@ So `due` now lives on `list_items` and **any item on any list can carry one**. A
 fires and badges identically to a dated to-do; there are no classes of item. "Due" in the pane is a
 derived cross-list *view*, not a stored list, so a dated item shows both there and on its own list
 while being one row.
+
+**There is no notes table either** (data-layer `00092`/`00093`). A note was the same row shape with
+capability removed — `(name, content, updated)` against an item's `(title, text, updated)`, minus a
+due date, a priority, completion, soft delete, and a seat in the realtime publication. It is now an
+undated item on the `notes` list, name in `title` and body in `text`, and the pane needed no new code
+to draw it: `bodyFor()` already expands an item whose `text` is longer than its label, which is what
+a note is. Reading and writing one goes through `get_lists` / `add_to_list` / `remove_from_list`;
+there are no note verbs.
 
 Consequences worth knowing:
 
@@ -617,10 +625,11 @@ across the room.
 Voice/MCP writes them (data-layer tools); the hub surfaces them:
 - **Card:** `public/cards/todo.js` — the 5th phone swipe pane. Self-fetches `/api/todos` (not part of
   the status stream), refreshes on mount / after edits / on focus.
-- **Endpoints:** `GET /api/todos` (lists + items + notes + the derived due view) ·
+- **Endpoints:** `GET /api/todos` (lists + items + the derived due view) ·
   `POST /api/todos/add` (service-key writes; adding to an unknown list auto-creates it) ·
-  `POST /api/todos/clear` · `POST /api/todos/snooze`. There is one cleared state and it is soft —
-  checking off and deleting are the same act, and the row survives a recovery window.
+  `POST /api/todos/clear` · `POST /api/todos/snooze`. Checking off and deleting are **different
+  acts** (data-layer `00088`) — see "Done and deleted are different acts" above. Both are soft; a
+  cleared row survives a recovery window.
 
 ---
 

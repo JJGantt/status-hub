@@ -87,6 +87,14 @@ const TASK_FULL_UNITS = TASK_RATE * TASK_DECAY_DAYS / 2;
 // 100/TASK_FULL_UNITS of them. One definition, because a chip claiming a task is worth 7 while the
 // bar moves by 11 is a chip nobody can trust again.
 const bandPoints = (units) => (TASK_FULL_UNITS > 0 ? (units * 100) / TASK_FULL_UNITS : 0);
+const POINT = TASK_FULL_UNITS / 100;                               // one displayed point, in units
+// Nearest WHOLE point, in units. Everything a chip announces is quantised through this before it is
+// scored, so the integer on the chip is the credit itself rather than a rendering of a number next
+// to it. A chip reading "+7" while 7.14 lands is a small lie that compounds — seven of them and the
+// bar is a point away from where the chips said it would be — and it makes the POTENTIAL chip
+// unactionable, since "do it now for +5" would move while he was reading it. Quantised, the 5 is a
+// plateau: completing anywhere inside the stretch of lateness that rounds to 5 pays exactly 5.
+const toPoints = (units) => Math.round(units / POINT) * POINT;
 
 // Quadratic falloff on an ABSOLUTE deviation: 1 at dev 0, 0 once |dev| >= tol. Small misses barely
 // register; big ones bite (3× the deviation ≈ 9× the penalty).
@@ -273,7 +281,7 @@ function tasksScore({ events = [], open = [], nowLocal }) {
     if (isExempt(e)) continue;                                     // nothing owed, so nothing earned
     const done = naive(e.completed_at), deadline = taskDeadline(e.scheduled_at || e.due);
     if (done == null || deadline == null || done < start || done > now) continue;
-    landings.push({ at: done, amount: completionValue(done - deadline) * (1 + (Number(e.priority) || 0)) });
+    landings.push({ at: done, amount: toPoints(completionValue(done - deadline) * (1 + (Number(e.priority) || 0))) });
   }
   landings.sort((a, b) => a.at - b.at);
 
@@ -284,7 +292,15 @@ function tasksScore({ events = [], open = [], nowLocal }) {
     if (isExempt(o)) continue;                                     // an appointment cannot be late
     const deadline = taskDeadline(o.scheduled_at || o.due);
     if (deadline == null) continue;
-    drains.push({ from: deadline + TASK_GRACE_MIN * MIN, rate: (1 + (Number(o.priority) || 0)) });
+    // Quantised for the same reason a landing is, so both sides of "a day overdue cancels an on-time
+    // completion" are stated on the same scale — 7 points a day against a completion's 7.
+    //
+    // That trade is exact in CREDIT REMOVED and not in bar movement, which is worth knowing before
+    // trusting the drain to bite. takeOldest eats the oldest end, and old credit has almost no weight
+    // left, so a day of draining destroys a large amount of face credit while the visible level falls
+    // by less — measured at 5-6 points, and saturating there: past a day or two the drain is chewing
+    // credit that had nearly finished decaying on its own. See docs/TODO.md.
+    drains.push({ from: deadline + TASK_GRACE_MIN * MIN, rate: toPoints(1 + (Number(o.priority) || 0)) });
   }
 
   const credits = [];                                              // oldest first
@@ -376,5 +392,5 @@ function computeScore({ volume, days = [], surplus = 0, taskEvents = [], openTas
 
 // Exported so the calendar can label a chip with the same numbers the band is actually scored on.
 // One definition, so a chip cannot claim a value the band would not give it.
-module.exports = { computeScore, tasksScore, taskDeadline, completionValue, completionStamp, bandPoints,
+module.exports = { computeScore, tasksScore, taskDeadline, completionValue, completionStamp, bandPoints, toPoints,
                    TASK_GRACE_MIN, TASK_LATE_ZERO_H, TASK_DRAIN_FULL_H };

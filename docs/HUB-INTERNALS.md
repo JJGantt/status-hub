@@ -283,8 +283,8 @@ record. (`task_events` existed for one afternoon and was dropped in `00089` for 
 
 Every constant is in one block at the top of `score.js`. **`TASK_RATE` is the amplitude knob** —
 completions/day that holds the band full — and `TASK_FULL_UNITS` derives from it, so one ordinary
-on-time completion is worth `1 / (RATE · DECAY_DAYS / 2)` of the band. At 4 that is ~7.1%, about
-2.4 points of the overall bar.
+on-time completion is worth `1 / (RATE · DECAY_DAYS / 2)` of the band. At 4 that is 7 points, about
+2.3 of the overall bar.
 
 Set it from the rate there is actually something to *earn* against, and that is what the late curve
 leaves rather than the raw count — five completions run an hour or two past their deadlines land
@@ -300,22 +300,33 @@ needed to hold the band full is `TASK_RATE` alone — shortening the decay makes
 *and* fade sooner, leaving the hold rate untouched. What it does change is memory: how fast a good
 run stops counting. It matches the seven days training and nutrition look back over.
 
-**Units are internal; POINTS are what is displayed.** The band holds `TASK_FULL_UNITS` of the first
-and exactly 100 of the second, and `bandPoints()` in `score.js` is the only conversion — a calendar
-chip reading `+7` and a bar moving 7 have to be the same statement. The chips carry whole points and
-no suffix, because the number is already on the scale the bar is drawn against; anything under half
-a point is not rendered, since a `+0` chip says less than no chip. `server.js` formats them once in
-`scoreFields`, for all three surfaces that draw them.
+**Units are internal; POINTS are what is displayed, and the display is the truth.** The band holds
+`TASK_FULL_UNITS` of the first and exactly 100 of the second. `bandPoints()` converts, and
+`toPoints()` quantises to a whole point — every completion is scored *through* `toPoints()` before
+it is admitted, so a chip's integer is not a rounding of the credit, it IS the credit. Verified
+against the replay: a chip reading `+7` moves the bar by 7.000 from any starting level, `+5` by
+5.000. Chips carry no suffix, because the number is already on the scale the bar is drawn against,
+and anything under half a point is not rendered, since a `+0` chip says less than no chip.
+`server.js` formats them once in `scoreFields`, for all three surfaces that draw them.
+
+Quantising at the source is also what makes the POTENTIAL chip actionable. "Do it now for +5" holds
+across the whole stretch of lateness that rounds to 5, so completing anywhere inside it pays exactly
+5 — where a continuous value moved while it was being read.
 
 **Do not clamp a chip to the band's remaining headroom.** It looks like the honest fix — a `+7` on a
-band at 96 seems to promise points there is no room for — and it is wrong. Measured against the
-replay at 41%, at 85%, and at a band held down by twelve completions a day, one on-time completion
-moves the bar by 7.1 points every time, then 6.1, 5.1, 4.0 … one point a day until it is gone at
-seven. A completion admitted over FULL pushes credit off the OLDEST end, and old credit carries
-almost no remaining life, so next to nothing is destroyed; clipping also removes *weighted* units, so
-each one clipped costs a large amount of face credit and the queue self-limits in the high 90s rather
-than sitting against the ceiling. Clamping would report 0 for a task that is worth a week of holding
-the bar up.
+band at 96 seems to promise points there is no room for — and it is wrong. Measured at 41%, at 85%,
+and at a band held down by twelve completions a day: 7 points every time, then 6, 5, 4 … one a day
+until it is gone at seven. A completion admitted over FULL pushes credit off the OLDEST end, and old
+credit carries almost no remaining life, so next to nothing is destroyed; clipping removes *weighted*
+units, so each one clipped costs a large amount of face credit and the queue self-limits in the high
+90s rather than sitting against the ceiling. Clamping would report 0 for a task worth a week of
+holding the bar up.
+
+**The drain is the one number that is not a promise about the bar.** An overdue item removes credit
+at 7 points a day, but it removes it from the oldest end, where the credit was nearly spent — so the
+visible level falls by less, measured at 5-6 points for the first day and saturating there rather
+than continuing. The chip states the item's own accrued cost, which is the truer statement of what it
+is doing; it is not what the bar will move by.
 
 `TASK_RATE` moves the drain with it, since an overdue item removes units from the same pool. That
 keeps one invariant that does not depend on the rate: **an item left overdue for a day cancels

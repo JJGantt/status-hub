@@ -25,7 +25,7 @@ const { buildWorkoutHeatmap } = require('./lib/heatmap');
 const { buildWeightPlot } = require('./lib/weightplot');
 const { getWeather } = require('./lib/weather');
 const { buildNutritionLog, buildGoalResolver, calorieColor } = require('./lib/nutritionlog');
-const { computeScore, taskDeadline, completionValue, completionStamp, bandPoints, TASK_GRACE_MIN, TASK_LATE_ZERO_H, TASK_DRAIN_FULL_H } = require('./lib/score');
+const { computeScore, taskDeadline, completionValue, completionStamp, bandPoints, toPoints, TASK_GRACE_MIN, TASK_LATE_ZERO_H, TASK_DRAIN_FULL_H } = require('./lib/score');
 
 // Settings cache: app_settings is read several times per status build but only changes on explicit
 // writes, which the realtime subscription announces (→ dirtySettings). One whole-table fetch serves
@@ -2288,25 +2288,32 @@ function nextChipTransition(rows, nowLocal) {
 // The switch at LATE_ZERO_H is where those two swap importance: before it, "you can still get 0.86"
 // is the useful fact; after it, the only useful fact is what it is taking.
 //
-// The overdue figure is the item's OWN accrued cost at its rate, not its clamped effect on the band.
-// Those differ once the band bottoms out — but an item still pinning the band at zero is still
-// costing him everything he earns, so its own rate is the truer statement of what it is doing.
+// The overdue figure is the item's OWN accrued cost at its rate, not its effect on the band. Those
+// differ in two ways: once the band bottoms out there is nothing left to take, and even above zero
+// the drain eats the oldest credit, which was nearly spent, so the bar falls by less than the figure
+// says. An item pinning the band at zero is still costing him everything he earns, so its own rate
+// is the truer statement of what it is DOING — but unlike the earned and potential branches, this
+// number is not a promise about where the bar will go.
 function chipScore(item, nowLocal, state) {
   const mult = 1 + Math.max(0, Number(item.priority) || 0);
   if ((item.priority || 0) < 0) return null;                       // exempt
   const deadline = taskDeadline(item.scheduled_at || item.due);
   if (deadline == null) return null;
   const ms = (stamp) => Date.parse(String(stamp).replace(' ', 'T') + 'Z');
+  // Through toPoints() on every branch, because the band scores through it too. The chip is then
+  // not a rounding of the credit — it IS the credit, and the two cannot drift by a fraction.
   if (item.completed_at) {
-    return { value: completionValue(ms(item.completed_at) - deadline) * mult, kind: 'earned' };
+    return { value: toPoints(completionValue(ms(item.completed_at) - deadline) * mult), kind: 'earned' };
   }
   if (state !== 'expired') return null;                            // upcoming or still in grace
   const late = ms(nowLocal) - deadline;
   if (late < TASK_LATE_ZERO_H * 3600000) {
-    return { value: completionValue(late) * mult, kind: 'potential' };
+    return { value: toPoints(completionValue(late) * mult), kind: 'potential' };
   }
+  // Accrued cost, at the same quantised rate the replay drains it at. Not itself a whole point: a
+  // drain is continuous, so this is a readout of something still moving rather than an event.
   const draining = late - TASK_GRACE_MIN * 60000;
-  return { value: -(draining / (TASK_DRAIN_FULL_H * 3600000)) * mult, kind: 'lost' };
+  return { value: -(draining / (TASK_DRAIN_FULL_H * 3600000)) * toPoints(mult), kind: 'lost' };
 }
 
 // Two chips to a half-hour line, each at a fixed half width whether or not there is a second one.
@@ -2369,9 +2376,11 @@ function aheadGrid(n) {
 // is a format they will eventually disagree about.
 // The number is in the band's POINTS, not its internal units — the gold band is 100 points and this
 // says how many of them the item is worth, so it is the same scale the bar is read on and needs no
-// suffix to say so. Whole points: the band itself is drawn to whole percent, and a chip claiming a
-// tenth it cannot show is precision nobody can act on. Anything under half a point is not rendered
-// at all, since a `+0` chip is worse than no chip.
+// suffix to say so. It is whole because the SCORING is whole: a completion is quantised to a point
+// by toPoints() before it is admitted, so this rounds nothing on the earned and potential branches
+// and the integer here is exactly what the bar moves by. Only the drain readout is a rounding, and
+// only because a drain is a continuous thing with no moment of landing. Anything under half a point
+// is not rendered at all, since a `+0` chip is worse than no chip.
 function scoreFields(item, nowLocal) {
   const sc = chipScore(item, nowLocal, chipState(item, nowLocal));
   if (!sc) return {};

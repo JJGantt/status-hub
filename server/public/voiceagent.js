@@ -28,6 +28,12 @@ let _outboxBusy = false;        // photo-outbox reentrancy latch — up here for
 let _card = null;               // the conversation card (null on pages without it)
 let micStream = null;           // the page's one held microphone — see holdMic(); up here for the same reason
 let micPending = null;          // an in-flight getUserMedia, so concurrent callers share one acquisition
+let _voiceChain = Promise.resolve();   // voice-outbox passes run one after another — see runVoiceOutbox()
+let _voiceBacklogStatus = () => {};    // where a resent clip with no live recorder reports; boot() points it at the activity bar
+const voiceOwners = new Map();         // clip id -> the live recorder that took it: { onStatus, onTranscript }
+// Both durable outboxes, up here because boot() drains them at load (idbBox is a hoisted declaration).
+const photoBox = idbBox('hub-photo-outbox');
+const voiceBox = idbBox('hub-voice-outbox');
 let activeMode = 'hub';         // which mode's conversation the panel shows — follows agent_mode, live
 
 // Switch the panel to a mode's conversation: reload its thread + update the on-screen indicator. Hub and
@@ -54,19 +60,29 @@ function boot() {
   _card = initCard();                // null if the conversation card isn't on this page
   setMode('hub');                    // default indicator until settings load
 
-  // Durable photo outbox: resume any interrupted send now, and again whenever we return to the
-  // foreground, regain the network, or restore from bfcache — so a photo caught mid-send by a
-  // screen-lock finishes itself the moment the hub is reopened. Progress routes to the activity bar.
+  // Durable outboxes (photos, and every voice clip): resume any interrupted send now, and again whenever
+  // we return to the foreground, regain the network, or restore from bfcache — so anything caught
+  // mid-send by a screen-lock or a dropped connection finishes itself the moment the hub is reopened.
+  // Progress routes to the activity bar.
   const photoStatus = (t, kind) => {
     if (!t) return;
     if (kind === 'done') activity.done(t);
     else if (kind === 'wait') activity.err(t);
     else activity.busy(t);
   };
-  runPhotoOutbox(photoStatus);
-  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') runPhotoOutbox(photoStatus); });
-  window.addEventListener('online', () => runPhotoOutbox(photoStatus));
-  window.addEventListener('pageshow', () => runPhotoOutbox(photoStatus));
+  // A voice clip resent with no recorder left to report to (the page was reloaded) reports here, mapped
+  // the way the navbar's voice button maps its own.
+  _voiceBacklogStatus = (t, kind) => {
+    if (kind === 'prompt') activity.prompt(t);
+    else if (kind === 'err') activity.err(t);
+    else if (kind === 'clear') activity.clear();
+    else activity.busy(t);
+  };
+  const resume = () => { runPhotoOutbox(photoStatus); runVoiceOutbox(); };
+  resume();
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') resume(); });
+  window.addEventListener('online', resume);
+  window.addEventListener('pageshow', resume);
   fetch('/api/settings').then((r) => r.json()).then((s) => {
     const n = parseFloat(s.phone_silence_s); if (Number.isFinite(n) && n > 0) phoneHangMs = n * 1000;
     const rs = parseFloat(s.session_reset_s); if (Number.isFinite(rs) && rs > 0) resetMs = rs * 1000;
@@ -170,6 +186,11 @@ export function bindTap(el, fn) {
   el.addEventListener('pointercancel', () => trace('pointercancel'));
 }
 
+// Speech needs a few tens of kbps. Left to itself iOS Safari's recorder has produced ~1.5 Mbps, which
+// put a two-minute command over the transcription service's upload cap. The server now takes a clip of
+// any size (lib/transcribe.js), but every byte still has to go up over the phone's connection first.
+const VOICE_BPS = 32000;
+
 // A self-contained recorder: getUserMedia → MediaRecorder → upload to /api/voice-command.
 // quick=true marks a one-off quick-add (the FAB) so the server tags it for a terse reply.
 // dryWhen (optional): checked at upload time — when true, the server only transcribes (?dry=1) and the
@@ -179,7 +200,7 @@ export function bindTap(el, fn) {
 // onState reports the button's one visual state: 'armed' (tapped — the mic is opening, or the clip is
 // on its way up), 'rec' (actually capturing) or 'idle'. Callers paint it; nothing else infers it.
 export function makeRecorder({ onStatus = () => {}, onState = () => {}, quick, autoStop, dryWhen, onTranscript }) {
-  let recording = false, rec = null, chunks = [], stream = null;
+  let recording = false, rec = null, chunks = [], stream = null, startedAt = 0;
   let arming = false;                 // tapped, mic not open yet — see start()
   let sending = false;                // stopped, clip still on its way up — see stop()
   let heardSpeech = false;            // the VAD crossed its threshold at least once this recording
@@ -249,10 +270,10 @@ export function makeRecorder({ onStatus = () => {}, onState = () => {}, quick, a
     arming = false; stream = s;
     const mime = pickMime();
     chunks = []; heardSpeech = false; vadRan = false;
-    rec = new MediaRecorder(stream, mime ? { mimeType: mime } : undefined);
+    rec = new MediaRecorder(stream, { ...(mime ? { mimeType: mime } : {}), audioBitsPerSecond: VOICE_BPS });
     rec.ondataavailable = (e) => { if (e.data && e.data.size) chunks.push(e.data); };
     rec.onstop = () => upload(mime);
-    rec.start(); recording = true; onState('rec');   // capturing for real now — full fill
+    rec.start(); recording = true; startedAt = performance.now(); onState('rec');   // capturing for real now — full fill
     trace('start:recording', { mime });
     muteOthers(true);   // mute every other listener (Mac + ESP) while this explicit command records
     onStatus(autoStop ? 'Listening…' : 'Listening… tap to send', 'rec');
@@ -299,24 +320,8 @@ export function makeRecorder({ onStatus = () => {}, onState = () => {}, quick, a
       onStatus('', 'clear');
       return;
     }
-    onStatus('Transcribing…', 'busy');
-    try {
-      const qp = new URLSearchParams();
-      if (dry) qp.set('dry', '1');
-      if (quick) qp.set('quick', '1');
-      qp.set('client_now', localNowNaive());           // this device's own wall clock, wherever it is
-      const qs = qp.toString();
-      const r = await fetch('/api/voice-command' + (qs ? '?' + qs : ''), {
-        method: 'POST', headers: { 'Content-Type': blob.type || 'audio/webm' }, body: blob });
-      const j = await r.json().catch(() => ({}));
-      if (!r.ok || j.error) onStatus(j.error || 'Send failed', 'err');
-      else if (!j.transcript) onStatus('Didn’t catch that — try again', 'err');
-      else if (dry) { onTranscript(j.transcript); onStatus('', 'clear'); }      // compose mode: into the text box
-      else {                                                                     // show what was heard, then stream the run
-        if (_card) _card.optimistic({ text: j.transcript, kind: 'text' });       // the spoken command as its own live user bubble
-        onStatus(j.transcript, 'prompt'); onStatus('Thinking…', 'busy');
-      }
-    } catch (_) { onStatus('Send failed', 'err'); }
+    // Durable from here: the clip stays on the phone until the server confirms it (the voice outbox).
+    await sendVoice({ blob, dry, quick: !!quick, dur: (performance.now() - startedAt) / 1000 }, { onStatus, onTranscript });
   }
   return {
     toggle() {
@@ -367,39 +372,39 @@ async function uploadBlob(blob, contentType) {
 // photo), so a real upload can't complete in the background; this guarantees no LOSS and an automatic,
 // immediate resume instead. client_now is stamped at CAPTURE time so a photo sent minutes later (after an
 // unlock) still logs against when it was actually taken; client_msg_id makes a resent send idempotent.
-const OUTBOX_DB = 'hub-photo-outbox';
-const OUTBOX_STORE = 'pending';
 const uid = () => ((self.crypto && crypto.randomUUID)
   ? crypto.randomUUID() : 'p-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2));
 
-function outboxDB() {
-  return new Promise((resolve, reject) => {
+// One database per outbox (photoBox / voiceBox, created at the top of the file), each holding a single
+// 'pending' store keyed by id — so neither outbox can ever need a schema migration for the other's sake.
+function idbBox(name) {
+  const open = () => new Promise((resolve, reject) => {
     let rq;
-    try { rq = indexedDB.open(OUTBOX_DB, 1); } catch (e) { return reject(e); }
-    rq.onupgradeneeded = () => rq.result.createObjectStore(OUTBOX_STORE, { keyPath: 'id' });
+    try { rq = indexedDB.open(name, 1); } catch (e) { return reject(e); }
+    rq.onupgradeneeded = () => rq.result.createObjectStore('pending', { keyPath: 'id' });
     rq.onsuccess = () => resolve(rq.result);
     rq.onerror = () => reject(rq.error);
   });
-}
-function outboxRun(mode, run) {
-  return outboxDB().then((db) => new Promise((resolve, reject) => {
-    const tx = db.transaction(OUTBOX_STORE, mode);
-    const rq = run(tx.objectStore(OUTBOX_STORE));      // an IDBRequest (result read on complete) or undefined
+  const run = (mode, fn) => open().then((db) => new Promise((resolve, reject) => {
+    const tx = db.transaction('pending', mode);
+    const rq = fn(tx.objectStore('pending'));          // an IDBRequest (result read on complete) or undefined
     tx.oncomplete = () => resolve(rq ? rq.result : undefined);
     tx.onerror = () => reject(tx.error);
     tx.onabort = () => reject(tx.error);
   }));
+  return {
+    put: (item) => run('readwrite', (s) => s.put(item)),
+    del: (id) => run('readwrite', (s) => s.delete(id)),
+    all: () => run('readonly', (s) => s.getAll()),
+  };
 }
-const outboxPut = (item) => outboxRun('readwrite', (s) => s.put(item));
-const outboxDelete = (id) => outboxRun('readwrite', (s) => s.delete(id));
-const outboxAll = () => outboxRun('readonly', (s) => s.getAll());
 
 async function outboxBadge() {
   let n = 0;
-  try { n = ((await outboxAll()) || []).length; } catch (_) {}
+  try { n = ((await photoBox.all()) || []).length; } catch (_) {}
   try { window.dispatchEvent(new CustomEvent('hub-photo-outbox', { detail: { pending: n } })); } catch (_) {}
 }
-export async function pendingPhotoCount() { try { return ((await outboxAll()) || []).length; } catch (_) { return 0; } }
+export async function pendingPhotoCount() { try { return ((await photoBox.all()) || []).length; } catch (_) { return 0; } }
 
 const shrinkTwice = async (file) => {                  // the iOS canvas decode can miss transiently; one retry before the raw fallback
   try { return await shrink(file); } catch (_) { return await shrink(file); }
@@ -412,7 +417,7 @@ async function sendOutboxItem(item, onStatus) {
     try { blob = await shrinkTwice(item.file); ct = 'image/jpeg'; }
     catch (_) { blob = item.file; ct = item.type || (item.file && item.file.type) || 'application/octet-stream'; }
     item.path = await uploadBlob(blob, ct);
-    await outboxPut(item);                             // an interruption from here on resumes straight at the send
+    await photoBox.put(item);                          // an interruption from here on resumes straight at the send
     if (_card && item.clientMsgId) _card.setPendingPath(item.clientMsgId, item.path);   // reconcile its optimistic chat bubble to the real object
   }
   const r = await fetch('/api/voice-text', {           // stays on 'Uploading photo…' through this tiny send
@@ -422,19 +427,22 @@ async function sendOutboxItem(item, onStatus) {
   if (!r.ok) throw new Error('send failed');
 }
 
-function beaconOutboxError(err, item) {                 // surface a failure the phone's console would otherwise hide
+// Surface a failure the phone's console would otherwise hide, into the hub's log (`fly logs | grep clientlog`).
+function clientLog(obj) {
   try {
-    const payload = JSON.stringify({
-      ev: 'quick-photo-fail',
-      err: String((err && err.message) || err),
-      fileType: (item && (item.type || (item.file && item.file.type))) || '',
-      fileSize: (item && item.file && item.file.size) || 0,
-      uploaded: !!(item && item.path),
-      ua: navigator.userAgent,
-    });
+    const payload = JSON.stringify({ ...obj, ua: navigator.userAgent });
     if (navigator.sendBeacon) navigator.sendBeacon('/api/clientlog', new Blob([payload], { type: 'application/json' }));
     else fetch('/api/clientlog', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: payload, keepalive: true });
   } catch (_) {}
+}
+function beaconOutboxError(err, item) {
+  clientLog({
+    ev: 'quick-photo-fail',
+    err: String((err && err.message) || err),
+    fileType: (item && (item.type || (item.file && item.file.type))) || '',
+    fileSize: (item && item.file && item.file.size) || 0,
+    uploaded: !!(item && item.path),
+  });
 }
 
 // Drive every queued photo to completion. onStatus(text, kind) surfaces progress: kind 'busy' | 'done' | 'wait'.
@@ -444,14 +452,14 @@ export async function runPhotoOutbox(onStatus) {
   try {
     for (;;) {
       let items = [];
-      try { items = (await outboxAll()) || []; } catch (_) { break; }
+      try { items = (await photoBox.all()) || []; } catch (_) { break; }
       if (!items.length) break;
       items.sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
       let progressed = false;
       for (const item of items) {
         try {
           await sendOutboxItem(item, onStatus);
-          await outboxDelete(item.id);
+          await photoBox.del(item.id);
           progressed = true;
           // 200 back from /api/voice-text = the request row exists and the worker is processing it server-side.
           onStatus && onStatus('Processing photo', 'done');
@@ -473,12 +481,99 @@ export async function runPhotoOutbox(onStatus) {
 export async function enqueuePhoto(file, onStatus) {
   const item = { id: uid(), createdAt: Date.now(), file, type: (file && file.type) || '',
     client_now: localNowNaive(), clientMsgId: uid(), path: null, text: '' };
-  await outboxPut(item);                               // from here the photo cannot be lost
+  await photoBox.put(item);                            // from here the photo cannot be lost
   outboxBadge();
   // Show it in the conversation the instant it's taken (where a chat card exists), not only once the worker
   // replies. Keyed by clientMsgId so the outbox can attach the uploaded path, and the server row can replace it.
   if (_card) { try { _card.optimistic({ localImages: [URL.createObjectURL(file)], clientId: item.clientMsgId, kind: 'photo' }); } catch (_) {} }
   runPhotoOutbox(onStatus);                            // fire-and-forget; resumes later if this send is interrupted (shows 'Uploading photo…' first)
+}
+
+// ===== durable voice outbox ==============================================================
+// A finished recording is written to IndexedDB BEFORE it is uploaded, and deleted only once the server
+// confirms it: the command is enqueued (its transcript is then the durable copy, in voice_requests), or a
+// dictation's transcript has been handed back. Any failure — a dropped connection, a screen-lock
+// mid-upload, the server refusing it — leaves the clip on the phone, and it goes again on the same
+// triggers as a photo (boot, return to the foreground, network back, bfcache restore).
+//
+// Clips go oldest first. A NETWORK failure ends the pass, since everything behind it would fail the same
+// way and must not overtake it. A server REFUSAL keeps the clip for the next pass but lets the queue
+// move on, so one clip the server can never take cannot hold every later command hostage.
+// client_now is stamped when the clip was recorded, not when it finally sends; client_msg_id (the clip's
+// id) makes a resend the server already enqueued a no-op.
+//
+// A dictation (dry — the composer while photos are pending, the repos card's session prompt) only means
+// something to the recorder that took it, so it is sent only while that recorder is alive. One stranded
+// by a reload is kept, not sent.
+async function sendVoice(clip, owner) {
+  const item = { id: uid(), createdAt: Date.now(), client_now: localNowNaive(), type: clip.blob.type || 'audio/webm', ...clip };
+  try { await voiceBox.put(item); }
+  catch (_) {                                          // no IndexedDB (a private window) — memory is the only copy there is
+    try { await deliverVoice(item, owner.onStatus, owner); } catch (e) { voiceFailed(e, item, owner.onStatus); }
+    return;
+  }
+  voiceOwners.set(item.id, owner);
+  await runVoiceOutbox();
+}
+
+// Upload one clip and act on the answer. Throws if the server did not take it; `refused` marks an
+// answer from the server, as opposed to never reaching it.
+async function deliverVoice(item, onStatus, owner) {
+  onStatus('Transcribing…', 'busy');
+  const qp = new URLSearchParams();
+  if (item.dry) qp.set('dry', '1');
+  if (item.quick) qp.set('quick', '1');
+  qp.set('client_now', item.client_now);               // this device's own wall clock, wherever it is
+  qp.set('client_msg_id', item.id);
+  if (item.dur > 0) qp.set('dur', item.dur.toFixed(1));
+  const r = await fetch('/api/voice-command?' + qp, {
+    method: 'POST', headers: { 'Content-Type': item.type }, body: item.blob });
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok || j.error) throw Object.assign(new Error(j.error || 'Send failed'), { refused: true });
+  if (j.duplicate) onStatus('', 'clear');                                    // an earlier attempt already enqueued it
+  else if (!j.transcript) onStatus('Didn’t catch that — try again', 'err');
+  else if (item.dry) { owner.onTranscript(j.transcript); onStatus('', 'clear'); }   // compose mode: into the text box
+  else {                                                                     // show what was heard, then stream the run
+    if (_card) _card.optimistic({ text: j.transcript, kind: 'text' });       // the spoken command as its own live user bubble
+    onStatus(j.transcript, 'prompt'); onStatus('Thinking…', 'busy');
+  }
+}
+
+function voiceFailed(err, item, onStatus) {
+  onStatus(err && err.refused ? err.message : 'Send failed', 'err');
+  clientLog({ ev: 'voice-send-fail', err: String((err && err.message) || err), refused: !!(err && err.refused),
+    bytes: item.blob ? item.blob.size : 0, type: item.type, dur: item.dur });
+}
+
+// Passes run one after another, never two at once: every caller — boot, a trigger, a recorder that has
+// just queued a clip — gets a whole pass that starts after its clip was written, so awaiting the returned
+// promise means that clip has been tried.
+export function runVoiceOutbox() {
+  _voiceChain = _voiceChain.then(voicePass, voicePass);
+  return _voiceChain;
+}
+async function voicePass() {
+  let items;
+  try { items = (await voiceBox.all()) || []; } catch (_) { return; }
+  items = items.filter((i) => !i.dry || voiceOwners.has(i.id))
+    .sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
+  for (let k = 0; k < items.length; k++) {
+    const item = items[k], owner = voiceOwners.get(item.id);
+    const onStatus = owner ? owner.onStatus : _voiceBacklogStatus;
+    try {
+      await deliverVoice(item, onStatus, owner);
+    } catch (e) {
+      voiceFailed(e, item, onStatus);
+      if (e && e.refused) continue;
+      for (const later of items.slice(k + 1)) {        // held back behind it; a live recorder still hears so
+        const o = voiceOwners.get(later.id);
+        if (o) o.onStatus('Send failed', 'err');
+      }
+      return;
+    }
+    await voiceBox.del(item.id).catch(() => {});       // a failed delete only means a resend, which the server drops
+    voiceOwners.delete(item.id);
+  }
 }
 
 export function activityBar() { return (_activityBar = _activityBar || initActivityBar()); }

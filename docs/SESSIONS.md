@@ -336,6 +336,10 @@ Function, not liveness — ask it to do something and see whether it did:
     # both consumers beating (stale = down)
     curl -s "$SUPABASE_URL/rest/v1/worker_presence?select=worker,last_seen" -H "apikey: $KEY"
 
+    # every running claude is on the wall as itself — exits 1 naming any mismatch, including a
+    # Claude Code update that changed the ~/.claude/sessions record the machines read
+    node ~/repos/voice-pipeline/orchestrator/check-sessions.mjs      # Pi: ~/voice-pipeline/…
+
     # what is running, and what each last said
     #   by voice: "what sessions are running"     by hand: GET /api/sessions
 

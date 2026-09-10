@@ -89,13 +89,6 @@ The scoring itself is built and live (`lib/score.js`, data-layer `00085`-`00087`
   the real rate of 2.1-2.7 units/day, so the band parked itself near full. 4 is set from that
   measurement and wants the same check after a week. The late-completion curve and the drain rate
   are in the same block and have not been re-measured against real days at all.
-- **The drain is weaker than its rate says, and asymmetric with earning.** A completion's points now
-  land exactly (`toPoints()` quantises before scoring, so a `+7` chip moves the bar 7.000). The drain
-  does not: it takes credit from the oldest end, which has nearly finished decaying, so a day overdue
-  costs the bar 5-6 points rather than 7 and stops biting after a day or two instead of accruing.
-  That means "an item left overdue for a day cancels one on-time completion" is true of credit
-  removed and false of the bar. Taking from the NEWEST end would make it exact and make neglect hurt,
-  at the cost of erasing recent work — which is a real design choice, not an oversight to patch.
 - **What happens below empty is undecided.** The level floors at zero today, so a badly neglected
   week and a catastrophically neglected one look the same once the band is drained. Whether that
   should carry a further consequence — bleeding into the other bands, or a separate marker — is

@@ -322,11 +322,26 @@ units, so each one clipped costs a large amount of face credit and the queue sel
 90s rather than sitting against the ceiling. Clamping would report 0 for a task worth a week of
 holding the bar up.
 
-**The drain is the one number that is not a promise about the bar.** An overdue item removes credit
-at 7 points a day, but it removes it from the oldest end, where the credit was nearly spent — so the
-visible level falls by less, measured at 5-6 points for the first day and saturating there rather
-than continuing. The chip states the item's own accrued cost, which is the truer statement of what it
-is doing; it is not what the bar will move by.
+**The drain is subtracted from the level, not taken out of the queue.** An overdue item adds to a
+running `debt` and the band is `credit − debt`, so a day overdue costs a flat 7 points — exactly what
+an on-time completion pays, verified both ways against the replay. It was taken from the oldest
+credits once, on the symmetry that overfill is, and that was wrong: the oldest credit has almost no
+weight left, so a day of neglect moved the bar about five points and after two days stopped moving it
+at all. Nothing about an overdue item points at a particular past completion.
+
+Two properties follow, both deliberate. **Debt is capped at the credit present, checked as it
+accrues** — that cap is what "cannot empty past 0%" means, and without it neglect would dig below the
+bottom of the bar where the next completion vanishes into the hole instead of moving it. And **the
+ceiling is on `credit − debt`, not on raw credit**, which is what leaves room under 100 for a
+completion to be visible while debt is outstanding. The side effect is that work which would have
+been clipped above the ceiling absorbs the drain first, so at four completions a day two days of
+neglect costs 11.6 rather than 14. Surplus is a buffer against neglect and nothing else — it still
+cannot hold the bar full.
+
+**Finishing the thing undoes the whole drain.** The replay is rebuilt from current rows, so an item
+that is no longer open contributes no drain to it — a three-day-overdue item that cost 21 points
+gives them back on completion, less the late-completion floor of 7. Neglect presses hard while it
+lasts and has an exit that does not have to be earned back.
 
 `TASK_RATE` moves the drain with it, since an overdue item removes units from the same pool. That
 keeps one invariant that does not depend on the rate: **an item left overdue for a day cancels

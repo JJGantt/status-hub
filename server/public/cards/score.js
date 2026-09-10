@@ -1,7 +1,8 @@
-// Overall-score health bar — TV right column. A vertical gauge filled to the overall %, split into
-// three stacked colours: nutrition (bottom), training, then tasks (top). Because
-// overall = (nutrition + training + tasks)/3, each contributes up to a third of the bar, so the
-// three segments together reach the overall %.
+// Overall-score health bar — TV right column. THREE vertical gauges side by side in one track, each
+// filled to its own 0-100%: tasks (left, gold), nutrition (middle, blue), training (right, green) —
+// the order they appear across the wall itself. Stacked into one column they said what the overall
+// was but not which part was short, and the overall is still legible: three full bars is a full
+// block, and a bar that lags leaves a notch in it.
 // Paints #healthbar; no-ops where that element is absent (phone uses its own surface).
 //
 // The gold band is earned by clearing dated list items and drained by leaving them overdue, and it
@@ -18,22 +19,22 @@ export function render(s) {
   if (!el) return;
   const sc = s && s.score;
   if (!sc) { el.innerHTML = ''; prevOverall = null; return; }
-  const third = (v) => Math.max(0, Math.min(100 / 3, (Number(v) || 0) / 3));
-  const nFill = third(sc.nutrition && sc.nutrition.pct);   // nutrition's share of the bar (0–33.3%)
-  const tFill = third(sc.training && sc.training.pct);     // training's share
-  const kFill = third(sc.tasks && sc.tasks.pct);           // tasks' share
+  const pct = (v) => Math.max(0, Math.min(100, Number(v) || 0));
+  const nFill = pct(sc.nutrition && sc.nutrition.pct);     // each column fills to its OWN score
+  const tFill = pct(sc.training && sc.training.pct);
+  const kFill = pct(sc.tasks && sc.tasks.pct);
   const overall = Math.max(0, Math.min(100,
-    typeof sc.overall === 'number' ? sc.overall : nFill + tFill + kFill));   // bar fills to here
-  // Drive the fills via CSS vars (numbers 0–33.3) so CSS can lay the bar out vertical (landscape) OR
+    typeof sc.overall === 'number' ? sc.overall : (nFill + tFill + kFill) / 3));  // the delta pill sits here
+  // Drive the fills via CSS vars (numbers 0–100) so CSS can lay the bar out vertical (landscape) OR
   // horizontal (portrait) from the same render.
   el.style.setProperty('--nfill', nFill);
   el.style.setProperty('--tfill', tFill);
   el.style.setProperty('--kfill', kFill);
   el.innerHTML =
     '<div class="hb-track">' +
+      '<div class="hb-fill hb-task"></div>' +
       '<div class="hb-fill hb-nutr"></div>' +
       '<div class="hb-fill hb-train"></div>' +
-      '<div class="hb-fill hb-task"></div>' +
     '</div>';
   // Float the delta only on a genuine move (skip the first paint, and pace-drift noise below 0.1pt).
   if (prevOverall !== null && Math.abs(overall - prevOverall) >= 0.1) floatDelta(el, overall - prevOverall, overall);

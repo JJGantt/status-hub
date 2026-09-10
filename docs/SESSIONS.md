@@ -145,8 +145,9 @@ The session a spoken follow-up lands in — and the one the pane, the strip and 
 focused — is decided in this order, by `focusedSession` in `data-layer/src/desk.ts` and `pickFocus` in
 the hub, which must agree:
 
-1. **A session focused by name** (`focus_session`: "focus the status-hub session"), while it runs. It
-   holds until he focuses another, releases it (`unfocus_session`: "go back to automatic"), dispatches
+1. **A session focused by name** (`focus_session`: "focus the status-hub session" — "pin" is the same
+   verb), while it runs. It holds until he focuses another, releases it (`unfocus_session`: "unfocus",
+   "unpin", "take the pin off", "go back to automatic"), dispatches
    new work, or it closes. "Focus the latest session" is a pin like any other — of whichever session
    is newest at that moment — which is why going back to automatic is a separate verb: when one tool
    did both, "latest" could be read either way.

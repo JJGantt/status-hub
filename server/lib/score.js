@@ -255,25 +255,39 @@ function completionStamp(at, nowLocal) {
  * pushed out to make room — the newest work always lands, and what falls off the far end is gone
  * for good rather than waiting above the ceiling as a buffer.
  *
- * Draining does NOT work from that end, or from the queue at all. The level is `credit − debt`, and
- * debt is a running total that an overdue item adds to for as long as it sits — flat, so a day
- * overdue costs exactly what an on-time completion pays. It was taken out of the oldest credits
- * once, on the symmetry that surplus is; that was wrong, because the oldest credit has almost no
- * weight left, so a day of neglect moved the bar about five points instead of seven and then stopped
- * moving it at all. Nothing about an overdue item points at a particular past completion. It is
- * pressure on the level, so it is subtracted from the level.
+ * Draining does NOT work from that end, or from the queue at all. The level is `credit − debt`,
+ * debt is a running total an overdue item adds to for every hour it sits, and A POINT LOST STAYS
+ * LOST: the debt does not decay, and finishing the item does not clear it. Completing buys one
+ * thing, which is that no further hours are billed. Raising the bar again takes new completions.
+ *
+ * Three shapes were built and measured before this one, and the two that coupled the drain to a
+ * specific credit both handed the loss back:
+ *
+ *   - taken from the OLDEST credits, on the symmetry that overfill is. The oldest credit is nearly
+ *     spent, so a day of neglect moved the bar five points instead of seven and stopped biting after
+ *     two days.
+ *   - taken from the NEWEST credit instead, which is the intuitive fix. It fails for a subtler
+ *     reason: the credit destroyed was going to expire anyway, so the loss fades on that credit's
+ *     clock. Coupling a debit to an event does not make it permanent — it makes it inherit that
+ *     event's decay. It also undercharges, since a point billed at 9am is worth less by the time the
+ *     day is read: a day overdue landed at 6.5 rather than 7.
+ *   - as a decaying NEGATIVE ENTRY stamped with the hour billed. Same outcome — the gap between
+ *     "was late" and "was never late" closed from 8.2 points to 1.4 over five idle days, so being
+ *     late was something you could wait out.
+ *
+ * A flat debt is the only one where the gap holds (measured: 9.0 points, unchanged over five idle
+ * days). What ages it out is the same thing that ages out a completion — the SPAN that billed it
+ * falls off the back of the seven-day window — so the penalty is tied to when the neglect happened
+ * rather than to when some unrelated credit happens to expire.
  *
  * Debt is capped at the credit actually present, checked as it accrues, and that cap is what
  * "cannot empty past 0%" means. Uncapped it would run below the bottom of the bar, where it is a
  * hole nobody can see — the bar reads 0 either way, and the next completion vanishes into the hole
  * instead of moving it. Capped, every new credit shows immediately however long the neglect ran.
  *
- * The whole drain is undone by finishing the thing: an item that is no longer open contributes no
- * drain to the next replay, which is rebuilt from current rows rather than accumulated. So neglect
- * presses hard while it lasts and has an exit that does not have to be earned back.
- *
- * A late completion whose value has gone negative is applied as debt, not admitted as a negative
- * credit: it takes something away, it does not sit in the queue waiting to age.
+ * A COMPLETED row still carries a drain span, from its deadline to its completed_at, which is what
+ * makes the band more than a function of what is open right now. Deleting the item is the honest way
+ * out: it stops the charge without claiming the thing was done.
  *
  * completed: [{ scheduled_at|due, completed_at, priority }] — items marked done.
  * open:      [{ scheduled_at|due, priority }]               — dated items still outstanding.
@@ -325,71 +339,72 @@ function tasksScore({ events = [], open = [], nowLocal }) {
     if (done != null) overdueSpan(e, done);
   }
 
-  // ENTRIES are every point in the band, positive or negative, each stamped with the moment it
-  // happened and each fading over the same TASK_DECAY_DAYS. That uniformity is the point: a level
-  // built from decaying parts has to know WHEN every part landed, so a drain cannot be a bare number
-  // subtracted at the end — it has to be an event too.
+  // The queue holds EARNED credit. A drain is a running DEBT subtracted from it, and the level is
+  // credit − debt. The debt does not decay, and finishing the item does not clear it.
   //
-  // An hour of an item sitting overdue is exactly that: something that happened, at a time. It lands
-  // as a negative entry at that hour and ages out from there, and FINISHING THE ITEM DOES NOT REMOVE
-  // IT. The thing did sit there; the only thing completing buys is that no further hours are charged.
+  // Two other shapes were built and measured first, and both handed the loss back:
   //
-  // What it deliberately does NOT do is debit an existing credit. Taking the points out of a recent
-  // completion would destroy that credit's own remaining decay along with it — charging the same
-  // neglect twice, once now and once as the decline that can no longer happen — and it would eat the
-  // reward for work just done, so the bar would sit still on the day something was finished. The two
-  // are only equivalent when the credit landed at the same instant as the drain, which is never.
+  //   - a decaying NEGATIVE ENTRY, stamped with the hour it was billed. It carries a full window of
+  //     its own, so it fades — the gap between "was late" and "was never late" closed from 8.2
+  //     points to 1.4 over five idle days. Lateness became something you could wait out.
+  //   - DEBITING A CREDIT, taking the points off the newest completion. Same result and for a
+  //     sharper reason: the credit it destroys was going to expire anyway, so the loss fades on that
+  //     credit's clock. Coupling the debit to an event does not make it permanent; it makes it
+  //     inherit the event's own decay. It also undercharges, because a point billed at 9am is worth
+  //     less by the time the day is read — a day overdue landed at 6.5 rather than 7.
   //
-  // takeOldest survives for the one job it was right for: OVERFILL, where displacing the credit
-  // closest to ageing out is a true statement rather than an accident of which end the loop started.
-  const entries = [];                                              // oldest first
-  const levelAt = (t) => entries.reduce((sum, c) => sum + c.credit * weightAt(c, t), 0);
-  // Push `want` off the OLDEST end at time t. Returns what was actually removed, which is less than
-  // asked for once the queue is empty. Negative entries are not credit and are never taken from.
+  // A flat debt is the only one of the three where a point lost stays lost. What ages it out is the
+  // same thing that ages out everything else: the SPAN that billed it eventually falls off the back
+  // of the seven-day window. So the penalty is tied to when the neglect happened, not to when some
+  // unrelated completion happens to expire.
+  //
+  // The debt is capped at the credit present, checked as it accrues, and that cap is what "cannot
+  // empty past 0%" means: debt banked under the floor is invisible, and the next completion would
+  // vanish into it instead of moving the bar.
+  const credits = [];                                              // oldest first
+  const creditAt = (t) => credits.reduce((sum, c) => sum + c.credit * weightAt(c, t), 0);
+  // OVERFILL only: push `want` off the oldest end — the credit closest to ageing out is the right
+  // thing to displace when the queue is merely full. Returns what was actually removed.
   const takeOldest = (want, t) => {
     let left = want;
-    for (const c of entries) {
+    for (const c of credits) {
       if (left <= 1e-9) break;
       const w = weightAt(c, t);
       if (w <= 0 || c.credit <= 0) continue;
       const removable = c.credit * w;
-      const take = Math.min(removable, left);
-      c.credit -= take / w;
-      left -= take;
+      const taken = Math.min(removable, left);
+      c.credit -= taken / w;
+      left -= taken;
     }
     return want - left;
   };
 
-  let earned = 0, drained = 0, li = 0;
+  let earned = 0, li = 0, debt = 0;
   for (let t = start; t <= now; t += stepMs) {
     const stepEnd = Math.min(t + stepMs, now);
     while (li < landings.length && landings[li].at <= stepEnd) {
       const L = landings[li];
       if (L.amount > 0) {
-        entries.push({ at: L.at, credit: L.amount });
-        const over = levelAt(L.at) - TASK_FULL_UNITS;
-        // Full: the newest still lands, the oldest is pushed out to make room for it.
+        credits.push({ at: L.at, credit: L.amount });
+        // The ceiling is on the level a person READS, not on raw credit: with debt outstanding there
+        // is room under 100, and a completion has to be visible in it.
+        const over = creditAt(L.at) - debt - TASK_FULL_UNITS;
         earned += over > 0 ? Math.max(0, L.amount - takeOldest(over, L.at)) : L.amount;
       }
       li++;
     }
     // Every hour any item spent overdue inside this step, at that item's rate.
-    let want = 0;
     for (const d of drains) {
       const a = Math.max(t, d.from), b = Math.min(stepEnd, d.to);
-      if (b > a) want += d.rate * ((b - a) / DAY);
+      if (b > a) debt += d.rate * ((b - a) / DAY);
     }
-    if (want > 0) {
-      // Never past the bottom. A penalty that would take the level below zero is not recorded at
-      // all, which is what "cannot empty past 0%" means: debt banked under the floor is invisible,
-      // and the next completion would vanish into it instead of moving the bar.
-      const applied = Math.min(want, Math.max(0, levelAt(stepEnd)));
-      if (applied > 1e-9) { entries.push({ at: stepEnd, credit: -applied }); drained -= applied; }
-    }
-    while (entries.length && Math.abs(entries[0].credit) <= 1e-9) entries.shift();
+    const cap = creditAt(stepEnd);
+    if (debt > cap) debt = cap;
+    while (credits.length && credits[0].credit <= 1e-9) credits.shift();
   }
+  const drained = -debt;
 
-  const level = Math.max(0, Math.min(TASK_FULL_UNITS, levelAt(now)));
+  const level = Math.max(0, Math.min(TASK_FULL_UNITS, creditAt(now) - debt));
   // What the next hour costs at the current rate, if nothing changes. Surfaced rather than derived
   // by a caller so there is one answer to "how fast am I bleeding" — and so it cannot drift from the
   // rate the replay above actually applied.

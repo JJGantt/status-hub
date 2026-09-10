@@ -337,29 +337,37 @@ units, so each one clipped costs a large amount of face credit and the queue sel
 90s rather than sitting against the ceiling. Clamping would report 0 for a task worth a week of
 holding the bar up.
 
-**The drain is not taken out of the queue — it is added to it, as negative entries.** Every hour an
-item spends overdue is a thing that happened at a time, so it lands as its own entry at that hour and
-fades over the same seven days as a completion. One rule for every point in the band: stamped with
-when it happened, and fading. A day overdue bills 7 points, exactly what an on-time completion pays.
+**A point lost stays lost.** The level is `credit − debt`: an overdue item adds to a running debt for
+every hour it sits, the debt does not decay, and finishing the item does not clear it. Completing
+buys one thing — no further hours are billed. Raising the bar again takes new completions. Measured:
+an item three days overdue reads 38.1 whether it is still open or was just completed, against 59.1
+had it never existed, and that 21-point gap holds unchanged over the following idle days.
 
-**Finishing does not refund it.** A completed row still contributes a drain span, from its deadline
-to its `completed_at`, so the band is not a function of what is open right now. Measured: an item
-three days overdue reads 42.6 whether it is still sitting there or was just completed — identical —
-against 59.1 had it never existed. The only thing completing buys is that no further hours are
-billed. **Deleting is the honest way out**: it stops the charge without claiming the thing was done,
-which is the difference between calling something off and doing it late.
+**Coupling the drain to a specific credit is the intuitive fix and it does not work.** Two versions
+were built and measured, and both handed the loss back:
 
-Two things it deliberately is not. It does **not debit an existing credit** — taking the points out
-of a recent completion would destroy that credit's own remaining decay along with it, charging the
-same neglect twice, and it would eat the reward for work just done so the bar sat still on the day
-something got finished. (Verified: a completion still moves the bar +7.00 while another item is three
-days overdue.) And `completionValue` no longer **goes negative** — it slides +1 → 0 over
-`TASK_LATE_ZERO_H` and stops there. Lateness is billed by the hour; a negative here charged the same
-lateness a second time in a lump.
+| shape | what happened |
+|---|---|
+| take from the OLDEST credit | that credit is nearly spent, so a day of neglect moved the bar 5 points instead of 7 and stopped biting after two days |
+| take from the NEWEST credit | the credit destroyed was going to expire anyway, so the loss fades on *that credit's* clock; also undercharges (6.5 for a day, since a point billed at 9am is worth less by the time the day is read) |
+| a decaying NEGATIVE ENTRY | the gap between "was late" and "was never late" closed from 8.2 points to 1.4 over five idle days — being late became something you could wait out |
 
-An hour that would take the level below zero is **not charged at all**. That is what "cannot empty
-past 0%" means: a penalty banked under the floor is invisible, the bar reads 0 either way, and the
-next completion would vanish into the hole instead of moving anything.
+The lesson worth keeping: **coupling a debit to an event does not make it permanent, it makes it
+inherit that event's decay.** A flat debt is the only shape where the gap holds. What ages it out is
+the same thing that ages out a completion — the *span* that billed it falls off the back of the
+seven-day window — so the penalty is tied to when the neglect happened, not to when some unrelated
+credit expires.
+
+**A completed row still carries a drain span**, from its deadline to its `completed_at`, which is
+what makes the band more than a function of what is open right now. **Deleting is the honest way
+out**: it stops the charge without claiming the thing was done. And `completionValue` no longer goes
+negative — it slides +1 → 0 over `TASK_LATE_ZERO_H` and stops, because lateness is billed by the hour
+and a negative charged the same lateness a second time in a lump.
+
+Debt is capped at the credit present, checked as it accrues — that cap is what "cannot empty past
+0%" means. Uncapped it digs below the bottom of the bar, where the bar reads 0 either way and the
+next completion vanishes into the hole instead of moving anything. Capped, a completion is worth
++7.00 however long the neglect ran.
 
 `TASK_RATE` moves the drain with it, since the drain rate is quantised through the same `toPoints()`.
 That keeps one invariant that does not depend on the rate: **an item left overdue for a day cancels

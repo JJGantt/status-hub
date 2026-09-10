@@ -84,11 +84,11 @@ the route and the `trace()` calls.
 The scoring itself is built and live (`lib/score.js`, data-layer `00085`-`00087`; how it works is in
 [HUB-INTERNALS.md](HUB-INTERNALS.md) §4 and §6). What is left:
 
-- **The constants want a week of real use.** `TASK_RATE = 2.5` sets the amplitude (one normal task
-  ~11.4% of the band), chosen so three ordinary completions a day fill the gold over a week with
-  something typically overdue; the late-completion curve and the drain rate are in the same block.
-  It was 8, which no real day ever came near — the band sat under 15% while the days it was scoring
-  had gone fine.
+- **The constants have had their week of real use, once.** `TASK_RATE` went 8 → 2.5 → 4: 8 was
+  unreachable (the band sat under 15% on days that had gone fine), and 2.5 turned out to be *under*
+  the real rate of 2.1-2.7 units/day, so the band parked itself near full. 4 is set from that
+  measurement and wants the same check after a week. The late-completion curve and the drain rate
+  are in the same block and have not been re-measured against real days at all.
 - **What happens below empty is undecided.** The level floors at zero today, so a badly neglected
   week and a catastrophically neglected one look the same once the band is drained. Whether that
   should carry a further consequence — bleeding into the other bands, or a separate marker — is

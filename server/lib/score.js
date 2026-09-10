@@ -59,14 +59,16 @@ const W_TODAY = 0.5;                                 // today's weight within nu
 // ---- task band tuning. Everything adjustable about the gold band is in this block. ----
 // On-time completions/day that HOLDS the band full. This is the amplitude knob: one ordinary
 // completion is worth 1/(RATE·DECAY/2) of the band, so raising it makes each task move the bar less.
-// It is set from the rate actually available to earn against, not from an idea of a busy day: a day
-// here holds two or three dated items, so a rate above that makes the gold unreachable however well
-// the day goes, and a band that cannot be filled is not measuring anything.
-// 2.5 puts a single normal task at ~11.4% of the band (~3.8 points of the overall bar), which is
-// what makes three ordinary completions a day fill the gold over a week WITH something typically
-// sitting overdue — the drain is budgeted for, not assumed away. Three a day and nothing overdue
-// fills it in four.
-const TASK_RATE = 2.5;
+// Set it from the rate actually EARNED against, which is what the late curve leaves rather than the
+// raw count: five completions run one to two hours past their deadlines land about four units.
+// A rate far above that leaves the gold unreachable however well the day goes, and a band that
+// cannot be filled is not measuring anything — which is what 8 did.
+// 2.5 was set when a day here carried two or three dated items. A week of real use (2026-09-05..09)
+// ran 2.1-2.7 units/day against it, so two a day settled the band at 80% and three pinned it at
+// 95%: full became the resting state, which is a gauge reporting nothing. 4 restores the spread —
+// two a day reads 50%, three 77%, and only four or more on time fills it.
+// One ordinary on-time completion is ~7.1% of the band, ~2.4 points of the overall bar.
+const TASK_RATE = 4;
 const TASK_DECAY_DAYS = 7;    // a completion's effect fades linearly to nothing over this
 const TASK_GRACE_MIN = 30;    // still "on time" this long past the deadline
 const TASK_LATE_ZERO_H = 4;   // lateness at which a completion is worth nothing

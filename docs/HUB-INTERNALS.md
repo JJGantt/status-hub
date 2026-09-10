@@ -283,15 +283,22 @@ record. (`task_events` existed for one afternoon and was dropped in `00089` for 
 
 Every constant is in one block at the top of `score.js`. **`TASK_RATE` is the amplitude knob** —
 completions/day that holds the band full — and `TASK_FULL_UNITS` derives from it, so one ordinary
-on-time completion is worth `1 / (RATE · DECAY_DAYS / 2)` of the band. At 2.5 that is ~11.4%, about
-3.8 points of the overall bar.
+on-time completion is worth `1 / (RATE · DECAY_DAYS / 2)` of the band. At 4 that is ~7.1%, about
+2.4 points of the overall bar.
 
-Set it from the rate there is actually something to earn against. A day here carries two or three
-dated items, so a rate above that leaves the gold unreachable no matter how well the day goes, and a
-band that cannot be filled measures nothing — which is what 8 did. 2.5 is the rate at which three
-ordinary completions a day fill the gold over a week *with something typically sitting overdue*; the
-drain is budgeted into the number rather than assumed away. Three a day and nothing overdue fills it
-in four.
+Set it from the rate there is actually something to *earn* against, and that is what the late curve
+leaves rather than the raw count — five completions run an hour or two past their deadlines land
+about four units. A rate far above the real one leaves the gold unreachable no matter how well the
+day goes, and a band that cannot be filled measures nothing, which is what 8 did. At 4, a steady two
+a day settles the band at 50%, three at 77%, and four or more on time fills it. Stopping dead from
+full runs 92 → 71 → 51 → 33 → 18 → 8 → 0 over the seven days of the decay window, so the first idle
+day is the expensive one.
+
+`TASK_DECAY_DAYS` is **not** a second amplitude knob, and it is the easy mistake here. The queue's
+steady level is `RATE · DAYS / 2` and FULL is defined as that same product, so the completions/day
+needed to hold the band full is `TASK_RATE` alone — shortening the decay makes each task worth more
+*and* fade sooner, leaving the hold rate untouched. What it does change is memory: how fast a good
+run stops counting. It matches the seven days training and nutrition look back over.
 
 `TASK_RATE` moves the drain with it, since an overdue item removes units from the same pool. That
 keeps one invariant that does not depend on the rate: **an item left overdue for a day cancels

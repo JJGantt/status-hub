@@ -159,6 +159,10 @@ the hub, which must agree:
 of the session he was typing in; that trade was reversed deliberately — the session he last used is the
 one he means — and ambient speech is guarded where it always was, by `follow_up` demanding a handoff.
 
+A pinned session carries a pin on every surface that shows focus — the home wall, the sessions wall,
+the footer strip, the phone pane — and automatic focus carries none, because a pin stays put while
+other sessions take turns. `/api/sessions` returns `pinned` beside `focus` for exactly this.
+
 **Focusing is itself a handoff.** `follow_up` normally demands an explicit phrase ("send a follow-up",
 "tell it to"), because the mic hears the whole room and forwarding ambient speech into a session is
 the failure that rule prevents. Naming a session removes the ambiguity, so everything said after a

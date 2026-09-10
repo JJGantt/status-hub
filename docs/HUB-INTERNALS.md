@@ -890,7 +890,9 @@ name while it runs, else nobody while a dispatch is still opening, else the most
 session. The rule, and why it includes the session he is typing in, is SESSIONS.md § Focus.
 
 It is worth showing because it moves: the session you last used holds follow-ups unless you pinned
-one, so glancing at the strip answers where "tell it to…" will go.
+one, so glancing at the strip answers where "tell it to…" will go. `pinned` (in `/api/sessions`, and
+on the status payload's `desk_focus`) says which of the two it is, and every surface that shows focus
+puts `PIN_SVG` from `shared.js` on a pinned session — a pin stays put, so it must not look automatic.
 
 `focus` is null only while a dispatch is opening or when nothing is running. The panel says so
 outright rather than leaving no row marked, which is indistinguishable from the marker failing to

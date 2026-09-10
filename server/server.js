@@ -847,6 +847,62 @@ setInterval(() => {
   try { startRealtime(); } catch (e) { console.log('resubscribe failed:', e.message); }
 }, 60000);
 
+// The watchdog above judges the socket by whether ANY event arrives, and that is a proxy it cannot
+// keep honest: `seen()` is fed by every subscription, and device_status is written every couple of
+// minutes by the litter and feeder watchers. So the one table with a permanent heartbeat vouches for
+// all the others, and a channel that reports SUBSCRIBED while delivering nothing for
+// `nutrition_entries` looks perfectly alive. That is not hypothetical — on 2026-09-10 a meal logged
+// at 09:26 did not reach any surface until the 15-minute backstop lapsed, the socket had been
+// SUBSCRIBED since 08:17 with device_status flowing the whole time, and the watchdog logged nothing.
+//
+// So check FUNCTION, not liveness: ask the database directly whether anything has been written that
+// the cache has not seen. The probe is a row COUNT per write-active table plus the newest completion
+// stamp — a few hundred bytes, against the ~143KB of the real queries — so it can run often enough
+// to close the window without undoing the caching it is protecting.
+//
+// A miss is also evidence the channel is lying, so it recycles the socket as well as refetching, and
+// it LOGS. The failure it exists to catch produced no output at all, which is why it went unnoticed
+// long enough to be reported as a date bug.
+const FRESH_PROBE_MS = 2 * 60 * 1000;
+// count=exact + a zero-row Range: PostgREST answers in the Content-Range header and sends no body.
+async function tableCount(table) {
+  const r = await fetch(`${SUPABASE_URL}/rest/v1/${table}?select=id`, {
+    headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}`,
+               'Range-Unit': 'items', Range: '0-0', Prefer: 'count=exact' },
+  });
+  if (!r.ok && r.status !== 206) throw new Error(`count ${table} -> ${r.status}`);
+  const cr = r.headers.get('content-range') || '';
+  return cr.slice(cr.indexOf('/') + 1);      // "0-0/1234" -> "1234"
+}
+async function freshnessFingerprint() {
+  const [nutrition, sets, items, completed] = await Promise.all([
+    tableCount('nutrition_entries'),
+    tableCount('sets'),
+    tableCount('list_items'),
+    // Completing an item changes no count, and it is the write the gold band is built on.
+    sb('list_items?completed_at=not.is.null&select=completed_at&order=completed_at.desc&limit=1')
+      .then((r) => (r[0] && r[0].completed_at) || ''),
+  ]);
+  return [nutrition, sets, items, completed].join('|');
+}
+let lastFingerprint = null;
+setInterval(async () => {
+  let fp;
+  try { fp = await freshnessFingerprint(); } catch (e) { console.log('freshness probe:', e.message); return; }
+  if (lastFingerprint === null) { lastFingerprint = fp; return; }   // first run only establishes a baseline
+  if (fp === lastFingerprint) return;
+  lastFingerprint = fp;
+  if (!rowCache.dirty) {
+    // The cache was clean, so realtime should already have dirtied it and did not.
+    console.log(`freshness probe: rows changed with no realtime event (${fp}) — refetching and recycling the socket`);
+    dirtyRows(); dirtyNutDay(); dirtyWorkoutDay(); dirtyHeatHistory();
+    try { if (hubChannel) supa.removeChannel(hubChannel); } catch (e) { console.log('removeChannel:', e.message); }
+    lastRealtimeEvent = Date.now();
+    try { startRealtime(); } catch (e) { console.log('resubscribe failed:', e.message); }
+    broadcast();
+  }
+}, FRESH_PROBE_MS);
+
 // ---- auth ----
 function getCookie(req, name) {
   const m = (req.headers.cookie || '').match(new RegExp('(?:^|; )' + name + '=([^;]+)'));

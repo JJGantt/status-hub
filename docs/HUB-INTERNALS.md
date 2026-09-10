@@ -38,6 +38,21 @@ Supabase ──▶ server.js buildStatus() ──▶ /api/status payload ──�
   clears on an event serves whatever it built on boot, forever, with a redeploy the only way out.
   `/api/surf/history` shipped that way and froze the surf card for 16 hours. Every cache here now
   pairs `dirty*()` with a `*_BACKSTOP_MS` age check; add both when you add a cache.
+- **The silence watchdog cannot see a per-table delivery failure, which is why the freshness probe
+  exists.** `REALTIME_SILENCE_LIMIT_MS` judges the socket by whether *any* event arrives, and
+  `seen()` is fed by every subscription including `device_status` — written every couple of minutes
+  by the litter and feeder watchers. So the one table with a permanent heartbeat vouches for all the
+  others. On 2026-09-10 a meal logged at 09:26 reached no surface until the 15-minute backstop
+  lapsed: the channel had been SUBSCRIBED since 08:17, device_status was flowing the whole time, and
+  the watchdog logged nothing. It surfaced as "the hub is stuck on Wednesday", because a nutrition
+  cell with no rows gets no `data-ndate` and so cannot be selected — a stale cache reads as a broken
+  date.
+  `FRESH_PROBE_MS` checks **function instead of liveness**: every two minutes it asks the database
+  for a fingerprint — a row count per write-active table plus the newest `completed_at` — and if that
+  moved while the cache was clean, realtime dropped something. It refetches, recycles the socket
+  (a miss is evidence the channel is lying), and **logs**, which the original failure never did. The
+  probe costs ~147 bytes and ~340ms per run, about one extra heavy fetch a day, so it closes the
+  window without undoing the caching it protects.
 - **Every stream goes through `liveStream()` (shared.js), never a bare `EventSource`.** An SSE
   connection can go half-open — `readyState` stays OPEN, no `error` fires, nothing arrives again —
   and the browser only retries a connection it saw CLOSE, so nothing reconnects it. A wall in that

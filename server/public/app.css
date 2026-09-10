@@ -441,13 +441,26 @@ body.tv .hb-delta{position:absolute;right:2px;z-index:6;padding:2px 7px;border-r
 body.tv .hb-delta.up{color:#0a140d;background:#39d353}
 body.tv .hb-delta.down{color:#fff;background:#e5484d}
 @keyframes hbDelta{0%{opacity:0;transform:translateY(8px)}12%{opacity:1}100%{opacity:0;transform:translateY(-46px)}}
-body.tv .hb-track{flex:1 1 auto;width:48px;position:relative;background:#0e1318;border:2px solid #2a3340;border-radius:20px;overflow:hidden;min-height:0}
-body.tv .hb-fill{position:absolute;bottom:0;width:calc(100% / 3);transition:height .6s ease,bottom .6s ease,width .6s ease,left .6s ease}
-/* vertical bars (landscape): three columns filling bottom-up, each to its own 0–100 var. Left to
-   right in the order the wall itself runs — the day's items, then food, then training. */
-body.tv .hb-task{background:#e6b93d;left:0;height:calc(var(--kfill,0)*1%)}
-body.tv .hb-nutr{background:#3b82f6;left:calc(100% / 3);height:calc(var(--nfill,0)*1%)}
-body.tv .hb-train{background:#39d353;left:calc(200% / 3);height:calc(var(--tfill,0)*1%)}
+/* The track holds three columns and nothing else: the shape of the container (rounded or square,
+   gapped or flush) is entirely in these two rules, and the columns do not care which it is. */
+/* No capsule and no border: three columns with a 3px gap between them, on the black. The gap is what
+   says these are three readings rather than one bar in three colours, and the ruler that crosses all
+   of them (below) is what says they share a scale — which is the only thing that makes comparing
+   their heights legal. A rounded outer track fought both: its radius pinched the outer two columns
+   at top and bottom, exactly where a bar means empty or full. */
+body.tv .hb-track{flex:1 1 auto;width:52px;position:relative;display:flex;gap:3px;min-height:0}
+body.tv .hb-col{flex:1 1 0;position:relative;min-width:0;overflow:hidden;background:#0e1318;border-radius:2px}
+/* Half way, brighter than the ten black divisions and drawn over the fills — the same graded-ink
+   trick the surf grids use for noon. Nine identical marks make you count; one anchor means you read
+   a height against it instead. */
+body.tv .hb-track::before{content:'';position:absolute;left:0;right:0;bottom:50%;height:2px;z-index:4;
+  background:rgba(255,255,255,.55);pointer-events:none}
+/* vertical bars (landscape): each column fills bottom-up to its own 0–100 var. Left to right in the
+   order the wall itself runs — the day's items, then food, then training. */
+body.tv .hb-fill{position:absolute;left:0;right:0;bottom:0;transition:height .6s ease,width .6s ease}
+body.tv .hb-task{background:#e6b93d;height:calc(var(--kfill,0)*1%)}
+body.tv .hb-nutr{background:#3b82f6;height:calc(var(--nfill,0)*1%)}
+body.tv .hb-train{background:#39d353;height:calc(var(--tfill,0)*1%)}
 /* 10-segment divisions (bold black): 9 internal dividers at 10%..90%. Drawing the 3px line at the BOTTOM of
    each band puts marks at 0,10,..,90 from the bottom — so there's NO line at the very top (the 100%/full edge),
    and the 0 line tucks under the rounded bottom. */
@@ -762,11 +775,13 @@ body.tv.wallportrait .ringrow .mring circle{stroke-width:6}
 
 /* health bar: horizontal, full width, thin — fills left→right from the same --nfill/--tfill/--kfill vars */
 body.tv.wallportrait .healthbar{flex-direction:row;align-items:stretch;padding:2px;min-height:0}
-body.tv.wallportrait .hb-track{flex:1 1 auto;width:auto;height:auto;border-radius:25px}
-body.tv.wallportrait .hb-fill{left:0;width:auto;height:calc(100% / 3)}
-body.tv.wallportrait .hb-task{top:0;bottom:auto;width:calc(var(--kfill,0)*1%)}
-body.tv.wallportrait .hb-nutr{top:calc(100% / 3);bottom:auto;width:calc(var(--nfill,0)*1%)}
-body.tv.wallportrait .hb-train{top:calc(200% / 3);bottom:auto;width:calc(var(--tfill,0)*1%)}
+body.tv.wallportrait .hb-track{flex:1 1 auto;width:auto;height:auto}
+body.tv.wallportrait .hb-track{flex-direction:column}
+body.tv.wallportrait .hb-track::before{left:50%;right:auto;top:0;bottom:0;width:2px;height:auto}
+body.tv.wallportrait .hb-fill{top:0;bottom:0;right:auto;height:auto}
+body.tv.wallportrait .hb-task{width:calc(var(--kfill,0)*1%)}
+body.tv.wallportrait .hb-nutr{width:calc(var(--nfill,0)*1%)}
+body.tv.wallportrait .hb-train{width:calc(var(--tfill,0)*1%)}
 body.tv.wallportrait .hb-track::after{background:repeating-linear-gradient(to right,#000 0,#000 3px,transparent 3px,transparent 10%)}
 
 /* muscle section: the front+back figures SIDE BY SIDE (front left, back right) on the left, volume bars

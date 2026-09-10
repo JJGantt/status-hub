@@ -32,9 +32,9 @@ export function render(s) {
   el.style.setProperty('--kfill', kFill);
   el.innerHTML =
     '<div class="hb-track">' +
-      '<div class="hb-fill hb-task"></div>' +
-      '<div class="hb-fill hb-nutr"></div>' +
-      '<div class="hb-fill hb-train"></div>' +
+      '<div class="hb-col"><div class="hb-fill hb-task"></div></div>' +
+      '<div class="hb-col"><div class="hb-fill hb-nutr"></div></div>' +
+      '<div class="hb-col"><div class="hb-fill hb-train"></div></div>' +
     '</div>';
   // Float the delta only on a genuine move (skip the first paint, and pace-drift noise below 0.1pt).
   if (prevOverall !== null && Math.abs(overall - prevOverall) >= 0.1) floatDelta(el, overall - prevOverall, overall);

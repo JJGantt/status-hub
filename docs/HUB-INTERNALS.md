@@ -199,8 +199,9 @@ recording put that wait between every tap and the red fill. Warm, it is 1ms.
 It is released when the page is hidden and re-warmed when it returns: iOS interrupts a backgrounded
 capture anyway, and the recording indicator should not stay lit over another app. A track can also end
 under us when something else takes the mic, so possession is decided by `readyState`, never by holding
-a reference. `micStream`/`micPending` are declared at the top of the file with the rest of `boot()`'s
-state, because `boot()` runs above them and a `let` it reaches would be in the temporal dead zone.
+a reference. `micStream`/`micPending` — and both outbox stores — are declared at the top of the file
+with the rest of `boot()`'s state, because `boot()` runs above them and a binding it reaches before
+its declaration is not yet initialised.
 
 ### The voice button has three states, and a tap lands on `pointerdown`
 
@@ -227,6 +228,29 @@ safe to DROP a clip the VAD watched end to end without once crossing it. Droppin
 Whisper does not return an empty string for silence: it invents a plausible phrase — "Thank you." is
 the usual one — and the worker then acts on it as a command.
 
+### A recorded clip is kept until the server has it, and no command is too long
+
+Every finished recording is written to IndexedDB (`hub-voice-outbox`) before it is uploaded, and
+deleted only when the server confirms it: the command enqueued (from then on its transcript in
+`voice_requests` is the durable copy), or a dictation's transcript handed back. A clip whose upload
+fails stays on the phone and resends on the photo outbox's triggers — boot, return to the foreground,
+`online`, `pageshow`. The resend carries the capture-time `client_now` and the clip's id as
+`client_msg_id`, which the server de-dupes, so a send whose answer was lost is not enqueued twice.
+
+Clips go oldest first. A network failure ends the pass, because everything behind it would fail the
+same way and must not overtake it. A server refusal keeps the clip but lets later clips through, so one
+the server can never take cannot hold every later command hostage. A dictation (`dryWhen` — the
+composer with photos pending, the repos card's session prompt) is only sent while the recorder that
+took it is alive; one stranded by a reload stays in the store unsent, since nothing else knows what it
+was for.
+
+There is no size or length limit on a command anywhere. `/api/voice-command` streams the body to a temp
+file, and `lib/transcribe.js` sends it to Groq as recorded when it is under Groq's 25 MB direct-upload
+cap, and otherwise re-encodes it (ffmpeg, installed by the Dockerfile) to 16 kHz mono Opus in half-hour
+pieces. The cap is easy to hit: a phone clip has arrived at ~1.5 Mbps, which put a 137-second command
+over it. Every clip logs `[voice-command] <bytes> <type> <secs>s <kbps> kbps`. The recorder asks for
+32 kbps (`VOICE_BPS`); desktop WebKit honours that for WebM but ignores anything under 64 kbps for MP4.
+
 ---
 
 ## 4. The domain engine (`lib/`)
@@ -243,6 +267,7 @@ The math lives here; each file has a thorough header. Summary map:
 | `heatmap.js` | Per-day set-count heatmap laid out as week columns. Shade is an **absolute** count — one level per 6 sets, topping out at 25+ — so a colour means the same thing in every window and on every surface. |
 | `weightplot.js` | The mean of each week's weigh-ins, on the same Sunday-anchored columns as the two heat maps, plus the three axis values. Points carry x/y as fractions of the plot box. A week with no reading is **interpolated** between the nearest measured week either side (anchors may sit outside the window) and flagged `imputed` so the card draws the line through it but no dot; a gap with no measured week *after* it stays `null`, because that is extrapolation. The band is whole pounds, widened to an even span so the middle line has an integer to label, and the FIRST column is always blank — the axis values are written over it. Built at `HOME_HEAT_WEEKS`, since the plot means nothing away from the columns it is aligned to. |
 | `score.js` | The health bar: `(training + nutrition + tasks)/3`, each band capped at a third. |
+| `transcribe.js` | Not domain math — speech to text for a voice clip of any length. Under Groq's 25 MB cap it goes up as recorded; over it, ffmpeg re-encodes to 16 kHz mono Opus at constrained 24 kbps in half-hour pieces, transcribed in order. |
 
 **The task band starts empty and is earned.** Nutrition and training measure how well a thing is
 going; the gold band measures whether dated list items get done. It has no neutral baseline on
@@ -438,7 +463,7 @@ per-list feed `/api/due-widget` replaced; nothing reads it.
 
 **Write:** `/api/settings` (GET/POST) · `/api/log-set` · `/api/log-entry` (POST/DELETE) ·
 `/api/commit-staged` · `/api/feed` · `/api/todos/{add,clear,snooze}` · `/api/repos/open` ·
-`/api/sessions/:action` · `/api/voice-command` (raw audio → Groq Whisper → enqueue) ·
+`/api/sessions/:action` · `/api/voice-command` (raw audio of any size → Groq Whisper → enqueue) ·
 `/api/voice-text` (text → enqueue) · `/api/voice-reset` · `/api/voice-activity` · `/api/attach`
 (photo upload) · `/api/register-push` · `/api/notify` (APNs to all devices) · `/api/clientlog`.
 

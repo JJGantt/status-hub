@@ -307,6 +307,16 @@ no suffix, because the number is already on the scale the bar is drawn against; 
 a point is not rendered, since a `+0` chip says less than no chip. `server.js` formats them once in
 `scoreFields`, for all three surfaces that draw them.
 
+**Do not clamp a chip to the band's remaining headroom.** It looks like the honest fix — a `+7` on a
+band at 96 seems to promise points there is no room for — and it is wrong. Measured against the
+replay at 41%, at 85%, and at a band held down by twelve completions a day, one on-time completion
+moves the bar by 7.1 points every time, then 6.1, 5.1, 4.0 … one point a day until it is gone at
+seven. A completion admitted over FULL pushes credit off the OLDEST end, and old credit carries
+almost no remaining life, so next to nothing is destroyed; clipping also removes *weighted* units, so
+each one clipped costs a large amount of face credit and the queue self-limits in the high 90s rather
+than sitting against the ceiling. Clamping would report 0 for a task that is worth a week of holding
+the bar up.
+
 `TASK_RATE` moves the drain with it, since an overdue item removes units from the same pool. That
 keeps one invariant that does not depend on the rate: **an item left overdue for a day cancels
 exactly one on-time completion.** Change the amplitude and that trade stays where it is.

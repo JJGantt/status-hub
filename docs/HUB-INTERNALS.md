@@ -300,6 +300,13 @@ needed to hold the band full is `TASK_RATE` alone — shortening the decay makes
 *and* fade sooner, leaving the hold rate untouched. What it does change is memory: how fast a good
 run stops counting. It matches the seven days training and nutrition look back over.
 
+**Units are internal; POINTS are what is displayed.** The band holds `TASK_FULL_UNITS` of the first
+and exactly 100 of the second, and `bandPoints()` in `score.js` is the only conversion — a calendar
+chip reading `+7` and a bar moving 7 have to be the same statement. The chips carry whole points and
+no suffix, because the number is already on the scale the bar is drawn against; anything under half
+a point is not rendered, since a `+0` chip says less than no chip. `server.js` formats them once in
+`scoreFields`, for all three surfaces that draw them.
+
 `TASK_RATE` moves the drain with it, since an overdue item removes units from the same pool. That
 keeps one invariant that does not depend on the rate: **an item left overdue for a day cancels
 exactly one on-time completion.** Change the amplitude and that trade stays where it is.

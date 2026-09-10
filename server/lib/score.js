@@ -82,6 +82,12 @@ const TASK_FULL_UNITS = TASK_RATE * TASK_DECAY_DAYS / 2;
 // A steady TASK_RATE completions a day, each aging out linearly over TASK_DECAY_DAYS, settles at
 // RATE·DAYS/2 — which is what FULL is, so the band is exactly reachable and holdable at that rate.
 
+// Units are the band's internal currency; POINTS are what a person reads. The band is 100 of them —
+// the same 100 the bar is drawn against — so an ordinary on-time completion is worth
+// 100/TASK_FULL_UNITS of them. One definition, because a chip claiming a task is worth 7 while the
+// bar moves by 11 is a chip nobody can trust again.
+const bandPoints = (units) => (TASK_FULL_UNITS > 0 ? (units * 100) / TASK_FULL_UNITS : 0);
+
 // Quadratic falloff on an ABSOLUTE deviation: 1 at dev 0, 0 once |dev| >= tol. Small misses barely
 // register; big ones bite (3× the deviation ≈ 9× the penalty).
 const quadAbs = (dev, tol) => (tol > 0 ? Math.max(0, 1 - (dev / tol) ** 2) : (dev <= 0 ? 1 : 0));
@@ -370,5 +376,5 @@ function computeScore({ volume, days = [], surplus = 0, taskEvents = [], openTas
 
 // Exported so the calendar can label a chip with the same numbers the band is actually scored on.
 // One definition, so a chip cannot claim a value the band would not give it.
-module.exports = { computeScore, tasksScore, taskDeadline, completionValue, completionStamp,
+module.exports = { computeScore, tasksScore, taskDeadline, completionValue, completionStamp, bandPoints,
                    TASK_GRACE_MIN, TASK_LATE_ZERO_H, TASK_DRAIN_FULL_H };

@@ -25,7 +25,7 @@ const { buildWorkoutHeatmap } = require('./lib/heatmap');
 const { buildWeightPlot } = require('./lib/weightplot');
 const { getWeather } = require('./lib/weather');
 const { buildNutritionLog, buildGoalResolver, calorieColor } = require('./lib/nutritionlog');
-const { computeScore, taskDeadline, completionValue, completionStamp, TASK_GRACE_MIN, TASK_LATE_ZERO_H, TASK_DRAIN_FULL_H } = require('./lib/score');
+const { computeScore, taskDeadline, completionValue, completionStamp, bandPoints, TASK_GRACE_MIN, TASK_LATE_ZERO_H, TASK_DRAIN_FULL_H } = require('./lib/score');
 
 // Settings cache: app_settings is read several times per status build but only changes on explicit
 // writes, which the realtime subscription announces (→ dirtySettings). One whole-table fetch serves
@@ -2367,12 +2367,18 @@ function aheadGrid(n) {
 // scored: a projection was a drawing of an item that did not exist yet.
 // Rendered here, not in the cards: three surfaces draw these chips and a format they each re-derive
 // is a format they will eventually disagree about.
+// The number is in the band's POINTS, not its internal units — the gold band is 100 points and this
+// says how many of them the item is worth, so it is the same scale the bar is read on and needs no
+// suffix to say so. Whole points: the band itself is drawn to whole percent, and a chip claiming a
+// tenth it cannot show is precision nobody can act on. Anything under half a point is not rendered
+// at all, since a `+0` chip is worse than no chip.
 function scoreFields(item, nowLocal) {
   const sc = chipScore(item, nowLocal, chipState(item, nowLocal));
-  if (!sc || Math.abs(sc.value) < 0.05) return {};
-  const n = Math.round(Math.abs(sc.value) * 10) / 10;
+  if (!sc) return {};
+  const n = Math.round(Math.abs(bandPoints(sc.value)));
+  if (n < 1) return {};
   // Sign rides separately so the clients colour on it without parsing the string back apart.
-  return { score: (sc.value > 0 ? '+' : '\u2212') + n.toFixed(1), score_kind: sc.kind,
+  return { score: (sc.value > 0 ? '+' : '\u2212') + n, score_kind: sc.kind,
            score_sign: sc.value > 0 ? 'pos' : 'neg' };
 }
 

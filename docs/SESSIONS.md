@@ -102,7 +102,10 @@ the voice worker's SDK client and the MCP children — and any process no row ow
 **Which conversation a process is in is READ, never inferred.** Claude Code keeps a record for every
 live process, `~/.claude/sessions/<pid>.json`, holding the conversation id (the transcript's filename)
 and the working directory. It rewrites the id when `/clear` starts a new conversation and deletes the
-file when the process exits. `orchestrator/src/discover.js` reads it on both machines — the Mac for
+file when the process exits, and it says whether a turn is in flight and when that last changed — which
+is where `working` and `active_at` come from; the transcript is only the fallback, since one long turn
+of tool calls can fill the window it is read through. `orchestrator/src/discover.js` reads it on both
+machines — the Mac for
 every process, the Pi for the tmux panes it launched (`launch.sh` `exec`s claude, so the pane's pid is
 claude's) — so a row follows a `/clear` exactly, on both.
 

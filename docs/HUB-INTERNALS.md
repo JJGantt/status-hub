@@ -249,7 +249,9 @@ file, and `lib/transcribe.js` sends it to Groq as recorded when it is under Groq
 cap, and otherwise re-encodes it (ffmpeg, installed by the Dockerfile) to 16 kHz mono Opus in half-hour
 pieces. The cap is easy to hit: a phone clip has arrived at ~1.5 Mbps, which put a 137-second command
 over it. Every clip logs `[voice-command] <bytes> <type> <secs>s <kbps> kbps`. The recorder asks for
-32 kbps (`VOICE_BPS`); desktop WebKit honours that for WebM but ignores anything under 64 kbps for MP4.
+48 kbps (`VOICE_BPS`), and not less: WebKit picks the audio bandwidth from that number, and at 32 kbps
+it falls to narrowband, which cost Whisper misheard words. (For MP4, WebKit ignores anything under
+64 kbps.)
 
 ---
 

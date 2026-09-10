@@ -189,7 +189,10 @@ export function bindTap(el, fn) {
 // Speech needs a few tens of kbps. Left to itself iOS Safari's recorder has produced ~1.5 Mbps, which
 // put a two-minute command over the transcription service's upload cap. The server now takes a clip of
 // any size (lib/transcribe.js), but every byte still has to go up over the phone's connection first.
-const VOICE_BPS = 32000;
+// 48k, not less: WebKit picks the audio bandwidth from this number, and at 32k it drops to narrowband
+// (~4 kHz), which cost Whisper seven misheard words in a 146-second read. At 48k it records
+// super-wideband and transcribed identically to the unconstrained default, at 37% of the size.
+const VOICE_BPS = 48000;
 
 // A self-contained recorder: getUserMedia → MediaRecorder → upload to /api/voice-command.
 // quick=true marks a one-off quick-add (the FAB) so the server tags it for a terse reply.

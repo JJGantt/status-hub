@@ -170,7 +170,7 @@ function paintGrids(cv, ax, viewW) {
     }
   }
   // NO SEAM between the grids. The two palettes do not overlap — ratings are red through green, size
-  // is blues — so the boundary draws itself, and a rule there was one more white line competing with
+  // is white then blues — so the boundary draws itself, and a rule there was one more white line competing with
   // the only two marks that have to win: now, and a week out.
 
   // WEEK SEPARATORS. The columns are days, and past the width of a couple of weeks nothing says

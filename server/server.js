@@ -405,15 +405,18 @@ function buildSurf(row) {
 //
 // Rating bands are a judgment, not a magnitude: red at or below Poor, yellow Poor-Fair, green Fair,
 // blue Good, purple Epic. Everything at or below Poor is one band because the difference between
-// Very Poor and Poor never changes whether it is worth going. Size stays a sequential blue ramp
-// because it really is a magnitude.
+// Very Poor and Poor never changes whether it is worth going. Size stays a sequential ramp because
+// it really is a magnitude: white for 0-1 ft, then blues from light to the darkest navy that still
+// reads as blue, so every band above flat gets the whole blue range to itself.
 const SURF_RATING_SCALE = ['FLAT','VERY_POOR','POOR','POOR_TO_FAIR','FAIR','FAIR_TO_GOOD','GOOD','EPIC'];
 const SURF_BAND_COLORS  = ['#ff3b30', '#ffcc00', '#34c759', '#0a84ff', '#af52de'];
 const SURF_BAND_LABELS  = ['Poor or below', 'Poor\u2013Fair', 'Fair', 'Good', 'Epic'];
 // Size bands are derived from the data, not fixed. Surfline's bands are not uniform one-foot steps
 // (4-5 and 4-6 both exist) and `plus` adds a half-step inside a band, so a hardcoded ladder drops
 // anything outside the range one spot happens to produce.
-const SURF_SIZE_STOPS = ['#86b6ef', '#3987e5', '#1c5cab', '#0d366b'];
+const SURF_SIZE_FLAT = '#ffffff';     // every band topping out at 1 ft
+const SURF_SIZE_FLAT_MAX = 1;
+const SURF_SIZE_STOPS = ['#86b6ef', '#3987e5', '#1c5cab', '#000c45'];
 
 // Interpolate the validated stops so any number of bands stays inside the validated range.
 function sizeRamp(n) {
@@ -1161,7 +1164,8 @@ app.get('/api/surf/history', async (req, res) => {
       return ka - kb || a[1].max - b[1].max || (a[1].plus ? 1 : 0) - (b[1].plus ? 1 : 0);
     });
     const sizeIdx = new Map(order.map(([k], i) => [k, i]));
-    const sizeColors = sizeRamp(order.length);
+    const nFlat = order.filter(([, v]) => v.max <= SURF_SIZE_FLAT_MAX).length;  // sorted, so a prefix
+    const sizeColors = Array(nFlat).fill(SURF_SIZE_FLAT).concat(sizeRamp(order.length - nFlat));
     const sizeLabels = order.map(([, v]) => `${v.min}\u2013${v.max}${v.plus ? '+' : ''} ft`);
 
     let rating = '', size = '';

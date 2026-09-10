@@ -163,7 +163,8 @@ structure**: a 1px line at each Saturday -> Sunday boundary (Sunday-aligned, lik
 above), which is what makes a day countable now that the letters are gone. **White is the hour axis
 and now**, graded so the eye always knows which line it is on: the now-line and its crossbar solid,
 noon at 70%, 6a and 6p at 35%. There is no rule between the two grids at all — ratings run red
-through green and size runs blues, so the boundary draws itself. A dashed line seven days out used
+through green and size runs white (0-1 ft) then blues, so the boundary draws itself. The white
+guides are invisible over a white 0-1 ft cell; that band is the one place the hour axis drops out. A dashed line seven days out used
 to count the columns off against today; the week rules do that better, per column edge instead of
 once, and it is gone. The rain grid beside it follows every one of these rules, because they are one
 card describing one week.

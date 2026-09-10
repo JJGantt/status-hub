@@ -2,7 +2,9 @@
 const express = require('express');
 const crypto = require('crypto');
 const fs = require('fs');
+const os = require('os');
 const path = require('path');
+const { pipeline } = require('stream/promises');
 const { createClient } = require('@supabase/supabase-js');
 const WebSocket = require('ws');
 const heicConvert = require('heic-convert');
@@ -24,6 +26,7 @@ const { getTZ, setTZ, DAY_START_HOUR, localDate, nutritionWindow, lastNTrainingD
 const { buildWorkoutHeatmap } = require('./lib/heatmap');
 const { buildWeightPlot } = require('./lib/weightplot');
 const { getWeather } = require('./lib/weather');
+const { transcribe } = require('./lib/transcribe');
 const { buildNutritionLog, buildGoalResolver, calorieColor } = require('./lib/nutritionlog');
 const { computeScore, taskDeadline, completionValue, completionStamp, bandPoints, toPoints, TASK_GRACE_MIN, TASK_LATE_ZERO_H, TASK_DRAIN_FULL_H } = require('./lib/score');
 
@@ -1817,39 +1820,60 @@ app.get('/api/voice-messages', async (req, res) => {
   } catch (e) { res.status(500).json({ error: String(e.message || e) }); }
 });
 
+// De-dupe resent sends: the durable outboxes (photos, and every voice clip) re-POST when a screen-lock
+// or a dropped connection killed the ack after the server had already enqueued. A client_msg_id turns
+// that retry into a no-op instead of a duplicate command. In-memory suffices — the hub runs a single
+// instance and the retry window is seconds to minutes; the map is bounded so it can't grow without limit.
+const seenMsgIds = new Map();   // client_msg_id -> first-seen ts
+function markSeen(msgId) {
+  if (!msgId) return;
+  seenMsgIds.set(msgId, Date.now());
+  if (seenMsgIds.size > 1000) seenMsgIds.delete(seenMsgIds.keys().next().value);
+}
+
 // In-app voice button: the browser/app uploads a recorded clip; we transcribe it with the SAME
 // Groq Whisper the ESP uses, then enqueue into voice_requests exactly like the Jarvis path. The
 // Mac worker claims it and writes the user+assistant turns into voice_messages (focus 'hub') —
-// the one shared conversation shown on the TV wall and in the app. Audio is never stored.
-app.post('/api/voice-command', express.raw({ type: '*/*', limit: '25mb' }), async (req, res) => {
+// the one shared conversation shown on the TV wall and in the app.
+//
+// There is NO size or length limit on a command. The body streams to a temp file rather than into
+// memory (a long uncompressed phone clip would not fit in this 256 MB machine), and lib/transcribe.js
+// re-encodes and splits anything too big for Groq. The file is deleted as soon as the request ends.
+app.post('/api/voice-command', async (req, res) => {
+  const tmp = path.join(os.tmpdir(), 'voice-' + crypto.randomUUID());
   try {
-    if (!GROQ_API_KEY) return res.status(503).json({ error: 'transcription not configured' });
-    const audio = req.body;
-    if (!audio || !audio.length) return res.status(400).json({ error: 'no audio' });
-    const ct = String(req.headers['content-type'] || 'audio/webm');
-    const ext = ct.includes('mp4') || ct.includes('m4a') ? 'm4a'
-              : ct.includes('mpeg') ? 'mp3' : ct.includes('wav') ? 'wav'
-              : ct.includes('ogg') ? 'ogg' : 'webm';
-    const form = new FormData();
-    form.append('file', new Blob([audio], { type: ct }), `clip.${ext}`);
-    form.append('model', 'whisper-large-v3-turbo');
-    form.append('response_format', 'text');
-    const gr = await fetch('https://api.groq.com/openai/v1/audio/transcriptions', {
-      method: 'POST', headers: { Authorization: `Bearer ${GROQ_API_KEY}` }, body: form });
-    if (!gr.ok) return res.status(502).json({ error: `transcription failed (${gr.status})` });
-    const transcript = (await gr.text()).trim();
-    if (!transcript) return res.json({ transcript: '', enqueued: false });
+    if (!GROQ_API_KEY) { req.resume(); return res.status(503).json({ error: 'transcription not configured' }); }
     // ?dry=1 → transcribe only, no enqueue. The chat composer uses this while photos are pending: the
     // transcript lands in the text box so the user sends text + photos together when they're ready.
-    if (String(req.query.dry || '') === '1') return res.json({ transcript, enqueued: false });
+    const dry = String(req.query.dry || '') === '1';
+    const msgId = String(req.query.client_msg_id || '').slice(0, 64);
+    if (!dry && msgId && seenMsgIds.has(msgId)) { req.resume(); return res.json({ enqueued: true, duplicate: true }); }
+    await pipeline(req, fs.createWriteStream(tmp));
+    const { size } = await fs.promises.stat(tmp);
+    if (!size) return res.status(400).json({ error: 'no audio' });
+    const ct = String(req.headers['content-type'] || 'audio/webm');
+    const { transcript, segments } = await transcribe(tmp, ct, GROQ_API_KEY);
+    // Bytes per second of speech is what decides whether a clip fits Groq's cap, and it is set by the
+    // recording device, not by us — so every clip reports it.
+    const dur = parseFloat(req.query.dur);
+    console.log(`[voice-command] ${size} bytes ${ct}` +
+      (dur > 0 ? ` ${dur.toFixed(1)}s ${Math.round(size * 8 / dur / 1000)} kbps` : '') +
+      (segments ? ` re-encoded into ${segments} segment(s)` : ''));
+    if (!transcript) return res.json({ transcript: '', enqueued: false });
+    if (dry) return res.json({ transcript, enqueued: false });
     // The bottom-right quick-add FAB sends ?quick=1 → tag the request so the worker asks Jarvis for a
     // terse, fits-in-the-status-chip confirmation. The full conversation card omits it (verbose replies).
     const quick = String(req.query.quick || '') === '1';
     const client_now = CLIENT_NOW_RE.test(String(req.query.client_now || '')) ? String(req.query.client_now) : null;
     await sbWrite('voice_requests', 'POST', { transcript, source: quick ? 'web-quick' : 'web', focus: 'hub',
       ...(client_now ? { client_now } : {}) });
+    markSeen(msgId);
     res.json({ transcript, enqueued: true });
-  } catch (e) { res.status(500).json({ error: String(e.message || e) }); }
+  } catch (e) {
+    res.status(e.status || 500).json({ error: String(e.message || e) });
+  } finally {
+    fs.promises.unlink(tmp).catch(() => {});
+  }
 });
 
 // Photo attachments: the chat composer uploads each image here (raw body, one per request); it lands
@@ -1949,11 +1973,7 @@ sweepAttachments();
 // Typed command from the Jarvis card — no audio, just enqueue the text like the voice path.
 // Photo attachments (object names from /api/attach) ride along; a photo-only send (no text) is valid —
 // the worker's framing directive tells the model the intent is to log what the photos show.
-// De-dupe resent sends: the durable photo outbox may re-POST if a screen-lock killed the ack before the
-// client marked the send done. A client_msg_id turns that retry into a no-op instead of a duplicate log.
-// In-memory suffices — the hub runs a single instance and the retry window is seconds to minutes; the map
-// is bounded so it can't grow without limit.
-const seenMsgIds = new Map();   // client_msg_id -> first-seen ts
+// A client_msg_id de-dupes a resent send (see seenMsgIds above /api/voice-command).
 app.post('/api/voice-text', express.json(), async (req, res) => {
   try {
     const text = String((req.body && req.body.text) || '').trim();

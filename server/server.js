@@ -416,23 +416,38 @@ const SURF_BAND_LABELS  = ['Poor or below', 'Poor\u2013Fair', 'Fair', 'Good', 'E
 // anything outside the range one spot happens to produce.
 const SURF_SIZE_FLAT = '#ffffff';     // every band topping out at 1 ft
 const SURF_SIZE_FLAT_MAX = 1;
-const SURF_SIZE_STOPS = ['#86b6ef', '#3987e5', '#1c5cab', '#000c45'];
+// The blues are spaced evenly in OKLCH lightness, not blended in RGB between fixed stops: RGB stops
+// bunched the middle bands together, which is what made adjacent sizes hard to tell apart. Hue drifts
+// toward pure blue as it darkens because a fixed hue goes grey-navy at the dark end. Chroma is the
+// most sRGB can hold at each lightness, capped so the mid blues don't go neon.
+const SURF_SIZE_L = [0.86, 0.20], SURF_SIZE_H = [252, 264], SURF_SIZE_CMAX = 0.17;
 
-// Interpolate the validated stops so any number of bands stays inside the validated range.
-function sizeRamp(n) {
-  if (n <= 0) return [];
-  if (n <= SURF_SIZE_STOPS.length) {
-    return Array.from({ length: n }, (_, i) =>
-      SURF_SIZE_STOPS[Math.round(i * (SURF_SIZE_STOPS.length - 1) / Math.max(1, n - 1))]);
+function oklchHex(L, C, h) {
+  const hr = h * Math.PI / 180;
+  const rgb = (c) => {
+    const a = c * Math.cos(hr), b = c * Math.sin(hr);
+    const l = (L + 0.3963377774 * a + 0.2158037573 * b) ** 3;
+    const m = (L - 0.1055613458 * a - 0.0638541728 * b) ** 3;
+    const s = (L - 0.0894841775 * a - 1.2914855480 * b) ** 3;
+    return [4.0767416621 * l - 3.3077115913 * m + 0.2309699292 * s,
+           -1.2684380046 * l + 2.6097574011 * m - 0.3413193965 * s,
+           -0.0041960863 * l - 0.7034186147 * m + 1.7076147010 * s];
+  };
+  let lo = 0, hi = C;   // bisect for the largest chroma still inside sRGB
+  for (let i = 0; i < 30; i++) {
+    const c = (lo + hi) / 2;
+    if (rgb(c).every((v) => v >= -1e-4 && v <= 1 + 1e-4)) lo = c; else hi = c;
   }
-  const hex = (h) => [1, 3, 5].map((k) => parseInt(h.slice(k, k + 2), 16));
-  const pad = (v) => v.toString(16).padStart(2, '0');
+  const enc = (x) => x <= 0.0031308 ? 12.92 * x : 1.055 * Math.pow(x, 1 / 2.4) - 0.055;
+  return '#' + rgb(lo).map((v) =>
+    Math.round(Math.min(1, Math.max(0, enc(v))) * 255).toString(16).padStart(2, '0')).join('');
+}
+
+function sizeRamp(n) {
   return Array.from({ length: n }, (_, i) => {
-    const t = (i / (n - 1)) * (SURF_SIZE_STOPS.length - 1);
-    const a = hex(SURF_SIZE_STOPS[Math.floor(t)]);
-    const b = hex(SURF_SIZE_STOPS[Math.min(SURF_SIZE_STOPS.length - 1, Math.ceil(t))]);
-    const f = t - Math.floor(t);
-    return '#' + a.map((v, k) => pad(Math.round(v + (b[k] - v) * f))).join('');
+    const t = n === 1 ? 0 : i / (n - 1);
+    return oklchHex(SURF_SIZE_L[0] + (SURF_SIZE_L[1] - SURF_SIZE_L[0]) * t, SURF_SIZE_CMAX,
+                    SURF_SIZE_H[0] + (SURF_SIZE_H[1] - SURF_SIZE_H[0]) * t);
   });
 }
 

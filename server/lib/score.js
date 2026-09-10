@@ -28,16 +28,19 @@
 //
 // TASKS% — the gold band. Starts EMPTY and is earned by completing dated list items; there is no
 //   neutral baseline, because a baseline would remove the only incentive the band exists to create,
-//   which is putting things on the list in the first place. Completing on time earns full value,
-//   completing progressively later earns less and eventually costs, and anything left sitting
-//   overdue drains continuously for as long as it sits. Every effect fades linearly to nothing over
-//   the same seven days the other two bands look back over, so a hit's SIZE decides how long it is
-//   felt — no separate recovery rule.
+//   which is putting things on the list in the first place. Completing on time earns full value and
+//   completing progressively later earns less, down to nothing at TASK_LATE_ZERO_H — but never less
+//   than nothing, because the cost of lateness is billed by the hour instead. Anything past its
+//   grace bills for as long as it sits, whether it is eventually done or not. Every effect fades
+//   linearly to nothing over the same seven days the other two bands look back over, so a hit's SIZE
+//   decides how long it is felt — no separate recovery rule.
 //
 //   Only COMPLETING scores. Deleting an item is worth nothing in either direction — it is a thing he
 //   decided not to do, not a thing he failed at — so calling off a whole series costs nothing and
 //   needs no special case. The two are different verbs precisely so that neither has to be guessed
-//   at from the clock.
+//   at from the clock. DELETING IS THEREFORE THE HONEST WAY OUT of something overdue: it stops the
+//   charge without pretending the thing was done, where completing it stops the charge and keeps
+//   every hour already billed.
 //
 //   EXEMPT items (priority < 0) are invisible to all of this. A work shift or an appointment happens
 //   at a time but owes nothing, so there is nothing to earn for "completing" one and penalising him
@@ -45,9 +48,11 @@
 //   drain — which is why this is a branch rather than a zero multiplier: a multiplier of zero would
 //   still let them count as overdue.
 //
-//   The drain on an open item is UNBOUNDED, deliberately. Ignoring something for a week is not the
-//   same as ignoring it for a day, and a floor would say it was. It always has a bounded exit, since
-//   completing the item replaces the whole accumulated drain with one floored late completion.
+//   The drain is UNBOUNDED in what it can bill, deliberately. Ignoring something for a week is not
+//   the same as ignoring it for a day, and a floor would say it was. What bounds it is the band: an
+//   hour that would take the level below zero is not charged, so neglect can empty the band and
+//   never dig under it. Completing does not refund what was already billed — only deleting the item
+//   avoids the charge, and that is the difference between calling something off and doing it late.
 
 const W_PRO = 0.35, W_CAL = 0.35, W_FAT = 0.30;     // nutrition macro weights (sum 1); carbs derived, not scored
 const PRO_TOL = 50;     // protein: grams BEHIND pace at which the score hits 0 (under only; over is free)
@@ -72,7 +77,6 @@ const TASK_RATE = 4;
 const TASK_DECAY_DAYS = 7;    // a completion's effect fades linearly to nothing over this
 const TASK_GRACE_MIN = 30;    // still "on time" this long past the deadline
 const TASK_LATE_ZERO_H = 4;   // lateness at which a completion is worth nothing
-const TASK_LATE_FLOOR_H = 24; // lateness at which a completion is worth its full negative
 const TASK_DRAIN_FULL_H = 24; // an overdue item drains one unit per this many hours, forever
 const DAY_START_HOUR = 4;     // the display day's 4am origin, shared with lib/dates.js
 const TASK_STEP_H = 1;        // replay granularity
@@ -172,13 +176,15 @@ function taskDeadline(occurrence) {
   if (at == null) return null;
   return isTimed(occurrence) ? at : at + DAY + DAY_START_HOUR * HOUR;
 }
-// +1 on time, sliding through 0 at LATE_ZERO and down to its floor at LATE_FLOOR.
+// +1 on time, sliding to 0 at LATE_ZERO and staying there. It does NOT go negative: the cost of
+// being late is the drain, charged by the hour for as long as the thing actually sat, and a negative
+// here would charge the same lateness a second time in a lump. This curve says only what finishing
+// is worth; the drain says what waiting cost.
 function completionValue(lateMs) {
-  const grace = TASK_GRACE_MIN * MIN, zero = TASK_LATE_ZERO_H * HOUR, floor = TASK_LATE_FLOOR_H * HOUR;
+  const grace = TASK_GRACE_MIN * MIN, zero = TASK_LATE_ZERO_H * HOUR;
   if (lateMs <= grace) return 1;
-  if (lateMs <= zero) return 1 - (lateMs - grace) / (zero - grace);
-  if (lateMs >= floor) return -1;
-  return -((lateMs - zero) / (floor - zero));
+  if (lateMs >= zero) return 0;
+  return 1 - (lateMs - grace) / (zero - grace);
 }
 
 // How far ahead of the caller's own clock a completion stamp may still be accepted. Two machines
@@ -297,28 +303,52 @@ function tasksScore({ events = [], open = [], nowLocal }) {
   }
   landings.sort((a, b) => a.at - b.at);
 
-  // An outstanding item drains at a steady rate for as long as it is overdue. The rate is constant;
-  // it is the TOTAL that grew without bound before, and the floor is what bounds it now.
+  // An item is overdue from its grace expiring until it is DONE — or until now, if it never was.
+  // Finishing stops the charge; it does not refund it. Both spans are reconstructible from the rows,
+  // since a completed item still carries its own deadline and its completed_at, so nothing has to be
+  // stored to remember that it sat there.
+  //
+  // The rate is quantised for the same reason a landing is, so the two sides are on one scale: a day
+  // overdue costs 7, an on-time completion pays 7.
   const drains = [];
-  for (const o of open) {
-    if (isExempt(o)) continue;                                     // an appointment cannot be late
-    const deadline = taskDeadline(o.scheduled_at || o.due);
-    if (deadline == null) continue;
-    // Quantised for the same reason a landing is, so both sides of "a day overdue cancels an on-time
-    // completion" are stated on the same scale — 7 points a day against a completion's 7 — and now
-    // that the drain is subtracted from the level rather than taken out of the credits, that trade
-    // is exact in bar movement too.
-    drains.push({ from: deadline + TASK_GRACE_MIN * MIN, rate: toPoints(1 + (Number(o.priority) || 0)) });
+  const overdueSpan = (row, until) => {
+    if (isExempt(row)) return;                                     // an appointment cannot be late
+    const deadline = taskDeadline(row.scheduled_at || row.due);
+    if (deadline == null) return;
+    const from = deadline + TASK_GRACE_MIN * MIN;
+    if (!(until > from)) return;
+    drains.push({ from, to: until, rate: toPoints(1 + (Number(row.priority) || 0)) });
+  };
+  for (const o of open) overdueSpan(o, Infinity);
+  for (const e of events) {
+    const done = naive(e.completed_at);
+    if (done != null) overdueSpan(e, done);
   }
 
-  const credits = [];                                              // oldest first
-  const creditAt = (t) => credits.reduce((sum, c) => sum + c.credit * weightAt(c, t), 0);
-  // Push `want` off the OLDEST end at time t. This is the overfill rule and nothing else now: the
-  // newest work always lands, and what it displaces is the credit closest to ageing out anyway.
-  // Returns what was actually removed, which is less than asked for once the queue is empty.
+  // ENTRIES are every point in the band, positive or negative, each stamped with the moment it
+  // happened and each fading over the same TASK_DECAY_DAYS. That uniformity is the point: a level
+  // built from decaying parts has to know WHEN every part landed, so a drain cannot be a bare number
+  // subtracted at the end — it has to be an event too.
+  //
+  // An hour of an item sitting overdue is exactly that: something that happened, at a time. It lands
+  // as a negative entry at that hour and ages out from there, and FINISHING THE ITEM DOES NOT REMOVE
+  // IT. The thing did sit there; the only thing completing buys is that no further hours are charged.
+  //
+  // What it deliberately does NOT do is debit an existing credit. Taking the points out of a recent
+  // completion would destroy that credit's own remaining decay along with it — charging the same
+  // neglect twice, once now and once as the decline that can no longer happen — and it would eat the
+  // reward for work just done, so the bar would sit still on the day something was finished. The two
+  // are only equivalent when the credit landed at the same instant as the drain, which is never.
+  //
+  // takeOldest survives for the one job it was right for: OVERFILL, where displacing the credit
+  // closest to ageing out is a true statement rather than an accident of which end the loop started.
+  const entries = [];                                              // oldest first
+  const levelAt = (t) => entries.reduce((sum, c) => sum + c.credit * weightAt(c, t), 0);
+  // Push `want` off the OLDEST end at time t. Returns what was actually removed, which is less than
+  // asked for once the queue is empty. Negative entries are not credit and are never taken from.
   const takeOldest = (want, t) => {
     let left = want;
-    for (const c of credits) {
+    for (const c of entries) {
       if (left <= 1e-9) break;
       const w = weightAt(c, t);
       if (w <= 0 || c.credit <= 0) continue;
@@ -330,53 +360,40 @@ function tasksScore({ events = [], open = [], nowLocal }) {
     return want - left;
   };
 
-  // DEBT is the drain, and it is deliberately not part of the queue. Draining used to reach in and
-  // destroy credits from the oldest end, which quietly made neglect nearly free: the oldest credit
-  // has almost no weight left, so a day overdue destroyed a lot of face credit while the bar fell
-  // about five points, and after a day or two it was chewing credit that had nearly finished
-  // decaying on its own and the bar stopped moving at all. Nothing in the idea of an overdue item
-  // says it should come out of some particular past completion — it is pressure on the level, so it
-  // is now a running total subtracted from the level, and a day overdue costs a flat 7.
-  //
-  // It is capped at the credit actually present, re-checked every step, and that cap is the whole of
-  // what "cannot empty past 0" means. Debt allowed to run past the bottom would be a hole nobody can
-  // see: the bar would read 0 either way, and the next completion would disappear into the hole
-  // instead of moving it. Capped as it accrues, the level is credit − debt and every new credit shows
-  // immediately, however long the neglect ran.
-  //
-  // takeOldest keeps the one job it was right for: OVERFILL, where displacing the oldest credit is a
-  // true statement rather than an accident of which end the loop started at.
-  let earned = 0, li = 0, debt = 0;
+  let earned = 0, drained = 0, li = 0;
   for (let t = start; t <= now; t += stepMs) {
     const stepEnd = Math.min(t + stepMs, now);
     while (li < landings.length && landings[li].at <= stepEnd) {
       const L = landings[li];
-      if (L.amount >= 0) {
-        credits.push({ at: L.at, credit: L.amount });
-        // The ceiling is on the level a person READS, not on raw credit: with debt outstanding there
-        // is room under 100, and a completion has to be visible in it.
-        const over = creditAt(L.at) - debt - TASK_FULL_UNITS;
+      if (L.amount > 0) {
+        entries.push({ at: L.at, credit: L.amount });
+        const over = levelAt(L.at) - TASK_FULL_UNITS;
         // Full: the newest still lands, the oldest is pushed out to make room for it.
         earned += over > 0 ? Math.max(0, L.amount - takeOldest(over, L.at)) : L.amount;
-      } else {
-        debt += -L.amount;                       // a very late one is a penalty, not a credit removal
       }
       li++;
     }
-    let rate = 0;
-    for (const d of drains) if (d.from < stepEnd) rate += d.rate;
-    if (rate > 0) debt += rate * ((stepEnd - t) / DAY);
-    const cap = creditAt(stepEnd);
-    if (debt > cap) debt = cap;
-    while (credits.length && credits[0].credit <= 1e-9) credits.shift();
+    // Every hour any item spent overdue inside this step, at that item's rate.
+    let want = 0;
+    for (const d of drains) {
+      const a = Math.max(t, d.from), b = Math.min(stepEnd, d.to);
+      if (b > a) want += d.rate * ((b - a) / DAY);
+    }
+    if (want > 0) {
+      // Never past the bottom. A penalty that would take the level below zero is not recorded at
+      // all, which is what "cannot empty past 0%" means: debt banked under the floor is invisible,
+      // and the next completion would vanish into it instead of moving the bar.
+      const applied = Math.min(want, Math.max(0, levelAt(stepEnd)));
+      if (applied > 1e-9) { entries.push({ at: stepEnd, credit: -applied }); drained -= applied; }
+    }
+    while (entries.length && Math.abs(entries[0].credit) <= 1e-9) entries.shift();
   }
 
-  const drained = -debt;
-  const level = Math.max(0, Math.min(TASK_FULL_UNITS, creditAt(now) - debt));
+  const level = Math.max(0, Math.min(TASK_FULL_UNITS, levelAt(now)));
   // What the next hour costs at the current rate, if nothing changes. Surfaced rather than derived
   // by a caller so there is one answer to "how fast am I bleeding" — and so it cannot drift from the
   // rate the replay above actually applied.
-  const liveRate = drains.reduce((r, d) => r + (d.from < now ? d.rate : 0), 0);
+  const liveRate = drains.reduce((r, d) => r + (d.from < now && d.to > now ? d.rate : 0), 0);
   const perHour = liveRate / 24;
   return {
     pct: TASK_FULL_UNITS > 0 ? level / TASK_FULL_UNITS : 0,
@@ -385,7 +402,7 @@ function tasksScore({ events = [], open = [], nowLocal }) {
     drain_per_hour: perHour,
     // Capped by what is actually there: at 0.4 units left, the next hour cannot cost more than that.
     drain_next_hour_pct: TASK_FULL_UNITS > 0 ? Math.min(level, perHour) / TASK_FULL_UNITS : 0,
-    overdue: drains.filter((d) => d.from < now).length,
+    overdue: drains.filter((d) => d.from < now && d.to > now).length,
     completed: landings.length,
   };
 }

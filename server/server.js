@@ -2344,30 +2344,41 @@ function nextChipTransition(rows, nowLocal) {
 // The switch at LATE_ZERO_H is where those two swap importance: before it, "you can still get 0.86"
 // is the useful fact; after it, the only useful fact is what it is taking.
 //
-// The overdue figure is the item's OWN accrued cost at its rate, not its effect on the band. Those
-// differ in two ways: once the band bottoms out there is nothing left to take, and even above zero
-// the drain eats the oldest credit, which was nearly spent, so the bar falls by less than the figure
-// says. An item pinning the band at zero is still costing him everything he earns, so its own rate
-// is the truer statement of what it is DOING — but unlike the earned and potential branches, this
-// number is not a promise about where the bar will go.
+// The overdue figure is the item's OWN accrued cost at its rate, which is what the bar moves by too
+// unless the band has bottomed out — an hour that would take the level below zero is never charged,
+// so at zero the figure keeps climbing while the bar cannot fall. An item pinning the band at zero
+// is still costing him everything he earns, so its own rate stays the truer statement of what it is
+// doing.
 function chipScore(item, nowLocal, state) {
   const mult = 1 + Math.max(0, Number(item.priority) || 0);
   if ((item.priority || 0) < 0) return null;                       // exempt
   const deadline = taskDeadline(item.scheduled_at || item.due);
   if (deadline == null) return null;
   const ms = (stamp) => Date.parse(String(stamp).replace(' ', 'T') + 'Z');
-  // Through toPoints() on every branch, because the band scores through it too. The chip is then
-  // not a rounding of the credit — it IS the credit, and the two cannot drift by a fraction.
+  // A COMPLETED item is what finishing paid MINUS every hour it sat before that. Those are different
+  // things and the chip has to be their sum, because the sum is what the item did to the band: an
+  // on-time completion is a clean +7, and one finished three days late is roughly −21 however
+  // promptly it was eventually ticked off. Showing only what finishing paid would print "+0" over an
+  // item that cost twenty points.
+  //
+  // Only the first half goes through toPoints(). The drain accrues by the hour and is a continuous
+  // quantity, so a chip carrying one is a rounded reading rather than the exact credit — true of the
+  // 'lost' branch already. An item completed inside its grace has no drain at all, and there the
+  // integer is still exactly what the bar moved by.
   if (item.completed_at) {
-    return { value: toPoints(completionValue(ms(item.completed_at) - deadline) * mult), kind: 'earned' };
+    const done = ms(item.completed_at);
+    const paid = toPoints(completionValue(done - deadline) * mult);
+    const sat = Math.max(0, done - (deadline + TASK_GRACE_MIN * 60000));
+    return { value: paid - (sat / (TASK_DRAIN_FULL_H * 3600000)) * toPoints(mult), kind: 'earned' };
   }
   if (state !== 'expired') return null;                            // upcoming or still in grace
   const late = ms(nowLocal) - deadline;
   if (late < TASK_LATE_ZERO_H * 3600000) {
     return { value: toPoints(completionValue(late) * mult), kind: 'potential' };
   }
-  // Accrued cost, at the same quantised rate the replay drains it at. Not itself a whole point: a
-  // drain is continuous, so this is a readout of something still moving rather than an event.
+  // Accrued cost, at the same quantised rate the replay bills it at. Not itself a whole point: the
+  // drain accrues by the hour, so this is a readout of something still moving. It keeps climbing
+  // while the item sits, and completing the item stops it rather than clearing it.
   const draining = late - TASK_GRACE_MIN * 60000;
   return { value: -(draining / (TASK_DRAIN_FULL_H * 3600000)) * toPoints(mult), kind: 'lost' };
 }

@@ -127,7 +127,8 @@ attaches to tmux over SSH and starts one by hand, which is not tracked.
 | tool / action | who claims it | what happens |
 |---|---|---|
 | `start_session` | target machine | pull, launch, publish the row |
-| `focus_session` | — | points the follow-up pointer at a session that already exists |
+| `focus_session` | — | pins the follow-up pointer to a session that already exists |
+| `unfocus_session` | — | releases the pin: follow-ups go to the most recently active session again |
 | `follow_up` | machine owning the focused session | text typed into the live session |
 | `rename_session` | owning machine | `/rename <name>` typed in — the session renames itself |
 | `end_session` | owning machine | close the tab / tmux session, park the row |
@@ -135,7 +136,7 @@ attaches to tmux over SSH and starts one by hand, which is not tracked.
 | `transfer_session` | machine GIVING IT UP | close, flush the mirror, ask the other to resume |
 | `get_sessions` | — | the numbered list |
 
-All seven are on the fast path (`SAFE_TOOLS`): they route prompts and manage what is running, and
+All of them are on the fast path (`SAFE_TOOLS`): they route prompts and manage what is running, and
 none of them invents a value.
 
 ### Focus — how a session gets spoken to
@@ -145,8 +146,10 @@ focused — is decided in this order, by `focusedSession` in `data-layer/src/des
 the hub, which must agree:
 
 1. **A session focused by name** (`focus_session`: "focus the status-hub session"), while it runs. It
-   holds until he focuses another, says "latest" (`focus_session latest`), dispatches new work, or it
-   closes.
+   holds until he focuses another, releases it (`unfocus_session`: "go back to automatic"), dispatches
+   new work, or it closes. "Focus the latest session" is a pin like any other — of whichever session
+   is newest at that moment — which is why going back to automatic is a separate verb: when one tool
+   did both, "latest" could be read either way.
 2. **A dispatch whose session has not opened yet** (`desk_focus.command_id`, while that command is
    pending or running). Words said in those seconds are meant for it, so a follow-up is saved rather
    than sent to whatever was active a moment before.

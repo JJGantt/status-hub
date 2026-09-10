@@ -79,6 +79,24 @@ the route and the `trace()` calls.
 
 ## Not started
 
+### Countdown on the red always-on border
+
+The footer's red border (`cards/routing.js`, from `wake` in `routingConfig()`) means only "always-on
+is off". It cannot tell the auto-brake from a manual off, and it says nothing about when the brake
+releases. Jared wants the time remaining shown on it.
+
+Once the worker persists its release time (voice-pipeline `docs/TODO.md`, "Countdown on the red
+blocked state"), `routingConfig()` ships `braked` plus that time. The settings refresh already
+delivers it, and `routing.js` paints the countdown. Do not compute it here from `voice_presence`:
+the thresholds would drift from the worker's, and realtime on that table fires on every voice match.
+Any wording beyond the bare time is Jared's.
+
+### Surf grid guides vanish over the white 0-1 ft band
+
+The noon, 6a/6p and now lines are white, so they disappear over a white 0-1 ft cell and are faint
+over the pale 1-2 ft blue. The size ramp was just rebuilt (white, then OKLCH-even blues); the guide
+ink over the light end has not been decided.
+
 ### Task band — tuning, and the surfaces it has not reached
 
 The scoring itself is built and live (`lib/score.js`, data-layer `00085`-`00087`; how it works is in

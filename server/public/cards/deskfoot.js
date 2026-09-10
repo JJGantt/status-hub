@@ -5,7 +5,7 @@
 //
 // The repo name and nothing else — no caption. The box IS the statement: something is holding
 // follow-ups, and it is this. A word explaining that is text on a wall nobody reads from a chair.
-import { esc } from '../shared.js';
+import { esc, PIN_SVG } from '../shared.js';
 
 export function render(s) {
   const el = document.getElementById('tv-follow');
@@ -14,5 +14,5 @@ export function render(s) {
   // Nothing running, or a dispatch still opening. Render nothing at all — an empty box on a display
   // nobody interacts with is worse than no box.
   if (!f) { el.innerHTML = ''; return; }
-  el.innerHTML = '<span class="tv-follow-box">' + esc(f.repo || f.id) + '</span>';
+  el.innerHTML = '<span class="tv-follow-box">' + (f.pinned ? PIN_SVG : '') + esc(f.repo || f.id) + '</span>';
 }

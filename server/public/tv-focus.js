@@ -5,7 +5,7 @@
 // list Jared is naming from ("focus the second session") and the answer that came back.
 //
 // Its own module, loaded only by tv-session-focus.html. The live wall shares nothing with it.
-import { esc } from './shared.js';
+import { esc, PIN_SVG } from './shared.js';
 
 const REFRESH_MS = 5000;
 
@@ -25,12 +25,13 @@ function render(d) {
 
   const live = d.resident || [];
   const focus = d.focus || null;
+  const pin = (s) => (d.pinned && s.id === focus ? PIN_SVG : '');   // a pin, not automatic focus
 
   tabs.innerHTML = live.map((s) =>
     `<span class="sf-tab${s.id === focus ? ' on' : ''}">` +
       `<span class="sf-dot${s.working ? '' : ' idle'}"></span>` +
       `<span class="sf-n">${s.n ?? ''}</span>` +
-      `<span class="sf-name">${esc(tabName(s))}</span>` +
+      `<span class="sf-name">${pin(s)}${esc(tabName(s))}</span>` +
       `<span class="sf-where">${s.worker === 'desk' ? 'Mac' : 'Pi'}</span>` +
     '</span>').join('');
 
@@ -40,7 +41,7 @@ function render(d) {
   if (!on) { body.innerHTML = ''; return; }
   body.innerHTML =
     '<div class="sf-head">' +
-      `<span class="sf-title">${esc(on.custom_title || on.label || on.repo)}</span>` +
+      `<span class="sf-title">${pin(on)}${esc(on.custom_title || on.label || on.repo)}</span>` +
       `<span class="sf-meta">${esc(on.repo)}</span>` +
     '</div>' +
     `<div class="sf-reply">${esc((on.last_reply || '').trim())}</div>`;

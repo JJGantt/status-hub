@@ -556,8 +556,8 @@ async function buildStatus() {
       sb('desk_focus?id=eq.current&select=command_id,session_id'),
       sb('desk_sessions?status=eq.resident&select=id,repo,label,command_id,status,active_at,reply_at,started'),
     ]);
-    const hit = await pickFocus((fRows || [])[0], sRows);
-    if (hit) deskFocus = { id: hit.id, repo: hit.repo, label: hit.label || null };
+    const { session: hit, pinned } = await pickFocus((fRows || [])[0], sRows);
+    if (hit) deskFocus = { id: hit.id, repo: hit.repo, label: hit.label || null, pinned };
   } catch (_) { /* the strip simply shows nothing rather than failing the whole payload */ }
 
   // ---- mic / worker liveness ----
@@ -2868,20 +2868,23 @@ const byActivity = (a, b) => sessionActivity(b) - sessionActivity(a);
 //   1. a session Jared focused BY NAME, while it is still running;
 //   2. a dispatch whose session has not opened yet — null here, so nothing claims focus in that gap;
 //   3. otherwise the most recently active running session, on either machine.
+// → { session, pinned }. `pinned` says the focus is 1 — his explicit pin — rather than automatic, and
+// every surface marks a pinned session differently, because a pin stays put while other sessions take
+// turns and automatic focus does not.
 async function pickFocus(focusRow, sessions) {
   const f = focusRow || {};
   const running = (sessions || []).filter((s) => s.status === 'resident');
   if (f.session_id) {
     const hit = running.find((s) => s.id === f.session_id);
-    if (hit) return hit;
+    if (hit) return { session: hit, pinned: true };
   }
   if (f.command_id && !(sessions || []).some((s) => s.command_id === f.command_id)) {
     // Only while it can still become a session: a command that failed or expired never will.
     const cmd = await sb(`desk_commands?id=eq.${encodeURIComponent(f.command_id)}&select=status`);
     const st = cmd && cmd[0] && cmd[0].status;
-    if (st === 'pending' || st === 'running') return null;
+    if (st === 'pending' || st === 'running') return { session: null, pinned: false };
   }
-  return running.sort(byActivity)[0] || null;
+  return { session: running.sort(byActivity)[0] || null, pinned: false };
 }
 
 app.get('/api/sessions', async (req, res) => {
@@ -2891,7 +2894,7 @@ app.get('/api/sessions', async (req, res) => {
       sb('desk_queue?claimed=is.null&select=*&order=created.asc'),
       sb('desk_focus?id=eq.current&select=command_id,session_id'),
     ]);
-    const focusHit = await pickFocus((focusRows || [])[0], sessions);
+    const { session: focusHit, pinned } = await pickFocus((focusRows || [])[0], sessions);
     const focus = focusHit ? focusHit.id : null;
     // The number Jared says out loud. THE RULE IS SHARED WITH `numberSessions` IN data-layer's
     // desk.ts and both have to agree, or "session three" means one thing to the pane and another to
@@ -2930,6 +2933,7 @@ app.get('/api/sessions', async (req, res) => {
       evicted: evicted.map((s, i) => (i === 0 ? full(s) : brief(s))),
       queued: queue || [],
       focus,
+      pinned,
     });
   } catch (e) { res.status(500).json({ error: String(e.message || e) }); }
 });

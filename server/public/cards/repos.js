@@ -9,7 +9,7 @@
 //
 // Self-fetching (NOT part of the status stream), like the todo pane. No-ops where #repospane is
 // absent (kiosk / mac / page).
-import { esc } from '../shared.js';
+import { esc, PIN_SVG } from '../shared.js';
 import { makeRecorder } from '../voiceagent.js';
 
 let mounted = false;
@@ -61,7 +61,7 @@ function sessionsHtml(s) {
         `${esc(x.label || x.repo)}` +
         (x.label && x.repo && x.label !== x.repo ? `<span class="sess-in">${esc(x.repo)}</span>` : '') +
           `<span class="sess-where">${x.worker === 'desk' ? 'Mac' : 'Pi'}</span>` +
-          (x.id === focus ? '<span class="sess-focus" title="a spoken follow-up goes here">follow-ups</span>' : '') +
+          (x.id === focus ? '<span class="sess-focus" title="a spoken follow-up goes here">' + (s.pinned ? PIN_SVG : '') + 'follow-ups</span>' : '') +
         `</span>` +
         `<span class="sess-say">${esc((x.say || '').slice(0, 90))}</span>` +
       `</div>` +

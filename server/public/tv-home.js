@@ -3,7 +3,7 @@
 //
 // DISPLAY ONLY, like every wall. Nothing here is interactive and nothing here writes — voice starts
 // sessions, voice focuses them, and this is where the answer comes back.
-import { esc, liveStream } from './shared.js';
+import { esc, liveStream, PIN_SVG } from './shared.js';
 import { mount } from './cards/dayline.js';
 
 // The month grid is the calendar wall's; this column takes the day on its own. `full=1` for the
@@ -47,6 +47,8 @@ const listed = (d) => [...(d.resident || []), ...(d.evicted || [])]
   .sort((a, b) => (a.n || 99) - (b.n || 99)).slice(0, LIST_MAX);
 
 const name = (s) => s.custom_title || s.label || s.repo;
+// A pinned session carries the pin wherever it is named; automatic focus carries nothing extra.
+const pinMark = (d, s) => (d.pinned && s.id === d.focus ? PIN_SVG : '');
 
 // What each session is doing right now, keyed by id and held between polls: `/api/sessions` knows
 // nothing about tool calls, so a re-render would wipe the line the moment the list refreshed.
@@ -88,7 +90,7 @@ function render(d) {
       '<div class="hw-row-top">' +
         `<span class="hw-sess-dot${s.working ? '' : ' idle'}"></span>` +
         `<span class="hw-row-n">${s.n ?? ''}</span>` +
-        `<span class="hw-row-name">${esc(name(s))}</span>` +
+        `<span class="hw-row-name">${pinMark(d, s)}${esc(name(s))}</span>` +
         `<span class="hw-row-where">${s.worker === 'desk' ? 'Mac' : 'Pi'}</span>` +
       '</div>' +
       rowActivity(s) +
@@ -96,7 +98,7 @@ function render(d) {
 
   // Nothing running and nothing parked is a real state, and an empty panel is its honest rendering.
   if (!on) { head.innerHTML = ''; reply.textContent = ''; return; }
-  head.innerHTML = `<span class="hw-sess-name">${esc(name(on))}</span>` +
+  head.innerHTML = `<span class="hw-sess-name">${pinMark(d, on)}${esc(name(on))}</span>` +
     `<span class="hw-sess-where">${esc(on.repo)} · ${on.worker === 'desk' ? 'Mac' : 'Pi'}</span>`;
   // textContent, not innerHTML: a reply is a model's prose and may hold anything that looks like
   // markup. The panel scrolls rather than truncating — however long the answer is, it is the answer.

@@ -125,6 +125,14 @@ export function paintScrolled(host, html, { sel = null, stick = false } = {}) {
 }
 
 export function esc(s){return String(s).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;');}
+
+// The mark on a PINNED session — focus he set by name, which stays put while other sessions take
+// turns — so it never reads as automatic focus, which follows whichever session is most recent. One
+// glyph, drawn in the surrounding text colour, on every surface that shows focus.
+export const PIN_SVG = '<svg class="pin-mark" viewBox="0 0 16 16" width="0.85em" height="0.85em" fill="currentColor"'
+  + ' role="img" aria-label="pinned" style="vertical-align:-0.1em;margin-right:0.3em">'
+  + '<path d="M5.5 1h5a1 1 0 0 1 0 2h-5a1 1 0 0 1 0-2z M5.6 3.4h4.8l.9 4.6H4.7z'
+  + ' M3.8 8h8.4a.8.8 0 0 1 0 1.6H3.8a.8.8 0 0 1 0-1.6z M7.4 9.6h1.2v4.8a.6.6 0 0 1-1.2 0z"/></svg>';
 // This device's own current wall clock, naive (no offset) — "YYYY-MM-DDTHH:MM:SS", matching exactly
 // how sets/nutrition_entries.occurred_at is stored. Sent with every write so the logged time is
 // whatever the clock reads on the device doing the logging, wherever that is — never converted to a

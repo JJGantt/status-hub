@@ -66,7 +66,7 @@ config change ON the Pi by dispatching a session to it.
 | `pid` | the Claude Code process the row belongs to — what liveness and the conversation are read from |
 | `tty` | Mac only: the Terminal tab, and the handle a follow-up is typed into |
 | `working` / `last_reply` / `reply_at` | is a turn in flight; the last COMPLETED answer, and when |
-| `active_at` | when the last turn FINISHED — the only thing that earns recency; what orders, numbers and focuses sessions |
+| `active_at` | the last turn boundary (a prompt sent, a turn finished) — what orders, numbers and focuses sessions |
 | `mirror_offset` / `mirror_at` | how much of the transcript is in the `transcripts` bucket |
 | `command_id` | the dispatch that created it — how a follow-up resolves its target |
 
@@ -191,14 +191,13 @@ held 1–11, so the badges read 12, 13, 1, 2, 3 down the pane and the second row
 implemented twice — `numberSessions` in `data-layer/src/desk.ts` and in `/api/sessions` — and **the
 two must agree**, or "session three" means one thing to the pane and another to the voice tools.
 
-**It is ordered by `active_at`, when the session last FINISHED a turn.** Only finishing earns recency —
-not the prompt, and not the work in between — so a session climbs the list when it has something new
-to say. `last_seen` was the obvious reading of "most recent" and it made the numbers unusable: every
-row is touched by its reconcile tick every 30s, so the order reshuffled between two reads seconds apart
-— measured, and caught when "focus the first session" landed on a session that had become first while
-the sentence was being processed. `started` cured that and left a session in active use below newer
-idle ones. `active_at` moves only when a turn finishes, never on a tick, so a number said out loud can
-still change before it is resolved — but only if a session finishes a turn in those few seconds.
+**It is ordered by `active_at`, the last turn boundary** — a prompt sent or a turn finished. `last_seen`
+was the obvious reading of "most recent" and it made the numbers unusable: every row is touched by its
+reconcile tick every 30s, so the order reshuffled between two reads seconds apart — measured, and caught
+when "focus the first session" landed on a session that had become first while the sentence was being
+processed. `started` cured that and left a session in active use below newer idle ones. `active_at`
+moves only when a session starts or finishes a turn, never on a tick, so a number said out loud can
+still change before it is resolved — but only if a session does something in those few seconds.
 
 A session can be named three ways, and `resolveSession` takes any of them: **the number** (digits or
 spoken — "3", "fifth", "the third session"), **the repo** ("status-hub"), or **words from its name**
@@ -296,7 +295,7 @@ nothing noticed until the next reconcile tick — up to 30s of an answer sitting
 showed the previous one. The file changing is an event, so `sessionWatch.js` watches it on both
 machines and pushes what it sees straight to the hub:
 
-    transcript append ─ fs.watch ─▶ sessionWatch ─┬─ a prompt ─▶ patch desk_sessions.working (a start earns no recency)
+    transcript append ─ fs.watch ─▶ sessionWatch ─┬─ a prompt ─▶ patch desk_sessions.active_at, working
                                                   ├─ tool_use  ─▶ POST /api/session-activity ─▶ SSE ─▶ wall
                                                   └─ end_turn  ─┬─ POST /api/session-activity ─▶ SSE ─▶ wall
                                                                 └─ patch desk_sessions.last_reply, active_at  (durable)

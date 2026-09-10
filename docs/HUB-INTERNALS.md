@@ -814,7 +814,7 @@ ones at 14, whoever made them.
 ### Numbering, and moving a session
 
 `/api/sessions` stamps each active session with `n`: running above parked, **most recently active
-first** within each (`active_at`, when its last turn finished — SESSIONS.md § Numbering says why not
+first** within each (`active_at`, the last turn boundary — SESSIONS.md § Numbering says why not
 `last_seen` or `started`), from 1. **That rule is duplicated in `data-layer/src/desk.ts`
 (`numberSessions`) and the two must agree** — it is how "move session three to the Mac" resolves to
 the same row the pane is showing. The number is a position, not identity: closing one renumbers the

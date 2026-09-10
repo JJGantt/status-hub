@@ -2855,10 +2855,10 @@ app.get('/api/repos', async (req, res) => {
 
 // Live and parked Claude sessions on the Pi. This is the ambient indicator: what is being worked on,
 // and on which repo — answered by selecting rows rather than by any separate bookkeeping.
-// When a session last FINISHED a turn (`active_at`) — only finishing earns recency, not a prompt or the
-// work in between — falling back for rows written before that column existed. Sessions are ordered,
-// numbered and focused by it everywhere. Not `last_seen`, which every reconcile tick touches (the list
-// would reshuffle every 30s), and not `started`, which kept a session in use below newer idle ones.
+// When a session last did something: its last turn boundary (`active_at` — a prompt sent or a turn
+// finished), falling back for rows written before that column existed. Sessions are ordered, numbered
+// and focused by it everywhere. Not `last_seen`, which every reconcile tick touches (the list would
+// reshuffle every 30s), and not `started`, which kept a session in use below newer idle ones.
 const sessionActivity = (s) => new Date(s.active_at || s.reply_at || s.started).getTime();
 const byActivity = (a, b) => sessionActivity(b) - sessionActivity(a);
 

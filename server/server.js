@@ -548,22 +548,15 @@ async function buildStatus() {
   const routing = await routingConfig();   // agent model / thinking / runner / wake (TV routing panel)
 
   // The session a spoken follow-up would land in — shown on the TV strip so the answer is ambient
-  // rather than something you have to open a pane to learn. Resolved exactly as the MCP resolves it,
-  // through desk_focus.command_id to the session that command created, so the wall and the behaviour
-  // cannot disagree. Null when the pointer names a session that has since been closed, which is a
-  // real state and is rendered as such.
+  // rather than something you have to open a pane to learn. The same rule as /api/sessions
+  // (pickFocus), so the strip, the wall and the behaviour cannot disagree.
   let deskFocus = null;
   try {
     const [fRows, sRows] = await Promise.all([
       sb('desk_focus?id=eq.current&select=command_id,session_id'),
-      sb('desk_sessions?status=eq.resident&select=id,repo,label,command_id'),
+      sb('desk_sessions?status=eq.resident&select=id,repo,label,command_id,status,active_at,reply_at,started'),
     ]);
-    // `session_id` is a session Jared named deliberately and wins over `command_id`, which is only
-    // the last thing dispatched. Same order as `focusedSession` in data-layer.
-    const f = (fRows || [])[0] || {};
-    const hit = f.session_id ? (sRows || []).find((r) => r.id === f.session_id)
-              : f.command_id ? (sRows || []).find((r) => r.command_id === f.command_id)
-              : null;
+    const hit = await pickFocus((fRows || [])[0], sRows);
     if (hit) deskFocus = { id: hit.id, repo: hit.repo, label: hit.label || null };
   } catch (_) { /* the strip simply shows nothing rather than failing the whole payload */ }
 
@@ -2862,6 +2855,35 @@ app.get('/api/repos', async (req, res) => {
 
 // Live and parked Claude sessions on the Pi. This is the ambient indicator: what is being worked on,
 // and on which repo — answered by selecting rows rather than by any separate bookkeeping.
+// When a session last did something: its last turn boundary (`active_at` — a prompt sent or a turn
+// finished), falling back for rows written before that column existed. Sessions are ordered, numbered
+// and focused by it everywhere. Not `last_seen`, which every reconcile tick touches (the list would
+// reshuffle every 30s), and not `started`, which kept a session in use below newer idle ones.
+const sessionActivity = (s) => new Date(s.active_at || s.reply_at || s.started).getTime();
+const byActivity = (a, b) => sessionActivity(b) - sessionActivity(a);
+
+// The session a spoken follow-up lands in, and the one every surface shows as focused. THE RULE IS
+// SHARED WITH `focusedSession` IN data-layer's desk.ts and the two must agree, or the wall shows one
+// session as focused while a follow-up lands in another:
+//   1. a session Jared focused BY NAME, while it is still running;
+//   2. a dispatch whose session has not opened yet — null here, so nothing claims focus in that gap;
+//   3. otherwise the most recently active running session, on either machine.
+async function pickFocus(focusRow, sessions) {
+  const f = focusRow || {};
+  const running = (sessions || []).filter((s) => s.status === 'resident');
+  if (f.session_id) {
+    const hit = running.find((s) => s.id === f.session_id);
+    if (hit) return hit;
+  }
+  if (f.command_id && !(sessions || []).some((s) => s.command_id === f.command_id)) {
+    // Only while it can still become a session: a command that failed or expired never will.
+    const cmd = await sb(`desk_commands?id=eq.${encodeURIComponent(f.command_id)}&select=status`);
+    const st = cmd && cmd[0] && cmd[0].status;
+    if (st === 'pending' || st === 'running') return null;
+  }
+  return running.sort(byActivity)[0] || null;
+}
+
 app.get('/api/sessions', async (req, res) => {
   try {
     const [sessions, queue, focusRows] = await Promise.all([
@@ -2869,38 +2891,17 @@ app.get('/api/sessions', async (req, res) => {
       sb('desk_queue?claimed=is.null&select=*&order=created.asc'),
       sb('desk_focus?id=eq.current&select=command_id,session_id'),
     ]);
-    // Which session a spoken follow-up would land in. Resolved the same way the MCP resolves it —
-    // through the COMMAND that created the session, never "the busiest session" — so what the panel
-    // shows and what a follow-up actually does cannot drift apart.
-    //
-    // Null is a real and useful answer, not a gap: the pointer survives the session it named, so
-    // after that session is closed a follow-up has nowhere to go. Showing nothing marked is how you
-    // find that out before speaking, rather than after.
-    // RESIDENT ONLY, because that is what a follow-up can actually reach: `followUp` refuses when the
-    // session it points at is not running, saves the words and says so. Marking a closed session as
-    // holding follow-ups said the opposite of what would happen — and the wall strip, which has
-    // always filtered on resident, disagreed with the pane about the same pointer.
-    //
-    // A session Jared focused deliberately (`session_id`) outranks the last dispatch (`command_id`).
-    const fp = (focusRows || [])[0] || {};
-    const focusRow = fp.session_id ? (sessions || []).find((s) => s.id === fp.session_id)
-                   : fp.command_id ? (sessions || []).find((s) => s.command_id === fp.command_id)
-                   : null;
-    const focus = focusRow && focusRow.status === 'resident' ? focusRow.id : null;
+    const focusHit = await pickFocus((focusRows || [])[0], sessions);
+    const focus = focusHit ? focusHit.id : null;
     // The number Jared says out loud. THE RULE IS SHARED WITH `numberSessions` IN data-layer's
     // desk.ts and both have to agree, or "session three" means one thing to the pane and another to
-    // the voice tools: active sessions only, NEWEST FIRST BY `started`, numbered from 1.
-    //
-    // Not by `last_seen` — every row is touched by its reconcile tick every 30s, so that order
-    // reshuffles between reads and a number said out loud can resolve to a different session by the
-    // time the sentence finishes. `started` never changes.
-    // RUNNING FIRST, then parked, newest first within each — the number is the POSITION IN THE LIST,
+    // the voice tools: active sessions only, MOST RECENTLY ACTIVE FIRST, numbered from 1.
+    // RUNNING FIRST, then parked, by activity within each — the number is the POSITION IN THE LIST,
     // which is where "the second session" comes from, and every surface draws running above parked.
     const rank = (s) => (s.status === 'resident' ? 0 : 1);
-    const byStarted = (a, b) => new Date(b.started).getTime() - new Date(a.started).getTime();
     const numbered = new Map((sessions || [])
       .filter((s) => s.status === 'resident' || s.status === 'evicted')
-      .sort((a, b) => rank(a) - rank(b) || byStarted(a, b))
+      .sort((a, b) => rank(a) - rank(b) || byActivity(a, b))
       .map((s, i) => [s.id, i + 1]));
     // Only the fields something renders. A desk_sessions row carries transcript paths, command ids and
     // five timestamps that no surface here reads — 97 rows of them was most of what was left of this
@@ -2919,13 +2920,13 @@ app.get('/api/sessions', async (req, res) => {
     const say = (s) => (s.last_reply || s.prompt || '').replace(/\s+/g, ' ').slice(0, SAY);
     const brief = (s) => ({ ...withN(s), say: say(s) });
     // The whole reply goes only to rows something can render in full: everything resident, plus the
-    // newest parked one, which is what the home wall falls back to when nothing is running.
+    // most recently active parked one, which is what the home wall falls back to when nothing runs.
     const full = (s) => ({ ...brief(s), last_reply: s.last_reply });
-    const evicted = (sessions || []).filter((s) => s.status === 'evicted').sort(byStarted);
+    const evicted = (sessions || []).filter((s) => s.status === 'evicted').sort(byActivity);
     res.json({
       // Resident = running now, reachable over Remote Control. Evicted = closed to free the machine
       // but resumable with full context, which is the distinction the panel has to make obvious.
-      resident: (sessions || []).filter((s) => s.status === 'resident').sort(byStarted).map(full),
+      resident: (sessions || []).filter((s) => s.status === 'resident').sort(byActivity).map(full),
       evicted: evicted.map((s, i) => (i === 0 ? full(s) : brief(s))),
       queued: queue || [],
       focus,

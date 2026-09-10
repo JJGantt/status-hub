@@ -28,20 +28,21 @@ const REFRESH_MS = 5000;
 const LIST_MAX = 3;
 
 /**
- * Which session the panel opens: the FOCUSED one — the session a spoken follow-up lands in, so what
- * the wall is showing and what he is about to talk to are the same session.
+ * Which session the panel opens: the FOCUSED one — the session a spoken follow-up lands in, which is
+ * the most recently active unless he pinned one — so what the wall is showing and what he is about to
+ * talk to are the same session.
  *
- * `focus` is null when nothing has been dispatched or focused, or when the pointer names a session
- * that has since closed; then it falls back to the newest running one, so the panel says something
- * rather than nothing. The list marks whichever is being shown — one highlight meaning "this is the
- * answer below", never a second one claiming to mean focus, which the footer already carries.
+ * `focus` is null only while a dispatch is still opening or when nothing is running; then it falls
+ * back to the first running one, else the most recent parked one, so the panel says something rather
+ * than nothing. The list marks whichever is being shown — one highlight meaning "this is the answer
+ * below", never a second one claiming to mean focus, which the footer already carries.
  */
 const shown = (d) => (d.resident || []).find((s) => s.id === d.focus) || (d.resident || [])[0]
   || (d.evicted || [])[0] || null;
 
-// Running first, then parked, newest first within each — `n` is the number he says out loud, worked
-// out by the server so every surface counts the same way. Ordering the list by it means "the second
-// session" points at the second line.
+// Running first, then parked, most recently active first within each — `n` is the number he says out
+// loud, worked out by the server so every surface counts the same way. Ordering the list by it means
+// "the second session" points at the second line.
 const listed = (d) => [...(d.resident || []), ...(d.evicted || [])]
   .sort((a, b) => (a.n || 99) - (b.n || 99)).slice(0, LIST_MAX);
 

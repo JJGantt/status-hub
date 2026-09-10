@@ -805,21 +805,20 @@ Terminal tab, found by the orchestrator rather than announced by anything. `orig
 (`adopted` vs `dispatched`), and they get the same liveness and last-reply treatment, so the panel
 describes everything running rather than only what was sent.
 
-**Adoption never touches `desk_focus`.** The follow-up pointer follows work handed over; the session
-he is typing in at that moment is exactly what a dictated follow-up must not land in.
+**Adoption never touches `desk_focus`.** A session appearing is not Jared choosing it; unpinned, focus
+is computed from activity (below), so nothing about adopting a session has to move a pointer.
 
 Retention is not per-origin: `sweepRetention` in `pi-desk` drops closed sessions at 7 days and parked
 ones at 14, whoever made them.
 
 ### Numbering, and moving a session
 
-`/api/sessions` stamps each active session with `n`: resident and evicted rows, **most recent first**,
-from 1. **That rule is duplicated in `data-layer/src/desk.ts` (`numberSessions`) and the two must
-agree** — it is how "move session three to the Mac" resolves to the same row the pane is showing.
-The number is a position, not identity: closing one renumbers the rest, which is the price of it
-being short enough to say. Sorting by `last_seen` also floats running sessions above parked ones with
-no second rule — a resident row is touched every reconcile tick, a parked one stopped being touched
-when it closed.
+`/api/sessions` stamps each active session with `n`: running above parked, **most recently active
+first** within each (`active_at`, the last turn boundary — SESSIONS.md § Numbering says why not
+`last_seen` or `started`), from 1. **That rule is duplicated in `data-layer/src/desk.ts`
+(`numberSessions`) and the two must agree** — it is how "move session three to the Mac" resolves to
+the same row the pane is showing. The number is a position, not identity: closing one renumbers the
+rest, which is the price of it being short enough to say.
 
 `POST /api/sessions/transfer` hands a session to the other machine. The row says which machine it is
 on now (`worker`), so the destination is implied. Two paths, matching the voice tool exactly: if the
@@ -884,24 +883,22 @@ chips so it uses the strip's empty middle without changing the row height — th
 that height. It renders only when a session is actually holding follow-ups; an empty box or the word
 "none" is noise on a wall you glance at. The phone panel is where the fuller form lives.
 
-`/api/sessions` returns `focus` — the session id a SPOKEN follow-up would land in — and the panel
-marks that row. It is resolved the same way the MCP resolves it, through the `desk_focus` row's
-`command_id` to the session that command created, so what the panel shows and what a follow-up
-actually does cannot drift apart.
+`/api/sessions` returns `focus` — the session a SPOKEN follow-up would land in — and the panel marks
+that row; the TV strip and the home wall show the same session. `pickFocus` in `server.js` decides it
+by the same rule as `focusedSession` in data-layer, and the two must agree: a session Jared focused by
+name while it runs, else nobody while a dispatch is still opening, else the most recently active running
+session. The rule, and why it includes the session he is typing in, is SESSIONS.md § Focus.
 
-It is worth showing because it is not guessable. The pointer follows **the last thing dispatched by
-voice**, not the session you are looking at and not the one that spoke most recently — deliberately,
-so a dictated follow-up can never land in whatever you happen to be typing in. The cost is that the
-session you have in mind and the one that will receive your words can differ silently.
+It is worth showing because it moves: the session you last used holds follow-ups unless you pinned
+one, so glancing at the strip answers where "tell it to…" will go.
 
-`focus` is legitimately null: the pointer outlives the session it named, so once that session is
-closed a follow-up has nowhere to go. The panel says so outright rather than leaving no row marked,
-which is indistinguishable from the marker failing to render.
+`focus` is null only while a dispatch is opening or when nothing is running. The panel says so
+outright rather than leaving no row marked, which is indistinguishable from the marker failing to
+render.
 
 That depends on both machines reporting honestly, which is why each reconciles its own sessions every
-30s — the Mac by looking for a `claude` process on the tab's tty (the tab outlives the process, so
-"is the tab open" is the wrong question). Without it a Mac row stayed `resident` for ever and the
-pointer kept naming a Terminal tab closed hours earlier.
+30s — by the process a row belongs to (`pid`), since a tab outlives the process inside it. Keyed by
+tab, a row closed the day before was kept running by the next session opened in its tab.
 
 ## 6c. Reports — a session's HTML write-up
 

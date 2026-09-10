@@ -42,7 +42,7 @@ config change ON the Pi by dispatching a session to it.
 | `orchestrator/src/commands.js` | Mac (launchd) | drains the queue, opens Terminal tabs |
 | `orchestrator/src/deskSessions.js` | Mac, every 30s | adopts, reports liveness, mirrors, starts watchers |
 | `orchestrator/src/sessionWatch.js` | both, on file events | watches live transcripts: pushes tool calls + finished turns |
-| `orchestrator/src/discover.js` | Mac | finds sessions nobody dispatched |
+| `orchestrator/src/discover.js` | both | which conversation each `claude` process is in, from Claude Code's own record |
 | `orchestrator/src/mirror.js` | both | uploads/downloads transcripts for a handover |
 | `orchestrator/src/transcripts.js` | both | reads a transcript: final reply, working, title |
 | `pi-desk/index.js` | Pi (systemd) | the same, plus residency limits and retention |
@@ -63,8 +63,10 @@ config change ON the Pi by dispatching a session to it.
 | `repo` / `label` | where it runs, and what it is called |
 | `status` | see below |
 | `claude_session_id` / `transcript_path` | the conversation, and where to read it |
+| `pid` | the Claude Code process the row belongs to — what liveness and the conversation are read from |
 | `tty` | Mac only: the Terminal tab, and the handle a follow-up is typed into |
 | `working` / `last_reply` / `reply_at` | is a turn in flight; the last COMPLETED answer, and when |
+| `active_at` | the last turn boundary (a prompt sent, a turn finished) — what orders, numbers and focuses sessions |
 | `mirror_offset` / `mirror_at` | how much of the transcript is in the `transcripts` bucket |
 | `command_id` | the dispatch that created it — how a follow-up resolves its target |
 
@@ -91,16 +93,26 @@ config change ON the Pi by dispatching a session to it.
 ## 4. How a session gets here
 
 **Dispatched.** `start_session` (voice) or the repo picker (phone) writes `open_session`. The target
-machine claims it, pulls the repo, launches with `--remote-control`, and publishes the row. The Pi
-clones from GitHub if it has no checkout; the Mac uses the one it has.
+machine claims it, pulls the repo, launches with `--remote-control`, and publishes the row as the most
+recently active session. The Pi clones from GitHub if it has no checkout; the Mac uses the one it has.
 
 **Adopted.** Every 30s the Mac lists `claude` processes that have a controlling tty — which excludes
-the worker's headless `claude -p` and the MCP children — finds each one's working directory with
-`lsof`, and matches it to a transcript. **The match is by birth order**: processes oldest-first, each
-taking the earliest unclaimed transcript in its project directory born within three minutes of its
-start. "Newest transcript since this process started" is what the LAUNCH path uses safely (it looks
-the instant it launches) and is wrong here — two live sessions in one repo both claimed the same file
-when tried, and each was then reported saying the other's words. No confident match means no row.
+the voice worker's SDK client and the MCP children — and any process no row owns becomes a row.
+
+**Which conversation a process is in is READ, never inferred.** Claude Code keeps a record for every
+live process, `~/.claude/sessions/<pid>.json`, holding the conversation id (the transcript's filename)
+and the working directory. It rewrites the id when `/clear` starts a new conversation and deletes the
+file when the process exits. `orchestrator/src/discover.js` reads it on both machines — the Mac for
+every process, the Pi for the tmux panes it launched (`launch.sh` `exec`s claude, so the pane's pid is
+claude's) — so a row follows a `/clear` exactly, on both.
+
+A row belongs to a PROCESS (`pid`), not a Terminal tab. A tab outlives the process inside it, and a
+later `claude` typed into the same tab is a different session with a row of its own.
+
+Inferring the transcript from outside — birth times, the newest file in a project directory — is
+what this used to do, and it cannot be made safe: every session opened in the home directory shares
+one project directory, so each new session looked like a `/clear` in every older one. The Mac logged
+336 rebinds against 42 adoptions that way, and rows were shown saying each other's words.
 
 The Pi adopts nothing: sessions there are launched by `pi-desk` or they do not exist, unless Jared
 attaches to tmux over SSH and starts one by hand, which is not tracked.
@@ -125,16 +137,21 @@ none of them invents a value.
 
 ### Focus — how a session gets spoken to
 
-`desk_focus` has two sources and they mean different things:
+The session a spoken follow-up lands in — and the one the pane, the strip and the home wall show as
+focused — is decided in this order, by `focusedSession` in `data-layer/src/desk.ts` and `pickFocus` in
+the hub, which must agree:
 
-- **`command_id`** — set automatically by a dispatch. "Start a session in X" points the follow-up
-  there, because that is obviously what he is now talking to.
-- **`session_id`** — set by `focus_session`, deliberately: "focus the status-hub session". It CLEARS
-  `command_id` and wins over it everywhere the pointer is read.
+1. **A session focused by name** (`focus_session`: "focus the status-hub session"), while it runs. It
+   holds until he focuses another, says "latest" (`focus_session latest`), dispatches new work, or it
+   closes.
+2. **A dispatch whose session has not opened yet** (`desk_focus.command_id`, while that command is
+   pending or running). Words said in those seconds are meant for it, so a follow-up is saved rather
+   than sent to whatever was active a moment before.
+3. **Otherwise the most recently active running session** (`active_at`), on either machine.
 
-Focusing is what makes voice-only surfaces work. Without it the pointer only ever named the last
-dispatch, so there was no way to go back to something — and on a wall or a watch there is no other
-way to say which of five sessions is meant.
+3 includes the session he is typing in at his keyboard. It used to be excluded, to keep dictation out
+of the session he was typing in; that trade was reversed deliberately — the session he last used is the
+one he means — and ambient speech is guarded where it always was, by `follow_up` demanding a handoff.
 
 **Focusing is itself a handoff.** `follow_up` normally demands an explicit phrase ("send a follow-up",
 "tell it to"), because the mic hears the whole room and forwarding ambient speech into a session is
@@ -163,7 +180,7 @@ session never re-reads its own file, so its terminal tab keeps the old title.
 
 ### Numbering
 
-Active sessions, **running first and then parked, newest first within each, numbered from 1** — which
+Active sessions, **running first and then parked, most recently active first within each, numbered from 1** — which
 is to say: the position in the list on screen. That is where "the second session" comes from; he reads
 it off a surface and says it, and `get_sessions` hands the agent the same list in the same order.
 Numbering the two groups together by age alone put the running sessions at 12 and 13 while parked ones
@@ -171,12 +188,13 @@ held 1–11, so the badges read 12, 13, 1, 2, 3 down the pane and the second row
 implemented twice — `numberSessions` in `data-layer/src/desk.ts` and in `/api/sessions` — and **the
 two must agree**, or "session three" means one thing to the pane and another to the voice tools.
 
-**It is ordered by `started` because that never changes.** `last_seen` was the obvious reading of
-"most recent" and it made the numbers unusable: every row is touched by its reconcile tick every 30s,
-so the order reshuffled between two reads seconds apart — measured, with two sessions sharing a
-timestamp to the second, and caught when "focus the first session" landed on a session that had
-become first while the sentence was being processed. A number said out loud has to still mean the
-same session when it is resolved, and that is several seconds later.
+**It is ordered by `active_at`, the last turn boundary** — a prompt sent or a turn finished. `last_seen`
+was the obvious reading of "most recent" and it made the numbers unusable: every row is touched by its
+reconcile tick every 30s, so the order reshuffled between two reads seconds apart — measured, and caught
+when "focus the first session" landed on a session that had become first while the sentence was being
+processed. `started` cured that and left a session in active use below newer idle ones. `active_at`
+moves only when a session starts or finishes a turn, never on a tick, so a number said out loud can
+still change before it is resolved — but only if a session does something in those few seconds.
 
 A session can be named three ways, and `resolveSession` takes any of them: **the number** (digits or
 spoken — "3", "fifth", "the third session"), **the repo** ("status-hub"), or **words from its name**
@@ -218,11 +236,10 @@ reattach; it starts a second process replaying the same file, and the two diverg
 them. Measured: the Pi's resume appended 16 records the Mac's copy never saw. Every path that resumes
 closes the other side first.
 
-**The follow-up pointer moves only on a dispatch.** `desk_focus` is set by `start_session`, by a
-resume, and by a dead-letter retry — never by adoption, never by "the most recently active session".
-Jared talks to sessions at his keyboard all day; a dictated follow-up must never land in one of those.
-The pane marks only a RESIDENT session as holding follow-ups, because that is what `follow_up` can
-actually reach.
+**`desk_focus` is written only by Jared's intent.** A dispatch, a resume and a dead-letter retry write
+its `command_id`; `focus_session` writes its `session_id`. Adoption and the reconcile ticks never touch
+it — unpinned, focus is COMPUTED from activity, not stored. Every surface resolves it by the same rule,
+and only a RESIDENT session can hold it, because that is what `follow_up` can actually reach.
 
 **Nothing spoken is ever dropped.** The queue has no way to fail — a command for a sleeping machine
 is claimed by nobody and expires unread — so every entry point checks the machine is beating BEFORE
@@ -261,9 +278,6 @@ the complete capture was discarded as its duplicate.
 
 - **Sessions started by hand ON THE PI are invisible.** Adoption is Mac-only. Nothing watches for a
   `claude` someone starts over SSH.
-- **The Pi does not follow a `/clear`** to the new transcript the way the Mac does. It cannot happen
-  unattended — compaction stays in the same file, and only `/clear` starts a new one — so this
-  matters only if Jared attaches to a tmux session and clears it himself.
 - **Failed commands have no surface.** `GET /api/failures` lists them and `POST
   /api/failures/:id/{retry,dismiss}` acts on one; nothing renders it, and nothing notifies.
 - **Mic handoff is not merged.** If one mic hears the first half of a sentence and another the second,
@@ -278,9 +292,10 @@ nothing noticed until the next reconcile tick — up to 30s of an answer sitting
 showed the previous one. The file changing is an event, so `sessionWatch.js` watches it on both
 machines and pushes what it sees straight to the hub:
 
-    transcript append ─ fs.watch ─▶ sessionWatch ─┬─ tool_use  ─▶ POST /api/session-activity ─▶ SSE ─▶ wall
+    transcript append ─ fs.watch ─▶ sessionWatch ─┬─ a prompt ─▶ patch desk_sessions.active_at, working
+                                                  ├─ tool_use  ─▶ POST /api/session-activity ─▶ SSE ─▶ wall
                                                   └─ end_turn  ─┬─ POST /api/session-activity ─▶ SSE ─▶ wall
-                                                                └─ patch desk_sessions.last_reply  (durable)
+                                                                └─ patch desk_sessions.last_reply, active_at  (durable)
 
 Note that the database write is no longer in the delivery path. It still happens, because the reply
 has to outlive the moment, but the wall hears from the machine that has the answer rather than
@@ -304,7 +319,7 @@ nobody.
 | phone pane (`cards/repos.js`) | everything: running, parked, queued, numbers, machine, last reply | full — start, name, transfer, resume, close |
 | the wall's footer (`cards/deskfoot.js`) | only the session holding follow-ups | none |
 | **TV session focus** (`/tv-session-focus`) | being built: the active sessions, nothing else | none — voice only |
-| the home wall (`/tv`, `tv-home.js`) | up to five, each with a live line of what it is doing; the focused one's full reply below | none — voice only |
+| the home wall (`/tv`, `tv-home.js`) | three, most recently active first, each with a live line of what it is doing; the focused one's full reply below | none — voice only |
 | voice (`get_sessions`) | the numbered list, and what each last said | every verb |
 
 The phone card is the complex one and stays that way — it is the surface with a keyboard and a

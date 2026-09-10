@@ -46,10 +46,8 @@ function sessionsHtml(s) {
   const res = s.resident || [], ev = s.evicted || [], q = s.queued || [];
   if (!res.length && !ev.length && !q.length) return '';
 
-  // Which session a SPOKEN follow-up lands in. Worth showing because it is not guessable: it follows
-  // the last thing dispatched by voice, not whatever you are looking at or whatever spoke most
-  // recently — so the session you have in mind and the one that will receive your words can differ,
-  // silently, and you only find out afterwards.
+  // Which session a SPOKEN follow-up lands in: the most recently active one unless he pinned another
+  // by name (pickFocus in server.js). Worth marking because it moves as sessions take turns.
   const focus = s.focus || null;
   // The NUMBER is the point of showing it: it is how a session gets named out loud ("move session
   // three to the Mac"), and it has to be the same number the voice tools resolve — the server derives

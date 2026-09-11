@@ -23,6 +23,19 @@ only bites when an entitlement or bundle id changes.
   `apps/project.yml` as a TODO.
 - Any **new extension target** (a new bundle id needs a new profile).
 
+### Voice clips that cannot go — two decisions
+
+Every recording is kept on the phone until the server confirms it (HUB-INTERNALS.md § "A recorded
+clip is kept"). Two cases need Jared's call before they are finished:
+
+- **A dictation stranded by a reload.** A clip recorded for the composer (photos pending) or as a
+  repos-card session prompt only means something to the recorder that took it, so after a reload it
+  stays in `hub-voice-outbox` unsent, with nowhere to go. Options: send it as a normal command, drop
+  its transcript into the chat text box, or something else.
+- **A clip the server keeps refusing.** It retries on every trigger and never blocks the clips behind
+  it, but the phone shows nothing beyond the existing "Send failed". Whether to show a count of waiting
+  clips, and its wording, is his.
+
 ---
 
 ## Failed dispatches have no surface yet
@@ -78,6 +91,15 @@ touch, so it logs `start:arming` with **no `pointerdown` in front of it**. Once 
 the route and the `trace()` calls.
 
 ## Not started
+
+### Confirm the iPhone honours the recorder's bitrate
+
+The phone clip that overflowed Groq's cap arrived at ~1,500 kbps; desktop WebKit records the same
+setup at ~224 kbps, so something about the iPhone's recorder is different and it has not been
+measured. The recorder now asks for 96 kbps (`VOICE_BPS`). Read the next phone clip's line in
+`fly logs -a jared-status-hub | grep voice-command`: roughly 100-120 kbps means the setting is
+honoured; ~1,500 means Safari ignores it and only the server's re-encode (`lib/transcribe.js`) is
+keeping long commands working — then the cause on the phone is still open.
 
 ### Countdown on the red always-on border
 

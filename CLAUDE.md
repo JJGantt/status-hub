@@ -103,7 +103,7 @@ already authenticated as Jared. Charts must be inline `<svg>` — no `<script>`,
 The shared frame (status strip · rings · health bar · footer · voice column) around four columns:
 today's day column, the six days after it, the weekly weigh-in plot over the three heat maps stacked
 with the strip that belongs to each (nutrition totals vs target, the rest/session clocks, surf), and
-the newest session's last answer. `tv-home.js` + `tv-home.css` are its own; everything else on it is a shared card `core.js`
+the focused session's last answer. `tv-home.js` + `tv-home.css` are its own; everything else on it is a shared card `core.js`
 already paints, which is why the page is mostly markup. This is the one to shape.
 
 Its grid is SIX columns, declared in `tv-home.css` — which means the spans app.css writes for its

@@ -83,7 +83,8 @@ config change ON the Pi by dispatching a session to it.
 
 - **`desk_commands`** — the queue. `pending → running → done | error | expired`, with `claimed_by`
   so a machine can sweep only its own abandoned claims.
-- **`desk_focus`** — a single row naming the dispatch a spoken follow-up belongs to.
+- **`desk_focus`** — a single row holding the pin (`session_id`, set by `focus_session`) and the
+  dispatch still opening (`command_id`). Unpinned, focus is computed from `active_at`, not stored here.
 - **`desk_queue`** — Pi only: work waiting for a residency slot. Never expires (unlike a command).
 - **`desk_dead_letters`** — everything that could not run, with its whole payload.
 - **`transcripts` bucket** — mirrored transcript tails, `<claude_session_id>/<offset>.part`.
@@ -248,7 +249,8 @@ them. Measured: the Pi's resume appended 16 records the Mac's copy never saw. Ev
 closes the other side first.
 
 **`desk_focus` is written only by Jared's intent.** A dispatch, a resume and a dead-letter retry write
-its `command_id`; `focus_session` writes its `session_id`. Adoption and the reconcile ticks never touch
+its `command_id`; `focus_session` writes its `session_id`; `unfocus_session` clears both. Adoption and
+the reconcile ticks never touch
 it — unpinned, focus is COMPUTED from activity, not stored. Every surface resolves it by the same rule,
 and only a RESIDENT session can hold it, because that is what `follow_up` can actually reach.
 
@@ -276,7 +278,7 @@ the complete capture was discarded as its duplicate.
 | session watch | on file events | `sessionWatch.js`: tool calls and finished turns, pushed as they land |
 | `COMMAND_TTL_S` | 120s | a command older than this expires unrun (and is kept) |
 | `CLAIM_STALE_S` | 900s | a claim held this long is treated as abandoned |
-| `LAUNCH_GRACE_S` | 90s | a new session is not declared dead before this |
+| `LAUNCH_GRACE_S` | 90s | a new session is not declared dead before this — and a row binds only a process that started within this of the row (Mac), which is what keeps a later `claude` in the same tab off an older row |
 | `MIC_QUIET_S` | 2.5s | every mic silent this long before a command is claimed |
 | `TTY_INPUT_MAX` | 900 | above this a follow-up goes by file |
 | `RESIDENT_MAX` / `WORKING_MAX` | 3 / 2 | Pi only: memory bound, CPU bound |
@@ -329,7 +331,7 @@ nobody.
 |---|---|---|
 | phone pane (`cards/repos.js`) | everything: running, parked, queued, numbers, machine, last reply | full — start, name, transfer, resume, close |
 | the wall's footer (`cards/deskfoot.js`) | only the session holding follow-ups | none |
-| **TV session focus** (`/tv-session-focus`) | being built: the active sessions, nothing else | none — voice only |
+| **TV session focus** (`/tv-session-focus`) | the running sessions as tabs, and the focused one's reply | none — voice only |
 | the home wall (`/tv`, `tv-home.js`) | three, most recently active first, each with a live line of what it is doing; the focused one's full reply below | none — voice only |
 | voice (`get_sessions`) | the numbered list, and what each last said | every verb |
 

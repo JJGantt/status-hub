@@ -145,8 +145,9 @@ reported. A completed item is not deleted: it leaves every active surface but st
   mute, weight-reminder, agent mode…). Full catalog: [docs/HUB-INTERNALS.md](docs/HUB-INTERNALS.md) §7.
 - `litter_events` — the litter-watcher's persisted event stream (cycles, resets, alerts, presence).
 - `repos` / `desk_commands` — the Mac's published projects, and the launch queue behind them (§9).
-- `desk_sessions` / `desk_queue` / `desk_focus` — live dispatched sessions, work waiting for a slot,
-  and the pointer to whichever session a spoken follow-up lands in.
+- `desk_sessions` / `desk_queue` / `desk_focus` — every Claude session on either machine (dispatched
+  or adopted), work waiting for a Pi slot, and the pin: a session focused by name, or a dispatch still
+  opening. Unpinned, a spoken follow-up goes to the most recently active session (docs/SESSIONS.md).
 - `reports` — the HTML write-ups a dispatched session publishes (`/report/:id`).
 - `govee_devices` — auto-discovered Govee lights (synced from the cloud API).
 - `device_tokens` — APNs tokens for push (with per-token `environment`).
@@ -366,8 +367,8 @@ is the bus; the daemon on each machine owns everything local:
   on a live transcript forks the conversation into two copies with one id. When the source is
   unreachable there is nothing to close, so the destination resumes from the mirror as of the last
   completed turn. `transfer_session` by voice, the `→ Pi` / `→ Mac` button in the pane.
-- **Sessions are numbered so they can be named out loud.** Active sessions, **most recent first,
-  from 1** — the same rule in `data-layer/src/desk.ts` (`numberSessions`) and in `/api/sessions`,
+- **Sessions are numbered so they can be named out loud.** Active sessions, **most recently active
+  first, running above parked, from 1** — the same rule in `data-layer/src/desk.ts` (`numberSessions`) and in `/api/sessions`,
   because "session three" has to mean one thing. The number is a position in the current list, never
   identity: closing one renumbers the rest, which is what keeps it 1..N over what is actually open.
   `end`, `resume` and `transfer` all take a number, a repo name, or an id; an ambiguous name is
@@ -377,8 +378,8 @@ is the bus; the daemon on each machine owns everything local:
   back through the transcript rather than living only in our row.
 - **Two closed states, and they are about what can be done.** `evicted` is parked WITH its
   transcript, so it resumes with the whole conversation — a new tab on the Mac, a new tmux session on
-  the Pi. `ended` means no transcript was ever bound (it never wrote one, or adoption never matched
-  it), so there is nothing to bring back. `transferred` means the conversation continues in another
+  the Pi. `ended` means no conversation was ever bound (claude never came up), so there is nothing to
+  bring back. `transferred` means the conversation continues in another
   row on the other machine.
 - **Nothing is kept for ever.** One retention rule, in `pi-desk` on the always-on machine: closed
   sessions (`ended`/`transferred`) go at 7 days, parked (`evicted`) at 14, the `desk_commands` log at

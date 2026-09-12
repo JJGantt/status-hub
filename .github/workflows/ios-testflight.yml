@@ -23,6 +23,13 @@ concurrency:
   group: ios-testflight
   cancel-in-progress: false    # never kill a half-finished upload
 
+# GitHub's default shell here is `bash -e` WITHOUT pipefail, so `xcodebuild … | tail` reported the
+# tail's success: a failed archive passed its step and export then failed with "archive not found".
+# An explicit `shell: bash` runs `bash -eo pipefail`.
+defaults:
+  run:
+    shell: bash
+
 jobs:
   testflight:
     runs-on: macos-latest

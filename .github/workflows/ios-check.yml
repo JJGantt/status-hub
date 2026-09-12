@@ -31,6 +31,13 @@ concurrency:
   group: ios-check
   cancel-in-progress: true    # a newer check supersedes an older one; nothing is shipped either way
 
+# GitHub's default shell here is `bash -e` WITHOUT pipefail, so `xcodebuild … | tail` reported the
+# tail's success: a failed archive passed its step and export then failed with "archive not found".
+# An explicit `shell: bash` runs `bash -eo pipefail`.
+defaults:
+  run:
+    shell: bash
+
 jobs:
   check:
     runs-on: macos-latest

@@ -451,7 +451,10 @@ frames for the kiosk) · `/api/list-stream` (SSE, one bodiless `lists` event whe
 a list changes — the calendar surfaces' push path, separate from the status frame they don't render) · `/api/workout-day` · `/api/nutrition-day` ·
 `/api/heat-history` (the heat-grid weeks OLDER than the frame's `HEAT_WEEKS` window, as a prefix the
 expanded sheet draws in front of it — the frame is re-pushed on every realtime event and history only
-grows, so it is fetched once by the one surface that can scroll through it) · `/api/voice-messages` ·
+grows, so it is fetched once by the one surface that can scroll through it) · `/api/voice-messages`
+(`?mode=active` resolves `agent_mode` on the server, for a client with no settings of its own — the
+watch) · `/api/voice-reply/:id` (held open until that command is `done` or `error`, settled by the
+`voice_requests` realtime subscription; after 25s it answers `pending` and the client asks again) ·
 `/api/todos` (lists + the derived `due` view) · `/api/calendar` (month grid(s) of every
 dated item — every occurrence is a real row, so nothing is projected; `?month=` pages, `?wall=1` adds
 the day timeline and reads `calendar_months` for the spread, `?day=1` is the timeline alone and
@@ -472,7 +475,7 @@ per-list feed `/api/due-widget` replaced; nothing reads it.
 **Write:** `/api/settings` (GET/POST) · `/api/log-set` · `/api/log-entry` (POST/DELETE) ·
 `/api/commit-staged` · `/api/feed` · `/api/todos/{add,clear,snooze}` · `/api/repos/open` ·
 `/api/sessions/:action` · `/api/voice-command` (raw audio of any size → Groq Whisper → enqueue) ·
-`/api/voice-text` (text → enqueue) · `/api/voice-reset` · `/api/voice-activity` · `/api/attach`
+`/api/voice-text` (text → enqueue; returns the request id, which `/api/voice-reply/:id` waits on) · `/api/voice-reset` · `/api/voice-activity` · `/api/attach`
 (photo upload) · `/api/register-push` · `/api/notify` (APNs to all devices) · `/api/clientlog`.
 
 **Auth:** the hub password → `sha256("status-hub:"+password)`; sent as the `hub` cookie (web) or the

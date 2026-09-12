@@ -819,10 +819,7 @@ function startRealtime() {
       broadcast(p);
       // When the agent_mode toggle flips (from anywhere — voice, another device), tell the voice panel to
       // switch to that mode's conversation live, so the on-screen context always matches the active mode.
-      if (p.new && p.new.key === 'agent_mode') {
-        const agent = ['1', 'true', 'on', 'yes'].includes(String(p.new.value).toLowerCase());
-        pushVoice('mode', { agent });
-      }
+      if (p.new && p.new.key === 'agent_mode') pushVoice('mode', { agent: agentModeOn(p.new.value) });
     })
     // Dated items and the lists that colour them. `list_items` DOES feed the status frame now — the
     // health bar's gold band is earned by clearing dated items and drained by leaving them — so a
@@ -837,6 +834,10 @@ function startRealtime() {
     // UPDATE both carry the new row in `payload.new` (UPDATE = a streamed row flipping done=true).
     .on('postgres_changes', { event: '*', schema: 'public', table: 'voice_messages' },
       (p) => { seen(); if (p.new) pushVoice('message', p.new); })
+    // A client waiting on its own command (/api/voice-reply/:id) is answered the moment the worker
+    // marks the request finished.
+    .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'voice_requests' },
+      (p) => { seen(); if (p.new) settleReply(p.new); })
     .subscribe((status) => {
       console.log('realtime channel:', status);
       // SUBSCRIBED means the handshake completed, not that events will flow. Treat it
@@ -1593,6 +1594,8 @@ function nowNaiveLocal() {
 // current wall clock as `client_now` (shared.js localNowNaive()); this only falls back to the
 // server's own naive-local reading when the client didn't supply one (e.g. an automated caller).
 const CLIENT_NOW_RE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}$/;
+// app_settings.agent_mode is stored as text; these are the values that mean "on".
+const agentModeOn = (v) => ['1', 'true', 'on', 'yes'].includes(String(v ?? '0').toLowerCase());
 function resolveNow(body) {
   const c = body && body.client_now;
   return typeof c === 'string' && CLIENT_NOW_RE.test(c) ? c : nowNaiveLocal();
@@ -1811,7 +1814,11 @@ app.get('/api/stream', async (req, res) => {
 app.get('/api/voice-messages', async (req, res) => {
   try {
     const focus = String(req.query.focus || 'hub');
-    const mode = String(req.query.mode || 'hub') === 'agent' ? 'agent' : 'hub';
+    // mode=active resolves to whichever mode agent_mode selects — the watch has no settings frame to
+    // read it from, and asking it to fetch one would put that rule in a second place.
+    const want = String(req.query.mode || 'hub');
+    const mode = want === 'active' ? (agentModeOn((await settingsAll()).agent_mode) ? 'agent' : 'hub')
+      : want === 'agent' ? 'agent' : 'hub';
     let limit = parseInt(req.query.limit, 10);
     if (!Number.isFinite(limit) || limit <= 0) limit = 50;
     limit = Math.min(limit, 500);
@@ -1836,10 +1843,10 @@ app.get('/api/voice-messages', async (req, res) => {
 // or a dropped connection killed the ack after the server had already enqueued. A client_msg_id turns
 // that retry into a no-op instead of a duplicate command. In-memory suffices — the hub runs a single
 // instance and the retry window is seconds to minutes; the map is bounded so it can't grow without limit.
-const seenMsgIds = new Map();   // client_msg_id -> first-seen ts
-function markSeen(msgId) {
+const seenMsgIds = new Map();   // client_msg_id -> the voice_requests id it enqueued (null if none returned)
+function markSeen(msgId, requestId = null) {
   if (!msgId) return;
-  seenMsgIds.set(msgId, Date.now());
+  seenMsgIds.set(msgId, requestId);
   if (seenMsgIds.size > 1000) seenMsgIds.delete(seenMsgIds.keys().next().value);
 }
 
@@ -1993,13 +2000,55 @@ app.post('/api/voice-text', express.json(), async (req, res) => {
       ? req.body.attachments.map(String).filter(attName).slice(0, 12) : [];
     if (!text && !attachments.length) return res.status(400).json({ error: 'empty' });
     const msgId = String((req.body && req.body.client_msg_id) || '').slice(0, 64);
-    if (msgId && seenMsgIds.has(msgId)) return res.json({ enqueued: true, duplicate: true });
+    if (msgId && seenMsgIds.has(msgId)) return res.json({ enqueued: true, duplicate: true, id: seenMsgIds.get(msgId) });
     const client_now = CLIENT_NOW_RE.test(String((req.body && req.body.client_now) || '')) ? String(req.body.client_now) : null;
-    await sbWrite('voice_requests', 'POST', { transcript: text, source: 'web', focus: 'hub',
+    const id = crypto.randomUUID();   // chosen here so the caller can wait on it (/api/voice-reply/:id)
+    await sbWrite('voice_requests', 'POST', { id, transcript: text, source: 'web', focus: 'hub',
       ...(attachments.length ? { attachments } : {}), ...(client_now ? { client_now } : {}) });
-    if (msgId) { seenMsgIds.set(msgId, Date.now()); if (seenMsgIds.size > 1000) seenMsgIds.delete(seenMsgIds.keys().next().value); }
-    res.json({ enqueued: true });
+    markSeen(msgId, id);
+    res.json({ enqueued: true, id });
   } catch (e) { res.status(500).json({ error: String(e.message || e) }); }
+});
+
+// Wait for one command to finish: held open until voice_requests row :id is done or error, then
+// answered with its outcome. The watch sends with /api/voice-text and waits here rather than
+// polling. Settled by the voice_requests realtime subscription; the read on entry covers a row that
+// finished before the wait began, and the waiter is registered BEFORE that read so a finish landing
+// between the two cannot be missed. A wait that runs out answers `pending` and the client asks
+// again — REPLY_WAIT_MS is only a bound on one HTTP request, kept under Fly's proxy idle timeout.
+const REPLY_WAIT_MS = 25000;
+const replyWaiters = new Map();   // request id -> Set of settle fns
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+function settleReply(row) {
+  if (!row || (row.status !== 'done' && row.status !== 'error')) return;
+  const waiting = replyWaiters.get(row.id);
+  if (waiting) for (const settle of [...waiting]) settle(row);
+}
+app.get('/api/voice-reply/:id', async (req, res) => {
+  const id = String(req.params.id);
+  if (!UUID_RE.test(id)) return res.status(400).json({ error: 'bad id' });
+  let waiting = replyWaiters.get(id);
+  if (!waiting) replyWaiters.set(id, (waiting = new Set()));
+  let over = false;
+  const finish = (send) => {
+    if (over) return;
+    over = true;
+    clearTimeout(timer);
+    waiting.delete(settle);
+    if (!waiting.size && replyWaiters.get(id) === waiting) replyWaiters.delete(id);
+    send();
+  };
+  const settle = (row) => finish(() => res.json({ status: row.status, result: row.result ?? null, error: row.error ?? null }));
+  waiting.add(settle);
+  const timer = setTimeout(() => finish(() => res.json({ status: 'pending' })), REPLY_WAIT_MS);
+  req.on('close', () => finish(() => {}));
+  try {
+    const rows = await sb(`voice_requests?id=eq.${id}&select=id,status,result,error`);
+    if (!rows || !rows.length) return finish(() => res.status(404).json({ error: 'no such request' }));
+    settleReply(rows[0]);
+  } catch (e) {
+    finish(() => res.status(500).json({ error: String(e.message || e) }));
+  }
 });
 
 // Reset the shared hub conversation: clear the stored thread, tell every live surface (web card +

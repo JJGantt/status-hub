@@ -82,6 +82,8 @@ targets:
     dependencies:
       - target: StatusHubControls
         embed: true
+      - target: StatusHubWatch
+        embed: true
   # iOS 18 Control widget → the "Record" button appears in the Lock Screen / Control Center gallery.
   StatusHubControls:
     type: app-extension
@@ -110,6 +112,62 @@ targets:
         PRODUCT_NAME: StatusHubControls
         SKIP_INSTALL: YES
         TARGETED_DEVICE_FAMILY: "1"
+  # The watch companion: one screen, the shared hub conversation, dictated into. Talks to the hub
+  # directly with the token the phone hands over (Sources/WatchLink.swift → Watch/Hub.swift).
+  StatusHubWatch:
+    type: application
+    platform: watchOS
+    deploymentTarget: "11.0"
+    sources:
+      - path: Watch
+      - path: Shared/Auth.swift   # Auth.host only — the watch's token comes from the phone, not a password
+      - path: AssetsWatch.xcassets
+    info:
+      path: Watch/Info.plist
+      properties:
+        CFBundleDisplayName: Status Hub
+        CFBundleShortVersionString: "$(MARKETING_VERSION)"
+        CFBundleVersion: "$(CURRENT_PROJECT_VERSION)"
+        WKApplication: true
+        WKCompanionAppBundleIdentifier: com.jaredgantt.statushub
+        # statushub://record is what the complication opens — straight into dictation.
+        CFBundleURLTypes:
+          - CFBundleURLName: com.jaredgantt.statushub.watch
+            CFBundleURLSchemes:
+              - statushub
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: NO
+        PRODUCT_BUNDLE_IDENTIFIER: com.jaredgantt.statushub.watch
+        PRODUCT_NAME: StatusHubWatch
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        TARGETED_DEVICE_FAMILY: "4"
+        SKIP_INSTALL: YES
+    dependencies:
+      - target: StatusHubWatchWidgets
+        embed: true
+  # The watch-face complication that opens the app into dictation.
+  StatusHubWatchWidgets:
+    type: app-extension
+    platform: watchOS
+    deploymentTarget: "11.0"
+    sources:
+      - path: WatchWidgets
+    info:
+      path: WatchWidgets/Info.plist
+      properties:
+        CFBundleDisplayName: Status Hub
+        CFBundleShortVersionString: "$(MARKETING_VERSION)"
+        CFBundleVersion: "$(CURRENT_PROJECT_VERSION)"
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.widgetkit-extension
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: NO
+        PRODUCT_BUNDLE_IDENTIFIER: com.jaredgantt.statushub.watch.widgets
+        PRODUCT_NAME: StatusHubWatchWidgets
+        SKIP_INSTALL: YES
+        TARGETED_DEVICE_FAMILY: "4"
   StatusHubMac:
     type: application
     platform: macOS

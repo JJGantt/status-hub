@@ -1,0 +1,168 @@
+import Foundation
+import Security
+import WatchConnectivity
+
+/// The hub token, handed over by the iPhone app and kept in this watch's own Keychain. The watch
+/// cannot sign in by itself: it has no web view, and the phone's cookies and Keychain are not shared
+/// with it. See `Sources/WatchLink.swift` for the phone's half.
+enum HubToken {
+    private static let query: [String: Any] = [
+        kSecClass as String: kSecClassGenericPassword,
+        kSecAttrService as String: "com.jaredgantt.statushub.watch",
+        kSecAttrAccount as String: "hubToken",
+    ]
+
+    static func get() -> String? {
+        var q = query
+        q[kSecReturnData as String] = true
+        q[kSecMatchLimit as String] = kSecMatchLimitOne
+        var item: CFTypeRef?
+        guard SecItemCopyMatching(q as CFDictionary, &item) == errSecSuccess,
+              let data = item as? Data, let s = String(data: data, encoding: .utf8), !s.isEmpty else { return nil }
+        return s
+    }
+
+    static func set(_ token: String?) {
+        SecItemDelete(query as CFDictionary)
+        guard let token, !token.isEmpty else { return }
+        var add = query
+        add[kSecValueData as String] = Data(token.utf8)
+        SecItemAdd(add as CFDictionary, nil)
+    }
+}
+
+/// The watch's half of WatchConnectivity: takes the token from application context, and asks for it
+/// directly — a message wakes the iPhone app in the background — whenever it has none.
+@MainActor
+final class PhoneLink: NSObject, WCSessionDelegate {
+    static let shared = PhoneLink()
+
+    /// Called when a token arrives, so a screen stuck without one can carry on.
+    var onToken: (() -> Void)?
+
+    func start() {
+        guard WCSession.isSupported() else { return }
+        WCSession.default.delegate = self
+        WCSession.default.activate()
+    }
+
+    func request() {
+        let session = WCSession.default
+        guard session.activationState == .activated, session.isReachable else { return }
+        session.sendMessage(["want": "hubToken"], replyHandler: { reply in
+            let token = reply["hubToken"] as? String
+            Task { @MainActor in self.ingest(token) }
+        }, errorHandler: nil)
+    }
+
+    private func ingest(_ token: String?) {
+        guard let token else { return }
+        let changed = token != (HubToken.get() ?? "")
+        if changed { HubToken.set(token) }
+        if changed && !token.isEmpty { onToken?() }
+    }
+
+    nonisolated func session(_ session: WCSession, activationDidCompleteWith state: WCSessionActivationState,
+                             error: Error?) {
+        let token = session.receivedApplicationContext["hubToken"] as? String
+        Task { @MainActor in
+            self.ingest(token)
+            if HubToken.get() == nil { self.request() }
+        }
+    }
+
+    nonisolated func session(_ session: WCSession, didReceiveApplicationContext context: [String: Any]) {
+        let token = context["hubToken"] as? String
+        Task { @MainActor in self.ingest(token) }
+    }
+
+    nonisolated func sessionReachabilityDidChange(_ session: WCSession) {
+        Task { @MainActor in if HubToken.get() == nil { self.request() } }
+    }
+}
+
+/// One row of the shared hub conversation (`voice_messages`), as `/api/voice-messages` returns it.
+struct Message: Decodable, Identifiable, Equatable {
+    let id: String
+    let role: String?
+    let text: String?
+    let request_id: String?
+}
+
+enum HubError: LocalizedError {
+    case noToken
+    case status(Int)
+
+    var errorDescription: String? {
+        switch self {
+        case .noToken:       return nil
+        case .status(let c): return "HTTP \(c)"
+        }
+    }
+}
+
+/// The three hub calls the watch makes. Same host and header as the phone's native calls.
+enum Hub {
+    /// The conversation every surface shows, scoped by the hub to its current context, in whichever
+    /// mode (hub or agent) is active.
+    static func thread() async throws -> [Message] {
+        let data = try await call("/api/voice-messages?focus=hub&mode=active&limit=200")
+        return try JSONDecoder().decode([Message].self, from: data)
+    }
+
+    /// Enqueues a command and returns its request id. A resend with the same `msgId` is answered with
+    /// the first send's id instead of running the command twice.
+    static func send(_ text: String, msgId: String) async throws -> String {
+        struct Sent: Decodable { let id: String? }
+        let data = try await call("/api/voice-text", method: "POST",
+                                  body: ["text": text, "client_msg_id": msgId, "client_now": clientNow()])
+        guard let id = try JSONDecoder().decode(Sent.self, from: data).id else { throw HubError.status(0) }
+        return id
+    }
+
+    struct Outcome: Decodable {
+        let status: String
+        let error: String?
+    }
+
+    /// Waits for a command to finish. The hub holds each request open until it does, and answers
+    /// `pending` when its own wait runs out, so this asks again until the answer is final.
+    static func outcome(_ id: String) async throws -> Outcome {
+        while true {
+            let data = try await call("/api/voice-reply/\(id)", timeout: 60)
+            let o = try JSONDecoder().decode(Outcome.self, from: data)
+            if o.status != "pending" { return o }
+            try Task.checkCancellation()
+        }
+    }
+
+    private static func call(_ path: String, method: String = "GET", body: [String: Any]? = nil,
+                             timeout: TimeInterval = 20) async throws -> Data {
+        guard let token = HubToken.get() else { throw HubError.noToken }
+        var r = URLRequest(url: URL(string: Auth.host + path)!)
+        r.httpMethod = method
+        r.timeoutInterval = timeout
+        r.setValue(token, forHTTPHeaderField: "X-Hub-Token")
+        if let body {
+            r.setValue("application/json", forHTTPHeaderField: "Content-Type")
+            r.httpBody = try JSONSerialization.data(withJSONObject: body)
+        }
+        let (data, resp) = try await URLSession.shared.data(for: r)
+        let code = (resp as? HTTPURLResponse)?.statusCode ?? 0
+        if code == 401 {
+            HubToken.set(nil)
+            await PhoneLink.shared.request()
+            throw HubError.noToken
+        }
+        guard (200..<300).contains(code) else { throw HubError.status(code) }
+        return data
+    }
+
+    /// The watch's own wall clock, which the worker anchors "now" to for a typed command.
+    private static func clientNow() -> String {
+        let f = DateFormatter()
+        f.locale = Locale(identifier: "en_US_POSIX")
+        f.dateFormat = "yyyy-MM-dd'T'HH:mm:ss"
+        return f.string(from: Date())
+    }
+}

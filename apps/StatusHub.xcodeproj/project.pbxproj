@@ -14,25 +14,36 @@
 		2865661A326AF6F9FE5F6E61 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = AC135E9E04A98CDB11B57AB2 /* Assets.xcassets */; };
 		2AE6971801629766230C380C /* Auth.swift in Sources */ = {isa = PBXBuildFile; fileRef = 88D699B5FDC0F7476374CF07 /* Auth.swift */; };
 		4047BFD86E0305E129C06B77 /* Info-iOS.plist in Resources */ = {isa = PBXBuildFile; fileRef = 12B2F6A89FA87D30EEC5ED56 /* Info-iOS.plist */; };
+		48D80B4A545868D78E2DC799 /* Auth.swift in Sources */ = {isa = PBXBuildFile; fileRef = 88D699B5FDC0F7476374CF07 /* Auth.swift */; };
 		51DECA2330E0FBC3832EF2A4 /* Models.swift in Sources */ = {isa = PBXBuildFile; fileRef = B47214768CCEE8C99EEF5958 /* Models.swift */; };
 		58F20A294FB54B942342ABB3 /* StatusHubControls.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = AD44A10C47F3ACE73074E7B2 /* StatusHubControls.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		5B95BB853AE0BB3D7E93EC0F /* OpenTodoItem.swift in Sources */ = {isa = PBXBuildFile; fileRef = 980C6D4E9785922A04236D2D /* OpenTodoItem.swift */; };
 		5D50E610532DA949FF006920 /* OpenTodoItem.swift in Sources */ = {isa = PBXBuildFile; fileRef = 980C6D4E9785922A04236D2D /* OpenTodoItem.swift */; };
 		60AE844C615F02EE05A50C80 /* Views.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7E727AC7945D69F9313E83AC /* Views.swift */; };
+		6188D9BD5163465CBE9D4FFB /* StatusHubWatch.app in Embed Watch Content */ = {isa = PBXBuildFile; fileRef = 94DD1B301CE525AF6B208DC7 /* StatusHubWatch.app */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		68E90B2316D4D69B4288AF5B /* RingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A86CE732DC51F6BC6973C5F0 /* RingsView.swift */; };
+		69C6B1241F836204E5FB5EB4 /* AssetsWatch.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 9F6A38324B6E1FE85ABDB8B6 /* AssetsWatch.xcassets */; };
 		6F48E2C9C6071F502AB252A0 /* ReposView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AF1D1C7A5D148A4366347C65 /* ReposView.swift */; };
 		745EBC9E16BCB0B7808949B4 /* reminder.caf in Resources */ = {isa = PBXBuildFile; fileRef = D45C11A97894E271FE097B5B /* reminder.caf */; };
 		751D569CB797DF41F82F80DB /* ReposWidget.swift in Sources */ = {isa = PBXBuildFile; fileRef = 61B4D21322132BFB2C145C0C /* ReposWidget.swift */; };
+		77A3FC66BCC0B5FAA82C04C6 /* StatusHubWatchApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = C00E5B1C61B9780EE2BE1945 /* StatusHubWatchApp.swift */; };
 		7876C764C368F15A396CAEDC /* Auth.swift in Sources */ = {isa = PBXBuildFile; fileRef = 88D699B5FDC0F7476374CF07 /* Auth.swift */; };
 		80C001EA5124225A4538240B /* StatusHubApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = DBE4FD566029B00F912457DA /* StatusHubApp.swift */; };
+		86F3FAF2206C002FF5A79054 /* Chat.swift in Sources */ = {isa = PBXBuildFile; fileRef = 65394C860C697D281720B76A /* Chat.swift */; };
+		8E8CD9763A8A0BD031DBF5E5 /* ChatView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C3E42D965464DC9CD4478CCB /* ChatView.swift */; };
+		8F4734EA7CF078B6F76963FB /* StatusHubWatchWidgets.swift in Sources */ = {isa = PBXBuildFile; fileRef = 73F9EE0177B282256E68470C /* StatusHubWatchWidgets.swift */; };
 		99C55A70179E1025B9004EF9 /* RecordControl.swift in Sources */ = {isa = PBXBuildFile; fileRef = FAC9C25A7B946678D80BA77A /* RecordControl.swift */; };
 		A4E6D950656AE1A3B80EECAA /* Push.swift in Sources */ = {isa = PBXBuildFile; fileRef = 835C09DFE3C581C0FCD41116 /* Push.swift */; };
 		A530752A59476C460CE68305 /* HubModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6DD537CFCDEFF1F747C3D8D2 /* HubModel.swift */; };
+		AE3C14A7061F839013EA169A /* WatchLink.swift in Sources */ = {isa = PBXBuildFile; fileRef = D87B899987639512DD905DCE /* WatchLink.swift */; };
 		B074269468DD14567FC7F3FF /* AssetsMac.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 43113D1E0A8CEB8334CFC02E /* AssetsMac.xcassets */; };
 		B0778EBC2C7F517F88E6662D /* HubVoiceIntent.swift in Sources */ = {isa = PBXBuildFile; fileRef = 630A58399AEBE9A0EB63449B /* HubVoiceIntent.swift */; };
 		B39D666BE8C69D4E75BB31F5 /* HubModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6DD537CFCDEFF1F747C3D8D2 /* HubModel.swift */; };
+		C4250430822C333D041CEEA1 /* Hub.swift in Sources */ = {isa = PBXBuildFile; fileRef = FD06B420AFC554D37540118C /* Hub.swift */; };
+		C692F0368E5A3BD1BA7E0679 /* WatchLink.swift in Sources */ = {isa = PBXBuildFile; fileRef = D87B899987639512DD905DCE /* WatchLink.swift */; };
 		C917F517205EDE3DA975EE4A /* HubVoiceIntent.swift in Sources */ = {isa = PBXBuildFile; fileRef = 630A58399AEBE9A0EB63449B /* HubVoiceIntent.swift */; };
 		C97CE9C67CFCE106140773BB /* Views.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7E727AC7945D69F9313E83AC /* Views.swift */; };
+		CDDBE30861DC50F9003C9B3C /* StatusHubWatchWidgets.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 7A798171A56FC30D0250CDD7 /* StatusHubWatchWidgets.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		D19716A696E535763020C4F4 /* Theme.swift in Sources */ = {isa = PBXBuildFile; fileRef = A3ED88961E8E93D6EBE0EA46 /* Theme.swift */; };
 		D8B3EEDED01AB105C95F173D /* Auth.swift in Sources */ = {isa = PBXBuildFile; fileRef = 88D699B5FDC0F7476374CF07 /* Auth.swift */; };
 		D998A2EA11DB625A5E768785 /* Models.swift in Sources */ = {isa = PBXBuildFile; fileRef = B47214768CCEE8C99EEF5958 /* Models.swift */; };
@@ -50,9 +61,34 @@
 			remoteGlobalIDString = 55B60953417C207CA9946AD3;
 			remoteInfo = StatusHubControls;
 		};
+		56DB9EEF694E6D97D9CF79C4 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 9D244CDCFECA7707C38735B8 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = F9829B346C7074D4BCBDB7EF;
+			remoteInfo = StatusHubWatchWidgets;
+		};
+		8485B5A025A0FF218F720BD9 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 9D244CDCFECA7707C38735B8 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = D131BA7C0F7D02ECCD23A369;
+			remoteInfo = StatusHubWatch;
+		};
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXCopyFilesBuildPhase section */
+		B594CBB36CBD0BB179F5ABED /* Embed Watch Content */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "$(CONTENTS_FOLDER_PATH)/Watch";
+			dstSubfolderSpec = 16;
+			files = (
+				6188D9BD5163465CBE9D4FFB /* StatusHubWatch.app in Embed Watch Content */,
+			);
+			name = "Embed Watch Content";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		D7FDA2D48C7C2B4191ADC658 /* Embed Foundation Extensions */ = {
 			isa = PBXCopyFilesBuildPhase;
 			buildActionMask = 2147483647;
@@ -64,34 +100,56 @@
 			name = "Embed Foundation Extensions";
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		F7CF6164931DF17DF5643ED5 /* Embed Foundation Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				CDDBE30861DC50F9003C9B3C /* StatusHubWatchWidgets.appex in Embed Foundation Extensions */,
+			);
+			name = "Embed Foundation Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
 		0AD761F7ECC2DBF3FA1641B0 /* RingsWidget.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RingsWidget.swift; sourceTree = "<group>"; };
 		12B2F6A89FA87D30EEC5ED56 /* Info-iOS.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = "Info-iOS.plist"; sourceTree = "<group>"; };
+		1395E04227DD7450E1CBC8AD /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		279F09507BAD56AB8AD69831 /* TodoWidget.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TodoWidget.swift; sourceTree = "<group>"; };
 		43113D1E0A8CEB8334CFC02E /* AssetsMac.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = AssetsMac.xcassets; sourceTree = "<group>"; };
 		61B4D21322132BFB2C145C0C /* ReposWidget.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReposWidget.swift; sourceTree = "<group>"; };
 		630A58399AEBE9A0EB63449B /* HubVoiceIntent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HubVoiceIntent.swift; sourceTree = "<group>"; };
+		65394C860C697D281720B76A /* Chat.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Chat.swift; sourceTree = "<group>"; };
 		6DD537CFCDEFF1F747C3D8D2 /* HubModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HubModel.swift; sourceTree = "<group>"; };
+		73F9EE0177B282256E68470C /* StatusHubWatchWidgets.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StatusHubWatchWidgets.swift; sourceTree = "<group>"; };
+		79EC24B4E553A538E5D4CC9A /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
+		7A798171A56FC30D0250CDD7 /* StatusHubWatchWidgets.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = StatusHubWatchWidgets.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		7E727AC7945D69F9313E83AC /* Views.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Views.swift; sourceTree = "<group>"; };
 		80B371A0F840BA7F14954FE5 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		824876CC8A2DF46BE8BF406A /* TodoView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TodoView.swift; sourceTree = "<group>"; };
 		835C09DFE3C581C0FCD41116 /* Push.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Push.swift; sourceTree = "<group>"; };
 		88D699B5FDC0F7476374CF07 /* Auth.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Auth.swift; sourceTree = "<group>"; };
+		94DD1B301CE525AF6B208DC7 /* StatusHubWatch.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = StatusHubWatch.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		980C6D4E9785922A04236D2D /* OpenTodoItem.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenTodoItem.swift; sourceTree = "<group>"; };
+		9F6A38324B6E1FE85ABDB8B6 /* AssetsWatch.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = AssetsWatch.xcassets; sourceTree = "<group>"; };
 		A3ED88961E8E93D6EBE0EA46 /* Theme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Theme.swift; sourceTree = "<group>"; };
 		A86CE732DC51F6BC6973C5F0 /* RingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RingsView.swift; sourceTree = "<group>"; };
 		AC135E9E04A98CDB11B57AB2 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		AD44A10C47F3ACE73074E7B2 /* StatusHubControls.appex */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = "wrapper.app-extension"; path = StatusHubControls.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		AF1D1C7A5D148A4366347C65 /* ReposView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReposView.swift; sourceTree = "<group>"; };
 		B47214768CCEE8C99EEF5958 /* Models.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Models.swift; sourceTree = "<group>"; };
+		C00E5B1C61B9780EE2BE1945 /* StatusHubWatchApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StatusHubWatchApp.swift; sourceTree = "<group>"; };
+		C3E42D965464DC9CD4478CCB /* ChatView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatView.swift; sourceTree = "<group>"; };
 		D45C11A97894E271FE097B5B /* reminder.caf */ = {isa = PBXFileReference; path = reminder.caf; sourceTree = "<group>"; };
+		D87B899987639512DD905DCE /* WatchLink.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchLink.swift; sourceTree = "<group>"; };
 		DBE4FD566029B00F912457DA /* StatusHubApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StatusHubApp.swift; sourceTree = "<group>"; };
 		DE7144970264B4FD475213E8 /* StatusHubMac.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = StatusHubMac.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		EF4C42BEDA65C5384974460A /* StatusHub.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = StatusHub.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		F198CD20CEADF9EC7C93F50C /* RecordIntent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecordIntent.swift; sourceTree = "<group>"; };
 		FAC9C25A7B946678D80BA77A /* RecordControl.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecordControl.swift; sourceTree = "<group>"; };
+		FD06B420AFC554D37540118C /* Hub.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Hub.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXGroup section */
@@ -101,6 +159,8 @@
 				EF4C42BEDA65C5384974460A /* StatusHub.app */,
 				AD44A10C47F3ACE73074E7B2 /* StatusHubControls.appex */,
 				DE7144970264B4FD475213E8 /* StatusHubMac.app */,
+				94DD1B301CE525AF6B208DC7 /* StatusHubWatch.app */,
+				7A798171A56FC30D0250CDD7 /* StatusHubWatchWidgets.appex */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -126,8 +186,21 @@
 				DBE4FD566029B00F912457DA /* StatusHubApp.swift */,
 				A3ED88961E8E93D6EBE0EA46 /* Theme.swift */,
 				7E727AC7945D69F9313E83AC /* Views.swift */,
+				D87B899987639512DD905DCE /* WatchLink.swift */,
 			);
 			path = Sources;
+			sourceTree = "<group>";
+		};
+		5F47CEC11A84CCA7CCDAB700 /* Watch */ = {
+			isa = PBXGroup;
+			children = (
+				65394C860C697D281720B76A /* Chat.swift */,
+				C3E42D965464DC9CD4478CCB /* ChatView.swift */,
+				FD06B420AFC554D37540118C /* Hub.swift */,
+				1395E04227DD7450E1CBC8AD /* Info.plist */,
+				C00E5B1C61B9780EE2BE1945 /* StatusHubWatchApp.swift */,
+			);
+			path = Watch;
 			sourceTree = "<group>";
 		};
 		8B3D9C515137832BB1FDEE95 = {
@@ -135,10 +208,13 @@
 			children = (
 				AC135E9E04A98CDB11B57AB2 /* Assets.xcassets */,
 				43113D1E0A8CEB8334CFC02E /* AssetsMac.xcassets */,
+				9F6A38324B6E1FE85ABDB8B6 /* AssetsWatch.xcassets */,
 				949CE30CB2642F8013288295 /* Controls */,
 				46F4A2164300BF712B758B03 /* Shared */,
 				F1C581DB520978DD991D147C /* Sounds */,
 				4F3C15E0045F52C4F298B679 /* Sources */,
+				5F47CEC11A84CCA7CCDAB700 /* Watch */,
+				F7663297B326291AB3B883C7 /* WatchWidgets */,
 				28DDBE315FD7A2196B48531F /* Products */,
 			);
 			sourceTree = "<group>";
@@ -164,6 +240,15 @@
 				D45C11A97894E271FE097B5B /* reminder.caf */,
 			);
 			path = Sounds;
+			sourceTree = "<group>";
+		};
+		F7663297B326291AB3B883C7 /* WatchWidgets */ = {
+			isa = PBXGroup;
+			children = (
+				79EC24B4E553A538E5D4CC9A /* Info.plist */,
+				73F9EE0177B282256E68470C /* StatusHubWatchWidgets.swift */,
+			);
+			path = WatchWidgets;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -211,11 +296,13 @@
 				BF616C497B262B05475FD24A /* Sources */,
 				B43536071C3233EB5EDD3895 /* Resources */,
 				D7FDA2D48C7C2B4191ADC658 /* Embed Foundation Extensions */,
+				B594CBB36CBD0BB179F5ABED /* Embed Watch Content */,
 			);
 			buildRules = (
 			);
 			dependencies = (
 				022207670EC5806DF02247AE /* PBXTargetDependency */,
+				B47A0EDE4A0A1725A76C9AAA /* PBXTargetDependency */,
 			);
 			name = StatusHub;
 			packageProductDependencies = (
@@ -223,6 +310,43 @@
 			productName = StatusHub;
 			productReference = EF4C42BEDA65C5384974460A /* StatusHub.app */;
 			productType = "com.apple.product-type.application";
+		};
+		D131BA7C0F7D02ECCD23A369 /* StatusHubWatch */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = D6F198CFF14998D35C2BDC32 /* Build configuration list for PBXNativeTarget "StatusHubWatch" */;
+			buildPhases = (
+				6F634D718AC222309280A9D0 /* Sources */,
+				C0F5644CD774BA9C804CF98C /* Resources */,
+				F7CF6164931DF17DF5643ED5 /* Embed Foundation Extensions */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				80E5828FF65844DDB03F5133 /* PBXTargetDependency */,
+			);
+			name = StatusHubWatch;
+			packageProductDependencies = (
+			);
+			productName = StatusHubWatch;
+			productReference = 94DD1B301CE525AF6B208DC7 /* StatusHubWatch.app */;
+			productType = "com.apple.product-type.application";
+		};
+		F9829B346C7074D4BCBDB7EF /* StatusHubWatchWidgets */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = A8473240EDA647EE85150C15 /* Build configuration list for PBXNativeTarget "StatusHubWatchWidgets" */;
+			buildPhases = (
+				BDEB5A6EF2EDCDFBC2D7A1F1 /* Sources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = StatusHubWatchWidgets;
+			packageProductDependencies = (
+			);
+			productName = StatusHubWatchWidgets;
+			productReference = 7A798171A56FC30D0250CDD7 /* StatusHubWatchWidgets.appex */;
+			productType = "com.apple.product-type.app-extension";
 		};
 /* End PBXNativeTarget section */
 
@@ -245,6 +369,14 @@
 						DevelopmentTeam = XMH4AVFC78;
 						ProvisioningStyle = Automatic;
 					};
+					D131BA7C0F7D02ECCD23A369 = {
+						DevelopmentTeam = XMH4AVFC78;
+						ProvisioningStyle = Automatic;
+					};
+					F9829B346C7074D4BCBDB7EF = {
+						DevelopmentTeam = XMH4AVFC78;
+						ProvisioningStyle = Automatic;
+					};
 				};
 			};
 			buildConfigurationList = 73491C54E9D9963BF733BC3A /* Build configuration list for PBXProject "StatusHub" */;
@@ -264,6 +396,8 @@
 				7BD5097CA6F9F605814DF4B8 /* StatusHub */,
 				55B60953417C207CA9946AD3 /* StatusHubControls */,
 				6EFEB0886840AF68C8D8D7BF /* StatusHubMac */,
+				D131BA7C0F7D02ECCD23A369 /* StatusHubWatch */,
+				F9829B346C7074D4BCBDB7EF /* StatusHubWatchWidgets */,
 			);
 		};
 /* End PBXProject section */
@@ -287,9 +421,37 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		C0F5644CD774BA9C804CF98C /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				69C6B1241F836204E5FB5EB4 /* AssetsWatch.xcassets in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
+		6F634D718AC222309280A9D0 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				48D80B4A545868D78E2DC799 /* Auth.swift in Sources */,
+				86F3FAF2206C002FF5A79054 /* Chat.swift in Sources */,
+				8E8CD9763A8A0BD031DBF5E5 /* ChatView.swift in Sources */,
+				C4250430822C333D041CEEA1 /* Hub.swift in Sources */,
+				77A3FC66BCC0B5FAA82C04C6 /* StatusHubWatchApp.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		BDEB5A6EF2EDCDFBC2D7A1F1 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				8F4734EA7CF078B6F76963FB /* StatusHubWatchWidgets.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		BF616C497B262B05475FD24A /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -304,6 +466,7 @@
 				ED30317D3B77A590C83D95BC /* StatusHubApp.swift in Sources */,
 				F10846CA6E8D579211CF7695 /* Theme.swift in Sources */,
 				C97CE9C67CFCE106140773BB /* Views.swift in Sources */,
+				C692F0368E5A3BD1BA7E0679 /* WatchLink.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -319,6 +482,7 @@
 				80C001EA5124225A4538240B /* StatusHubApp.swift in Sources */,
 				D19716A696E535763020C4F4 /* Theme.swift in Sources */,
 				60AE844C615F02EE05A50C80 /* Views.swift in Sources */,
+				AE3C14A7061F839013EA169A /* WatchLink.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -346,6 +510,16 @@
 			isa = PBXTargetDependency;
 			target = 55B60953417C207CA9946AD3 /* StatusHubControls */;
 			targetProxy = 2A78A8C2D225DE81399A8F4E /* PBXContainerItemProxy */;
+		};
+		80E5828FF65844DDB03F5133 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = F9829B346C7074D4BCBDB7EF /* StatusHubWatchWidgets */;
+			targetProxy = 56DB9EEF694E6D97D9CF79C4 /* PBXContainerItemProxy */;
+		};
+		B47A0EDE4A0A1725A76C9AAA /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = D131BA7C0F7D02ECCD23A369 /* StatusHubWatch */;
+			targetProxy = 8485B5A025A0FF218F720BD9 /* PBXContainerItemProxy */;
 		};
 /* End PBXTargetDependency section */
 
@@ -430,6 +604,21 @@
 			};
 			name = Debug;
 		};
+		468517F46C2696355907FBC3 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = Watch/Info.plist;
+				PRODUCT_BUNDLE_IDENTIFIER = com.jaredgantt.statushub.watch;
+				PRODUCT_NAME = StatusHubWatch;
+				SDKROOT = watchos;
+				SKIP_INSTALL = YES;
+				TARGETED_DEVICE_FAMILY = 4;
+				WATCHOS_DEPLOYMENT_TARGET = 11.0;
+			};
+			name = Release;
+		};
 		4F8CF2AE2CC00BD84B009727 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -503,6 +692,40 @@
 			};
 			name = Debug;
 		};
+		9047005A5B2EBBF5697396AB /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = WatchWidgets/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.jaredgantt.statushub.watch.widgets;
+				PRODUCT_NAME = StatusHubWatchWidgets;
+				SDKROOT = watchos;
+				SKIP_INSTALL = YES;
+				TARGETED_DEVICE_FAMILY = 4;
+				WATCHOS_DEPLOYMENT_TARGET = 11.0;
+			};
+			name = Release;
+		};
+		9408EEAEA5A0829EB7D7FA26 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = Watch/Info.plist;
+				PRODUCT_BUNDLE_IDENTIFIER = com.jaredgantt.statushub.watch;
+				PRODUCT_NAME = StatusHubWatch;
+				SDKROOT = watchos;
+				SKIP_INSTALL = YES;
+				TARGETED_DEVICE_FAMILY = 4;
+				WATCHOS_DEPLOYMENT_TARGET = 11.0;
+			};
+			name = Debug;
+		};
 		AD00F90496F3B9B9D9A6B2FB /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -518,6 +741,25 @@
 				MACOSX_DEPLOYMENT_TARGET = 13.0;
 				PRODUCT_NAME = "Status Hub";
 				SDKROOT = macosx;
+			};
+			name = Debug;
+		};
+		BD45C1230D0C6CC17095A1C0 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = WatchWidgets/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.jaredgantt.statushub.watch.widgets;
+				PRODUCT_NAME = StatusHubWatchWidgets;
+				SDKROOT = watchos;
+				SKIP_INSTALL = YES;
+				TARGETED_DEVICE_FAMILY = 4;
+				WATCHOS_DEPLOYMENT_TARGET = 11.0;
 			};
 			name = Debug;
 		};
@@ -640,6 +882,24 @@
 			buildConfigurations = (
 				4F8CF2AE2CC00BD84B009727 /* Debug */,
 				F5A4DD25329D02ADD619406D /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		A8473240EDA647EE85150C15 /* Build configuration list for PBXNativeTarget "StatusHubWatchWidgets" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				BD45C1230D0C6CC17095A1C0 /* Debug */,
+				9047005A5B2EBBF5697396AB /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		D6F198CFF14998D35C2BDC32 /* Build configuration list for PBXNativeTarget "StatusHubWatch" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				9408EEAEA5A0829EB7D7FA26 /* Debug */,
+				468517F46C2696355907FBC3 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Debug;

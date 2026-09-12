@@ -17,7 +17,7 @@ documents **everything**, not just the hub. Keep it current as pieces change.
   reads/writes Supabase; nothing else is authoritative.
 - **One web codebase, many surfaces.** The web hub (desktop / phone / TV) is one codebase, and the
   native iOS/macOS apps are WKWebView shells over it, so every screen shares the same UI. The Home
-  Screen widgets are the one exception — they draw natively (§4).
+  Screen widgets and the watch app are the exceptions — they draw natively (§4).
 - **The Pi is an active service host.** It runs the voice worker as a middle-priority fallback
   (between Mac and Fly) and can host other services. Supabase remains the *data* source of truth,
   but that's about storage, not about what runs on the Pi.
@@ -192,6 +192,10 @@ Produce tracking rides on nutrition rather than its own table: `nutrition_entrie
     path to the app (`statushub://repo/<path>`), which lands on the repos pane and starts dictating
     the session's first message — a widget extension has no microphone of its own.
   - See [docs/HUB-INTERNALS.md](docs/HUB-INTERNALS.md) §9b.
+- **Apple Watch** — `status-hub/apps/Watch/`, native (watchOS has no web view) and embedded in the
+  iOS app: the shared hub thread, dictated into; commands go through `/api/voice-text` like a typed
+  one. A complication opens it straight into dictation. See
+  [docs/HUB-INTERNALS.md](docs/HUB-INTERNALS.md) §9c.
 - **ESP32** — the voice mic (see §5).
 - **iPhone push** — native APNs notifications (see §7).
 

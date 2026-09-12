@@ -57,6 +57,21 @@ the production gateway, answers with `BadDeviceToken`. The distribution certific
 this repo's GitHub secrets, so a build meant to receive real notifications has to come from
 `ios-adhoc.yml` or `ios-testflight.yml`. Local builds are for iterating on UI.
 
+## Checking the Swift compiles, on this Mac
+
+Xcode 26 ships without the iOS and watchOS **device platforms**, and this Mac deliberately has no
+simulator runtimes, so `xcodebuild -scheme …` finds no destination and a watchOS target build fails
+in `actool` on the asset catalog. Do not run `xcodebuild -downloadPlatform` to fix that — it pulls
+the multi-GB simulator runtime, which has filled this disk before; the device platforms come from
+Xcode → Settings → Components. To check code without either, type-check against the SDKs, which are
+installed:
+
+    cd apps
+    xcrun -sdk iphoneos swiftc -typecheck -target arm64-apple-ios18.0 -D HUB_APP Sources/*.swift Shared/*.swift
+    xcrun -sdk watchos swiftc -typecheck -parse-as-library -swift-version 5 -target arm64-apple-watchos11.0 Watch/*.swift Shared/Auth.swift
+
+Assets, Info.plists and embedding are only proven by the CI archive.
+
 ## No new bundle ids, no App Groups
 
 Xcode's developer-account login is rejected, so nothing needing a **new or updated provisioning

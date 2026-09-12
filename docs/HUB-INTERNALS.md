@@ -1094,9 +1094,11 @@ callers; only the HTTP response is filtered.
 
 ## 9. Native app (`apps/`)
 
-XcodeGen (`project.yml`) → three targets: **`StatusHub`** (iOS 17+), **`StatusHubMac`** (macOS 13+,
-shares `Sources/` + `Shared/Auth.swift` only), and **`StatusHubControls`** (iOS 18+
-widgetkit-extension, embedded by the iOS app — §9b). More than a thin wrapper now:
+XcodeGen (`project.yml`) → five targets: **`StatusHub`** (iOS 17+), **`StatusHubMac`** (macOS 13+,
+shares `Sources/` + `Shared/Auth.swift` only), **`StatusHubControls`** (iOS 18+
+widgetkit-extension, embedded by the iOS app — §9b), and **`StatusHubWatch`** with its complication
+extension **`StatusHubWatchWidgets`** (watchOS 11+, embedded by the iOS app — §9c). More than a thin
+wrapper now:
 
 - **`HubWebView`** (StatusHubApp.swift): WKWebView over `Auth.host`, seeds the `hub` cookie from the
   Keychain password; grants webview media capture; bridges JS dialogs to native alerts.
@@ -1261,3 +1263,31 @@ dirty, and the whole list greyed when desk presence is stale. Home Screen famili
   scan and only moves when work happens.
 
 Harness: `tools/render-repos.swift`.
+
+## 9c. `StatusHubWatch` — the watch app
+
+A watchOS 11+ app (`apps/Watch/`, bundle `com.jaredgantt.statushub.watch`) embedded by the iOS app,
+plus a one-widget complication extension (`apps/WatchWidgets/`, `com.jaredgantt.statushub.watch.widgets`).
+It is native SwiftUI, not a web view: watchOS has no WKWebView.
+
+- **One screen.** The shared hub thread on black — `/api/voice-messages?focus=hub&mode=active`, the
+  same current-context thread the phone and the TV show, in whichever mode `agent_mode` selects. A
+  tap anywhere on it, or the double-tap gesture, opens system dictation (`TextFieldLink`).
+- **A command is a typed command.** The dictated text goes to `/api/voice-text` (source `web`), so
+  the worker treats it as push-to-talk: no addressing gate, no duplicate-drop, no spoken reply on the
+  TV. The watch then waits on `/api/voice-reply/:id` and reloads the thread when it comes back. The
+  `client_msg_id` is kept across a Retry, so a resend after a dropped connection gets the first
+  send's id back instead of running twice; once the id is known, Retry only waits again. **Cancel
+  stops waiting — the command is already with the worker and still runs.**
+- **The complication** (circular and corner) opens `statushub://record`. The app answers by raising
+  the same text-input sheet itself, through WatchKit's `presentTextInputController` on the hosting
+  interface controller — SwiftUI has no way to open dictation without a tap.
+- **The token comes from the phone.** The watch has no web view to sign in with and shares neither
+  cookies nor Keychain with the phone. `Sources/WatchLink.swift` reads the `hub` cookie from the web
+  view's cookie store (falling back to the Keychain password) and sends it as WatchConnectivity
+  application context on activation, when the watch app is installed (`sessionWatchStateDidChange` —
+  context sent before that is refused), and on every cookie change. The watch keeps it in its own
+  Keychain and, whenever it has none, asks with a message, which wakes the phone app in the
+  background. A 401 drops the stored token and asks again.
+- **It ships inside the iOS app**, so it reaches the watch with the Ad Hoc build. Do not install a
+  local build of the iOS app to try the watch: that build cannot receive push (CLAUDE.md).

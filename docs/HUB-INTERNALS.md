@@ -244,6 +244,11 @@ composer with photos pending, the repos card's session prompt) is only sent whil
 took it is alive; one stranded by a reload stays in the store unsent, since nothing else knows what it
 was for.
 
+A clip that cannot go is kept, never dropped, and there is deliberately no count of waiting clips on
+screen: one should never pile up, and when one does, Jared looks at it with Claude. Every failed
+attempt is in the hub log with its size, type, duration and the server's answer —
+`fly logs -a jared-status-hub | grep voice-send-fail`.
+
 There is no size or length limit on a command anywhere. `/api/voice-command` streams the body to a temp
 file, and `lib/transcribe.js` sends it to Groq as recorded when it is under Groq's 25 MB direct-upload
 cap, and otherwise re-encodes it (ffmpeg, installed by the Dockerfile) to 16 kHz mono Opus in half-hour

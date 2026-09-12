@@ -23,19 +23,6 @@ only bites when an entitlement or bundle id changes.
   `apps/project.yml` as a TODO.
 - Any **new extension target** (a new bundle id needs a new profile).
 
-### Voice clips that cannot go — two decisions
-
-Every recording is kept on the phone until the server confirms it (HUB-INTERNALS.md § "A recorded
-clip is kept"). Two cases need Jared's call before they are finished:
-
-- **A dictation stranded by a reload.** A clip recorded for the composer (photos pending) or as a
-  repos-card session prompt only means something to the recorder that took it, so after a reload it
-  stays in `hub-voice-outbox` unsent, with nowhere to go. Options: send it as a normal command, drop
-  its transcript into the chat text box, or something else.
-- **A clip the server keeps refusing.** It retries on every trigger and never blocks the clips behind
-  it, but the phone shows nothing beyond the existing "Send failed". Whether to show a count of waiting
-  clips, and its wording, is his.
-
 ---
 
 ## Failed dispatches have no surface yet

@@ -1,5 +1,6 @@
 #!/usr/bin/env node
-// A tiny App Store Connect API client — enough to see and register DEVICES.
+// A tiny App Store Connect API client — enough to see and register DEVICES, and to register a new
+// target's BUNDLE ID.
 //
 // Why this exists: an Ad Hoc build only installs on iPhones whose UDID was registered with Apple
 // BEFORE the build was signed, because the UDID list is baked into the provisioning profile inside
@@ -12,6 +13,11 @@
 //
 //   node asc.mjs devices                     — list every registered device
 //   node asc.mjs register <UDID> <name…>     — register one iPhone
+//   node asc.mjs bundle-id <identifier> <name…> — register a bundle id for a new app or extension target
+//
+// A new target's bundle id has to be registered HERE before the first archive. The CI archive's
+// automatic signing does not register one: with the watch app's ids missing it chose a profile it
+// then could not find ("Build input file cannot be found: …mobileprovision") and the archive failed.
 //
 // Env: ASC_KEY_P8 (the key's PEM text), ASC_KEY_ID, ASC_ISSUER_ID.
 
@@ -94,7 +100,21 @@ if (cmd === 'devices') {
     if (/already exist/i.test(e.message)) console.log(`${udid} was already registered — nothing to do.`);
     else throw e;
   }
+} else if (cmd === 'bundle-id') {
+  const [identifier, ...nameParts] = rest;
+  const name = nameParts.join(' ');
+  if (!identifier || !name) { console.error('usage: asc.mjs bundle-id <identifier> <name…>'); process.exit(2); }
+  try {
+    // UNIVERSAL is what Xcode itself registers, and what the account's other watch ids are.
+    const { data } = await api('POST', '/v1/bundleIds', {
+      data: { type: 'bundleIds', attributes: { identifier, name, platform: 'UNIVERSAL' } },
+    });
+    console.log(`registered ${data.attributes.identifier} as "${data.attributes.name}" (${data.id})`);
+  } catch (e) {
+    if (/already (exist|been used|registered)|not available/i.test(e.message)) console.log(`${identifier} is already registered — nothing to do.\n${e.message}`);
+    else throw e;
+  }
 } else {
-  console.error('usage: asc.mjs devices | asc.mjs register <UDID> <name…>');
+  console.error('usage: asc.mjs devices | asc.mjs register <UDID> <name…> | asc.mjs bundle-id <identifier> <name…>');
   process.exit(2);
 }

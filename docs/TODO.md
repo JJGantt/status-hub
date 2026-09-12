@@ -10,7 +10,8 @@ Companion to [ARCHITECTURE.md](../ARCHITECTURE.md) and [HUB-INTERNALS.md](HUB-IN
 ### Xcode developer-account login is rejected
 `Unable to log in with account 'jaredgantt@gmail.com'` on any build that needs a **new or updated
 provisioning profile**. Existing profiles still work from cache, so ordinary builds succeed — this
-only bites when an entitlement or bundle id changes.
+only bites when an entitlement changes. A new bundle id does not need it: register it with
+`apps/tools/asc.mjs bundle-id` and the CI archive makes its profiles.
 
 **Fix:** Xcode → Settings → Accounts → sign in again.
 
@@ -21,7 +22,6 @@ only bites when an entitlement or bundle id changes.
   `interruption-level: time-sensitive` on every reminder; iOS ignores it without the entitlement, so
   it starts working the moment the capability exists — no code change. The entitlement line sits in
   `apps/project.yml` as a TODO.
-- Any **new extension target** (a new bundle id needs a new profile).
 
 ---
 

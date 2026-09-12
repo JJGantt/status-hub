@@ -72,12 +72,19 @@ installed:
 
 Assets, Info.plists and embedding are only proven by the CI archive.
 
-## No new bundle ids, no App Groups
+## A new bundle id is registered first, then archived on CI
 
-Xcode's developer-account login is rejected, so nothing needing a **new or updated provisioning
-profile** can be signed (`docs/TODO.md` § Blocked on Jared). A new widget goes into the existing
-`StatusHubControls` bundle (the `WidgetBundle` at the bottom of `apps/Controls/RecordControl.swift`);
-a widget and its button intents share `UserDefaults.standard`, since they are one process already.
+Register a new target's bundle id with `node apps/tools/asc.mjs bundle-id <identifier> <name>`
+before its first archive; the CI archive's automatic signing then makes its Ad Hoc and App Store
+profiles. It does NOT register a missing id itself — it picks a profile it cannot find and the
+archive fails with "Build input file cannot be found: …mobileprovision". That is how `StatusHubWatch`
+and `StatusHubWatchWidgets` were added.
+
+Still blocked by the rejected Xcode login: capabilities the ASC API cannot enable (Time Sensitive
+Notifications — `docs/TODO.md` § Blocked on Jared) and App Groups. A new iOS widget still goes into
+the existing `StatusHubControls` bundle (the `WidgetBundle` at the bottom of
+`apps/Controls/RecordControl.swift`); a widget and its button intents share `UserDefaults.standard`,
+since they are one process already.
 
 ## Widget drawing files stay WidgetKit-free
 

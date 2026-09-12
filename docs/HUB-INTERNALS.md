@@ -1135,9 +1135,7 @@ the widgets' data path:
 One iOS-18 widgetkit-extension (`apps/Controls/`, bundle `com.jaredgantt.statushub.controls`,
 embedded by the app) hosts **all of them** — the Record control, the Macro Rings widget, the Due
 widget and the Projects widget — in a single `WidgetBundle` (bottom of `RecordControl.swift`).
-That is the intended shape — a bundle is meant to carry several widgets and controls — and it also
-avoids a **new bundle id**, which would need a new provisioning profile, which the rejected Xcode
-account session can't issue ([TODO.md](TODO.md) § Blocked on Jared).
+That is the intended shape — a bundle is meant to carry several widgets and controls.
 
 **Record control** (`RecordControl.swift`) — a Lock Screen / Control Center button. It runs
 `HubVoiceIntent`, so it needs none of the app's code: `openAppWhenRun` opens the app and `perform()`

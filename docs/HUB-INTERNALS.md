@@ -886,6 +886,21 @@ not the same thing — mid-turn that is a half-written thought.
 wherever they write the reply, so they are replaced together; it is blank, not an older prompt, when
 the turn's opening has scrolled out of the window `readTail` reads.
 
+### Every finished reply is a notification
+
+Each session's final reply of a turn — never the tool calls — is pushed to the phone, and from there
+the watch, by `notifySessionReply`: both machines already report every turn end to
+`/api/session-activity` (`sessionWatch.js`), so it is sent from there, for every session on either
+machine, the one being typed in included. Kind `session`, `active` so it lights the watch; title the
+session's name, body the reply. It is keyed `session-reply:<id>:<reply_at>` — the watcher sends the
+turn's `at` — so one turn buzzes once even when its end is noticed twice, and `push_enabled` gates it
+as it gates the voice worker. `relay.js` posts a hub dispatch's first reply into the hub thread but
+sends no push of its own: this one covers it.
+
+The payload's `session_id` is what a tap opens: `SessionLaunch` → `window.__showSession` lands on the
+sessions pane with that row scrolled into view and marked (`cards/repos.js`). The `SESSION_REPLY`
+category gives the watch an Open button (§9c).
+
 Both machines publish it through one shared module (`voice-pipeline/orchestrator/src/transcripts.js`),
 which also finds the transcript a launch just created. Its `readTail` stats the path first and reads
 only regular files: a row written before the tty had its own column carries a device path, and
@@ -1331,6 +1346,12 @@ has no WKWebView.
   bottom — or while recording — the page's record button holds it again. Where the view stands comes
   from `onScrollGeometryChange` (`trackScroll` in `Watch/WatchUI.swift`). A finger tap on the thread
   still records from anywhere; only the gesture pages.
+- **A session's reply notification opens it** (§6b). `WatchAppDelegate` registers the `SESSION_REPLY`
+  category with one foreground action, Open — the button double tap presses on a watch notification —
+  and answers it, or a tap on the notification itself, with `Sessions.open(rowId:)`: the app lands on
+  the sessions page with that conversation pushed (`Sessions.path`), a row the list has not loaded yet
+  (a resumed session's new one) included. The category is registered at launch, so the watch app has
+  to have run once for the button to appear.
 - **A command is a recorded clip, sent the way the phone's microphone sends one.** `Watch/Recorder.swift`
   records AAC, mono, 16 kHz, and `Hub.sendAudio` uploads the file to `/api/voice-command` (source
   `web`): the hub transcribes it with the same Groq Whisper, and the worker treats it as push-to-talk —

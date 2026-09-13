@@ -1,9 +1,12 @@
 import SwiftUI
+import UserNotifications
+import WatchKit
 
 @main
 struct StatusHubWatchApp: App {
+    @WKApplicationDelegateAdaptor(WatchAppDelegate.self) private var appDelegate
     @StateObject private var chat = Chat.shared
-    @StateObject private var sessions = Sessions()
+    @StateObject private var sessions = Sessions.shared
     @StateObject private var nutrition = Nutrition()
     @StateObject private var workout = Workout()
 
@@ -20,6 +23,36 @@ struct StatusHubWatchApp: App {
                 .environmentObject(nutrition)
                 .environmentObject(workout)
         }
+    }
+}
+
+/// Notifications. The phone's pushes reach the watch too, and a session's finished reply carries the
+/// SESSION_REPLY category: its Open button — the one double tap presses — opens that session here.
+final class WatchAppDelegate: NSObject, WKApplicationDelegate, UNUserNotificationCenterDelegate {
+    private static let sessionCategory = UNNotificationCategory(
+        identifier: "SESSION_REPLY",
+        actions: [UNNotificationAction(identifier: "SESSION_OPEN", title: "Open", options: [.foreground])],
+        intentIdentifiers: [], options: [])
+
+    func applicationDidFinishLaunching() {
+        UNUserNotificationCenter.current().delegate = self
+        UNUserNotificationCenter.current().setNotificationCategories([Self.sessionCategory])
+    }
+
+    // Shown even while the app is open, as on the phone.
+    func userNotificationCenter(_ center: UNUserNotificationCenter, willPresent notification: UNNotification,
+                                withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void) {
+        completionHandler([.banner, .sound, .list])
+    }
+
+    func userNotificationCenter(_ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse,
+                                withCompletionHandler completionHandler: @escaping () -> Void) {
+        let opens = response.actionIdentifier == "SESSION_OPEN"
+            || response.actionIdentifier == UNNotificationDefaultActionIdentifier
+        if opens, let id = response.notification.request.content.userInfo["session_id"] as? String {
+            Task { @MainActor in await Sessions.shared.open(rowId: id) }
+        }
+        completionHandler()
     }
 }
 
@@ -50,7 +83,12 @@ struct RootView: View {
         // A record request (complication or Record control) always lands on the prompt, whichever
         // page was showing.
         .onChange(of: chat.recordRequested) { _, asked in if asked { page = .chat } }
-        .onAppear { follow() }
+        // A session opened from its notification lands on the sessions page, even on a cold launch.
+        .onChange(of: sessions.path) { _, path in if !path.isEmpty { page = .sessions } }
+        .onAppear {
+            if !sessions.path.isEmpty { page = .sessions }
+            follow()
+        }
         .onChange(of: page) { _, _ in follow() }
         .onChange(of: phase) { _, _ in follow() }
     }

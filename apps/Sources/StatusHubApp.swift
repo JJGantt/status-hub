@@ -113,6 +113,31 @@ final class RepoLaunch {
     }
 }
 
+// A session's reply notification, tapped: lands on the sessions pane with that session scrolled into
+// view. Same polling shape as RecordLaunch — a tap can cold-launch the app before the page has mounted.
+final class SessionLaunch {
+    static let shared = SessionLaunch()
+    weak var webView: WKWebView?
+    private var pendingId: String?
+
+    func request(_ id: String) { pendingId = id; fire() }
+    func fireIfPending() { if pendingId != nil { fire() } }
+
+    private func fire(retries: Int = 12) {
+        guard let id = pendingId, let wv = webView else { return }
+        wv.evaluateJavaScript("!!(window.__showSession)") { [weak self] ready, _ in
+            guard let self, self.pendingId != nil else { return }
+            if (ready as? Bool) == true {
+                self.pendingId = nil
+                let arg = String(data: (try? JSONSerialization.data(withJSONObject: [id])) ?? Data(), encoding: .utf8) ?? "[\"\"]"
+                wv.evaluateJavaScript("window.__showSession(\(arg)[0])", completionHandler: nil)
+            } else if retries > 0 {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) { self.fire(retries: retries - 1) }
+            }
+        }
+    }
+}
+
 // statushub://report/<id> — a write-up published by a dispatched session, opened from its push.
 //
 // Preferred path: hand it to the hub's Reports pane, which opens the report in a sandboxed frame. You
@@ -315,6 +340,7 @@ struct HubWebView {
             PaneLaunch.shared.fireIfPending()     // statushub://pane/<name> cold launch → land there
             RepoLaunch.shared.fireIfPending()     // statushub://repo/<path> cold launch → dictate there
             ReportLaunch.shared.fireIfPending()   // statushub://report/<id> cold launch → open it
+            SessionLaunch.shared.fireIfPending()  // a session-reply notification cold launch → land on it
         }
         #endif
 
@@ -362,6 +388,7 @@ struct HubWebView {
         PaneLaunch.shared.webView = wv     // …and statushub://pane/<name>
         RepoLaunch.shared.webView = wv     // …and statushub://repo/<path>
         ReportLaunch.shared.webView = wv   // …and statushub://report/<id>
+        SessionLaunch.shared.webView = wv  // …and a tapped session-reply notification
         #endif
         #if os(iOS)
         wv.scrollView.contentInsetAdjustmentBehavior = .never

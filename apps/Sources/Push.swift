@@ -127,6 +127,11 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
     func userNotificationCenter(_ center: UNUserNotificationCenter,
                                 didReceive response: UNNotificationResponse,
                                 withCompletionHandler completionHandler: @escaping () -> Void) {
+        // A session's finished reply: tapping the banner lands on that session in the sessions pane.
+        if let sid = response.notification.request.content.userInfo["session_id"] as? String {
+            SessionLaunch.shared.request(sid)
+            return completionHandler()
+        }
         // A published report: tapping the banner opens that page. Checked before the reminder guard,
         // which returns early on any notification without a reminder_id.
         if let rid = response.notification.request.content.userInfo["report_id"] as? String {

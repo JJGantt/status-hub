@@ -45,9 +45,24 @@ private func sessionName(_ names: String?...) -> String? {
 /// tool calls it is making, and a reply of his being recorded or sent into it.
 @MainActor
 final class Sessions: ObservableObject {
+    /// One per app, so a tapped notification can open a session (WatchAppDelegate).
+    static let shared = Sessions()
+
     enum Failure: Equatable {
         case micDenied
         case message(String)
+    }
+
+    /// The sessions page's navigation: empty is the list, one key is that conversation open.
+    @Published var path: [String] = []
+
+    private init() {}
+
+    /// A session's reply notification, opened: shows that conversation on the sessions page. The row
+    /// named may be one the list has not loaded yet — a resumed session's new row.
+    func open(rowId: String) async {
+        if !rows.contains(where: { $0.id == rowId }) { await load() }
+        path = [rows.first { $0.id == rowId }?.key ?? rowId]
     }
 
     /// One row per conversation: its running row if it has one, else its newest parked one.

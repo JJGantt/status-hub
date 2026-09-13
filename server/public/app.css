@@ -533,6 +533,9 @@ body.tv.phonewall .pane-reports .reportscard>div{flex:1 1 auto;min-height:0;disp
   text-transform:uppercase}
 /* Steady, not pulsing: it means "open and reachable", not "actively working". */
 .sessions .sess-dot{width:8px;height:8px;border-radius:50%;background:#39d353;display:inline-block}
+/* The session a reply notification opened (__showSession in cards/repos.js), marked briefly. */
+.sessions .sess.flash{animation:sess-flash 1.6s ease-out}
+@keyframes sess-flash{from{background:rgba(255,255,255,.16)}to{background:transparent}}
 .sessions .sess-btn{background:#1a222c;border:1px solid #2a333f;border-radius:7px;color:#e6ebf2;
   font-size:12px;padding:5px 10px;cursor:pointer}
 .sessions .sess-btn.ghost{background:transparent;color:#5d6672;padding:5px 8px}

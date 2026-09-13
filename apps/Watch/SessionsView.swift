@@ -6,7 +6,7 @@ struct SessionsView: View {
     @EnvironmentObject private var sessions: Sessions
 
     var body: some View {
-        NavigationStack {
+        NavigationStack(path: $sessions.path) {
             List(sessions.list) { s in
                 NavigationLink(value: s.key) { row(s) }
             }

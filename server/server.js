@@ -2128,18 +2128,44 @@ app.post('/api/voice-reset', async (req, res) => {
 // the orchestrator writes `last_reply` to Supabase separately, for durability, off this path.
 //
 //   state 'tool'  — a tool call, `text` is its one-line description
-//   state 'done'  — the turn finished, `text` is the reply (truncated for the row it lands on)
+//   state 'done'  — the turn finished, `text` is the reply (truncated for the row it lands on) and
+//                   `at` its reply_at; it is also pushed to the phone (notifySessionReply)
 app.post('/api/session-activity', express.json(), (req, res) => {
   const b = req.body || {};
   const session = String(b.session || '');
   if (!session) return res.status(400).json({ error: 'session required' });
-  pushSession({
-    session,
-    state: b.state === 'done' ? 'done' : 'tool',
-    text: String(b.text || '').slice(0, 400),
-  });
+  const done = b.state === 'done';
+  const text = String(b.text || '').slice(0, 400);
+  pushSession({ session, state: done ? 'done' : 'tool', text });
+  if (done && text) notifySessionReply(session, text, typeof b.at === 'string' ? b.at : null);
   res.status(204).end();
 });
+
+// Every session's finished reply, pushed to the phone (and from there the watch) — the final message
+// of each turn, never the tool calls in between. Sent from here because both machines already report
+// every turn end to this endpoint. Keyed by the turn's reply time: the watcher can notice one turn end
+// more than once, and a restart must not buzz again for a reply already delivered (the text hash covers
+// a host that does not send `at` yet). The payload's session_id is what tapping it opens, on the phone
+// and on the watch; SESSION_REPLY is the watch's category with the Open action. Gated by the same
+// Settings → Push switch the voice worker obeys.
+const sentSessionReplies = new Set();
+async function notifySessionReply(sessionId, text, at) {
+  try {
+    const s = await settingsAll();
+    if (s.push_enabled !== undefined
+        && ['0', 'false', 'off', 'no', ''].includes(String(s.push_enabled).trim().toLowerCase())) return;
+    const turn = at || crypto.createHash('sha1').update(text).digest('hex').slice(0, 16);
+    const key = `session-reply:${sessionId}:${turn}`;
+    if (sentSessionReplies.has(key)) return;
+    sentSessionReplies.add(key);
+    if (sentSessionReplies.size > 500) sentSessionReplies.delete(sentSessionReplies.values().next().value);
+    const seen = await sb(`notifications?dedupe_key=eq.${encodeURIComponent(key)}&select=id&limit=1`);
+    if (seen && seen.length) return;
+    const [row] = (await sb(`desk_sessions?id=eq.${encodeURIComponent(sessionId)}&select=label,custom_title,repo`)) || [];
+    const title = (row && (row.custom_title || row.label || row.repo)) || 'Session';
+    await pushAll('session', title, text, key, { category: 'SESSION_REPLY', payload: { session_id: sessionId } });
+  } catch (e) { console.log('[session-push]', e.message); }
+}
 
 app.post('/api/voice-activity', express.json(), (req, res) => {
   const b = req.body || {};
@@ -2174,6 +2200,9 @@ const NOTIFY_STYLE = {
   // A finished piece of dispatched work. 'active' rather than 'time-sensitive': it is worth seeing
   // when you pick the phone up, but a build that finished is not worth breaking a Focus for.
   report:   { emoji: '📄', interruptionLevel: 'active' },
+  // A session's finished reply (notifySessionReply). 'active', not 'passive' like a voice ack: it has
+  // to reach the watch with its Open button, and a passive one never lights either screen.
+  session:  { interruptionLevel: 'active' },
 };
 
 // The home-screen badge = every EXPIRED item: not cleared, dated, and past the moment it was FIRST

@@ -341,7 +341,10 @@ a question asked from the watch is answered on the watch. `voice-pipeline/orches
 does it on both machines, called from the watcher's `end_turn` and from the tick as the net:
 
     start_session (voice worker's data MCP, DATA_CALLER=hub) ─▶ desk_commands.payload.relay = true
-    first end_turn ─▶ relayFirstReply ─▶ voice_messages {session_id, session_label} ─▶ thread + push
+    first end_turn ─▶ relayFirstReply ─▶ voice_messages {session_id, session_label} ─▶ thread
+
+The push for that reply is the hub's, not the relay's: every session's finished reply is a notification
+(HUB-INTERNALS §6b, `notifySessionReply`), and a second one from here would buzz twice.
 
 Only that first reply. After it the session is an ordinary one: Jared reads it where it runs and
 answers it with a follow-up, and a reply to the relayed message in the thread is a fresh hub command.

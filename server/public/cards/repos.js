@@ -257,6 +257,23 @@ window.__startRepoSession = async (path) => {
   beginDictation(li, machines.pi ? 'pi' : 'mac');
 };
 
+// Called by the native app when a session's reply notification is tapped: lands on the sessions list
+// with that session scrolled into view and briefly marked, so the eye finds the one that just answered.
+window.__showSession = async (id) => {
+  const el = document.getElementById('repospane');
+  if (!el) return;
+  try { window.__showPane && window.__showPane('repos'); } catch (_) {}
+  if (!mounted) { mounted = true; }
+  await load();
+  const li = el.querySelector(`li.sess[data-id="${CSS.escape(String(id))}"]`);
+  if (!li) return;
+  li.scrollIntoView({ block: 'center', behavior: 'smooth' });
+  li.classList.remove('flash');
+  void li.offsetWidth;   // restart the animation if it is already marked
+  li.classList.add('flash');
+  li.addEventListener('animationend', () => li.classList.remove('flash'), { once: true });
+};
+
 export function render() {
   if (mounted) return;                                // self-refreshing; not driven by the status stream
   if (!document.getElementById('repospane')) return;  // absent on kiosk/mac/page → no-op

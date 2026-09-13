@@ -1271,24 +1271,37 @@ Harness: `tools/render-repos.swift`.
 ## 9c. `StatusHubWatch` — the watch app
 
 A watchOS 11+ app (`apps/Watch/`, bundle `com.jaredgantt.statushub.watch`) embedded by the iOS app,
-plus a one-widget complication extension (`apps/WatchWidgets/`, `com.jaredgantt.statushub.watch.widgets`).
-It is native SwiftUI, not a web view: watchOS has no WKWebView.
+plus its widget extension (`apps/WatchWidgets/`, `com.jaredgantt.statushub.watch.widgets`): the
+complication and, on watchOS 26, the Record control. It is native SwiftUI, not a web view: watchOS
+has no WKWebView.
 
 - **Three pages, swiped left to right:** the prompt (below), the nutrition page and the workout page.
   A page loads when it comes on screen and holds `/api/day-stream` open only while it is showing,
   reloading on its own kind of frame (and after every reconnect, since a change may have gone by).
 - **The prompt page.** The shared hub thread on black — `/api/voice-messages?focus=hub&mode=active`, the
   same current-context thread the phone and the TV show, in whichever mode `agent_mode` selects. A
-  tap anywhere on it, or the double-tap gesture, opens system dictation (`TextFieldLink`).
-- **A command is a typed command.** The dictated text goes to `/api/voice-text` (source `web`), so
-  the worker treats it as push-to-talk: no addressing gate, no duplicate-drop, no spoken reply on the
-  TV. The watch then waits on `/api/voice-reply/:id` and reloads the thread when it comes back. The
-  `client_msg_id` is kept across a Retry, so a resend after a dropped connection gets the first
-  send's id back instead of running twice; once the id is known, Retry only waits again. **Cancel
-  stops waiting — the command is already with the worker and still runs.**
-- **The complication** (circular and corner) opens `statushub://record`. The app answers by raising
-  the same text-input sheet itself, through WatchKit's `presentTextInputController` on the hosting
-  interface controller — SwiftUI has no way to open dictation without a tap.
+  tap anywhere on it, or the double-tap gesture, starts recording; the next tap sends. Cancel throws
+  the clip away.
+- **A command is a recorded clip, sent the way the phone's microphone sends one.** `Watch/Recorder.swift`
+  records AAC, mono, 16 kHz, and `Hub.sendAudio` uploads the file to `/api/voice-command` (source
+  `web`): the hub transcribes it with the same Groq Whisper, and the worker treats it as push-to-talk —
+  no addressing gate, no duplicate-drop, no spoken reply on the TV. The hub answers with the
+  transcript, shown until the turn lands, and the request id, and the watch waits on
+  `/api/voice-reply/:id`. No id means the hub heard no words: nothing is enqueued and the watch buzzes.
+- **Recording sets `voice_muted`**, as the phone's microphone does, so the Mac and the ESP do not
+  enqueue the same sentence a second time. The flag has no expiry, so every way out of a recording
+  (send, Cancel) writes the unmute, and the writes are chained so an unmute cannot land ahead of its
+  mute.
+- **Retry.** The clip is kept until its command has run, and the `client_msg_id` across a Retry, so a
+  resend after a dropped connection gets the first send's id back instead of running twice. Once the
+  id is known, Retry only waits again; after a worker error it uploads the clip as a new attempt.
+  **Cancel stops waiting — a command the hub already has still runs.**
+- **Two launchers, one request.** The complication (circular and corner) opens `statushub://record`.
+  The Record control (`RecordControl`, watchOS 26 — Control Center, the Smart Stack, and the Action
+  button on an Ultra) runs `RecordIntent`, an `OpenIntent`, which launches the app and runs
+  `perform()` in it: the file is compiled into both targets, and `WATCH_APP` gates the app-only call.
+  Both set `Chat.recordRequested`; the app switches to the prompt page and records as soon as it is
+  active.
 - **The nutrition page** is the hub nutrition card's four pace rings (no produce rings) over today's
   log. The rings are `cards/nutrition.js`'s SVG redrawn in a Canvas to the same geometry and colours.
   The card recomputes them every second from the browser clock; the watch instead takes

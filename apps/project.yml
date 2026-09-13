@@ -115,14 +115,16 @@ targets:
         PRODUCT_NAME: StatusHubControls
         SKIP_INSTALL: YES
         TARGETED_DEVICE_FAMILY: "1"
-  # The watch companion: one screen, the shared hub conversation, dictated into. Talks to the hub
-  # directly with the token the phone hands over (Sources/WatchLink.swift → Watch/Hub.swift).
+  # The watch companion: the shared hub conversation, recorded into (clips go to /api/voice-command,
+  # like the phone's microphone). Talks to the hub directly with the token the phone hands over
+  # (Sources/WatchLink.swift → Watch/Hub.swift).
   StatusHubWatch:
     type: application
     platform: watchOS
     deploymentTarget: "11.0"
     sources:
       - path: Watch
+      - path: WatchWidgets/RecordIntent.swift   # the Record control's intent runs in the app (WATCH_APP)
       - path: Shared/Auth.swift   # Auth.host only — the watch's token comes from the phone, not a password
       - path: Controls/RingsView.swift   # the /api/rings types and the card palette; its widget views go unused
       - path: AssetsWatch.xcassets
@@ -135,7 +137,8 @@ targets:
         WKApplication: true
         WKCompanionAppBundleIdentifier: com.jaredgantt.statushub
         ITSAppUsesNonExemptEncryption: false
-        # statushub://record is what the complication opens — straight into dictation.
+        NSMicrophoneUsageDescription: Status Hub uses the microphone for voice commands.
+        # statushub://record is what the complication opens — straight into recording.
         CFBundleURLTypes:
           - CFBundleURLName: com.jaredgantt.statushub.watch
             CFBundleURLSchemes:
@@ -148,10 +151,12 @@ targets:
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         TARGETED_DEVICE_FAMILY: "4"
         SKIP_INSTALL: YES
+        SWIFT_ACTIVE_COMPILATION_CONDITIONS: $(inherited) WATCH_APP
     dependencies:
       - target: StatusHubWatchWidgets
         embed: true
-  # The watch-face complication that opens the app into dictation.
+  # The watch-face complication and the Record control (watchOS 26), both opening the app into
+  # recording.
   StatusHubWatchWidgets:
     type: app-extension
     platform: watchOS

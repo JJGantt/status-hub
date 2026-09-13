@@ -109,14 +109,27 @@ enum Hub {
         try await json("/api/voice-messages?focus=hub&mode=active&limit=200")
     }
 
-    /// Enqueues a command and returns its request id. A resend with the same `msgId` is answered with
-    /// the first send's id instead of running the command twice.
-    static func send(_ text: String, msgId: String) async throws -> String {
-        struct Sent: Decodable { let id: String? }
-        let data = try await call("/api/voice-text", method: "POST",
-                                  body: ["text": text, "client_msg_id": msgId, "client_now": clientNow()])
-        guard let id = try JSONDecoder().decode(Sent.self, from: data).id else { throw HubError.status(0) }
-        return id
+    /// What the hub heard in a clip, and the request it enqueued. No id means it heard no words.
+    struct Heard: Decodable {
+        let transcript: String?
+        let id: String?
+    }
+
+    /// Uploads a recorded clip. The hub transcribes it and enqueues what it heard as a command, the
+    /// same path the phone's microphone takes. A resend with the same `msgId` is answered with the
+    /// first send's id instead of running the command twice.
+    static func sendAudio(_ clip: Recorder.Clip, msgId: String) async throws -> Heard {
+        let query = "client_msg_id=\(msgId)&client_now=\(clientNow())&dur=\(String(format: "%.1f", clip.duration))"
+        var r = try request("/api/voice-command?" + query, method: "POST", timeout: 60)
+        r.setValue("audio/mp4", forHTTPHeaderField: "Content-Type")
+        let (data, resp) = try await URLSession.shared.upload(for: r, fromFile: clip.url)
+        try await check(resp)
+        return try JSONDecoder().decode(Heard.self, from: data)
+    }
+
+    /// The global `voice_muted` flag every always-on listener obeys. Best effort, as on the phone.
+    static func muteOthers(_ on: Bool) async {
+        _ = try? await call("/api/settings", method: "POST", body: ["key": "voice_muted", "value": on ? "1" : "0"])
     }
 
     struct Outcome: Decodable {

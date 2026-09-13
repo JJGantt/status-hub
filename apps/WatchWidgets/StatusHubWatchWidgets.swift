@@ -5,11 +5,28 @@ import WidgetKit
 struct StatusHubWatchWidgets: WidgetBundle {
     var body: some Widget {
         RecordComplication()
+        if #available(watchOS 26.0, *) {
+            RecordControl()
+        }
     }
 }
 
-/// A watch-face button that opens the app straight into dictation: `statushub://record`, which the
-/// app answers by raising the text-input sheet itself.
+/// The Record control (watchOS 26): Control Center, the Smart Stack, and on an Ultra the Action
+/// button. It opens the app straight into recording through `RecordIntent`.
+@available(watchOS 26.0, *)
+struct RecordControl: ControlWidget {
+    var body: some ControlWidgetConfiguration {
+        StaticControlConfiguration(kind: "com.jaredgantt.statushub.watch.record") {
+            ControlWidgetButton(action: RecordIntent()) {
+                Label("Record", systemImage: "mic.fill")
+            }
+        }
+        .displayName("Record")
+    }
+}
+
+/// A watch-face button that opens the app straight into recording: `statushub://record`, which the
+/// app answers by starting to record.
 struct RecordComplication: Widget {
     var body: some WidgetConfiguration {
         StaticConfiguration(kind: "RecordComplication", provider: Provider()) { _ in

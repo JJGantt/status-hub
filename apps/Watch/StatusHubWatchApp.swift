@@ -2,7 +2,7 @@ import SwiftUI
 
 @main
 struct StatusHubWatchApp: App {
-    @StateObject private var chat = Chat()
+    @StateObject private var chat = Chat.shared
     @StateObject private var nutrition = Nutrition()
     @StateObject private var workout = Workout()
 
@@ -35,12 +35,13 @@ struct RootView: View {
             WorkoutView().tag(Page.workout)
         }
         .tabViewStyle(.page)
-        // The complication always lands on the prompt, whichever page was showing.
         .onOpenURL { url in
             guard url.scheme == "statushub", url.host == "record" else { return }
-            page = .chat
-            chat.requestDictation()
+            chat.requestRecording()
         }
+        // A record request (complication or Record control) always lands on the prompt, whichever
+        // page was showing.
+        .onChange(of: chat.recordRequested) { _, asked in if asked { page = .chat } }
         .onChange(of: page) { _, _ in follow() }
         .onChange(of: phase) { _, _ in follow() }
     }

@@ -199,9 +199,10 @@ Produce tracking rides on nutrition rather than its own table: `nutrition_entrie
     the session's first message — a widget extension has no microphone of its own.
   - See [docs/HUB-INTERNALS.md](docs/HUB-INTERNALS.md) §9b.
 - **Apple Watch** — `status-hub/apps/Watch/`, native (watchOS has no web view) and embedded in the
-  iOS app. Three pages: the shared hub thread, dictated into (commands go through `/api/voice-text`
-  like a typed one); the nutrition card's pace rings over today's log; and the home wall's rest
-  clocks over today's sets. A complication opens it straight into dictation. See
+  iOS app. Three pages: the shared hub thread, recorded into (clips go to `/api/voice-command` like
+  the phone's microphone); the nutrition card's pace rings over today's log; and the home wall's rest
+  clocks over today's sets. A complication and the Record control (watchOS 26, which an Ultra's
+  Action button can run) open it straight into recording. See
   [docs/HUB-INTERNALS.md](docs/HUB-INTERNALS.md) §9c.
 - **ESP32** — the voice mic (see §5).
 - **iPhone push** — native APNs notifications (see §7).

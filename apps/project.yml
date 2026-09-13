@@ -124,6 +124,7 @@ targets:
     sources:
       - path: Watch
       - path: Shared/Auth.swift   # Auth.host only — the watch's token comes from the phone, not a password
+      - path: Controls/RingsView.swift   # the /api/rings types and the card palette; its widget views go unused
       - path: AssetsWatch.xcassets
     info:
       path: Watch/Info.plist

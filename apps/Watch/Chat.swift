@@ -14,6 +14,8 @@ final class Chat: ObservableObject {
     @Published private(set) var pending: String?
     @Published private(set) var waiting = false
     @Published private(set) var failure: Failure?
+    /// Set by the complication's statushub://record; the prompt page raises dictation once it can.
+    @Published var dictationRequested = false
 
     // Kept across a retry. A retry with the same msgId cannot enqueue twice, and once the request id
     // is known a retry only waits again — the command is already with the worker.
@@ -24,6 +26,8 @@ final class Chat: ObservableObject {
     init() {
         PhoneLink.shared.onToken = { [weak self] in self?.tokenArrived() }
     }
+
+    func requestDictation() { dictationRequested = true }
 
     func load() async {
         do {

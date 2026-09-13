@@ -27,8 +27,9 @@ struct Score: Decodable {
 }
 struct RingsFeed: Decodable { let step_min: Int; let score: Score?; let frames: [Frame] }
 
-private extension Color {
-    /// "#rrggbb" from the server's pace palette.
+extension Color {
+    /// "#rrggbb" from the server's pace palette. Internal, not private: the watch compiles this file
+    /// for the /api/rings types and draws with the same palette.
     init(hex: String) {
         let h = hex.hasPrefix("#") ? String(hex.dropFirst()) : hex
         let v = UInt32(h, radix: 16) ?? 0x22c55e

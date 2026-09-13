@@ -6,8 +6,6 @@ import WatchKit
 struct ChatView: View {
     @EnvironmentObject private var chat: Chat
     @Environment(\.scenePhase) private var phase
-    /// Set by the complication's statushub://record; honoured once the app is active.
-    @State private var dictateWhenActive = false
 
     var body: some View {
         ScrollViewReader { proxy in
@@ -32,11 +30,7 @@ struct ChatView: View {
             Task { await chat.load() }
             dictateIfAsked()
         }
-        .onOpenURL { url in
-            guard url.scheme == "statushub", url.host == "record" else { return }
-            dictateWhenActive = true
-            dictateIfAsked()
-        }
+        .onChange(of: chat.dictationRequested) { _, _ in dictateIfAsked() }
     }
 
     /// Where the view settles: the start of the newest turn, as the restaurant app does, or the prompt
@@ -122,8 +116,8 @@ struct ChatView: View {
     /// The complication's launch: raise the same sheet without a tap. SwiftUI has no call for that,
     /// so it goes through WatchKit's text-input controller on the hosting interface controller.
     private func dictateIfAsked() {
-        guard dictateWhenActive, phase == .active else { return }
-        dictateWhenActive = false
+        guard chat.dictationRequested, phase == .active else { return }
+        chat.dictationRequested = false
         guard !chat.waiting else { return }
         WKApplication.shared().visibleInterfaceController?.presentTextInputController(
             withSuggestions: nil, allowedInputMode: .plain

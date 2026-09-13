@@ -101,13 +101,12 @@ enum HubError: LocalizedError {
     }
 }
 
-/// The three hub calls the watch makes. Same host and header as the phone's native calls.
+/// The hub calls the watch makes. Same host and header as the phone's native calls.
 enum Hub {
     /// The conversation every surface shows, scoped by the hub to its current context, in whichever
     /// mode (hub or agent) is active.
     static func thread() async throws -> [Message] {
-        let data = try await call("/api/voice-messages?focus=hub&mode=active&limit=200")
-        return try JSONDecoder().decode([Message].self, from: data)
+        try await json("/api/voice-messages?focus=hub&mode=active&limit=200")
     }
 
     /// Enqueues a command and returns its request id. A resend with the same `msgId` is answered with
@@ -129,15 +128,34 @@ enum Hub {
     /// `pending` when its own wait runs out, so this asks again until the answer is final.
     static func outcome(_ id: String) async throws -> Outcome {
         while true {
-            let data = try await call("/api/voice-reply/\(id)", timeout: 60)
-            let o = try JSONDecoder().decode(Outcome.self, from: data)
+            let o: Outcome = try await json("/api/voice-reply/\(id)", timeout: 60)
             if o.status != "pending" { return o }
             try Task.checkCancellation()
         }
     }
 
+    static func json<T: Decodable>(_ path: String, timeout: TimeInterval = 20) async throws -> T {
+        try JSONDecoder().decode(T.self, from: try await call(path, timeout: timeout))
+    }
+
+    /// A server-sent event stream, open until the hub or the network drops it. The hub pings every
+    /// 25s, so a minute without a byte is a dead connection rather than a quiet one.
+    static func stream(_ path: String) async throws -> URLSession.AsyncBytes {
+        let (bytes, resp) = try await URLSession.shared.bytes(for: try request(path, timeout: 60))
+        try await check(resp)
+        return bytes
+    }
+
     private static func call(_ path: String, method: String = "GET", body: [String: Any]? = nil,
                              timeout: TimeInterval = 20) async throws -> Data {
+        let (data, resp) = try await URLSession.shared.data(for: try request(path, method: method, body: body,
+                                                                              timeout: timeout))
+        try await check(resp)
+        return data
+    }
+
+    private static func request(_ path: String, method: String = "GET", body: [String: Any]? = nil,
+                                timeout: TimeInterval) throws -> URLRequest {
         guard let token = HubToken.get() else { throw HubError.noToken }
         var r = URLRequest(url: URL(string: Auth.host + path)!)
         r.httpMethod = method
@@ -147,7 +165,10 @@ enum Hub {
             r.setValue("application/json", forHTTPHeaderField: "Content-Type")
             r.httpBody = try JSONSerialization.data(withJSONObject: body)
         }
-        let (data, resp) = try await URLSession.shared.data(for: r)
+        return r
+    }
+
+    private static func check(_ resp: URLResponse) async throws {
         let code = (resp as? HTTPURLResponse)?.statusCode ?? 0
         if code == 401 {
             HubToken.set(nil)
@@ -155,7 +176,6 @@ enum Hub {
             throw HubError.noToken
         }
         guard (200..<300).contains(code) else { throw HubError.status(code) }
-        return data
     }
 
     /// The watch's own wall clock, which the worker anchors "now" to for a typed command.

@@ -66,9 +66,10 @@ config change ON the Pi by dispatching a session to it.
 | `pid` | the Claude Code process the row belongs to — what liveness and the conversation are read from |
 | `tty` | Mac only: the Terminal tab, and the handle a follow-up is typed into |
 | `working` / `last_reply` / `reply_at` | is a turn in flight; the last COMPLETED answer, and when |
+| `last_prompt` | the prompt that answer was to — published with it, replaced with it |
 | `active_at` | the last turn boundary (a prompt sent, a turn finished) — what orders, numbers and focuses sessions |
 | `mirror_offset` / `mirror_at` | how much of the transcript is in the `transcripts` bucket |
-| `command_id` | the dispatch that created it — how a follow-up resolves its target |
+| `command_id` | the dispatch or resume that created it — how a follow-up resolves its target |
 
 **Statuses, and they are about what can be done:**
 
@@ -85,7 +86,8 @@ config change ON the Pi by dispatching a session to it.
   so a machine can sweep only its own abandoned claims.
 - **`desk_focus`** — a single row holding the pin (`session_id`, set by `focus_session`) and the
   dispatch still opening (`command_id`). Unpinned, focus is computed from `active_at`, not stored here.
-- **`desk_queue`** — Pi only: work waiting for a residency slot. Never expires (unlike a command).
+- **`desk_queue`** — Pi only: work waiting for a residency slot, new sessions and resumes alike
+  (`resume_id` names the conversation a resume continues). Never expires (unlike a command).
 - **`desk_dead_letters`** — everything that could not run, with its whole payload.
 - **`transcripts` bucket** — mirrored transcript tails, `<claude_session_id>/<offset>.part`.
 
@@ -133,7 +135,11 @@ attaches to tmux over SSH and starts one by hand, which is not tracked.
 | `follow_up` | machine owning the focused session | text typed into the live session |
 | `rename_session` | owning machine | `/rename <name>` typed in — the session renames itself |
 | `end_session` | owning machine | close the tab / tmux session, park the row |
-| `resume_session` | owning machine | `claude --resume <id>` in a new tab or tmux session |
+| `resume_session` | owning machine | `claude --resume <id>` in a new tab or tmux session, with an optional prompt; on a full Pi it waits in `desk_queue` for a slot like new work |
+
+The hub's `POST /api/sessions/followup` (the watch's session page) is `follow_up` addressed by session
+id instead of by focus, and for a parked session it writes `resume_session` with the words as the
+prompt instead — HUB-INTERNALS §6b.
 | `transfer_session` | machine GIVING IT UP | close, flush the mirror, ask the other to resume |
 | `get_sessions` | — | the numbered list |
 
@@ -246,7 +252,10 @@ path rewritten to the Pi's home, same session id, full recall of the conversatio
 **One writer per transcript.** `claude --resume` on a transcript that is live elsewhere does not
 reattach; it starts a second process replaying the same file, and the two diverge with one id between
 them. Measured: the Pi's resume appended 16 records the Mac's copy never saw. Every path that resumes
-closes the other side first.
+closes the other side first, and the hub asks about the conversation before it resumes one
+(`conversationNow`, HUB-INTERNALS §6b): a resume makes a new row and leaves the parked one parked, so
+without that check a follow-up or a Resume tap on the old row would start a second process on a
+conversation already running again under the new one.
 
 **`desk_focus` is written only by Jared's intent.** A dispatch, a resume and a dead-letter retry write
 its `command_id`; `focus_session` writes its `session_id`; `unfocus_session` clears both. Adoption and

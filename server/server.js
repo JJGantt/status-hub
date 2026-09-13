@@ -3046,12 +3046,41 @@ app.get('/api/sessions', async (req, res) => {
   } catch (e) { res.status(500).json({ error: String(e.message || e) }); }
 });
 
+// Where words for a session's CONVERSATION should go right now. A resume makes a new row and leaves the
+// parked one parked, and `claude --resume` keeps the conversation's id — so it is the conversation,
+// not the row, that has to be asked about. Resuming one that is already running again would start a
+// second process on one transcript, which forks it (SESSIONS.md, one writer). Both machines stamp a
+// resumed row with the resume command's id, and the Pi publishes its conversation id at launch, so
+// every case below is an exact lookup rather than a guess.
+//   { live }    running now — this row, or the one a resume made: type into it
+//   { opening } a resume is still starting, or queued for a Pi slot: nothing to type into yet
+//   { parked }  nothing running: resume it
+async function conversationNow(row) {
+  if (row.status === 'resident') return { live: row };
+  const cid = row.claude_session_id;
+  if (cid) {
+    const live = await sb(`desk_sessions?claude_session_id=eq.${encodeURIComponent(cid)}&status=eq.resident&select=id,worker,status&limit=1`);
+    if (live && live.length) return { live: live[0] };
+    const queued = await sb(`desk_queue?resume_id=eq.${encodeURIComponent(cid)}&select=id&limit=1`);
+    if (queued && queued.length) return { opening: true };
+  }
+  const cmds = await sb(`desk_commands?kind=eq.resume_session&payload->>session=eq.${encodeURIComponent(row.id)}` +
+    '&select=id,status&order=created.desc&limit=1');
+  const last = cmds && cmds[0];
+  if (last && (last.status === 'pending' || last.status === 'running')) return { opening: true };
+  if (last && last.status === 'done') {
+    const made = await sb(`desk_sessions?command_id=eq.${encodeURIComponent(last.id)}&status=eq.resident&select=id,worker,status&limit=1`);
+    if (made && made.length) return { live: made[0] };
+  }
+  return { parked: row };
+}
+
 // One session in full, for a surface that shows a single session rather than the list — the watch's
 // session page. `/api/sessions` sends most parked sessions' replies only as the one-line `say`.
 app.get('/api/sessions/:id', async (req, res) => {
   try {
     const rows = await sb(`desk_sessions?id=eq.${encodeURIComponent(String(req.params.id))}` +
-      '&select=id,label,custom_title,repo,worker,status,working,last_reply,reply_at');
+      '&select=id,label,custom_title,repo,worker,status,working,claude_session_id,last_prompt,last_reply,reply_at');
     if (!rows || !rows.length) return res.status(404).json({ error: 'no such session' });
     res.json(rows[0]);
   } catch (e) { res.status(500).json({ error: String(e.message || e) }); }
@@ -3072,29 +3101,35 @@ app.post('/api/sessions/:action', express.json(), async (req, res) => {
     const rowsFull = await sb(`desk_sessions?id=eq.${encodeURIComponent(id)}&select=*`);
     if (!rowsFull.length) return res.status(404).json({ error: 'no such session' });
 
-    // Type his words into THIS session: data-layer's followUp, addressed by id instead of by focus,
-    // so the watch can answer the session it is showing. Both machines refuse a session that is not
-    // running (there is no process to type into), and an asleep machine gets the words dead-lettered
-    // rather than dropped, as everywhere else. client_msg_id makes a resend after a lost answer
-    // return the first command instead of typing the words twice.
+    // Words for a session. Running, they are typed in — data-layer's followUp, addressed by id instead
+    // of by focus, so the watch can answer the session it is showing. Parked, it is resumed with the
+    // words as its prompt, which both machines accept (a full Pi queues it for a slot). conversationNow
+    // decides which, so a conversation already running again under a newer row gets the words there
+    // rather than a second process. An asleep machine gets them dead-lettered, as everywhere else, and
+    // client_msg_id makes a resend after a lost answer return the first command.
     if (action === 'followup') {
-      const row = rowsFull[0];
       const text = String((req.body || {}).text || '').trim();
       if (!text) return res.status(400).json({ error: 'text required' });
-      if (row.status !== 'resident') return res.status(409).json({ error: 'that session is not running' });
       const msgId = String((req.body || {}).client_msg_id || '').slice(0, 64);
       const seenKey = msgId ? 'followup:' + msgId : '';
       if (seenKey && seenMsgIds.has(seenKey)) return res.json({ id: seenMsgIds.get(seenKey), duplicate: true });
-      const machine = row.worker === 'desk' ? 'mac' : 'pi';
-      const payload = { session: id, prompt: text, target: machine };
+      const now = await conversationNow(rowsFull[0]);
+      if (now.opening) return res.status(409).json({ error: 'that session is still opening' });
+      const target = now.live || now.parked;
+      if (!now.live && !target.claude_session_id) {
+        return res.status(409).json({ error: 'that session has no conversation to resume' });
+      }
+      const machine = target.worker === 'desk' ? 'mac' : 'pi';
+      const kind = now.live ? 'follow_up' : 'resume_session';
+      const payload = { session: target.id, prompt: text, target: machine };
       if (!(await machineAwake(machine))) {
-        const saved = await deadLetter('follow_up', payload, machine, `the ${machine === 'mac' ? 'Mac' : 'Pi'} is not responding`);
+        const saved = await deadLetter(kind, payload, machine, `the ${machine === 'mac' ? 'Mac' : 'Pi'} is not responding`);
         return res.status(409).json({ error: `the ${machine === 'mac' ? 'Mac' : 'Pi'} is not responding`, saved });
       }
       const cmdId = crypto.randomUUID();
-      await sbWrite('desk_commands', 'POST', { id: cmdId, kind: 'follow_up', payload });
+      await sbWrite('desk_commands', 'POST', { id: cmdId, kind, payload });
       markSeen(seenKey, cmdId);
-      return res.json({ id: cmdId });
+      return res.json({ id: cmdId, session: target.id, resumed: !now.live });
     }
 
     // Hand it to the other machine, carrying the conversation. Same two paths as the voice tool, and
@@ -3140,6 +3175,14 @@ app.post('/api/sessions/:action', express.json(), async (req, res) => {
       return res.json({ id: cmdId, name, live: true });
     }
 
+    // Resuming a conversation that is already running again, or still opening, would start a second
+    // process on one transcript (see conversationNow).
+    if (action === 'resume') {
+      const now = await conversationNow(rowsFull[0]);
+      if (!now.parked) {
+        return res.status(409).json({ error: now.live ? 'that session is already running' : 'that session is still opening' });
+      }
+    }
     const kind = action === 'resume' ? 'resume_session' : action === 'end' ? 'end_session' : null;
     if (!kind) return res.status(400).json({ error: 'unknown action' });
     // The machine that OWNS the session, read from its row. Hardcoding 'pi' sent every Mac session's

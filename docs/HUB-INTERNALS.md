@@ -854,15 +854,23 @@ through the command instead.
 
 ### Following up on one session
 
-`POST /api/sessions/followup` (`{id, text, client_msg_id}`) types words into the session with that id:
-the same `desk_commands` `follow_up` the voice tool writes, which only ever targets the focused
-session. The watch uses it to answer the session it is showing. It refuses a session that is not
-running, since both machines' handlers throw for one; dead-letters the words when the owning machine
-is not beating, like every desk command from the hub; and returns the first command for a repeated
-`client_msg_id` rather than typing the words twice.
+`POST /api/sessions/followup` (`{id, text, client_msg_id}`) hands words to one session's conversation,
+which is how the watch answers the session it is showing. Running, the words are typed in — the same
+`desk_commands` `follow_up` the voice tool writes for the focused session. Parked, the session is
+resumed with the words as its prompt: `resume_session` takes one on both machines, and a full Pi
+queues it for a slot. An asleep machine gets the words dead-lettered, like every desk command from the
+hub, and a repeated `client_msg_id` returns the first command rather than sending them twice.
 
-`GET /api/sessions/:id` returns one session with its whole `last_reply`, under its own projection, for
-a surface showing a single session rather than the list.
+**It asks about the conversation, not the row** (`conversationNow`). A resume makes a new row and leaves
+the parked one parked, and `claude --resume` keeps the conversation's id — so words for a parked row
+whose conversation is running again go to the running row, and a resume still opening or queued
+answers 409. A second resume would put two processes on one transcript and fork it; the phone's Resume
+button goes through the same check. Every case is an exact lookup: both machines stamp a resumed row
+with the resume command's id, and the Pi publishes the conversation id at launch.
+
+`GET /api/sessions/:id` returns one session with its `last_prompt`, whole `last_reply` and
+`claude_session_id`, under its own projection, for a surface showing a single session rather than the
+list.
 
 ### The last thing a session said
 
@@ -871,6 +879,10 @@ a surface showing a single session rather than the list.
 read from the transcript rather than inferred: Claude Code writes one record per content block, each
 carrying the message's `stop_reason`, and a turn ends with `end_turn`. "The last assistant text" is
 not the same thing — mid-turn that is a half-written thought.
+
+`last_prompt` is the prompt that started that turn. `readTail` pairs the two and both machines write it
+wherever they write the reply, so they are replaced together; it is blank, not an older prompt, when
+the turn's opening has scrolled out of the window `readTail` reads.
 
 Both machines publish it through one shared module (`voice-pipeline/orchestrator/src/transcripts.js`),
 which also finds the transcript a launch just created. Its `readTail` stats the path first and reads
@@ -1299,13 +1311,15 @@ has no WKWebView.
   while the page is watching and clear when the next command starts (`working`) or this one ends
   (`done`). A tap anywhere on it, or the double-tap gesture, starts recording; the next tap sends.
   Cancel throws the clip away.
-- **The sessions page** lists `/api/sessions` — running first, then parked, most recently active first
-  within each, the order `n` counts in — and follows `/api/session-stream`. A session opens to its whole
-  last reply (`GET /api/sessions/:id`) and the tool calls of the turn it is running, as its machine
-  reports them. On a running session a tap records a reply: the hub transcribes it without enqueueing
-  anything (`/api/voice-command?dry=1`), and `POST /api/sessions/followup` types the words into that
-  session (§6b). His words stay under the reply until the session's next `done`. A parked session
-  takes no reply, because neither machine can type into a session that is not running.
+- **The sessions page** lists `/api/sessions` one row per conversation — running first, then parked,
+  most recently active first within each, the order `n` counts in — and follows `/api/session-stream`.
+  Everything it keeps is keyed by `claude_session_id`, not by row: a resume makes a new row for the
+  same conversation, and keyed by row the page would lose a session the moment it resumed. A session
+  opens to its last prompt and the whole reply to it (`GET /api/sessions/:id`) and the tool calls of
+  the turn it is running, as its machine reports them. A tap records a reply: the hub transcribes it
+  without enqueueing anything (`/api/voice-command?dry=1`), and `POST /api/sessions/followup` types the
+  words in, or resumes a parked session with them (§6b). His words stay under the reply until the
+  conversation's next `done`.
 - **One microphone.** `Watch/Capture.swift` owns the recorder for both pages. `owner` says whose
   recording it is, so a page cannot start one over another's, and only the owner draws or sends it.
 - **A command is a recorded clip, sent the way the phone's microphone sends one.** `Watch/Recorder.swift`

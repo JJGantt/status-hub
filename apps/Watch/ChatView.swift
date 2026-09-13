@@ -40,7 +40,7 @@ struct ChatView: View {
     private var thread: some View {
         VStack(alignment: .leading, spacing: 14) {
             ForEach(chat.thread) { m in
-                row(m.text ?? "", user: m.role == "user").id(m.id)
+                row(m.text ?? "", user: m.role == "user", session: m.session_id != nil).id(m.id)
             }
             if let p = chat.pending {
                 row(p, user: true).id("pending")
@@ -60,9 +60,12 @@ struct ChatView: View {
         .contentShape(Rectangle())
     }
 
-    private func row(_ text: String, user: Bool) -> some View {
+    /// The tint a session's relayed reply wears on every surface (the web hub's .ai-msg-session text).
+    private static let sessionTint = Color(red: 0.62, green: 0.89, blue: 0.83)
+
+    private func row(_ text: String, user: Bool, session: Bool = false) -> some View {
         Text(inlineMarkdown(text))
-            .foregroundColor(user ? .gray : .white)
+            .foregroundColor(user ? .gray : session ? Self.sessionTint : .white)
             .font(.system(size: user ? 12 : 13, weight: user ? .medium : .regular))
             .frame(maxWidth: .infinity, alignment: .leading)
     }

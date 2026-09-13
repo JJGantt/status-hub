@@ -87,6 +87,8 @@ struct Message: Decodable, Identifiable, Equatable {
     let role: String?
     let text: String?
     let request_id: String?
+    /// Set on a session's reply relayed into the thread (voice-pipeline orchestrator/src/relay.js).
+    let session_id: String?
 }
 
 enum HubError: LocalizedError {

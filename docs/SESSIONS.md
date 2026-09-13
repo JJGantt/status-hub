@@ -334,6 +334,20 @@ the mechanism. The same is true one layer up: the wall keeps a 5s poll of `/api/
 push, because a session dying, the focus moving and the numbering changing announce themselves to
 nobody.
 
+### A hub dispatch answers back once
+
+A session started from the hub conversation posts its **first** finished reply into that thread, so
+a question asked from the watch is answered on the watch. `voice-pipeline/orchestrator/src/relay.js`
+does it on both machines, called from the watcher's `end_turn` and from the tick as the net:
+
+    start_session (voice worker's data MCP, DATA_CALLER=hub) ─▶ desk_commands.payload.relay = true
+    first end_turn ─▶ relayFirstReply ─▶ voice_messages {session_id, session_label} ─▶ thread + push
+
+Only that first reply. After it the session is an ordinary one: Jared reads it where it runs and
+answers it with a follow-up, and a reply to the relayed message in the thread is a fresh hub command.
+`voice_messages.session_id` is unique, so the watcher and the tick can both fire without a duplicate.
+A session any other agent dispatches has no `relay` flag and stays out of the thread.
+
 ## 11. Where it is surfaced
 
 | surface | what it shows | interaction |
@@ -343,6 +357,7 @@ nobody.
 | **TV session focus** (`/tv-session-focus`) | the running sessions as tabs, and the focused one's reply | none — voice only |
 | the home wall (`/tv`, `tv-home.js`) | three, most recently active first, each with a live line of what it is doing; the focused one's full reply below | none — voice only |
 | voice (`get_sessions`) | the numbered list, and what each last said | every verb |
+| the hub conversation (web `.ai-msg-session`, watch tint) | a hub-dispatched session's first reply, tinted and named by its label | reply is a fresh command |
 
 The phone card is the complex one and stays that way — it is the surface with a keyboard and a
 pointer. Everything else is glanceable and driven by voice, which is why sessions need numbers and

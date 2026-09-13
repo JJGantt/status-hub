@@ -672,7 +672,10 @@ function initCard() {
       const w = esc(String(row.worker));
       inner += '<span class="ai-worker ai-worker-' + w + '">' + w + '</span>';
     }
-    return '<div class="ai-msg ai-msg-' + side + (row.pending ? ' ai-msg-pending' : '') + '">' + inner + '</div>';
+    // A session's reply relayed into the thread: tinted, and named by the session it came from.
+    const session = side === 'assistant' && row.session_id;
+    if (session && row.session_label) inner += '<span class=ai-session>' + esc(String(row.session_label)) + '</span>';
+    return '<div class="ai-msg ai-msg-' + side + (session ? ' ai-msg-session' : '') + (row.pending ? ' ai-msg-pending' : '') + '">' + inner + '</div>';
   }
   let lastTs = 0;   // created_at (ms) of the newest message shown — to detect a context-reset gap
   function upsert(row) {

@@ -59,6 +59,9 @@ targets:
         CFBundleShortVersionString: "$(MARKETING_VERSION)"
         CFBundleVersion: "$(CURRENT_PROJECT_VERSION)"
         LSRequiresIPhoneOS: true
+        # HTTPS only — exempt. Without this declared, TestFlight holds every upload at "Missing
+        # Compliance" and the tester group cannot install it until someone answers by hand.
+        ITSAppUsesNonExemptEncryption: false
         UILaunchScreen: {}
         UIApplicationSupportsIndirectInputEvents: true
         UISupportedInterfaceOrientations:
@@ -130,6 +133,7 @@ targets:
         CFBundleVersion: "$(CURRENT_PROJECT_VERSION)"
         WKApplication: true
         WKCompanionAppBundleIdentifier: com.jaredgantt.statushub
+        ITSAppUsesNonExemptEncryption: false
         # statushub://record is what the complication opens — straight into dictation.
         CFBundleURLTypes:
           - CFBundleURLName: com.jaredgantt.statushub.watch

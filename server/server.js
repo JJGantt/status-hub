@@ -1905,7 +1905,7 @@ app.post('/api/voice-command', async (req, res) => {
     // transcript lands in the text box so the user sends text + photos together when they're ready.
     const dry = String(req.query.dry || '') === '1';
     const msgId = String(req.query.client_msg_id || '').slice(0, 64);
-    if (!dry && msgId && seenMsgIds.has(msgId)) { req.resume(); return res.json({ enqueued: true, duplicate: true }); }
+    if (!dry && msgId && seenMsgIds.has(msgId)) { req.resume(); return res.json({ enqueued: true, duplicate: true, id: seenMsgIds.get(msgId) }); }
     await pipeline(req, fs.createWriteStream(tmp));
     const { size } = await fs.promises.stat(tmp);
     if (!size) return res.status(400).json({ error: 'no audio' });
@@ -1923,10 +1923,11 @@ app.post('/api/voice-command', async (req, res) => {
     // terse, fits-in-the-status-chip confirmation. The full conversation card omits it (verbose replies).
     const quick = String(req.query.quick || '') === '1';
     const client_now = CLIENT_NOW_RE.test(String(req.query.client_now || '')) ? String(req.query.client_now) : null;
-    await sbWrite('voice_requests', 'POST', { transcript, source: quick ? 'web-quick' : 'web', focus: 'hub',
+    const id = crypto.randomUUID();   // chosen here so the caller can wait on it (/api/voice-reply/:id)
+    await sbWrite('voice_requests', 'POST', { id, transcript, source: quick ? 'web-quick' : 'web', focus: 'hub',
       ...(client_now ? { client_now } : {}) });
-    markSeen(msgId);
-    res.json({ transcript, enqueued: true });
+    markSeen(msgId, id);
+    res.json({ transcript, enqueued: true, id });
   } catch (e) {
     res.status(e.status || 500).json({ error: String(e.message || e) });
   } finally {
@@ -2050,8 +2051,8 @@ app.post('/api/voice-text', express.json(), async (req, res) => {
 });
 
 // Wait for one command to finish: held open until voice_requests row :id is done or error, then
-// answered with its outcome. The watch sends with /api/voice-text and waits here rather than
-// polling. Settled by the voice_requests realtime subscription; the read on entry covers a row that
+// answered with its outcome. The watch uploads its clip to /api/voice-command and waits here rather
+// than polling. Settled by the voice_requests realtime subscription; the read on entry covers a row that
 // finished before the wait began, and the waiter is registered BEFORE that read so a finish landing
 // between the two cannot be missed. A wait that runs out answers `pending` and the client asks
 // again — REPLY_WAIT_MS is only a bound on one HTTP request, kept under Fly's proxy idle timeout.

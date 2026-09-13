@@ -11,12 +11,14 @@
 		0C6EDE683DFC99BC5DD60409 /* RecordIntent.swift in Sources */ = {isa = PBXBuildFile; fileRef = F198CD20CEADF9EC7C93F50C /* RecordIntent.swift */; };
 		0E69DD82E7A03FBF6DC8305C /* RingsWidget.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0AD761F7ECC2DBF3FA1641B0 /* RingsWidget.swift */; };
 		0F141CDE69394C33EB49DFAE /* TodoView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 824876CC8A2DF46BE8BF406A /* TodoView.swift */; };
+		12D0DCB4808D439F40DEDCC4 /* Capture.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3EE13DD050BF1BC4B943C3CC /* Capture.swift */; };
 		14F93E7C978F91E1C8547E29 /* TodoWidget.swift in Sources */ = {isa = PBXBuildFile; fileRef = 279F09507BAD56AB8AD69831 /* TodoWidget.swift */; };
 		1C569FFA9D76D921D56B85D8 /* RecordIntent.swift in Sources */ = {isa = PBXBuildFile; fileRef = F62C833499BAA9A4A1C9F660 /* RecordIntent.swift */; };
 		2865661A326AF6F9FE5F6E61 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = AC135E9E04A98CDB11B57AB2 /* Assets.xcassets */; };
 		2AE6971801629766230C380C /* Auth.swift in Sources */ = {isa = PBXBuildFile; fileRef = 88D699B5FDC0F7476374CF07 /* Auth.swift */; };
 		4047BFD86E0305E129C06B77 /* Info-iOS.plist in Resources */ = {isa = PBXBuildFile; fileRef = 12B2F6A89FA87D30EEC5ED56 /* Info-iOS.plist */; };
 		48D80B4A545868D78E2DC799 /* Auth.swift in Sources */ = {isa = PBXBuildFile; fileRef = 88D699B5FDC0F7476374CF07 /* Auth.swift */; };
+		4D60B234E0ADF4D9465FE606 /* SessionsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AC7643D7992852F757EF0A7E /* SessionsView.swift */; };
 		4DB8BD1AC2A03D075B399CA4 /* WorkoutView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A3F70079ED5B30314C83B6BD /* WorkoutView.swift */; };
 		51D9EC4E888D09D03D22734A /* Recorder.swift in Sources */ = {isa = PBXBuildFile; fileRef = 14EB30894FADCF33B66D0455 /* Recorder.swift */; };
 		51DECA2330E0FBC3832EF2A4 /* Models.swift in Sources */ = {isa = PBXBuildFile; fileRef = B47214768CCEE8C99EEF5958 /* Models.swift */; };
@@ -53,7 +55,9 @@
 		D19716A696E535763020C4F4 /* Theme.swift in Sources */ = {isa = PBXBuildFile; fileRef = A3ED88961E8E93D6EBE0EA46 /* Theme.swift */; };
 		D8B3EEDED01AB105C95F173D /* Auth.swift in Sources */ = {isa = PBXBuildFile; fileRef = 88D699B5FDC0F7476374CF07 /* Auth.swift */; };
 		D998A2EA11DB625A5E768785 /* Models.swift in Sources */ = {isa = PBXBuildFile; fileRef = B47214768CCEE8C99EEF5958 /* Models.swift */; };
+		E5F01E32A844356CC4D3F449 /* WatchUI.swift in Sources */ = {isa = PBXBuildFile; fileRef = E15B459BE174F4274C78B54E /* WatchUI.swift */; };
 		E8ABA2047F042D0E11B6C604 /* Workout.swift in Sources */ = {isa = PBXBuildFile; fileRef = F4BAD78C211DC1432CDEB572 /* Workout.swift */; };
+		EBD52912FF3B6259E305FBFA /* Sessions.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3DA8801FE7845595DD403F04 /* Sessions.swift */; };
 		ED30317D3B77A590C83D95BC /* StatusHubApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = DBE4FD566029B00F912457DA /* StatusHubApp.swift */; };
 		EE1E28331D9AE8401BEE3601 /* Push.swift in Sources */ = {isa = PBXBuildFile; fileRef = 835C09DFE3C581C0FCD41116 /* Push.swift */; };
 		F10846CA6E8D579211CF7695 /* Theme.swift in Sources */ = {isa = PBXBuildFile; fileRef = A3ED88961E8E93D6EBE0EA46 /* Theme.swift */; };
@@ -128,6 +132,8 @@
 		14EB30894FADCF33B66D0455 /* Recorder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Recorder.swift; sourceTree = "<group>"; };
 		279F09507BAD56AB8AD69831 /* TodoWidget.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TodoWidget.swift; sourceTree = "<group>"; };
 		38BD5AA187D80545B616356B /* Nutrition.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Nutrition.swift; sourceTree = "<group>"; };
+		3DA8801FE7845595DD403F04 /* Sessions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sessions.swift; sourceTree = "<group>"; };
+		3EE13DD050BF1BC4B943C3CC /* Capture.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Capture.swift; sourceTree = "<group>"; };
 		43113D1E0A8CEB8334CFC02E /* AssetsMac.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = AssetsMac.xcassets; sourceTree = "<group>"; };
 		61B4D21322132BFB2C145C0C /* ReposWidget.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReposWidget.swift; sourceTree = "<group>"; };
 		630A58399AEBE9A0EB63449B /* HubVoiceIntent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HubVoiceIntent.swift; sourceTree = "<group>"; };
@@ -149,6 +155,7 @@
 		A3F70079ED5B30314C83B6BD /* WorkoutView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkoutView.swift; sourceTree = "<group>"; };
 		A86CE732DC51F6BC6973C5F0 /* RingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RingsView.swift; sourceTree = "<group>"; };
 		AC135E9E04A98CDB11B57AB2 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		AC7643D7992852F757EF0A7E /* SessionsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionsView.swift; sourceTree = "<group>"; };
 		AD44A10C47F3ACE73074E7B2 /* StatusHubControls.appex */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = "wrapper.app-extension"; path = StatusHubControls.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		AF1D1C7A5D148A4366347C65 /* ReposView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReposView.swift; sourceTree = "<group>"; };
 		B47214768CCEE8C99EEF5958 /* Models.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Models.swift; sourceTree = "<group>"; };
@@ -158,6 +165,7 @@
 		D87B899987639512DD905DCE /* WatchLink.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchLink.swift; sourceTree = "<group>"; };
 		DBE4FD566029B00F912457DA /* StatusHubApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StatusHubApp.swift; sourceTree = "<group>"; };
 		DE7144970264B4FD475213E8 /* StatusHubMac.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = StatusHubMac.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		E15B459BE174F4274C78B54E /* WatchUI.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchUI.swift; sourceTree = "<group>"; };
 		EF4C42BEDA65C5384974460A /* StatusHub.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = StatusHub.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		F198CD20CEADF9EC7C93F50C /* RecordIntent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecordIntent.swift; sourceTree = "<group>"; };
 		F4BAD78C211DC1432CDEB572 /* Workout.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Workout.swift; sourceTree = "<group>"; };
@@ -208,6 +216,7 @@
 		5F47CEC11A84CCA7CCDAB700 /* Watch */ = {
 			isa = PBXGroup;
 			children = (
+				3EE13DD050BF1BC4B943C3CC /* Capture.swift */,
 				65394C860C697D281720B76A /* Chat.swift */,
 				C3E42D965464DC9CD4478CCB /* ChatView.swift */,
 				FD06B420AFC554D37540118C /* Hub.swift */,
@@ -215,7 +224,10 @@
 				38BD5AA187D80545B616356B /* Nutrition.swift */,
 				7300D161B8F2C8E565CA4FAB /* NutritionView.swift */,
 				14EB30894FADCF33B66D0455 /* Recorder.swift */,
+				3DA8801FE7845595DD403F04 /* Sessions.swift */,
+				AC7643D7992852F757EF0A7E /* SessionsView.swift */,
 				C00E5B1C61B9780EE2BE1945 /* StatusHubWatchApp.swift */,
+				E15B459BE174F4274C78B54E /* WatchUI.swift */,
 				F4BAD78C211DC1432CDEB572 /* Workout.swift */,
 				A3F70079ED5B30314C83B6BD /* WorkoutView.swift */,
 			);
@@ -457,6 +469,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				48D80B4A545868D78E2DC799 /* Auth.swift in Sources */,
+				12D0DCB4808D439F40DEDCC4 /* Capture.swift in Sources */,
 				86F3FAF2206C002FF5A79054 /* Chat.swift in Sources */,
 				8E8CD9763A8A0BD031DBF5E5 /* ChatView.swift in Sources */,
 				C4250430822C333D041CEEA1 /* Hub.swift in Sources */,
@@ -465,7 +478,10 @@
 				1C569FFA9D76D921D56B85D8 /* RecordIntent.swift in Sources */,
 				51D9EC4E888D09D03D22734A /* Recorder.swift in Sources */,
 				0A405A9C2335E55FE66C39DB /* RingsView.swift in Sources */,
+				EBD52912FF3B6259E305FBFA /* Sessions.swift in Sources */,
+				4D60B234E0ADF4D9465FE606 /* SessionsView.swift in Sources */,
 				77A3FC66BCC0B5FAA82C04C6 /* StatusHubWatchApp.swift in Sources */,
+				E5F01E32A844356CC4D3F449 /* WatchUI.swift in Sources */,
 				E8ABA2047F042D0E11B6C604 /* Workout.swift in Sources */,
 				4DB8BD1AC2A03D075B399CA4 /* WorkoutView.swift in Sources */,
 			);

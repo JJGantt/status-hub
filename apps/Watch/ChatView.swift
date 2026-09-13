@@ -1,10 +1,11 @@
 import SwiftUI
 import WatchKit
 
-/// The one screen: the shared hub conversation on black. A tap anywhere on it (or the double-tap
+/// The prompt page: the shared hub conversation on black. A tap anywhere on it (or the double-tap
 /// gesture) starts recording the next command, and the next tap sends it.
 struct ChatView: View {
     @EnvironmentObject private var chat: Chat
+    @ObservedObject private var capture = Capture.shared
     @Environment(\.scenePhase) private var phase
 
     var body: some View {
@@ -24,20 +25,15 @@ struct ChatView: View {
             }
         }
         .background(Color.black.ignoresSafeArea())
-        .task { await chat.load() }
         .onAppear { recordIfAsked() }
-        .onChange(of: phase) { _, now in
-            guard now == .active else { return }
-            Task { await chat.load() }
-            recordIfAsked()
-        }
+        .onChange(of: phase) { _, now in if now == .active { recordIfAsked() } }
         .onChange(of: chat.recordRequested) { _, _ in recordIfAsked() }
     }
 
     /// Where the view settles: the recording under way, the command being waited on, or the start of
     /// the newest turn, as the restaurant app does.
     private var scrollTarget: String? {
-        if chat.recording { return "recording" }
+        if capture.owner == .hub { return "recording" }
         return chat.pending != nil ? "pending" : chat.thread.last?.id
     }
 
@@ -48,6 +44,9 @@ struct ChatView: View {
             }
             if let p = chat.pending {
                 row(p, user: true).id("pending")
+            }
+            if !chat.activity.isEmpty {
+                ActivityLines(lines: chat.activity)
             }
             if chat.thread.isEmpty && chat.pending == nil {
                 Text(">")
@@ -62,29 +61,16 @@ struct ChatView: View {
     }
 
     private func row(_ text: String, user: Bool) -> some View {
-        Text(rendered(text))
+        Text(inlineMarkdown(text))
             .foregroundColor(user ? .gray : .white)
             .font(.system(size: user ? 12 : 13, weight: user ? .medium : .regular))
             .frame(maxWidth: .infinity, alignment: .leading)
     }
 
-    /// Inline markdown (bold, italics, code) renders; anything else stays as written.
-    private func rendered(_ s: String) -> AttributedString {
-        (try? AttributedString(markdown: s, options: .init(interpretedSyntax: .inlineOnlyPreservingWhitespace)))
-            ?? AttributedString(s)
-    }
-
     @ViewBuilder private var status: some View {
-        if chat.recording {
-            HStack {
-                recordingClock
-                Spacer()
-                Button("Cancel", action: chat.cancelRecording)
-                    .tint(.red)
-                    .buttonStyle(.bordered)
-                    .controlSize(.small)
-            }
-            .id("recording")
+        if capture.owner == .hub {
+            RecordingBar(since: capture.since, cancel: chat.cancelRecording)
+                .id("recording")
         } else if chat.waiting {
             HStack {
                 ProgressView().frame(width: 24, height: 24)
@@ -112,18 +98,6 @@ struct ChatView: View {
                 Button("Retry", action: chat.retry)
                     .buttonStyle(.bordered)
                     .controlSize(.small)
-            }
-        }
-    }
-
-    /// A red dot, and the time recorded once the microphone is actually open.
-    private var recordingClock: some View {
-        HStack(spacing: 6) {
-            Circle().fill(Color.red).frame(width: 10, height: 10)
-            if let since = chat.recordingSince {
-                Text(since, style: .timer)
-                    .font(.system(size: 14, weight: .medium, design: .monospaced))
-                    .foregroundColor(.red)
             }
         }
     }

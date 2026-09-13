@@ -1,7 +1,8 @@
 import Foundation
 import WatchKit
 
-/// The screen's state: the shared thread, the clip being recorded, and the one command in flight.
+/// The prompt page's state: the shared thread, the hub command in flight, and the tool calls of
+/// whatever hub command is running.
 @MainActor
 final class Chat: ObservableObject {
     /// One per app, so the Record control's intent can reach the screen (WatchWidgets/RecordIntent.swift).
@@ -14,28 +15,27 @@ final class Chat: ObservableObject {
     }
 
     @Published private(set) var thread: [Message] = []
-    @Published private(set) var recording = false
-    /// When the microphone actually opened; nil while it is still opening.
-    @Published private(set) var recordingSince: Date?
     /// What the hub heard, shown until it lands in the thread.
     @Published private(set) var pending: String?
     @Published private(set) var waiting = false
     @Published private(set) var failure: Failure?
+    /// Tool calls of the hub command running now, as the worker reports them. The hub does not store
+    /// them, so they show while a command runs and clear when the next starts or this one finishes.
+    @Published private(set) var activity: [String] = []
     /// Set by the complication's statushub://record and by the Record control; the prompt page starts
     /// recording once it is on screen.
     @Published var recordRequested = false
 
-    private let recorder = Recorder()
-    /// Tapped, microphone not open yet. A tap in this window cancels instead of stopping.
-    private var arming = false
+    private let capture = Capture.shared
     // Kept across a retry: the clip until its command has run, the msgId so a resend cannot enqueue
     // twice, and the request id once known, after which a retry only waits again.
     private var clip: Recorder.Clip?
     private var msgId = UUID().uuidString
     private var requestId: String?
     private var task: Task<Void, Never>?
-    /// Mute writes run one after another, so an unmute can never land ahead of its own mute.
-    private var muteTask: Task<Void, Never>?
+    private var stream: Task<Void, Never>?
+    private var loading = false
+    private var reloadAfter = false
 
     private init() {
         PhoneLink.shared.onToken = { [weak self] in self?.tokenArrived() }
@@ -43,54 +43,55 @@ final class Chat: ObservableObject {
 
     func requestRecording() { recordRequested = true }
 
-    func load() async {
-        do {
-            thread = try await Hub.thread().filter { $0.role != "tool" }
-            if failure == .noToken { failure = nil }
-        } catch HubError.noToken {
-            failure = .noToken
-        } catch {
-            // Keep showing what was there; the next activation reloads.
+    /// The page is on screen: load now, and follow the conversation and the tool calls of the hub
+    /// command running until `deactivate`.
+    func activate() {
+        Task { await load() }
+        guard stream == nil else { return }
+        stream = Task {
+            await Hub.listen("/api/voice-stream", reconnected: { [weak self] in await self?.load() }) { [weak self] event, data in
+                await self?.voiceFrame(event, data)
+            }
         }
     }
 
+    func deactivate() {
+        stream?.cancel()
+        stream = nil
+    }
+
+    func load() async {
+        if loading { reloadAfter = true; return }
+        loading = true
+        defer { loading = false }
+        repeat {
+            reloadAfter = false
+            do {
+                thread = try await Hub.thread()
+                if failure == .noToken { failure = nil }
+            } catch HubError.noToken {
+                failure = .noToken
+            } catch {
+                // Keep showing what was there; the next frame or activation reloads.
+            }
+        } while reloadAfter
+    }
+
     func toggleRecording() {
-        if recording { stopRecording() } else { startRecording() }
+        if capture.owner == .hub { stopRecording() } else { startRecording() }
     }
 
     func startRecording() {
-        guard !recording, !waiting else { return }
+        guard capture.owner == nil, !waiting else { return }
         failure = nil
-        // Flipped before the await, so a second tap while the microphone opens is always a stop.
-        recording = true
-        arming = true
-        Task {
-            do {
-                try await recorder.start()
-            } catch {
-                arming = false
-                recording = false
-                failure = (error as? Recorder.Failure) == .denied ? .micDenied : .message(error.localizedDescription)
-                return
-            }
-            guard arming else { recorder.cancel(); return }   // cancelled while the microphone opened
-            arming = false
-            recordingSince = Date()
-            // Every other listener (Mac, ESP) goes deaf while the watch records, as it does for the
-            // phone's microphone, so one sentence cannot arrive as two commands.
-            setMuted(true)
+        capture.start(for: .hub) { [weak self] error in
+            self?.failure = (error as? Recorder.Failure) == .denied ? .micDenied : .message(error.localizedDescription)
         }
     }
 
     /// Ends the recording and sends it.
     func stopRecording() {
-        guard recording else { return }
-        recording = false
-        recordingSince = nil
-        if arming { arming = false; return }
-        let finished = recorder.stop()
-        setMuted(false)
-        guard let finished else { return }
+        guard capture.owner == .hub, let finished = capture.stop() else { return }
         discardClip()
         clip = finished
         msgId = UUID().uuidString
@@ -101,12 +102,7 @@ final class Chat: ObservableObject {
 
     /// Ends the recording and throws it away.
     func cancelRecording() {
-        guard recording else { return }
-        recording = false
-        recordingSince = nil
-        if arming { arming = false; return }
-        recorder.cancel()
-        setMuted(false)
+        if capture.owner == .hub { capture.cancel() }
     }
 
     func retry() {
@@ -134,17 +130,29 @@ final class Chat: ObservableObject {
         if failure == .noToken { retry() } else { Task { await load() } }
     }
 
-    private func setMuted(_ on: Bool) {
-        let previous = muteTask
-        muteTask = Task {
-            await previous?.value
-            await Hub.muteOthers(on)
-        }
-    }
-
     private func discardClip() {
         if let clip { try? FileManager.default.removeItem(at: clip.url) }
         clip = nil
+    }
+
+    private func voiceFrame(_ event: String, _ data: String) async {
+        guard event == "voice", let frame = try? JSONDecoder().decode(VoiceFrame.self, from: Data(data.utf8)) else { return }
+        switch frame.kind {
+        case "activity":
+            guard (frame.row?.focus ?? "hub") == "hub" else { return }
+            switch frame.row?.state {
+            case "tool":
+                if let text = frame.row?.text, !text.isEmpty { activity.append(text) }
+            case "working", "done":
+                activity = []
+            default:
+                break
+            }
+        case "message", "mode", "reset":
+            await load()
+        default:
+            break
+        }
     }
 
     private func run() {
@@ -190,4 +198,16 @@ final class Chat: ObservableObject {
             waiting = false
         }
     }
+}
+
+/// A frame of `/api/voice-stream`. `activity` rows are the worker's live reports (a tool call, the
+/// command starting, it finishing); `message` rows are the conversation's own rows as they are written.
+private struct VoiceFrame: Decodable {
+    struct Row: Decodable {
+        let text: String?
+        let state: String?
+        let focus: String?
+    }
+    let kind: String
+    let row: Row?
 }

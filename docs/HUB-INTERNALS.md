@@ -852,6 +852,18 @@ Writing the `custom-title` record ourselves also works for anything that reads t
 running session never re-reads its own file and would keep the old tab title — which is why it goes
 through the command instead.
 
+### Following up on one session
+
+`POST /api/sessions/followup` (`{id, text, client_msg_id}`) types words into the session with that id:
+the same `desk_commands` `follow_up` the voice tool writes, which only ever targets the focused
+session. The watch uses it to answer the session it is showing. It refuses a session that is not
+running, since both machines' handlers throw for one; dead-letters the words when the owning machine
+is not beating, like every desk command from the hub; and returns the first command for a repeated
+`client_msg_id` rather than typing the words twice.
+
+`GET /api/sessions/:id` returns one session with its whole `last_reply`, under its own projection, for
+a surface showing a single session rather than the list.
+
 ### The last thing a session said
 
 `desk_sessions.last_reply` is the FINAL message of a turn, with `reply_at` for when it landed and
@@ -1275,13 +1287,27 @@ plus its widget extension (`apps/WatchWidgets/`, `com.jaredgantt.statushub.watch
 complication and, on watchOS 26, the Record control. It is native SwiftUI, not a web view: watchOS
 has no WKWebView.
 
-- **Three pages, swiped left to right:** the prompt (below), the nutrition page and the workout page.
-  A page loads when it comes on screen and holds `/api/day-stream` open only while it is showing,
-  reloading on its own kind of frame (and after every reconnect, since a change may have gone by).
+- **Four pages, swiped left to right:** the sessions page, the prompt (where the app opens), the
+  nutrition page and the workout page. A page loads when it comes on screen and holds its event
+  stream open only while it is showing, reloading after every reconnect, since a change may have gone
+  by. `Hub.listen` reads all three streams; every frame the hub sends has a `data:` line, keepalives
+  included, and that is what it dispatches on.
 - **The prompt page.** The shared hub thread on black — `/api/voice-messages?focus=hub&mode=active`, the
-  same current-context thread the phone and the TV show, in whichever mode `agent_mode` selects. A
-  tap anywhere on it, or the double-tap gesture, starts recording; the next tap sends. Cancel throws
-  the clip away.
+  same current-context thread the phone and the TV show, in whichever mode `agent_mode` selects. It
+  follows `/api/voice-stream`: a `message` frame reloads the thread, and the worker's `activity` frames
+  draw the running command's tool calls under it. The hub stores none of those, so they show only
+  while the page is watching and clear when the next command starts (`working`) or this one ends
+  (`done`). A tap anywhere on it, or the double-tap gesture, starts recording; the next tap sends.
+  Cancel throws the clip away.
+- **The sessions page** lists `/api/sessions` — running first, then parked, most recently active first
+  within each, the order `n` counts in — and follows `/api/session-stream`. A session opens to its whole
+  last reply (`GET /api/sessions/:id`) and the tool calls of the turn it is running, as its machine
+  reports them. On a running session a tap records a reply: the hub transcribes it without enqueueing
+  anything (`/api/voice-command?dry=1`), and `POST /api/sessions/followup` types the words into that
+  session (§6b). His words stay under the reply until the session's next `done`. A parked session
+  takes no reply, because neither machine can type into a session that is not running.
+- **One microphone.** `Watch/Capture.swift` owns the recorder for both pages. `owner` says whose
+  recording it is, so a page cannot start one over another's, and only the owner draws or sends it.
 - **A command is a recorded clip, sent the way the phone's microphone sends one.** `Watch/Recorder.swift`
   records AAC, mono, 16 kHz, and `Hub.sendAudio` uploads the file to `/api/voice-command` (source
   `web`): the hub transcribes it with the same Groq Whisper, and the worker treats it as push-to-talk —

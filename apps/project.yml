@@ -115,9 +115,9 @@ targets:
         PRODUCT_NAME: StatusHubControls
         SKIP_INSTALL: YES
         TARGETED_DEVICE_FAMILY: "1"
-  # The watch companion: the shared hub conversation, recorded into (clips go to /api/voice-command,
-  # like the phone's microphone). Talks to the hub directly with the token the phone hands over
-  # (Sources/WatchLink.swift → Watch/Hub.swift).
+  # The watch companion: the sessions, the shared hub conversation (recorded into — clips go to
+  # /api/voice-command like the phone's microphone), and the day's nutrition and workout. Talks to the
+  # hub directly with the token the phone hands over (Sources/WatchLink.swift → Watch/Hub.swift).
   StatusHubWatch:
     type: application
     platform: watchOS

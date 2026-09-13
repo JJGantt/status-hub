@@ -109,22 +109,31 @@ enum Hub {
         try await json("/api/voice-messages?focus=hub&mode=active&limit=200")
     }
 
-    /// What the hub heard in a clip, and the request it enqueued. No id means it heard no words.
+    /// What the hub heard in a clip, and the request it enqueued. No id means it heard no words, or the
+    /// clip was sent `dry`.
     struct Heard: Decodable {
         let transcript: String?
         let id: String?
     }
 
-    /// Uploads a recorded clip. The hub transcribes it and enqueues what it heard as a command, the
-    /// same path the phone's microphone takes. A resend with the same `msgId` is answered with the
-    /// first send's id instead of running the command twice.
-    static func sendAudio(_ clip: Recorder.Clip, msgId: String) async throws -> Heard {
+    /// Uploads a recorded clip, transcribed with the same Groq Whisper as the phone's microphone. The
+    /// hub enqueues what it heard as a command, or with `dry` only hands the words back. A resend with
+    /// the same `msgId` is answered with the first send's id instead of running the command twice.
+    static func sendAudio(_ clip: Recorder.Clip, msgId: String, dry: Bool = false) async throws -> Heard {
         let query = "client_msg_id=\(msgId)&client_now=\(clientNow())&dur=\(String(format: "%.1f", clip.duration))"
+            + (dry ? "&dry=1" : "")
         var r = try request("/api/voice-command?" + query, method: "POST", timeout: 60)
         r.setValue("audio/mp4", forHTTPHeaderField: "Content-Type")
         let (data, resp) = try await URLSession.shared.upload(for: r, fromFile: clip.url)
         try await check(resp)
         return try JSONDecoder().decode(Heard.self, from: data)
+    }
+
+    /// Types his words into a running session. A resend with the same `msgId` returns the first send's
+    /// command instead of typing the words twice.
+    static func followUp(_ session: String, text: String, msgId: String) async throws {
+        _ = try await call("/api/sessions/followup", method: "POST",
+                           body: ["id": session, "text": text, "client_msg_id": msgId])
     }
 
     /// The global `voice_muted` flag every always-on listener obeys. Best effort, as on the phone.
@@ -147,20 +156,27 @@ enum Hub {
         }
     }
 
-    /// Holds /api/day-stream open and runs `reload` on each frame of `kind`, and once after every
-    /// reconnect, since a change may have gone by while it was down. Backs off while the hub cannot be
+    /// Holds a hub event stream open and hands every frame's event name and data to `frame`, running
+    /// `reconnected` after each reconnect, since something may have gone by while it was down. Every
+    /// frame the hub sends has a `data:` line, keepalives included. Backs off while the hub cannot be
     /// reached. Returns when the calling task is cancelled.
-    static func follow(_ kind: String, reload: @escaping () async -> Void) async {
+    static func listen(_ path: String, reconnected: @escaping () async -> Void = {},
+                       frame: @escaping (_ event: String, _ data: String) async -> Void) async {
         var backoff: Double = 1
         var first = true
         while !Task.isCancelled {
             do {
-                let bytes = try await stream("/api/day-stream")
-                if !first { await reload() }
+                let bytes = try await stream(path)
+                if !first { await reconnected() }
                 first = false
                 backoff = 1
-                for try await line in bytes.lines where line == "event: " + kind {
-                    await reload()
+                var event = ""
+                for try await line in bytes.lines {
+                    if line.hasPrefix("event: ") {
+                        event = String(line.dropFirst(7))
+                    } else if line.hasPrefix("data: ") {
+                        await frame(event, String(line.dropFirst(6)))
+                    }
                 }
             } catch {}
             guard !Task.isCancelled else { return }
@@ -169,8 +185,20 @@ enum Hub {
         }
     }
 
+    /// Runs `reload` on each /api/day-stream frame of `kind`, and after every reconnect.
+    static func follow(_ kind: String, reload: @escaping () async -> Void) async {
+        await listen("/api/day-stream", reconnected: reload) { event, _ in
+            if event == kind { await reload() }
+        }
+    }
+
     static func json<T: Decodable>(_ path: String, timeout: TimeInterval = 20) async throws -> T {
         try JSONDecoder().decode(T.self, from: try await call(path, timeout: timeout))
+    }
+
+    /// One path segment, escaped: session ids go into URLs.
+    static func pathComponent(_ s: String) -> String {
+        s.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed.subtracting(CharacterSet(charactersIn: "/"))) ?? s
     }
 
     /// A server-sent event stream, open until the hub or the network drops it. The hub pings every
@@ -213,7 +241,7 @@ enum Hub {
         guard (200..<300).contains(code) else { throw HubError.status(code) }
     }
 
-    /// The watch's own wall clock, which the worker anchors "now" to for a typed command.
+    /// The watch's own wall clock, which the worker anchors "now" to for a command.
     private static func clientNow() -> String {
         let f = DateFormatter()
         f.locale = Locale(identifier: "en_US_POSIX")

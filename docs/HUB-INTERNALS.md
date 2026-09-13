@@ -473,8 +473,8 @@ character per hour; `defaultT0` marks the window the card lands on before it is 
 
 **Widget feeds** (compact, one per widget — §9b): `/api/rings` (a timeline of per-minute pace frames,
 not a snapshot; the watch reads it too) · `/api/workout-now` (the watch's workout page: the rest-clock
-inputs, `sets_today`, and the exercise the last set went onto with each muscle's weekly sets and volume
-colour) · `/api/due-widget` (every dated item across every list) · `/api/repos-widget` (the
+inputs, `sets_today`, and every exercise today — newest first by its last set — each with its muscles'
+weekly sets and volume colour) · `/api/due-widget` (every dated item across every list) · `/api/repos-widget` (the
 Mac's projects + desk presence). `/api/list-widget` returns one list's item titles and is the
 per-list feed `/api/due-widget` replaced; nothing reads it.
 
@@ -1299,10 +1299,11 @@ It is native SwiftUI, not a web view: watchOS has no WKWebView.
   The watch compiles `Controls/RingsView.swift` for the `/api/rings` types and the palette; the
   widget's own views in it go unused. The log is `cards/nutritionlog.js`'s day list (band, then
   entries newest first, staged on top), display only, with the chips wrapping instead of scrolling.
-- **The workout page** is the home wall's workout block: `#resttimer` (Last set · Session · Sets,
-  ticking each second off naive wall-clock digits exactly as `workouts.js` does) and the
-  `data-recent` row for the exercise the last set went onto, fed by `/api/workout-now`. The strip
-  stays one line as on the wall, stepping smaller, and wraps only when one line would be unreadable.
+- **The workout page** is the home wall's `#resttimer` (Last set · Session · Sets, ticking each
+  second off naive wall-clock digits exactly as `workouts.js` does) over every exercise logged today,
+  each drawn as the wall's `data-recent` row — the one a set just went onto at the top, the rest
+  scrolling below — fed by `/api/workout-now`. The strip stays one line as on the wall, stepping
+  smaller, and wraps only when one line would be unreadable.
 - **The token comes from the phone.** The watch has no web view to sign in with and shares neither
   cookies nor Keychain with the phone. `Sources/WatchLink.swift` reads the `hub` cookie from the web
   view's cookie store (falling back to the Keychain password) and sends it as WatchConnectivity

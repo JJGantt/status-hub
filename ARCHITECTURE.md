@@ -194,8 +194,8 @@ Produce tracking rides on nutrition rather than its own table: `nutrition_entrie
   - See [docs/HUB-INTERNALS.md](docs/HUB-INTERNALS.md) §9b.
 - **Apple Watch** — `status-hub/apps/Watch/`, native (watchOS has no web view) and embedded in the
   iOS app. Three pages: the shared hub thread, dictated into (commands go through `/api/voice-text`
-  like a typed one); the nutrition card's pace rings over today's log; and the home wall's workout
-  block. A complication opens it straight into dictation. See
+  like a typed one); the nutrition card's pace rings over today's log; and the home wall's rest
+  clocks over today's sets. A complication opens it straight into dictation. See
   [docs/HUB-INTERNALS.md](docs/HUB-INTERNALS.md) §9c.
 - **ESP32** — the voice mic (see §5).
 - **iPhone push** — native APNs notifications (see §7).

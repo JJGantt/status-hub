@@ -46,7 +46,7 @@ final class Nutrition: ObservableObject {
     func activate() {
         Task { await load() }
         guard stream == nil else { return }
-        stream = Task { await follow() }
+        stream = Task { await Hub.follow("nutrition") { [weak self] in await self?.load() } }
     }
 
     func deactivate() {
@@ -86,27 +86,6 @@ final class Nutrition: ObservableObject {
             if wait > 0 { try? await Task.sleep(nanoseconds: UInt64(wait * 1_000_000_000)) }
             guard !Task.isCancelled else { return }
             await self?.load()
-        }
-    }
-
-    /// Holds /api/nutrition-stream open and reloads on each `nutrition` event. A dropped stream comes
-    /// back with backoff and reloads once reconnected, since a change may have gone by unheard.
-    private func follow() async {
-        var backoff: Double = 1
-        var first = true
-        while !Task.isCancelled {
-            do {
-                let bytes = try await Hub.stream("/api/nutrition-stream")
-                if !first { await load() }
-                first = false
-                backoff = 1
-                for try await line in bytes.lines where line == "event: nutrition" {
-                    await load()
-                }
-            } catch {}
-            guard !Task.isCancelled else { return }
-            try? await Task.sleep(nanoseconds: UInt64(backoff * 1_000_000_000))
-            backoff = min(backoff * 2, 60)
         }
     }
 

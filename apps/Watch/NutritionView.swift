@@ -223,7 +223,7 @@ private struct EntryRow: View {
 private func mn(_ v: Double?) -> Int { Int((v ?? 0).rounded()) }
 
 /// A number printed the way JavaScript prints it: no ".0" on a whole one.
-private func js(_ v: Double) -> String { v == v.rounded() ? String(Int(v)) : String(v) }
+func js(_ v: Double) -> String { v == v.rounded() ? String(Int(v)) : String(v) }
 
 /// Lays its children left to right and wraps. The hub's rows scroll sideways instead, which a watch
 /// is too narrow for.

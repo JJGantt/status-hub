@@ -4,6 +4,7 @@ import SwiftUI
 struct StatusHubWatchApp: App {
     @StateObject private var chat = Chat()
     @StateObject private var nutrition = Nutrition()
+    @StateObject private var workout = Workout()
 
     init() {
         // Activate WatchConnectivity at launch so a token the phone already sent is picked up at once.
@@ -12,17 +13,18 @@ struct StatusHubWatchApp: App {
 
     var body: some Scene {
         WindowGroup {
-            RootView().environmentObject(chat).environmentObject(nutrition)
+            RootView().environmentObject(chat).environmentObject(nutrition).environmentObject(workout)
         }
     }
 }
 
-/// Two pages: the prompt, and the rings and today's log to its right.
+/// Three pages, left to right: the prompt, the rings and today's log, and the workout block.
 struct RootView: View {
-    enum Page { case chat, nutrition }
+    enum Page { case chat, nutrition, workout }
 
     @EnvironmentObject private var chat: Chat
     @EnvironmentObject private var nutrition: Nutrition
+    @EnvironmentObject private var workout: Workout
     @Environment(\.scenePhase) private var phase
     @State private var page = Page.chat
 
@@ -30,6 +32,7 @@ struct RootView: View {
         TabView(selection: $page) {
             ChatView().tag(Page.chat)
             NutritionView().tag(Page.nutrition)
+            WorkoutView().tag(Page.workout)
         }
         .tabViewStyle(.page)
         // The complication always lands on the prompt, whichever page was showing.
@@ -42,8 +45,9 @@ struct RootView: View {
         .onChange(of: phase) { _, _ in follow() }
     }
 
-    /// The nutrition page loads and holds its stream open only while it is the page on screen.
+    /// A page loads and holds its stream open only while it is the one on screen.
     private func follow() {
         if phase == .active && page == .nutrition { nutrition.activate() } else { nutrition.deactivate() }
+        if phase == .active && page == .workout { workout.activate() } else { workout.deactivate() }
     }
 }

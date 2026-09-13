@@ -134,6 +134,28 @@ enum Hub {
         }
     }
 
+    /// Holds /api/day-stream open and runs `reload` on each frame of `kind`, and once after every
+    /// reconnect, since a change may have gone by while it was down. Backs off while the hub cannot be
+    /// reached. Returns when the calling task is cancelled.
+    static func follow(_ kind: String, reload: @escaping () async -> Void) async {
+        var backoff: Double = 1
+        var first = true
+        while !Task.isCancelled {
+            do {
+                let bytes = try await stream("/api/day-stream")
+                if !first { await reload() }
+                first = false
+                backoff = 1
+                for try await line in bytes.lines where line == "event: " + kind {
+                    await reload()
+                }
+            } catch {}
+            guard !Task.isCancelled else { return }
+            try? await Task.sleep(nanoseconds: UInt64(backoff * 1_000_000_000))
+            backoff = min(backoff * 2, 60)
+        }
+    }
+
     static func json<T: Decodable>(_ path: String, timeout: TimeInterval = 20) async throws -> T {
         try JSONDecoder().decode(T.self, from: try await call(path, timeout: timeout))
     }

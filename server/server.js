@@ -1254,7 +1254,13 @@ app.get('/api/status', async (req, res) => {
 // changed()) covers external writers, and the hub's own set writes dirty it synchronously.
 const workoutDayCache = new Map();   // date -> { body, at }
 const WORKOUTDAY_BACKSTOP_MS = 15 * 60 * 1000;
-const dirtyWorkoutDay = () => workoutDayCache.clear();
+// /api/day-stream clients: told, with a bodiless `nutrition` or `workout` frame, when that day may have
+// changed. Every path that can change one already dirties its day cache, so that is where they fire.
+const dayClients = new Set();
+function pushDay(kind) {
+  for (const c of dayClients) { try { c.write(`event: ${kind}\ndata: {}\n\n`); } catch {} }
+}
+const dirtyWorkoutDay = () => { workoutDayCache.clear(); pushDay('workout'); };
 // Compact feed for the iOS home/lock-screen widget. buildStatus() is heavy (many Supabase reads),
 // so the widget gets only the four numbers it draws rather than the whole dashboard payload.
 // Per-minute frames put it around 37KB, once an hour — the frames dominate, and the alternative
@@ -1320,12 +1326,9 @@ app.get('/api/rings', async (req, res) => {
   } catch (e) { res.status(500).json({ error: String(e.message || e) }); }
 });
 
-app.get('/api/workout-day', async (req, res) => {
-  try {
-    const date = String(req.query.date || '').slice(0, 10);
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return res.status(400).json({ error: 'bad date' });
+async function workoutDay(date) {
     const hit = workoutDayCache.get(date);
-    if (hit && Date.now() - hit.at < WORKOUTDAY_BACKSTOP_MS) return res.json(hit.body);
+    if (hit && Date.now() - hit.at < WORKOUTDAY_BACKSTOP_MS) return hit.body;
     const rows = await sbRange(`sets?occurred_at=gte.${date}T00:00:00&occurred_at=lte.${date}T23:59:59&select=id,occurred_at,exercise,weight_lbs,reps&order=occurred_at`);
     const order = [], byEx = {};
     for (const r of rows) { if (!byEx[r.exercise]) { byEx[r.exercise] = []; order.push(r.exercise); } byEx[r.exercise].push({ id: r.id, weight_lbs: r.weight_lbs, reps: r.reps }); }
@@ -1335,7 +1338,34 @@ app.get('/api/workout-day', async (req, res) => {
     const recent = rows.length ? rows[rows.length - 1].exercise : null;
     const body = { date, total: rows.length, recent, exercises: order.map((n) => ({ name: n, sets: byEx[n] })) };
     workoutDayCache.set(date, { body, at: Date.now() });
-    res.json(body);
+    return body;
+}
+app.get('/api/workout-day', async (req, res) => {
+  try {
+    const date = String(req.query.date || '').slice(0, 10);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return res.status(400).json({ error: 'bad date' });
+    res.json(await workoutDay(date));
+  } catch (e) { res.status(500).json({ error: String(e.message || e) }); }
+});
+
+// Compact feed for the watch's workout page, which is the home wall's workout block and nothing else:
+// the inputs to its rest/session clocks and set tally, and the exercise the last set went onto with
+// each of its muscles' WEEKLY sets in that muscle's volume colour (cards/workouts.js `data-recent` +
+// muscle.js exerciseVolumeChips). buildStatus() has all of it, but as the whole dashboard.
+app.get('/api/workout-now', async (req, res) => {
+  try {
+    const st = await buildStatus();
+    const day = await workoutDay(st.today);
+    const ex = (day.exercises || []).find((e) => e.name === day.recent) || null;
+    const V = st.volume || {}, ix = {};
+    for (const g of V.groups || []) for (const m of g.muscles) ix[m.muscle] = m;
+    const muscles = ex ? ((V.exercise_muscles || {})[ex.name] || []).filter((e) => ix[e.muscle]).map((e) => ({
+      label: ix[e.muscle].label, sets: ix[e.muscle].sets, color: ix[e.muscle].color, primary: e.contribution >= 1,
+    })) : [];
+    res.json({
+      last_set_at: st.last_set_at, session_start_at: st.session_start_at, sets_today: st.sets_today,
+      recent: ex ? { name: ex.name, sets: ex.sets.map((x) => ({ weight_lbs: x.weight_lbs, reps: x.reps })), muscles } : null,
+    });
   } catch (e) { res.status(500).json({ error: String(e.message || e) }); }
 });
 
@@ -1512,13 +1542,7 @@ app.post('/api/register-push', express.json(), async (req, res) => {
 // synchronously so their immediate client re-fetch can't race the realtime round-trip.
 const nutDayCache = new Map();   // `${date}|${window day}` -> { body, at }
 const NUTDAY_BACKSTOP_MS = 15 * 60 * 1000;
-// Every path that can change a nutrition day already dirties this cache, so that is also where
-// /api/nutrition-stream clients are told to reload.
-const nutClients = new Set();
-const dirtyNutDay = () => {
-  nutDayCache.clear();
-  for (const c of nutClients) { try { c.write('event: nutrition\ndata: {}\n\n'); } catch {} }
-};
+const dirtyNutDay = () => { nutDayCache.clear(); pushDay('nutrition'); };
 app.get('/api/nutrition-day', async (req, res) => {
   try {
     // date=today lets a client that has no 4am-origin day of its own (the watch) ask for the current one.
@@ -3200,16 +3224,16 @@ app.get('/api/list-stream', (req, res) => {
   req.on('close', () => { clearInterval(ka); listClients.delete(res); });
 });
 
-// Nutrition SSE: one bodiless `event: nutrition` frame whenever a nutrition day may have changed. For
-// a client that cannot take the full status frame on every push — the watch, which reloads its rings
-// and today's log on it.
-app.get('/api/nutrition-stream', (req, res) => {
+// Day SSE: a bodiless `event: nutrition` or `event: workout` frame whenever that day may have changed.
+// For a client that cannot take the full status frame on every push — the watch, which reloads the
+// page on screen when its kind arrives.
+app.get('/api/day-stream', (req, res) => {
   res.set({ 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache',
             Connection: 'keep-alive', 'X-Accel-Buffering': 'no' });
   res.flushHeaders();
-  nutClients.add(res);
+  dayClients.add(res);
   const ka = setInterval(() => { try { res.write(PING); } catch {} }, 25000);
-  req.on('close', () => { clearInterval(ka); nutClients.delete(res); });
+  req.on('close', () => { clearInterval(ka); dayClients.delete(res); });
 });
 
 // Session SSE: one `event: session` frame per tool call or finished turn, from either machine.

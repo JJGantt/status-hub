@@ -81,9 +81,11 @@ than storing a second copy; missing credentials degrade to local-only.
 Sending to a **group** requires `chat_id`, not a handle — a group has no single participant to
 address, so it is reached by conversation guid.
 
-**Files** are sent from paths on the Mac, whoever the caller is. Each is copied into Messages' own
-Attachments folder first, because a file Messages cannot read is not refused: it arrives as an
-empty bubble marked delivered. The copy is the attachment from then on and is never cleaned up.
+**Files** are sent from paths on the Mac, whoever the caller is; a Pi session sends one of its own
+files by uploading it first with `messages-mcp/bin/upload`, which prints the Mac path. Each file
+lands in Messages' own Attachments folder before it is sent, because a file Messages cannot read is
+not refused: it arrives as an empty bubble marked delivered. That copy is the attachment from then
+on and is never cleaned up.
 
 **`gmail-mcp` has no machine dependency.** It is HTTPS against the Gmail API with a stored refresh
 token, so it runs on the Mac, the Pi or Fly identically and works while all of them are asleep.

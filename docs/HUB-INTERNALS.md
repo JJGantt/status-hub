@@ -455,6 +455,10 @@ grows, so it is fetched once by the one surface that can scroll through it) · `
 (`?mode=active` resolves `agent_mode` on the server, for a client with no settings of its own — the
 watch) · `/api/voice-reply/:id` (held open until that command is `done` or `error`, settled by the
 `voice_requests` realtime subscription; after 25s it answers `pending` and the client asks again) ·
+`/api/day-stream` (SSE, a bodiless `nutrition` or `workout` frame whenever that day may have changed —
+fired from `dirtyNutDay()` / `dirtyWorkoutDay()`, which every write path already calls; the watch's push
+path) · `/api/nutrition-day` also takes `date=today`, so a client with no 4am-origin day of its own
+gets the server's ·
 `/api/todos` (lists + the derived `due` view) · `/api/calendar` (month grid(s) of every
 dated item — every occurrence is a real row, so nothing is projected; `?month=` pages, `?wall=1` adds
 the day timeline and reads `calendar_months` for the spread, `?day=1` is the timeline alone and
@@ -468,7 +472,9 @@ character per hour; `defaultT0` marks the window the card lands on before it is 
 `/api/attachment`.
 
 **Widget feeds** (compact, one per widget — §9b): `/api/rings` (a timeline of per-minute pace frames,
-not a snapshot) · `/api/due-widget` (every dated item across every list) · `/api/repos-widget` (the
+not a snapshot; the watch reads it too) · `/api/workout-now` (the watch's workout page: the rest-clock
+inputs, `sets_today`, and the exercise the last set went onto with each muscle's weekly sets and volume
+colour) · `/api/due-widget` (every dated item across every list) · `/api/repos-widget` (the
 Mac's projects + desk presence). `/api/list-widget` returns one list's item titles and is the
 per-list feed `/api/due-widget` replaced; nothing reads it.
 
@@ -1268,7 +1274,10 @@ A watchOS 11+ app (`apps/Watch/`, bundle `com.jaredgantt.statushub.watch`) embed
 plus a one-widget complication extension (`apps/WatchWidgets/`, `com.jaredgantt.statushub.watch.widgets`).
 It is native SwiftUI, not a web view: watchOS has no WKWebView.
 
-- **One screen.** The shared hub thread on black — `/api/voice-messages?focus=hub&mode=active`, the
+- **Three pages, swiped left to right:** the prompt (below), the nutrition page and the workout page.
+  A page loads when it comes on screen and holds `/api/day-stream` open only while it is showing,
+  reloading on its own kind of frame (and after every reconnect, since a change may have gone by).
+- **The prompt page.** The shared hub thread on black — `/api/voice-messages?focus=hub&mode=active`, the
   same current-context thread the phone and the TV show, in whichever mode `agent_mode` selects. A
   tap anywhere on it, or the double-tap gesture, opens system dictation (`TextFieldLink`).
 - **A command is a typed command.** The dictated text goes to `/api/voice-text` (source `web`), so
@@ -1280,6 +1289,20 @@ It is native SwiftUI, not a web view: watchOS has no WKWebView.
 - **The complication** (circular and corner) opens `statushub://record`. The app answers by raising
   the same text-input sheet itself, through WatchKit's `presentTextInputController` on the hosting
   interface controller — SwiftUI has no way to open dictation without a tap.
+- **The nutrition page** is the hub nutrition card's four pace rings (no produce rings) over today's
+  log. The rings are `cards/nutrition.js`'s SVG redrawn in a Canvas to the same geometry and colours.
+  The card recomputes them every second from the browser clock; the watch instead takes
+  `/api/rings`'s per-minute frames and blends between the two either side of now each second. Between
+  two minutes the arcs, both ticks and the deviation number all move linearly, so the blend reproduces
+  the card's drain without a copy of `lib/pace.js` in Swift. Colours come from a frame, never derived.
+  This is why a frame's `frac` is sent to four places: at two it moved the tick in ~8-minute jumps.
+  The watch compiles `Controls/RingsView.swift` for the `/api/rings` types and the palette; the
+  widget's own views in it go unused. The log is `cards/nutritionlog.js`'s day list (band, then
+  entries newest first, staged on top), display only, with the chips wrapping instead of scrolling.
+- **The workout page** is the home wall's workout block: `#resttimer` (Last set · Session · Sets,
+  ticking each second off naive wall-clock digits exactly as `workouts.js` does) and the
+  `data-recent` row for the exercise the last set went onto, fed by `/api/workout-now`. The strip
+  stays one line as on the wall, stepping smaller, and wraps only when one line would be unreadable.
 - **The token comes from the phone.** The watch has no web view to sign in with and shares neither
   cookies nor Keychain with the phone. `Sources/WatchLink.swift` reads the `hub` cookie from the web
   view's cookie store (falling back to the Keychain password) and sends it as WatchConnectivity

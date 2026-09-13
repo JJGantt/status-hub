@@ -12,12 +12,16 @@ struct SessionRow: Decodable, Identifiable, Equatable {
     let repo: String?
     let status: String?
     let working: Bool?
+    let claude_session_id: String?
 
     var name: String { sessionName(custom_title, label, repo) ?? id }
     var running: Bool { status == "resident" }
+    /// The conversation this row is a stretch of. A resume makes a new row for the same conversation
+    /// (`claude --resume` keeps its id), so everything the page keeps about a session is keyed by this.
+    var key: String { claude_session_id ?? id }
 }
 
-/// `/api/sessions/:id`: one session with its whole last reply.
+/// `/api/sessions/:id`: one session with its last prompt and the whole reply to it.
 struct SessionDetail: Decodable, Equatable {
     let id: String
     let label: String?
@@ -25,10 +29,11 @@ struct SessionDetail: Decodable, Equatable {
     let repo: String?
     let status: String?
     let working: Bool?
+    let claude_session_id: String?
+    let last_prompt: String?
     let last_reply: String?
 
     var name: String { sessionName(custom_title, label, repo) ?? id }
-    var running: Bool { status == "resident" }
 }
 
 /// The name a session goes by everywhere: the one Jared gave it, else the router's label, else its repo.
@@ -36,8 +41,8 @@ private func sessionName(_ names: String?...) -> String? {
     names.compactMap { $0 }.first { !$0.isEmpty }
 }
 
-/// The sessions page's state: the list, each open session's reply, the tool calls each is making, and
-/// a reply being recorded or sent into one.
+/// The sessions page's state, per conversation: the list, each open one's last prompt and reply, the
+/// tool calls it is making, and a reply of his being recorded or sent into it.
 @MainActor
 final class Sessions: ObservableObject {
     enum Failure: Equatable {
@@ -45,17 +50,20 @@ final class Sessions: ObservableObject {
         case message(String)
     }
 
+    /// One row per conversation: its running row if it has one, else its newest parked one.
     @Published private(set) var list: [SessionRow] = []
     @Published private(set) var details: [String: SessionDetail] = [:]
-    /// Each session's tool calls since its last reply, as its machine reports them. Live only: the
+    /// Each conversation's tool calls since its last reply, as its machine reports them. Live only: the
     /// hub does not store them.
     @Published private(set) var activity: [String: [String]] = [:]
-    /// His words for a session, shown from the moment they are transcribed until its next reply.
+    /// His words for a conversation, shown from the moment they are transcribed until its next reply.
     @Published private(set) var sent: [String: String] = [:]
     @Published private(set) var busy: Set<String> = []
     @Published private(set) var failures: [String: Failure] = [:]
 
     private let capture = Capture.shared
+    /// Every row the hub sent, so a stream frame (which names a row) can be matched to its conversation.
+    private var rows: [SessionRow] = []
     // Kept across a retry: the clip until its words are known, and the msgId so a resend cannot type
     // the words twice.
     private var clips: [String: Recorder.Clip] = [:]
@@ -87,94 +95,114 @@ final class Sessions: ObservableObject {
         defer { loading = false }
         repeat {
             reloadAfter = false
-            if let l: Lists = try? await Hub.json("/api/sessions") { list = l.resident + l.evicted }
+            if let l: Lists = try? await Hub.json("/api/sessions") {
+                rows = l.resident + l.evicted
+                var seen = Set<String>()
+                list = rows.filter { seen.insert($0.key).inserted }
+            }
         } while reloadAfter
     }
 
-    func loadDetail(_ id: String) async {
-        if let d: SessionDetail = try? await Hub.json("/api/sessions/" + Hub.pathComponent(id)) { details[id] = d }
+    /// The row a conversation's words go to: its running row, else its newest parked one.
+    func row(for key: String) -> SessionRow? {
+        rows.first { $0.key == key && $0.running } ?? rows.first { $0.key == key }
     }
 
-    func toggleRecording(_ id: String) {
-        if capture.owner == .session(id) { stopRecording(id) } else { startRecording(id) }
+    func loadDetail(_ key: String) async {
+        guard let r = row(for: key) else { return }
+        if let d: SessionDetail = try? await Hub.json("/api/sessions/" + Hub.pathComponent(r.id)) { details[key] = d }
     }
 
-    func startRecording(_ id: String) {
-        guard capture.owner == nil, !busy.contains(id), details[id]?.running == true else { return }
-        failures[id] = nil
-        capture.start(for: .session(id)) { [weak self] error in
-            self?.failures[id] = (error as? Recorder.Failure) == .denied ? .micDenied : .message(error.localizedDescription)
+    func toggleRecording(_ key: String) {
+        if capture.owner == .session(key) { stopRecording(key) } else { startRecording(key) }
+    }
+
+    func startRecording(_ key: String) {
+        guard capture.owner == nil, !busy.contains(key), row(for: key) != nil else { return }
+        failures[key] = nil
+        capture.start(for: .session(key)) { [weak self] error in
+            self?.failures[key] = (error as? Recorder.Failure) == .denied ? .micDenied : .message(error.localizedDescription)
         }
     }
 
     /// Ends the recording and sends it into the session.
-    func stopRecording(_ id: String) {
-        guard capture.owner == .session(id), let clip = capture.stop() else { return }
-        discard(id)
-        clips[id] = clip
-        msgIds[id] = UUID().uuidString
-        sent[id] = nil
-        send(id)
+    func stopRecording(_ key: String) {
+        guard capture.owner == .session(key), let clip = capture.stop() else { return }
+        discard(key)
+        clips[key] = clip
+        msgIds[key] = UUID().uuidString
+        sent[key] = nil
+        send(key)
     }
 
     /// Ends the recording and throws it away.
-    func cancelRecording(_ id: String) {
-        if capture.owner == .session(id) { capture.cancel() }
+    func cancelRecording(_ key: String) {
+        if capture.owner == .session(key) { capture.cancel() }
     }
 
-    func retry(_ id: String) { send(id) }
+    func retry(_ key: String) { send(key) }
 
     private func reloadAll() async {
         await load()
-        for id in details.keys { await loadDetail(id) }
+        for key in details.keys { await loadDetail(key) }
     }
 
-    /// The hub transcribes the clip without enqueueing anything (`?dry=1`), then types the words into
-    /// the session. Once the words are known, a retry only resends them.
-    private func send(_ id: String) {
-        guard let msgId = msgIds[id], !busy.contains(id) else { return }
-        failures[id] = nil
-        busy.insert(id)
+    /// The hub transcribes the clip without enqueueing anything (`?dry=1`), then hands the words to the
+    /// session: typed in if it is running, resumed with them if it is parked — the hub decides. Once the
+    /// words are known, a retry only resends them.
+    private func send(_ key: String) {
+        guard let msgId = msgIds[key], !busy.contains(key) else { return }
+        failures[key] = nil
+        busy.insert(key)
         Task {
-            defer { busy.remove(id) }
+            defer { busy.remove(key) }
             do {
-                if sent[id] == nil {
-                    guard let clip = clips[id] else { return }
+                if sent[key] == nil {
+                    guard let clip = clips[key] else { return }
                     let heard = try await Hub.sendAudio(clip, msgId: msgId, dry: true)
                     guard let text = heard.transcript, !text.isEmpty else {
-                        discard(id)
+                        discard(key)
                         WKInterfaceDevice.current().play(.failure)
                         return
                     }
-                    sent[id] = text
-                    discard(id)
+                    sent[key] = text
+                    discard(key)
                 }
-                try await Hub.followUp(id, text: sent[id] ?? "", msgId: msgId)
+                try await Hub.followUp(row(for: key)?.id ?? key, text: sent[key] ?? "", msgId: msgId)
             } catch {
-                failures[id] = .message(error.localizedDescription)
+                failures[key] = .message(error.localizedDescription)
             }
         }
     }
 
-    private func discard(_ id: String) {
-        if let clip = clips[id] { try? FileManager.default.removeItem(at: clip.url) }
-        clips[id] = nil
+    private func discard(_ key: String) {
+        if let clip = clips[key] { try? FileManager.default.removeItem(at: clip.url) }
+        clips[key] = nil
+    }
+
+    /// The conversation a stream frame's row belongs to. A row the list has not seen yet — a session
+    /// a resume just opened — is looked up after reloading it.
+    private func key(forRow id: String) async -> String {
+        if let r = rows.first(where: { $0.id == id }) { return r.key }
+        await load()
+        return rows.first(where: { $0.id == id })?.key ?? id
     }
 
     private func sessionFrame(_ event: String, _ data: String) async {
         struct Frame: Decodable { let session: String; let state: String?; let text: String? }
         guard event == "session", let f = try? JSONDecoder().decode(Frame.self, from: Data(data.utf8)) else { return }
+        let key = await key(forRow: f.session)
         guard f.state == "done" else {
-            if let text = f.text, !text.isEmpty { activity[f.session, default: []].append(text) }
+            if let text = f.text, !text.isEmpty { activity[key, default: []].append(text) }
             return
         }
-        activity[f.session] = nil
-        if sent[f.session] != nil && failures[f.session] == nil && !busy.contains(f.session) {
-            sent[f.session] = nil
-            msgIds[f.session] = nil
+        activity[key] = nil
+        if sent[key] != nil && failures[key] == nil && !busy.contains(key) {
+            sent[key] = nil
+            msgIds[key] = nil
             WKInterfaceDevice.current().play(.notification)
         }
         await load()
-        if details[f.session] != nil { await loadDetail(f.session) }
+        if details[key] != nil { await loadDetail(key) }
     }
 }

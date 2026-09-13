@@ -432,42 +432,26 @@ is the bus; the daemon on each machine owns everything local:
 
 - ⚠️ `voice-pipeline/fly-worker/` is a dead orphan — no `fly.toml`, no `Dockerfile`, nothing deploys
   it. The real Fly worker is `voice-pipeline/server/`. Delete it rather than reading it.
-- 🔜 **TestFlight migration** (longevity — an Ad Hoc profile expires after a year and the app then
-  refuses to launch). Push works today on an Ad Hoc production build, which `ios-adhoc.yml` produces;
-  see §11. The remaining blocker is **Jared creating the App Store Connect app record**, which the
-  ASC API cannot do; after that the upload finishes from here. The App-Store `.ipa` and the
-  production entitlement are already prepared.
 
 ---
 
 ## 11. Getting a build onto the phone
 
-**From the Mac, build locally — do not dispatch Actions for this.** The Mac has Xcode, an Apple
-Development identity, and the phone paired over Wi-Fi, so the round trip is about ninety seconds:
+**TestFlight is the route.** Dispatch `ios-testflight.yml` (or push an `ios-*` tag): a macOS runner
+archives and uploads, Apple processes it, and the internal group `internal_main` on the App Store
+Connect app "JaredHub" (id `6805268657`) receives every build, so the phone installs it from the
+TestFlight app over the air — nothing has to be on the Mac's network. The watch app rides inside it.
+A TestFlight build expires 90 days after upload. The runner bills at 10x, so dispatch it deliberately.
 
-    cd ~/repos/status-hub/apps && xcodegen generate
-    xcodebuild -project StatusHub.xcodeproj -scheme StatusHub -configuration Debug \
-      -destination 'generic/platform=iOS' -derivedDataPath /tmp/sh-devbuild \
-      -allowProvisioningUpdates \
-      -authenticationKeyPath ~/.appstoreconnect/private_keys/AuthKey_P8Y337A8RC.p8 \
-      -authenticationKeyID P8Y337A8RC \
-      -authenticationKeyIssuerID 141a8ead-b829-4e58-b9ff-b8c95f8c4ed9 \
-      DEVELOPMENT_TEAM=XMH4AVFC78 CODE_SIGN_STYLE=Automatic build
-    xcrun devicectl device install app --device "Jared's iPhone" \
-      /tmp/sh-devbuild/Build/Products/Debug-iphoneos/StatusHub.app
-
-The catch is not expiry — the team development profile is good for a year (the one on the phone runs
-to 2027-06-22). It is that a build signed here carries `aps-environment: development` and so
-registers a **sandbox** APNs token, which the hub's production sends cannot reach. Local builds are
-for iterating on UI; a build that must receive push has to be archived by the workflows below.
-
-**Everything below is the route for when the Mac is unreachable**, where a macOS runner is the only
-machine that can compile. It bills at 10x, so dispatch it deliberately.
+**A local build is for iterating on UI, never for installing.** A build signed on this Mac carries
+`aps-environment: development` and registers a **sandbox** APNs token, which the hub's production
+sends cannot reach, so installing one silences push until a production build replaces it. It also
+needs the iOS device platform from Xcode → Settings → Components (CLAUDE.md).
 
 There is no way to *push* an iOS app to an iPhone. Apple has no remote-install channel for a normal
 (non-MDM, non-supervised) device, so every route ends either in a tap on the phone or in a machine
-that the phone is already paired with. What follows is the route that needs neither TestFlight nor
-any public hosting.
+that the phone is already paired with. What follows is the Ad Hoc route, which needs neither
+TestFlight nor any public hosting but does need the phone reachable from the Mac.
 
 `ios-check.yml` is the fourth workflow and the one that runs most: it compiles the app and renders the
 widget layouts to PNGs without shipping anything, so a machine with no Xcode can still find out

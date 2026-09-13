@@ -1330,13 +1330,17 @@ async function workoutDay(date) {
     const hit = workoutDayCache.get(date);
     if (hit && Date.now() - hit.at < WORKOUTDAY_BACKSTOP_MS) return hit.body;
     const rows = await sbRange(`sets?occurred_at=gte.${date}T00:00:00&occurred_at=lte.${date}T23:59:59&select=id,occurred_at,exercise,weight_lbs,reps&order=occurred_at`);
-    const order = [], byEx = {};
-    for (const r of rows) { if (!byEx[r.exercise]) { byEx[r.exercise] = []; order.push(r.exercise); } byEx[r.exercise].push({ id: r.id, weight_lbs: r.weight_lbs, reps: r.reps }); }
+    const order = [], byEx = {}, lastAt = {};
+    for (const r of rows) {
+      if (!byEx[r.exercise]) { byEx[r.exercise] = []; order.push(r.exercise); }
+      byEx[r.exercise].push({ id: r.id, weight_lbs: r.weight_lbs, reps: r.reps });
+      lastAt[r.exercise] = r.occurred_at;   // rows are in time order, so this ends on the exercise's last set
+    }
     // Which exercise was logged LAST, by the clock — not the group that appears last, which is the
     // one whose FIRST set came latest. Going back to an earlier exercise for another set has to move
     // this, or the wall shows the wrong grouping for the set that just happened.
     const recent = rows.length ? rows[rows.length - 1].exercise : null;
-    const body = { date, total: rows.length, recent, exercises: order.map((n) => ({ name: n, sets: byEx[n] })) };
+    const body = { date, total: rows.length, recent, exercises: order.map((n) => ({ name: n, sets: byEx[n], last_at: lastAt[n] })) };
     workoutDayCache.set(date, { body, at: Date.now() });
     return body;
 }
@@ -1348,23 +1352,26 @@ app.get('/api/workout-day', async (req, res) => {
   } catch (e) { res.status(500).json({ error: String(e.message || e) }); }
 });
 
-// Compact feed for the watch's workout page, which is the home wall's workout block and nothing else:
-// the inputs to its rest/session clocks and set tally, and the exercise the last set went onto with
-// each of its muscles' WEEKLY sets in that muscle's volume colour (cards/workouts.js `data-recent` +
-// muscle.js exerciseVolumeChips). buildStatus() has all of it, but as the whole dashboard.
+// Compact feed for the watch's workout page: the inputs to the home wall's rest/session clocks and set
+// tally, and EVERY exercise logged today, each with its muscles' WEEKLY sets in that muscle's volume
+// colour (the wall's `data-recent` row, muscle.js exerciseVolumeChips). Newest first by each
+// exercise's last set, so the one a set just went onto is at the top and the rest scroll below it.
+// buildStatus() has all of it, but as the whole dashboard.
 app.get('/api/workout-now', async (req, res) => {
   try {
     const st = await buildStatus();
     const day = await workoutDay(st.today);
-    const ex = (day.exercises || []).find((e) => e.name === day.recent) || null;
     const V = st.volume || {}, ix = {};
     for (const g of V.groups || []) for (const m of g.muscles) ix[m.muscle] = m;
-    const muscles = ex ? ((V.exercise_muscles || {})[ex.name] || []).filter((e) => ix[e.muscle]).map((e) => ({
+    const muscles = (name) => ((V.exercise_muscles || {})[name] || []).filter((e) => ix[e.muscle]).map((e) => ({
       label: ix[e.muscle].label, sets: ix[e.muscle].sets, color: ix[e.muscle].color, primary: e.contribution >= 1,
-    })) : [];
+    }));
+    const exercises = (day.exercises || []).slice()
+      .sort((a, b) => String(b.last_at).localeCompare(String(a.last_at)))
+      .map((ex) => ({ name: ex.name, sets: ex.sets.map((x) => ({ weight_lbs: x.weight_lbs, reps: x.reps })),
+                      muscles: muscles(ex.name) }));
     res.json({
-      last_set_at: st.last_set_at, session_start_at: st.session_start_at, sets_today: st.sets_today,
-      recent: ex ? { name: ex.name, sets: ex.sets.map((x) => ({ weight_lbs: x.weight_lbs, reps: x.reps })), muscles } : null,
+      last_set_at: st.last_set_at, session_start_at: st.session_start_at, sets_today: st.sets_today, exercises,
     });
   } catch (e) { res.status(500).json({ error: String(e.message || e) }); }
 });

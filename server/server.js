@@ -1299,7 +1299,7 @@ app.get('/api/rings', async (req, res) => {
           dev_color: x.dev_g < 0 ? '#f87171' : x.dev_g > 0 ? (x.over_color || '#22c55e') : '#22c55e',
         };
       }
-      frames.push({ t, frac: f.fraction, macros });
+      frames.push({ t, frac: f.frac, macros });
     }
     // The health bar that sits with the rings on the wall (cards/score.js): one gauge split three
     // ways — nutrition, training, tasks — since overall = (n + t + k)/3, so each can fill at most a
@@ -1512,10 +1512,18 @@ app.post('/api/register-push', express.json(), async (req, res) => {
 // synchronously so their immediate client re-fetch can't race the realtime round-trip.
 const nutDayCache = new Map();   // `${date}|${window day}` -> { body, at }
 const NUTDAY_BACKSTOP_MS = 15 * 60 * 1000;
-const dirtyNutDay = () => nutDayCache.clear();
+// Every path that can change a nutrition day already dirties this cache, so that is also where
+// /api/nutrition-stream clients are told to reload.
+const nutClients = new Set();
+const dirtyNutDay = () => {
+  nutDayCache.clear();
+  for (const c of nutClients) { try { c.write('event: nutrition\ndata: {}\n\n'); } catch {} }
+};
 app.get('/api/nutrition-day', async (req, res) => {
   try {
-    const date = String(req.query.date || '').slice(0, 10);
+    // date=today lets a client that has no 4am-origin day of its own (the watch) ask for the current one.
+    const asked = String(req.query.date || '').slice(0, 10);
+    const date = asked === 'today' ? nutritionWindow().day : asked;
     if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return res.status(400).json({ error: 'bad date' });
     const cacheKey = date + '|' + nutritionWindow().day;   // window day flips at 4am → isToday changes
     const hit = nutDayCache.get(cacheKey);
@@ -3190,6 +3198,18 @@ app.get('/api/list-stream', (req, res) => {
   listClients.add(res);
   const ka = setInterval(() => { try { res.write(PING); } catch {} }, 25000);
   req.on('close', () => { clearInterval(ka); listClients.delete(res); });
+});
+
+// Nutrition SSE: one bodiless `event: nutrition` frame whenever a nutrition day may have changed. For
+// a client that cannot take the full status frame on every push — the watch, which reloads its rings
+// and today's log on it.
+app.get('/api/nutrition-stream', (req, res) => {
+  res.set({ 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache',
+            Connection: 'keep-alive', 'X-Accel-Buffering': 'no' });
+  res.flushHeaders();
+  nutClients.add(res);
+  const ka = setInterval(() => { try { res.write(PING); } catch {} }, 25000);
+  req.on('close', () => { clearInterval(ka); nutClients.delete(res); });
 });
 
 // Session SSE: one `event: session` frame per tool call or finished turn, from either machine.

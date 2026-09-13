@@ -195,8 +195,12 @@ function computePace({ consumed, goal, staged, window, nowOff }) {
   for (const k of MACRO_KEYS) {
     macros[k] = macroPace((consumed || {})[k] || 0, (goal || {})[k] || 0, frac, (staged || {})[k] || 0);
   }
+  // `fraction` is the display figure (two places). `frac` is for POSITIONING the pace tick: at two
+  // places a 14h window moves in ~8-minute jumps, and a surface stepping through per-minute frames
+  // would show the tick standing still and then leaping.
   return { window, window_hours: Math.round(((window.endMin - window.startMin) / 60) * 100) / 100,
-           per_hour: perHour(goal, window), nowOff, fraction: Math.round(frac * 100) / 100, macros };
+           per_hour: perHour(goal, window), nowOff, fraction: Math.round(frac * 100) / 100,
+           frac: Math.round(frac * 10000) / 10000, macros };
 }
 
 // "8:00a–10:00p" style label from the offsets.

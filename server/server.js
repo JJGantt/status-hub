@@ -3046,8 +3046,20 @@ app.get('/api/sessions', async (req, res) => {
   } catch (e) { res.status(500).json({ error: String(e.message || e) }); }
 });
 
+// One session in full, for a surface that shows a single session rather than the list — the watch's
+// session page. `/api/sessions` sends most parked sessions' replies only as the one-line `say`.
+app.get('/api/sessions/:id', async (req, res) => {
+  try {
+    const rows = await sb(`desk_sessions?id=eq.${encodeURIComponent(String(req.params.id))}` +
+      '&select=id,label,custom_title,repo,worker,status,working,last_reply,reply_at');
+    if (!rows || !rows.length) return res.status(404).json({ error: 'no such session' });
+    res.json(rows[0]);
+  } catch (e) { res.status(500).json({ error: String(e.message || e) }); }
+});
+
 // Act on one: 'end' closes it for good, 'resume' brings an evicted one back, 'forget' drops the row
-// without touching the machine (the transcript stays on disk; it just stops being offered).
+// without touching the machine (the transcript stays on disk; it just stops being offered), and
+// 'followup' types words into a running one (see below).
 app.post('/api/sessions/:action', express.json(), async (req, res) => {
   try {
     const action = String(req.params.action || '');
@@ -3059,6 +3071,31 @@ app.post('/api/sessions/:action', express.json(), async (req, res) => {
     }
     const rowsFull = await sb(`desk_sessions?id=eq.${encodeURIComponent(id)}&select=*`);
     if (!rowsFull.length) return res.status(404).json({ error: 'no such session' });
+
+    // Type his words into THIS session: data-layer's followUp, addressed by id instead of by focus,
+    // so the watch can answer the session it is showing. Both machines refuse a session that is not
+    // running (there is no process to type into), and an asleep machine gets the words dead-lettered
+    // rather than dropped, as everywhere else. client_msg_id makes a resend after a lost answer
+    // return the first command instead of typing the words twice.
+    if (action === 'followup') {
+      const row = rowsFull[0];
+      const text = String((req.body || {}).text || '').trim();
+      if (!text) return res.status(400).json({ error: 'text required' });
+      if (row.status !== 'resident') return res.status(409).json({ error: 'that session is not running' });
+      const msgId = String((req.body || {}).client_msg_id || '').slice(0, 64);
+      const seenKey = msgId ? 'followup:' + msgId : '';
+      if (seenKey && seenMsgIds.has(seenKey)) return res.json({ id: seenMsgIds.get(seenKey), duplicate: true });
+      const machine = row.worker === 'desk' ? 'mac' : 'pi';
+      const payload = { session: id, prompt: text, target: machine };
+      if (!(await machineAwake(machine))) {
+        const saved = await deadLetter('follow_up', payload, machine, `the ${machine === 'mac' ? 'Mac' : 'Pi'} is not responding`);
+        return res.status(409).json({ error: `the ${machine === 'mac' ? 'Mac' : 'Pi'} is not responding`, saved });
+      }
+      const cmdId = crypto.randomUUID();
+      await sbWrite('desk_commands', 'POST', { id: cmdId, kind: 'follow_up', payload });
+      markSeen(seenKey, cmdId);
+      return res.json({ id: cmdId });
+    }
 
     // Hand it to the other machine, carrying the conversation. Same two paths as the voice tool, and
     // they have to stay the same: the source closes and flushes when it is up, and when it is not,

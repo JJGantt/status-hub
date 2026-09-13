@@ -1301,7 +1301,10 @@ has no WKWebView.
   button on an Ultra) runs `RecordIntent`, an `OpenIntent`, which launches the app and runs
   `perform()` in it: the file is compiled into both targets, and `WATCH_APP` gates the app-only call.
   Both set `Chat.recordRequested`; the app switches to the prompt page and records as soon as it is
-  active.
+  active. Without an Action button, the no-touch path is the Smart Stack: with Settings → Gestures →
+  Double Tap → Smart Stack set to Select and Record pinned, two double taps from the watch face open
+  it recording (verified on an SE 3, watchOS 26.5). An app holding a workout session (Watchset while
+  it captures) sits above even pinned items.
 - **The nutrition page** is the hub nutrition card's four pace rings (no produce rings) over today's
   log. The rings are `cards/nutrition.js`'s SVG redrawn in a Canvas to the same geometry and colours.
   The card recomputes them every second from the browser clock; the watch instead takes

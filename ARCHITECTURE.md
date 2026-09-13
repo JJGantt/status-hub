@@ -32,7 +32,7 @@ documents **everything**, not just the hub. Keep it current as pieces change.
 | `voice-pipeline` | (private) | ESP wake-word → transcription → worker → Supabase | Fly `jared-voice` (+ Mac launchd) |
 | `data-layer` | JJGantt/data-layer | Supabase schema (migrations) + the `data` MCP | Supabase `felyggqjjhltwokdfhop` |
 | `govee-mcp` | JJGantt/mcp-govee | Govee light control MCP (LAN + cloud) | runs inside workers |
-| `messages-mcp` | JJGantt/messages-mcp | iMessage/SMS read + send MCP | Mac only (stdio) |
+| `messages-mcp` | JJGantt/messages-mcp | iMessage/SMS read + send MCP | Mac only (stdio, plus HTTP :27187 for the Pi) |
 | `gmail-mcp` | JJGantt/gmail-mcp | Gmail read/label/draft/send MCP | anywhere (stdio) |
 | `litter-robot` | JJGantt/litter-robot | Litter-Robot 4 auto-resume watcher | Fly `litter-robot-watcher` |
 
@@ -80,6 +80,10 @@ than storing a second copy; missing credentials degrade to local-only.
 
 Sending to a **group** requires `chat_id`, not a handle — a group has no single participant to
 address, so it is reached by conversation guid.
+
+**Files** are sent from paths on the Mac, whoever the caller is. Each is copied into Messages' own
+Attachments folder first, because a file Messages cannot read is not refused: it arrives as an
+empty bubble marked delivered. The copy is the attachment from then on and is never cleaned up.
 
 **`gmail-mcp` has no machine dependency.** It is HTTPS against the Gmail API with a stored refresh
 token, so it runs on the Mac, the Pi or Fly identically and works while all of them are asleep.

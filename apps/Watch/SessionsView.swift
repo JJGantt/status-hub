@@ -49,30 +49,34 @@ struct SessionView: View {
     private var recording: Bool { capture.owner == .session(key) }
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 10) {
-                Button { sessions.toggleRecording(key) } label: { content }
-                    .buttonStyle(.plain)
-                    .handGestureShortcut(.primaryAction, isEnabled: scroll.atBottom || recording)
-                    .disabled(sessions.busy.contains(key))
-                status
+        ScrollViewReader { proxy in
+            ScrollView {
+                VStack(alignment: .leading, spacing: 10) {
+                    Button { sessions.toggleRecording(key) } label: { content }
+                        .buttonStyle(.plain)
+                        .handGestureShortcut(.primaryAction, isEnabled: scroll.atBottom || recording)
+                        .disabled(sessions.busy.contains(key))
+                    status
+                    Color.clear.frame(height: 1).id("tail")
+                }
+                .padding(.horizontal, 8)
+                .padding(.bottom, 8)
             }
-            .padding(.horizontal, 8)
-            .padding(.bottom, 8)
+            .scrollIndicators(.never)
+            .scrollPosition($position)
+            .trackScroll($scroll)
+            // A new reply is read from its top. Work in progress — his words, a recording, tool calls —
+            // lands at the bottom, so that is where the view follows it. Opening a session leaves its
+            // prompt and reply at the top. Jumps to a view go through the reader; the position is only
+            // for paging, which moves by a distance rather than to a view.
+            .onChange(of: detail?.last_reply) { old, new in
+                guard old != nil, new != old else { return }
+                withAnimation(.easeOut(duration: 0.2)) { proxy.scrollTo("reply", anchor: .top) }
+            }
+            .onChange(of: activity.count) { old, new in if new > old { toBottom(proxy) } }
+            .onChange(of: sessions.sent[key]) { _, new in if new != nil { toBottom(proxy) } }
+            .onChange(of: recording) { _, now in if now { toBottom(proxy) } }
         }
-        .scrollIndicators(.never)
-        .scrollPosition($position)
-        .trackScroll($scroll)
-        // A new reply is read from its top. Work in progress — his words, a recording, tool calls —
-        // lands at the bottom, so that is where the view follows it. Opening a session leaves its
-        // prompt and reply at the top.
-        .onChange(of: detail?.last_reply) { old, new in
-            guard old != nil, new != old else { return }
-            withAnimation(.easeOut(duration: 0.2)) { position.scrollTo(id: "reply", anchor: .top) }
-        }
-        .onChange(of: activity.count) { old, new in if new > old { toBottom() } }
-        .onChange(of: sessions.sent[key]) { _, new in if new != nil { toBottom() } }
-        .onChange(of: recording) { _, now in if now { toBottom() } }
         .overlay(alignment: .bottom) {
             PageDownMarker(more: !scroll.atBottom && !recording) {
                 withAnimation(.easeOut(duration: 0.25)) { position.pageDown(from: scroll) }
@@ -83,8 +87,8 @@ struct SessionView: View {
         .task { await sessions.loadDetail(key) }
     }
 
-    private func toBottom() {
-        withAnimation(.easeOut(duration: 0.2)) { position.scrollTo(edge: .bottom) }
+    private func toBottom(_ proxy: ScrollViewProxy) {
+        withAnimation(.easeOut(duration: 0.2)) { proxy.scrollTo("tail", anchor: .bottom) }
     }
 
     private var content: some View {

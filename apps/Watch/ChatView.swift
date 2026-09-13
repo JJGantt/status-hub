@@ -14,20 +14,24 @@ struct ChatView: View {
     private var recording: Bool { capture.owner == .hub }
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 10) {
-                recordButton { thread }
-                status
+        ScrollViewReader { proxy in
+            ScrollView {
+                VStack(alignment: .leading, spacing: 10) {
+                    recordButton { thread }
+                    status
+                }
+                .padding(.horizontal, 8)
+                .padding(.bottom, 8)
             }
-            .padding(.horizontal, 8)
-            .padding(.bottom, 8)
-        }
-        .scrollIndicators(.never)
-        .scrollPosition($position)
-        .trackScroll($scroll)
-        .onChange(of: scrollTarget) { _, target in
-            guard let target else { return }
-            withAnimation(.easeOut(duration: 0.2)) { position.scrollTo(id: target, anchor: .top) }
+            .scrollIndicators(.never)
+            .scrollPosition($position)
+            .trackScroll($scroll)
+            // Jumps to a view go through the reader, which finds any view with an id; the position is
+            // only for paging, which moves by a distance rather than to a view.
+            .onChange(of: scrollTarget) { _, target in
+                guard let target else { return }
+                withAnimation(.easeOut(duration: 0.2)) { proxy.scrollTo(target, anchor: .top) }
+            }
         }
         .overlay(alignment: .bottom) {
             PageDownMarker(more: !scroll.atBottom && !recording) {

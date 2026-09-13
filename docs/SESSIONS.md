@@ -330,7 +330,9 @@ attaching to a running session would replay its whole history as though it were 
 **The tick still does both of these jobs**, and that is deliberate rather than leftover. Liveness
 cannot be event-driven — nothing fires when a process stops existing — and `fs.watch` genuinely drops
 events, since FSEvents coalesces on macOS and inotify misses under load. So the tick is the net, not
-the mechanism. The same is true one layer up: the wall keeps a 5s poll of `/api/sessions` behind the
+the mechanism. That includes the reply's phone notification: a tick that reads a finished turn newer
+than the one the row records (and newer than the row itself, so a resume's inherited history does not
+count) reports it with `reportTurnEnd`, the watcher's own call, and the hub pushes each turn once. The same is true one layer up: the wall keeps a 5s poll of `/api/sessions` behind the
 push, because a session dying, the focus moving and the numbering changing announce themselves to
 nobody.
 

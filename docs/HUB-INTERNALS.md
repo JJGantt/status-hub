@@ -890,7 +890,8 @@ the turn's opening has scrolled out of the window `readTail` reads.
 
 Each session's final reply of a turn — never the tool calls — is pushed to the phone, and from there
 the watch, by `notifySessionReply`: both machines already report every turn end to
-`/api/session-activity` (`sessionWatch.js`), so it is sent from there, for every session on either
+`/api/session-activity` (`sessionWatch.js` `reportTurnEnd` — the watcher the moment a turn ends, the
+reconcile tick for one `fs.watch` dropped), so it is sent from there, for every session on either
 machine, the one being typed in included. Kind `session`, `active` so it lights the watch; title the
 session's name, body the reply. It is keyed `session-reply:<id>:<reply_at>` — the watcher sends the
 turn's `at` — so one turn buzzes once even when its end is noticed twice, and `push_enabled` gates it

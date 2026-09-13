@@ -1,15 +1,15 @@
 import Foundation
 
-/// `/api/workout-now`: the home wall's workout block — the inputs to its clocks, today's set tally, and
-/// the exercise the last set went onto.
+/// `/api/workout-now`: the inputs to the home wall's rest clocks and set tally, and every exercise
+/// logged today, newest first by its last set.
 struct WorkoutNow: Decodable {
     struct Muscle: Decodable { let label: String; let sets: Double; let color: String; let primary: Bool }
     struct Lift: Decodable { let weight_lbs: Double?; let reps: Int? }
-    struct Recent: Decodable { let name: String; let sets: [Lift]; let muscles: [Muscle] }
+    struct Exercise: Decodable { let name: String; let sets: [Lift]; let muscles: [Muscle] }
     let last_set_at: String?
     let session_start_at: String?
     let sets_today: Int?
-    let recent: Recent?
+    let exercises: [Exercise]
 }
 
 @MainActor

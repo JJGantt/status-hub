@@ -1,7 +1,8 @@
 import SwiftUI
 
-/// The page right of nutrition: the home wall's workout block (cards/workouts.js) — the rest clocks,
-/// then the exercise the last set went onto, as its `data-recent` row draws it.
+/// The page right of nutrition: the home wall's rest clocks (cards/workouts.js), then every exercise
+/// logged today in the wall's `data-recent` row, the one a set just went onto first and the rest
+/// scrolling below it.
 struct WorkoutView: View {
     @EnvironmentObject private var workout: Workout
 
@@ -15,7 +16,14 @@ struct WorkoutView: View {
                                   now: ctx.date)
                     }
                 }
-                if let r = workout.now?.recent { RecentLift(recent: r) }
+                ForEach(Array((workout.now?.exercises ?? []).enumerated()), id: \.offset) { i, ex in
+                    LiftRow(exercise: ex)
+                        .padding(.top, i == 0 ? 0 : 9)
+                        // Ruled apart like the hub's day list (`.dex`), since the rows no longer stand alone.
+                        .overlay(alignment: .top) {
+                            if i > 0 { Rectangle().fill(Color(hex: "#222a33")).frame(height: 1) }
+                        }
+                }
             }
             .padding(.horizontal, 4)
         }
@@ -125,20 +133,21 @@ private func wallClock(_ now: Date) -> Double {
     return digitCalendar.date(from: c)?.timeIntervalSince1970 ?? now.timeIntervalSince1970
 }
 
-/// `#heatinfo[data-recent]`: the dumbbell mark and the exercise's name, each muscle it trains with that
-/// muscle's weekly sets (the name grey — bright for a primary mover, dim for a synergist — and the
-/// number in the muscle's volume colour), then its sets ruled apart and the tally closing the row.
-private struct RecentLift: View {
-    let recent: WorkoutNow.Recent
+/// One exercise as `#heatinfo[data-recent]` draws it: the dumbbell mark and the name, each muscle it
+/// trains with that muscle's weekly sets (the name grey — bright for a primary mover, dim for a
+/// synergist — and the number in the muscle's volume colour), then its sets ruled apart and the tally
+/// closing the row.
+private struct LiftRow: View {
+    let exercise: WorkoutNow.Exercise
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
             Flow(spacing: 11, lineSpacing: 2) {
                 HStack(alignment: .firstTextBaseline, spacing: 9) {
                     Dumbbell().frame(width: 15, height: 15).opacity(0.6).alignmentGuide(.firstTextBaseline) { $0.height - 2 }
-                    Text(recent.name).font(.system(size: 17, weight: .bold)).foregroundColor(Color(hex: "#e6eaf0"))
+                    Text(exercise.name).font(.system(size: 17, weight: .bold)).foregroundColor(Color(hex: "#e6eaf0"))
                 }
-                ForEach(Array(recent.muscles.enumerated()), id: \.offset) { _, m in
+                ForEach(Array(exercise.muscles.enumerated()), id: \.offset) { _, m in
                     HStack(alignment: .firstTextBaseline, spacing: 4) {
                         Text(m.label).font(.system(size: 12, weight: .semibold))
                             .foregroundColor(Color(hex: m.primary ? "#c7cdd6" : "#6b7686"))
@@ -148,7 +157,7 @@ private struct RecentLift: View {
                     .fixedSize()
                 }
             }
-            SetsRow(sets: recent.sets)
+            SetsRow(sets: exercise.sets)
         }
         .padding(.horizontal, 2)
     }

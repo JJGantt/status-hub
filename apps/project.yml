@@ -71,6 +71,8 @@ targets:
         NSMicrophoneUsageDescription: Status Hub uses the microphone for voice commands.
         NSCameraUsageDescription: Status Hub uses the camera to capture food and nutrition labels.
         NSPhotoLibraryUsageDescription: Status Hub attaches photos of food and nutrition labels.
+        # The hub page's navigator.geolocation in the WKWebView (voiceagent.js hereNow) needs it.
+        NSLocationWhenInUseUsageDescription: For nearby requests.
         CFBundleURLTypes:
           - CFBundleURLName: com.jaredgantt.statushub
             CFBundleURLSchemes:
@@ -138,6 +140,7 @@ targets:
         WKCompanionAppBundleIdentifier: com.jaredgantt.statushub
         ITSAppUsesNonExemptEncryption: false
         NSMicrophoneUsageDescription: Status Hub uses the microphone for voice commands.
+        NSLocationWhenInUseUsageDescription: For nearby requests.   # Watch/Location.swift
         # statushub://record is what the complication opens — straight into recording.
         CFBundleURLTypes:
           - CFBundleURLName: com.jaredgantt.statushub.watch

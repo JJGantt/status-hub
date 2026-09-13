@@ -16,6 +16,7 @@
 		1C569FFA9D76D921D56B85D8 /* RecordIntent.swift in Sources */ = {isa = PBXBuildFile; fileRef = F62C833499BAA9A4A1C9F660 /* RecordIntent.swift */; };
 		2865661A326AF6F9FE5F6E61 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = AC135E9E04A98CDB11B57AB2 /* Assets.xcassets */; };
 		2AE6971801629766230C380C /* Auth.swift in Sources */ = {isa = PBXBuildFile; fileRef = 88D699B5FDC0F7476374CF07 /* Auth.swift */; };
+		2D7BBEABB20A4F0C080608E0 /* Location.swift in Sources */ = {isa = PBXBuildFile; fileRef = D2181310AB9F5E005371B8B0 /* Location.swift */; };
 		4047BFD86E0305E129C06B77 /* Info-iOS.plist in Resources */ = {isa = PBXBuildFile; fileRef = 12B2F6A89FA87D30EEC5ED56 /* Info-iOS.plist */; };
 		48D80B4A545868D78E2DC799 /* Auth.swift in Sources */ = {isa = PBXBuildFile; fileRef = 88D699B5FDC0F7476374CF07 /* Auth.swift */; };
 		4D60B234E0ADF4D9465FE606 /* SessionsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AC7643D7992852F757EF0A7E /* SessionsView.swift */; };
@@ -161,6 +162,7 @@
 		B47214768CCEE8C99EEF5958 /* Models.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Models.swift; sourceTree = "<group>"; };
 		C00E5B1C61B9780EE2BE1945 /* StatusHubWatchApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StatusHubWatchApp.swift; sourceTree = "<group>"; };
 		C3E42D965464DC9CD4478CCB /* ChatView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatView.swift; sourceTree = "<group>"; };
+		D2181310AB9F5E005371B8B0 /* Location.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Location.swift; sourceTree = "<group>"; };
 		D45C11A97894E271FE097B5B /* reminder.caf */ = {isa = PBXFileReference; path = reminder.caf; sourceTree = "<group>"; };
 		D87B899987639512DD905DCE /* WatchLink.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchLink.swift; sourceTree = "<group>"; };
 		DBE4FD566029B00F912457DA /* StatusHubApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StatusHubApp.swift; sourceTree = "<group>"; };
@@ -221,6 +223,7 @@
 				C3E42D965464DC9CD4478CCB /* ChatView.swift */,
 				FD06B420AFC554D37540118C /* Hub.swift */,
 				1395E04227DD7450E1CBC8AD /* Info.plist */,
+				D2181310AB9F5E005371B8B0 /* Location.swift */,
 				38BD5AA187D80545B616356B /* Nutrition.swift */,
 				7300D161B8F2C8E565CA4FAB /* NutritionView.swift */,
 				14EB30894FADCF33B66D0455 /* Recorder.swift */,
@@ -473,6 +476,7 @@
 				86F3FAF2206C002FF5A79054 /* Chat.swift in Sources */,
 				8E8CD9763A8A0BD031DBF5E5 /* ChatView.swift in Sources */,
 				C4250430822C333D041CEEA1 /* Hub.swift in Sources */,
+				2D7BBEABB20A4F0C080608E0 /* Location.swift in Sources */,
 				F9B3AEDE8FF26869DC2B821B /* Nutrition.swift in Sources */,
 				B63E8DE2508FDBEB38EC60C7 /* NutritionView.swift in Sources */,
 				1C569FFA9D76D921D56B85D8 /* RecordIntent.swift in Sources */,

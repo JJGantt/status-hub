@@ -122,8 +122,13 @@ enum Hub {
     /// hub enqueues what it heard as a command, or with `dry` only hands the words back. A resend with
     /// the same `msgId` is answered with the first send's id instead of running the command twice.
     static func sendAudio(_ clip: Recorder.Clip, msgId: String, dry: Bool = false) async throws -> Heard {
-        let query = "client_msg_id=\(msgId)&client_now=\(clientNow())&dur=\(String(format: "%.1f", clip.duration))"
+        var query = "client_msg_id=\(msgId)&client_now=\(clientNow())&dur=\(String(format: "%.1f", clip.duration))"
             + (dry ? "&dry=1" : "")
+        // Where he is, for "near me" and a pickup point; a dictation (dry) goes nowhere yet.
+        if !dry, let l = await Here.shared.fix() {
+            query += String(format: "&lat=%.5f&lon=%.5f&acc=%.0f",
+                            l.coordinate.latitude, l.coordinate.longitude, l.horizontalAccuracy)
+        }
         var r = try request("/api/voice-command?" + query, method: "POST", timeout: 60)
         r.setValue("audio/mp4", forHTTPHeaderField: "Content-Type")
         let (data, resp) = try await URLSession.shared.upload(for: r, fromFile: clip.url)

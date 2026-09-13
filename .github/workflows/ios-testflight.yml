@@ -50,6 +50,8 @@ jobs:
         env:
           P12: ${{ secrets.IOS_DIST_P12 }}
           P12_PASSWORD: ${{ secrets.IOS_DIST_P12_PASSWORD }}
+          DEV_P12: ${{ secrets.IOS_DEV_P12 }}
+          DEV_P12_PASSWORD: ${{ secrets.IOS_DEV_P12_PASSWORD }}
         run: |
           KEYCHAIN=build.keychain
           KEYCHAIN_PASSWORD=$(uuidgen)
@@ -61,6 +63,14 @@ jobs:
           security set-keychain-settings -t 3600 -u "$KEYCHAIN"
           security import /tmp/dist.p12 -k "$KEYCHAIN" -P "$P12_PASSWORD" \
             -T /usr/bin/codesign -T /usr/bin/security
+          # The Apple Development identity the archive step signs with. With none in this keychain,
+          # automatic signing CREATES a development certificate on every run and the runner then
+          # discards its key, so each build left an unusable certificate behind until the account hit
+          # Apple's limit and every archive failed. One permanent certificate is reused instead.
+          echo "$DEV_P12" | base64 --decode > /tmp/dev.p12
+          security import /tmp/dev.p12 -k "$KEYCHAIN" -P "$DEV_P12_PASSWORD" \
+            -T /usr/bin/codesign -T /usr/bin/security
+          rm -f /tmp/dev.p12
           # Without this, codesign triggers a GUI authorisation prompt that nothing can answer.
           security set-key-partition-list -S apple-tool:,apple:,codesign: \
             -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN" >/dev/null

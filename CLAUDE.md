@@ -57,6 +57,14 @@ the production gateway, answers with `BadDeviceToken`. The distribution certific
 this repo's GitHub secrets, so a build meant to receive real notifications has to come from
 `ios-adhoc.yml` or `ios-testflight.yml`. Local builds are for iterating on UI.
 
+**The build machines sign with one permanent development certificate** (secrets `IOS_DEV_P12` /
+`IOS_DEV_P12_PASSWORD`, local copy `~/.appstoreconnect/private_keys/statushub-ci-development.p12`),
+imported beside the distribution one in both iOS workflows. Without a development identity in the
+runner's keychain, automatic signing creates a new certificate on every run and the runner discards
+its key; ten of those filled the account and every archive then failed with "maximum number of
+certificates". It lasts a year: when it expires, make a new one and replace both secrets — never let
+Xcode mint them again.
+
 **Ship to his phone through TestFlight.** It installs over the air; an Ad Hoc `.ipa` has to be
 pushed from the Mac with `devicectl`, so it needs the phone on the Mac's network — a build made while
 he was out never got installed. The App Store Connect app is "JaredHub" (id `6805268657`) and its

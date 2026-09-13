@@ -2,26 +2,36 @@ import SwiftUI
 import WatchKit
 
 /// The prompt page: the shared hub conversation on black. A tap anywhere on it (or the double-tap
-/// gesture) starts recording the next command, and the next tap sends it.
+/// gesture) starts recording the next command, and the next tap sends it. A reply opens at its top, and
+/// while more of it is below the screen double tap pages down instead of recording.
 struct ChatView: View {
     @EnvironmentObject private var chat: Chat
     @ObservedObject private var capture = Capture.shared
     @Environment(\.scenePhase) private var phase
+    @State private var position = ScrollPosition(idType: String.self)
+    @State private var scroll = ScrollState()
+
+    private var recording: Bool { capture.owner == .hub }
 
     var body: some View {
-        ScrollViewReader { proxy in
-            ScrollView {
-                VStack(alignment: .leading, spacing: 10) {
-                    recordButton { thread }
-                    status
-                }
-                .padding(.horizontal, 8)
-                .padding(.bottom, 8)
+        ScrollView {
+            VStack(alignment: .leading, spacing: 10) {
+                recordButton { thread }
+                status
             }
-            .scrollIndicators(.never)
-            .onChange(of: scrollTarget) { _, target in
-                guard let target else { return }
-                withAnimation(.easeOut(duration: 0.2)) { proxy.scrollTo(target, anchor: .top) }
+            .padding(.horizontal, 8)
+            .padding(.bottom, 8)
+        }
+        .scrollIndicators(.never)
+        .scrollPosition($position)
+        .trackScroll($scroll)
+        .onChange(of: scrollTarget) { _, target in
+            guard let target else { return }
+            withAnimation(.easeOut(duration: 0.2)) { position.scrollTo(id: target, anchor: .top) }
+        }
+        .overlay(alignment: .bottom) {
+            PageDownMarker(more: !scroll.atBottom && !recording) {
+                withAnimation(.easeOut(duration: 0.25)) { position.pageDown(from: scroll) }
             }
         }
         .background(Color.black.ignoresSafeArea())
@@ -30,10 +40,10 @@ struct ChatView: View {
         .onChange(of: chat.recordRequested) { _, _ in recordIfAsked() }
     }
 
-    /// Where the view settles: the recording under way, the command being waited on, or the start of
-    /// the newest turn, as the restaurant app does.
+    /// Where the view settles: the recording under way, the command being waited on, or the top of the
+    /// newest reply, so a long one is read from its start.
     private var scrollTarget: String? {
-        if capture.owner == .hub { return "recording" }
+        if recording { return "recording" }
         return chat.pending != nil ? "pending" : chat.thread.last?.id
     }
 
@@ -71,7 +81,7 @@ struct ChatView: View {
     }
 
     @ViewBuilder private var status: some View {
-        if capture.owner == .hub {
+        if recording {
             RecordingBar(since: capture.since, cancel: chat.cancelRecording)
                 .id("recording")
         } else if chat.waiting {
@@ -105,11 +115,12 @@ struct ChatView: View {
         }
     }
 
-    /// The whole thread is the record button: a tap starts, the next one sends. Double-tap does the same.
+    /// The whole thread is the record button: a tap starts, the next one sends. Double tap does the
+    /// same once the view is at the bottom (or a recording is under way); above that it pages down.
     private func recordButton<Label: View>(@ViewBuilder label: () -> Label) -> some View {
         Button(action: chat.toggleRecording, label: label)
             .buttonStyle(.plain)
-            .handGestureShortcut(.primaryAction)
+            .handGestureShortcut(.primaryAction, isEnabled: scroll.atBottom || recording)
             .disabled(chat.waiting)
     }
 

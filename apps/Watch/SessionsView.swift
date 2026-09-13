@@ -34,40 +34,57 @@ struct SessionsView: View {
 }
 
 /// One conversation: the last prompt and the reply to it, the tool calls of the turn it is running,
-/// and a reply of his own. A tap anywhere (or double tap) starts recording and the next tap sends it;
-/// a parked session is resumed with the words.
+/// and a reply of his own. A tap anywhere (or double tap, once the view is at the bottom) starts
+/// recording and the next one sends it; a parked session is resumed with the words. While more of a
+/// reply is below the screen, double tap pages down instead.
 struct SessionView: View {
     let key: String
     @EnvironmentObject private var sessions: Sessions
     @ObservedObject private var capture = Capture.shared
+    @State private var position = ScrollPosition(idType: String.self)
+    @State private var scroll = ScrollState()
 
     private var detail: SessionDetail? { sessions.details[key] }
     private var activity: [String] { sessions.activity[key] ?? [] }
+    private var recording: Bool { capture.owner == .session(key) }
 
     var body: some View {
-        ScrollViewReader { proxy in
-            ScrollView {
-                VStack(alignment: .leading, spacing: 10) {
-                    Button { sessions.toggleRecording(key) } label: { content }
-                        .buttonStyle(.plain)
-                        .handGestureShortcut(.primaryAction)
-                        .disabled(sessions.busy.contains(key))
-                    status
-                    Color.clear.frame(height: 1).id("tail")
-                }
-                .padding(.horizontal, 8)
-                .padding(.bottom, 8)
+        ScrollView {
+            VStack(alignment: .leading, spacing: 10) {
+                Button { sessions.toggleRecording(key) } label: { content }
+                    .buttonStyle(.plain)
+                    .handGestureShortcut(.primaryAction, isEnabled: scroll.atBottom || recording)
+                    .disabled(sessions.busy.contains(key))
+                status
             }
-            .scrollIndicators(.never)
-            // New work lands at the bottom, so that is where the view follows it; opening a session
-            // leaves its prompt and reply at the top.
-            .onChange(of: activity.count) { _, _ in proxy.scrollTo("tail", anchor: .bottom) }
-            .onChange(of: sessions.sent[key]) { _, _ in proxy.scrollTo("tail", anchor: .bottom) }
-            .onChange(of: capture.owner) { _, _ in proxy.scrollTo("tail", anchor: .bottom) }
+            .padding(.horizontal, 8)
+            .padding(.bottom, 8)
+        }
+        .scrollIndicators(.never)
+        .scrollPosition($position)
+        .trackScroll($scroll)
+        // A new reply is read from its top. Work in progress — his words, a recording, tool calls —
+        // lands at the bottom, so that is where the view follows it. Opening a session leaves its
+        // prompt and reply at the top.
+        .onChange(of: detail?.last_reply) { old, new in
+            guard old != nil, new != old else { return }
+            withAnimation(.easeOut(duration: 0.2)) { position.scrollTo(id: "reply", anchor: .top) }
+        }
+        .onChange(of: activity.count) { old, new in if new > old { toBottom() } }
+        .onChange(of: sessions.sent[key]) { _, new in if new != nil { toBottom() } }
+        .onChange(of: recording) { _, now in if now { toBottom() } }
+        .overlay(alignment: .bottom) {
+            PageDownMarker(more: !scroll.atBottom && !recording) {
+                withAnimation(.easeOut(duration: 0.25)) { position.pageDown(from: scroll) }
+            }
         }
         .background(Color.black.ignoresSafeArea())
         .navigationTitle(detail?.name ?? "")
         .task { await sessions.loadDetail(key) }
+    }
+
+    private func toBottom() {
+        withAnimation(.easeOut(duration: 0.2)) { position.scrollTo(edge: .bottom) }
     }
 
     private var content: some View {
@@ -80,6 +97,7 @@ struct SessionView: View {
                     .foregroundColor(.white)
                     .font(.system(size: 13))
                     .frame(maxWidth: .infinity, alignment: .leading)
+                    .id("reply")
             }
             if let mine = sessions.sent[key] {
                 words(mine)
@@ -101,7 +119,7 @@ struct SessionView: View {
     }
 
     @ViewBuilder private var status: some View {
-        if capture.owner == .session(key) {
+        if recording {
             RecordingBar(since: capture.since) { sessions.cancelRecording(key) }
         } else if sessions.busy.contains(key) {
             ProgressView().frame(width: 24, height: 24)

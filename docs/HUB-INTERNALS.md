@@ -1324,6 +1324,13 @@ has no WKWebView.
   conversation's next `done`.
 - **One microphone.** `Watch/Capture.swift` owns the recorder for both pages. `owner` says whose
   recording it is, so a page cannot start one over another's, and only the owner draws or sends it.
+- **Double tap pages before it records.** A reply is read from its top: the prompt page scrolls the
+  newest reply's top to the top of the screen, and a session page does the same when a new reply lands.
+  While more is below the screen, a small chevron sits at the bottom edge and holds the double-tap
+  gesture (`PageDownMarker`, `handGestureShortcut(_:isEnabled:)`), paging one screen less a line. At the
+  bottom — or while recording — the page's record button holds it again. Where the view stands comes
+  from `onScrollGeometryChange` (`trackScroll` in `Watch/WatchUI.swift`). A finger tap on the thread
+  still records from anywhere; only the gesture pages.
 - **A command is a recorded clip, sent the way the phone's microphone sends one.** `Watch/Recorder.swift`
   records AAC, mono, 16 kHz, and `Hub.sendAudio` uploads the file to `/api/voice-command` (source
   `web`): the hub transcribes it with the same Groq Whisper, and the worker treats it as push-to-talk —

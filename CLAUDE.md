@@ -57,6 +57,12 @@ the production gateway, answers with `BadDeviceToken`. The distribution certific
 this repo's GitHub secrets, so a build meant to receive real notifications has to come from
 `ios-adhoc.yml` or `ios-testflight.yml`. Local builds are for iterating on UI.
 
+**Ship to his phone through TestFlight.** It installs over the air; an Ad Hoc `.ipa` has to be
+pushed from the Mac with `devicectl`, so it needs the phone on the Mac's network — a build made while
+he was out never got installed. The App Store Connect app is "JaredHub" (id `6805268657`) and its
+internal group `internal_main` receives every build. Without a group an upload reaches no one, which
+is how builds 1 and 2 sat unused.
+
 ## Checking the Swift compiles, on this Mac
 
 Xcode 26 ships without the iOS and watchOS **device platforms**, and this Mac deliberately has no

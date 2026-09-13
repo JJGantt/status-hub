@@ -194,14 +194,8 @@ voice acks still use the system default. `NOTIFY_STYLE` in `server/server.js` is
 is declared; the file must be bundled in the app or iOS silently falls back.
 
 ### Prune dead APNs tokens
-`device_tokens` still holds the June Ad Hoc token (`8d7df828…`, production, last seen Jul 4). APNs
-returns `410 Unregistered` for it on every send, so every push logs a half-failure. Delete a token
-when APNs answers 410.
-
-### TestFlight migration
-The build on the phone is an Xcode/**sandbox** build, signed with the team development profile
-(`aps-environment: development`). It expires around **June 2027**, and push dies with it. Already
-flagged in ARCHITECTURE.md §9; the App Store `.ipa` and production entitlement are prepared.
+Nothing removes a row from `device_tokens` when APNs answers `410 Unregistered`, so a token from a
+build that is no longer installed keeps being sent to. Delete a token when APNs answers 410.
 
 ---
 

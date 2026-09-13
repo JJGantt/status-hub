@@ -1287,5 +1287,5 @@ It is native SwiftUI, not a web view: watchOS has no WKWebView.
   context sent before that is refused), and on every cookie change. The watch keeps it in its own
   Keychain and, whenever it has none, asks with a message, which wakes the phone app in the
   background. A 401 drops the stored token and asks again.
-- **It ships inside the iOS app**, so it reaches the watch with the Ad Hoc build. Do not install a
+- **It ships inside the iOS app**, so it reaches the watch with a TestFlight build of the app. Do not install a
   local build of the iOS app to try the watch: that build cannot receive push (CLAUDE.md).

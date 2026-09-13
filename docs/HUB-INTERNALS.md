@@ -480,8 +480,10 @@ per-list feed `/api/due-widget` replaced; nothing reads it.
 
 **Write:** `/api/settings` (GET/POST) · `/api/log-set` · `/api/log-entry` (POST/DELETE) ·
 `/api/commit-staged` · `/api/feed` · `/api/todos/{add,clear,snooze}` · `/api/repos/open` ·
-`/api/sessions/:action` · `/api/voice-command` (raw audio of any size → Groq Whisper → enqueue) ·
-`/api/voice-text` (text → enqueue; returns the request id, which `/api/voice-reply/:id` waits on) · `/api/voice-reset` · `/api/voice-activity` · `/api/attach`
+`/api/sessions/:action` · `/api/voice-command` (raw audio of any size → Groq Whisper → enqueue;
+optional `lat`/`lon`/`acc`/`place` query → `voice_requests.location`) ·
+`/api/voice-text` (text → enqueue, optional `location` object likewise; returns the request id, which
+`/api/voice-reply/:id` waits on) · `/api/voice-reset` · `/api/voice-activity` · `/api/attach`
 (photo upload) · `/api/register-push` · `/api/notify` (APNs to all devices) · `/api/clientlog`.
 
 **Auth:** the hub password → `sha256("status-hub:"+password)`; sent as the `hub` cookie (web) or the

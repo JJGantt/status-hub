@@ -521,6 +521,21 @@ async function sendVoice(clip, owner) {
   await runVoiceOutbox();
 }
 
+// Where this device is, for "near me" and a pickup point. A fix up to two minutes old is reused so a
+// command does not wait on the GPS; no permission, no fix in time, or no API at all just means the
+// command goes without one.
+function hereNow() {
+  if (!navigator.geolocation) return Promise.resolve(null);
+  return new Promise((resolve) => {
+    let timer = null;
+    const done = (v) => { clearTimeout(timer); resolve(v); };
+    timer = setTimeout(() => resolve(null), 2000);
+    navigator.geolocation.getCurrentPosition(
+      (p) => done({ lat: p.coords.latitude, lon: p.coords.longitude, acc: p.coords.accuracy }),
+      () => done(null), { maximumAge: 120000, timeout: 2000 });
+  });
+}
+
 // Upload one clip and act on the answer. Throws if the server did not take it; `refused` marks an
 // answer from the server, as opposed to never reaching it.
 async function deliverVoice(item, onStatus, owner) {
@@ -531,6 +546,8 @@ async function deliverVoice(item, onStatus, owner) {
   qp.set('client_now', item.client_now);               // this device's own wall clock, wherever it is
   qp.set('client_msg_id', item.id);
   if (item.dur > 0) qp.set('dur', item.dur.toFixed(1));
+  const where = item.dry ? null : await hereNow();      // a dictation into the text box goes nowhere yet
+  if (where) for (const k of ['lat', 'lon', 'acc']) qp.set(k, String(where[k]));
   const r = await fetch('/api/voice-command?' + qp, {
     method: 'POST', headers: { 'Content-Type': item.type }, body: item.blob });
   const j = await r.json().catch(() => ({}));
@@ -814,9 +831,11 @@ function initCard() {
       }
       setPendingPath(cid, attachments);            // let the eventual server row reconcile against the uploaded object
       setStatus('Sent — working…');
+      const where = await hereNow();
       const r = await fetch('/api/voice-text', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text, client_now: localNowNaive(), ...(attachments.length ? { attachments } : {}) }) });
+        body: JSON.stringify({ text, client_now: localNowNaive(), ...(attachments.length ? { attachments } : {}),
+                               ...(where ? { location: where } : {}) }) });
       if (r.ok) clearTray(); else dropPending(cid);
       setStatus(r.ok ? '' : 'Send failed');
     } catch (_) { setStatus('Send failed'); textEl.value = text; dropPending(cid); }

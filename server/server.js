@@ -1897,6 +1897,19 @@ function markSeen(msgId, requestId = null) {
 // There is NO size or length limit on a command. The body streams to a temp file rather than into
 // memory (a long uncompressed phone clip would not fit in this 256 MB machine), and lib/transcribe.js
 // re-encodes and splits anything too big for Groq. The file is deleted as soon as the request ends.
+// Where Jared was when he spoke, if the device sent it: numbers from the watch's or the browser's
+// location fix, and a place name only when the device produced one itself. Nothing here looks a
+// position up, so a command never sends his location to a third party; the worker hands it to the
+// model as context and the model uses it only for a request that depends on where he is.
+function parseLocation(src) {
+  const lat = parseFloat(src && src.lat), lon = parseFloat(src && src.lon);
+  if (!Number.isFinite(lat) || !Number.isFinite(lon) || Math.abs(lat) > 90 || Math.abs(lon) > 180) return null;
+  const acc = parseFloat(src.acc);
+  const place = typeof src.place === 'string' ? src.place.trim().slice(0, 160) : '';
+  return { lat: +lat.toFixed(5), lon: +lon.toFixed(5),
+           ...(Number.isFinite(acc) ? { acc: Math.round(acc) } : {}), ...(place ? { place } : {}) };
+}
+
 app.post('/api/voice-command', async (req, res) => {
   const tmp = path.join(os.tmpdir(), 'voice-' + crypto.randomUUID());
   try {
@@ -1923,9 +1936,10 @@ app.post('/api/voice-command', async (req, res) => {
     // terse, fits-in-the-status-chip confirmation. The full conversation card omits it (verbose replies).
     const quick = String(req.query.quick || '') === '1';
     const client_now = CLIENT_NOW_RE.test(String(req.query.client_now || '')) ? String(req.query.client_now) : null;
+    const location = parseLocation(req.query);
     const id = crypto.randomUUID();   // chosen here so the caller can wait on it (/api/voice-reply/:id)
     await sbWrite('voice_requests', 'POST', { id, transcript, source: quick ? 'web-quick' : 'web', focus: 'hub',
-      ...(client_now ? { client_now } : {}) });
+      ...(client_now ? { client_now } : {}), ...(location ? { location } : {}) });
     markSeen(msgId, id);
     res.json({ transcript, enqueued: true, id });
   } catch (e) {
@@ -2042,9 +2056,11 @@ app.post('/api/voice-text', express.json(), async (req, res) => {
     const msgId = String((req.body && req.body.client_msg_id) || '').slice(0, 64);
     if (msgId && seenMsgIds.has(msgId)) return res.json({ enqueued: true, duplicate: true, id: seenMsgIds.get(msgId) });
     const client_now = CLIENT_NOW_RE.test(String((req.body && req.body.client_now) || '')) ? String(req.body.client_now) : null;
+    const location = parseLocation(req.body && req.body.location);
     const id = crypto.randomUUID();   // chosen here so the caller can wait on it (/api/voice-reply/:id)
     await sbWrite('voice_requests', 'POST', { id, transcript: text, source: 'web', focus: 'hub',
-      ...(attachments.length ? { attachments } : {}), ...(client_now ? { client_now } : {}) });
+      ...(attachments.length ? { attachments } : {}), ...(client_now ? { client_now } : {}),
+      ...(location ? { location } : {}) });
     markSeen(msgId, id);
     res.json({ enqueued: true, id });
   } catch (e) { res.status(500).json({ error: String(e.message || e) }); }

@@ -107,7 +107,10 @@ function fitCanvas(cv, w, h) {
 // at that distance — the weekday letters over the columns and the noon label beside them both go,
 // while the guide lines they named stay, because the line is the thing that was doing the work. What
 // keeps its labels is the one axis no colour or placement can carry: the water temperature.
-const onWall = () => document.body.classList.contains('tv');
+// The phone loads the same page as the kiosk (`body.tv`), so it is told apart by `phonewall`, which
+// wall.js sets before any card paints — without that the phone lost its labels along with the wall.
+const onWall = () => document.body.classList.contains('tv') &&
+  !document.body.classList.contains('phonewall');
 
 // Canvas rather than ~1,300 rects: this is a phone surface and the grids are pure colour with no
 // per-cell interaction to hang off the DOM. `cv` scrolls inside its box; `ax` is the gutter canvas
@@ -213,7 +216,7 @@ function paintGrids(cv, ax, viewW) {
   a.font = '9px system-ui, -apple-system, sans-serif';
   a.textBaseline = 'middle'; a.textAlign = 'right'; a.fillStyle = '#8b96a5';
   for (const base of [DOW_H, DOW_H + GRID_H])
-    for (const [h, txt] of [[12, '12p']])
+    for (const [h, txt] of [[6, '6a'], [12, '12p'], [18, '6p']])
       a.fillText(txt, PAD_L - 5, base + GRID_H - h * ch);
 }
 

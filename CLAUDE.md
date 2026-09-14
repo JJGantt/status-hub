@@ -187,12 +187,14 @@ are drawn `preserveAspectRatio="none"` — at that width a 36:93 figure no longe
 
 **A wall drops every label a reader could infer, and this is deliberate.** No month row over the two
 week heat maps (`.hmonths` is hidden in `tv-home.css`), no weekday letters over the surf grids and no
-noon label beside them (`onWall()` in `cards/surf.js`). At couch distance a 9-11px string is not
+hour labels beside them (`onWall()` in `cards/surf.js`). At couch distance a 9-11px string is not
 read, and what those said — which end is old, roughly where in the week a column falls — the columns
 already say. The guide LINES they named all stay: the line was doing the work, not the word. Two
 things keep their numbers, because no colour or placement can carry them: the water temperature and
 the weigh-in plot's three values. The markup and the phone are untouched — the month row still paints
-in the expanded sheet, and the phone's surf card still labels its hours.
+in the expanded sheet, and the phone's surf card keeps its weekday letters and its 6a / 12p / 6p
+hour labels. The phone loads the same `body.tv` page as the kiosk, so `onWall()` tells them apart by
+`phonewall` (set by `wall.js`); test for `tv` alone and the phone silently loses its labels too.
 
 **The heat column's bottom card is surf AND weather**, side by side: the surf plots narrowed to the
 heat-map width (403px) so their day columns line up with the week columns above, and `cards/weather.js`

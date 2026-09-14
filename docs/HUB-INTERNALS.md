@@ -1353,10 +1353,17 @@ has no WKWebView.
   cold launch lands short while the thread is still laying out. The thread is the newest 40 rows,
   about twenty exchanges.
   While more is below the screen, a small chevron sits at the bottom edge and holds the double-tap
-  gesture (`PageDownMarker`, `handGestureShortcut(_:isEnabled:)`), paging one screen less a line. At the
-  bottom — or while recording — the page's record button holds it again. Where the view stands comes
-  from `onScrollGeometryChange` (`trackScroll` in `Watch/WatchUI.swift`). A finger tap on the thread
-  still records from anywhere; only the gesture pages.
+  gesture (`PageDownMarker`, `handGestureShortcut(_:isEnabled:)`). Text scrolls to the screen's very
+  edge, so the marker fades it out of a 28pt strip there and the chevron sits in that strip. A page
+  moves the last line showing above the strip to the top edge of the screen. At the bottom — or while
+  recording — the page's record button holds the gesture again. Where the view stands comes from
+  `onScrollGeometryChange` (`trackScroll` in `Watch/WatchUI.swift`). A finger tap on the thread still
+  records from anywhere; only the gesture pages.
+  The paging math rests on two things measured in the watchOS 26.5 simulator, both easy to get
+  wrong: the scroll geometry spans the whole screen (the strips under the clock and along the bottom
+  included), but `ScrollPosition.scrollTo(y:)` puts y at the top of the *safe area*, so the target
+  is the new top edge plus the top inset. An overlay is laid out against the safe area and
+  `ignoresSafeArea` does not move it, so the marker is offset down by the bottom inset.
 - **A session's reply notification opens it** (§6b). `WatchAppDelegate` registers the `SESSION_REPLY`
   category with one foreground action, Open — the button double tap presses on a watch notification —
   and answers it, or a tap on the notification itself, with `Sessions.open(rowId:)`: the app lands on

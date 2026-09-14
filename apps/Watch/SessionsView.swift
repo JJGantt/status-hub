@@ -78,7 +78,7 @@ struct SessionView: View {
             .onChange(of: recording) { _, now in if now { toBottom(proxy) } }
         }
         .overlay(alignment: .bottom) {
-            PageDownMarker(more: !scroll.atBottom && !recording) {
+            PageDownMarker(more: !scroll.atBottom && !recording, edge: scroll.insetBottom) {
                 withAnimation(.easeOut(duration: 0.25)) { position.pageDown(from: scroll) }
             }
         }

@@ -52,11 +52,16 @@ struct ActivityLines: View {
 /// the end — which is when double tap goes back to recording. Both come from the visible rect, in the
 /// content's own coordinates: the end is where no content is left below what is showing.
 struct ScrollState: Equatable {
+    /// The content y at the screen's top edge (`contentOffset`).
     var offset: CGFloat = 0
+    /// The whole screen's height, the strips under the clock and along the bottom edge included.
     var page: CGFloat = 0
+    /// How much further the view can scroll down before it stops.
     var below: CGFloat = 0
     /// The content's height, so a view holding a position can re-aim as content lays out or grows.
     var content: CGFloat = 0
+    var insetTop: CGFloat = 0
+    var insetBottom: CGFloat = 0
 
     /// Within a line of the end, or nothing to scroll at all.
     var atBottom: Bool { below <= 12 }
@@ -66,8 +71,12 @@ extension View {
     /// Keeps `state` current as the scroll view this modifies moves or its content changes.
     func trackScroll(_ state: Binding<ScrollState>) -> some View {
         onScrollGeometryChange(for: ScrollState.self) { g in
+            // The scroll stops with the content's end at the safe area's bottom, the bottom inset short
+            // of the screen's edge.
             ScrollState(offset: g.contentOffset.y, page: g.visibleRect.height,
-                        below: g.contentSize.height - g.visibleRect.maxY, content: g.contentSize.height)
+                        below: g.contentSize.height + g.contentInsets.bottom - g.visibleRect.maxY,
+                        content: g.contentSize.height,
+                        insetTop: g.contentInsets.top, insetBottom: g.contentInsets.bottom)
         } action: { _, new in
             state.wrappedValue = new
         }
@@ -75,9 +84,15 @@ extension View {
 }
 
 extension ScrollPosition {
-    /// One screen further down, keeping the last line just read at the top, and never past the end.
+    /// One screen further down: the last line showing above the page-down marker becomes the top line.
+    /// Measured in the watchOS 26.5 simulator: `contentOffset` and `visibleRect` span the whole screen,
+    /// the strips under the clock and the bottom edge included, but `scrollTo(y:)` puts y at the top of
+    /// the safe area, `insetTop` below the screen's edge — so the new top edge is handed over plus
+    /// `insetTop`. Paging by the offset alone came up short by that strip, about two and a half lines.
     mutating func pageDown(from s: ScrollState) {
-        scrollTo(y: s.offset + min(max(s.page - 24, 40), max(s.below, 0)))
+        let lastLine: CGFloat = 18   // about one line of reply text, kept on screen as the new top line
+        let shown = s.page - PageDownMarker.fade
+        scrollTo(y: s.offset + max(0, min(shown - lastLine, s.below)) + s.insetTop)
     }
 }
 
@@ -85,23 +100,36 @@ extension ScrollPosition {
 /// below. It holds the double-tap gesture until the view reaches the bottom, when the page's own record
 /// button takes it back.
 struct PageDownMarker: View {
+    /// The strip along the screen's bottom edge that text fades out of while the chevron shows. Text
+    /// scrolls to the very edge, so without it the chevron always sits on some line.
+    static let fade: CGFloat = 28
+
     let more: Bool
+    /// The scroll view's bottom inset: the strip between the safe area and the screen's edge.
+    let edge: CGFloat
     let action: () -> Void
 
     var body: some View {
-        Button(action: action) {
-            Image(systemName: "chevron.compact.down")
-                .font(.system(size: 16, weight: .semibold))
-                .foregroundColor(.gray)
-                .shadow(color: .black, radius: 3)
-                .frame(width: 44, height: 20)
-                .contentShape(Rectangle())
+        ZStack(alignment: .bottom) {
+            LinearGradient(colors: [Color.black.opacity(0), .black, .black], startPoint: .top, endPoint: .bottom)
+                .frame(height: Self.fade)
+                .allowsHitTesting(false)
+            Button(action: action) {
+                Image(systemName: "chevron.compact.down")
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundColor(.gray)
+                    .frame(width: 44, height: 18)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .handGestureShortcut(.primaryAction, isEnabled: more)
+            .allowsHitTesting(more)
+            .padding(.bottom, 2)
         }
-        .buttonStyle(.plain)
-        .handGestureShortcut(.primaryAction, isEnabled: more)
+        .frame(maxWidth: .infinity)
         .opacity(more ? 1 : 0)
-        .allowsHitTesting(more)
-        // Down into the screen's bottom edge, below the last line of text rather than on top of it.
-        .offset(y: 14)
+        // An overlay ends at the safe area's bottom; down by the inset puts it at the screen's edge
+        // (36pt on a 46mm watch, measured). ignoresSafeArea does not move an overlay.
+        .offset(y: edge)
     }
 }

@@ -2128,15 +2128,18 @@ app.post('/api/voice-reset', async (req, res) => {
 // the orchestrator writes `last_reply` to Supabase separately, for durability, off this path.
 //
 //   state 'tool'  — a tool call, `text` is its one-line description
+//   state 'text'  — what the session said between tool calls, never its final reply
 //   state 'done'  — the turn finished, `text` is the reply (truncated for the row it lands on) and
 //                   `at` its reply_at; it is also pushed to the phone (notifySessionReply)
 app.post('/api/session-activity', express.json(), (req, res) => {
   const b = req.body || {};
   const session = String(b.session || '');
   if (!session) return res.status(400).json({ error: 'session required' });
-  const done = b.state === 'done';
-  const text = String(b.text || '').slice(0, 400);
-  pushSession({ session, state: done ? 'done' : 'tool', text });
+  const state = ['done', 'text'].includes(b.state) ? b.state : 'tool';
+  const done = state === 'done';
+  // A thought can run to a paragraph; a tool line or a row's reply never needs more than 400.
+  const text = String(b.text || '').slice(0, state === 'text' ? 2000 : 400);
+  pushSession({ session, state, text });
   if (done && text) notifySessionReply(session, text, typeof b.at === 'string' ? b.at : null);
   res.status(204).end();
 });
@@ -2170,11 +2173,12 @@ async function notifySessionReply(sessionId, text, at) {
 app.post('/api/voice-activity', express.json(), (req, res) => {
   const b = req.body || {};
   pushVoice('activity', {
-    text: String(b.text || '').slice(0, 400),
-    // Preserve 'working' (the command's transcript, once per command), 'done', and 'escalate' (the
-    // Sonnet→Opus hop mid-run); everything else is a tool call. 'working' is what the TV keys the
-    // heard-you pop off, so it must survive intact.
-    state: ['done', 'working', 'escalate'].includes(b.state) ? b.state : 'tool',
+    // A thought (state 'text') can run to a paragraph; everything else is a line.
+    text: String(b.text || '').slice(0, b.state === 'text' ? 2000 : 400),
+    // Preserve 'working' (the command's transcript, once per command), 'done', 'escalate' (the
+    // Sonnet→Opus hop mid-run) and 'text' (what the model said between tool calls); everything else
+    // is a tool call. 'working' is what the TV keys the heard-you pop off, so it must survive intact.
+    state: ['done', 'working', 'escalate', 'text'].includes(b.state) ? b.state : 'tool',
     focus: String(b.focus || 'hub'),
   });
   res.status(204).end();

@@ -19,9 +19,10 @@ final class Chat: ObservableObject {
     @Published private(set) var pending: String?
     @Published private(set) var waiting = false
     @Published private(set) var failure: Failure?
-    /// Tool calls of the hub command running now, as the worker reports them. The hub does not store
-    /// them, so they show while a command runs and clear when the next starts or this one finishes.
-    @Published private(set) var activity: [String] = []
+    /// Tool calls of the hub command running now, and what the model says between them, as the worker
+    /// reports them. The hub does not store them, so they show while a command runs and clear when the
+    /// next starts or this one finishes.
+    @Published private(set) var activity: [ActivityLine] = []
     /// Set by the complication's statushub://record and by the Record control; the prompt page starts
     /// recording once it is on screen.
     @Published var recordRequested = false
@@ -141,8 +142,10 @@ final class Chat: ObservableObject {
         case "activity":
             guard (frame.row?.focus ?? "hub") == "hub" else { return }
             switch frame.row?.state {
-            case "tool":
-                if let text = frame.row?.text, !text.isEmpty { activity.append(text) }
+            case "tool", "text":
+                if let text = frame.row?.text, !text.isEmpty {
+                    activity.append(ActivityLine(text: text, thought: frame.row?.state == "text"))
+                }
             case "working", "done":
                 activity = []
             default:

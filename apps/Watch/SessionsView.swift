@@ -45,7 +45,7 @@ struct SessionView: View {
     @State private var scroll = ScrollState()
 
     private var detail: SessionDetail? { sessions.details[key] }
-    private var activity: [String] { sessions.activity[key] ?? [] }
+    private var activity: [ActivityLine] { sessions.activity[key] ?? [] }
     private var recording: Bool { capture.owner == .session(key) }
 
     var body: some View {

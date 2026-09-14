@@ -31,18 +31,32 @@ struct RecordingBar: View {
     }
 }
 
-/// Tool calls as the machine running them reports them, one line each, oldest first.
+/// One step of a running turn, as the machine running it reports it: a tool call, or what the model
+/// said between two of them (`thought`).
+struct ActivityLine: Equatable {
+    let text: String
+    let thought: Bool
+}
+
+/// A running turn's steps, oldest first. A tool call is one grey line; a thought is read in full.
 struct ActivityLines: View {
-    let lines: [String]
+    let lines: [ActivityLine]
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
             ForEach(Array(lines.enumerated()), id: \.offset) { _, line in
-                Text(line)
-                    .font(.system(size: 10, design: .monospaced))
-                    .foregroundColor(.gray)
-                    .lineLimit(2)
-                    .frame(maxWidth: .infinity, alignment: .leading)
+                if line.thought {
+                    Text(inlineMarkdown(line.text))
+                        .font(.system(size: 12))
+                        .foregroundColor(Color(white: 0.78))
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                } else {
+                    Text(line.text)
+                        .font(.system(size: 10, design: .monospaced))
+                        .foregroundColor(.gray)
+                        .lineLimit(2)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
             }
         }
     }

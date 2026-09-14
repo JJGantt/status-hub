@@ -150,11 +150,17 @@ footer row's reserved lane (`#tv-act`) so it occupies space rather than covering
 made by `voiceagent.js`'s kiosk predicate, not by whether `#tv-act` exists — §6e says why. Same states
 either way.
 The frames are: `working` (the prompt, once per command),
-`tool` (each tool call + args), `escalate`, and `done`. **`escalate` is the Sonnet→Opus hop**: the worker
+`tool` (each tool call + args), `text` (what the model said between tool calls, up to 2000 characters),
+`escalate`, and `done`. **`escalate` is the Sonnet→Opus hop**: the worker
 sends one when a hub turn leaves the fast path (it needed a full-access tool, or Sonnet errored), and the
 bar shows it as its own violet row *and* lights an `OPUS` chip that persists for the rest of the run —
 later tool rows replace the text, but the fact that this turn changed models stays on screen until the
-command finishes. Only these four states survive the relay; anything else is coerced to `tool`.
+command finishes. Only these five states survive the relay; anything else is coerced to `tool`.
+A `text` frame is only ever text a tool call FOLLOWED: every runner holds what the model says until the
+next tool call and drops it if none comes, because the text after the last tool call is the reply and
+arrives as the thread message. The bar shows a thought in its `busy` style. Nothing keeps them, which is
+why both the hub model and every session are told their final message must restate anything it needs
+from earlier in the turn (`HUB_SYSTEM`, `~/CLAUDE.md`).
 On the kiosk the running states hold indefinitely; only a TERMINAL row (`done`, or a client-side
 error) is on a timer, and it holds for `activity_hold_s` (default 60s) so a reply is still on screen
 well after the turn ends. Off the kiosk the bar floats over the page with the conversation a swipe
@@ -470,7 +476,7 @@ the day timeline and reads `calendar_months` for the spread, `?day=1` is the tim
 `&full=1` makes it a rolling ±12h window instead of a calendar day — see the dial below, and
 `&ahead=N` adds the N days after today as `ahead`) · `/api/badge` · `/api/repos` ·
 `/api/repos/cmd/:id` · `/api/sessions` (live desk sessions + the follow-up `focus`) ·
-`/api/session-stream` (SSE, one `session` frame per tool call or finished turn, pushed by the
+`/api/session-stream` (SSE, one `session` frame per tool call, in-between text or finished turn, pushed by the
 orchestrator on either machine — see SESSIONS.md §10) · `/api/reports`
 (list only — `html` is never selected) · `/api/surf/history` (the whole hourly archive as one
 character per hour; `defaultT0` marks the window the card lands on before it is scrolled back) ·
@@ -1331,7 +1337,8 @@ has no WKWebView.
 - **The prompt page.** The shared hub thread on black — `/api/voice-messages?focus=hub&mode=active`, the
   same current-context thread the phone and the TV show, in whichever mode `agent_mode` selects. It
   follows `/api/voice-stream`: a `message` frame reloads the thread, and the worker's `activity` frames
-  draw the running command's tool calls under it. The hub stores none of those, so they show only
+  draw the running command's tool calls under it, and what the model says between them in full, in
+  plain text rather than the tool calls' grey monospace (`ActivityLines`). The hub stores none of those, so they show only
   while the page is watching and clear when the next command starts (`working`) or this one ends
   (`done`). A tap anywhere on it, or the double-tap gesture, starts recording; the next tap sends.
   Cancel throws the clip away.

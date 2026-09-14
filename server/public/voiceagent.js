@@ -114,6 +114,7 @@ function boot() {
       if (a.state === 'working') playPop();        // his words just landed on screen
       if (a.state === 'done') activity.done(a.text);
       else if (a.state === 'escalate') activity.escalate(a.text);   // Sonnet handed off to Opus mid-run
+      else if (a.state === 'text') activity.thought(a.text);        // what it said between tool calls
       else activity.tool(a.text);
       return;
     }
@@ -667,6 +668,7 @@ export function initActivityBar() {
     rec(t) { setPrompt(''); setModel(''); show(t || 'Listening…', 'rec', true); },
     busy(t) { show(t, 'busy', true); },          // Transcribing… / Thinking…
     tool(t) { show('⚙ ' + (t || 'tool'), 'tool', true); },
+    thought(t) { show(t, 'busy', true); },          // what the model said between tool calls
     // The Sonnet→Opus hop: announced on its own row, then remembered as the OPUS chip.
     escalate(t) { setModel('Opus'); show('⤴ ' + (t || 'Escalated to Opus'), 'esc', true); },
     done(t) { show(t ? '✓ ' + t : 'Done ✓', 'done', false); },

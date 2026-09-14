@@ -68,9 +68,9 @@ final class Sessions: ObservableObject {
     /// One row per conversation: its running row if it has one, else its newest parked one.
     @Published private(set) var list: [SessionRow] = []
     @Published private(set) var details: [String: SessionDetail] = [:]
-    /// Each conversation's tool calls since its last reply, as its machine reports them. Live only: the
-    /// hub does not store them.
-    @Published private(set) var activity: [String: [String]] = [:]
+    /// Each conversation's tool calls since its last reply, and what it said between them, as its
+    /// machine reports them. Live only: the hub does not store them.
+    @Published private(set) var activity: [String: [ActivityLine]] = [:]
     /// His words for a conversation, shown from the moment they are transcribed until its next reply.
     @Published private(set) var sent: [String: String] = [:]
     @Published private(set) var busy: Set<String> = []
@@ -208,7 +208,9 @@ final class Sessions: ObservableObject {
         guard event == "session", let f = try? JSONDecoder().decode(Frame.self, from: Data(data.utf8)) else { return }
         let key = await key(forRow: f.session)
         guard f.state == "done" else {
-            if let text = f.text, !text.isEmpty { activity[key, default: []].append(text) }
+            if let text = f.text, !text.isEmpty {
+                activity[key, default: []].append(ActivityLine(text: text, thought: f.state == "text"))
+            }
             return
         }
         activity[key] = nil

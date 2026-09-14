@@ -60,17 +60,18 @@ const activity = new Map();   // session id -> { state, text }
 const oneLine = (t) => String(t || '').replace(/\s+/g, ' ').trim();
 
 function rowActivity(s) {
-  // Live first — a tool call in flight is the most current thing this session has to say. Falling
-  // back to `last_reply` is what makes a quiet session say anything at all: nothing is streaming to
-  // it, but it still answered something, and a blank line reads as a session that has done nothing.
-  // The wall is also blank on arrival otherwise, since live frames only start once it is watching.
+  // Live first — a tool call in flight, or what the session said between two of them, is the most
+  // current thing it has to say. Falling back to `last_reply` is what makes a quiet session say
+  // anything at all: nothing is streaming to it, but it still answered something, and a blank line
+  // reads as a session that has done nothing. The wall is also blank on arrival otherwise, since live
+  // frames only start once it is watching.
   const a = activity.get(s.id);
-  const live = a && a.state === 'tool';
-  const text = live ? a.text : oneLine((a && a.text) || s.last_reply);
+  const live = a && (a.state === 'tool' || a.state === 'text');
+  const text = oneLine(live ? a.text : ((a && a.text) || s.last_reply));
   // The line is ALWAYS rendered, empty or not. Growing a row when a tool fires and collapsing it when
   // one stops would make the whole list jump every few seconds, which is unreadable across a room.
   if (!text) return '<span class="hw-row-act idle"></span>';
-  return `<span class="hw-row-act ${live ? 'tool' : 'done'}">${esc(text)}</span>`;
+  return `<span class="hw-row-act ${live ? a.state : 'done'}">${esc(text)}</span>`;
 }
 
 let last = null;   // the most recent /api/sessions payload, so an activity frame can repaint alone

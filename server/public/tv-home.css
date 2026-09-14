@@ -516,6 +516,8 @@ body.tv .hw-row-where{font-size:12px;font-weight:700;letter-spacing:.06em;text-t
 body.tv .hw-row-act{display:block;min-height:19px;font-size:14px;line-height:19px;min-width:0;
   overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-variant-numeric:tabular-nums}
 body.tv .hw-row-act.tool{color:#4fd1c5}
+/* What a session says between tool calls is words, not an action: body text, brighter than a reply's grey. */
+body.tv .hw-row-act.text{color:#d5dde6}
 body.tv .hw-row-act.done{color:#8b96a5}
 body.tv .hw-sess-head{flex:0 0 auto;display:flex;align-items:center;gap:10px;flex-wrap:wrap;
   border-top:1px solid #222a33;padding-top:12px}

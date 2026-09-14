@@ -316,6 +316,7 @@ machines and pushes what it sees straight to the hub:
 
     transcript append ─ fs.watch ─▶ sessionWatch ─┬─ a prompt ─▶ patch desk_sessions.active_at, working
                                                   ├─ tool_use  ─▶ POST /api/session-activity ─▶ SSE ─▶ wall
+                                                  ├─ text before a tool_use (state 'text') ─▶ the same
                                                   └─ end_turn  ─┬─ POST /api/session-activity ─▶ SSE ─▶ wall
                                                                 └─ patch desk_sessions.last_reply, active_at  (durable)
 

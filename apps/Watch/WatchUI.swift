@@ -55,6 +55,8 @@ struct ScrollState: Equatable {
     var offset: CGFloat = 0
     var page: CGFloat = 0
     var below: CGFloat = 0
+    /// The content's height, so a view holding a position can re-aim as content lays out or grows.
+    var content: CGFloat = 0
 
     /// Within a line of the end, or nothing to scroll at all.
     var atBottom: Bool { below <= 12 }
@@ -65,7 +67,7 @@ extension View {
     func trackScroll(_ state: Binding<ScrollState>) -> some View {
         onScrollGeometryChange(for: ScrollState.self) { g in
             ScrollState(offset: g.contentOffset.y, page: g.visibleRect.height,
-                        below: g.contentSize.height - g.visibleRect.maxY)
+                        below: g.contentSize.height - g.visibleRect.maxY, content: g.contentSize.height)
         } action: { _, new in
             state.wrappedValue = new
         }
@@ -99,5 +101,7 @@ struct PageDownMarker: View {
         .handGestureShortcut(.primaryAction, isEnabled: more)
         .opacity(more ? 1 : 0)
         .allowsHitTesting(more)
+        // Down into the screen's bottom edge, below the last line of text rather than on top of it.
+        .offset(y: 14)
     }
 }

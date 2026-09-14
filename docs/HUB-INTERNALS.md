@@ -1342,6 +1342,10 @@ has no WKWebView.
   recording it is, so a page cannot start one over another's, and only the owner draws or sends it.
 - **Double tap pages before it records.** A reply is read from its top: the prompt page scrolls the
   newest reply's top to the top of the screen, and a session page does the same when a new reply lands.
+  The prompt page holds that spot (`pinned`) from the moment the app opens or comes back to the front
+  until he scrolls or pages, re-aiming on every change in the content's height — a single jump on a
+  cold launch lands short while the thread is still laying out. The thread is the newest 40 rows,
+  about twenty exchanges.
   While more is below the screen, a small chevron sits at the bottom edge and holds the double-tap
   gesture (`PageDownMarker`, `handGestureShortcut(_:isEnabled:)`), paging one screen less a line. At the
   bottom — or while recording — the page's record button holds it again. Where the view stands comes

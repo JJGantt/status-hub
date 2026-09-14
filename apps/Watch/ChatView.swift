@@ -10,6 +10,11 @@ struct ChatView: View {
     @Environment(\.scenePhase) private var phase
     @State private var position = ScrollPosition(idType: String.self)
     @State private var scroll = ScrollState()
+    /// Whether the view is held at `scrollTarget`, the top of the newest reply. Set when the app opens or
+    /// comes back to the front and when a reply arrives, and kept until he scrolls or pages himself: a
+    /// thread still laying out (two hundred rows on a cold launch) or still growing moves the spot, so a
+    /// single jump lands short of it, and while pinned every change in the content's height re-aims.
+    @State private var pinned = true
 
     private var recording: Bool { capture.owner == .hub }
 
@@ -28,20 +33,42 @@ struct ChatView: View {
             .trackScroll($scroll)
             // Jumps to a view go through the reader, which finds any view with an id; the position is
             // only for paging, which moves by a distance rather than to a view.
-            .onChange(of: scrollTarget) { _, target in
-                guard let target else { return }
-                withAnimation(.easeOut(duration: 0.2)) { proxy.scrollTo(target, anchor: .top) }
+            .onChange(of: scrollTarget) { _, _ in
+                pinned = true
+                jump(proxy, animated: true)
+            }
+            .onChange(of: scroll.content) { _, _ in if pinned { jump(proxy) } }
+            .onScrollPhaseChange { _, now in
+                if now == .interacting || now == .tracking { pinned = false }
+            }
+            .onChange(of: phase) { _, now in
+                guard now == .active else { return }
+                pinned = true
+                jump(proxy)
+                recordIfAsked()
+            }
+            .onAppear {
+                jump(proxy)
+                recordIfAsked()
             }
         }
         .overlay(alignment: .bottom) {
             PageDownMarker(more: !scroll.atBottom && !recording) {
+                pinned = false
                 withAnimation(.easeOut(duration: 0.25)) { position.pageDown(from: scroll) }
             }
         }
         .background(Color.black.ignoresSafeArea())
-        .onAppear { recordIfAsked() }
-        .onChange(of: phase) { _, now in if now == .active { recordIfAsked() } }
         .onChange(of: chat.recordRequested) { _, _ in recordIfAsked() }
+    }
+
+    private func jump(_ proxy: ScrollViewProxy, animated: Bool = false) {
+        guard let target = scrollTarget else { return }
+        if animated {
+            withAnimation(.easeOut(duration: 0.2)) { proxy.scrollTo(target, anchor: .top) }
+        } else {
+            proxy.scrollTo(target, anchor: .top)
+        }
     }
 
     /// Where the view settles: the recording under way, the command being waited on, or the top of the

@@ -108,7 +108,9 @@ enum Hub {
     /// The conversation every surface shows, scoped by the hub to its current context, in whichever
     /// mode (hub or agent) is active.
     static func thread() async throws -> [Message] {
-        try await json("/api/voice-messages?focus=hub&mode=active&limit=200")
+        // The newest 40 rows, about twenty exchanges: all a wrist needs, and a short thread lays out
+        // fast enough on opening for the view to land on the newest reply.
+        try await json("/api/voice-messages?focus=hub&mode=active&limit=40")
     }
 
     /// What the hub heard in a clip, and the request it enqueued. No id means it heard no words, or the

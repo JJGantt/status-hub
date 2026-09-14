@@ -129,6 +129,7 @@ enum Hub {
     /// hub enqueues what it heard as a command, or with `dry` only hands the words back. A resend with
     /// the same `msgId` is answered with the first send's id instead of running the command twice.
     static func sendAudio(_ clip: Recorder.Clip, msgId: String, dry: Bool = false) async throws -> Heard {
+        try blockInSimulator("voice-command")
         var query = "client_msg_id=\(msgId)&client_now=\(clientNow())&dur=\(String(format: "%.1f", clip.duration))"
             + (dry ? "&dry=1" : "")
         // Where he is, for "near me" and a pickup point; a dictation (dry) goes nowhere yet.
@@ -146,6 +147,7 @@ enum Hub {
     /// Types his words into a running session. A resend with the same `msgId` returns the first send's
     /// command instead of typing the words twice.
     static func followUp(_ session: String, text: String, msgId: String) async throws {
+        try blockInSimulator("followup")
         _ = try await call("/api/sessions/followup", method: "POST",
                            body: ["id": session, "text": text, "client_msg_id": msgId])
     }
@@ -208,6 +210,16 @@ enum Hub {
         await listen("/api/day-stream", reconnected: reload) { event, _ in
             if event == kind { await reload() }
         }
+    }
+
+    /// The simulator runs the real app against the live hub, so a test tap that records and stops would
+    /// otherwise land in his conversation as a command, or be typed into a session. Compiled out of
+    /// device builds.
+    private static func blockInSimulator(_ what: String) throws {
+        #if targetEnvironment(simulator)
+        log("send-blocked", ["what": what])
+        throw HubError.status(0)
+        #endif
     }
 
     /// A line in the hub's log (`fly logs -a jared-status-hub | grep clientlog`): what the watch showed

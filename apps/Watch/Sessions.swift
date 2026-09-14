@@ -150,7 +150,12 @@ final class Sessions: ObservableObject {
     }
 
     func startRecording(_ key: String) {
-        guard capture.owner == nil, !busy.contains(key), row(for: key) != nil else { return }
+        guard capture.owner == nil, !busy.contains(key), row(for: key) != nil else {
+            // Each of these used to return in silence, which from the wrist is a record tap doing nothing.
+            Hub.log("record-refused", ["view": "session", "owner": String(describing: capture.owner),
+                                       "busy": busy.contains(key), "row": row(for: key)?.id ?? "none"])
+            return
+        }
         failures[key] = nil
         capture.start(for: .session(key)) { [weak self] error in
             self?.failures[key] = (error as? Recorder.Failure) == .denied ? .micDenied : .message(error.localizedDescription)

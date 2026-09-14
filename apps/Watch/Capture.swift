@@ -30,7 +30,10 @@ final class Capture: ObservableObject {
     /// always a stop. Every other listener (Mac, ESP) goes deaf while it records, as it does for the
     /// phone's microphone, so one sentence cannot arrive twice.
     func start(for owner: Owner, onFailure: @escaping @MainActor (Error) -> Void) {
-        guard self.owner == nil, !opening else { return }
+        guard self.owner == nil, !opening else {
+            Hub.log("mic-refused", ["owner": String(describing: self.owner), "opening": opening])
+            return
+        }
         self.owner = owner
         arming = true
         opening = true
@@ -41,12 +44,14 @@ final class Capture: ObservableObject {
             } catch {
                 arming = false
                 self.owner = nil
+                Hub.log("mic-failed", ["error": String(describing: error).prefix(120).description])
                 onFailure(error)
                 return
             }
             guard arming else { recorder.cancel(); return }   // stopped while the microphone opened
             arming = false
             since = Date()
+            Hub.log("mic-open", ["owner": String(describing: owner)])
             setMuted(true)
         }
     }
@@ -73,6 +78,9 @@ final class Capture: ObservableObject {
     }
 
     private func setMuted(_ on: Bool) {
+        #if targetEnvironment(simulator)
+        return   // a test recording in the simulator must not deafen the real room mics
+        #endif
         let previous = muteTask
         muteTask = Task {
             await previous?.value

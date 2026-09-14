@@ -70,8 +70,8 @@ struct RootView: View {
 
     var body: some View {
         TabView(selection: $page) {
-            SessionsView().tag(Page.sessions)
-            ChatView().tag(Page.chat)
+            SessionsView().tag(Page.sessions).environment(\.onScreen, page == .sessions)
+            ChatView().tag(Page.chat).environment(\.onScreen, page == .chat)
             NutritionView().tag(Page.nutrition)
             WorkoutView().tag(Page.workout)
         }

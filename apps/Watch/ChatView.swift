@@ -1,10 +1,10 @@
 import SwiftUI
 import WatchKit
 
-/// The prompt page: the shared hub conversation on black. A tap anywhere on it (or the double-tap
-/// gesture) starts recording the next command, and the next tap sends it. A reply opens at its top, and
-/// while more of it is below the screen double tap pages down instead of recording (`PagedScroll`,
-/// shared with a session's page).
+/// The prompt page: the shared hub conversation on black. A reply opens at its top. The bottom control
+/// (and double tap, bound to it alone) pages down while more is below and records at the bottom; a tap
+/// anywhere on the thread also records. The next press sends (`PagedScroll`, shared with a session's
+/// page).
 struct ChatView: View {
     @EnvironmentObject private var chat: Chat
     @ObservedObject private var capture = Capture.shared
@@ -20,7 +20,8 @@ struct ChatView: View {
 
     var body: some View {
         ScrollViewReader { proxy in
-            PagedScroll(name: "chat", recording: recording, atBottom: $atBottom, willPage: { pinned = false }) {
+            PagedScroll(name: "chat", recording: recording, canRecord: !chat.waiting, atBottom: $atBottom,
+                        willPage: { pinned = false }, record: chat.toggleRecording) {
                 recordButton { thread }
                 status
             }
@@ -124,15 +125,14 @@ struct ChatView: View {
         }
     }
 
-    /// The whole thread is the record button: a tap starts, the next one sends. Double tap does the
-    /// same once the view is at the bottom (or a recording is under way); above that it pages down.
+    /// The whole thread records under a finger: a tap starts, the next one sends. Double tap is not
+    /// bound here — it belongs to the bottom control alone (BottomControl says why).
     private func recordButton<Label: View>(@ViewBuilder label: () -> Label) -> some View {
         Button(action: {
             Hub.log("record", ["view": "chat", "atBottom": atBottom, "recording": recording])
             chat.toggleRecording()
         }, label: label)
             .buttonStyle(.plain)
-            .handGestureShortcut(.primaryAction, isEnabled: atBottom || recording)
             .disabled(chat.waiting)
     }
 

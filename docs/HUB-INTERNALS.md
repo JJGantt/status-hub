@@ -1355,19 +1355,24 @@ has no WKWebView.
   conversation's next `done`.
 - **One microphone.** `Watch/Capture.swift` owns the recorder for both pages. `owner` says whose
   recording it is, so a page cannot start one over another's, and only the owner draws or sends it.
-- **Double tap pages before it records.** A reply is read from its top: the prompt page scrolls the
+- **Double tap belongs to one control.** A reply is read from its top: the prompt page scrolls the
   newest reply's top to the top of the screen, and a session page does the same when a new reply lands.
   The prompt page holds that spot (`pinned`) from the moment the app opens or comes back to the front
   until he scrolls or pages, re-aiming on every change in the content's height — a single jump on a
   cold launch lands short while the thread is still laying out. The thread is the newest 40 rows,
   about twenty exchanges.
-  While more is below the screen, a small chevron sits at the bottom edge and holds the double-tap
-  gesture (`PageDownMarker`, `handGestureShortcut(_:isEnabled:)`). Text scrolls to the screen's very
-  edge, so the marker fades it out of a 28pt strip there and the chevron sits in that strip. A page
-  moves the last line showing above the strip to the top edge of the screen. At the bottom — or while
-  recording — the page's record button holds the gesture again. Where the view stands comes from
-  `onScrollGeometryChange` (`trackScroll` in `Watch/WatchUI.swift`). A finger tap on the thread still
-  records from anywhere; only the gesture pages.
+  Each page has one control at its bottom edge (`BottomControl`), and it is the only thing bound to
+  double tap (`handGestureShortcut`, live only while its page is the one showing — every page stays
+  alive in the TabView, and two live bindings leave the system to pick). It pages down while more is
+  below (a chevron; text fades out of a 28pt strip under it, and a page moves the last line showing
+  above the strip to the top edge of the screen), records at the bottom (a mic in the same spot), and
+  sends while recording (a stop). It never hides and never hands the gesture on. Handing it on was the
+  first design and it failed on his watch through build 23: at the bottom the chevron vanished and the
+  record button — the whole page of text — took double tap, so a double tap there pressed the whole
+  page, a tap where the chevron had been hit empty space, and the view crept back up under his finger.
+  The control sits 9pt up, clear of the page dots, which change page when tapped. A finger tap anywhere
+  on the text still records. Where the view stands comes from `onScrollGeometryChange` (`trackScroll`
+  in `Watch/WatchUI.swift`).
   The paging math rests on things measured in the watchOS 26.5 simulator, all easy to get wrong.
   The same scroll view reports its geometry in two frames depending on how it was last moved: after
   a jump to a view (`ScrollViewReader`, which every open and pin uses) `visibleRect` is the safe area
@@ -1394,13 +1399,19 @@ has no WKWebView.
 - **The watch logs what it does to the hub.** `Hub.log` posts to `/api/clientlog`, which prints one
   `[clientlog]` line per event: `fly logs -a jared-status-hub | grep '"src":"watch"'`. Events: `thread`
   and `detail` (what a page loaded), `page` / `paged` / `bottom` (the scroll state around each double
-  tap), `record`, `stream-open` / `stream-end` / `stream-error`, and `frame` (each stream frame for the
+  tap), `control` (a press of the bottom control, with its mode), `record` (a finger tap on the text),
+  `record-refused` / `mic-refused` / `mic-failed` / `mic-open` (why a recording did or did not start —
+  each refusal used to return in silence), `stream-open` / `stream-end` / `stream-error`, and `frame` (each stream frame for the
   session on screen, to see whether the stream reaches the wrist live). Read it before guessing at a
   report from the wrist.
 - **The real watch app runs in a simulator against the live hub.** Simulator-only code, compiled out
   of device builds: the token comes from `SIMCTL_CHILD_HUB_TOKEN` (the kiosk's, sent as `?token=`),
   `-autopage chat|session` stands in for double tap every two seconds, and `-opensession <row id>`
-  opens a session as its notification would. The built app needs `WKWatchOnly` and no
+  opens a session as its notification would. Recording and stopping there never reaches the hub
+  (`blockInSimulator` in `Hub.swift` — a test tap once sent a stray "you" into his conversation) and
+  never mutes the room mics. Real clicks on the Simulator window (System Events `click at`, with
+  Window › Point Accurate and no bezel, so one watch point is one screen point) press the real
+  controls; the simulator cannot make a double tap. The built app needs `WKWatchOnly` and no
   `WKCompanionAppBundleIdentifier` (then an ad-hoc `codesign`) to install on an unpaired watch
   simulator. Use an SE 3 device type for his watch: the 46mm geometry differs.
 - **A session's reply notification opens it** (§6b). `WatchAppDelegate` registers the `SESSION_REPLY`

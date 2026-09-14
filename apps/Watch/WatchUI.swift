@@ -136,62 +136,93 @@ extension ScrollPosition {
         let lastLine: CGFloat = 18   // about one line of reply text, kept on screen as the new top line
         let safe = s.safeBottom - s.safeTop
         let strips = WKInterfaceDevice.current().screenBounds.height - safe   // under the clock + bottom edge
-        let top = s.safeBottom + strips - PageDownMarker.fade - lastLine
+        let top = s.safeBottom + strips - BottomControl.fade - lastLine
         scrollTo(y: min(max(top, s.safeTop), s.content - safe))
     }
 }
 
-/// The only sign a response runs past the screen: a small chevron at the bottom edge while there is more
-/// below. It holds the double-tap gesture until the view reaches the bottom, when the page's own record
-/// button takes it back.
-struct PageDownMarker: View {
+/// The one control a conversation page puts under double tap, at the bottom edge. What it does depends
+/// on where the page stands: pages down while more is below (a chevron, the text fading out under it),
+/// records at the bottom (a mic), and sends while recording (a stop). It never disappears and never
+/// hands the gesture to anything else. Two buttons trading the gesture at the bottom — a chevron, then
+/// the page-sized record button — was how a double tap there pressed the whole page, how a tap where the
+/// chevron had been landed in empty space, and how the view crept back up under it.
+struct BottomControl: View {
+    enum Mode { case more, record, stop }
+
     /// The strip along the screen's bottom edge that text fades out of while the chevron shows. Text
     /// scrolls to the very edge, so without it the chevron always sits on some line.
     static let fade: CGFloat = 28
 
-    let more: Bool
+    let mode: Mode
+    let enabled: Bool
     let action: () -> Void
+    @Environment(\.onScreen) private var onScreen
 
     var body: some View {
-        // A full-height column reaching past the safe area puts the marker on the screen's physical
-        // bottom edge in either frame. Its empty top takes no touches, so taps reach the page beneath.
+        // A full-height column reaching past the safe area puts the control on the screen's physical
+        // bottom edge in either scroll frame. Its empty top takes no touches, so taps reach the page.
         VStack(spacing: 0) {
             Spacer(minLength: 0)
             ZStack(alignment: .bottom) {
-                LinearGradient(colors: [Color.black.opacity(0), .black, .black], startPoint: .top, endPoint: .bottom)
-                    .frame(height: Self.fade)
-                    .allowsHitTesting(false)
+                if mode == .more {
+                    LinearGradient(colors: [Color.black.opacity(0), .black, .black], startPoint: .top, endPoint: .bottom)
+                        .frame(height: Self.fade)
+                        .allowsHitTesting(false)
+                }
                 Button(action: action) {
-                    Image(systemName: "chevron.compact.down")
-                        .font(.system(size: 16, weight: .semibold))
-                        .foregroundColor(.gray)
+                    Image(systemName: symbol)
+                        .font(.system(size: mode == .more ? 16 : 13, weight: .semibold))
+                        .foregroundColor(mode == .stop ? .red : .gray)
+                        .opacity(enabled ? 1 : 0.4)
                         .frame(width: 44, height: 18)
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
-                .handGestureShortcut(.primaryAction, isEnabled: more)
-                .allowsHitTesting(more)
-                .padding(.bottom, 2)
+                // The page's only double-tap binding, and live only while the page is the one showing:
+                // every page stays alive in the TabView, and two live bindings leave the system to pick.
+                .handGestureShortcut(.primaryAction, isEnabled: onScreen && enabled)
+                .disabled(!enabled)
+                // Clear of the page dots under it: a tap on those changes page, and in a simulator test
+                // one aimed at this control did.
+                .padding(.bottom, 9)
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .ignoresSafeArea(edges: .bottom)
-        .opacity(more ? 1 : 0)
+    }
+
+    private var symbol: String {
+        switch mode {
+        case .more: "chevron.compact.down"
+        case .record: "mic.fill"
+        case .stop: "stop.fill"
+        }
     }
 }
 
-/// The scrolling both conversation pages share, so paging, finding the bottom and handing double tap
-/// to recording are one piece of code on the prompt page and a session alike. It owns where the view
-/// stands; a page reads only `atBottom`, which flips a few times a scroll rather than every frame, so
-/// the page's own views are not rebuilt while it moves. The prompt page rebuilt its whole thread,
-/// forty rows of markdown, on every frame of a page, and stuttered.
+extension EnvironmentValues {
+    /// Whether the page this view is on is the one showing. Every page of the app stays alive side by
+    /// side in the TabView, so a control that binds double tap asks this first.
+    @Entry var onScreen: Bool = true
+}
+
+/// The scrolling both conversation pages share, so paging, finding the bottom and the bottom control
+/// are one piece of code on the prompt page and a session alike. It owns where the view stands; a page
+/// reads only `atBottom`, which flips a few times a scroll rather than every frame, so the page's own
+/// views are not rebuilt while it moves. The prompt page rebuilt its whole thread, forty rows of
+/// markdown, on every frame of a page, and stuttered.
 struct PagedScroll<Content: View>: View {
     /// What a log line calls this page: "chat" or "session".
     let name: String
     let recording: Bool
+    /// Whether a recording may start now — not while the page is waiting on a command or a send.
+    var canRecord = true
     @Binding var atBottom: Bool
-    /// Runs before a double tap pages: the prompt page lets go of the reply it was holding.
+    /// Runs before the control pages: the prompt page lets go of the reply it was holding.
     var willPage: () -> Void = {}
+    /// Starts a recording at the bottom, or sends the one under way.
+    let record: () -> Void
     @ViewBuilder let content: () -> Content
 
     @State private var scroll = ScrollState()
@@ -216,11 +247,21 @@ struct PagedScroll<Content: View>: View {
             paging = false
             Hub.log("paged", scroll.fields(name))
         }
-        .overlay { PageDownMarker(more: !scroll.atBottom && !recording, action: page) }
+        .overlay { BottomControl(mode: mode, enabled: mode != .record || canRecord, action: press) }
         .background(Color.black.ignoresSafeArea())
         #if targetEnvironment(simulator)
         .task { await autoPage() }
         #endif
+    }
+
+    private var mode: BottomControl.Mode { recording ? .stop : scroll.atBottom ? .record : .more }
+
+    private func press() {
+        guard mode != .more else { return page() }
+        var f = scroll.fields(name)
+        f["mode"] = mode == .stop ? "stop" : "record"
+        Hub.log("control", f)
+        record()
     }
 
     private func page() {

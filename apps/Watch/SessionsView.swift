@@ -53,9 +53,9 @@ struct SessionsView: View {
 }
 
 /// One conversation: the last prompt and the reply to it, the tool calls of the turn it is running,
-/// and a reply of his own. A tap anywhere (or double tap, once the view is at the bottom) starts
-/// recording and the next one sends it; a parked session is resumed with the words. While more of a
-/// reply is below the screen, double tap pages down instead.
+/// and a reply of his own. The bottom control (and double tap, bound to it alone) pages down while more
+/// is below and records at the bottom; a tap anywhere on the text also records. The next press sends;
+/// a parked session is resumed with the words.
 struct SessionView: View {
     let key: String
     @EnvironmentObject private var sessions: Sessions
@@ -68,13 +68,13 @@ struct SessionView: View {
 
     var body: some View {
         ScrollViewReader { proxy in
-            PagedScroll(name: "session", recording: recording, atBottom: $atBottom) {
+            PagedScroll(name: "session", recording: recording, canRecord: !sessions.busy.contains(key),
+                        atBottom: $atBottom, record: { sessions.toggleRecording(key) }) {
                 Button {
                     Hub.log("record", ["view": "session", "atBottom": atBottom, "recording": recording])
                     sessions.toggleRecording(key)
                 } label: { content }
                     .buttonStyle(.plain)
-                    .handGestureShortcut(.primaryAction, isEnabled: atBottom || recording)
                     .disabled(sessions.busy.contains(key))
                 status
             }

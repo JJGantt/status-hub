@@ -84,7 +84,10 @@ final class Chat: ObservableObject {
     }
 
     func startRecording() {
-        guard capture.owner == nil, !waiting else { return }
+        guard capture.owner == nil, !waiting else {
+            Hub.log("record-refused", ["view": "chat", "owner": String(describing: capture.owner), "waiting": waiting])
+            return
+        }
         failure = nil
         capture.start(for: .hub) { [weak self] error in
             self?.failure = (error as? Recorder.Failure) == .denied ? .micDenied : .message(error.localizedDescription)

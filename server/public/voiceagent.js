@@ -12,16 +12,29 @@ import { esc, localNowNaive, liveStream, KIOSK } from './shared.js';
 let phoneHangMs = 3000;   // phone trailing-silence (ms) for the FAB VAD; overridden by the phone_silence_s setting
 let resetMs = 30 * 60 * 1000;   // context-reset idle gap (ms) = session_reset_s. A message arriving after a gap
                                 // this long means the agent reset its context, so the shown thread resets too.
-// How long a FINISHED row — the reply, or an error — holds on the activity bar before it hides. The
-// running states (Listening / Thinking / each tool call) are sticky and ignore this entirely; only the
-// terminal row is on a timer. A new command still clears it immediately, because show() resets the
+// How long a FINISHED row — the reply, or an error — holds on the kiosk's activity bar before it hides.
+// There the running states (Listening / Thinking / each tool call) are sticky and ignore this entirely;
+// only the terminal row is on a timer. A new command still clears it immediately, because show() resets the
 // pending timeout on every call, so this is a ceiling and never a floor.
 let activityHoldMs = 60 * 1000;
+// Off the kiosk the bar floats OVER the page, and the reply is one swipe away in the conversation pane,
+// so a finished row only has to be glanced at — `phone_activity_hold_s`, not the wall's minute.
+let phoneHoldMs = 8 * 1000;
+// Off the kiosk, the running states are not sticky forever either. Several turns never send the `done`
+// that would close them — a command injected into a focused session, a context reset, a dropped
+// duplicate, a run that crashed — and a phone backgrounded mid-run never hears a `done` that WAS sent,
+// since a suspended stream does not replay. Each of those left "Thinking…" or the last tool row floating
+// over the phone for good. So a running row hides once nothing has touched it for this long; a later
+// frame of a run that is merely slow brings it straight back. Listening is exempt: a live recorder
+// always ends it itself.
+const PHONE_STALE_MS = 2 * 60 * 1000;
 // The interactive client (boot(), below) and the kiosk (tv.js) each already fetch /api/settings, so the
 // module that owns the bar takes the value from them rather than making a third request of its own.
 export function applyActivitySettings(s) {
   const n = parseFloat((s || {}).activity_hold_s);
   if (Number.isFinite(n) && n > 0) activityHoldMs = n * 1000;
+  const p = parseFloat((s || {}).phone_activity_hold_s);
+  if (Number.isFinite(p) && p > 0) phoneHoldMs = p * 1000;
 }
 let _activityBar = null;        // shared activity-popup singleton — declared up here so boot() (below) can call activityBar() without a TDZ error
 let _outboxBusy = false;        // photo-outbox reentrancy latch — up here for the same reason: boot() runs runPhotoOutbox()
@@ -621,6 +634,13 @@ export function initActivityBar() {
   const mdl = bar.querySelector('.ai-act-model');
   const STATES = ['ai-act-rec', 'ai-act-busy', 'ai-act-tool', 'ai-act-esc', 'ai-act-done', 'ai-act-err'];
   let hideT = null;
+  let hideAt = 0;             // when the pending hide is due (0 = none) — see the visibilitychange below
+  function hide() { clearTimeout(hideT); hideAt = 0; bar.classList.remove('show'); setPrompt(''); setModel(''); }
+  // A backgrounded page's timers are suspended with it, so a hide that fell due while the phone was
+  // locked would otherwise wait out its remaining delay again after the page comes back.
+  if (!KIOSK) document.addEventListener('visibilitychange', () => {
+    if (!document.hidden && hideAt && Date.now() >= hideAt) hide();
+  });
   function setPrompt(text) {
     const t = (text || '').trim();
     prm.textContent = t ? '“' + t + '”' : '';
@@ -637,8 +657,10 @@ export function initActivityBar() {
     txt.textContent = text || '';
     bar.classList.remove(...STATES);
     bar.classList.add('show', 'ai-act-' + (kind || 'busy'));
-    clearTimeout(hideT);
-    if (!sticky) hideT = setTimeout(() => { bar.classList.remove('show'); setPrompt(''); setModel(''); }, activityHoldMs);
+    clearTimeout(hideT); hideAt = 0;
+    const ms = !sticky ? (KIOSK ? activityHoldMs : phoneHoldMs)
+      : (KIOSK || kind === 'rec') ? 0 : PHONE_STALE_MS;
+    if (ms) { hideAt = Date.now() + ms; hideT = setTimeout(hide, ms); }
   }
   return {
     prompt(t) { setPrompt(t); },                  // the transcribed command; stays up for the whole run
@@ -649,7 +671,7 @@ export function initActivityBar() {
     escalate(t) { setModel('Opus'); show('⤴ ' + (t || 'Escalated to Opus'), 'esc', true); },
     done(t) { show(t ? '✓ ' + t : 'Done ✓', 'done', false); },
     err(t) { show(t, 'err', false); },
-    clear() { clearTimeout(hideT); bar.classList.remove('show'); setPrompt(''); setModel(''); },
+    clear: hide,
   };
 }
 

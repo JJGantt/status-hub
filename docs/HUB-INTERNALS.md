@@ -155,10 +155,15 @@ sends one when a hub turn leaves the fast path (it needed a full-access tool, or
 bar shows it as its own violet row *and* lights an `OPUS` chip that persists for the rest of the run —
 later tool rows replace the text, but the fact that this turn changed models stays on screen until the
 command finishes. Only these four states survive the relay; anything else is coerced to `tool`.
-The running states hold indefinitely; only a TERMINAL row (`done`, or a client-side error) is on a
-timer, and it holds for `activity_hold_s` (default 60s) so a reply is still on screen well after the
-turn ends. Any new frame clears it early — `show()` resets the pending timeout on every call — so the
-setting is a ceiling, never a floor. Both surfaces read it from the `/api/settings` fetch they already
+On the kiosk the running states hold indefinitely; only a TERMINAL row (`done`, or a client-side
+error) is on a timer, and it holds for `activity_hold_s` (default 60s) so a reply is still on screen
+well after the turn ends. Off the kiosk the bar floats over the page with the conversation a swipe
+away, so a terminal row holds only `phone_activity_hold_s` (default 8s), and a running row (anything
+but Listening) hides after two minutes with no new frame. That ceiling is what keeps the phone's bar
+from sticking: several worker paths never send `done` (a command injected into a focused session, a
+context reset, a dropped duplicate, a crashed run), and a phone backgrounded mid-run never hears one
+that was sent. A late frame from a slow run shows the bar again. Any new frame clears a pending hide
+early — `show()` resets the timeout on every call — so each hold is a ceiling, never a floor. Both surfaces read it from the `/api/settings` fetch they already
 make (`voiceagent.js`'s `boot()`, `tv.js`'s), handing it to `applyActivitySettings`.
 
 **Cards (`public/cards/`)** — each exports `render(s)` and paints from its `s.*` slice:
@@ -1116,6 +1121,7 @@ callers; only the HTTP response is filtered.
 | `maintenance_phase` | JSON `{start, seed, sign, hold}` — the current goal phase (§4). Written on a `surplus_cal` sign flip. |
 | `session_reset_s` | Idle gap before the hub voice conversation resets context. |
 | `activity_hold_s` | Seconds a finished activity row (the reply, or an error) holds on the bar. Default 60. |
+| `phone_activity_hold_s` | The same, off the kiosk (phone, Mac app panel). Default 8. |
 | `wakefree_enabled` | Always-on (wake-free) voice on/off. |
 | `voice_inject_mode` | Mac-mic speech injected into the focused window (ESP off). |
 | `voice_muted` | Global mute (PTT/FAB) — silences Mac mic + ESP. |

@@ -316,9 +316,9 @@ machines and pushes what it sees straight to the hub:
 
     transcript append ─ fs.watch ─▶ sessionWatch ─┬─ a prompt ─▶ patch desk_sessions.active_at, working
                                                   ├─ tool_use  ─▶ POST /api/session-activity ─▶ SSE ─▶ wall
-                                                  ├─ text before a tool_use (state 'text') ─▶ the same
-                                                  │    (only when Claude Code records it: 2.1.270 stopped
-                                                  │     mid-session; the transcript format is internal)
+                                                  ├─ a step's words, just before its tool_use (state 'text') ─▶ the same
+                                                  │    (its text, else its thinking summary: from 2.1.268
+                                                  │     Claude Code stops recording text after a tool result)
                                                   └─ end_turn  ─┬─ POST /api/session-activity ─▶ SSE ─▶ wall
                                                                 └─ patch desk_sessions.last_reply, active_at  (durable)
 

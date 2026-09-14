@@ -88,6 +88,14 @@ struct RootView: View {
         .onAppear {
             if !sessions.path.isEmpty { page = .sessions }
             follow()
+            #if targetEnvironment(simulator)
+            // `-opensession <row id>` at launch: open a session as its notification would, so its page
+            // can be watched in a simulator.
+            let args = ProcessInfo.processInfo.arguments
+            if let i = args.firstIndex(of: "-opensession"), i + 1 < args.count {
+                Task { await sessions.open(rowId: args[i + 1]) }
+            }
+            #endif
         }
         .onChange(of: page) { _, _ in follow() }
         .onChange(of: phase) { _, _ in follow() }

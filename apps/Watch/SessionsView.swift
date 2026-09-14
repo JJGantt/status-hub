@@ -60,8 +60,7 @@ struct SessionView: View {
     let key: String
     @EnvironmentObject private var sessions: Sessions
     @ObservedObject private var capture = Capture.shared
-    @State private var position = ScrollPosition(idType: String.self)
-    @State private var scroll = ScrollState()
+    @State private var atBottom = false
 
     private var detail: SessionDetail? { sessions.details[key] }
     private var activity: [ActivityLine] { sessions.activity[key] ?? [] }
@@ -69,25 +68,20 @@ struct SessionView: View {
 
     var body: some View {
         ScrollViewReader { proxy in
-            ScrollView {
-                VStack(alignment: .leading, spacing: 10) {
-                    Button { sessions.toggleRecording(key) } label: { content }
-                        .buttonStyle(.plain)
-                        .handGestureShortcut(.primaryAction, isEnabled: scroll.atBottom || recording)
-                        .disabled(sessions.busy.contains(key))
-                    status
-                    Color.clear.frame(height: 1).id("tail").scrollEnd($scroll)
-                }
-                .padding(.horizontal, 8)
-                .padding(.bottom, 8)
+            PagedScroll(name: "session", recording: recording, atBottom: $atBottom) {
+                Button {
+                    Hub.log("record", ["view": "session", "atBottom": atBottom, "recording": recording])
+                    sessions.toggleRecording(key)
+                } label: { content }
+                    .buttonStyle(.plain)
+                    .handGestureShortcut(.primaryAction, isEnabled: atBottom || recording)
+                    .disabled(sessions.busy.contains(key))
+                status
             }
-            .scrollIndicators(.never)
-            .scrollPosition($position)
-            .trackScroll($scroll)
             // A new reply is read from its top. Work in progress — his words, a recording, tool calls —
-            // lands at the bottom, so that is where the view follows it. Opening a session leaves its
-            // prompt and reply at the top. Jumps to a view go through the reader; the position is only
-            // for paging, which moves by a distance rather than to a view.
+            // lands at the bottom (`tail`, PagedScroll's end marker), so that is where the view follows
+            // it. Opening a session leaves its prompt and reply at the top. Jumps to a view go through
+            // the reader; paging moves by a distance instead.
             .onChange(of: detail?.last_reply) { old, new in
                 guard old != nil, new != old else { return }
                 withAnimation(.easeOut(duration: 0.2)) { proxy.scrollTo("reply", anchor: .top) }
@@ -96,12 +90,6 @@ struct SessionView: View {
             .onChange(of: sessions.sent[key]) { _, new in if new != nil { toBottom(proxy) } }
             .onChange(of: recording) { _, now in if now { toBottom(proxy) } }
         }
-        .overlay(alignment: .bottom) {
-            PageDownMarker(more: !scroll.atBottom && !recording) {
-                withAnimation(.easeOut(duration: 0.25)) { position.pageDown(from: scroll) }
-            }
-        }
-        .background(Color.black.ignoresSafeArea())
         .navigationTitle(detail?.name ?? "")
         .task { await sessions.loadDetail(key) }
     }

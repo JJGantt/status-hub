@@ -138,7 +138,11 @@ final class Sessions: ObservableObject {
 
     func loadDetail(_ key: String) async {
         guard let r = row(for: key) else { return }
-        if let d: SessionDetail = try? await Hub.json("/api/sessions/" + Hub.pathComponent(r.id)) { details[key] = d }
+        if let d: SessionDetail = try? await Hub.json("/api/sessions/" + Hub.pathComponent(r.id)) {
+            details[key] = d
+            Hub.log("detail", ["row": r.id, "prompt": String((d.last_prompt ?? "").prefix(60)),
+                               "reply": String((d.last_reply ?? "").prefix(80)), "replyChars": d.last_reply?.count ?? 0])
+        }
     }
 
     func toggleRecording(_ key: String) {
@@ -220,6 +224,11 @@ final class Sessions: ObservableObject {
         struct Frame: Decodable { let session: String; let state: String?; let text: String? }
         guard event == "session", let f = try? JSONDecoder().decode(Frame.self, from: Data(data.utf8)) else { return }
         let key = await key(forRow: f.session)
+        // Every frame for the conversation on screen, so the hub's log shows whether the stream reaches
+        // the wrist live or arrives late in a lump.
+        if key == path.last {
+            Hub.log("frame", ["row": f.session, "state": f.state ?? "", "text": String((f.text ?? "").prefix(50))])
+        }
         guard f.state == "done" else {
             if let text = f.text, !text.isEmpty {
                 activity[key, default: []].append(ActivityLine(text: text, thought: f.state == "text"))

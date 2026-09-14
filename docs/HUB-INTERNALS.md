@@ -1387,6 +1387,22 @@ has no WKWebView.
   true by construction whenever the view has stopped at its end. The sessions list ends with the build
   number (`CFBundleVersion`, which CI sets to the TestFlight build), so a fix that has not been
   installed is not mistaken for one that failed.
+  Both pages scroll through one component, `PagedScroll` (`Watch/WatchUI.swift`), so paging, the
+  bottom and the double-tap handover cannot differ between them. It owns the scroll state and hands
+  its page only `atBottom`: the prompt page used to hold the per-frame state itself and rebuilt its
+  whole thread every frame of a page. Thread rows are their own view (`ThreadRow`) for the same reason.
+- **The watch logs what it does to the hub.** `Hub.log` posts to `/api/clientlog`, which prints one
+  `[clientlog]` line per event: `fly logs -a jared-status-hub | grep '"src":"watch"'`. Events: `thread`
+  and `detail` (what a page loaded), `page` / `paged` / `bottom` (the scroll state around each double
+  tap), `record`, `stream-open` / `stream-end` / `stream-error`, and `frame` (each stream frame for the
+  session on screen, to see whether the stream reaches the wrist live). Read it before guessing at a
+  report from the wrist.
+- **The real watch app runs in a simulator against the live hub.** Simulator-only code, compiled out
+  of device builds: the token comes from `SIMCTL_CHILD_HUB_TOKEN` (the kiosk's, sent as `?token=`),
+  `-autopage chat|session` stands in for double tap every two seconds, and `-opensession <row id>`
+  opens a session as its notification would. The built app needs `WKWatchOnly` and no
+  `WKCompanionAppBundleIdentifier` (then an ad-hoc `codesign`) to install on an unpaired watch
+  simulator. Use an SE 3 device type for his watch: the 46mm geometry differs.
 - **A session's reply notification opens it** (§6b). `WatchAppDelegate` registers the `SESSION_REPLY`
   category with one foreground action, Open — the button double tap presses on a watch notification —
   and answers it, or a tap on the notification itself, with `Sessions.open(rowId:)`: the app lands on

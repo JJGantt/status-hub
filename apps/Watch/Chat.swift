@@ -70,6 +70,7 @@ final class Chat: ObservableObject {
             do {
                 thread = try await Hub.thread()
                 if failure == .noToken { failure = nil }
+                Hub.log("thread", ["rows": thread.count, "last": String((thread.last?.text ?? "").prefix(80))])
             } catch HubError.noToken {
                 failure = .noToken
             } catch {

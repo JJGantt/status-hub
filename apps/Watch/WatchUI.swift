@@ -98,6 +98,13 @@ struct ScrollState: Equatable {
     /// could not happen and recording was never handed the gesture. A view that has stopped at its end
     /// always has its end on screen, whatever the geometry reports.
     var atBottom: Bool { endY <= WKInterfaceDevice.current().screenBounds.height + 12 }
+
+    /// For a log line (`Hub.log`): enough to see from the hub what the page's scroll looked like.
+    func fields(_ view: String) -> [String: Any] {
+        ["view": view, "safeTop": Int(safeTop), "safeBottom": Int(safeBottom), "content": Int(content),
+         "endY": endY.isFinite ? Int(endY) : -1, "atBottom": atBottom,
+         "screen": Int(WKInterfaceDevice.current().screenBounds.height)]
+    }
 }
 
 extension View {
@@ -171,4 +178,70 @@ struct PageDownMarker: View {
         .ignoresSafeArea(edges: .bottom)
         .opacity(more ? 1 : 0)
     }
+}
+
+/// The scrolling both conversation pages share, so paging, finding the bottom and handing double tap
+/// to recording are one piece of code on the prompt page and a session alike. It owns where the view
+/// stands; a page reads only `atBottom`, which flips a few times a scroll rather than every frame, so
+/// the page's own views are not rebuilt while it moves. The prompt page rebuilt its whole thread,
+/// forty rows of markdown, on every frame of a page, and stuttered.
+struct PagedScroll<Content: View>: View {
+    /// What a log line calls this page: "chat" or "session".
+    let name: String
+    let recording: Bool
+    @Binding var atBottom: Bool
+    /// Runs before a double tap pages: the prompt page lets go of the reply it was holding.
+    var willPage: () -> Void = {}
+    @ViewBuilder let content: () -> Content
+
+    @State private var scroll = ScrollState()
+    @State private var position = ScrollPosition(idType: String.self)
+    @State private var paging = false
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 10) {
+                content()
+                Color.clear.frame(height: 1).id("tail").scrollEnd($scroll)
+            }
+            .padding(.horizontal, 8)
+            .padding(.bottom, 8)
+        }
+        .scrollIndicators(.never)
+        .scrollPosition($position)
+        .trackScroll($scroll)
+        .onChange(of: scroll.atBottom, initial: true) { _, now in atBottom = now }
+        .onScrollPhaseChange { _, now in
+            guard paging, now == .idle else { return }
+            paging = false
+            Hub.log("paged", scroll.fields(name))
+        }
+        .overlay { PageDownMarker(more: !scroll.atBottom && !recording, action: page) }
+        .background(Color.black.ignoresSafeArea())
+        #if targetEnvironment(simulator)
+        .task { await autoPage() }
+        #endif
+    }
+
+    private func page() {
+        willPage()
+        Hub.log("page", scroll.fields(name))
+        paging = true
+        withAnimation(.easeOut(duration: 0.25)) { position.pageDown(from: scroll) }
+    }
+
+    #if targetEnvironment(simulator)
+    /// `-autopage chat` (or `session`) at launch pages every two seconds until the bottom, standing in
+    /// for the double tap a simulator cannot make, so the real pages can be watched scrolling there.
+    private func autoPage() async {
+        let args = ProcessInfo.processInfo.arguments
+        guard let i = args.firstIndex(of: "-autopage"), i + 1 < args.count, args[i + 1] == name else { return }
+        try? await Task.sleep(nanoseconds: 4_000_000_000)
+        for _ in 0..<10 {
+            if scroll.atBottom { Hub.log("bottom", scroll.fields(name)); return }
+            page()
+            try? await Task.sleep(nanoseconds: 2_000_000_000)
+        }
+    }
+    #endif
 }

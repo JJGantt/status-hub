@@ -13,6 +13,11 @@ enum HubToken {
     ]
 
     static func get() -> String? {
+        #if targetEnvironment(simulator)
+        // A simulator has no phone to hand it a token. Passed at launch instead
+        // (`SIMCTL_CHILD_HUB_TOKEN=… xcrun simctl launch`), so the real app runs against real data there.
+        if let t = ProcessInfo.processInfo.environment["HUB_TOKEN"], !t.isEmpty { return t }
+        #endif
         var q = query
         q[kSecReturnData as String] = true
         q[kSecMatchLimit as String] = kSecMatchLimitOne
@@ -176,6 +181,7 @@ enum Hub {
         while !Task.isCancelled {
             do {
                 let bytes = try await stream(path)
+                log("stream-open", ["path": path])
                 if !first { await reconnected() }
                 first = false
                 backoff = 1
@@ -187,7 +193,10 @@ enum Hub {
                         await frame(event, String(line.dropFirst(6)))
                     }
                 }
-            } catch {}
+                log("stream-end", ["path": path])
+            } catch {
+                if !Task.isCancelled { log("stream-error", ["path": path, "error": String(describing: error).prefix(120).description]) }
+            }
             guard !Task.isCancelled else { return }
             try? await Task.sleep(nanoseconds: UInt64(backoff * 1_000_000_000))
             backoff = min(backoff * 2, 60)
@@ -199,6 +208,16 @@ enum Hub {
         await listen("/api/day-stream", reconnected: reload) { event, _ in
             if event == kind { await reload() }
         }
+    }
+
+    /// A line in the hub's log (`fly logs -a jared-status-hub | grep clientlog`): what the watch showed
+    /// and how a page scrolled, so a report from the wrist can be checked against what the watch did.
+    /// Fire and forget; a lost line costs nothing.
+    static func log(_ event: String, _ fields: [String: Any] = [:]) {
+        var body = fields
+        body["src"] = "watch"
+        body["ev"] = event
+        Task.detached { _ = try? await call("/api/clientlog", method: "POST", body: body, timeout: 10) }
     }
 
     static func json<T: Decodable>(_ path: String, timeout: TimeInterval = 20) async throws -> T {
@@ -229,7 +248,14 @@ enum Hub {
     private static func request(_ path: String, method: String = "GET", body: [String: Any]? = nil,
                                 timeout: TimeInterval) throws -> URLRequest {
         guard let token = HubToken.get() else { throw HubError.noToken }
-        var r = URLRequest(url: URL(string: Auth.host + path)!)
+        var url = URL(string: Auth.host + path)!
+        #if targetEnvironment(simulator)
+        // The simulator's token is the kiosk's, which the hub takes as `?token=`, not as the header.
+        var c = URLComponents(url: url, resolvingAgainstBaseURL: false)!
+        c.queryItems = (c.queryItems ?? []) + [URLQueryItem(name: "token", value: token)]
+        url = c.url!
+        #endif
+        var r = URLRequest(url: url)
         r.httpMethod = method
         r.timeoutInterval = timeout
         r.setValue(token, forHTTPHeaderField: "X-Hub-Token")

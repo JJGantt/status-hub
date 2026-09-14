@@ -3,13 +3,13 @@ import WatchKit
 
 /// The prompt page: the shared hub conversation on black. A tap anywhere on it (or the double-tap
 /// gesture) starts recording the next command, and the next tap sends it. A reply opens at its top, and
-/// while more of it is below the screen double tap pages down instead of recording.
+/// while more of it is below the screen double tap pages down instead of recording (`PagedScroll`,
+/// shared with a session's page).
 struct ChatView: View {
     @EnvironmentObject private var chat: Chat
     @ObservedObject private var capture = Capture.shared
     @Environment(\.scenePhase) private var phase
-    @State private var position = ScrollPosition(idType: String.self)
-    @State private var scroll = ScrollState()
+    @State private var atBottom = false
     /// Whether the view is held at `scrollTarget`, the top of the newest reply. Set when the app opens or
     /// comes back to the front and when a reply arrives, and kept until he scrolls or pages himself: a
     /// thread still laying out (two hundred rows on a cold launch) or still growing moves the spot, so a
@@ -20,25 +20,19 @@ struct ChatView: View {
 
     var body: some View {
         ScrollViewReader { proxy in
-            ScrollView {
-                VStack(alignment: .leading, spacing: 10) {
-                    recordButton { thread }
-                    status
-                    Color.clear.frame(height: 1).scrollEnd($scroll)
-                }
-                .padding(.horizontal, 8)
-                .padding(.bottom, 8)
+            PagedScroll(name: "chat", recording: recording, atBottom: $atBottom, willPage: { pinned = false }) {
+                recordButton { thread }
+                status
             }
-            .scrollIndicators(.never)
-            .scrollPosition($position)
-            .trackScroll($scroll)
-            // Jumps to a view go through the reader, which finds any view with an id; the position is
-            // only for paging, which moves by a distance rather than to a view.
+            // Jumps to a view go through the reader, which finds any view with an id; paging moves by a
+            // distance instead (PagedScroll).
             .onChange(of: scrollTarget) { _, _ in
                 pinned = true
                 jump(proxy, animated: true)
             }
-            .onChange(of: scroll.content) { _, _ in if pinned { jump(proxy) } }
+            .onScrollGeometryChange(for: CGFloat.self) { $0.contentSize.height } action: { _, _ in
+                if pinned { jump(proxy) }
+            }
             .onScrollPhaseChange { _, now in
                 if now == .interacting || now == .tracking { pinned = false }
             }
@@ -53,13 +47,6 @@ struct ChatView: View {
                 recordIfAsked()
             }
         }
-        .overlay(alignment: .bottom) {
-            PageDownMarker(more: !scroll.atBottom && !recording) {
-                pinned = false
-                withAnimation(.easeOut(duration: 0.25)) { position.pageDown(from: scroll) }
-            }
-        }
-        .background(Color.black.ignoresSafeArea())
         .onChange(of: chat.recordRequested) { _, _ in recordIfAsked() }
     }
 
@@ -82,10 +69,10 @@ struct ChatView: View {
     private var thread: some View {
         VStack(alignment: .leading, spacing: 14) {
             ForEach(chat.thread) { m in
-                row(m.text ?? "", user: m.role == "user", session: m.session_id != nil).id(m.id)
+                ThreadRow(text: m.text ?? "", user: m.role == "user", session: m.session_id != nil).id(m.id)
             }
             if let p = chat.pending {
-                row(p, user: true).id("pending")
+                ThreadRow(text: p, user: true).id("pending")
             }
             if !chat.activity.isEmpty {
                 ActivityLines(lines: chat.activity)
@@ -100,16 +87,6 @@ struct ChatView: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .contentShape(Rectangle())
-    }
-
-    /// The tint a session's relayed reply wears on every surface (the web hub's .ai-msg-session text).
-    private static let sessionTint = Color(red: 0.62, green: 0.89, blue: 0.83)
-
-    private func row(_ text: String, user: Bool, session: Bool = false) -> some View {
-        Text(inlineMarkdown(text))
-            .foregroundColor(user ? .gray : session ? Self.sessionTint : .white)
-            .font(.system(size: user ? 12 : 13, weight: user ? .medium : .regular))
-            .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     @ViewBuilder private var status: some View {
@@ -150,9 +127,12 @@ struct ChatView: View {
     /// The whole thread is the record button: a tap starts, the next one sends. Double tap does the
     /// same once the view is at the bottom (or a recording is under way); above that it pages down.
     private func recordButton<Label: View>(@ViewBuilder label: () -> Label) -> some View {
-        Button(action: chat.toggleRecording, label: label)
+        Button(action: {
+            Hub.log("record", ["view": "chat", "atBottom": atBottom, "recording": recording])
+            chat.toggleRecording()
+        }, label: label)
             .buttonStyle(.plain)
-            .handGestureShortcut(.primaryAction, isEnabled: scroll.atBottom || recording)
+            .handGestureShortcut(.primaryAction, isEnabled: atBottom || recording)
             .disabled(chat.waiting)
     }
 
@@ -161,5 +141,23 @@ struct ChatView: View {
         guard chat.recordRequested, phase == .active else { return }
         chat.recordRequested = false
         chat.startRecording()
+    }
+}
+
+/// One message of the thread. Its own view so that SwiftUI, finding its inputs unchanged, skips it
+/// instead of parsing its markdown again every time the page is rebuilt.
+private struct ThreadRow: View {
+    let text: String
+    let user: Bool
+    var session = false
+
+    /// The tint a session's relayed reply wears on every surface (the web hub's .ai-msg-session text).
+    private static let sessionTint = Color(red: 0.62, green: 0.89, blue: 0.83)
+
+    var body: some View {
+        Text(inlineMarkdown(text))
+            .foregroundColor(user ? .gray : session ? Self.sessionTint : .white)
+            .font(.system(size: user ? 12 : 13, weight: user ? .medium : .regular))
+            .frame(maxWidth: .infinity, alignment: .leading)
     }
 }

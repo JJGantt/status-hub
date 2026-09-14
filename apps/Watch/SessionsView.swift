@@ -6,20 +6,18 @@ struct SessionsView: View {
     @EnvironmentObject private var sessions: Sessions
 
     var body: some View {
-        NavigationStack(path: $sessions.path) {
-            List {
-                ForEach(sessions.list) { s in
-                    NavigationLink(value: s.key) { row(s) }
-                }
-                // Which build is on the wrist, so a fix that has not arrived is not taken for one that
-                // failed. The TestFlight build number: CI stamps the run number into CFBundleVersion.
-                Text("Build \(Self.build)")
-                    .font(.system(size: 11))
-                    .foregroundColor(.gray)
-                    .frame(maxWidth: .infinity)
-                    .listRowBackground(Color.clear)
+        // A row pushes onto the app's root stack (RootView), so the session covers every page.
+        List {
+            ForEach(sessions.list) { s in
+                NavigationLink(value: s.key) { row(s) }
             }
-            .navigationDestination(for: String.self) { key in SessionView(key: key) }
+            // Which build is on the wrist, so a fix that has not arrived is not taken for one that
+            // failed. The TestFlight build number: CI stamps the run number into CFBundleVersion.
+            Text("Build \(Self.build)")
+                .font(.system(size: 11))
+                .foregroundColor(.gray)
+                .frame(maxWidth: .infinity)
+                .listRowBackground(Color.clear)
         }
     }
 
@@ -90,7 +88,6 @@ struct SessionView: View {
             .onChange(of: sessions.sent[key]) { _, new in if new != nil { toBottom(proxy) } }
             .onChange(of: recording) { _, now in if now { toBottom(proxy) } }
         }
-        .navigationTitle(detail?.name ?? "")
         .task { await sessions.loadDetail(key) }
     }
 

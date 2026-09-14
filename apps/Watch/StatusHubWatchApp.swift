@@ -69,13 +69,19 @@ struct RootView: View {
     @State private var page = Page.chat
 
     var body: some View {
-        TabView(selection: $page) {
-            SessionsView().tag(Page.sessions).environment(\.onScreen, page == .sessions)
-            ChatView().tag(Page.chat).environment(\.onScreen, page == .chat)
-            NutritionView().tag(Page.nutrition)
-            WorkoutView().tag(Page.workout)
+        // A session opens on top of the whole row of pages, not inside the sessions page: the row takes
+        // sideways swipes, so a session pushed inside one of its pages never got the watch's own swipe
+        // back — only a back button and a title bar that cost the top of the screen.
+        NavigationStack(path: $sessions.path) {
+            TabView(selection: $page) {
+                SessionsView().tag(Page.sessions).environment(\.onScreen, page == .sessions)
+                ChatView().tag(Page.chat).environment(\.onScreen, page == .chat)
+                NutritionView().tag(Page.nutrition)
+                WorkoutView().tag(Page.workout)
+            }
+            .tabViewStyle(.page)
+            .navigationDestination(for: String.self) { key in SessionView(key: key) }
         }
-        .tabViewStyle(.page)
         .onOpenURL { url in
             guard url.scheme == "statushub", url.host == "record" else { return }
             chat.requestRecording()

@@ -1344,6 +1344,10 @@ has no WKWebView.
   Cancel throws the clip away.
 - **The sessions page** lists `/api/sessions` one row per conversation — running first, then parked,
   most recently active first within each, the order `n` counts in — and follows `/api/session-stream`.
+  A tapped row opens its session on top of the whole row of pages (the `NavigationStack` is
+  `RootView`'s, around the `TabView`), not inside the sessions page: there the page row took sideways
+  swipes and the watch's own swipe back never fired. The session has no title bar; its back arrow
+  stays until that swipe is confirmed on the wrist.
   Each row is its name over up to three lines of what it last said: the list's `say`, which the hub
   already cuts to 120 characters, drawn smaller and grey with its markdown's bold and code dropped.
   Everything it keeps is keyed by `claude_session_id`, not by row: a resume makes a new row for the

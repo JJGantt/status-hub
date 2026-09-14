@@ -1379,6 +1379,14 @@ has no WKWebView.
   from the screen (`WKInterfaceDevice.screenBounds`). `scrollTo(y:)` puts y at the safe area's top, so
   a page's target is the new top edge plus the strip under the clock. The marker is a full-height
   column that ignores the bottom safe area, which lands it on the physical edge in either frame.
+  **Being at the bottom is not read from the scroll geometry at all.** On his watch (not reproducible
+  in the 46mm simulator) the geometry kept reporting content below after the view had stopped at its
+  end, so each double tap asked for a scroll that could not happen, the view jiggled, and recording
+  never got the gesture. A 1pt view after the last content (`scrollEnd`) reports where it really is
+  on screen, and the page is at the bottom when that is within a line of the screen's bottom edge —
+  true by construction whenever the view has stopped at its end. The sessions list ends with the build
+  number (`CFBundleVersion`, which CI sets to the TestFlight build), so a fix that has not been
+  installed is not mistaken for one that failed.
 - **A session's reply notification opens it** (§6b). `WatchAppDelegate` registers the `SESSION_REPLY`
   category with one foreground action, Open — the button double tap presses on a watch notification —
   and answers it, or a tap on the notification itself, with `Sessions.open(rowId:)`: the app lands on

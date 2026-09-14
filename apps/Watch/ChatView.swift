@@ -24,6 +24,7 @@ struct ChatView: View {
                 VStack(alignment: .leading, spacing: 10) {
                     recordButton { thread }
                     status
+                    Color.clear.frame(height: 1).scrollEnd($scroll)
                 }
                 .padding(.horizontal, 8)
                 .padding(.bottom, 8)

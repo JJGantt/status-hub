@@ -86,12 +86,18 @@ struct ScrollState: Equatable {
     var safeBottom: CGFloat = 0
     /// The content's height, so a view holding a position can re-aim as content lays out or grows.
     var content: CGFloat = 0
+    /// Where the end of the content actually is on the screen: the bottom of a marker placed after the
+    /// last view (`scrollEnd`), in screen points from the top. Unknown until that marker lays out.
+    var endY: CGFloat = .infinity
 
-    /// How much further the view can scroll down: it stops with the content's end at the safe area's
-    /// bottom.
+    /// How far below the safe area the content runs, by the scroll geometry. Paging aims with it.
     var below: CGFloat { content - safeBottom }
-    /// Within a line of the end, or nothing to scroll at all.
-    var atBottom: Bool { below <= 12 }
+    /// The end of the content is on screen, or within a line of the bottom edge. Read from where the
+    /// last view really is, NOT from the scroll geometry: on his watch the geometry said content was
+    /// left below after the view had stopped at its end, so every double tap asked for a scroll that
+    /// could not happen and recording was never handed the gesture. A view that has stopped at its end
+    /// always has its end on screen, whatever the geometry reports.
+    var atBottom: Bool { endY <= WKInterfaceDevice.current().screenBounds.height + 12 }
 }
 
 extension View {
@@ -102,8 +108,15 @@ extension View {
                         safeBottom: g.visibleRect.maxY - g.contentInsets.bottom,
                         content: g.contentSize.height)
         } action: { _, new in
-            state.wrappedValue = new
+            var s = new
+            s.endY = state.wrappedValue.endY   // owned by the end marker
+            state.wrappedValue = s
         }
+    }
+
+    /// Marks the end of a scroll view's content. Goes on the last view inside it.
+    func scrollEnd(_ state: Binding<ScrollState>) -> some View {
+        onGeometryChange(for: CGFloat.self) { $0.frame(in: .global).maxY } action: { state.wrappedValue.endY = $0 }
     }
 }
 

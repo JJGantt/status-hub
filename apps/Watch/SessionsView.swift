@@ -7,12 +7,23 @@ struct SessionsView: View {
 
     var body: some View {
         NavigationStack(path: $sessions.path) {
-            List(sessions.list) { s in
-                NavigationLink(value: s.key) { row(s) }
+            List {
+                ForEach(sessions.list) { s in
+                    NavigationLink(value: s.key) { row(s) }
+                }
+                // Which build is on the wrist, so a fix that has not arrived is not taken for one that
+                // failed. The TestFlight build number: CI stamps the run number into CFBundleVersion.
+                Text("Build \(Self.build)")
+                    .font(.system(size: 11))
+                    .foregroundColor(.gray)
+                    .frame(maxWidth: .infinity)
+                    .listRowBackground(Color.clear)
             }
             .navigationDestination(for: String.self) { key in SessionView(key: key) }
         }
     }
+
+    private static let build = Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "?"
 
     private func row(_ s: SessionRow) -> some View {
         HStack(alignment: .firstTextBaseline, spacing: 6) {
@@ -65,7 +76,7 @@ struct SessionView: View {
                         .handGestureShortcut(.primaryAction, isEnabled: scroll.atBottom || recording)
                         .disabled(sessions.busy.contains(key))
                     status
-                    Color.clear.frame(height: 1).id("tail")
+                    Color.clear.frame(height: 1).id("tail").scrollEnd($scroll)
                 }
                 .padding(.horizontal, 8)
                 .padding(.bottom, 8)

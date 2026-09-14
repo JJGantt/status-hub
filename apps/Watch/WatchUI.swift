@@ -1,4 +1,5 @@
 import SwiftUI
+import WatchKit
 
 /// Inline markdown (bold, italics, code) renders; anything else stays as written.
 func inlineMarkdown(_ s: String) -> AttributedString {
@@ -72,20 +73,23 @@ struct ActivityLines: View {
 }
 
 /// Where a scroll view stands: enough to page it by the double-tap gesture, and to know it has reached
-/// the end — which is when double tap goes back to recording. Both come from the visible rect, in the
-/// content's own coordinates: the end is where no content is left below what is showing.
+/// the end — which is when double tap goes back to recording. Kept in terms of the SAFE AREA, the one
+/// frame the scroll geometry reports consistently. Measured in the watchOS 26.5 simulator, the same
+/// scroll view reports two frames depending on how it was last moved: after a jump to a view
+/// (ScrollViewReader) `visibleRect` is the safe area alone with zero `contentInsets`; after
+/// `scrollTo(y:)` it is the whole screen with the strips as insets. Math on `contentOffset` and the
+/// insets directly was right in one frame and wrong in the other — short pages, a chevron mid-screen,
+/// and an end the view could never reach.
 struct ScrollState: Equatable {
-    /// The content y at the screen's top edge (`contentOffset`).
-    var offset: CGFloat = 0
-    /// The whole screen's height, the strips under the clock and along the bottom edge included.
-    var page: CGFloat = 0
-    /// How much further the view can scroll down before it stops.
-    var below: CGFloat = 0
+    /// The safe area's top and bottom edges, in the content's coordinates.
+    var safeTop: CGFloat = 0
+    var safeBottom: CGFloat = 0
     /// The content's height, so a view holding a position can re-aim as content lays out or grows.
     var content: CGFloat = 0
-    var insetTop: CGFloat = 0
-    var insetBottom: CGFloat = 0
 
+    /// How much further the view can scroll down: it stops with the content's end at the safe area's
+    /// bottom.
+    var below: CGFloat { content - safeBottom }
     /// Within a line of the end, or nothing to scroll at all.
     var atBottom: Bool { below <= 12 }
 }
@@ -94,12 +98,9 @@ extension View {
     /// Keeps `state` current as the scroll view this modifies moves or its content changes.
     func trackScroll(_ state: Binding<ScrollState>) -> some View {
         onScrollGeometryChange(for: ScrollState.self) { g in
-            // The scroll stops with the content's end at the safe area's bottom, the bottom inset short
-            // of the screen's edge.
-            ScrollState(offset: g.contentOffset.y, page: g.visibleRect.height,
-                        below: g.contentSize.height + g.contentInsets.bottom - g.visibleRect.maxY,
-                        content: g.contentSize.height,
-                        insetTop: g.contentInsets.top, insetBottom: g.contentInsets.bottom)
+            ScrollState(safeTop: g.visibleRect.minY + g.contentInsets.top,
+                        safeBottom: g.visibleRect.maxY - g.contentInsets.bottom,
+                        content: g.contentSize.height)
         } action: { _, new in
             state.wrappedValue = new
         }
@@ -107,15 +108,16 @@ extension View {
 }
 
 extension ScrollPosition {
-    /// One screen further down: the last line showing above the page-down marker becomes the top line.
-    /// Measured in the watchOS 26.5 simulator: `contentOffset` and `visibleRect` span the whole screen,
-    /// the strips under the clock and the bottom edge included, but `scrollTo(y:)` puts y at the top of
-    /// the safe area, `insetTop` below the screen's edge — so the new top edge is handed over plus
-    /// `insetTop`. Paging by the offset alone came up short by that strip, about two and a half lines.
+    /// One screen further down: the last line showing above the page-down marker becomes the top line
+    /// at the screen's edge. `scrollTo(y:)` puts y at the safe area's top, so the target is that new top
+    /// edge plus the strip under the clock. The strips come from the screen, not the scroll geometry,
+    /// which reports them only in one of its frames.
     mutating func pageDown(from s: ScrollState) {
         let lastLine: CGFloat = 18   // about one line of reply text, kept on screen as the new top line
-        let shown = s.page - PageDownMarker.fade
-        scrollTo(y: s.offset + max(0, min(shown - lastLine, s.below)) + s.insetTop)
+        let safe = s.safeBottom - s.safeTop
+        let strips = WKInterfaceDevice.current().screenBounds.height - safe   // under the clock + bottom edge
+        let top = s.safeBottom + strips - PageDownMarker.fade - lastLine
+        scrollTo(y: min(max(top, s.safeTop), s.content - safe))
     }
 }
 
@@ -128,31 +130,32 @@ struct PageDownMarker: View {
     static let fade: CGFloat = 28
 
     let more: Bool
-    /// The scroll view's bottom inset: the strip between the safe area and the screen's edge.
-    let edge: CGFloat
     let action: () -> Void
 
     var body: some View {
-        ZStack(alignment: .bottom) {
-            LinearGradient(colors: [Color.black.opacity(0), .black, .black], startPoint: .top, endPoint: .bottom)
-                .frame(height: Self.fade)
-                .allowsHitTesting(false)
-            Button(action: action) {
-                Image(systemName: "chevron.compact.down")
-                    .font(.system(size: 16, weight: .semibold))
-                    .foregroundColor(.gray)
-                    .frame(width: 44, height: 18)
-                    .contentShape(Rectangle())
+        // A full-height column reaching past the safe area puts the marker on the screen's physical
+        // bottom edge in either frame. Its empty top takes no touches, so taps reach the page beneath.
+        VStack(spacing: 0) {
+            Spacer(minLength: 0)
+            ZStack(alignment: .bottom) {
+                LinearGradient(colors: [Color.black.opacity(0), .black, .black], startPoint: .top, endPoint: .bottom)
+                    .frame(height: Self.fade)
+                    .allowsHitTesting(false)
+                Button(action: action) {
+                    Image(systemName: "chevron.compact.down")
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundColor(.gray)
+                        .frame(width: 44, height: 18)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .handGestureShortcut(.primaryAction, isEnabled: more)
+                .allowsHitTesting(more)
+                .padding(.bottom, 2)
             }
-            .buttonStyle(.plain)
-            .handGestureShortcut(.primaryAction, isEnabled: more)
-            .allowsHitTesting(more)
-            .padding(.bottom, 2)
         }
-        .frame(maxWidth: .infinity)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .ignoresSafeArea(edges: .bottom)
         .opacity(more ? 1 : 0)
-        // An overlay ends at the safe area's bottom; down by the inset puts it at the screen's edge
-        // (36pt on a 46mm watch, measured). ignoresSafeArea does not move an overlay.
-        .offset(y: edge)
     }
 }

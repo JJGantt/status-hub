@@ -53,7 +53,7 @@ struct ChatView: View {
             }
         }
         .overlay(alignment: .bottom) {
-            PageDownMarker(more: !scroll.atBottom && !recording, edge: scroll.insetBottom) {
+            PageDownMarker(more: !scroll.atBottom && !recording) {
                 pinned = false
                 withAnimation(.easeOut(duration: 0.25)) { position.pageDown(from: scroll) }
             }

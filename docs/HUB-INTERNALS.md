@@ -1368,11 +1368,17 @@ has no WKWebView.
   recording — the page's record button holds the gesture again. Where the view stands comes from
   `onScrollGeometryChange` (`trackScroll` in `Watch/WatchUI.swift`). A finger tap on the thread still
   records from anywhere; only the gesture pages.
-  The paging math rests on two things measured in the watchOS 26.5 simulator, both easy to get
-  wrong: the scroll geometry spans the whole screen (the strips under the clock and along the bottom
-  included), but `ScrollPosition.scrollTo(y:)` puts y at the top of the *safe area*, so the target
-  is the new top edge plus the top inset. An overlay is laid out against the safe area and
-  `ignoresSafeArea` does not move it, so the marker is offset down by the bottom inset.
+  The paging math rests on things measured in the watchOS 26.5 simulator, all easy to get wrong.
+  The same scroll view reports its geometry in two frames depending on how it was last moved: after
+  a jump to a view (`ScrollViewReader`, which every open and pin uses) `visibleRect` is the safe area
+  alone with zero `contentInsets`; after `ScrollPosition.scrollTo(y:)` it is the whole screen with the
+  strips as insets. Math on `contentOffset` and the insets was right in one frame and wrong in the
+  other: a short first page, the chevron drawn mid-screen, and a last page aimed where the view
+  could not go, so double tap never reached the bottom. `ScrollState` therefore keeps only the safe
+  area's edges (`visibleRect` less the insets, the same in both frames), and the strips' height comes
+  from the screen (`WKInterfaceDevice.screenBounds`). `scrollTo(y:)` puts y at the safe area's top, so
+  a page's target is the new top edge plus the strip under the clock. The marker is a full-height
+  column that ignores the bottom safe area, which lands it on the physical edge in either frame.
 - **A session's reply notification opens it** (§6b). `WatchAppDelegate` registers the `SESSION_REPLY`
   category with one foreground action, Open — the button double tap presses on a watch notification —
   and answers it, or a tap on the notification itself, with `Sessions.open(rowId:)`: the app lands on

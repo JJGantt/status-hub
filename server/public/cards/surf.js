@@ -32,7 +32,7 @@ let scrollEnd = 0;
 let hist = null, histFor = null, histPending = false, histAt = 0;
 
 // `capturedAt` alone is not enough to decide the copy is current. It moves with the Surfline
-// capture, every 3h, but the water trace is a half-hourly buoy reading that advances independently
+// capture, a new model run about every 6h, but the water trace is a half-hourly buoy reading that advances independently
 // — so a card left open all day held a water series hours behind a source that had moved many
 // times. The age check is what picks those up; it matches the server's own cache floor, so a
 // refetch inside the window is answered from memory rather than costing a rebuild.

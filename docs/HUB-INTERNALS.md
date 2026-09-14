@@ -1383,7 +1383,10 @@ has no WKWebView.
   category with one foreground action, Open — the button double tap presses on a watch notification —
   and answers it, or a tap on the notification itself, with `Sessions.open(rowId:)`: the app lands on
   the sessions page with that conversation pushed (`Sessions.path`), a row the list has not loaded yet
-  (a resumed session's new one) included. The category is registered at launch, so the watch app has
+  (a resumed session's new one) included, and it fetches that conversation's reply itself. Left to the
+  view's own load, the reply stayed old: a conversation already on screen does not appear again, and an
+  app in the background missed the stream's `done`. For the same reason the page refetches the
+  on-screen conversation whenever it becomes active. The category is registered at launch, so the watch app has
   to have run once for the button to appear.
 - **A command is a recorded clip, sent the way the phone's microphone sends one.** `Watch/Recorder.swift`
   records AAC, mono, 16 kHz, and `Hub.sendAudio` uploads the file to `/api/voice-command` (source

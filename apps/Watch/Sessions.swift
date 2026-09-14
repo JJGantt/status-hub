@@ -64,8 +64,13 @@ final class Sessions: ObservableObject {
     /// A session's reply notification, opened: shows that conversation on the sessions page. The row
     /// named may be one the list has not loaded yet — a resumed session's new row.
     func open(rowId: String) async {
-        if !rows.contains(where: { $0.id == rowId }) { await load() }
-        path = [rows.first { $0.id == rowId }?.key ?? rowId]
+        await load()
+        let key = rows.first { $0.id == rowId }?.key ?? rowId
+        path = [key]
+        // Asked here, not left to the view: when this conversation is already the one on screen the view
+        // does not appear again, and an app that was in the background missed the stream's `done`, so
+        // nothing else would fetch the reply the notification is about.
+        await loadDetail(key)
     }
 
     /// One row per conversation: its running row if it has one, else its newest parked one.
@@ -92,7 +97,12 @@ final class Sessions: ObservableObject {
 
     /// The page is on screen: load now, and follow every session's activity until `deactivate`.
     func activate() {
-        Task { await load() }
+        // The conversation on screen too: a turn that finished while the app was away sent its `done`
+        // to a stream that was not listening.
+        Task {
+            await load()
+            if let key = path.last { await loadDetail(key) }
+        }
         guard stream == nil else { return }
         stream = Task {
             await Hub.listen("/api/session-stream", reconnected: { [weak self] in await self?.reloadAll() }) { [weak self] event, data in

@@ -21,10 +21,18 @@ struct SessionsView: View {
                     .font(.system(size: 12, weight: .semibold, design: .monospaced))
                     .foregroundColor(.gray)
             }
-            Text(s.name)
-                .font(.system(size: 14))
-                .foregroundColor(s.running ? .white : .gray)
-                .lineLimit(2)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(s.name)
+                    .font(.system(size: 14))
+                    .foregroundColor(s.running ? .white : .gray)
+                    .lineLimit(2)
+                if let say = s.say, !say.isEmpty {
+                    Text(snippet(say))
+                        .font(.system(size: 11))
+                        .foregroundColor(.gray)
+                        .lineLimit(3)
+                }
+            }
             Spacer(minLength: 0)
             if s.working == true || !(sessions.activity[s.key] ?? []).isEmpty {
                 Circle().fill(Color.green).frame(width: 7, height: 7)

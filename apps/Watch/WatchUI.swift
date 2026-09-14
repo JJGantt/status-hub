@@ -6,6 +6,15 @@ func inlineMarkdown(_ s: String) -> AttributedString {
         ?? AttributedString(s)
 }
 
+/// A reply's opening for the line under a title: its markdown syntax gone and none of the bold, code
+/// or link styling kept, so it reads as one quiet run of text.
+func snippet(_ s: String) -> AttributedString {
+    var a = inlineMarkdown(s)
+    a.inlinePresentationIntent = nil
+    a.link = nil
+    return a
+}
+
 /// The row a recording shows under its page: a red dot, the time recorded once the microphone is
 /// actually open, and Cancel.
 struct RecordingBar: View {

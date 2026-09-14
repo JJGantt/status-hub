@@ -13,6 +13,9 @@ struct SessionRow: Decodable, Identifiable, Equatable {
     let status: String?
     let working: Bool?
     let claude_session_id: String?
+    /// The start of what it last said (its prompt until it has replied), whitespace collapsed and cut
+    /// to 120 characters by the hub.
+    let say: String?
 
     var name: String { sessionName(custom_title, label, repo) ?? id }
     var running: Bool { status == "resident" }

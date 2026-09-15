@@ -26,6 +26,7 @@ export async function open() {
   const injectOn = ['1', 'true', 'on', 'yes'].includes(String(cur.voice_inject_mode ?? '0').toLowerCase());
   const speakOn = ['1', 'true', 'on', 'yes'].includes(String(cur.voice_speak_replies ?? '0').toLowerCase());
   const pushOn = !['0', 'false', 'off', 'no'].includes(String(cur.push_enabled ?? '1').toLowerCase());
+  const jaredbotOn = ['1', 'true', 'on', 'yes'].includes(String(cur.jaredbot_enabled ?? '0').toLowerCase());
   const agentCwdRaw = cur.agent_cwd || '';
   const resetMin = (() => { const s = parseFloat(cur.session_reset_s); return Number.isFinite(s) && s > 0 ? Math.round(s / 60) : 5; })();
   // Working-directory picker: options are the repo dirs the worker publishes (agent_cwd_options).
@@ -89,6 +90,11 @@ export async function open() {
         '<button type="button" data-v="0"' + (pushOn ? '' : ' class="on"') + '>Off</button>' +
         '<button type="button" data-v="1"' + (pushOn ? ' class="on"' : '') + '>On</button>' +
       '</div>' +
+      '<div class="settings-sec">JaredBot</div>' +
+      '<div class="settings-seg" id="set-jaredbot">' +
+        '<button type="button" data-v="0"' + (jaredbotOn ? '' : ' class="on"') + '>Off</button>' +
+        '<button type="button" data-v="1"' + (jaredbotOn ? ' class="on"' : '') + '>On</button>' +
+      '</div>' +
 
       '<div class="settings-sec">Weight reminder</div>' +
       '<div class="settings-seg" id="set-wr-enabled">' +
@@ -135,6 +141,11 @@ export async function open() {
     const b = e.target.closest('[data-v]'); if (!b) return;
     back.querySelectorAll('#set-push button').forEach((x) => x.classList.toggle('on', x === b));
     save('push_enabled', b.dataset.v);          // worker checks this before pushing a result to the phone
+  });
+  back.querySelector('#set-jaredbot').addEventListener('click', (e) => {
+    const b = e.target.closest('[data-v]'); if (!b) return;
+    back.querySelectorAll('#set-jaredbot button').forEach((x) => x.classList.toggle('on', x === b));
+    save('jaredbot_enabled', b.dataset.v);      // messages-mcp jaredbot.py reads this before every decision
   });
   // Full agent mode — hub and full-agent keep SEPARATE, persistent conversations now, so toggling the mode
   // just switches which one is live; it no longer wipes anything (the worker resumes each mode's own session).

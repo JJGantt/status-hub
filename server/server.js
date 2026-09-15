@@ -26,7 +26,7 @@ const { getTZ, setTZ, DAY_START_HOUR, localDate, nutritionWindow, lastNTrainingD
 const { buildWorkoutHeatmap } = require('./lib/heatmap');
 const { buildWeightPlot } = require('./lib/weightplot');
 const { getWeather } = require('./lib/weather');
-const { transcribe } = require('./lib/transcribe');
+const { transcribe, extFor } = require('./lib/transcribe');
 const { buildNutritionLog, buildGoalResolver, calorieColor } = require('./lib/nutritionlog');
 const { computeScore, taskDeadline, completionValue, completionStamp, bandPoints, toPoints, TASK_GRACE_MIN, TASK_LATE_ZERO_H, TASK_DRAIN_FULL_H } = require('./lib/score');
 
@@ -88,12 +88,18 @@ async function surplusCal() {
   } catch { return 150; }
 }
 // Idle gap (seconds) after which the hub agent resets its context — the worker's `session_reset_s`
-// setting (default 30min). Used to scope the conversation panel to the current context.
-async function sessionResetS() {
-  try {
-    const v = parseFloat((await settingsAll()).session_reset_s);
-    return Number.isFinite(v) && v > 0 ? v : 1800;
-  } catch { return 1800; }
+// setting (default 30min).
+function resetGapS(s) {
+  const v = parseFloat((s || {}).session_reset_s);
+  return Number.isFinite(v) && v > 0 ? v : 1800;
+}
+// Whether a message at `at` opens a new conversation context after one at `prev` (both epoch ms): an idle
+// gap longer than session_reset_s (hub only; full-agent never gap-resets), or a manual reset
+// (voice_reset_at) in between. The one rule behind both the history endpoint and the live stream.
+function opensContext(prev, at, mode, s) {
+  const resetAt = Date.parse((s || {}).voice_reset_at || '');
+  return (mode === 'hub' && at - prev > resetGapS(s) * 1000)
+    || (Number.isFinite(resetAt) && prev < resetAt && resetAt <= at);
 }
 // Min length (days) of the aligned intake-tracking window before adaptive maintenance goes live.
 // Editable in settings; default 14, clamped to a sane 7–60.
@@ -755,6 +761,27 @@ function pushVoice(kind, row) {
   for (const res of voiceClients) { try { res.write(frame); } catch {} }
 }
 
+// The last message time per mode, so a live row is flagged as opening a new context by the same rule
+// /api/voice-messages applies to history. Seeded from the table at boot; a row that arrives before the
+// seed is simply not flagged.
+const lastVoiceAt = { hub: null, agent: null };
+function markLive(row) {
+  if ((row.focus || 'hub') !== 'hub' || !row.created_at) return row;
+  const mode = row.mode === 'agent' ? 'agent' : 'hub';
+  const at = Date.parse(row.created_at), prev = lastVoiceAt[mode];
+  if (prev === null || at > prev) lastVoiceAt[mode] = at;
+  return prev !== null && opensContext(prev, at, mode, settingsCache.map) ? { ...row, ctx_break: true } : row;
+}
+async function seedLastVoiceAt() {
+  for (const [mode, filter] of [['hub', 'or=(mode.is.null,mode.eq.hub)'], ['agent', 'mode=eq.agent']]) {
+    try {
+      const r = await sb(`voice_messages?focus=eq.hub&${filter}&order=created_at.desc&limit=1&select=created_at`);
+      if (r && r[0] && lastVoiceAt[mode] === null) lastVoiceAt[mode] = Date.parse(r[0].created_at);
+    } catch (_) {}
+  }
+}
+seedLastVoiceAt();
+
 // Tell every open calendar surface that dated items changed, so it re-reads /api/calendar. The
 // signal carries no payload on purpose: what each surface needs back differs (the wall wants
 // `calendar_months` months plus today's timeline, the phone wants whichever month it has paged to),
@@ -833,7 +860,7 @@ function startRealtime() {
     // Voice pipeline: stream inserts/updates straight to the /tv conversation panel. INSERT and
     // UPDATE both carry the new row in `payload.new` (UPDATE = a streamed row flipping done=true).
     .on('postgres_changes', { event: '*', schema: 'public', table: 'voice_messages' },
-      (p) => { seen(); if (p.new) pushVoice('message', p.new); })
+      (p) => { seen(); if (p.new) pushVoice('message', p.eventType === 'INSERT' ? markLive(p.new) : p.new); })
     // A client waiting on its own command (/api/voice-reply/:id) is answered the moment the worker
     // marks the request finished.
     .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'voice_requests' },
@@ -1864,15 +1891,22 @@ app.get('/api/voice-messages', async (req, res) => {
     // Mode filter — legacy rows (mode NULL) predate the split and count as 'hub'.
     const modeFilter = mode === 'agent' ? '&mode=eq.agent' : '&or=(mode.is.null,mode.eq.hub)';
     const rows = (await sb(`voice_messages?focus=eq.${encodeURIComponent(focus)}${modeFilter}&order=created_at.desc&limit=${limit}&select=*`) || []).reverse();
-    // Full-agent context never resets on an idle gap, so its whole thread is one context — show it all.
-    if (mode === 'agent') { res.json(rows); return; }
-    // Hub mode scopes to the CURRENT context: the trailing run with no idle gap longer than session_reset_s.
-    // After a longer gap the hub starts a fresh context, so older turns it no longer remembers aren't shown.
-    const gapMs = (await sessionResetS()) * 1000;
-    let start = rows.length ? rows.length - 1 : 0;
-    for (let i = rows.length - 1; i > 0; i--) {
-      if (Date.parse(rows[i].created_at) - Date.parse(rows[i - 1].created_at) <= gapMs) start = i - 1;
-      else break;
+    // Where each context begins, by opensContext() — the same rule the live stream marks rows with.
+    const s = await settingsAll();
+    const breaks = rows.map((r, i) => i > 0 &&
+      opensContext(Date.parse(rows[i - 1].created_at), Date.parse(r.created_at), mode, s));
+    // ?history=1 (the conversation card) → every row, the first of each context flagged so the card can
+    // draw a divider there. Older contexts are the record of what he said and what came of it; hiding
+    // them made a failed command look like it had never been sent.
+    if (String(req.query.history || '') === '1') {
+      res.json(rows.map((r, i) => (breaks[i] ? { ...r, ctx_break: true } : r)));
+      return;
+    }
+    // Every other surface (watch, wall) shows the current context only.
+    let start = Math.max(0, breaks.lastIndexOf(true));
+    const resetAt = Date.parse(s.voice_reset_at || '');
+    if (Number.isFinite(resetAt) && rows.length && Date.parse(rows[rows.length - 1].created_at) < resetAt) {
+      start = rows.length;   // reset since the last message: nothing belongs to the new context yet
     }
     res.json(rows.slice(start));   // current context only, oldest→newest
   } catch (e) { res.status(500).json({ error: String(e.message || e) }); }
@@ -1910,6 +1944,27 @@ function parseLocation(src) {
            ...(Number.isFinite(acc) ? { acc: Math.round(acc) } : {}), ...(place ? { place } : {}) };
 }
 
+// The recording behind a phone command, kept in the voice-clips bucket for as long as its voice_requests
+// row (pi-desk's sweepRetention deletes both after KEEP_REQUEST_DAYS). Without it a bad transcription
+// leaves nothing to go on: a clip heard as Icelandic can only be understood by listening to it, and the
+// temp file is gone when this handler ends. Runs after the reply and swallows its own failure, so it can
+// neither slow a command down nor fail one.
+const CLIP_BUCKET = 'voice-clips';
+async function keepClip(id, file, contentType, bytes, dur) {
+  try {
+    const type = contentType.split(';')[0].trim();
+    const path = `${id}.${extFor(contentType)}`;
+    const r = await fetch(`${SUPABASE_URL}/storage/v1/object/${CLIP_BUCKET}/${path}`, {
+      method: 'POST',
+      headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}`, 'Content-Type': type },
+      body: await fs.openAsBlob(file, { type }),
+    });
+    if (!r.ok) throw new Error(`upload -> ${r.status}`);
+    await sbWrite(`voice_requests?id=eq.${id}`, 'PATCH',
+      { audio: { path, bytes, type, ...(dur > 0 ? { dur: +dur.toFixed(1) } : {}) } });
+  } catch (e) { console.log(`[voice-command] could not keep clip ${id}: ${e.message || e}`); }
+}
+
 app.post('/api/voice-command', async (req, res) => {
   const tmp = path.join(os.tmpdir(), 'voice-' + crypto.randomUUID());
   try {
@@ -1942,6 +1997,7 @@ app.post('/api/voice-command', async (req, res) => {
       ...(client_now ? { client_now } : {}), ...(location ? { location } : {}) });
     markSeen(msgId, id);
     res.json({ transcript, enqueued: true, id });
+    await keepClip(id, tmp, ct, size, dur);   // before the finally below deletes the temp file
   } catch (e) {
     res.status(e.status || 500).json({ error: String(e.message || e) });
   } finally {
@@ -2107,12 +2163,14 @@ app.get('/api/voice-reply/:id', async (req, res) => {
   }
 });
 
-// Reset the shared hub conversation: clear the stored thread, tell every live surface (web card +
-// TV panel) to clear, and enqueue a sentinel so the Mac worker drops its resumed Claude session —
-// the next command starts with fresh context.
+// Reset the shared hub conversation: record where the old context ends (voice_reset_at), tell every live
+// surface, and enqueue a sentinel so the worker drops its resumed Claude session — the next command
+// starts with fresh context. The thread itself is kept: the conversation card shows older contexts behind
+// a divider, and every other surface starts its view at the reset.
 app.post('/api/voice-reset', async (req, res) => {
   try {
-    await sbWrite('voice_messages?focus=eq.hub', 'DELETE');
+    await putSetting('voice_reset_at', new Date().toISOString());
+    dirtySettings();
     pushVoice('reset', null);
     await sbWrite('voice_requests', 'POST', { transcript: VOICE_RESET_SENTINEL, source: 'web', focus: 'hub' });
     res.json({ ok: true });
@@ -2176,9 +2234,10 @@ app.post('/api/voice-activity', express.json(), (req, res) => {
     // A thought (state 'text') can run to a paragraph; everything else is a line.
     text: String(b.text || '').slice(0, b.state === 'text' ? 2000 : 400),
     // Preserve 'working' (the command's transcript, once per command), 'done', 'escalate' (the
-    // Sonnet→Opus hop mid-run) and 'text' (what the model said between tool calls); everything else
-    // is a tool call. 'working' is what the TV keys the heard-you pop off, so it must survive intact.
-    state: ['done', 'working', 'escalate', 'text'].includes(b.state) ? b.state : 'tool',
+    // Sonnet→Opus hop mid-run), 'text' (what the model said between tool calls) and 'error' (a command
+    // it could not act on, shown as a failure); everything else is a tool call. 'working' is what the TV
+    // keys the heard-you pop off, so it must survive intact.
+    state: ['done', 'working', 'escalate', 'text', 'error'].includes(b.state) ? b.state : 'tool',
     focus: String(b.focus || 'hub'),
   });
   res.status(204).end();

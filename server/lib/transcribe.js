@@ -41,6 +41,9 @@ async function whisper(file, type, name, key) {
   form.append('file', await fs.openAsBlob(file, { type }), name);   // file-backed: never held in memory
   form.append('model', 'whisper-large-v3-turbo');
   form.append('response_format', 'text');
+  // English, always. Left to detect the language, Whisper picks one per clip from its opening audio,
+  // and a quiet or noisy opening can land it anywhere: a phone command came back as Icelandic.
+  form.append('language', 'en');
   const r = await fetch(GROQ_URL, { method: 'POST', headers: { Authorization: `Bearer ${key}` }, body: form });
   if (!r.ok) throw Object.assign(new Error(`transcription failed (${r.status})`), { status: 502 });
   return (await r.text()).trim();
@@ -65,4 +68,4 @@ async function transcribe(file, contentType, key) {
   }
 }
 
-module.exports = { transcribe, GROQ_MAX_BYTES, SEGMENT_S };
+module.exports = { transcribe, extFor, GROQ_MAX_BYTES, SEGMENT_S };

@@ -464,7 +464,9 @@ a list changes — the calendar surfaces' push path, separate from the status fr
 expanded sheet draws in front of it — the frame is re-pushed on every realtime event and history only
 grows, so it is fetched once by the one surface that can scroll through it) · `/api/voice-messages`
 (`?mode=active` resolves `agent_mode` on the server, for a client with no settings of its own — the
-watch) · `/api/voice-reply/:id` (held open until that command is `done` or `error`, settled by the
+watch; the current context only, unless `?history=1`, which returns older contexts too with
+`ctx_break` on the first row of each so the conversation card draws a divider there; live rows on
+`/api/voice-stream` carry the same flag, by the same `opensContext()` rule) · `/api/voice-reply/:id` (held open until that command is `done` or `error`, settled by the
 `voice_requests` realtime subscription; after 25s it answers `pending` and the client asks again) ·
 `/api/day-stream` (SSE, a bodiless `nutrition` or `workout` frame whenever that day may have changed —
 fired from `dirtyNutDay()` / `dirtyWorkoutDay()`, which every write path already calls; the watch's push
@@ -491,10 +493,12 @@ per-list feed `/api/due-widget` replaced; nothing reads it.
 
 **Write:** `/api/settings` (GET/POST) · `/api/log-set` · `/api/log-entry` (POST/DELETE) ·
 `/api/commit-staged` · `/api/feed` · `/api/todos/{add,clear,snooze}` · `/api/repos/open` ·
-`/api/sessions/:action` · `/api/voice-command` (raw audio of any size → Groq Whisper → enqueue;
-optional `lat`/`lon`/`acc`/`place` query → `voice_requests.location`) ·
+`/api/sessions/:action` · `/api/voice-command` (raw audio of any size → Groq Whisper, English only →
+enqueue; the clip is kept in the private `voice-clips` bucket and named in `voice_requests.audio`, both
+deleted by pi-desk after 7 days; optional `lat`/`lon`/`acc`/`place` query → `voice_requests.location`) ·
 `/api/voice-text` (text → enqueue, optional `location` object likewise; returns the request id, which
-`/api/voice-reply/:id` waits on) · `/api/voice-reset` · `/api/voice-activity` · `/api/attach`
+`/api/voice-reply/:id` waits on) · `/api/voice-reset` (stamps `voice_reset_at`; the thread is kept) ·
+`/api/voice-activity` · `/api/attach`
 (photo upload) · `/api/register-push` · `/api/notify` (APNs to all devices) · `/api/clientlog`.
 
 **Auth:** the hub password → `sha256("status-hub:"+password)`; sent as the `hub` cookie (web) or the
@@ -1126,6 +1130,7 @@ callers; only the HTTP response is filtered.
 | `maintenance_min_days` | Aligned-window length before adaptive maintenance goes live (Settings "calibration window"). |
 | `maintenance_phase` | JSON `{start, seed, sign, hold}` — the current goal phase (§4). Written on a `surplus_cal` sign flip. |
 | `session_reset_s` | Idle gap before the hub voice conversation resets context. |
+| `voice_reset_at` | When the hub conversation was last reset by hand — a context boundary, like an idle gap. Written by `/api/voice-reset`. |
 | `activity_hold_s` | Seconds a finished activity row (the reply, or an error) holds on the bar. Default 60. |
 | `phone_activity_hold_s` | The same, off the kiosk (phone, Mac app panel). Default 8. |
 | `wakefree_enabled` | Always-on (wake-free) voice on/off. |

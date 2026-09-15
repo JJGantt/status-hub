@@ -938,6 +938,7 @@ body.tv .hmonths{margin-left:0;font-size:11px}
 .ai-msg-user .ai-msg-text{color:#6ea8ff;text-align:right}
 .ai-msg-assistant{align-self:flex-start}
 .ai-msg-assistant .ai-msg-text{color:#c2cad4}
+.ai-ctx-rule{align-self:stretch;flex:none;border-top:1px solid #2a3340;margin:4px 0}   /* where one conversation context ends and the next begins */
 .ai-msg-session{background:rgba(63,184,157,.09);border-left:2px solid #3fb89d;border-radius:8px;padding:6px 10px}
 .ai-msg-session .ai-msg-text{color:#9fe3d3}
 .ai-session{display:block;margin-top:2px;font-size:10px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:#3fb89d}

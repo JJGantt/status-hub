@@ -10,8 +10,6 @@
 import { esc, localNowNaive, liveStream, KIOSK } from './shared.js';
 
 let phoneHangMs = 3000;   // phone trailing-silence (ms) for the FAB VAD; overridden by the phone_silence_s setting
-let resetMs = 30 * 60 * 1000;   // context-reset idle gap (ms) = session_reset_s. A message arriving after a gap
-                                // this long means the agent reset its context, so the shown thread resets too.
 // How long a FINISHED row — the reply, or an error — holds on the kiosk's activity bar before it hides.
 // There the running states (Listening / Thinking / each tool call) are sticky and ignore this entirely;
 // only the terminal row is on a timer. A new command still clears it immediately, because show() resets the
@@ -98,7 +96,6 @@ function boot() {
   window.addEventListener('pageshow', resume);
   fetch('/api/settings').then((r) => r.json()).then((s) => {
     const n = parseFloat(s.phone_silence_s); if (Number.isFinite(n) && n > 0) phoneHangMs = n * 1000;
-    const rs = parseFloat(s.session_reset_s); if (Number.isFinite(rs) && rs > 0) resetMs = rs * 1000;
     applyActivitySettings(s);
     setMode(['1', 'true', 'on', 'yes'].includes(String(s.agent_mode ?? '0').toLowerCase()) ? 'agent' : 'hub');
   }).catch(() => {});
@@ -106,13 +103,14 @@ function boot() {
   // One voice stream feeds the conversation, the activity bar, and the live mode switch.
   liveStream('/api/voice-stream', { voice: (e) => {
     let msg; try { msg = JSON.parse(e.data); } catch (_) { return; }
-    if (msg.kind === 'reset') { if (_card) _card.clear(); activity.clear(); return; }
+    if (msg.kind === 'reset') { if (_card) _card.rule(); activity.clear(); return; }   // the old context stays, behind a divider
     if (msg.kind === 'mode') { setMode(msg.row && msg.row.agent ? 'agent' : 'hub'); return; }  // toggle flipped → switch thread
     if (msg.kind === 'activity') {                 // live progress, pushed direct from the worker (low-latency)
       const a = msg.row || {};
       if ((a.focus || 'hub') !== 'hub') return;
       if (a.state === 'working') playPop();        // his words just landed on screen
       if (a.state === 'done') activity.done(a.text);
+      else if (a.state === 'error') activity.err(a.text);           // a command it could not act on
       else if (a.state === 'escalate') activity.escalate(a.text);   // Sonnet handed off to Opus mid-run
       else if (a.state === 'text') activity.thought(a.text);        // what it said between tool calls
       else activity.tool(a.text);
@@ -718,17 +716,22 @@ function initCard() {
     if (session && row.session_label) inner += '<span class=ai-session>' + esc(String(row.session_label)) + '</span>';
     return '<div class="ai-msg ai-msg-' + side + (session ? ' ai-msg-session' : '') + (row.pending ? ' ai-msg-pending' : '') + '">' + inner + '</div>';
   }
-  let lastTs = 0;   // created_at (ms) of the newest message shown — to detect a context-reset gap
+  // A divider where one conversation context ends and the next begins; never two in a row.
+  function rule() {
+    const last = log.lastElementChild;
+    if (!last || last.classList.contains('ai-ctx-rule')) return;
+    const hr = document.createElement('div');
+    hr.className = 'ai-ctx-rule';
+    log.appendChild(hr);
+  }
   function upsert(row) {
     if (!row || (row.focus || 'hub') !== 'hub') return;
     if (row.role === 'tool') return;        // tool calls live in the activity bar, not the thread
     reconcile(row);                         // a real row for a locally-sent message replaces its optimistic bubble
-    // Hub only: a new message after a gap longer than the reset window means the hub reset its context — so
-    // clear the thread first, mirroring the reset. Full-agent never gap-resets, so its thread persists.
-    const ts = row.created_at ? Date.parse(row.created_at) : Date.now();
+    // The server flags the first row of each new context (an idle gap or a manual reset). The older
+    // context stays in the thread behind a divider rather than being wiped.
     const fresh = !seen.has(row.id);
-    if (activeMode === 'hub' && fresh && lastTs && (ts - lastTs) > resetMs) clear();
-    if (fresh) lastTs = ts;
+    if (fresh && row.ctx_break) rule();
     const stick = nearBottom();
     const tmp = document.createElement('div'); tmp.innerHTML = bubbleHtml(row);
     const el = tmp.firstElementChild, existing = seen.get(row.id);
@@ -747,7 +750,7 @@ function initCard() {
     (p.localImages || []).forEach((u) => { try { URL.revokeObjectURL(u); } catch (_) {} });
     pending.delete(cid);
   }
-  function clear() { log.innerHTML = ''; seen.clear(); lastTs = 0; for (const cid of [...pending.keys()]) dropPending(cid); }
+  function clear() { log.innerHTML = ''; seen.clear(); for (const cid of [...pending.keys()]) dropPending(cid); }
   // Optimistic send: render the user's own message/photo the instant they send it, before the worker has
   // processed anything. The matching server row (via SSE or backfill) replaces it later — see reconcile().
   function optimistic(o) {
@@ -782,11 +785,11 @@ function initCard() {
   }
   async function backfill() {
     try {
-      const r = await fetch('/api/voice-messages?focus=hub&mode=' + activeMode + '&limit=200');   // the active mode's thread (server scopes hub to the current context)
+      const r = await fetch('/api/voice-messages?focus=hub&mode=' + activeMode + '&limit=200&history=1');   // the active mode's thread, older contexts included and flagged where each begins
       if (!r.ok) return;
       const rows = await r.json();
       const now = Date.now();
-      log.innerHTML = ''; seen.clear(); lastTs = 0;      // detaches server + optimistic els; the pending map still holds the optimistic ones
+      log.innerHTML = ''; seen.clear();      // detaches server + optimistic els; the pending map still holds the optimistic ones
       for (const row of rows) upsert(row);               // reconcile() drops any pending the server thread now contains
       for (const cid of [...pending.keys()]) {           // re-append still-unmatched optimistic bubbles at the bottom
         const p = pending.get(cid);
@@ -884,6 +887,6 @@ function initCard() {
   });
   bindTap(micBtn, () => cardRec.toggle());
 
-  return { upsert, clear, backfill, optimistic, setPendingPath, dropPending };
+  return { upsert, clear, rule, backfill, optimistic, setPendingPath, dropPending };
 }
 

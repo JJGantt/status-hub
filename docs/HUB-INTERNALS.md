@@ -1138,6 +1138,7 @@ callers; only the HTTP response is filtered.
 | `agent_mode` / `agent_cwd` | Full-agent (coding) mode toggle + working dir for the worker. |
 | `weight_reminder_enabled` / `_mode` / `_time` | The daily weigh-in push (On/Off, Manual/Dynamic, time). |
 | `push_enabled` | Master push toggle. |
+| `jaredbot_enabled` | JaredBot, the group-chat auto-replier in messages-mcp (`jaredbot.py`), which reads it before every decision. Also voice `set_jaredbot`. |
 
 ---
 

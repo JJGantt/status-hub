@@ -2326,7 +2326,7 @@ async function overdueCount() {
     const nowET = etNowString();
     // Exempt items (a shift, an appointment) owe nothing, so they can never be overdue and must
     // never badge — a red count he cannot clear by doing anything is just noise.
-    return rows.filter((r) => (r.priority || 0) >= 0 && dueMoment(r.scheduled_at || r.due) <= nowET).length;
+    return rows.filter((r) => (r.priority || 0) >= 0 && lateMoment(r.scheduled_at || r.due) <= nowET).length;
   } catch (_) { return null; }
 }
 
@@ -2376,7 +2376,7 @@ function overdueHeat(item, nowLocal) {
   const st = chipState(item, nowLocal);
   if (st === 'upcoming') return 0;
   if (st === 'grace') return 1;                    // due, but still free — warm, not hot
-  const at = dueMoment(item.scheduled_at || item.due);
+  const at = lateMoment(item.scheduled_at || item.due);
   const hrs = (Date.parse(nowLocal.replace(' ', 'T') + 'Z') - Date.parse(at.replace(' ', 'T') + 'Z')) / 3600000;
   return hrs >= 72 ? 4 : hrs >= 24 ? 3 : 2;
 }
@@ -2394,8 +2394,8 @@ app.get('/api/todos', async (req, res) => {
     // Longest outstanding first, then upcoming.
     const nowET = etNowString();
     const due = all.filter((i) => i.due)
-      .map((i) => ({ ...i, expired: dueMoment(i.scheduled_at || i.due) <= nowET, heat: overdueHeat(i, nowET) }))
-      .sort((a, b) => dueMoment(a.scheduled_at || a.due) < dueMoment(b.scheduled_at || b.due) ? -1 : 1);
+      .map((i) => ({ ...i, expired: lateMoment(i.scheduled_at || i.due) <= nowET, heat: overdueHeat(i, nowET) }))
+      .sort((a, b) => lateMoment(a.scheduled_at || a.due) < lateMoment(b.scheduled_at || b.due) ? -1 : 1);
     res.json({ lists, due });
   } catch (e) { res.status(500).json({ error: String(e.message || e) }); }
 });
@@ -2432,7 +2432,7 @@ app.get('/api/due-widget', async (req, res) => {
       title: itemTitle(r),
       list: r.list_name,
       emoji: emojiOf[r.list_name] || null,
-      expired: dueMoment(r.scheduled_at || r.due) <= nowET,
+      expired: lateMoment(r.scheduled_at || r.due) <= nowET,
       heat: overdueHeat(r, nowET),
       priority: r.priority || 0,
       when: r.scheduled_at || r.due,
@@ -2484,7 +2484,7 @@ app.get('/api/list-widget', async (req, res) => {
       id: r.id,
       title: itemTitle(r),
       // Dated items live on ordinary lists now, so the widget marks the ones that have come due.
-      overdue: !!r.due && dueMoment(r.due) <= nowET,
+      overdue: !!r.due && lateMoment(r.due) <= nowET,
     })) });
   } catch (e) { res.status(500).json({ error: String(e.message || e) }); }
 });
@@ -2538,7 +2538,7 @@ function plusMinutes(naiveLocal, mins) {
 // due -> grace (still on time, costs nothing) -> expired (draining). One place, so the calendar and
 // the pane cannot disagree about when something starts costing.
 function chipState(item, nowLocal) {
-  const at = dueMoment(item.scheduled_at || item.due);
+  const at = lateMoment(item.scheduled_at || item.due);
   if (!at || at > nowLocal) return 'upcoming';
   return plusMinutes(at, TASK_GRACE_MIN) > nowLocal ? 'grace' : 'expired';
 }
@@ -2591,7 +2591,7 @@ function nextChipTransition(rows, nowLocal) {
   const consider = (m) => { if (m && m > nowLocal && (next === null || m < next)) next = m; };
   for (const r of rows || []) {
     if (r.completed_at) continue;                // a finished item's chip is settled; nothing moves
-    const at = dueMoment(r.scheduled_at || r.due);
+    const at = lateMoment(r.scheduled_at || r.due);
     if (!at) continue;
     consider(toMinute(at));                      // it comes due
     consider(toMinute(plusMinutes(at, TASK_GRACE_MIN)));   // it stops being free
@@ -2811,9 +2811,10 @@ app.get('/api/calendar', async (req, res) => {
       emoji: emojiOf[r.list_name] || null,
       color: listColor(r.list_name),
       time: calTimeLabel(occ),
-      // `past`: this occurrence's moment has gone by (dims the chip). `expired`: it is overdue
-      // and uncleared, which is also what is draining his score for as long as it stays that way.
-      past: dueMoment(occ) <= nowET,
+      // `past`: this occurrence's moment has gone by (dims the chip) — for an all-day item that is the
+      // end of its day, not the 9am it notified at. `expired`: it is overdue and uncleared, which is
+      // also what is draining his score for as long as it stays that way.
+      past: lateMoment(occ) <= nowET,
       // `done` means he finished a task. An exempt item closes itself when its moment passes,
       // which is not the same thing and must not read as an achievement — it just becomes past.
       done: !!r.completed_at && (r.priority || 0) >= 0,
@@ -3585,10 +3586,21 @@ console.log(`[weight-reminder] armed (apns: ${apns.configured() ? 'configured, '
 
 // ---- reminder firing: app-push a reminder once its due time (local) has passed. Dedupe via a
 // `notifications` row keyed `reminder:<id>` so it fires exactly once. Date-only dues fire at 9am local.
-// A date-only due means 9am local that day; otherwise the stored local-naive timestamp is the moment.
+// A date-only due FIRES at 9am local that day; otherwise the stored local-naive timestamp is the moment.
+// This is when it notifies and nothing else — whether it is late is `lateMoment`.
 function dueMoment(due) {
   const d = String(due);
   return /T\d/.test(d) ? d : d.slice(0, 10) + 'T09:00:00';
+}
+
+// When a dated item stops being on time: the SCORING deadline, as a local-naive stamp. A timed item is
+// late at its own moment; a date-only one is on time for its whole day and late at the next day's 4am
+// origin. Everything that calls an item overdue reads this — chip colour and dimming, the badge, the
+// pane's red, both widgets — so red means exactly what the score means by it. Reading `dueMoment`
+// instead turned an all-day chip red at 9:30am while it was still worth its full +7.
+function lateMoment(due) {
+  const at = taskDeadline(due);
+  return at == null ? null : new Date(at).toISOString().slice(0, 19);
 }
 
 // ---- what happens when a dated item comes due ----

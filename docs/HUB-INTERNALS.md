@@ -552,6 +552,12 @@ Consequences worth knowing:
 - **Badge** = every overdue item across every list (`overdueCount()`), not just one table's. It is
   PUSHED — from the `list_items` subscription and from `dueTick` when something fires — so its own
   timer is a 10-minute backstop rather than the thing keeping the icon honest.
+- **Firing and overdue are different moments.** `dueMoment` is when an item notifies, and only
+  `dueTick` reads it; a date-only item fires at 9am. `lateMoment` is when it stops being on time — the
+  scoring deadline, which for a date-only item is the next day's 4am origin — and every surface that
+  calls something overdue reads that one: chip red and dimming, the badge, the pane, both widgets. Mix
+  them and an all-day chip goes red at 9:30am while it is still worth its full +7. data-layer's
+  `isExpired` holds the same rule.
 - **The scheduler** (`dueTick`) wakes every 60s but only SCANS when the next due moment has arrived or
   a `list_items` change dirtied it — a moment passing is not a row changing, so the clock stays and the
   query goes. It reads `list_items` where `due` is past, dedupes against

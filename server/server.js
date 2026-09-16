@@ -2877,9 +2877,11 @@ app.get('/api/calendar', async (req, res) => {
     let dayline = null;
     if (wall || dayOnly) {
       const todayItems = byDay[todayKey] || [];
-      // On the dial an expired all-day item is in `overdue` instead. It has no hour row, so the dial
-      // can never show it and always holds it — drawn in both places it would be the same red twice.
-      const allday = todayItems.filter((i) => !i.time && !(full && i.expired));
+      // The dial draws no all-day strip. An all-day item is on time until its day ENDS, so it waits in
+      // the dock at the bottom with the rest of what is still to come, and moves to `overdue` at the
+      // top if the day ends without it (cards/dayline.js). Under the date it read as one of the red
+      // rows stacked above it, and it is not one of them.
+      const allday = full ? [] : todayItems.filter((i) => !i.time);
       const timed = todayItems.filter((i) => i.time);
       const clockOf = (t) => {
         const m = String(t).match(/^(\d+)(?::(\d+))?([ap])$/);

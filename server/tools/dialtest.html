@@ -11,8 +11,8 @@
      frozen 09:45.
 
      `overdue=N` adds N expired items to the top cover, oldest first, and one more sitting on the 1am
-     row, which the dial reaches but cannot write on — it has to be held too. `allday=1` puts an
-     all-day chip under the date. Together they are the whole top cover at its fullest. With `overdue`,
+     row, which the dial reaches but cannot write on — it has to be held too. `allday=1` gives today an
+     all-day item, which waits in the dock at the bottom beside a timed one the dial cannot reach. With `overdue`,
      `redcase=1` also turns the items under test red and lists them as overdue: move them with `hour`
      and they stay on the dial while their row can hold words, and join the cover once it cannot. -->
 <!doctype html><html><head><meta charset="utf-8">
@@ -86,14 +86,20 @@
       hours.find((x) => x.t === 1).halves[0] = half([one]);
       overdue.push(one);
     }
-    const allday = q.get('allday') ? at(null, 'Pay rent').map((c) => ({ ...c, id: 'ad' })) : [];
+    // Today as the look-ahead's first day, which is what feeds the dock: a 10pm item past the end of
+    // the drum, and the all-day one.
+    const ahead = q.get('allday') ? [{ items: [
+      ...at('10p', 'Dinner').map((c) => ({ ...c, id: 'late' })),
+      ...at(null, 'Pay rent').map((c) => ({ ...c, id: 'ad' })),
+    ] }] : null;
     return new Response(JSON.stringify({ today:'2026-09-08',
-      dayline: { date:'2026-09-08', label:'Tue, Sep 8', allday, hours }, ...(N ? { overdue } : {}) }),
+      dayline: { date:'2026-09-08', label:'Tue, Sep 8', allday: [], hours },
+      ...(N ? { overdue } : {}), ...(ahead ? { ahead } : {}) }),
       { headers: { 'content-type': 'application/json' } });
   };
 </script>
 <script type="module">
   import { mount } from '/public/cards/dayline.js';
-  mount(document.getElementById('cw-day'), { url: '/api/calendar?day=1&full=1', dial: true });
+  mount(document.getElementById('cw-day'), { url: '/api/calendar?day=1&full=1', dial: true, dock: true });
 </script>
 </body></html>

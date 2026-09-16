@@ -256,7 +256,9 @@ function project(col) {
 // projection, and only this pass knows it.
 //
 //   THE DOCK, at the bottom: today's items still to come, held until the drum turns far enough for
-//   their row to carry words.
+//   their row to carry words — and today's all-day items, which no row will ever carry. Their
+//   deadline is the end of the day, the far end of what is still to come, so they sit under the
+//   timed ones.
 //   OVERDUE, at the top: items that went red and are still sitting there, held once their row has
 //   receded past words or out of the window altogether — or was never in it, for anything overdue
 //   from an earlier day. Its rows sit ABOVE the date, not under it: the date heads the day, and an
@@ -275,10 +277,10 @@ function paintEdges(col) {
   const box = col.el.querySelector('.cw-hours');
   const H = box ? box.clientHeight : 0;
 
-  // All-day items are held by neither: they have no row to wait for or recede from, and the strip
-  // under the date is where they live. A past item is not waiting for anything.
-  const waiting = col.dock && col.today && col.today.items
-    ? col.today.items.filter((it) => it.time && !it.past) : [];
+  // A past item is not waiting for anything. For an all-day item "past" is the end of its day, and by
+  // then it is either done or in `overdue`.
+  const upcoming = col.dock && col.today && col.today.items ? col.today.items.filter((it) => !it.past) : [];
+  const timed = upcoming.filter((it) => it.time), allday = upcoming.filter((it) => !it.time);
   const overdue = col.overdue || [];
 
   // A dock row lands at the height of the dial's last row that can still hold words, so an item is
@@ -324,7 +326,7 @@ function paintEdges(col) {
       (hr.halves || []).forEach((h) => (h.items || []).forEach((it) => legible.add(it.id)));
     });
     const next = { ov: overdue.filter((it) => !legible.has(it.id)),
-                   dk: waiting.filter((it) => !legible.has(it.id)) };
+                   dk: timed.filter((it) => !legible.has(it.id)).concat(allday) };
     if (next.ov.length === held.ov.length && next.dk.length === held.dk.length) break;
     held = next;
   }
@@ -339,8 +341,10 @@ const OVERDUE_MAX = 4;
 // chip's 50% is a percentage of its flex container, so the box has to be there: hang the chip off the
 // row itself and 50% is measured against a container 56px wider, which is a chip that changes width
 // at the moment the dial picks it up or lets it go.
+// An all-day row is marked, so the dock can rule it off from the timed ones above it: its gutter is
+// empty, and directly under "10p" an empty gutter reads as 10pm too.
 const edgeRow = (label, it, more = '') =>
-  `<div class="cw-dkrow"><span class="cw-dkh">${esc(label || '')}</span>` +
+  `<div class="cw-dkrow${it.time ? '' : ' allday'}"><span class="cw-dkh">${esc(label || '')}</span>` +
   `<div class="cw-dkitems">${chip(it, false)}${more}</div></div>`;
 
 // Only as tall as it needs to be: with nothing waiting there is no dock at all and the dial has its

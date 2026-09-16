@@ -244,7 +244,8 @@ same response (`&ahead=7`) and by the same reload, into a second element handed 
 and the look-ahead column draws the six after it.
 
 **The dock** is today's items the dial cannot show yet, held at the bottom of the dial column until
-it can (`paintEdges` in `cards/dayline.js`). The dial is a rolling window centred on now and it
+it can (`paintEdges` in `cards/dayline.js`) — and today's all-day items, under a rule beneath the
+timed ones, since no row will ever carry them and their deadline is the end of the day. The dial is a rolling window centred on now and it
 foreshortens hard, so being inside the +-12h window is not the same as being readable — just past
 midnight a noon item sat on a ONE-PIXEL row while its 4pm and 10pm siblings were outside the window
 altogether, and the whole of that day was invisible the moment it began. Membership is therefore
@@ -272,9 +273,10 @@ the TOP of the dial once it cannot show them — their row receded past words, l
 never in it because they were due on an earlier day. `full=1` ships every one as `overdue` (any date,
 oldest first, each with a `when` label for the gutter) and the client keeps whichever are not legible,
 newest four shown and the rest as `+N`. They sit ABOVE the date, because below it they would claim to
-be today's. The date, the all-day strip and these rows are one opaque block (`.cw-top`) covering the
-head of the dial, so the axis stays the middle of the column; on the dial an expired all-day item is
-in `overdue`, not `allday`, since it has no row and is always held.
+be today's. The date and these rows are one opaque block (`.cw-top`) covering the head of the dial,
+so the axis stays the middle of the column. The dial gets no all-day strip (`allday` is empty for
+`full=1`): an all-day item waits in the dock until its day ends, and only then, if still open, goes
+red and joins these rows. Under the date it looked like one of the overdue items, which it is not.
 
 **A cover counts against legibility.** A row either cover reaches, even partly, is `.covered`: blanked,
 and its items not counted as shown, so an overdue item under the top cover joins it instead of

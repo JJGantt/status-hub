@@ -53,7 +53,7 @@ body.tv .hw-daycard .cw-day{flex:1 1 auto;min-height:0;display:flex;flex-directi
    Rows stop sharing the column equally and take exactly what the drum gives them, so `flex` must not
    fight the inline height. --face is cos of the row's angle: 1 on the axis, 0 at the rim. */
 body.tv .hw-daycard .cw-day.dial .cw-hours{overflow:hidden;flex:1 1 auto}
-/* THE TOP COVER — overdue rows, then the date, then the all-day strip — is lifted OUT of the flow.
+/* THE TOP COVER — overdue rows, then the date — is lifted OUT of the flow.
    The axis is the middle of the hours box, so anything in flow above it pushes the whole dial down:
    44px of heading put the now-line 25px below the middle of the column, which is exactly the
    lopsidedness you see rather than a fault in the projection.
@@ -61,20 +61,14 @@ body.tv .hw-daycard .cw-day.dial .cw-hours{overflow:hidden;flex:1 1 auto}
    It covers the head of the dial instead, the way the dock covers its tail, and it is opaque — the
    rows under it are hidden, not showing through as coloured fragments behind the text. With only
    the date that is the four oldest hours, three slivers and a row too thin for words. Every
-   all-day or overdue row takes more, and a row it covers is not legible however tall it is:
-   paintEdges() in cards/dayline.js counts the cover, so an overdue item under it joins it rather
-   than disappearing beneath it.
-
-   The all-day chips start at the dial's chip column, 46px of gutter plus the row's 10px gap, and
-   take half the width the way a dial chip does. */
+   overdue row takes more, and a row it covers is not legible however tall it is: paintEdges() in
+   cards/dayline.js counts the cover, so an overdue item under it joins it rather than disappearing
+   beneath it. There is no all-day strip here — the server ships none to the dial, whose all-day
+   items wait in the dock. */
 body.tv .hw-daycard .cw-day.dial{padding-top:0}
 body.tv .hw-daycard .cw-day.dial .cw-top{position:absolute;top:0;left:0;right:0;z-index:2;
   display:flex;flex-direction:column;background:#000;pointer-events:none}
 body.tv .hw-daycard .cw-day.dial .cw-dayhead{margin:0}
-body.tv .hw-daycard .cw-day.dial .cw-allday{flex-direction:row;flex-wrap:wrap;gap:3px 4px;
-  margin:0;padding:2px 0 4px 56px}
-body.tv .hw-daycard .cw-day.dial .cw-allday .cw-dchip{height:var(--chip-full);box-sizing:border-box;
-  font-size:max(10px, calc((var(--chip-full) - 4px) / 1.25))}
 /* border-box, and no padding: the projection writes an exact pixel height per row, and the default
    content-box added its 2px padding and 1px border on top of that. Four pixels a row is nothing to
    look at and eleven pixels of drift across the column, which is the now-line missing the axis. */
@@ -174,6 +168,11 @@ body.tv .hw-daycard .cw-day.dial .cw-hour.covered > *{visibility:hidden}
    a queue, and a border here reads as the dial's grid showing through the thing covering it. */
 body.tv .hw-daycard .cw-day.dial .cw-dkrow{height:var(--dkrow, 26px);display:flex;gap:10px;
   align-items:center;overflow:hidden}
+/* Except once: between the timed items and the all-day ones under them. An all-day row has no hour to
+   put in the gutter, and an empty gutter under "10p" reads as 10pm. The rule is the hour separator's
+   own colour, since what it says is the same thing — a different time. */
+body.tv .hw-daycard .cw-day.dial .cw-dock .cw-dkrow:not(.allday) + .cw-dkrow.allday{
+  border-top:1px solid #222a33}
 /* The hour is in the gutter in BOTH states — it never moves. Waiting, it is dimmed and keeps its
    am/pm, because at a distance from now an 8 is genuinely ambiguous; once the dial reaches it the
    hour is simply the dial's own, in the dial's hand. */

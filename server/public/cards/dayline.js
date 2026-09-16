@@ -283,18 +283,24 @@ function paintEdges(col) {
   const timed = upcoming.filter((it) => it.time), allday = upcoming.filter((it) => !it.time);
   const overdue = col.overdue || [];
 
+  // A full chip: what a lone item gets on any row with room for words, since an occupied half floors
+  // at it (tv-home.css).
+  const chipFull = parseFloat(getComputedStyle(col.el).getPropertyValue('--chip-full')) || CHIP_MIN;
   // A dock row lands at the height of the dial's last row that can still hold words, so an item is
-  // already where it is going to be when the drum reaches it. Falling back to CHIP_MIN only matters
-  // before the first projection has run.
-  let dkRow = CHIP_MIN;
+  // already where it is going to be when the drum reaches it. That height is measured off a chip
+  // actually sitting there; with none on any readable row — an empty day, or before the first
+  // projection — it is the full chip a lone item would get. Falling back to CHIP_MIN drew the dock at
+  // the smallest size that still holds a word, 10px text, on exactly the days it was all there was.
+  let dkRow = 0;
   for (const r of rows) {
     if (r.classList.contains('thin')) continue;
     const ch = parseFloat(r.style.getPropertyValue('--chiph'));
     if (ch) dkRow = ch;
   }
+  dkRow = dkRow || chipFull;
   // An overdue row is a full chip. It has no row it is about to become, and it is something costing
   // him right now, so it is drawn at the size a chip wants rather than the smallest that still reads.
-  const ovRow = parseFloat(getComputedStyle(col.el).getPropertyValue('--chip-full')) || CHIP_MIN;
+  const ovRow = chipFull;
   const top = col.el.querySelector('.cw-top');
 
   // Each pass paints what is held so far and MEASURES the covers that produces, so their borders,

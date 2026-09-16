@@ -252,7 +252,7 @@ altogether, and the whole of that day was invisible the moment it began. Members
 decided in the client, after `project()` measures: an item is docked when it is still ahead and not
 on a row with room for words (`.thin`) that no cover reaches. A dock row is built to BECOME a dial row
 without moving — same 46px hour gutter, same 10px gap, and the height of the dial's last readable
-row — so the only
+row (a full chip when no readable row has one to measure) — so the only
 thing that changes when the drum reaches it is that its hour stops being greyed. The dock covers the
 dial's tail rather than shortening it, and it is only as tall as it needs to be: nothing waiting, no
 dock at all. One fetch and one clock for both: they are one answer to one question, and a look-ahead

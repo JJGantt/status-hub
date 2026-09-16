@@ -155,6 +155,9 @@ body.tv .hw-daycard .cw-day.dial{position:relative}
 body.tv .hw-daycard .cw-day.dial .cw-dock{position:absolute;left:0;right:0;bottom:0;z-index:2;
   background:#000;display:flex;flex-direction:column;border-top:1px solid #313d4a}
 body.tv .hw-daycard .cw-day.dial .cw-dock .cw-dchip{opacity:.78}
+/* Not an all-day one. It is not waiting for the drum; it can be done now, at any point until the day
+   ends, so dimming it says the opposite of what it is. */
+body.tv .hw-daycard .cw-day.dial .cw-dock .cw-dkrow.allday .cw-dchip{opacity:1}
 /* OVERDUE ROWS are dock rows, above the date. The same shape for the same reason — an item leaving
    the dial keeps its gutter and its half-width chip — and no dimming, because nothing about these is
    not live yet: they are costing him now. The rule under them is the dock's, turned over, and says

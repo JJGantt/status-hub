@@ -2727,6 +2727,19 @@ function scoreFields(item, nowLocal) {
            score_sign: sc.value > 0 ? 'pos' : 'neg' };
 }
 
+// Where an overdue item sat, in the fewest characters that place it. Today, the time (nothing for an
+// all-day item — the day is the only fact it has). Within the last six days, the weekday, which is
+// unambiguous because none of them shares today's. Past that, the date.
+function overdueWhen(due, todayKey) {
+  const day = String(due).slice(0, 10);
+  if (day === todayKey) return calTimeLabel(due) || '';
+  const at = Date.parse(`${day}T00:00:00Z`);
+  const ago = Math.round((Date.parse(`${todayKey}T00:00:00Z`) - at) / 86400000);
+  const d = new Date(at);
+  return ago < 7 ? d.toLocaleDateString('en-US', { timeZone: 'UTC', weekday: 'short' })
+                 : `${d.getUTCMonth() + 1}/${d.getUTCDate()}`;
+}
+
 function calOccurrences(item, startKey, endKey) {
   const day = String(item.due).slice(0, 10);
   return day >= startKey && day <= endKey ? [item.due] : [];
@@ -2789,34 +2802,38 @@ app.get('/api/calendar', async (req, res) => {
     const emojiOf = {};
     for (const l of listRows || []) emojiOf[l.name] = l.emoji;
 
+    // One chip, whichever surface draws it and whatever day it lands on. The day buckets and the
+    // dial's overdue list both build from this, so a chip cannot carry different state in the two.
+    const calChip = (r, occ) => ({
+      id: r.id,
+      title: itemTitle(r),
+      list: r.list_name,
+      emoji: emojiOf[r.list_name] || null,
+      color: listColor(r.list_name),
+      time: calTimeLabel(occ),
+      // `past`: this occurrence's moment has gone by (dims the chip). `expired`: it is overdue
+      // and uncleared, which is also what is draining his score for as long as it stays that way.
+      past: dueMoment(occ) <= nowET,
+      // `done` means he finished a task. An exempt item closes itself when its moment passes,
+      // which is not the same thing and must not read as an achievement — it just becomes past.
+      done: !!r.completed_at && (r.priority || 0) >= 0,
+      exempt: (r.priority || 0) < 0,
+      // Three states, and they line up with what the SCORE is doing rather than with the clock
+      // alone: `grace` is due-but-still-free (the 30 minutes that score as on time), `expired` is
+      // past that and actively draining. Colouring them the same made a chip go red while it was
+      // still costing nothing, and gave no signal at the moment the cost actually starts.
+      grace: !r.completed_at && (r.priority || 0) >= 0 && chipState(r, nowET) === 'grace',
+      expired: !r.completed_at && (r.priority || 0) >= 0 && chipState(r, nowET) === 'expired',
+      priority: r.priority || 0,
+      ...scoreFields(r, nowET),
+      repeating: !!r.series_id,
+    });
+
     const byDay = {};
     for (const r of rows || []) {
       for (const occ of calOccurrences(r, startKey, endKey)) {
-        (byDay[occ.slice(0, 10)] ??= []).push({
-          _occ: occ,   // sort key only, stripped below — date-only sorts before any 'T…' same-day
-          id: r.id,
-          title: itemTitle(r),
-          list: r.list_name,
-          emoji: emojiOf[r.list_name] || null,
-          color: listColor(r.list_name),
-          time: calTimeLabel(occ),
-          // `past`: this occurrence's moment has gone by (dims the chip). `expired`: it is overdue
-          // and uncleared, which is also what is draining his score for as long as it stays that way.
-          past: dueMoment(occ) <= nowET,
-          // `done` means he finished a task. An exempt item closes itself when its moment passes,
-          // which is not the same thing and must not read as an achievement — it just becomes past.
-          done: !!r.completed_at && (r.priority || 0) >= 0,
-          exempt: (r.priority || 0) < 0,
-          // Three states, and they line up with what the SCORE is doing rather than with the clock
-          // alone: `grace` is due-but-still-free (the 30 minutes that score as on time), `expired` is
-          // past that and actively draining. Colouring them the same made a chip go red while it was
-          // still costing nothing, and gave no signal at the moment the cost actually starts.
-          grace: !r.completed_at && (r.priority || 0) >= 0 && chipState(r, nowET) === 'grace',
-          expired: !r.completed_at && (r.priority || 0) >= 0 && chipState(r, nowET) === 'expired',
-          priority: r.priority || 0,
-          ...scoreFields(r, nowET),
-          repeating: !!r.series_id,
-        });
+        // `_occ` is a sort key only, stripped below — date-only sorts before any 'T…' same-day.
+        (byDay[occ.slice(0, 10)] ??= []).push({ _occ: occ, ...calChip(r, occ) });
       }
     }
     for (const k of Object.keys(byDay)) {
@@ -2859,7 +2876,9 @@ app.get('/api/calendar', async (req, res) => {
     let dayline = null;
     if (wall || dayOnly) {
       const todayItems = byDay[todayKey] || [];
-      const allday = todayItems.filter((i) => !i.time);
+      // On the dial an expired all-day item is in `overdue` instead. It has no hour row, so the dial
+      // can never show it and always holds it — drawn in both places it would be the same red twice.
+      const allday = todayItems.filter((i) => !i.time && !(full && i.expired));
       const timed = todayItems.filter((i) => i.time);
       const clockOf = (t) => {
         const m = String(t).match(/^(\d+)(?::(\d+))?([ap])$/);
@@ -2906,6 +2925,23 @@ app.get('/api/calendar', async (req, res) => {
       dayline = { date: todayKey, label: todayCell ? todayCell.label : todayKey, allday, hours };
     }
 
+    // THE DIAL'S OVERDUE LIST — every expired, unfinished item, whatever day it was due, oldest first.
+    // The dial only reaches twelve hours back and its far rows are too thin for words, so an item
+    // that has gone red and receded past what it can show was simply gone from the wall while it went
+    // on draining — and anything overdue from an earlier day was never on it at all. The whole list
+    // ships and the dial holds whichever of these it cannot show legibly; which ones that is depends
+    // on the measured projection, so it is decided there (paintEdges in cards/dayline.js).
+    //
+    // Read from the rows, not the day buckets: the buckets stop at the first month's grid, and an
+    // item nobody cleared a month ago is still overdue.
+    let overdue = null;
+    if (full) {
+      overdue = (rows || [])
+        .filter((r) => !r.completed_at && (r.priority || 0) >= 0 && chipState(r, nowET) === 'expired')
+        .sort((a, b) => (String(a.due) < String(b.due) ? -1 : 1))
+        .map((r) => ({ ...calChip(r, r.due), when: overdueWhen(r.due, todayKey) }));
+    }
+
     // THE LOOK-AHEAD — one box per day, in order, and it STARTS AT TODAY. It is a list rather than a
     // timeline: the useful fact about a day you are not inside is what is on it, not where in it.
     //
@@ -2944,7 +2980,7 @@ app.get('/api/calendar', async (req, res) => {
       }
     }
 
-    if (dayOnly) return res.json({ today: todayKey, dayline, ...(ahead ? { ahead } : {}), next_transition: nextChipTransition(rows, nowET) });
+    if (dayOnly) return res.json({ today: todayKey, dayline, ...(ahead ? { ahead } : {}), ...(overdue ? { overdue } : {}), next_transition: nextChipTransition(rows, nowET) });
     res.json({
       today: todayKey,
       dow: ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'],

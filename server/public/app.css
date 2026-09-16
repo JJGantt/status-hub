@@ -1074,6 +1074,9 @@ body.tv:not(.phonewall) #tv-act .ai-act:not(.show){visibility:hidden}
    beside its months, the home wall's middle column, and the phone's lists pane. Sizes below are the
    WALL's — read from a couch — and #daycard shrinks them for the phone at the bottom of this block.
    The wall's column width lives with each wall, since that is a property of the wall, not the day. */
+/* The date and the all-day strip travel as one block, so the dial can lift both off its hours. Here
+   the block is transparent to layout: its children are the column's own flex items. */
+.cw-top{display:contents}
 .cw-dayhead{font-size:24px;font-weight:700;color:#fff;flex:0 0 auto;margin-bottom:10px}
 .cw-allday{display:flex;flex-direction:column;gap:5px;flex:0 0 auto;margin-bottom:8px}
 .cw-hours{flex:1 1 auto;min-height:0;display:flex;flex-direction:column;overflow:hidden}

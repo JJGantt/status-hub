@@ -244,13 +244,14 @@ same response (`&ahead=7`) and by the same reload, into a second element handed 
 and the look-ahead column draws the six after it.
 
 **The dock** is today's items the dial cannot show yet, held at the bottom of the dial column until
-it can (`paintDock` in `cards/dayline.js`). The dial is a rolling window centred on now and it
+it can (`paintEdges` in `cards/dayline.js`). The dial is a rolling window centred on now and it
 foreshortens hard, so being inside the +-12h window is not the same as being readable — just past
 midnight a noon item sat on a ONE-PIXEL row while its 4pm and 10pm siblings were outside the window
 altogether, and the whole of that day was invisible the moment it began. Membership is therefore
 decided in the client, after `project()` measures: an item is docked when it is still ahead and not
-on a row with room for words (`.thin`). A dock row is built to BECOME a dial row without moving —
-same 46px hour gutter, same 10px gap, and the height of the dial's last readable row — so the only
+on a row with room for words (`.thin`) that no cover reaches. A dock row is built to BECOME a dial row
+without moving — same 46px hour gutter, same 10px gap, and the height of the dial's last readable
+row — so the only
 thing that changes when the drum reaches it is that its hour stops being greyed. The dock covers the
 dial's tail rather than shortening it, and it is only as tall as it needs to be: nothing waiting, no
 dock at all. One fetch and one clock for both: they are one answer to one question, and a look-ahead
@@ -265,6 +266,21 @@ no hour row underneath is saying it.
 chips take the box between them, so four items are read at 20px, five at 15, six at 12, and seven
 or more break into two columns. Nothing is a fixed size, because a fixed size in a box of unknown
 fullness is a spare strip under every busy day. The table is in `docs/HUB-INTERNALS.md`.
+
+**The overdue rows** are the dock turned over: items that went red and are still unfinished, held at
+the TOP of the dial once it cannot show them — their row receded past words, left the window, or was
+never in it because they were due on an earlier day. `full=1` ships every one as `overdue` (any date,
+oldest first, each with a `when` label for the gutter) and the client keeps whichever are not legible,
+newest four shown and the rest as `+N`. They sit ABOVE the date, because below it they would claim to
+be today's. The date, the all-day strip and these rows are one opaque block (`.cw-top`) covering the
+head of the dial, so the axis stays the middle of the column; on the dial an expired all-day item is
+in `overdue`, not `allday`, since it has no row and is always held.
+
+**A cover counts against legibility.** A row either cover reaches, even partly, is `.covered`: blanked,
+and its items not counted as shown, so an overdue item under the top cover joins it instead of
+vanishing beneath it. That makes membership depend on the covers' heights and vice versa, so
+`paintEdges` iterates from nothing held, painting and measuring each pass; each pass can only add, so
+it settles, and on the same answer for the same geometry whatever was drawn the minute before.
 
 ## Where a fact goes
 

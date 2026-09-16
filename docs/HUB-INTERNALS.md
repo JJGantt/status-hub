@@ -647,6 +647,12 @@ hour, crossing midnight in both directions, each carrying `t` — hours from tod
 may be negative or past 24. That is the coordinate the dial angles off, and it is what lets a client
 draw a continuous timeline without knowing anything about dates.
 
+It also ships **`overdue`**: every expired, unfinished item whatever day it was due, oldest first, each
+a normal chip plus `when` — the time if it was due today (empty for an all-day item), the weekday if
+within the last six days, `M/D` before that. It is read from the rows rather than the day buckets,
+because the buckets stop at the month grid and an item left overdue for a month is still overdue.
+With `full=1` an expired all-day item is left out of `allday`, since the dial holds it in `overdue`.
+
 ### The look-ahead (`?ahead=N`, home wall only)
 
 `ahead` is the N days AFTER today, in order, each with `dow`, `day`, a `month` on the day the number
@@ -745,9 +751,17 @@ nine. Below `CHIP_MIN` there is no room for words at all and the row goes `.thin
 The decision reads the box's height, the gap and the floor — none of which depend on what it last
 drew, unlike measuring the halves themselves, so it cannot oscillate against its own output.
 
+**Both ends of the dial are covered, not shortened**, so the axis stays the middle: the dock over the
+tail, and over the head one opaque block (`.cw-top`) of overdue rows, the date, and the all-day strip.
+Which items those hold is decided after the projection (`paintEdges`): an item is shown on the dial
+only if its row is not `.thin` and neither cover reaches it. A row a cover reaches is `.covered` and
+blanked, so the cover's edge never cuts an hour number or a chip in half. CLAUDE.md § The day column
+has the membership rules.
+
 **`server/tools/dialtest.html` is the bench for all of this**: the column at its real size, a stubbed
 payload, and a frozen clock, with `?case=` choosing what is in the hour and `?hour=` sliding it up
-and down the drum. It is deliberately outside `public/`, so it is not in the image. Use it rather
+and down the drum. `?overdue=N&allday=1` fills the top cover, and `&redcase=1` turns the items under
+test red so `?hour=` shows the point where an overdue item leaves the dial for the cover. It is deliberately outside `public/`, so it is not in the image. Use it rather
 than real rows — a dated item with a past `due` pushes a real notification.
 
 **A calendar day cannot feed this** — that is what `full=1` exists for. Tried with one day, by 21:30

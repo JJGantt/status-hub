@@ -68,7 +68,11 @@ export function dayHtml(dl) {
       `<span class="cw-hl">${esc(h.label)}</span>` +
       `<div class="cw-hitems">${hourItems(h, false)}</div>${now}</div>`;
   }).join('');
-  return `<div class="cw-dayhead">${esc(dl.label)}</div>${allday}<div class="cw-hours">${hours}</div>`;
+  // The date and the all-day strip are one block, so a surface that lifts them off the hours (the
+  // dial, which also stacks its overdue rows on top) moves them together. Everywhere else the block
+  // is `display: contents` and lays out exactly as its two children would.
+  return `<div class="cw-top"><div class="cw-dayhead">${esc(dl.label)}</div>${allday}</div>` +
+    `<div class="cw-hours">${hours}</div>`;
 }
 
 // ONE DAY OF THE LOOK-AHEAD — which day it is, then what is on it. A list, not a timeline: at a
@@ -110,7 +114,7 @@ export function aheadHtml(days) { return (days || []).map(aheadDay).join(''); }
 export function mount(el, { url = '/api/calendar?day=1', centre = false, onload = null, dial = false,
                             ahead = null, dock = false } = {}) {
   if (!el) return;
-  const col = { el, url, centre, onload, dial, ahead, dock, dl: null, next: null, today: null };
+  const col = { el, url, centre, onload, dial, ahead, dock, dl: null, next: null, today: null, overdue: null };
   columns.push(col);
   if (dial) {
     el.classList.add('dial');
@@ -242,58 +246,125 @@ function project(col) {
     row.style.setProperty('--chiph', `${ch}px`);
     row.classList.toggle('thin', ch < CHIP_MIN);
   });
-  paintDock(col);   // which items are already legible is exactly what was just decided
+  paintEdges(col);   // which items are already legible is exactly what was just decided
 }
 
-// THE DOCK — today's items the dial cannot show yet, held at the bottom of the column until it can.
-//
-// The dial is a rolling window centred on now and it foreshortens hard, so being INSIDE the window
-// is not the same as being readable: at half past midnight a noon item sat on a one-pixel row. That
-// is why membership is decided here rather than on the server — `.thin` is a measured outcome of the
+// THE TWO EDGES — what the dial holds because it cannot show it. The dial is a rolling window
+// centred on now and it foreshortens hard, so being INSIDE the window is not the same as being
+// readable: at half past midnight a noon item sat on a one-pixel row. Membership at both edges is
+// therefore decided here rather than on the server — `.thin` is a measured outcome of the
 // projection, and only this pass knows it.
 //
-// A dock row is built to become a dial row without moving. Same gutter for the hour, same left edge
-// for the chip, and the height of the dial's last readable row — so when the drum turns far enough
-// the item is already where it is going to be, and all that changes is that its hour stops being
-// greyed. The dock is only as tall as it needs to be: with nothing waiting there is no dock at all
-// and the dial has its whole column back.
-function paintDock(col) {
-  if (!col.dock) return;
-  let el = col.el.querySelector('.cw-dock');
-  const day = col.today;
-  if (!day || !day.items || !col.dl) { if (el) el.remove(); return; }
-
-  // Everything already sitting on a row with room for words. Rows and payload hours are the same
-  // list in the same order, so the ids line up without matching on anything.
+//   THE DOCK, at the bottom: today's items still to come, held until the drum turns far enough for
+//   their row to carry words.
+//   OVERDUE, at the top: items that went red and are still sitting there, held once their row has
+//   receded past words or out of the window altogether — or was never in it, for anything overdue
+//   from an earlier day. Its rows sit ABOVE the date, not under it: the date heads the day, and an
+//   item from Tuesday stacked below "Wed" would claim to be Wednesday's.
+//
+// Both COVER the dial rather than shortening it, so the axis stays the middle of the column. What
+// they cover is the rim, where the rows are slivers — but not only slivers once they grow, and a row
+// under a cover is not legible however tall it is. So covering counts: an item whose row sits under
+// either one joins it. That makes membership depend on the covers' heights, which depend on
+// membership, so it is iterated — from empty, and each pass can only add, so it settles, and always
+// on the same answer for the same geometry rather than on whatever was drawn last minute.
+function paintEdges(col) {
+  if (!col.dl || (!col.dock && !col.overdue)) return;
   const rows = [...col.el.querySelectorAll('.cw-hour')];
-  const legible = new Set();
-  (col.dl.hours || []).forEach((hr, i) => {
-    if (!rows[i] || rows[i].classList.contains('thin')) return;
-    (hr.halves || []).forEach((h) => (h.items || []).forEach((it) => legible.add(it.id)));
-  });
+  const hours = col.dl.hours || [];
+  const box = col.el.querySelector('.cw-hours');
+  const H = box ? box.clientHeight : 0;
 
-  // Still to come today, and not legible yet. A past item is not waiting for anything.
-  const waiting = day.items.filter((it) => !it.past && !legible.has(it.id));
-  if (!waiting.length) { if (el) el.remove(); return; }
+  // All-day items are held by neither: they have no row to wait for or recede from, and the strip
+  // under the date is where they live. A past item is not waiting for anything.
+  const waiting = col.dock && col.today && col.today.items
+    ? col.today.items.filter((it) => it.time && !it.past) : [];
+  const overdue = col.overdue || [];
 
-  // The height it will land at: the last row that can still hold words. Falling back to CHIP_MIN
-  // only matters before the first projection has run.
-  let rowH = CHIP_MIN;
+  // A dock row lands at the height of the dial's last row that can still hold words, so an item is
+  // already where it is going to be when the drum reaches it. Falling back to CHIP_MIN only matters
+  // before the first projection has run.
+  let dkRow = CHIP_MIN;
   for (const r of rows) {
     if (r.classList.contains('thin')) continue;
     const ch = parseFloat(r.style.getPropertyValue('--chiph'));
-    if (ch) rowH = ch;
+    if (ch) dkRow = ch;
   }
+  // An overdue row is a full chip. It has no row it is about to become, and it is something costing
+  // him right now, so it is drawn at the size a chip wants rather than the smallest that still reads.
+  const ovRow = parseFloat(getComputedStyle(col.el).getPropertyValue('--chip-full')) || CHIP_MIN;
+  const top = col.el.querySelector('.cw-top');
 
-  // The row mirrors `.cw-hour` exactly — gutter, then an items box the chip takes HALF of. A chip's
-  // 50% is a percentage of its flex container, so the box has to be there: hang the chip off the row
-  // itself and 50% is measured against a container 56px wider, which is a chip that changes width at
-  // the moment it is picked up.
-  const html = waiting.map((it) =>
-    `<div class="cw-dkrow"><span class="cw-dkh">${esc(it.time || '')}</span>` +
-    `<div class="cw-dkitems">${chip(it, false)}</div></div>`
-  ).join('');
+  // Each pass paints what is held so far and MEASURES the covers that produces, so their borders,
+  // the wrapping all-day strip and whatever else CSS adds are counted exactly rather than estimated.
+  // The first pass paints nothing held, which is what makes the answer independent of last minute's.
+  // It all happens inside one task, so no intermediate state is ever on screen.
+  let held = { ov: [], dk: [] };
+  for (;;) {
+    paintDock(col, held.dk, dkRow);
+    paintOverdue(col, held.ov, ovRow);
+    const dockEl = col.el.querySelector('.cw-dock');
+    const topEdge = top ? top.offsetHeight : 0;
+    const botEdge = H - (dockEl ? dockEl.offsetHeight : 0);
+    // Rows and payload hours are the same list in the same order, so the ids line up without
+    // matching on anything. A pixel of slack either way: the heights are fractional and offsets are
+    // not, and a row that merely touches a cover is not under it.
+    //
+    // A covered row is blanked as well as discounted. The cover is opaque, but it ends wherever it
+    // ends, and that is usually partway down a row — half an hour number or the bottom of a chip
+    // left showing under it reads as a broken wall, not as a row that is out of sight.
+    const legible = new Set();
+    hours.forEach((hr, i) => {
+      const r = rows[i];
+      if (!r) return;
+      // Before the column has a height nothing has been laid out, and every row would read as covered.
+      const covered = H > 0 && (r.offsetTop < topEdge - 1 || r.offsetTop + r.offsetHeight > botEdge + 1);
+      r.classList.toggle('covered', covered);
+      if (covered || r.classList.contains('thin')) return;
+      (hr.halves || []).forEach((h) => (h.items || []).forEach((it) => legible.add(it.id)));
+    });
+    const next = { ov: overdue.filter((it) => !legible.has(it.id)),
+                   dk: waiting.filter((it) => !legible.has(it.id)) };
+    if (next.ov.length === held.ov.length && next.dk.length === held.dk.length) break;
+    held = next;
+  }
+}
+
+// Most overdue rows the top cover takes. Every row is past hours of the dial it hides, and unlike the
+// dock this list has no natural bound — nothing cleared stays overdue for as long as it is left — so
+// the rest ride on the top row as its +N, a hidden item still visible AS hidden.
+const OVERDUE_MAX = 4;
+
+// One held row. It mirrors `.cw-hour` exactly — gutter, then an items box the chip takes HALF of. A
+// chip's 50% is a percentage of its flex container, so the box has to be there: hang the chip off the
+// row itself and 50% is measured against a container 56px wider, which is a chip that changes width
+// at the moment the dial picks it up or lets it go.
+const edgeRow = (label, it, more = '') =>
+  `<div class="cw-dkrow"><span class="cw-dkh">${esc(label || '')}</span>` +
+  `<div class="cw-dkitems">${chip(it, false)}${more}</div></div>`;
+
+// Only as tall as it needs to be: with nothing waiting there is no dock at all and the dial has its
+// whole column back.
+function paintDock(col, waiting, rowH) {
+  let el = col.el.querySelector('.cw-dock');
+  if (!waiting.length) { if (el) el.remove(); return; }
+  const html = waiting.map((it) => edgeRow(it.time, it)).join('');
   if (!el) { el = document.createElement('div'); el.className = 'cw-dock'; col.el.appendChild(el); }
+  el.style.setProperty('--dkrow', `${Math.round(rowH)}px`);
+  if (el.innerHTML !== html) el.innerHTML = html;
+}
+
+// Oldest at the top, the way the dial runs, so the newest sits nearest the day it left. Past the cap
+// the OLDEST collapse into the +N: the rows kept are the ones closest to the timeline they came off.
+function paintOverdue(col, items, rowH) {
+  const top = col.el.querySelector('.cw-top');
+  let el = col.el.querySelector('.cw-overdue');
+  if (!items.length || !top) { if (el) el.remove(); return; }
+  const shown = items.slice(-OVERDUE_MAX);
+  const more = items.length - shown.length;
+  const html = shown.map((it, k) =>
+    edgeRow(it.when, it, k === 0 && more ? `<span class="cw-more">+${more}</span>` : '')).join('');
+  if (!el) { el = document.createElement('div'); el.className = 'cw-overdue'; top.prepend(el); }
   el.style.setProperty('--dkrow', `${Math.round(rowH)}px`);
   if (el.innerHTML !== html) el.innerHTML = html;
 }
@@ -307,6 +378,8 @@ async function load(col) {
   // column takes the days after it. One request answers both, so the two cannot disagree about
   // which day it is.
   col.today = col.dock && d.ahead ? d.ahead[0] : null;
+  // Only the dial's request carries it; its absence is what keeps the other surfaces tray-less.
+  col.overdue = col.dial ? d.overdue || null : null;
   if (col.ahead && d.ahead) col.ahead.innerHTML = aheadHtml(col.dock ? d.ahead.slice(1) : d.ahead);
   if (!d.dayline) return;
   col.dl = d.dayline;
@@ -317,7 +390,7 @@ async function load(col) {
   col.el.innerHTML = dayHtml(d.dayline);
   col.hour = new Date().getHours();   // which hour this window was built around
   project(col);
-  paintDock(col);
+  paintEdges(col);
   if (col.centre) centreOnNow(col.el);
 }
 

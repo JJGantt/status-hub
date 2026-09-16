@@ -53,18 +53,28 @@ body.tv .hw-daycard .cw-day{flex:1 1 auto;min-height:0;display:flex;flex-directi
    Rows stop sharing the column equally and take exactly what the drum gives them, so `flex` must not
    fight the inline height. --face is cos of the row's angle: 1 on the axis, 0 at the rim. */
 body.tv .hw-daycard .cw-day.dial .cw-hours{overflow:hidden;flex:1 1 auto}
-/* The date is lifted OUT of the flow. The axis is the middle of the hours box, so any header above
-   it pushes the whole dial down — 44px of heading put the now-line 25px below the middle of the
-   column, which is exactly the lopsidedness you see rather than a fault in the projection.
+/* THE TOP COVER — overdue rows, then the date, then the all-day strip — is lifted OUT of the flow.
+   The axis is the middle of the hours box, so anything in flow above it pushes the whole dial down:
+   44px of heading put the now-line 25px below the middle of the column, which is exactly the
+   lopsidedness you see rather than a fault in the projection.
 
-   IT IS NOT FREE, THOUGH. It covers the top ~34px, which is the four oldest hours in the window:
-   three slivers and one row of about 19px, and that fourth row is tall enough to hold a chip. A
-   chip there is already flattened to a bar (`.thin`, below), so what the date sits on top of is a
-   band of colour, and the part of the band behind the text reads as a fragment rather than as an
-   item. Anything given more height here takes another hour of the day with it. */
+   It covers the head of the dial instead, the way the dock covers its tail, and it is opaque — the
+   rows under it are hidden, not showing through as coloured fragments behind the text. With only
+   the date that is the four oldest hours, three slivers and a row too thin for words. Every
+   all-day or overdue row takes more, and a row it covers is not legible however tall it is:
+   paintEdges() in cards/dayline.js counts the cover, so an overdue item under it joins it rather
+   than disappearing beneath it.
+
+   The all-day chips start at the dial's chip column, 46px of gutter plus the row's 10px gap, and
+   take half the width the way a dial chip does. */
 body.tv .hw-daycard .cw-day.dial{padding-top:0}
-body.tv .hw-daycard .cw-day.dial .cw-dayhead{position:absolute;top:0;left:0;z-index:2;margin:0;
-  pointer-events:none}
+body.tv .hw-daycard .cw-day.dial .cw-top{position:absolute;top:0;left:0;right:0;z-index:2;
+  display:flex;flex-direction:column;background:#000;pointer-events:none}
+body.tv .hw-daycard .cw-day.dial .cw-dayhead{margin:0}
+body.tv .hw-daycard .cw-day.dial .cw-allday{flex-direction:row;flex-wrap:wrap;gap:3px 4px;
+  margin:0;padding:2px 0 4px 56px}
+body.tv .hw-daycard .cw-day.dial .cw-allday .cw-dchip{height:var(--chip-full);box-sizing:border-box;
+  font-size:max(10px, calc((var(--chip-full) - 4px) / 1.25))}
 /* border-box, and no padding: the projection writes an exact pixel height per row, and the default
    content-box added its 2px padding and 1px border on top of that. Four pixels a row is nothing to
    look at and eleven pixels of drift across the column, which is the now-line missing the axis. */
@@ -151,6 +161,15 @@ body.tv .hw-daycard .cw-day.dial{position:relative}
 body.tv .hw-daycard .cw-day.dial .cw-dock{position:absolute;left:0;right:0;bottom:0;z-index:2;
   background:#000;display:flex;flex-direction:column;border-top:1px solid #313d4a}
 body.tv .hw-daycard .cw-day.dial .cw-dock .cw-dchip{opacity:.78}
+/* OVERDUE ROWS are dock rows, above the date. The same shape for the same reason — an item leaving
+   the dial keeps its gutter and its half-width chip — and no dimming, because nothing about these is
+   not live yet: they are costing him now. The rule under them is the dock's, turned over, and says
+   the same thing: this is not the dial. */
+body.tv .hw-daycard .cw-day.dial .cw-overdue{display:flex;flex-direction:column;gap:2px;
+  border-bottom:1px solid #313d4a;padding-bottom:4px;margin-bottom:4px}
+/* A row either cover reaches, even partly. paintEdges() already stopped counting what is on it;
+   this stops drawing it, so the cover's edge never slices an hour number or a chip in half. */
+body.tv .hw-daycard .cw-day.dial .cw-hour.covered > *{visibility:hidden}
 /* No rule between rows. The dial rules its hours off because each one is a slice of time; these are
    a queue, and a border here reads as the dial's grid showing through the thing covering it. */
 body.tv .hw-daycard .cw-day.dial .cw-dkrow{height:var(--dkrow, 26px);display:flex;gap:10px;
@@ -163,7 +182,7 @@ body.tv .hw-daycard .cw-day.dial .cw-dkh{flex:0 0 46px;text-align:right;font-siz
 /* The items box `.cw-hitems` would be, so the chip's own half-width basis measures against the same
    container it will measure against on the dial. */
 body.tv .hw-daycard .cw-day.dial .cw-dkitems{flex:1 1 auto;min-width:0;display:flex}
-body.tv .hw-daycard .cw-day.dial .cw-dock .cw-dchip{min-width:0;
+body.tv .hw-daycard .cw-day.dial .cw-dkitems .cw-dchip{min-width:0;
   font-size:max(10px, calc((var(--dkrow, 26px) - 4px) / 1.25))}
 body.tv .hw-daycard .cw-day.dial .cw-hour.sliver .cw-hitems{gap:1px}
 /* The server draws a marker inside whichever hour contains now. On the dial that hour is a moving

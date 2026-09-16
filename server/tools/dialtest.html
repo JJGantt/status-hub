@@ -8,7 +8,13 @@
      `case` picks what is in the hour: `onehalf` two items at :00, `split` one at :00 and one at :30,
      `over` one at :00 and two at :30, `heavy` two and two. `hour` moves that hour up and down the
      drum, which is how the merge crossover gets swept — the row shrinks as it recedes from the
-     frozen 09:45. -->
+     frozen 09:45.
+
+     `overdue=N` adds N expired items to the top cover, oldest first, and one more sitting on the 1am
+     row, which the dial reaches but cannot write on — it has to be held too. `allday=1` puts an
+     all-day chip under the date. Together they are the whole top cover at its fullest. With `overdue`,
+     `redcase=1` also turns the items under test red and lists them as overdue: move them with `hour`
+     and they stay on the dial while their row can hold words, and join the cover once it cannot. -->
 <!doctype html><html><head><meta charset="utf-8">
 <link rel="stylesheet" href="/public/app.css"><link rel="stylesheet" href="/public/tv-home.css">
 <style>
@@ -58,8 +64,31 @@
                : [half([]), half([])];
       hours.push({ t, h, label: String(h % 12 || 12), halves: hv, now: t === 9 ? 75 : null });
     }
+    const q = new URLSearchParams(location.search);
+    const late = (id, title, when, score) => ({ id, title, when, time: null, color: '#ffd60a',
+      priority: 0, done: false, past: true, grace: false, expired: true, exempt: false,
+      score, score_kind: 'lost', score_sign: 'neg' });
+    const N = +(q.get('overdue') || 0);
+    const overdue = [
+      late('o1', 'Shower', '9/1', '\u221249'), late('o2', 'Renew tags', 'Thu', '\u221228'),
+      late('o3', 'Shower', 'Sat', '\u221214'), late('o4', 'Call dentist', 'Mon', '\u22127'),
+      late('o5', 'Insurance', '', '\u22122'),
+    ].slice(5 - Math.min(5, N));
+    if (N && q.get('redcase')) {
+      for (const hr of hours) if (hr.h === HOUR) for (const hf of hr.halves) for (const it of hf.items) {
+        Object.assign(it, { past: true, expired: true, when: it.time, score: '\u22121', score_kind: 'lost', score_sign: 'neg' });
+        overdue.push(it);
+      }
+    }
+    if (N) {
+      // A real row: 1am is inside the window and too thin for words at 09:45.
+      const one = late('o6', 'Meds', '1a', '\u22123'); one.time = '1a';
+      hours.find((x) => x.t === 1).halves[0] = half([one]);
+      overdue.push(one);
+    }
+    const allday = q.get('allday') ? at(null, 'Pay rent').map((c) => ({ ...c, id: 'ad' })) : [];
     return new Response(JSON.stringify({ today:'2026-09-08',
-      dayline: { date:'2026-09-08', label:'Tue, Sep 8', allday: [], hours } }),
+      dayline: { date:'2026-09-08', label:'Tue, Sep 8', allday, hours }, ...(N ? { overdue } : {}) }),
       { headers: { 'content-type': 'application/json' } });
   };
 </script>

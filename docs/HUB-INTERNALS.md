@@ -140,7 +140,7 @@ were never the problem.
 | `cards/weather.js` | The rain-chance grid, in the surf card on the home wall and in the phone's misc pane with it. Paints only: the grid, the drawn window, the peak and the colours are all decided in `lib/weather`. Carries no day letters and no sky icons — the leftmost column is today by definition, and in this climate NWS says "chance of showers and thunderstorms" six days in seven, so the icon discriminated nothing the colour did not. |
 | `cards/dayline.js` | THE day column, on every surface that has one — and the home wall's look-ahead beside it, painted from the same response into the element `mount` was given as `ahead` — the calendar wall, the home wall, the phone's lists pane. Owns the fetch, the clock and the reload rules: it re-reads on an `/api/list-stream` push and when the server says a chip changes state, and otherwise just moves the now-line against the clock (each hour row carries its 24h number). Mounts `#daycard` itself; the walls mount their column, because they choose the endpoint. |
 | `tv-calendar.js` | The calendar wall's middle (only `tv-calendar.html` loads it): the month grid(s) out of the `/api/calendar?wall=1` payload that `dayline.js` fetched for the column beside them. Display-only. |
-| `tv-home.js` | The home wall's own middle (only `tv-home.html` loads it): mounts the day column and the look-ahead column beside it, and polls `/api/sessions` for the three most recently active sessions and the focused one's last answer (a pinned one carries the pin). Display-only. |
+| `tv-home.js` | The home wall's own middle (only `tv-home.html` loads it): mounts the day column and the look-ahead column beside it, and paints the three most recently active sessions and the focused one's last answer (a pinned one carries the pin) from pushed `sessions` frames, with a 5-minute fetch behind them as the net. Display-only. |
 | `mic.js` | The `/mic` standalone launcher page's script (its own recorder, reuses `voiceagent`). |
 
 The activity element (`.ai-act`) renders the
@@ -983,7 +983,7 @@ writes a self-contained HTML page, it lands as a push notification, and tapping 
 |---|---|
 | `publish_report(title, summary, html)` | data-layer MCP (`src/reports.ts`) — writes a `reports` row |
 | the instruction to publish | `REPORT_DIRECTIVE`, appended to the prompt by `pi-desk` and the Mac orchestrator |
-| the notification | `reportTick()` here, every 20s |
+| the notification | `reportTick()` here — fired by realtime the moment a `reports` row is INSERTed, with a 10-minute backstop behind it |
 | the page | `GET /report/:id`; every report at `GET /reports` |
 | the way in | the **Reports pane** — the last swipe pane, right after the repo launcher |
 | the pane's data | `GET /api/reports` (list only; `html` is never selected) → `cards/reports.js` |

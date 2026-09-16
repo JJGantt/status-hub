@@ -275,8 +275,10 @@ A **live hub context window overrides priority**: it stays pinned to the worker 
 the window resets or that worker goes silent, so a conversation isn't lost to a needless switch.
 
 - **Claiming latency:** a **Supabase realtime listener** (`RealtimeWaker` in `worker.py`) wakes the
-  loop the instant a `voice_requests` row is INSERTed; a short poll (`IDLE_POLL_S`, ~15s) is the
-  backstop, and the claim socket is recycled every ~5 min to beat realtime half-open death.
+  loop the instant a `voice_requests` row is INSERTed; a slow poll (`IDLE_POLL_S`, 60s) is the
+  backstop, and the claim socket is recycled every ~5 min to beat realtime half-open death. An idle
+  cycle costs ONE read: whether anything is pending. Standby and the orphan-claim sweep answer
+  nothing while there is nothing to claim, so they run on their own 60s clocks rather than per cycle.
 - **Model routing — one dynamic route.** Every hub command runs **Sonnet first**, given only the SAFE
   read/actuator tools (`allowed_tools` on the warm SDK client); the gated data-WRITE tools are absent
   from that list, so Sonnet can see them and is *denied* them. If the turn needs one — it emits

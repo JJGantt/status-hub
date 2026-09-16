@@ -207,7 +207,7 @@ implemented twice — `numberSessions` in `data-layer/src/desk.ts` and in `/api/
 two must agree**, or "session three" means one thing to the pane and another to the voice tools.
 
 **It is ordered by `active_at`, the last turn boundary** — a prompt sent or a turn finished. `last_seen`
-was the obvious reading of "most recent" and it made the numbers unusable: every row is touched by its
+was the obvious reading of "most recent" and it made the numbers unusable: every row was touched by its
 reconcile tick every 30s, so the order reshuffled between two reads seconds apart — measured, and caught
 when "focus the first session" landed on a session that had become first while the sentence was being
 processed. `started` cured that and left a session in active use below newer idle ones. `active_at`
@@ -283,7 +283,7 @@ the complete capture was discarded as its duplicate.
 
 | | value | why |
 |---|---|---|
-| reconcile tick | 30s | both machines: liveness, mirror, and the BACKSTOP for last reply |
+| reconcile tick | 30s | both machines: liveness, mirror, and the BACKSTOP for last reply. **It writes only what changed** — an unconditional rewrite per resident row per tick was ~19k writes/day against ~6 sessions a day that did anything, and now that `desk_sessions` is published to realtime each such write is also a broadcast to every open screen. `last_seen` rides along with a real change or refreshes every 10 min; its only consumer is the 14-day sweep over parked rows, whose stamp freezes at eviction |
 | session watch | on file events | `sessionWatch.js`: tool calls and finished turns, pushed as they land |
 | `COMMAND_TTL_S` | 120s | a command older than this expires unrun (and is kept) |
 | `CLAIM_STALE_S` | 900s | a claim held this long is treated as abandoned |
@@ -335,9 +335,11 @@ cannot be event-driven — nothing fires when a process stops existing — and `
 events, since FSEvents coalesces on macOS and inotify misses under load. So the tick is the net, not
 the mechanism. That includes the reply's phone notification: a tick that reads a finished turn newer
 than the one the row records (and newer than the row itself, so a resume's inherited history does not
-count) reports it with `reportTurnEnd`, the watcher's own call, and the hub pushes each turn once. The same is true one layer up: the wall keeps a 5s poll of `/api/sessions` behind the
-push, because a session dying, the focus moving and the numbering changing announce themselves to
-nobody.
+count) reports it with `reportTurnEnd`, the watcher's own call, and the hub pushes each turn once. The same is true one layer up: the wall keeps a 5-MINUTE poll of `/api/sessions` behind the
+push, and only as a net. `desk_sessions`, `desk_queue` and `desk_focus` are in the realtime
+publication (data-layer migration `00104`), so a session dying, the focus moving and the numbering
+changing now do announce themselves — each pushes a fresh payload (`pushSessions` in the hub), built
+by the same function that answers the endpoint so the two cannot disagree.
 
 ### A hub dispatch answers back once
 

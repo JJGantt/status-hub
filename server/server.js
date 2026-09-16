@@ -865,6 +865,19 @@ function startRealtime() {
     // marks the request finished.
     .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'voice_requests' },
       (p) => { seen(); if (p.new) settleReply(p.new); })
+    // The three tables a session view is assembled from. These are why the walls no longer poll
+    // /api/sessions every 5s: a session starting, ending, being renamed, finishing a turn, being
+    // focused or queueing behind another one all land here, and each pushes a fresh payload.
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'desk_sessions' },
+      () => { seen(); pushSessions(); })
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'desk_queue' },
+      () => { seen(); pushSessions(); })
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'desk_focus' },
+      () => { seen(); pushSessions(); })
+    // A written report announces itself rather than being discovered: reportTick's timer is now only
+    // the net under this, instead of the fastest database timer on the server.
+    .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'reports' },
+      () => { seen(); reportTick().catch((e) => console.log('[report] error', e.message)); })
     .subscribe((status) => {
       console.log('realtime channel:', status);
       // SUBSCRIBED means the handshake completed, not that events will flow. Treat it
@@ -3087,6 +3100,10 @@ const byActivity = (a, b) => sessionActivity(b) - sessionActivity(a);
 // → { session, pinned }. `pinned` says the focus is 1 — his explicit pin — rather than automatic, and
 // every surface marks a pinned session differently, because a pin stays put while other sessions take
 // turns and automatic focus does not.
+// Commands seen in a terminal state. A command only ever moves pending → running → done/error, so a
+// terminal answer is true for ever and re-reading it is pure waste. One entry per focus Jared sets.
+const settledCommands = new Set();
+
 async function pickFocus(focusRow, sessions) {
   const f = focusRow || {};
   const running = (sessions || []).filter((s) => s.status === 'resident');
@@ -3094,17 +3111,29 @@ async function pickFocus(focusRow, sessions) {
     const hit = running.find((s) => s.id === f.session_id);
     if (hit) return { session: hit, pinned: true };
   }
-  if (f.command_id && !(sessions || []).some((s) => s.command_id === f.command_id)) {
+  if (f.command_id && !(sessions || []).some((s) => s.command_id === f.command_id)
+      && !settledCommands.has(f.command_id)) {
     // Only while it can still become a session: a command that failed or expired never will.
     const cmd = await sb(`desk_commands?id=eq.${encodeURIComponent(f.command_id)}&select=status`);
     const st = cmd && cmd[0] && cmd[0].status;
     if (st === 'pending' || st === 'running') return { session: null, pinned: false };
+    // Anything else is FINAL — done, error, expired, or a row retention has already swept. `desk_focus`
+    // keeps its `command_id` until an explicit unfocus, and the session it made is swept at 7 days, so
+    // without this the lookup below fires on every build for the rest of that focus's life and throws
+    // the answer away each time: ~14.6k reads/day of a row whose status can no longer change.
+    settledCommands.add(f.command_id);
   }
   return { session: running.sort(byActivity)[0] || null, pinned: false };
 }
 
-app.get('/api/sessions', async (req, res) => {
-  try {
+// The session payload every surface renders — built in one place so the endpoint and the push cannot
+// drift into disagreeing about what a session list is.
+//
+// THE SURFACES DO NOT POLL THIS. `desk_sessions`, `desk_queue` and `desk_focus` are in the realtime
+// publication (data-layer migration 00104), so a change to any of them pushes a fresh payload the
+// moment it happens; a client's own fetch is only the net under a dropped frame or a deaf socket.
+async function buildSessions() {
+  {
     const [sessions, queue, focusRows] = await Promise.all([
       sb('desk_sessions?select=*&order=last_seen.desc'),
       sb('desk_queue?claimed=is.null&select=*&order=created.asc'),
@@ -3142,7 +3171,7 @@ app.get('/api/sessions', async (req, res) => {
     // most recently active parked one, which is what the home wall falls back to when nothing runs.
     const full = (s) => ({ ...brief(s), last_reply: s.last_reply });
     const evicted = (sessions || []).filter((s) => s.status === 'evicted').sort(byActivity);
-    res.json({
+    return {
       // Resident = running now, reachable over Remote Control. Evicted = closed to free the machine
       // but resumable with full context, which is the distinction the panel has to make obvious.
       resident: (sessions || []).filter((s) => s.status === 'resident').sort(byActivity).map(full),
@@ -3150,9 +3179,33 @@ app.get('/api/sessions', async (req, res) => {
       queued: queue || [],
       focus,
       pinned,
-    });
-  } catch (e) { res.status(500).json({ error: String(e.message || e) }); }
+    };
+  }
+}
+
+app.get('/api/sessions', async (req, res) => {
+  try { res.json(await buildSessions()); }
+  catch (e) { res.status(500).json({ error: String(e.message || e) }); }
 });
+
+// One `event: sessions` frame carrying the whole payload, to the wall pool.
+//
+// COALESCED on purpose: opening a session writes `desk_sessions`, `desk_queue` and `desk_focus`
+// within a few milliseconds of each other, and a frame per change would build and ship the same
+// payload three times. Skipped entirely when nobody is watching, so a dark TV costs nothing.
+let sessionsPushTimer = null;
+function pushSessions() {
+  if (!sessionClients.size || sessionsPushTimer) return;
+  sessionsPushTimer = setTimeout(async () => {
+    sessionsPushTimer = null;
+    if (!sessionClients.size) return;
+    let payload;
+    try { payload = await buildSessions(); }
+    catch (e) { console.log('[sessions] push build failed:', e.message); return; }
+    const frame = 'event: sessions\ndata: ' + JSON.stringify(payload) + '\n\n';
+    for (const res of sessionClients) { try { res.write(frame); } catch {} }
+  }, 150);
+}
 
 // Where words for a session's CONVERSATION should go right now. A resume makes a new row and leaves the
 // parked one parked, and `claude --resume` keeps the conversation's id — so it is the conversation,
@@ -3609,7 +3662,11 @@ async function reportTick() {
     } catch (_) {}
   }
 }
-setInterval(() => reportTick().catch((e) => console.log('[report] error', e.message)), 20000);
+// A BACKSTOP, not the mechanism — an INSERT on `reports` fires reportTick directly (startRealtime).
+// This only covers an event the subscription missed while deaf, so it is minutes rather than the 20s
+// that made it the fastest database timer here.
+const REPORT_BACKSTOP_MS = 10 * 60 * 1000;
+setInterval(() => reportTick().catch((e) => console.log('[report] error', e.message)), REPORT_BACKSTOP_MS);
 reportTick().catch(() => {});
 dueTick().catch(() => {});
 console.log('[due] firing armed');

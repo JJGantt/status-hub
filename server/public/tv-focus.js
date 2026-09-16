@@ -5,9 +5,11 @@
 // list Jared is naming from ("focus the second session") and the answer that came back.
 //
 // Its own module, loaded only by tv-session-focus.html. The live wall shares nothing with it.
-import { esc, PIN_SVG } from './shared.js';
+import { esc, liveStream, PIN_SVG } from './shared.js';
 
-const REFRESH_MS = 5000;
+// A BACKSTOP, not the mechanism — see the `sessions` stream at the bottom of this file. This wall held
+// no stream at all, so a 5s fetch was the only way anything reached it.
+const REFRESH_MS = 5 * 60 * 1000;
 
 /**
  * What a tab is called.
@@ -54,3 +56,10 @@ async function load() {
 
 load();
 setInterval(load, REFRESH_MS);
+
+// THE MECHANISM: the list, the queue and the focus, pushed the moment any of them changes. The fetch
+// above is only the net under a dropped frame — and `liveStream` rebuilds a socket that goes deaf,
+// which is what makes a poll this slow safe on a wall nobody ever touches.
+liveStream('/api/session-stream', {
+  sessions: (e) => { try { render(JSON.parse(e.data)); } catch (_) {} },
+});

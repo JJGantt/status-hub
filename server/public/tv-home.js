@@ -22,7 +22,10 @@ mount(document.getElementById('cw-day'), {
   dock: true,
 });
 
-const REFRESH_MS = 5000;
+// A BACKSTOP, not the mechanism: every change arrives as a `sessions` frame the moment it happens.
+// This only covers what a dropped frame or a reconnect would lose. At 5s it was ~76k Supabase reads a
+// day to watch a list that changed about six times.
+const REFRESH_MS = 5 * 60 * 1000;
 // Three, not five. The list is a glance at what is running; the room it was taking above the answer
 // is worth more to the answer, which is the thing on this column actually read word by word.
 const LIST_MAX = 3;
@@ -119,9 +122,16 @@ setInterval(load, REFRESH_MS);
 
 // Live activity from either machine. A finished turn repaints immediately with the reply it carries,
 // rather than waiting for the poll to fetch a `last_reply` that has already been written.
-liveStream('/api/session-stream', { session: (e) => {
-  let a;
-  try { a = JSON.parse(e.data); } catch { return; }
-  activity.set(a.session, { state: a.state, text: a.text });
-  if (a.state === 'done') load(); else render(null);
-} });
+liveStream('/api/session-stream', {
+  // THE MECHANISM: the whole list, queue and focus, pushed when any of them changes — a session
+  // starting or dying, the focus moving, the numbering changing, a turn's reply landing.
+  sessions: (e) => { try { render(JSON.parse(e.data)); } catch (_) {} },
+  // Live activity from either machine. A tool call is transient and never stored, so this is the only
+  // way it can arrive; a finished turn repaints from the `sessions` frame that follows its write.
+  session: (e) => {
+    let a;
+    try { a = JSON.parse(e.data); } catch { return; }
+    activity.set(a.session, { state: a.state, text: a.text });
+    render(null);
+  },
+});

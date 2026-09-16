@@ -545,7 +545,9 @@ there are no note verbs.
 Consequences worth knowing:
 
 - **Badge** = every overdue item across every list (`overdueCount()`), not just one table's.
-- **The scheduler** (`dueTick`, every 60s) scans `list_items` where `due` is past, dedupes against
+- **The scheduler** (`dueTick`) wakes every 60s but only SCANS when the next due moment has arrived or
+  a `list_items` change dirtied it — a moment passing is not a row changing, so the clock stays and the
+  query goes. It reads `list_items` where `due` is past, dedupes against
   `notifications.dedupe_key`, and hands off to a **named handler** in `DUE_HANDLERS` rather than
   calling `pushAll` directly. Only `push` exists today; the seam earns its ten lines because the
   second handler is already scheduled — AlarmKit ([TODO.md](TODO.md)), which fires on-device and

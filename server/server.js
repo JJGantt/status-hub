@@ -495,6 +495,26 @@ const rowCache = { rows: null, key: '', at: 0, dirty: true };
 const ROWCACHE_BACKSTOP_MS = 15 * 60 * 1000;
 const dirtyRows = () => { rowCache.dirty = true; };
 
+// The status strip's session fields, on the same terms as the row cache above. These two reads ran on
+// EVERY frame — and a frame is rebuilt on every realtime event as well as every 30s — to answer a
+// question whose answer changes a handful of times a day. `desk_sessions` and `desk_focus` are in the
+// publication now (data-layer 00104), so a change dirties this directly instead of being discovered.
+const deskCache = { rows: null, at: 0, dirty: true };
+const DESKCACHE_BACKSTOP_MS = 15 * 60 * 1000;
+const dirtyDesk = () => { deskCache.dirty = true; };
+
+async function fetchDeskRows() {
+  if (!deskCache.dirty && deskCache.rows && Date.now() - deskCache.at < DESKCACHE_BACKSTOP_MS) {
+    return deskCache.rows;
+  }
+  const rows = await Promise.all([
+    sb('desk_focus?id=eq.current&select=command_id,session_id'),
+    sb('desk_sessions?status=eq.resident&select=id,repo,label,command_id,status,active_at,reply_at,started'),
+  ]);
+  deskCache.rows = rows; deskCache.at = Date.now(); deskCache.dirty = false;
+  return rows;
+}
+
 async function fetchStatusRows(win, week, histStart, heatStart) {
   const nutLogStart = localDate(new Date(Date.now() - 86 * 86400000));
   const taskWindowStart = localDate(new Date(Date.now() - 8 * 86400000));  // an effect is gone at 7 days; a day's slack costs nothing
@@ -576,10 +596,7 @@ async function buildStatus() {
   // (pickFocus), so the strip, the wall and the behaviour cannot disagree.
   let deskFocus = null;
   try {
-    const [fRows, sRows] = await Promise.all([
-      sb('desk_focus?id=eq.current&select=command_id,session_id'),
-      sb('desk_sessions?status=eq.resident&select=id,repo,label,command_id,status,active_at,reply_at,started'),
-    ]);
+    const [fRows, sRows] = await fetchDeskRows();
     const { session: hit, pinned } = await pickFocus((fRows || [])[0], sRows);
     if (hit) deskFocus = { id: hit.id, repo: hit.repo, label: hit.label || null, pinned };
   } catch (_) { /* the strip simply shows nothing rather than failing the whole payload */ }
@@ -854,7 +871,14 @@ function startRealtime() {
     // Without the rebuild a completion would not show on the bar until the 15-minute backstop, which
     // is the one moment the reward is supposed to land.
     .on('postgres_changes', { event: '*', schema: 'public', table: 'list_items' },
-      () => { seen(); dirtyRows(); pushLists(); broadcast(); })
+      () => {
+        seen(); dirtyRows(); pushLists(); broadcast();
+        // A dated item added, snoozed, completed or cleared changes both when the next thing is due
+        // and what the icon should read. Pushing the badge here is what lets its own poll be a
+        // backstop instead of the mechanism that keeps a cleared task from lingering on his phone.
+        dirtyDue();
+        syncBadge().catch((e) => console.log('[badge] error', e.message));
+      })
     .on('postgres_changes', { event: '*', schema: 'public', table: 'lists' },
       () => { seen(); pushLists(); })
     // Voice pipeline: stream inserts/updates straight to the /tv conversation panel. INSERT and
@@ -868,12 +892,15 @@ function startRealtime() {
     // The three tables a session view is assembled from. These are why the walls no longer poll
     // /api/sessions every 5s: a session starting, ending, being renamed, finishing a turn, being
     // focused or queueing behind another one all land here, and each pushes a fresh payload.
+    // dirtyDesk on the two that feed the status strip, so the NEXT frame is fresh. Deliberately no
+    // broadcast() here: a frame still costs four uncached presence reads, so pushing one per desk
+    // change would spend more than the poll it replaced.
     .on('postgres_changes', { event: '*', schema: 'public', table: 'desk_sessions' },
-      () => { seen(); pushSessions(); })
+      () => { seen(); dirtyDesk(); pushSessions(); })
     .on('postgres_changes', { event: '*', schema: 'public', table: 'desk_queue' },
       () => { seen(); pushSessions(); })
     .on('postgres_changes', { event: '*', schema: 'public', table: 'desk_focus' },
-      () => { seen(); pushSessions(); })
+      () => { seen(); dirtyDesk(); pushSessions(); })
     // A written report announces itself rather than being discovered: reportTick's timer is now only
     // the net under this, instead of the fastest database timer on the server.
     .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'reports' },
@@ -3133,54 +3160,52 @@ async function pickFocus(focusRow, sessions) {
 // publication (data-layer migration 00104), so a change to any of them pushes a fresh payload the
 // moment it happens; a client's own fetch is only the net under a dropped frame or a deaf socket.
 async function buildSessions() {
-  {
-    const [sessions, queue, focusRows] = await Promise.all([
-      sb('desk_sessions?select=*&order=last_seen.desc'),
-      sb('desk_queue?claimed=is.null&select=*&order=created.asc'),
-      sb('desk_focus?id=eq.current&select=command_id,session_id'),
-    ]);
-    const { session: focusHit, pinned } = await pickFocus((focusRows || [])[0], sessions);
-    const focus = focusHit ? focusHit.id : null;
-    // The number Jared says out loud. THE RULE IS SHARED WITH `numberSessions` IN data-layer's
-    // desk.ts and both have to agree, or "session three" means one thing to the pane and another to
-    // the voice tools: active sessions only, MOST RECENTLY ACTIVE FIRST, numbered from 1.
-    // RUNNING FIRST, then parked, by activity within each — the number is the POSITION IN THE LIST,
-    // which is where "the second session" comes from, and every surface draws running above parked.
-    const rank = (s) => (s.status === 'resident' ? 0 : 1);
-    const numbered = new Map((sessions || [])
-      .filter((s) => s.status === 'resident' || s.status === 'evicted')
-      .sort((a, b) => rank(a) - rank(b) || byActivity(a, b))
-      .map((s, i) => [s.id, i + 1]));
-    // Only the fields something renders. A desk_sessions row carries transcript paths, command ids and
-    // five timestamps that no surface here reads — 97 rows of them was most of what was left of this
-    // response after the replies came out of it. Adding a field to a session view means adding it here.
-    const withN = (s) => ({
-      id: s.id, n: numbered.get(s.id) || null,
-      label: s.label, custom_title: s.custom_title, repo: s.repo,
-      worker: s.worker, status: s.status, working: s.working,
-      claude_session_id: s.claude_session_id,      // presence of a transcript = the transfer button
-    });
-    // One line of what the session last said, for the rows that only ever show one line. The repos
-    // pane cuts `last_reply` to 90 characters for every row it lists; sending the whole reply so it
-    // can be thrown away cost 155KB of a 242KB response over 95 parked sessions, which is most of
-    // what a phone downloads on a cold load.
-    const SAY = 120;
-    const say = (s) => (s.last_reply || s.prompt || '').replace(/\s+/g, ' ').slice(0, SAY);
-    const brief = (s) => ({ ...withN(s), say: say(s) });
-    // The whole reply goes only to rows something can render in full: everything resident, plus the
-    // most recently active parked one, which is what the home wall falls back to when nothing runs.
-    const full = (s) => ({ ...brief(s), last_reply: s.last_reply });
-    const evicted = (sessions || []).filter((s) => s.status === 'evicted').sort(byActivity);
-    return {
-      // Resident = running now, reachable over Remote Control. Evicted = closed to free the machine
-      // but resumable with full context, which is the distinction the panel has to make obvious.
-      resident: (sessions || []).filter((s) => s.status === 'resident').sort(byActivity).map(full),
-      evicted: evicted.map((s, i) => (i === 0 ? full(s) : brief(s))),
-      queued: queue || [],
-      focus,
-      pinned,
-    };
-  }
+  const [sessions, queue, focusRows] = await Promise.all([
+    sb('desk_sessions?select=*&order=last_seen.desc'),
+    sb('desk_queue?claimed=is.null&select=*&order=created.asc'),
+    sb('desk_focus?id=eq.current&select=command_id,session_id'),
+  ]);
+  const { session: focusHit, pinned } = await pickFocus((focusRows || [])[0], sessions);
+  const focus = focusHit ? focusHit.id : null;
+  // The number Jared says out loud. THE RULE IS SHARED WITH `numberSessions` IN data-layer's
+  // desk.ts and both have to agree, or "session three" means one thing to the pane and another to
+  // the voice tools: active sessions only, MOST RECENTLY ACTIVE FIRST, numbered from 1.
+  // RUNNING FIRST, then parked, by activity within each — the number is the POSITION IN THE LIST,
+  // which is where "the second session" comes from, and every surface draws running above parked.
+  const rank = (s) => (s.status === 'resident' ? 0 : 1);
+  const numbered = new Map((sessions || [])
+    .filter((s) => s.status === 'resident' || s.status === 'evicted')
+    .sort((a, b) => rank(a) - rank(b) || byActivity(a, b))
+    .map((s, i) => [s.id, i + 1]));
+  // Only the fields something renders. A desk_sessions row carries transcript paths, command ids and
+  // five timestamps that no surface here reads — 97 rows of them was most of what was left of this
+  // response after the replies came out of it. Adding a field to a session view means adding it here.
+  const withN = (s) => ({
+    id: s.id, n: numbered.get(s.id) || null,
+    label: s.label, custom_title: s.custom_title, repo: s.repo,
+    worker: s.worker, status: s.status, working: s.working,
+    claude_session_id: s.claude_session_id,      // presence of a transcript = the transfer button
+  });
+  // One line of what the session last said, for the rows that only ever show one line. The repos
+  // pane cuts `last_reply` to 90 characters for every row it lists; sending the whole reply so it
+  // can be thrown away cost 155KB of a 242KB response over 95 parked sessions, which is most of
+  // what a phone downloads on a cold load.
+  const SAY = 120;
+  const say = (s) => (s.last_reply || s.prompt || '').replace(/\s+/g, ' ').slice(0, SAY);
+  const brief = (s) => ({ ...withN(s), say: say(s) });
+  // The whole reply goes only to rows something can render in full: everything resident, plus the
+  // most recently active parked one, which is what the home wall falls back to when nothing runs.
+  const full = (s) => ({ ...brief(s), last_reply: s.last_reply });
+  const evicted = (sessions || []).filter((s) => s.status === 'evicted').sort(byActivity);
+  return {
+    // Resident = running now, reachable over Remote Control. Evicted = closed to free the machine
+    // but resumable with full context, which is the distinction the panel has to make obvious.
+    resident: (sessions || []).filter((s) => s.status === 'resident').sort(byActivity).map(full),
+    evicted: evicted.map((s, i) => (i === 0 ? full(s) : brief(s))),
+    queued: queue || [],
+    focus,
+    pinned,
+  };
 }
 
 app.get('/api/sessions', async (req, res) => {
@@ -3581,18 +3606,35 @@ const DUE_HANDLERS = {
               ...(item.emoji ? { emoji: item.emoji } : {}) }),
 };
 
+// THE NEXT MOMENT anything here has to happen, spelled the way everything below compares — an ET
+// `YYYY-MM-DDTHH:MM:SS` string. Between now and then there is nothing to do, so the minute tick costs
+// no queries at all; a `list_items` change dirties it through the realtime subscription. The clock
+// stays because a moment arriving is not a row changing — but the QUERY goes: this read every open
+// dated item 1,440 times a day, overwhelmingly to learn that 9am has still not come.
+let dueNextAt = '';
+let dueDirty = true;
+const dirtyDue = () => { dueDirty = true; };
+const earlierOf = (a, b) => (!a ? (b || '') : (!b || a <= b ? a : b));
+
 async function dueTick() {
   const nowET = etNowString();
+  if (!dueDirty && (!dueNextAt || nowET < dueNextAt)) return;
   let rows;
   // Every list, not just todo — "reminder" is a predicate (has a due), not a place.
   try { rows = await sb('list_items?deleted=eq.false&completed_at=is.null&due=not.is.null&select=id,list_name,text,title,due,scheduled_at,priority,series_id'); } catch (_) { return; }
+  // Only once the read succeeded: a failed read must leave the state dirty so the next tick retries.
+  dueDirty = false;
+  dueNextAt = '';
   if (!rows.length) return;
   // One lookup for the whole tick rather than one per item — a handful of lists, read at most once a
   // minute, and only when something is actually dated.
   let emojiOf = {};
   try { for (const l of await sb('lists?select=name,emoji')) emojiOf[l.name] = l.emoji; } catch (_) {}
   for (const r of rows) {
-    if (dueMoment(r.due) > nowET) continue;                           // not due yet
+    if (dueMoment(r.due) > nowET) {                                   // not due yet
+      dueNextAt = earlierOf(dueNextAt, dueMoment(r.due));             // …so wake for the soonest one
+      continue;
+    }
     // Scoped to the occurrence rather than the row. Each occurrence is its own row now, so the id
     // alone would do — except for snoozing, which moves `due` on an existing row and must be allowed
     // to fire again at its new moment. Including the due gets that for free instead of needing the
@@ -3607,29 +3649,37 @@ async function dueTick() {
     // (data-layer migration 00085), so each one fires once and then stays put — which is also what
     // lets it sit there visibly overdue and drain the score until it is dealt with.
   }
-  await closeExempt(nowET);
+  dueNextAt = earlierOf(dueNextAt, await closeExempt(nowET, rows));
+  // The badge follows what just fired or closed. It is pushed from the `list_items` subscription too,
+  // so its own timer can be a backstop rather than the thing that keeps the icon honest.
+  syncBadge().catch((e) => console.log('[badge] error', e.message));
 }
 
 // Exempt items close themselves once their moment has gone. A shift is not something he finishes;
 // it is something that happens and is then over, and leaving it on the list would make him tidy up
 // after his own calendar. Uses the SCORING deadline rather than the firing time, so an all-day
 // exempt item closes at the end of its day instead of at 9am when it notified.
-async function closeExempt(nowET) {
-  const now = Date.parse(nowET.replace(' ', 'T') + 'Z');
-  let rows;
-  try {
-    rows = await sb('list_items?deleted=eq.false&completed_at=is.null&due=not.is.null&priority=lt.0'
-                    + '&select=id,due,scheduled_at,title,text');
-  } catch (_) { return; }
+// Takes the rows `dueTick` has already read rather than reading them again: that query was this same
+// open-dated-item set filtered to `priority=lt.0`, and the caller's rows carry `priority` already.
+// Returns the next exempt deadline still in the future, so the caller knows when to wake.
+async function closeExempt(nowET, rows) {
+  const now = Date.parse(nowET + 'Z');   // both sides are naive ET, compared in one pseudo-UTC space
+  let next = '';
   for (const r of rows || []) {
+    if (!(Number(r.priority) < 0)) continue;   // exempt items only — what the old query's filter said
     const deadline = taskDeadline(r.scheduled_at || r.due);
-    if (deadline == null || deadline > now) continue;
+    if (deadline == null) continue;
+    if (deadline > now) {
+      next = earlierOf(next, new Date(deadline).toISOString().slice(0, 19));
+      continue;
+    }
     try {
       await sbWrite(`list_items?id=eq.${encodeURIComponent(r.id)}`, 'PATCH',
         { completed_at: etNowString(), updated: new Date().toISOString() });
       console.log(`[due] closed exempt ${r.id} "${String(r.title || r.text).slice(0, 40)}"`);
     } catch (e) { console.log('[due] closeExempt:', e.message); }
   }
+  return next;
 }
 setInterval(() => dueTick().catch((e) => console.log('[due] error', e.message)), 60000);
 
@@ -3686,7 +3736,11 @@ async function syncBadge() {
   for (const { token, environment } of tokens) await apns.send(token, { environment, badge: n });
   console.log(`[badge] -> ${n}`);
 }
-setInterval(() => syncBadge().catch((e) => console.log('[badge] error', e.message)), 60000);
+// A BACKSTOP. The badge is pushed by the `list_items` subscription and by `dueTick` when something
+// fires, so this only catches a change that arrived while the socket was deaf. It was a 60s count of
+// every open dated item, and the count changes a handful of times a day.
+const BADGE_BACKSTOP_MS = 10 * 60 * 1000;
+setInterval(() => syncBadge().catch((e) => console.log('[badge] error', e.message)), BADGE_BACKSTOP_MS);
 syncBadge().catch(() => {});
 
 // ---- retention. Clearing is a SOFT delete so it can be undone, but that's only tenable if the rows

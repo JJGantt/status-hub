@@ -31,7 +31,10 @@ Supabase ──▶ server.js buildStatus() ──▶ /api/status payload ──�
   frame; `core.js` calls each card's `render(s)`.
 - **Realtime:** the server subscribes to Supabase realtime on the tables that must invalidate the
   cached payload (nutrition, sets, app_settings, voice_*), so a voice/MCP write reflects in seconds
-  rather than waiting for the tick.
+  rather than waiting for the tick. It also subscribes to `desk_sessions` / `desk_queue` / `desk_focus`
+  and to `reports`, which do not invalidate a cache so much as PUSH: the first three build a `sessions`
+  frame (see `pushSessions`, and §3 — it is why the walls no longer poll `/api/sessions`), and a new
+  `reports` row fires `reportTick` directly.
 - **Realtime invalidation is a fast path, never a cache's only refresh.** Every server-side cache
   needs an age check too. Events get dropped — CHANNEL_ERROR and half-open silence are both routine,
   which is what `REALTIME_SILENCE_LIMIT_MS` and the socket recycle exist for — and a cache that only
@@ -478,8 +481,10 @@ the day timeline and reads `calendar_months` for the spread, `?day=1` is the tim
 `&full=1` makes it a rolling ±12h window instead of a calendar day — see the dial below, and
 `&ahead=N` adds the N days after today as `ahead`) · `/api/badge` · `/api/repos` ·
 `/api/repos/cmd/:id` · `/api/sessions` (live desk sessions + the follow-up `focus`) ·
-`/api/session-stream` (SSE, one `session` frame per tool call, in-between text or finished turn, pushed by the
-orchestrator on either machine — see SESSIONS.md §10) · `/api/reports`
+`/api/session-stream` (SSE, two frame kinds: `session` — one per tool call, in-between text or finished
+turn, pushed by the orchestrator on either machine — and `sessions`, the whole `/api/sessions` payload,
+pushed whenever `desk_sessions`/`desk_queue`/`desk_focus` change, which is what replaced the walls'
+5s poll — see SESSIONS.md §10) · `/api/reports`
 (list only — `html` is never selected) · `/api/surf/history` (the whole hourly archive as one
 character per hour; `defaultT0` marks the window the card lands on before it is scrolled back) ·
 `/api/attachment`.
@@ -544,7 +549,9 @@ there are no note verbs.
 
 Consequences worth knowing:
 
-- **Badge** = every overdue item across every list (`overdueCount()`), not just one table's.
+- **Badge** = every overdue item across every list (`overdueCount()`), not just one table's. It is
+  PUSHED — from the `list_items` subscription and from `dueTick` when something fires — so its own
+  timer is a 10-minute backstop rather than the thing keeping the icon honest.
 - **The scheduler** (`dueTick`) wakes every 60s but only SCANS when the next due moment has arrived or
   a `list_items` change dirtied it — a moment passing is not a row changing, so the clock stays and the
   query goes. It reads `list_items` where `due` is past, dedupes against

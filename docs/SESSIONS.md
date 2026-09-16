@@ -89,7 +89,11 @@ config change ON the Pi by dispatching a session to it.
 - **`desk_queue`** — Pi only: work waiting for a residency slot, new sessions and resumes alike
   (`resume_id` names the conversation a resume continues). Never expires (unlike a command).
 - **`desk_dead_letters`** — everything that could not run, with its whole payload.
-- **`transcripts` bucket** — mirrored transcript tails, `<claude_session_id>/<offset>.part`.
+- **`transcripts` bucket** — mirrored transcript tails, `<claude_session_id>/<offset>.part`. A
+  conversation's parts are cleared in BOTH places that abandon it: when retention forgets the session,
+  and when a `/clear` rebinds the row to a new conversation. The second one is easy to miss — from that
+  instant the old parts are unreachable (the mirror is keyed by conversation id and the row now names a
+  different one), and retention will never reach them either.
 
 ---
 

@@ -141,7 +141,7 @@ attaches to tmux over SSH and starts one by hand, which is not tracked.
 | `end_session` | owning machine | close the tab / tmux session, park the row |
 | `resume_session` | owning machine | `claude --resume <id>` in a new tab or tmux session, with an optional prompt; on a full Pi it waits in `desk_queue` for a slot like new work |
 
-The hub's `POST /api/sessions/followup` (the watch's session page) is `follow_up` addressed by session
+The hub's `POST /api/sessions/followup` (the watch's and the phone's session view) is `follow_up` addressed by session
 id instead of by focus, and for a parked session it writes `resume_session` with the words as the
 prompt instead — HUB-INTERNALS §6b.
 | `transfer_session` | machine GIVING IT UP | close, flush the mirror, ask the other to resume |

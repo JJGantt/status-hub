@@ -179,7 +179,8 @@ make (`voiceagent.js`'s `boot()`, `tv.js`'s), handing it to `applyActivitySettin
 
 `nutrition` (Cal/P/C/F pace rings + produce sub-rings) · `nutritionlog` (calorie+weight plot +
 adherence calendar) · `maintviz` (the maintenance-window viz — the whole history at a fixed density, dragged by hand) · `todo` (dated items / lists,
-self-fetches) · `repos` (the Mac's projects; tap to launch a Claude session there, self-fetches) ·
+self-fetches) · `repos` (the Mac's projects; tap to launch a Claude session there — and the sessions list, where a
+row opens its session, §6b — self-fetches) ·
 `reports` (a dispatched session's write-ups, self-fetches — §6c) · `muscle` (body map + volume
 gauges) · `workouts` (heatmap + day detail) · `weightweeks` (home-wall weekly weigh-in plot) ·
 `litter` · `feeder` · `surf` · `routing` (TV top strip)
@@ -910,7 +911,7 @@ through the command instead.
 ### Following up on one session
 
 `POST /api/sessions/followup` (`{id, text, client_msg_id}`) hands words to one session's conversation,
-which is how the watch answers the session it is showing. Running, the words are typed in — the same
+which is how the watch and the phone answer the session they are showing. Running, the words are typed in — the same
 `desk_commands` `follow_up` the voice tool writes for the focused session. Parked, the session is
 resumed with the words as its prompt: `resume_session` takes one on both machines, and a full Pi
 queues it for a slot. An asleep machine gets the words dead-lettered, like every desk command from the
@@ -926,6 +927,29 @@ with the resume command's id, and the Pi publishes the conversation id at launch
 `GET /api/sessions/:id` returns one session with its `last_prompt`, whole `last_reply` and
 `claude_session_id`, under its own projection, for a surface showing a single session rather than the
 list.
+
+### One session, open on the phone
+
+Tapping a row of the repos pane's sessions list opens that session in place of the list
+(`openSession` in `cards/repos.js`), and `‹ Sessions` goes back. It is the watch's session page at
+phone size: the last prompt, the whole reply to it, the tool calls and between-call thoughts of a turn
+in flight, and a composer — typed, or spoken through the pane's dry-transcribing recorder — whose
+words go to `/api/sessions/followup`. A failed send shows the hub's own `error` and leaves the words
+in the box; resending the same words reuses the `client_msg_id`.
+
+It follows `/api/session-stream`, opened on the first open rather than at mount because
+`#repospane` is in the kiosk's markup too. `session` frames carry the steps. The reply itself is
+taken from the `sessions` frame, not from `done`: `done` is sent off the write path, so the row can
+still hold the previous reply when it arrives, while a `sessions` frame is built from the row after
+the write. Everything is keyed by `claude_session_id`, as on the watch, so a follow-up that resumes
+a parked session carries the view over to the new row.
+
+A reply renders as inline markdown with whitespace kept, escaped first. A link keeps its words and
+loses its target, since following one would navigate the app's web view away from the hub.
+
+While a session is open the pane carries `sv-open`, which stops the pane scrolling and gives the card
+its whole height so the composer stays put — the chat pane's layout. Re-focusing the app re-reads the
+open session rather than the list.
 
 ### The last thing a session said
 
@@ -951,8 +975,9 @@ turn's `at` — so one turn buzzes once even when its end is noticed twice, and 
 as it gates the voice worker. `relay.js` posts a hub dispatch's first reply into the hub thread but
 sends no push of its own: this one covers it.
 
-The payload's `session_id` is what a tap opens: `SessionLaunch` → `window.__showSession` lands on the
-sessions pane with that row scrolled into view and marked (`cards/repos.js`). The `SESSION_REPLY`
+The payload's `session_id` is what a tap opens: `SessionLaunch` → `window.__showSession` opens that
+session on the repos pane (§ One session, open on the phone), or lands on the list when the row is
+gone. It is a web-side function, so what a tap does changes with a deploy, not an app build. The `SESSION_REPLY`
 category gives the watch an Open button (§9c).
 
 Both machines publish it through one shared module (`voice-pipeline/orchestrator/src/transcripts.js`),

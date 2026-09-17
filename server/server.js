@@ -3322,7 +3322,8 @@ async function conversationNow(row) {
 }
 
 // One session in full, for a surface that shows a single session rather than the list — the watch's
-// session page. `/api/sessions` sends most parked sessions' replies only as the one-line `say`.
+// session page and the phone's (openSession in cards/repos.js). `/api/sessions` sends most parked
+// sessions' replies only as the one-line `say`.
 app.get('/api/sessions/:id', async (req, res) => {
   try {
     const rows = await sb(`desk_sessions?id=eq.${encodeURIComponent(String(req.params.id))}` +
@@ -3348,7 +3349,7 @@ app.post('/api/sessions/:action', express.json(), async (req, res) => {
     if (!rowsFull.length) return res.status(404).json({ error: 'no such session' });
 
     // Words for a session. Running, they are typed in — data-layer's followUp, addressed by id instead
-    // of by focus, so the watch can answer the session it is showing. Parked, it is resumed with the
+    // of by focus, so the watch and the phone can answer the session they are showing. Parked, it is resumed with the
     // words as its prompt, which both machines accept (a full Pi queues it for a slot). conversationNow
     // decides which, so a conversation already running again under a newer row gets the words there
     // rather than a second process. An asleep machine gets them dead-lettered, as everywhere else, and

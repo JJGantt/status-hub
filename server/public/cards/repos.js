@@ -2,21 +2,27 @@
 //
 // Tapping one enqueues a desk command; the Mac's orchestrator opens a Terminal running
 // `claude --remote-control <name>` and the session shows up in the Claude app, where the actual
-// work happens. This pane only starts it — a clean session in the right directory, from anywhere.
+// work happens. The launcher only starts it — a clean session in the right directory, from anywhere.
+//
+// Above the projects is the list of sessions already running or parked, and a row of it opens that
+// session in place of the list: its last prompt and reply, the turn in flight, and a composer that
+// answers it (openSession, below).
 //
 // Everything in ~/repos is listed, git checkout or not: the branch chip and dirty dot simply don't
 // render for a plain directory.
 //
 // Self-fetching (NOT part of the status stream), like the todo pane. No-ops where #repospane is
-// absent (kiosk / mac / page).
-import { esc, PIN_SVG } from '../shared.js';
-import { makeRecorder } from '../voiceagent.js';
+// absent (/page). Every wall's markup carries it, hidden on the kiosk, so it mounts there too.
+import { esc, PIN_SVG, liveStream } from '../shared.js';
+import { makeRecorder, bindTap } from '../voiceagent.js';
 
 let mounted = false;
 let desk = { online: false };
 let machines = { mac: false, pi: false };
 let recorder = null;      // one shared recorder; only ever one repo is being dictated to
 let armed = null;         // the <li> currently listening
+let rows = [];            // every row of the last /api/sessions payload, running and parked
+let cur = null;           // the session open in place of the list (openSession), or null for the list
 
 // 'now' / '20m' / '3h' / '5d' — how long ago this was last touched (HEAD commit for a repo, the
 // directory's mtime otherwise).
@@ -129,8 +135,10 @@ async function load() {
   // Fetched alongside rather than folded into /api/repos: sessions change on their own schedule and
   // a failure to read them must not blank the project list, which is the pane's primary job.
   try { d.sessions = await (await fetch('/api/sessions')).json(); } catch (_) { d.sessions = null; }
+  if (d.sessions) keep(d.sessions);
   desk = d.desk || { online: false };
   machines = d.machines || { mac: desk.online, pi: false };
+  if (cur) return;   // a session was opened while this was in flight; the list must not replace it
   el.innerHTML = html(d);
   wire(el);
 }
@@ -224,6 +232,9 @@ function wire(el) {
       e.stopPropagation();
       sessionAction(b.closest('li.sess'), b.dataset.act);
     }));
+  // The row itself opens the session; its buttons act on it without opening it.
+  el.querySelectorAll('li.sess[data-id]').forEach((li) =>
+    li.addEventListener('click', () => openSession(li.dataset.id)));
   el.querySelectorAll('li[data-path]').forEach((li) => {
     li.addEventListener('click', () => {
       // First tap opens the machine choice; tapping the row again closes it. Only one row at a time,
@@ -243,6 +254,269 @@ function wire(el) {
   });
 }
 
+// ---- one session, opened in place of the list -------------------------------------------------
+// What the watch's session page shows (apps/Watch/SessionsView.swift), at phone size: the prompt
+// that started the last turn and the whole reply to it, the tool calls of a turn in flight, and a
+// composer whose words go into that conversation — typed in when it is running, resumed with them
+// when it is parked; the hub decides which (`/api/sessions/followup`).
+//
+// Everything here is keyed by the CONVERSATION (`claude_session_id`), not the row: a resume makes a
+// new row for the same conversation, so the row the view was opened on can stop being the one that
+// is talking. `cur.id` follows the conversation to whichever row is running it.
+
+const nameOf = (x) => x.custom_title || x.label || x.repo || x.id;
+const keyOfRow = (r) => r.claude_session_id || r.id;
+const newMsgId = () => ((self.crypto && crypto.randomUUID)
+  ? crypto.randomUUID() : Date.now().toString(36) + Math.random().toString(36).slice(2));
+
+// Inline markdown only, whitespace kept — what `inlineMarkdown` gives the watch. Escaped FIRST: a
+// reply is a model's prose and may hold anything that looks like markup, so the only tags in the
+// result are the ones written here. Code is lifted out before the emphasis rules run, or a `*` inside
+// it would be read as one. A link keeps its words and loses its target: following one would navigate
+// the hub's own web view away from the hub.
+const HELD = /(\d+)/g;   // where a lifted code span goes back (a private-use character)
+function inlineMd(text) {
+  const code = [];
+  const lift = (html) => { code.push(html); return '' + (code.length - 1) + ''; };
+  return esc(String(text).replace(//g, ''))
+    .replace(/```[^\n]*\n([\s\S]*?)```\n?/g, (_, c) => lift('<code class="sv-pre">' + c.replace(/\n$/, '') + '</code>'))
+    .replace(/`([^`\n]+)`/g, (_, c) => lift('<code>' + c + '</code>'))
+    .replace(/\*\*([^*\n]+)\*\*/g, '<strong>$1</strong>')
+    .replace(/(^|[^\w*])\*([^*\s][^*\n]*?)\*(?!\w)/g, '$1<em>$2</em>')
+    .replace(/\[([^\]\n]+)\]\((?:https?:|\/)[^)\s]*\)/g, '$1')
+    .replace(HELD, (_, i) => code[+i]);
+}
+
+// The last /api/sessions payload's rows, from a fetch or a pushed `sessions` frame. With a session
+// open it is also how the view learns what no `session` frame says: the conversation moving to a new
+// row (a resume), and a reply that has actually been WRITTEN — the `done` frame is sent off the write
+// path, so the row can still hold the previous reply when it arrives.
+const unknown = new Set();   // frame row ids that were not in the list even after re-reading it
+function keep(payload) {
+  rows = [...(payload.resident || []), ...(payload.evicted || [])];
+  for (const r of rows) unknown.delete(r.id);
+  if (!cur) return;
+  const now = rows.find((r) => r.status === 'resident' && keyOfRow(r) === cur.key)
+           || rows.find((r) => r.id === cur.id);
+  if (!now) return;
+  const d = cur.detail;
+  const moved = now.id !== cur.id;
+  cur.id = now.id;
+  if (moved || now.status !== d.status || !!now.working !== !!d.working
+      || (now.last_reply !== undefined && now.last_reply !== d.last_reply)) reloadDetail();
+}
+
+let reading = null;          // one re-read of the list at a time, shared by every frame waiting on it
+async function keyOfFrame(rowId) {
+  if (cur && rowId === cur.id) return cur.key;
+  const hit = () => rows.find((r) => r.id === rowId);
+  if (!hit() && !unknown.has(rowId)) {
+    reading = reading || fetch('/api/sessions').then((r) => r.json()).then(keep)
+      .catch(() => {}).finally(() => { reading = null; });
+    await reading;
+    if (!hit()) unknown.add(rowId);
+  }
+  const r = hit();
+  return r ? keyOfRow(r) : rowId;
+}
+
+// A tool call or a thought of the open conversation's turn joins the view; a finished turn clears
+// them and re-reads the session. Frames for every other session are dropped.
+async function frame(a) {
+  if (!cur || !a || !a.session) return;
+  const key = await keyOfFrame(a.session);
+  if (!cur || key !== cur.key) return;
+  if (a.state !== 'done') {
+    if (!a.text) return;
+    cur.activity.push({ text: String(a.text), thought: a.state === 'text' });
+    cur.working = true;
+    paintBody({ follow: true });
+    return;
+  }
+  cur.id = a.session;
+  cur.activity = [];
+  cur.mine = '';
+  await reloadDetail();
+}
+
+let following = false, connected = false;
+// Opened on the first open rather than at mount: #repospane is in the kiosk's markup too, and a wall
+// that never opens a session has no use for the frames. It then stays for the life of the page, like
+// every other stream here — `liveStream` keeps rebuilding a socket after `close()`.
+function follow() {
+  if (following) return;
+  following = true;
+  liveStream('/api/session-stream', {
+    sessions: (e) => { try { keep(JSON.parse(e.data)); } catch (_) {} },
+    session: (e) => { try { frame(JSON.parse(e.data)); } catch (_) {} },
+  }, {
+    // A RE-connect: a turn may have ended while the socket was down, and its frames are not replayed.
+    onOpen: () => { if (connected && cur) reloadDetail(); connected = true; },
+  });
+}
+
+async function reloadDetail() {
+  if (!cur) return;
+  const at = cur;
+  let d;
+  try {
+    const r = await fetch('/api/sessions/' + encodeURIComponent(at.id));
+    if (!r.ok) return;
+    d = await r.json();
+  } catch (_) { return; }
+  if (cur !== at) return;
+  const fresh = d.last_reply !== at.detail.last_reply;
+  at.detail = d;
+  at.working = !!d.working;
+  // A reply that has landed ends the turn whether or not its `done` frame got here.
+  if (fresh) { at.activity = []; at.mine = ''; }
+  paintHead();
+  paintBody({ top: fresh });
+}
+
+function paintHead() {
+  const el = document.getElementById('repospane');
+  const d = cur && cur.detail;
+  if (!el || !d) return;
+  const t = el.querySelector('.sv-title'), w = el.querySelector('.sv-where'), dot = el.querySelector('.sv-bar .sess-dot');
+  if (t) t.textContent = nameOf(d);
+  if (w) w.textContent = d.worker === 'desk' ? 'Mac' : 'Pi';
+  if (dot) dot.hidden = d.status !== 'resident';
+}
+
+// `top` brings a new reply to the top of the view, where reading it starts; `follow` keeps a view
+// that was already at the bottom there as the turn's steps arrive, and leaves one he has scrolled
+// up in where it is.
+function paintBody({ top = false, follow = false } = {}) {
+  const el = document.getElementById('repospane');
+  const body = el && el.querySelector('.sv-body');
+  if (!body || !cur) return;
+  const d = cur.detail;
+  const atEnd = body.scrollHeight - body.scrollTop - body.clientHeight < 60;
+  body.innerHTML =
+    (d.last_prompt ? `<div class="sv-words">${inlineMd(d.last_prompt.trim())}</div>` : '') +
+    (d.last_reply ? `<div class="sv-reply">${inlineMd(d.last_reply.trim())}</div>` : '') +
+    (cur.mine ? `<div class="sv-words">${inlineMd(cur.mine)}</div>` : '') +
+    cur.activity.map((a) => a.thought
+      ? `<div class="sv-thought">${inlineMd(a.text)}</div>`
+      : `<div class="sv-tool">${esc(a.text)}</div>`).join('') +
+    (cur.working ? '<div class="sv-working"><span class="ai-caret">▍</span></div>' : '');
+  if (top) {
+    const reply = body.querySelector('.sv-reply');
+    body.scrollTop = reply ? Math.max(0, reply.offsetTop - body.offsetTop - 8) : 0;
+  } else if (follow && atEnd) body.scrollTop = body.scrollHeight;
+}
+
+// His words into the open conversation. The text stays in the box until the hub has taken it, and a
+// resend of the same words carries the same id, so a lost answer cannot type them twice.
+async function sendWords(text) {
+  const el = document.getElementById('repospane');
+  const at = cur;
+  text = String(text || '').trim();
+  if (!el || !at || !text || at.sending) return;
+  const status = el.querySelector('.sv-status');
+  const say = (t) => { if (status && cur === at) status.textContent = t || ''; };
+  if (!at.msg || at.msg.text !== text) at.msg = { text, id: newMsgId() };
+  at.sending = true;
+  el.querySelector('.sv').classList.add('sending');
+  say('');
+  try {
+    const r = await fetch('/api/sessions/followup', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: at.id, text, client_msg_id: at.msg.id }),
+    });
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(j.error || String(r.status));
+    at.msg = null;
+    if (cur === at) {
+      const box = el.querySelector('.sv-text');
+      if (box && box.value.trim() === text) box.value = '';
+      at.mine = text;
+      paintBody();
+      const body = el.querySelector('.sv-body');
+      if (body) body.scrollTop = body.scrollHeight;
+    }
+  } catch (e) {
+    // Words that were spoken exist nowhere else, so a failed send leaves them in the box to resend.
+    const box = cur === at && el.querySelector('.sv-text');
+    if (box && !box.value.trim()) box.value = text;
+    say(String(e.message || e));
+  }
+  at.sending = false;
+  if (cur === at) el.querySelector('.sv').classList.remove('sending');
+}
+
+// Opens one session over the list. False when there is no such row to show, so a caller with
+// somewhere else to go (a notification tap) can go there.
+async function openSession(id) {
+  const el = document.getElementById('repospane');
+  if (!el || !id) return false;
+  cancelDictation();
+  follow();
+  // A parked row whose conversation is running again under a newer row opens as that one.
+  const tapped = rows.find((r) => r.id === id);
+  const live = tapped && rows.find((r) => r.status === 'resident' && keyOfRow(r) === keyOfRow(tapped));
+  const rowId = (live || tapped || { id }).id;
+  let d;
+  try {
+    const r = await fetch('/api/sessions/' + encodeURIComponent(rowId));
+    if (!r.ok) return false;
+    d = await r.json();
+  } catch (_) { return false; }
+  if (cur && cur.rec) cur.rec.stop();
+  cur = { id: d.id, key: keyOfRow(d), detail: d, working: !!d.working, activity: [], mine: '', msg: null, sending: false, rec: null };
+  const at = cur;
+  const pane = el.closest('.pane');
+  if (pane) pane.classList.add('sv-open');
+  el.innerHTML =
+    '<div class="sv">' +
+      '<div class="sv-bar"><button class="sv-back" type="button">‹ Sessions</button>' +
+        '<span class="sv-title"></span><span class="sess-dot" title="open and reachable"></span>' +
+        '<span class="sv-where"></span></div>' +
+      '<div class="sv-body"></div>' +
+      '<div class="sv-input">' +
+        '<button class="ai-mic sv-mic" type="button" aria-label="Tap to talk"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="2" width="6" height="12" rx="3"></rect><path d="M5 11a7 7 0 0 0 14 0"></path><line x1="12" y1="18" x2="12" y2="22"></line></svg></button>' +
+        '<input class="ai-text sv-text" type="text" placeholder="Message…" autocomplete="off">' +
+        '<button class="ai-send sv-send" type="button">Send</button>' +
+      '</div>' +
+      '<div class="ai-status sv-status"></div>' +
+    '</div>';
+  paintHead();
+  paintBody();
+  const box = el.querySelector('.sv-text'), mic = el.querySelector('.sv-mic'), status = el.querySelector('.sv-status');
+  el.querySelector('.sv-back').addEventListener('click', showList);
+  el.querySelector('.sv-send').addEventListener('click', () => sendWords(box.value));
+  box.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); sendWords(box.value); } });
+  // Spoken words go straight in, as they do on the watch and as this pane's launcher sends a dictated
+  // prompt: `dryWhen` has the hub transcribe without enqueueing a voice command, and the transcript
+  // is sent as the follow-up. Trailing silence ends the recording; a second tap ends it sooner.
+  at.rec = makeRecorder({
+    autoStop: true,
+    dryWhen: () => true,
+    onStatus: (t, kind) => { if (cur === at && kind !== 'prompt') status.textContent = t || ''; },
+    onState: (s) => { mic.classList.toggle('ai-rec', s === 'rec'); mic.classList.toggle('ai-armed', s === 'armed'); },
+    onTranscript: (t) => {
+      const words = String(t || '').trim();
+      if (cur !== at || !words) return;
+      // Spoken while an earlier message is still going up: held in the box rather than dropped.
+      if (at.sending) box.value = (box.value.trim() ? box.value.trim() + ' ' : '') + words;
+      else sendWords(words);
+    },
+  });
+  bindTap(mic, () => at.rec.toggle());
+  return true;
+}
+
+// Back to the list, from the view's own button or from anything that needs the list on screen.
+async function showList() {
+  const el = document.getElementById('repospane');
+  if (cur && cur.rec) cur.rec.stop();
+  cur = null;
+  const pane = el && el.closest('.pane');
+  if (pane) pane.classList.remove('sv-open');
+  await load();
+}
+
 // Called by the native app when a repo widget row is tapped (statushub://repo/<path>). The widget
 // can't reach a microphone, so it hands the choice over and the recording happens here.
 window.__startRepoSession = async (path) => {
@@ -250,28 +524,22 @@ window.__startRepoSession = async (path) => {
   if (!el) return;
   try { window.__showPane && window.__showPane('repos'); } catch (_) {}
   if (!mounted) { mounted = true; }
-  await load();
+  await showList();
   const li = el.querySelector(`li[data-path="${CSS.escape(String(path))}"]`);
   if (!li) return;
   li.scrollIntoView({ block: 'center', behavior: 'smooth' });
   beginDictation(li, machines.pi ? 'pi' : 'mac');
 };
 
-// Called by the native app when a session's reply notification is tapped: lands on the sessions list
-// with that session scrolled into view and briefly marked, so the eye finds the one that just answered.
+// Called by the native app when a session's reply notification is tapped: opens that session, so
+// the reply the notification was about is what is on screen. A row that no longer exists lands on
+// the list instead.
 window.__showSession = async (id) => {
   const el = document.getElementById('repospane');
   if (!el) return;
   try { window.__showPane && window.__showPane('repos'); } catch (_) {}
   if (!mounted) { mounted = true; }
-  await load();
-  const li = el.querySelector(`li.sess[data-id="${CSS.escape(String(id))}"]`);
-  if (!li) return;
-  li.scrollIntoView({ block: 'center', behavior: 'smooth' });
-  li.classList.remove('flash');
-  void li.offsetWidth;   // restart the animation if it is already marked
-  li.classList.add('flash');
-  li.addEventListener('animationend', () => li.classList.remove('flash'), { once: true });
+  if (!(await openSession(String(id)))) showList();
 };
 
 export function render() {
@@ -279,5 +547,7 @@ export function render() {
   if (!document.getElementById('repospane')) return;  // absent on kiosk/mac/page → no-op
   mounted = true;
   load();
-  window.addEventListener('focus', load);
+  // Coming back to the app re-reads whichever is showing. Re-reading the list over an open session
+  // would put him back on the list every time he switched apps mid-read.
+  window.addEventListener('focus', () => (cur ? reloadDetail() : load()));
 }

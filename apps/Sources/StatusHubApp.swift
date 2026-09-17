@@ -113,8 +113,9 @@ final class RepoLaunch {
     }
 }
 
-// A session's reply notification, tapped: lands on the sessions pane with that session scrolled into
-// view. Same polling shape as RecordLaunch — a tap can cold-launch the app before the page has mounted.
+// A session's reply notification, tapped: opens that session on the repos pane (the page's
+// `__showSession` decides what that means). Same polling shape as RecordLaunch — a tap can cold-launch
+// the app before the page has mounted.
 final class SessionLaunch {
     static let shared = SessionLaunch()
     weak var webView: WKWebView?

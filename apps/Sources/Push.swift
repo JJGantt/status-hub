@@ -127,7 +127,7 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
     func userNotificationCenter(_ center: UNUserNotificationCenter,
                                 didReceive response: UNNotificationResponse,
                                 withCompletionHandler completionHandler: @escaping () -> Void) {
-        // A session's finished reply: tapping the banner lands on that session in the sessions pane.
+        // A session's finished reply: tapping the banner opens that session on the repos pane.
         if let sid = response.notification.request.content.userInfo["session_id"] as? String {
             SessionLaunch.shared.request(sid)
             return completionHandler()

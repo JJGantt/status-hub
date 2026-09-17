@@ -533,9 +533,9 @@ body.tv.phonewall .pane-reports .reportscard>div{flex:1 1 auto;min-height:0;disp
   text-transform:uppercase}
 /* Steady, not pulsing: it means "open and reachable", not "actively working". */
 .sessions .sess-dot{width:8px;height:8px;border-radius:50%;background:#39d353;display:inline-block}
-/* The session a reply notification opened (__showSession in cards/repos.js), marked briefly. */
-.sessions .sess.flash{animation:sess-flash 1.6s ease-out}
-@keyframes sess-flash{from{background:rgba(255,255,255,.16)}to{background:transparent}}
+/* A row opens its session (openSession in cards/repos.js); its buttons act without opening it. */
+.sessions li.sess[data-id]{cursor:pointer;-webkit-tap-highlight-color:transparent}
+.sessions li.sess[data-id]:active{background:#0e1318}
 .sessions .sess-btn{background:#1a222c;border:1px solid #2a333f;border-radius:7px;color:#e6ebf2;
   font-size:12px;padding:5px 10px;cursor:pointer}
 .sessions .sess-btn.ghost{background:transparent;color:#5d6672;padding:5px 8px}
@@ -563,6 +563,34 @@ body.tv.phonewall .pane-reports .reportscard>div{flex:1 1 auto;min-height:0;disp
 .rpt-bar-title{flex:1 1 auto;min-width:0;font-size:13px;color:#8b96a5;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .rpt-frame{flex:1 1 auto;min-height:0;width:100%;border:0;background:#fff}
 .sessions li.busy{opacity:.5;pointer-events:none}
+/* One session, open in place of the list. The pane stops scrolling and hands its whole height to the
+   card, as the chat pane does, so the composer stays at the bottom and only the conversation scrolls.
+   `sv-open` is set on the pane by openSession and cleared by showList. */
+body.tv.phonewall .pane-repos.sv-open{overflow:hidden;display:flex;flex-direction:column}
+body.tv.phonewall .pane-repos.sv-open .card{flex:1 1 auto;min-height:0;display:flex;flex-direction:column;overflow:hidden}
+body.tv.phonewall .pane-repos.sv-open #repospane{flex:1 1 auto;min-height:0;display:flex;flex-direction:column}
+.sv{flex:1 1 auto;min-height:0;display:flex;flex-direction:column;margin:-14px}
+.sv-bar{flex:0 0 auto;display:flex;align-items:center;gap:10px;padding:10px 12px;border-bottom:1px solid #222a33}
+.sv-back{flex:0 0 auto;background:none;border:0;padding:0;color:#5b8def;font-size:15px;cursor:pointer}
+.sv-title{flex:1 1 auto;min-width:0;font-size:13px;font-weight:600;color:#e6ebf2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sv-bar .sess-dot{flex:0 0 auto;width:8px;height:8px;border-radius:50%;background:#39d353}
+.sv-bar .sess-dot[hidden]{display:none}
+.sv-where{flex:0 0 auto;font-size:10px;font-weight:700;letter-spacing:.3px;color:#5d6672;text-transform:uppercase}
+.sv-body{flex:1 1 auto;min-height:0;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:12px 14px;
+  display:flex;flex-direction:column;gap:12px}
+.sv-body>*{flex:0 0 auto;white-space:pre-wrap;word-break:break-word}
+/* His words in the chat's colour for them; the reply is the thing being read, so it is the brightest. */
+.sv-words{font-size:14px;line-height:1.45;color:#6ea8ff}
+.sv-reply{font-size:15px;line-height:1.5;color:#d5dbe3}
+.sv-thought{font-size:13.5px;line-height:1.45;color:#9aa5b3}
+.sv-tool{font:12px/1.4 ui-monospace,SFMono-Regular,Menlo,monospace;color:#6b7686;white-space:nowrap;
+  overflow:hidden;text-overflow:ellipsis}
+.sv-body code{font:.9em ui-monospace,SFMono-Regular,Menlo,monospace;background:#0e1318;border-radius:4px;padding:1px 4px}
+.sv-body code.sv-pre{display:block;padding:8px 10px;overflow-x:auto;white-space:pre}
+.sv-body strong{color:#f1f4f8}
+.sv-input{flex:0 0 auto;display:flex;align-items:center;gap:8px;padding:10px 12px 4px;border-top:1px solid #222a33}
+.sv-status{flex:0 0 auto;padding:0 14px 8px}
+.sv.sending .sv-send{opacity:.5;pointer-events:none}
 .repos .rp-age{flex:0 0 auto;font-size:12px;color:#8b96a5}
 /* Launch feedback replaces the age column: blue while the Mac works, then green or red. */
 .repos li[data-say] .rp-age{display:none}

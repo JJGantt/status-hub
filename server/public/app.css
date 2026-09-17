@@ -578,7 +578,11 @@ body.tv.phonewall .pane-repos.sv-open #repospane{flex:1 1 auto;min-height:0;disp
 .sv-where{flex:0 0 auto;font-size:10px;font-weight:700;letter-spacing:.3px;color:#5d6672;text-transform:uppercase}
 .sv-body{flex:1 1 auto;min-height:0;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:12px 14px;
   display:flex;flex-direction:column;gap:12px}
-.sv-body>*{flex:0 0 auto;white-space:pre-wrap;word-break:break-word}
+.sv-body>*,.sv-turn>*{flex:0 0 auto;white-space:pre-wrap;word-break:break-word}
+/* One finished exchange. Earlier ones are context above the one the view opens on, ruled off from it. */
+.sv-body>.sv-turn{display:flex;flex-direction:column;gap:12px;white-space:normal}
+.sv-turn+.sv-turn{border-top:1px solid #222a33;padding-top:12px}
+.sv-body a{color:#5b8def;text-decoration:underline;text-underline-offset:2px}
 /* His words in the chat's colour for them; the reply is the thing being read, so it is the brightest. */
 .sv-words{font-size:14px;line-height:1.45;color:#6ea8ff}
 .sv-reply{font-size:15px;line-height:1.5;color:#d5dbe3}

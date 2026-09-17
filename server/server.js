@@ -3324,12 +3324,25 @@ async function conversationNow(row) {
 // One session in full, for a surface that shows a single session rather than the list — the watch's
 // session page and the phone's (openSession in cards/repos.js). `/api/sessions` sends most parked
 // sessions' replies only as the one-line `say`.
+//
+// `turns` is the conversation's last finished turns, oldest first, the newest being the row's own
+// `last_prompt`/`last_reply`. They come from `desk_turns`, which a trigger on `desk_sessions` fills in
+// the same transaction as the row (data-layer 00105) — so a client told the row changed can already
+// read the turn. Keyed by conversation, which is what carries the history across a resume or transfer.
+const SESSION_TURNS = 10;
 app.get('/api/sessions/:id', async (req, res) => {
   try {
     const rows = await sb(`desk_sessions?id=eq.${encodeURIComponent(String(req.params.id))}` +
       '&select=id,label,custom_title,repo,worker,status,working,claude_session_id,last_prompt,last_reply,reply_at');
     if (!rows || !rows.length) return res.status(404).json({ error: 'no such session' });
-    res.json(rows[0]);
+    const row = rows[0];
+    // The history is context, not the answer: without it the session still opens on its last turn.
+    let turns = [];
+    try {
+      turns = ((await sb(`desk_turns?conversation=eq.${encodeURIComponent(row.claude_session_id || row.id)}` +
+        `&select=at,prompt,reply&order=at.desc&limit=${SESSION_TURNS}`)) || []).reverse();
+    } catch (e) { console.log('[sessions] turns:', e.message); }
+    res.json({ ...row, turns });
   } catch (e) { res.status(500).json({ error: String(e.message || e) }); }
 });
 

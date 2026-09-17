@@ -271,20 +271,34 @@ const newMsgId = () => ((self.crypto && crypto.randomUUID)
 
 // Inline markdown only, whitespace kept — what `inlineMarkdown` gives the watch. Escaped FIRST: a
 // reply is a model's prose and may hold anything that looks like markup, so the only tags in the
-// result are the ones written here. Code is lifted out before the emphasis rules run, or a `*` inside
-// it would be read as one. A link keeps its words and loses its target: following one would navigate
-// the hub's own web view away from the hub.
-const HELD = /(\d+)/g;   // where a lifted code span goes back (a private-use character)
+// result are the ones written here. Code and links are lifted out before the emphasis rules run, or
+// a `*` inside one would be read as emphasis.
+//
+// A link ALWAYS asks for a new window. Followed in place it would navigate the app's one web view
+// away from the hub, with nothing on screen to come back by. `target=_blank` reaches the app's
+// `createWebViewWith` instead, which hands the address to Safari; a build without that handler
+// ignores the tap, which is the safe way round. Only http(s) becomes a link — a relative one would
+// open a second hub inside the first — and anything else keeps its words and loses its target.
+const MARK = '\uE000';                                  // a private-use character: where a lifted span goes back
+const HELD = new RegExp(MARK + '(\\d+)' + MARK, 'g');
 function inlineMd(text) {
-  const code = [];
-  const lift = (html) => { code.push(html); return '' + (code.length - 1) + ''; };
-  return esc(String(text).replace(//g, ''))
+  const held = [];
+  const lift = (html) => { held.push(html); return MARK + (held.length - 1) + MARK; };
+  const link = (url, words) => lift(`<a href="${url}" target="_blank" rel="noopener noreferrer">${words}</a>`);
+  return esc(String(text).split(MARK).join(''))
     .replace(/```[^\n]*\n([\s\S]*?)```\n?/g, (_, c) => lift('<code class="sv-pre">' + c.replace(/\n$/, '') + '</code>'))
     .replace(/`([^`\n]+)`/g, (_, c) => lift('<code>' + c + '</code>'))
+    .replace(/\[([^\]\n]+)\]\((https?:\/\/[^)\s]+)\)/g, (_, words, url) => link(url, words))
+    .replace(/\[([^\]\n]+)\]\([^)\s]*\)/g, '$1')
+    // A bare address. It stops at an escaped quote, and gives back the punctuation that ends the
+    // sentence it sits in rather than linking it.
+    .replace(/https?:\/\/(?:(?!&quot;)[^\s<])+/g, (m) => {
+      const url = m.replace(/[.,;:!?)\]']+$/, '');
+      return link(url, url) + m.slice(url.length);
+    })
     .replace(/\*\*([^*\n]+)\*\*/g, '<strong>$1</strong>')
     .replace(/(^|[^\w*])\*([^*\s][^*\n]*?)\*(?!\w)/g, '$1<em>$2</em>')
-    .replace(/\[([^\]\n]+)\]\((?:https?:|\/)[^)\s]*\)/g, '$1')
-    .replace(HELD, (_, i) => code[+i]);
+    .replace(HELD, (_, i) => held[+i]);
 }
 
 // The last /api/sessions payload's rows, from a fetch or a pushed `sessions` frame. With a session
@@ -384,26 +398,38 @@ function paintHead() {
   if (dot) dot.hidden = d.status !== 'resident';
 }
 
-// `top` brings a new reply to the top of the view, where reading it starts; `follow` keeps a view
-// that was already at the bottom there as the turn's steps arrive, and leaves one he has scrolled
-// up in where it is.
-function paintBody({ top = false, follow = false } = {}) {
+// The conversation's last finished turns, oldest first (`turns`, from /api/sessions/:id). The last
+// of them is the row's own last_prompt/last_reply, which stands alone when there is no history.
+function turnsOf(d) {
+  if (Array.isArray(d.turns) && d.turns.length) return d.turns;
+  return d.last_reply ? [{ prompt: d.last_prompt, reply: d.last_reply }] : [];
+}
+
+// The earlier turns are context and sit ABOVE where the view lands: `open` puts the last turn's
+// prompt at the top, so what is on screen is the exchange he came for and the rest is a scroll up.
+// `top` does the same with a reply that has just arrived, where reading it starts. `follow` keeps a
+// view that was already at the bottom there as the turn's steps arrive, and leaves one he has
+// scrolled up in where it is.
+function paintBody({ open = false, top = false, follow = false } = {}) {
   const el = document.getElementById('repospane');
   const body = el && el.querySelector('.sv-body');
   if (!body || !cur) return;
-  const d = cur.detail;
   const atEnd = body.scrollHeight - body.scrollTop - body.clientHeight < 60;
   body.innerHTML =
-    (d.last_prompt ? `<div class="sv-words">${inlineMd(d.last_prompt.trim())}</div>` : '') +
-    (d.last_reply ? `<div class="sv-reply">${inlineMd(d.last_reply.trim())}</div>` : '') +
+    turnsOf(cur.detail).map((t) => '<div class="sv-turn">' +
+      (t.prompt ? `<div class="sv-words">${inlineMd(t.prompt.trim())}</div>` : '') +
+      `<div class="sv-reply">${inlineMd(String(t.reply || '').trim())}</div></div>`).join('') +
     (cur.mine ? `<div class="sv-words">${inlineMd(cur.mine)}</div>` : '') +
     cur.activity.map((a) => a.thought
       ? `<div class="sv-thought">${inlineMd(a.text)}</div>`
       : `<div class="sv-tool">${esc(a.text)}</div>`).join('') +
     (cur.working ? '<div class="sv-working"><span class="ai-caret">▍</span></div>' : '');
-  if (top) {
-    const reply = body.querySelector('.sv-reply');
-    body.scrollTop = reply ? Math.max(0, reply.offsetTop - body.offsetTop - 8) : 0;
+  if (open || top) {
+    const turns = body.querySelectorAll('.sv-turn');
+    const last = turns[turns.length - 1];
+    const at = last && (open ? last : last.querySelector('.sv-reply'));
+    // Less the body's own padding, so the first turn of a conversation rests at zero.
+    body.scrollTop = at ? Math.max(0, at.offsetTop - body.offsetTop - 12) : 0;
   } else if (follow && atEnd) body.scrollTop = body.scrollHeight;
 }
 
@@ -482,7 +508,7 @@ async function openSession(id) {
       '<div class="ai-status sv-status"></div>' +
     '</div>';
   paintHead();
-  paintBody();
+  paintBody({ open: true });
   const box = el.querySelector('.sv-text'), mic = el.querySelector('.sv-mic'), status = el.querySelector('.sv-status');
   el.querySelector('.sv-back').addEventListener('click', showList);
   el.querySelector('.sv-send').addEventListener('click', () => sendWords(box.value));

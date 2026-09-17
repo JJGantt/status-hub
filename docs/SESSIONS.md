@@ -66,7 +66,7 @@ config change ON the Pi by dispatching a session to it.
 | `pid` | the Claude Code process the row belongs to — what liveness and the conversation are read from |
 | `tty` | Mac only: the Terminal tab, and the handle a follow-up is typed into |
 | `working` / `last_reply` / `reply_at` | is a turn in flight; the last COMPLETED answer, and when |
-| `last_prompt` | the prompt that answer was to — published with it, replaced with it |
+| `last_prompt` | the prompt that answer was to — published with it, replaced with it. Earlier turns are kept in `desk_turns`, by trigger (HUB-INTERNALS § The turns before the last one) |
 | `active_at` | the last turn boundary (a prompt sent, a turn finished) — what orders, numbers and focuses sessions |
 | `mirror_offset` / `mirror_at` | how much of the transcript is in the `transcripts` bucket |
 | `command_id` | the dispatch or resume that created it — how a follow-up resolves its target |

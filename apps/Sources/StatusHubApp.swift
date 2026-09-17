@@ -269,6 +269,23 @@ struct HubWebView {
             decisionHandler(.grant)   // first-party hub → no nested prompt
         }
 
+        // A link that asks for a new window goes to the system browser. There is one web view and it
+        // is the hub, so there is no window to open — and the page marks every link it cannot afford
+        // to follow in place this way (`target=_blank`: a session's reply, cards/repos.js), because
+        // followed in place it would replace the hub with no way back. Unimplemented, WebKit drops
+        // such a tap in silence.
+        func webView(_ webView: WKWebView, createWebViewWith configuration: WKWebViewConfiguration,
+                     for navigationAction: WKNavigationAction, windowFeatures: WKWindowFeatures) -> WKWebView? {
+            if let url = navigationAction.request.url, ["http", "https"].contains(url.scheme?.lowercased() ?? "") {
+                #if os(iOS)
+                UIApplication.shared.open(url)
+                #else
+                NSWorkspace.shared.open(url)
+                #endif
+            }
+            return nil
+        }
+
         // JS dialog panels. WKWebView suppresses window.alert/confirm/prompt (confirm returns false)
         // unless these WKUIDelegate methods are implemented — which silently broke every in-page button
         // gated on a confirm() (commit, delete, reset context). Present them as native dialogs instead.

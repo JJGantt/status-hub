@@ -924,17 +924,18 @@ answers 409. A second resume would put two processes on one transcript and fork 
 button goes through the same check. Every case is an exact lookup: both machines stamp a resumed row
 with the resume command's id, and the Pi publishes the conversation id at launch.
 
-`GET /api/sessions/:id` returns one session with its `last_prompt`, whole `last_reply` and
-`claude_session_id`, under its own projection, for a surface showing a single session rather than the
-list.
+`GET /api/sessions/:id` returns one session with its `last_prompt`, whole `last_reply`,
+`claude_session_id` and its last ten `turns` (§ The turns before the last one), under its own
+projection, for a surface showing a single session rather than the list.
 
 ### One session, open on the phone
 
 Tapping a row of the repos pane's sessions list opens that session in place of the list
 (`openSession` in `cards/repos.js`), and `‹ Sessions` goes back. It is the watch's session page at
-phone size: the last prompt, the whole reply to it, the tool calls and between-call thoughts of a turn
-in flight, and a composer — typed, or spoken through the pane's dry-transcribing recorder — whose
-words go to `/api/sessions/followup`. A failed send shows the hub's own `error` and leaves the words
+phone size, with more room: the conversation's last ten turns, the tool calls and between-call
+thoughts of a turn in flight, and a composer — typed, or spoken through the pane's dry-transcribing
+recorder — whose words go to `/api/sessions/followup`. It opens ON the last turn, its prompt at the
+top of the view; the earlier ones are context, a scroll up. A failed send shows the hub's own `error` and leaves the words
 in the box; resending the same words reuses the `client_msg_id`.
 
 It follows `/api/session-stream`, opened on the first open rather than at mount because
@@ -944,8 +945,11 @@ still hold the previous reply when it arrives, while a `sessions` frame is built
 the write. Everything is keyed by `claude_session_id`, as on the watch, so a follow-up that resumes
 a parked session carries the view over to the new row.
 
-A reply renders as inline markdown with whitespace kept, escaped first. A link keeps its words and
-loses its target, since following one would navigate the app's web view away from the hub.
+A reply renders as inline markdown with whitespace kept, escaped first. **Every link in it is
+`target=_blank`, and that is load-bearing**: followed in place, a link replaces the hub in the app's
+one web view with nothing on screen to come back by. A new-window request reaches the app's
+`createWebViewWith` (`StatusHubApp.swift`), which hands the address to Safari; an app build older
+than that handler drops the tap, which is the safe failure. Only `http(s)` addresses become links.
 
 While a session is open the pane carries `sv-open`, which stops the pane scrolling and gives the card
 its whole height so the composer stays put — the chat pane's layout. Re-focusing the app re-reads the
@@ -960,8 +964,25 @@ carrying the message's `stop_reason`, and a turn ends with `end_turn`. "The last
 not the same thing — mid-turn that is a half-written thought.
 
 `last_prompt` is the prompt that started that turn. `readTail` pairs the two and both machines write it
-wherever they write the reply, so they are replaced together; it is blank, not an older prompt, when
-the turn's opening has scrolled out of the window `readTail` reads.
+wherever they write the reply, so they are replaced together. A turn of tool calls is routinely several
+megabytes against the 512KB `readTail` reads, so when the reply is in that window and the turn's
+opening is not, it reads backwards for it — once per turn, cached, a miss included. It is blank, never
+an older prompt, when the turn was not started by something he said: a background task finishing, or
+Claude Code's own injected context and compaction summaries, which are passed over.
+
+### The turns before the last one
+
+`desk_turns` holds each conversation's finished turns (`conversation`, `at`, `prompt`, `reply`), and
+`GET /api/sessions/:id` returns the last ten as `turns`, oldest first, the newest being the row's own
+last turn. Nothing in this repo or on either machine writes it: a trigger on `desk_sessions`
+(data-layer `00105`) records a turn whenever `reply_at`, `last_reply`, `last_prompt` or the
+conversation id changes, in the same transaction as the row — so a client told the row changed can
+already read the turn, and the four places a turn end is written (two machines, each from its watcher
+and its tick) cannot disagree. It is keyed by `claude_session_id`, which is what carries the history
+across a resume or a transfer, and it bounds itself: 20 turns a conversation, 30 days.
+
+A turn carries what the row carried, so a reply is the same 4000 characters the machines cut
+`last_reply` to.
 
 ### Every finished reply is a notification
 

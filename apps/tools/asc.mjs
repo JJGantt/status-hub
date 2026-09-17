@@ -131,7 +131,9 @@ if (cmd === 'devices') {
   // A build stops being installable 90 days after upload, and TestFlight words that on the phone as
   // the tester not having access rather than as an expiry — so "it says I am not a tester" is only
   // a membership problem once this shows a live build.
-  const { data } = await api('GET', '/v1/apps/6805268657/builds?limit=20&include=buildBetaDetail,betaGroups');
+  // The app's own builds relationship refuses `include`; the top-level collection filtered by app
+  // takes it, and the group assignment is the point — a build in no group reaches nobody.
+  const { data } = await api('GET', '/v1/builds?filter[app]=6805268657&limit=20&include=betaGroups');
   console.log(`${data.length} build(s) on JaredHub:\n`);
   for (const b of data) {
     const a = b.attributes;

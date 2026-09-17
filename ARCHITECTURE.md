@@ -455,6 +455,20 @@ Connect app "JaredHub" (id `6805268657`) receives every build, so the phone inst
 TestFlight app over the air — nothing has to be on the Mac's network. The watch app rides inside it.
 A TestFlight build expires 90 days after upload. The runner bills at 10x, so dispatch it deliberately.
 
+**When TestFlight says he is not a tester, that is membership, not the build.** TestFlight keeps
+showing the app to an Apple ID that was ever a tester but refuses to install for one that is not in a
+group now — which is what a new phone signed in to a different Apple ID looks like. `ios-testers.yml`
+(Linux, 1x) answers it without a Mac or an interactive Apple ID login: `list` prints every group with
+its members and public link, `builds` prints what TestFlight is offering and when it expires, and
+`add` puts an address in a group. Two traps behind it:
+
+- **The App Store Connect account carries four apps** — JaredHub, StrokeSaver, CapGrille and Watchset
+  — and a group name is only unique within one, so groups are named `App/Group` here. `asc.mjs`
+  walks all four for exactly that reason; the device and bundle-id commands are account-wide anyway.
+- **An internal group can never have a public link.** Apple offers those on external groups only, and
+  an external group's builds have to clear Beta App Review first, so "turn the link on" is not a
+  setting away from an internal group. Of the four apps only CapGrille has one.
+
 **A local build is for iterating on UI, never for installing.** A build signed on this Mac carries
 `aps-environment: development` and registers a **sandbox** APNs token, which the hub's production
 sends cannot reach, so installing one silences push until a production build replaces it. It also

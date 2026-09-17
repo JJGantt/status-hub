@@ -293,7 +293,8 @@ function completionStamp(at, nowLocal) {
  */
 function tasksScore({ events = [], open = [], nowLocal }) {
   const now = naive(nowLocal);
-  const empty = { pct: 0, level: 0, units: 0, earned: 0, drained: 0, overdue: 0, completed: 0, loss_per_day: 0 };
+  const empty = { pct: 0, level: 0, units: 0, earned: 0, drained: 0, overdue: 0, completed: 0,
+                  loss_per_day: 0, loss_changes_at: null };
   if (now == null) return empty;
 
   const stepMs = TASK_STEP_H * HOUR;
@@ -414,12 +415,18 @@ function tasksScore({ events = [], open = [], nowLocal }) {
   //
   // Capped by what is there. It is an instantaneous rate, and at 5 points left a band cannot lose 27
   // in a day, whatever the rate says; an empty band loses nothing.
-  const fading = credits.reduce((r, c) => r + (weightAt(c, now) > 0 ? c.credit : 0), 0) / TASK_DECAY_DAYS;
+  const alive = credits.filter((c) => c.credit > 1e-9 && weightAt(c, now) > 0);
+  const fading = alive.reduce((r, c) => r + c.credit, 0) / TASK_DECAY_DAYS;
   const overdueRate = drains.reduce((r, d) => r + (d.from < now && d.to > now ? d.rate : 0), 0);
+  // The rate only STEPS: a credit reaching the end of its window stops fading, an item comes overdue
+  // or stops being. The second is already a chip transition; the first changes no row, so nothing
+  // would tell a surface to re-read. This is that moment, as a local-naive minute.
+  const expiry = alive.reduce((m, c) => Math.min(m, c.at + decayWindow), Infinity);
   return {
     pct: TASK_FULL_UNITS > 0 ? level / TASK_FULL_UNITS : 0,
     level, units: level, earned, drained,
     loss_per_day: Math.min(level, fading + overdueRate),
+    loss_changes_at: Number.isFinite(expiry) ? new Date(Math.ceil(expiry / MIN) * MIN).toISOString().slice(0, 16) : null,
     overdue: drains.filter((d) => d.from < now && d.to > now).length,
     completed: landings.length,
   };
@@ -436,9 +443,6 @@ function computeScore({ volume, days = [], surplus = 0, taskEvents = [], openTas
       pct: pct(k.pct), units: Math.round(k.units * 100) / 100,
       earned: Math.round(k.earned * 100) / 100, drained: Math.round(k.drained * 100) / 100,
       overdue: k.overdue, completed: k.completed,
-      // Whole POINTS a day the band is falling at, fading and overdue together. On the payload rather
-      // than derived by a client, so it cannot drift from the replay that produced the level.
-      loss_per_day: Math.round(bandPoints(k.loss_per_day)),
     },
     training: { pct: pct(t.pct), points: t.points, target: t.target },
     nutrition: {

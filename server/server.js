@@ -28,7 +28,7 @@ const { buildWeightPlot } = require('./lib/weightplot');
 const { getWeather } = require('./lib/weather');
 const { transcribe, extFor } = require('./lib/transcribe');
 const { buildNutritionLog, buildGoalResolver, calorieColor } = require('./lib/nutritionlog');
-const { computeScore, taskDeadline, completionValue, completionStamp, bandPoints, toPoints, TASK_GRACE_MIN, TASK_LATE_ZERO_H, TASK_DRAIN_FULL_H } = require('./lib/score');
+const { computeScore, tasksScore, taskDeadline, completionValue, completionStamp, bandPoints, toPoints, TASK_GRACE_MIN, TASK_LATE_ZERO_H, TASK_DRAIN_FULL_H } = require('./lib/score');
 
 // Settings cache: app_settings is read several times per status build but only changes on explicit
 // writes, which the realtime subscription announces (→ dirtySettings). One whole-table fetch serves
@@ -2928,6 +2928,23 @@ app.get('/api/calendar', async (req, res) => {
       dayline = { date: todayKey, label: todayCell ? todayCell.label : todayKey, allday, hours };
     }
 
+    // HOW FAST THE TASK BAND IS FALLING, for the dial's date line: the points a day it loses right
+    // now, fading and overdue together (tasksScore has the arithmetic). It belongs with the dated items
+    // rather than on the health bar, which is three bands and this is one of them. The rows here are
+    // exactly the band's own inputs — every dated item, done or open — and the replay ignores
+    // completions older than its window, so the same function reads the same number the band does.
+    let loss = null;
+    if (full) {
+      const k = tasksScore({ events: (rows || []).filter((r) => r.completed_at),
+                             open: (rows || []).filter((r) => !r.completed_at), nowLocal: nowET });
+      loss = { per_day: Math.round(bandPoints(k.loss_per_day)), changes_at: k.loss_changes_at };
+      if (dayline) dayline.loss_per_day = loss.per_day;
+    }
+    // A wall re-reads at the next moment anything it draws changes on its own. The loss rate adds one
+    // kind of moment the chips do not have: a completion ageing out of the band.
+    const transition = [nextChipTransition(rows, nowET), loss && loss.changes_at]
+      .filter(Boolean).sort()[0] || null;
+
     // THE DIAL'S OVERDUE LIST — every expired, unfinished item, whatever day it was due, oldest first.
     // The dial only reaches twelve hours back and its far rows are too thin for words, so an item
     // that has gone red and receded past what it can show was simply gone from the wall while it went
@@ -2983,7 +3000,7 @@ app.get('/api/calendar', async (req, res) => {
       }
     }
 
-    if (dayOnly) return res.json({ today: todayKey, dayline, ...(ahead ? { ahead } : {}), ...(overdue ? { overdue } : {}), next_transition: nextChipTransition(rows, nowET) });
+    if (dayOnly) return res.json({ today: todayKey, dayline, ...(ahead ? { ahead } : {}), ...(overdue ? { overdue } : {}), next_transition: transition });
     res.json({
       today: todayKey,
       dow: ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'],
@@ -2994,7 +3011,7 @@ app.get('/api/calendar', async (req, res) => {
       months,
       ...(dayline ? { dayline } : {}),
       ...(ahead ? { ahead } : {}),
-      next_transition: nextChipTransition(rows, nowET),
+      next_transition: transition,
     });
   } catch (e) { res.status(500).json({ error: String(e.message || e) }); }
 });

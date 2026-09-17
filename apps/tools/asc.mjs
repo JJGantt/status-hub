@@ -1,6 +1,6 @@
 #!/usr/bin/env node
-// A tiny App Store Connect API client — enough to see and register DEVICES, and to register a new
-// target's BUNDLE ID.
+// A tiny App Store Connect API client — enough to see and register DEVICES, to register a new
+// target's BUNDLE ID, and to see and change who TestFlight will let install a build.
 //
 // Why this exists: an Ad Hoc build only installs on iPhones whose UDID was registered with Apple
 // BEFORE the build was signed, because the UDID list is baked into the provisioning profile inside
@@ -14,6 +14,18 @@
 //   node asc.mjs devices                     — list every registered device
 //   node asc.mjs register <UDID> <name…>     — register one iPhone
 //   node asc.mjs bundle-id <identifier> <name…> — register a bundle id for a new app or extension target
+//   node asc.mjs testers                     — list the beta groups, their public links, and who is in them
+//   node asc.mjs add-tester <group> <email> [first] [last] — put an address in a group
+//   node asc.mjs public-link <group> on|off  — the shareable join link, external groups only
+//
+// TestFlight shows the app to anyone signed in with an Apple ID that has ever been a tester, but it
+// only lets them INSTALL while that Apple ID is currently in a group — the state a phone reports as
+// not being one of the testers. So `testers` is the diagnosis and `add-tester` is the fix, and the
+// address that matters is the one the phone is signed in to iCloud with, not the developer account.
+//
+// An INTERNAL group can only hold Apple IDs that are Users on the App Store Connect account, and it
+// can never have a public link — Apple only offers those on external groups, which is why a missing
+// link is usually a missing external group rather than a setting that got switched off.
 //
 // A new target's bundle id has to be registered HERE before the first archive. The CI archive's
 // automatic signing does not register one: with the watch app's ids missing it chose a profile it
@@ -114,7 +126,75 @@ if (cmd === 'devices') {
     if (/already (exist|been used|registered)|not available/i.test(e.message)) console.log(`${identifier} is already registered — nothing to do.\n${e.message}`);
     else throw e;
   }
+} else if (cmd === 'testers' || cmd === 'add-tester' || cmd === 'public-link') {
+  // Every beta call hangs off one app, and the account has more than one.
+  const APP_ID = '6805268657';   // JaredHub
+
+  const groups = async () => (await api('GET', `/v1/apps/${APP_ID}/betaGroups?limit=200`)).data;
+  const findGroup = (all, name) => {
+    const hit = all.filter((g) => g.attributes.name.toLowerCase() === String(name).toLowerCase());
+    if (hit.length !== 1) {
+      console.error(`no single group called "${name}". Groups: ${all.map((g) => g.attributes.name).join(', ')}`);
+      process.exit(2);
+    }
+    return hit[0];
+  };
+
+  if (cmd === 'add-tester') {
+    const [group, email, first = '', last = ''] = rest;
+    if (!group || !email) { console.error('usage: asc.mjs add-tester <group> <email> [first] [last]'); process.exit(2); }
+    const g = findGroup(await groups(), group);
+    try {
+      await api('POST', '/v1/betaTesters', {
+        data: {
+          type: 'betaTesters',
+          attributes: { email, firstName: first, lastName: last },
+          relationships: { betaGroups: { data: [{ type: 'betaGroups', id: g.id }] } },
+        },
+      });
+      console.log(`added ${email} to "${g.attributes.name}"`);
+    } catch (e) {
+      // An address Apple already knows cannot be created again, but it can still be short of this
+      // group — which is exactly the case being fixed, so look it up and attach it instead.
+      if (!/already exist|taken|duplicate/i.test(e.message)) throw e;
+      const { data } = await api('GET', `/v1/betaTesters?filter[email]=${encodeURIComponent(email)}&limit=1`);
+      if (!data.length) throw e;
+      await api('POST', `/v1/betaGroups/${g.id}/relationships/betaTesters`, {
+        data: [{ type: 'betaTesters', id: data[0].id }],
+      });
+      console.log(`${email} already existed; added to "${g.attributes.name}"`);
+    }
+  }
+
+  if (cmd === 'public-link') {
+    const [group, state] = rest;
+    if (!group || !['on', 'off'].includes(state)) { console.error('usage: asc.mjs public-link <group> on|off'); process.exit(2); }
+    const g = findGroup(await groups(), group);
+    if (g.attributes.isInternalGroup) {
+      console.error(`"${g.attributes.name}" is an internal group; Apple offers public links on external groups only.`);
+      process.exit(2);
+    }
+    const { data } = await api('PATCH', `/v1/betaGroups/${g.id}`, {
+      data: { type: 'betaGroups', id: g.id, attributes: { publicLinkEnabled: state === 'on' } },
+    });
+    console.log(`"${data.attributes.name}" public link ${data.attributes.publicLinkEnabled ? data.attributes.publicLink : 'off'}`);
+  }
+
+  // Always print the state, including straight after a change, for the same reason the devices
+  // workflow does: the log should end with what the account says, not with what we asked for.
+  const all = await groups();
+  console.log(`\n${all.length} beta group(s) on JaredHub:\n`);
+  for (const g of all) {
+    const a = g.attributes;
+    console.log(`  ${a.name}  [${a.isInternalGroup ? 'internal' : 'external'}]  link: ${a.publicLinkEnabled ? a.publicLink : 'none'}`);
+    const { data: testers } = await api('GET', `/v1/betaGroups/${g.id}/betaTesters?limit=200`);
+    for (const t of testers) {
+      const ta = t.attributes;
+      console.log(`      ${ta.email}  ${[ta.firstName, ta.lastName].filter(Boolean).join(' ')}  ${ta.state || ''}`);
+    }
+    if (!testers.length) console.log('      (empty)');
+  }
 } else {
-  console.error('usage: asc.mjs devices | asc.mjs register <UDID> <name…> | asc.mjs bundle-id <identifier> <name…>');
+  console.error('usage: asc.mjs devices | register <UDID> <name…> | bundle-id <identifier> <name…> | testers | add-tester <group> <email> [first] [last] | public-link <group> on|off');
   process.exit(2);
 }

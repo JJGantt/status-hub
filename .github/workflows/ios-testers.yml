@@ -1,0 +1,59 @@
+# See and change who TestFlight will let install a build.
+#
+# Same shape and reasoning as ios-devices.yml: pure REST against App Store Connect, so a LINUX
+# runner at 1x rather than the 10x macOS one. Run it freely.
+#
+# TestFlight shows the app to any Apple ID that was ever a tester but refuses to install for one
+# that is not in a group now, so "it is in my TestFlight but says I am not a tester" is answered
+# here rather than by building again.
+name: iOS testers
+
+on:
+  workflow_dispatch:
+    inputs:
+      action:
+        description: 'list, add a tester, or turn a public link on/off'
+        type: choice
+        options: [list, add, link-on, link-off]
+        default: list
+      group:
+        description: 'Beta group name, as the list prints it'
+        type: string
+        default: ''
+      email:
+        description: 'Apple ID email to add — the one the phone is signed in to iCloud with'
+        type: string
+        default: ''
+      first:
+        description: 'First name'
+        type: string
+        default: ''
+      last:
+        description: 'Last name'
+        type: string
+        default: ''
+
+jobs:
+  testers:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      ASC_KEY_ID: P8Y337A8RC
+      ASC_ISSUER_ID: 141a8ead-b829-4e58-b9ff-b8c95f8c4ed9
+      ASC_KEY_P8: ${{ secrets.ASC_KEY_P8 }}
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Add
+        if: inputs.action == 'add'
+        run: node apps/tools/asc.mjs add-tester "${{ inputs.group }}" "${{ inputs.email }}" "${{ inputs.first }}" "${{ inputs.last }}"
+
+      - name: Public link
+        if: inputs.action == 'link-on' || inputs.action == 'link-off'
+        run: node apps/tools/asc.mjs public-link "${{ inputs.group }}" "${{ inputs.action == 'link-on' && 'on' || 'off' }}"
+
+      # asc.mjs prints the groups and their members at the end of every command, so a list needs no
+      # step of its own — but a bare `list` run still needs something to execute.
+      - name: List
+        if: inputs.action == 'list'
+        run: node apps/tools/asc.mjs testers

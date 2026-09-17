@@ -61,8 +61,7 @@ export function mountStrip(el, { axisH = 14, hourW = 26 } = {}) {
   if (!el) return null;
   host = el;
   cfg = { axisH, hourW };
-  el.innerHTML = '<div class="ds-scroll"><div class="ds-strip"></div></div>' +
-    '<span class="ds-here"></span><span class="ds-late"></span>';
+  el.innerHTML = '<div class="ds-scroll"><div class="ds-strip"></div></div><span class="ds-here"></span>';
   // WHICH DAY YOU ARE LOOKING AT, pinned to the left edge and not scrolling with the strip. The day
   // names inside it sit at their own midnights, so today's is off the left end from the moment the
   // strip lands on now — which left the only date on the whole page reading FRI 18, tomorrow.
@@ -177,15 +176,6 @@ function paint(d) {
   strip.style.height = `${H}px`;
   scroll.style.height = `${H}px`;
 
-  // How many things are late, whatever day they were due. The strip itself shows the ones from today
-  // once you scroll back to them; anything older is off its left end entirely, and this is the only
-  // thing on the page that would say so. It does not scroll with the strip.
-  here();
-
-  const late = (d.overdue || []).length;
-  const badge = host.querySelector('.ds-late');
-  badge.textContent = late ? String(late) : '';
-  badge.classList.toggle('on', late > 0);
 
   // Land a little to the left of now, so the last hour or two is in the picture with what is coming.
   // Only on the first paint and when the day rolls — a repaint under someone mid-scroll must not

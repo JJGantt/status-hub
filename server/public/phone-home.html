@@ -59,13 +59,16 @@
       <div class="card ph-daycard"><div class="ph-strip" id="ph-strip"></div></div>
     </div>
 
-    <!-- FOOD | TRAINING — the two week heat maps side by side, sharing a top edge so a week sits at
-         the same x in both. What is ABOVE each map is its long view (the weigh-in trend, the clocks
-         since the last set); what is below it is today (the day's totals, the last thing logged). -->
+    <!-- FOOD and TRAINING, STACKED, with the body beside them — the wall's arrangement. Side by
+         side the two maps were half the width, so the cells were half the size for the same seven
+         rows, and the column beside them had nothing in it. Stacked, they take the width they want
+         and the figures fill the tall thin column that frees, which is the shape a body map is.
+         Above each map is its long view (the weigh-in trend, the clocks since the last set); below
+         it is today (the day's totals, the last thing logged). -->
     <div class="row-card ph-heatrow">
       <div class="card ph-heatcard">
-        <div class="ph-heatpair">
-          <div class="ph-heatcol">
+        <div class="ph-heattop">
+          <div class="ph-heatstack">
             <!-- Weekly weigh-in average over the food map's own week columns. The alignment is the
                  chart: cards/weightweeks.js insets the box by half a column at each end, in calc
                  from --cols and the grid's gap, so --hgap must equal the gap in `.heat`. -->
@@ -75,49 +78,41 @@
               <div class="hw-strip" id="nutinfo" data-band></div>
             </div>
             <div class="hw-recent" id="nutrecent"></div>
-          </div>
-          <div class="ph-heatcol">
-            <!-- The clocks sit ABOVE the map, where the weigh-in plot sits opposite them. They used
-                 to be below it, which left an empty block here and pushed this map off the other
-                 one's top edge — two costs for one misplacement. -->
-            <div class="hw-strip" id="resttimer"></div>
             <div class="ph-block" id="workouts">
               <div id="heatwrap"></div>
+              <div class="hw-strip" id="resttimer"></div>
             </div>
             <div class="hw-recent" id="heatinfo" data-recent></div>
           </div>
+          <!-- One figure in the markup; cards/muscle.js splits it into the front/back pair and
+               paints each region from volume.muscle_colors. Tapping a region opens #bodyinfo, which
+               muscle.js moves out to the document so the sheet is not trapped in here. -->
+          <div class="ph-body" id="body"><!--BODY_SVG--></div>
+          <div id="bodyinfo"></div>
         </div>
       </div>
     </div>
 
-    <!-- THE BODY, and WHAT IS RUNNING. One figure in the markup; cards/muscle.js splits it into the
-         front/back pair and paints each region from volume.muscle_colors. Tapping a region opens
-         #bodyinfo, which muscle.js moves out to the document so the sheet is not trapped in here.
-         The sessions list beside it is TITLES ONLY — each row is the session's name and the one line
-         of what it is doing right now, a tool call or the last thing it said. -->
-    <div class="row-card ph-bodyrow">
-      <div class="card ph-bodycard">
-        <div class="ph-body" id="body"><!--BODY_SVG--></div>
-        <div id="bodyinfo"></div>
+    <!-- SURF and WHAT IS RUNNING, on one row. The plots are bare here — no weekday letters, no hour
+         labels, no current-conditions strip — because every one of those answers a question the
+         picture has already answered, and this card is a fifth of the screen. The two that stay are
+         the water temperature and the rain grid's peak: no colour or placement carries those.
+         The session rows are titles and the one line of what each is doing; TAPPING one opens it in
+         the session view, which is the lists pane's, with the whole conversation and a composer. -->
+    <div class="row-card ph-surfrow">
+      <div class="card ph-surfcard">
+        <div class="fit" id="surf"><h2>Surf</h2><div class=big>…</div></div>
+        <div id="weather"></div>
       </div>
       <div class="card ph-sesscard">
         <div class="ph-sess-list" id="ph-sess-list"></div>
       </div>
     </div>
 
-    <!-- SURF and RAIN, side by side as they are on the wall: one week of one place, read together.
-         The surf plots take their drawn heights from --surf-grid-h / --surf-water-h in the CSS,
-         because their own defaults are a third of a phone screen. -->
-    <div class="row-card ph-surfrow">
-      <div class="card ph-surfcard">
-        <div class="fit" id="surf"><h2>Surf</h2><div class=big>…</div></div>
-        <div id="weather"></div>
-      </div>
-    </div>
-
-    <!-- THE CONVERSATION, last exchange only — what he asked and what came back. The full thread is
-         one swipe left, with the composer; this is the tail of it, so the page says what the hub is
-         in the middle of without having to leave it. -->
+    <!-- THE CONVERSATION — the tail of the hub thread, scrolling, pinned to the newest line. It is
+         the block that takes whatever height the rest of the screen did not need, because it is the
+         only one here that can spend an arbitrary amount of it: more room is simply more of the
+         conversation. The composer is one swipe left. -->
     <div class="row-card ph-convrow">
       <div class="card ph-convcard"><div class="ph-conv" id="ph-conv"></div></div>
     </div>

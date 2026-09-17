@@ -99,7 +99,19 @@ function grid() {
 // only by scrolling, and the card looks unchanged until someone does.
 function layout(viewW) {
   const { cols, byDay } = grid();
-  const dT0 = hist.defaultT0 == null ? hist.t0 : hist.defaultT0;
+  // A surface can ask for its own window instead of the server's: `--surf-back: 7` means seven days
+  // of history and everything Surfline has forward of now. The archive is the same either way —
+  // this only says where the card LANDS, and everything older is still a scroll away. The phone's
+  // home page asks for it because its card is a fifth the area of the wall's and was showing the
+  // same three weeks in it, which put a day under ten pixels.
+  const back = cssPx('--surf-back', 0);
+  let dT0;
+  if (back > 0) {
+    const midnight = new Date(); midnight.setHours(0, 0, 0, 0);
+    dT0 = Math.floor(midnight.getTime() / 1000) - back * 86400;
+  } else {
+    dT0 = hist.defaultT0 == null ? hist.t0 : hist.defaultT0;
+  }
   const di = Math.max(0, cols.indexOf(dayKey(new Date(dT0 * 1000))));
   const cw = viewW / Math.max(1, cols.length - di);
   return { cols, byDay, cw, totalW: cw * cols.length };
@@ -118,14 +130,15 @@ function fitCanvas(cv, w, h) {
   return g;
 }
 
-// A wall is read from a couch. Anything a reader can get from POSITION alone is not worth the pixels
-// at that distance — the weekday letters over the columns and the noon label beside them both go,
-// while the guide lines they named stay, because the line is the thing that was doing the work. What
-// keeps its labels is the one axis no colour or placement can carry: the water temperature.
-// The phone loads the same page as the kiosk (`body.tv`), so it is told apart by `phonewall`, which
-// wall.js sets before any card paints — without that the phone lost its labels along with the wall.
-const onWall = () => document.body.classList.contains('tv') &&
-  !document.body.classList.contains('phonewall');
+// BARE PLOTS: no weekday letters over the columns, no hour labels beside them. Anything a reader can
+// get from POSITION alone is not worth the pixels — the guide lines those labels named all stay,
+// because the line is what was doing the work. What keeps its labels either way is the one axis no
+// colour or placement can carry: the water temperature.
+// A wall is bare because nothing that small is read across a room. Any other surface says so with
+// `--surf-bare: 1` on #surf; the phone's home page does, because its card is a fifth of the screen
+// and a label whose answer is already in the picture is the first thing to go.
+const onWall = () => cssPx('--surf-bare', 0) === 1
+  || (document.body.classList.contains('tv') && !document.body.classList.contains('phonewall'));
 
 // Canvas rather than ~1,300 rects: this is a phone surface and the grids are pure colour with no
 // per-cell interaction to hang off the DOM. `cv` scrolls inside its box; `ax` is the gutter canvas
@@ -244,9 +257,16 @@ function paintWater(cv, ax, viewW) {
   const g = fitCanvas(cv, totalW, WATER_H());
   const vals = hist.water.concat(hist.waterFc).filter(v => v != null);
   if (!vals.length) return;
-  const lo = Math.floor(Math.min(...vals)) - 1, hi = Math.ceil(Math.max(...vals)) + 1;
+  // THE SCALE HUGS THE DATA. Rounding out to whole degrees and then padding a degree either side
+  // turned a three-degree swing into a seven-degree span, and the trace drew as a flat line across
+  // the middle of its box with nothing above or below it. A twelfth of the span at each end is
+  // enough to keep the extremes off the edge, and the box itself is inset by four rather than
+  // seven now that the labels no longer need a line of their own at the top and bottom.
+  const raw0 = Math.min(...vals), raw1 = Math.max(...vals);
+  const span = Math.max(1, raw1 - raw0);
+  const lo = raw0 - span / 12, hi = raw1 + span / 12;
   const X = (i) => (i / (hist.hours - 1)) * totalW;
-  const Y = (v) => WATER_H() - 6 - ((v - lo) / (hi - lo)) * (WATER_H() - 14);
+  const Y = (v) => WATER_H() - 4 - ((v - lo) / (hi - lo)) * (WATER_H() - 8);
 
   // Horizontal grid labelled in the gutter. Without it the trace has shape but no scale: a reader
   // can see it rising and cannot say what it is rising to.
@@ -286,8 +306,13 @@ function paintWater(cv, ax, viewW) {
   const a = fitCanvas(ax, PAD_L, WATER_H());
   a.font = '9px system-ui, -apple-system, sans-serif';
   a.textBaseline = 'middle'; a.textAlign = 'right'; a.fillStyle = '#8b96a5';
+  // A surface can put this strip OVER the plot instead of in a gutter beside it (the phone's home
+  // page does, at the right-hand end, where the trace has run out), so the glyphs carry their own
+  // ground. On a gutter of their own it costs nothing and shows as nothing.
+  a.shadowColor = '#0b0f13'; a.shadowBlur = 3;
   for (let v = Math.ceil(lo / step) * step; v <= hi; v += step)
     a.fillText(v + '\u00b0', PAD_L - 5, Y(v));
+  a.shadowBlur = 0;
 }
 
 // The grids and the water trace are one timeline, so dragging either moves the other. Mirroring

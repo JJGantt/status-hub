@@ -76,7 +76,8 @@ function paint(p, d) {
   const on = shown(d);
   if (p.list) {
     p.list.innerHTML = listed(d, p.max).map((s) =>
-      `<div class="hw-row${on && s.id === on.id ? ' on' : ''}${s.status === 'resident' ? '' : ' parked'}">` +
+      `<div class="hw-row${on && s.id === on.id ? ' on' : ''}${s.status === 'resident' ? '' : ' parked'}"` +
+        `${p.tap ? ` data-open="${esc(String(s.id))}"` : ''}>` +
         '<div class="hw-row-top">' +
           `<span class="hw-sess-dot${s.working ? '' : ' idle'}"></span>` +
           `<span class="hw-row-n">${s.n ?? ''}</span>` +
@@ -116,9 +117,18 @@ let started = false;
  * taking above the answer is worth more to the answer, and a surface with no answer under it can
  * afford more.
  */
-export function mountSessions({ list = null, head = null, reply = null, max = 3 } = {}) {
+export function mountSessions({ list = null, head = null, reply = null, max = 3, tap = false } = {}) {
   if (!list && !head && !reply) return;
-  panels.push({ list, head, reply, max });
+  panels.push({ list, head, reply, max, tap });
+  // `tap` opens the row in the session VIEW — the one the repos pane already has, with the whole
+  // conversation and a composer. A wall never asks for it (nothing is standing at one to tap), and
+  // this is a delegate rather than a listener per row because the list is rebuilt on every frame.
+  if (tap && list) {
+    list.addEventListener('click', (e) => {
+      const row = e.target.closest('[data-open]');
+      if (row && window.__showSession) window.__showSession(row.dataset.open);
+    });
+  }
   if (last) render(null);
   if (started) return;
   started = true;

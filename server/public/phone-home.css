@@ -121,16 +121,21 @@ body.tv.phonehome .ds-late{position:absolute;right:0;top:0;z-index:3;display:non
   border-radius:6px;padding:0 5px;font-variant-numeric:tabular-nums}
 body.tv.phonehome .ds-late.on{display:block}
 
-/* ---- food and training: the two heat maps, side by side ---------------------------------------
-   SIDE BY SIDE because a heat map's cells are square, so its height follows its width: one at the
-   full width of the phone is 170px tall before any strip. They share a top edge, and that matters —
-   they are the same fifteen Sunday-aligned weeks, so a week is at the same x in both and the eye
-   reads across them. Above each map is its long view; below it is today. */
+/* ---- food and training: the two heat maps, STACKED, with the body beside them ------------------
+   The wall's arrangement, and for the wall's reason. Side by side each map had half the width, so
+   its cells were half the size for the same seven rows, and the column that should have held the
+   figures held nothing. Stacked, the maps take the width they want and what frees is a tall thin
+   column — which is the shape a body map already is.
+   THE CELL GAP IS 1px, not the 2.5 the wall uses: a cell is about eighteen pixels here where the
+   wall's is twenty-five, so the same gap was a seventh of the mark instead of a tenth and the grid
+   read as black ruled by colour rather than the other way round. --hgap below moves with it —
+   half of it is what the weigh-in box is inset by at each end. */
 body.tv.phonehome .ph-heatrow{flex:0 0 auto}
 body.tv.phonehome .ph-heatcard{flex:1 1 auto;min-width:0}
-body.tv.phonehome .ph-heatpair{display:flex;gap:10px;align-items:flex-start}
-body.tv.phonehome .ph-heatcol{flex:1 1 0;min-width:0;display:flex;flex-direction:column;gap:3px}
-body.tv.phonehome .ph-block{display:flex;flex-direction:column;gap:3px;min-width:0;position:relative}
+body.tv.phonehome .ph-heattop{position:relative;display:flex;padding-right:77px}
+body.tv.phonehome .ph-heatstack{flex:1 1 auto;min-width:0;display:flex;flex-direction:column;gap:2px}
+body.tv.phonehome .heat,body.tv.phonehome .hcol{gap:1px}
+body.tv.phonehome .ph-block{display:flex;flex-direction:column;gap:2px;min-width:0;position:relative}
 body.tv.phonehome .hmonths{display:none}   /* 9px month labels over a 15-column strip read as a smear */
 body.tv.phonehome .hcell{border-radius:1px}
 body.tv.phonehome .nutheat,body.tv.phonehome #heatwrap{display:flex;flex-direction:column;min-width:0}
@@ -139,7 +144,7 @@ body.tv.phonehome .nutheat,body.tv.phonehome #heatwrap{display:flex;flex-directi
    calc from --cols and the grid's gap — so --hgap must stay equal to the gap in `.heat` (app.css).
    The drawing is inset vertically by --wpi, half a label, so each axis value can be CENTRED on the
    line it names instead of hanging off the top or sitting under the first row of cells. */
-body.tv.phonehome .hw-wplot{flex:0 0 26px;min-height:0;position:relative;--hgap:2.5px;--wpi:5px;
+body.tv.phonehome .hw-wplot{flex:0 0 22px;min-height:0;position:relative;--hgap:1px;--wpi:5px;
   --half:calc((100% - (var(--cols) - 1) * var(--hgap)) / (2 * var(--cols)))}
 body.tv.phonehome .wp-plot{position:absolute;top:var(--wpi);bottom:var(--wpi);left:var(--half);right:var(--half)}
 body.tv.phonehome .wp-plot svg{display:block;width:100%;height:100%;overflow:visible}
@@ -158,7 +163,7 @@ body.tv.phonehome .wp-lab{position:absolute;left:0;font-size:8px;font-weight:700
    THE GOALS COME OFF THE TOTALS. `1380/3060 cal` four times over does not fit a half-width column at
    any size worth reading, and the denominator is the one half of it already on screen: the rings
    above ARE the goal, drawn as the distance still to go. This strip is the amount. */
-body.tv.phonehome .hw-strip{flex:0 0 auto;min-height:0}
+body.tv.phonehome .hw-strip{flex:0 0 15px;height:15px;min-height:0;display:flex}
 body.tv.phonehome .nutday{display:flex;flex-wrap:nowrap;align-items:baseline;margin:0;padding:2px 5px;
   gap:0 7px;background:#0b0f13;border-radius:5px;white-space:nowrap;overflow:hidden}
 body.tv.phonehome .nd-seg{flex:0 0 auto;font-size:9px}
@@ -176,19 +181,25 @@ body.tv.phonehome #resttimer .rt-count{font-size:12px;white-space:nowrap}
 body.tv.phonehome #resttimer .rt-watcher{display:none}
 /* THE LAST THING LOGGED, one per column: the meal, and the exercise whose set was logged last. Two
    lines each — the name with its time pushed right, then the readings under it. */
-/* --rc-base / --rc-min / --rc-name-base are read by cards/workouts.js, whose own numbers (16px of
+/* THE LAST THING LOGGED — the meal, and the exercise whose set was logged last. ONE LINE each here,
+   where the wall gives them two: the name and its readings run along a single row, because together
+   they are about 250px at this size and the stack is 278 wide. Two lines cost 24px out of the
+   tallest block on the screen, and every one of those comes off the conversation at the bottom.
+   --rc-base / --rc-min / --rc-name-base are read by cards/workouts.js, whose own numbers (16px of
    set list, a 17px name) are wall sizes. Without them the sets row and the exercise name are drawn
    half again the size of everything around them here, and only shrink if they actually overflow. */
-body.tv.phonehome .hw-recent{flex:0 0 auto;min-height:26px;padding:0;min-width:0;overflow:hidden;
+body.tv.phonehome .hw-recent{flex:0 0 20px;height:20px;padding:0;min-width:0;overflow:hidden;
+  display:flex;align-items:baseline;gap:7px;
   --rc-base:10px;--rc-min:7px;--rc-name-base:11px}
-body.tv.phonehome .hw-recent .rc-top{display:flex;align-items:baseline;gap:6px;min-width:0}
+body.tv.phonehome .hw-recent .rc-vals,body.tv.phonehome .hw-recent .rc-sets{flex:1 1 auto;min-width:0}
+body.tv.phonehome .hw-recent .rc-top{flex:0 1 auto;display:flex;align-items:baseline;gap:6px;min-width:0}
 body.tv.phonehome .hw-recent .rc-name{font-size:10px;line-height:1.2;font-weight:700;color:#e6eaf0;
   min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-body.tv.phonehome .hw-recent .rc-when{margin-left:auto;flex:0 0 auto;font-size:8px;color:#5c6675;
+body.tv.phonehome .hw-recent .rc-when{flex:0 0 auto;font-size:8px;color:#5c6675;
   font-variant-numeric:tabular-nums}
 body.tv.phonehome .hw-recent .rc-staged{font-size:7px;font-weight:700;letter-spacing:.06em;color:#d6c042;
   background:rgba(214,192,66,.13);border-radius:3px;padding:0 3px;align-self:center}
-body.tv.phonehome .hw-recent .rc-vals{display:flex;gap:11px;margin-top:1px;white-space:nowrap;overflow:hidden}
+body.tv.phonehome .hw-recent .rc-vals{display:flex;gap:8px;margin-top:0;white-space:nowrap;overflow:hidden}
 body.tv.phonehome .hw-recent .rc-set{flex:0 0 auto}
 body.tv.phonehome .hw-recent .rc-v{font-size:10px;font-weight:700;color:#c7cdd6;font-variant-numeric:tabular-nums}
 body.tv.phonehome .hw-recent .rc-u{font-size:10px;font-weight:400;color:#5c6675;margin-left:2px}
@@ -227,33 +238,47 @@ body.tv.phonehome .hw-recent .rc-m-n{font-size:var(--rcfs,10px);font-weight:700;
 body.tv.phonehome .expand-btn{width:20px;height:20px;left:auto;right:0;top:-1px}
 body.tv.phonehome .expand-btn svg{width:12px;height:12px}
 
-/* ---- the body, and what is running -------------------------------------------------------------
-   Front and back SIDE BY SIDE, sized by the ROW's height rather than by their own width: the pair is
-   two 36:93 halves, so width-driven they are two and a half times as tall as they are wide and set
-   the height of everything beside them. Here the row is declared and the figures fit into it. */
-/* THE ABSORBER. Every other block on this screen is a declared height or is sized by its own
-   content, so whatever is left over lands here — and both things in it can spend it: the figures are
-   sized by the row and the session rows share it out. That is what the day strip used to do, and it
-   could not spend it on anything. */
-body.tv.phonehome .ph-bodyrow{flex:1 1 auto;min-height:96px}
-/* The card is DECLARED, and each figure is half of it. Sized by its content instead, the card took
-   whatever the figures claimed — and when they claimed wrong it took the whole row and left the
-   sessions list beside it with no width at all. `aspect-ratio` pins the box to the viewBox's own
-   36:93 in every engine, rather than trusting `width:auto` to mean the same thing in each. */
-body.tv.phonehome .ph-bodycard{flex:0 0 94px;min-width:0;overflow:hidden}
-body.tv.phonehome .ph-body{height:100%;display:flex;align-items:center;justify-content:center;overflow:hidden}
-body.tv.phonehome .ph-body .figstack{height:100%;display:flex;flex-direction:row;gap:3px;
-  justify-content:center;overflow:hidden}
-body.tv.phonehome .ph-body .figstack svg{height:100%;width:auto;aspect-ratio:36/93;
-  max-width:calc(50% - 2px);overflow:hidden;display:block}
+/* ---- the body, beside the maps -------------------------------------------------------------------
+   Front ABOVE back, filling the tall thin column the stacked maps leave — a 36:93 figure is that
+   shape already, which is why the wall runs it the same way. The column is declared: sized by its
+   content it took whatever the figures claimed, and when they claimed wrong (see the viewBox note in
+   CLAUDE.md) it took the whole row and left its neighbour with no width. */
+/* 98px, and the number is a consequence rather than a taste. A 36:93 figure stacked twice fills a
+   column of height H at width 0.387*H/2 — so the column's width and the stack's height decide each
+   other, and the stack's height is 0.93 of its own width plus its strips. 98 against a ~265 stack is
+   the pair that comes out with no slack on either side of the figures. Move one and the other is
+   wrong: too wide and the figures sit in a band of black, too narrow and the maps grow until the
+   block is half the screen.
+
+   IT IS POSITIONED, NOT A FLEX CHILD, and that is load-bearing. As a flex child its own content
+   decided its height, and a figure sized from the column's WIDTH is 2.6 times as tall as it is wide
+   — so the pair claimed 506px and stretched the whole block to it, the exact opposite of filling
+   what the maps left. Out of the height calculation it takes the stack's height as a fact.
+   Each figure then takes HALF THE COLUMN from flex and `meet` fits the drawing inside it. Nothing
+   here says a width: an aspect-ratio fought flex over which axis was the input, and width won it.
+
+   THE COLUMN IS DELIBERATELY A HAIR TOO NARROW for the drawing, and that is the whole trick. Each
+   split svg holds the WHOLE 72-unit artwork with a 36-unit window over it, so any horizontal slack
+   inside the box is filled by the figure next door — and `overflow:hidden` cannot help, because the
+   bleed is INSIDE the element, not past it. Too narrow, the drawing is width-bound and the slack
+   lands above and below it, where there is nothing to bleed. */
+body.tv.phonehome .ph-body{position:absolute;top:0;right:0;bottom:0;width:70px;
+  display:flex;align-items:center;justify-content:center;overflow:hidden}
+body.tv.phonehome .ph-body .figstack{height:100%;width:100%;display:flex;flex-direction:column;gap:2px;
+  align-items:center;justify-content:center;overflow:hidden}
+body.tv.phonehome .ph-body .figstack svg{flex:1 1 0;min-height:0;width:100%;overflow:hidden;display:block}
+
+/* ---- what is running ----------------------------------------------------------------------------
+   Titles and the one line of what each session is doing. TAPPING a row opens it in the session view
+   (the lists pane's, with the whole conversation and a composer), so a truncated title here costs
+   nothing — it is a way in, not the answer. */
 body.tv.phonehome .ph-sesscard{flex:1 1 auto;min-width:0;display:flex}
 body.tv.phonehome .ph-sess-list{flex:1 1 auto;min-width:0;display:flex;flex-direction:column;gap:4px}
 body.tv.phonehome .ph-sess-list:empty{display:none}
-/* The rows SHARE the row's height rather than sitting at their content size with the slack pushed
-   between them — a list held apart by gaps reads as three unrelated things. What the extra buys is
-   a second line of what the session is doing, which is the reason the list is here at all. */
 body.tv.phonehome .hw-row{flex:1 1 0;min-height:0;display:flex;flex-direction:column;gap:1px;
-  justify-content:center;min-width:0;padding:3px 6px;background:#0b0f13;border-radius:5px;overflow:hidden}
+  justify-content:center;min-width:0;padding:3px 6px;background:#0b0f13;border-radius:5px;
+  overflow:hidden;cursor:pointer;-webkit-tap-highlight-color:transparent}
+body.tv.phonehome .hw-row:active{background:#161d25}
 body.tv.phonehome .hw-row-top{display:flex;align-items:center;gap:5px;min-width:0}
 body.tv.phonehome .hw-row.on{background:#161d25;box-shadow:inset 2px 0 0 #fff}
 body.tv.phonehome .hw-row.parked{opacity:.5}
@@ -277,46 +302,61 @@ body.tv.phonehome .hw-row-act.tool{color:#4fd1c5}
 body.tv.phonehome .hw-row-act.text{color:#d5dde6}
 body.tv.phonehome .hw-row-act.done{color:#8b96a5}
 
-/* ---- surf and rain ------------------------------------------------------------------------------
-   One week of one place, so they sit side by side the way they do on the wall. The surf plots take
-   their drawn heights from these two custom properties (cards/surf.js reads them off #surf): their
-   own defaults are 86px a grid and 68px of water, which is a third of a phone screen for one card.
-   The colour key goes — the ramps are learned in a day and it was costing a block of height every
-   time the card was drawn after that. */
+/* ---- surf and rain, beside the session list -----------------------------------------------------
+   BARE PLOTS. `--surf-bare` drops the weekday letters over the columns and the hour labels beside
+   them, and the current-conditions strip goes with them: the rating, the size and the water are all
+   in the picture under it, said better. What stays is the water TEMPERATURE and the rain grid's
+   peak, because no colour or placement carries a number.
+   `--surf-back` is the window: seven days of history and everything Surfline has forward of now.
+   The server's default is twelve back, which fills a wall — in a card this size it put a day under
+   ten pixels and showed more of the archive than the wall does, which was the wrong way round.
+   Everything older is still one drag away. */
 body.tv.phonehome .ph-surfrow{flex:0 0 auto}
-body.tv.phonehome .ph-surfcard{flex:1 1 auto;min-width:0;display:flex;align-items:stretch;gap:8px}
-body.tv.phonehome .ph-surfcard #surf{flex:1 1 auto;min-width:0;padding:0;height:auto;
-  --surf-grid-h:66px;--surf-water-h:44px}
-/* THE RAIN GRID FILLS THE COLUMN. Given a height of its own it stopped short of the surf plots beside
-   it and left a black block the size of a card under it — the same hole that was over the nutrition
-   map, in the corner where it is most visible. It stretches instead, and the top margin is the surf
-   card's head, so the two grids start on the same line: they are one week of one place. */
-body.tv.phonehome .ph-surfcard #weather{flex:0 0 112px;min-width:0;height:auto;gap:2px;
-  margin-top:20px}
-body.tv.phonehome .ph-surfcard .surfkey{display:none}
-body.tv.phonehome .ph-surfcard .devstrip{gap:0 10px;align-items:baseline;flex-wrap:nowrap}
-body.tv.phonehome .ph-surfcard .devname{font-size:10px;margin-right:0}
-/* `body.tv .devchip .dc-v` is 31px — a status chip read from a couch. Three of those wrapped the
-   card's head onto three lines and took seventy pixels off the day strip. */
-body.tv.phonehome .devchip{background:none;border:none;padding:0;gap:4px}
-body.tv.phonehome .devchip .dc-l{font-size:9px}
-body.tv.phonehome .devchip .dc-v{font-size:11px}
-body.tv.phonehome .devchip .dc-v .dot{width:7px;height:7px;margin-right:4px}
-body.tv.phonehome .ph-surfcard .surfheat{margin-top:4px}
-body.tv.phonehome .ph-surfcard .surfwater{margin-top:4px}
-body.tv.phonehome .ph-surfcard .wx-peak span{font-size:9px}
+body.tv.phonehome .ph-surfcard{flex:0 0 198px;min-width:0;display:flex;flex-direction:column;gap:3px}
+body.tv.phonehome .ph-surfcard #surf{flex:0 0 auto;min-width:0;padding:0;height:auto;gap:0;
+  --surf-bare:1;--surf-back:7;--surf-grid-h:34px;--surf-water-h:40px}
+body.tv.phonehome .ph-surfcard .devstrip,body.tv.phonehome .ph-surfcard .surfkey{display:none}
+body.tv.phonehome .ph-surfcard .surfheat{margin-top:0}
+body.tv.phonehome .ph-surfcard .surfwater{margin-top:3px;position:relative}
+/* NO LEFT GUTTER. It exists to hold the hour labels and the water temperatures, and the hours are
+   gone here — so the grids start at the card's own edge and the temperatures move ON TO the plot at
+   its right-hand end, where the trace has already run out. They carry a shadow (cards/surf.js) so
+   they read over whatever is under them. The gutter canvas is positioned rather than hidden: it is
+   what surf.js draws the numbers into, and taking it out of the flow is what gives the plot the
+   width the gutter was holding. */
+body.tv.phonehome .ph-surfcard .surfheat .surfax{display:none}
+body.tv.phonehome .ph-surfcard .surfwater .surfax{position:absolute;right:2px;top:0;z-index:2;
+  pointer-events:none}
+/* The rain grid is a seven-day forecast next to sixteen days of surf, so it gets the height that
+   ratio deserves rather than a block of its own — and its one number moves BESIDE it rather than
+   taking a row under it. 6am to midnight, because the server's 5-to-10 window put an hour under two
+   pixels in a block this short; one guide line at 3pm, the middle of what is drawn. */
+body.tv.phonehome .ph-surfcard #weather{flex:0 0 auto;min-width:0;height:44px;margin-top:0;gap:5px;
+  flex-direction:row;align-items:stretch;--wx-h0:6;--wx-h1:24;--wx-guide:15}
+/* The grid's box is STRETCHED to the block, not sized by the canvas in it. cards/weather.js measures
+   this box and writes the canvas to it, so a box that took its height from that canvas is a box
+   whose height is whatever it was the last time something else decided it — which is how a 44px
+   block came out holding a 150px grid. */
+body.tv.phonehome .ph-surfcard .wx-grid{flex:1 1 auto;min-width:0;min-height:0;align-self:stretch}
+body.tv.phonehome .ph-surfcard .wx-peak{order:-1;flex:0 0 auto;padding:0;align-items:center}
+/* Six of the seven spans are empty — the number is drawn under the column it belongs to, and beside
+   the grid there is no column to be under. The one that carries it is all that is left. */
+body.tv.phonehome .ph-surfcard .wx-peak span:empty{display:none}
+body.tv.phonehome .ph-surfcard .wx-peak span{flex:0 0 auto;font-size:11px}
 
-/* ---- the tail of the conversation --------------------------------------------------------------
-   What he last asked, and what last came back. One line each, and the label is the same word the
-   composer's own indicator uses. The full thread with its composer is one swipe left. */
-body.tv.phonehome .ph-convrow{flex:0 0 auto}
-body.tv.phonehome .ph-convcard{flex:1 1 auto;min-width:0}
-body.tv.phonehome .ph-conv{display:flex;flex-direction:column;gap:2px;min-width:0}
-body.tv.phonehome .ph-conv:empty{display:none}
+/* ---- the conversation ----------------------------------------------------------------------------
+   THE ABSORBER, and the only block here that can spend an arbitrary amount of height: more room is
+   simply more of the thread. It scrolls, and it is pinned to the newest line. The composer is one
+   swipe left. */
+body.tv.phonehome .ph-convrow{flex:1 1 auto;min-height:76px}
+body.tv.phonehome .ph-convcard{flex:1 1 auto;min-width:0;display:flex;min-height:0}
+body.tv.phonehome .ph-conv{flex:1 1 auto;min-width:0;min-height:0;overflow-y:auto;
+  -webkit-overflow-scrolling:touch;display:flex;flex-direction:column;gap:3px}
+body.tv.phonehome .ph-conv::-webkit-scrollbar{display:none}
 body.tv.phonehome .ph-convline{display:flex;align-items:baseline;gap:6px;min-width:0}
 body.tv.phonehome .ph-convk{flex:0 0 22px;font-size:8px;font-weight:800;letter-spacing:.05em;
   text-transform:uppercase;color:#5c6675}
 body.tv.phonehome .ph-convline.said .ph-convk{color:#4fd1c5}
-body.tv.phonehome .ph-convt{flex:1 1 auto;min-width:0;font-size:10px;line-height:1.3;color:#8b96a5;
-  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+body.tv.phonehome .ph-convt{flex:1 1 auto;min-width:0;font-size:10px;line-height:1.35;color:#8b96a5;
+  word-break:break-word}
 body.tv.phonehome .ph-convline.said .ph-convt{color:#d5dde6}

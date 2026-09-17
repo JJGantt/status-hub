@@ -258,12 +258,12 @@ and it is not reflowable — the wall's type is written for a room. `phone-home.
 phone's own size instead, so a size in it is the size it is read at, and the cards that measure
 themselves come out at the sizes their own modules chose for a phone.
 
-**Nothing scrolls vertically.** `.rows` is the height of the pane and every block on it is either a
-declared height or sized by its own content. Exactly one takes the leftover — the body/sessions row,
-`flex:1 1 auto` — and it is that one because both things in it can SPEND height: the muscle figures
-are sized by the row, and the session rows share it out and put what is left into a second line of
-what each session is doing. The day strip held that job first and could not spend it: it claimed a
-third of the screen and left it black. There are no card borders and almost no padding for the same
+**Nothing scrolls vertically** — except the conversation, which is the point of it. `.rows` is the
+height of the pane and every block on it is either a declared height or sized by its own content.
+Exactly one takes the leftover: the conversation at the bottom, `flex:1 1 auto`, because it is the
+only block here that can spend an arbitrary amount of height — more room is simply more of the
+thread. It scrolls and is pinned to the newest line, re-pinned by a ResizeObserver because its own
+height is not settled when the thread first paints into it. There are no card borders and almost no padding for the same
 reason: a rule costs two pixels of height for something the black ground between blocks already says,
 and where two things genuinely need separating they get a background instead, which costs nothing.
 
@@ -292,12 +292,19 @@ It also beats app.css's `body.tv.wallportrait` block on equal specificity, by lo
   a model's answer, and the wall spends a column on one because it is read word by word from a chair.
 - **The voice column is the last exchange.** One line of what he asked, one of what came back
   (`#ph-conv`). The whole thread with its composer is the chat pane, one swipe left.
-- **The two heat maps are SIDE BY SIDE and share a top edge.** A heat map's cells are square, so its
-  height follows its width — one at full phone width is 170px tall before any strip. They are the
-  same fifteen Sunday-aligned weeks, so a week is at the same x in both and the eye reads across
-  them. What is ABOVE each is its long view (the weigh-in trend, the clocks since the last set);
-  what is below it is today. Both of those were below their map once, which left an empty block over
-  the training column and pushed its map off the food map's top edge — two costs for one placement.
+- **The two heat maps are STACKED with the body beside them**, which is the wall's arrangement and
+  for the wall's reason. Side by side each map had half the width, so its cells were half the size
+  for the same seven rows, and the column that should have held the figures held nothing. Stacked,
+  the maps take the width they want and what frees is a tall thin column — the shape a body map
+  already is. What is ABOVE each map is its long view (the weigh-in trend, the clocks since the last
+  set); what is below it is today, on ONE line each.
+- **The cell gap is 1px, not the wall's 2.5.** A cell is about eighteen pixels here where the wall's
+  is twenty-five, so the same gap was a seventh of the mark instead of a tenth and the grid read as
+  black ruled by colour. `--hgap` on the weigh-in plot moves with it — half of it is what the plot's
+  box is inset by at each end.
+- **Surf and the session list share a row**, and a session row is TAPPABLE: it opens in the session
+  view the lists pane already has, with the whole conversation and a composer. So a title truncated
+  in that column costs nothing — it is a way in, not the answer.
 - **The day's totals lose their GOALS.** `1380/3060 cal` four times over does not fit a half-width
   column at any size worth reading, and the denominator is the half of it already on screen: the
   rings above ARE the goal, drawn as the distance still to go. The strip is the amount.
@@ -315,7 +322,17 @@ replace — everything else gets exactly what it had.
 | what | where it is said | why |
 |---|---|---|
 | `--surf-grid-h` / `--surf-water-h` on `#surf` | `cards/surf.js` | its own 86px a grid plus 68px of water is a third of a phone screen for one card |
+| `--surf-back` on `#surf` | `cards/surf.js` (`layout`) | the server lands the card twelve days back, which fills a wall; in a card a fifth of that area it put a day under ten pixels and showed MORE of the archive than the wall does. Seven back and everything forward. Older is still one drag away |
+| `--surf-bare` on `#surf` | `cards/surf.js` (`onWall`) | the weekday letters and the hour labels. A wall drops them because nothing that small is read across a room; this drops them because the picture already answers them |
+| `--wx-h0` / `--wx-h1` / `--wx-guide` on `#weather` | `cards/weather.js` | `pop` carries all 24 hours and `window` is only what the server took its peak over, so a surface can draw a narrower band. 6am to midnight here, with ONE guide at 3pm: in a 44px block the server's three graded lines are two pixels apart and say less than one does |
 | `--rc-base` / `--rc-min` / `--rc-name-base` on `.hw-recent` | `cards/workouts.js` (`fitRow`) | the set list starts at 16px and the exercise name at 17px, and both only shrink if they overflow — so on a phone they were drawn half again the size of everything around them and stayed there |
+
+Two more things on that card are not knobs but are worth knowing. The left GUTTER holds the hour
+labels and the water temperatures; with the hours gone it is dead width, so the phone positions the
+water's gutter canvas over the right-hand end of the plot instead (where the trace has run out) and
+hides the grids' entirely — which is also what gives the plots the width it was holding. And the
+water trace's scale now hugs its data rather than rounding out to whole degrees and padding one
+either side, which had turned a three-degree swing into a flat line across the middle of the box.
 
 ## The split body figures carry the WHOLE artwork, and only a viewBox hides half of it
 

@@ -142,7 +142,7 @@ already authenticated as Jared. Charts must be inline `<svg>` — no `<script>`,
 
 ## There are four walls, and the default is the one being molded
 
-`public/tv-home.html` (`/` and `/tv`) is the **home wall — the default, and what the TV is showing**.
+`public/tv-home.html` (`/tv`) is the **home wall — the default, and what the TV is showing**.
 The shared frame (status strip · rings · health bar · footer · voice column) around four columns:
 today's day column, the six days after it, the weekly weigh-in plot over the three heat maps stacked
 with the strip that belongs to each (nutrition totals vs target, the rest/session clocks, surf), and
@@ -153,7 +153,8 @@ Its grid is SIX columns, declared in `tv-home.css` — which means the spans app
 five are wrong here and are overridden alongside it: the status strip reaches column 6, the footer
 column 7, and the health bar sits in 6. Add a column and those three are what silently misplace.
 
-`public/tv-health.html` (`/tv-health`) is the health wall — what used to be the default, and still
+`public/tv-health.html` (`/tv-health`, and `/` — **which is what the phone loads**, see the route
+comment in `server.js`) is the health wall — what used to be the default, and still
 the only place nutrition, the muscle map, the volume bars and the workout heatmap are on one screen,
 each with the detail panel its heatmap fills. Too much to glance at from a couch, which is why it
 gave up `/`.

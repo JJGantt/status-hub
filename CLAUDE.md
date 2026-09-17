@@ -297,13 +297,24 @@ It also beats app.css's `body.tv.wallportrait` block on equal specificity, by lo
   as a SCROLLING LIST — four nutrition entries, each tapping open to its ingredients, and three
   exercises with their sets. Those were one line saying only the last thing logged; the room came
   from making the maps smaller, which is what the smaller maps are for.
-- **The map is eleven weeks at a 12px cell** (`PHONE_HEAT_WEEKS`), against the wall's fifteen: at
-  this width fifteen put a cell under nine pixels. The server ships the trim rather than the client
-  slicing one, because the weigh-in plot's columns are built to match. Everything older is a
-  SIDEWAYS SCROLL — the whole archive is prefixed in place (`data-history`, heathistory.js).
-- **What the map does not use is empty on the nutrition side and holds the body figures on the
-  training side.** The figures take the height of the whole training section, because beside the map
-  alone they would be ninety pixels tall and thirty-five wide.
+- **The maps take NO trim, and that is not an oversight.** They scroll, so the box decides what is on
+  screen and everything either side is a drag away — and a trim could not carry the archive anyway:
+  `/api/heat-history` returns the weeks OLDER than the frame's own window, so prefixing it to an
+  eleven-week trim leaves weeks 12-20 missing out of the middle of the picture, silently and in the
+  right colours. The cell is 12px, so the map is 90px tall whatever its width; `PHONE_HEAT_WEEKS`
+  survives only as the count the weigh-in plot is built on, which has to be the number of columns the
+  FOOD map shows at rest, because the plot does not scroll with the map under it.
+- **The maps land on the newest week and stay there**, held by an observer rather than pinned once:
+  the cards rebuild the grids on every frame and `paintScrolled` carries the position across, so one
+  pin at the wrong moment is a wrong position that persists all day. It stops the moment he drags
+  one, which is what `paintScrolled` is for.
+- **The training map runs all the way to the figures.** Same cell as the food map above it — it just
+  gets more columns, because the width is there and the history to fill it is already loaded.
+- **The body figures fill the training section's height**, and their column's width is what that
+  height implies (2 x 0.387 x it) rather than a number picked first — anything less is a band of
+  black above and below them. A hair under, deliberately: each split svg holds the whole 72-unit
+  artwork with a 36-unit window over it, so horizontal slack inside the box is filled by the figure
+  next door and `overflow:hidden` cannot help, because the bleed is INSIDE the element.
 - **Every list on the page scrolls** and is capped by a DECLARED height: the entries, the exercises,
   the sessions, the conversation. A list with no ceiling in a row that takes its height from its
   tallest child is a row as tall as the list — forty sessions made that row 1,596px and pushed

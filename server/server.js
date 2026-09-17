@@ -17,10 +17,10 @@ const BODY_SVG = require('./lib/bodymap');
 // the point is never to show less, it is to not widen the column (which oversizes surf under it and
 // robs the sessions column). Cells are fluid, so a trim only helps if the stack keeps its cell size.
 const HOME_HEAT_WEEKS = 15;
-// And the PHONE's home page, which runs the two maps stacked with the body figures beside the lower
-// one — so the map is a small block near the left edge rather than a strip across the column, and at
-// that width fifteen weeks is a cell too small to read. Fewer columns at a bigger cell, and the
-// weigh-in plot is rebuilt on the same count: its whole job is to sit over the columns it names.
+// The PHONE's home page trims no heat map: its maps SCROLL, so what is visible is decided by the box
+// they sit in, and everything either side of that is one drag away. What it does need is a weigh-in
+// plot built on the number of columns its food map SHOWS at rest — eleven — because the plot does
+// not scroll with the map under it and its whole job is to sit over the columns it names.
 const PHONE_HEAT_WEEKS = 11;
 // Weeks of heat grid carried in the status frame. The frame is re-pushed on every realtime event,
 // so this window is fixed; everything older is served on demand by /api/heat-history, which splits
@@ -708,8 +708,6 @@ async function buildStatus() {
   };
   const heatmap_home = trimHeat(heatmap, HOME_HEAT_WEEKS);
   const nutrition_log_home = trimHeat(nutrition_log, HOME_HEAT_WEEKS);
-  const heatmap_phone = trimHeat(heatmap, PHONE_HEAT_WEEKS);
-  const nutrition_log_phone = trimHeat(nutrition_log, PHONE_HEAT_WEEKS);
   // Built at the HOME window because the home wall is the only surface that draws it: the plot is
   // meaningless away from the columns it is aligned to, so there is no full-window version to trim.
   const weight_plot = buildWeightPlot(weights, HOME_HEAT_WEEKS, today);
@@ -772,8 +770,7 @@ async function buildStatus() {
     }
   }
   return { today, litter, feeder, surf, weather: getWeather(), nutrition, maintenance, pace: paceData, volume, heatmap, nutrition_log,
-    heatmap_home, nutrition_log_home, weight_plot,
-    heatmap_phone, nutrition_log_phone, weight_plot_phone,
+    heatmap_home, nutrition_log_home, weight_plot, weight_plot_phone,
     last_set_at, session_start_at, sets_today, rep_watcher, routing, mics, score, desk_focus: deskFocus,
     generated_at: new Date().toISOString() };
 }

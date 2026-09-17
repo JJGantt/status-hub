@@ -23,13 +23,16 @@ export const KIOSK = document.body.classList.contains('tv')
   && !document.body.classList.contains('mac') && !document.body.classList.contains('phonehome')
   && window.innerWidth >= 1400;
 
-// WHICH HEAT WINDOW this surface draws. The frame carries the full span plus a trim for each surface
-// that wants a shorter one, rather than letting a surface slice its own: the weigh-in plot's columns
-// are built to match, so a client-side slice would have to re-derive that too and the two would
-// drift the first time one of them changed. `phonehome` is tested before `homewall` because the
-// phone's page carries both and its own window is the narrower.
-export const heatPick = (s, key) => (document.body.classList.contains('phonehome') && s[key + '_phone'])
-  || (document.body.classList.contains('homewall') && s[key + '_home']) || {};
+// WHICH HEAT WINDOW this surface draws. The frame carries the full span plus a trim for the surfaces
+// that want a shorter one, rather than letting a surface slice its own: the weigh-in plot's columns
+// are built to match, so a client-side slice would have to re-derive that too.
+//
+// A SCROLLING map asks for neither — the phone's home page takes the full window and lets its box
+// decide what is on screen. It also cannot take a trim: `/api/heat-history` returns the weeks OLDER
+// than the frame's own window, so prefixing that archive to a trim leaves the weeks between them
+// missing out of the middle of the picture, silently and in the right colours.
+export const heatPick = (s, key) =>
+  (document.body.classList.contains('homewall') && s[key + '_home']) || {};
 
 // latest status frame — one writer (core's render). Held on an object so importers see updates
 // (you can't reassign another module's exported binding, but you can mutate a shared object).

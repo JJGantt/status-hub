@@ -6,7 +6,7 @@
 <!-- One bundle per page, built by build.js from public/pages/phone-home.js — that file
      lists the modules this page runs, and is where you add or remove one. -->
 <script type="module" src="dist/phone-home.js"></script>
-</head><body class="tv homewall phonehome phonewall">
+</head><body class="tv phonehome phonewall">
 <!-- THE PHONE'S HOME PAGE, at `/`. Everything the home wall (/tv) carries, in portrait, at the
      phone's OWN scale — no scaled canvas — and IN ONE SCREEN. Nothing here scrolls vertically; that
      is the constraint the whole layout answers, and it is why every block below is either a fixed
@@ -16,8 +16,9 @@
      maps, the rings, the strips). `phonewall` is here so every card that asks takes its PHONE
      branch — surf keeps its weekday letters and hour labels, the muscle detail opens as a sheet.
      `phonehome` is this page: it turns the kiosk verdict off whatever the window width, and it is
-     what phone-home.css hangs its layout on. `homewall` is the 15-week heat window — the one the
-     weigh-in plot's columns are built on, so a surface drawing that plot has to ask for it.
+     what phone-home.css hangs its layout on. It asks for NO heat trim — `homewall` would give it the
+     15-week one — because its maps scroll: the box decides what is on screen and the rest is a drag
+     away, and a trim cannot carry the archive anyway (see heatPick in shared.js).
 
      Same swipe panes as before it — [chat] [home] [misc] [maint] [lists] [repos] [reports], landing
      on home. What changed is only the middle one. -->

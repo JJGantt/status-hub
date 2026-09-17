@@ -139,7 +139,7 @@ body.tv.phonehome .ph-heatrow{flex:0 0 auto}
 body.tv.phonehome .ph-heatcard{flex:1 1 auto;min-width:0}
 body.tv.phonehome .ph-heattop{display:flex;flex-direction:column;gap:4px;min-width:0}
 body.tv.phonehome .ph-nut{width:var(--mapw);min-width:0;display:flex;flex-direction:column;gap:2px}
-body.tv.phonehome .ph-heattop{--mapw:142px;--cell:12px}
+body.tv.phonehome .ph-heattop{--mapw:142px;--cell:12px}   /* 11*12 + 10*1 — eleven columns, exactly */
 body.tv.phonehome .ph-block{display:flex;flex-direction:column;gap:2px;min-width:0;position:relative}
 body.tv.phonehome .hmonths{display:none}   /* 9px month labels over a 15-column strip read as a smear */
 /* Fixed-width columns, because the archive is longer than the box: `flex:1 1 0` divides whatever is
@@ -240,11 +240,13 @@ body.tv.phonehome #heatinfo{--rc-base:10px;--rc-min:7px;--rc-name-base:11px}
    working set list runs past the width — losing the tail of a row beats losing a whole exercise. */
 body.tv.phonehome #heatinfo .dex{display:flex;flex-direction:row;flex-wrap:nowrap;align-items:baseline;
   gap:7px;padding:0;min-width:0}
-body.tv.phonehome #heatinfo .wk-exhead{flex:0 1 auto;min-width:0;gap:0}
+/* A FIXED name column, not a shrinking one. `flex:0 1 auto` let the name's own text set its width
+   and then overflow it, so the sets started under the tail of it and the two overlapped. */
+body.tv.phonehome #heatinfo .wk-exhead{flex:0 0 92px;min-width:0;gap:0;overflow:hidden}
 /* The name keeps a floor. Left to shrink against the set list it came out as `Ches...`, and an
    exercise you cannot name is a row of numbers belonging to nothing. The sets give way instead —
    they scroll sideways inside their own half of the row. */
-body.tv.phonehome #heatinfo .dex-n{font-size:10px;min-width:74px;white-space:nowrap;overflow:hidden;
+body.tv.phonehome #heatinfo .dex-n{font-size:10px;min-width:0;white-space:nowrap;overflow:hidden;
   text-overflow:ellipsis}
 body.tv.phonehome #heatinfo .dex-sets{flex:1 1 auto;min-width:0;display:flex;gap:7px;
   overflow-x:auto;scrollbar-width:none;white-space:nowrap}
@@ -261,9 +263,20 @@ body.tv.phonehome .expand-btn svg{width:12px;height:12px}
    alone they would be ninety pixels tall and thirty-five wide. The map keeps its own width inside
    the section, so the empty ground between it and the figures is the same shape as the empty ground
    beside the nutrition map above. */
-body.tv.phonehome .ph-wksec{position:relative;display:flex;padding-right:112px}
+/* 141px = the figures' own width at the height this section has. The section's height is fixed —
+   a 12px cell makes the map 90 whatever its width, plus the clocks and three exercise rows — so the
+   pair wants 2 x 0.387 x that, and anything less leaves a band of black above and below them. It is
+   a hair under, deliberately: each split svg holds the WHOLE 72-unit artwork with a 36-unit window
+   over it, so horizontal slack inside the box is filled by the figure next door, and overflow:hidden
+   cannot help because the bleed is INSIDE the element. Width-bound, the slack lands above and below,
+   where there is nothing to bleed. */
+body.tv.phonehome .ph-wksec{position:relative;display:flex;padding-right:141px}
 body.tv.phonehome .ph-wk{flex:1 1 auto;min-width:0;display:flex;flex-direction:column;gap:3px}
-body.tv.phonehome .ph-wk .ph-block{width:var(--mapw)}
+/* THE TRAINING MAP RUNS TO THE FIGURES. It is the same 12px cell as the food map above it — it just
+   gets more of them, because the width is there and the history to fill it is already loaded. The
+   food map stays at exactly eleven columns because the weigh-in plot over it does not scroll with
+   it: the plot is built on the number of columns the map SHOWS at rest (PHONE_HEAT_WEEKS). */
+body.tv.phonehome .ph-wk .ph-block{width:auto;min-width:0}
 /* IT IS POSITIONED, NOT A FLEX CHILD, and that is load-bearing. As a flex child its own content
    decided its height, and a figure sized from the column's WIDTH is 2.6 times as tall as it is wide
    — so the pair claimed 500px and stretched the whole block to it, the exact opposite of filling
@@ -273,7 +286,7 @@ body.tv.phonehome .ph-wk .ph-block{width:var(--mapw)}
    the figure next door — and overflow:hidden cannot help, because the bleed is INSIDE the element.
    Too narrow, the drawing is width-bound and the slack lands above and below it, where there is
    nothing to bleed. */
-body.tv.phonehome .ph-body{position:absolute;top:0;right:0;bottom:0;width:104px;
+body.tv.phonehome .ph-body{position:absolute;top:0;right:0;bottom:0;width:133px;
   display:flex;align-items:center;justify-content:center;overflow:hidden}
 body.tv.phonehome .ph-body .figstack{height:100%;width:100%;display:flex;flex-direction:row;gap:3px;
   align-items:center;justify-content:center;overflow:hidden}

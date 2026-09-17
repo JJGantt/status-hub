@@ -37,11 +37,27 @@ onHistoryLoaded(() => {
   if (!state.last) return;
   workouts.render(state.last);
   nutritionlog.render(state.last);
-  requestAnimationFrame(() => {
-    pinRight(document.getElementById('nutheat'));
-    pinRight(document.getElementById('heatwrap'));
-  });
 });
+
+// LANDING ON THE NEWEST WEEK, and staying there. scrollLeft 0 is the OLDEST, which on a map whose
+// first columns predate the logging is a box of empty cells — which is exactly how it looked.
+//
+// Watched rather than set once: the cards rebuild these grids on every frame, and `paintScrolled`
+// carries the scroll position across a rebuild, so a single pin at the wrong moment (before the
+// archive lands, before the columns have their width) is a wrong position that then persists all
+// day. The observer re-pins on each rebuild instead, and stops as soon as he has dragged one — at
+// which point holding his place is the whole point of paintScrolled.
+for (const id of ['nutheat', 'heatwrap']) {
+  const el = document.getElementById(id);
+  if (!el) continue;
+  let dragged = false;
+  el.addEventListener('scroll', () => {
+    dragged = el.scrollWidth - el.scrollLeft - el.clientWidth > 4;
+  }, { passive: true });
+  const pin = () => { if (!dragged) pinRight(el); };
+  new MutationObserver(pin).observe(el, { childList: true, subtree: true });
+  pin();
+}
 
 // ---- what is running -----------------------------------------------------
 //

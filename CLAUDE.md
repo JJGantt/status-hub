@@ -292,12 +292,22 @@ It also beats app.css's `body.tv.wallportrait` block on equal specificity, by lo
   a model's answer, and the wall spends a column on one because it is read word by word from a chair.
 - **The voice column is the last exchange.** One line of what he asked, one of what came back
   (`#ph-conv`). The whole thread with its composer is the chat pane, one swipe left.
-- **The two heat maps are STACKED with the body beside them**, which is the wall's arrangement and
-  for the wall's reason. Side by side each map had half the width, so its cells were half the size
-  for the same seven rows, and the column that should have held the figures held nothing. Stacked,
-  the maps take the width they want and what frees is a tall thin column — the shape a body map
-  already is. What is ABOVE each map is its long view (the weigh-in trend, the clocks since the last
-  set); what is below it is today, on ONE line each.
+- **The two heat maps are STACKED, each a small block at the LEFT of its own section.** Above each
+  is its long view (the weigh-in trend, the clocks since the last set); below it is the day itself,
+  as a SCROLLING LIST — four nutrition entries, each tapping open to its ingredients, and three
+  exercises with their sets. Those were one line saying only the last thing logged; the room came
+  from making the maps smaller, which is what the smaller maps are for.
+- **The map is eleven weeks at a 12px cell** (`PHONE_HEAT_WEEKS`), against the wall's fifteen: at
+  this width fifteen put a cell under nine pixels. The server ships the trim rather than the client
+  slicing one, because the weigh-in plot's columns are built to match. Everything older is a
+  SIDEWAYS SCROLL — the whole archive is prefixed in place (`data-history`, heathistory.js).
+- **What the map does not use is empty on the nutrition side and holds the body figures on the
+  training side.** The figures take the height of the whole training section, because beside the map
+  alone they would be ninety pixels tall and thirty-five wide.
+- **Every list on the page scrolls** and is capped by a DECLARED height: the entries, the exercises,
+  the sessions, the conversation. A list with no ceiling in a row that takes its height from its
+  tallest child is a row as tall as the list — forty sessions made that row 1,596px and pushed
+  everything under it off the screen.
 - **The cell gap is 1px, not the wall's 2.5.** A cell is about eighteen pixels here where the wall's
   is twenty-five, so the same gap was a seventh of the mark instead of a tenth and the grid read as
   black ruled by colour. `--hgap` on the weigh-in plot moves with it — half of it is what the plot's
@@ -325,6 +335,7 @@ replace — everything else gets exactly what it had.
 | `--surf-back` on `#surf` | `cards/surf.js` (`layout`) | the server lands the card twelve days back, which fills a wall; in a card a fifth of that area it put a day under ten pixels and showed MORE of the archive than the wall does. Seven back and everything forward. Older is still one drag away |
 | `--surf-bare` on `#surf` | `cards/surf.js` (`onWall`) | the weekday letters and the hour labels. A wall drops them because nothing that small is read across a room; this drops them because the picture already answers them |
 | `--wx-h0` / `--wx-h1` / `--wx-guide` on `#weather` | `cards/weather.js` | `pop` carries all 24 hours and `window` is only what the server took its peak over, so a surface can draw a narrower band. 6am to midnight here, with ONE guide at 3pm: in a 44px block the server's three graded lines are two pixels apart and say less than one does |
+| `.addbtn` / `.dact-btn` / `.dex-head`'s column | app.css, under `body.tv.phonewall` | all three are written for a canvas scaled to about a third — a 110px-wide button and a name stacked over its macros. At native size they are slabs and two rows per entry, so the phone's home page flattens them |
 | `--rc-base` / `--rc-min` / `--rc-name-base` on `.hw-recent` | `cards/workouts.js` (`fitRow`) | the set list starts at 16px and the exercise name at 17px, and both only shrink if they overflow — so on a phone they were drawn half again the size of everything around them and stayed there |
 
 Two more things on that card are not knobs but are worth knowing. The left GUTTER holds the hour

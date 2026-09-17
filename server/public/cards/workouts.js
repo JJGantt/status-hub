@@ -1,6 +1,6 @@
 // Workout Volume card: GitHub-style heatmap with inline day detail + click/drag-scrub selection,
 // defaulting to today; plus a rest timer (time since last set, hidden once past 5 min).
-import { state, esc, localNowNaive, paintScrolled } from '../shared.js';
+import { state, esc, localNowNaive, paintScrolled, heatPick } from '../shared.js';
 import { withHistory } from '../heathistory.js';
 import { exerciseVolumeChips } from './muscle.js';
 let heatSelDate=null, heatReq=0;
@@ -12,8 +12,7 @@ export function render(s){
  const hw=document.getElementById('heatwrap'); if(!hw)return;
  // In the expanded sheet the grid carries its full history in front of the live window; everywhere
  // else it is the window the frame ships. See heathistory.js.
- const H=withHistory(Object.assign({weeks:[],months:[]},s.heatmap,
-   document.body.classList.contains('homewall')&&s.heatmap_home||{}),'heatmap',hw,s.today);
+ const H=withHistory(Object.assign({weeks:[],months:[]},s.heatmap,heatPick(s,'heatmap')),'heatmap',hw,s.today);
  // Six steps, one per level from lib/heatmap.js: [0]=a day with no sets, black; then 1-6, 7-12,
  // 13-18, 19-24, 25+ sets.
  const HC=['#000','#0e4429','#006d32','#158c3a','#26a641','#39d353'];

@@ -15,16 +15,20 @@ export function loadHistory() {
   if (inflight) return inflight;
   inflight = fetch('/api/heat-history')
     .then((r) => r.json())
-    .then((j) => { hist = j && !j.error ? j : null; inflight = null; if (hist && onLoaded) onLoaded(); return hist; })
+    .then((j) => { hist = j && !j.error ? j : null; inflight = null; if (hist) loaded.forEach((f) => f()); return hist; })
     .catch(() => { inflight = null; return null; });
   return inflight;
 }
 
 // The live window with its history in front — but only for a grid that is actually inside the open
 // sheet. The wall behind it keeps the short window its cell size is tuned for.
+// A surface gets the whole archive in front of the frame's window if it is inside an OPEN sheet, or
+// inside anything marked `data-history` — the phone's home page marks its two maps, which scroll
+// horizontally through the span in place rather than needing a sheet to do it in.
 export function withHistory(live, key, el, today) {
-  const sheet = document.querySelector('.sectsheet.open');
-  if (!hist || !el || !sheet || !sheet.contains(el)) return live;
+  const wants = el && (el.closest('[data-history]')
+    || (document.querySelector('.sectsheet.open') || { contains: () => false }).contains(el));
+  if (!hist || !wants) return live;
   // The prefix was cut at the frame's window. Once the 4am day rolls over that window has slid a
   // column and the two no longer meet, so drop it and refetch rather than draw a grid with a gap.
   if (today && hist.today !== today) { hist = null; loadHistory(); return live; }

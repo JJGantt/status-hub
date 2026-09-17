@@ -5,11 +5,14 @@
 // It is the phone's analogue of tv-home.js. Where the wall gives a column to today's dial and a
 // column to the focused session's whole answer, this gives neither: a phone is read at arm's length
 // for a few seconds, so the day lies down and a session is a title with a line under it.
-import { esc } from './shared.js';
+import { esc, state } from './shared.js';
 import { mount } from './cards/dayline.js';
 import { mountStrip } from './cards/daystrip.js';
 import { mountSessions } from './cards/sessions.js';
 import { onThread } from './voiceagent.js';
+import { loadHistory, onHistoryLoaded, pinRight } from './heathistory.js';
+import * as workouts from './cards/workouts.js';
+import * as nutritionlog from './cards/nutritionlog.js';
 
 // ---- today, and the days after it ----------------------------------------
 //
@@ -23,12 +26,31 @@ mount(null, {
   onload: (d) => { if (strip) strip.paint(d); },
 });
 
+// ---- the whole archive, in the two maps -----------------------------------
+//
+// The status frame carries a fixed window because it is re-pushed on every realtime event; everything
+// older is one request (`/api/heat-history`), made once, and the maps here are marked `data-history`
+// so cards/heathistory.js prefixes it to what the frame ships. They scroll sideways through it and
+// land on the newest week — scrollLeft 0 is the OLDEST, which is not where anyone opens a heat map.
+loadHistory();
+onHistoryLoaded(() => {
+  if (!state.last) return;
+  workouts.render(state.last);
+  nutritionlog.render(state.last);
+  requestAnimationFrame(() => {
+    pinRight(document.getElementById('nutheat'));
+    pinRight(document.getElementById('heatwrap'));
+  });
+});
+
 // ---- what is running -----------------------------------------------------
 //
-// Three rows, the same as the wall — and TAPPABLE here, which the wall's are not. A row opens the
-// session in the view the lists pane already has, with the whole conversation and a composer, so a
-// title truncated in this column costs nothing: it is a way in, not the answer.
-mountSessions({ list: document.getElementById('ph-sess-list'), max: 3, tap: true });
+// EVERY session, in a box three rows tall that scrolls. The wall caps its list because a wall cannot
+// be scrolled; here the cap would only be hiding rows that cost nothing to keep. TAPPABLE, which the
+// wall's are not: a row opens the session in the view the lists pane already has, with the whole
+// conversation and a composer, so a title truncated in this column costs nothing — it is a way in,
+// not the answer.
+mountSessions({ list: document.getElementById('ph-sess-list'), max: 40, tap: true });
 
 // ---- the tail of the conversation ----------------------------------------
 //

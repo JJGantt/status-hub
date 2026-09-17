@@ -21,7 +21,8 @@
 
 export function render(s) {
  const el = document.getElementById('weightweeks'); if (!el) return;  // only the home wall has one
- const W = s && s.weight_plot;
+ // Built per heat window, because the plot IS its alignment to the columns under it — see heatPick.
+ const W = s && ((document.body.classList.contains('phonehome') && s.weight_plot_phone) || s.weight_plot);
  if (!W || !W.points || !W.points.length) { el.innerHTML = ''; return; }
  const P = W.points;
  el.style.setProperty('--cols', P.length);

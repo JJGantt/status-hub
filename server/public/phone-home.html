@@ -59,36 +59,45 @@
       <div class="card ph-daycard"><div class="ph-strip" id="ph-strip"></div></div>
     </div>
 
-    <!-- FOOD and TRAINING, STACKED, with the body beside them — the wall's arrangement. Side by
-         side the two maps were half the width, so the cells were half the size for the same seven
-         rows, and the column beside them had nothing in it. Stacked, they take the width they want
-         and the figures fill the tall thin column that frees, which is the shape a body map is.
-         Above each map is its long view (the weigh-in trend, the clocks since the last set); below
-         it is today (the day's totals, the last thing logged). -->
+    <!-- FOOD and TRAINING, STACKED, with the body beside the workout half — the wall's arrangement.
+         Each map is a small block at the LEFT of its section, at its own width; what it does not use
+         is deliberately empty on the nutrition side and holds the figures on the training side.
+         Under each map: what today came to, then the day itself as a scrolling list. The maps scroll
+         too — sideways, through the whole archive (`data-history`, see heathistory.js). -->
     <div class="row-card ph-heatrow">
       <div class="card ph-heatcard">
         <div class="ph-heattop">
-          <div class="ph-heatstack">
+
+          <div class="ph-nut">
             <!-- Weekly weigh-in average over the food map's own week columns. The alignment is the
                  chart: cards/weightweeks.js insets the box by half a column at each end, in calc
-                 from --cols and the grid's gap, so --hgap must equal the gap in `.heat`. -->
+                 from --cols and the grid's gap, so --hgap must equal the gap in `.heat`. The server
+                 builds a plot per heat window for the same reason (weight_plot_phone). -->
             <div class="hw-wplot" id="weightweeks"></div>
-            <div class="ph-block" id="nutritionlog">
+            <div class="ph-block" id="nutritionlog" data-history>
               <div id="nutheat" class="nutheat"></div>
-              <div class="hw-strip" id="nutinfo" data-band></div>
             </div>
-            <div class="hw-recent" id="nutrecent"></div>
-            <div class="ph-block" id="workouts">
-              <div id="heatwrap"></div>
-              <div class="hw-strip" id="resttimer"></div>
-            </div>
-            <div class="hw-recent" id="heatinfo" data-recent></div>
           </div>
-          <!-- One figure in the markup; cards/muscle.js splits it into the front/back pair and
-               paints each region from volume.muscle_colors. Tapping a region opens #bodyinfo, which
-               muscle.js moves out to the document so the sheet is not trapped in here. -->
-          <div class="ph-body" id="body"><!--BODY_SVG--></div>
-          <div id="bodyinfo"></div>
+          <!-- The day's totals against target, then every entry on it. Tapping one opens its
+               ingredients. The totals line is sticky at the top of the scroller — it is what the
+               list adds up to, so it does not scroll away from the rows it is the sum of. -->
+          <div class="ph-list" id="nutinfo"></div>
+
+          <div class="ph-wksec">
+            <div class="ph-wk">
+              <div class="ph-block" id="workouts" data-history>
+                <div id="heatwrap"></div>
+              </div>
+              <div class="hw-strip" id="resttimer"></div>
+              <div class="ph-list" id="heatinfo"></div>
+            </div>
+            <!-- One figure in the markup; cards/muscle.js splits it into the front/back pair and
+                 paints each region from volume.muscle_colors. Tapping a region opens #bodyinfo,
+                 which muscle.js moves out to the document so the sheet is not trapped in here. -->
+            <div class="ph-body" id="body"><!--BODY_SVG--></div>
+            <div id="bodyinfo"></div>
+          </div>
+
         </div>
       </div>
     </div>

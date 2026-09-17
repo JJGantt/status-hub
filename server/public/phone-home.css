@@ -37,7 +37,7 @@ body.tv.phonehome .rows .fit{height:auto;padding:0;gap:4px;overflow:hidden}
    came out taller than the four gauges beside it, so the row took its height from the smallest thing
    on it and the four rings sat in a band of empty black. Pinning the row and dividing it three ways
    for the produce puts the big rings back in charge of their own box. */
-body.tv.phonehome .ringrow{flex:0 0 74px}
+body.tv.phonehome .ringrow{flex:0 0 70px}
 body.tv.phonehome .ringrow .ringcard{flex:1 1 auto;min-width:0}
 body.tv.phonehome .ringrow #nutrition,body.tv.phonehome .ringrow .fit{height:100%}
 body.tv.phonehome .ringrow #nutrition{display:flex;flex-direction:column}
@@ -121,29 +121,45 @@ body.tv.phonehome .ds-late{position:absolute;right:0;top:0;z-index:3;display:non
   border-radius:6px;padding:0 5px;font-variant-numeric:tabular-nums}
 body.tv.phonehome .ds-late.on{display:block}
 
-/* ---- food and training: the two heat maps, STACKED, with the body beside them ------------------
-   The wall's arrangement, and for the wall's reason. Side by side each map had half the width, so
-   its cells were half the size for the same seven rows, and the column that should have held the
-   figures held nothing. Stacked, the maps take the width they want and what frees is a tall thin
-   column — which is the shape a body map already is.
-   THE CELL GAP IS 1px, not the 2.5 the wall uses: a cell is about eighteen pixels here where the
-   wall's is twenty-five, so the same gap was a seventh of the mark instead of a tenth and the grid
-   read as black ruled by colour rather than the other way round. --hgap below moves with it —
-   half of it is what the weigh-in box is inset by at each end. */
+/* ---- food and training ---------------------------------------------------------------------------
+   Two SECTIONS, stacked. Each is a small map at the left of its own row with its day under it; what
+   the map does not use is empty on the nutrition side (deliberately, for now) and holds the body
+   figures on the training side.
+
+   THE MAP IS ELEVEN WEEKS AND A 12px CELL. Fewer columns at a bigger cell than the wall's fifteen:
+   at this width fifteen put a cell under nine pixels. The server ships the trim (PHONE_HEAT_WEEKS)
+   rather than the client slicing one, because the weigh-in plot's columns are built to match and a
+   slice here would have to re-derive that too. Everything older is a SIDEWAYS SCROLL away — the
+   whole archive is prefixed in place (data-history, heathistory.js), landing on the newest week.
+
+   THE CELL GAP IS 1px, not the wall's 2.5: a cell is twelve pixels here against twenty-five there,
+   so the same gap was a fifth of the mark instead of a tenth and the grid read as black ruled by
+   colour. --hgap on the plot moves with it — half of it is what the plot's box is inset by. */
 body.tv.phonehome .ph-heatrow{flex:0 0 auto}
 body.tv.phonehome .ph-heatcard{flex:1 1 auto;min-width:0}
-body.tv.phonehome .ph-heattop{position:relative;display:flex;padding-right:77px}
-body.tv.phonehome .ph-heatstack{flex:1 1 auto;min-width:0;display:flex;flex-direction:column;gap:2px}
-body.tv.phonehome .heat,body.tv.phonehome .hcol{gap:1px}
+body.tv.phonehome .ph-heattop{display:flex;flex-direction:column;gap:4px;min-width:0}
+body.tv.phonehome .ph-nut{width:var(--mapw);min-width:0;display:flex;flex-direction:column;gap:2px}
+body.tv.phonehome .ph-heattop{--mapw:142px;--cell:12px}
 body.tv.phonehome .ph-block{display:flex;flex-direction:column;gap:2px;min-width:0;position:relative}
 body.tv.phonehome .hmonths{display:none}   /* 9px month labels over a 15-column strip read as a smear */
-body.tv.phonehome .hcell{border-radius:1px}
-body.tv.phonehome .nutheat,body.tv.phonehome #heatwrap{display:flex;flex-direction:column;min-width:0}
+/* Fixed-width columns, because the archive is longer than the box: `flex:1 1 0` divides whatever is
+   there across the width, which is exactly what a scroller must not do. The cell then fills its
+   column and stays square on its own aspect-ratio. */
+body.tv.phonehome .nutheat,body.tv.phonehome #heatwrap{display:flex;flex-direction:column;min-width:0;
+  overflow-x:auto;overflow-y:hidden;scrollbar-width:none}
+body.tv.phonehome .nutheat::-webkit-scrollbar,body.tv.phonehome #heatwrap::-webkit-scrollbar{display:none}
+body.tv.phonehome .heat,body.tv.phonehome .hcol{gap:1px}
+/* `flex:1 1 auto` from app.css divides whatever columns there are across the box, which is exactly
+   what a scroller must not do — the archive has to lay itself out at its own width and be scrolled
+   past. Both the row and the grid inside it opt out. */
+body.tv.phonehome .hbody,body.tv.phonehome .heat{flex:0 0 auto!important;width:max-content}
+body.tv.phonehome .hcol{flex:0 0 var(--cell)!important;width:var(--cell)}
+body.tv.phonehome .hcell{width:100%!important;border-radius:1px}
 /* WEEKLY WEIGH-IN, on the food map's own week columns. The alignment IS the chart: the box is inset
    by half a column at each end so x runs from the first column's centre to the last's, all of it in
-   calc from --cols and the grid's gap — so --hgap must stay equal to the gap in `.heat` (app.css).
-   The drawing is inset vertically by --wpi, half a label, so each axis value can be CENTRED on the
-   line it names instead of hanging off the top or sitting under the first row of cells. */
+   calc from --cols and the grid's gap. The map SCROLLS and the plot does not, so the plot draws the
+   window the frame ships and the scroll carries the map past it — the two agree wherever the map is
+   sitting at rest, which is where it lands and where it is read. */
 body.tv.phonehome .hw-wplot{flex:0 0 22px;min-height:0;position:relative;--hgap:1px;--wpi:5px;
   --half:calc((100% - (var(--cols) - 1) * var(--hgap)) / (2 * var(--cols)))}
 body.tv.phonehome .wp-plot{position:absolute;top:var(--wpi);bottom:var(--wpi);left:var(--half);right:var(--half)}
@@ -152,23 +168,61 @@ body.tv.phonehome .wp-grid{stroke:rgba(255,255,255,.10);stroke-width:1}
 body.tv.phonehome .wp-line{fill:none;stroke:#a78bfa;stroke-width:1.4;stroke-linejoin:round;stroke-linecap:round}
 body.tv.phonehome .wp-dot{position:absolute;width:3px;height:3px;margin:-1.5px 0 0 -1.5px;
   border-radius:50%;background:#a78bfa}
-/* The three values are written OVER the left end of the plot — the oldest week, where covering a
-   point costs least — because a gutter for them would inset the data, and being uninset is the whole
-   point. line-height:1 makes the box exactly font-size tall, which is what --wpi above is half of. */
 body.tv.phonehome .wp-lab{position:absolute;left:0;font-size:8px;font-weight:700;color:#8b96a5;
   font-variant-numeric:tabular-nums;line-height:1;pointer-events:none;
   top:calc(var(--wpi) + var(--y) * (100% - 2 * var(--wpi)));transform:translateY(-50%);
   text-shadow:0 0 4px #000,0 0 4px #000,0 0 2px #000}
-/* The day's totals, and the clocks. Both are ONE ROW here.
-   THE GOALS COME OFF THE TOTALS. `1380/3060 cal` four times over does not fit a half-width column at
-   any size worth reading, and the denominator is the one half of it already on screen: the rings
-   above ARE the goal, drawn as the distance still to go. This strip is the amount. */
-body.tv.phonehome .hw-strip{flex:0 0 15px;height:15px;min-height:0;display:flex}
-body.tv.phonehome .nutday{display:flex;flex-wrap:nowrap;align-items:baseline;margin:0;padding:2px 5px;
-  gap:0 7px;background:#0b0f13;border-radius:5px;white-space:nowrap;overflow:hidden}
+
+/* ---- the day, under each map --------------------------------------------------------------------
+   A SCROLLING LIST in a box a few rows tall, which is what the space the smaller maps freed is for.
+   Nutrition: the totals line, then every entry on the day, each one tapping open to its ingredients.
+   Training: every exercise with its sets. Both were one line before and said only the last thing. */
+body.tv.phonehome .ph-list{flex:0 0 auto;min-width:0;overflow-y:auto;overflow-x:hidden;
+  scrollbar-width:none;-webkit-overflow-scrolling:touch}
+body.tv.phonehome .ph-list::-webkit-scrollbar{display:none}
+body.tv.phonehome #nutinfo{height:74px}
+body.tv.phonehome #heatinfo{height:57px}
+/* THE TOTALS ARE BACK TO SAYING WHAT THEY ARE OUT OF. A bare `1380 cal` is half the reading — the
+   rings above are the other half, but only for today and only as a distance. It is STICKY at the top
+   of its own scroller, because it is what the rows under it add up to. */
+body.tv.phonehome .nutday{position:sticky;top:0;z-index:2;display:flex;flex-wrap:nowrap;
+  align-items:baseline;margin:0 0 3px;padding:2px 5px;gap:0 8px;background:#0b0f13;border-radius:5px;
+  white-space:nowrap;overflow:hidden}
 body.tv.phonehome .nd-seg{flex:0 0 auto;font-size:9px}
-body.tv.phonehome .nd-goal{display:none}
+body.tv.phonehome .nd-goal{display:inline}
 body.tv.phonehome .nd-date{display:none}   /* the day is the one thing a glance already knows */
+/* THE BUTTONS GO. `.addbtn` and `.dact-btn` are sized in app.css under `body.tv.phonewall` — 20px
+   type, a 110px minimum width — for a canvas scaled to about a third, so at native size they are
+   slabs, and a tap here is for READING the ingredients, not for editing the day. The lists pane has
+   the editing. Same family as the expand glyph above.
+   The macro chips lose their pills too: a border around every number turns four readings into four
+   objects, and at this size the pill is most of the ink. */
+body.tv.phonehome .ph-list .addbtn,body.tv.phonehome .ph-list .dact{display:none}
+body.tv.phonehome .ph-list .dset{background:none;border-radius:0;padding:0;margin:0;font-size:9px;
+  color:#8b96a5}
+body.tv.phonehome .ph-list .dex-macros{gap:6px}
+/* An entry: its name and macros on one row, its ingredients under it when it is open. */
+body.tv.phonehome .ph-list .dex{padding:1px 0;border-bottom:1px solid #141a21}
+body.tv.phonehome .ph-list .dex:last-child{border-bottom:none}
+/* ONE ROW per entry: the name, then what it came to. app.css stacks these into a column under
+   `body.tv.phonewall`, which is right on a canvas a third of this size and is two rows here — so
+   four entries became two and the list stopped being a list. */
+body.tv.phonehome .ph-list .dex-head{display:flex;flex-direction:row;flex-wrap:nowrap;
+  align-items:baseline;gap:7px;min-width:0}
+body.tv.phonehome .ph-list .dex-macros{flex:0 1 auto;min-width:0;overflow:hidden}
+body.tv.phonehome .ph-list .dex-n{flex:0 1 auto;min-width:0;font-size:10px;color:#e6eaf0;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+body.tv.phonehome .ph-list .dex-caret{margin-right:4px;color:#5c6675;font-size:8px}
+body.tv.phonehome .ph-list .dex-macros{flex:0 0 auto;display:flex;align-items:baseline;gap:5px}
+body.tv.phonehome .ph-list .dset{font-size:8px;padding:0}
+body.tv.phonehome .ph-list .ding{display:flex;align-items:baseline;gap:5px;padding:0 0 0 12px}
+body.tv.phonehome .ph-list .ding-n{flex:1 1 auto;min-width:0;font-size:9px;color:#8b96a5;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+body.tv.phonehome .ph-list .heath{display:none}   /* the date is the day the map already has selected */
+body.tv.phonehome .ph-list .dex-n .stagedbadge{font-size:7px}
+/* The clocks. One row, and the same treatment as the totals line so the column reads as two of the
+   same thing rather than a panel and a bare row. */
+body.tv.phonehome .hw-strip{flex:0 0 16px;height:16px;min-height:0;display:flex}
 body.tv.phonehome #resttimer{margin:0;padding:2px 5px;gap:8px;justify-content:flex-start;
   align-items:baseline;background:#0b0f13;border:none;border-radius:5px;flex-wrap:nowrap;overflow:hidden}
 body.tv.phonehome #resttimer .rt-side{flex-direction:row;align-items:baseline;gap:4px;text-align:left;
@@ -176,106 +230,68 @@ body.tv.phonehome #resttimer .rt-side{flex-direction:row;align-items:baseline;ga
 body.tv.phonehome #resttimer .rt-right{margin-left:auto}
 body.tv.phonehome #resttimer .rt-label{font-size:9px;letter-spacing:0;text-transform:none;
   font-weight:800;color:#8b96a5;white-space:nowrap}
-body.tv.phonehome #resttimer .rt-time{font-size:12px;white-space:nowrap}
-body.tv.phonehome #resttimer .rt-count{font-size:12px;white-space:nowrap}
+body.tv.phonehome #resttimer .rt-time,body.tv.phonehome #resttimer .rt-count{font-size:12px;white-space:nowrap}
 body.tv.phonehome #resttimer .rt-watcher{display:none}
-/* THE LAST THING LOGGED, one per column: the meal, and the exercise whose set was logged last. Two
-   lines each — the name with its time pushed right, then the readings under it. */
-/* THE LAST THING LOGGED — the meal, and the exercise whose set was logged last. ONE LINE each here,
-   where the wall gives them two: the name and its readings run along a single row, because together
-   they are about 250px at this size and the stack is 278 wide. Two lines cost 24px out of the
-   tallest block on the screen, and every one of those comes off the conversation at the bottom.
-   --rc-base / --rc-min / --rc-name-base are read by cards/workouts.js, whose own numbers (16px of
-   set list, a 17px name) are wall sizes. Without them the sets row and the exercise name are drawn
-   half again the size of everything around them here, and only shrink if they actually overflow. */
-body.tv.phonehome .hw-recent{flex:0 0 20px;height:20px;padding:0;min-width:0;overflow:hidden;
-  display:flex;align-items:baseline;gap:7px;
-  --rc-base:10px;--rc-min:7px;--rc-name-base:11px}
-body.tv.phonehome .hw-recent .rc-vals,body.tv.phonehome .hw-recent .rc-sets{flex:1 1 auto;min-width:0}
-body.tv.phonehome .hw-recent .rc-top{flex:0 1 auto;display:flex;align-items:baseline;gap:6px;min-width:0}
-body.tv.phonehome .hw-recent .rc-name{font-size:10px;line-height:1.2;font-weight:700;color:#e6eaf0;
-  min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-body.tv.phonehome .hw-recent .rc-when{flex:0 0 auto;font-size:8px;color:#5c6675;
-  font-variant-numeric:tabular-nums}
-body.tv.phonehome .hw-recent .rc-staged{font-size:7px;font-weight:700;letter-spacing:.06em;color:#d6c042;
-  background:rgba(214,192,66,.13);border-radius:3px;padding:0 3px;align-self:center}
-body.tv.phonehome .hw-recent .rc-vals{display:flex;gap:8px;margin-top:0;white-space:nowrap;overflow:hidden}
-body.tv.phonehome .hw-recent .rc-set{flex:0 0 auto}
-body.tv.phonehome .hw-recent .rc-v{font-size:10px;font-weight:700;color:#c7cdd6;font-variant-numeric:tabular-nums}
-body.tv.phonehome .hw-recent .rc-u{font-size:10px;font-weight:400;color:#5c6675;margin-left:2px}
-body.tv.phonehome .hw-recent .rc-m{font-size:10px;font-weight:700;color:#8b96a5;margin-left:2px}
-body.tv.phonehome .hw-recent .rc-x{font-size:10px;font-weight:400;color:#5c6675;margin:0 1px}
-body.tv.phonehome .hw-recent .rc-w{font-size:8px}
-/* Sets are RULED apart rather than spaced apart — a hairline separates at a third of the distance a
-   gap needs, and unlike a gap it does not grow when the numbers do. cards/workouts.js steps --rcfs
-   down until the whole list fits, and everything on the row is proportional to it. */
-body.tv.phonehome .hw-recent .rc-sets{gap:0}
-body.tv.phonehome .hw-recent .rc-sets .rc-set{padding:0 calc(var(--rcfs,10px) * .5)}
-body.tv.phonehome .hw-recent .rc-sets .rc-set:first-child{padding-left:0}
-body.tv.phonehome .hw-recent .rc-sets .rc-set:last-child{padding-right:0}
-body.tv.phonehome .hw-recent .rc-sets .rc-set+.rc-set{border-left:1px solid rgba(255,255,255,.18)}
-body.tv.phonehome .hw-recent .rc-sets .rc-v{font-size:var(--rcfs,10px)}
-body.tv.phonehome .hw-recent .rc-sets .rc-x{font-size:var(--rcfs,10px);margin:0 calc(var(--rcfs,10px) * .19)}
-body.tv.phonehome .hw-recent .rc-sets .rc-w{font-size:calc(var(--rcfs,10px) * .8125)}
-body.tv.phonehome .hw-recent .rc-sets .rc-count{flex:0 0 auto;margin-left:auto;padding-left:6px;
-  border-left:2px solid rgba(255,255,255,.5);font-size:10px;font-weight:700;color:#e6eaf0;
-  font-variant-numeric:tabular-nums}
-/* Each muscle's weekly sets in that muscle's own volume colour — bare, because 15 in green already
-   says both the number and that it is on target. The NAME carries the other reading: bright for a
-   primary mover, dim for a synergist. */
-body.tv.phonehome .hw-recent .rc-mus{flex:0 1 auto;margin-left:auto;display:flex;align-items:baseline;
-  gap:calc(var(--rcfs,10px) * .6);min-width:0;overflow:hidden;white-space:nowrap}
-body.tv.phonehome #heatinfo .rc-name{flex:0 0 auto}
-body.tv.phonehome .hw-recent .rc-m-i{flex:0 0 auto;display:inline-flex;align-items:baseline;
-  gap:calc(var(--rcfs,10px) * .27)}
-body.tv.phonehome .hw-recent .rc-m-i .rc-m-lab{color:#c7cdd6}
-body.tv.phonehome .hw-recent .rc-m-i.sec .rc-m-lab{color:#6b7686}
-body.tv.phonehome .hw-recent .rc-m-lab{font-size:calc(var(--rcfs,10px) * .8);font-weight:600}
-body.tv.phonehome .hw-recent .rc-m-n{font-size:var(--rcfs,10px);font-weight:700;font-variant-numeric:tabular-nums}
+/* The exercise rows, from cards/workouts.js's full-day list. --rc-* are read there; its own numbers
+   (16px of set list, a 17px name) are wall sizes and only shrink if the row overflows. */
+body.tv.phonehome #heatinfo{--rc-base:10px;--rc-min:7px;--rc-name-base:11px}
+/* ONE ROW per exercise, for the same reason the entries above are one row: the name and its sets
+   stacked is two rows, and this box is four. The sets scroll sideways inside the row when a long
+   working set list runs past the width — losing the tail of a row beats losing a whole exercise. */
+body.tv.phonehome #heatinfo .dex{display:flex;flex-direction:row;flex-wrap:nowrap;align-items:baseline;
+  gap:7px;padding:0;min-width:0}
+body.tv.phonehome #heatinfo .wk-exhead{flex:0 1 auto;min-width:0;gap:0}
+/* The name keeps a floor. Left to shrink against the set list it came out as `Ches...`, and an
+   exercise you cannot name is a row of numbers belonging to nothing. The sets give way instead —
+   they scroll sideways inside their own half of the row. */
+body.tv.phonehome #heatinfo .dex-n{font-size:10px;min-width:74px;white-space:nowrap;overflow:hidden;
+  text-overflow:ellipsis}
+body.tv.phonehome #heatinfo .dex-sets{flex:1 1 auto;min-width:0;display:flex;gap:7px;
+  overflow-x:auto;scrollbar-width:none;white-space:nowrap}
+body.tv.phonehome #heatinfo .dex-sets::-webkit-scrollbar{display:none}
+body.tv.phonehome #heatinfo .dset{flex:0 0 auto;font-size:9px;padding:0;margin:0;background:none;
+  border-radius:0;color:#8b96a5}
 /* The expand glyph is sized for a canvas scaled to about a third, so at native size it is a 64px
-   button over the oldest weeks of the map. It moves to the top RIGHT corner — the newest week's
-   Sunday, the one cell a glance is never reading — and shrinks to a corner mark. */
+   button over the map. A corner mark instead, at the top right. */
 body.tv.phonehome .expand-btn{width:20px;height:20px;left:auto;right:0;top:-1px}
 body.tv.phonehome .expand-btn svg{width:12px;height:12px}
 
-/* ---- the body, beside the maps -------------------------------------------------------------------
-   Front ABOVE back, filling the tall thin column the stacked maps leave — a 36:93 figure is that
-   shape already, which is why the wall runs it the same way. The column is declared: sized by its
-   content it took whatever the figures claimed, and when they claimed wrong (see the viewBox note in
-   CLAUDE.md) it took the whole row and left its neighbour with no width. */
-/* 98px, and the number is a consequence rather than a taste. A 36:93 figure stacked twice fills a
-   column of height H at width 0.387*H/2 — so the column's width and the stack's height decide each
-   other, and the stack's height is 0.93 of its own width plus its strips. 98 against a ~265 stack is
-   the pair that comes out with no slack on either side of the figures. Move one and the other is
-   wrong: too wide and the figures sit in a band of black, too narrow and the maps grow until the
-   block is half the screen.
-
-   IT IS POSITIONED, NOT A FLEX CHILD, and that is load-bearing. As a flex child its own content
+/* ---- the training section, and the body beside it ----------------------------------------------
+   The figures take the height of the WHOLE section — map, clocks and list — because beside the map
+   alone they would be ninety pixels tall and thirty-five wide. The map keeps its own width inside
+   the section, so the empty ground between it and the figures is the same shape as the empty ground
+   beside the nutrition map above. */
+body.tv.phonehome .ph-wksec{position:relative;display:flex;padding-right:112px}
+body.tv.phonehome .ph-wk{flex:1 1 auto;min-width:0;display:flex;flex-direction:column;gap:3px}
+body.tv.phonehome .ph-wk .ph-block{width:var(--mapw)}
+/* IT IS POSITIONED, NOT A FLEX CHILD, and that is load-bearing. As a flex child its own content
    decided its height, and a figure sized from the column's WIDTH is 2.6 times as tall as it is wide
-   — so the pair claimed 506px and stretched the whole block to it, the exact opposite of filling
-   what the maps left. Out of the height calculation it takes the stack's height as a fact.
-   Each figure then takes HALF THE COLUMN from flex and `meet` fits the drawing inside it. Nothing
-   here says a width: an aspect-ratio fought flex over which axis was the input, and width won it.
-
-   THE COLUMN IS DELIBERATELY A HAIR TOO NARROW for the drawing, and that is the whole trick. Each
-   split svg holds the WHOLE 72-unit artwork with a 36-unit window over it, so any horizontal slack
-   inside the box is filled by the figure next door — and `overflow:hidden` cannot help, because the
-   bleed is INSIDE the element, not past it. Too narrow, the drawing is width-bound and the slack
-   lands above and below it, where there is nothing to bleed. */
-body.tv.phonehome .ph-body{position:absolute;top:0;right:0;bottom:0;width:70px;
+   — so the pair claimed 500px and stretched the whole block to it, the exact opposite of filling
+   what the maps left. Out of the height calculation it takes the section's height as a fact.
+   THE COLUMN IS DELIBERATELY A HAIR TOO NARROW for the drawing. Each split svg holds the WHOLE
+   72-unit artwork with a 36-unit window over it, so any horizontal slack inside the box is filled by
+   the figure next door — and overflow:hidden cannot help, because the bleed is INSIDE the element.
+   Too narrow, the drawing is width-bound and the slack lands above and below it, where there is
+   nothing to bleed. */
+body.tv.phonehome .ph-body{position:absolute;top:0;right:0;bottom:0;width:104px;
   display:flex;align-items:center;justify-content:center;overflow:hidden}
-body.tv.phonehome .ph-body .figstack{height:100%;width:100%;display:flex;flex-direction:column;gap:2px;
+body.tv.phonehome .ph-body .figstack{height:100%;width:100%;display:flex;flex-direction:row;gap:3px;
   align-items:center;justify-content:center;overflow:hidden}
-body.tv.phonehome .ph-body .figstack svg{flex:1 1 0;min-height:0;width:100%;overflow:hidden;display:block}
+body.tv.phonehome .ph-body .figstack svg{flex:1 1 0;min-width:0;height:100%;overflow:hidden;display:block}
 
 /* ---- what is running ----------------------------------------------------------------------------
    Titles and the one line of what each session is doing. TAPPING a row opens it in the session view
    (the lists pane's, with the whole conversation and a composer), so a truncated title here costs
    nothing — it is a way in, not the answer. */
-body.tv.phonehome .ph-sesscard{flex:1 1 auto;min-width:0;display:flex}
-body.tv.phonehome .ph-sess-list{flex:1 1 auto;min-width:0;display:flex;flex-direction:column;gap:4px}
+body.tv.phonehome .ph-sesscard{flex:1 1 auto;min-width:0;min-height:0;display:flex;height:100%}
+/* A BOX THREE ROWS TALL THAT SCROLLS, holding every session rather than the top three. The wall caps
+   its list because a wall cannot be scrolled; here the cap was only hiding rows that cost nothing. */
+body.tv.phonehome .ph-sess-list{flex:1 1 auto;min-width:0;min-height:0;height:100%;
+  display:flex;flex-direction:column;gap:4px;
+  overflow-y:auto;overflow-x:hidden;scrollbar-width:none;-webkit-overflow-scrolling:touch}
+body.tv.phonehome .ph-sess-list::-webkit-scrollbar{display:none}
 body.tv.phonehome .ph-sess-list:empty{display:none}
-body.tv.phonehome .hw-row{flex:1 1 0;min-height:0;display:flex;flex-direction:column;gap:1px;
+body.tv.phonehome .hw-row{flex:0 0 auto;min-height:0;display:flex;flex-direction:column;gap:1px;
   justify-content:center;min-width:0;padding:3px 6px;background:#0b0f13;border-radius:5px;
   overflow:hidden;cursor:pointer;-webkit-tap-highlight-color:transparent}
 body.tv.phonehome .hw-row:active{background:#161d25}
@@ -311,10 +327,13 @@ body.tv.phonehome .hw-row-act.done{color:#8b96a5}
    The server's default is twelve back, which fills a wall — in a card this size it put a day under
    ten pixels and showed more of the archive than the wall does, which was the wrong way round.
    Everything older is still one drag away. */
-body.tv.phonehome .ph-surfrow{flex:0 0 auto}
-body.tv.phonehome .ph-surfcard{flex:0 0 198px;min-width:0;display:flex;flex-direction:column;gap:3px}
+/* DECLARED, not sized by its content. The session list holds every session now, and a list with no
+   ceiling in a row that takes its height from its tallest child is a row as tall as the list —
+   1,596px of it, with everything under it pushed off the screen. */
+body.tv.phonehome .ph-surfrow{flex:0 0 140px}
+body.tv.phonehome .ph-surfcard{flex:0 0 198px;min-width:0;min-height:0;display:flex;flex-direction:column;gap:3px}
 body.tv.phonehome .ph-surfcard #surf{flex:0 0 auto;min-width:0;padding:0;height:auto;gap:0;
-  --surf-bare:1;--surf-back:7;--surf-grid-h:34px;--surf-water-h:40px}
+  --surf-bare:1;--surf-back:7;--surf-grid-h:30px;--surf-water-h:36px}
 body.tv.phonehome .ph-surfcard .devstrip,body.tv.phonehome .ph-surfcard .surfkey{display:none}
 body.tv.phonehome .ph-surfcard .surfheat{margin-top:0}
 body.tv.phonehome .ph-surfcard .surfwater{margin-top:3px;position:relative}
@@ -331,7 +350,7 @@ body.tv.phonehome .ph-surfcard .surfwater .surfax{position:absolute;right:2px;to
    ratio deserves rather than a block of its own — and its one number moves BESIDE it rather than
    taking a row under it. 6am to midnight, because the server's 5-to-10 window put an hour under two
    pixels in a block this short; one guide line at 3pm, the middle of what is drawn. */
-body.tv.phonehome .ph-surfcard #weather{flex:0 0 auto;min-width:0;height:44px;margin-top:0;gap:5px;
+body.tv.phonehome .ph-surfcard #weather{flex:0 0 auto;min-width:0;height:40px;margin-top:0;gap:5px;
   flex-direction:row;align-items:stretch;--wx-h0:6;--wx-h1:24;--wx-guide:15}
 /* The grid's box is STRETCHED to the block, not sized by the canvas in it. cards/weather.js measures
    this box and writes the canvas to it, so a box that took its height from that canvas is a box
@@ -348,7 +367,7 @@ body.tv.phonehome .ph-surfcard .wx-peak span{flex:0 0 auto;font-size:11px}
    THE ABSORBER, and the only block here that can spend an arbitrary amount of height: more room is
    simply more of the thread. It scrolls, and it is pinned to the newest line. The composer is one
    swipe left. */
-body.tv.phonehome .ph-convrow{flex:1 1 auto;min-height:76px}
+body.tv.phonehome .ph-convrow{flex:1 1 auto;min-height:92px}
 body.tv.phonehome .ph-convcard{flex:1 1 auto;min-width:0;display:flex;min-height:0}
 body.tv.phonehome .ph-conv{flex:1 1 auto;min-width:0;min-height:0;overflow-y:auto;
   -webkit-overflow-scrolling:touch;display:flex;flex-direction:column;gap:3px}

@@ -1,7 +1,7 @@
 // Nutrition Log card: combined dual-axis calorie+weight plot (weekly game) + calorie-adherence
 // calendar (daily game), with inline day detail + click/drag-scrub selection. Every entry row
 // expands to its ingredient breakdown + actions (log-again / change-quantity / delete).
-import { esc, dualPlot, state, localNowNaive, paintScrolled } from '../shared.js';
+import { esc, dualPlot, state, localNowNaive, paintScrolled, heatPick } from '../shared.js';
 import { withHistory } from '../heathistory.js';
 
 const CAL_COLOR='#3b82f6', W_COLOR='#a78bfa';
@@ -11,8 +11,7 @@ const expandedIds=new Set(); // entry ids whose ingredient breakdown is open —
 
 export function render(s){
  // Shorter calendar on the home wall (it shares its column with the muscle map); see workouts.js.
- let N=s.nutrition_log&&Object.assign({},s.nutrition_log,
-   document.body.classList.contains('homewall')&&s.nutrition_log_home||{});
+ let N=s.nutrition_log&&Object.assign({},s.nutrition_log,heatPick(s,'nutrition_log'));
  // Desktop renders heatmap+plot together into #nutwrap. The TV wall splits them so the food
  // list can sit BETWEEN them: heatmap → #nutheat (top), plot → #nutplot (bottom).
  const wrap=document.getElementById('nutwrap');

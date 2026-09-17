@@ -6,11 +6,18 @@
 // budget — plenty of width, almost no height — so the axis turns ninety degrees and the day scrolls
 // under a fixed viewport instead of being squeezed into one.
 //
-// LANES ARE WHY THIS WORKS. An hour is about eleven pixels here, so a 4pm item and a 7pm one are
-// thirty pixels apart and their titles are not: one row would be a smear. Each chip goes in the
-// first lane free at its own x, so a title takes the width it needs and the next one drops a lane.
-// When every lane is busy the chip already in the one that frees soonest is CUT SHORT rather than
-// overlapped — a title losing its tail is still readable, two titles on top of each other are not.
+// LANES ARE WHY THIS WORKS. Two items a couple of hours apart are closer together than their titles
+// are long, so one row would be a smear. Each chip goes in the first lane free at its own x, so a
+// title takes the width it needs and the next one drops a lane. When every lane is busy the chip
+// already in the one that frees soonest is CUT SHORT rather than overlapped — a title losing its
+// tail is still readable, two titles on top of each other are not.
+//
+// THE SCALE IS WHAT MAKES THE LANES MEAN ANYTHING, and it is the number to be careful with. At
+// eleven pixels an hour a chip with a title on it was five to ten HOURS wide, so every item blocked
+// its lane for the rest of the day and four items an hour or two apart came out as a diagonal
+// staircase — four lanes, each holding one chip, the x of each saying nothing the little `4p` on it
+// was not already saying. At twenty-six a chip is about three hours, which is a duration, so two
+// things at the same end of an afternoon share a lane and only a real collision drops one.
 //
 // It keeps going past today: the days after it are the same axis continued, ruled and labelled at
 // each midnight, which is what makes the look-ahead free here. Scroll right and you are in tomorrow.
@@ -23,10 +30,9 @@ import { chip } from './dayline.js';
 const TICK_EVERY = 3;    // hours between hour labels and their guide lines
 const LANE_GAP = 3;
 const CHIP_GAP = 4;      // clear space between two chips sharing a lane
-const MIN_LANES = 3;     // the floor, whatever the height: two items at the same hour plus one more
-const MAX_LANES = 6;     // past six the rows are thinner than the type on them
-const MIN_LANE_H = 20;
-const MAX_LANE_H = 30;
+const MIN_LANES = 3;     // always reserved, even on an empty day — the room for a collision
+const MAX_LANES = 4;     // past four the block is taking screen off everything under it
+const LANE_H = 20;
 const CHIP_MIN_W = 22;   // a chip cut this short is a coloured stub, and that is the honest amount
 
 let host = null, cfg = null, day0 = null, placed = false, lastD = null;
@@ -51,11 +57,16 @@ const hourLabel = (h) => `${h % 12 || 12}${h < 12 ? 'a' : 'p'}`;
  * and how tall they get is measured off the element (see geom), because on this page the strip is
  * the block that absorbs whatever height the rest of the screen did not need.
  */
-export function mountStrip(el, { axisH = 14, hourW = 11 } = {}) {
+export function mountStrip(el, { axisH = 14, hourW = 26 } = {}) {
   if (!el) return null;
   host = el;
   cfg = { axisH, hourW };
-  el.innerHTML = '<div class="ds-scroll"><div class="ds-strip"></div></div><span class="ds-late"></span>';
+  el.innerHTML = '<div class="ds-scroll"><div class="ds-strip"></div></div>' +
+    '<span class="ds-here"></span><span class="ds-late"></span>';
+  // WHICH DAY YOU ARE LOOKING AT, pinned to the left edge and not scrolling with the strip. The day
+  // names inside it sit at their own midnights, so today's is off the left end from the moment the
+  // strip lands on now — which left the only date on the whole page reading FRI 18, tomorrow.
+  el.querySelector('.ds-scroll').addEventListener('scroll', here, { passive: true });
   // The clock hand has to tick; nothing is fetched and nothing is inspected. It re-aims at the next
   // exact minute each pass, so it cannot drift, and the DAY rolling over is a change to what the
   // server laid out — dayline.js's own tick re-reads then and paint() runs again with the new days.
@@ -72,22 +83,27 @@ export function mountStrip(el, { axisH = 14, hourW = 11 } = {}) {
   return { paint };
 }
 
-// How the block's height is spent. It takes whatever the rest of the screen did not need, and it
-// spends it on LANES FIRST and then on their height — more rows while there is room for another
-// readable one, taller rows once there is not. Both, rather than one: a fixed lane height leaves a
-// band of black under a quiet day, and a fixed lane count makes a busy one unreadable.
-function geom() {
-  const avail = Math.max(0, host.clientHeight - cfg.axisH);
-  const n = Math.min(MAX_LANES,
-    Math.max(MIN_LANES, Math.floor((avail + LANE_GAP) / (MIN_LANE_H + LANE_GAP))));
-  const h = Math.max(MIN_LANE_H,
-    Math.min(MAX_LANE_H, Math.floor((avail - (n - 1) * LANE_GAP) / n)));
-  return { n, h };
-}
+// How tall the block is, in lanes. It comes from the DAY, not from the space available: this used to
+// measure its own container, which is sized by its content, so a first paint read a box that had not
+// been squeezed yet, claimed six lanes of it, and then kept them — a third of the screen held for
+// four items with the rest of it black. Three lanes always (the room a collision needs), a fourth
+// only when the day actually wants one, and nothing beyond that.
+const boxH = (n) => cfg.axisH + n * LANE_H + (n - 1) * LANE_GAP;
 
 function nowX() {
   const n = new Date();
   return (n.getHours() + n.getMinutes() / 60) * cfg.hourW;
+}
+
+// The day the LEFT EDGE of the viewport is in.
+function here() {
+  if (!host || !lastD || !lastD.ahead) return;
+  const sc = host.querySelector('.ds-scroll');
+  const k = Math.min(lastD.ahead.length - 1,
+    Math.max(0, Math.floor((sc.scrollLeft + 1) / (24 * cfg.hourW))));
+  const d = lastD.ahead[k];
+  const lab = host.querySelector('.ds-here');
+  if (d && lab) lab.textContent = `${d.dow} ${d.day}`;
 }
 
 function moveNow() {
@@ -103,12 +119,9 @@ function paint(d) {
   const scroll = host.querySelector('.ds-scroll');
   const strip = host.querySelector('.ds-strip');
   const dayW = 24 * cfg.hourW;
-  const { n: N, h: LANE_H } = geom();
+  const N = MAX_LANES;
   strip.style.width = `${days.length * dayW}px`;
-  strip.style.height = `${cfg.axisH + N * LANE_H + (N - 1) * LANE_GAP}px`;
-  // The chips take their height AND their type from the lane, the way the dial's rows do — one
-  // number, read back in CSS, so a taller lane is a bigger chip rather than the same chip floating.
-  strip.style.setProperty('--ds-laneh', `${LANE_H}px`);
+  strip.style.height = `${boxH(N)}px`;
 
   // The axis: a rule and a label at each midnight, a fainter one every three hours. Day one is
   // today and gets no rule — the now-line is the mark on it, and a second line at its left edge
@@ -144,6 +157,7 @@ function paint(d) {
   const els = [...strip.querySelectorAll('.ds-item')];
   const right = new Array(N).fill(-Infinity);   // where each lane is busy until
   const last = new Array(N).fill(null);         // and what is sitting there
+  let used = 0;                                 // how many the day actually needed
   els.forEach((e, i) => {
     const x = items[i].x;
     let lane = right.findIndex((r) => r <= x - CHIP_GAP);
@@ -156,11 +170,18 @@ function paint(d) {
     e.style.top = `${cfg.axisH + lane * (LANE_H + LANE_GAP)}px`;
     right[lane] = x + e.offsetWidth;
     last[lane] = { el: e, x };
+    if (lane + 1 > used) used = lane + 1;
   });
+  // Now the block is only as tall as the day made it.
+  const H = boxH(Math.max(MIN_LANES, used));
+  strip.style.height = `${H}px`;
+  scroll.style.height = `${H}px`;
 
   // How many things are late, whatever day they were due. The strip itself shows the ones from today
   // once you scroll back to them; anything older is off its left end entirely, and this is the only
   // thing on the page that would say so. It does not scroll with the strip.
+  here();
+
   const late = (d.overdue || []).length;
   const badge = host.querySelector('.ds-late');
   badge.textContent = late ? String(late) : '';
@@ -172,6 +193,9 @@ function paint(d) {
   const today = d.today || dateKey(new Date());
   if (!placed || today !== day0) {
     day0 = today; placed = true;
-    requestAnimationFrame(() => { scroll.scrollLeft = Math.max(0, nowX() - scroll.clientWidth * 0.3); });
+    requestAnimationFrame(() => {
+      scroll.scrollLeft = Math.max(0, nowX() - scroll.clientWidth * 0.22);
+      here();
+    });
   }
 }

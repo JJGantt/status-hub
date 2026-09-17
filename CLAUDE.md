@@ -258,12 +258,14 @@ and it is not reflowable — the wall's type is written for a room. `phone-home.
 phone's own size instead, so a size in it is the size it is read at, and the cards that measure
 themselves come out at the sizes their own modules chose for a phone.
 
-**Nothing scrolls vertically.** `.rows` is the height of the pane and every block on it is a declared
-height except ONE — the day strip, which is `flex:1 1 auto` and takes exactly what the others did not
-need. So raising any other height on that screen is spending the day's lanes, and that is the trade
-to weigh before doing it. There are no card borders and almost no padding for the same reason: a rule
-costs two pixels of height for something the black ground between blocks already says, and where two
-things genuinely need separating they get a background instead, which costs nothing.
+**Nothing scrolls vertically.** `.rows` is the height of the pane and every block on it is either a
+declared height or sized by its own content. Exactly one takes the leftover — the body/sessions row,
+`flex:1 1 auto` — and it is that one because both things in it can SPEND height: the muscle figures
+are sized by the row, and the session rows share it out and put what is left into a second line of
+what each session is doing. The day strip held that job first and could not spend it: it claimed a
+third of the screen and left it black. There are no card borders and almost no padding for the same
+reason: a rule costs two pixels of height for something the black ground between blocks already says,
+and where two things genuinely need separating they get a background instead, which costs nothing.
 
 Its body carries four classes and each does a job. `tv` is the card styling the walls share (black
 ground, headings off, the heat maps, the rings, the chips). `phonewall` makes every card take its
@@ -277,6 +279,9 @@ It also beats app.css's `body.tv.wallportrait` block on equal specificity, by lo
 - **Today LIES DOWN** (`cards/daystrip.js`) — hours left to right, each item at its own time. The
   dial is the same day standing up, which is right for a tall column read across a room; a phone in
   portrait has width and no height, so the axis turns and the day scrolls under a fixed viewport.
+- **Which day it is, is pinned to the left of the strip** and does not scroll with it (`.ds-here`).
+  The day names inside the strip sit at their own midnights, so today's is off the left end from the
+  moment it lands on now — and the only date anywhere on the page then read FRI 18: tomorrow.
 - **The strip keeps going past midnight**, ruled and labelled at each day boundary, which is what
   makes the look-ahead cost nothing here: scroll right and you are in tomorrow. There is no separate
   list of the next six days, and there was — it ate a third of the screen to say less.
@@ -312,18 +317,24 @@ replace — everything else gets exactly what it had.
 | `--surf-grid-h` / `--surf-water-h` on `#surf` | `cards/surf.js` | its own 86px a grid plus 68px of water is a third of a phone screen for one card |
 | `--rc-base` / `--rc-min` / `--rc-name-base` on `.hw-recent` | `cards/workouts.js` (`fitRow`) | the set list starts at 16px and the exercise name at 17px, and both only shrink if they overflow — so on a phone they were drawn half again the size of everything around them and stayed there |
 
-## Lanes are why the day strip works
+## The day strip: the scale is what makes the lanes mean anything
 
-An hour is about eleven pixels on it, so a 4pm item and a 7pm one are thirty pixels apart and their
-titles are not: one row would be a smear. Each chip goes in the first lane FREE AT ITS OWN X, so a
-title takes the width it needs and the next one drops a lane. When every lane is busy, the chip
-already sitting in the lane that frees soonest is CUT SHORT rather than overlapped — a title losing
-its tail is still readable, two titles on top of each other are not.
+Each chip goes in the first lane FREE AT ITS OWN X, so a title takes the width it needs and the next
+one drops a lane. When every lane is busy, the chip already sitting in the lane that frees soonest is
+CUT SHORT rather than overlapped — a title losing its tail is still readable, two titles on top of
+each other are not.
 
-The block spends its height on lanes first and then on their height: more rows while there is room
-for another readable one, taller rows once there is not. Both, rather than one — a fixed lane height
-leaves a band of black under a quiet day, and a fixed lane count makes a busy one unreadable. The
-chips take their own height and type from the lane, so nothing floats in a row it does not fill.
+**`hourW` is the number to be careful with, and it is 26px.** At eleven a chip with a title on it was
+five to ten HOURS wide, so every item blocked its lane for the rest of the day and four things an
+hour or two apart came out as a diagonal staircase: four lanes, one chip each, the x of every one of
+them saying nothing the little `4p` written on it was not already saying. At twenty-six a chip is
+about three hours, which is a duration — so two things at the same end of an afternoon share a lane
+and only a real collision drops one. The visible window is about fourteen hours, most of a waking day.
+
+**Its height comes from the DAY, not from the space available.** Three lanes always, which is the
+room a collision needs; a fourth only when the day wants one; nothing beyond. It measured its own
+container once, which is sized by its content — so a first paint read a box that had not been
+squeezed yet, claimed six lanes of it and kept them.
 
 ## What is running is one module
 

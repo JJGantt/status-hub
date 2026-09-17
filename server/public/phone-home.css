@@ -72,14 +72,15 @@ body.tv.phonehome .hb-track::after{background:repeating-linear-gradient(to right
 body.tv.phonehome .hb-delta{display:none}
 
 /* ---- today, lying down -------------------------------------------------------------------------
-   THE ONE BLOCK THAT GROWS. Everything else on the screen is sized, so whatever height is left lands
-   here and becomes lanes — cards/daystrip.js measures this element and divides. The floor is three
-   lanes, which is the least that can hold two items at the same hour and still show a third.
+   AS TALL AS THE DAY MADE IT: three lanes always, a fourth only when the day needs one, and the
+   height is written by cards/daystrip.js. It used to take all the screen's slack and hold it —
+   a third of the page, black, for four items. The slack goes to the body/sessions row instead,
+   which is the one block here that can actually spend height on something.
    It scrolls HORIZONTALLY and lands a little to the left of now. */
-body.tv.phonehome .ph-dayrow{flex:1 1 auto;min-height:74px}
+body.tv.phonehome .ph-dayrow{flex:0 0 auto}
 body.tv.phonehome .ph-daycard{flex:1 1 auto;min-width:0;position:relative}
-body.tv.phonehome .ph-strip{position:relative;height:100%;min-height:0}
-body.tv.phonehome .ds-scroll{height:100%;overflow-x:auto;overflow-y:hidden;scrollbar-width:none;
+body.tv.phonehome .ph-strip{position:relative}
+body.tv.phonehome .ds-scroll{overflow-x:auto;overflow-y:hidden;scrollbar-width:none;
   -webkit-overflow-scrolling:touch}
 body.tv.phonehome .ds-scroll::-webkit-scrollbar{display:none}
 body.tv.phonehome .ds-strip{position:relative;height:100%}
@@ -97,20 +98,24 @@ body.tv.phonehome .ds-dlab{position:absolute;top:0;font-size:10px;line-height:12
 body.tv.phonehome .ds-more{font-weight:700;color:#8b96a5;margin-left:4px}
 /* A chip sits at its own time and takes the width its title needs. `max-width` is set by the lane
    packer when that lane's next item arrives before this one has finished — see cards/daystrip.js.
-   Its height IS the lane and its type follows, the way the dial's rows do; the ceiling is there
-   because nothing else on this screen is over 12px, and a quiet day gives the lanes enough height
-   to put the day's chips half again the size of everything around them. */
+   It is set at the size the rest of the screen is read at. Deriving it from the lane height instead
+   made the day's chips the largest type on the page — a quiet day left the lanes tall, and the block
+   that was already the emptiest was also the loudest. */
 body.tv.phonehome .ds-item{position:absolute;display:block;white-space:nowrap;overflow:hidden}
 body.tv.phonehome .ds-item .cw-dchip{display:inline-flex;max-width:100%;line-height:1.2;
-  padding:1px 5px 1px 6px;border-left-width:3px;align-items:center;
-  height:var(--ds-laneh,20px);
-  font-size:clamp(10px, calc((var(--ds-laneh,20px) - 7px) / 1.2), 12px)}
+  padding:1px 5px 1px 6px;border-left-width:3px;align-items:center;height:20px;font-size:11px}
 body.tv.phonehome .ds-item .cw-t{flex:0 0 auto;margin-right:4px;font-size:.82em;font-weight:700;
   color:#8b96a5;font-variant-numeric:tabular-nums}
 body.tv.phonehome .ds-item .cw-sc{margin-left:4px;font-size:9px}
 body.tv.phonehome .ds-item .cw-sc.k-potential{padding:0 2px;font-size:8px}
-/* How many things are late, on any day. It does not scroll with the strip: the ones from today are
-   in it once you scroll back, and anything older is off its left end entirely. */
+/* WHICH DAY the left edge of the view is in — opaque, pinned, and not scrolling with the strip. The
+   day names inside it sit at their own midnights, so today's is off the left end from the moment the
+   strip lands on now, and the only date on the whole page read FRI 18: tomorrow.
+   How many things are late, on any day, sits at the other end. It does not scroll either: the ones
+   from today are in the strip once you scroll back, and anything older is off its left end. */
+body.tv.phonehome .ds-here{position:absolute;left:0;top:0;z-index:3;
+  font-size:10px;line-height:12px;font-weight:800;letter-spacing:.04em;text-transform:uppercase;
+  color:#fff;background:#000;padding-right:7px;white-space:nowrap}
 body.tv.phonehome .ds-late{position:absolute;right:0;top:0;z-index:3;display:none;
   font-size:10px;line-height:12px;font-weight:800;color:#fff;background:#cc0d16;
   border-radius:6px;padding:0 5px;font-variant-numeric:tabular-nums}
@@ -226,17 +231,23 @@ body.tv.phonehome .expand-btn svg{width:12px;height:12px}
    Front and back SIDE BY SIDE, sized by the ROW's height rather than by their own width: the pair is
    two 36:93 halves, so width-driven they are two and a half times as tall as they are wide and set
    the height of everything beside them. Here the row is declared and the figures fit into it. */
-body.tv.phonehome .ph-bodyrow{flex:0 0 104px}
+/* THE ABSORBER. Every other block on this screen is a declared height or is sized by its own
+   content, so whatever is left over lands here — and both things in it can spend it: the figures are
+   sized by the row and the session rows share it out. That is what the day strip used to do, and it
+   could not spend it on anything. */
+body.tv.phonehome .ph-bodyrow{flex:1 1 auto;min-height:96px}
 body.tv.phonehome .ph-bodycard{flex:0 0 auto;min-width:0}
 body.tv.phonehome .ph-body{height:100%;display:flex;align-items:center}
 body.tv.phonehome .ph-body .figstack{height:100%;display:flex;flex-direction:row;gap:3px}
 body.tv.phonehome .ph-body .figstack svg{height:100%;width:auto;display:block}
 body.tv.phonehome .ph-sesscard{flex:1 1 auto;min-width:0;display:flex}
-body.tv.phonehome .ph-sess-list{flex:1 1 auto;min-width:0;display:flex;flex-direction:column;
-  justify-content:space-between;gap:3px}
+body.tv.phonehome .ph-sess-list{flex:1 1 auto;min-width:0;display:flex;flex-direction:column;gap:4px}
 body.tv.phonehome .ph-sess-list:empty{display:none}
-body.tv.phonehome .hw-row{flex:0 1 auto;min-height:0;display:flex;flex-direction:column;gap:0;
-  min-width:0;padding:2px 6px;background:#0b0f13;border-radius:5px;overflow:hidden}
+/* The rows SHARE the row's height rather than sitting at their content size with the slack pushed
+   between them — a list held apart by gaps reads as three unrelated things. What the extra buys is
+   a second line of what the session is doing, which is the reason the list is here at all. */
+body.tv.phonehome .hw-row{flex:1 1 0;min-height:0;display:flex;flex-direction:column;gap:1px;
+  justify-content:center;min-width:0;padding:3px 6px;background:#0b0f13;border-radius:5px;overflow:hidden}
 body.tv.phonehome .hw-row-top{display:flex;align-items:center;gap:5px;min-width:0}
 body.tv.phonehome .hw-row.on{background:#161d25;box-shadow:inset 2px 0 0 #fff}
 body.tv.phonehome .hw-row.parked{opacity:.5}
@@ -254,8 +265,8 @@ body.tv.phonehome .hw-row-where{font-size:7px;font-weight:700;letter-spacing:.05
    stops makes the whole list jump every few seconds. Teal for a tool call — the palette already
    spends green on alive, amber on due, red on overdue and blue on the clock, so a machine working
    needs a colour that is none of those and still reads as motion. */
-body.tv.phonehome .hw-row-act{display:block;min-height:12px;font-size:9px;line-height:12px;min-width:0;
-  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+body.tv.phonehome .hw-row-act{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;
+  min-height:12px;font-size:9px;line-height:12px;min-width:0;overflow:hidden}
 body.tv.phonehome .hw-row-act.tool{color:#4fd1c5}
 body.tv.phonehome .hw-row-act.text{color:#d5dde6}
 body.tv.phonehome .hw-row-act.done{color:#8b96a5}

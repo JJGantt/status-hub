@@ -15,7 +15,9 @@
 //
 // The line is an SVG stretched with preserveAspectRatio="none", which distorts anything drawn in it:
 // strokes stay true only because of vector-effect, and text would be squashed outright. So the dots
-// and the labels are HTML on top, positioned by the same percentages.
+// and the labels are HTML on top, positioned by the same fractions. The labels sit OUTSIDE the plot
+// box (they start at the container's left edge, not the first column's centre), so their y is mapped
+// through the plot's vertical inset in CSS rather than being a plain percentage.
 
 export function render(s) {
  const el = document.getElementById('weightweeks'); if (!el) return;  // only the home wall has one
@@ -43,8 +45,11 @@ export function render(s) {
  const dots = P.filter((p) => p.y != null && !p.imputed).map((p) =>
   '<i class=wp-dot style="left:' + pc(p.x) + '%;top:' + pc(p.y) + '%" ' +
   'title="' + p.week + ': ' + p.avg + ' (' + p.n + ')"></i>').join('');
- const labs = W.axis.map((a, i) =>
-  '<span class="wp-lab wp-lab' + i + '">' + a.v + '</span>').join('');
+ // Each value carries the y fraction of the line it names, so the label and the line are placed from
+ // ONE number. Three hand-placed CSS rules is how they came apart: two of them anchored an edge of the
+ // text to the line instead of its middle, and a number under the top line reads as the one below it.
+ const labs = W.axis.map((a) =>
+  '<span class=wp-lab style="--y:' + a.y + '">' + a.v + '</span>').join('');
  el.innerHTML =
   '<div class=wp-plot>' +
    '<svg viewBox="0 0 100 100" preserveAspectRatio="none">' + grid + lines + '</svg>' + dots +

@@ -179,6 +179,13 @@ gap in `.heat` and `--hgap` in `tv-home.css` has to move with it. Its first colu
 blank: the three axis values are written over the left end of the plot, because a gutter for them
 would inset the data and being uninset is the entire point.
 
+That is the HORIZONTAL axis. Vertically the drawing is inset by `--wpi`, half a label, at each end,
+and that inset is what lets each axis value be centred on the line it names: centred on a line at the
+very edge of the 68px slot, the top number would hang over the card's rule and the bottom one over the
+first cells of the nutrition map. The label and its line are both placed from the server's `a.y`, so
+they cannot drift apart — anchoring an EDGE of the text to the line is what made 179 sit under the 179
+line and read as the label for the point above it.
+
 It also has no height of its own to spend — the column was already exactly full — so the plot's 68px
 came off the heat maps. A cell takes its height from its WIDTH, so squaring them again meant
 narrowing the grid by the same proportion: `.hw-heatstack` is a fixed 359px, and the sum behind that

@@ -325,11 +325,16 @@ body.tv .hw-heatcard .hmonths{display:none}
 /* THE WEEKLY WEIGH-IN PLOT, above both maps — geometry in cards/weightweeks.js. --cols is written
    onto this element by the card; --hgap must stay equal to the gap in `.heat`, since half of it is
    what the plot box is inset by at each end to land on the first and last column centres. */
-body.tv .hw-heatcard .hw-wplot{flex:0 0 68px;min-height:0;position:relative;--hgap:2.5px;
+body.tv .hw-heatcard .hw-wplot{flex:0 0 68px;min-height:0;position:relative;--hgap:2.5px;--wpi:6px;
   --half:calc((100% - (var(--cols) - 1) * var(--hgap)) / (2 * var(--cols)))}
-body.tv .hw-heatcard .wp-plot{position:absolute;top:0;bottom:0;left:var(--half);right:var(--half)}
+/* --wpi insets the DRAWING from the 68px slot by half a label at each end, top and bottom, and that
+   inset is the only reason the axis values can be centred on their own lines: a label centred on a
+   line at the very edge of the slot would hang over the card's rule above and over the first cells of
+   the nutrition map below. The slot's height does not change, so the 359px sum below is unaffected. */
+body.tv .hw-heatcard .wp-plot{position:absolute;top:var(--wpi);bottom:var(--wpi);
+  left:var(--half);right:var(--half)}
 /* overflow visible: the top and bottom axis lines ARE the extreme readings, so they sit on the very
-   edge of the box and half of each stroke is outside it. */
+   edge of the drawing and half of each stroke is outside it. */
 body.tv .hw-heatcard .wp-plot svg{display:block;width:100%;height:100%;overflow:visible}
 body.tv .hw-heatcard .wp-grid{stroke:rgba(255,255,255,.10);stroke-width:1}
 body.tv .hw-heatcard .wp-line{fill:none;stroke:#a78bfa;stroke-width:1.6;stroke-linejoin:round;
@@ -339,12 +344,14 @@ body.tv .hw-heatcard .wp-dot{position:absolute;width:3.5px;height:3.5px;margin:-
 /* The three values, over the plot rather than beside it: a gutter would inset the data and the whole
    point is that it is NOT inset. They sit at the left, which is the oldest week — the one end where
    covering a point costs least — and the shadow is what keeps them readable where they do. */
+/* Each one is CENTRED on the line it names, from the same --y fraction the line itself is drawn at,
+   mapped through the same inset. A number whose box merely touches its line reads as belonging to the
+   space below it — which is how 179 came to sit under the 179 line and be read as the label for a
+   point above it. line-height:1 makes the box exactly font-size tall, so --wpi above is half of it. */
 body.tv .hw-heatcard .wp-lab{position:absolute;left:0;font-size:11px;font-weight:700;color:#8b96a5;
   font-variant-numeric:tabular-nums;line-height:1;pointer-events:none;
+  top:calc(var(--wpi) + var(--y) * (100% - 2 * var(--wpi)));transform:translateY(-50%);
   text-shadow:0 0 4px #000,0 0 4px #000,0 0 2px #000}
-body.tv .hw-heatcard .wp-lab0{top:0}
-body.tv .hw-heatcard .wp-lab1{top:50%;transform:translateY(-50%)}
-body.tv .hw-heatcard .wp-lab2{bottom:0}
 
 /* The height reaches all the way down to `.hcol`. Every box between the stack and the cells used to
    size itself off the cells' own aspect ratio, so a stack too short for them simply overflowed and

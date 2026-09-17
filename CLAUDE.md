@@ -157,7 +157,7 @@ column 7, and the health bar sits in 6. Add a column and those three are what si
 comment in `server.js`) is the health wall — what used to be the default, and still
 the only place nutrition, the muscle map, the volume bars and the workout heatmap are on one screen,
 each with the detail panel its heatmap fills. Too much to glance at from a couch, which is why it
-gave up `/`.
+gave up `/tv`.
 
 `public/tv-session-focus.html` (`/tv-session-focus`) is the sessions wall: always-on, no interaction,
 stripped down around the sessions list so it reads across a room and eventually on a watch.

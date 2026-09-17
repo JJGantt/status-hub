@@ -26,6 +26,7 @@ const TARGETS = {
   obliques: 8,
   erectors: 8,        // "Lower back"
   hip_flexors: 8,
+  forearms: 10,
 };
 // Per-bout hard clip (junk-volume guard): a muscle earns at most CAP adjusted sets within a single
 // training bout. A bout is a run of sets with no gap longer than BOUT_GAP_MS (so a second session

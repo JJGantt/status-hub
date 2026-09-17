@@ -1073,13 +1073,9 @@ app.get('/tv', (req, res) => {
   res.setHeader('Cache-Control', 'no-cache');
   res.type('html').send(TV_HTML);
 });
-app.get('/phone', (req, res) => {
+app.get(['/', '/phone'], (req, res) => {
   res.setHeader('Cache-Control', 'no-cache');
   res.type('html').send(PHONE_HTML);
-});
-app.get('/', (req, res) => {
-  res.setHeader('Cache-Control', 'no-cache');
-  res.type('html').send(TV_HEALTH_HTML);
 });
 app.get('/tv-session-focus', (req, res) => {
   res.setHeader('Cache-Control', 'no-cache');

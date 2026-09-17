@@ -153,11 +153,11 @@ Its grid is SIX columns, declared in `tv-home.css` — which means the spans app
 five are wrong here and are overridden alongside it: the status strip reaches column 6, the footer
 column 7, and the health bar sits in 6. Add a column and those three are what silently misplace.
 
-`public/tv-health.html` (`/tv-health`, and `/` — **which is what the phone loads**, see the route
-comment in `server.js`) is the health wall — what used to be the default, and still
+`public/tv-health.html` (`/tv-health`) is the health wall — what used to be the default, and still
 the only place nutrition, the muscle map, the volume bars and the workout heatmap are on one screen,
 each with the detail panel its heatmap fills. Too much to glance at from a couch, which is why it
-gave up `/tv`.
+gave up `/tv`. It held `/` for a while after that, which is how the phone came to be reading a wall;
+`public/phone-home.html` has that route now.
 
 `public/tv-session-focus.html` (`/tv-session-focus`) is the sessions wall: always-on, no interaction,
 stripped down around the sessions list so it reads across a room and eventually on a watch.
@@ -201,8 +201,10 @@ already say. The guide LINES they named all stay: the line was doing the work, n
 things keep their numbers, because no colour or placement can carry them: the water temperature and
 the weigh-in plot's three values. The markup and the phone are untouched — the month row still paints
 in the expanded sheet, and the phone's surf card keeps its weekday letters and its 6a / 12p / 6p
-hour labels. The phone loads the same `body.tv` page as the kiosk, so `onWall()` tells them apart by
-`phonewall` (set by `wall.js`); test for `tv` alone and the phone silently loses its labels too.
+hour labels. Every phone surface carries `body.tv` for the card styling, so `onWall()` tells them
+apart by `phonewall` — set by `wall.js` on a wall opened at phone size, and written into the markup
+on `phone-home.html`, which is never anything else. Test for `tv` alone and the phone silently loses
+its labels too.
 
 **The heat column's bottom card is surf AND weather**, side by side: the surf plots narrowed to the
 heat-map width (403px) so their day columns line up with the week columns above, and `cards/weather.js`
@@ -226,22 +228,82 @@ card describing one week.
 `tv.js` / `wall.js` / `wallmode.js` / `cards/*`, so a change to those hits ALL of them; split
 whatever needs to differ at the moment it needs to differ. If you are reshaping the default into
 something you cannot verify in one pass, copy it to a new file and swap `/` when it is good — that
-is how the home wall was built.
+is how the home wall was built, and how the phone's home page was.
+
+The phone's home page is a file on the same terms: it is NOT a wall and `wallmode.js` never touches
+it, but it draws the same cards from the same frame, so a change to `core.js` or `cards/*` reaches
+it as well as the four.
 
 Each page loads **one** `<script src="dist/<page>.js">`, built from `public/pages/<page>.js` — which
 lists the modules that page runs, in order. **That entry file is where a module is added or removed**;
 a new `<script>` tag in the HTML will not load. A new *card* needs nothing, since `core.js` already
 imports it and the bundler follows the graph.
 
-**On a phone, `wall.js` moves cards out of the shell into the misc pane** (`misc-litter-slot`,
-`misc-surf-slot`) by moving the nearest enclosing `.card`. A card sharing a `.card` wrapper with its
-neighbours takes them along: surf has a `.card` of its own inside the home wall's heat column purely
-so that adopting it does not carry the whole column into the pane.
+**A WALL opened at phone size moves cards out of the shell into its misc pane** (`wall.js`,
+`misc-litter-slot`, `misc-surf-slot`) by moving the nearest enclosing `.card`. A card sharing a
+`.card` wrapper with its neighbours takes them along: surf has a `.card` of its own inside the home
+wall's heat column purely so that adopting it does not carry the whole column into the pane. The
+phone's own home page does none of this — it has its own markup and puts each card where it wants
+it — so this is about the walls, and about keeping them openable on a phone.
+
+## The phone's home page is not a wall, and the difference is SCALE
+
+`public/phone-home.html` at `/` — what the iOS app loads. It carries everything the home wall
+carries, in portrait, and it is its own file for one reason: **it is not scaled.**
+
+Every other phone view of the hub is a wall. `wall.js` renders the 1920x1080 shell into a fixed
+1080-wide canvas and CSS-transforms it down, so on a 393pt phone the scale is about 0.36 and the
+wall's 17px label lands at 6px of glass. That is the whole readability problem, and it is not
+reflowable: the wall's type is written for a room. `phone-home.css` is laid out at the phone's own
+size instead, so a size in it is the size it is read at, and the cards that measure themselves — the
+surf grids, the rain grid, the heat cells — come out at the sizes their own modules chose for a
+phone. Nearly every rule would have had to be overridden to do that inside `tv-home.css`.
+
+Its body carries four classes and each does a job. `tv` is the card styling the walls share (black
+ground, headings off, the heat maps, the rings, the chips). `phonewall` makes every card take its
+phone branch. `homewall` is the 15-week heat window (`HOME_HEAT_WEEKS`), which is the window the
+weigh-in plot's columns are built on — a surface drawing that plot has to ask for it. `phonehome` is
+this page: it turns the kiosk verdict off whatever the window width, and it is what the CSS hangs on.
+It also beats app.css's `body.tv.wallportrait` block on equal specificity, by loading after it.
+
+**What it does differently from the wall, and why:**
+
+- **No dial.** Today is simply the first row of the look-ahead, which is what lets the look-ahead
+  cover all seven days. The hour-by-hour day is one swipe away in the lists pane (`#daycard`) —
+  that is what you open when you are working through a day, not what a glance wants.
+- **The overdue items are at the head of the week.** On the wall they ride the top of the dial; with
+  no dial here, nothing else on the page would say they exist.
+- **The session panel is the list and nothing else.** No head, no reply: a phone has nowhere to put
+  a model's answer, and the wall spends a column on one because it is read word by word from a chair.
+- **The voice column is the last exchange.** One line of what he asked, one of what came back
+  (`#ph-conv`). The whole thread with its composer is the chat pane, one swipe left.
+- **The two heat maps are SIDE BY SIDE and share a top edge.** A heat map's cells are square, so its
+  height follows its width — one at full phone width is 170px tall before either strip. They are the
+  same fifteen Sunday-aligned weeks, so a week is at the same x in both and the eye reads across
+  them; that is why the right column carries an empty 34px where the weigh-in plot sits on the left.
+- **The wall pane SCROLLS.** There is more here than a phone screen holds at a size worth reading,
+  and shrinking until it fits is the thing this page exists to stop. The order is what makes that
+  work — devices, rings, score and the week are above the fold.
+
+It shares the panes the walls had: [chat] [home] [misc] [maint] [lists] [repos] [reports], landing on
+home, driven by `phone-home.js` rather than `wall.js` — there is no canvas to scale, so only the
+paging is left.
+
+## What is running is one module
+
+`cards/sessions.js`, on both the home wall and the phone's home page. `mountSessions` takes the
+elements a surface has: a list always, and a `head` + `reply` only where there is room for an answer.
+Everything else — the numbering, the ordering, the highlight, the activity line under each row — is
+shared, and it has to be: `n` is the number he says out loud, so two copies of that ordering is two
+surfaces that can disagree about which session is "the second one".
 
 ## The day column is one module
 
 `cards/dayline.js` draws it everywhere — the calendar wall beside its months, the home wall's middle
-column, and the phone's lists pane (`#daycard`, which it mounts itself). Surfaces differ in CSS size
+column, and the phone's lists pane (`#daycard`, which it mounts itself). `mount` also takes a NULL
+column, which is the phone home page: it wants the look-ahead and no hour rows, and it still has to
+be the same mount, because the look-ahead and the day are one answer to one question and a second
+fetch on its own clock is a second chance to be showing a different day. Surfaces differ in CSS size
 and in which endpoint feeds them (`?day=1` alone, `?wall=1` when the same payload also carries the
 months, handed back through `onload`), never in markup. There were two copies of this and they had
 already drifted to different class names for the same chip and two separate clocks.

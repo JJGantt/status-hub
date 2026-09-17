@@ -221,11 +221,12 @@ function tvStackFigures(){
  const svg=host.querySelector('svg.bodysvg'); if(!svg||host.dataset.split)return;
  host.dataset.split='1';
  const inner=svg.innerHTML;
- // The home wall gives this column whatever width its heat maps do not need, which is more than a
- // 36:93 figure can use at that height — and 'meet' then centres the figure and leaves the NEXT
- // half of the artwork showing beside it, since the viewBox window no longer fills the viewport.
- // 'none' fills it instead: the column is wider than the figure is, and the figure takes the width.
- const pa=document.body.classList.contains('homewall')?'none':'xMidYMid meet';
+ // `figfill` on the host says its box is a shape the artwork does not fit — the home wall's column
+ // is whatever width its heat maps do not need, which is more than a 36:93 figure can use at that
+ // height, and 'meet' there centres the figure and leaves the NEXT half of the artwork showing
+ // beside it. 'none' fills the box instead. It is a fact about the BOX, so it is declared on the box
+ // (tv-home.html) rather than inferred from which page this is.
+ const pa=document.getElementById('body').classList.contains('figfill')?'none':'xMidYMid meet';
  const wrap=document.createElement('div'); wrap.className='figstack';
  wrap.innerHTML=
    '<svg viewBox="0 0 36 93" preserveAspectRatio="'+pa+'" class="bodysvg figfront">'+inner+'</svg>'+

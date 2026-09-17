@@ -151,6 +151,11 @@ body.tv.phonehome .ph-odrow .cw-more{font-size:10px}
 body.tv.phonehome .ph-heatcard{flex:1 1 auto;min-width:0}
 body.tv.phonehome .ph-heatpair{display:flex;gap:10px;align-items:flex-start}
 body.tv.phonehome .ph-heatcol{flex:1 1 0;min-width:0;display:flex;flex-direction:column;gap:4px}
+/* THE TWO MAPS SHARE A TOP EDGE, and that is worth an empty 34px. They are the same fifteen weeks on
+   the same Sunday-aligned columns, so a week is at the same x in both and the eye can run across
+   them — food on the left, training on the right, one column per week. Let the weigh-in plot push
+   the food map down and that stops being true, and nothing about the picture says why. */
+body.tv.phonehome .ph-heatcol + .ph-heatcol::before{content:'';flex:0 0 34px}
 body.tv.phonehome .ph-block{display:flex;flex-direction:column;gap:4px;min-width:0;position:relative}
 body.tv.phonehome .hmonths{display:none}   /* 9px month labels over a 15-column strip read as a smear */
 body.tv.phonehome .hcell{border-radius:1px}
@@ -179,11 +184,17 @@ body.tv.phonehome .wp-lab{position:absolute;left:0;font-size:9px;font-weight:700
 /* The day's totals against target, and the rest/session clocks. ONE treatment for both, so the pair
    reads as two of the same thing rather than a panel and a bare row. */
 body.tv.phonehome .hw-strip{flex:0 0 auto;min-height:0}
-body.tv.phonehome .nutday{margin:0;padding:3px 6px;gap:7px;background:#0b0f13;border-radius:7px;
-  flex-wrap:nowrap;white-space:nowrap}
-body.tv.phonehome .nd-seg{font-size:10px}
+/* TWO LINES, two readings each. On one line the four run to about 200px and the column is 175, and
+   `.nutday` scrolls rather than erroring — so what you see is the fat figure simply absent, which
+   reads as three macros rather than as something cut off. A second line costs 12px and is honest. */
+body.tv.phonehome .nutday{display:grid;grid-template-columns:1fr 1fr;margin:0;padding:3px 6px;
+  gap:1px 7px;background:#0b0f13;border-radius:7px;white-space:nowrap;overflow:visible}
+body.tv.phonehome .nd-seg{font-size:9px;overflow:hidden;text-overflow:ellipsis}
 body.tv.phonehome .nd-date{display:none}   /* the day is the one thing a glance already knows */
+/* The same height as the two-line band opposite it, so what is UNDER the two — the last meal and the
+   last exercise — starts on one line as well. */
 body.tv.phonehome #resttimer{margin:0;padding:3px 6px;gap:10px;justify-content:flex-start;
+  align-items:center;min-height:30px;
   background:#0b0f13;border:1px solid #1c232b;border-radius:7px;flex-wrap:nowrap}
 body.tv.phonehome #resttimer .rt-side{flex-direction:row;align-items:baseline;gap:5px;text-align:left;
   min-width:0;white-space:nowrap}
@@ -243,9 +254,11 @@ body.tv.phonehome .hw-recent .rc-m-i .rc-m-lab{color:#c7cdd6}
 body.tv.phonehome .hw-recent .rc-m-i.sec .rc-m-lab{color:#6b7686}
 body.tv.phonehome .hw-recent .rc-m-lab{font-size:calc(var(--rcfs,11px) * .8);font-weight:600}
 body.tv.phonehome .hw-recent .rc-m-n{font-size:var(--rcfs,11px);font-weight:700;font-variant-numeric:tabular-nums}
-/* The expand glyph is drawn inside a scaled canvas on the walls and is huge in the SVG to survive
-   it. Here nothing is scaled, so it is simply too big — a corner mark, not a button. */
-body.tv.phonehome .expand-btn svg{width:18px;height:18px}
+/* The expand glyph is sized for a canvas scaled to about a third, so at native size it is a 64px
+   button sitting over the oldest weeks of the map. It moves to the top RIGHT corner — the newest
+   week's Sunday, the one cell a glance is never reading — and shrinks to a corner mark. */
+body.tv.phonehome .expand-btn{width:22px;height:22px;left:auto;right:0;top:-2px}
+body.tv.phonehome .expand-btn svg{width:13px;height:13px}
 
 /* ---- the body, and what is running -------------------------------------------------------------
    Front and back SIDE BY SIDE rather than stacked: a 72:93 figure stacked twice in a phone column is
@@ -253,7 +266,10 @@ body.tv.phonehome .expand-btn svg{width:18px;height:18px}
    doing. No answer panel: the wall gives the focused session's whole reply a column because it is
    read word by word from a chair, and a phone that wants the answer opens the session. */
 body.tv.phonehome .ph-bodyrow{align-items:stretch}
-body.tv.phonehome .ph-bodycard{flex:0 0 42%;min-width:0}
+/* 34%, and the figure's own proportions are what set the row's height: the pair is two 36:93 halves
+   side by side, so a card an inch wider is two inches taller. The width that frees goes to the
+   session titles beside it, which are the thing being truncated. */
+body.tv.phonehome .ph-bodycard{flex:0 0 34%;min-width:0}
 body.tv.phonehome .ph-bodycard .fit{padding:4px}
 body.tv.phonehome .ph-body{flex:1 1 auto;min-width:0;min-height:0;display:flex}
 body.tv.phonehome .ph-body .figstack{flex:1 1 auto;min-width:0;display:flex;flex-direction:row;gap:4px}
@@ -294,8 +310,13 @@ body.tv.phonehome .hw-row-act.done{color:#8b96a5}
 body.tv.phonehome .ph-surfcard{flex:1 1 auto;min-width:0;padding:6px 8px}
 body.tv.phonehome .ph-surfcard .fit{padding:0;gap:4px}
 body.tv.phonehome .ph-surfcard .surfkey{display:none}
-body.tv.phonehome .ph-surfcard .devstrip{gap:0 14px}
-body.tv.phonehome .ph-surfcard #weather{margin-top:6px}
+body.tv.phonehome .ph-surfcard .devstrip{gap:0 12px;align-items:baseline}
+body.tv.phonehome .ph-surfcard .devname{font-size:11px;margin-right:0}
+/* The rain grid's own height is 220px, chosen beside the surf plots on a wall. Here it sits UNDER
+   them, and the pair has to stay in proportion: the surf grids are 185px of two stacked days-by-hours
+   plots, so a second grid of the same kind gets about half that. */
+body.tv.phonehome .ph-surfcard #weather{margin-top:6px;height:104px}
+body.tv.phonehome .ph-surfcard .wx-peak span{font-size:11px}
 
 /* ---- the tail of the conversation --------------------------------------------------------------
    What he last asked, and what last came back. One line each, and the label is the same word the

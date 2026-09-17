@@ -940,6 +940,13 @@ body.tv.phonewall .dex-caret{font-size:19px}
 body.tv.phonewall .dex{padding:6px 0}
 /* heatmaps (nutrition + workout): drop the day-of-week labels, keep the month row (a touch bigger),
    and realign it now that the 30px day-label gutter is gone so months sit over their week columns */
+/* THE SPLIT BODY FIGURES CLIP. cards/muscle.js puts the WHOLE 72-unit artwork in both halves and
+   windows each one with a viewBox — which only holds while the box matches that 36:93 ratio. Give an
+   svg `width:auto` and Safari resolves it to the CONTAINER's width, not the viewBox's, so `meet`
+   centres the window in a box far wider than it and the other half of the drawing paints outside it:
+   four figures instead of two, on the phone only. One line, and it cannot change a surface that was
+   already correct. */
+.figstack svg{overflow:hidden}
 body.tv .hdows{display:none}
 body.tv .hmonths{margin-left:0;font-size:11px}
 /* VOICE column — compact, fixed width, near-black, its own border. */

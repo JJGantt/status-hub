@@ -317,6 +317,24 @@ replace — everything else gets exactly what it had.
 | `--surf-grid-h` / `--surf-water-h` on `#surf` | `cards/surf.js` | its own 86px a grid plus 68px of water is a third of a phone screen for one card |
 | `--rc-base` / `--rc-min` / `--rc-name-base` on `.hw-recent` | `cards/workouts.js` (`fitRow`) | the set list starts at 16px and the exercise name at 17px, and both only shrink if they overflow — so on a phone they were drawn half again the size of everything around them and stayed there |
 
+## The split body figures carry the WHOLE artwork, and only a viewBox hides half of it
+
+`cards/muscle.js` splits the one 72x93 figure into a front and a back by emitting the same `<g>`
+twice with `viewBox="0 0 36 93"` and `viewBox="36 0 36 93"`. Nothing is removed — each half is the
+entire drawing with a window over it — so the window only holds while the svg's BOX is that 36:93
+ratio, and any box wider than it paints the other figure beside the one it is supposed to show.
+
+Give the svg `width:auto` and Chrome resolves it from the viewBox's ratio while **Safari resolves it
+to the container's width**, so `meet` centres a 36-wide window inside a box twice that and the rest
+of the artwork spills out: FOUR figures on his phone, two in every test here. `.figstack svg` now
+carries `overflow:hidden` in app.css, which cannot change a surface that was already right, and the
+phone's own boxes are pinned with `aspect-ratio:36/93` rather than trusting `auto`.
+
+The knock-on was worse than the drawing: the body card was sized by its content, so the bad figures
+took the whole row and the sessions list beside them ended up with no width at all. A block whose
+width comes from something that can go wrong takes its neighbours with it when it does — the card is
+a declared width now.
+
 ## The day strip: the scale is what makes the lanes mean anything
 
 Each chip goes in the first lane FREE AT ITS OWN X, so a title takes the width it needs and the next

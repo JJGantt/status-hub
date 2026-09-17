@@ -236,10 +236,16 @@ body.tv.phonehome .expand-btn svg{width:12px;height:12px}
    sized by the row and the session rows share it out. That is what the day strip used to do, and it
    could not spend it on anything. */
 body.tv.phonehome .ph-bodyrow{flex:1 1 auto;min-height:96px}
-body.tv.phonehome .ph-bodycard{flex:0 0 auto;min-width:0}
-body.tv.phonehome .ph-body{height:100%;display:flex;align-items:center}
-body.tv.phonehome .ph-body .figstack{height:100%;display:flex;flex-direction:row;gap:3px}
-body.tv.phonehome .ph-body .figstack svg{height:100%;width:auto;display:block}
+/* The card is DECLARED, and each figure is half of it. Sized by its content instead, the card took
+   whatever the figures claimed — and when they claimed wrong it took the whole row and left the
+   sessions list beside it with no width at all. `aspect-ratio` pins the box to the viewBox's own
+   36:93 in every engine, rather than trusting `width:auto` to mean the same thing in each. */
+body.tv.phonehome .ph-bodycard{flex:0 0 94px;min-width:0;overflow:hidden}
+body.tv.phonehome .ph-body{height:100%;display:flex;align-items:center;justify-content:center;overflow:hidden}
+body.tv.phonehome .ph-body .figstack{height:100%;display:flex;flex-direction:row;gap:3px;
+  justify-content:center;overflow:hidden}
+body.tv.phonehome .ph-body .figstack svg{height:100%;width:auto;aspect-ratio:36/93;
+  max-width:calc(50% - 2px);overflow:hidden;display:block}
 body.tv.phonehome .ph-sesscard{flex:1 1 auto;min-width:0;display:flex}
 body.tv.phonehome .ph-sess-list{flex:1 1 auto;min-width:0;display:flex;flex-direction:column;gap:4px}
 body.tv.phonehome .ph-sess-list:empty{display:none}
@@ -278,10 +284,15 @@ body.tv.phonehome .hw-row-act.done{color:#8b96a5}
    The colour key goes — the ramps are learned in a day and it was costing a block of height every
    time the card was drawn after that. */
 body.tv.phonehome .ph-surfrow{flex:0 0 auto}
-body.tv.phonehome .ph-surfcard{flex:1 1 auto;min-width:0;display:flex;align-items:flex-start;gap:8px}
+body.tv.phonehome .ph-surfcard{flex:1 1 auto;min-width:0;display:flex;align-items:stretch;gap:8px}
 body.tv.phonehome .ph-surfcard #surf{flex:1 1 auto;min-width:0;padding:0;height:auto;
   --surf-grid-h:66px;--surf-water-h:44px}
-body.tv.phonehome .ph-surfcard #weather{flex:0 0 112px;min-width:0;height:145px;margin-top:0;gap:2px}
+/* THE RAIN GRID FILLS THE COLUMN. Given a height of its own it stopped short of the surf plots beside
+   it and left a black block the size of a card under it — the same hole that was over the nutrition
+   map, in the corner where it is most visible. It stretches instead, and the top margin is the surf
+   card's head, so the two grids start on the same line: they are one week of one place. */
+body.tv.phonehome .ph-surfcard #weather{flex:0 0 112px;min-width:0;height:auto;gap:2px;
+  margin-top:20px}
 body.tv.phonehome .ph-surfcard .surfkey{display:none}
 body.tv.phonehome .ph-surfcard .devstrip{gap:0 10px;align-items:baseline;flex-wrap:nowrap}
 body.tv.phonehome .ph-surfcard .devname{font-size:10px;margin-right:0}

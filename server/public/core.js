@@ -1,5 +1,5 @@
 // Bootstrapping: SSE → render orchestrator, then the layout init.
-import { TOUCH, state, liveStream } from './shared.js';
+import { TOUCH, KIOSK, state, liveStream } from './shared.js';
 import * as litter from './cards/litter.js';
 import * as feeder from './cards/feeder.js';
 import * as surf from './cards/surf.js';
@@ -98,5 +98,6 @@ if(TOUCH && !document.body.classList.contains('tv')){
  requestAnimationFrame(()=>{const el=document.querySelector('.statusrow'); if(el)el.scrollIntoView();});
 }
 // Shared bottom navbar on BOTH views (full page + phone wall) + the Mac app (body.mac); skip only the
-// big-screen TV kiosk, which is display-only.
-if(!document.body.classList.contains('tv') || window.innerWidth < 1400 || document.body.classList.contains('mac')) mountNavbar();
+// big-screen TV kiosk, which is display-only. KIOSK is that verdict, reached once in shared.js, so a
+// surface that is not a kiosk cannot end up without a navbar because this restated the test.
+if(!KIOSK) mountNavbar();

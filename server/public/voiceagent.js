@@ -46,6 +46,12 @@ const voiceOwners = new Map();         // clip id -> the live recorder that took
 const photoBox = idbBox('hub-photo-outbox');
 const voiceBox = idbBox('hub-voice-outbox');
 let activeMode = 'hub';         // which mode's conversation the panel shows — follows agent_mode, live
+// Other views of the hub thread: a page can show the conversation somewhere besides the card, and the
+// phone home's one-line prompt/reply strip does. They subscribe here rather than opening their own
+// EventSource — this page already holds /api/voice-stream open, and a second one on the same endpoint
+// is the duplication tv.js was split out to stop. Declared up here with the rest of boot()'s state,
+// since boot() runs above the bottom of this file.
+const threadSubs = [];
 
 // Switch the panel to a mode's conversation: reload its thread + update the on-screen indicator. Hub and
 // full-agent keep SEPARATE threads (the worker tags each message); this is what makes the visible context
@@ -122,14 +128,25 @@ function boot() {
     if ((row.mode || 'hub') !== activeMode) return;   // only the ACTIVE mode's messages land in the panel
     if (row.role === 'tool') return;               // (tools now arrive as 'activity', never as messages)
     if (_card) _card.upsert(row);                  // user/assistant → conversation
-  } }, { onOpen: () => { if (_card) _card.backfill(); } });
+    threadSubs.forEach((f) => f(row));             // any other view of the same thread
+  } }, { onOpen: () => { if (_card) _card.backfill(); threadSubs.forEach((f) => f(null)); } });
   // The conversation must reflect the active mode's thread live, from ANY source — hence the onOpen
   // resync above (every reconnect, including the watchdog's rebuild and the first connect) plus this
   // one on returning to the foreground. A mobile browser silently suspends the stream when backgrounded
   // and never replays what it missed; without these the thread shows only what THIS device sent until a
   // manual refresh. backfill() is idempotent — a full rebuild — so resyncing costs nothing.
   if (_card) document.addEventListener('visibilitychange', () => { if (!document.hidden) _card.backfill(); });
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) threadSubs.forEach((f) => f(null)); });
 }
+
+// ---- other views of the hub thread ---------------------------------------
+// A page can show the conversation somewhere besides the card — the phone home's one-line
+// prompt/reply strip does. They subscribe HERE rather than opening their own EventSource: this page
+// already holds /api/voice-stream open, and a second one on the same endpoint is the duplication
+// tv.js was split out to stop (a phone paying for two sockets and two backfills for the life of the
+// page). The callback gets each new row, and `null` meaning RESYNC — a reconnect, or the tab coming
+// back to the foreground, where a suspended stream has already missed whatever arrived.
+export function onThread(fn) { threadSubs.push(fn); fn(null); }
 
 // ONE microphone, held for as long as the hub is on screen.
 //

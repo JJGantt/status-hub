@@ -1,0 +1,171 @@
+<!doctype html><html><head><meta charset=utf-8>
+<meta name=viewport content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>Status Hub</title>
+<link rel="stylesheet" href="app.css">
+<link rel="stylesheet" href="phone-home.css">
+<!-- One bundle per page, built by build.js from public/pages/phone-home.js — that file
+     lists the modules this page runs, and is where you add or remove one. -->
+<script type="module" src="dist/phone-home.js"></script>
+</head><body class="tv phonehome phonewall">
+<!-- THE PHONE'S HOME PAGE, at `/`. Everything the home wall (/tv) carries, in portrait and at the
+     phone's OWN scale — no scaled canvas. The wall is 1920x1080 read from a couch; this is 390pt
+     read at arm's length, and the two want different sizes for the same facts, so this is its own
+     file rather than a reflow of that one.
+
+     `tv` is here for the card styling the walls share (black ground, no card headings, the heat
+     maps, the rings, the strips). `phonewall` is here so every card that asks takes its PHONE
+     branch — surf keeps its weekday letters and hour labels, the muscle detail opens as a sheet.
+     `phonehome` is this page: it turns the kiosk verdict off whatever the window width, and it is
+     what phone-home.css hangs its layout on.
+
+     Same swipe panes as before it — [chat] [home] [misc] [maint] [lists] [repos] [reports], landing
+     on home. What changed is only the middle one. -->
+<div class="wallpanes" id="wallpanes">
+
+<section class="pane pane-chat">
+  <div class="ai-shell">
+    <div class="ai-head"><span class="ai-mode" id="ai-mode" title="Active conversation mode">Hub</span><button class="ai-reset" id="ai-reset" type="button" title="Start a fresh conversation">Reset context</button></div>
+    <div class="ai-log" id="ai-log"></div>
+    <div class="ai-input">
+      <button class="ai-mic" id="ai-mic" type="button" aria-label="Tap to talk"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="2" width="6" height="12" rx="3"></rect><path d="M5 11a7 7 0 0 0 14 0"></path><line x1="12" y1="18" x2="12" y2="22"></line></svg></button>
+      <input class="ai-text" id="ai-text" type="text" placeholder="Message…" autocomplete="off">
+      <button class="ai-send" id="ai-send" type="button">Send</button>
+    </div>
+    <div class="ai-status" id="ai-status"></div>
+  </div>
+</section>
+
+<section class="pane pane-wall">
+<div class="tv-shell">
+  <div class="rows">
+
+    <!-- STATUS — the devices and the agent routing, the same strip the wall opens with. -->
+    <div class="row-card statusrow">
+      <div class="card statuscard"><div class="fit" id="litter"><h2>Litter-Robot</h2><div class=big>…</div></div></div>
+      <div class="card statuscard tv-routecard"><div class="fit" id="tv-routing"></div></div>
+    </div>
+
+    <!-- RINGS — calories and the three macros across, with the produce trio stacked at the end. -->
+    <div class="row-card ringrow">
+      <div class="card ringcard"><div class="fit"><div id="nutrition"><h2>Today · Nutrition</h2><div class=big>…</div></div></div></div>
+    </div>
+
+    <!-- HEALTH BAR — the three scores, lying on their side. -->
+    <div class="healthbar" id="healthbar"></div>
+
+    <!-- THE WEEK — seven days STARTING TODAY, one row each (cards/dayline.js). The wall puts today
+         on a dial beside this because he is standing in front of it and the question is how much of
+         the day is left; on a phone the dial is one swipe away in the lists pane, and here the
+         question a glance asks is only what is on each day. So today is simply the first row.
+         The overdue strip above it is what the dial's top cover carries on the wall: items that went
+         red and are still open, on any day. Nothing else on this page would say they exist. -->
+    <div class="row-card ph-weekrow">
+      <div class="card ph-weekcard"><div class="fit">
+        <div class="ph-overdue" id="ph-overdue"></div>
+        <div class="cw-week" id="cw-week"></div>
+      </div></div>
+    </div>
+
+    <!-- FOOD | TRAINING — the two week heat maps side by side, each under the weigh-in plot or over
+         the clocks that belong to it, and each with the last thing logged under it. Side by side
+         rather than stacked: a heat map's cells are square, so its HEIGHT follows its width, and one
+         at full phone width would be 170px tall before either strip. -->
+    <div class="row-card ph-heatrow">
+      <div class="card ph-heatcard"><div class="fit">
+        <div class="ph-heatpair">
+          <div class="ph-heatcol">
+            <!-- Weekly weigh-in average over the food map's own week columns. The alignment is the
+                 chart: cards/weightweeks.js insets the box by half a column at each end, in calc
+                 from --cols and the grid's gap, so --hgap below must equal the gap in `.heat`. -->
+            <div class="hw-wplot" id="weightweeks"></div>
+            <div class="ph-block" id="nutritionlog">
+              <div id="nutheat" class="nutheat"></div>
+              <div class="hw-strip" id="nutinfo" data-band></div>
+            </div>
+            <div class="hw-recent" id="nutrecent"></div>
+          </div>
+          <div class="ph-heatcol">
+            <div class="ph-block" id="workouts">
+              <div id="heatwrap"></div>
+              <div class="hw-strip" id="resttimer"></div>
+            </div>
+            <div class="hw-recent" id="heatinfo" data-recent></div>
+          </div>
+        </div>
+      </div></div>
+    </div>
+
+    <!-- THE BODY, and WHAT IS RUNNING. One figure in the markup; cards/muscle.js splits it into the
+         front/back pair and paints each region from volume.muscle_colors. Tapping a region opens
+         #bodyinfo, which muscle.js moves out to the document so the sheet is not trapped in here.
+         The sessions list beside it is TITLES ONLY — each row is the session's name and the one line
+         of what it is doing right now, a tool call or the last thing it said. The wall gives the
+         focused session's whole answer a column; a phone has nowhere to put an answer, and the list
+         is the part a glance is for. -->
+    <div class="row-card ph-bodyrow">
+      <div class="card ph-bodycard"><div class="fit">
+        <div class="ph-body" id="body"><!--BODY_SVG--></div>
+        <div id="bodyinfo"></div>
+      </div></div>
+      <div class="card ph-sesscard"><div class="fit">
+        <div class="ph-sess-list" id="ph-sess-list"></div>
+      </div></div>
+    </div>
+
+    <!-- SURF and RAIN — one week of one place, read together, so they share a card the way they do
+         on the wall. On the phone they stack: the surf grids are already at the size cards/surf.js
+         draws them for a phone, and halving the width would put a day under 9px. -->
+    <div class="row-card ph-surfrow">
+      <div class="card ph-surfcard">
+        <div class="fit" id="surf"><h2>Surf</h2><div class=big>…</div></div>
+        <div id="weather"></div>
+      </div>
+    </div>
+
+    <!-- THE CONVERSATION, last exchange only — what he asked and what came back. The full thread is
+         one swipe left, with the composer; this is the tail of it, so the page says what the hub is
+         in the middle of without having to leave it. -->
+    <div class="row-card ph-convrow">
+      <div class="card ph-convcard"><div class="fit">
+        <div class="ph-conv" id="ph-conv"></div>
+      </div></div>
+    </div>
+
+  </div>
+</div>
+</section>
+
+<section class="pane pane-misc">
+  <!-- The devices that are not on the home column: the feeder, and whether the mics are alive. -->
+  <div class="card statuscard"><div class="fit" id="feeder"><h2>Cat Feeder</h2><div class=big>…</div></div></div>
+  <div class="card statuscard"><div class="fit" id="mics"><h2>Voice System</h2><div class=big>…</div></div></div>
+</section>
+
+<section class="pane pane-maint">
+  <!-- maintenance-window visualization: the data the adaptive calorie target is based on
+       (cards/maintviz.js renders it from the stream's maintenance.viz). -->
+  <div class="card maintcard"><div id="maintviz"></div></div>
+</section>
+
+<section class="pane pane-todo">
+  <!-- Today as a TIMELINE — the dial's grammar, at phone scale (cards/dayline.js mounts #daycard
+       itself). It is here rather than on the home column because an hour-by-hour day is what you
+       open when you are working through one, not what a glance wants. Then the lists themselves. -->
+  <div class="card daycardwrap"><div id="daycard"></div></div>
+  <div class="card todocard"><div id="todopane"></div></div>
+</section>
+
+<section class="pane pane-repos">
+  <!-- the Mac's repos (published by the orchestrator). Tap one to open a remote-controlled Claude
+       session there and pick it up in the Claude app. cards/repos.js. -->
+  <div class="card reposcard"><div id="repospane"></div></div>
+</section>
+
+<section class="pane pane-reports">
+  <!-- the write-ups those sessions hand back when they finish. Sits next to the launcher because it
+       is the same loop seen from the other end: repos sends work out, this is what returns. -->
+  <div class="card reportscard"><div id="reportspane"></div></div>
+</section>
+
+</div>
+</body></html>

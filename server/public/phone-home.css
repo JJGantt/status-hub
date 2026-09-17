@@ -1,0 +1,314 @@
+/* THE PHONE HOME PAGE — everything this page needs that app.css does not already give it.
+   Loaded ONLY by phone-home.html, so the walls are untouched.
+
+   THE ONE THING TO KNOW: this page is NOT scaled. Every other phone view of the hub is the 1920x1080
+   wall rendered into a fixed canvas and CSS-transformed down (wall.js), which is why their type is
+   written at wall sizes — 17px there lands at about 6px on the glass. Here a pixel is a pixel, so
+   every size below is the size it is read at, and the cards that measure themselves (the surf grids,
+   the rain grid, the heat cells) come out at the sizes their own modules chose for a phone.
+
+   That is also why this is a file rather than a portrait mode on tv-home.css: the wall and the phone
+   want different SIZES for the same facts, and nearly every rule would have had to be overridden.
+
+   body.tv is here for what the two genuinely share — the black ground, headings off, the heat maps,
+   the rings, the chips. Everything below narrows that to this page with .phonehome, which also beats
+   app.css's `body.tv.wallportrait` block on equal specificity by loading after it. */
+
+/* ---- the page, and the panes ------------------------------------------------------------------
+   The wall pane SCROLLS. There is more here than a phone screen holds at a size worth reading, and
+   the alternative — shrinking until it fits — is the thing this page exists to stop. The order is
+   what makes that work: the glance (devices, rings, score, the week) is above the fold, and what is
+   below it is what you scroll to when you want it. */
+body.tv.phonehome{height:100vh;height:100dvh;overflow:hidden}
+body.tv.phonehome .pane-wall{overflow-y:auto;overflow-x:hidden;-webkit-overflow-scrolling:touch}
+body.tv.phonehome .tv-shell{position:static;transform:none;width:auto;height:auto}
+/* A flex column, not the wall's grid. The bottom padding clears the fixed navbar. */
+body.tv.phonehome .rows{display:flex;flex-direction:column;gap:8px;
+  height:auto;min-height:0;overflow:visible;padding:8px 10px 74px}
+body.tv.phonehome .row-card{display:flex;gap:8px;flex:0 0 auto}
+body.tv.phonehome .card{border:1px solid #1a2028;border-radius:10px;background:#000!important}
+body.tv.phonehome .rows .fit{height:auto;padding:6px 8px;gap:5px;overflow:hidden}
+
+/* ---- status: devices, then routing -------------------------------------------------------------
+   Two strips stacked rather than side by side. Each is a row of chips that would rather have the
+   whole width than half of it, and neither is tall — stacking costs 18px and buys both of them
+   every chip they carry instead of a scrollbar each. */
+body.tv.phonehome .statusrow{flex-direction:column;gap:5px;min-height:0}
+body.tv.phonehome .statusrow .card{border:none;border-radius:0}
+body.tv.phonehome .statusrow .fit{padding:0;justify-content:center}
+body.tv.phonehome .devstrip{flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none;gap:0 10px}
+body.tv.phonehome .devstrip::-webkit-scrollbar{display:none}
+body.tv.phonehome .devchips{display:flex;align-items:center;gap:8px;min-width:0}
+body.tv.phonehome .devicon{height:15px;flex:0 0 auto}
+body.tv.phonehome .devchip{gap:4px;padding:0}
+body.tv.phonehome .devchip .dc-l{font-size:9px}
+body.tv.phonehome .devchip .dc-v{font-size:12px}
+body.tv.phonehome .devchip .dc-v .dot{width:7px;height:7px;margin-right:4px}
+body.tv.phonehome #tv-routing .rt-row{gap:5px}
+body.tv.phonehome #tv-routing .rt-flag{font-size:10px}
+body.tv.phonehome #tv-routing .rt-chip{padding:1px 4px;gap:3px}
+body.tv.phonehome #tv-routing .rt-chip .rt-k{font-size:9px}
+body.tv.phonehome #tv-routing .rt-chip .rt-v{font-size:11px}
+
+/* ---- rings: calories and the three macros across, produce stacked at the end -------------------
+   The wall stacks these down a column because it has a column to spend; across is the only way that
+   fits a portrait phone, and it is also the reading order of the numbers themselves. */
+body.tv.phonehome .ringrow{flex:0 0 auto}
+body.tv.phonehome .ringrow .ringcard{flex:1 1 auto;min-width:0}
+body.tv.phonehome .ringrow .fit{padding:4px 6px}
+body.tv.phonehome .ringrow #nutrition{display:flex;flex-direction:column}
+body.tv.phonehome .ringrow .rings{display:flex;flex-direction:row;align-items:center;
+  justify-content:space-between;gap:5px;margin:0}
+body.tv.phonehome .ringrow .ring{flex:1 1 0;min-width:0;display:flex;flex-direction:column;justify-content:center}
+body.tv.phonehome .ringrow .ring svg{max-width:none;max-height:none;width:100%;height:auto}
+body.tv.phonehome .ringrow .ring .rtot{display:none}
+body.tv.phonehome .ringrow .pnote{display:none}
+/* The produce trio stacks vertically beside Fat, each square about a third of a macro ring. Width
+   drives the size, not height: letting flex hand them a share of the row's height and deriving width
+   from aspect-ratio reserved a whole ring of dead air for 20px of drawing. */
+body.tv.phonehome .ringrow .ringmini{flex:0 0 auto;width:11%;max-width:none;margin:0;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px}
+body.tv.phonehome .ringrow .mring{flex:0 0 auto;width:100%;aspect-ratio:1;display:block}
+body.tv.phonehome .ringrow .mring svg{max-width:none;width:100%;height:100%;margin:0}
+/* At this size the glyph would render a few pixels and read as a smudge, so it scales up inside the
+   ring and the stroke thins to make room. Colour is the identifier here; the icon confirms it. */
+body.tv.phonehome .ringrow .mring .micon{transform:scale(1.5);transform-origin:40px 40px}
+body.tv.phonehome .ringrow .mring circle{stroke-width:6}
+
+/* ---- health bar: the three scores lying on their side ------------------------------------------ */
+body.tv.phonehome .healthbar{flex:0 0 14px;flex-direction:row;align-items:stretch;padding:0;min-height:0}
+body.tv.phonehome .hb-track{flex:1 1 auto;width:auto;height:auto;flex-direction:column;gap:2px}
+body.tv.phonehome .hb-track::before{left:50%;right:auto;top:0;bottom:0;width:2px;height:auto}
+body.tv.phonehome .hb-fill{top:0;bottom:0;right:auto;height:auto}
+body.tv.phonehome .hb-task{width:calc(var(--kfill,0)*1%)}
+body.tv.phonehome .hb-nutr{width:calc(var(--nfill,0)*1%)}
+body.tv.phonehome .hb-train{width:calc(var(--tfill,0)*1%)}
+body.tv.phonehome .hb-track::after{background:repeating-linear-gradient(to right,#000 0,#000 2px,transparent 2px,transparent 10%)}
+body.tv.phonehome .hb-delta{display:none}
+
+/* ---- the week ----------------------------------------------------------------------------------
+   Seven days as seven ROWS, the day's name in a fixed gutter and its items filling the rest. The
+   wall gives each day a tall box and lets the server's row/column grid fill it; a phone's box is
+   wide and short, so the chips simply wrap across it and the grid those numbers describe does not
+   apply. The gutter is fixed so the chips of every day start at the same x — that column edge is
+   what makes seven rows read as one week rather than seven lists.
+
+   ROW ONE IS TODAY. The server's look-ahead starts at today (see /api/calendar), which is what lets
+   this page have no dial at all: today is simply the first day of the seven. */
+body.tv.phonehome .ph-weekcard{flex:1 1 auto;min-width:0}
+body.tv.phonehome .ph-weekcard .fit{gap:6px}
+body.tv.phonehome .cw-week{display:flex;flex-direction:column;gap:4px}
+body.tv.phonehome .cw-wday{display:flex;align-items:center;gap:7px;min-height:26px;
+  border:1px solid #1c232b;border-radius:7px;padding:3px 6px}
+body.tv.phonehome .cw-week > .cw-wday:first-child{border-color:#3a4552;background:#080c10}
+body.tv.phonehome .cw-wh{flex:0 0 62px;display:flex;align-items:baseline;gap:5px;min-width:0}
+body.tv.phonehome .cw-wdow{flex:0 0 auto;font-size:11px;font-weight:800;letter-spacing:.05em;
+  text-transform:uppercase;color:#8b96a5}
+body.tv.phonehome .cw-week > .cw-wday:first-child .cw-wdow{color:#fff}
+body.tv.phonehome .cw-wnum{flex:0 0 auto;font-size:14px;font-weight:700;color:#cfd8e3;line-height:1;
+  font-variant-numeric:tabular-nums}
+body.tv.phonehome .cw-wmo{flex:0 0 auto;font-size:9px;font-weight:700;color:#5c6675}
+body.tv.phonehome .cw-wh .cw-more{margin-left:auto;font-size:10px;padding:0}
+/* The server's --rows/--cols describe a tall box and mean nothing in a wide one, so the items wrap
+   instead. A chip takes the width its title needs up to half the line: two short items read as two,
+   and one long one is not stretched across the row pretending to be the whole day. */
+body.tv.phonehome .cw-witems{flex:1 1 auto;min-width:0;display:flex;flex-wrap:wrap;
+  align-items:center;gap:3px 4px;grid-template-columns:none;grid-template-rows:none;container-type:normal}
+body.tv.phonehome .cw-witems .cw-dchip{flex:0 1 auto;max-width:calc(50% - 2px);min-width:0;
+  font-size:12px;line-height:1.2;padding:1px 5px 1px 6px;border-left-width:3px}
+body.tv.phonehome .cw-witems:has(.cw-dchip:only-child) .cw-dchip{max-width:100%}
+/* The time is metadata about the item, not part of its name — a day box has no hour row under it to
+   say when, so the chip carries it, dimmed and tabular so a column of them lines up. */
+body.tv.phonehome .cw-witems .cw-t{flex:0 0 auto;margin-right:5px;font-size:.8em;font-weight:700;
+  color:#8b96a5;font-variant-numeric:tabular-nums}
+body.tv.phonehome .cw-witems .cw-sc{margin-left:5px;font-size:10px}
+body.tv.phonehome .cw-witems .cw-sc.k-potential{padding:0 3px;font-size:9px}
+
+/* ---- overdue: what went red and is still open --------------------------------------------------
+   On the wall these stack on top of the dial, above the date, because below it they would claim to
+   be today's. Here there is no dial, so they take the head of the week for the same reason — and
+   they are ruled off from it, because they belong to no day on the list. */
+body.tv.phonehome .ph-overdue{display:flex;flex-direction:column;gap:3px}
+body.tv.phonehome .ph-overdue:empty{display:none}
+body.tv.phonehome .ph-overdue:not(:empty){padding-bottom:6px;border-bottom:1px solid #313d4a}
+body.tv.phonehome .ph-odrow{display:flex;align-items:center;gap:7px;min-width:0}
+/* The same 62px gutter the days use, carrying how late the item is instead of which day it is —
+   so the chips of an overdue item and of a day start on the same column edge. */
+body.tv.phonehome .ph-odwhen{flex:0 0 62px;font-size:11px;font-weight:700;color:#ff6b6b;
+  font-variant-numeric:tabular-nums;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+body.tv.phonehome .ph-odrow .cw-dchip{flex:1 1 auto;min-width:0;font-size:12px;line-height:1.2;
+  padding:1px 5px 1px 6px;border-left-width:3px}
+body.tv.phonehome .ph-odrow .cw-t{flex:0 0 auto;margin-right:5px;font-size:.8em;font-weight:700;
+  color:#e8b4b4;font-variant-numeric:tabular-nums}
+body.tv.phonehome .ph-odrow .cw-more{font-size:10px}
+
+/* ---- food and training: the two heat maps, side by side ---------------------------------------
+   SIDE BY SIDE because a heat map's cells are square, so its height follows its width: one at the
+   full width of the phone is 170px tall before either strip under it. Half the width halves the
+   height, and 15 weeks still land at about 10px a cell, which is a legible mark at arm's length.
+   Each column carries what belongs to it — the weigh-in plot over the food map, the rest and session
+   clocks under the training one — and, under both, the last thing logged. */
+body.tv.phonehome .ph-heatcard{flex:1 1 auto;min-width:0}
+body.tv.phonehome .ph-heatpair{display:flex;gap:10px;align-items:flex-start}
+body.tv.phonehome .ph-heatcol{flex:1 1 0;min-width:0;display:flex;flex-direction:column;gap:4px}
+body.tv.phonehome .ph-block{display:flex;flex-direction:column;gap:4px;min-width:0;position:relative}
+body.tv.phonehome .hmonths{display:none}   /* 9px month labels over a 15-column strip read as a smear */
+body.tv.phonehome .hcell{border-radius:1px}
+body.tv.phonehome .nutheat,body.tv.phonehome #heatwrap{display:flex;flex-direction:column;min-width:0}
+/* WEEKLY WEIGH-IN, on the food map's own week columns. The alignment IS the chart: the box is inset
+   by half a column at each end so x runs from the first column's centre to the last's, all of it in
+   calc from --cols and the grid's gap — so --hgap must stay equal to the gap in `.heat` (app.css).
+   The drawing is inset vertically by --wpi, half a label, so each axis value can be CENTRED on the
+   line it names instead of hanging off the top or sitting under the first row of cells. */
+body.tv.phonehome .hw-wplot{flex:0 0 34px;min-height:0;position:relative;--hgap:2.5px;--wpi:5px;
+  --half:calc((100% - (var(--cols) - 1) * var(--hgap)) / (2 * var(--cols)))}
+body.tv.phonehome .hw-wplot:empty{display:none}
+body.tv.phonehome .wp-plot{position:absolute;top:var(--wpi);bottom:var(--wpi);left:var(--half);right:var(--half)}
+body.tv.phonehome .wp-plot svg{display:block;width:100%;height:100%;overflow:visible}
+body.tv.phonehome .wp-grid{stroke:rgba(255,255,255,.10);stroke-width:1}
+body.tv.phonehome .wp-line{fill:none;stroke:#a78bfa;stroke-width:1.4;stroke-linejoin:round;stroke-linecap:round}
+body.tv.phonehome .wp-dot{position:absolute;width:3px;height:3px;margin:-1.5px 0 0 -1.5px;
+  border-radius:50%;background:#a78bfa}
+/* The three values are written OVER the left end of the plot — the oldest week, where covering a
+   point costs least — because a gutter for them would inset the data, and being uninset is the whole
+   point. line-height:1 makes the box exactly font-size tall, which is what --wpi above is half of. */
+body.tv.phonehome .wp-lab{position:absolute;left:0;font-size:9px;font-weight:700;color:#8b96a5;
+  font-variant-numeric:tabular-nums;line-height:1;pointer-events:none;
+  top:calc(var(--wpi) + var(--y) * (100% - 2 * var(--wpi)));transform:translateY(-50%);
+  text-shadow:0 0 4px #000,0 0 4px #000,0 0 2px #000}
+/* The day's totals against target, and the rest/session clocks. ONE treatment for both, so the pair
+   reads as two of the same thing rather than a panel and a bare row. */
+body.tv.phonehome .hw-strip{flex:0 0 auto;min-height:0}
+body.tv.phonehome .nutday{margin:0;padding:3px 6px;gap:7px;background:#0b0f13;border-radius:7px;
+  flex-wrap:nowrap;white-space:nowrap}
+body.tv.phonehome .nd-seg{font-size:10px}
+body.tv.phonehome .nd-date{display:none}   /* the day is the one thing a glance already knows */
+body.tv.phonehome #resttimer{margin:0;padding:3px 6px;gap:10px;justify-content:flex-start;
+  background:#0b0f13;border:1px solid #1c232b;border-radius:7px;flex-wrap:nowrap}
+body.tv.phonehome #resttimer .rt-side{flex-direction:row;align-items:baseline;gap:5px;text-align:left;
+  min-width:0;white-space:nowrap}
+body.tv.phonehome #resttimer .rt-right{margin-left:auto}
+body.tv.phonehome #resttimer .rt-label{font-size:9px;letter-spacing:0;text-transform:none;
+  font-weight:800;color:#8b96a5;white-space:nowrap}
+body.tv.phonehome #resttimer .rt-time{font-size:14px;white-space:nowrap}
+body.tv.phonehome #resttimer .rt-count{font-size:14px;white-space:nowrap}
+body.tv.phonehome #resttimer .rt-watcher{display:none}
+/* THE LAST THING LOGGED, one per column: the meal, and the exercise whose set was logged last. The
+   name is the heavy thing and the time is metadata about it, so they share a baseline with the time
+   pushed right; the values line up on the row under them, separated by space rather than by pills. */
+body.tv.phonehome .hw-recent{flex:0 0 auto;min-height:32px;padding:0 1px;min-width:0;overflow:hidden}
+body.tv.phonehome .hw-recent .rc-top{display:flex;align-items:baseline;gap:7px;min-width:0}
+body.tv.phonehome .hw-recent .rc-name{font-size:11px;line-height:1.15;font-weight:700;color:#e6eaf0;
+  min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+body.tv.phonehome .hw-recent .rc-when{margin-left:auto;flex:0 0 auto;font-size:9px;color:#5c6675;
+  font-variant-numeric:tabular-nums}
+body.tv.phonehome .hw-recent .rc-staged{font-size:8px;font-weight:700;letter-spacing:.06em;color:#d6c042;
+  background:rgba(214,192,66,.13);border:1px solid rgba(214,192,66,.4);border-radius:4px;
+  padding:0 4px;align-self:center}
+/* A wide gap between readings and a narrow one inside a pair: the space before a unit is what keeps
+   `40 12` from reading as one number, and between readings it is ten times that. */
+body.tv.phonehome .hw-recent .rc-vals{display:flex;gap:14px;margin-top:2px;white-space:nowrap;overflow:hidden}
+body.tv.phonehome .hw-recent .rc-set{flex:0 0 auto}
+body.tv.phonehome .hw-recent .rc-v{font-size:11px;font-weight:700;color:#c7cdd6;font-variant-numeric:tabular-nums}
+body.tv.phonehome .hw-recent .rc-u{font-size:11px;font-weight:400;color:#5c6675;margin-left:2px}
+body.tv.phonehome .hw-recent .rc-m{font-size:11px;font-weight:700;color:#8b96a5;margin-left:3px}
+body.tv.phonehome .hw-recent .rc-x{font-size:11px;font-weight:400;color:#5c6675;margin:0 2px}
+body.tv.phonehome .hw-recent .rc-w{font-size:9px}
+/* Sets are RULED apart rather than spaced apart — a hairline separates at a third of the distance a
+   gap needs, and unlike a gap it does not grow when the numbers do. That is what lets a long run of
+   them fit a half-width column. cards/workouts.js steps --rcfs down until the whole list fits, and
+   everything on the row is proportional to it, so only the type shrinks. */
+body.tv.phonehome .hw-recent .rc-sets{gap:0}
+body.tv.phonehome .hw-recent .rc-sets .rc-set{padding:0 calc(var(--rcfs,11px) * .55)}
+body.tv.phonehome .hw-recent .rc-sets .rc-set:first-child{padding-left:0}
+body.tv.phonehome .hw-recent .rc-sets .rc-set:last-child{padding-right:0}
+body.tv.phonehome .hw-recent .rc-sets .rc-set+.rc-set{border-left:1px solid rgba(255,255,255,.18)}
+body.tv.phonehome .hw-recent .rc-sets .rc-v{font-size:var(--rcfs,11px)}
+body.tv.phonehome .hw-recent .rc-sets .rc-x{font-size:var(--rcfs,11px);margin:0 calc(var(--rcfs,11px) * .19)}
+body.tv.phonehome .hw-recent .rc-sets .rc-w{font-size:calc(var(--rcfs,11px) * .8125)}
+/* The set COUNT, behind a heavier rule: the same mark said louder, which is what makes it read as
+   the row's total rather than as another set. It does not shrink with them. */
+body.tv.phonehome .hw-recent .rc-sets .rc-count{flex:0 0 auto;margin-left:auto;padding-left:7px;
+  border-left:2px solid rgba(255,255,255,.5);font-size:11px;font-weight:700;color:#e6eaf0;
+  font-variant-numeric:tabular-nums}
+/* Each muscle's weekly sets in that muscle's own volume colour — bare, because 15 in green already
+   says both the number and that it is on target. The NAME carries the other reading: bright for a
+   primary mover, dim for a synergist. */
+body.tv.phonehome .hw-recent .rc-mus{flex:0 1 auto;margin-left:auto;display:flex;align-items:baseline;
+  gap:calc(var(--rcfs,11px) * .6);min-width:0;overflow:hidden;white-space:nowrap}
+body.tv.phonehome #heatinfo .rc-name{flex:0 0 auto}
+body.tv.phonehome .hw-recent .rc-m-i{flex:0 0 auto;display:inline-flex;align-items:baseline;
+  gap:calc(var(--rcfs,11px) * .27)}
+body.tv.phonehome .hw-recent .rc-m-i .rc-m-lab{color:#c7cdd6}
+body.tv.phonehome .hw-recent .rc-m-i.sec .rc-m-lab{color:#6b7686}
+body.tv.phonehome .hw-recent .rc-m-lab{font-size:calc(var(--rcfs,11px) * .8);font-weight:600}
+body.tv.phonehome .hw-recent .rc-m-n{font-size:var(--rcfs,11px);font-weight:700;font-variant-numeric:tabular-nums}
+/* The expand glyph is drawn inside a scaled canvas on the walls and is huge in the SVG to survive
+   it. Here nothing is scaled, so it is simply too big — a corner mark, not a button. */
+body.tv.phonehome .expand-btn svg{width:18px;height:18px}
+
+/* ---- the body, and what is running -------------------------------------------------------------
+   Front and back SIDE BY SIDE rather than stacked: a 72:93 figure stacked twice in a phone column is
+   taller than the screen. Beside them, the sessions list — titles and the one line of what each is
+   doing. No answer panel: the wall gives the focused session's whole reply a column because it is
+   read word by word from a chair, and a phone that wants the answer opens the session. */
+body.tv.phonehome .ph-bodyrow{align-items:stretch}
+body.tv.phonehome .ph-bodycard{flex:0 0 42%;min-width:0}
+body.tv.phonehome .ph-bodycard .fit{padding:4px}
+body.tv.phonehome .ph-body{flex:1 1 auto;min-width:0;min-height:0;display:flex}
+body.tv.phonehome .ph-body .figstack{flex:1 1 auto;min-width:0;display:flex;flex-direction:row;gap:4px}
+body.tv.phonehome .ph-body .figstack svg{flex:1 1 0;width:50%;height:auto;min-width:0;display:block}
+body.tv.phonehome .ph-sesscard{flex:1 1 auto;min-width:0}
+body.tv.phonehome .ph-sess-list{display:flex;flex-direction:column;gap:4px;min-width:0}
+body.tv.phonehome .ph-sess-list:empty{display:none}
+body.tv.phonehome .hw-row{display:flex;flex-direction:column;gap:1px;min-width:0;padding:3px 6px;
+  border:1px solid #1c232b;border-radius:6px}
+body.tv.phonehome .hw-row-top{display:flex;align-items:center;gap:6px;min-width:0}
+body.tv.phonehome .hw-row.on{border-color:#fff;background:#0e1318}
+body.tv.phonehome .hw-row.parked{opacity:.5}
+body.tv.phonehome .hw-sess-dot{width:7px;height:7px;border-radius:50%;background:#39d353;flex:0 0 auto;
+  box-shadow:0 0 6px rgba(57,211,83,.7)}
+body.tv.phonehome .hw-sess-dot.idle{background:#5c6675;box-shadow:none}
+body.tv.phonehome .hw-row-n{font-size:11px;font-weight:700;color:#8b96a5;flex:0 0 auto;
+  font-variant-numeric:tabular-nums}
+body.tv.phonehome .hw-row-name{font-size:11px;font-weight:600;color:#c7cdd6;min-width:0;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+body.tv.phonehome .hw-row.on .hw-row-name{color:#fff}
+body.tv.phonehome .hw-row-where{font-size:8px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;
+  color:#5c6675;margin-left:auto;flex:0 0 auto}
+/* The line is always there, however empty: a row that grows when a tool fires and shrinks when one
+   stops makes the whole list jump every few seconds. Teal for a tool call — the palette already
+   spends green on alive, amber on due, red on overdue and blue on the clock, so a machine working
+   needs a colour that is none of those and still reads as motion. */
+body.tv.phonehome .hw-row-act{display:block;min-height:13px;font-size:10px;line-height:13px;min-width:0;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+body.tv.phonehome .hw-row-act.tool{color:#4fd1c5}
+body.tv.phonehome .hw-row-act.text{color:#d5dde6}
+body.tv.phonehome .hw-row-act.done{color:#8b96a5}
+
+/* ---- surf and rain ------------------------------------------------------------------------------
+   One week of one place, so they share a card and stack. The grids are already at the size
+   cards/surf.js draws for a phone — it keeps its weekday letters and its hour labels here, because
+   body.phonewall is what tells it this is not a wall. The colour key goes: the ramps are learned in
+   a day and it was costing a block of height every time the card was drawn after that. */
+body.tv.phonehome .ph-surfcard{flex:1 1 auto;min-width:0;padding:6px 8px}
+body.tv.phonehome .ph-surfcard .fit{padding:0;gap:4px}
+body.tv.phonehome .ph-surfcard .surfkey{display:none}
+body.tv.phonehome .ph-surfcard .devstrip{gap:0 14px}
+body.tv.phonehome .ph-surfcard #weather{margin-top:6px}
+
+/* ---- the tail of the conversation --------------------------------------------------------------
+   What he last asked, and what last came back. One line each, and the label is the same word the
+   composer's own indicator uses. The full thread with its composer is one swipe left. */
+body.tv.phonehome .ph-convcard{flex:1 1 auto;min-width:0}
+body.tv.phonehome .ph-conv{display:flex;flex-direction:column;gap:4px;min-width:0}
+body.tv.phonehome .ph-conv:empty{display:none}
+body.tv.phonehome .ph-convrow{display:flex;align-items:baseline;gap:7px;min-width:0}
+body.tv.phonehome .ph-convk{flex:0 0 26px;font-size:9px;font-weight:800;letter-spacing:.05em;
+  text-transform:uppercase;color:#5c6675}
+body.tv.phonehome .ph-convrow.said .ph-convk{color:#4fd1c5}
+/* Two lines, then it ellipsises. One was too little to tell two answers apart and three started
+   being the thread rather than its tail. */
+body.tv.phonehome .ph-convt{flex:1 1 auto;min-width:0;font-size:11px;line-height:1.35;color:#8b96a5;
+  display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+body.tv.phonehome .ph-convrow.said .ph-convt{color:#d5dde6}

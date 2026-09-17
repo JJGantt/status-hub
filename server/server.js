@@ -201,6 +201,14 @@ const DASHBOARD_HTML = fs.readFileSync(path.join(__dirname, 'public', 'index.htm
 // pair itself, so the wall only has to give it a column to be thin in.
 const TV_HTML = fs.readFileSync(path.join(__dirname, 'public', 'tv-home.html'), 'utf8')
   .replace('<!--BODY_SVG-->', BODY_SVG);
+// THE PHONE'S HOME PAGE, at `/`. Everything the home wall carries, in portrait and at the phone's
+// own scale — no scaled canvas, so a size in phone-home.css is the size it is read at. It is a file
+// rather than a portrait mode on the home wall because the two want different sizes for the same
+// facts; what they share is the CARDS, which is most of it.
+// Injects the body-map SVG like the walls do: cards/muscle.js splits the one 72x93 figure into the
+// front/back pair itself, and this page runs them side by side.
+const PHONE_HTML = fs.readFileSync(path.join(__dirname, 'public', 'phone-home.html'), 'utf8')
+  .replace('<!--BODY_SVG-->', BODY_SVG);
 // THE HEALTH WALL, at /tv-health. What used to be the default: nutrition, the muscle map and volume
 // bars, the workout heatmap, each with the detail panel its heatmap fills. Too much to glance at,
 // which is why the home wall took `/` from it, and still the only place all of it is on one screen.
@@ -1050,19 +1058,24 @@ app.use((req, res, next) => {
   res.redirect('/login');
 });
 
-// `/` AND `/tv` ARE NOT THE SAME PAGE, and this is the one thing to know before changing a wall.
+// `/` AND `/tv` ARE NOT THE SAME PAGE, and this is the one thing to know before changing either.
 //
 // `/tv` is the TV — the Pi's kiosk loads it, and it serves whichever wall is being built. `/` is the
-// PHONE: the iOS app loads it, wall.js scales the shell into a swipe pane and wraps its own pages
-// around it. They shared one route until the home wall took over the TV, and the phone came along
-// with it uninvited — a wall reflowed for a phone in portrait is a different piece of work from the
-// wall itself, and pointing one route at a new file does not do it.
+// PHONE, which the iOS app loads. They are different FILES and they are laid out at different
+// scales: a wall is 1920x1080 read from a couch, and every other phone view of one is that canvas
+// CSS-transformed down, which is why their type is written at wall sizes. phone-home.html is not
+// scaled at all — it is laid out at the phone's own size, in portrait — so the two share their cards
+// and nothing else.
 //
-// So a new wall goes on `/tv` and `/` stays where it is until the phone side is actually done.
+// `/phone` is the same page under its own name, for looking at it on something that is not a phone.
 // The full detail page is '/page'. no-cache so a deploy is never masked by a stale cached page.
 app.get('/tv', (req, res) => {
   res.setHeader('Cache-Control', 'no-cache');
   res.type('html').send(TV_HTML);
+});
+app.get('/phone', (req, res) => {
+  res.setHeader('Cache-Control', 'no-cache');
+  res.type('html').send(PHONE_HTML);
 });
 app.get('/', (req, res) => {
   res.setHeader('Cache-Control', 'no-cache');

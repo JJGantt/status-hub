@@ -17,8 +17,11 @@ if (MAC && document.body) document.body.classList.add('mac');
 // the same question with it and they must not be able to disagree. body.phonewall is not set yet at import
 // time (wall.js loads after core.js's import graph), so this is the viewport predicate wall.js uses;
 // body.mac is set just above.
+// `phonehome` is the phone's own home page. It carries `tv` for the wall cards' styling but it is
+// never the kiosk, however wide the window it is opened in — it has a composer, a navbar and taps.
 export const KIOSK = document.body.classList.contains('tv')
-  && !document.body.classList.contains('mac') && window.innerWidth >= 1400;
+  && !document.body.classList.contains('mac') && !document.body.classList.contains('phonehome')
+  && window.innerWidth >= 1400;
 
 // latest status frame — one writer (core's render). Held on an object so importers see updates
 // (you can't reassign another module's exported binding, but you can mutate a shared object).

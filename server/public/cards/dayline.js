@@ -16,7 +16,7 @@ const columns = [];
 // No repeat glyph, and no time unless the surface asks: on the day column the line a chip sits on
 // already says the time, and several chips share that line's width. Both were spending room the
 // chips need more.
-function chip(it, withTime) {
+export function chip(it, withTime) {
   const cls = 'cw-dchip' + (it.exempt ? ' exempt' : '') +
     (it.done ? ' done' : it.expired ? ' exp' : it.grace ? ' grace' : it.past ? ' past' : '');
   // The server decides both the number and which kind it is; this only paints it.
@@ -120,7 +120,11 @@ export function aheadHtml(days) { return (days || []).map(aheadDay).join(''); }
  */
 export function mount(el, { url = '/api/calendar?day=1', centre = false, onload = null, dial = false,
                             ahead = null, dock = false } = {}) {
-  if (!el) return;
+  // `el` may be null: a surface can want the LOOK-AHEAD and no hour column at all. The phone's home
+  // page is that — a day is a list there and today is simply the first of the seven — and it still
+  // has to be one mount, because the look-ahead and the day column are one answer to one question
+  // and a second fetch on its own clock is a second chance to be showing a different day.
+  if (!el && !ahead) return;
   const col = { el, url, centre, onload, dial, ahead, dock, dl: null, next: null, today: null, overdue: null };
   columns.push(col);
   if (dial) {
@@ -398,12 +402,13 @@ async function load(col) {
   // Only the dial's request carries it; its absence is what keeps the other surfaces tray-less.
   col.overdue = col.dial ? d.overdue || null : null;
   if (col.ahead && d.ahead) col.ahead.innerHTML = aheadHtml(col.dock ? d.ahead.slice(1) : d.ahead);
-  if (!d.dayline) return;
-  col.dl = d.dayline;
-  // When the next chip changes state on its own — comes due, leaves grace, starts draining. Without
-  // it the clock only moved the line, and an item went overdue keeping its old colour until some
-  // unrelated edit happened to touch the lists.
+  // Which day this answer was built for, and when the next chip changes state on its own — due,
+  // out of grace, draining. Both are read by the tick, including on a column that has no hour rows
+  // to move a line along, so they are set before the dayline bails out.
+  col.day = d.today || null;
   col.next = d.next_transition || null;
+  if (!col.el || !d.dayline) return;
+  col.dl = d.dayline;
   col.el.innerHTML = dayHtml(d.dayline);
   col.hour = new Date().getHours();   // which hour this window was built around
   project(col);
@@ -452,6 +457,13 @@ function tick() {
   const now = new Date();
   setTimeout(tick, 60000 - (now.getSeconds() * 1000 + now.getMilliseconds()));
   for (const col of columns) {
+    // Look-ahead only, no hour column. Nothing here moves with the minute hand — a day box is a
+    // list — so the only reasons to re-read are the two the clock brings on its own: the day
+    // rolling over, and a chip reaching the moment it changes colour.
+    if (!col.el) {
+      if ((col.next && stamp(now) >= col.next) || (col.day && dateKey(now) !== col.day)) load(col);
+      continue;
+    }
     if (!col.dl || !col.el.isConnected) continue;
     // A dial re-projects instead of moving a line: every row's size depends on the clock, not just
     // the marker, and the hours it lays out never leave the range because it holds all of them.

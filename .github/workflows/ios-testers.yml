@@ -14,7 +14,7 @@ on:
       action:
         description: 'list, add a tester, or turn a public link on/off'
         type: choice
-        options: [list, add, link-on, link-off]
+        options: [list, builds, add, link-on, link-off]
         default: list
       group:
         description: 'Beta group name, as the list prints it'
@@ -57,3 +57,7 @@ jobs:
       - name: List
         if: inputs.action == 'list'
         run: node apps/tools/asc.mjs testers
+
+      - name: Builds
+        if: inputs.action == 'builds'
+        run: node apps/tools/asc.mjs builds

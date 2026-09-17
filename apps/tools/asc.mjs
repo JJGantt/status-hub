@@ -17,6 +17,7 @@
 //   node asc.mjs testers                     — list the beta groups, their public links, and who is in them
 //   node asc.mjs add-tester <group> <email> [first] [last] — put an address in a group
 //   node asc.mjs public-link <group> on|off  — the shareable join link, external groups only
+//   node asc.mjs builds                      — the builds TestFlight is offering, and when they expire
 //
 // TestFlight shows the app to anyone signed in with an Apple ID that has ever been a tester, but it
 // only lets them INSTALL while that Apple ID is currently in a group — the state a phone reports as
@@ -126,6 +127,25 @@ if (cmd === 'devices') {
     if (/already (exist|been used|registered)|not available/i.test(e.message)) console.log(`${identifier} is already registered — nothing to do.\n${e.message}`);
     else throw e;
   }
+} else if (cmd === 'builds') {
+  // A build stops being installable 90 days after upload, and TestFlight words that on the phone as
+  // the tester not having access rather than as an expiry — so "it says I am not a tester" is only
+  // a membership problem once this shows a live build.
+  const { data } = await api('GET', '/v1/apps/6805268657/builds?limit=20&include=buildBetaDetail,betaGroups');
+  console.log(`${data.length} build(s) on JaredHub:\n`);
+  for (const b of data) {
+    const a = b.attributes;
+    const groups = (b.relationships?.betaGroups?.data || []).length;
+    console.log(`  ${a.version}  uploaded ${a.uploadedDate}  expires ${a.expirationDate}  ${a.expired ? 'EXPIRED' : 'live'}  ${a.processingState}  groups: ${groups}`);
+  }
+  // Internal testing is limited to Apple IDs that are Users on the account, so an address that is
+  // not here cannot be in an internal group however the invite was sent.
+  const { data: users } = await api('GET', '/v1/users?limit=200');
+  console.log(`\n${users.length} App Store Connect user(s):\n`);
+  for (const u of users) {
+    const a = u.attributes;
+    console.log(`  ${a.username}  ${[a.firstName, a.lastName].filter(Boolean).join(' ')}  ${(a.roles || []).join('/')}`);
+  }
 } else if (cmd === 'testers' || cmd === 'add-tester' || cmd === 'public-link') {
   // Every beta call hangs off one app, and the account has more than one.
   const APP_ID = '6805268657';   // JaredHub
@@ -195,6 +215,6 @@ if (cmd === 'devices') {
     if (!testers.length) console.log('      (empty)');
   }
 } else {
-  console.error('usage: asc.mjs devices | register <UDID> <name…> | bundle-id <identifier> <name…> | testers | add-tester <group> <email> [first] [last] | public-link <group> on|off');
+  console.error('usage: asc.mjs devices | register <UDID> <name…> | bundle-id <identifier> <name…> | testers | add-tester <group> <email> [first] [last] | public-link <group> on|off | builds');
   process.exit(2);
 }

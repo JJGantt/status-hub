@@ -288,7 +288,7 @@ The math lives here; each file has a thorough header. Summary map:
 | `bodymap.js` | The front/back body SVG (viewBox 0 0 72 93); volume colors paint onto it. |
 | `heatmap.js` | Per-day set-count heatmap laid out as week columns. Shade is an **absolute** count — one level per 6 sets, topping out at 25+ — so a colour means the same thing in every window and on every surface. |
 | `weightplot.js` | The mean of each week's weigh-ins, on the same Sunday-anchored columns as the two heat maps, plus the three axis values. Points carry x/y as fractions of the plot box. A week with no reading is **interpolated** between the nearest measured week either side (anchors may sit outside the window) and flagged `imputed` so the card draws the line through it but no dot; a gap with no measured week *after* it stays `null`, because that is extrapolation. The band is whole pounds, widened to an even span so the middle line has an integer to label, and the FIRST column is always blank — the axis values are written over it. Built at `HOME_HEAT_WEEKS`, since the plot means nothing away from the columns it is aligned to. |
-| `score.js` | The health bar: `(training + nutrition + tasks)/3`, each band capped at a third. `tasksScore` also returns `loss_per_day` — the points a day the gold band is falling at right now, fading plus overdue, capped at what is left — and `loss_changes_at`, the next moment a completion ages out and the rate steps. Fading is each credit's face value over 7 days summed, not a point a day per completion: late, drained, overfilled and important credits all fade at their own rate. |
+| `score.js` | The health bar: `(training + nutrition + tasks)/3`, each band capped at a third. `tasksScore` also returns `loss_per_day` — the points a day the gold band is falling at right now, fading plus overdue, capped at what is left — and `loss_changes_at`, the next moment a completion ages out and the rate steps; `gained_today` and `today_ends_at` are the same pair for today's gain, at landed face value. Fading is each credit's face value over 7 days summed, not a point a day per completion: late, drained, overfilled and important credits all fade at their own rate. |
 | `transcribe.js` | Not domain math — speech to text for a voice clip of any length. Under Groq's 25 MB cap it goes up as recorded; over it, ffmpeg re-encodes to 16 kHz mono Opus at constrained 24 kbps in half-hour pieces, transcribed in order. |
 
 **The task band starts empty and is earned.** Nutrition and training measure how well a thing is
@@ -653,9 +653,11 @@ hour, crossing midnight in both directions, each carrying `t` — hours from tod
 may be negative or past 24. That is the coordinate the dial angles off, and it is what lets a client
 draw a continuous timeline without knowing anything about dates.
 
-It also puts **`loss_per_day`** on `dayline` — the task band's rate of loss in whole points, drawn at the
-end of the dial's date line rather than on the health bar, which is three bands — and folds the moment
-that rate next steps into `next_transition`, since a completion ageing out changes no row.
+It also puts **`tasks`** on `dayline` — `gained`, the points completions have landed since today's 4am
+origin, and `loss_per_day`, the rate the task band is falling at — drawn at the end of the dial's date
+line as `+gained (−loss/d)` rather than on the health bar, which is three bands. Two moments that
+change neither number through a row are folded into `next_transition`: a completion ageing out, which
+steps the rate, and the next 4am, which zeroes the gain.
 
 And it ships **`overdue`**: every expired, unfinished item whatever day it was due, oldest first, each
 a normal chip plus `when` — the time if it was due today (empty for an all-day item), the weekday if

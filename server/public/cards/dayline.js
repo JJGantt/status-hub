@@ -71,11 +71,14 @@ export function dayHtml(dl) {
   // The date and the all-day strip are one block, so a surface that lifts them off the hours (the
   // dial, which also stacks its overdue rows on top) moves them together. Everywhere else the block
   // is `display: contents` and lays out exactly as its two children would.
-  // The task band's rate of loss rides the date line where the server sends one (the dial): points a
-  // day, fading and overdue together. Nothing at all when nothing is being lost.
-  const loss = dl.loss_per_day
-    ? `<span class="cw-loss">\u2212${esc(dl.loss_per_day)}<span class="cw-lossu">/d</span></span>` : '';
-  return `<div class="cw-top"><div class="cw-dayhead">${esc(dl.label)}${loss}</div>${allday}</div>` +
+  // The task band rides the date line where the server sends it (the dial): today's gain, then the
+  // rate it is falling at. Both always drawn, zeros included — a +0 is the day's tally so far, and a
+  // pair that appeared and vanished would move the date line's contents around under a glance.
+  const t = dl.tasks;
+  const band = t
+    ? `<span class="cw-band"><span class="cw-gain">+${esc(t.gained)}</span>` +
+      `<span class="cw-loss">(\u2212${esc(t.loss_per_day)}<span class="cw-lossu">/d</span>)</span></span>` : '';
+  return `<div class="cw-top"><div class="cw-dayhead">${esc(dl.label)}${band}</div>${allday}</div>` +
     `<div class="cw-hours">${hours}</div>`;
 }
 

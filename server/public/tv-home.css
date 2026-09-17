@@ -69,11 +69,14 @@ body.tv .hw-daycard .cw-day.dial{padding-top:0}
 body.tv .hw-daycard .cw-day.dial .cw-top{position:absolute;top:0;left:0;right:0;z-index:2;
   display:flex;flex-direction:column;background:#000;pointer-events:none}
 body.tv .hw-daycard .cw-day.dial .cw-dayhead{margin:0;display:flex;align-items:baseline}
-/* The task band's rate of loss, at the far end of the date line, in the band's gold: it is one of the
-   three bands and not the whole bar, so it sits with the dated items it comes from. */
-body.tv .hw-daycard .cw-day.dial .cw-loss{margin-left:auto;padding-right:4px;color:#e6b93d;font-size:21px;
-  font-weight:800;font-variant-numeric:tabular-nums}
-body.tv .hw-daycard .cw-day.dial .cw-lossu{font-size:13px;font-weight:700;opacity:.75;margin-left:1px}
+/* The task band at the far end of the date line: today's gain in green, the rate it is falling at in
+   red beside it. It is one of the health bar's three bands, not the whole bar, so it sits with the
+   dated items it comes from. The gain is the larger of the two because it is the one he moves. */
+body.tv .hw-daycard .cw-day.dial .cw-band{margin-left:auto;padding-right:4px;display:flex;align-items:baseline;
+  gap:7px;font-weight:800;font-variant-numeric:tabular-nums}
+body.tv .hw-daycard .cw-day.dial .cw-gain{color:#39d353;font-size:22px}
+body.tv .hw-daycard .cw-day.dial .cw-loss{color:#ff4d4d;font-size:18px}
+body.tv .hw-daycard .cw-day.dial .cw-lossu{font-size:12px;font-weight:700;opacity:.8;margin-left:1px}
 /* border-box, and no padding: the projection writes an exact pixel height per row, and the default
    content-box added its 2px padding and 1px border on top of that. Four pixels a row is nothing to
    look at and eleven pixels of drift across the column, which is the now-line missing the axis. */

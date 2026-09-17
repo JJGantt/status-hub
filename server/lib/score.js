@@ -294,7 +294,7 @@ function completionStamp(at, nowLocal) {
 function tasksScore({ events = [], open = [], nowLocal }) {
   const now = naive(nowLocal);
   const empty = { pct: 0, level: 0, units: 0, earned: 0, drained: 0, overdue: 0, completed: 0,
-                  loss_per_day: 0, loss_changes_at: null };
+                  loss_per_day: 0, loss_changes_at: null, gained_today: 0, today_ends_at: null };
   if (now == null) return empty;
 
   const stepMs = TASK_STEP_H * HOUR;
@@ -422,11 +422,20 @@ function tasksScore({ events = [], open = [], nowLocal }) {
   // or stops being. The second is already a chip transition; the first changes no row, so nothing
   // would tell a surface to re-read. This is that moment, as a local-naive minute.
   const expiry = alive.reduce((m, c) => Math.min(m, c.at + decayWindow), Infinity);
+  // WHAT TODAY HAS EARNED: every completion landed since the day's 4am origin, at the value it landed
+  // with — the same whole points its chip says. Not net of anything: the loss is its own number beside
+  // it, and a gain that quietly subtracted the drain would be the two of them said twice.
+  const dayOf = new Date(now - DAY_START_HOUR * HOUR);
+  const todayStart = Date.UTC(dayOf.getUTCFullYear(), dayOf.getUTCMonth(), dayOf.getUTCDate()) + DAY_START_HOUR * HOUR;
+  const gainedToday = landings.reduce((sum, L) => sum + (L.at >= todayStart && L.at <= now ? L.amount : 0), 0);
   return {
     pct: TASK_FULL_UNITS > 0 ? level / TASK_FULL_UNITS : 0,
     level, units: level, earned, drained,
     loss_per_day: Math.min(level, fading + overdueRate),
     loss_changes_at: Number.isFinite(expiry) ? new Date(Math.ceil(expiry / MIN) * MIN).toISOString().slice(0, 16) : null,
+    gained_today: gainedToday,
+    // The day rolling over zeroes the gain, which no row change announces either.
+    today_ends_at: new Date(todayStart + DAY).toISOString().slice(0, 16),
     overdue: drains.filter((d) => d.from < now && d.to > now).length,
     completed: landings.length,
   };

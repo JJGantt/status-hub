@@ -2928,21 +2928,25 @@ app.get('/api/calendar', async (req, res) => {
       dayline = { date: todayKey, label: todayCell ? todayCell.label : todayKey, allday, hours };
     }
 
-    // HOW FAST THE TASK BAND IS FALLING, for the dial's date line: the points a day it loses right
-    // now, fading and overdue together (tasksScore has the arithmetic). It belongs with the dated items
-    // rather than on the health bar, which is three bands and this is one of them. The rows here are
-    // exactly the band's own inputs — every dated item, done or open — and the replay ignores
-    // completions older than its window, so the same function reads the same number the band does.
-    let loss = null;
+    // THE TASK BAND ON THE DIAL'S DATE LINE: what today has earned, and how fast the band is falling
+    // right now, fading and overdue together (tasksScore has the arithmetic for both). They belong with
+    // the dated items rather than on the health bar, which is three bands and this is one of them. The
+    // rows here are exactly the band's own inputs — every dated item, done or open — and the replay
+    // ignores completions older than its window, so the same function reads the same numbers the
+    // band does. Whole points, the band's own scale.
+    let band = null;
     if (full) {
-      const k = tasksScore({ events: (rows || []).filter((r) => r.completed_at),
-                             open: (rows || []).filter((r) => !r.completed_at), nowLocal: nowET });
-      loss = { per_day: Math.round(bandPoints(k.loss_per_day)), changes_at: k.loss_changes_at };
-      if (dayline) dayline.loss_per_day = loss.per_day;
+      band = tasksScore({ events: (rows || []).filter((r) => r.completed_at),
+                          open: (rows || []).filter((r) => !r.completed_at), nowLocal: nowET });
+      if (dayline) {
+        dayline.tasks = { gained: Math.round(bandPoints(band.gained_today)),
+                          loss_per_day: Math.round(bandPoints(band.loss_per_day)) };
+      }
     }
-    // A wall re-reads at the next moment anything it draws changes on its own. The loss rate adds one
-    // kind of moment the chips do not have: a completion ageing out of the band.
-    const transition = [nextChipTransition(rows, nowET), loss && loss.changes_at]
+    // A wall re-reads at the next moment anything it draws changes on its own. The band adds two kinds
+    // of moment the chips do not have, and neither changes a row: a completion ageing out, which steps
+    // the loss rate, and the 4am day origin, which zeroes the gain.
+    const transition = [nextChipTransition(rows, nowET), band && band.loss_changes_at, band && band.today_ends_at]
       .filter(Boolean).sort()[0] || null;
 
     // THE DIAL'S OVERDUE LIST — every expired, unfinished item, whatever day it was due, oldest first.

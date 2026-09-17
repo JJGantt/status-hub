@@ -133,6 +133,11 @@ if (cmd === 'devices') {
   // a membership problem once this shows a live build.
   // The app's own builds relationship refuses `include`; the top-level collection filtered by app
   // takes it, and the group assignment is the point — a build in no group reaches nobody.
+  // Every app on the account, because "the TestFlight app" is only unambiguous while there is one.
+  const { data: apps } = await api('GET', '/v1/apps?limit=200');
+  console.log(`${apps.length} app(s) on the account:\n`);
+  for (const a of apps) console.log(`  ${a.id}  ${a.attributes.bundleId}  ${a.attributes.name}`);
+  console.log('');
   const { data } = await api('GET', '/v1/builds?filter[app]=6805268657&limit=20&include=betaGroups');
   console.log(`${data.length} build(s) on JaredHub:\n`);
   for (const b of data) {

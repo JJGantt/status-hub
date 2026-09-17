@@ -154,14 +154,26 @@ if (cmd === 'devices') {
     console.log(`  ${a.username}  ${[a.firstName, a.lastName].filter(Boolean).join(' ')}  ${(a.roles || []).join('/')}`);
   }
 } else if (cmd === 'testers' || cmd === 'add-tester' || cmd === 'public-link') {
-  // Every beta call hangs off one app, and the account has more than one.
-  const APP_ID = '6805268657';   // JaredHub
-
-  const groups = async () => (await api('GET', `/v1/apps/${APP_ID}/betaGroups?limit=200`)).data;
+  // Every beta group hangs off one app and the account has several, so this walks all of them —
+  // "which app is the tester missing from" is usually the question being answered.
+  const apps = (await api('GET', '/v1/apps?limit=200')).data;
+  const groups = async () => {
+    const out = [];
+    for (const app of apps) {
+      for (const g of (await api('GET', `/v1/apps/${app.id}/betaGroups?limit=200`)).data) {
+        out.push({ ...g, app: app.attributes.name });
+      }
+    }
+    return out;
+  };
+  // A group name is only unique within its app, so "App/Group" disambiguates when a bare name does
+  // not — and a name matching two groups is refused rather than guessed at.
   const findGroup = (all, name) => {
-    const hit = all.filter((g) => g.attributes.name.toLowerCase() === String(name).toLowerCase());
+    const want = String(name).toLowerCase();
+    const hit = all.filter((g) => g.attributes.name.toLowerCase() === want
+      || `${g.app}/${g.attributes.name}`.toLowerCase() === want);
     if (hit.length !== 1) {
-      console.error(`no single group called "${name}". Groups: ${all.map((g) => g.attributes.name).join(', ')}`);
+      console.error(`no single group called "${name}". Groups: ${all.map((g) => `${g.app}/${g.attributes.name}`).join(', ')}`);
       process.exit(2);
     }
     return hit[0];
@@ -179,7 +191,7 @@ if (cmd === 'devices') {
           relationships: { betaGroups: { data: [{ type: 'betaGroups', id: g.id }] } },
         },
       });
-      console.log(`added ${email} to "${g.attributes.name}"`);
+      console.log(`added ${email} to ${g.app}/${g.attributes.name}`);
     } catch (e) {
       // An address Apple already knows cannot be created again, but it can still be short of this
       // group — which is exactly the case being fixed, so look it up and attach it instead.
@@ -189,7 +201,7 @@ if (cmd === 'devices') {
       await api('POST', `/v1/betaGroups/${g.id}/relationships/betaTesters`, {
         data: [{ type: 'betaTesters', id: data[0].id }],
       });
-      console.log(`${email} already existed; added to "${g.attributes.name}"`);
+      console.log(`${email} already existed; added to ${g.app}/${g.attributes.name}`);
     }
   }
 
@@ -198,22 +210,22 @@ if (cmd === 'devices') {
     if (!group || !['on', 'off'].includes(state)) { console.error('usage: asc.mjs public-link <group> on|off'); process.exit(2); }
     const g = findGroup(await groups(), group);
     if (g.attributes.isInternalGroup) {
-      console.error(`"${g.attributes.name}" is an internal group; Apple offers public links on external groups only.`);
+      console.error(`${g.app}/${g.attributes.name} is an internal group; Apple offers public links on external groups only.`);
       process.exit(2);
     }
     const { data } = await api('PATCH', `/v1/betaGroups/${g.id}`, {
       data: { type: 'betaGroups', id: g.id, attributes: { publicLinkEnabled: state === 'on' } },
     });
-    console.log(`"${data.attributes.name}" public link ${data.attributes.publicLinkEnabled ? data.attributes.publicLink : 'off'}`);
+    console.log(`${g.app}/${data.attributes.name} public link ${data.attributes.publicLinkEnabled ? data.attributes.publicLink : 'off'}`);
   }
 
   // Always print the state, including straight after a change, for the same reason the devices
   // workflow does: the log should end with what the account says, not with what we asked for.
   const all = await groups();
-  console.log(`\n${all.length} beta group(s) on JaredHub:\n`);
+  console.log(`\n${all.length} beta group(s) across ${apps.length} app(s):\n`);
   for (const g of all) {
     const a = g.attributes;
-    console.log(`  ${a.name}  [${a.isInternalGroup ? 'internal' : 'external'}]  link: ${a.publicLinkEnabled ? a.publicLink : 'none'}`);
+    console.log(`  ${g.app}/${a.name}  [${a.isInternalGroup ? 'internal' : 'external'}]  link: ${a.publicLinkEnabled ? a.publicLink : 'none'}`);
     const { data: testers } = await api('GET', `/v1/betaGroups/${g.id}/betaTesters?limit=200`);
     for (const t of testers) {
       const ta = t.attributes;

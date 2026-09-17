@@ -246,18 +246,24 @@ wall's heat column purely so that adopting it does not carry the whole column in
 phone's own home page does none of this — it has its own markup and puts each card where it wants
 it — so this is about the walls, and about keeping them openable on a phone.
 
-## The phone's home page is not a wall, and the difference is SCALE
+## The phone's home page is not a wall, and it FITS ONE SCREEN
 
 `public/phone-home.html` at `/` — what the iOS app loads. It carries everything the home wall
-carries, in portrait, and it is its own file for one reason: **it is not scaled.**
+carries, in portrait, and two constraints shape all of it.
 
-Every other phone view of the hub is a wall. `wall.js` renders the 1920x1080 shell into a fixed
-1080-wide canvas and CSS-transforms it down, so on a 393pt phone the scale is about 0.36 and the
-wall's 17px label lands at 6px of glass. That is the whole readability problem, and it is not
-reflowable: the wall's type is written for a room. `phone-home.css` is laid out at the phone's own
-size instead, so a size in it is the size it is read at, and the cards that measure themselves — the
-surf grids, the rain grid, the heat cells — come out at the sizes their own modules chose for a
-phone. Nearly every rule would have had to be overridden to do that inside `tv-home.css`.
+**It is not scaled.** Every other phone view of the hub is a wall: `wall.js` renders the 1920x1080
+shell into a fixed 1080-wide canvas and CSS-transforms it down, so on a 393pt phone the scale is
+about 0.36 and the wall's 17px label lands at 6px of glass. That is the whole readability problem,
+and it is not reflowable — the wall's type is written for a room. `phone-home.css` is laid out at the
+phone's own size instead, so a size in it is the size it is read at, and the cards that measure
+themselves come out at the sizes their own modules chose for a phone.
+
+**Nothing scrolls vertically.** `.rows` is the height of the pane and every block on it is a declared
+height except ONE — the day strip, which is `flex:1 1 auto` and takes exactly what the others did not
+need. So raising any other height on that screen is spending the day's lanes, and that is the trade
+to weigh before doing it. There are no card borders and almost no padding for the same reason: a rule
+costs two pixels of height for something the black ground between blocks already says, and where two
+things genuinely need separating they get a background instead, which costs nothing.
 
 Its body carries four classes and each does a job. `tv` is the card styling the walls share (black
 ground, headings off, the heat maps, the rings, the chips). `phonewall` makes every card take its
@@ -268,26 +274,56 @@ It also beats app.css's `body.tv.wallportrait` block on equal specificity, by lo
 
 **What it does differently from the wall, and why:**
 
-- **No dial.** Today is simply the first row of the look-ahead, which is what lets the look-ahead
-  cover all seven days. The hour-by-hour day is one swipe away in the lists pane (`#daycard`) —
-  that is what you open when you are working through a day, not what a glance wants.
-- **The overdue items are at the head of the week.** On the wall they ride the top of the dial; with
-  no dial here, nothing else on the page would say they exist.
+- **Today LIES DOWN** (`cards/daystrip.js`) — hours left to right, each item at its own time. The
+  dial is the same day standing up, which is right for a tall column read across a room; a phone in
+  portrait has width and no height, so the axis turns and the day scrolls under a fixed viewport.
+- **The strip keeps going past midnight**, ruled and labelled at each day boundary, which is what
+  makes the look-ahead cost nothing here: scroll right and you are in tomorrow. There is no separate
+  list of the next six days, and there was — it ate a third of the screen to say less.
+- **No status strip.** The litter robot, the feeder, the mics and the routing chips are in the misc
+  pane. None of them changes hour to hour, and all four are a chip strip, which is the one shape a
+  swipe pane has room to spare for.
 - **The session panel is the list and nothing else.** No head, no reply: a phone has nowhere to put
   a model's answer, and the wall spends a column on one because it is read word by word from a chair.
 - **The voice column is the last exchange.** One line of what he asked, one of what came back
   (`#ph-conv`). The whole thread with its composer is the chat pane, one swipe left.
 - **The two heat maps are SIDE BY SIDE and share a top edge.** A heat map's cells are square, so its
-  height follows its width — one at full phone width is 170px tall before either strip. They are the
+  height follows its width — one at full phone width is 170px tall before any strip. They are the
   same fifteen Sunday-aligned weeks, so a week is at the same x in both and the eye reads across
-  them; that is why the right column carries an empty 34px where the weigh-in plot sits on the left.
-- **The wall pane SCROLLS.** There is more here than a phone screen holds at a size worth reading,
-  and shrinking until it fits is the thing this page exists to stop. The order is what makes that
-  work — devices, rings, score and the week are above the fold.
+  them. What is ABOVE each is its long view (the weigh-in trend, the clocks since the last set);
+  what is below it is today. Both of those were below their map once, which left an empty block over
+  the training column and pushed its map off the food map's top edge — two costs for one placement.
+- **The day's totals lose their GOALS.** `1380/3060 cal` four times over does not fit a half-width
+  column at any size worth reading, and the denominator is the half of it already on screen: the
+  rings above ARE the goal, drawn as the distance still to go. The strip is the amount.
 
 It shares the panes the walls had: [chat] [home] [misc] [maint] [lists] [repos] [reports], landing on
 home, driven by `phone-home.js` rather than `wall.js` — there is no canvas to scale, so only the
 paging is left.
+
+### Three wall-sized numbers a surface can now override
+
+Each of these lived as a constant inside a card because there was only ever one surface drawing it at
+one size. A phone at arm's length wants all three smaller, and each is now a default the surface can
+replace — everything else gets exactly what it had.
+
+| what | where it is said | why |
+|---|---|---|
+| `--surf-grid-h` / `--surf-water-h` on `#surf` | `cards/surf.js` | its own 86px a grid plus 68px of water is a third of a phone screen for one card |
+| `--rc-base` / `--rc-min` / `--rc-name-base` on `.hw-recent` | `cards/workouts.js` (`fitRow`) | the set list starts at 16px and the exercise name at 17px, and both only shrink if they overflow — so on a phone they were drawn half again the size of everything around them and stayed there |
+
+## Lanes are why the day strip works
+
+An hour is about eleven pixels on it, so a 4pm item and a 7pm one are thirty pixels apart and their
+titles are not: one row would be a smear. Each chip goes in the first lane FREE AT ITS OWN X, so a
+title takes the width it needs and the next one drops a lane. When every lane is busy, the chip
+already sitting in the lane that frees soonest is CUT SHORT rather than overlapped — a title losing
+its tail is still readable, two titles on top of each other are not.
+
+The block spends its height on lanes first and then on their height: more rows while there is room
+for another readable one, taller rows once there is not. Both, rather than one — a fixed lane height
+leaves a band of black under a quiet day, and a fixed lane count makes a busy one unreadable. The
+chips take their own height and type from the lane, so nothing floats in a row it does not fill.
 
 ## What is running is one module
 

@@ -113,10 +113,23 @@ function tickRest(){
 // draws its full name, and a long one that is not listed is handled by the name fit instead.
 const EX_SHORT={ 'Romanian Deadlifts':'RDL' };
 
+// The START and the FLOOR are the surface's, not this file's: `base` and `min` are wall sizes, and a
+// phone reading the same row at arm's length in a half-width column wants both smaller. A surface
+// says so with `--rc-base` / `--rc-min` on the row; everything else gets exactly what it had.
 function fitRow(el,base,min){
  if(!el)return;
- let fs=base; el.style.setProperty('--rcfs',fs+'px');
- while(fs>min&&el.scrollWidth>el.clientWidth+0.5){ fs-=0.5; el.style.setProperty('--rcfs',fs+'px'); }
+ const cs=getComputedStyle(el);
+ const b=parseFloat(cs.getPropertyValue('--rc-base'))||base;
+ const m=parseFloat(cs.getPropertyValue('--rc-min'))||min;
+ let fs=b; el.style.setProperty('--rcfs',fs+'px');
+ while(fs>m&&el.scrollWidth>el.clientWidth+0.5){ fs-=0.5; el.style.setProperty('--rcfs',fs+'px'); }
+}
+
+// Where the exercise name starts before the three-stage shrink below brings it down, same reasoning.
+function nameBase(el,dflt){
+ if(!el)return dflt;
+ const v=parseFloat(getComputedStyle(el).getPropertyValue('--rc-name-base'));
+ return Number.isFinite(v)&&v>0?v:dflt;
 }
 
 function fmtLbs(n){ const v=Number(n)||0; return Number.isInteger(v)?String(v):v.toFixed(1); }
@@ -176,7 +189,7 @@ async function loadHeatDay(date){
    musEl.outerHTML=exerciseVolumeChips(ex.name,true);
    musEl=hi.querySelector('.rc-mus'); fitRow(musEl,15,9);
   }
-  for(let nfs=17; nfs>13&&over(musEl); ){ nameEl.style.fontSize=(--nfs)+'px'; fitRow(musEl,15,9); }
+  for(let nfs=nameBase(nameEl,17); nfs>nameBase(nameEl,17)-4&&over(musEl); ){ nameEl.style.fontSize=(--nfs)+'px'; fitRow(musEl,15,9); }
   return;
  }
  const sp=hi.closest('.detailpanel'), stick=sp&&(sp.scrollHeight-sp.scrollTop-sp.clientHeight<60); // keep pinned to newest if already at bottom

@@ -1,55 +1,34 @@
 // The phone home page's own middle. Everything else on it is a shared card core.js already paints;
-// this file holds the four things that are this surface's — the week, the overdue strip, the session
-// list and the tail of the conversation — plus the swipe panes around them.
+// this file holds the three things that are this surface's — today's strip, the session list, the
+// tail of the conversation — plus the swipe panes around them.
 //
 // It is the phone's analogue of tv-home.js. Where the wall gives a column to today's dial and a
 // column to the focused session's whole answer, this gives neither: a phone is read at arm's length
-// for a few seconds, so a day is a list and a session is a title with a line under it.
+// for a few seconds, so the day lies down and a session is a title with a line under it.
 import { esc } from './shared.js';
-import { mount, chip } from './cards/dayline.js';
+import { mount } from './cards/dayline.js';
+import { mountStrip } from './cards/daystrip.js';
 import { mountSessions } from './cards/sessions.js';
 import { onThread } from './voiceagent.js';
 
-// ---- the week, and what is already late ----------------------------------
+// ---- today, and the days after it ----------------------------------------
 //
-// SEVEN days starting today, as a list of days (cards/dayline.js). `full=1` is not for a dial here —
-// there is none — it is what makes the response carry `overdue`, which is the other half of the
-// answer: everything red and still open, on any day, which nothing else on this page would say
-// exists. One request for both, so the two cannot disagree about which day it is.
-const week = document.getElementById('cw-week');
-const od = document.getElementById('ph-overdue');
-
-// Four, then a count. A phone's overdue strip is a prompt to open the lists pane, not the list
-// itself — past four rows it stops being a glance and starts being the thing it is pointing at.
-const OVERDUE_MAX = 4;
-
-// Oldest first, the way the server sends them, and the OLDEST are the ones that collapse into the
-// +N: the rows worth keeping are the ones nearest the day they came off.
-function paintOverdue(items) {
-  if (!od) return;
-  const all = items || [];
-  if (!all.length) { od.innerHTML = ''; return; }
-  const shown = all.slice(-OVERDUE_MAX);
-  const more = all.length - shown.length;
-  od.innerHTML = shown.map((it, k) =>
-    '<div class="ph-odrow">' +
-      `<span class="ph-odwhen">${esc(it.when || '')}</span>` +
-      chip(it, true) +
-      (k === 0 && more ? `<span class="cw-more">+${more}</span>` : '') +
-    '</div>').join('');
-}
-
+// ONE fetch for all of it. `day=1&full=1&ahead=7` carries the seven days starting today and the
+// overdue list, and the strip draws them as one continuous axis — so the look-ahead is not a second
+// surface here, it is the same timeline scrolled right. `full=1` is what makes `overdue` ship; the
+// dayline itself goes unused, because an hour-row column is the lists pane's shape, not this one's.
+const strip = mountStrip(document.getElementById('ph-strip'));
 mount(null, {
   url: '/api/calendar?day=1&full=1&ahead=7',
-  ahead: week,
-  onload: (d) => paintOverdue(d.overdue),
+  onload: (d) => { if (strip) strip.paint(d); },
 });
 
 // ---- what is running -----------------------------------------------------
 //
-// Four rows, one more than the wall keeps. The wall spends its fourth on the focused session's
-// answer; this column has no answer under it to protect, so the room goes back to the list.
-mountSessions({ list: document.getElementById('ph-sess-list'), max: 4 });
+// Three rows, the same as the wall. A fourth fits only by taking both lines of every row down to
+// where the activity line under the title stops being readable, and that line is the whole reason
+// the list is here rather than a count.
+mountSessions({ list: document.getElementById('ph-sess-list'), max: 3 });
 
 // ---- the tail of the conversation ----------------------------------------
 //
@@ -65,10 +44,10 @@ let lastAsk = null, lastSaid = null;
 
 function paintConv() {
   if (!conv) return;
-  const row = (kind, label, text) => (text
-    ? `<div class="ph-convrow ${kind}"><span class="ph-convk">${label}</span>` +
+  const line = (kind, label, text) => (text
+    ? `<div class="ph-convline ${kind}"><span class="ph-convk">${label}</span>` +
       `<span class="ph-convt">${esc(text)}</span></div>` : '');
-  conv.innerHTML = row('ask', 'You', lastAsk) + row('said', 'Hub', lastSaid);
+  conv.innerHTML = line('ask', 'You', lastAsk) + line('said', 'Hub', lastSaid);
 }
 
 // One line, collapsed: a reply arrives with its paragraphs intact and this is a single row.

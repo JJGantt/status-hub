@@ -170,8 +170,8 @@ Produce tracking rides on nutrition rather than its own table: `nutrition_entrie
 - **Web hub** — `status-hub/server/public/` (`core.js`, `cards/*`, `app.css`). Desktop `/page` =
   scrolling rows; phone = swipe panes on `/` (chat · **home** · misc · **maint** · **lists** ·
   **repos** · **reports**), where the home pane is `phone-home.html` — everything the TV's home wall
-  carries, laid out in portrait at the phone's own scale rather than as a scaled-down wall; all off
-  `/api/stream` (SSE). Served by the Node server.
+  carries in ONE SCREEN, laid out in portrait at the phone's own scale rather than as a scaled-down
+  wall; all off `/api/stream` (SSE). Served by the Node server.
   (Card/module map: [docs/HUB-INTERNALS.md](docs/HUB-INTERNALS.md).)
 - **`/mic`** — a minimal fullscreen tap-to-talk launcher page (Add-to-Home-Screen web-clip); reuses
   the same recorder + pipeline as the in-app voice FAB.

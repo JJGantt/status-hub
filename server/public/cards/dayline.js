@@ -120,11 +120,12 @@ export function aheadHtml(days) { return (days || []).map(aheadDay).join(''); }
  */
 export function mount(el, { url = '/api/calendar?day=1', centre = false, onload = null, dial = false,
                             ahead = null, dock = false } = {}) {
-  // `el` may be null: a surface can want the LOOK-AHEAD and no hour column at all. The phone's home
-  // page is that — a day is a list there and today is simply the first of the seven — and it still
-  // has to be one mount, because the look-ahead and the day column are one answer to one question
-  // and a second fetch on its own clock is a second chance to be showing a different day.
-  if (!el && !ahead) return;
+  // `el` may be null: a surface can want the look-ahead, or just the PAYLOAD through `onload`, and no
+  // hour column at all. The phone's home page is the second — it draws the same days as a horizontal
+  // strip of its own — and it still has to be one mount, because the day, the days after it and the
+  // overdue list are one answer to one question, and a second fetch on its own clock is a second
+  // chance to be showing a different day.
+  if (!el && !ahead && !onload) return;
   const col = { el, url, centre, onload, dial, ahead, dock, dl: null, next: null, today: null, overdue: null };
   columns.push(col);
   if (dial) {

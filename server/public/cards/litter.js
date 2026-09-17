@@ -12,7 +12,8 @@ export function render(s){
  // device chip-groups later (e.g. a pet feeder) — just append another .devchips block.
  const chip=(label,val,col)=>'<span class=devchip><span class=dc-l>'+label+'</span>'+
    '<span class=dc-v style="color:'+col+'">'+val+'</span></span>';
- document.getElementById('litter').innerHTML=
+ const el=document.getElementById('litter'); if(!el)return;  // a surface without the tile (the phone's home page)
+ el.innerHTML=
   '<div class=devstrip>'+
    '<div class=devchips>'+
      '<img class=devicon src="/litter-robot.png" alt="Litter-Robot">'+

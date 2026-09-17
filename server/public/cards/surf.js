@@ -14,10 +14,25 @@ const ftRange = (a, b) =>
 // Refetched when a new snapshot lands (capturedAt moves) or when the copy ages out, never on the
 // 30s broadcast that re-renders this card: the whole archive is one response, and redrawing grids
 // does not require re-reading them.
-const GRID_H = 86;         // per grid; both are drawn on one canvas so they sit flush
+// The drawn heights. These are DEFAULTS, not constants: a surface can shrink the plots by declaring
+// `--surf-grid-h` / `--surf-water-h` on #surf. They are read rather than measured because the
+// canvases are what give the card its height — there is nothing to measure against. The phone's home
+// page is why: it has to fit one screen, and at these sizes the two grids plus the water trace are a
+// third of it. Everything else leaves them alone and gets exactly what it had.
+const GRID_H_DEFAULT = 86;   // per grid; both are drawn on one canvas so they sit flush
 const DOW_H = 13;          // weekday-letter strip above the grids, same canvas so it stays aligned
-const WATER_H = 68;
+const WATER_H_DEFAULT = 68;
 const PAD_L = 26;          // left gutter for axis labels, so nothing is written over the data
+
+// A length off the card, in px, falling back to the default when the surface says nothing.
+function cssPx(name, dflt) {
+  const el = document.getElementById('surf');
+  if (!el) return dflt;
+  const v = parseFloat(getComputedStyle(el).getPropertyValue(name));
+  return Number.isFinite(v) && v > 0 ? v : dflt;
+}
+const GRID_H = () => cssPx('--surf-grid-h', GRID_H_DEFAULT);
+const WATER_H = () => cssPx('--surf-water-h', WATER_H_DEFAULT);
 
 // The plots hold the whole archive and scroll horizontally; the card lands at the right-hand end,
 // showing the window the server marks with `defaultT0`. The gutter is its own canvas OUTSIDE the
@@ -120,7 +135,7 @@ function paintGrids(cv, ax, viewW) {
   const wall = onWall();
   const dowH = wall ? 0 : DOW_H;
   const { cols, byDay, cw, totalW } = layout(viewW);
-  const H = dowH + GRID_H * 2, ch = GRID_H / 24;
+  const H = dowH + GRID_H() * 2, ch = GRID_H() / 24;
   const g = fitCanvas(cv, totalW, H);
 
   // Weekday letter over each column, on the same canvas as the grids so it cannot drift out of
@@ -144,12 +159,12 @@ function paintGrids(cv, ax, viewW) {
     const c = byDay.get(k);
     for (let h = 0; h < 24; h++) {
       // hour 0 at the bottom of each grid, so the morning band reads as a horizontal stripe
-      const y = dowH + GRID_H - (h + 1) * ch;
+      const y = dowH + GRID_H() - (h + 1) * ch;
       const rb = c.r[h], sb = c.s[h];
       g.fillStyle = rb === '.' ? '#1a222b' : (hist.bandColors[parseInt(rb, 36)] || '#1a222b');
       g.fillRect(x * cw, y, Math.ceil(cw) + .5, Math.ceil(ch) + .5);
       g.fillStyle = sb === '.' ? '#1a222b' : (hist.sizeColors[parseInt(sb, 36)] || '#1a222b');
-      g.fillRect(x * cw, GRID_H + y, Math.ceil(cw) + .5, Math.ceil(ch) + .5);
+      g.fillRect(x * cw, GRID_H() + y, Math.ceil(cw) + .5, Math.ceil(ch) + .5);
     }
   });
 
@@ -165,9 +180,9 @@ function paintGrids(cv, ax, viewW) {
   // daylight either side of it, and each is dimmer than the mark above it in importance — now (solid
   // white), noon (70%), six (35%). At 45% the sixes start reading as equals of noon and the eye
   // stops knowing which line it is on.
-  for (const base of [dowH, dowH + GRID_H]) {
+  for (const base of [dowH, dowH + GRID_H()]) {
     for (const [h, alpha] of [[6, .35], [12, .7], [18, .35]]) {
-      const y = base + GRID_H - h * ch;
+      const y = base + GRID_H() - h * ch;
       g.strokeStyle = `rgba(255,255,255,${alpha})`; g.lineWidth = 1;
       g.beginPath(); g.moveTo(0, y); g.lineTo(totalW, y); g.stroke();
     }
@@ -202,8 +217,8 @@ function paintGrids(cv, ax, viewW) {
     // mapping the noon guide uses, so hour + minutes lands on the instant rather than the cell.
     const hNow = hourOf(now) + now.getMinutes() / 60;
     g.lineWidth = 2;
-    for (const base of [dowH, dowH + GRID_H]) {
-      const y = base + GRID_H - hNow * ch;
+    for (const base of [dowH, dowH + GRID_H()]) {
+      const y = base + GRID_H() - hNow * ch;
       g.beginPath(); g.moveTo(x - cw * .45, y); g.lineTo(x + cw * .45, y); g.stroke();
     }
   }
@@ -215,9 +230,9 @@ function paintGrids(cv, ax, viewW) {
   if (wall) return;
   a.font = '9px system-ui, -apple-system, sans-serif';
   a.textBaseline = 'middle'; a.textAlign = 'right'; a.fillStyle = '#8b96a5';
-  for (const base of [DOW_H, DOW_H + GRID_H])
+  for (const base of [DOW_H, DOW_H + GRID_H()])
     for (const [h, txt] of [[6, '6a'], [12, '12p'], [18, '6p']])
-      a.fillText(txt, PAD_L - 5, base + GRID_H - h * ch);
+      a.fillText(txt, PAD_L - 5, base + GRID_H() - h * ch);
 }
 
 // Water: measured up to now, forecast beyond it. Two series, because a prediction and a reading are
@@ -226,12 +241,12 @@ function paintGrids(cv, ax, viewW) {
 function paintWater(cv, ax, viewW) {
   if (!hist || !cv) return;
   const { cols, cw, totalW } = layout(viewW);
-  const g = fitCanvas(cv, totalW, WATER_H);
+  const g = fitCanvas(cv, totalW, WATER_H());
   const vals = hist.water.concat(hist.waterFc).filter(v => v != null);
   if (!vals.length) return;
   const lo = Math.floor(Math.min(...vals)) - 1, hi = Math.ceil(Math.max(...vals)) + 1;
   const X = (i) => (i / (hist.hours - 1)) * totalW;
-  const Y = (v) => WATER_H - 6 - ((v - lo) / (hi - lo)) * (WATER_H - 14);
+  const Y = (v) => WATER_H() - 6 - ((v - lo) / (hi - lo)) * (WATER_H() - 14);
 
   // Horizontal grid labelled in the gutter. Without it the trace has shape but no scale: a reader
   // can see it rising and cannot say what it is rising to.
@@ -253,7 +268,7 @@ function paintWater(cv, ax, viewW) {
   if (ti >= 0) {
     g.strokeStyle = '#ffffff'; g.lineWidth = 1.5;
     const x = (ti + .5) * cw;
-    g.beginPath(); g.moveTo(x, 0); g.lineTo(x, WATER_H); g.stroke();
+    g.beginPath(); g.moveTo(x, 0); g.lineTo(x, WATER_H()); g.stroke();
   }
   const line = (arr, color, dash) => {
     g.strokeStyle = color; g.lineWidth = 1.4; g.setLineDash(dash); g.beginPath();
@@ -268,7 +283,7 @@ function paintWater(cv, ax, viewW) {
   line(hist.waterFc, '#6aa6c8', [3, 2]);
 
   if (!ax) return;
-  const a = fitCanvas(ax, PAD_L, WATER_H);
+  const a = fitCanvas(ax, PAD_L, WATER_H());
   a.font = '9px system-ui, -apple-system, sans-serif';
   a.textBaseline = 'middle'; a.textAlign = 'right'; a.fillStyle = '#8b96a5';
   for (let v = Math.ceil(lo / step) * step; v <= hi; v += step)

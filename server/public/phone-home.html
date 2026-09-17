@@ -7,10 +7,10 @@
      lists the modules this page runs, and is where you add or remove one. -->
 <script type="module" src="dist/phone-home.js"></script>
 </head><body class="tv homewall phonehome phonewall">
-<!-- THE PHONE'S HOME PAGE, at `/`. Everything the home wall (/tv) carries, in portrait and at the
-     phone's OWN scale — no scaled canvas. The wall is 1920x1080 read from a couch; this is 390pt
-     read at arm's length, and the two want different sizes for the same facts, so this is its own
-     file rather than a reflow of that one.
+<!-- THE PHONE'S HOME PAGE, at `/`. Everything the home wall (/tv) carries, in portrait, at the
+     phone's OWN scale — no scaled canvas — and IN ONE SCREEN. Nothing here scrolls vertically; that
+     is the constraint the whole layout answers, and it is why every block below is either a fixed
+     height or the one block that absorbs what the others did not need (the day strip).
 
      `tv` is here for the card styling the walls share (black ground, no card headings, the heat
      maps, the rings, the strips). `phonewall` is here so every card that asks takes its PHONE
@@ -40,12 +40,6 @@
 <div class="tv-shell">
   <div class="rows">
 
-    <!-- STATUS — the devices and the agent routing, the same strip the wall opens with. -->
-    <div class="row-card statusrow">
-      <div class="card statuscard"><div class="fit" id="litter"><h2>Litter-Robot</h2><div class=big>…</div></div></div>
-      <div class="card statuscard tv-routecard"><div class="fit" id="tv-routing"></div></div>
-    </div>
-
     <!-- RINGS — calories and the three macros across, with the produce trio stacked at the end. -->
     <div class="row-card ringrow">
       <div class="card ringcard"><div class="fit"><div id="nutrition"><h2>Today · Nutrition</h2><div class=big>…</div></div></div></div>
@@ -54,30 +48,27 @@
     <!-- HEALTH BAR — the three scores, lying on their side. -->
     <div class="healthbar" id="healthbar"></div>
 
-    <!-- THE WEEK — seven days STARTING TODAY, one row each (cards/dayline.js). The wall puts today
-         on a dial beside this because he is standing in front of it and the question is how much of
-         the day is left; on a phone the dial is one swipe away in the lists pane, and here the
-         question a glance asks is only what is on each day. So today is simply the first row.
-         The overdue strip above it is what the dial's top cover carries on the wall: items that went
-         red and are still open, on any day. Nothing else on this page would say they exist. -->
-    <div class="row-card ph-weekrow">
-      <div class="card ph-weekcard"><div class="fit">
-        <div class="ph-overdue" id="ph-overdue"></div>
-        <div class="cw-week" id="cw-week"></div>
-      </div></div>
+    <!-- TODAY, LYING DOWN — hours left to right, items at their own time, stacked into lanes
+         (cards/daystrip.js). The wall's dial is this same day standing up, which is the right shape
+         for a tall column read across a room; a phone in portrait has width and no height, so the
+         axis turns. It keeps going past midnight into the days after it, which is what makes the
+         look-ahead cost nothing here.
+         THIS IS THE BLOCK THAT ABSORBS SLACK: everything else on the screen is sized, and whatever
+         height is left becomes more lanes. -->
+    <div class="row-card ph-dayrow">
+      <div class="card ph-daycard"><div class="ph-strip" id="ph-strip"></div></div>
     </div>
 
-    <!-- FOOD | TRAINING — the two week heat maps side by side, each under the weigh-in plot or over
-         the clocks that belong to it, and each with the last thing logged under it. Side by side
-         rather than stacked: a heat map's cells are square, so its HEIGHT follows its width, and one
-         at full phone width would be 170px tall before either strip. -->
+    <!-- FOOD | TRAINING — the two week heat maps side by side, sharing a top edge so a week sits at
+         the same x in both. What is ABOVE each map is its long view (the weigh-in trend, the clocks
+         since the last set); what is below it is today (the day's totals, the last thing logged). -->
     <div class="row-card ph-heatrow">
-      <div class="card ph-heatcard"><div class="fit">
+      <div class="card ph-heatcard">
         <div class="ph-heatpair">
           <div class="ph-heatcol">
             <!-- Weekly weigh-in average over the food map's own week columns. The alignment is the
                  chart: cards/weightweeks.js insets the box by half a column at each end, in calc
-                 from --cols and the grid's gap, so --hgap below must equal the gap in `.heat`. -->
+                 from --cols and the grid's gap, so --hgap must equal the gap in `.heat`. -->
             <div class="hw-wplot" id="weightweeks"></div>
             <div class="ph-block" id="nutritionlog">
               <div id="nutheat" class="nutheat"></div>
@@ -86,36 +77,37 @@
             <div class="hw-recent" id="nutrecent"></div>
           </div>
           <div class="ph-heatcol">
+            <!-- The clocks sit ABOVE the map, where the weigh-in plot sits opposite them. They used
+                 to be below it, which left an empty block here and pushed this map off the other
+                 one's top edge — two costs for one misplacement. -->
+            <div class="hw-strip" id="resttimer"></div>
             <div class="ph-block" id="workouts">
               <div id="heatwrap"></div>
-              <div class="hw-strip" id="resttimer"></div>
             </div>
             <div class="hw-recent" id="heatinfo" data-recent></div>
           </div>
         </div>
-      </div></div>
+      </div>
     </div>
 
     <!-- THE BODY, and WHAT IS RUNNING. One figure in the markup; cards/muscle.js splits it into the
          front/back pair and paints each region from volume.muscle_colors. Tapping a region opens
          #bodyinfo, which muscle.js moves out to the document so the sheet is not trapped in here.
          The sessions list beside it is TITLES ONLY — each row is the session's name and the one line
-         of what it is doing right now, a tool call or the last thing it said. The wall gives the
-         focused session's whole answer a column; a phone has nowhere to put an answer, and the list
-         is the part a glance is for. -->
+         of what it is doing right now, a tool call or the last thing it said. -->
     <div class="row-card ph-bodyrow">
-      <div class="card ph-bodycard"><div class="fit">
+      <div class="card ph-bodycard">
         <div class="ph-body" id="body"><!--BODY_SVG--></div>
         <div id="bodyinfo"></div>
-      </div></div>
-      <div class="card ph-sesscard"><div class="fit">
+      </div>
+      <div class="card ph-sesscard">
         <div class="ph-sess-list" id="ph-sess-list"></div>
-      </div></div>
+      </div>
     </div>
 
-    <!-- SURF and RAIN — one week of one place, read together, so they share a card the way they do
-         on the wall. On the phone they stack: the surf grids are already at the size cards/surf.js
-         draws them for a phone, and halving the width would put a day under 9px. -->
+    <!-- SURF and RAIN, side by side as they are on the wall: one week of one place, read together.
+         The surf plots take their drawn heights from --surf-grid-h / --surf-water-h in the CSS,
+         because their own defaults are a third of a phone screen. -->
     <div class="row-card ph-surfrow">
       <div class="card ph-surfcard">
         <div class="fit" id="surf"><h2>Surf</h2><div class=big>…</div></div>
@@ -127,9 +119,7 @@
          one swipe left, with the composer; this is the tail of it, so the page says what the hub is
          in the middle of without having to leave it. -->
     <div class="row-card ph-convrow">
-      <div class="card ph-convcard"><div class="fit">
-        <div class="ph-conv" id="ph-conv"></div>
-      </div></div>
+      <div class="card ph-convcard"><div class="ph-conv" id="ph-conv"></div></div>
     </div>
 
   </div>
@@ -137,9 +127,13 @@
 </section>
 
 <section class="pane pane-misc">
-  <!-- The devices that are not on the home column: the feeder, and whether the mics are alive. -->
+  <!-- The devices: the litter robot and the feeder, and whether the mics are alive. They came off
+       the home column when it had to fit one screen — none of them changes hour to hour, and all
+       three are a chip strip, which is the one shape a swipe pane has room to spare for. -->
+  <div class="card statuscard"><div class="fit" id="litter"><h2>Litter-Robot</h2><div class=big>…</div></div></div>
   <div class="card statuscard"><div class="fit" id="feeder"><h2>Cat Feeder</h2><div class=big>…</div></div></div>
   <div class="card statuscard"><div class="fit" id="mics"><h2>Voice System</h2><div class=big>…</div></div></div>
+  <div class="card statuscard"><div class="fit" id="tv-routing"></div></div>
 </section>
 
 <section class="pane pane-maint">
@@ -149,9 +143,9 @@
 </section>
 
 <section class="pane pane-todo">
-  <!-- Today as a TIMELINE — the dial's grammar, at phone scale (cards/dayline.js mounts #daycard
-       itself). It is here rather than on the home column because an hour-by-hour day is what you
-       open when you are working through one, not what a glance wants. Then the lists themselves. -->
+  <!-- Today as a vertical TIMELINE — the dial's grammar, at phone scale (cards/dayline.js mounts
+       #daycard itself). It is here rather than on the home column because the home column's strip
+       is a glance and this is the one you work through. Then the lists themselves. -->
   <div class="card daycardwrap"><div id="daycard"></div></div>
   <div class="card todocard"><div id="todopane"></div></div>
 </section>

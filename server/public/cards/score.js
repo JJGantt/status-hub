@@ -30,7 +30,12 @@ export function render(s) {
   el.style.setProperty('--nfill', nFill);
   el.style.setProperty('--tfill', tFill);
   el.style.setProperty('--kfill', kFill);
+  // How fast the gold band is falling right now, fading and overdue together, in the band's points a
+  // day. Always drawn, empty when nothing is being lost: the track takes whatever height is left, and a
+  // row that came and went would rescale the bars every time.
+  const loss = sc.tasks && sc.tasks.loss_per_day;
   el.innerHTML =
+    `<div class="hb-loss">${loss ? `\u2212${loss}<span class="hb-unit">/d</span>` : ''}</div>` +
     '<div class="hb-track">' +
       '<div class="hb-col"><div class="hb-fill hb-task"></div></div>' +
       '<div class="hb-col"><div class="hb-fill hb-nutr"></div></div>' +

@@ -293,8 +293,7 @@ function completionStamp(at, nowLocal) {
  */
 function tasksScore({ events = [], open = [], nowLocal }) {
   const now = naive(nowLocal);
-  const empty = { pct: 0, level: 0, units: 0, earned: 0, drained: 0, overdue: 0, completed: 0,
-                  drain_per_day: 0, drain_per_hour: 0, drain_next_hour_pct: 0 };
+  const empty = { pct: 0, level: 0, units: 0, earned: 0, drained: 0, overdue: 0, completed: 0, loss_per_day: 0 };
   if (now == null) return empty;
 
   const stepMs = TASK_STEP_H * HOUR;
@@ -404,18 +403,23 @@ function tasksScore({ events = [], open = [], nowLocal }) {
   }
 
   const level = Math.max(0, Math.min(TASK_FULL_UNITS, levelAt(now)));
-  // What the next hour costs at the current rate, if nothing changes. Surfaced rather than derived
-  // by a caller so there is one answer to "how fast am I bleeding" — and so it cannot drift from the
-  // rate the replay above actually applied.
-  const liveRate = drains.reduce((r, d) => r + (d.from < now && d.to > now ? d.rate : 0), 0);
-  const perHour = liveRate / 24;
+  // HOW FAST THE BAND IS FALLING RIGHT NOW, if nothing changes — one number, both causes.
+  //
+  // Fading: a credit loses its own face value spread evenly over the decay window, so it falls at
+  // face / DAYS a day however old it is, until it reaches zero and stops. That is 1 a day only for a
+  // full 7; a late completion, one the drain has eaten into, or one partly pushed out by overfill all
+  // fade slower, and an important one faster. Summing faces rather than counting credits is the
+  // whole difference between this and "a point a day per completion".
+  // Overdue: every item past its grace, at its own rate.
+  //
+  // Capped by what is there. It is an instantaneous rate, and at 5 points left a band cannot lose 27
+  // in a day, whatever the rate says; an empty band loses nothing.
+  const fading = credits.reduce((r, c) => r + (weightAt(c, now) > 0 ? c.credit : 0), 0) / TASK_DECAY_DAYS;
+  const overdueRate = drains.reduce((r, d) => r + (d.from < now && d.to > now ? d.rate : 0), 0);
   return {
     pct: TASK_FULL_UNITS > 0 ? level / TASK_FULL_UNITS : 0,
     level, units: level, earned, drained,
-    drain_per_day: liveRate,
-    drain_per_hour: perHour,
-    // Capped by what is actually there: at 0.4 units left, the next hour cannot cost more than that.
-    drain_next_hour_pct: TASK_FULL_UNITS > 0 ? Math.min(level, perHour) / TASK_FULL_UNITS : 0,
+    loss_per_day: Math.min(level, fading + overdueRate),
     overdue: drains.filter((d) => d.from < now && d.to > now).length,
     completed: landings.length,
   };
@@ -432,10 +436,9 @@ function computeScore({ volume, days = [], surplus = 0, taskEvents = [], openTas
       pct: pct(k.pct), units: Math.round(k.units * 100) / 100,
       earned: Math.round(k.earned * 100) / 100, drained: Math.round(k.drained * 100) / 100,
       overdue: k.overdue, completed: k.completed,
-      // What the next hour costs at the current rate. Carried on the payload rather than left to a
-      // client to derive, so every surface that ever shows it agrees with the replay that applied it.
-      drain_per_day: Math.round(k.drain_per_day * 100) / 100,
-      drain_next_hour_pct: pct(k.drain_next_hour_pct),
+      // Whole POINTS a day the band is falling at, fading and overdue together. On the payload rather
+      // than derived by a client, so it cannot drift from the replay that produced the level.
+      loss_per_day: Math.round(bandPoints(k.loss_per_day)),
     },
     training: { pct: pct(t.pct), points: t.points, target: t.target },
     nutrition: {

@@ -339,6 +339,7 @@ async function keyOfFrame(rowId) {
 
 // A tool call or a thought of the open conversation's turn joins the view; a finished turn clears
 // them and re-reads the session. Frames for every other session are dropped.
+let frameChain = Promise.resolve();
 async function frame(a) {
   if (!cur || !a || !a.session) return;
   const key = await keyOfFrame(a.session);
@@ -374,7 +375,15 @@ function follow() {
   following = true;
   liveStream('/api/session-stream', {
     sessions: (e) => { try { keep(JSON.parse(e.data)); } catch (_) {} },
-    session: (e) => { try { frame(JSON.parse(e.data)); } catch (_) {} },
+    // ONE AT A TIME, in arrival order. `frame` is async — it may have to look a session up — so fired
+    // unawaited the frames overtake each other whenever one awaits and the next does not: a `said`
+    // arriving before the `queued` it replaces leaves the queued copy stranded below for ever, and one
+    // arriving after its turn's `done` is re-added to a stream that was just cleared. Both looked like
+    // a duplicated prompt. The same chain the orchestrator's sends use, for the same reason.
+    session: (e) => {
+      let a; try { a = JSON.parse(e.data); } catch (_) { return; }
+      frameChain = frameChain.then(() => frame(a)).catch(() => {});
+    },
   }, {
     // A RE-connect: a turn may have ended while the socket was down, and its frames are not replayed.
     onOpen: () => { if (connected && cur) reloadDetail(); connected = true; },
@@ -437,7 +446,7 @@ function paintBody({ open = false, top = false, follow = false } = {}) {
       (t.prompt ? `<div class="sv-words">${inlineMd(t.prompt.trim())}</div>` : '') +
       `<div class="sv-reply">${inlineMd(String(t.reply || '').trim())}</div></div>`).join('') +
     cur.activity.map((a) => a.said
-      ? `<div class="sv-words">${inlineMd(a.text)}</div>`
+      ? `<div class="sv-words">${saidHtml(a.text)}</div>`
       : a.thought
         ? `<div class="sv-thought">${inlineMd(a.text)}</div>`
         : `<div class="sv-tool">${esc(a.text)}</div>`).join('') +
@@ -445,7 +454,7 @@ function paintBody({ open = false, top = false, follow = false } = {}) {
     // SENT, NOT YET READ. Below the caret, because that is what it is: waiting behind whatever the
     // model is still doing. It moves into the stream at the moment the model takes it, which is a
     // real event in the transcript (`absorbed_mid_turn`) and not a guess.
-    cur.pending.map((t) => `<div class="sv-words sv-queued">${inlineMd(t)}</div>`).join('');
+    cur.pending.map((t) => `<div class="sv-words sv-queued">${saidHtml(t)}</div>`).join('');
   if (open || top) {
     // The last block in the body IS the newest thing. Inside a turn the newest part is the reply, not
     // the prompt that asked for it, so a turn resolves one level further in.
@@ -522,6 +531,24 @@ async function uploadShot(file) {
   const j = await r.json().catch(() => ({}));
   if (!r.ok || !j.path) throw new Error(j.error || 'upload failed');
   return j.path;
+}
+
+// HIS WORDS, with any pictures drawn as pictures.
+//
+// A session is typed into, so an attachment reaches it as a line naming local files — which is the
+// right thing for the session and the wrong thing to show him, since he is the one who attached them.
+// The basename IS the hub's object name (the host saves each file under it, see fetchAttachment), so
+// the same bytes come back from /api/attachment and the line becomes the thumbnails it stands for.
+const ATTACH_RE = /^\[Jared attached [^:\]]*: ([^\]]+?) — read (?:it|them) now\.\]\s*/;
+function saidHtml(text) {
+  const m = ATTACH_RE.exec(String(text || ''));
+  if (!m) return inlineMd(String(text || ''));
+  const shots = m[1].split(',').map((p) => p.trim().split('/').pop()).filter((n) => /^[\w.-]+$/.test(n));
+  const rest = String(text).slice(m[0].length).trim();
+  return (shots.length
+    ? `<span class="sv-said-shots">${shots.map((n) =>
+        `<img src="/api/attachment?path=${encodeURIComponent(n)}" alt="">`).join('')}</span>`
+    : '') + (rest ? inlineMd(rest) : '');
 }
 
 // Opening one reads its reply — see `unread` in buildSessions. Fire and forget: the list re-renders

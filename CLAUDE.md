@@ -308,8 +308,19 @@ It also beats app.css's `body.tv.wallportrait` block on equal specificity, by lo
   the cards rebuild the grids on every frame and `paintScrolled` carries the position across, so one
   pin at the wrong moment is a wrong position that persists all day. It stops the moment he drags
   one, which is what `paintScrolled` is for.
-- **The training map runs all the way to the figures.** Same cell as the food map above it — it just
-  gets more columns, because the width is there and the history to fill it is already loaded.
+- **Both maps are the same width**, and the ground beside each is the same shape: the figures fill it
+  on the training side and it stays empty on the food side.
+- **THE TWO MAPS AND THE WEIGH-IN PLOT SCROLL AS ONE.** They are three views of one axis — the same
+  Sunday-aligned weeks at the same cell — so dragging any of them drags the others. Mirrored by
+  DISTANCE FROM THE RIGHT, not by scrollLeft: the food map's archive is shorter (intake logging
+  started later), so the two agree about where `now` is and diverge only at the far end, where the
+  shorter one has nothing anyway. The plot is drawn across the map's whole span inside a scroller of
+  its own, with its three axis values a SIBLING of that scroller rather than a child — inside it they
+  slide off the left end the moment it is dragged, and it lands at the right.
+  The mirroring flag clears a FRAME later, not on the next line: setting `scrollLeft` fires a scroll
+  event of its own, so clearing it synchronously let the mirrored rails answer back and the shortest
+  of them dragged everyone to its own end — the training map could never be scrolled past where the
+  food map ran out.
 - **The body figures fill the training section's height**, and their column's width is what that
   height implies (2 x 0.387 x it) rather than a number picked first — anything less is a band of
   black above and below them. A hair under, deliberately: each split svg holds the whole 72-unit

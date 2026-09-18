@@ -51,8 +51,15 @@ export function render(s) {
  // text to the line instead of its middle, and a number under the top line reads as the one below it.
  const labs = W.axis.map((a) =>
   '<span class=wp-lab style="--y:' + a.y + '">' + a.v + '</span>').join('');
+ // THREE LAYERS, because a surface whose maps scroll wants this to scroll WITH them and its axis
+ // values to stay put while it does. `.wp-scroll` is the viewport, `.wp-plot` the drawing inside it,
+ // and `.wp-axis` a sibling of the scroller rather than a child — so the numbers do not slide off the
+ // left end the moment the plot is dragged. Where nothing scrolls (the walls) the scroller is exactly
+ // the width of its box and this is the same picture it always was.
  el.innerHTML =
-  '<div class=wp-plot>' +
-   '<svg viewBox="0 0 100 100" preserveAspectRatio="none">' + grid + lines + '</svg>' + dots +
-  '</div>' + labs;
+  '<div class=wp-scroll>' +
+   '<div class=wp-plot>' +
+    '<svg viewBox="0 0 100 100" preserveAspectRatio="none">' + grid + lines + '</svg>' + dots +
+   '</div>' +
+  '</div><div class=wp-axis>' + labs + '</div>';
 }

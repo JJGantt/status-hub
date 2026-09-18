@@ -39,25 +39,61 @@ onHistoryLoaded(() => {
   nutritionlog.render(state.last);
 });
 
-// LANDING ON THE NEWEST WEEK, and staying there. scrollLeft 0 is the OLDEST, which on a map whose
-// first columns predate the logging is a box of empty cells — which is exactly how it looked.
+// LANDING ON THE NEWEST WEEK, AND MOVING AS ONE. The two maps and the weigh-in plot over them are
+// three views of one axis — the same Sunday-aligned weeks at the same cell — so dragging any of them
+// drags the others. They are mirrored by DISTANCE FROM THE RIGHT rather than by scrollLeft: the food
+// map's archive is shorter than the training map's (intake logging started later), so the two agree
+// about where `now` is and diverge only at the far end, where the shorter one has nothing anyway.
 //
-// Watched rather than set once: the cards rebuild these grids on every frame, and `paintScrolled`
-// carries the scroll position across a rebuild, so a single pin at the wrong moment (before the
-// archive lands, before the columns have their width) is a wrong position that then persists all
-// day. The observer re-pins on each rebuild instead, and stops as soon as he has dragged one — at
-// which point holding his place is the whole point of paintScrolled.
-for (const id of ['nutheat', 'heatwrap']) {
-  const el = document.getElementById(id);
-  if (!el) continue;
-  let dragged = false;
-  el.addEventListener('scroll', () => {
-    dragged = el.scrollWidth - el.scrollLeft - el.clientWidth > 4;
-  }, { passive: true });
-  const pin = () => { if (!dragged) pinRight(el); };
-  new MutationObserver(pin).observe(el, { childList: true, subtree: true });
-  pin();
+// scrollLeft 0 is the OLDEST, which on a map whose first columns predate the logging is a box of
+// empty cells — which is exactly how it looked. Watched rather than pinned once: the cards rebuild
+// these grids on every frame and `paintScrolled` carries the position across, so a single pin at the
+// wrong moment (before the archive lands, before the columns have their width) is a wrong position
+// that then persists all day. It stops as soon as he has dragged one, at which point holding his
+// place is what paintScrolled is for.
+const rails = () => [document.getElementById('nutheat'), document.getElementById('heatwrap'),
+  document.querySelector('#weightweeks .wp-scroll')].filter(Boolean);
+const endOf = (el) => Math.max(0, el.scrollWidth - el.scrollLeft - el.clientWidth);
+let mirroring = false, dragged = false;
+
+// The flag is cleared a FRAME later, not on the next line. Setting scrollLeft fires a scroll event
+// of its own, asynchronously — so clearing it synchronously let the mirrored rails answer back, and
+// the shortest of them (the food map, whose archive starts later) dragged everyone to its own end.
+// The training map could then never be scrolled past where the food map runs out.
+function mirror(src) {
+  if (mirroring) return;
+  mirroring = true;
+  const end = endOf(src);
+  for (const el of rails()) {
+    if (el === src) continue;
+    el.scrollLeft = Math.max(0, el.scrollWidth - el.clientWidth - end);
+  }
+  requestAnimationFrame(() => { mirroring = false; });
 }
+
+function watch(el) {
+  if (!el || el.dataset.railed) return;
+  el.dataset.railed = '1';
+  el.addEventListener('scroll', () => {
+    if (!mirroring) dragged = endOf(el) > 4;
+    mirror(el);
+  }, { passive: true });
+}
+
+function pinRail() {
+  if (dragged) return;
+  for (const el of rails()) pinRight(el);
+}
+
+for (const id of ['nutheat', 'heatwrap', 'weightweeks']) {
+  const host = document.getElementById(id);
+  if (!host) continue;
+  // The plot's scroller is rebuilt with the plot, so the listener is (re)attached on each rebuild;
+  // the two maps keep their own element and only their contents change.
+  new MutationObserver(() => { rails().forEach(watch); pinRail(); }).observe(host, { childList: true, subtree: true });
+}
+rails().forEach(watch);
+pinRail();
 
 // ---- what is running -----------------------------------------------------
 //

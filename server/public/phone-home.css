@@ -138,8 +138,11 @@ body.tv.phonehome .ds-late.on{display:block}
 body.tv.phonehome .ph-heatrow{flex:0 0 auto}
 body.tv.phonehome .ph-heatcard{flex:1 1 auto;min-width:0}
 body.tv.phonehome .ph-heattop{display:flex;flex-direction:column;gap:4px;min-width:0}
-body.tv.phonehome .ph-nut{width:var(--mapw);min-width:0;display:flex;flex-direction:column;gap:2px}
-body.tv.phonehome .ph-heattop{--mapw:142px;--cell:12px}   /* 11*12 + 10*1 — eleven columns, exactly */
+/* The two maps are the SAME WIDTH, and the ground beside each is the same shape: the figures fill it
+   on the training side, and on the food side it stays empty. `--span` is what one map's whole archive
+   measures, which is what the weigh-in plot has to be drawn across to scroll with it. */
+body.tv.phonehome .ph-nut{padding-right:141px;min-width:0;display:flex;flex-direction:column;gap:2px}
+body.tv.phonehome .ph-heattop{--cell:12px;--span:calc(var(--cols, 20) * (var(--cell) + 1px) - 1px)}
 body.tv.phonehome .ph-block{display:flex;flex-direction:column;gap:2px;min-width:0;position:relative}
 body.tv.phonehome .hmonths{display:none}   /* 9px month labels over a 15-column strip read as a smear */
 /* Fixed-width columns, because the archive is longer than the box: `flex:1 1 0` divides whatever is
@@ -162,7 +165,17 @@ body.tv.phonehome .hcell{width:100%!important;border-radius:1px}
    sitting at rest, which is where it lands and where it is read. */
 body.tv.phonehome .hw-wplot{flex:0 0 22px;min-height:0;position:relative;--hgap:1px;--wpi:5px;
   --half:calc((100% - (var(--cols) - 1) * var(--hgap)) / (2 * var(--cols)))}
-body.tv.phonehome .wp-plot{position:absolute;top:var(--wpi);bottom:var(--wpi);left:var(--half);right:var(--half)}
+body.tv.phonehome .wp-scroll{position:absolute;inset:0;overflow-x:auto;overflow-y:hidden;
+  scrollbar-width:none}
+body.tv.phonehome .wp-scroll::-webkit-scrollbar{display:none}
+/* Drawn across the map's WHOLE span and dragged past the box, rather than fitted to it — that is
+   what lets it move with the columns under it. Inset by half a cell at each end so x still runs from
+   the first column's centre to the last's, which is the whole chart. */
+body.tv.phonehome .wp-plot{position:relative;margin-left:calc(var(--cell) / 2);margin-top:var(--wpi);
+  width:calc(var(--span) - var(--cell));height:calc(100% - 2 * var(--wpi))}
+/* The axis values are a SIBLING of the scroller, not a child: inside it they slide off the left end
+   the moment the plot is dragged, and the plot lands at the right. */
+body.tv.phonehome .wp-axis{position:absolute;inset:0;z-index:2;pointer-events:none}
 body.tv.phonehome .wp-plot svg{display:block;width:100%;height:100%;overflow:visible}
 body.tv.phonehome .wp-grid{stroke:rgba(255,255,255,.10);stroke-width:1}
 body.tv.phonehome .wp-line{fill:none;stroke:#a78bfa;stroke-width:1.4;stroke-linejoin:round;stroke-linecap:round}
@@ -375,6 +388,10 @@ body.tv.phonehome .ph-surfcard .wx-peak{order:-1;flex:0 0 auto;padding:0;align-i
    the grid there is no column to be under. The one that carries it is all that is left. */
 body.tv.phonehome .ph-surfcard .wx-peak span:empty{display:none}
 body.tv.phonehome .ph-surfcard .wx-peak span{flex:0 0 auto;font-size:11px}
+
+/* The floating voice popup is off here. It is a fixed pill over the bottom of the page and the
+   bottom of this page is the conversation, which it sat on top of. One line to put back. */
+body.tv.phonehome .ai-act{display:none}
 
 /* ---- the conversation ----------------------------------------------------------------------------
    THE ABSORBER, and the only block here that can spend an arbitrary amount of height: more room is

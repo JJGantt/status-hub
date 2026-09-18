@@ -331,6 +331,7 @@ body.tv .hw-heatcard .hw-wplot{flex:0 0 68px;min-height:0;position:relative;--hg
    inset is the only reason the axis values can be centred on their own lines: a label centred on a
    line at the very edge of the slot would hang over the card's rule above and over the first cells of
    the nutrition map below. The slot's height does not change, so the 359px sum below is unaffected. */
+body.tv .hw-heatcard .wp-scroll{position:absolute;inset:0}
 body.tv .hw-heatcard .wp-plot{position:absolute;top:var(--wpi);bottom:var(--wpi);
   left:var(--half);right:var(--half)}
 /* overflow visible: the top and bottom axis lines ARE the extreme readings, so they sit on the very

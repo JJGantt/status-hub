@@ -18,10 +18,9 @@ const BODY_SVG = require('./lib/bodymap');
 // robs the sessions column). Cells are fluid, so a trim only helps if the stack keeps its cell size.
 const HOME_HEAT_WEEKS = 15;
 // The PHONE's home page trims no heat map: its maps SCROLL, so what is visible is decided by the box
-// they sit in, and everything either side of that is one drag away. What it does need is a weigh-in
-// plot built on the number of columns its food map SHOWS at rest — eleven — because the plot does
-// not scroll with the map under it and its whole job is to sit over the columns it names.
-const PHONE_HEAT_WEEKS = 11;
+// they sit in and everything either side of that is one drag away. Its weigh-in plot scrolls with
+// them, which is why it is built on the frame's own window rather than a shorter one — it needs a
+// point over every column the food map has, not just the ones on screen.
 // Weeks of heat grid carried in the status frame. The frame is re-pushed on every realtime event,
 // so this window is fixed; everything older is served on demand by /api/heat-history, which splits
 // its prefix at exactly this boundary.
@@ -711,7 +710,9 @@ async function buildStatus() {
   // Built at the HOME window because the home wall is the only surface that draws it: the plot is
   // meaningless away from the columns it is aligned to, so there is no full-window version to trim.
   const weight_plot = buildWeightPlot(weights, HOME_HEAT_WEEKS, today);
-  const weight_plot_phone = buildWeightPlot(weights, PHONE_HEAT_WEEKS, today);
+  // The phone's plot spans the map's WHOLE window, not the part of it on screen: there it scrolls
+  // with the map under it, so it has to have a point over every column the map has.
+  const weight_plot_phone = buildWeightPlot(weights, HEAT_WEEKS, today);
 
   // ---- overall score (0.5·training + 0.5·nutrition over the rolling week) ----
   const { goalForDay } = buildGoalResolver({ rows: nutLogRows || [], weights, targets: targetRows || [], today, surplus, fallbackMaint: maintenance.maintenance });

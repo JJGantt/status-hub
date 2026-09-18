@@ -41,11 +41,6 @@
 <div class="tv-shell">
   <div class="rows">
 
-    <!-- RINGS — calories and the three macros across, with the produce trio stacked at the end. -->
-    <div class="row-card ringrow">
-      <div class="card ringcard"><div class="fit"><div id="nutrition"><h2>Today · Nutrition</h2><div class=big>…</div></div></div></div>
-    </div>
-
     <!-- HEALTH BAR — the three scores, lying on their side. -->
     <div class="healthbar" id="healthbar"></div>
 
@@ -69,20 +64,29 @@
       <div class="card ph-heatcard">
         <div class="ph-heattop">
 
-          <div class="ph-nut">
-            <!-- Weekly weigh-in average over the food map's own week columns. The alignment is the
-                 chart: cards/weightweeks.js insets the box by half a column at each end, in calc
-                 from --cols and the grid's gap, so --hgap must equal the gap in `.heat`. The server
-                 builds a plot per heat window for the same reason (weight_plot_phone). -->
-            <div class="hw-wplot" id="weightweeks" data-history></div>
-            <div class="ph-block" id="nutritionlog" data-history>
-              <div id="nutheat" class="nutheat"></div>
+          <!-- THE FOOD SECTION: the map with its trend over it and its day under it, and the RINGS in
+               the ground beside them. That ground was deliberately empty for a while; the rings are
+               what it is for, and they belong here — they are today's calories and macros, next to
+               the map of every day's. Moving them off the top of the page gave the conversation at
+               the bottom seventy pixels it did not have. -->
+          <div class="ph-nutsec">
+            <div class="ph-nut">
+              <!-- Weekly weigh-in average over the food map's own week columns. The alignment is the
+                   chart: cards/weightweeks.js insets the box by half a column at each end, in calc
+                   from --cols and the grid's gap, so --hgap must equal the gap in `.heat`. -->
+              <div class="hw-wplot" id="weightweeks" data-history></div>
+              <div class="ph-block" id="nutritionlog" data-history>
+                <div id="nutheat" class="nutheat"></div>
+              </div>
+              <!-- The day's totals against target. Its OWN element, outside the scroller below it:
+                   sticky inside one it still moved with the entries for a frame and read as hovering
+                   over them, where the clocks on the training side never move at all. -->
+              <div class="hw-strip" id="nutband"></div>
+              <!-- Every entry on the day, tapping open to its ingredients. -->
+              <div class="ph-list" id="nutinfo"></div>
             </div>
+            <div class="card ringcard"><div id="nutrition"><h2>Today · Nutrition</h2><div class=big>…</div></div></div>
           </div>
-          <!-- The day's totals against target, then every entry on it. Tapping one opens its
-               ingredients. The totals line is sticky at the top of the scroller — it is what the
-               list adds up to, so it does not scroll away from the rows it is the sum of. -->
-          <div class="ph-list" id="nutinfo"></div>
 
           <div class="ph-wksec">
             <div class="ph-wk">

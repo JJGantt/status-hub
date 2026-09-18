@@ -36,37 +36,9 @@ body.tv.phonehome .row-card{display:flex;gap:8px;flex:0 0 auto;min-height:0}
 body.tv.phonehome .card{border:none;border-radius:0;background:#000!important;min-height:0}
 body.tv.phonehome .rows .fit{height:auto;padding:0;gap:4px;overflow:hidden}
 
-/* ---- rings: calories and the three macros across, produce stacked at the end -------------------
-   THE ROW'S HEIGHT IS DECLARED, not left to the content. Sized by its content the produce column
-   came out taller than the four gauges beside it, so the row took its height from the smallest thing
-   on it and the four rings sat in a band of empty black. Pinning the row and dividing it three ways
-   for the produce puts the big rings back in charge of their own box. */
-body.tv.phonehome .ringrow{flex:0 0 70px}
-body.tv.phonehome .ringrow .ringcard{flex:1 1 auto;min-width:0}
-body.tv.phonehome .ringrow #nutrition,body.tv.phonehome .ringrow .fit{height:100%}
-body.tv.phonehome .ringrow #nutrition{display:flex;flex-direction:column}
-body.tv.phonehome .ringrow .rings{flex:1 1 auto;min-height:0;display:flex;flex-direction:row;
-  align-items:center;justify-content:space-between;gap:6px;margin:0}
-body.tv.phonehome .ringrow .ring{flex:0 1 auto;min-width:0;height:100%;display:flex;align-items:center}
-body.tv.phonehome .ringrow .ring svg{max-width:none;max-height:100%;width:auto;height:100%}
-body.tv.phonehome .ringrow .ring .rtot{display:none}
-body.tv.phonehome .ringrow .pnote{display:none}
-/* Each produce square is about a third of a macro ring, so the three of them stack inside the row's
-   own height and the group claims none of it. The width is DECLARED: `auto` on a column of
-   aspect-ratio squares takes it from the SVG's natural size, which is a full-size ring, and the four
-   gauges beside them were pushed off the right edge of the screen by it. */
-body.tv.phonehome .ringrow .ringmini{flex:0 0 20px;width:20px;max-width:none;margin:0;height:100%;
-  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px}
-body.tv.phonehome .ringrow .mring{flex:0 0 20px;width:20px;height:20px;display:flex;align-items:center}
-body.tv.phonehome .ringrow .mring svg{max-width:none;width:100%;height:100%;margin:0}
-/* At this size the glyph would render a few pixels and read as a smudge, so it scales up inside the
-   ring and the stroke thins to make room. Colour is the identifier here; the icon confirms it. */
-body.tv.phonehome .ringrow .mring .micon{transform:scale(1.55);transform-origin:40px 40px}
-body.tv.phonehome .ringrow .mring circle{stroke-width:7}
-
 /* ---- health bar: the three scores lying on their side ------------------------------------------ */
-body.tv.phonehome .healthbar{flex:0 0 10px;flex-direction:row;align-items:stretch;padding:0;min-height:0}
-body.tv.phonehome .hb-track{flex:1 1 auto;width:auto;height:auto;flex-direction:column;gap:2px}
+body.tv.phonehome .healthbar{flex:0 0 20px;flex-direction:row;align-items:stretch;padding:0;min-height:0}
+body.tv.phonehome .hb-track{flex:1 1 auto;width:auto;height:auto;flex-direction:column;gap:3px}
 body.tv.phonehome .hb-track::before{left:50%;right:auto;top:0;bottom:0;width:2px;height:auto}
 body.tv.phonehome .hb-fill{top:0;bottom:0;right:auto;height:auto}
 body.tv.phonehome .hb-task{width:calc(var(--kfill,0)*1%)}
@@ -99,7 +71,13 @@ body.tv.phonehome .ds-hl{position:absolute;top:0;font-size:9px;line-height:12px;
   font-variant-numeric:tabular-nums;white-space:nowrap;pointer-events:none}
 body.tv.phonehome .ds-dlab{position:absolute;top:0;font-size:10px;line-height:12px;font-weight:800;
   letter-spacing:.04em;text-transform:uppercase;color:#c7cdd6;white-space:nowrap;pointer-events:none}
-body.tv.phonehome .ds-more{font-weight:700;color:#8b96a5;margin-left:4px}
+/* The overflow count sits at the RIGHT edge of a day's block, in its header row — a fact about the
+   day rather than a fourth chip, and the block has no room under the chips for one anyway. */
+body.tv.phonehome .ds-more{position:absolute;top:0;font-size:9px;line-height:12px;font-weight:700;
+  color:#8b96a5;transform:translateX(-100%);pointer-events:none}
+/* A chip in a day BLOCK fills it: there is no hour axis under it, so its width says nothing and it
+   may as well spend all of it on the title. */
+body.tv.phonehome .ds-item.ds-block .cw-dchip{width:100%;max-width:100%}
 /* A chip sits at its own time and takes the width its title needs. `max-width` is set by the lane
    packer when that lane's next item arrives before this one has finished — see cards/daystrip.js.
    It is set at the size the rest of the screen is read at. Deriving it from the lane height instead
@@ -144,7 +122,36 @@ body.tv.phonehome .ph-heatcard{flex:1 1 auto;min-width:0}
 body.tv.phonehome .ph-heattop{display:flex;flex-direction:column;gap:4px;min-width:0}
 /* The two maps are the SAME WIDTH, and the ground beside each is the same shape: the figures fill it
    on the training side, and on the food side it stays empty. */
-body.tv.phonehome .ph-nut{padding-right:141px;min-width:0;display:flex;flex-direction:column;gap:2px}
+/* THE FOOD SECTION: the map's column, then the rings in the ground beside it. That ground was
+   deliberately empty for a while and the rings are what it is for — today's calories and macros
+   next to the map of every day's. It also gave the page back the seventy pixels the ring row was
+   taking off the top, which is where the plot's extra height and the conversation's came from. */
+body.tv.phonehome .ph-nutsec{display:flex;gap:8px;align-items:stretch;min-width:0}
+body.tv.phonehome .ph-nut{flex:1 1 auto;min-width:0;display:flex;flex-direction:column;gap:2px}
+/* 134px, the same width as the figures beside the training map below — the two empty grounds were
+   the same shape, so the two things filling them are too. */
+body.tv.phonehome .ringcard{flex:0 0 134px;min-width:0;display:flex;align-items:center;overflow:hidden}
+/* Content-sized and CENTRED, not stretched. The column's height comes from the food map's side of
+   the section, and a ring is sized by its own width — so stretching this only put the four of them
+   at the top with the slack hanging underneath. */
+body.tv.phonehome .ringcard #nutrition{flex:0 0 auto;width:100%;min-width:0;display:flex;
+  flex-direction:column;gap:6px}
+/* FOUR RINGS IN A SQUARE, not a row. In 134px a row of four is 33px a ring; two by two is 65, which
+   is the difference between a gauge and a dot. The produce trio runs underneath, three across. */
+body.tv.phonehome .ringcard .rings{display:grid;grid-template-columns:1fr 1fr;gap:4px;margin:0;
+  flex:0 0 auto}
+body.tv.phonehome .ringcard .ring{min-width:0;display:flex;flex-direction:column;justify-content:center}
+body.tv.phonehome .ringcard .ring svg{max-width:none;max-height:none;width:100%;height:auto}
+body.tv.phonehome .ringcard .ring .rtot{display:none}
+body.tv.phonehome .ringcard .pnote{display:none}
+body.tv.phonehome .ringcard .ringmini{flex:0 0 auto;width:100%;max-width:none;margin:0;
+  display:flex;flex-direction:row;align-items:center;justify-content:space-between;gap:4px}
+body.tv.phonehome .ringcard .mring{flex:1 1 0;min-width:0;display:block}
+body.tv.phonehome .ringcard .mring svg{max-width:none;width:100%;height:auto;margin:0}
+/* At this size the glyph would render a few pixels and read as a smudge, so it scales up inside the
+   ring and the stroke thins to make room. Colour is the identifier here; the icon confirms it. */
+body.tv.phonehome .ringcard .mring .micon{transform:scale(1.5);transform-origin:40px 40px}
+body.tv.phonehome .ringcard .mring circle{stroke-width:7}
 body.tv.phonehome .ph-heattop{--cell:12px}
 body.tv.phonehome .ph-block{display:flex;flex-direction:column;gap:2px;min-width:0;position:relative}
 body.tv.phonehome .hmonths{display:none}   /* 9px month labels over a 15-column strip read as a smear */
@@ -166,7 +173,7 @@ body.tv.phonehome .hcell{width:100%!important;border-radius:1px}
    calc from --cols and the grid's gap. The map SCROLLS and the plot does not, so the plot draws the
    window the frame ships and the scroll carries the map past it — the two agree wherever the map is
    sitting at rest, which is where it lands and where it is read. */
-body.tv.phonehome .hw-wplot{flex:0 0 22px;min-height:0;position:relative;--hgap:1px;--wpi:5px;
+body.tv.phonehome .hw-wplot{flex:0 0 44px;min-height:0;position:relative;--hgap:1px;--wpi:6px;
   --half:calc((100% - (var(--cols) - 1) * var(--hgap)) / (2 * var(--cols)))}
 body.tv.phonehome .wp-scroll{position:absolute;inset:0;overflow-x:auto;overflow-y:hidden;
   scrollbar-width:none}
@@ -208,11 +215,13 @@ body.tv.phonehome .ph-list{flex:0 0 auto;min-width:0;overflow-y:auto;overflow-x:
 body.tv.phonehome .ph-list::-webkit-scrollbar{display:none}
 body.tv.phonehome #nutinfo{height:74px}
 body.tv.phonehome #heatinfo{height:57px}
-/* THE TOTALS ARE BACK TO SAYING WHAT THEY ARE OUT OF. A bare `1380 cal` is half the reading — the
-   rings above are the other half, but only for today and only as a distance. It is STICKY at the top
-   of its own scroller, because it is what the rows under it add up to. */
-body.tv.phonehome .nutday{position:sticky;top:0;z-index:2;display:flex;flex-wrap:nowrap;
-  align-items:baseline;margin:0 0 3px;padding:2px 5px;gap:0 8px;background:#0b0f13;border-radius:5px;
+/* THE TOTALS, on an element of their own (#nutband) above the scroller rather than sticky inside it.
+   Sticky it still travelled with the entries for a frame on every flick and read as hovering over
+   them; the clocks on the training side never move at all, and these two are the same kind of thing.
+   They say what they are OUT OF: a bare `1380 cal` is half the reading, and the rings beside them are
+   the other half only for today and only as a distance. */
+body.tv.phonehome .nutday{display:flex;flex-wrap:nowrap;
+  align-items:baseline;margin:0;padding:2px 5px;gap:0 8px;background:#0b0f13;border-radius:5px;
   white-space:nowrap;overflow:hidden}
 body.tv.phonehome .nd-seg{flex:0 0 auto;font-size:9px}
 body.tv.phonehome .nd-goal{display:inline}
@@ -227,6 +236,14 @@ body.tv.phonehome .ph-list .addbtn,body.tv.phonehome .ph-list .dact{display:none
 body.tv.phonehome .ph-list .dset{background:none;border-radius:0;padding:0;margin:0;font-size:9px;
   color:#8b96a5}
 body.tv.phonehome .ph-list .dex-macros{gap:6px}
+/* NUMBERS ONLY, RULED APART. `396 kcal 19g P 77g C 1g F` is four labelled readings in a column that
+   has room for about two; the order never changes, so `396/19/77/1` is the same reading in a third
+   of the width. cards/nutritionlog.js puts each unit in its own element so this can drop them.
+   The caret and the time go with them: every row expands, so the caret says nothing a tap does not,
+   and the time is the one thing on the row he says he never reads. */
+body.tv.phonehome .ph-list .du,body.tv.phonehome .ph-list .dex-caret,
+body.tv.phonehome .ph-list .dex-time{display:none}
+body.tv.phonehome .ph-list .dex-macros .dset + .dset::before{content:'/';color:#4a545f;margin:0 2px}
 /* An entry: its name and macros on one row, its ingredients under it when it is open. */
 body.tv.phonehome .ph-list .dex{padding:1px 0;border-bottom:1px solid #141a21}
 body.tv.phonehome .ph-list .dex:last-child{border-bottom:none}
@@ -238,8 +255,7 @@ body.tv.phonehome .ph-list .dex-head{display:flex;flex-direction:row;flex-wrap:n
 body.tv.phonehome .ph-list .dex-macros{flex:0 1 auto;min-width:0;overflow:hidden}
 body.tv.phonehome .ph-list .dex-n{flex:0 1 auto;min-width:0;font-size:10px;color:#e6eaf0;
   overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-body.tv.phonehome .ph-list .dex-caret{margin-right:4px;color:#5c6675;font-size:8px}
-body.tv.phonehome .ph-list .dex-macros{flex:0 0 auto;display:flex;align-items:baseline;gap:5px}
+body.tv.phonehome .ph-list .dex-macros{flex:0 0 auto;display:flex;align-items:baseline;gap:0}
 body.tv.phonehome .ph-list .dset{font-size:8px;padding:0}
 body.tv.phonehome .ph-list .ding{display:flex;align-items:baseline;gap:5px;padding:0 0 0 12px}
 body.tv.phonehome .ph-list .ding-n{flex:1 1 auto;min-width:0;font-size:9px;color:#8b96a5;
@@ -277,8 +293,15 @@ body.tv.phonehome #heatinfo .dex-n{font-size:10px;min-width:0;white-space:nowrap
 body.tv.phonehome #heatinfo .dex-sets{flex:1 1 auto;min-width:0;display:flex;gap:7px;
   overflow-x:auto;scrollbar-width:none;white-space:nowrap}
 body.tv.phonehome #heatinfo .dex-sets::-webkit-scrollbar{display:none}
+/* `100 lb x 13` becomes `100x13`: the unit is the same on every set on the page, and the row was
+   running past its width for the sake of repeating it. The COUNT sits at the end, right-aligned and
+   OUTSIDE the scroller — a long working set can still be dragged through, and the total stays put. */
 body.tv.phonehome #heatinfo .dset{flex:0 0 auto;font-size:9px;padding:0;margin:0;background:none;
   border-radius:0;color:#8b96a5}
+body.tv.phonehome #heatinfo .du{display:none}
+body.tv.phonehome #heatinfo .dx{margin:0}
+body.tv.phonehome #heatinfo .wk-n{flex:0 0 auto;margin-left:6px;padding-left:6px;font-size:10px;
+  font-weight:700;color:#c7cdd6;border-left:1px solid rgba(255,255,255,.18)}
 /* The expand glyph is sized for a canvas scaled to about a third, so at native size it is a 64px
    button over the map. A corner mark instead, at the top right. */
 body.tv.phonehome .expand-btn{width:20px;height:20px;left:auto;right:0;top:-1px}

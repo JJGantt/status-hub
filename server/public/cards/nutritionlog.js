@@ -77,11 +77,13 @@ function fmtTime(occurred){
 }
 const mn=v=>Math.round(Number(v)||0); // macro number, rounded
 // Macro chips for an entry/total: cal + P/C/F. `cls` lets the day header use a bolder style.
+// The UNIT is its own element. A surface with no room for `396 kcal 19g P 77g C 1g F` can drop the
+// four units and rule the numbers apart instead — the order is fixed, so `396/19/77/1` says the same
+// thing in a third of the width. Nothing changes where the units are kept.
 function macroChips(o){
- return '<span class=dset>'+mn(o.calories)+' kcal</span>'+
-   '<span class=dset>'+mn(o.protein_g)+'g P</span>'+
-   '<span class=dset>'+mn(o.carbs_g)+'g C</span>'+
-   '<span class=dset>'+mn(o.fat_g)+'g F</span>';
+ const chip=(v,u)=>'<span class=dset>'+v+'<i class=du>'+u+'</i></span>';
+ return chip(mn(o.calories),' kcal')+chip(mn(o.protein_g),'g P')+
+   chip(mn(o.carbs_g),'g C')+chip(mn(o.fat_g),'g F');
 }
 async function loadNutDay(date){
  const tok=++nutReq;
@@ -95,17 +97,22 @@ async function loadNutDay(date){
  const DOW=['SU','M','TU','W','TH','F','SA'][dt.getDay()];
  const dshort=(dt.getMonth()+1)+'/'+dt.getDate();
  const dayband=(inner)=>'<div class=nutday><span class=nd-date>'+DOW+' '+dshort+'</span>'+inner+'</div>';
+ // A surface can give the band an element of its OWN, outside whatever scrolls the entries. Sticky
+ // inside the scroller it still moved with them for a frame and read as hovering over the list; the
+ // clocks on the training side never move, and these two are the same kind of thing.
+ const bandEl=document.getElementById('nutband');
+ const putBand=(html)=>{ if(bandEl){ bandEl.innerHTML=html; return ''; } return html; };
  // `data-band` asks for the summary line ONLY — the wall wants the day's totals under its heatmap,
  // not an entry list it has no room for and nobody can tap.
  const bandOnly=ni.dataset.band!==undefined;
- if(!j.entries||!j.entries.length){ ni.innerHTML=dayband('')+(bandOnly?'':'<div class=bi-none>No food logged</div>'); return; }
+ if(!j.entries||!j.entries.length){ ni.innerHTML=putBand(dayband(''))+(bandOnly?'':'<div class=bi-none>No food logged</div>'); return; }
  const tm=j.target_macros||{};
  const seg=(v,goal,lbl)=>'<span class=nd-seg><b>'+v+'</b>'+(goal!=null?'<span class=nd-goal>/'+goal+'</span>':'')+' '+lbl+'</span>';
- let h=dayband(
+ let h=putBand(dayband(
    seg(j.total_cal, j.target_cal>0?j.target_cal:null, 'cal')+
    seg(mn(j.total_protein), tm.protein_g!=null?tm.protein_g:null, 'P')+
    seg(mn(j.total_carbs), tm.carbs_g!=null?tm.carbs_g:null, 'C')+
-   seg(mn(j.total_fat), tm.fat_g!=null?tm.fat_g:null, 'F'));
+   seg(mn(j.total_fat), tm.fat_g!=null?tm.fat_g:null, 'F')));
  if(bandOnly){
   ni.innerHTML=h;
   // The last thing ADDED to the log, into its own element when a surface has one — staged or eaten,
@@ -149,7 +156,7 @@ async function loadNutDay(date){
   h+='<div class="dex dex-exp'+(staged?' dex-staged':'')+'" data-idx="'+i+'">'+
      '<div class="dex-head" data-toggle="'+i+'">'+
        '<div class=dex-n><span class=dex-caret>'+(open?'▾':'▸')+'</span>'+esc(e.name||'—')+(staged?' <span class=stagedbadge>STAGED</span>':'')+'</div>'+
-       '<div class=dex-macros>'+macroChips(e)+((!staged&&t)?'<span class=dset>'+t+'</span>':'')+
+       '<div class=dex-macros>'+macroChips(e)+((!staged&&t)?'<span class="dset dex-time">'+t+'</span>':'')+
          (staged?'<button class="addbtn commitbtn" type=button data-commit-entry="'+i+'" title="Commit — log as eaten now">commit</button>':'')+
        '</div>'+
      '</div>';

@@ -196,9 +196,15 @@ async function loadHeatDay(date){
  lastHeatExercises=j.exercises;
  let h='<div class=heath>'+date+' · '+j.total+' sets</div>';
  j.exercises.forEach((ex,i)=>{
+  // `lb` and the multiplication sign are their own elements for the same reason the macro units are:
+  // a surface with no room for `100 lb × 13` can drop the unit and close the gaps, and `100×13` says
+  // the same thing. The COUNT rides at the end of the row — right-aligned and outside whatever
+  // scrolls the sets, so a long working set still leaves the total readable.
   h+='<div class=dex><div class=wk-exhead><div class=dex-n>'+esc(ex.name)+'</div>'+
      '<button class="addbtn wk-rep" type=button data-rep="'+i+'" title="Log another set (same weight)">+</button></div>'+
-     '<div class=dex-sets>'+ex.sets.map(st=>'<span class="dset wk-set" data-set="'+st.id+'" data-w="'+st.weight_lbs+'" data-r="'+st.reps+'" title="Tap to edit">'+(st.weight_lbs===0?'BW':(st.weight_lbs+' lb'))+' × '+st.reps+'</span>').join('')+'</div></div>';
+     '<div class=dex-sets>'+ex.sets.map(st=>'<span class="dset wk-set" data-set="'+st.id+'" data-w="'+st.weight_lbs+'" data-r="'+st.reps+'" title="Tap to edit">'+
+       (st.weight_lbs===0?'BW':(st.weight_lbs+'<i class=du> lb</i>'))+'<i class=dx>×</i>'+st.reps+'</span>').join('')+'</div>'+
+     '<span class=wk-n>'+ex.sets.length+'</span></div>';
  });
  hi.innerHTML=h;
  if(sp&&stick)sp.scrollTop=sp.scrollHeight; // scroll to the newest set

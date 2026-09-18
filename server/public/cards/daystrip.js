@@ -27,7 +27,10 @@
 import { esc } from '../shared.js';
 import { chip } from './dayline.js';
 
-const TICK_EVERY = 3;    // hours between hour labels and their guide lines
+// EVERY hour is labelled on today, because the strip doubles as the clock — "is it nearer 4 or 5"
+// should not need counting from a mark three hours away. That is what sets the scale: a label is
+// about eighteen pixels, so an hour has to be wide enough to hold one and still read as a gap.
+const TICK_EVERY = 1;
 const LANE_GAP = 3;
 const CHIP_GAP = 4;      // clear space between two chips sharing a lane
 const MIN_LANES = 3;     // always reserved, even on an empty day — the room for a collision
@@ -57,10 +60,10 @@ const hourLabel = (h) => `${h % 12 || 12}${h < 12 ? 'a' : 'p'}`;
  * and how tall they get is measured off the element (see geom), because on this page the strip is
  * the block that absorbs whatever height the rest of the screen did not need.
  */
-export function mountStrip(el, { axisH = 14, hourW = 26 } = {}) {
+export function mountStrip(el, { axisH = 14, hourW = 36, dayW = 96 } = {}) {
   if (!el) return null;
   host = el;
-  cfg = { axisH, hourW };
+  cfg = { axisH, hourW, dayW };
   el.innerHTML = '<div class="ds-scroll"><div class="ds-strip"></div></div><span class="ds-here"></span>';
   // WHICH DAY YOU ARE LOOKING AT, pinned to the left edge and not scrolling with the strip. The day
   // names inside it sit at their own midnights, so today's is off the left end from the moment the
@@ -89,6 +92,15 @@ export function mountStrip(el, { axisH = 14, hourW = 26 } = {}) {
 // only when the day actually wants one, and nothing beyond that.
 const boxH = (n) => cfg.axisH + n * LANE_H + (n - 1) * LANE_GAP;
 
+// TWO SCALES ON ONE BAND. Today is a clock — hours across, every one of them labelled, wide enough
+// to read the time off. A day at a remove is not a clock: nobody asks where in Saturday something
+// falls, only what is on it, so it collapses to a BLOCK the width of a few chips. Giving every day
+// today's scale spent six hundred pixels a day saying almost nothing, and made today's hours narrow
+// enough that only every third could be named.
+const todayW = () => 24 * cfg.hourW;
+const dayStart = (k) => (k === 0 ? 0 : todayW() + (k - 1) * cfg.dayW);
+const dayWidth = (k) => (k === 0 ? todayW() : cfg.dayW);
+
 function nowX() {
   const n = new Date();
   return (n.getHours() + n.getMinutes() / 60) * cfg.hourW;
@@ -98,8 +110,9 @@ function nowX() {
 function here() {
   if (!host || !lastD || !lastD.ahead) return;
   const sc = host.querySelector('.ds-scroll');
-  const k = Math.min(lastD.ahead.length - 1,
-    Math.max(0, Math.floor((sc.scrollLeft + 1) / (24 * cfg.hourW))));
+  const x = sc.scrollLeft + 1;
+  let k = 0;
+  while (k + 1 < lastD.ahead.length && x >= dayStart(k + 1)) k++;
   const d = lastD.ahead[k];
   const lab = host.querySelector('.ds-here');
   if (d && lab) lab.textContent = `${d.dow} ${d.day}`;
@@ -117,46 +130,63 @@ function paint(d) {
   const days = d.ahead;
   const scroll = host.querySelector('.ds-scroll');
   const strip = host.querySelector('.ds-strip');
-  const dayW = 24 * cfg.hourW;
   const N = MAX_LANES;
-  strip.style.width = `${days.length * dayW}px`;
+  strip.style.width = `${dayStart(days.length - 1) + dayWidth(days.length - 1)}px`;
   strip.style.height = `${boxH(N)}px`;
 
-  // The axis: a rule and a label at each midnight, a fainter one every three hours. Day one is
-  // today and gets no rule — the now-line is the mark on it, and a second line at its left edge
-  // would read as one more boundary rather than as where the strip begins.
+  // THE AXIS. Today gets an hour rule and an hour NAME at every hour; a day at a remove gets one
+  // rule at its own edge and its name. Today's own name sits at x=0 and there is no rule under it —
+  // the now-line is the mark on today, and a second line at the strip's left edge would read as one
+  // more boundary rather than as where it begins.
   let html = '';
   days.forEach((day, k) => {
-    const x0 = k * dayW;
+    const x0 = dayStart(k);
     if (k) html += `<i class="ds-day" style="left:${x0}px"></i>`;
-    const more = day.more ? `<b class="ds-more">+${day.more}</b>` : '';
-    html += `<span class="ds-dlab" style="left:${x0 + (k ? 3 : 0)}px">${esc(day.dow)} ${day.day}${more}</span>`;
+    html += `<span class="ds-dlab" style="left:${x0 + (k ? 3 : 0)}px">${esc(day.dow)}\u00a0${day.day}</span>`;
+    if (k) return;
     for (let h = TICK_EVERY; h < 24; h += TICK_EVERY) {
       const x = x0 + h * cfg.hourW;
-      // The LINE always; the label only where the day's own name is not already sitting. At this
-      // scale the first tick after a midnight is thirty pixels from it, which is inside the word.
+      // The LINE always; the NAME wherever today's own label is not already sitting.
       html += `<i class="ds-tick" style="left:${x}px"></i>` +
-        (h > TICK_EVERY ? `<span class="ds-hl" style="left:${x + 2}px">${hourLabel(h)}</span>` : '');
+        (h > 1 ? `<span class="ds-hl" style="left:${x + 2}px">${hourLabel(h)}</span>` : '');
     }
   });
 
-  // Every item on the seven days, in time order — the order lane packing has to walk them in.
+  // TODAY's items, in time order — the order lane packing has to walk them in.
   const items = [];
-  days.forEach((day, k) => (day.items || []).forEach((it) => {
+  (days[0].items || []).forEach((it) => {
     const h = hourOf(it.time);
-    items.push({ it, x: k * dayW + (h == null ? 0 : h * cfg.hourW), timed: h != null });
-  }));
+    items.push({ it, x: h == null ? 0 : h * cfg.hourW, timed: h != null });
+  });
   items.sort((a, b) => a.x - b.x);
   html += items.map((o) =>
     `<span class="ds-item" style="left:${o.x}px">${chip(o.it, o.timed)}</span>`).join('');
+
+  // A DAY AT A REMOVE is a stack: one chip per lane, in time order, as many as the lanes allow and
+  // the rest counted at its head. The chips carry their time, because there is no hour axis under
+  // them to say it.
+  let blocks = 0;
+  days.forEach((day, k) => {
+    if (!k) return;
+    const all = day.items || [];
+    const show = all.slice(0, N);
+    if (show.length > blocks) blocks = show.length;
+    const over = (day.more || 0) + Math.max(0, all.length - N);
+    if (over) html += `<b class="ds-more" style="left:${dayStart(k) + cfg.dayW - 3}px">+${over}</b>`;
+    show.forEach((it, lane) => {
+      html += `<span class="ds-item ds-block" style="left:${dayStart(k) + 2}px;` +
+        `width:${cfg.dayW - 4}px;top:${cfg.axisH + lane * (LANE_H + LANE_GAP)}px">` +
+        `${chip(it, true)}</span>`;
+    });
+  });
   html += `<i class="ds-now" style="left:${nowX()}px"></i>`;
   strip.innerHTML = html;
 
-  // Lane packing, after the browser has measured what each title actually wants.
-  const els = [...strip.querySelectorAll('.ds-item')];
+  // Lane packing for TODAY only — a block's chips already have their lane.
+  const els = [...strip.querySelectorAll('.ds-item:not(.ds-block)')];
   const right = new Array(N).fill(-Infinity);   // where each lane is busy until
   const last = new Array(N).fill(null);         // and what is sitting there
-  let used = 0;                                 // how many the day actually needed
+  let used = blocks;                            // how many lanes anything on the strip needed
   els.forEach((e, i) => {
     const x = items[i].x;
     let lane = right.findIndex((r) => r <= x - CHIP_GAP);
@@ -184,7 +214,7 @@ function paint(d) {
   if (!placed || today !== day0) {
     day0 = today; placed = true;
     requestAnimationFrame(() => {
-      scroll.scrollLeft = Math.max(0, nowX() - scroll.clientWidth * 0.22);
+      scroll.scrollLeft = Math.max(0, nowX() - scroll.clientWidth * 0.3);
       here();
     });
   }

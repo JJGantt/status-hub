@@ -176,14 +176,18 @@ let act = null;
 let actT = 0;           // a run that never reports an end must not leave the line up for ever
 onActivity((a) => {
   const state = a.state || 'tool';
+  const first = !act;              // the run's FIRST frame — see the pin below
   clearTimeout(actT);
   if (state === 'done' || state === 'error') act = null;
   else if (state === 'working') act = { text: '' };
   else act = { text: String(a.text || '').replace(/\s+/g, ' ').trim() };
   if (act) actT = setTimeout(() => { act = null; paintConv(); }, 5 * 60 * 1000);
-  // NOT pinned: a line that redraws every few seconds would drag him back down every time he scrolled
-  // up to read something. At the bottom, which is where it matters, `held` is false and it sticks.
-  paintConv();
+  // PINNED ON THE FIRST FRAME ONLY. The box lands on the TOP of the last message, so with a long
+  // reply above it the new line is below the fold and the one thing it exists to say is invisible —
+  // the run's first frame is therefore worth the jump, exactly as his own prompt landing is. Every
+  // frame after it repaints where he left it, so a line changing every few seconds cannot drag him
+  // back down while he is reading.
+  paintConv(first && !!act);
 });
 function clearAct() { clearTimeout(actT); act = null; }
 

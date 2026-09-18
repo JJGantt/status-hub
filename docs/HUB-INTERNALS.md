@@ -525,6 +525,10 @@ dated item — every occurrence is a real row, so nothing is projected; `?month=
 the day timeline and reads `calendar_months` for the spread, `?day=1` is the timeline alone and
 `&full=1` makes it a rolling ±12h window instead of a calendar day — see the dial below, and
 `&ahead=N` adds the N days after today as `ahead`) · `/api/badge` · `/api/repos` ·
+`/api/session-activity` (a live session's steps, relayed straight out over SSE — `tool`, `text` for
+what it says between calls, `said` for HIS words arriving mid-turn, `done` for the finished reply.
+`said` exists so a prompt sent while a turn runs lands in the stream where it happened instead of at
+the top of the turn it interrupted) ·
 `/api/repos/cmd/:id` · `/api/sessions` (live desk sessions + the follow-up `focus`; each row carries
 `unread`, a finished reply nobody has opened) · `/api/sessions/seen` (opening one stamps
 `desk_sessions.seen_at`, which is what clears it on every surface) ·

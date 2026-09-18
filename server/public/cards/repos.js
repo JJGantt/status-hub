@@ -342,14 +342,13 @@ async function frame(a) {
   if (!cur || key !== cur.key) return;
   if (a.state !== 'done') {
     if (!a.text) return;
-    cur.activity.push({ text: String(a.text), thought: a.state === 'text' });
+    cur.activity.push({ text: String(a.text), thought: a.state === 'text', said: a.state === 'said' });
     cur.working = true;
     paintBody({ follow: true });
     return;
   }
   cur.id = a.session;
   cur.activity = [];
-  cur.mine = '';
   await reloadDetail();
 }
 
@@ -383,7 +382,7 @@ async function reloadDetail() {
   at.detail = d;
   at.working = !!d.working;
   // A reply that has landed ends the turn whether or not its `done` frame got here.
-  if (fresh) { at.activity = []; at.mine = ''; }
+  if (fresh) { at.activity = []; }
   paintHead();
   paintBody({ top: fresh });
 }
@@ -424,10 +423,11 @@ function paintBody({ open = false, top = false, follow = false } = {}) {
     turnsOf(cur.detail).map((t) => '<div class="sv-turn">' +
       (t.prompt ? `<div class="sv-words">${inlineMd(t.prompt.trim())}</div>` : '') +
       `<div class="sv-reply">${inlineMd(String(t.reply || '').trim())}</div></div>`).join('') +
-    (cur.mine ? `<div class="sv-words">${inlineMd(cur.mine)}</div>` : '') +
-    cur.activity.map((a) => a.thought
-      ? `<div class="sv-thought">${inlineMd(a.text)}</div>`
-      : `<div class="sv-tool">${esc(a.text)}</div>`).join('') +
+    cur.activity.map((a) => a.said
+      ? `<div class="sv-words">${inlineMd(a.text)}</div>`
+      : a.thought
+        ? `<div class="sv-thought">${inlineMd(a.text)}</div>`
+        : `<div class="sv-tool">${esc(a.text)}</div>`).join('') +
     (cur.working ? '<div class="sv-working"><span class="ai-caret">▍</span></div>' : '');
   if (open || top) {
     // The last block in the body IS the newest thing. Inside a turn the newest part is the reply, not
@@ -465,7 +465,9 @@ async function sendWords(text) {
     if (cur === at) {
       const box = el.querySelector('.sv-text');
       if (box && box.value.trim() === text) box.value = '';
-      at.mine = text;
+      // Into the stream, not into a slot of its own: what he says mid-turn belongs where it happened,
+      // among the steps that ran before and after it.
+      at.activity.push({ text, said: true });
       paintBody();
       const body = el.querySelector('.sv-body');
       if (body) body.scrollTop = body.scrollHeight;
@@ -506,7 +508,7 @@ async function openSession(id) {
     d = await r.json();
   } catch (_) { return false; }
   if (cur && cur.rec) cur.rec.stop();
-  cur = { id: d.id, key: keyOfRow(d), detail: d, working: !!d.working, activity: [], mine: '', msg: null, sending: false, rec: null };
+  cur = { id: d.id, key: keyOfRow(d), detail: d, working: !!d.working, activity: [], msg: null, sending: false, rec: null };
   const at = cur;
   const pane = el.closest('.pane');
   if (pane) pane.classList.add('sv-open');

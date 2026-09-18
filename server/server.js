@@ -2340,10 +2340,15 @@ app.post('/api/session-activity', express.json(), (req, res) => {
   const b = req.body || {};
   const session = String(b.session || '');
   if (!session) return res.status(400).json({ error: 'session required' });
-  const state = ['done', 'text'].includes(b.state) ? b.state : 'tool';
+  // `said` is HIS WORDS arriving mid-turn — a prompt typed or dictated into a session while it is
+  // still working. It has to survive as its own state: collapsed into 'tool' it would be drawn as a
+  // tool call, and dropped it would reach the view only when the turn ended, where it renders above
+  // steps that had already happened before he said it.
+  const state = ['done', 'text', 'said'].includes(b.state) ? b.state : 'tool';
   const done = state === 'done';
-  // A thought can run to a paragraph; a tool line or a row's reply never needs more than 400.
-  const text = String(b.text || '').slice(0, state === 'text' ? 2000 : 400);
+  // A thought or a dictated prompt can run to a paragraph; a tool line or a row's reply never needs
+  // more than 400.
+  const text = String(b.text || '').slice(0, (state === 'text' || state === 'said') ? 2000 : 400);
   pushSession({ session, state, text });
   if (done && text) notifySessionReply(session, text, typeof b.at === 'string' ? b.at : null);
   res.status(204).end();

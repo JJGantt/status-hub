@@ -8,6 +8,13 @@ const CAL_COLOR='#3b82f6', W_COLOR='#a78bfa';
 let nutSelDate=null, nutReq=0;
 let lastDayEntries=null, lastDayDate=null; // last day-detail loaded (for add-popup lookups)
 const expandedIds=new Set(); // entry ids whose ingredient breakdown is open — persists across SSE re-renders until closed by hand
+// Back to now (the phone's reset button): every open breakdown closes. The set is what keeps one
+// open across re-renders, so clearing it and repainting the day is the whole of it.
+addEventListener('hubreset',()=>{
+ if(!expandedIds.size)return;
+ expandedIds.clear();
+ if(nutSelDate)loadNutDay(nutSelDate); else if(state.last)render(state.last);
+});
 
 export function render(s){
  // Shorter calendar on the home wall (it shares its column with the muscle map); see workouts.js.

@@ -143,10 +143,9 @@ body.tv.phonehome .ph-heatrow{flex:0 0 auto}
 body.tv.phonehome .ph-heatcard{flex:1 1 auto;min-width:0}
 body.tv.phonehome .ph-heattop{display:flex;flex-direction:column;gap:4px;min-width:0}
 /* The two maps are the SAME WIDTH, and the ground beside each is the same shape: the figures fill it
-   on the training side, and on the food side it stays empty. `--span` is what one map's whole archive
-   measures, which is what the weigh-in plot has to be drawn across to scroll with it. */
+   on the training side, and on the food side it stays empty. */
 body.tv.phonehome .ph-nut{padding-right:141px;min-width:0;display:flex;flex-direction:column;gap:2px}
-body.tv.phonehome .ph-heattop{--cell:12px;--span:calc(var(--cols, 20) * (var(--cell) + 1px) - 1px)}
+body.tv.phonehome .ph-heattop{--cell:12px}
 body.tv.phonehome .ph-block{display:flex;flex-direction:column;gap:2px;min-width:0;position:relative}
 body.tv.phonehome .hmonths{display:none}   /* 9px month labels over a 15-column strip read as a smear */
 /* Fixed-width columns, because the archive is longer than the box: `flex:1 1 0` divides whatever is
@@ -175,8 +174,14 @@ body.tv.phonehome .wp-scroll::-webkit-scrollbar{display:none}
 /* Drawn across the map's WHOLE span and dragged past the box, rather than fitted to it — that is
    what lets it move with the columns under it. Inset by half a cell at each end so x still runs from
    the first column's centre to the last's, which is the whole chart. */
+/* The width is resolved HERE, not inherited. `--cols` is written by cards/weightweeks.js onto
+   #weightweeks, and a `--span` declared further up the tree resolves its own `var(--cols)` against
+   the element it is declared ON — which does not have one, so it silently took the fallback. The
+   plot came out twenty weeks wide against maps twenty-nine weeks wide, which left it about a week
+   and a half of travel: dragging the maps moved it a hair and then it stopped. */
 body.tv.phonehome .wp-plot{position:relative;margin-left:calc(var(--cell) / 2);margin-top:var(--wpi);
-  width:calc(var(--span) - var(--cell));height:calc(100% - 2 * var(--wpi))}
+  width:calc(var(--cols, 20) * (var(--cell) + 1px) - 1px - var(--cell));
+  height:calc(100% - 2 * var(--wpi))}
 /* The axis values are a SIBLING of the scroller, not a child: inside it they slide off the left end
    the moment the plot is dragged, and the plot lands at the right. */
 body.tv.phonehome .wp-axis{position:absolute;inset:0;z-index:2;pointer-events:none}

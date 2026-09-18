@@ -331,7 +331,12 @@ It also beats app.css's `body.tv.wallportrait` block on equal specificity, by lo
   The mirroring is then in WEEKS, not pixels: `round((max - scrollLeft) / 13)`. Pixels would be close
   and not equal, because the plot's drawing is inset half a cell at each end and its scroll range is
   a column narrower than a map's.
-  The plot is drawn across the whole span inside a scroller of its own, with its axis values a
+  The plot's WIDTH is resolved on the plot itself, from the `--cols` cards/weightweeks.js writes onto
+  `#weightweeks`. A `--span` declared further up the tree resolved its own `var(--cols)` against the
+  element it was declared ON, which has none — so it took the fallback silently, drew the plot twenty
+  weeks wide against maps twenty-nine weeks wide, and left it a week and a half of travel: dragging
+  the maps moved it a hair and then it stopped.
+  It is drawn across the whole span inside a scroller of its own, with its axis values a
   SIBLING of that scroller rather than a child — inside it they slide off the left end the moment it
   is dragged, and it lands at the right. It is also REPLACED outright on every render where the maps
   are repainted through `paintScrolled`, so the rebuild handler puts it back on the week the maps are

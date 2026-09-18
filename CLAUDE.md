@@ -291,10 +291,24 @@ It also beats app.css's `body.tv.wallportrait` block on equal specificity, by lo
   time: two full days side by side is most of the strip spent on two days, which is the thing the
   blocks exist to avoid. The strip runs sixty days out (`ahead=60`), because a scroller that stops a
   week from now is a week you can reach and nothing beyond it.
-- **The RESET button on the navbar** (`hubreset`, broadcast on `window`) puts every scroll position
-  on the page back: the three heat rails to the newest week, the four lists to their own end, the
-  surf plots to today, and the strip to now with only today open. It is an event rather than a call
-  so that whoever owns a position listens for it, and the navbar needs to know none of them.
+- **The RESET button on the navbar** (`hubreset`, broadcast on `window`) leaves the page as a FRESH
+  LOAD would leave it, without reloading. Not just scroll: the three heat rails to the newest week,
+  every list to its own end, the pane back to home, the surf plots to today, the strip to now with
+  only today open, BOTH heat maps' selected day back to today, every expanded nutrition entry closed,
+  the muscle sheet and any open section sheet closed, and a session opened over the repos list back
+  to the list. It is an event rather than a call so that whoever owns a piece of that state listens
+  for it and the navbar needs to know none of them — which is also the trap: state added anywhere
+  without a listener is state the reset silently leaves behind.
+- **The RINGS FOLLOW THE SELECTED DAY.** Tapping a cell on the food heat map points all seven gauges,
+  the `2699 / 3060` under each and the deviation in each hole at that day, against the goal THAT day
+  had — the calorie target is dynamic and the macro split is off that day's bodyweight, so a day in
+  July is not measured against today's numbers. `cards/nutritionlog.js` announces the day it has
+  loaded (`nutday`) and `cards/nutrition.js` draws it; today is announced too, which is what puts the
+  rings back on the live clock. A finished day is `frac = 1` — the whole goal was expected, so the arc
+  is simply what was eaten against it, which is the same math the live tick reaches at the end of the
+  eating window rather than a second way of drawing a ring. The mini produce rings move with them:
+  `/api/nutrition-day` rolls that day's own produce, or three of the seven would still be reporting
+  today beside a day in August.
 - **Which day it is, is pinned to the left of the strip** and does not scroll with it (`.ds-here`).
   The day names inside the strip sit at their own midnights, so today's is off the left end from the
   moment it lands on now — and the only date anywhere on the page then read FRI 18: tomorrow.
@@ -324,6 +338,16 @@ It also beats app.css's `body.tv.wallportrait` block on equal specificity, by lo
   rule in the small box, and the reset button uses it too.
   Measured off the rects rather than `offsetTop`: the box is not an offset parent, so offsetTop is
   against some ancestor and the difference is a shift, not the number wanted.
+  **A COMMAND HE HAS SPOKEN APPEARS BEFORE THE REPLY DOES.** The worker writes the user bubble only
+  once the run is over — deliberately, so a wake-word false positive never lands in the thread — so
+  the box sat unchanged from the moment he spoke until the whole answer arrived, and then both lines
+  appeared at once. `onPending` in voiceagent.js is the conversation card's optimistic bubble for
+  every OTHER view of the thread: three dots while a clip is being transcribed, then the transcript
+  in its place, then the real row replacing it. Two sources, and both are needed — the upload's own
+  answer is LOCAL (only the recording device knows a clip is in the air), while the worker's `working`
+  activity carries the transcript to EVERY device, which is what makes a command spoken at the puck
+  appear here. The placeholder is taken down by the matching user row or by the reply, never by a
+  resync replaying history, and a run that reports nothing back drops it after five minutes.
   The full thread with its composer is the chat pane, one swipe left; that one still renders the
   source, since it was not what he asked for.
 - **The two heat maps are STACKED, each a small block at the LEFT of its own section.** Above each

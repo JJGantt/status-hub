@@ -114,7 +114,9 @@ function boot() {
     if (msg.kind === 'activity') {                 // live progress, pushed direct from the worker (low-latency)
       const a = msg.row || {};
       if ((a.focus || 'hub') !== 'hub') return;
-      if (a.state === 'working') playPop();        // his words just landed on screen
+      // His words just landed on screen — and this is the one event that carries them to a device that
+      // did not do the recording, so it is what puts a command spoken at the puck into every thread view.
+      if (a.state === 'working') { playPop(); pushPending({ state: 'prompt', text: a.text }); }
       if (a.state === 'done') activity.done(a.text);
       else if (a.state === 'error') activity.err(a.text);           // a command it could not act on
       else if (a.state === 'escalate') activity.escalate(a.text);   // Sonnet handed off to Opus mid-run
@@ -147,6 +149,21 @@ function boot() {
 // page). The callback gets each new row, and `null` meaning RESYNC — a reconnect, or the tab coming
 // back to the foreground, where a suspended stream has already missed whatever arrived.
 export function onThread(fn) { threadSubs.push(fn); fn(null); }
+
+// ---- the command that has been HEARD but is not in the thread yet ---------
+//
+// The worker writes the user bubble only once the run is over — deliberately, so a wake-word false
+// positive never lands in the thread — which means a thread view shows nothing at all between speaking
+// and the reply, and then both lines at once. The conversation CARD covers that with its own optimistic
+// bubble; this is the same thing for every OTHER view of the thread (the phone home page's box).
+//
+// Two sources, and both are needed. `transcribing` and the transcript that comes back from the upload
+// are LOCAL — only the device that recorded knows a clip is in the air. The worker's `working` activity
+// carries the transcript to every device, which is what makes a command spoken at the puck or the Mac
+// appear here too; it arrives second on the recording device and says the same thing.
+const pendingSubs = [];
+export function onPending(fn) { pendingSubs.push(fn); }
+function pushPending(p) { for (const f of pendingSubs) { try { f(p); } catch (_) {} } }
 
 // ONE microphone, held for as long as the hub is on screen.
 //
@@ -569,6 +586,8 @@ function hereNow() {
 // answer from the server, as opposed to never reaching it.
 async function deliverVoice(item, onStatus, owner) {
   onStatus('Transcribing…', 'busy');
+  // A dictation goes into a text box, not into the conversation, so it is nobody else's business.
+  if (!item.dry) pushPending({ state: 'transcribing' });
   const qp = new URLSearchParams();
   if (item.dry) qp.set('dry', '1');
   if (item.quick) qp.set('quick', '1');
@@ -581,17 +600,19 @@ async function deliverVoice(item, onStatus, owner) {
     method: 'POST', headers: { 'Content-Type': item.type }, body: item.blob });
   const j = await r.json().catch(() => ({}));
   if (!r.ok || j.error) throw Object.assign(new Error(j.error || 'Send failed'), { refused: true });
-  if (j.duplicate) onStatus('', 'clear');                                    // an earlier attempt already enqueued it
-  else if (!j.transcript) onStatus('Didn’t catch that — try again', 'err');
+  if (j.duplicate) { onStatus('', 'clear'); pushPending({ state: 'clear' }); }  // an earlier attempt already enqueued it
+  else if (!j.transcript) { onStatus('Didn’t catch that — try again', 'err'); if (!item.dry) pushPending({ state: 'clear' }); }
   else if (item.dry) { owner.onTranscript(j.transcript); onStatus('', 'clear'); }   // compose mode: into the text box
   else {                                                                     // show what was heard, then stream the run
     if (_card) _card.optimistic({ text: j.transcript, kind: 'text' });       // the spoken command as its own live user bubble
+    pushPending({ state: 'prompt', text: j.transcript });                    // and in every other view of the thread
     onStatus(j.transcript, 'prompt'); onStatus('Thinking…', 'busy');
   }
 }
 
 function voiceFailed(err, item, onStatus) {
   onStatus(err && err.refused ? err.message : 'Send failed', 'err');
+  if (!item.dry) pushPending({ state: 'clear' });   // nothing is coming — take the placeholder down
   clientLog({ ev: 'voice-send-fail', err: String((err && err.message) || err), refused: !!(err && err.refused),
     bytes: item.blob ? item.blob.size : 0, type: item.type, dur: item.dur });
 }

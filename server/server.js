@@ -1733,11 +1733,17 @@ app.get('/api/nutrition-day', async (req, res) => {
     const wAsOf = weights.filter((w) => w.date <= date);
     const bw = wAsOf.length ? wAsOf[wAsOf.length - 1].weight : null;
     const target_macros = target_cal > 0 ? macroTargets(target_cal, bw) : null;
+    // This day's produce, on the same fill gauges the rings draw for today. A surface that points the
+    // rings at a selected day needs all SEVEN of them to move together — four macros from the totals
+    // above and these three — or the mini rings would still be reporting today beside a day in July.
+    // Committed entries only, exactly like the totals: a staged meal is never part of a day.
+    const dayProduce = produceRoll(committed.flatMap((e) => (Array.isArray(e.ingredients) ? e.ingredients : [])));
+    const produce = pace.computeFill(dayProduce, await produceTargets());
     const body = {
       date,
       total_cal, total_protein: Math.round(total_protein),
       total_carbs: Math.round(total_carbs), total_fat: Math.round(total_fat),
-      target_cal, target_macros, delta_color,
+      target_cal, target_macros, delta_color, produce,
       entries, recent,
     };
     nutDayCache.set(cacheKey, { body, at: Date.now() });

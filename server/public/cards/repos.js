@@ -543,6 +543,9 @@ async function showList() {
   await load();
 }
 
+// Back to now: the pane shows the list again, which is what a fresh load shows.
+window.addEventListener('hubreset', () => { if (cur) showList(); });
+
 // Called by the native app when a repo widget row is tapped (statushub://repo/<path>). The widget
 // can't reach a microphone, so it hands the choice over and the recording happens here.
 window.__startRepoSession = async (path) => {

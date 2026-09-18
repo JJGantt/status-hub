@@ -501,7 +501,8 @@ watch; the current context only, unless `?history=1`, which returns older contex
 `/api/day-stream` (SSE, a bodiless `nutrition` or `workout` frame whenever that day may have changed —
 fired from `dirtyNutDay()` / `dirtyWorkoutDay()`, which every write path already calls; the watch's push
 path) · `/api/nutrition-day` also takes `date=today`, so a client with no 4am-origin day of its own
-gets the server's ·
+gets the server's, and ships that day's own `produce` fill gauges beside its totals and targets so a
+surface pointing the rings at a selected day can move all seven of them together ·
 `/api/todos` (lists + the derived `due` view) · `/api/calendar` (month grid(s) of every
 dated item — every occurrence is a real row, so nothing is projected; `?month=` pages, `?wall=1` adds
 the day timeline and reads `calendar_months` for the spread, `?day=1` is the timeline alone and

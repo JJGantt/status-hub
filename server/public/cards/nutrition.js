@@ -7,6 +7,18 @@
 // at the position the arc would END if it were committed.
 import { state } from '../shared.js';
 
+// THE RINGS FOLLOW THE SELECTED DAY. Tapping a cell on the food heat map points them at that day:
+// the seven gauges, the numbers under them and the deviation in each hole all become that day's,
+// measured against the goal THAT day had (each day carries its own dynamic calorie target and its own
+// bodyweight macro split). `nutday` carries the day cards/nutritionlog.js just loaded — today included,
+// which is what puts the rings back on the live clock.
+//
+// A finished day has no pace left to run: the window is over, so the whole goal was expected and the
+// arc is simply what was eaten against it. That is `frac = 1`, which is the same math the live tick
+// reaches at the end of the eating window — nothing here is a second way of drawing a ring.
+let dayView = null;            // the selected past day, or null for today (live)
+const src = () => dayView || (state.last && state.last.pace) || null;
+
 const RC = 2 * Math.PI * 34; // ring circumference (r=34)
 function hslToHex(h, s, l) {
  const c = (1 - Math.abs(2 * l - 1)) * s, x = c * (1 - Math.abs(((h / 60) % 2) - 1)), m = l - c / 2;
@@ -26,8 +38,10 @@ const overColor = (dn) => hslToHex(45 - 20 * Math.max(0, Math.min(1, dn / SCALE)
 // minutes since 4am in the browser's clock (the eating window is in NY; Jared's devices are NY)
 function nowOffsetMin() { const d = new Date(); return (((d.getHours() - 4) * 60 + d.getMinutes() + d.getSeconds() / 60) + 1440) % 1440; }
 
-export function render(s) {
- const P = s.pace || {}, PM = P.macros || {};
+export function render() { paint(); }
+
+function paint() {
+ const P = src() || {}, PM = P.macros || {};
  const ring = (glyph, key) => { const m = PM[key]; if (!m) return '';
   return '<div class="ring" data-macro="' + key + '">' +
    '<svg viewBox="0 0 80 80">' +
@@ -42,7 +56,7 @@ export function render(s) {
    '<div class="rtot">' + (m.consumed || 0) + ' / ' + (m.goal || 0) + '</div>' +
    '</div>'; };
  const el = document.getElementById('nutrition'); if (!el) return; // absent on /page after consolidation
- el.innerHTML = '<h2>Today · Nutrition</h2>' +
+ el.innerHTML = '<h2>' + (dayView ? dayView.label : 'Today') + ' · Nutrition</h2>' +
   '<div class=rings>' + ring('Cal', 'calories') + ring('P', 'protein_g') + ring('C', 'carbs_g') + ring('F', 'fat_g') +
    miniGroup(P.produce) + '</div>' +
   '<div class=pnote>' + (P.window_label || '') + '</div>';
@@ -108,9 +122,14 @@ function setMark(el, pos) {
 
 // live tick: recompute the pace position from the browser clock + the (fixed-for-the-day) window
 function tickRings() {
- const P = state.last && state.last.pace; if (!P || !P.window) return;
- const w = P.window, off = nowOffsetMin();
- const frac = off <= w.startMin ? 0 : off >= w.endMin ? 1 : (off - w.startMin) / (w.endMin - w.startMin);
+ const P = src(); if (!P) return;
+ let frac;
+ if (dayView) frac = 1;                        // a day that is over: the whole goal was expected
+ else {
+  const w = P.window; if (!w) return;
+  const off = nowOffsetMin();
+  frac = off <= w.startMin ? 0 : off >= w.endMin ? 1 : (off - w.startMin) / (w.endMin - w.startMin);
+ }
  document.querySelectorAll('#nutrition .ring').forEach((el) => {
   const m = (P.macros || {})[el.dataset.macro]; if (!m) return;
   const goal = m.goal || 0, consumed = m.consumed || 0;
@@ -133,3 +152,28 @@ function tickRings() {
  });
 }
 setInterval(tickRings, 1000);
+
+// The day cards/nutritionlog.js has open. Today means the live rings, so `dayView` goes back to null
+// and the tick resumes against the clock; any other day is drawn from that day's own totals and that
+// day's own goals, which the server resolves per-day (an older cut had a different target).
+addEventListener('nutday', (e) => {
+ const d = e.detail || {};
+ if (!d.date) return;
+ if (d.date === d.today) { if (!dayView) return; dayView = null; paint(); return; }
+ const tm = d.target_macros || {};
+ const m = (consumed, goal) => ({ consumed: Math.round(consumed || 0), goal: Math.round(goal || 0) });
+ const dt = new Date(d.date + 'T12:00:00');
+ dayView = {
+  date: d.date,
+  label: ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][dt.getDay()] + ' ' + (dt.getMonth() + 1) + '/' + dt.getDate(),
+  macros: {
+   calories: m(d.total_cal, d.target_cal),
+   protein_g: m(d.total_protein, tm.protein_g),
+   carbs_g: m(d.total_carbs, tm.carbs_g),
+   fat_g: m(d.total_fat, tm.fat_g),
+  },
+  produce: d.produce || null,
+  window_label: '',
+ };
+ paint();
+});

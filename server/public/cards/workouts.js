@@ -5,6 +5,12 @@ import { withHistory } from '../heathistory.js';
 import { exerciseVolumeChips } from './muscle.js';
 let heatSelDate=null, heatReq=0;
 let lastHeatExercises=null; // exercises for the open day-detail (for the repeat-set popup)
+// Back to now: the day detail returns to today, the same as a fresh load, where nothing has been
+// picked yet and render() defaults it. The reset button is meant to leave the page as it opens.
+addEventListener('hubreset',()=>{
+ const today=state.last&&state.last.today;
+ if(today&&today!==heatSelDate)selectDay(today);
+});
 
 export function render(s){
  // Shorter span on the home wall, where this runs beside the muscle column. Selection only — both

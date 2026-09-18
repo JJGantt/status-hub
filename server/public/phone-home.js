@@ -9,7 +9,7 @@ import { esc, md, state } from './shared.js';
 import { mount } from './cards/dayline.js';
 import { mountStrip } from './cards/daystrip.js';
 import { mountSessions } from './cards/sessions.js';
-import { onThread } from './voiceagent.js';
+import { onThread, onPending } from './voiceagent.js';
 import { loadHistory, onHistoryLoaded, pinRight } from './heathistory.js';
 import * as workouts from './cards/workouts.js';
 import * as nutritionlog from './cards/nutritionlog.js';
@@ -100,16 +100,27 @@ for (const id of ['nutheat', 'heatwrap', 'weightweeks']) {
 rails().forEach(watch);
 restore();
 
-// Back to now, from the navbar. Everything on this page that holds a scroll position gives it up:
-// the three rails to the newest week, the four lists to their own top (or bottom, for the thread,
-// where the newest line is). The day strip and the surf plots listen for the same event themselves.
+// BACK TO NOW — the page as it opens, without opening it again. That is the whole bar: anything a
+// fresh load would not be showing has to be given up here, and the things that are not scroll
+// positions are the ones that get forgotten. Each card gives up its own (the day strip's expanded
+// day, the surf plots' offset, both heat maps' selected day, the muscle sheet, an open section sheet,
+// a session opened over the repos list); this handler is what THIS page owns — the three rails, every
+// list's scroll, the pane it lands on, and the thread at its newest message.
 window.addEventListener('hubreset', () => {
   dragged = false; weeksBack = 0;
   restore();
-  for (const sel of ['#nutinfo', '#heatinfo', '.ph-sess-list']) {
+  for (const sel of ['#nutinfo', '#heatinfo', '.ph-sess-list', '#todopane', '#daycard',
+                     '#repospane', '#reportspane', '#maintviz']) {
     const el = document.querySelector(sel);
     if (el) el.scrollTop = 0;
   }
+  // The chat pane's log is the one list whose default is its BOTTOM — a fresh backfill lands on the
+  // newest message, not the oldest.
+  const log = document.getElementById('ai-log');
+  if (log) log.scrollTop = log.scrollHeight;
+  // And the pane it opens on. Instant, not smooth: this is the page as loaded, not a navigation.
+  const pn = document.getElementById('wallpanes');
+  if (pn) pn.scrollLeft = pn.clientWidth;
   toLast();
 });
 
@@ -141,6 +152,34 @@ let thread = [];        // [{role, text, session}] oldest first
 // wrong thing, and one early paint against an empty box left the thread parked mid-way and never
 // recovering. Our own scrollTop write fires this too, which is right — it lands at the bottom.
 let held = false;
+
+// WHAT HAS BEEN HEARD BUT IS NOT IN THE THREAD YET. The worker writes the user bubble only when the run
+// is over, so without this the box sat unchanged from the moment he spoke until the whole reply landed,
+// and then both lines appeared together. `null` is nothing in flight; `{text:''}` is a clip being
+// transcribed, where the words are not known yet and the line is three dots; anything else is the
+// transcript, standing in for the row that will replace it.
+let pending = null;
+let pendingT = 0;       // a run that never reports back must not leave the line up forever
+onPending((p) => {
+  if (!p) return;
+  clearTimeout(pendingT);
+  if (p.state === 'clear') pending = null;
+  else if (p.state === 'transcribing') pending = { text: '' };
+  else if (p.state === 'prompt') pending = { text: String(p.text || '') };
+  else return;
+  if (pending) pendingT = setTimeout(() => { pending = null; paintConv(); }, 5 * 60 * 1000);
+  paintConv(true);
+});
+// The row the placeholder was standing in for has arrived — or the reply has, which means the run is
+// over whatever the thread looks like. Only ever called on a LIVE row: a resync replays the whole
+// history, where an old assistant row would take down a placeholder put up a second ago.
+function settle(row) {
+  if (!pending) return;
+  const t = String((row && row.text) || '').trim();
+  if (row.role === 'assistant' || (row.role === 'user' && t && t === pending.text.trim())) {
+    clearTimeout(pendingT); pending = null;
+  }
+}
 
 // WHERE IT LANDS: the top of the LAST message at the top of the box, not the bottom of the thread.
 // A reply is read from its first line, and a box scrolled to the very end opens on the last line of
@@ -185,7 +224,11 @@ function paintConv(pin) {
     return `<div class="ph-convline ${said ? 'said' : 'ask'}${from ? ' sess' : ''}">` +
       (from ? `<span class="ph-convk">${esc(from)}</span>` : '') +
       `<div class="ph-convt">${md(r.text)}</div></div>`;
-  }).join('');
+  }).join('') + (pending
+    ? '<div class="ph-convline ask pend"><div class="ph-convt">' +
+      (pending.text ? md(pending.text) : '<span class=ph-dots><i></i><i></i><i></i></span>') +
+      '</div></div>'
+    : '');
   // Twice: once now, because the layout is already final after the assignment above, and once on the
   // next frame, because this block's own height is whatever the rest of the screen did not need and
   // is not settled until the flex pass has run.
@@ -208,11 +251,16 @@ async function resync() {
     const rows = await (await fetch('/api/voice-messages?focus=hub&mode=active&limit=' + TAIL)).json();
     thread = [];
     for (const r of rows || []) takeRow(r);
+    // The placeholder survives a resync unless the row it was standing in for is now in the thread.
+    if (pending && pending.text) {
+      const last = [...thread].reverse().find((r) => r.role === 'user');
+      if (last && last.text.trim() === pending.text.trim()) { clearTimeout(pendingT); pending = null; }
+    }
     paintConv(true);
   } catch (_) { /* the next push or resync reconciles */ }
 }
 
-onThread((row) => { if (!row) { resync(); return; } takeRow(row); paintConv(); });
+onThread((row) => { if (!row) { resync(); return; } takeRow(row); settle(row); paintConv(); });
 
 // ---- the swipe panes -----------------------------------------------------
 //

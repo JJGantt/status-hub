@@ -124,6 +124,8 @@ function showSel(sel){
  }
 }
 function setSel(sel){SEL=sel;showSel(sel);}
+// Back to now: no muscle picked, no highlight, no sheet — a fresh load has none of them.
+addEventListener('hubreset',()=>{ if(SEL)setSel(null); });
 function toggleSel(sel){ if(SEL&&SEL.kind===sel.kind&&SEL.key===sel.key)setSel(null); else setSel(sel); }
 
 // Muscle Volume card: sortable (Priority = least-trained first, default; or Grouped), rows clickable.

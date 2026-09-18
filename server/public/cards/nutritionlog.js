@@ -11,8 +11,11 @@ const expandedIds=new Set(); // entry ids whose ingredient breakdown is open —
 // Back to now (the phone's reset button): every open breakdown closes. The set is what keeps one
 // open across re-renders, so clearing it and repainting the day is the whole of it.
 addEventListener('hubreset',()=>{
- if(!expandedIds.size)return;
  expandedIds.clear();
+ // And back to TODAY. The rings, the totals under them and the entry list all follow the selected
+ // cell now, so a day from ten weeks ago left selected while the maps scroll home is half a reset.
+ const today=state.last&&state.last.today;
+ if(today&&today!==nutSelDate){ selectNutDay(today); return; }
  if(nutSelDate)loadNutDay(nutSelDate); else if(state.last)render(state.last);
 });
 
@@ -96,6 +99,11 @@ async function loadNutDay(date){
  const tok=++nutReq;
  let j; try{ j=await (await fetch('/api/nutrition-day?date='+date)).json(); }catch(_){ return; }
  if(tok!==nutReq)return; // a newer cell was selected mid-flight — drop this stale response
+ // THE RINGS FOLLOW THIS DAY (cards/nutrition.js). Announced before the entry list is built, and from
+ // here rather than from the cell handler, because this is where the day's own totals and its own
+ // goals exist — the goal is per-day, so the rings cannot be drawn from the date alone. Today is
+ // announced too: that is what puts them back on the live clock.
+ try{ dispatchEvent(new CustomEvent('nutday',{detail:Object.assign({today:state.last&&state.last.today},j)})); }catch(_){}
  const ni=document.getElementById('nutinfo'); if(!ni)return;   // page without the nutrition log card
  const sp=ni.closest('.detailpanel'), atTop=!sp||sp.scrollTop<60; // newest entries render on top now
  // Selected-day summary band — compact one-liner: DOW + date, then measured/goal for cal + each

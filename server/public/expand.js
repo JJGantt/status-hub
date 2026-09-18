@@ -78,6 +78,9 @@ function closeSheet() {
   if (state.last) { workouts.render(state.last); nutritionlog.render(state.last); }  // back to the frame's window
 }
 
+// Back to now: a sheet left open is the largest piece of state on the page, and a fresh load has none.
+window.addEventListener('hubreset', () => { if (openKey) closeSheet(); });
+
 function mount() {
   // main mobile UI only = the wall on a phone-sized viewport. (Big-screen kiosk / desktop are untouched.)
   if (!document.body.classList.contains('tv') || window.innerWidth >= 1400) return;

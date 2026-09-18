@@ -68,6 +68,12 @@ config change ON the Pi by dispatching a session to it.
 | `working` / `last_reply` / `reply_at` | is a turn in flight; the last COMPLETED answer, and when |
 | `last_prompt` | the prompt that answer was to. A message too long or too multi-line to type into a tty is parked in `~/.claude-desk-prompts` and a one-line stub naming the file is typed instead, so the STUB is what the transcript holds — `turnStart` in the orchestrator's transcripts.js substitutes the file's contents back, which is why every surface shows the words. The stash is swept at thirty days, not one: deleting a file turns his message back into the stub wherever it is drawn — published with it, replaced with it. Earlier turns are kept in `desk_turns`, by trigger (HUB-INTERNALS § The turns before the last one) |
 | `active_at` | the last turn boundary (a prompt sent, a turn finished) — what orders, numbers and focuses sessions |
+**A prompt typed while a turn is running is a `queue-operation`, not a `user` record.** Claude Code
+queues it and writes the user record only when the turn consumes it, so a watcher looking at user
+records alone learns of a mid-turn prompt minutes late or never — which is the one case a live view
+most needs it. `sessionWatch` sends its `said` frame off the `enqueue` record and remembers the text,
+so the user record that follows does not say it twice.
+
 | `seen_at` | when the last reply was READ. A row is unread while `reply_at` is newer (or `seen_at` is null), which is what every session list flags. On the row rather than per device: the phone, the wall and the Mac share one list, so reading an answer on any of them has read it. Two things stamp it — opening the session in the hub (`POST /api/sessions/seen`), and its Terminal tab being frontmost on the Mac (`readFront` in the orchestrator's reconcile tick) |
 | `mirror_offset` / `mirror_at` | how much of the transcript is in the `transcripts` bucket |
 | `command_id` | the dispatch or resume that created it — how a follow-up resolves its target |

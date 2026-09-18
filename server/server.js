@@ -2346,13 +2346,23 @@ app.post('/api/session-activity', express.json(), (req, res) => {
   // steps that had already happened before he said it.
   // `said` is his words at the moment the model SAW them; `queued` is his words sent but not yet seen,
   // which a view holds apart rather than placing among steps it was never read between.
-  const state = ['done', 'text', 'said', 'queued'].includes(b.state) ? b.state : 'tool';
+  const state = ['done', 'text', 'said', 'queued', 'summary'].includes(b.state) ? b.state : 'tool';
   const done = state === 'done';
   // A thought or a dictated prompt can run to a paragraph; a tool line or a row's reply never needs
   // more than 400.
   const text = String(b.text || '').slice(0, ['text', 'said', 'queued'].includes(state) ? 2000 : 400);
+  const at = typeof b.at === 'string' ? b.at : null;
+  // THE NOTIFICATION IS A SENTENCE, and the machine that produced the reply writes it — it already
+  // runs Claude, so no key lives anywhere for this. That takes seconds, and `done` cannot wait: it is
+  // what stops a live view showing the caret. So the host sends `done` at once with `summary_coming`,
+  // and this holds the push for the `summary` frame behind it. A host that sends no summary (or one
+  // whose summariser failed) omits the flag and is notified from `done` exactly as before.
+  if (state === 'summary') {
+    if (text) notifySessionReply(session, text, at, typeof b.summary === 'string' ? b.summary : null);
+    return res.status(204).end();          // not a step: nothing on a wall should draw it
+  }
   pushSession({ session, state, text });
-  if (done && text) notifySessionReply(session, text, typeof b.at === 'string' ? b.at : null);
+  if (done && text && b.summary_coming !== true) notifySessionReply(session, text, at);
   res.status(204).end();
 });
 
@@ -2364,7 +2374,7 @@ app.post('/api/session-activity', express.json(), (req, res) => {
 // and on the watch; SESSION_REPLY is the watch's category with the Open action. Gated by the same
 // Settings → Push switch the voice worker obeys.
 const sentSessionReplies = new Set();
-async function notifySessionReply(sessionId, text, at) {
+async function notifySessionReply(sessionId, text, at, summary) {
   try {
     const s = await settingsAll();
     if (s.push_enabled !== undefined
@@ -2378,7 +2388,10 @@ async function notifySessionReply(sessionId, text, at) {
     if (seen && seen.length) return;
     const [row] = (await sb(`desk_sessions?id=eq.${encodeURIComponent(sessionId)}&select=label,custom_title,repo`)) || [];
     const title = (row && (row.custom_title || row.label || row.repo)) || 'Session';
-    await pushAll('session', title, text, key, { category: 'SESSION_REPLY', payload: { session_id: sessionId } });
+    // The sentence if there is one, the reply's opening if not. Tapping it opens that session either
+    // way — the payload is what the app reads and it is unchanged.
+    const body = (typeof summary === 'string' && summary.trim()) ? summary.trim() : text;
+    await pushAll('session', title, body, key, { category: 'SESSION_REPLY', payload: { session_id: sessionId } });
   } catch (e) { console.log('[session-push]', e.message); }
 }
 

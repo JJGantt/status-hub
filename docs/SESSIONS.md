@@ -68,6 +68,7 @@ config change ON the Pi by dispatching a session to it.
 | `working` / `last_reply` / `reply_at` | is a turn in flight; the last COMPLETED answer, and when |
 | `last_prompt` | the prompt that answer was to — published with it, replaced with it. Earlier turns are kept in `desk_turns`, by trigger (HUB-INTERNALS § The turns before the last one) |
 | `active_at` | the last turn boundary (a prompt sent, a turn finished) — what orders, numbers and focuses sessions |
+| `seen_at` | when the last reply was OPENED. A row is unread while `reply_at` is newer (or `seen_at` is null), which is what every session list flags. On the row rather than per device: the phone, the wall and the Mac share one list, so reading an answer on any of them has read it |
 | `mirror_offset` / `mirror_at` | how much of the transcript is in the `transcripts` bucket |
 | `command_id` | the dispatch or resume that created it — how a follow-up resolves its target |
 

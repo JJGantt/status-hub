@@ -3440,6 +3440,11 @@ async function buildSessions() {
     label: s.label, custom_title: s.custom_title, repo: s.repo,
     worker: s.worker, status: s.status, working: s.working,
     claude_session_id: s.claude_session_id,      // presence of a transcript = the transfer button
+    // UNREAD: a final reply has landed and nobody has opened it since. Tool calls and thoughts do not
+    // set `reply_at`, so this marks a finished answer and nothing else — which is the only thing on a
+    // session that is actually owed attention. Decided here rather than in the cards because three
+    // surfaces draw these rows, and a rule they each re-derive is one they will disagree about.
+    unread: !!s.reply_at && (!s.seen_at || Date.parse(s.reply_at) > Date.parse(s.seen_at)),
   });
   // One line of what the session last said, for the rows that only ever show one line. The repos
   // pane cuts `last_reply` to 90 characters for every row it lists; sending the whole reply so it
@@ -3462,6 +3467,19 @@ async function buildSessions() {
     pinned,
   };
 }
+
+// Opening a session's conversation is what reads its reply. Stamped from whichever surface opened it,
+// because the list is one list — reading an answer on the phone means it has been read, and the wall
+// should stop flagging it.
+app.post('/api/sessions/seen', express.json(), async (req, res) => {
+  try {
+    const id = String((req.body && req.body.id) || '');
+    if (!id) return res.status(400).json({ error: 'id required' });
+    await sbWrite(`desk_sessions?id=eq.${encodeURIComponent(id)}`, 'PATCH', { seen_at: new Date().toISOString() });
+    res.json({ ok: true });
+    pushSessions();   // the mark clears on every open list, not just the one that read it
+  } catch (e) { res.status(500).json({ error: String(e.message || e) }); }
+});
 
 app.get('/api/sessions', async (req, res) => {
   try { res.json(await buildSessions()); }

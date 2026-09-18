@@ -405,11 +405,16 @@ function turnsOf(d) {
   return d.last_reply ? [{ prompt: d.last_prompt, reply: d.last_reply }] : [];
 }
 
-// The earlier turns are context and sit ABOVE where the view lands: `open` puts the last turn's
-// prompt at the top, so what is on screen is the exchange he came for and the rest is a scroll up.
-// `top` does the same with a reply that has just arrived, where reading it starts. `follow` keeps a
-// view that was already at the bottom there as the turn's steps arrive, and leaves one he has
-// scrolled up in where it is.
+// WHERE IT LANDS: the top of the NEWEST THING, whatever that thing is. A finished reply puts its own
+// first line at the top, because that is where reading starts; a tool call or a thought after it is
+// newer, so that goes to the top instead; a turn still running ends in the caret, and the caret goes
+// as far up as the scroll allows — which with history above it is simply the bottom. One rule, and
+// the browser's own clamp is what turns "as far up as it can" into "at the end" when the tail is
+// shorter than the box.
+//
+// `open` and `top` are the same placement (arriving at a session, and a reply landing in one already
+// open); `follow` keeps a view that was already at the bottom there as the turn's steps arrive, and
+// leaves one he has scrolled up in where it is.
 function paintBody({ open = false, top = false, follow = false } = {}) {
   const el = document.getElementById('repospane');
   const body = el && el.querySelector('.sv-body');
@@ -425,9 +430,12 @@ function paintBody({ open = false, top = false, follow = false } = {}) {
       : `<div class="sv-tool">${esc(a.text)}</div>`).join('') +
     (cur.working ? '<div class="sv-working"><span class="ai-caret">▍</span></div>' : '');
   if (open || top) {
-    const turns = body.querySelectorAll('.sv-turn');
-    const last = turns[turns.length - 1];
-    const at = last && (open ? last : last.querySelector('.sv-reply'));
+    // The last block in the body IS the newest thing. Inside a turn the newest part is the reply, not
+    // the prompt that asked for it, so a turn resolves one level further in.
+    const last = body.lastElementChild;
+    const at = last && last.classList.contains('sv-turn')
+      ? (last.querySelector('.sv-reply') || last)
+      : last;
     // Less the body's own padding, so the first turn of a conversation rests at zero.
     body.scrollTop = at ? Math.max(0, at.offsetTop - body.offsetTop - 12) : 0;
   } else if (follow && atEnd) body.scrollTop = body.scrollHeight;
@@ -474,6 +482,13 @@ async function sendWords(text) {
 
 // Opens one session over the list. False when there is no such row to show, so a caller with
 // somewhere else to go (a notification tap) can go there.
+// Opening one reads its reply — see `unread` in buildSessions. Fire and forget: the list re-renders
+// off the push the hub sends back, and a failed stamp only means the mark stays up.
+function markSeen(id) {
+  fetch('/api/sessions/seen', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ id }) }).catch(() => {});
+}
+
 async function openSession(id) {
   const el = document.getElementById('repospane');
   if (!el || !id) return false;
@@ -483,6 +498,7 @@ async function openSession(id) {
   const tapped = rows.find((r) => r.id === id);
   const live = tapped && rows.find((r) => r.status === 'resident' && keyOfRow(r) === keyOfRow(tapped));
   const rowId = (live || tapped || { id }).id;
+  markSeen(rowId);
   let d;
   try {
     const r = await fetch('/api/sessions/' + encodeURIComponent(rowId));

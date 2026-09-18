@@ -76,7 +76,11 @@ function paint(p, d) {
   const on = shown(d);
   if (p.list) {
     p.list.innerHTML = listed(d, p.max).map((s) =>
-      `<div class="hw-row${on && s.id === on.id ? ' on' : ''}${s.status === 'resident' ? '' : ' parked'}"` +
+      // `on` is the FOCUSED session — where a spoken follow-up goes, and what a surface with a reply
+      // panel is showing below. `unread` is a finished answer nobody has opened. Two different
+      // questions, so two different marks: one row can carry both.
+      `<div class="hw-row${on && s.id === on.id ? ' on' : ''}${s.unread ? ' unread' : ''}` +
+        `${s.status === 'resident' ? '' : ' parked'}"` +
         `${p.tap ? ` data-open="${esc(String(s.id))}"` : ''}>` +
         '<div class="hw-row-top">' +
           `<span class="hw-sess-dot${s.working ? '' : ' idle'}"></span>` +

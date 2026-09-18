@@ -537,6 +537,13 @@ body.tv .hw-row{display:flex;flex-direction:column;gap:3px;min-width:0;padding:6
 body.tv .hw-row-top{display:flex;align-items:center;gap:10px;min-width:0}
 body.tv .hw-row.on{border-color:#fff;background:#0e1318}
 body.tv .hw-row.parked{opacity:.5}
+/* UNREAD: a finished answer nobody has opened. An amber left edge, because the two marks already on
+   a row mean other things — the white border is the FOCUSED session and the green dot is one
+   WORKING — and an unread row is very often both parked and idle, which is exactly when the row is
+   dimmed. So it also takes its opacity back: a finished session is the one most worth reading. */
+body.tv .hw-row.unread{opacity:1;border-left:3px solid #e0a03a;padding-left:7px}
+body.tv .hw-row.unread .hw-row-name{color:#fff}
+body.tv .hw-row.unread .hw-row-act{color:#e6c88a}
 body.tv .hw-row-n{font-size:17px;font-weight:700;color:#8b96a5;flex:0 0 auto;font-variant-numeric:tabular-nums}
 body.tv .hw-row-name{font-size:17px;font-weight:600;color:#c7cdd6;min-width:0;
   overflow:hidden;text-overflow:ellipsis;white-space:nowrap}

@@ -422,9 +422,14 @@ It also beats app.css's `body.tv.wallportrait` block on equal specificity, by lo
   transcript to EVERY device, which is what makes a command spoken at the puck appear here. The
   placeholder comes down on the matching user row or on the reply, never on a resync replaying
   history, and a run that reports nothing back drops it after five minutes.
-  **There is no chat pane.** The hub conversation is this block, and the navbar's microphone is how
-  it is answered — so the phone has no place to TYPE to the hub and no Reset-context button. Those
-  belong to the walls' chat pane, which is still there and which renders the markdown source.
+  **There is no chat PANE; there is a chat SHEET.** The navbar's keyboard button opens `#ph-chat`
+  over the page — the same `ai-shell` markup the walls carry, wired by the same `initCard()` in
+  voiceagent.js — with the whole thread, the composer, the mic, the attach tray and Reset context. A
+  sheet rather than a pane because it covers whatever is open instead of taking a slot in the swipe
+  order, and the whole chat rather than a bare input because composing a reply means seeing what you
+  are replying to, which the tail here cannot show with a keyboard over half the screen. It lands on
+  the newest line BEFORE the input takes focus: focusing first makes iOS scroll the page to the input
+  and the log stays wherever that left it.
 - **The two heat maps are STACKED, each a small block at the LEFT of its own section.** Above each
   is its long view (the weigh-in trend, the clocks since the last set); below it is the day itself,
   as a SCROLLING LIST — four nutrition entries, each tapping open to its ingredients, and three
@@ -543,6 +548,22 @@ what `panes.clientWidth` means in `phone-home.js` and what the reset returns to.
 reached by swiping rather than by tapping something, and it is the answer to the home page's session
 block, which is deliberately only a list. Tapping a row there lands here with that session's whole
 conversation and a composer.
+
+**A session row carries two marks, and they answer different questions.** `on` is the FOCUSED
+session — where a spoken follow-up goes, and what a surface with a reply panel is showing below.
+`unread` is a finished answer nobody has opened: `buildSessions` sets it from `reply_at` being newer
+than `seen_at`, so tool calls and thoughts never raise it and only a completed reply does. Opening
+the session stamps `seen_at` (`POST /api/sessions/seen`), on the row rather than per device, because
+the phone and the wall are looking at one list and reading an answer on either means it has been
+read. An unread row takes an amber left edge and its full opacity back — it is very often parked and
+idle, which is exactly when a row is dimmed, and a finished session is the one most worth reading.
+
+**The session view lands on the top of the NEWEST THING** (`paintBody` in `cards/repos.js`). The last
+block in the body is that thing; inside a turn it resolves one level further in, to the reply rather
+than the prompt that asked for it. A tool call or a thought after the last turn is newer, so it wins;
+a turn still running ends in the caret, and the caret goes as far up as the scroll allows — which,
+with history above it, is simply the bottom. The browser's own clamp is what turns "as far up as it
+can" into "at the end" when the tail is shorter than the box, so there is one rule and no cases.
 
 ### Wall-sized numbers a surface can override
 

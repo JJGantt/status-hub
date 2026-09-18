@@ -23,6 +23,25 @@
      Swipe panes: [sessions] [home] [misc] [maint] [lists] [reports], landing on home. There is no
      chat pane — the hub conversation is on this page, and the navbar's microphone is how you answer
      it, so the pane left of home is the sessions view instead. -->
+<!-- TYPING TO THE HUB. The conversation is on the home page and the navbar's microphone answers it,
+     but a keyboard is the other half of that and a composer alone is not enough: while typing you
+     have to see what you are replying to. So the keyboard button opens the FULL chat — the same
+     `ai-shell` the walls carry, the same `initCard()` in voiceagent.js wiring it — as a sheet over
+     the page, with the whole thread scrolled to its newest line.
+     Outside `#wallpanes` on purpose: it covers whatever pane is open rather than being one. -->
+<div class="ph-chat" id="ph-chat">
+  <div class="ai-shell">
+    <div class="ai-head"><span class="ai-mode" id="ai-mode" title="Active conversation mode">Hub</span><button class="ai-reset" id="ai-reset" type="button" title="Start a fresh conversation">Reset context</button><button class="ph-chat-x" id="ph-chat-x" type="button" aria-label="Close">✕</button></div>
+    <div class="ai-log" id="ai-log"></div>
+    <div class="ai-input">
+      <button class="ai-mic" id="ai-mic" type="button" aria-label="Tap to talk"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="2" width="6" height="12" rx="3"></rect><path d="M5 11a7 7 0 0 0 14 0"></path><line x1="12" y1="18" x2="12" y2="22"></line></svg></button>
+      <input class="ai-text" id="ai-text" type="text" placeholder="Message…" autocomplete="off">
+      <button class="ai-send" id="ai-send" type="button">Send</button>
+    </div>
+    <div class="ai-status" id="ai-status"></div>
+  </div>
+</div>
+
 <div class="wallpanes" id="wallpanes">
 
 

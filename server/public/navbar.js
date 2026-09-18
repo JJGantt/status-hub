@@ -25,6 +25,9 @@ const CAL = '<svg viewBox="0 0 24 24" width="21" height="21" fill="none" stroke=
 // each one holds where it was left, deliberately. This is the way back to now without a reload.
 // Broadcast rather than called: whoever owns a scroll position listens, and nothing here has to know
 // what those are or import them.
+const KEYBOARD = '<svg viewBox="0 0 24 24" width="21" height="21" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+  '<rect x="2" y="6" width="20" height="12" rx="2"></rect>' +
+  '<path d="M6 10h.01M10 10h.01M14 10h.01M18 10h.01M6 14h.01M18 14h.01M9 14h6"></path></svg>';
 const RESET = '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
   '<path d="M3 12a9 9 0 1 0 3-6.7"></path><polyline points="3 4 3 10 9 10"></polyline></svg>';
 
@@ -146,6 +149,32 @@ export function mountNavbar() {
     finally { camBtn.disabled = false; camBtn.classList.remove('busy'); }
   });
   right.appendChild(camBtn);
+  // TYPE TO THE HUB. The microphone beside it is the fast way and the camera is the wordless one;
+  // this is the one for words you would rather not say out loud, or that a transcript gets wrong.
+  // It opens the whole chat rather than a bare input, because composing a reply means seeing what
+  // you are replying to — which is the only thing the home page's tail of the thread cannot give
+  // you while the keyboard is covering half the screen.
+  const chatSheet = document.getElementById('ph-chat');
+  if (chatSheet) {
+    const kb = document.createElement('button');
+    kb.className = 'wfab wfab-kb'; kb.type = 'button'; kb.setAttribute('aria-label', 'Type a message');
+    kb.innerHTML = KEYBOARD;
+    const log = document.getElementById('ai-log');
+    kb.addEventListener('click', () => {
+      chatSheet.classList.add('open');
+      // The newest line first, then the focus — focusing first makes iOS scroll the page itself to
+      // the input and the log lands wherever that left it.
+      if (log) log.scrollTop = log.scrollHeight;
+      const t = document.getElementById('ai-text');
+      if (t) requestAnimationFrame(() => t.focus());
+    });
+    const close = () => { chatSheet.classList.remove('open'); const t = document.getElementById('ai-text'); if (t) t.blur(); };
+    const x = document.getElementById('ph-chat-x');
+    if (x) x.addEventListener('click', close);
+    // Back to now closes it, like every other sheet on the page.
+    window.addEventListener('hubreset', close);
+    right.appendChild(kb);
+  }
   right.appendChild(mkVoice('wfab-fast', SPARKLE, 'Voice command'));
 
   const bar = document.createElement('div'); bar.className = 'navbar';

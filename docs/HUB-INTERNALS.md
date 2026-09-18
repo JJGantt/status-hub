@@ -525,7 +525,9 @@ dated item — every occurrence is a real row, so nothing is projected; `?month=
 the day timeline and reads `calendar_months` for the spread, `?day=1` is the timeline alone and
 `&full=1` makes it a rolling ±12h window instead of a calendar day — see the dial below, and
 `&ahead=N` adds the N days after today as `ahead`) · `/api/badge` · `/api/repos` ·
-`/api/repos/cmd/:id` · `/api/sessions` (live desk sessions + the follow-up `focus`) ·
+`/api/repos/cmd/:id` · `/api/sessions` (live desk sessions + the follow-up `focus`; each row carries
+`unread`, a finished reply nobody has opened) · `/api/sessions/seen` (opening one stamps
+`desk_sessions.seen_at`, which is what clears it on every surface) ·
 `/api/session-stream` (SSE, two frame kinds: `session` — one per tool call, in-between text or finished
 turn, pushed by the orchestrator on either machine — and `sessions`, the whole `/api/sessions` payload,
 pushed whenever `desk_sessions`/`desk_queue`/`desk_focus` change, which is what replaced the walls'

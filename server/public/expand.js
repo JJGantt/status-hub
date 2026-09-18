@@ -7,14 +7,24 @@
 import { state } from './shared.js';
 import * as workouts from './cards/workouts.js';
 import * as nutritionlog from './cards/nutritionlog.js';
+import * as surf from './cards/surf.js';
 import { loadHistory, onHistoryLoaded, pinRight } from './heathistory.js';
 
+const HEATS = [workouts, nutritionlog];
 const SECTIONS = {
   // `icon` = element the corner glyph is placed on. `move` = ordered elements pulled into the sheet body
   // (their event delegation + listeners travel with them). Restored to their exact spots on close.
   // `heat` = the scroll container holding that section's grid, pinned to its newest column on open.
-  nut: { icon: '#nutritionlog', move: ['#nutritionlog'], title: 'Nutrition', heat: '#nutheat' },
-  wk:  { icon: '#workouts',     move: ['#workouts', '#heatinfo'], title: 'Workouts', heat: '#heatwrap' },
+  // `cards` = the modules to re-run once the elements have moved, because every one of these draws
+  // itself to the size and window the surface gives it and the sheet is a different surface.
+  // `tap` = open by tapping this, instead of by a corner glyph.
+  nut: { icon: '#nutritionlog', move: ['#nutritionlog'], title: 'Nutrition', heat: '#nutheat', cards: HEATS },
+  wk:  { icon: '#workouts',     move: ['#workouts', '#heatinfo'], title: 'Workouts', heat: '#heatwrap', cards: HEATS },
+  // SURF opens by tapping the plots themselves. A corner glyph is 64px square and this card is a
+  // fifth of a phone screen — the glyph would cover the thing it opens. The card is deliberately bare
+  // and short (see phone-home.css); this is the other half of that bargain, where it gets the height
+  // to be read and its labels back.
+  surf: { icon: '#surf', move: ['#surf'], title: 'Surf', cards: [surf], tap: '.surfheat, .surfwater' },
 };
 
 // corner "expand" glyph (diagonal arrows). Big in the SVG because it lives INSIDE the ~0.36×-scaled wall
@@ -35,8 +45,10 @@ onHistoryLoaded(() => { if (openKey) repaint(openKey); });
 // history, and the cell size the sheet gives it). Then pin to the newest column: scrollLeft 0 is
 // the OLDEST week, which is not where anyone opens a heatmap to look.
 function repaint(key) {
-  if (state.last) { workouts.render(state.last); nutritionlog.render(state.last); }
-  const el = document.querySelector(SECTIONS[key].heat);
+  const sec = SECTIONS[key];
+  if (state.last) for (const card of sec.cards) card.render(state.last);
+  if (!sec.heat) return;      // surf holds its own place, as a distance from the right-hand end
+  const el = document.querySelector(sec.heat);
   if (el) requestAnimationFrame(() => pinRight(el));
 }
 
@@ -74,8 +86,11 @@ function closeSheet() {
   restore = [];
   sheet.classList.remove('open');
   document.body.classList.remove('ss-open');
+  const was = openKey;
   openKey = null;
-  if (state.last) { workouts.render(state.last); nutritionlog.render(state.last); }  // back to the frame's window
+  // Back to the size and window the page itself gives it — the cards read both off the element, and
+  // the element has just moved back.
+  if (state.last && was) for (const card of SECTIONS[was].cards) card.render(state.last);
 }
 
 // Back to now: a sheet left open is the largest piece of state on the page, and a fresh load has none.
@@ -86,7 +101,9 @@ function mount() {
   if (!document.body.classList.contains('tv') || window.innerWidth >= 1400) return;
   for (const key of Object.keys(SECTIONS)) {
     const host = document.querySelector(SECTIONS[key].icon);
-    if (!host || host.querySelector('.expand-btn')) continue;
+    if (!host) continue;
+    if (SECTIONS[key].tap) { bindTap(host, key); continue; }
+    if (host.querySelector('.expand-btn')) continue;
     if (getComputedStyle(host).position === 'static') host.style.position = 'relative';
     const b = document.createElement('button');
     b.className = 'expand-btn';
@@ -97,6 +114,32 @@ function mount() {
     b.addEventListener('click', (e) => { e.stopPropagation(); e.preventDefault(); openSheet(key); });
     host.appendChild(b);
   }
+}
+
+// TAP TO OPEN, on a thing that also scrolls sideways. The plots are a horizontal scroller, so the
+// gesture that opens the sheet and the gesture that drags the timeline start identically — a plain
+// click handler turns every flick into an open. Bound on the HOST and delegated, because the card
+// rebuilds its innards on every broadcast and a listener on those would be thrown away twice a minute.
+//
+// A tap is: the pointer barely moved, AND the scroller under it did not. The second test is what
+// catches a flick that was answered by momentum rather than by the finger.
+function bindTap(host, key) {
+  if (host.dataset.ssTap) return;
+  host.dataset.ssTap = '1';
+  let x = 0, y = 0, left = 0;
+  const scrollerAt = (e) => (e.target.closest ? e.target.closest('.surfscroll') : null);
+  host.addEventListener('pointerdown', (e) => {
+    const box = scrollerAt(e);
+    x = e.clientX; y = e.clientY; left = box ? box.scrollLeft : 0;
+  }, { passive: true });
+  host.addEventListener('pointerup', (e) => {
+    if (openKey) return;                                          // already in the sheet
+    if (!e.target.closest || !e.target.closest(SECTIONS[key].tap)) return;
+    if (Math.abs(e.clientX - x) > 6 || Math.abs(e.clientY - y) > 6) return;
+    const box = scrollerAt(e);
+    if (box && Math.abs(box.scrollLeft - left) > 2) return;
+    openSheet(key);
+  }, { passive: true });
 }
 
 function boot() { mount(); if (!document.querySelector('.expand-btn')) setTimeout(mount, 400); }

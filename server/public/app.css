@@ -122,6 +122,28 @@ body.tv .sectsheet .hcell{width:17px!important;height:17px!important;max-width:n
 .sectsheet[data-sec="nut"] #nutheat,.sectsheet[data-sec="wk"] #workouts #heatwrap{
   overscroll-behavior-x:contain;-webkit-overflow-scrolling:touch}
 .sectsheet .expand-btn{display:none}                     /* the host's own corner icon travels with it — hide it inside the sheet */
+/* SURF, EXPANDED. The card it comes from is a fifth of a phone screen and deliberately bare — no
+   weekday letters, no hour labels, thirty pixels a grid — because at that size a label is unreadable
+   and the picture answers it anyway. This is the other half of that bargain: the same plots given the
+   height to be read, with the gutter, the letters, the key and the conditions strip all back, simply
+   by not being inside `.ph-surfcard` any more (every one of those is scoped to it).
+   The heights are plain px because cards/surf.js parses them — a calc() in a custom property is not
+   resolved for getPropertyValue, so it would read as NaN and silently fall back to the wall's size.
+   The body scrolls, so a shorter phone crops nothing. */
+.sectsheet[data-sec="surf"] .ss-body{overflow-y:auto;padding:6px 10px 58px}
+.sectsheet[data-sec="surf"] #surf{flex:0 0 auto;display:flex;flex-direction:column;gap:6px;
+  height:auto;min-width:0;padding:0;
+  --surf-bare:0;--surf-back:10;--surf-grid-h:225px;--surf-water-h:160px}
+.sectsheet[data-sec="surf"] #surf .surfkey{flex-wrap:wrap;row-gap:3px;margin-top:5px}
+/* The conditions strip is written for a WALL — `body.tv` gives it a 23px name and a 31px value, and
+   this sheet is read at arm's length like the page under it. Left alone it spent 250px, a third of
+   the screen, on three words; at this size it is a line, and the height goes to the plots. */
+.sectsheet[data-sec="surf"] #surf .devstrip{gap:4px 14px;margin:0}
+.sectsheet[data-sec="surf"] #surf .devname{font-size:11px}
+.sectsheet[data-sec="surf"] #surf .devchip{gap:6px}
+.sectsheet[data-sec="surf"] #surf .devchip .dc-l{font-size:10px}
+.sectsheet[data-sec="surf"] #surf .devchip .dc-v{font-size:13px}
+.sectsheet[data-sec="surf"] #surf .devchip .dc-v .dot{width:8px;height:8px;margin-right:5px}
 .sectsheet .card h2,.sectsheet #workouts h2{display:none}
 /* NUTRITION: #nutritionlog = heat (top) + full-day totals & food list (scroll) + trend plot (kept, bottom) */
 .sectsheet[data-sec="nut"] #nutritionlog{flex:1 1 auto;min-height:0;display:flex;flex-direction:column;padding:12px 14px;gap:10px}

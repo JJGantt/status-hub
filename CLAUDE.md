@@ -460,6 +460,18 @@ It also beats app.css's `body.tv.wallportrait` block on equal specificity, by lo
 - **Surf and the session list share a row**, and a session row is TAPPABLE: it opens in the session
   view the lists pane already has, with the whole conversation and a composer. So a title truncated
   in that column costs nothing — it is a way in, not the answer.
+- **THE SURF PLOTS ARE TAPPABLE TOO**, into the full-screen sheet (`expand.js`, `data-sec="surf"`).
+  That is the other half of the bargain the small card makes: it is thirty pixels a grid and bare on
+  purpose, and everything it drops — the gutter with its hour labels, the weekday letters, the key,
+  the conditions strip — comes back simply by no longer being inside `.ph-surfcard`, since every one
+  of those rules is scoped to it. The sheet then says its own `--surf-grid-h` / `--surf-water-h` /
+  `--surf-back`, and shrinks the conditions strip, which `body.tv` otherwise writes at wall size (a
+  23px name and a 31px value) and which spent a third of the screen on three words.
+  **A TAP HERE IS NOT A CLICK**, because the plots are a horizontal scroller and the two gestures
+  start identically: `bindTap` opens only when the pointer barely moved AND the scroller under it did
+  not, the second test being what catches a flick answered by momentum rather than by the finger. It
+  is delegated from the card, which persists, rather than bound to the plots, which are rebuilt twice
+  a minute.
 - **The day's totals are ON THE RINGS**, one under each gauge — `2699 / 3060` under Cal, `134 / 178`
   under P. That is the totals line split four ways and attached to the thing each number belongs to,
   so it needs no labels and there is no separate band: `#nutinfo` carries `data-noband` and

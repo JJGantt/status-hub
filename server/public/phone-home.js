@@ -114,11 +114,7 @@ window.addEventListener('hubreset', () => {
     const el = document.querySelector(sel);
     if (el) el.scrollTop = 0;
   }
-  // The chat pane's log is the one list whose default is its BOTTOM — a fresh backfill lands on the
-  // newest message, not the oldest.
-  const log = document.getElementById('ai-log');
-  if (log) log.scrollTop = log.scrollHeight;
-  // And the pane it opens on. Instant, not smooth: this is the page as loaded, not a navigation.
+  // The pane it opens on. Instant, not smooth: this is the page as loaded, not a navigation.
   const pn = document.getElementById('wallpanes');
   if (pn) pn.scrollLeft = pn.clientWidth;
   toLast();
@@ -264,9 +260,10 @@ onThread((row) => { if (!row) { resync(); return; } takeRow(row); settle(row); p
 
 // ---- the swipe panes -----------------------------------------------------
 //
-// [chat] [home] [misc] [maint] [lists] [repos] [reports], landing on home. The wall's version of this
-// (wall.js) also scales a 1920x1080 canvas down to fit; there is nothing to scale here — the page is
-// laid out at the phone's own size — so only the paging is left.
+// [sessions] [home] [misc] [maint] [lists] [reports], landing on home — index 1, which is what
+// `clientWidth` means here and what the reset returns to. The wall's version of this (wall.js) also
+// scales a 1920x1080 canvas down to fit; there is nothing to scale here — the page is laid out at the
+// phone's own size — so only the paging is left.
 const panes = document.getElementById('wallpanes');
 if (panes) {
   requestAnimationFrame(() => { panes.scrollLeft = panes.clientWidth; });

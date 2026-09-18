@@ -223,8 +223,9 @@ an idle robot otherwise look identical. `SELF_CYCLING` means the robot left slee
 cycling on its own and nothing here is driving it.
 
 **Surfaces (same code, different chrome):** desktop `/page` = scrolling rows; phone = swipe panes on
-`/`, in the markup order of `phone-home.html` — chat · home · misc · maint · lists · repos · reports,
-landing on home; TV `/tv` = the home wall + a voice panel (auth `?token=`); the `/mic` page = a
+`/`, in the markup order of `phone-home.html` — sessions · home · misc · maint · lists · reports,
+landing on home (index 1). No chat pane: the hub conversation is on the home pane, and the sessions
+view takes the slot left of it; TV `/tv` = the home wall + a voice panel (auth `?token=`); the `/mic` page = a
 minimal fullscreen voice launcher; `/calendar` = the standalone calendar page (navbar's calendar
 button gets there); `/tv-calendar` = the calendar wall (§ CLAUDE.md's walls note). The phone's page is
 NOT a scaled wall — see CLAUDE.md, "The phone's home page is not a wall".
@@ -848,7 +849,7 @@ am/pm was never ambiguous, and dropping the letter is what buys the digit enough
 across the room.
 
 Voice/MCP writes them (data-layer tools); the hub surfaces them:
-- **Card:** `public/cards/todo.js` — the 5th phone swipe pane. Self-fetches `/api/todos` (not part of
+- **Card:** `public/cards/todo.js` — the phone's `lists` swipe pane. Self-fetches `/api/todos` (not part of
   the status stream), refreshes on mount / after edits / on focus.
 - **Endpoints:** `GET /api/todos` (lists + items + the derived due view) ·
   `POST /api/todos/add` (service-key writes; takes a `list_id` and **404s** on one that does not

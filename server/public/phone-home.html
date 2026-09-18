@@ -20,21 +20,20 @@
      15-week one — because its maps scroll: the box decides what is on screen and the rest is a drag
      away, and a trim cannot carry the archive anyway (see heatPick in shared.js).
 
-     Same swipe panes as before it — [chat] [home] [misc] [maint] [lists] [repos] [reports], landing
-     on home. What changed is only the middle one. -->
+     Swipe panes: [sessions] [home] [misc] [maint] [lists] [reports], landing on home. There is no
+     chat pane — the hub conversation is on this page, and the navbar's microphone is how you answer
+     it, so the pane left of home is the sessions view instead. -->
 <div class="wallpanes" id="wallpanes">
 
-<section class="pane pane-chat">
-  <div class="ai-shell">
-    <div class="ai-head"><span class="ai-mode" id="ai-mode" title="Active conversation mode">Hub</span><button class="ai-reset" id="ai-reset" type="button" title="Start a fresh conversation">Reset context</button></div>
-    <div class="ai-log" id="ai-log"></div>
-    <div class="ai-input">
-      <button class="ai-mic" id="ai-mic" type="button" aria-label="Tap to talk"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="2" width="6" height="12" rx="3"></rect><path d="M5 11a7 7 0 0 0 14 0"></path><line x1="12" y1="18" x2="12" y2="22"></line></svg></button>
-      <input class="ai-text" id="ai-text" type="text" placeholder="Message…" autocomplete="off">
-      <button class="ai-send" id="ai-send" type="button">Send</button>
-    </div>
-    <div class="ai-status" id="ai-status"></div>
-  </div>
+
+<!-- SESSIONS, immediately left of home. The list of what is running, and — tapping a row, here or on
+     the home page's own session list — that session's whole conversation with a composer to answer
+     it. This is the one pane you arrive at by swiping rather than by tapping something, which is why
+     it is the neighbour: the home page's session block is a way in, not the answer. -->
+<section class="pane pane-repos">
+  <!-- the Mac's repos (published by the orchestrator). Tap one to open a remote-controlled Claude
+       session there and pick it up in the Claude app. cards/repos.js. -->
+  <div class="card reposcard"><div id="repospane"></div></div>
 </section>
 
 <section class="pane pane-wall">
@@ -134,7 +133,7 @@
     <!-- THE CONVERSATION — the tail of the hub thread, scrolling, pinned to the newest line. It is
          the block that takes whatever height the rest of the screen did not need, because it is the
          only one here that can spend an arbitrary amount of it: more room is simply more of the
-         conversation. The composer is one swipe left. -->
+         conversation. Answering it is the navbar's microphone. -->
     <div class="row-card ph-convrow">
       <div class="card ph-convcard"><div class="ph-conv" id="ph-conv"></div></div>
     </div>
@@ -167,11 +166,6 @@
   <div class="card todocard"><div id="todopane"></div></div>
 </section>
 
-<section class="pane pane-repos">
-  <!-- the Mac's repos (published by the orchestrator). Tap one to open a remote-controlled Claude
-       session there and pick it up in the Claude app. cards/repos.js. -->
-  <div class="card reposcard"><div id="repospane"></div></div>
-</section>
 
 <section class="pane pane-reports">
   <!-- the write-ups those sessions hand back when they finish. Sits next to the launcher because it

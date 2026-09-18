@@ -422,7 +422,9 @@ It also beats app.css's `body.tv.wallportrait` block on equal specificity, by lo
   transcript to EVERY device, which is what makes a command spoken at the puck appear here. The
   placeholder comes down on the matching user row or on the reply, never on a resync replaying
   history, and a run that reports nothing back drops it after five minutes.
-  The full thread with its composer is the chat pane, one swipe left; that one renders the source.
+  **There is no chat pane.** The hub conversation is this block, and the navbar's microphone is how
+  it is answered — so the phone has no place to TYPE to the hub and no Reset-context button. Those
+  belong to the walls' chat pane, which is still there and which renders the markdown source.
 - **The two heat maps are STACKED, each a small block at the LEFT of its own section.** Above each
   is its long view (the weigh-in trend, the clocks since the last set); below it is the day itself,
   as a SCROLLING LIST — four nutrition entries, each tapping open to its ingredients, and three
@@ -497,8 +499,8 @@ It also beats app.css's `body.tv.wallportrait` block on equal specificity, by lo
   black ruled by colour. `--hgap` on the weigh-in plot moves with it — half of it is what the plot's
   box is inset by at each end.
 - **Surf and the session list share a row**, and a session row is TAPPABLE: it opens in the session
-  view the lists pane already has, with the whole conversation and a composer. So a title truncated
-  in that column costs nothing — it is a way in, not the answer.
+  view one swipe LEFT (`cards/repos.js`, `window.__showSession`), with the whole conversation and a
+  composer. So a title truncated in that column costs nothing — it is a way in, not the answer.
 - **THE SURF PLOTS ARE TAPPABLE TOO**, into the full-screen sheet (`expand.js`, `data-sec="surf"`).
   That is the other half of the bargain the small card makes: it is thirty pixels a grid and bare on
   purpose, and everything it drops — the gutter with its hour labels, the weekday letters, the key,
@@ -533,9 +535,14 @@ It also beats app.css's `body.tv.wallportrait` block on equal specificity, by lo
   automatic minimum is its CONTENT, so a plain `1fr` sizes each ring to its svg's intrinsic width and
   the ring column stands far taller than the one it is supposed to match.
 
-It shares the panes the walls had: [chat] [home] [misc] [maint] [lists] [repos] [reports], landing on
-home, driven by `phone-home.js` rather than `wall.js` — there is no canvas to scale, so only the
-paging is left.
+Its panes are [sessions] [home] [misc] [maint] [lists] [reports], landing on home — index 1, which is
+what `panes.clientWidth` means in `phone-home.js` and what the reset returns to. Driven by
+`phone-home.js` rather than `wall.js`, since there is no canvas to scale and only the paging is left.
+
+**SESSIONS sits immediately left of home**, where the walls put their chat pane. It is the one pane
+reached by swiping rather than by tapping something, and it is the answer to the home page's session
+block, which is deliberately only a list. Tapping a row there lands here with that session's whole
+conversation and a composer.
 
 ### Wall-sized numbers a surface can override
 

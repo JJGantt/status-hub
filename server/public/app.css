@@ -144,6 +144,38 @@ body.tv .sectsheet .hcell{width:17px!important;height:17px!important;max-width:n
 .sectsheet[data-sec="surf"] #surf .devchip .dc-l{font-size:10px}
 .sectsheet[data-sec="surf"] #surf .devchip .dc-v{font-size:13px}
 .sectsheet[data-sec="surf"] #surf .devchip .dc-v .dot{width:8px;height:8px;margin-right:5px}
+/* MUSCLES, EXPANDED. The figures at a size a finger can aim at, and under them the volume bars —
+   twenty-three rows, which is exactly what the page below has no room for and why they are hidden
+   there. The body scrolls, so the bars run as long as they need to. */
+.sectsheet[data-sec="body"] .ss-body{overflow-y:auto;padding:6px 10px 58px}
+/* A DECLARED BOX, not an aspect-ratio. The figure svgs carry a `width` presentation ATTRIBUTE, which
+   beats `width:auto` — so `aspect-ratio` alone does nothing and each half came out at the container's
+   width, twice what it should be. The pattern that works (and that the page below already uses) is a
+   definite box with `flex:1 1 0` svgs inside it, so the width comes from flex rather than the
+   attribute. 370px of figure and 286px of pair leaves the volume bars on the same screen.
+   The pair must be a hair NARROWER than 36:93 per figure: each half holds the WHOLE artwork with a
+   36-unit window over it, so horizontal slack inside the box is filled by the figure next door and
+   overflow:hidden cannot help — the bleed is inside the element. 140/370 = .378 against .387. */
+.sectsheet[data-sec="body"] #body{flex:0 0 auto;position:static;width:256px;height:330px;margin:0 auto}
+.sectsheet[data-sec="body"] #body .figstack{height:100%;width:100%;display:flex;flex-direction:row;
+  gap:6px;justify-content:center}
+.sectsheet[data-sec="body"] #body .figstack svg{flex:1 1 0;min-width:0;height:100%;
+  overflow:hidden;display:block}
+.sectsheet[data-sec="body"] #volume{display:block;flex:0 0 auto;margin-top:8px;font-size:13px}
+.sectsheet[data-sec="body"] #volume h2{display:block;font-size:12px;color:#8b96a5;margin:0 0 5px;
+  letter-spacing:.03em;text-transform:uppercase}
+/* TWENTY-THREE ROWS, so every pixel of row height costs eight of screen. The base styling is a
+   desktop card's — 12px labels, a 10px track and 5px between rows, which came to 41px a row and put
+   the list two screens long under the figures. At 24 it is half that and still legible at arm's
+   length, which is the trade this sheet exists to make: both things visible, one short scroll. */
+.sectsheet[data-sec="body"] #volume .vsort{margin-bottom:7px;font-size:12px}
+.sectsheet[data-sec="body"] #volume .vrow{padding:1px 6px;margin:0 -6px 2px}
+.sectsheet[data-sec="body"] #volume .vrow-l{font-size:11px;margin-bottom:2px}
+.sectsheet[data-sec="body"] #volume .vtrack{height:7px;border-radius:4px}
+/* The detail a tapped muscle opens is `position:fixed` on <body> at z-index 900, which is BEHIND the
+   sheet at 2000 — inside the sheet it opened invisibly. Above the sheet, below the add-modal (3000).
+   Written at the same specificity as the rule that sets the 900, or it loses to it. */
+body.ss-open #bodyinfo,body.touch.ss-open #bodyinfo,body.tv.phonewall.ss-open #bodyinfo{z-index:2100}
 .sectsheet .card h2,.sectsheet #workouts h2{display:none}
 /* NUTRITION: #nutritionlog = heat (top) + full-day totals & food list (scroll) + trend plot (kept, bottom) */
 .sectsheet[data-sec="nut"] #nutritionlog{flex:1 1 auto;min-height:0;display:flex;flex-direction:column;padding:12px 14px;gap:10px}

@@ -8,6 +8,7 @@ import { state } from './shared.js';
 import * as workouts from './cards/workouts.js';
 import * as nutritionlog from './cards/nutritionlog.js';
 import * as surf from './cards/surf.js';
+import * as muscle from './cards/muscle.js';
 import { loadHistory, onHistoryLoaded, pinRight } from './heathistory.js';
 
 const HEATS = [workouts, nutritionlog];
@@ -25,6 +26,11 @@ const SECTIONS = {
   // and short (see phone-home.css); this is the other half of that bargain, where it gets the height
   // to be read and its labels back.
   surf: { icon: '#surf', move: ['#surf'], title: 'Surf', cards: [surf], tap: '.surfheat, .surfwater' },
+  // THE BODY opens the same way, and for the same reason the small one does not select a muscle:
+  // two whole figures in 133px puts a region at a few pixels. Expanded, the figures are aimable and
+  // the volume bars come with them — twenty-three of them, which is the one thing the phone's home
+  // screen has never had room for.
+  body: { icon: '#body', move: ['#body', '#volume'], title: 'Muscles', cards: [muscle], tap: '#body' },
 };
 
 // corner "expand" glyph (diagonal arrows). Big in the SVG because it lives INSIDE the ~0.36×-scaled wall

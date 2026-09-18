@@ -99,8 +99,16 @@
             <!-- One figure in the markup; cards/muscle.js splits it into the front/back pair and
                  paints each region from volume.muscle_colors. Tapping a region opens #bodyinfo,
                  which muscle.js moves out to the document so the sheet is not trapped in here. -->
-            <div class="ph-body" id="body"><!--BODY_SVG--></div>
+            <!-- `data-nosel` — a tap here does not pick a muscle, it OPENS (expand.js). At this size
+                 the figures are 133px wide for two whole bodies, so a region is a few pixels and the
+                 detail sheet it opens covers half the screen; picking one is a thing to do in the
+                 expanded view, where the figures are big enough to aim at. -->
+            <div class="ph-body" id="body" data-nosel><!--BODY_SVG--></div>
             <div id="bodyinfo"></div>
+            <!-- The volume bars. Hidden on the page — there is no room for twenty-three of them on a
+                 screen that already fits — and shown when expand.js moves it into the sheet beside
+                 the figures, which is the one place they have ever been readable on a phone. -->
+            <div id="volume"></div>
           </div>
 
         </div>

@@ -357,6 +357,10 @@ body.tv.phonehome .ph-body{position:absolute;top:0;right:0;bottom:0;width:133px;
 body.tv.phonehome .ph-body .figstack{height:100%;width:100%;display:flex;flex-direction:row;gap:3px;
   align-items:center;justify-content:center;overflow:hidden}
 body.tv.phonehome .ph-body .figstack svg{flex:1 1 0;min-width:0;height:100%;overflow:hidden;display:block}
+/* The volume bars live in the markup so the card can render them every frame, but there is no room
+   for twenty-three rows on a screen that already fits exactly. They are the expanded view's
+   (app.css, .sectsheet[data-sec="body"]), which is the only place they have ever been readable here. */
+body.tv.phonehome .ph-wksec > #volume{display:none}
 
 /* ---- what is running ----------------------------------------------------------------------------
    Titles and the one line of what each session is doing. TAPPING a row opens it in the session view

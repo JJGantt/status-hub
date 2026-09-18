@@ -242,11 +242,15 @@ function tvStackFigures(){
  const bodyEl=document.getElementById('body');
  if(!bodyEl)return;  // page without the muscle card (e.g. /page after consolidation) — nothing to bind
  document.querySelectorAll('#body path[data-r]').forEach(p=>{if(muscleForId(p.getAttribute('data-r')))p.classList.add('tappable');});
+ // A host marked `data-nosel` does not select a muscle where it sits — the tap belongs to whatever
+ // opens it (expand.js). It DOES select once expanded, so the test is "am I in the sheet" rather than
+ // a fixed flag: the same element is both surfaces, and it is moved between them rather than copied.
+ const selectable=()=>bodyEl.dataset.nosel===undefined||!!bodyEl.closest('.sectsheet');
  if(!TOUCH){
-  bodyEl.addEventListener('mouseover',e=>{const p=e.target.closest('path[data-r]');if(!p)return;const m=muscleForId(p.getAttribute('data-r'));if(m)showSel({kind:'muscle',key:m});});
+  bodyEl.addEventListener('mouseover',e=>{if(!selectable())return;const p=e.target.closest('path[data-r]');if(!p)return;const m=muscleForId(p.getAttribute('data-r'));if(m)showSel({kind:'muscle',key:m});});
   bodyEl.addEventListener('mouseout',e=>{if(e.target.closest('path[data-r]'))showSel(SEL);});
  }
- bodyEl.addEventListener('click',e=>{const p=e.target.closest('path[data-r]');if(!p)return;const m=muscleForId(p.getAttribute('data-r'));if(m)toggleSel({kind:'muscle',key:m});});
+ bodyEl.addEventListener('click',e=>{if(!selectable())return;const p=e.target.closest('path[data-r]');if(!p)return;const m=muscleForId(p.getAttribute('data-r'));if(m)toggleSel({kind:'muscle',key:m});});
  // PHONE WALL: move the detail panel OUT of the transform-scaled shell onto <body> — fixed positioning
  // inside a transformed ancestor is relative to that ancestor, not the viewport, so the bottom-sheet
  // styling can only work from outside. (Same viewport test wall.js uses; body.phonewall isn't set yet

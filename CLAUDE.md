@@ -444,6 +444,19 @@ It also beats app.css's `body.tv.wallportrait` block on equal specificity, by lo
   event of its own, so clearing it synchronously let the mirrored rails answer back and the shortest
   of them dragged everyone to its own end — the training map could never be scrolled past where the
   food map ran out.
+- **THE BODY OPENS TOO**, into the same sheet the surf plots use (`expand.js`, `data-sec="body"`),
+  and it brings the VOLUME BARS with it — `#volume` is in the phone's markup but `display:none`,
+  because twenty-three rows do not fit a screen that already fits exactly, and the sheet is the only
+  place they have ever been readable here. In the small view a tap does NOT pick a muscle: `#body`
+  carries `data-nosel`, and `cards/muscle.js` tests `closest('.sectsheet')` rather than a fixed flag,
+  because the same element is both surfaces and it is MOVED between them. Two whole figures in 133px
+  puts a region at a few pixels and the detail it opens covers half the screen; aiming at one is a
+  thing to do expanded.
+  The sheet gives the figures a DECLARED BOX with `flex:1 1 0` svgs inside it, not an `aspect-ratio`:
+  the figure svgs carry a `width` presentation ATTRIBUTE, which beats `width:auto`, so aspect-ratio
+  alone does nothing and each half came out at the container's width — twice what it should be. And
+  the volume rows are re-sized there, because their base styling is a desktop card's and 41px a row
+  made the list two screens long under the figures.
 - **The body figures fill the training section's height**, and their column's width is what that
   height implies (2 x 0.387 x it) rather than a number picked first — anything less is a band of
   black above and below them. A hair under, deliberately: each split svg holds the whole 72-unit

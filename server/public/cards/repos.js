@@ -23,6 +23,9 @@ let recorder = null;      // one shared recorder; only ever one repo is being di
 let armed = null;         // the <li> currently listening
 let rows = [];            // every row of the last /api/sessions payload, running and parked
 let cur = null;           // the session open in place of the list (openSession), or null for the list
+// Pictures queued for the next message, as {url, name}: a local object URL to show, and the hub's
+// object name once it has landed. Cleared when they go, so a failed send keeps them.
+let shots = [];
 
 // 'now' / '20m' / '3h' / '5d' — how long ago this was last touched (HEAD commit for a repo, the
 // directory's mtime otherwise).
@@ -447,7 +450,9 @@ async function sendWords(text) {
   const el = document.getElementById('repospane');
   const at = cur;
   text = String(text || '').trim();
-  if (!el || !at || !text || at.sending) return;
+  // Pictures alone are a message: "look at this" with nothing typed is the common case for a screenshot.
+  const pics = shots.filter((a) => a.name).map((a) => a.name);
+  if (!el || !at || (!text && !pics.length) || at.sending) return;
   const status = el.querySelector('.sv-status');
   const say = (t) => { if (status && cur === at) status.textContent = t || ''; };
   if (!at.msg || at.msg.text !== text) at.msg = { text, id: newMsgId() };
@@ -457,7 +462,7 @@ async function sendWords(text) {
   try {
     const r = await fetch('/api/sessions/followup', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id: at.id, text, client_msg_id: at.msg.id }),
+      body: JSON.stringify({ id: at.id, text, attachments: pics, client_msg_id: at.msg.id }),
     });
     const j = await r.json().catch(() => ({}));
     if (!r.ok) throw new Error(j.error || String(r.status));
@@ -467,7 +472,10 @@ async function sendWords(text) {
       if (box && box.value.trim() === text) box.value = '';
       // Into the stream, not into a slot of its own: what he says mid-turn belongs where it happened,
       // among the steps that ran before and after it.
-      at.activity.push({ text, said: true });
+      at.activity.push({ text: text || '(picture)', said: true });
+      for (const a of shots) URL.revokeObjectURL(a.url);
+      shots = [];
+      const tray = el.querySelector('.sv-tray'); if (tray) tray.innerHTML = '';
       paintBody();
       const body = el.querySelector('.sv-body');
       if (body) body.scrollTop = body.scrollHeight;
@@ -484,6 +492,24 @@ async function sendWords(text) {
 
 // Opens one session over the list. False when there is no such row to show, so a caller with
 // somewhere else to go (a notification tap) can go there.
+// Shrunk before upload, the same as the chat composer's: a phone photo is several megabytes of detail
+// no model reads, and the session's machine has to pull it down again on the other side.
+async function uploadShot(file) {
+  const img = await new Promise((ok, no) => {
+    const i = new Image(); i.onload = () => ok(i); i.onerror = no; i.src = URL.createObjectURL(file);
+  });
+  const scale = Math.min(1, 1568 / Math.max(img.width, img.height));
+  const c = document.createElement('canvas');
+  c.width = Math.round(img.width * scale); c.height = Math.round(img.height * scale);
+  c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+  URL.revokeObjectURL(img.src);
+  const blob = await new Promise((ok) => c.toBlob(ok, 'image/jpeg', 0.85));
+  const r = await fetch('/api/attach', { method: 'POST', headers: { 'Content-Type': 'image/jpeg' }, body: blob });
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok || !j.path) throw new Error(j.error || 'upload failed');
+  return j.path;
+}
+
 // Opening one reads its reply — see `unread` in buildSessions. Fire and forget: the list re-renders
 // off the push the hub sends back, and a failed stamp only means the mark stays up.
 function markSeen(id) {
@@ -520,14 +546,45 @@ async function openSession(id) {
       '<div class="sv-body"></div>' +
       '<div class="sv-input">' +
         '<button class="ai-mic sv-mic" type="button" aria-label="Tap to talk"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="2" width="6" height="12" rx="3"></rect><path d="M5 11a7 7 0 0 0 14 0"></path><line x1="12" y1="18" x2="12" y2="22"></line></svg></button>' +
+        '<button class="ai-mic sv-clip" type="button" aria-label="Attach a picture"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><path d="M21 15l-5-5L5 21"></path></svg></button>' +
+        '<input class="sv-file" type="file" accept="image/*" multiple hidden>' +
         '<input class="ai-text sv-text" type="text" placeholder="Message…" autocomplete="off">' +
         '<button class="ai-send sv-send" type="button">Send</button>' +
       '</div>' +
+      '<div class="sv-tray"></div>' +
       '<div class="ai-status sv-status"></div>' +
     '</div>';
   paintHead();
   paintBody({ open: true });
   const box = el.querySelector('.sv-text'), mic = el.querySelector('.sv-mic'), status = el.querySelector('.sv-status');
+  // PICTURES INTO A TERMINAL SESSION. A session is typed into, so an image cannot be sent to it — what
+  // is sent is a PATH. The hub keeps the bytes (`/api/attach`, the same bucket the chat composer uses)
+  // and the machine that owns the session pulls them down beside its stashed prompts, so what reaches
+  // the tty is a line naming a local file the session can read. Nothing here knows any of that: it
+  // uploads, and hands the names to the follow-up.
+  const fileIn = el.querySelector('.sv-file'), tray = el.querySelector('.sv-tray');
+  el.querySelector('.sv-clip').addEventListener('click', () => fileIn.click());
+  const paintTray = () => {
+    tray.innerHTML = shots.map((a, i) =>
+      `<span class="sv-shot${a.name ? '' : ' up'}"><img src="${esc(a.url)}" alt="">` +
+      `<button type="button" class="sv-shot-x" data-i="${i}" aria-label="Remove">✕</button></span>`).join('');
+  };
+  tray.addEventListener('click', (e) => {
+    const x = e.target.closest('.sv-shot-x'); if (!x) return;
+    const [gone] = shots.splice(Number(x.dataset.i), 1);
+    if (gone) URL.revokeObjectURL(gone.url);
+    paintTray();
+  });
+  fileIn.addEventListener('change', async () => {
+    const files = [...(fileIn.files || [])]; fileIn.value = '';
+    for (const f of files) {
+      const a = { url: URL.createObjectURL(f), name: null };
+      shots.push(a); paintTray();
+      try { a.name = await uploadShot(f); }
+      catch (_) { shots.splice(shots.indexOf(a), 1); status.textContent = 'Upload failed'; }
+      paintTray();
+    }
+  });
   el.querySelector('.sv-back').addEventListener('click', showList);
   el.querySelector('.sv-send').addEventListener('click', () => sendWords(box.value));
   box.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); sendWords(box.value); } });

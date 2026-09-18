@@ -569,6 +569,22 @@ idle, which is exactly when a row is dimmed, and a finished session is the one m
 and each surface loads only its own, so a rule written in one of them reaches half the surfaces that
 draw this row.
 
+**A session is typed into, so a PICTURE is sent as a PATH.** The composer's attach button shrinks the
+image and uploads it to `/api/attach` — the same bucket the chat composer fills — and the follow-up
+carries the object names. The machine that OWNS the session pulls the bytes down beside its stashed
+prompts (`fetchAttachment`) and prepends a line naming the local files, which the session reads
+itself. A picture with no words is a whole message. It reaches the hub with `?token=`, the way
+everything on that machine does; `X-Hub-Token` is the derived token the iOS app carries and not this.
+
+**A message too long for a tty is stashed, and both halves of that are hidden here.** `sendToTty`
+parks the words in `~/.claude-desk-prompts` and types a one-line stub naming the file, so the STUB is
+what the transcript holds: `turnStart` substitutes the file's contents back, which is why every
+surface shows the words. The stub also asks the session to reply with them verbatim, so they are
+visible in the terminal — and that echo is the same paragraph twice anywhere the stub has already
+been resolved, so `sessionWatch` drops the text frame that quotes it, matched on a flattened middle
+slice of the prompt (the part a quotation reproduces exactly, where its two ends differ). The stash is
+swept at thirty days: deleting a file turns the message back into the stub wherever it is drawn.
+
 **The session view lands on the top of the NEWEST THING** (`paintBody` in `cards/repos.js`). The last
 block in the body is that thing; inside a turn it resolves one level further in, to the reply rather
 than the prompt that asked for it. A tool call or a thought after the last turn is newer, so it wins;

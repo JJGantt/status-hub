@@ -3587,7 +3587,12 @@ app.post('/api/sessions/:action', express.json(), async (req, res) => {
     // client_msg_id makes a resend after a lost answer return the first command.
     if (action === 'followup') {
       const text = String((req.body || {}).text || '').trim();
-      if (!text) return res.status(400).json({ error: 'text required' });
+      // PICTURES: object names from /api/attach, the same bucket the chat composer fills. They ride to
+      // the machine that owns the session, which pulls the bytes down and hands the session a local
+      // path — a tty can be typed into, and an image cannot be typed. A picture alone is a message.
+      const attachments = (Array.isArray((req.body || {}).attachments) ? (req.body || {}).attachments : [])
+        .map(String).filter((n) => /^[\w.-]+$/.test(n)).slice(0, 8);
+      if (!text && !attachments.length) return res.status(400).json({ error: 'text or attachments required' });
       const msgId = String((req.body || {}).client_msg_id || '').slice(0, 64);
       const seenKey = msgId ? 'followup:' + msgId : '';
       if (seenKey && seenMsgIds.has(seenKey)) return res.json({ id: seenMsgIds.get(seenKey), duplicate: true });
@@ -3599,7 +3604,8 @@ app.post('/api/sessions/:action', express.json(), async (req, res) => {
       }
       const machine = target.worker === 'desk' ? 'mac' : 'pi';
       const kind = now.live ? 'follow_up' : 'resume_session';
-      const payload = { session: target.id, prompt: text, target: machine };
+      const payload = { session: target.id, prompt: text, target: machine,
+                        ...(attachments.length ? { attachments } : {}) };
       if (!(await machineAwake(machine))) {
         const saved = await deadLetter(kind, payload, machine, `the ${machine === 'mac' ? 'Mac' : 'Pi'} is not responding`);
         return res.status(409).json({ error: `the ${machine === 'mac' ? 'Mac' : 'Pi'} is not responding`, saved });

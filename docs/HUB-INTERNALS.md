@@ -156,7 +156,7 @@ were never the problem.
 | `navbar.js` | Bottom bar: settings gear, the calendar link (on `/calendar` itself, a back-to-the-wall toggle instead) + the single voice FAB (`wfab-fast`). Exposes `window.__startVoiceCommand` for the native launcher. |
 | `voiceagent.js` | The in-app conversation pipeline: `makeRecorder` (mic → `/api/voice-command`), the activity popup, the conversation card, and the durable photo and voice outboxes (IndexedDB) that resend whatever a failed upload left on the phone. |
 | `settings.js` | The gear panel — reads/writes `app_settings` via `/api/settings` (§7). |
-| `wall.js` | WALL-only now: scales the 1920×1080 shell into a phone-sized canvas and drives the swipe panes around it. `/` no longer loads a wall, so this is what keeps a wall openable on a phone, plus the Mac app's fit. |
+| `wall.js` | WALL-only: scales the 1920×1080 shell into a phone-sized canvas and drives the swipe panes around it. `/` serves `phone-home.html`, which is laid out at native size and needs none of this, so `wall.js` is what keeps a WALL openable on a phone, plus the Mac app's fit. |
 | `phone-home.js` | The phone home page's own middle (`/`): mounts the day strip, the sessions list and the last exchange of the hub thread — and its swipe paging, which is all that is left of wall.js's job on a page that is not scaled. |
 | `cards/daystrip.js` | TODAY LYING DOWN, and the days after it — the phone home page's day. Hours left to right, each item at its own time, packed into lanes so two titles never overlap (the one in the lane that frees soonest is truncated instead). It keeps going past midnight, which is why that page needs no separate look-ahead. Painted from the same `/api/calendar` response `cards/dayline.js` fetches, so there is one clock for both. |
 | `expand.js` | Full-screen section sheets. Nutrition and workouts open from a corner icon; **surf opens by tapping the plots themselves** (a 64px glyph would cover a card that is a fifth of a phone screen). On open it moves the elements into the sheet and re-runs that section's cards, because each one draws itself to the size and window its surface gives it — the grids pick up the sheet's fixed cell size and their history, and surf picks up the sheet's `--surf-*`. The heat sections then pin to the newest column; surf holds its own place, as a distance from the right-hand end. |
@@ -484,7 +484,7 @@ frame) so a surface can pick it up without re-deriving it.
 
 **Pages:** `/` + `/phone` (the phone's home page — the home wall's content, in portrait and at the
 phone's own scale) · `/tv` (the home wall, the TV default) · `/tv-health` (health wall — what
-used to be the default on both) · `/tv-session-focus` (sessions wall) · `/tv-calendar` (calendar wall) · `/calendar` (phone/desktop calendar) · `/page` (desktop dashboard) · `/mic` (voice
+the health wall) · `/tv-session-focus` (sessions wall) · `/tv-calendar` (calendar wall) · `/calendar` (phone/desktop calendar) · `/page` (desktop dashboard) · `/mic` (voice
 launcher) · `/reports` + `/report/:id` (§6c) · `/login` · `/healthz` · `/privacy` · `/terms`.
 
 **Read:** `/api/status` (full payload) · `/api/stream` (SSE status) · `/api/voice-stream` (SSE voice
@@ -502,7 +502,9 @@ watch; the current context only, unless `?history=1`, which returns older contex
 fired from `dirtyNutDay()` / `dirtyWorkoutDay()`, which every write path already calls; the watch's push
 path) · `/api/nutrition-day` also takes `date=today`, so a client with no 4am-origin day of its own
 gets the server's, and ships that day's own `produce` fill gauges beside its totals and targets so a
-surface pointing the rings at a selected day can move all seven of them together ·
+surface pointing the rings at a selected day moves all seven of them together ·
+`/api/alarms/ack` (the phone reporting the set of AlarmKit alarms it holds; arms and disarms
+`list_items.alarm_armed_at`) ·
 `/api/alarms` (the dated items marked `alarm`, inside a 7-day window, each with an ABSOLUTE instant —
 what the phone registers with AlarmKit; see status-hub's CLAUDE.md) · `/api/todos/alarm` (sets or
 clears that mark) ·

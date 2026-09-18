@@ -146,35 +146,22 @@ The scoring itself is built and live (`lib/score.js`, data-layer `00085`-`00087`
   rather than a failure — but if it turns out to be annoying, the fix is a horizon reminder, not a
   background job that quietly extends lists forever.
 
-### AlarmKit — the plumbing is in; nothing marks an item yet
-Breaks silent mode **and** Focus, full-screen stop/snooze UI, Lock Screen + Watch. iOS 26+ only;
-device confirmed on **26.6**. One-time permission prompt, no Apple approval (unlike critical alerts),
-**no entitlement and no portal capability** — `com.apple.developer.alarmkit` does not exist, and
-putting it in an entitlements file is itself what makes a device build fail. So none of this is
-behind the rejected Xcode login.
+### AlarmKit — what is still open
+The alarm path is built and in use; how it works is in this repo's `CLAUDE.md`. What remains:
 
-**Built and deployed** (how it fits together is in this repo's CLAUDE.md):
-`list_items.alarm` (data-layer migration `00106`) · `GET /api/alarms` · `POST /api/todos/alarm` ·
-`nudgeAlarms()` off the `list_items` subscription · `Shared/HubAlarm.swift` ·
-`Controls/AlarmWidget.swift` (the Live Activity AlarmKit requires for its alert) ·
-`Sources/AlarmSync.swift` · three Info.plist keys. Verified live end to end on the server: the feed is
-empty until an item is marked, carries the right absolute instant when it is, empties when the item
-goes, is behind the auth gate, and the mark wakes the devices.
-
-**What is left, in order:**
-
-1. **Nothing sets `alarm`.** That is the open product decision and it is Jared's: which items ring.
-   `POST /api/todos/alarm` is the only way in today. The likely shape is a word in the voice tool
-   ("set an alarm for…", "timer"), which means a data-layer tool change, not a hub one. Deliberately
-   not guessed — a soup timer should wake the room and an errand at 2am should not.
-2. **Prove it on the device.** Two things are unverified and only a phone can answer them:
-   - whether `AlarmManager.schedule` succeeds from an app launched in the BACKGROUND by the silent
-     push. Nothing documents a foreground requirement either way. If it does not, the design still
-     works — the foreground sync is the guarantee — but the push stops being worth sending.
-   - the per-app cap on scheduled alarms. `AlarmError.maximumLimitReached` is handled (stop, keeping
-     the soonest), but the number decides whether a 7-day window is the right size.
-3. **A tap on the alert goes nowhere.** `HubAlarmMetadata` carries the item id precisely so it can
-   open that item; wiring it to the existing `statushub://` handling is a small follow-on.
+1. **Prove the background wake on the device.** `didReceiveRemoteNotification` fires whether the app
+   is suspended or on screen, so "it ran from a push" does not establish that the phone was asleep.
+   The trigger now carries the application state (`push:background` / `push:active`) in the
+   `alarm-sync` beacon, so the next wake while the phone is idle answers it. If schedules do not
+   succeed from a suspended app, the design still holds — the foreground sync is the guarantee — but
+   the push stops being worth sending.
+2. **Find the per-app cap on scheduled alarms.** `AlarmError.maximumLimitReached` is handled (stop,
+   keeping the soonest), and it beacons — but the number decides whether a 7-day window is right.
+3. **A tap on the alert goes nowhere.** `HubAlarmMetadata` carries the item id so it can open that
+   item; wiring it to the existing `statushub://` handling is a small follow-on.
+4. **Nothing decides which items ring except Jared's words.** `add_to_list`'s `alarm` and `set_alarm`
+   are the way in, and both tool descriptions refuse to infer it. That is the intended shape, not a
+   gap — recorded here because it is the question anyone extending this will reach for first.
 
 ### The Pi / TV wall second mode
 Partly landed as two of the walls: the sessions wall (`/tv-session-focus`) is where a long answer

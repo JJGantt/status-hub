@@ -107,66 +107,83 @@ the existing `StatusHubControls` bundle (the `WidgetBundle` at the bottom of
 `apps/Controls/RecordControl.swift`); a widget and its button intents share `UserDefaults.standard`,
 since they are one process already.
 
-## An alarm is registered on the phone, so the server can only say "look again"
+## An alarm rings from the phone, and the hub can only ask
 
 `list_items.alarm` marks a dated item alarm-grade: iOS 26's AlarmKit rings it through silent mode and
-through a Focus. Four pieces, and the shape of all of them follows from one fact — **an AlarmKit alarm
-is registered ON the device.** There is no push that rings one, not even a push-to-start the way a
-Live Activity has.
+through a Focus, the same as the Clock app. Everything about the design follows from one fact — **an
+AlarmKit alarm is registered ON the device.** No push rings one, and there is no push-to-start the way
+a Live Activity has. So the hub's whole role is to publish what should be registered and to ask the
+phone to look.
 
 | | |
 |---|---|
-| `GET /api/alarms` | what the phone should have registered right now: everything marked, due inside `ALARM_WINDOW_DAYS`. `at` is an ABSOLUTE instant (`instantFromLocal`), not the naive stamp the rest of the API speaks, so a phone that has travelled cannot resolve 4pm against wherever it is. |
-| `POST /api/todos/alarm` | sets or clears the mark. The only way in — nothing infers it from priority or wording. |
-| `nudgeAlarms()` | a silent push off the `list_items` subscription, only for rows that are (or were) marked. |
+| `GET /api/alarms` | what the phone should hold right now: every marked item due inside `ALARM_WINDOW_DAYS`. `at` is an ABSOLUTE instant (`instantFromLocal`), not the naive stamp the rest of the API speaks, so a phone that has travelled resolves nothing itself. |
+| `POST /api/todos/alarm` | sets or clears the mark. Nothing infers it from priority or wording. |
+| `POST /api/alarms/ack` | the phone reporting the whole SET it holds, after every sync. Arms the items in it, disarms the ones that are not, and diffs first so an unchanged sync writes nothing. |
+| `nudgeAlarms()` | a silent push off the `list_items` subscription, for rows that are or were marked. |
 | `Sources/AlarmSync.swift` | reads the feed and makes the device match it. |
+| `Controls/AlarmWidget.swift` | the alert's Live Activity. |
 
-**It syncs a WINDOW, not a change.** Every run registers everything in the next week and cancels what
-is no longer there, which is what makes a dropped wake cheap: iOS throttles background pushes on its
-own heuristics and delivers none at all after a force-quit, so the cost of missing one has to be "an
-alarm created in the last few hours registers late", never "the next alarm did not happen". The
-foreground sync (`applicationDidBecomeActive`) is the guarantee; the push is what usually makes the
-guarantee unnecessary.
+**The sync carries a WINDOW, not a change.** Every run registers everything in the next week and
+cancels what is not in it. That is what makes a dropped wake cheap: iOS throttles background pushes on
+its own heuristics and delivers none at all after a force-quit, so the worst a missed one costs is an
+alarm created since the last sync registering late, never the next alarm failing to ring.
 
-**The alarm id is derived, not stored** — `HubAlarm.id` is sha256 of (item id, moment). So the sync is
-a set difference against `AlarmManager.shared.alarms` with no local bookkeeping to drift, and snoozing
-an item is automatically a different alarm: the old id is cancelled and the new one scheduled without
-anything having to notice it moved.
+**The sync runs from `scenePhase`, not from the app delegate.** This app is a SwiftUI `WindowGroup`,
+so it is scene-based, and UIKit does not promise to call `applicationDidBecomeActive` in a scene-based
+app. `AlarmSync.sync(why:)` is called from `.onChange(of: scenePhase)` and `.task` in
+`StatusHubApp.swift`; the delegate calls it too, and the `why` in every beacon names which fired.
+Foreground is the guarantee, the silent push is the speed.
 
-**The alert is a Live Activity.** AlarmKit draws no UI of its own — it requires a widget extension
+**Only a foreground run may prompt.** `mayPrompt` gates `requestAuthorization()` — the permission
+prompt is a question someone has to be looking at to answer, and the system gives one chance at it.
+
+**Every exit beacons** to `/api/clientlog` as `ev: "alarm-sync"` with the trigger and the
+authorization state: `start`, `asked`, `unauthorized`, `no-feed`, `done`, `limit`. This is the only
+trace the device side leaves — scheduling is local and the wake is a fire-and-forget push — so
+without it a silent failure is indistinguishable from a declined one. A push-driven run reports the
+application state in its trigger (`push:background` / `push:active`), which is the only way to tell
+work done while suspended from work done on screen.
+
+**The alarm id is derived, not stored.** `HubAlarm.id` is sha256 of (item id, moment), so the sync is
+a set difference against `AlarmManager.shared.alarms` with no local bookkeeping to drift — and moving
+an item is a different id, so the old alarm is cancelled and the new one scheduled without anything
+having to notice it moved.
+
+**The alert is a Live Activity.** AlarmKit draws no UI of its own: it requires a widget extension
 declaring an `ActivityConfiguration` over `AlarmAttributes<Metadata>`, which is
-`Controls/AlarmWidget.swift` in the existing `StatusHubControls` bundle. Without it, scheduling
-succeeds and nothing appears.
+`Controls/AlarmWidget.swift` in the `StatusHubControls` bundle. Without one, scheduling succeeds and
+nothing appears.
 
-**None of it is a capability.** `com.apple.developer.alarmkit` does not exist — putting it in an
-entitlements file is itself what makes a device build fail with "provisioning profile doesn't
-include…". The whole cost in the project is three Info.plist keys (`NSAlarmKitUsageDescription`,
-`NSSupportsLiveActivities`, `UIBackgroundModes: remote-notification`), so no profile is regenerated
-and the rejected Xcode login does not gate it.
+**None of it is a capability.** `com.apple.developer.alarmkit` does not exist, and putting it in an
+entitlements file is what makes a device build fail with "provisioning profile doesn't include…". The
+whole cost in the project is three Info.plist keys — `NSAlarmKitUsageDescription`,
+`NSSupportsLiveActivities`, `UIBackgroundModes: remote-notification` — so no profile is regenerated
+and the rejected Xcode login does not gate it. It does need the **iOS 26 SDK**: both iOS workflows
+select the newest Xcode on the runner and fail with a named error below SDK 26, because the failure
+otherwise is "no such module AlarmKit" deep inside a Swift file.
 
-That background mode has a consequence worth knowing: the app now wakes for the **badge-only** silent
-pushes too, which it never used to. `didReceiveRemoteNotification` answers `.noData` immediately for
-anything without an `alarms` key — an app that claims work it did not do gets woken less often.
+`UIBackgroundModes` also means the app wakes for the **badge-only** silent pushes.
+`didReceiveRemoteNotification` answers `.noData` immediately for anything without an `alarms` key: an
+app that claims work it did not do gets woken less often.
 
-## An alarm is a REQUEST until the phone says otherwise
+## An alarm is a REQUEST until the phone confirms it
 
-`list_items.alarm` asks for it; `list_items.alarm_armed_at` is the phone confirming it. The hub cannot
-see whether an AlarmKit alarm will ring — it lives on the device — so `POST /api/alarms/ack` takes the
-whole SET the phone currently holds after every sync, and the hub arms the ones in it and disarms the
-ones that are not. A set rather than an event, because a message about one alarm cannot express a
-cancellation, and nothing else would ever clear a flag on an alarm the phone dropped. Diffed before
-writing, so an unchanged sync costs no writes and wakes no surface through realtime.
+`list_items.alarm` asks; `list_items.alarm_armed_at` is the phone's answer. The hub cannot see whether
+an alarm will ring, so `/api/alarms/ack` carries the whole set the phone holds. A set rather than an
+event, because a message about one alarm cannot express a cancellation and nothing else would clear
+the flag on an alarm the phone dropped.
 
-**The chip says both** (`chip()` in `cards/dayline.js`, so every day surface gets it at once): a ⏰ in
-full colour means armed and it will ring; a GREY one means asked for and not confirmed. Colour, not
-opacity — at 35% a red-and-white clock on a dark chip still reads red, and the two states were
-indistinguishable side by side. Same glyph either way, so there is no second symbol to learn, and the
-grey one is the warning seen BEFORE the moment rather than by sleeping through it.
+**The chip carries both states** (`chip()` in `cards/dayline.js`, so every day surface gets it at
+once): a ⏰ in full colour is armed and will ring, a GREY one is asked for and unconfirmed. The
+difference is COLOUR, not opacity — a colour emoji stays legible as itself at low opacity, so the two
+states have to differ in hue to be told apart. One glyph either way, so there is no second symbol to
+learn, and the grey one is a warning readable before the moment rather than after sleeping through it.
 
-**An alarm does not also notify.** `dueTick` skips the push for `r.alarm`: the alarm already broke
-silent mode and a Focus with a full-screen alert, and a banner behind it says the same thing quieter
-at the same second. The cost is real and stated in the code — the notification carried the Done /
-1 Hour / Tomorrow buttons, so an alarm-grade item can only be acted on from a list.
+**An alarm does not also notify.** `dueTick` skips the push for `r.alarm`: the full-screen alert has
+already broken silent mode and Focus, and a banner behind it repeats it quieter at the same second.
+The consequence to know: the notification is what carries the Done / 1 Hour / Tomorrow buttons, so an
+alarm-grade item is actionable only from a list.
 
 ## Widget drawing files stay WidgetKit-free
 
@@ -214,11 +231,9 @@ Its grid is SIX columns, declared in `tv-home.css` — which means the spans app
 five are wrong here and are overridden alongside it: the status strip reaches column 6, the footer
 column 7, and the health bar sits in 6. Add a column and those three are what silently misplace.
 
-`public/tv-health.html` (`/tv-health`) is the health wall — what used to be the default, and still
-the only place nutrition, the muscle map, the volume bars and the workout heatmap are on one screen,
-each with the detail panel its heatmap fills. Too much to glance at from a couch, which is why it
-gave up `/tv`. It held `/` for a while after that, which is how the phone came to be reading a wall;
-`public/phone-home.html` has that route now.
+`public/tv-health.html` (`/tv-health`) is the health wall — the only place nutrition, the muscle map,
+the volume bars and the workout heatmap are on one screen, each with the detail panel its heatmap
+fills. Too much to glance at from a couch, which is why it is not the default.
 
 `public/tv-session-focus.html` (`/tv-session-focus`) is the sessions wall: always-on, no interaction,
 stripped down around the sessions list so it reads across a room and eventually on a watch.
@@ -341,153 +356,144 @@ It also beats app.css's `body.tv.wallportrait` block on equal specificity, by lo
 **What it does differently from the wall, and why:**
 
 - **Today LIES DOWN** (`cards/daystrip.js`) — hours left to right, each item at its own time. The
-  dial is the same day standing up, which is right for a tall column read across a room; a phone in
-  portrait has width and no height, so the axis turns and the day scrolls under a fixed viewport.
+  dial is the same day standing up, which suits a tall column read across a room; a phone in portrait
+  has width and no height, so the axis turns and the day scrolls under a fixed viewport.
 - **TWO SCALES ON ONE BAND.** Today is a CLOCK: every hour named, wide enough to read the time off.
   A day at a remove is not a clock — nobody asks where in Saturday something falls, only what is on
   it — so it collapses to a block the width of a few chips, one per lane, with the rest counted at
-  its head. Giving every day today's scale spent six hundred pixels a day saying almost nothing, and
-  left today's hours too narrow to name more than every third one.
-  **Tapping a collapsed day opens it** at today's scale, and tapping it again puts it back. One at a
-  time: two full days side by side is most of the strip spent on two days, which is the thing the
-  blocks exist to avoid. The strip runs sixty days out (`ahead=60`), because a scroller that stops a
-  week from now is a week you can reach and nothing beyond it.
+  its head. At today's scale a distant day costs six hundred pixels to say almost nothing, and
+  squeezes today's hours below the width a label needs.
+  **Tapping a collapsed day opens it** at today's scale, and tapping it again closes it. One at a
+  time, because two full days side by side is most of the strip spent on two days, which is what the
+  blocks exist to avoid. The strip runs sixty days out (`ahead=60`): a scroller that stops a week out
+  is a week you can reach and nothing beyond it.
 - **The RESET button on the navbar** (`hubreset`, broadcast on `window`) leaves the page as a FRESH
-  LOAD would leave it, without reloading. Not just scroll: the three heat rails to the newest week,
-  every list to its own end, the pane back to home, the surf plots to today, the strip to now with
-  only today open, BOTH heat maps' selected day back to today, every expanded nutrition entry closed,
-  the muscle sheet and any open section sheet closed, and a session opened over the repos list back
-  to the list. It is an event rather than a call so that whoever owns a piece of that state listens
-  for it and the navbar needs to know none of them — which is also the trap: state added anywhere
-  without a listener is state the reset silently leaves behind.
+  LOAD leaves it, without reloading. Not just scroll: the three heat rails to the newest week, every
+  list to its own end, the pane back to home, the surf plots to today, the strip to now with only
+  today open, both heat maps' selected day back to today, every expanded nutrition entry closed, the
+  muscle sheet and any open section sheet closed, and a session opened over the repos list back to the
+  list. An event rather than a call, so whoever owns a piece of that state listens for it and the
+  navbar knows none of them — which is also the trap: state added anywhere without a listener is state
+  the reset silently leaves behind.
 - **The RINGS FOLLOW THE SELECTED DAY.** Tapping a cell on the food heat map points all seven gauges,
-  the `2699 / 3060` under each and the deviation in each hole at that day, against the goal THAT day
-  had — the calorie target is dynamic and the macro split is off that day's bodyweight, so a day in
-  July is not measured against today's numbers. `cards/nutritionlog.js` announces the day it has
-  loaded (`nutday`) and `cards/nutrition.js` draws it; today is announced too, which is what puts the
-  rings back on the live clock. A finished day is `frac = 1` — the whole goal was expected, so the arc
-  is simply what was eaten against it, which is the same math the live tick reaches at the end of the
-  eating window rather than a second way of drawing a ring. The mini produce rings move with them:
-  `/api/nutrition-day` rolls that day's own produce, or three of the seven would still be reporting
-  today beside a day in August.
+  the `2699 / 3060` under each and the deviation in each hole at that day, measured against the goal
+  THAT day had: the calorie target is dynamic and the macro split follows that day's bodyweight, so a
+  day in July is not judged by today's numbers. `cards/nutritionlog.js` announces the day it has
+  loaded (`nutday`) and `cards/nutrition.js` draws it; today is announced too, which is what returns
+  the rings to the live clock. A finished day is `frac = 1` — the whole goal was expected, so the arc
+  is what was eaten against it, the same math the live tick reaches at the end of the eating window
+  rather than a second way of drawing a ring. The mini produce rings move with them, because
+  `/api/nutrition-day` rolls that day's own produce; without it three of the seven would report today
+  beside a day in August.
 - **Which day it is, is pinned to the left of the strip** and does not scroll with it (`.ds-here`).
-  The day names inside the strip sit at their own midnights, so today's is off the left end from the
-  moment it lands on now — and the only date anywhere on the page then read FRI 18: tomorrow.
+  The day names inside the strip sit at their own midnights, so today's is off the left end whenever
+  the strip is on now — leaving the page with no date on it anywhere but tomorrow's.
 - **The strip keeps going past midnight**, ruled and labelled at each day boundary, which is what
   makes the look-ahead cost nothing here: scroll right and you are in tomorrow. There is no separate
-  list of the next six days, and there was — it ate a third of the screen to say less.
+  list of the next six days; one costs a third of the screen to say less.
 - **No status strip.** The litter robot, the feeder, the mics and the routing chips are in the misc
   pane. None of them changes hour to hour, and all four are a chip strip, which is the one shape a
   swipe pane has room to spare for.
 - **The session panel is the list and nothing else.** No head, no reply: a phone has nowhere to put
   a model's answer, and the wall spends a column on one because it is read word by word from a chair.
-- **The voice column is the tail of the thread** (`#ph-conv`), rendered as MARKDOWN — a reply is
-  written in it and was being read as its source, every newline collapsed and `**bold**` and `- `
-  standing in the prose. `md()` in shared.js does the part a model actually writes: headings, lists,
-  emphasis, code, links. EVERY path escapes first — the text is a model's, rendered into an origin
-  already authenticated as Jared, so no tag ever comes from the input; the input is escaped and then
-  our own patterns put tags around it, and a link is rewritten only when its target is http(s).
+- **The voice column is the tail of the thread** (`#ph-conv`), rendered as MARKDOWN. A reply is
+  written in markdown, so reading it as plain text collapses every newline and leaves `**bold**` and
+  `- ` standing in the prose. `md()` in shared.js covers the part a model actually writes: headings,
+  lists, emphasis, code, links. EVERY path escapes first — the text is a model's, rendered into an
+  origin already authenticated as Jared, so no tag comes from the input; the input is escaped and our
+  own patterns put tags around it, and a link is rewritten only when its target is http(s).
   A reply RELAYED FROM A SESSION carries that session's name and the tint the conversation card gives
-  it: it is a machine reporting back, not the hub answering. There is no `You` / `Hub` label — his
-  own words are dim and the hub's are not, which is the whole of who-said-what, and a word in a
-  gutter repeated it and took the gutter's width off every line.
-  **IT LANDS ON THE TOP OF THE LAST MESSAGE**, not at the bottom of the thread — a reply is read from
-  its first line, and a box scrolled to the very end opens on the last line of it with the rest
-  above, so the newest thing on screen was its own tail. Clamped, so a short last message simply
-  rests at the end of the scroll, where it already was. The session view has landed this way since it
-  was written (`open` in cards/repos.js puts the last turn's prompt at the top); this is the same
-  rule in the small box, and the reset button uses it too.
+  it: it is a machine reporting back, not the hub answering. There is no `You` / `Hub` label — his own
+  words are dim and the hub's are not, which is the whole of who-said-what, and a word in a gutter
+  repeats it at the cost of that gutter's width on every line.
+  **IT LANDS ON THE TOP OF THE LAST MESSAGE**, not at the bottom of the thread: a reply is read from
+  its first line, and a box scrolled to the very end shows its last line with the rest above. Clamped,
+  so a short last message rests at the end of the scroll. The session view lands the same way (`open`
+  in cards/repos.js puts the last turn's prompt at the top), and the reset button uses it too.
   Measured off the rects rather than `offsetTop`: the box is not an offset parent, so offsetTop is
   against some ancestor and the difference is a shift, not the number wanted.
   **A COMMAND HE HAS SPOKEN APPEARS BEFORE THE REPLY DOES.** The worker writes the user bubble only
-  once the run is over — deliberately, so a wake-word false positive never lands in the thread — so
-  the box sat unchanged from the moment he spoke until the whole answer arrived, and then both lines
-  appeared at once. `onPending` in voiceagent.js is the conversation card's optimistic bubble for
-  every OTHER view of the thread: three dots while a clip is being transcribed, then the transcript
-  in its place, then the real row replacing it. Two sources, and both are needed — the upload's own
-  answer is LOCAL (only the recording device knows a clip is in the air), while the worker's `working`
-  activity carries the transcript to EVERY device, which is what makes a command spoken at the puck
-  appear here. The placeholder is taken down by the matching user row or by the reply, never by a
-  resync replaying history, and a run that reports nothing back drops it after five minutes.
-  The full thread with its composer is the chat pane, one swipe left; that one still renders the
-  source, since it was not what he asked for.
+  once a run is over — deliberately, so a wake-word false positive never lands in the thread — so
+  nothing in the thread itself marks the gap between speaking and answering. `onPending` in
+  voiceagent.js is the conversation card's optimistic bubble for every OTHER view of the thread: three
+  dots while a clip is being transcribed, then the transcript in its place, then the real row
+  replacing it. Two sources, and both are needed — the upload's own answer is LOCAL (only the
+  recording device knows a clip is in the air), while the worker's `working` activity carries the
+  transcript to EVERY device, which is what makes a command spoken at the puck appear here. The
+  placeholder comes down on the matching user row or on the reply, never on a resync replaying
+  history, and a run that reports nothing back drops it after five minutes.
+  The full thread with its composer is the chat pane, one swipe left; that one renders the source.
 - **The two heat maps are STACKED, each a small block at the LEFT of its own section.** Above each
   is its long view (the weigh-in trend, the clocks since the last set); below it is the day itself,
   as a SCROLLING LIST — four nutrition entries, each tapping open to its ingredients, and three
-  exercises with their sets. Those were one line saying only the last thing logged; the room came
-  from making the maps smaller, which is what the smaller maps are for.
+  exercises with their sets. The room for those lists is what the small maps buy.
 - **The maps take NO trim, and that is not an oversight.** They scroll, so the box decides what is on
-  screen and everything either side is a drag away — and a trim could not carry the archive anyway:
+  screen and everything either side is a drag away — and a trim cannot carry the archive anyway:
   `/api/heat-history` returns the weeks OLDER than the frame's own window, so prefixing it to an
-  eleven-week trim leaves weeks 12-20 missing out of the middle of the picture, silently and in the
-  right colours. The cell is 12px, so the map is 90px tall whatever its width; `PHONE_HEAT_WEEKS`
-  survives only as the count the weigh-in plot is built on, which has to be the number of columns the
-  FOOD map shows at rest, because the plot does not scroll with the map under it.
+  eleven-week trim drops weeks 12-20 out of the middle of the picture, silently and in the right
+  colours. The cell is 12px, so the map is 90px tall whatever its width; `PHONE_HEAT_WEEKS` survives
+  only as the count the weigh-in plot is built on, which has to be the number of columns the FOOD map
+  shows at rest, because the plot does not scroll with the map under it.
 - **The maps land on the newest week and stay there**, held by an observer rather than pinned once:
-  the cards rebuild the grids on every frame and `paintScrolled` carries the position across, so one
-  pin at the wrong moment is a wrong position that persists all day. It stops the moment he drags
-  one, which is what `paintScrolled` is for.
+  the cards rebuild the grids on every frame and `paintScrolled` carries the position across, so a
+  single pin at the wrong moment is a wrong position that persists all day. It stops the moment he
+  drags one, which is what `paintScrolled` is for.
 - **Both maps are the same width**, and the ground beside each is the same shape: the figures fill it
   on the training side and it stays empty on the food side.
 - **A DRAG ON A HEAT MAP HAS TO REACH THE BROWSER.** Scrubbing a map and scrolling one want the same
-  gesture, and the cards resolve it by preventDefaulting the drag wherever the grid cannot scroll —
-  a test that read `closest('.sectsheet.open')`, because the expanded sheet was the only place one
-  did. The moment another surface scrolled its maps, every drag on them was still being swallowed as
-  a scrub and nothing moved. `scrollableX(el, host)` in shared.js asks the DOM instead, and its walk
-  STOPS AT THE HOST: the phone's panes are themselves a horizontal scroller, so an unbounded walk
-  finds one from anywhere and no grid would ever scrub again.
+  gesture, and the cards resolve it by preventDefaulting the drag wherever the grid cannot scroll.
+  That test is `scrollableX(el, host)` in shared.js, which asks the DOM — and its walk STOPS AT THE
+  HOST, because the phone's panes are themselves a horizontal scroller and an unbounded walk finds one
+  from anywhere, which would mean no grid ever scrubs.
 - **THE TWO MAPS AND THE WEIGH-IN PLOT SCROLL AS ONE, AND THEIR DAYS STAY ALIGNED.** That needs both
   halves, and the first is the one that matters: **all three SPAN THE SAME WEEKS**. `/api/heat-history`
-  builds both maps over the LONGER of the two archives and ships a weigh-in plot across it, so a
-  given week is the same column in each. Built to their own lengths they simply stopped at different
-  places — the food map's archive starts later, because intake logging began after the training log
-  did — so dragging back ran it out of columns while the training map carried on, and the two ended
-  up showing different months. A week before the logging started is an empty column, which is what
-  the map draws for a day with nothing on it anyway.
-  The mirroring is then in WEEKS, not pixels: `round((max - scrollLeft) / 13)`. Pixels would be close
-  and not equal, because the plot's drawing is inset half a cell at each end and its scroll range is
-  a column narrower than a map's.
-  The plot's WIDTH is resolved on the plot itself, from the `--cols` cards/weightweeks.js writes onto
-  `#weightweeks`. A `--span` declared further up the tree resolved its own `var(--cols)` against the
-  element it was declared ON, which has none — so it took the fallback silently, drew the plot twenty
-  weeks wide against maps twenty-nine weeks wide, and left it a week and a half of travel: dragging
-  the maps moved it a hair and then it stopped.
-  It is drawn across the whole span inside a scroller of its own, with its axis values a
-  SIBLING of that scroller rather than a child — inside it they slide off the left end the moment it
-  is dragged, and it lands at the right. It is also REPLACED outright on every render where the maps
-  are repainted through `paintScrolled`, so the rebuild handler puts it back on the week the maps are
-  on; left alone it returned to `now` once a minute while they stayed where he left them.
-  Only the plot's two END values are labelled: in a 22px box three numbers stacked are crunched, and
-  the middle one is the one a reader infers from the two either side. Its LINE stays — the line was
-  what did the work.
+  builds both maps over the LONGER of the two archives and ships a weigh-in plot across it, so a given
+  week is the same column in each. Built to their own lengths they stop at different places — the food
+  map's archive starts later, since intake logging began after the training log did — and dragging
+  back runs one out of columns while the other carries on, leaving the two on different months. A week
+  before the logging started is an empty column, which is what the map draws for a day with nothing on
+  it anyway.
+  The mirroring is in WEEKS, not pixels: `round((max - scrollLeft) / 13)`. Pixels are close and not
+  equal, because the plot's drawing is inset half a cell at each end and its scroll range is a column
+  narrower than a map's.
+  The plot's WIDTH is resolved ON THE PLOT, from the `--cols` cards/weightweeks.js writes onto
+  `#weightweeks`. A custom property resolves `var()` against the element it is DECLARED on, so the same
+  span declared further up the tree takes the fallback silently and draws the plot too narrow to
+  follow the maps.
+  It is drawn across the whole span inside a scroller of its own, with its axis values a SIBLING of
+  that scroller rather than a child — a child slides off the left end the moment it is dragged. It is
+  REPLACED outright on every render where the maps repaint through `paintScrolled`, so the rebuild
+  handler puts it back on the week the maps are on; left alone it returns to `now` once a minute while
+  they stay where he left them.
+  Only the plot's two END values are labelled: three numbers stacked in a 22px box are crunched, and
+  the middle one is the one a reader infers from the two either side. Its LINE stays — the line does
+  the work.
   The mirroring flag clears a FRAME later, not on the next line: setting `scrollLeft` fires a scroll
-  event of its own, so clearing it synchronously let the mirrored rails answer back and the shortest
-  of them dragged everyone to its own end — the training map could never be scrolled past where the
-  food map ran out.
-- **THE BODY OPENS TOO**, into the same sheet the surf plots use (`expand.js`, `data-sec="body"`),
-  and it brings the VOLUME BARS with it — `#volume` is in the phone's markup but `display:none`,
-  because twenty-three rows do not fit a screen that already fits exactly, and the sheet is the only
-  place they have ever been readable here. In the small view a tap does NOT pick a muscle: `#body`
-  carries `data-nosel`, and `cards/muscle.js` tests `closest('.sectsheet')` rather than a fixed flag,
-  because the same element is both surfaces and it is MOVED between them. Two whole figures in 133px
-  puts a region at a few pixels and the detail it opens covers half the screen; aiming at one is a
-  thing to do expanded.
+  event of its own, so clearing it synchronously lets the mirrored rails answer back and the shortest
+  of them drags everyone to its own end.
+- **THE BODY OPENS**, into the same sheet the surf plots use (`expand.js`, `data-sec="body"`), and it
+  brings the VOLUME BARS with it — `#volume` is in the phone's markup but `display:none`, because
+  twenty-three rows do not fit a screen that already fits exactly, and the sheet is the only surface
+  here with room for them. In the small view a tap does NOT pick a muscle: `#body` carries
+  `data-nosel`, and `cards/muscle.js` tests `closest('.sectsheet')` rather than a fixed flag, because
+  the same element is both surfaces and it is MOVED between them. Two whole figures in 133px puts a
+  region at a few pixels, and the detail it opens covers half the screen; aiming at one is a thing to
+  do expanded.
   The sheet gives the figures a DECLARED BOX with `flex:1 1 0` svgs inside it, not an `aspect-ratio`:
   the figure svgs carry a `width` presentation ATTRIBUTE, which beats `width:auto`, so aspect-ratio
-  alone does nothing and each half came out at the container's width — twice what it should be. And
-  the volume rows are re-sized there, because their base styling is a desktop card's and 41px a row
-  made the list two screens long under the figures.
+  alone does nothing and each half takes the container's width. The volume rows are re-sized there
+  too — their base styling is a desktop card's, and at 41px a row the list runs two screens under the
+  figures.
 - **The body figures fill the training section's height**, and their column's width is what that
-  height implies (2 x 0.387 x it) rather than a number picked first — anything less is a band of
+  height implies (2 x 0.387 x it) rather than a number picked first — anything less leaves a band of
   black above and below them. A hair under, deliberately: each split svg holds the whole 72-unit
   artwork with a 36-unit window over it, so horizontal slack inside the box is filled by the figure
   next door and `overflow:hidden` cannot help, because the bleed is INSIDE the element.
 - **Every list on the page scrolls** and is capped by a DECLARED height: the entries, the exercises,
   the sessions, the conversation. A list with no ceiling in a row that takes its height from its
-  tallest child is a row as tall as the list — forty sessions made that row 1,596px and pushed
-  everything under it off the screen.
+  tallest child makes the row as tall as the list, which pushes everything under it off the screen.
 - **The cell gap is 1px, not the wall's 2.5.** A cell is about eighteen pixels here where the wall's
-  is twenty-five, so the same gap was a seventh of the mark instead of a tenth and the grid read as
+  is twenty-five, so the wall's gap is a seventh of the mark instead of a tenth and the grid reads as
   black ruled by colour. `--hgap` on the weigh-in plot moves with it — half of it is what the plot's
   box is inset by at each end.
 - **Surf and the session list share a row**, and a session row is TAPPABLE: it opens in the session
@@ -496,19 +502,19 @@ It also beats app.css's `body.tv.wallportrait` block on equal specificity, by lo
 - **THE SURF PLOTS ARE TAPPABLE TOO**, into the full-screen sheet (`expand.js`, `data-sec="surf"`).
   That is the other half of the bargain the small card makes: it is thirty pixels a grid and bare on
   purpose, and everything it drops — the gutter with its hour labels, the weekday letters, the key,
-  the conditions strip — comes back simply by no longer being inside `.ph-surfcard`, since every one
-  of those rules is scoped to it. The sheet then says its own `--surf-grid-h` / `--surf-water-h` /
-  `--surf-back`, and shrinks the conditions strip, which `body.tv` otherwise writes at wall size (a
-  23px name and a 31px value) and which spent a third of the screen on three words.
+  the conditions strip — returns simply by not being inside `.ph-surfcard`, since every one of those
+  rules is scoped to it. The sheet says its own `--surf-grid-h` / `--surf-water-h` / `--surf-back`,
+  and re-sizes the conditions strip, which `body.tv` otherwise writes at wall size (a 23px name and a
+  31px value) and which at that size takes a third of the screen for three words.
   **THE EXPANDED GRIDS ARE RULED HOURLY** (`--surf-hours: 1`), and it is the only surface that asks:
-  at the card's 30px a grid an hour is a pixel and a quarter, so twenty-three lines would be a white
+  at the card's 30px a grid an hour is a pixel and a quarter, where twenty-three lines are a white
   wash over the data. Three tiers, and they FOLLOW THE GUTTER — every line the gutter names is solid,
   every line it does not is a dash:
   6a / noon / 6p solid and bright, one mark rather than graded against each other, since they are
   equally the skeleton of a day and the gutter says which one you are on · 3a 9a 3p 9p solid and dim,
-  the line the sixes used to be, so halving a quarter of the day is a read and not a count · every
-  other hour dashed and fainter. The dash is not decoration: a faint SOLID line at hourly spacing
-  reads as a second grid competing with the cells, where a dash reads as a ruler.
+  so halving a quarter of the day is a read and not a count · every other hour dashed and fainter. The
+  dash is not decoration: a faint SOLID line at hourly spacing reads as a second grid competing with
+  the cells, where a dash reads as a ruler.
   The gutter names every THIRD hour and no more — twenty-three labels at 9px is the same noise in
   words. The card and the wall draw only the first tier, and THERE it is graded (noon the reference,
   the sixes bracketing the daylight), because with three lines on the whole grid the grading is the
@@ -521,39 +527,38 @@ It also beats app.css's `body.tv.wallportrait` block on equal specificity, by lo
 - **The day's totals are ON THE RINGS**, one under each gauge — `2699 / 3060` under Cal, `134 / 178`
   under P. That is the totals line split four ways and attached to the thing each number belongs to,
   so it needs no labels and there is no separate band: `#nutinfo` carries `data-noband` and
-  cards/nutritionlog.js drops it. It also settles the section's two halves against each other — the
-  height the band was taking off the food column is height the rings did not have, and the two now
+  cards/nutritionlog.js drops it. It also settles the section's two halves against each other, which
   come out within a pixel of each other.
   The ring grid is `repeat(2, minmax(0, 1fr))`, and the `minmax(0,` is load-bearing: a grid item's
-  automatic minimum is its CONTENT, so with a plain `1fr` each ring sized to its svg's intrinsic
-  width, the two columns came to 204 in a 134px box and the ring column stood seventy pixels taller
-  than the one it was supposed to match.
+  automatic minimum is its CONTENT, so a plain `1fr` sizes each ring to its svg's intrinsic width and
+  the ring column stands far taller than the one it is supposed to match.
 
 It shares the panes the walls had: [chat] [home] [misc] [maint] [lists] [repos] [reports], landing on
 home, driven by `phone-home.js` rather than `wall.js` — there is no canvas to scale, so only the
 paging is left.
 
-### Three wall-sized numbers a surface can now override
+### Wall-sized numbers a surface can override
 
-Each of these lived as a constant inside a card because there was only ever one surface drawing it at
-one size. A phone at arm's length wants all three smaller, and each is now a default the surface can
-replace — everything else gets exactly what it had.
+Each of these is a card's DEFAULT, sized for a wall, which any surface can replace with a CSS custom
+property on the card's element. A surface that says nothing gets the default. A phone at arm's length
+wants most of them smaller.
 
 | what | where it is said | why |
 |---|---|---|
 | `--surf-grid-h` / `--surf-water-h` on `#surf` | `cards/surf.js` | its own 86px a grid plus 68px of water is a third of a phone screen for one card |
 | `--surf-back` on `#surf` | `cards/surf.js` (`layout`) | the server lands the card twelve days back, which fills a wall; in a card a fifth of that area it put a day under ten pixels and showed MORE of the archive than the wall does. Seven back and everything forward. Older is still one drag away |
-| `--surf-bare` on `#surf` | `cards/surf.js` (`onWall`) | the weekday letters and the hour labels. A wall drops them because nothing that small is read across a room; this drops them because the picture already answers them |
+| `--surf-bare` on `#surf` | `cards/surf.js` (`onWall`) | the weekday letters and the hour labels. A wall drops them because nothing that small is read across a room; a small card drops them because the picture already answers them |
+| `--surf-hours` on `#surf` | `cards/surf.js` (`HOURLY`) | rule every hour instead of the three. Only the expanded sheet asks: at 30px a grid an hour is a pixel and a quarter, and twenty-three lines there are a white wash over the data |
 | `--wx-h0` / `--wx-h1` / `--wx-guide` on `#weather` | `cards/weather.js` | `pop` carries all 24 hours and `window` is only what the server took its peak over, so a surface can draw a narrower band. 6am to midnight here, with ONE guide at 3pm: in a 44px block the server's three graded lines are two pixels apart and say less than one does |
-| `.addbtn` / `.dact-btn` / `.dex-head`'s column | app.css, under `body.tv.phonewall` | all three are written for a canvas scaled to about a third — a 110px-wide button and a name stacked over its macros. At native size they are slabs and two rows per entry, so the phone's home page flattens them |
-| `--rc-base` / `--rc-min` / `--rc-name-base` on `.hw-recent` | `cards/workouts.js` (`fitRow`) | the set list starts at 16px and the exercise name at 17px, and both only shrink if they overflow — so on a phone they were drawn half again the size of everything around them and stayed there |
+| `.addbtn` / `.dact-btn` / `.dex-head`'s column | app.css, under `body.tv.phonewall` | all three are written for a canvas scaled to about a third — a 110px-wide button and a name stacked over its macros. At native size that is a slab and two rows per entry, so the phone's home page flattens them |
+| `--rc-base` / `--rc-min` / `--rc-name-base` on `.hw-recent` | `cards/workouts.js` (`fitRow`) | the set list starts at 16px and the exercise name at 17px, and both shrink only on overflow — so on a phone they draw half again the size of everything around them and stay there |
 
 Two more things on that card are not knobs but are worth knowing. The left GUTTER holds the hour
-labels and the water temperatures; with the hours gone it is dead width, so the phone positions the
-water's gutter canvas over the right-hand end of the plot instead (where the trace has run out) and
-hides the grids' entirely — which is also what gives the plots the width it was holding. And the
-water trace's scale now hugs its data rather than rounding out to whole degrees and padding one
-either side, which had turned a three-degree swing into a flat line across the middle of the box.
+labels and the water temperatures; with the hours dropped it is dead width, so the phone positions the
+water's gutter canvas over the right-hand end of the plot (where the trace has run out) and hides the
+grids' entirely, which is what gives the plots that width. And the water trace's scale hugs its data
+rather than rounding out to whole degrees with one either side, which at this height flattens a
+three-degree swing into a line across the middle of the box.
 
 ## The split body figures carry the WHOLE artwork, and only a viewBox hides half of it
 
@@ -562,16 +567,16 @@ twice with `viewBox="0 0 36 93"` and `viewBox="36 0 36 93"`. Nothing is removed 
 entire drawing with a window over it — so the window only holds while the svg's BOX is that 36:93
 ratio, and any box wider than it paints the other figure beside the one it is supposed to show.
 
-Give the svg `width:auto` and Chrome resolves it from the viewBox's ratio while **Safari resolves it
-to the container's width**, so `meet` centres a 36-wide window inside a box twice that and the rest
-of the artwork spills out: FOUR figures on his phone, two in every test here. `.figstack svg` now
-carries `overflow:hidden` in app.css, which cannot change a surface that was already right, and the
-phone's own boxes are pinned with `aspect-ratio:36/93` rather than trusting `auto`.
+**Never size one with `width:auto`.** Chrome resolves it from the viewBox's ratio; **Safari resolves
+it to the container's width**, so `meet` centres a 36-wide window inside a box twice that and the rest
+of the artwork spills out beside it — four figures where there should be two. `.figstack svg` carries
+`overflow:hidden` in app.css, and every box that holds one is pinned: `aspect-ratio:36/93` on the
+phone's own, a declared box with `flex:1 1 0` svgs in the expanded sheet (where a `width` presentation
+attribute on the svg beats `aspect-ratio` outright).
 
-The knock-on was worse than the drawing: the body card was sized by its content, so the bad figures
-took the whole row and the sessions list beside them ended up with no width at all. A block whose
-width comes from something that can go wrong takes its neighbours with it when it does — the card is
-a declared width now.
+**The card that holds them is a DECLARED width**, not one sized by its content. A block whose width
+comes from something that can go wrong takes its neighbours with it when it does: content-sized, a
+spilled figure claims the whole row and leaves the sessions list beside it with no width at all.
 
 ## The day strip: the scale is what makes the lanes mean anything
 
@@ -580,17 +585,17 @@ one drops a lane. When every lane is busy, the chip already sitting in the lane 
 CUT SHORT rather than overlapped — a title losing its tail is still readable, two titles on top of
 each other are not.
 
-**`hourW` is the number to be careful with, and it is 26px.** At eleven a chip with a title on it was
-five to ten HOURS wide, so every item blocked its lane for the rest of the day and four things an
-hour or two apart came out as a diagonal staircase: four lanes, one chip each, the x of every one of
-them saying nothing the little `4p` written on it was not already saying. At twenty-six a chip is
-about three hours, which is a duration — so two things at the same end of an afternoon share a lane
-and only a real collision drops one. The visible window is about fourteen hours, most of a waking day.
+**`hourW` is the number to be careful with, and it is 26px.** A chip is about three hours wide at
+that scale, which is a duration — so two things at the same end of an afternoon share a lane and only
+a real collision drops one. Narrow it and a titled chip spans five to ten HOURS, blocking its lane for
+the rest of the day: four items an hour apart then take four lanes, one chip each, and the x of every
+one of them says nothing the little `4p` written on it does not. The visible window is about fourteen
+hours, most of a waking day.
 
 **Its height comes from the DAY, not from the space available.** Three lanes always, which is the
-room a collision needs; a fourth only when the day wants one; nothing beyond. It measured its own
-container once, which is sized by its content — so a first paint read a box that had not been
-squeezed yet, claimed six lanes of it and kept them.
+room a collision needs; a fourth only when the day wants one; nothing beyond. It must not measure its
+own container: that container is sized by its content, so a first paint reads a box nothing has
+squeezed yet, claims six lanes of it and keeps them.
 
 ## What is running is one module
 

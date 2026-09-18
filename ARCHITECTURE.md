@@ -131,6 +131,13 @@ reminder is a row with a `due` date, and any item on any list can carry one (dat
 `00056`/`00057`); a note is an undated row on the `notes` *list*, its name in `title` and its body in
 `text` (`00092`/`00093`). Anything still reaching for either table is reading a dropped one.
 
+A dated row can also carry **`alarm`**, which makes it RING rather than notify: the phone registers it
+with iOS 26's AlarmKit, which breaks silent mode and a Focus like the Clock app. The alarm lives on the
+DEVICE — no push rings one — so the hub publishes what should be registered (`/api/alarms`), wakes the
+phone with a silent push when it changes, and reads back what the phone actually holds into
+`alarm_armed_at`. An alarm-grade item does not also send a notification. (status-hub's `CLAUDE.md` has
+the mechanism.)
+
 There is likewise **no `repeat_every` column** (`00085`/`00086`). Recurrence is materialised: one
 scheduling request writes one dated row per occurrence, sharing a `series_id`. Nothing advances a
 `due` any more, so `due` and `scheduled_at` always agree.
@@ -312,6 +319,9 @@ the window resets or that worker goes silent, so a conversation isn't lost to a 
 - **Weight reminder** (first use case): once/day at the configured time (Settings → Weight
   reminder: On/Off, Manual/Dynamic, default Manual 08:00). **Skips** if weight *or* food is
   already logged that day. Deduped via `notifications` (survives restarts).
+- **Alarms** are the other channel and are NOT push: an item marked `alarm` is registered on the
+  phone with AlarmKit and rings through silent mode and Focus. `dueTick` sends no notification for
+  one. See §3's `list_items` note and status-hub's `CLAUDE.md`.
 - **Reminder firing** (2026-08): a 60s tick also app-pushes any user reminder whose local `due` has
   passed (deduped via a `notifications` row keyed `reminder:<id>`; date-only dues fire 9am). Shares the
   `pushAll()` fan-out with `/api/notify`.

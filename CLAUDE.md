@@ -310,6 +310,13 @@ It also beats app.css's `body.tv.wallportrait` block on equal specificity, by lo
   one, which is what `paintScrolled` is for.
 - **Both maps are the same width**, and the ground beside each is the same shape: the figures fill it
   on the training side and it stays empty on the food side.
+- **A DRAG ON A HEAT MAP HAS TO REACH THE BROWSER.** Scrubbing a map and scrolling one want the same
+  gesture, and the cards resolve it by preventDefaulting the drag wherever the grid cannot scroll —
+  a test that read `closest('.sectsheet.open')`, because the expanded sheet was the only place one
+  did. The moment another surface scrolled its maps, every drag on them was still being swallowed as
+  a scrub and nothing moved. `scrollableX(el, host)` in shared.js asks the DOM instead, and its walk
+  STOPS AT THE HOST: the phone's panes are themselves a horizontal scroller, so an unbounded walk
+  finds one from anywhere and no grid would ever scrub again.
 - **THE TWO MAPS AND THE WEIGH-IN PLOT SCROLL AS ONE.** They are three views of one axis — the same
   Sunday-aligned weeks at the same cell — so dragging any of them drags the others. Mirrored by
   DISTANCE FROM THE RIGHT, not by scrollLeft: the food map's archive is shorter (intake logging
@@ -317,6 +324,9 @@ It also beats app.css's `body.tv.wallportrait` block on equal specificity, by lo
   shorter one has nothing anyway. The plot is drawn across the map's whole span inside a scroller of
   its own, with its three axis values a SIBLING of that scroller rather than a child — inside it they
   slide off the left end the moment it is dragged, and it lands at the right.
+  Only the plot's two END values are labelled: in a 22px box three numbers stacked are crunched, and
+  the middle one is the one a reader infers from the two either side. Its LINE stays — the line was
+  what did the work.
   The mirroring flag clears a FRAME later, not on the next line: setting `scrollLeft` fires a scroll
   event of its own, so clearing it synchronously let the mirrored rails answer back and the shortest
   of them dragged everyone to its own end — the training map could never be scrolled past where the

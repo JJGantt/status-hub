@@ -34,6 +34,26 @@ export const KIOSK = document.body.classList.contains('tv')
 export const heatPick = (s, key) =>
   (document.body.classList.contains('homewall') && s[key + '_home']) || {};
 
+// CAN A DRAG STARTING HERE SCROLL SOMETHING? Scrubbing a heat map and scrolling one want the same
+// gesture and the grid can only have one of them: where it scrolls, the drag belongs to the browser
+// and the tap arrives afterwards as a click; where it cannot, the drag is a scrub and the handler
+// preventDefaults so it does not become a card-drag instead.
+//
+// Asked of the DOM rather than of the page. It used to be `closest('.sectsheet.open')` — true only
+// inside the expanded sheet, which was the only place a grid scrolled — and the moment another
+// surface scrolled its maps, every drag on them was still being swallowed as a scrub.
+//
+// The walk STOPS AT THE HOST, and that bound is load-bearing: the phone's panes are themselves a
+// horizontal scroller, so an unbounded walk finds one from anywhere and no grid would ever scrub.
+export function scrollableX(el, host) {
+  for (let n = el; n && n !== document.body; n = n.parentElement) {
+    if (n !== el && n.scrollWidth > n.clientWidth + 1
+        && getComputedStyle(n).overflowX !== 'visible') return true;
+    if (n === host) break;
+  }
+  return false;
+}
+
 // latest status frame — one writer (core's render). Held on an object so importers see updates
 // (you can't reassign another module's exported binding, but you can mutate a shared object).
 export const state = { last: null };

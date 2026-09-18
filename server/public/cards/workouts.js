@@ -1,6 +1,6 @@
 // Workout Volume card: GitHub-style heatmap with inline day detail + click/drag-scrub selection,
 // defaulting to today; plus a rest timer (time since last set, hidden once past 5 min).
-import { state, esc, localNowNaive, paintScrolled, heatPick } from '../shared.js';
+import { state, esc, localNowNaive, paintScrolled, heatPick, scrollableX } from '../shared.js';
 import { withHistory } from '../heathistory.js';
 import { exerciseVolumeChips } from './muscle.js';
 let heatSelDate=null, heatReq=0;
@@ -304,7 +304,7 @@ if(document.getElementById('resttimer'))setInterval(tickRest,1000);
  // Scrubbing and scrolling both want a horizontal drag. Outside the sheet the grid can't scroll, so
  // the drag is a scrub and preventDefault keeps it from becoming a card-drag. Inside the sheet the
  // grid scrolls, so a touch drag belongs to the browser and the tap arrives as a click instead.
- const scrollable=(c)=>!!c.closest('.sectsheet.open');
+ const scrollable=(c)=>scrollableX(c,wk);
  wk.addEventListener('pointerdown',e=>{const c=e.target.closest('.hcell');if(!c||!c.dataset.date)return;
   if(e.pointerType!=='mouse'&&scrollable(c))return;
   scrub=true;selectDay(c.dataset.date);e.preventDefault();e.stopPropagation();/* don't let it become a card-drag */});

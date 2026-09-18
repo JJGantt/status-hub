@@ -1,7 +1,7 @@
 // Nutrition Log card: combined dual-axis calorie+weight plot (weekly game) + calorie-adherence
 // calendar (daily game), with inline day detail + click/drag-scrub selection. Every entry row
 // expands to its ingredient breakdown + actions (log-again / change-quantity / delete).
-import { esc, dualPlot, state, localNowNaive, paintScrolled, heatPick } from '../shared.js';
+import { esc, dualPlot, state, localNowNaive, paintScrolled, heatPick, scrollableX } from '../shared.js';
 import { withHistory } from '../heathistory.js';
 
 const CAL_COLOR='#3b82f6', W_COLOR='#a78bfa';
@@ -178,7 +178,7 @@ function selectNutDay(date){ if(date===nutSelDate)return; nutSelDate=date; markN
  const cellAt=(x,y)=>{const el=document.elementFromPoint(x,y);return el&&el.closest?el.closest('.hcell'):null;};
  // See workouts.js: in the expanded sheet the grid scrolls, so a touch drag is the browser's and the
  // tap arrives as a click. Elsewhere the drag stays a scrub.
- const scrollable=(c)=>!!c.closest('.sectsheet.open');
+ const scrollable=(c)=>scrollableX(c,nl);
  nl.addEventListener('pointerdown',e=>{const c=e.target.closest('.hcell');if(!c||!c.dataset.ndate)return;
   if(e.pointerType!=='mouse'&&scrollable(c))return;
   scrub=true;selectNutDay(c.dataset.ndate);e.preventDefault();e.stopPropagation();});

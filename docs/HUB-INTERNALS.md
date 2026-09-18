@@ -526,6 +526,14 @@ dated item — every occurrence is a real row, so nothing is projected; `?month=
 the day timeline and reads `calendar_months` for the spread, `?day=1` is the timeline alone and
 `&full=1` makes it a rolling ±12h window instead of a calendar day — see the dial below, and
 `&ahead=N` adds the N days after today as `ahead`) · `/api/badge` · `/api/repos` ·
+**A session reply's notification is a SUMMARY.** `notifySessionReply` runs the finished answer through
+Haiku (`summarizeReply`, `claude-haiku-4-5-20251001`, `ANTHROPIC_API_KEY`) and pushes that as the body:
+at most six short lines, one per thing done, impersonal and past tense, leading with the question when
+the reply asks one. The raw answer is pages written for a screen, and a lock screen shows its first
+three hundred characters — usually the preamble. It NEVER blocks the push: no key, a bad response or a
+timeout all fall back to the raw reply. Tapping it still opens that session; the payload is untouched.
+Measured around 1.5s, which the push waits for.
+
 `/api/session-activity` (a live session's steps, relayed straight out over SSE — `tool`, `text` for
 what it says between calls, `said` for HIS words arriving mid-turn, `done` for the finished reply.
 `said` exists so a prompt sent while a turn runs lands in the stream where it happened instead of at

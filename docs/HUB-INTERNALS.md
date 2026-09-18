@@ -52,10 +52,22 @@ Supabase ──▶ server.js buildStatus() ──▶ /api/status payload ──�
   date.
   `FRESH_PROBE_MS` checks **function instead of liveness**: every two minutes it asks the database
   for a fingerprint — a row count per write-active table plus the newest `completed_at` — and if that
-  moved while the cache was clean, realtime dropped something. It refetches, recycles the socket
-  (a miss is evidence the channel is lying), and **logs**, which the original failure never did. The
-  probe costs ~147 bytes and ~340ms per run, about one extra heavy fetch a day, so it closes the
-  window without undoing the caching it protects.
+  moved while realtime announced nothing about those same tables, realtime dropped something. It
+  refetches, recycles the socket (a miss is evidence the channel is lying), and **logs**, which the
+  original failure never did. The probe costs ~147 bytes and ~340ms per run, about one extra heavy
+  fetch a day, so it closes the window without undoing the caching it protects.
+- **What "realtime announced nothing" is measured against is `rtEvents`, not `rowCache.dirty`.**
+  `dirty` looks like the right flag and is not: `broadcast()` is what CLEARS it and `broadcast()` runs
+  on every realtime event, so by the time the probe reads it, it has almost always been cleared by the
+  very event the probe is asking about. Testing it made the probe fire after ORDINARY writes — a
+  completion realtime delivered in under 20 seconds was declared missing 105 seconds later — and each
+  firing recycled a healthy socket. That is not a harmless false positive: a recycle is a real
+  `CLOSED` → `SUBSCRIBED` gap, so the watchdog for dropped events was manufacturing the windows in
+  which events drop. `rtEvents` counts events on exactly the three tables the fingerprint can see
+  (`nutrition_entries`, `sets`, `list_items`), lives outside `startRealtime` so a recycle does not
+  reset it, and is sampled after the fingerprint read so an event landing during that read still
+  counts. Subscribe to a new table the fingerprint covers and it needs `fpSeen()` too, or the probe
+  will call its writes missing.
 - **The probe has to recover the CLIENTS too, not just the server's caches.** A refetch fixes what
   the next request answers; it repaints nothing already on a screen. The calendar surfaces re-read on
   the `lists` frame and on nothing else but a transition minute they computed in advance, which can

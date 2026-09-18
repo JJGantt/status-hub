@@ -843,6 +843,12 @@ let hubChannel = null;
 // signature of a dead socket rather than a quiet house.
 const REALTIME_SILENCE_LIMIT_MS = 6 * 60 * 1000;
 
+// Realtime events on exactly the three tables the freshness fingerprint below can see. The probe
+// asks "did the database move without realtime saying so", and this counter is the "saying so" half.
+// Module scope, not inside startRealtime: a recycle rebuilds the handlers and must not reset it.
+let rtEvents = 0;
+const fpSeen = () => { rtEvents++; };
+
 function startRealtime() {
   // A change to any cached source table dirties the row cache, then rebuilds + pushes. The extra
   // subscriptions (weight_log … surf_snapshots) exist for the cache: without them an edit would sit
@@ -854,8 +860,10 @@ function startRealtime() {
     // rebuild the frame but must NOT drag the heavy cached queries along. Plain broadcast only.
     .on('postgres_changes', { event: '*', schema: 'public', table: 'device_status' },
       () => { seen(); broadcast(); })
-    .on('postgres_changes', { event: '*', schema: 'public', table: 'nutrition_entries' }, changed)
-    .on('postgres_changes', { event: '*', schema: 'public', table: 'sets' }, changed)
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'nutrition_entries' },
+      (p) => { fpSeen(); changed(p); })
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'sets' },
+      (p) => { fpSeen(); changed(p); })
     .on('postgres_changes', { event: '*', schema: 'public', table: 'weight_log' }, changed)
     .on('postgres_changes', { event: '*', schema: 'public', table: 'nutrition_targets' }, changed)
     .on('postgres_changes', { event: '*', schema: 'public', table: 'exercise_catalog' }, changed)
@@ -887,6 +895,7 @@ function startRealtime() {
     // is the one moment the reward is supposed to land.
     .on('postgres_changes', { event: '*', schema: 'public', table: 'list_items' },
       () => {
+        fpSeen();
         seen(); dirtyRows(); pushLists(); broadcast();
         // A dated item added, snoozed, completed or cleared changes both when the next thing is due
         // and what the icon should read. Pushing the badge here is what lets its own poll be a
@@ -983,14 +992,31 @@ async function freshnessFingerprint() {
   return [nutrition, sets, items, completed].join('|');
 }
 let lastFingerprint = null;
+// `rtEvents` as of the end of the previous run. Anything realtime announced since then is credited to
+// whatever move this run finds, so the question the probe asks is exactly: the database changed, did
+// realtime mention it?
+let rtMark = 0;
 setInterval(async () => {
   let fp;
   try { fp = await freshnessFingerprint(); } catch (e) { console.log('freshness probe:', e.message); return; }
+  // Sampled AFTER the read, so an event arriving during it still counts, and consumed on every run —
+  // including the quiet ones — so credit cannot accumulate across intervals.
+  const announced = rtEvents !== rtMark;
+  rtMark = rtEvents;
   if (lastFingerprint === null) { lastFingerprint = fp; return; }   // first run only establishes a baseline
   if (fp === lastFingerprint) return;
   lastFingerprint = fp;
-  if (!rowCache.dirty) {
-    // The cache was clean, so realtime should already have dirtied it and did not.
+  if (!announced) {
+    // The database moved and realtime said nothing about any of the three tables this fingerprint can
+    // see. That is the miss the probe exists for.
+    //
+    // It tested `rowCache.dirty` before, which cannot tell a dropped event from a handled one:
+    // `broadcast()` is what CLEARS that flag and it runs on every realtime event, so by the time the
+    // probe looked the flag had almost always been cleared by the very event it was checking for. It
+    // therefore fired after ORDINARY writes — on 2026-09-17 a completion realtime delivered in under
+    // 20 seconds was declared missing 105 seconds later — and every firing tore down a healthy
+    // socket. A recycle is a real CLOSED→SUBSCRIBED gap, so a watchdog for dropped events was
+    // manufacturing the windows in which events drop.
     console.log(`freshness probe: rows changed with no realtime event (${fp}) — refetching and recycling the socket`);
     dirtyRows(); dirtyNutDay(); dirtyWorkoutDay(); dirtyHeatHistory();
     try { if (hubChannel) supa.removeChannel(hubChannel); } catch (e) { console.log('removeChannel:', e.message); }

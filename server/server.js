@@ -2362,57 +2362,6 @@ app.post('/api/session-activity', express.json(), (req, res) => {
 // and on the watch; SESSION_REPLY is the watch's category with the Open action. Gated by the same
 // Settings → Push switch the voice worker obeys.
 const sentSessionReplies = new Set();
-// ---- the notification body: a summary, written by Haiku ---------------------
-//
-// A session's final answer is written to be read on a screen — it can be pages, with code blocks and
-// tables — and what lands on a lock screen is the first three hundred characters of that, which is
-// usually the preamble. An expanded notification holds eight or nine short lines, so the useful thing
-// to put in them is what the answer SAYS, not how it begins.
-//
-// Haiku because it is the cheapest thing that can read a page and say what happened, and because this
-// runs on every finished turn on every machine — a slow or expensive model here would be a tax on
-// working at all. Measured around two seconds, and the push waits for it, which is invisible against
-// a turn that took minutes.
-//
-// NEVER BLOCKS THE NOTIFICATION. No key, a bad response, a timeout, anything — the raw reply goes out
-// exactly as it does now. A summary is an improvement to the body, not a precondition for having one.
-const ANTHROPIC_KEY = process.env.ANTHROPIC_API_KEY || '';
-const SUMMARY_MODEL = 'claude-haiku-4-5-20251001';
-const SUMMARY_MAX_CHARS = 420;        // about nine short lines in an expanded notification
-async function summarizeReply(text) {
-  const body = String(text || '').trim();
-  if (!ANTHROPIC_KEY || body.length < 200) return body;   // short answers are already their own summary
-  const ctl = new AbortController();
-  const t = setTimeout(() => ctl.abort(), 8000);
-  try {
-    const r = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST', signal: ctl.signal,
-      headers: { 'x-api-key': ANTHROPIC_KEY, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
-      body: JSON.stringify({
-        model: SUMMARY_MODEL,
-        max_tokens: 300,
-        // Lines, not a paragraph: an expanded notification is read at a glance, and one block of prose
-        // at that width is a wall. One thing per line is what makes it scannable.
-        system: 'You summarise a coding assistant\'s finished reply so it can be read on a phone '
-          + 'notification. Say what was DONE and what the outcome was — the facts someone needs to '
-          + 'decide whether to open it.\n'
-          + 'A REPORT, addressed to nobody: no "you", no "I", no "the assistant". Past tense, terse, '
-          + 'like a commit subject. "Reverted the poll" — not "You reverted the poll".\n'
-          + 'ONE SHORT LINE PER THING, each on its own line. At most 6 lines and 350 characters in '
-          + 'total, and finish every line — better to drop a line than to cut one off.\n'
-          + 'No bullets, no dashes, no markdown, no code, no preamble.\n'
-          + 'If the reply asks a question or needs a decision, that is the FIRST line.',
-        messages: [{ role: 'user', content: body.slice(0, 12000) }],
-      }),
-    });
-    if (!r.ok) return body;
-    const j = await r.json();
-    const out = ((j.content || []).find((c) => c.type === 'text') || {}).text;
-    return (out && out.trim()) ? out.trim().slice(0, SUMMARY_MAX_CHARS) : body;
-  } catch (_) { return body; }        // aborted, offline, malformed — the reply itself is the fallback
-  finally { clearTimeout(t); }
-}
-
 async function notifySessionReply(sessionId, text, at) {
   try {
     const s = await settingsAll();
@@ -2427,9 +2376,7 @@ async function notifySessionReply(sessionId, text, at) {
     if (seen && seen.length) return;
     const [row] = (await sb(`desk_sessions?id=eq.${encodeURIComponent(sessionId)}&select=label,custom_title,repo`)) || [];
     const title = (row && (row.custom_title || row.label || row.repo)) || 'Session';
-    // Tapping it still opens that session — the payload is what the app reads, and it is unchanged.
-    const body = await summarizeReply(text);
-    await pushAll('session', title, body, key, { category: 'SESSION_REPLY', payload: { session_id: sessionId } });
+    await pushAll('session', title, text, key, { category: 'SESSION_REPLY', payload: { session_id: sessionId } });
   } catch (e) { console.log('[session-push]', e.message); }
 }
 

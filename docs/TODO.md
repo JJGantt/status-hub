@@ -163,6 +163,27 @@ The alarm path is built and in use; how it works is in this repo's `CLAUDE.md`. 
    are the way in, and both tool descriptions refuse to infer it. That is the intended shape, not a
    gap — recorded here because it is the question anyone extending this will reach for first.
 
+### A session notification should carry a SUMMARY, not the raw reply
+
+What lands on a lock screen is the first three hundred characters of an answer written for a screen,
+which is usually its preamble. An expanded notification holds six or seven short lines, so what
+belongs in them is what the answer SAYS — terse, one line per thing, leading with the question when
+the reply asks one. Proven to work: Haiku produces exactly that in about 1.5s.
+
+**Blocked on a decision about WHERE it runs.** It was briefly wired as an Anthropic API call from the
+hub, which meant putting an API key on Fly — Jared's, moved there without him asking for it. That is
+removed, and the notification is the raw reply again.
+
+The options, and the reason to prefer the second:
+
+- **The hub calls the API.** Simple, one place, but it needs an API key on Fly and bills per turn.
+- **The machine that produced the reply summarises it.** Both machines already run Claude with his
+  subscription (the worker's `SdkRunner`, or `claude -p` one-shot), so there is no new credential
+  anywhere. `notifySessionReply` would take a `summary` field on `/api/session-activity` alongside the
+  `done` text, and fall back to the raw reply when none arrives — the same shape the push already has.
+
+Nothing is wired until he picks one.
+
 ### The Pi / TV wall second mode
 Partly landed as two of the walls: the sessions wall (`/tv-session-focus`) is where a long answer
 can actually be read, and the calendar wall (`/tv-calendar`) puts every dated item on the TV. Still

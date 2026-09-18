@@ -33,6 +33,11 @@ function cssPx(name, dflt) {
 }
 const GRID_H = () => cssPx('--surf-grid-h', GRID_H_DEFAULT);
 const WATER_H = () => cssPx('--surf-water-h', WATER_H_DEFAULT);
+// EVERY HOUR RULED, not just the three. A surface asks for it with `--surf-hours: 1`, and only one
+// does: at the card's 30px a grid an hour is a pixel and a quarter, so twenty-three lines would be a
+// white wash with the data underneath it. The expanded sheet is seven times taller, which is where a
+// row is thick enough for the line to mean the hour rather than the neighbourhood.
+const HOURLY = () => cssPx('--surf-hours', 0) === 1;
 
 // The plots hold the whole archive and scroll horizontally; the card lands at the right-hand end,
 // showing the window the server marks with `defaultT0`. The gutter is its own canvas OUTSIDE the
@@ -193,13 +198,30 @@ function paintGrids(cv, ax, viewW) {
   // daylight either side of it, and each is dimmer than the mark above it in importance — now (solid
   // white), noon (70%), six (35%). At 45% the sixes start reading as equals of noon and the eye
   // stops knowing which line it is on.
+  // TWO levels once the grid is ruled hourly, not three. 6a, noon and 6p are ONE mark — the same
+  // solid line — and everything between them is a faint dash. Which of the three you are on is said
+  // by the gutter, and by the fact that they sit a quarter of the grid apart; grading them against
+  // each other as well only made the eye rank three things that are equally the skeleton of the day.
+  // Dashed rather than merely dimmer for the hours between: a faint SOLID line at this spacing reads
+  // as a second grid and competes with the cells, where a dash reads as a ruler, which is what it is.
+  //
+  // The card and the wall keep the three-level version below, because they draw only these three and
+  // there the grading IS the axis — noon the reference, the sixes bracketing the daylight round it.
+  const hourly = HOURLY();
   for (const base of [dowH, dowH + GRID_H()]) {
-    for (const [h, alpha] of [[6, .35], [12, .7], [18, .35]]) {
+    for (let h = 1; h <= 23; h++) {
+      const named = h === 6 || h === 12 || h === 18;
+      if (!hourly && !named) continue;
       const y = base + GRID_H() - h * ch;
-      g.strokeStyle = `rgba(255,255,255,${alpha})`; g.lineWidth = 1;
+      g.setLineDash(named ? [] : [2, 3]);
+      g.strokeStyle = named
+        ? `rgba(255,255,255,${hourly || h === 12 ? .7 : .35})`
+        : 'rgba(255,255,255,.17)';
+      g.lineWidth = 1;
       g.beginPath(); g.moveTo(0, y); g.lineTo(totalW, y); g.stroke();
     }
   }
+  g.setLineDash([]);   // the week separators and the now-line below are solid
   // NO SEAM between the grids. The two palettes do not overlap — ratings are red through green, size
   // is white then blues — so the boundary draws itself, and a rule there was one more white line competing with
   // the only two marks that have to win: now, and a week out.
@@ -242,10 +264,19 @@ function paintGrids(cv, ax, viewW) {
   const a = fitCanvas(ax, PAD_L, H);
   if (wall) return;
   a.font = '9px system-ui, -apple-system, sans-serif';
-  a.textBaseline = 'middle'; a.textAlign = 'right'; a.fillStyle = '#8b96a5';
+  a.textBaseline = 'middle'; a.textAlign = 'right';
+  // Every third hour once the grid is ruled hourly. A dashed line nobody can name is texture, not a
+  // ruler — but naming all twenty-three at a 9px type would be the same thing in words. Three-hourly
+  // is one label per ~28px at the sheet's height, and the two lines between any pair are then
+  // countable. The named three stay brighter, so the axis still reads at a glance.
+  const rows = hourly
+    ? [[3, '3a'], [6, '6a'], [9, '9a'], [12, '12p'], [15, '3p'], [18, '6p'], [21, '9p']]
+    : [[6, '6a'], [12, '12p'], [18, '6p']];
   for (const base of [DOW_H, DOW_H + GRID_H()])
-    for (const [h, txt] of [[6, '6a'], [12, '12p'], [18, '6p']])
+    for (const [h, txt] of rows) {
+      a.fillStyle = (h === 6 || h === 12 || h === 18) ? '#8b96a5' : '#5d6672';
       a.fillText(txt, PAD_L - 5, base + GRID_H() - h * ch);
+    }
 }
 
 // Water: measured up to now, forecast beyond it. Two series, because a prediction and a reading are

@@ -467,6 +467,17 @@ It also beats app.css's `body.tv.wallportrait` block on equal specificity, by lo
   of those rules is scoped to it. The sheet then says its own `--surf-grid-h` / `--surf-water-h` /
   `--surf-back`, and shrinks the conditions strip, which `body.tv` otherwise writes at wall size (a
   23px name and a 31px value) and which spent a third of the screen on three words.
+  **THE EXPANDED GRIDS ARE RULED HOURLY** (`--surf-hours: 1`), and it is the only surface that asks:
+  at the card's 30px a grid an hour is a pixel and a quarter, so twenty-three lines would be a white
+  wash over the data. Two levels, not three — 6a, noon and 6p are ONE mark, the same solid line, and
+  every hour between them is a faint DASH. Which of the three you are on is said by the gutter and by
+  their sitting a quarter of the grid apart; grading them against each other as well only ranked three
+  things that are equally the skeleton of a day. The dash is not decoration: a faint SOLID line at
+  hourly spacing reads as a second grid and competes with the cells, where a dash reads as a ruler.
+  The gutter then names every THIRD hour, the named three brighter — twenty-three labels at 9px is
+  the same noise in words, and a dashed line nobody can name is texture rather than a ruler.
+  The card and the wall keep the original three-level grading, because they draw only those three and
+  there the grading IS the axis.
   **A TAP HERE IS NOT A CLICK**, because the plots are a horizontal scroller and the two gestures
   start identically: `bindTap` opens only when the pointer barely moved AND the scroller under it did
   not, the second test being what catches a flick answered by momentum rather than by the finger. It

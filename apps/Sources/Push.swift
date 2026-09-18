@@ -133,7 +133,18 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
                      didReceiveRemoteNotification userInfo: [AnyHashable: Any],
                      fetchCompletionHandler completionHandler: @escaping (UIBackgroundFetchResult) -> Void) {
         guard userInfo["alarms"] != nil else { return completionHandler(.noData) }
-        AlarmSync.sync(why: "push") { changed in completionHandler(changed ? .newData : .noData) }
+        // WHICH STATE, in the trigger name. This handler fires whether the app is suspended or open
+        // on screen, so "it ran from a push" does not by itself say the phone was asleep in a pocket
+        // — and that is the one thing about this design nothing documents. Read here because this is
+        // already the main thread; asking for it inside the async sync would need an actor hop.
+        let state: String
+        switch application.applicationState {
+        case .background: state = "background"
+        case .inactive: state = "inactive"
+        case .active: state = "active"
+        @unknown default: state = "unknown"
+        }
+        AlarmSync.sync(why: "push:" + state) { changed in completionHandler(changed ? .newData : .noData) }
     }
 
     // Show the banner even when the app is foregrounded.

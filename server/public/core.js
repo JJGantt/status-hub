@@ -23,7 +23,24 @@ import './settings.js';     // gear → settings panel (routing mode + trailing-
 import { mountNavbar } from './navbar.js';   // shared bottom bar (toggle · settings · brain · sparkle)
 
 // The commit this page was LOADED from — see state.last below.
-let builtAt = null;
+let builtAt = null, stale = false;
+
+// A DEPLOY HAS TO REACH THE SCREEN. A page open for hours never re-requests its own bundle, and on
+// iOS closing the app usually SUSPENDS it: reopening restores the same page with the same code, so
+// "I closed and reopened it" is not a reload and a fix can look unfixed for an afternoon.
+//
+// Two moments, because the first is not reliable on a phone. Going HIDDEN is the invisible one, and
+// it is tried first — but JS is suspended shortly after backgrounding and the navigation may never
+// finish. Coming back VISIBLE is the one that always runs, and it is the least-bad time to
+// interrupt: he has just arrived and has typed nothing.
+//
+// A wall is never hidden, so it reloads at once, which is what a wall wants.
+function goStale() {
+  if (stale) return;
+  stale = true;
+  if (KIOSK || document.hidden) return location.reload();
+  document.addEventListener('visibilitychange', () => location.reload());
+}
 
 // A widget can't poll — it draws snapshots WidgetKit schedules, so it only learns about new food or
 // a new set when something reloads its timeline. Inside the iOS app we know the moment the numbers
@@ -55,10 +72,7 @@ function render(s){
  // which is what a wall wants, since nobody is typing into it.
  if(s.commit){
   if(!builtAt) builtAt=s.commit;
-  else if(s.commit!==builtAt){
-   if(document.hidden||KIOSK) location.reload();
-   else document.addEventListener('visibilitychange',()=>{ if(document.hidden) location.reload(); },{once:true});
-  }
+  else if(s.commit!==builtAt) goStale();
  }
  nudgeWidgets(s);
  litter.render(s);

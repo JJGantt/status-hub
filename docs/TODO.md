@@ -151,6 +151,46 @@ Breaks silent mode **and** Focus, full-screen stop/snooze UI, Lock Screen + Watc
 device confirmed on **26.6**, so it's available. One-time permission prompt, no Apple approval
 (unlike critical alerts).
 
+**Nothing about this is behind the Xcode login.** There is no entitlement and no portal capability:
+`com.apple.developer.alarmkit` does not exist — it is an LLM invention Apple has publicly called out
+on the forums, and putting it in an entitlements file is itself what makes a device build fail with
+"provisioning profile doesn't include…". Everything AlarmKit needs is Info.plist and code, so no
+profile is regenerated and the rejected login does not gate it.
+
+**What has to go in**, none of it a capability:
+- `NSAlarmKitUsageDescription` in the StatusHub target's Info.plist (`apps/project.yml`). Jared
+  writes that string — it is shown to him in the permission prompt.
+- `NSSupportsLiveActivities: true`. The alarm's alert and countdown UI is a **Live Activity**: the
+  framework requires a widget extension with an `ActivityConfiguration` over
+  `AlarmAttributes<Metadata>`, plus an `AlarmPresentation.Alert` (title + `AlarmButton`s) in the
+  attributes. `StatusHubControls` is the extension to host it (it is already embedded, already
+  signed); its deployment target is 18.0, so all of it sits behind `@available(iOS 26, *)`, as does
+  everything in the app — `StatusHub` itself is `deploymentTarget: 17.0` and should stay there.
+- `UIBackgroundModes: [remote-notification]` **if** the silent-push path below is used. The app has
+  NO `UIBackgroundModes` at all today, so it currently cannot run a line of code in the background.
+  This is also plain Info.plist — Background Modes adds no entitlement, and Push Notifications is
+  already on the App ID.
+- `AlarmManager.shared.requestAuthorization()` once, in the foreground, before anything can be
+  scheduled. Then `AlarmManager.shared.schedule(id:configuration:)`, and `alarms` to diff against.
+
+**The sync, and why it is not a push.** An alarm is registered on the device; there is no
+push-to-schedule (unlike Live Activities' push-to-start), so the hub can never make the phone ring by
+itself. The design that survives that: on every sync the app schedules **every dated item in the next
+N days**, not just the changed one. Then a missed wake costs at most an item created inside that
+window since the last sync, rather than the next alarm. Sync on foreground (guaranteed), on a silent
+push from `DUE_HANDLERS` when a dated item changes (best-effort), and from a `BGAppRefreshTask` as
+the backstop.
+
+The native app should fetch the items **itself** rather than take them from the WebView: the web
+layer only runs while the WKWebView is alive, which is exactly not the case on a background wake.
+
+Still unverified, and worth an on-device test before the design leans on it: whether
+`AlarmManager.schedule` succeeds from an app launched in the BACKGROUND by a silent push. Nothing
+documents a foreground requirement, and a silent push gives ~30s of runtime, but iOS also discards
+silent pushes on its own heuristics and delivers none at all after a force-quit. Also undocumented:
+the per-app cap on scheduled alarms (there is one) — measure it, because scheduling a window ahead
+is what will hit it.
+
 Architectural consequence: AlarmKit alarms are scheduled **on-device**, not pushed. So the Fly
 watcher's job changes from "push at due time" to "wake the app when a reminder is created, app
 schedules the alarm locally." Upside: once set it fires exactly on time with no dependence on
@@ -166,8 +206,6 @@ AlarmKit becomes an entry there rather than surgery on the loop. Note the archit
 stands: AlarmKit schedules on-device, so its "handler" is really "wake the app so it can schedule
 locally", not "deliver now".
 
-Unverified: whether AlarmKit can schedule from a **background** wake (vs only with the app open).
-Not documented either way — needs an on-device test.
 
 ### The Pi / TV wall second mode
 Partly landed as two of the walls: the sessions wall (`/tv-session-focus`) is where a long answer

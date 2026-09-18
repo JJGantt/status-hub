@@ -117,6 +117,7 @@ function boot() {
       // His words just landed on screen — and this is the one event that carries them to a device that
       // did not do the recording, so it is what puts a command spoken at the puck into every thread view.
       if (a.state === 'working') { playPop(); pushPending({ state: 'prompt', text: a.text }); }
+      pushActivity(a);               // any other view of the run — see onActivity below
       if (a.state === 'done') activity.done(a.text);
       else if (a.state === 'error') activity.err(a.text);           // a command it could not act on
       else if (a.state === 'escalate') activity.escalate(a.text);   // Sonnet handed off to Opus mid-run
@@ -164,6 +165,17 @@ export function onThread(fn) { threadSubs.push(fn); fn(null); }
 const pendingSubs = [];
 export function onPending(fn) { pendingSubs.push(fn); }
 function pushPending(p) { for (const f of pendingSubs) { try { f(p); } catch (_) {} } }
+
+// ---- what the run is DOING, frame by frame -------------------------------
+//
+// The same frames the activity bar draws, handed to any other view that wants them: a tool call, a
+// thought between tool calls, the Sonnet->Opus hop, and the `done` / `error` that ends the run. The
+// bar is a popup over the page and the phone's home page hides it outright, so a surface that wants
+// this inside its own conversation subscribes here rather than re-styling the bar. Hub focus only —
+// a session's frames run on /api/session-stream, which cards/repos.js holds.
+const activitySubs = [];
+export function onActivity(fn) { activitySubs.push(fn); }
+function pushActivity(a) { for (const f of activitySubs) { try { f(a); } catch (_) {} } }
 
 // ONE microphone, held for as long as the hub is on screen.
 //

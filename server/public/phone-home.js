@@ -9,7 +9,7 @@ import { esc, md, state } from './shared.js';
 import { mount } from './cards/dayline.js';
 import { mountStrip } from './cards/daystrip.js';
 import { mountSessions } from './cards/sessions.js';
-import { onThread, onPending } from './voiceagent.js';
+import { onThread, onPending, onActivity } from './voiceagent.js';
 import { loadHistory, onHistoryLoaded, pinRight } from './heathistory.js';
 import * as workouts from './cards/workouts.js';
 import * as nutritionlog from './cards/nutritionlog.js';
@@ -166,10 +166,34 @@ onPending((p) => {
   if (pending) pendingT = setTimeout(() => { pending = null; paintConv(); }, 5 * 60 * 1000);
   paintConv(true);
 });
+// WHAT THE MODEL IS DOING RIGHT NOW, on ONE line, at the bottom of the box. The run pushes a frame
+// per tool call and per thought; this keeps only the NEWEST, and keeps nothing at all once the reply
+// lands. The session view is where every step is listed and read — here the question is only whether
+// it is working, and a stack of tool calls in a box this size is the whole box.
+//
+// `{text:''}` is a run that has started and not reported a step yet, which is the caret alone.
+let act = null;
+let actT = 0;           // a run that never reports an end must not leave the line up for ever
+onActivity((a) => {
+  const state = a.state || 'tool';
+  clearTimeout(actT);
+  if (state === 'done' || state === 'error') act = null;
+  else if (state === 'working') act = { text: '' };
+  else act = { text: String(a.text || '').replace(/\s+/g, ' ').trim() };
+  if (act) actT = setTimeout(() => { act = null; paintConv(); }, 5 * 60 * 1000);
+  // NOT pinned: a line that redraws every few seconds would drag him back down every time he scrolled
+  // up to read something. At the bottom, which is where it matters, `held` is false and it sticks.
+  paintConv();
+});
+function clearAct() { clearTimeout(actT); act = null; }
+
 // The row the placeholder was standing in for has arrived — or the reply has, which means the run is
 // over whatever the thread looks like. Only ever called on a LIVE row: a resync replays the whole
 // history, where an old assistant row would take down a placeholder put up a second ago.
 function settle(row) {
+  // The reply IS the end of the run, whatever frames did or did not arrive, so the activity line
+  // comes down with it rather than waiting for a `done` that a dropped socket may have eaten.
+  if (row.role === 'assistant') clearAct();
   if (!pending) return;
   const t = String((row && row.text) || '').trim();
   if (row.role === 'assistant' || (row.role === 'user' && t && t === pending.text.trim())) {
@@ -224,6 +248,12 @@ function paintConv(pin) {
     ? '<div class="ph-convline ask pend"><div class="ph-convt">' +
       (pending.text ? md(pending.text) : '<span class=ph-dots><i></i><i></i><i></i></span>') +
       '</div></div>'
+    : '') + (act
+    // The lowest line, under his words and above nothing: the caret says it is working and the step
+    // says what it is doing. Plain text, collapsed and clipped to the one line — a thought arrives as
+    // markdown and this is not the surface that reads one.
+    ? '<div class="ph-convline work"><div class="ph-convt"><span class="ph-caret">\u258d</span>' +
+      '<span class="ph-worktxt">' + esc(act.text) + '</span></div></div>'
     : '');
   // Twice: once now, because the layout is already final after the assignment above, and once on the
   // next frame, because this block's own height is whatever the rest of the screen did not need and

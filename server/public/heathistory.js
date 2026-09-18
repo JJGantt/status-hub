@@ -42,6 +42,10 @@ export function withHistory(live, key, el, today) {
 
 // Pin a grid to its newest column — the right edge. Called on open, and again when history lands
 // and widens it.
+// The weigh-in plot over the archive's own span. A surface that scrolls the plot with the maps needs
+// a point over every column they have, and the status frame only carries the live window's worth.
+export function fullPlot() { return hist && hist.weight_plot; }
+
 export function pinRight(el) {
   if (el) el.scrollLeft = el.scrollWidth;
 }

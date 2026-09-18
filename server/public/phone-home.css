@@ -25,9 +25,13 @@
 body.tv.phonehome{height:100vh;height:100dvh;overflow:hidden}
 body.tv.phonehome .pane-wall{overflow:hidden}
 body.tv.phonehome .tv-shell{position:static;transform:none;width:auto;height:100%}
-/* A flex column the height of the pane. The bottom padding clears the fixed navbar. */
-body.tv.phonehome .rows{display:flex;flex-direction:column;gap:6px;
-  height:100%;min-height:0;overflow:hidden;padding:6px 10px 62px}
+/* A flex column that ENDS above the navbar, rather than one the height of the pane with padding
+   under it. `overflow:hidden` clips at the PADDING box, not the content box — so the moment the
+   blocks inside added up to more than the space, the last of them rendered down into that padding
+   and out under the bar. Taking the height instead means there is nowhere for it to go.
+   The safe-area inset is the home indicator on his phone, which the navbar sits over. */
+body.tv.phonehome .rows{display:flex;flex-direction:column;gap:6px;min-height:0;overflow:hidden;
+  height:calc(100% - 62px - env(safe-area-inset-bottom, 0px));padding:6px 10px 0}
 body.tv.phonehome .row-card{display:flex;gap:8px;flex:0 0 auto;min-height:0}
 body.tv.phonehome .card{border:none;border-radius:0;background:#000!important;min-height:0}
 body.tv.phonehome .rows .fit{height:auto;padding:0;gap:4px;overflow:hidden}
@@ -401,7 +405,7 @@ body.tv.phonehome .ai-act{display:none}
    THE ABSORBER, and the only block here that can spend an arbitrary amount of height: more room is
    simply more of the thread. It scrolls, and it is pinned to the newest line. The composer is one
    swipe left. */
-body.tv.phonehome .ph-convrow{flex:1 1 auto;min-height:92px}
+body.tv.phonehome .ph-convrow{flex:1 1 auto;min-height:0}
 body.tv.phonehome .ph-convcard{flex:1 1 auto;min-width:0;display:flex;min-height:0}
 body.tv.phonehome .ph-conv{flex:1 1 auto;min-width:0;min-height:0;overflow-y:auto;
   -webkit-overflow-scrolling:touch;display:flex;flex-direction:column;gap:3px}

@@ -51,23 +51,27 @@ onHistoryLoaded(() => {
 // wrong moment (before the archive lands, before the columns have their width) is a wrong position
 // that then persists all day. It stops as soon as he has dragged one, at which point holding his
 // place is what paintScrolled is for.
+const COLW = 13;   // one week: the 12px cell plus the 1px gap (phone-home.css --cell)
 const rails = () => [document.getElementById('nutheat'), document.getElementById('heatwrap'),
   document.querySelector('#weightweeks .wp-scroll')].filter(Boolean);
-const endOf = (el) => Math.max(0, el.scrollWidth - el.scrollLeft - el.clientWidth);
-let mirroring = false, dragged = false;
+const maxOf = (el) => Math.max(0, el.scrollWidth - el.clientWidth);
+let mirroring = false, dragged = false, weeksBack = 0;
 
-// The flag is cleared a FRAME later, not on the next line. Setting scrollLeft fires a scroll event
-// of its own, asynchronously — so clearing it synchronously let the mirrored rails answer back, and
-// the shortest of them (the food map, whose archive starts later) dragged everyone to its own end.
-// The training map could then never be scrolled past where the food map runs out.
+// MIRRORED IN WEEKS, not in pixels. All three span the same weeks now (the archive builds both maps
+// over the longer of the two, and ships a plot across it), so "N columns back from now" is the same
+// week in each and there is nothing left for them to drift on. Pixels would have been close and not
+// equal: the plot's drawing is inset half a cell at each end, so its scroll range is a column
+// narrower than a map's.
 function mirror(src) {
   if (mirroring) return;
   mirroring = true;
-  const end = endOf(src);
+  weeksBack = Math.round((maxOf(src) - src.scrollLeft) / COLW);
   for (const el of rails()) {
     if (el === src) continue;
-    el.scrollLeft = Math.max(0, el.scrollWidth - el.clientWidth - end);
+    el.scrollLeft = Math.max(0, maxOf(el) - weeksBack * COLW);
   }
+  // A frame later, not on the next line: setting scrollLeft fires a scroll event of its own, and
+  // clearing the flag synchronously let the mirrored rails answer back.
   requestAnimationFrame(() => { mirroring = false; });
 }
 
@@ -75,25 +79,26 @@ function watch(el) {
   if (!el || el.dataset.railed) return;
   el.dataset.railed = '1';
   el.addEventListener('scroll', () => {
-    if (!mirroring) dragged = endOf(el) > 4;
+    if (!mirroring) dragged = maxOf(el) - el.scrollLeft > 4;
     mirror(el);
   }, { passive: true });
 }
 
-function pinRail() {
-  if (dragged) return;
-  for (const el of rails()) pinRight(el);
+// After a rebuild, back to the week they were on. The two maps keep their own element and
+// `paintScrolled` carries their position across, but the plot is replaced outright and would come
+// back at `now` while the maps stayed where he left them — which is the two of them showing
+// different months again, once a minute, without him touching anything.
+function restore() {
+  for (const el of rails()) el.scrollLeft = Math.max(0, maxOf(el) - (dragged ? weeksBack * COLW : 0));
 }
 
 for (const id of ['nutheat', 'heatwrap', 'weightweeks']) {
   const host = document.getElementById(id);
   if (!host) continue;
-  // The plot's scroller is rebuilt with the plot, so the listener is (re)attached on each rebuild;
-  // the two maps keep their own element and only their contents change.
-  new MutationObserver(() => { rails().forEach(watch); pinRail(); }).observe(host, { childList: true, subtree: true });
+  new MutationObserver(() => { rails().forEach(watch); restore(); }).observe(host, { childList: true, subtree: true });
 }
 rails().forEach(watch);
-pinRail();
+restore();
 
 // ---- what is running -----------------------------------------------------
 //

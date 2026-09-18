@@ -19,10 +19,16 @@
 // box (they start at the container's left edge, not the first column's centre), so their y is mapped
 // through the plot's vertical inset in CSS rather than being a plain percentage.
 
+import { fullPlot } from '../heathistory.js';
+
 export function render(s) {
  const el = document.getElementById('weightweeks'); if (!el) return;  // only the home wall has one
  // Built per heat window, because the plot IS its alignment to the columns under it — see heatPick.
- const W = s && ((document.body.classList.contains('phonehome') && s.weight_plot_phone) || s.weight_plot);
+ // A surface marked `data-history` draws its maps over the whole archive, so the plot has to span
+ // that too or the three stop agreeing about which column is which week the moment one is dragged.
+ const full = el.closest('[data-history]') ? fullPlot() : null;
+ const W = s && (full
+   || (document.body.classList.contains('phonehome') && s.weight_plot_phone) || s.weight_plot);
  if (!W || !W.points || !W.points.length) { el.innerHTML = ''; return; }
  const P = W.points;
  el.style.setProperty('--cols', P.length);

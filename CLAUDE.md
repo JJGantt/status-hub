@@ -259,7 +259,10 @@ phone's own size instead, so a size in it is the size it is read at, and the car
 themselves come out at the sizes their own modules chose for a phone.
 
 **Nothing scrolls vertically** — except the conversation, which is the point of it. `.rows` is the
-height of the pane and every block on it is either a declared height or sized by its own content.
+pane's height LESS the navbar and the home indicator, and it holds that in `height`, not in
+`padding-bottom`: `overflow:hidden` clips at the PADDING box, so the moment the blocks added up to
+more than the space the last of them rendered down into that padding and out under the bar. Every
+block on it is either a declared height or sized by its own content.
 Exactly one takes the leftover: the conversation at the bottom, `flex:1 1 auto`, because it is the
 only block here that can spend an arbitrary amount of height — more room is simply more of the
 thread. It scrolls and is pinned to the newest line, re-pinned by a ResizeObserver because its own
@@ -317,13 +320,22 @@ It also beats app.css's `body.tv.wallportrait` block on equal specificity, by lo
   a scrub and nothing moved. `scrollableX(el, host)` in shared.js asks the DOM instead, and its walk
   STOPS AT THE HOST: the phone's panes are themselves a horizontal scroller, so an unbounded walk
   finds one from anywhere and no grid would ever scrub again.
-- **THE TWO MAPS AND THE WEIGH-IN PLOT SCROLL AS ONE.** They are three views of one axis — the same
-  Sunday-aligned weeks at the same cell — so dragging any of them drags the others. Mirrored by
-  DISTANCE FROM THE RIGHT, not by scrollLeft: the food map's archive is shorter (intake logging
-  started later), so the two agree about where `now` is and diverge only at the far end, where the
-  shorter one has nothing anyway. The plot is drawn across the map's whole span inside a scroller of
-  its own, with its three axis values a SIBLING of that scroller rather than a child — inside it they
-  slide off the left end the moment it is dragged, and it lands at the right.
+- **THE TWO MAPS AND THE WEIGH-IN PLOT SCROLL AS ONE, AND THEIR DAYS STAY ALIGNED.** That needs both
+  halves, and the first is the one that matters: **all three SPAN THE SAME WEEKS**. `/api/heat-history`
+  builds both maps over the LONGER of the two archives and ships a weigh-in plot across it, so a
+  given week is the same column in each. Built to their own lengths they simply stopped at different
+  places — the food map's archive starts later, because intake logging began after the training log
+  did — so dragging back ran it out of columns while the training map carried on, and the two ended
+  up showing different months. A week before the logging started is an empty column, which is what
+  the map draws for a day with nothing on it anyway.
+  The mirroring is then in WEEKS, not pixels: `round((max - scrollLeft) / 13)`. Pixels would be close
+  and not equal, because the plot's drawing is inset half a cell at each end and its scroll range is
+  a column narrower than a map's.
+  The plot is drawn across the whole span inside a scroller of its own, with its axis values a
+  SIBLING of that scroller rather than a child — inside it they slide off the left end the moment it
+  is dragged, and it lands at the right. It is also REPLACED outright on every render where the maps
+  are repainted through `paintScrolled`, so the rebuild handler puts it back on the week the maps are
+  on; left alone it returned to `now` once a minute while they stayed where he left them.
   Only the plot's two END values are labelled: in a 22px box three numbers stacked are crunched, and
   the middle one is the one a reader infers from the two either side. Its LINE stays — the line was
   what did the work.

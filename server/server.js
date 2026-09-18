@@ -1501,10 +1501,18 @@ app.get('/api/heat-history', async (req, res) => {
     const setWeeks = weeksSpanning(firstSet[0] && dayBucketOf(firstSet[0].occurred_at), today);
     const nutWeeks = weeksSpanning(firstNut[0] && dayBucketOf(firstNut[0].occurred_at), today);
 
+    // BOTH MAPS GET THE SAME SPAN, which is the longer of the two. They are read together — a surface
+    // can scroll them as one axis — and that is only possible if a given week is the same column in
+    // each. Built to their own lengths they simply stop at different places: the food map's archive
+    // starts later (intake logging began after the training log did), so dragging back ran it out of
+    // columns while the training map carried on, and the two ended up showing different months.
+    // A week before the logging started is an empty column, which is what the map draws for a day
+    // with nothing on it anyway.
+    const span = Math.max(setWeeks, nutWeeks);
     // Nothing older than the window on either map — say so without reading a row of history.
     const empty = { weeks: [], months: [], join_month: null };
-    if (setWeeks <= HEAT_WEEKS && nutWeeks <= HEAT_WEEKS) {
-      const body = { today, window_weeks: HEAT_WEEKS, heatmap: empty, nutrition_log: empty };
+    if (span <= HEAT_WEEKS) {
+      const body = { today, window_weeks: HEAT_WEEKS, heatmap: empty, nutrition_log: empty, weight_plot: null };
       heatHistCache.body = body; heatHistCache.at = Date.now();
       return res.json(body);
     }
@@ -1512,22 +1520,22 @@ app.get('/api/heat-history', async (req, res) => {
     // The nutrition calendar's colour is intake against that day's GOAL, which is maintenance-derived
     // and phase-aware. Those numbers come off buildStatus() rather than being recomputed here, so a
     // day cannot be one colour on the card and another in the expanded view.
-    const st = nutWeeks > HEAT_WEEKS ? await buildStatus() : null;
+    const st = await buildStatus();
     const [setRows, nutRows, weightRows, targetRows] = await Promise.all([
-      setWeeks > HEAT_WEEKS ? sbRange('sets?select=occurred_at&order=occurred_at') : [],
-      st ? sbRange('nutrition_entries?staged=eq.false&select=occurred_at,calories,protein_g,fat_g&order=occurred_at') : [],
-      st ? sb('weight_log?select=date,weight_lbs&order=date.asc') : [],
-      st ? sb('nutrition_targets?select=date,calories&order=date.asc') : [],
+      sbRange('sets?select=occurred_at&order=occurred_at'),
+      sbRange('nutrition_entries?staged=eq.false&select=occurred_at,calories,protein_g,fat_g&order=occurred_at'),
+      sb('weight_log?select=date,weight_lbs&order=date.asc'),
+      sb('nutrition_targets?select=date,calories&order=date.asc'),
     ]);
 
-    const heatmap = setWeeks > HEAT_WEEKS ? heatPrefix(buildWorkoutHeatmap(setRows, setWeeks, today)) : empty;
-    let nutrition_log = empty;
-    if (st) {
-      const weights = (weightRows || []).map((r) => ({ date: String(r.date).slice(0, 10), weight: Number(r.weight_lbs) }));
-      nutrition_log = heatPrefix(buildNutritionLog(nutRows, weights, st.maintenance.target, st.maintenance.maintenance,
-        today, targetRows || [], nutWeeks, await surplusCal(), 150, st.pace.fraction));
-    }
-    const body = { today, window_weeks: HEAT_WEEKS, heatmap, nutrition_log };
+    const weights = (weightRows || []).map((r) => ({ date: String(r.date).slice(0, 10), weight: Number(r.weight_lbs) }));
+    const heatmap = heatPrefix(buildWorkoutHeatmap(setRows, span, today));
+    const nutrition_log = heatPrefix(buildNutritionLog(nutRows, weights, st.maintenance.target, st.maintenance.maintenance,
+      today, targetRows || [], span, await surplusCal(), 150, st.pace.fraction));
+    // The weigh-in plot over that same span, for the surfaces that scroll it with the maps — it has
+    // to have a point over every column they have, not just the ones the status frame carries.
+    const weight_plot = buildWeightPlot(weights, span, today);
+    const body = { today, window_weeks: HEAT_WEEKS, heatmap, nutrition_log, weight_plot };
     heatHistCache.body = body; heatHistCache.at = Date.now();
     res.json(body);
   } catch (e) { res.status(500).json({ error: String(e.message || e) }); }

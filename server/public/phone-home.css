@@ -75,6 +75,12 @@ body.tv.phonehome .ds-dlab{position:absolute;top:0;font-size:10px;line-height:12
    day rather than a fourth chip, and the block has no room under the chips for one anyway. */
 body.tv.phonehome .ds-more{position:absolute;top:0;font-size:9px;line-height:12px;font-weight:700;
   color:#8b96a5;transform:translateX(-100%);pointer-events:none}
+/* THE TAP TARGET for a day, over the whole of it. On top of the chips rather than under them: a
+   collapsed day is mostly chips, and they are display-only, so a tap anywhere in the block should
+   open it. Transparent, and it does not stop the strip being dragged — the handler discards a click
+   whose gesture moved the scroller. */
+body.tv.phonehome .ds-hit{position:absolute;top:0;bottom:0;z-index:4;cursor:pointer;
+  -webkit-tap-highlight-color:transparent}
 /* A chip in a day BLOCK fills it: there is no hour axis under it, so its width says nothing and it
    may as well spend all of it on the title. */
 body.tv.phonehome .ds-item.ds-block .cw-dchip{width:100%;max-width:100%}

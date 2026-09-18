@@ -16,13 +16,13 @@ import * as nutritionlog from './cards/nutritionlog.js';
 
 // ---- today, and the days after it ----------------------------------------
 //
-// ONE fetch for all of it. `day=1&full=1&ahead=7` carries the seven days starting today and the
+// ONE fetch for all of it. `day=1&full=1&ahead=60` carries two months from today and the
 // overdue list, and the strip draws them as one continuous axis — so the look-ahead is not a second
 // surface here, it is the same timeline scrolled right. `full=1` is what makes `overdue` ship; the
 // dayline itself goes unused, because an hour-row column is the lists pane's shape, not this one's.
 const strip = mountStrip(document.getElementById('ph-strip'));
 mount(null, {
-  url: '/api/calendar?day=1&full=1&ahead=7',
+  url: '/api/calendar?day=1&full=1&ahead=60',
   onload: (d) => { if (strip) strip.paint(d); },
 });
 
@@ -99,6 +99,20 @@ for (const id of ['nutheat', 'heatwrap', 'weightweeks']) {
 }
 rails().forEach(watch);
 restore();
+
+// Back to now, from the navbar. Everything on this page that holds a scroll position gives it up:
+// the three rails to the newest week, the four lists to their own top (or bottom, for the thread,
+// where the newest line is). The day strip and the surf plots listen for the same event themselves.
+window.addEventListener('hubreset', () => {
+  dragged = false; weeksBack = 0;
+  restore();
+  for (const sel of ['#nutinfo', '#heatinfo', '.ph-sess-list']) {
+    const el = document.querySelector(sel);
+    if (el) el.scrollTop = 0;
+  }
+  const c = document.getElementById('ph-conv');
+  if (c) c.scrollTop = c.scrollHeight;
+});
 
 // ---- what is running -----------------------------------------------------
 //

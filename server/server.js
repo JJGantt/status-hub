@@ -2848,7 +2848,10 @@ app.get('/api/calendar', async (req, res) => {
     // the month's last day and so ends ON that day when the month ends on a Saturday. Widening the
     // expansion window is the whole fix: the month grids read from their own bounds, so the extra
     // day buckets cost nothing to anyone who did not ask for them.
-    const aheadDays = Math.max(0, Math.min(14, Math.trunc(Number(req.query.ahead)) || 0));
+    // The cap is a bound on the expansion below, not a view decision: the phone's strip scrolls on
+    // past the week and a day off its right-hand end is a day nobody can reach. Ninety is a quarter
+    // of a year of mostly-empty boxes, which costs one pass over rows already in hand.
+    const aheadDays = Math.max(0, Math.min(90, Math.trunc(Number(req.query.ahead)) || 0));
     const todayMs = Date.parse(`${todayKey}T00:00:00Z`);
     // One expansion over the whole span; every month's grid then reads from the same day buckets.
     const startKey = keyOf(bounds[0].gridStart);

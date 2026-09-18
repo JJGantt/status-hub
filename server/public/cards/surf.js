@@ -315,6 +315,13 @@ function paintWater(cv, ax, viewW) {
   a.shadowBlur = 0;
 }
 
+// Back to now: the plots are held at a distance from their right-hand end, so zero is today.
+addEventListener('hubreset', () => {
+  scrollEnd = 0;
+  const el = document.getElementById('surf');
+  if (el) syncScroll(el);
+});
+
 // The grids and the water trace are one timeline, so dragging either moves the other. Mirroring
 // only when the value differs is what stops the two boxes driving each other in a loop.
 function syncScroll(el) {

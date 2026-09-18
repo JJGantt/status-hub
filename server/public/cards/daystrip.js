@@ -39,6 +39,10 @@ const LANE_H = 20;
 const CHIP_MIN_W = 22;   // a chip cut this short is a coloured stub, and that is the honest amount
 
 let host = null, cfg = null, day0 = null, placed = false, lastD = null;
+// WHICH DAY IS OPEN, besides today. One at a time: two full days side by side is most of the strip
+// spent on two days, and the whole point of the collapsed blocks is that a day at a remove needs a
+// few chips and not a timeline. Null means only today is.
+let openDay = null;
 
 const pad2 = (n) => String(n).padStart(2, '0');
 const dateKey = (d) => `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
@@ -68,7 +72,33 @@ export function mountStrip(el, { axisH = 14, hourW = 36, dayW = 96 } = {}) {
   // WHICH DAY YOU ARE LOOKING AT, pinned to the left edge and not scrolling with the strip. The day
   // names inside it sit at their own midnights, so today's is off the left end from the moment the
   // strip lands on now — which left the only date on the whole page reading FRI 18, tomorrow.
-  el.querySelector('.ds-scroll').addEventListener('scroll', here, { passive: true });
+  const sc = el.querySelector('.ds-scroll');
+  sc.addEventListener('scroll', here, { passive: true });
+  // TAP A DAY TO OPEN IT, tap it again to put it back. A drag is not a tap: the strip is a scroller
+  // and a flick that happens to end over a day would otherwise open it, so the gesture is discarded
+  // unless the scroll position is where it started.
+  // null, not 0: a click with no pointerdown behind it (the native app, a test) has no gesture to
+  // judge, and comparing against a zero that was never a scroll position discarded every real tap
+  // the moment the strip was scrolled anywhere at all.
+  let downAt = null;
+  sc.addEventListener('pointerdown', () => { downAt = sc.scrollLeft; }, { passive: true });
+  sc.addEventListener('click', (e) => {
+    const hit = e.target.closest('.ds-hit');
+    if (!hit) return;
+    if (downAt !== null && Math.abs(sc.scrollLeft - downAt) > 4) { downAt = null; return; }
+    downAt = null;
+    const k = Number(hit.dataset.day);
+    openDay = openDay === k ? null : k;
+    if (!lastD) return;
+    paint(lastD);
+    // Land on the day just opened rather than wherever its old 96px block happened to leave the
+    // view — opening one is a request to look at it.
+    if (openDay !== null) {
+      // Exactly on its midnight, not a few pixels before it: the pinned label reads whichever day the
+      // LEFT EDGE is in, so a lead-in of eight pixels had it naming the day before the one just opened.
+      requestAnimationFrame(() => { sc.scrollLeft = dayStart(openDay); here(); });
+    }
+  });
   // The clock hand has to tick; nothing is fetched and nothing is inspected. It re-aims at the next
   // exact minute each pass, so it cannot drift, and the DAY rolling over is a change to what the
   // server laid out — dayline.js's own tick re-reads then and paint() runs again with the new days.
@@ -78,6 +108,12 @@ export function mountStrip(el, { axisH = 14, hourW = 36, dayW = 96 } = {}) {
     moveNow();
   };
   tick();
+  // Back to now: today alone open, and the strip where it lands on a fresh load.
+  window.addEventListener('hubreset', () => {
+    openDay = null;
+    if (lastD) paint(lastD);
+    requestAnimationFrame(() => { sc.scrollLeft = Math.max(0, nowX() - sc.clientWidth * 0.3); here(); });
+  });
   // How many lanes there are is measured off this element, and the element's height is whatever the
   // rest of the screen did not need — so a rotation or a keyboard opening changes it and the strip
   // has to be laid out again. Nothing is fetched: it repaints the answer it already has.
@@ -97,9 +133,15 @@ const boxH = (n) => cfg.axisH + n * LANE_H + (n - 1) * LANE_GAP;
 // falls, only what is on it, so it collapses to a BLOCK the width of a few chips. Giving every day
 // today's scale spent six hundred pixels a day saying almost nothing, and made today's hours narrow
 // enough that only every third could be named.
+// A day is OPEN when it is drawn as a clock — today always, and whichever one was last tapped.
+const isOpen = (k) => k === 0 || k === openDay;
 const todayW = () => 24 * cfg.hourW;
-const dayStart = (k) => (k === 0 ? 0 : todayW() + (k - 1) * cfg.dayW);
-const dayWidth = (k) => (k === 0 ? todayW() : cfg.dayW);
+const dayWidth = (k) => (isOpen(k) ? todayW() : cfg.dayW);
+function dayStart(k) {
+  let x = 0;
+  for (let i = 0; i < k; i++) x += dayWidth(i);
+  return x;
+}
 
 function nowX() {
   const n = new Date();
@@ -134,40 +176,46 @@ function paint(d) {
   strip.style.width = `${dayStart(days.length - 1) + dayWidth(days.length - 1)}px`;
   strip.style.height = `${boxH(N)}px`;
 
-  // THE AXIS. Today gets an hour rule and an hour NAME at every hour; a day at a remove gets one
-  // rule at its own edge and its name. Today's own name sits at x=0 and there is no rule under it —
-  // the now-line is the mark on today, and a second line at the strip's left edge would read as one
-  // more boundary rather than as where it begins.
+  // THE AXIS. An OPEN day gets an hour rule and an hour NAME at every hour; a collapsed one gets a
+  // rule at its own edge and its name. Today's own name sits at x=0 with no rule under it — the
+  // now-line is the mark on today, and a second line at the strip's left edge would read as one more
+  // boundary rather than as where it begins.
   let html = '';
   days.forEach((day, k) => {
     const x0 = dayStart(k);
     if (k) html += `<i class="ds-day" style="left:${x0}px"></i>`;
-    html += `<span class="ds-dlab" style="left:${x0 + (k ? 3 : 0)}px">${esc(day.dow)}\u00a0${day.day}</span>`;
-    if (k) return;
+    html += `<span class="ds-dlab${isOpen(k) ? ' on' : ''}" style="left:${x0 + (k ? 3 : 0)}px">` +
+      `${esc(day.dow)}\u00a0${day.day}</span>`;
+    // Every day but today is a tap target, open or closed — tapping the open one puts it back.
+    if (k) html += `<i class="ds-hit" data-day="${k}" style="left:${x0}px;width:${dayWidth(k)}px"></i>`;
+    if (!isOpen(k)) return;
     for (let h = TICK_EVERY; h < 24; h += TICK_EVERY) {
       const x = x0 + h * cfg.hourW;
-      // The LINE always; the NAME wherever today's own label is not already sitting.
+      // The LINE always; the NAME wherever the day's own label is not already sitting.
       html += `<i class="ds-tick" style="left:${x}px"></i>` +
         (h > 1 ? `<span class="ds-hl" style="left:${x + 2}px">${hourLabel(h)}</span>` : '');
     }
   });
 
-  // TODAY's items, in time order — the order lane packing has to walk them in.
+  // The OPEN days' items, in time order — the order lane packing has to walk them in. Two open days
+  // are far enough apart on the axis that one pass over both packs each of them on its own.
   const items = [];
-  (days[0].items || []).forEach((it) => {
-    const h = hourOf(it.time);
-    items.push({ it, x: h == null ? 0 : h * cfg.hourW, timed: h != null });
+  days.forEach((day, k) => {
+    if (!isOpen(k)) return;
+    (day.items || []).forEach((it) => {
+      const h = hourOf(it.time);
+      items.push({ it, x: dayStart(k) + (h == null ? 0 : h * cfg.hourW), timed: h != null });
+    });
   });
   items.sort((a, b) => a.x - b.x);
   html += items.map((o) =>
     `<span class="ds-item" style="left:${o.x}px">${chip(o.it, o.timed)}</span>`).join('');
 
-  // A DAY AT A REMOVE is a stack: one chip per lane, in time order, as many as the lanes allow and
-  // the rest counted at its head. The chips carry their time, because there is no hour axis under
-  // them to say it.
+  // A COLLAPSED day is a stack: one chip per lane, in time order, as many as the lanes allow and the
+  // rest counted at its head. The chips carry their time, because there is no hour axis under them.
   let blocks = 0;
   days.forEach((day, k) => {
-    if (!k) return;
+    if (isOpen(k)) return;
     const all = day.items || [];
     const show = all.slice(0, N);
     if (show.length > blocks) blocks = show.length;
@@ -182,7 +230,7 @@ function paint(d) {
   html += `<i class="ds-now" style="left:${nowX()}px"></i>`;
   strip.innerHTML = html;
 
-  // Lane packing for TODAY only — a block's chips already have their lane.
+  // Lane packing for the OPEN days only — a block's chips already have their lane.
   const els = [...strip.querySelectorAll('.ds-item:not(.ds-block)')];
   const right = new Array(N).fill(-Infinity);   // where each lane is busy until
   const last = new Array(N).fill(null);         // and what is sitting there

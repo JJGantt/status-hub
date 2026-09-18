@@ -282,6 +282,19 @@ It also beats app.css's `body.tv.wallportrait` block on equal specificity, by lo
 - **Today LIES DOWN** (`cards/daystrip.js`) — hours left to right, each item at its own time. The
   dial is the same day standing up, which is right for a tall column read across a room; a phone in
   portrait has width and no height, so the axis turns and the day scrolls under a fixed viewport.
+- **TWO SCALES ON ONE BAND.** Today is a CLOCK: every hour named, wide enough to read the time off.
+  A day at a remove is not a clock — nobody asks where in Saturday something falls, only what is on
+  it — so it collapses to a block the width of a few chips, one per lane, with the rest counted at
+  its head. Giving every day today's scale spent six hundred pixels a day saying almost nothing, and
+  left today's hours too narrow to name more than every third one.
+  **Tapping a collapsed day opens it** at today's scale, and tapping it again puts it back. One at a
+  time: two full days side by side is most of the strip spent on two days, which is the thing the
+  blocks exist to avoid. The strip runs sixty days out (`ahead=60`), because a scroller that stops a
+  week from now is a week you can reach and nothing beyond it.
+- **The RESET button on the navbar** (`hubreset`, broadcast on `window`) puts every scroll position
+  on the page back: the three heat rails to the newest week, the four lists to their own end, the
+  surf plots to today, and the strip to now with only today open. It is an event rather than a call
+  so that whoever owns a position listens for it, and the navbar needs to know none of them.
 - **Which day it is, is pinned to the left of the strip** and does not scroll with it (`.ds-here`).
   The day names inside the strip sit at their own midnights, so today's is off the left end from the
   moment it lands on now — and the only date anywhere on the page then read FRI 18: tomorrow.

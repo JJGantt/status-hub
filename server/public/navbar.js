@@ -20,6 +20,14 @@ const CAMERA = '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stro
 const CAL = '<svg viewBox="0 0 24 24" width="21" height="21" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
   '<rect x="3" y="4" width="18" height="18" rx="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>';
 
+// The reset: back to the default scroll position everywhere at once. The phone's home page is a
+// screen of scrollers — two heat maps and a plot on one axis, the day's strip, four lists — and
+// each one holds where it was left, deliberately. This is the way back to now without a reload.
+// Broadcast rather than called: whoever owns a scroll position listens, and nothing here has to know
+// what those are or import them.
+const RESET = '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+  '<path d="M3 12a9 9 0 1 0 3-6.7"></path><polyline points="3 4 3 10 9 10"></polyline></svg>';
+
 export function mountNavbar() {
   if (document.querySelector('.navbar')) return;          // once per page
   const onWall = document.body.classList.contains('tv');  // wall ↔ page view
@@ -91,6 +99,14 @@ export function mountNavbar() {
     left.appendChild(cal);
   }
   left.appendChild(gear);
+  // Only where there is something to reset — the walls do not scroll and /page is one long page.
+  if (document.body.classList.contains('phonehome')) {
+    const reset = document.createElement('button');
+    reset.className = 'nav-toggle'; reset.type = 'button'; reset.innerHTML = RESET;
+    reset.setAttribute('aria-label', 'Back to now');
+    reset.onclick = () => window.dispatchEvent(new CustomEvent('hubreset'));
+    left.appendChild(reset);
+  }
   const right = document.createElement('div'); right.className = 'navbar-grp';
 
   // One-shot photo: camera ONLY (no library — `capture` skips straight to the camera sheet), shrinks +

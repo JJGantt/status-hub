@@ -188,6 +188,12 @@ as a popup on the page view, the phone wall and the Mac app, and on the TV kiosk
 footer row's reserved lane (`#tv-act`) so it occupies space rather than covering a card. The choice is
 made by `voiceagent.js`'s kiosk predicate, not by whether `#tv-act` exists — §6e says why. Same states
 either way.
+The phone's HOME page is the exception, and it takes the frames rather than the element: `.ai-act` is
+`display:none` there, because a float over a surface laid out to fit exactly has nowhere to sit, and
+`onActivity(fn)` in `voiceagent.js` hands the same frames to the conversation tail, which draws the
+newest one as its own lowest line. Hub focus only — a session's frames are `/api/session-stream`,
+which `cards/repos.js` holds. Any surface wanting live progress inside its own markup subscribes
+there instead of restyling the popup.
 The frames are: `working` (the prompt, once per command),
 `tool` (each tool call + args), `text` (what the model said between tool calls, up to 2000 characters),
 `escalate`, and `done`. **`escalate` is the Sonnet→Opus hop**: the worker

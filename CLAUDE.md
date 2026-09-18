@@ -403,9 +403,22 @@ It also beats app.css's `body.tv.wallportrait` block on equal specificity, by lo
   origin already authenticated as Jared, so no tag comes from the input; the input is escaped and our
   own patterns put tags around it, and a link is rewritten only when its target is http(s).
   A reply RELAYED FROM A SESSION carries that session's name and the tint the conversation card gives
-  it: it is a machine reporting back, not the hub answering. There is no `You` / `Hub` label — his own
-  words are dim and the hub's are not, which is the whole of who-said-what, and a word in a gutter
-  repeats it at the cost of that gutter's width on every line.
+  it: it is a machine reporting back, not the hub answering. There is no `You` / `Hub` label — HIS
+  WORDS ARE DIM AND ON THE RIGHT, hugging their own width, and the hub's are bright and take the
+  whole of it, so a thread of short commands and long replies reads as two columns before any of it
+  is read. A word in a gutter says the same thing a third time at the cost of that gutter's width on
+  every line. The text inside a right-hugged block stays left-aligned: a prompt is not always one
+  line, and a ragged left edge is what right-aligning a paragraph costs.
+  **THE LOWEST LINE SAYS WHETHER IT IS WORKING.** `onActivity` in voiceagent.js hands every surface
+  the frames the activity popup draws — a tool call, a thought, the Opus hop — and this box keeps the
+  NEWEST ONE ONLY, on one clipped line behind a pulsing caret, cleared by the reply or by the run's
+  `done`. The session view is where a whole trajectory is listed and read; a stack of tool calls here
+  is the whole box. The popup itself is hidden outright on this page (`.ai-act` in phone-home.css) —
+  it is a float over a surface that fits exactly, and this line is what replaces it. It PINS the box
+  on the run's FIRST frame and never again: the box lands on the TOP of the last message, so under a
+  long reply a new line at the end is below the fold, and a line that changes every few seconds would
+  otherwise drag him down every time he scrolled up. The caret pulses through dimnesses rather than
+  blinking off, because at 9px a hard on/off reads as something failing.
   **IT LANDS ON THE TOP OF THE LAST MESSAGE**, not at the bottom of the thread: a reply is read from
   its first line, and a box scrolled to the very end shows its last line with the rest above. Clamped,
   so a short last message rests at the end of the scroll. The session view lands the same way (`open`

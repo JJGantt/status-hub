@@ -48,8 +48,14 @@
          only this page loads; the live wall shares none of it. -->
     <div class="row-card sessrow">
       <div class="card sesscard"><div class="fit">
+        <!-- The list, the focused session's name and its answer — all three painted by
+             cards/sessions.js, the one module every surface that draws sessions uses. This wall
+             styles the same `.hw-row` markup as a row of tabs; it does not build its own. -->
         <div class="sf-tabs" id="sf-tabs"></div>
-        <div class="sf-body" id="sf-body"></div>
+        <div class="sf-body" id="sf-body">
+          <div class="sf-head" id="sf-head"></div>
+          <div class="sf-reply" id="sf-reply"></div>
+        </div>
       </div></div>
     </div>
 

@@ -5,24 +5,41 @@
 body.tv .sessrow{grid-column:2/5;grid-row:2;display:flex;flex-direction:column;min-width:0;min-height:0}
 body.tv .sesscard{flex:1 1 auto;min-height:0}
 
-/* TABS — one per running session, across the top. Sized to be read from a couch, not tapped:
-   nothing here is interactive. White on black with a thin border; no fills, no tints. */
+/* TABS — one per running session, across the top. The markup is `cards/sessions.js`'s `.hw-row`, the
+   same rows the home wall and the phone draw; only the LAYOUT is this wall's. Sized to be read from a
+   couch, not tapped: nothing here is interactive. White on black, thin borders, no fills.
+   Written against `.hw-row` rather than a shape of its own, so the pin, the unread mark and the live
+   activity line arrive with the module instead of having to be reproduced here. */
 .sf-tabs{display:flex;gap:12px;flex-wrap:wrap;align-items:stretch;flex:0 0 auto;padding-bottom:12px;
   border-bottom:1px solid #333;margin-bottom:14px}
-.sf-tab{display:flex;align-items:center;gap:12px;padding:10px 16px;border:1px solid #444;background:none;min-width:0}
-.sf-tab .sf-n{font-size:22px;font-weight:700;color:#fff;line-height:1}
-.sf-tab .sf-name{font-size:22px;font-weight:600;color:#fff;white-space:nowrap;overflow:hidden;
-  text-overflow:ellipsis;max-width:24ch}
-.sf-tab .sf-where{font-size:14px;font-weight:600;letter-spacing:.4px;color:#fff;text-transform:uppercase}
+body.tv .sf-tabs .hw-row{display:flex;flex-direction:column;gap:2px;padding:10px 16px;
+  border:1px solid #444;background:none;min-width:0;max-width:30ch;border-radius:0}
+body.tv .sf-tabs .hw-row-top{display:flex;align-items:center;gap:12px;min-width:0}
+body.tv .sf-tabs .hw-row-n{font-size:22px;font-weight:700;color:#fff;line-height:1;flex:0 0 auto}
+body.tv .sf-tabs .hw-row-name{font-size:22px;font-weight:600;color:#fff;white-space:nowrap;
+  overflow:hidden;text-overflow:ellipsis;min-width:0}
+body.tv .sf-tabs .hw-row-where{font-size:14px;font-weight:600;letter-spacing:.4px;color:#fff;
+  text-transform:uppercase;flex:0 0 auto}
 /* the one holding follow-ups: a brighter border, nothing else */
-.sf-tab.on{border-color:#fff;border-width:2px;padding:9px 15px}
+body.tv .sf-tabs .hw-row.on{border-color:#fff;border-width:2px;padding:9px 15px}
+/* a finished answer nobody has opened — the same amber every other surface marks it with */
+body.tv .sf-tabs .hw-row.unread{opacity:1;border-left:4px solid #e0a03a;padding-left:13px}
+body.tv .sf-tabs .hw-row.unread.on{padding-left:12px}
+body.tv .sf-tabs .hw-row.parked{opacity:.5}
+/* What it is doing, under the name. A wall has room for one line of it and it is the only thing on
+   this page that moves between answers. */
+body.tv .sf-tabs .hw-row-act{display:block;font-size:14px;line-height:19px;color:#8b96a5;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:30ch}
+body.tv .sf-tabs .hw-row-act.tool{color:#4fd1c5}
+body.tv .sf-tabs .hw-row-act.text{color:#d5dde6}
 /* mid-turn */
-.sf-dot{width:9px;height:9px;border-radius:50%;background:#39d353;flex:0 0 auto}
-.sf-dot.idle{background:#555}
+body.tv .sf-tabs .hw-sess-dot{width:9px;height:9px;border-radius:50%;background:#39d353;flex:0 0 auto}
+body.tv .sf-tabs .hw-sess-dot.idle{background:#555}
 
 /* BODY — the focused session's last completed answer, at reading-across-a-room size. */
 .sf-body{flex:1 1 auto;min-height:0;display:flex;flex-direction:column;overflow:hidden}
 .sf-head{display:flex;align-items:baseline;gap:14px;flex:0 0 auto;margin-bottom:12px}
-.sf-head .sf-title{font-size:24px;font-weight:700;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.sf-head .sf-meta{font-size:16px;color:#888;white-space:nowrap}
+body.tv .sf-head .hw-sess-name{font-size:24px;font-weight:700;color:#fff;white-space:nowrap;
+  overflow:hidden;text-overflow:ellipsis;min-width:0}
+body.tv .sf-head .hw-sess-where{font-size:16px;color:#888;white-space:nowrap;flex:0 0 auto}
 .sf-reply{flex:1 1 auto;min-height:0;overflow:hidden;font-size:27px;line-height:1.45;color:#fff;white-space:pre-wrap}

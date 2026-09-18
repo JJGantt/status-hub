@@ -654,11 +654,18 @@ squeezed yet, claims six lanes of it and keeps them.
 
 ## What is running is one module
 
-`cards/sessions.js`, on both the home wall and the phone's home page. `mountSessions` takes the
-elements a surface has: a list always, and a `head` + `reply` only where there is room for an answer.
+`cards/sessions.js`, on the home wall, the phone's home page AND the sessions wall
+(`/tv-session-focus`). `mountSessions` takes the elements a surface has: a list always, and a `head` +
+`reply` only where there is room for an answer.
 Everything else — the numbering, the ordering, the highlight, the activity line under each row — is
 shared, and it has to be: `n` is the number he says out loud, so two copies of that ordering is two
 surfaces that can disagree about which session is "the second one".
+
+**A surface styles those rows; it does not build them.** The sessions wall lays the same `.hw-row`
+markup out as a row of tabs (`tv-focus.css` scopes every rule to `.sf-tabs`), which is why the pin,
+the unread mark and the live activity line reach it without `tv-focus.js` knowing they exist — it is
+twenty lines, and all of them are the mount. A second renderer is how a wall ends up disagreeing with
+the phone about which session is pinned.
 
 ## The day column is one module
 

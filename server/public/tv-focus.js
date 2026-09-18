@@ -1,65 +1,21 @@
 // The session wall: which sessions are running, and what the focused one last said.
 //
-// DISPLAY ONLY. There is no interaction on this screen and there never will be — it is a TV across a
-// room, and eventually a watch. Everything here is driven by voice, so what it has to do is show the
-// list Jared is naming from ("focus the second session") and the answer that came back.
+// It draws NOTHING of its own. `cards/sessions.js` is the one module every surface that shows sessions
+// uses — the home wall, the phone's home page and this — because the numbering is what Jared says out
+// loud ("focus the second session"), and two copies of that ordering are two surfaces that can
+// disagree about which session "the second one" is. The same module is also why the pin, the unread
+// mark and the live activity line arrive here without this file knowing they exist.
 //
-// Its own module, loaded only by tv-session-focus.html. The live wall shares nothing with it.
-import { esc, liveStream, PIN_SVG } from './shared.js';
+// What is left here is the SHAPE: this wall lays the same `.hw-row` markup out as a row of tabs
+// across the top (tv-focus.css), with the focused session's answer filling the rest of the screen.
+// A wall is read across a room, so the list is short and the answer is large.
+import { mountSessions } from './cards/sessions.js';
 
-// A BACKSTOP, not the mechanism — see the `sessions` stream at the bottom of this file. This wall held
-// no stream at all, so a 5s fetch was the only way anything reached it.
-const REFRESH_MS = 5 * 60 * 1000;
-
-/**
- * What a tab is called.
- *
- * The REPO, unless Jared named the session himself. A generated title is long and a router label
- * describes a job — neither fits a tab, and both make the row unreadable at a glance. `custom_title`
- * is only ever set by a rename he did, which is why it is stored apart from `label`.
- */
-const tabName = (s) => s.custom_title || s.repo;
-
-function render(d) {
-  const tabs = document.getElementById('sf-tabs');
-  const body = document.getElementById('sf-body');
-  if (!tabs || !body) return;
-
-  const live = d.resident || [];
-  const focus = d.focus || null;
-  const pin = (s) => (d.pinned && s.id === focus ? PIN_SVG : '');   // a pin, not automatic focus
-
-  tabs.innerHTML = live.map((s) =>
-    `<span class="sf-tab${s.id === focus ? ' on' : ''}">` +
-      `<span class="sf-dot${s.working ? '' : ' idle'}"></span>` +
-      `<span class="sf-n">${s.n ?? ''}</span>` +
-      `<span class="sf-name">${pin(s)}${esc(tabName(s))}</span>` +
-      `<span class="sf-where">${s.worker === 'desk' ? 'Mac' : 'Pi'}</span>` +
-    '</span>').join('');
-
-  // The focused session's last COMPLETED turn. Nothing is shown when nothing holds follow-ups —
-  // an empty panel is the honest rendering of "no session is being talked to", and no tab is lit.
-  const on = live.find((s) => s.id === focus);
-  if (!on) { body.innerHTML = ''; return; }
-  body.innerHTML =
-    '<div class="sf-head">' +
-      `<span class="sf-title">${pin(on)}${esc(on.custom_title || on.label || on.repo)}</span>` +
-      `<span class="sf-meta">${esc(on.repo)}</span>` +
-    '</div>' +
-    `<div class="sf-reply">${esc((on.last_reply || '').trim())}</div>`;
-}
-
-async function load() {
-  try { render(await (await fetch('/api/sessions')).json()); }
-  catch (_) { /* a failed poll leaves the last frame up; the next one reconciles */ }
-}
-
-load();
-setInterval(load, REFRESH_MS);
-
-// THE MECHANISM: the list, the queue and the focus, pushed the moment any of them changes. The fetch
-// above is only the net under a dropped frame — and `liveStream` rebuilds a socket that goes deaf,
-// which is what makes a poll this slow safe on a wall nobody ever touches.
-liveStream('/api/session-stream', {
-  sessions: (e) => { try { render(JSON.parse(e.data)); } catch (_) {} },
+// Five, not the wall default of three: this wall is nothing BUT sessions, so the room the list takes
+// is not being taken from anything else. The home wall keeps three because its column is shared.
+mountSessions({
+  list: document.getElementById('sf-tabs'),
+  head: document.getElementById('sf-head'),
+  reply: document.getElementById('sf-reply'),
+  max: 5,
 });

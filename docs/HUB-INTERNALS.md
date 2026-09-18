@@ -78,6 +78,17 @@ Supabase ──▶ server.js buildStatus() ──▶ /api/status payload ──�
   `list_items` handler — `pushLists()`, `dirtyDue()`, `syncBadge()` — on top of the refetch and the
   socket recycle. A subscription that PUSHES rather than invalidating a cache needs its push added
   here as well, or that surface goes stale in exactly the case the probe exists to catch.
+- **A read may mark the row cache clean only if no write was announced while it ran.**
+  `dirtyRows()` bumps `rowCache.gen` and `fetchStatusRows` compares it once its queries return: a
+  read that began before an invalidation still answers its own caller, but is not kept and does not
+  clear `dirty`. Every `list_items` event starts a read, and two writes a second apart are routine, so
+  reads overlap. Without the check the earlier read clears the flag the later event set, and rows
+  fetched before the second write sit marked clean until something unrelated dirties the cache. The
+  gold band shows it: chips come live from `/api/calendar` and read `+7` at once, while the bar is
+  built from this cache and lags a completion until the next list write. `broadcast()` numbers its
+  builds and drops a frame once a later build has been sent, because builds finish out of order too.
+  Both paths log when they fire (`[rowcache]`, `[broadcast]`); a hit there is this race, not a dropped
+  realtime event.
 - **Every stream goes through `liveStream()` (shared.js), never a bare `EventSource`.** An SSE
   connection can go half-open — `readyState` stays OPEN, no `error` fires, nothing arrives again —
   and the browser only retries a connection it saw CLOSE, so nothing reconnects it. A wall in that

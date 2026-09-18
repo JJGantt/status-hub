@@ -524,9 +524,10 @@ const dirtySurfHist = () => { surfHistCache = { at: 0, body: null }; };
 // make those routine writes dirty the cache and drag the 11 heavy queries along ~720×/day.
 // This took Supabase egress from ~143KB × every 30s (≈0.5GB/day, the free-plan quota blowout) to
 // effectively zero at idle.
-const rowCache = { rows: null, key: '', at: 0, dirty: true };
+const rowCache = { rows: null, key: '', at: 0, dirty: true, gen: 0 };
 const ROWCACHE_BACKSTOP_MS = 15 * 60 * 1000;
-const dirtyRows = () => { rowCache.dirty = true; };
+// `gen` lets a read that began before an invalidation see that it has been overtaken.
+const dirtyRows = () => { rowCache.dirty = true; rowCache.gen++; };
 
 // The status strip's session fields, on the same terms as the row cache above. These two reads ran on
 // EVERY frame — and a frame is rebuilt on every realtime event as well as every 30s — to answer a
@@ -554,6 +555,7 @@ async function fetchStatusRows(win, week, histStart, heatStart) {
   const key = [win.start, win.end, week[0], histStart, heatStart, nutLogStart, taskWindowStart].join('|');
   if (!rowCache.dirty && rowCache.rows && rowCache.key === key
       && Date.now() - rowCache.at < ROWCACHE_BACKSTOP_MS) return rowCache.rows;
+  const gen = rowCache.gen;
   const [entries, stagedEntries, setRows, weightRows, histRows, muscleRows, heatRows, catalogRows, nutLogRows, targetRows, surfRows, taskEventRows, openTaskRows] = await Promise.all([
     sb(`nutrition_entries?occurred_at=gte.${win.start}&occurred_at=lt.${win.end}&staged=eq.false&select=calories,protein_g,carbs_g,fat_g,veg_g,dark_green_g,fruit_g`),
     // Staged meals carry no day: they are pending until committed, so there is no window to filter on
@@ -575,9 +577,14 @@ async function fetchStatusRows(win, week, histStart, heatStart) {
     sb(`list_items?deleted=eq.false&completed_at=gte.${taskWindowStart}T00:00:00&due=not.is.null&select=scheduled_at,due,completed_at,priority`),
     sb('list_items?deleted=eq.false&completed_at=is.null&due=not.is.null&select=scheduled_at,due,priority'),
   ]);
-  rowCache.rows = { entries, stagedEntries, setRows, weightRows, histRows, muscleRows, heatRows, catalogRows, nutLogRows, targetRows, surfRows, taskEventRows, openTaskRows };
+  const rows = { entries, stagedEntries, setRows, weightRows, histRows, muscleRows, heatRows, catalogRows, nutLogRows, targetRows, surfRows, taskEventRows, openTaskRows };
+  if (gen !== rowCache.gen) {
+    console.log('[rowcache] a write was announced mid-read: serving this read, leaving the cache dirty');
+    return rows;
+  }
+  rowCache.rows = rows;
   rowCache.key = key; rowCache.at = Date.now(); rowCache.dirty = false;
-  return rowCache.rows;
+  return rows;
 }
 
 async function buildStatus() {
@@ -798,10 +805,14 @@ async function buildStatus() {
 }
 
 // ---- realtime push: recompute + push to all connected browsers on any DB change ----
+let frameSeq = 0, frameSent = 0;
 async function broadcast() {
+  const seq = ++frameSeq;
   let frame;
   try { frame = 'data: ' + JSON.stringify(await buildStatus()) + '\n\n'; }
   catch (e) { console.error('broadcast build failed:', e.message); return; }
+  if (seq < frameSent) { console.log('[broadcast] dropped a frame a later build already sent'); return; }
+  frameSent = seq;
   for (const res of sseClients) { try { res.write(frame); } catch {} }
 }
 

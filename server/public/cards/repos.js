@@ -349,14 +349,19 @@ function traceFrame(a, note) {
     fetch('/api/clientlog', { method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ ev: 'sv-frame', n: ++frameSeen, state: a.state, note,
         session: a.session, len: String(a.text || '').length,
-        head: String(a.text || '').slice(0, 40), streams: liveCount() }) }).catch(() => {});
+        head: String(a.text || '').slice(0, 40), streams: liveCount(),
+        // What the DOM ended up with. One frame that renders twice and two frames that each render
+        // once look identical on screen and are different bugs.
+        acts: cur ? cur.activity.length : -1, pend: cur ? cur.pending.length : -1,
+        drawn: document.querySelectorAll('#repospane .sv-body .sv-words').length,
+        bodies: document.querySelectorAll('#repospane .sv-body').length }) }).catch(() => {});
   } catch (_) {}
 }
 async function frame(a) {
   if (!cur || !a || !a.session) return;
   const key = await keyOfFrame(a.session);
   if (!cur || key !== cur.key) return;
-  traceFrame(a, 'handled');
+  setTimeout(() => traceFrame(a, 'handled'), 0);
   if (a.state !== 'done') {
     if (!a.text) return;
     // QUEUED is not part of the trajectory yet — it is held apart (below) until the model reads it.

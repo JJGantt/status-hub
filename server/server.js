@@ -1506,7 +1506,14 @@ async function workoutDay(date) {
     // one whose FIRST set came latest. Going back to an earlier exercise for another set has to move
     // this, or the wall shows the wrong grouping for the set that just happened.
     const recent = rows.length ? rows[rows.length - 1].exercise : null;
-    const body = { date, total: rows.length, recent, exercises: order.map((n) => ({ name: n, sets: byEx[n], last_at: lastAt[n] })) };
+    // NEWEST EXERCISE FIRST, like the food log's entries. `order` is the sequence each exercise was
+    // FIRST logged in, which puts the thing he just did at the bottom of a scrolling list — the one
+    // place he is least likely to look for it while he is still training. Sorted by the exercise's
+    // LAST set, so going back to an earlier movement for another set moves it up, which is the same
+    // rule `recent` above follows. Sets inside an exercise stay in the order they were done.
+    const body = { date, total: rows.length, recent,
+      exercises: order.map((n) => ({ name: n, sets: byEx[n], last_at: lastAt[n] }))
+        .sort((a, b) => String(b.last_at).localeCompare(String(a.last_at))) };
     workoutDayCache.set(date, { body, at: Date.now() });
     return body;
 }

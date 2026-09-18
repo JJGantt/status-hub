@@ -56,6 +56,16 @@ Supabase ──▶ server.js buildStatus() ──▶ /api/status payload ──�
   (a miss is evidence the channel is lying), and **logs**, which the original failure never did. The
   probe costs ~147 bytes and ~340ms per run, about one extra heavy fetch a day, so it closes the
   window without undoing the caching it protects.
+- **The probe has to recover the CLIENTS too, not just the server's caches.** A refetch fixes what
+  the next request answers; it repaints nothing already on a screen. The calendar surfaces re-read on
+  the `lists` frame and on nothing else but a transition minute they computed in advance, which can
+  be hours out — so whenever the probe is the path that reconciles a `list_items` write rather than
+  the subscription, every chip stays drawn from before it until that minute arrives. On 2026-09-17 a
+  task completed at 18:42 held its next transition at 21:00 and sat red on the wall, the phone and
+  the browser while `/api/calendar` answered `done`. The recovery branch therefore repeats the whole
+  `list_items` handler — `pushLists()`, `dirtyDue()`, `syncBadge()` — on top of the refetch and the
+  socket recycle. A subscription that PUSHES rather than invalidating a cache needs its push added
+  here as well, or that surface goes stale in exactly the case the probe exists to catch.
 - **Every stream goes through `liveStream()` (shared.js), never a bare `EventSource`.** An SSE
   connection can go half-open — `readyState` stays OPEN, no `error` fires, nothing arrives again —
   and the browser only retries a connection it saw CLOSE, so nothing reconnects it. A wall in that

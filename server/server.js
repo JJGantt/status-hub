@@ -997,6 +997,20 @@ setInterval(async () => {
     lastRealtimeEvent = Date.now();
     try { startRealtime(); } catch (e) { console.log('resubscribe failed:', e.message); }
     broadcast();
+    // Then everything the `list_items` subscription does, because the write this probe just caught
+    // may well have been one of its — the fingerprint counts list_items rows and carries the newest
+    // completion stamp precisely so it can see them.
+    //
+    // A rebuilt status frame does not repaint a chip. The calendar surfaces re-read on the `lists`
+    // frame and on nothing else but a transition minute they computed in advance, which can be hours
+    // out. So whenever this probe is the path that reconciles a list write rather than the
+    // subscription, every chip stays drawn from before it: on 2026-09-17 a task completed at 18:42
+    // held its next transition at 21:00 and sat red on the wall, the phone and the browser while
+    // /api/calendar answered `done`. Recovering the server's caches without re-announcing to the
+    // clients fixes only the half nobody is looking at.
+    pushLists();
+    dirtyDue();
+    syncBadge().catch((e) => console.log('[badge] error', e.message));
   }
 }, FRESH_PROBE_MS);
 

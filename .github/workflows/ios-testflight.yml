@@ -46,6 +46,19 @@ jobs:
       # A keychain of our own, unlocked, and made the default. Using the runner's login keychain
       # works right up until it doesn't — it can be locked mid-build, and xcodebuild's failure when
       # it can't reach a signing identity is opaque.
+      # The app now uses AlarmKit, which is iOS 26. `macos-latest` pins no Xcode, so the runner's
+      # default can be older than the SDK the code needs — and the failure that produces is a
+      # "no such module" deep inside a Swift file, which reads like our bug and is not. Pick the
+      # newest Xcode installed, then say plainly if it is still too old.
+      - name: Select an Xcode with the iOS 26 SDK
+        run: |
+          latest=$(ls -d /Applications/Xcode*.app | sort -V | tail -1)
+          sudo xcode-select -s "$latest"
+          xcodebuild -version
+          sdk=$(xcrun -sdk iphoneos --show-sdk-version)
+          echo "iOS SDK $sdk"
+          [ "${sdk%%.*}" -ge 26 ] || { echo "::error::iOS SDK $sdk is older than 26 — AlarmKit will not build"; exit 1; }
+
       - name: Import the signing certificate
         env:
           P12: ${{ secrets.IOS_DIST_P12 }}

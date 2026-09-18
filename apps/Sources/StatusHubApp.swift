@@ -12,6 +12,7 @@ import AppKit
 struct StatusHubApp: App {
     #if os(iOS)
     @UIApplicationDelegateAdaptor(AppDelegate.self) var appDelegate   // APNs registration (see Push.swift)
+    @Environment(\.scenePhase) private var scenePhase
     #endif
     var body: some Scene {
         WindowGroup {
@@ -55,6 +56,19 @@ struct StatusHubApp: App {
                         if !name.isEmpty { PaneLaunch.shared.request(name) }
                     }
                 }
+                // BECOMING ACTIVE, from the scene rather than from the app delegate. This app is a
+                // SwiftUI `WindowGroup`, so it is scene-based, and UIKit does not promise to call
+                // `applicationDidBecomeActive` in a scene-based app — which is why the alarm sync it
+                // was hung off never ran. `scenePhase` is the supported signal here.
+                //
+                // This is the run that MATTERS: an AlarmKit alarm is registered on the device, the
+                // permission prompt can only be raised with someone looking at it, and the silent
+                // push behind it is best-effort. Opening the app is the one guaranteed moment.
+                .onChange(of: scenePhase) { _, phase in
+                    guard phase == .active else { return }
+                    AlarmSync.sync(why: "scenePhase", mayPrompt: true)
+                }
+                .task { AlarmSync.sync(why: "launch", mayPrompt: true) }
             #endif
             #if os(macOS)
                 // Landscape: the Mac app renders the wall (?mode=mac) — the TV dashboard + a docked chat

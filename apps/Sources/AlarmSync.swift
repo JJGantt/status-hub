@@ -22,17 +22,31 @@ import SwiftUI
 //
 // Called on foreground (the guarantee) and from the silent push (the speed). Both in Push.swift.
 enum AlarmSync {
-    /// - Parameter mayPrompt: whether this run is allowed to ask for authorization. Only a foreground
-    ///   run is: the prompt is a UI the user has to answer, and asking from a background wake burns
-    ///   the one chance the system gives on a screen nobody is looking at.
-    static func sync(mayPrompt: Bool = false, done: ((Bool) -> Void)? = nil) {
+    /// - Parameters:
+    ///   - why: which trigger this is, for the beacon. Nothing on the device's side of this leaves a
+    ///     trace otherwise — scheduling is local and the wake is a fire-and-forget push — so when it
+    ///     does nothing there is no way to tell "never ran" from "ran and declined" without being told.
+    ///   - mayPrompt: whether this run may ask for authorization. Only a foreground run may: the
+    ///     prompt is a question someone has to be looking at to answer, and asking from a background
+    ///     wake spends the one chance the system gives on a screen nobody is watching.
+    static func sync(why: String, mayPrompt: Bool = false, done: ((Bool) -> Void)? = nil) {
         #if canImport(AlarmKit)
         if #available(iOS 26.0, *) {
-            Task { let changed = await run(mayPrompt: mayPrompt); done?(changed) }
+            Task { let changed = await run(why: why, mayPrompt: mayPrompt); done?(changed) }
             return
         }
+        beacon(["at": "no-alarmkit", "why": why])
+        #else
+        beacon(["at": "not-compiled", "why": why])
         #endif
         done?(false)
+    }
+
+    /// Into the hub's app log (`[clientlog]`), which is the only place a phone can say anything.
+    static func beacon(_ fields: [String: Any]) {
+        var body = fields
+        body["ev"] = "alarm-sync"
+        HubAPI.post("/api/clientlog", body, done: {})
     }
 }
 
@@ -44,14 +58,36 @@ private extension AlarmSync {
         let alarms: [Item]
     }
 
-    static func run(mayPrompt: Bool) async -> Bool {
-        let manager = AlarmManager.shared
-        if manager.authorizationState == .notDetermined {
-            guard mayPrompt else { return false }
-            _ = try? await manager.requestAuthorization()
+    static func name(_ state: AlarmManager.AuthorizationState) -> String {
+        switch state {
+        case .notDetermined: return "notDetermined"
+        case .denied: return "denied"
+        case .authorized: return "authorized"
+        @unknown default: return "unknown"
         }
-        guard manager.authorizationState == .authorized else { return false }
-        guard let feed = await fetch() else { return false }
+    }
+
+    static func run(why: String, mayPrompt: Bool) async -> Bool {
+        let manager = AlarmManager.shared
+        var state = manager.authorizationState
+        beacon(["at": "start", "why": why, "prompt": mayPrompt, "state": name(state)])
+        if state == .notDetermined {
+            guard mayPrompt else { return false }
+            // The returned state is what to trust. Re-reading `authorizationState` right after the
+            // prompt is reading a value that may not have caught up yet, and a run that answers its
+            // own question with a stale snapshot does nothing and says nothing.
+            do { state = try await manager.requestAuthorization() }
+            catch { beacon(["at": "ask-failed", "why": why, "err": String(describing: error)]); return false }
+            beacon(["at": "asked", "why": why, "state": name(state)])
+        }
+        guard state == .authorized else {
+            beacon(["at": "unauthorized", "why": why, "state": name(state)])
+            return false
+        }
+        guard let feed = await fetch() else {
+            beacon(["at": "no-feed", "why": why, "token": Auth.token() != nil])
+            return false
+        }
 
         // What SHOULD be registered, keyed by the id the device will know it under.
         var want: [UUID: Feed.Item] = [:]
@@ -88,12 +124,13 @@ private extension AlarmSync {
             } catch AlarmManager.AlarmError.maximumLimitReached {
                 // The per-app cap. Nothing later in the window will fit either, and the ones already
                 // registered are the sooner ones, so stopping here keeps the nearest alarms.
-                print("[alarms] device limit reached at \(registered.count + want.count) — stopping")
+                beacon(["at": "limit", "why": why, "registered": registered.count])
                 break
             } catch {
-                print("[alarms] schedule failed: \(error.localizedDescription)")
+                beacon(["at": "schedule-failed", "why": why, "err": String(describing: error)])
             }
         }
+        beacon(["at": "done", "why": why, "want": want.count, "have": have.count, "changed": changed])
         return changed
     }
 

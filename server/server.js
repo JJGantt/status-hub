@@ -3229,6 +3229,11 @@ app.get('/api/alarms', async (req, res) => {
       if (iso) alarms.push({ id: r.id, at: iso, title: itemTitle(r) });
     }
     res.json({ alarms, window_days: ALARM_WINDOW_DAYS, tz: getTZ() });
+    // LOGGED, because this is the only evidence that the phone's side ran at all. Nothing else in the
+    // alarm path leaves a trace here: the wake is a push (fire and forget), and scheduling happens on
+    // the device. A fetch appearing shortly after a wake is also the whole proof that a BACKGROUND
+    // wake can do the work — which is the one thing about this design that is undocumented.
+    console.log(`[alarms] fetched by ${req.get('X-Hub-Token') ? 'app' : 'browser'} -> ${alarms.length}`);
   } catch (e) { res.status(500).json({ error: String(e.message || e) }); }
 });
 

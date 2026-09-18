@@ -133,7 +133,7 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
                      didReceiveRemoteNotification userInfo: [AnyHashable: Any],
                      fetchCompletionHandler completionHandler: @escaping (UIBackgroundFetchResult) -> Void) {
         guard userInfo["alarms"] != nil else { return completionHandler(.noData) }
-        AlarmSync.sync { changed in completionHandler(changed ? .newData : .noData) }
+        AlarmSync.sync(why: "push") { changed in completionHandler(changed ? .newData : .noData) }
     }
 
     // Show the banner even when the app is foregrounded.
@@ -178,11 +178,12 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
     // Badge is authoritative from the hub, so re-read it whenever the app comes forward.
     func applicationDidBecomeActive(_ application: UIApplication) {
         HubAPI.refreshBadge()
-        // The GUARANTEE behind the silent push. iOS drops background wakes as it likes and sends none
-        // at all after a force-quit, so opening the app is the one moment the registered alarms are
-        // certainly brought level with the hub. This is also the only run allowed to raise the
-        // permission prompt, because that is a question someone has to be looking at to answer.
-        AlarmSync.sync(mayPrompt: true)
+        // Kept, but NOT relied on. This app is a SwiftUI `WindowGroup`, which means it is scene-based,
+        // and UIKit routes activation to the scene in a scene-based app rather than calling this — so
+        // whether it runs at all is not ours to decide. The sync that is guaranteed to run is the one
+        // driven by `scenePhase` in StatusHubApp.swift; the beacon names which trigger fired, so the
+        // two cannot quietly become one.
+        AlarmSync.sync(why: "didBecomeActive", mayPrompt: true)
         // A placed widget holds a CACHED timeline: reinstalling the app does not refresh it, so new
         // widget code — or a changed payload shape — keeps rendering against the old cached entries
         // until the policy date rolls round. Opening the app forces it to regenerate.

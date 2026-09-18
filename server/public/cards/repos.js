@@ -13,7 +13,7 @@
 //
 // Self-fetching (NOT part of the status stream), like the todo pane. No-ops where #repospane is
 // absent (/page). Every wall's markup carries it, hidden on the kiosk, so it mounts there too.
-import { esc, PIN_SVG, liveStream } from '../shared.js';
+import { esc, PIN_SVG, liveStream, liveCount } from '../shared.js';
 import { makeRecorder, bindTap } from '../voiceagent.js';
 
 let mounted = false;
@@ -340,10 +340,23 @@ async function keyOfFrame(rowId) {
 // A tool call or a thought of the open conversation's turn joins the view; a finished turn clears
 // them and re-reads the session. Frames for every other session are dropped.
 let frameChain = Promise.resolve();
+// TEMPORARY. Three guesses at the duplicated prompt have each been wrong and each was reasoned from
+// code rather than from what the device receives. This reports every frame the phone actually handles,
+// so the next real prompt answers it. Remove once it has.
+let frameSeen = 0;
+function traceFrame(a, note) {
+  try {
+    fetch('/api/clientlog', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ev: 'sv-frame', n: ++frameSeen, state: a.state, note,
+        session: a.session, len: String(a.text || '').length,
+        head: String(a.text || '').slice(0, 40), streams: liveCount() }) }).catch(() => {});
+  } catch (_) {}
+}
 async function frame(a) {
   if (!cur || !a || !a.session) return;
   const key = await keyOfFrame(a.session);
   if (!cur || key !== cur.key) return;
+  traceFrame(a, 'handled');
   if (a.state !== 'done') {
     if (!a.text) return;
     // QUEUED is not part of the trajectory yet — it is held apart (below) until the model reads it.

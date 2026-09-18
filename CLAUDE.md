@@ -148,6 +148,26 @@ That background mode has a consequence worth knowing: the app now wakes for the 
 pushes too, which it never used to. `didReceiveRemoteNotification` answers `.noData` immediately for
 anything without an `alarms` key — an app that claims work it did not do gets woken less often.
 
+## An alarm is a REQUEST until the phone says otherwise
+
+`list_items.alarm` asks for it; `list_items.alarm_armed_at` is the phone confirming it. The hub cannot
+see whether an AlarmKit alarm will ring — it lives on the device — so `POST /api/alarms/ack` takes the
+whole SET the phone currently holds after every sync, and the hub arms the ones in it and disarms the
+ones that are not. A set rather than an event, because a message about one alarm cannot express a
+cancellation, and nothing else would ever clear a flag on an alarm the phone dropped. Diffed before
+writing, so an unchanged sync costs no writes and wakes no surface through realtime.
+
+**The chip says both** (`chip()` in `cards/dayline.js`, so every day surface gets it at once): a ⏰ in
+full colour means armed and it will ring; a GREY one means asked for and not confirmed. Colour, not
+opacity — at 35% a red-and-white clock on a dark chip still reads red, and the two states were
+indistinguishable side by side. Same glyph either way, so there is no second symbol to learn, and the
+grey one is the warning seen BEFORE the moment rather than by sleeping through it.
+
+**An alarm does not also notify.** `dueTick` skips the push for `r.alarm`: the alarm already broke
+silent mode and a Focus with a full-screen alert, and a banner behind it says the same thing quieter
+at the same second. The cost is real and stated in the code — the notification carried the Done /
+1 Hour / Tomorrow buttons, so an alarm-grade item can only be acted on from a list.
+
 ## Widget drawing files stay WidgetKit-free
 
 `Controls/RingsView.swift`, `TodoView.swift` and `ReposView.swift` import no WidgetKit, so

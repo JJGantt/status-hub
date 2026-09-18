@@ -585,6 +585,13 @@ been resolved, so `sessionWatch` drops the text frame that quotes it, matched on
 slice of the prompt (the part a quotation reproduces exactly, where its two ends differ). The stash is
 swept at thirty days: deleting a file turns the message back into the stub wherever it is drawn.
 
+**WORDS SENT FROM THIS VIEW ARE ON SCREEN TWICE UNLESS THE FRAME CONFIRMS THEM.** The composer shows
+them the instant they are sent, before the Mac has typed them into the session — and the session then
+records them, so the watcher sends them straight back as a `said` frame. The optimistic entry carries
+`mine`, and a matching frame CONSUMES exactly one of them rather than appending: saying the same thing
+twice still shows twice. This is invisible to anything that tests the frame path on its own, which is
+why it survived several fixes aimed at the transport.
+
 **The session view lands on the top of the NEWEST THING** (`paintBody` in `cards/repos.js`). The last
 block in the body is that thing; inside a turn it resolves one level further in, to the reply rather
 than the prompt that asked for it. A tool call or a thought after the last turn is newer, so it wins;

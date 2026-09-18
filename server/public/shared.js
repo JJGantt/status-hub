@@ -79,8 +79,6 @@ export const state = { last: null };
 // `listeners` is {eventName: fn}. `onOpen` fires on every (re)connect, including the first.
 const SILENT_MS = 75000;          // 3 missed pings — the socket is not delivering
 const streams = new Set();        // every stream on the page, for the staleness bar below
-/** How many streams this page holds. Temporary, for the duplicated-prompt trace in cards/repos.js. */
-export const liveCount = () => streams.size;
 
 export function liveStream(url, listeners, { onOpen } = {}) {
   // TWO clocks, deliberately. `seenAt` is the last frame from anywhere and never resets on its own —

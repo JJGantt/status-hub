@@ -13,7 +13,7 @@
 //
 // Self-fetching (NOT part of the status stream), like the todo pane. No-ops where #repospane is
 // absent (/page). Every wall's markup carries it, hidden on the kiosk, so it mounts there too.
-import { esc, PIN_SVG, liveStream, liveCount } from '../shared.js';
+import { esc, PIN_SVG, liveStream} from '../shared.js';
 import { makeRecorder, bindTap } from '../voiceagent.js';
 
 let mounted = false;
@@ -340,32 +340,10 @@ async function keyOfFrame(rowId) {
 // A tool call or a thought of the open conversation's turn joins the view; a finished turn clears
 // them and re-reads the session. Frames for every other session are dropped.
 let frameChain = Promise.resolve();
-// TEMPORARY. Three guesses at the duplicated prompt have each been wrong and each was reasoned from
-// code rather than from what the device receives. This reports every frame the phone actually handles,
-// so the next real prompt answers it. Remove once it has.
-let frameSeen = 0;
-function traceFrame(a, note) {
-  try {
-    fetch('/api/clientlog', { method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ev: 'sv-frame', n: ++frameSeen, state: a.state, note,
-        session: a.session, len: String(a.text || '').length,
-        head: String(a.text || '').slice(0, 40), streams: liveCount(),
-        // What the DOM ended up with. One frame that renders twice and two frames that each render
-        // once look identical on screen and are different bugs.
-        acts: cur ? cur.activity.length : -1, pend: cur ? cur.pending.length : -1,
-        // WHAT is in there. Two entries with the same text is one frame pushed twice; two with
-        // different text means the second copy on screen is coming from somewhere else entirely.
-        actTexts: cur ? cur.activity.map((x) => (x.said ? 'S:' : x.thought ? 'T:' : 'X:')
-          + String(x.text || '').slice(0, 18)) : [],
-        drawn: document.querySelectorAll('#repospane .sv-body .sv-words').length,
-        bodies: document.querySelectorAll('#repospane .sv-body').length }) }).catch(() => {});
-  } catch (_) {}
-}
 async function frame(a) {
   if (!cur || !a || !a.session) return;
   const key = await keyOfFrame(a.session);
   if (!cur || key !== cur.key) return;
-  setTimeout(() => traceFrame(a, 'handled'), 0);
   if (a.state !== 'done') {
     if (!a.text) return;
     // QUEUED is not part of the trajectory yet — it is held apart (below) until the model reads it.
@@ -376,7 +354,19 @@ async function frame(a) {
       return;
     }
     // …and `said` is that moment: it leaves the holding area and takes its real place in the stream.
-    if (a.state === 'said') cur.pending = cur.pending.filter((q) => q !== a.text);
+    if (a.state === 'said') {
+      cur.pending = cur.pending.filter((q) => q !== a.text);
+      // Words sent from THIS view are already on screen (`mine` above). The frame coming back is the
+      // same sentence, so it CONFIRMS that copy rather than adding one: exactly one optimistic entry
+      // is consumed, so saying the same thing twice still shows twice.
+      const i = cur.activity.findIndex((x) => x.mine && x.text === a.text);
+      if (i >= 0) {
+        cur.activity[i].mine = false;
+        cur.working = true;
+        paintBody({ follow: true });
+        return;
+      }
+    }
     cur.activity.push({ text: String(a.text), thought: a.state === 'text', said: a.state === 'said' });
     cur.working = true;
     paintBody({ follow: true });
@@ -517,7 +507,11 @@ async function sendWords(text) {
       if (box && box.value.trim() === text) box.value = '';
       // Into the stream, not into a slot of its own: what he says mid-turn belongs where it happened,
       // among the steps that ran before and after it.
-      at.activity.push({ text: text || '(picture)', said: true });
+      // OPTIMISTIC, and marked as such. It is his words on screen the instant they are sent, before
+      // the Mac has typed them into the session — but the session then records them and the watcher
+      // sends them back as a `said` frame. Without the mark, that frame is a second copy of the same
+      // sentence, which is exactly what it looked like.
+      at.activity.push({ text: text || '(picture)', said: true, mine: true });
       for (const a of shots) URL.revokeObjectURL(a.url);
       shots = [];
       const tray = el.querySelector('.sv-tray'); if (tray) tray.innerHTML = '';

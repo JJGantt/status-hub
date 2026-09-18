@@ -22,6 +22,9 @@ import './voiceagent.js';   // shared 'hub' conversation + activity popup (self-
 import './settings.js';     // gear → settings panel (routing mode + trailing-silence); self-skips on TV
 import { mountNavbar } from './navbar.js';   // shared bottom bar (toggle · settings · brain · sparkle)
 
+// The commit this page was LOADED from — see state.last below.
+let builtAt = null;
+
 // A widget can't poll — it draws snapshots WidgetKit schedules, so it only learns about new food or
 // a new set when something reloads its timeline. Inside the iOS app we know the moment the numbers
 // move (this is the live stream that moved them), so nudge the native shell then. Throttled: a
@@ -42,6 +45,21 @@ function nudgeWidgets(s){
 function render(s){
  if(!s||s.error){return;}
  state.last=s;
+ // A DEPLOY REACHES THE SCREEN. A page open for hours never re-requests its bundle, so without this
+ // the server moves on and the surface keeps running whatever it loaded — which is how a phone spends
+ // an afternoon on replaced code, and how a bug fixed twice looks unfixed. The first commit seen is
+ // this page's build; a different one means the server has moved.
+ //
+ // Reloaded when the page is next HIDDEN, never under his hands: a surface that reloads mid-sentence
+ // is worse than one a few minutes old. A wall is never hidden, so it takes the reload at once —
+ // which is what a wall wants, since nobody is typing into it.
+ if(s.commit){
+  if(!builtAt) builtAt=s.commit;
+  else if(s.commit!==builtAt){
+   if(document.hidden||KIOSK) location.reload();
+   else document.addEventListener('visibilitychange',()=>{ if(document.hidden) location.reload(); },{once:true});
+  }
+ }
  nudgeWidgets(s);
  litter.render(s);
  feeder.render(s);    // cat feeder tile (no-ops on the TV wall, which omits #feeder)

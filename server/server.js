@@ -801,6 +801,12 @@ async function buildStatus() {
   return { today, litter, feeder, surf, weather: getWeather(), nutrition, maintenance, pace: paceData, volume, heatmap, nutrition_log,
     heatmap_home, nutrition_log_home, weight_plot, weight_plot_phone,
     last_set_at, session_start_at, sets_today, rep_watcher, routing, mics, score, desk_focus: deskFocus,
+    // THE BUILD THIS FRAME CAME FROM. A page that has been open for hours never re-requests its own
+    // bundle, so a deploy reaches the server and not the screen — which is how a phone spends an
+    // afternoon running code that was replaced. Every client remembers the first commit it sees and
+    // reloads when it changes. Push, not a version check on a timer: a deploy restarts the server,
+    // every stream reconnects, and the next frame carries the new one.
+    commit: process.env.COMMIT || 'dev',
     generated_at: new Date().toISOString() };
 }
 

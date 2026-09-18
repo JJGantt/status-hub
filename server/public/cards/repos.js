@@ -345,6 +345,15 @@ async function frame(a) {
   if (!cur || key !== cur.key) return;
   if (a.state !== 'done') {
     if (!a.text) return;
+    // QUEUED is not part of the trajectory yet — it is held apart (below) until the model reads it.
+    if (a.state === 'queued') {
+      if (!cur.pending.includes(a.text)) cur.pending.push(String(a.text));
+      cur.working = true;
+      paintBody({ follow: true });
+      return;
+    }
+    // …and `said` is that moment: it leaves the holding area and takes its real place in the stream.
+    if (a.state === 'said') cur.pending = cur.pending.filter((q) => q !== a.text);
     cur.activity.push({ text: String(a.text), thought: a.state === 'text', said: a.state === 'said' });
     cur.working = true;
     paintBody({ follow: true });
@@ -352,6 +361,7 @@ async function frame(a) {
   }
   cur.id = a.session;
   cur.activity = [];
+  cur.pending = [];
   await reloadDetail();
 }
 
@@ -385,7 +395,7 @@ async function reloadDetail() {
   at.detail = d;
   at.working = !!d.working;
   // A reply that has landed ends the turn whether or not its `done` frame got here.
-  if (fresh) { at.activity = []; }
+  if (fresh) { at.activity = []; at.pending = []; }
   paintHead();
   paintBody({ top: fresh });
 }
@@ -431,7 +441,11 @@ function paintBody({ open = false, top = false, follow = false } = {}) {
       : a.thought
         ? `<div class="sv-thought">${inlineMd(a.text)}</div>`
         : `<div class="sv-tool">${esc(a.text)}</div>`).join('') +
-    (cur.working ? '<div class="sv-working"><span class="ai-caret">▍</span></div>' : '');
+    (cur.working ? '<div class="sv-working"><span class="ai-caret">▍</span></div>' : '') +
+    // SENT, NOT YET READ. Below the caret, because that is what it is: waiting behind whatever the
+    // model is still doing. It moves into the stream at the moment the model takes it, which is a
+    // real event in the transcript (`absorbed_mid_turn`) and not a guess.
+    cur.pending.map((t) => `<div class="sv-words sv-queued">${inlineMd(t)}</div>`).join('');
   if (open || top) {
     // The last block in the body IS the newest thing. Inside a turn the newest part is the reply, not
     // the prompt that asked for it, so a turn resolves one level further in.
@@ -534,7 +548,7 @@ async function openSession(id) {
     d = await r.json();
   } catch (_) { return false; }
   if (cur && cur.rec) cur.rec.stop();
-  cur = { id: d.id, key: keyOfRow(d), detail: d, working: !!d.working, activity: [], msg: null, sending: false, rec: null };
+  cur = { id: d.id, key: keyOfRow(d), detail: d, working: !!d.working, activity: [], pending: [], msg: null, sending: false, rec: null };
   const at = cur;
   const pane = el.closest('.pane');
   if (pane) pane.classList.add('sv-open');

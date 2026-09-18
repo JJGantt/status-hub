@@ -2344,11 +2344,13 @@ app.post('/api/session-activity', express.json(), (req, res) => {
   // still working. It has to survive as its own state: collapsed into 'tool' it would be drawn as a
   // tool call, and dropped it would reach the view only when the turn ended, where it renders above
   // steps that had already happened before he said it.
-  const state = ['done', 'text', 'said'].includes(b.state) ? b.state : 'tool';
+  // `said` is his words at the moment the model SAW them; `queued` is his words sent but not yet seen,
+  // which a view holds apart rather than placing among steps it was never read between.
+  const state = ['done', 'text', 'said', 'queued'].includes(b.state) ? b.state : 'tool';
   const done = state === 'done';
   // A thought or a dictated prompt can run to a paragraph; a tool line or a row's reply never needs
   // more than 400.
-  const text = String(b.text || '').slice(0, (state === 'text' || state === 'said') ? 2000 : 400);
+  const text = String(b.text || '').slice(0, ['text', 'said', 'queued'].includes(state) ? 2000 : 400);
   pushSession({ session, state, text });
   if (done && text) notifySessionReply(session, text, typeof b.at === 'string' ? b.at : null);
   res.status(204).end();

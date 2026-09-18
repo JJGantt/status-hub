@@ -178,6 +178,9 @@ body.tv .sectsheet .hcell{width:17px!important;height:17px!important;max-width:n
 body.ss-open #bodyinfo,body.touch.ss-open #bodyinfo,body.tv.phonewall.ss-open #bodyinfo{z-index:2100}
 /* Pictures queued for the next message in a session. Thumbnails while they upload (dimmed until the
    hub has the bytes), each removable, and the row collapses to nothing when empty. */
+/* Sent, and the model has not read it yet. His words, dimmed and held below the caret — the same
+   block it will become once it is taken, so nothing jumps when it moves into the stream. */
+.sv-queued{opacity:.5;border-left:2px solid #3a4452;padding-left:8px}
 .sv-tray{display:flex;flex-wrap:wrap;gap:6px;padding:0 2px}
 .sv-tray:empty{display:none}
 .sv-tray .sv-shot{position:relative;width:54px;height:54px;border-radius:8px;overflow:hidden;

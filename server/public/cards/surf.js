@@ -198,24 +198,29 @@ function paintGrids(cv, ax, viewW) {
   // daylight either side of it, and each is dimmer than the mark above it in importance — now (solid
   // white), noon (70%), six (35%). At 45% the sixes start reading as equals of noon and the eye
   // stops knowing which line it is on.
-  // TWO levels once the grid is ruled hourly, not three. 6a, noon and 6p are ONE mark — the same
-  // solid line — and everything between them is a faint dash. Which of the three you are on is said
-  // by the gutter, and by the fact that they sit a quarter of the grid apart; grading them against
-  // each other as well only made the eye rank three things that are equally the skeleton of the day.
-  // Dashed rather than merely dimmer for the hours between: a faint SOLID line at this spacing reads
-  // as a second grid and competes with the cells, where a dash reads as a ruler, which is what it is.
+  // Ruled hourly where there is room, in three tiers that follow the GUTTER: every line the gutter
+  // names is SOLID, and every line it does not is a faint dash.
+  //   6a / noon / 6p   solid, bright — one mark, not graded against each other. They are equally the
+  //                    skeleton of a day, and which one you are on is said by the gutter beside it.
+  //   3a 9a 3p 9p      solid, dim — the same line the sixes used to be. Labelled, so halving a
+  //                    quarter of the day is a read rather than a count.
+  //   everything else  dashed and fainter. Not merely dimmer: a faint SOLID line at hourly spacing
+  //                    reads as a second grid competing with the cells, where a dash reads as a
+  //                    ruler, which is what it is.
   //
-  // The card and the wall keep the three-level version below, because they draw only these three and
-  // there the grading IS the axis — noon the reference, the sixes bracketing the daylight round it.
+  // The card and the wall draw only the first tier, and there it IS graded — noon the reference, the
+  // sixes bracketing the daylight round it — because with three lines on the whole grid the grading
+  // is the axis. That is the `!hourly` branch below.
   const hourly = HOURLY();
   for (const base of [dowH, dowH + GRID_H()]) {
     for (let h = 1; h <= 23; h++) {
-      const named = h === 6 || h === 12 || h === 18;
-      if (!hourly && !named) continue;
+      const six = h % 6 === 0;                      // 6a, noon, 6p
+      const third = h % 3 === 0 && !six;            // 3a, 9a, 3p, 9p
+      if (!hourly && !six) continue;
       const y = base + GRID_H() - h * ch;
-      g.setLineDash(named ? [] : [2, 3]);
-      g.strokeStyle = named
-        ? `rgba(255,255,255,${hourly || h === 12 ? .7 : .35})`
+      g.setLineDash(six || third ? [] : [2, 3]);
+      g.strokeStyle = six ? `rgba(255,255,255,${hourly || h === 12 ? .7 : .35})`
+        : third ? 'rgba(255,255,255,.35)'
         : 'rgba(255,255,255,.17)';
       g.lineWidth = 1;
       g.beginPath(); g.moveTo(0, y); g.lineTo(totalW, y); g.stroke();

@@ -353,6 +353,10 @@ function traceFrame(a, note) {
         // What the DOM ended up with. One frame that renders twice and two frames that each render
         // once look identical on screen and are different bugs.
         acts: cur ? cur.activity.length : -1, pend: cur ? cur.pending.length : -1,
+        // WHAT is in there. Two entries with the same text is one frame pushed twice; two with
+        // different text means the second copy on screen is coming from somewhere else entirely.
+        actTexts: cur ? cur.activity.map((x) => (x.said ? 'S:' : x.thought ? 'T:' : 'X:')
+          + String(x.text || '').slice(0, 18)) : [],
         drawn: document.querySelectorAll('#repospane .sv-body .sv-words').length,
         bodies: document.querySelectorAll('#repospane .sv-body').length }) }).catch(() => {});
   } catch (_) {}

@@ -26,5 +26,12 @@ struct StatusHubControlsBundle: WidgetBundle {
         RingsWidget()
         TodoWidget()
         ReposWidget()
+        // The alarm's Live Activity (AlarmWidget.swift). Not a widget anyone places — AlarmKit needs an
+        // ActivityConfiguration for AlarmAttributes to exist SOMEWHERE in the bundle, and this is the
+        // only widget extension the app has. iOS 26 only, hence the availability fence; the extension
+        // itself deploys to 18.
+        #if canImport(AlarmKit)
+        if #available(iOS 26.0, *) { HubAlarmWidget() }
+        #endif
     }
 }

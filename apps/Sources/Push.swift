@@ -64,6 +64,13 @@ enum HubAPI {
         }.resume()
     }
 
+    /// A plain authenticated GET. Used by the alarm sync, whose whole point is running when there is
+    /// no page to ride — a background wake has no WebView and no web session.
+    static func get(_ path: String, done: @escaping (Data?) -> Void) {
+        guard let req = request(path, method: "GET", json: nil) else { return done(nil) }
+        URLSession.shared.dataTask(with: req) { data, _, _ in done(data) }.resume()
+    }
+
     /// Re-read the true count. Called when the app foregrounds, so the badge self-corrects even if a
     /// background push was throttled away.
     static func refreshBadge() {
@@ -114,6 +121,21 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
         print("APNs registration failed: \(error.localizedDescription)")
     }
 
+    // A SILENT push. The badge-only ones have always been sent; with the `remote-notification`
+    // background mode the app now actually wakes for them, so this has to be cheap and has to say no
+    // when there is nothing to do — an app that reports work it did not do gets woken less often.
+    //
+    // `alarms` is the hub asking for a reschedule (nudgeAlarms in server.js). An AlarmKit alarm lives
+    // on the device, so this is the only path by which a reminder marked alarm-grade on another
+    // machine reaches the phone before it is next opened. No prompt: authorization is a foreground
+    // question, and a run that finds it unanswered simply does nothing.
+    func application(_ application: UIApplication,
+                     didReceiveRemoteNotification userInfo: [AnyHashable: Any],
+                     fetchCompletionHandler completionHandler: @escaping (UIBackgroundFetchResult) -> Void) {
+        guard userInfo["alarms"] != nil else { return completionHandler(.noData) }
+        AlarmSync.sync { changed in completionHandler(changed ? .newData : .noData) }
+    }
+
     // Show the banner even when the app is foregrounded.
     func userNotificationCenter(_ center: UNUserNotificationCenter,
                                 willPresent notification: UNNotification,
@@ -156,6 +178,11 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
     // Badge is authoritative from the hub, so re-read it whenever the app comes forward.
     func applicationDidBecomeActive(_ application: UIApplication) {
         HubAPI.refreshBadge()
+        // The GUARANTEE behind the silent push. iOS drops background wakes as it likes and sends none
+        // at all after a force-quit, so opening the app is the one moment the registered alarms are
+        // certainly brought level with the hub. This is also the only run allowed to raise the
+        // permission prompt, because that is a question someone has to be looking at to answer.
+        AlarmSync.sync(mayPrompt: true)
         // A placed widget holds a CACHED timeline: reinstalling the app does not refresh it, so new
         // widget code — or a changed payload shape — keeps rendering against the old cached entries
         // until the policy date rolls round. Opening the app forces it to regenerate.

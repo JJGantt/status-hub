@@ -107,6 +107,47 @@ the existing `StatusHubControls` bundle (the `WidgetBundle` at the bottom of
 `apps/Controls/RecordControl.swift`); a widget and its button intents share `UserDefaults.standard`,
 since they are one process already.
 
+## An alarm is registered on the phone, so the server can only say "look again"
+
+`list_items.alarm` marks a dated item alarm-grade: iOS 26's AlarmKit rings it through silent mode and
+through a Focus. Four pieces, and the shape of all of them follows from one fact — **an AlarmKit alarm
+is registered ON the device.** There is no push that rings one, not even a push-to-start the way a
+Live Activity has.
+
+| | |
+|---|---|
+| `GET /api/alarms` | what the phone should have registered right now: everything marked, due inside `ALARM_WINDOW_DAYS`. `at` is an ABSOLUTE instant (`instantFromLocal`), not the naive stamp the rest of the API speaks, so a phone that has travelled cannot resolve 4pm against wherever it is. |
+| `POST /api/todos/alarm` | sets or clears the mark. The only way in — nothing infers it from priority or wording. |
+| `nudgeAlarms()` | a silent push off the `list_items` subscription, only for rows that are (or were) marked. |
+| `Sources/AlarmSync.swift` | reads the feed and makes the device match it. |
+
+**It syncs a WINDOW, not a change.** Every run registers everything in the next week and cancels what
+is no longer there, which is what makes a dropped wake cheap: iOS throttles background pushes on its
+own heuristics and delivers none at all after a force-quit, so the cost of missing one has to be "an
+alarm created in the last few hours registers late", never "the next alarm did not happen". The
+foreground sync (`applicationDidBecomeActive`) is the guarantee; the push is what usually makes the
+guarantee unnecessary.
+
+**The alarm id is derived, not stored** — `HubAlarm.id` is sha256 of (item id, moment). So the sync is
+a set difference against `AlarmManager.shared.alarms` with no local bookkeeping to drift, and snoozing
+an item is automatically a different alarm: the old id is cancelled and the new one scheduled without
+anything having to notice it moved.
+
+**The alert is a Live Activity.** AlarmKit draws no UI of its own — it requires a widget extension
+declaring an `ActivityConfiguration` over `AlarmAttributes<Metadata>`, which is
+`Controls/AlarmWidget.swift` in the existing `StatusHubControls` bundle. Without it, scheduling
+succeeds and nothing appears.
+
+**None of it is a capability.** `com.apple.developer.alarmkit` does not exist — putting it in an
+entitlements file is itself what makes a device build fail with "provisioning profile doesn't
+include…". The whole cost in the project is three Info.plist keys (`NSAlarmKitUsageDescription`,
+`NSSupportsLiveActivities`, `UIBackgroundModes: remote-notification`), so no profile is regenerated
+and the rejected Xcode login does not gate it.
+
+That background mode has a consequence worth knowing: the app now wakes for the **badge-only** silent
+pushes too, which it never used to. `didReceiveRemoteNotification` answers `.noData` immediately for
+anything without an `alarms` key — an app that claims work it did not do gets woken less often.
+
 ## Widget drawing files stay WidgetKit-free
 
 `Controls/RingsView.swift`, `TodoView.swift` and `ReposView.swift` import no WidgetKit, so

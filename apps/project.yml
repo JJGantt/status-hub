@@ -73,6 +73,18 @@ targets:
         NSPhotoLibraryUsageDescription: Status Hub attaches photos of food and nutrition labels.
         # The hub page's navigator.geolocation in the WKWebView (voiceagent.js hereNow) needs it.
         NSLocationWhenInUseUsageDescription: For nearby requests.
+        # AlarmKit (iOS 26+). NO entitlement and NO portal capability — `com.apple.developer.alarmkit`
+        # does not exist, and putting it in the entitlements file is itself what makes a device build
+        # fail. These three keys are the whole of what the framework needs from the project.
+        NSAlarmKitUsageDescription: Alarms for your reminders.
+        # The alarm's alert and countdown are a Live Activity — AlarmKit renders them through the
+        # widget extension's ActivityConfiguration (Controls/AlarmWidget.swift).
+        NSSupportsLiveActivities: true
+        # So a silent push can wake the app to reschedule. An AlarmKit alarm is registered ON the
+        # device, so without this a new alarm reaches the phone only when the app is next opened.
+        # Background Modes adds no entitlement; Push Notifications is already on the App ID.
+        UIBackgroundModes:
+          - remote-notification
         CFBundleURLTypes:
           - CFBundleURLName: com.jaredgantt.statushub
             CFBundleURLSchemes:

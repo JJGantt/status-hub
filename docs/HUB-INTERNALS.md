@@ -503,6 +503,9 @@ fired from `dirtyNutDay()` / `dirtyWorkoutDay()`, which every write path already
 path) · `/api/nutrition-day` also takes `date=today`, so a client with no 4am-origin day of its own
 gets the server's, and ships that day's own `produce` fill gauges beside its totals and targets so a
 surface pointing the rings at a selected day can move all seven of them together ·
+`/api/alarms` (the dated items marked `alarm`, inside a 7-day window, each with an ABSOLUTE instant —
+what the phone registers with AlarmKit; see status-hub's CLAUDE.md) · `/api/todos/alarm` (sets or
+clears that mark) ·
 `/api/todos` (lists + the derived `due` view) · `/api/calendar` (month grid(s) of every
 dated item — every occurrence is a real row, so nothing is projected; `?month=` pages, `?wall=1` adds
 the day timeline and reads `calendar_months` for the spread, `?day=1` is the timeline alone and

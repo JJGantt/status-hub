@@ -15,6 +15,7 @@
 		14F93E7C978F91E1C8547E29 /* TodoWidget.swift in Sources */ = {isa = PBXBuildFile; fileRef = 279F09507BAD56AB8AD69831 /* TodoWidget.swift */; };
 		1C569FFA9D76D921D56B85D8 /* RecordIntent.swift in Sources */ = {isa = PBXBuildFile; fileRef = F62C833499BAA9A4A1C9F660 /* RecordIntent.swift */; };
 		2865661A326AF6F9FE5F6E61 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = AC135E9E04A98CDB11B57AB2 /* Assets.xcassets */; };
+		2AA1CF6BAFEFCEE02DDB33A1 /* AlarmSync.swift in Sources */ = {isa = PBXBuildFile; fileRef = 641FE871B04F44B291E63EB5 /* AlarmSync.swift */; };
 		2AE6971801629766230C380C /* Auth.swift in Sources */ = {isa = PBXBuildFile; fileRef = 88D699B5FDC0F7476374CF07 /* Auth.swift */; };
 		2D7BBEABB20A4F0C080608E0 /* Location.swift in Sources */ = {isa = PBXBuildFile; fileRef = D2181310AB9F5E005371B8B0 /* Location.swift */; };
 		4047BFD86E0305E129C06B77 /* Info-iOS.plist in Resources */ = {isa = PBXBuildFile; fileRef = 12B2F6A89FA87D30EEC5ED56 /* Info-iOS.plist */; };
@@ -26,6 +27,7 @@
 		58F20A294FB54B942342ABB3 /* StatusHubControls.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = AD44A10C47F3ACE73074E7B2 /* StatusHubControls.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		5B95BB853AE0BB3D7E93EC0F /* OpenTodoItem.swift in Sources */ = {isa = PBXBuildFile; fileRef = 980C6D4E9785922A04236D2D /* OpenTodoItem.swift */; };
 		5D50E610532DA949FF006920 /* OpenTodoItem.swift in Sources */ = {isa = PBXBuildFile; fileRef = 980C6D4E9785922A04236D2D /* OpenTodoItem.swift */; };
+		60967219F3FD01BEE8169AB0 /* AlarmWidget.swift in Sources */ = {isa = PBXBuildFile; fileRef = 42EE28AFC13645DC41A71D9C /* AlarmWidget.swift */; };
 		60AE844C615F02EE05A50C80 /* Views.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7E727AC7945D69F9313E83AC /* Views.swift */; };
 		6188D9BD5163465CBE9D4FFB /* StatusHubWatch.app in Embed Watch Content */ = {isa = PBXBuildFile; fileRef = 94DD1B301CE525AF6B208DC7 /* StatusHubWatch.app */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		68E90B2316D4D69B4288AF5B /* RingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A86CE732DC51F6BC6973C5F0 /* RingsView.swift */; };
@@ -40,12 +42,14 @@
 		8E8CD9763A8A0BD031DBF5E5 /* ChatView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C3E42D965464DC9CD4478CCB /* ChatView.swift */; };
 		8F4734EA7CF078B6F76963FB /* StatusHubWatchWidgets.swift in Sources */ = {isa = PBXBuildFile; fileRef = 73F9EE0177B282256E68470C /* StatusHubWatchWidgets.swift */; };
 		99C55A70179E1025B9004EF9 /* RecordControl.swift in Sources */ = {isa = PBXBuildFile; fileRef = FAC9C25A7B946678D80BA77A /* RecordControl.swift */; };
+		9C99C535170BF94328C68EB3 /* AlarmSync.swift in Sources */ = {isa = PBXBuildFile; fileRef = 641FE871B04F44B291E63EB5 /* AlarmSync.swift */; };
 		9F6DFFB0796E9EE6B110235A /* RecordIntent.swift in Sources */ = {isa = PBXBuildFile; fileRef = F62C833499BAA9A4A1C9F660 /* RecordIntent.swift */; };
 		A4E6D950656AE1A3B80EECAA /* Push.swift in Sources */ = {isa = PBXBuildFile; fileRef = 835C09DFE3C581C0FCD41116 /* Push.swift */; };
 		A530752A59476C460CE68305 /* HubModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6DD537CFCDEFF1F747C3D8D2 /* HubModel.swift */; };
 		AE3C14A7061F839013EA169A /* WatchLink.swift in Sources */ = {isa = PBXBuildFile; fileRef = D87B899987639512DD905DCE /* WatchLink.swift */; };
 		B074269468DD14567FC7F3FF /* AssetsMac.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 43113D1E0A8CEB8334CFC02E /* AssetsMac.xcassets */; };
 		B0778EBC2C7F517F88E6662D /* HubVoiceIntent.swift in Sources */ = {isa = PBXBuildFile; fileRef = 630A58399AEBE9A0EB63449B /* HubVoiceIntent.swift */; };
+		B0EA6EAD595FC20AE4CAA5A2 /* HubAlarm.swift in Sources */ = {isa = PBXBuildFile; fileRef = FBE9E070BFB91A0A9915FDE0 /* HubAlarm.swift */; };
 		B39D666BE8C69D4E75BB31F5 /* HubModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6DD537CFCDEFF1F747C3D8D2 /* HubModel.swift */; };
 		B63E8DE2508FDBEB38EC60C7 /* NutritionView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7300D161B8F2C8E565CA4FAB /* NutritionView.swift */; };
 		C4250430822C333D041CEEA1 /* Hub.swift in Sources */ = {isa = PBXBuildFile; fileRef = FD06B420AFC554D37540118C /* Hub.swift */; };
@@ -62,6 +66,7 @@
 		ED30317D3B77A590C83D95BC /* StatusHubApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = DBE4FD566029B00F912457DA /* StatusHubApp.swift */; };
 		EE1E28331D9AE8401BEE3601 /* Push.swift in Sources */ = {isa = PBXBuildFile; fileRef = 835C09DFE3C581C0FCD41116 /* Push.swift */; };
 		F10846CA6E8D579211CF7695 /* Theme.swift in Sources */ = {isa = PBXBuildFile; fileRef = A3ED88961E8E93D6EBE0EA46 /* Theme.swift */; };
+		F85139B7682257CEDBA852FC /* HubAlarm.swift in Sources */ = {isa = PBXBuildFile; fileRef = FBE9E070BFB91A0A9915FDE0 /* HubAlarm.swift */; };
 		F9B3AEDE8FF26869DC2B821B /* Nutrition.swift in Sources */ = {isa = PBXBuildFile; fileRef = 38BD5AA187D80545B616356B /* Nutrition.swift */; };
 		FB6B5DF33E6070D5348F0E27 /* RecordIntent.swift in Sources */ = {isa = PBXBuildFile; fileRef = F198CD20CEADF9EC7C93F50C /* RecordIntent.swift */; };
 /* End PBXBuildFile section */
@@ -135,9 +140,11 @@
 		38BD5AA187D80545B616356B /* Nutrition.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Nutrition.swift; sourceTree = "<group>"; };
 		3DA8801FE7845595DD403F04 /* Sessions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sessions.swift; sourceTree = "<group>"; };
 		3EE13DD050BF1BC4B943C3CC /* Capture.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Capture.swift; sourceTree = "<group>"; };
+		42EE28AFC13645DC41A71D9C /* AlarmWidget.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AlarmWidget.swift; sourceTree = "<group>"; };
 		43113D1E0A8CEB8334CFC02E /* AssetsMac.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = AssetsMac.xcassets; sourceTree = "<group>"; };
 		61B4D21322132BFB2C145C0C /* ReposWidget.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReposWidget.swift; sourceTree = "<group>"; };
 		630A58399AEBE9A0EB63449B /* HubVoiceIntent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HubVoiceIntent.swift; sourceTree = "<group>"; };
+		641FE871B04F44B291E63EB5 /* AlarmSync.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AlarmSync.swift; sourceTree = "<group>"; };
 		65394C860C697D281720B76A /* Chat.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Chat.swift; sourceTree = "<group>"; };
 		6DD537CFCDEFF1F747C3D8D2 /* HubModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HubModel.swift; sourceTree = "<group>"; };
 		7300D161B8F2C8E565CA4FAB /* NutritionView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NutritionView.swift; sourceTree = "<group>"; };
@@ -173,6 +180,7 @@
 		F4BAD78C211DC1432CDEB572 /* Workout.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Workout.swift; sourceTree = "<group>"; };
 		F62C833499BAA9A4A1C9F660 /* RecordIntent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecordIntent.swift; sourceTree = "<group>"; };
 		FAC9C25A7B946678D80BA77A /* RecordControl.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecordControl.swift; sourceTree = "<group>"; };
+		FBE9E070BFB91A0A9915FDE0 /* HubAlarm.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HubAlarm.swift; sourceTree = "<group>"; };
 		FD06B420AFC554D37540118C /* Hub.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Hub.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -193,6 +201,7 @@
 			isa = PBXGroup;
 			children = (
 				88D699B5FDC0F7476374CF07 /* Auth.swift */,
+				FBE9E070BFB91A0A9915FDE0 /* HubAlarm.swift */,
 				630A58399AEBE9A0EB63449B /* HubVoiceIntent.swift */,
 				980C6D4E9785922A04236D2D /* OpenTodoItem.swift */,
 			);
@@ -202,6 +211,7 @@
 		4F3C15E0045F52C4F298B679 /* Sources */ = {
 			isa = PBXGroup;
 			children = (
+				641FE871B04F44B291E63EB5 /* AlarmSync.swift */,
 				6DD537CFCDEFF1F747C3D8D2 /* HubModel.swift */,
 				12B2F6A89FA87D30EEC5ED56 /* Info-iOS.plist */,
 				B47214768CCEE8C99EEF5958 /* Models.swift */,
@@ -256,6 +266,7 @@
 		949CE30CB2642F8013288295 /* Controls */ = {
 			isa = PBXGroup;
 			children = (
+				42EE28AFC13645DC41A71D9C /* AlarmWidget.swift */,
 				80B371A0F840BA7F14954FE5 /* Info.plist */,
 				FAC9C25A7B946678D80BA77A /* RecordControl.swift */,
 				AF1D1C7A5D148A4366347C65 /* ReposView.swift */,
@@ -504,7 +515,9 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				2AA1CF6BAFEFCEE02DDB33A1 /* AlarmSync.swift in Sources */,
 				D8B3EEDED01AB105C95F173D /* Auth.swift in Sources */,
+				B0EA6EAD595FC20AE4CAA5A2 /* HubAlarm.swift in Sources */,
 				B39D666BE8C69D4E75BB31F5 /* HubModel.swift in Sources */,
 				C917F517205EDE3DA975EE4A /* HubVoiceIntent.swift in Sources */,
 				D998A2EA11DB625A5E768785 /* Models.swift in Sources */,
@@ -522,6 +535,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				9C99C535170BF94328C68EB3 /* AlarmSync.swift in Sources */,
 				2AE6971801629766230C380C /* Auth.swift in Sources */,
 				A530752A59476C460CE68305 /* HubModel.swift in Sources */,
 				51DECA2330E0FBC3832EF2A4 /* Models.swift in Sources */,
@@ -538,7 +552,9 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				60967219F3FD01BEE8169AB0 /* AlarmWidget.swift in Sources */,
 				7876C764C368F15A396CAEDC /* Auth.swift in Sources */,
+				F85139B7682257CEDBA852FC /* HubAlarm.swift in Sources */,
 				B0778EBC2C7F517F88E6662D /* HubVoiceIntent.swift in Sources */,
 				5B95BB853AE0BB3D7E93EC0F /* OpenTodoItem.swift in Sources */,
 				99C55A70179E1025B9004EF9 /* RecordControl.swift in Sources */,

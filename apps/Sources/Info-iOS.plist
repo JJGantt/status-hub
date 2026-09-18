@@ -35,6 +35,8 @@
 	<false/>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
+	<key>NSAlarmKitUsageDescription</key>
+	<string>Alarms for your reminders.</string>
 	<key>NSCameraUsageDescription</key>
 	<string>Status Hub uses the camera to capture food and nutrition labels.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
@@ -43,8 +45,14 @@
 	<string>Status Hub uses the microphone for voice commands.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>Status Hub attaches photos of food and nutrition labels.</string>
+	<key>NSSupportsLiveActivities</key>
+	<true/>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>remote-notification</string>
+	</array>
 	<key>UILaunchScreen</key>
 	<dict/>
 	<key>UISupportedInterfaceOrientations</key>

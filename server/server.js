@@ -327,6 +327,27 @@ function etStringAt(d) {
 }
 const etNowString = () => etStringAt(new Date());
 
+// The INVERSE of etStringAt: a local-naive stamp in the display timezone -> the absolute instant it
+// names, as ISO-8601 UTC. Everything else in this server stays naive because nothing needed the
+// instant — an AlarmKit alarm does, because it is registered on the phone against a real `Date` and
+// the phone must not re-apply a zone of its own on top.
+//
+// Two passes, and the second is not decoration: the zone's offset has to be read AT the instant, and
+// the instant is what is being solved for. One pass lands within an hour of the answer; the second
+// settles the two hours a year where the first read was on the wrong side of a DST change.
+function instantFromLocal(naive) {
+  const m = /^(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2})(?::(\d{2}))?/.exec(String(naive || ''));
+  if (!m) return null;
+  const wall = Date.UTC(+m[1], +m[2] - 1, +m[3], +m[4], +m[5], +(m[6] || 0));
+  let t = wall;
+  for (let i = 0; i < 2; i++) {
+    const seen = Date.parse(etStringAt(new Date(t)) + 'Z');   // what a clock in the zone reads at t
+    if (!Number.isFinite(seen)) return null;
+    t = wall - (seen - t);                                    // ...so correct by exactly the offset
+  }
+  return new Date(t).toISOString();
+}
+
 // ---- assemble dashboard data ----
 // ---- surf: latest Surfline snapshot -> current + 7-day per-day rollup ----
 // Data is collected by the Pi (repo JJGantt/surf-report) into surf_snapshots.
@@ -894,7 +915,7 @@ function startRealtime() {
     // Without the rebuild a completion would not show on the bar until the 15-minute backstop, which
     // is the one moment the reward is supposed to land.
     .on('postgres_changes', { event: '*', schema: 'public', table: 'list_items' },
-      () => {
+      (p) => {
         fpSeen();
         seen(); dirtyRows(); pushLists(); broadcast();
         // A dated item added, snoozed, completed or cleared changes both when the next thing is due
@@ -902,6 +923,11 @@ function startRealtime() {
         // backstop instead of the mechanism that keeps a cleared task from lingering on his phone.
         dirtyDue();
         syncBadge().catch((e) => console.log('[badge] error', e.message));
+        // …and only an ALARM-grade row is worth waking the phone for. Reading both sides catches the
+        // mark being taken off as well as put on; a hard DELETE carries only the primary key, so
+        // that one is missed and waits for the next foreground sync (the purge job is its only
+        // source, and it deletes rows that were soft-deleted weeks ago).
+        if ((p && p.new && p.new.alarm) || (p && p.old && p.old.alarm)) nudgeAlarms();
       })
     .on('postgres_changes', { event: '*', schema: 'public', table: 'lists' },
       () => { seen(); pushLists(); })
@@ -3160,6 +3186,52 @@ app.post('/api/todos/snooze', express.json(), async (req, res) => {
   } catch (e) { res.status(500).json({ error: String(e.message || e) }); }
 });
 
+// Mark a dated item ALARM-GRADE, or take the mark off. An alarm breaks silent mode and a Focus, so
+// nothing sets this on its own — not priority, not wording. It is set because someone said so.
+app.post('/api/todos/alarm', express.json(), async (req, res) => {
+  try {
+    const b = req.body || {};
+    const id = String(b.id || '');
+    if (!id) return res.status(400).json({ error: 'id required' });
+    const alarm = !(b.alarm === false || b.alarm === 0 || b.alarm === '0' || b.alarm === 'false');
+    await sbWrite(`list_items?id=eq.${encodeURIComponent(id)}`, 'PATCH',
+      { alarm, updated: new Date().toISOString() });
+    res.json({ ok: true, id, alarm });
+    // The realtime subscription wakes the phone off this write, so there is nothing to do here.
+  } catch (e) { res.status(500).json({ error: String(e.message || e) }); }
+});
+
+// ---- the alarm feed -------------------------------------------------------
+//
+// What the phone should have registered with AlarmKit right now. Read natively (HubAPI, X-Hub-Token)
+// rather than through the WebView, because the moment this matters most is a background wake, where
+// there is no page.
+//
+// A WINDOW, not a change list. Every sync registers everything in the next week and cancels whatever
+// is no longer here, so a wake that iOS threw away costs at most an item created since the last sync
+// rather than the next alarm. That also makes the app's side a pure diff with no state to keep.
+//
+// `at` is an absolute instant, not the naive stamp the rest of the API speaks: the zone rule lives
+// here (server computes, clients render), and a phone that has travelled must not resolve 4pm
+// against wherever it happens to be.
+const ALARM_WINDOW_DAYS = 7;
+app.get('/api/alarms', async (req, res) => {
+  try {
+    const now = etNowString();
+    const until = plusMinutes(now, ALARM_WINDOW_DAYS * 1440);
+    const rows = await sb('list_items?deleted=eq.false&completed_at=is.null&alarm=eq.true'
+      + '&due=not.is.null&select=id,list_name,text,title,due&order=due.asc');
+    const alarms = [];
+    for (const r of rows || []) {
+      const at = dueMoment(r.due);                       // a date-only due rings at 9am, as it notifies
+      if (at < now || at > until) continue;              // already gone, or past the window
+      const iso = instantFromLocal(at);
+      if (iso) alarms.push({ id: r.id, at: iso, title: itemTitle(r) });
+    }
+    res.json({ alarms, window_days: ALARM_WINDOW_DAYS, tz: getTZ() });
+  } catch (e) { res.status(500).json({ error: String(e.message || e) }); }
+});
+
 // The app reads this when it comes to the foreground, so the badge is right even if a silent
 // background push never landed.
 app.get('/api/badge', async (req, res) => {
@@ -3894,6 +3966,31 @@ async function syncBadge() {
   for (const { token, environment } of tokens) await apns.send(token, { environment, badge: n });
   console.log(`[badge] -> ${n}`);
 }
+// ---- waking the phone to reschedule ----------------------------------------
+//
+// An AlarmKit alarm is registered ON the device, so a change here cannot ring anything by itself;
+// the phone has to re-read /api/alarms and reschedule. This is the only way that happens without him
+// opening the app, and it is best-effort ON PURPOSE: iOS throttles background pushes on its own
+// heuristics and delivers none at all after a force-quit. The app's foreground sync is the
+// guarantee — this is what usually makes the guarantee unnecessary.
+//
+// Silent, because apns.js turns a push with no title and no body into a background one; `alarms: 1`
+// rides alongside so the app can tell this apart from the badge-only pushes it also now wakes for.
+// Debounced, because one voice command writes a row more than once (insert, then a due) and each
+// write is otherwise a wake.
+let alarmNudgeT = null;
+const ALARM_NUDGE_MS = 4000;
+function nudgeAlarms() {
+  if (!apns.configured() || alarmNudgeT) return;
+  alarmNudgeT = setTimeout(async () => {
+    alarmNudgeT = null;
+    let tokens = [];
+    try { tokens = await sb('device_tokens?platform=eq.ios&select=token,environment'); } catch (_) { return; }
+    for (const { token, environment } of tokens) await apns.send(token, { environment, payload: { alarms: 1 } });
+    console.log(`[alarms] woke ${tokens.length} device(s)`);
+  }, ALARM_NUDGE_MS);
+}
+
 // A BACKSTOP. The badge is pushed by the `list_items` subscription and by `dueTick` when something
 // fires, so this only catches a change that arrived while the socket was deaf. It was a 60s count of
 // every open dated item, and the count changes a handful of times a day.

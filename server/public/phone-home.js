@@ -110,8 +110,7 @@ window.addEventListener('hubreset', () => {
     const el = document.querySelector(sel);
     if (el) el.scrollTop = 0;
   }
-  const c = document.getElementById('ph-conv');
-  if (c) c.scrollTop = c.scrollHeight;
+  toLast();
 });
 
 // ---- what is running -----------------------------------------------------
@@ -142,16 +141,35 @@ let thread = [];        // [{role, text, session}] oldest first
 // wrong thing, and one early paint against an empty box left the thread parked mid-way and never
 // recovering. Our own scrollTop write fires this too, which is right — it lands at the bottom.
 let held = false;
+
+// WHERE IT LANDS: the top of the LAST message at the top of the box, not the bottom of the thread.
+// A reply is read from its first line, and a box scrolled to the very end opens on the last line of
+// it with the rest above — so the newest thing on screen was its own tail. The session view has
+// landed this way for a while (`open` in cards/repos.js); this is the same rule in the small box.
+//
+// Clamped, so a short last message simply rests at the end of the scroll, which is where it already
+// was. Measured off the rects rather than offsetTop: the box is not an offset parent, so offsetTop
+// is against some ancestor and the difference is only a shift, not the number wanted.
+function toLast() {
+  if (!conv) return;
+  const el = conv.lastElementChild;
+  const max = Math.max(0, conv.scrollHeight - conv.clientHeight);
+  if (!el) { conv.scrollTop = max; held = false; return; }
+  const delta = el.getBoundingClientRect().top - conv.getBoundingClientRect().top;
+  conv.scrollTop = Math.max(0, Math.min(max, conv.scrollTop + delta));
+  held = false;
+}
+
 if (conv) {
   conv.addEventListener('scroll', () => {
     held = conv.scrollHeight - conv.scrollTop - conv.clientHeight > 24;
   }, { passive: true });
   // This block's height is whatever the rest of the screen did not need, so it is not settled when
-  // the thread first paints into it — and a bottom pinned against the wrong height is a thread
-  // parked mid-way that nothing afterwards corrects. Re-pin whenever the box itself resizes.
+  // the thread first paints into it — and a position taken against the wrong height is a thread
+  // parked somewhere nothing afterwards corrects. Re-place it whenever the box itself resizes.
   try {
-    new ResizeObserver(() => { if (!held) conv.scrollTop = conv.scrollHeight; }).observe(conv);
-  } catch (_) { /* no ResizeObserver: the paint-time pin is what there is */ }
+    new ResizeObserver(() => { if (!held) toLast(); }).observe(conv);
+  } catch (_) { /* no ResizeObserver: the paint-time placement is what there is */ }
 }
 
 function paintConv(pin) {
@@ -168,11 +186,10 @@ function paintConv(pin) {
       (from ? `<span class="ph-convk">${esc(from)}</span>` : '') +
       `<div class="ph-convt">${md(r.text)}</div></div>`;
   }).join('');
-  // Twice: once now, because scrollHeight is already final after the assignment above, and once on
-  // the next frame, because this block's own height is whatever the rest of the screen did not need
-  // and is not settled until the flex pass has run.
-  const bottom = () => { conv.scrollTop = conv.scrollHeight; held = false; };
-  if (stick) { bottom(); requestAnimationFrame(() => { if (!held) bottom(); }); }
+  // Twice: once now, because the layout is already final after the assignment above, and once on the
+  // next frame, because this block's own height is whatever the rest of the screen did not need and
+  // is not settled until the flex pass has run.
+  if (stick) { toLast(); requestAnimationFrame(() => { if (!held) toLast(); }); }
 }
 
 // The text is kept WHOLE — paragraphs, lists and all. It arrives as markdown and is rendered as

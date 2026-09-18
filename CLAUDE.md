@@ -316,6 +316,14 @@ It also beats app.css's `body.tv.wallportrait` block on equal specificity, by lo
   it: it is a machine reporting back, not the hub answering. There is no `You` / `Hub` label — his
   own words are dim and the hub's are not, which is the whole of who-said-what, and a word in a
   gutter repeated it and took the gutter's width off every line.
+  **IT LANDS ON THE TOP OF THE LAST MESSAGE**, not at the bottom of the thread — a reply is read from
+  its first line, and a box scrolled to the very end opens on the last line of it with the rest
+  above, so the newest thing on screen was its own tail. Clamped, so a short last message simply
+  rests at the end of the scroll, where it already was. The session view has landed this way since it
+  was written (`open` in cards/repos.js puts the last turn's prompt at the top); this is the same
+  rule in the small box, and the reset button uses it too.
+  Measured off the rects rather than `offsetTop`: the box is not an offset parent, so offsetTop is
+  against some ancestor and the difference is a shift, not the number wanted.
   The full thread with its composer is the chat pane, one swipe left; that one still renders the
   source, since it was not what he asked for.
 - **The two heat maps are STACKED, each a small block at the LEFT of its own section.** Above each

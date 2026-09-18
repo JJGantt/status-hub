@@ -377,9 +377,16 @@ It also beats app.css's `body.tv.wallportrait` block on equal specificity, by lo
 - **Surf and the session list share a row**, and a session row is TAPPABLE: it opens in the session
   view the lists pane already has, with the whole conversation and a composer. So a title truncated
   in that column costs nothing — it is a way in, not the answer.
-- **The day's totals lose their GOALS.** `1380/3060 cal` four times over does not fit a half-width
-  column at any size worth reading, and the denominator is the half of it already on screen: the
-  rings above ARE the goal, drawn as the distance still to go. The strip is the amount.
+- **The day's totals are ON THE RINGS**, one under each gauge — `2699 / 3060` under Cal, `134 / 178`
+  under P. That is the totals line split four ways and attached to the thing each number belongs to,
+  so it needs no labels and there is no separate band: `#nutinfo` carries `data-noband` and
+  cards/nutritionlog.js drops it. It also settles the section's two halves against each other — the
+  height the band was taking off the food column is height the rings did not have, and the two now
+  come out within a pixel of each other.
+  The ring grid is `repeat(2, minmax(0, 1fr))`, and the `minmax(0,` is load-bearing: a grid item's
+  automatic minimum is its CONTENT, so with a plain `1fr` each ring sized to its svg's intrinsic
+  width, the two columns came to 204 in a 134px box and the ring column stood seventy pixels taller
+  than the one it was supposed to match.
 
 It shares the panes the walls had: [chat] [home] [misc] [maint] [lists] [repos] [reports], landing on
 home, driven by `phone-home.js` rather than `wall.js` — there is no canvas to scale, so only the

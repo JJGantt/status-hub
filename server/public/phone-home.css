@@ -144,15 +144,26 @@ body.tv.phonehome .ringcard #nutrition{flex:0 0 auto;width:100%;min-width:0;disp
   flex-direction:column;gap:6px}
 /* FOUR RINGS IN A SQUARE, not a row. In 134px a row of four is 33px a ring; two by two is 65, which
    is the difference between a gauge and a dot. The produce trio runs underneath, three across. */
-body.tv.phonehome .ringcard .rings{display:grid;grid-template-columns:1fr 1fr;gap:4px;margin:0;
-  flex:0 0 auto}
+/* `minmax(0, 1fr)`, not `1fr`. A grid item's automatic minimum is its CONTENT, so the four rings
+   each sized to the svg's own intrinsic width and the two columns came to 204 in a 134px box — the
+   ring column then stood seventy pixels taller than the food column beside it, which is the mismatch
+   this was meant to remove. The produce row spans both columns underneath them. */
+body.tv.phonehome .ringcard .rings{display:grid;grid-template-columns:repeat(2, minmax(0, 1fr));
+  gap:4px;margin:0;flex:0 0 auto}
 body.tv.phonehome .ringcard .ring{min-width:0;display:flex;flex-direction:column;justify-content:center}
+body.tv.phonehome .ringcard .ringmini{grid-column:1/-1}
 body.tv.phonehome .ringcard .ring svg{max-width:none;max-height:none;width:100%;height:auto}
-body.tv.phonehome .ringcard .ring .rtot{display:none}
+/* EACH RING SAYS WHAT IT IS OUT OF, under its own gauge. That is the day's totals line, split four
+   ways and attached to the thing each number belongs to — so the line itself goes, and the height it
+   was taking off the food column is height the rings did not have. */
+body.tv.phonehome .ringcard .ring .rtot{font-size:10px;line-height:12px;color:#8b96a5;margin-top:0;
+  white-space:nowrap;font-variant-numeric:tabular-nums}
 body.tv.phonehome .ringcard .pnote{display:none}
+/* Centred across the column with the space between them, not packed to one end: three 34px rings in
+   134 leaves thirty-two pixels, and spread evenly they read as a row rather than as a cluster. */
 body.tv.phonehome .ringcard .ringmini{flex:0 0 auto;width:100%;max-width:none;margin:0;
-  display:flex;flex-direction:row;align-items:center;justify-content:space-between;gap:4px}
-body.tv.phonehome .ringcard .mring{flex:1 1 0;min-width:0;display:block}
+  display:flex;flex-direction:row;align-items:center;justify-content:space-evenly;gap:0}
+body.tv.phonehome .ringcard .mring{flex:0 0 auto;min-width:0;display:block;width:34px}
 body.tv.phonehome .ringcard .mring svg{max-width:none;width:100%;height:auto;margin:0}
 /* At this size the glyph would render a few pixels and read as a smudge, so it scales up inside the
    ring and the stroke thins to make room. Colour is the identifier here; the icon confirms it. */
@@ -219,7 +230,7 @@ body.tv.phonehome .wp-lab{position:absolute;left:0;font-size:8px;font-weight:700
 body.tv.phonehome .ph-list{flex:0 0 auto;min-width:0;overflow-y:auto;overflow-x:hidden;
   scrollbar-width:none;-webkit-overflow-scrolling:touch}
 body.tv.phonehome .ph-list::-webkit-scrollbar{display:none}
-body.tv.phonehome #nutinfo{height:74px}
+body.tv.phonehome #nutinfo{height:57px}   /* three entries, the same as the exercises below */
 body.tv.phonehome #heatinfo{height:57px}
 /* THE TOTALS, on an element of their own (#nutband) above the scroller rather than sticky inside it.
    Sticky it still travelled with the entries for a frame on every flick and read as hovering over

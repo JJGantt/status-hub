@@ -101,7 +101,10 @@ async function loadNutDay(date){
  // inside the scroller it still moved with them for a frame and read as hovering over the list; the
  // clocks on the training side never move, and these two are the same kind of thing.
  const bandEl=document.getElementById('nutband');
- const putBand=(html)=>{ if(bandEl){ bandEl.innerHTML=html; return ''; } return html; };
+ // `data-noband` drops it altogether: the phone's rings each carry their own `2699 / 3060` under the
+ // gauge, which says what the band said and says WHICH number it is without a label.
+ const noBand=ni.dataset.noband!==undefined;
+ const putBand=(html)=>{ if(bandEl){ bandEl.innerHTML=html; return ''; } return noBand?'':html; };
  // `data-band` asks for the summary line ONLY — the wall wants the day's totals under its heatmap,
  // not an entry list it has no room for and nobody can tap.
  const bandOnly=ni.dataset.band!==undefined;

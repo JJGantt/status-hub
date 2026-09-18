@@ -78,12 +78,12 @@
               <div class="ph-block" id="nutritionlog" data-history>
                 <div id="nutheat" class="nutheat"></div>
               </div>
-              <!-- The day's totals against target. Its OWN element, outside the scroller below it:
-                   sticky inside one it still moved with the entries for a frame and read as hovering
-                   over them, where the clocks on the training side never move at all. -->
-              <div class="hw-strip" id="nutband"></div>
-              <!-- Every entry on the day, tapping open to its ingredients. -->
-              <div class="ph-list" id="nutinfo"></div>
+              <!-- Every entry on the day, tapping open to its ingredients. `data-noband` drops the
+                   day's totals line: each ring beside this carries its own `2699 / 3060` under the
+                   gauge, which says what the band said and says which number it is without a label.
+                   A band here as well was a second copy of that, and a height mismatch with the
+                   rings — the two sides of this section now come out the same. -->
+              <div class="ph-list" id="nutinfo" data-noband></div>
             </div>
             <div class="card ringcard"><div id="nutrition"><h2>Today · Nutrition</h2><div class=big>…</div></div></div>
           </div>

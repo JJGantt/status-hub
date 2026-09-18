@@ -158,6 +158,57 @@ export function paintScrolled(host, html, { sel = null, stick = false } = {}) {
   return after;
 }
 
+// ---- markdown, the little of it a model actually writes -------------------------------------
+//
+// A reply is written in markdown and was being read as its source: `**bold**`, `- ` and `## ` in the
+// middle of running text, with every newline collapsed. This renders the part that carries meaning —
+// headings, lists, emphasis, code, links — and nothing else.
+//
+// EVERY PATH ESCAPES FIRST. The text is a model's, rendered into an origin already authenticated as
+// Jared, so no tag here ever comes from the input: the input is escaped and then OUR OWN patterns
+// introduce tags around it. A link is rewritten only when its target is http(s), which is what keeps
+// `javascript:` out of an href.
+function mdInline(s) {
+  return esc(s)
+    .replace(/`([^`\n]+)`/g, '<code>$1</code>')
+    .replace(/\*\*([^*\n]+)\*\*/g, '<b>$1</b>')
+    .replace(/(^|[\s(])\*([^*\n]+)\*/g, '$1<i>$2</i>')
+    .replace(/\[([^\]\n]+)\]\((https?:\/\/[^\s)]+)\)/g,
+      '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>');
+}
+
+export function md(src) {
+  const lines = String(src == null ? '' : src).replace(/\r\n?/g, '\n').split('\n');
+  let html = '', list = null, code = null;
+  const closeList = () => { if (list) { html += `</${list}>`; list = null; } };
+  for (const raw of lines) {
+    if (/^\s*```/.test(raw)) {
+      if (code === null) { closeList(); code = []; } else { html += `<pre>${esc(code.join('\n'))}</pre>`; code = null; }
+      continue;
+    }
+    if (code !== null) { code.push(raw); continue; }
+    const line = raw.trimEnd();
+    if (!line.trim()) { closeList(); continue; }
+    const h = line.match(/^(#{1,6})\s+(.*)$/);
+    if (h) { closeList(); html += `<div class=md-h>${mdInline(h[2])}</div>`; continue; }
+    const ul = line.match(/^\s*[-*+]\s+(.*)$/);
+    if (ul) {
+      if (list !== 'ul') { closeList(); html += '<ul>'; list = 'ul'; }
+      html += `<li>${mdInline(ul[1])}</li>`; continue;
+    }
+    const ol = line.match(/^\s*\d+[.)]\s+(.*)$/);
+    if (ol) {
+      if (list !== 'ol') { closeList(); html += '<ol>'; list = 'ol'; }
+      html += `<li>${mdInline(ol[1])}</li>`; continue;
+    }
+    closeList();
+    html += `<p>${mdInline(line)}</p>`;
+  }
+  if (code !== null) html += `<pre>${esc(code.join('\n'))}</pre>`;
+  closeList();
+  return html;
+}
+
 export function esc(s){return String(s).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;');}
 
 // The mark on a PINNED session — focus he set by name, which stays put while other sessions take

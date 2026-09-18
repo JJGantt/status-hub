@@ -5,7 +5,7 @@
 // It is the phone's analogue of tv-home.js. Where the wall gives a column to today's dial and a
 // column to the focused session's whole answer, this gives neither: a phone is read at arm's length
 // for a few seconds, so the day lies down and a session is a title with a line under it.
-import { esc, state } from './shared.js';
+import { esc, md, state } from './shared.js';
 import { mount } from './cards/dayline.js';
 import { mountStrip } from './cards/daystrip.js';
 import { mountSessions } from './cards/sessions.js';
@@ -134,8 +134,8 @@ mountSessions({ list: document.getElementById('ph-sess-list'), max: 40, tap: tru
 // means resync, which is when the current context is re-read. `mode=active` resolves hub vs agent on
 // the server, which is the same rule the conversation card follows.
 const conv = document.getElementById('ph-conv');
-const TAIL = 30;        // lines held; past that the top of the context is off the end of the scroll
-let thread = [];        // [{role, text}] oldest first
+const TAIL = 30;        // messages held; past that the top of the context is off the end of the scroll
+let thread = [];        // [{role, text, session}] oldest first
 
 // Whether he has scrolled UP to read something. Held as a flag rather than measured at paint time:
 // measuring the old content's scroll position just before replacing it wholesale is measuring the
@@ -159,12 +159,15 @@ function paintConv(pin) {
   const stick = pin || !held;
   conv.innerHTML = thread.map((r) => {
     const said = r.role === 'assistant';
-    return `<div class="ph-convline ${said ? 'said' : 'ask'}">` +
-      `<span class="ph-convk">${said ? 'Hub' : 'You'}</span>` +
-      `<span class="ph-convt">${esc(r.text)}</span></div>`;
+    // NO `You` / `Hub` label. His own words are dim and the hub's are not, which already says which
+    // is which — a word in a gutter said it twice and took the gutter's width off every line.
+    // A reply RELAYED FROM A SESSION keeps its name, because that is the one thing the colour cannot
+    // carry: it is a machine reporting back, not the hub answering.
+    const from = said && r.session ? r.session : null;
+    return `<div class="ph-convline ${said ? 'said' : 'ask'}${from ? ' sess' : ''}">` +
+      (from ? `<span class="ph-convk">${esc(from)}</span>` : '') +
+      `<div class="ph-convt">${md(r.text)}</div></div>`;
   }).join('');
-  // Synchronously: scrollHeight is already final after the assignment above, and deferring it to a
-  // frame let the next paint overwrite the position before it was ever applied.
   // Twice: once now, because scrollHeight is already final after the assignment above, and once on
   // the next frame, because this block's own height is whatever the rest of the screen did not need
   // and is not settled until the flex pass has run.
@@ -172,14 +175,14 @@ function paintConv(pin) {
   if (stick) { bottom(); requestAnimationFrame(() => { if (!held) bottom(); }); }
 }
 
-// One line, collapsed: a reply arrives with its paragraphs intact and a row here is a single line.
-const oneLine = (t) => String(t == null ? '' : t).replace(/\s+/g, ' ').trim();
-
+// The text is kept WHOLE — paragraphs, lists and all. It arrives as markdown and is rendered as
+// markdown (`md` in shared.js); collapsing it to one line was reading the SOURCE of a reply rather
+// than the reply, with `**bold**` and `- ` left standing in the middle of the prose.
 function takeRow(r) {
-  const text = oneLine(r.text);
-  if (!text) return;                       // a photo-only message has no line to show
+  const text = String(r.text == null ? '' : r.text).trim();
+  if (!text) return;                       // a photo-only message has nothing to show
   if (r.role !== 'user' && r.role !== 'assistant') return;
-  thread.push({ role: r.role, text });
+  thread.push({ role: r.role, text, session: r.session_id ? (r.session_label || '') : '' });
   if (thread.length > TAIL) thread = thread.slice(-TAIL);
 }
 

@@ -306,8 +306,18 @@ It also beats app.css's `body.tv.wallportrait` block on equal specificity, by lo
   swipe pane has room to spare for.
 - **The session panel is the list and nothing else.** No head, no reply: a phone has nowhere to put
   a model's answer, and the wall spends a column on one because it is read word by word from a chair.
-- **The voice column is the last exchange.** One line of what he asked, one of what came back
-  (`#ph-conv`). The whole thread with its composer is the chat pane, one swipe left.
+- **The voice column is the tail of the thread** (`#ph-conv`), rendered as MARKDOWN — a reply is
+  written in it and was being read as its source, every newline collapsed and `**bold**` and `- `
+  standing in the prose. `md()` in shared.js does the part a model actually writes: headings, lists,
+  emphasis, code, links. EVERY path escapes first — the text is a model's, rendered into an origin
+  already authenticated as Jared, so no tag ever comes from the input; the input is escaped and then
+  our own patterns put tags around it, and a link is rewritten only when its target is http(s).
+  A reply RELAYED FROM A SESSION carries that session's name and the tint the conversation card gives
+  it: it is a machine reporting back, not the hub answering. There is no `You` / `Hub` label — his
+  own words are dim and the hub's are not, which is the whole of who-said-what, and a word in a
+  gutter repeated it and took the gutter's width off every line.
+  The full thread with its composer is the chat pane, one swipe left; that one still renders the
+  source, since it was not what he asked for.
 - **The two heat maps are STACKED, each a small block at the LEFT of its own section.** Above each
   is its long view (the weigh-in trend, the clocks since the last set); below it is the day itself,
   as a SCROLLING LIST — four nutrition entries, each tapping open to its ingredients, and three

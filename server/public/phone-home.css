@@ -455,10 +455,32 @@ body.tv.phonehome .ph-convcard{flex:1 1 auto;min-width:0;display:flex;min-height
 body.tv.phonehome .ph-conv{flex:1 1 auto;min-width:0;min-height:0;overflow-y:auto;
   -webkit-overflow-scrolling:touch;display:flex;flex-direction:column;gap:3px}
 body.tv.phonehome .ph-conv::-webkit-scrollbar{display:none}
-body.tv.phonehome .ph-convline{display:flex;align-items:baseline;gap:6px;min-width:0}
-body.tv.phonehome .ph-convk{flex:0 0 22px;font-size:8px;font-weight:800;letter-spacing:.05em;
-  text-transform:uppercase;color:#5c6675}
-body.tv.phonehome .ph-convline.said .ph-convk{color:#4fd1c5}
-body.tv.phonehome .ph-convt{flex:1 1 auto;min-width:0;font-size:10px;line-height:1.35;color:#8b96a5;
+/* A message is a BLOCK, not a labelled row. His own words are dim and the hub's are not, which is
+   already the whole of who-said-what; a `You` / `Hub` in a gutter repeated it and took the gutter's
+   width off every line of every message. */
+body.tv.phonehome .ph-convline{display:block;min-width:0;padding:1px 0}
+body.tv.phonehome .ph-convt{min-width:0;font-size:10px;line-height:1.35;color:#8b96a5;
   word-break:break-word}
 body.tv.phonehome .ph-convline.said .ph-convt{color:#d5dde6}
+/* A reply RELAYED FROM A SESSION is a machine reporting back, not the hub answering. Same tint and
+   the same name the full conversation card gives it — and the name is the one thing the colour
+   cannot say, so it is the only label left anywhere in this box. */
+body.tv.phonehome .ph-convline.sess{background:rgba(63,184,157,.09);border-left:2px solid #3fb89d;
+  border-radius:5px;padding:3px 6px;margin:2px 0}
+body.tv.phonehome .ph-convline.sess .ph-convt{color:#9fe3d3}
+body.tv.phonehome .ph-convk{display:block;margin-bottom:1px;font-size:8px;font-weight:700;
+  letter-spacing:.07em;text-transform:uppercase;color:#3fb89d}
+/* MARKDOWN, at this size. A reply is written in it and was being read as its source: paragraphs run
+   together into one line, `**bold**` and `- ` left standing in the prose. The margins are tight
+   because this box is the tail of a thread, not a document. */
+body.tv.phonehome .ph-convt p{margin:0 0 3px}
+body.tv.phonehome .ph-convt p:last-child{margin-bottom:0}
+body.tv.phonehome .ph-convt ul,body.tv.phonehome .ph-convt ol{margin:0 0 3px;padding-left:13px}
+body.tv.phonehome .ph-convt li{margin:0 0 1px}
+body.tv.phonehome .ph-convt .md-h{font-weight:700;color:#e6eaf0;margin:2px 0 1px}
+body.tv.phonehome .ph-convline.said .ph-convt b{color:#fff}
+body.tv.phonehome .ph-convt code{font:9px/1.3 ui-monospace,SFMono-Regular,Menlo,monospace;
+  background:#0e1318;border-radius:3px;padding:0 3px}
+body.tv.phonehome .ph-convt pre{margin:2px 0;padding:3px 5px;background:#0e1318;border-radius:4px;
+  font:9px/1.35 ui-monospace,SFMono-Regular,Menlo,monospace;white-space:pre-wrap;word-break:break-word}
+body.tv.phonehome .ph-convt a{color:#6ea8ff;text-decoration:underline;text-underline-offset:2px}

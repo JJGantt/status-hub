@@ -176,6 +176,11 @@ body.tv .sectsheet .hcell{width:17px!important;height:17px!important;max-width:n
    sheet at 2000 — inside the sheet it opened invisibly. Above the sheet, below the add-modal (3000).
    Written at the same specificity as the rule that sets the 900, or it loses to it. */
 body.ss-open #bodyinfo,body.touch.ss-open #bodyinfo,body.tv.phonewall.ss-open #bodyinfo{z-index:2100}
+/* The alarm clock on a chip. Full = the phone has it registered; faint = asked for, not yet
+   confirmed. The emoji is drawn a touch smaller than the text around it because a colour glyph at
+   the same nominal size reads bigger than the letters beside it. */
+.cw-al{font-size:.85em;line-height:1;margin-right:2px;flex:none}
+.cw-al.pend{opacity:.35}
 .sectsheet .card h2,.sectsheet #workouts h2{display:none}
 /* NUTRITION: #nutritionlog = heat (top) + full-day totals & food list (scroll) + trend plot (kept, bottom) */
 .sectsheet[data-sec="nut"] #nutritionlog{flex:1 1 auto;min-height:0;display:flex;flex-direction:column;padding:12px 14px;gap:10px}

@@ -130,7 +130,17 @@ private extension AlarmSync {
                 beacon(["at": "schedule-failed", "why": why, "err": String(describing: error)])
             }
         }
-        beacon(["at": "done", "why": why, "want": want.count, "have": have.count, "changed": changed])
+        // WHAT WE ACTUALLY HOLD, back to the hub. An AlarmKit alarm lives here, not there, so without
+        // this the hub can only ever say an item was ASKED to ring — and a surface that draws that as
+        // a promise is lying whenever a schedule failed, the limit was hit, or authorization was
+        // never granted. Read fresh rather than assumed from the loop above: what matters is what the
+        // system says it has, not what we believe we did to it.
+        //
+        // The whole SET, because a cancellation cannot be expressed by a message about one alarm.
+        let held = ((try? manager.alarms) ?? []).compactMap { a in want[a.id]?.id }
+        HubAPI.post("/api/alarms/ack", ["ids": held], done: {})
+        beacon(["at": "done", "why": why, "want": want.count, "have": have.count,
+                "held": held.count, "changed": changed])
         return changed
     }
 

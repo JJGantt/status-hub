@@ -2481,7 +2481,7 @@ app.get('/api/todos', async (req, res) => {
   try {
     const [listNames, items] = await Promise.all([
       sb('lists?select=id,name,emoji&order=name'),
-      sb('list_items?deleted=eq.false&completed_at=is.null&select=id,list_id,list_name,text,title,due,scheduled_at,priority,series_id&order=created.asc'),
+      sb('list_items?deleted=eq.false&completed_at=is.null&select=id,list_id,list_name,text,title,due,scheduled_at,priority,series_id,alarm,alarm_armed_at&order=created.asc'),
     ]);
     const all = items || [];
     // Grouped by `list_id`, and the id is sent on so the composer can post it back. `list_name` is a
@@ -2517,7 +2517,7 @@ function itemTitle(row) {
 app.get('/api/due-widget', async (req, res) => {
   try {
     const [rows, listRows] = await Promise.all([
-      sb('list_items?deleted=eq.false&completed_at=is.null&due=not.is.null&select=id,list_name,text,title,due,scheduled_at,priority,series_id&order=scheduled_at.asc'),
+      sb('list_items?deleted=eq.false&completed_at=is.null&due=not.is.null&select=id,list_name,text,title,due,scheduled_at,priority,series_id,alarm,alarm_armed_at&order=scheduled_at.asc'),
       sb('lists?select=name,emoji'),
     ]);
     const emojiOf = {};
@@ -2531,6 +2531,8 @@ app.get('/api/due-widget', async (req, res) => {
       expired: lateMoment(r.scheduled_at || r.due) <= nowET,
       heat: overdueHeat(r, nowET),
       priority: r.priority || 0,
+      alarm: !!r.alarm,
+      armed: !!r.alarm_armed_at,
       when: r.scheduled_at || r.due,
       repeating: !!r.series_id,
     }));
@@ -2896,7 +2898,7 @@ app.get('/api/calendar', async (req, res) => {
       // The one surface that draws COMPLETED items as well as outstanding ones. Seeing a day fill in
       // with things that got done is half the point of marking them done; every other surface is a
       // list of what is left, and a finished item on it is noise.
-      sb('list_items?deleted=eq.false&due=not.is.null&select=id,list_name,text,title,due,scheduled_at,priority,series_id,completed_at'),
+      sb('list_items?deleted=eq.false&due=not.is.null&select=id,list_name,text,title,due,scheduled_at,priority,series_id,completed_at,alarm,alarm_armed_at'),
     ]);
     const emojiOf = {};
     for (const l of listRows || []) emojiOf[l.name] = l.emoji;
@@ -2925,6 +2927,12 @@ app.get('/api/calendar', async (req, res) => {
       grace: !r.completed_at && (r.priority || 0) >= 0 && chipState(r, nowET) === 'grace',
       expired: !r.completed_at && (r.priority || 0) >= 0 && chipState(r, nowET) === 'expired',
       priority: r.priority || 0,
+      // AN ALARM, and whether the PHONE has said so. Marking an item `alarm` is a request — the alarm
+      // itself lives on the device, so the hub cannot see that it will ring. `armed` is the phone's
+      // own ack (POST /api/alarms/ack); until it lands, the chip shows the clock faintly rather than
+      // claiming something nobody has confirmed.
+      alarm: !!r.alarm,
+      armed: !!r.alarm_armed_at,
       ...scoreFields(r, nowET),
       repeating: !!r.series_id,
     });
@@ -3234,6 +3242,32 @@ app.get('/api/alarms', async (req, res) => {
     // the device. A fetch appearing shortly after a wake is also the whole proof that a BACKGROUND
     // wake can do the work — which is the one thing about this design that is undocumented.
     console.log(`[alarms] fetched by ${req.get('X-Hub-Token') ? 'app' : 'browser'} -> ${alarms.length}`);
+  } catch (e) { res.status(500).json({ error: String(e.message || e) }); }
+});
+
+// WHAT THE PHONE ACTUALLY HOLDS. Posted after every sync (AlarmSync), as the full set of item ids it
+// has registered with AlarmKit right now — the same shape as the feed, because the phone's whole job
+// is to make one equal the other.
+//
+// A SET, not an event, for the same reason the feed is a window: a message saying "I scheduled this
+// one" cannot express a cancellation, and nothing else would ever clear the flag on an item whose
+// alarm the phone dropped. Diffed before writing, so a sync that changed nothing costs no writes and
+// does not wake every open surface through realtime.
+app.post('/api/alarms/ack', express.json(), async (req, res) => {
+  try {
+    const ids = Array.isArray(req.body && req.body.ids) ? req.body.ids.map(String) : [];
+    const have = new Set(ids);
+    const rows = await sb('list_items?deleted=eq.false&alarm=eq.true&select=id,alarm_armed_at');
+    const now = new Date().toISOString();
+    const arm = [], disarm = [];
+    for (const r of rows || []) {
+      if (have.has(r.id) && !r.alarm_armed_at) arm.push(r.id);
+      else if (!have.has(r.id) && r.alarm_armed_at) disarm.push(r.id);
+    }
+    for (const id of arm) await sbWrite(`list_items?id=eq.${encodeURIComponent(id)}`, 'PATCH', { alarm_armed_at: now });
+    for (const id of disarm) await sbWrite(`list_items?id=eq.${encodeURIComponent(id)}`, 'PATCH', { alarm_armed_at: null });
+    if (arm.length || disarm.length) console.log(`[alarms] ack: +${arm.length} -${disarm.length} (phone holds ${ids.length})`);
+    res.json({ ok: true, armed: arm.length, disarmed: disarm.length });
   } catch (e) { res.status(500).json({ error: String(e.message || e) }); }
 });
 
@@ -3856,7 +3890,7 @@ async function dueTick() {
   if (!dueDirty && (!dueNextAt || nowET < dueNextAt)) return;
   let rows;
   // Every list, not just todo — "reminder" is a predicate (has a due), not a place.
-  try { rows = await sb('list_items?deleted=eq.false&completed_at=is.null&due=not.is.null&select=id,list_name,text,title,due,scheduled_at,priority,series_id'); } catch (_) { return; }
+  try { rows = await sb('list_items?deleted=eq.false&completed_at=is.null&due=not.is.null&select=id,list_name,text,title,due,scheduled_at,priority,series_id,alarm'); } catch (_) { return; }
   // Only once the read succeeded: a failed read must leave the state dirty so the next tick retries.
   dueDirty = false;
   dueNextAt = '';
@@ -3876,6 +3910,15 @@ async function dueTick() {
     // old ledger row deleted by hand. Do not shorten this key: see the note in CLAUDE.md.
     const dk = `reminder:${r.id}:${r.due}`;
     try { if ((await sb(`notifications?dedupe_key=eq.${encodeURIComponent(dk)}&select=id&limit=1`)).length) continue; } catch (_) { continue; }
+    // AN ALARM DOES NOT ALSO NOTIFY. The alarm already broke silent mode and a Focus with a
+    // full-screen alert; a banner behind it says the same thing quieter, at the same second.
+    //
+    // The cost is real and is the reason this is a choice rather than an obvious cleanup: the
+    // notification is what carried the Done / 1 Hour / Tomorrow buttons, so an alarm-grade item can
+    // only be acted on from a list. And if the phone never registered the alarm, nothing fires at
+    // all — which is exactly what `armed` on the chip exists to make visible BEFORE the moment
+    // arrives, rather than discovering it by sleeping through something.
+    if (r.alarm) { console.log(`[due] ${r.id} is an alarm — not notifying`); continue; }
     const handler = DUE_HANDLERS.push;
     if (handler === DUE_HANDLERS.push && !apns.configured()) continue;   // nothing to deliver through
     await handler({ ...r, emoji: emojiOf[r.list_name] }, dk);

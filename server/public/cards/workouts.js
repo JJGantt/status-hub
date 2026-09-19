@@ -19,9 +19,11 @@ export function render(s){
  // In the expanded sheet the grid carries its full history in front of the live window; everywhere
  // else it is the window the frame ships. See heathistory.js.
  const H=withHistory(Object.assign({weeks:[],months:[]},s.heatmap,heatPick(s,'heatmap')),'heatmap',hw,s.today);
- // Six steps, one per level from lib/heatmap.js: [0]=a day with no sets, black; then 1-6, 7-12,
- // 13-18, 19-24, 25+ sets.
- const HC=['#000','#0e4429','#006d32','#158c3a','#26a641','#39d353'];
+ // Eight steps, one per level from lib/heatmap.js: [0]=a day with no sets, black; then 1-6, 7-12,
+ // 13-18, 19-24, 25-30, 31-36, 37+ sets. The last two continue the greens at the same hue and
+ // saturation, spaced like the steps before them, and stop short of white: the today outline is
+ // near-white, so a top shade any paler would swallow it.
+ const HC=['#000','#0e4429','#006d32','#158c3a','#26a641','#39d353','#43f461','#8cfc94'];
  const monthRow=(H.months||[]).map(m=>'<div class=hm>'+m+'</div>').join('');
  const grid=(H.weeks||[]).map(col=>'<div class=hcol>'+col.map(d=>{
    const bg=d.level<0?'transparent':HC[d.level];

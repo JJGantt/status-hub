@@ -35,11 +35,21 @@ let builtAt = null, stale = false;
 // interrupt: he has just arrived and has typed nothing.
 //
 // A wall is never hidden, so it reloads at once, which is what a wall wants.
+// A PHONE THAT NEVER GOES HIDDEN is the third case, and it holds the old bundle forever: a screen
+// parked on this page has no visibilitychange coming, and since the page is now also the alarm clock
+// that means a deploy can leave a phone holding code that cannot ring. So idleness is the other
+// moment to take. Interrupting a page nobody has touched for two minutes costs nothing — the
+// deferral above exists only to avoid reloading under someone's hands, not to wait forever.
+const STALE_IDLE_MS = 120000;
 function goStale() {
   if (stale) return;
   stale = true;
   if (KIOSK || document.hidden) return location.reload();
   document.addEventListener('visibilitychange', () => location.reload());
+  let idleT = null;
+  const arm = () => { clearTimeout(idleT); idleT = setTimeout(() => location.reload(), STALE_IDLE_MS); };
+  ['pointerdown', 'keydown', 'touchstart'].forEach((e) => document.addEventListener(e, arm, { passive: true }));
+  arm();
 }
 
 // A widget can't poll — it draws snapshots WidgetKit schedules, so it only learns about new food or

@@ -138,6 +138,11 @@ alarm:
   which is how a change made at 4am reaches an already-open page with no push involved. A second
   EventSource on one phone is a mistake already made here. The two-minute reload behind it is the
   backstop for a socket gone deaf while still looking open.
+- **The ring is bounded** (`RING_MAX_MS`, matched to the server's `ALARM_NAG_MIN`). With STOP as the
+  only way out it rang for 53 minutes into an empty room. The loud layer and the quiet one give up
+  together, because two layers stopping at different times is two behaviours to remember. It also
+  stops when the item leaves the feed, so clearing it anywhere else ends the noise — the feed is the
+  state, and STOP is only one way of changing it.
 
 ## An alarm rings from the phone, and the hub can only ask
 

@@ -17,7 +17,12 @@ const FEED = '/api/due-widget';
 const RELOAD_MS = 120000;     // backstop only; the stream is what makes a 4am change land
 const BEEP_MS = 1400;
 
-let items = [], fireT = null, ringT = null, actx = null, lock = null;
+// HOW LONG IT RINGS. Left unbounded it rang for 53 minutes into an empty room, because STOP was the
+// only thing that ended it. Matched to ALARM_NAG_MIN on the server so the loud layer and the quiet
+// one give up together — two layers that stop at different times is two behaviours to remember.
+const RING_MAX_MS = 10 * 60 * 1000;
+
+let items = [], fireT = null, ringT = null, ringEndT = null, ringing = null, actx = null, lock = null;
 const fired = new Set();
 const keyOf = (it) => `${it.id}:${it.when}`;
 
@@ -67,16 +72,20 @@ function overlay(title, at) {
 function startRing(it) {
   if (ringT) return;
   unlock();
+  ringing = it;
   const d = new Date(it.at);
   const when = `${((d.getHours() + 11) % 12) + 1}:${String(d.getMinutes()).padStart(2, '0')}`;
   overlay(it.title, when).classList.add('on');
   document.body.classList.add('alarming');
   burst();
   ringT = setInterval(burst, BEEP_MS);
+  ringEndT = setTimeout(stopRing, RING_MAX_MS);
   try { if (navigator.vibrate) navigator.vibrate([600, 300, 600, 300, 600]); } catch (_) {}
 }
 function stopRing() {
   clearInterval(ringT); ringT = null;
+  clearTimeout(ringEndT); ringEndT = null;
+  ringing = null;
   document.body.classList.remove('alarming');
   const el = document.getElementById('alarmfire');
   if (el) el.remove();
@@ -107,6 +116,10 @@ async function load() {
   try {
     const d = await (await fetch(FEED, { cache: 'no-store' })).json();
     items = (d.items || []).filter((x) => x.alarm && x.when);
+    // DEALT WITH ELSEWHERE IS STILL DEALT WITH. Clearing the item on the watch or another phone drops
+    // it from this feed, and a page still beeping about something already handled is noise nobody can
+    // trace back to a cause. The feed is the state; STOP is only one way of changing it.
+    if (ringing && !items.some((x) => x.id === ringing.id)) return stopRing();
     schedule();
   } catch (_) { /* keep the schedule already held rather than losing it to a blip */ }
 }

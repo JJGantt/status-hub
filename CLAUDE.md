@@ -107,6 +107,31 @@ the existing `StatusHubControls` bundle (the `WidgetBundle` at the bottom of
 `apps/Controls/RecordControl.swift`); a widget and its button intents share `UserDefaults.standard`,
 since they are one process already.
 
+## `/alarm` — a page that rings itself
+
+`server/public/alarm.html`, served at `/alarm`. A phone left on it is the alarm clock: it holds a
+LOCAL timer to the next `alarm`-marked item from `/api/due-widget` and beeps through Web Audio when
+it arrives, so nothing has to be delivered at the moment itself.
+
+It exists because both halves of the device path were measured failing silently on the same night —
+AlarmKit acked an alarm it never presented, and four silent pushes carrying a new alarm to a sleeping
+phone were refused. This has neither dependency.
+
+Three things are load-bearing rather than decoration, and each is a way it can quietly stop being an
+alarm:
+
+- **TEST arms it.** iOS will not let a page make noise until a gesture has authorised the
+  `AudioContext`. Untapped, the page looks fine and is silent at the moment it matters, which is why
+  the state is on screen (`SOUND READY` / `SOUND OFF`) rather than assumed.
+- **The wake lock is the mechanism.** Timers in a locked phone do not run on any schedule worth
+  betting a morning on. iOS drops the lock on every visibility change, so it is re-taken on
+  `visibilitychange`, not taken once.
+- **The timer re-arms in steps.** `setTimeout` is capped and drifts across hours, so only the final
+  short hop is the real one.
+
+The `EventSource` is how a change made at 4am reaches an already-open page — no push, no APNs. The
+two-minute reload behind it is a backstop for a socket gone deaf while still looking open.
+
 ## An alarm rings from the phone, and the hub can only ask
 
 `list_items.alarm` marks a dated item alarm-grade: iOS 26's AlarmKit rings it through silent mode and
@@ -198,15 +223,22 @@ difference is COLOUR, not opacity — a colour emoji stays legible as itself at 
 states have to differ in hue to be told apart. One glyph either way, so there is no second symbol to
 learn, and the grey one is a warning readable before the moment rather than after sleeping through it.
 
-**An alarm notifies only if the phone never confirmed it.** `dueTick` skips the push when
-`r.alarm && r.alarm_armed_at`: the full-screen alert has already broken silent mode and Focus, and a
-banner behind it repeats it quieter at the same second. The consequence to know: the notification is
-what carries the Done / 1 Hour / Tomorrow buttons, so an alarm-grade item that rings is actionable
-only from a list.
+**THE ACK DOES NOT MEAN IT WILL RING.** `alarm_armed_at` records the phone saying it holds an alarm,
+and an alarm registered, acked (`held:2`) and left untouched was measured going off in complete
+silence. AlarmKit confirms holding an alarm it then does not present. So the ack establishes that the
+phone accepted the alarm and nothing more, and anything that treats it as a promise is wrong.
 
-An item still unconfirmed when its moment arrives DOES notify, because otherwise nothing fires at
-all — a wake iOS threw away is silent and permanent, and the mark alone never made anything ring. A
-redundant banner costs a buzz; a missing one costs the morning, so the unconfirmed case notifies.
+**So `dueTick` always notifies, alarm or not.** It used to skip the push for an armed item on the
+reasoning that a full-screen alert had already broken silent mode and a banner only repeats it
+quieter. That trade only holds if the alert happens, and it does not — the skip converted a failed
+alarm into no alarm at all. A redundant notification costs a buzz; a suppressed one costs the
+morning. The cost of always sending is that the Done / 1 Hour / Tomorrow buttons now ride on every
+dated item, which is the right way round.
+
+**`/alarm` is what actually makes noise.** A phone left on that page rings from its own timer and its
+own speaker, so it depends on neither thing measured to fail here: not AlarmKit's presentation, and
+not the silent push that carries a new alarm to a sleeping phone. `dueTick`'s notification is the
+layer underneath it, not the mechanism.
 
 **And it keeps asking**, once a minute for `ALARM_NAG_MIN`. One banner is right for a reminder,
 which is something to notice; an alarm is something being slept through, and a single banner at the

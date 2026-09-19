@@ -232,6 +232,7 @@ const MIC_HTML = fs.readFileSync(path.join(__dirname, 'public', 'mic.html'), 'ut
 // tappable days. /tv-calendar is THE CALENDAR WALL: the shared frame (status strip, rings, health
 // bar, footer, voice column) with the freed middle holding a day timeline + month grid(s), so
 // wallmode.js can put it on the TV when wall_mode says 'calendar'.
+const ALARM_HTML = fs.readFileSync(path.join(__dirname, 'public', 'alarm.html'), 'utf8');
 const CAL_HTML = fs.readFileSync(path.join(__dirname, 'public', 'calendar.html'), 'utf8');
 const TV_CAL_HTML = fs.readFileSync(path.join(__dirname, 'public', 'tv-calendar.html'), 'utf8');
 
@@ -1182,6 +1183,15 @@ app.get('/page', (req, res) => {
 app.get('/mic', (req, res) => {
   res.setHeader('Cache-Control', 'no-cache');
   res.type('html').send(MIC_HTML);
+});
+// A phone left on this page IS the alarm clock. It rings from its own timer and its own speaker, so
+// it depends on neither of the two things measured to fail here: AlarmKit acks an alarm it then does
+// not present, and the silent push that carries a new alarm to a sleeping phone is refused. Its own
+// page rather than a corner of the hub, because the job is to be left running untouched for eight
+// hours and nothing else on the hub wants that.
+app.get('/alarm', (req, res) => {
+  res.setHeader('Cache-Control', 'no-cache');
+  res.type('html').send(ALARM_HTML);
 });
 // Two pages on purpose: wallmode.js switches only kiosk paths, so a spoken "put the calendar on
 // the TV" moves /tv-calendar and never yanks a phone sitting on /calendar.
@@ -3996,19 +4006,16 @@ async function dueTick() {
     // to fire again at its new moment. Including the due gets that for free instead of needing the
     // old ledger row deleted by hand. Do not shorten this key: see the note in CLAUDE.md.
     const dk = `reminder:${r.id}:${r.due}`;
-    // AN ALARM THE PHONE HOLDS DOES NOT ALSO NOTIFY. It already broke silent mode and a Focus with a
-    // full-screen alert; a banner behind it says the same thing quieter, at the same second. The cost
-    // is real: the notification is what carries the Done / 1 Hour / Tomorrow buttons, so an item that
-    // rings can only be acted on from a list.
+    // AN ALARM NOTIFIES TOO, always. This used to skip the push whenever `alarm_armed_at` was set,
+    // on the reasoning that a full-screen alert had already broken silent mode and a banner behind it
+    // only repeats it quieter. The premise is false: an alarm registered, acked (`held:2`) and left
+    // untouched was measured going off in complete silence — AlarmKit confirms holding an alarm it
+    // then does not present, so the ack says the phone accepted it, never that it will ring.
     //
-    // AN ALARM THE PHONE NEVER TOOK STILL NOTIFIES, because otherwise nothing fires at all. Marking
-    // an item `alarm` is only a REQUEST; `alarm_armed_at` is the phone confirming it holds it (POST
-    // /api/alarms/ack). Absent that confirmation the silent wake carrying the alarm to the device was
-    // most likely thrown away — iOS throttles background pushes, and a second one a quarter of an
-    // hour behind the first is dropped outright — so the quieter banner is the only thing left
-    // between him and sleeping through it. A banner that is redundant costs a buzz; a missing one
-    // costs the whole morning, so the unconfirmed case notifies.
-    if (r.alarm && r.alarm_armed_at) { console.log(`[due] ${r.id} is an alarm the phone holds — not notifying`); continue; }
+    // That makes the ack the one thing this must not trust, because acting on it turns a failed
+    // alarm into no alarm at all rather than into a banner. A redundant notification costs a buzz; a
+    // suppressed one costs the morning. `/alarm` left open is what actually makes noise now, and
+    // this is the layer under it.
     // AND IT KEEPS ASKING. The key carries the minute, so the minute tick sends one a minute until
     // the item is completed (which takes it out of this query) or the phone arms it after all (which
     // takes the branch above). Derived from how late it is rather than counted anywhere, so there is

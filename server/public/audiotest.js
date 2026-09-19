@@ -56,10 +56,10 @@ const TESTS = [
   // The alarm's own path, untouched. If this is silent and the file below is not, the fault is Web
   // Audio specifically rather than the app's output.
   ['OSC', () => osc('OSC', { native: false })],
-  // A plain media element. Different pipeline, same speaker — separates "this API is blocked" from
-  // "nothing this app plays is audible".
+  // A plain media element — the path Guided Access allows, and now the alarm's primary. Plays the
+  // real tone so what is heard here is what will be heard at 7am.
   ['FILE', () => {
-    const a = new Audio('/pop.m4a');
+    const a = new Audio('/alarm.m4a');   // the real alarm tone, not the UI blip
     a.play().then(() => done('FILE', { played: true }))
       .catch((e) => done('FILE', { played: false, error: String(e.name || e) }));
   }],

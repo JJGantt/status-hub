@@ -17,20 +17,42 @@ const FEED = '/api/due-widget';
 const RELOAD_MS = 120000;     // backstop only; the stream is what makes a 4am change land
 const BEEP_MS = 1400;
 
+// THE MEDIA ELEMENT IS THE PATH THAT SURVIVES GUIDED ACCESS, and that is the whole reason the sound
+// is a file rather than synthesised. Measured on the device: inside a Guided Access session an
+// <audio> element plays and Web Audio is silent — an alarm built on oscillators flashed on screen,
+// reported `running`, scheduled its beeps and made no noise at all. Web Audio stays as the fallback
+// for a context where the file will not play, not as the first choice.
+//
+// `alarm.m4a` is a 2s two-tone pattern built to loop seamlessly (see the generator in the commit).
+// A pure tone is easy to sleep through, so it carries odd harmonics and alternates pitch.
+const SOUND = '/alarm.m4a';
+
 // HOW LONG IT RINGS. Left unbounded it rang for 53 minutes into an empty room, because STOP was the
 // only thing that ended it. Matched to ALARM_NAG_MIN on the server so the loud layer and the quiet
 // one give up together — two layers that stop at different times is two behaviours to remember.
 const RING_MAX_MS = 10 * 60 * 1000;
 
-let items = [], fireT = null, ringT = null, ringEndT = null, ringing = null, actx = null, lock = null;
+let items = [], fireT = null, ringT = null, ringEndT = null, ringing = null, actx = null, lock = null, media = null;
+
+// Built once and kept, so the bytes are already on the device when it matters rather than being
+// fetched at the moment the alarm is due.
+function sound() {
+  if (!media) {
+    media = new Audio(SOUND);
+    media.loop = true;
+    media.preload = 'auto';
+    try { media.load(); } catch (_) {}
+  }
+  return media;
+}
 const fired = new Set();
 const keyOf = (it) => `${it.id}:${it.when}`;
 
-// ---- sound ------------------------------------------------------------------------------------
-// Web Audio, not an <audio> file: nothing to fetch at 4am and the gain is ours. iOS will not let a
-// page make noise until a gesture has authorised the AudioContext, so the context is built on the
-// first touch this page receives and kept for the night. Without that the page looks fine and is
-// silent at the only moment it matters.
+// ---- sound: the FALLBACK path ------------------------------------------------------------------
+// Web Audio is second choice now, not first — a Guided Access session plays a media element and
+// silences this. It stays because it needs no file and no network, which is the right property for
+// whatever context refuses the element. iOS will not let it make noise until a gesture has
+// authorised the context, so it is built on the first touch the page receives and kept.
 function unlock() {
   try {
     if (!actx) actx = new (window.AudioContext || window.webkitAudioContext)();
@@ -78,22 +100,43 @@ function overlay(title, at) {
   document.body.appendChild(el);
   return el;
 }
+// The file first, oscillators only if it refuses. Both are attempted rather than one chosen up
+// front, because the thing that decides which works is the session the phone is in, which the page
+// cannot see from inside.
+function makeNoise() {
+  const a = sound();
+  try { a.currentTime = 0; } catch (_) {}
+  a.play().then(() => {
+    beaconSound({ path: 'media', ok: true });
+  }).catch((e) => {
+    beaconSound({ path: 'media', ok: false, error: String(e.name || e) });
+    unlock();
+    burst();
+    if (!ringT) ringT = setInterval(burst, BEEP_MS);
+  });
+}
+function beaconSound(f) {
+  try {
+    navigator.sendBeacon('/api/clientlog',
+      new Blob([JSON.stringify({ ev: 'alarmclock', ...f })], { type: 'application/json' }));
+  } catch (_) {}
+}
+
 function startRing(it) {
-  if (ringT) return;
-  nativeAudio(true);   // BEFORE unlock(): the session has to be ours before the context makes noise
-  unlock();
+  if (ringing) return;
+  nativeAudio(true);   // BEFORE any playback: the session has to be ours before the sound starts
   ringing = it;
   const d = new Date(it.at);
   const when = `${((d.getHours() + 11) % 12) + 1}:${String(d.getMinutes()).padStart(2, '0')}`;
   overlay(it.title, when).classList.add('on');
   document.body.classList.add('alarming');
-  burst();
-  ringT = setInterval(burst, BEEP_MS);
+  makeNoise();
   ringEndT = setTimeout(stopRing, RING_MAX_MS);
   try { if (navigator.vibrate) navigator.vibrate([600, 300, 600, 300, 600]); } catch (_) {}
 }
 function stopRing() {
   clearInterval(ringT); ringT = null;
+  try { if (media) { media.pause(); media.currentTime = 0; } } catch (_) {}
   nativeAudio(false);   // give the microphone back; .playback cannot record
   clearTimeout(ringEndT); ringEndT = null;
   ringing = null;
@@ -157,6 +200,9 @@ function beacon() {
   const body = {
     ev: 'alarmclock',
     audio: actx ? actx.state : 'none',
+    // What the element can actually do. readyState >= 2 means the bytes are on the device, which is
+    // the half of "will it ring" that the AudioContext state never covered.
+    media: media ? media.readyState : null,
     lock: !!lock,
     visible: document.visibilityState === 'visible',
     next: n ? new Date(n.at).toISOString() : null,

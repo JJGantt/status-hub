@@ -129,13 +129,18 @@ alarm:
   authorised the `AudioContext`, so it is built on the first `pointerdown`/`touchstart`/`keydown`
   the page receives. No button to press: a page that needs arming and does not say so fails exactly
   once, at 4am.
-- **A RUNNING AUDIOCONTEXT IS NOT AUDIBLE SOUND.** An alarm has been seen flashing on screen with
-  `actx.state === 'running'`, oscillators scheduled, and nothing coming out of the phone. WKWebView
-  audio plays under the app's audio session, and the app set none — so it ran ambient, which the
-  ring/silent switch silences. `nativeAudio()` asks the native side for a `.playback` session for
-  the duration of the ring (`alarmAudio` in `StatusHubApp.swift`), and gives it back on stop because
-  `.playback` cannot record and the voice features need the microphone. In a plain browser there is
-  no session to claim and it no-ops, so a browser tab is still silenceable.
+- **GUIDED ACCESS SILENCES WEB AUDIO AND ALLOWS A MEDIA ELEMENT.** Measured on the device with the
+  ringer on: inside a session `<audio>` plays and an oscillator makes no sound at all. That is why
+  the alarm is a FILE (`alarm.m4a`, a 2s two-tone loop) and not synthesised — an alarm built on
+  oscillators flashed on screen, reported `running`, scheduled its beeps and was silent through the
+  whole morning. Web Audio stays only as the fallback when the element refuses to play.
+- **A RUNNING AUDIOCONTEXT IS NOT AUDIBLE SOUND**, which is what made that failure invisible: every
+  signal the page could see said it was working. `media.readyState` now rides in the beacon next to
+  the context state, because the element having its bytes is the half that actually predicts noise.
+- **`nativeAudio()`** asks the native side for a `.playback` session for the duration of the ring
+  (`alarmAudio` in `StatusHubApp.swift`) and gives it back on stop, because `.playback` cannot record
+  and the voice features need the microphone. That covers the mute switch, which is a different
+  failure from the Guided Access one. In a plain browser there is no session to claim and it no-ops.
 - **The wake lock is the mechanism, not a nicety.** A locked phone does not run timers on any
   schedule worth betting a morning on. iOS drops the lock on every visibility change, so it is
   re-taken on `visibilitychange` rather than taken once.

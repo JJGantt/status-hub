@@ -149,12 +149,16 @@ The scoring itself is built and live (`lib/score.js`, data-layer `00085`-`00087`
 ### AlarmKit — what is still open
 The alarm path is built and in use; how it works is in this repo's `CLAUDE.md`. What remains:
 
-1. **Prove the background wake on the device.** `didReceiveRemoteNotification` fires whether the app
-   is suspended or on screen, so "it ran from a push" does not establish that the phone was asleep.
-   The trigger now carries the application state (`push:background` / `push:active`) in the
-   `alarm-sync` beacon, so the next wake while the phone is idle answers it. If schedules do not
-   succeed from a suspended app, the design still holds — the foreground sync is the guarantee — but
-   the push stops being worth sending.
+1. **Prove the background wake on the device.** Still open, and the obstacle sits one step earlier
+   than this item assumed: DELIVERY, not scheduling. `didReceiveRemoteNotification` fires whether the
+   app is suspended or on screen, so the trigger carries the application state
+   (`push:background` / `push:active`) in the `alarm-sync` beacon to tell the two apart. Neither has
+   been seen from a sleeping phone yet, because the phone never ran at all — across a burst of five
+   pushes (2026-09-19, 23:42 to 00:18) only the first produced a run, and the rest were refused with
+   no beacon and no feed fetch behind them. A clean sample needs ONE push after hours of quiet rather
+   than one behind a burst that has already spent the budget, so the measurement to make is a single
+   overnight wake. Until it exists, assume a wake reaches a sleeping phone rarely — which is what
+   `dueTick`'s notification for an unconfirmed alarm is there to cover.
 2. **Find the per-app cap on scheduled alarms.** `AlarmError.maximumLimitReached` is handled (stop,
    keeping the soonest), and it beacons — but the number decides whether a 7-day window is right.
 3. **A tap on the alert goes nowhere.** `HubAlarmMetadata` carries the item id so it can open that

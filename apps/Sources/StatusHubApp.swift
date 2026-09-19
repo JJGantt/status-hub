@@ -8,6 +8,28 @@ import WidgetKit              // reloadAllTimelines — a placed widget caches i
 import AppKit
 #endif
 
+#if os(iOS)
+// HOLDING THE SCREEN AWAKE while the app is in front.
+//
+// This is for the ALARM path, not for reading the wall. A new alarm only reaches the device over a
+// push, and iOS rations the background kind hard — measured here, a phone refused four in a row
+// overnight while alert pushes to the same device in the same minutes arrived, and a passive alert
+// carrying `content-available` did not wake it either. A push to an ACTIVE app is not rationed at
+// all: the same phone fetched and acked one second after a nudge with the app on screen. So an alarm
+// decided at 4am registers immediately if the app is still in front, and not at all if the screen
+// has locked behind it. Auto-Lock is what decides which of those happens, so the app takes it over
+// rather than leaving the alarm to a Settings toggle nobody will remember to set.
+//
+// iOS restores the idle timer itself when the app leaves the foreground, so passing false is belt
+// and braces — but it is what stops a backgrounded StatusHub holding the screen open over whatever
+// the user switched to.
+enum StayAwake {
+    static func apply(_ on: Bool) {
+        UIApplication.shared.isIdleTimerDisabled = on
+    }
+}
+#endif
+
 @main
 struct StatusHubApp: App {
     #if os(iOS)
@@ -65,10 +87,14 @@ struct StatusHubApp: App {
                 // permission prompt can only be raised with someone looking at it, and the silent
                 // push behind it is best-effort. Opening the app is the one guaranteed moment.
                 .onChange(of: scenePhase) { _, phase in
+                    StayAwake.apply(phase == .active)
                     guard phase == .active else { return }
                     AlarmSync.sync(why: "scenePhase", mayPrompt: true)
                 }
-                .task { AlarmSync.sync(why: "launch", mayPrompt: true) }
+                .task {
+                    StayAwake.apply(true)
+                    AlarmSync.sync(why: "launch", mayPrompt: true)
+                }
             #endif
             #if os(macOS)
                 // Landscape: the Mac app renders the wall (?mode=mac) — the TV dashboard + a docked chat

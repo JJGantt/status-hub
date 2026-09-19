@@ -110,7 +110,7 @@ since they are one process already.
 ## The hub page IS the alarm clock
 
 `public/alarmclock.js`, imported by `pages/phone-home.js` and `pages/index.js`. It holds a LOCAL
-timer to the next `alarm`-marked item from `/api/due-widget` and beeps through Web Audio when it
+timer to the next `alarm`-marked item from `/api/due-widget` and plays `alarm.m4a` on a loop when it
 arrives, so nothing has to be delivered at the moment itself.
 
 It exists because both halves of the device path were measured failing silently on the same night —

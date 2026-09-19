@@ -138,6 +138,15 @@ sits idle overnight: that is both when the wake is most likely to be dropped and
 follows to pick the phone up, and two pushes a quarter of an hour apart is already enough for the
 second to be refused outright.
 
+**The last attempt changes CHANNEL, not just timing** (`escalateWake`). A background push and an
+alert push are delivered on different terms and only the first is rationed — a phone here refused
+four background pushes while alert pushes to the same device in the same minutes arrived — so once
+the silent wakes have been refused, another one of the same is the least useful thing to send. The
+escalation goes out as an alert carrying `content-available` (`wake: true` in `apns.js`) at
+`interruption-level: passive`, which buys the reliable delivery class without lighting the screen or
+making a sound. That combination is the whole point: a 4am wake to register an alarm has to cost a
+silent line in Notification Centre, not a wake-up three hours early.
+
 **The sync runs from `scenePhase`, not from the app delegate.** This app is a SwiftUI `WindowGroup`,
 so it is scene-based, and UIKit does not promise to call `applicationDidBecomeActive` in a scene-based
 app. `AlarmSync.sync(why:)` is called from `.onChange(of: scenePhase)` and `.task` in
@@ -198,6 +207,15 @@ only from a list.
 An item still unconfirmed when its moment arrives DOES notify, because otherwise nothing fires at
 all — a wake iOS threw away is silent and permanent, and the mark alone never made anything ring. A
 redundant banner costs a buzz; a missing one costs the morning, so the unconfirmed case notifies.
+
+**And it keeps asking**, once a minute for `ALARM_NAG_MIN`. One banner is right for a reminder,
+which is something to notice; an alarm is something being slept through, and a single banner at the
+moment is the one shape guaranteed not to work for that. The dedupe key carries the minute
+(`…:r<n>`), derived from how late the item is rather than counted anywhere, so nothing drifts and a
+restart resumes at the right number. Completing the item is the real stop condition — it leaves
+`dueTick`'s query — and the phone arming it late stops it too, by taking the branch above. The nag
+also has to hold the tick open (`dueNextAt`), because the tick otherwise sleeps to the next FUTURE
+due and an already-overdue row never sets one.
 
 ## Widget drawing files stay WidgetKit-free
 

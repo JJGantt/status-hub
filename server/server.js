@@ -3890,6 +3890,17 @@ function dueMoment(due) {
   return /T\d/.test(d) ? d : d.slice(0, 10) + 'T09:00:00';
 }
 
+// Two local-naive stamps as milliseconds, so one can be subtracted from the other. Both are read in
+// the same zone, so treating them as UTC cancels out — this converts nothing, it only subtracts.
+const naiveMs = (s) => Date.parse(String(s).slice(0, 19) + 'Z');
+
+// How long an alarm the phone never confirmed keeps asking. A reminder is one banner because it is
+// something to notice; an alarm is something being slept through, and a single banner at the moment
+// is the one shape guaranteed not to work for that. It stops the instant the item is completed —
+// that is the real stop condition — and this only bounds how long it tries, because a banner nobody
+// has answered in ten minutes is not going to be answered by an eleventh.
+const ALARM_NAG_MIN = 10;
+
 // When a dated item stops being on time: the SCORING deadline, as a local-naive stamp. A timed item is
 // late at its own moment; a date-only one is on time for its whole day and late at the next day's 4am
 // origin. Everything that calls an item overdue reads this — chip colour and dimming, the badge, the
@@ -3985,7 +3996,6 @@ async function dueTick() {
     // to fire again at its new moment. Including the due gets that for free instead of needing the
     // old ledger row deleted by hand. Do not shorten this key: see the note in CLAUDE.md.
     const dk = `reminder:${r.id}:${r.due}`;
-    try { if ((await sb(`notifications?dedupe_key=eq.${encodeURIComponent(dk)}&select=id&limit=1`)).length) continue; } catch (_) { continue; }
     // AN ALARM THE PHONE HOLDS DOES NOT ALSO NOTIFY. It already broke silent mode and a Focus with a
     // full-screen alert; a banner behind it says the same thing quieter, at the same second. The cost
     // is real: the notification is what carries the Done / 1 Hour / Tomorrow buttons, so an item that
@@ -3999,10 +4009,25 @@ async function dueTick() {
     // between him and sleeping through it. A banner that is redundant costs a buzz; a missing one
     // costs the whole morning, so the unconfirmed case notifies.
     if (r.alarm && r.alarm_armed_at) { console.log(`[due] ${r.id} is an alarm the phone holds — not notifying`); continue; }
-    if (r.alarm) console.log(`[due] ${r.id} is an alarm the phone never confirmed — notifying instead`);
+    // AND IT KEEPS ASKING. The key carries the minute, so the minute tick sends one a minute until
+    // the item is completed (which takes it out of this query) or the phone arms it after all (which
+    // takes the branch above). Derived from how late it is rather than counted anywhere, so there is
+    // no state to drift and a restart resumes at the right number instead of starting over.
+    let key = dk;
+    if (r.alarm) {
+      const late = Math.floor((naiveMs(nowET) - naiveMs(dueMoment(r.due))) / 60000);
+      if (late >= ALARM_NAG_MIN) continue;
+      if (late > 0) key = `${dk}:r${late}`;
+      // Hold the tick open. It otherwise sleeps to the next FUTURE due, and a nag is the one thing
+      // that needs it back in a minute with nothing scheduled to bring it — an already-overdue row
+      // never sets the wake, so without this the second banner never goes out.
+      dueNextAt = earlierOf(dueNextAt, plusMinutes(nowET, 1));
+      console.log(`[due] ${r.id} is an alarm the phone never confirmed — notifying (${late + 1}/${ALARM_NAG_MIN})`);
+    }
+    try { if ((await sb(`notifications?dedupe_key=eq.${encodeURIComponent(key)}&select=id&limit=1`)).length) continue; } catch (_) { continue; }
     const handler = DUE_HANDLERS.push;
     if (handler === DUE_HANDLERS.push && !apns.configured()) continue;   // nothing to deliver through
-    await handler({ ...r, emoji: emojiOf[r.list_name] }, dk);
+    await handler({ ...r, emoji: emojiOf[r.list_name] }, key);
     console.log(`[due] fired ${r.id} [${r.list_name}] "${String(r.title || r.text).slice(0, 40)}"`);
     // Nothing to re-arm. Every occurrence of a recurring thing is its own row with its own due
     // (data-layer migration 00085), so each one fires once and then stays put — which is also what
@@ -4136,12 +4161,29 @@ async function unarmedAlarms() {
   let rows = [];
   try {
     rows = await sb('list_items?deleted=eq.false&completed_at=is.null&alarm=eq.true'
-      + '&due=not.is.null&select=id,due,alarm_armed_at');
+      + '&due=not.is.null&select=id,list_name,text,title,due,alarm_armed_at');
   } catch (_) { return []; }
   return (rows || []).filter((r) => {
     const at = dueMoment(r.due);
     return at >= now && at <= until && !r.alarm_armed_at;
   });
+}
+
+// THE LAST ATTEMPT CHANGES CHANNEL rather than repeating a refused one. A background push and an
+// alert push are delivered on different terms and only the first is rationed, so once the silent
+// wakes have been refused the useful move is the other channel, not another one of the same.
+// `passive` is what makes that affordable: the push goes out in the reliable class but does not light
+// the screen or make a sound, so a 4am wake to register an alarm costs a silent line in Notification
+// Centre instead of waking him three hours early. `content-available` rides alongside the alert so
+// the app still gets its background run. The title is the item's own, since this is visible.
+async function escalateWake(pending) {
+  let tokens = [];
+  try { tokens = await sb('device_tokens?platform=eq.ios&select=token,environment'); } catch (_) { return 0; }
+  const title = itemTitle(pending[0]) || 'Alarm';
+  for (const { token, environment } of tokens) {
+    await apns.send(token, { environment, title, interruptionLevel: 'passive', wake: true, payload: { alarms: 1 } });
+  }
+  return tokens.length;
 }
 
 // RETRY UNTIL THE PHONE SAYS IT HAS THEM — the stop condition is the ack, not a count of attempts.
@@ -4153,8 +4195,10 @@ function retryUnarmed(step) {
   alarmRetryT = setTimeout(async () => {
     const pending = await unarmedAlarms();
     if (!pending.length) return console.log('[alarms] every alarm in the window is armed');
-    const n = await pushNudge();
-    console.log(`[alarms] ${pending.length} unarmed, re-woke ${n} device(s) (try ${step + 1}/${ALARM_RETRY_MS.length})`);
+    const last = step === ALARM_RETRY_MS.length - 1;
+    const n = last ? await escalateWake(pending) : await pushNudge();
+    console.log(`[alarms] ${pending.length} unarmed, ${last ? 'escalated to a visible wake on' : 're-woke'} ${n} device(s)`
+      + ` (try ${step + 1}/${ALARM_RETRY_MS.length})`);
     retryUnarmed(step + 1);
   }, ALARM_RETRY_MS[step]);
 }

@@ -3277,17 +3277,20 @@ app.post('/api/todos/alarm', express.json(), async (req, res) => {
 // here (server computes, clients render), and a phone that has travelled must not resolve 4pm
 // against wherever it happens to be.
 const ALARM_WINDOW_DAYS = 7;
-// ALARMKIT IS RETIRED, and this is the switch. An alarm was registered, acked by the phone
-// (`held:2`) and left untouched, and its moment passed in complete silence — AlarmKit confirms
-// holding an alarm it then does not present, so nothing it reports can be trusted and an armed chip
-// was drawing a promise it could not keep.
+// ALARMKIT IS FOR ALARMS JARED SETS HIMSELF. It was briefly switched off here after an alarm it had
+// acked (`held:2`) passed in silence — but that test ran inside a Guided Access session, which is
+// now known to silence audio paths (it mutes Web Audio while letting a media element through), so it
+// never established that AlarmKit is broken. Switching it off on that evidence was wrong.
 //
-// Serving an EMPTY feed rather than deleting the path, because the feed is a WINDOW and the phone
-// makes itself match it: empty means the device cancels every alarm it holds, which is how the ones
-// already registered get taken back. Deleting the endpoint would strand them on the device forever.
-// `list_items.alarm` keeps its meaning — it marks what should ring — and `alarmclock.js` is what
-// reads it now. Flip this to true to put the device path back.
-const ALARMKIT_ENABLED = false;
+// What IS established is narrower and unaffected by it: a CHANGE cannot reach a sleeping phone,
+// because the silent push carrying it is rationed and refused. That is why `alarmclock.js` exists
+// and why it is not a backup — see docs/ALARMS.md. AlarmKit keeps the ordinary case, where he is
+// holding the phone and the app registers the alarm in under a second.
+//
+// Kept as a switch rather than deleted code: the feed is a WINDOW the phone makes itself match, so
+// serving it empty is how alarms already on the device get cancelled. Deleting the route would
+// strand them there instead.
+const ALARMKIT_ENABLED = true;
 app.get('/api/alarms', async (req, res) => {
   try {
     if (!ALARMKIT_ENABLED) {

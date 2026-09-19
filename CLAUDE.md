@@ -107,6 +107,13 @@ the existing `StatusHubControls` bundle (the `WidgetBundle` at the bottom of
 `apps/Controls/RecordControl.swift`); a widget and its button intents share `UserDefaults.standard`,
 since they are one process already.
 
+## Alarms: two paths, and Guided Access is the lock
+
+`docs/ALARMS.md` is the whole picture — which path covers which case, why neither covers both, and
+the surf scenario end to end. The one thing to carry into any change here: **the programmatic path
+requires the app open in Guided Access**, because that is Jared's lock, not an optional extra. So
+anything Guided Access suppresses is unusable for it — which is Web Audio, and possibly AlarmKit.
+
 ## The hub page IS the alarm clock
 
 `public/alarmclock.js`, imported by `pages/phone-home.js` and `pages/index.js`. It holds a LOCAL

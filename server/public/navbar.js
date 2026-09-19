@@ -26,8 +26,12 @@ const CAL = '<svg viewBox="0 0 24 24" width="21" height="21" fill="none" stroke=
 // Broadcast rather than called: whoever owns a scroll position listens, and nothing here has to know
 // what those are or import them.
 // Bars rising and falling — a mic that is listening rather than one you hold down.
+// Five separate lines rather than one path: each bar has to move on its own for the level-meter
+// animation, and a single path can only be animated as a whole.
 const EAR = '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">' +
-  '<path d="M4 10v4M8 6v12M12 3v18M16 6v12M20 10v4"></path></svg>';
+  '<line x1="4" y1="9" x2="4" y2="15"></line><line x1="8" y1="5" x2="8" y2="19"></line>' +
+  '<line x1="12" y1="3" x2="12" y2="21"></line><line x1="16" y1="5" x2="16" y2="19"></line>' +
+  '<line x1="20" y1="9" x2="20" y2="15"></line></svg>';
 const RESET = '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
   '<path d="M3 12a9 9 0 1 0 3-6.7"></path><polyline points="3 4 3 10 9 10"></polyline></svg>';
 
@@ -187,8 +191,15 @@ export function mountNavbar() {
     const ear = document.createElement('button');
     ear.className = 'wfab wfab-listen'; ear.type = 'button'; ear.setAttribute('aria-label', 'Always-on listening');
     ear.innerHTML = EAR;
+    // Three states in one button, because nothing else on screen says any of it: engaged and waiting,
+    // hearing him right now, and sending what it heard. `on` stays set through all of them — it is
+    // what says the microphone is still open at all.
     const lis = makeListener({ onStatus,
-      onState: (st) => { ear.classList.toggle('on', st === 'listening'); } });
+      onState: (st) => {
+        ear.classList.toggle('on', st !== 'idle');
+        ear.classList.toggle('hearing', st === 'hearing');
+        ear.classList.toggle('sending', st === 'sending');
+      } });
     bindTap(ear, () => lis.toggle());
     // Leaving the page cannot leave a microphone open behind it.
     window.addEventListener('pagehide', () => lis.disengage());

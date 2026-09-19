@@ -1332,8 +1332,9 @@ body.tv.phonewall .pane-todo .daycardwrap{padding:12px 14px 14px;flex:0 0 auto}
 /* Sized like the camera beside it, and POSITIONED so the ring below anchors to the button rather
    than to the navbar — .wfab carries no position of its own. */
 .navbar .wfab-listen { width: 46px; height: 46px; position: relative; }
-/* On: it has to be obvious at a glance that the microphone is still open. Nothing else on the screen
-   says so, and forgetting is how a phone ends up listening to a room all afternoon. */
+/* THREE STATES, ALL IN THE BUTTON. Nothing else on screen says any of this, and the difference that
+   matters most is "still open" vs "off" — so `on` holds through all three and only the manner
+   changes. Bars at rest, bars moving while he talks, a turning ring while the clip goes up. */
 .navbar .wfab-listen.on { color: #ff453a; border-color: #ff453a; }
 .navbar .wfab-listen.on::after {
   content: ''; position: absolute; inset: -3px;
@@ -1341,5 +1342,30 @@ body.tv.phonewall .pane-todo .daycardwrap{padding:12px 14px 14px;flex:0 0 auto}
   animation: listenpulse 1.6s ease-in-out infinite;
 }
 @keyframes listenpulse { 0%, 100% { opacity: .9; transform: scale(1); } 50% { opacity: .25; transform: scale(1.12); } }
+
+/* Engaged but quiet: the bars sit low, so "waiting" and "hearing you" are different shapes and not
+   just different speeds — legible at a glance rather than needing a second look. */
+.navbar .wfab-listen svg line { transform-origin: center; transition: transform .15s ease; }
+.navbar .wfab-listen.on svg line { transform: scaleY(.4); }
+
+/* Hearing him: a level meter. Staggered so it reads as sound rather than a blink. */
+.navbar .wfab-listen.hearing { background: #ff453a; color: #fff; border-color: #ff453a; }
+.navbar .wfab-listen.hearing svg line { animation: eqbar .55s ease-in-out infinite; }
+.navbar .wfab-listen.hearing svg line:nth-of-type(1) { animation-delay: -.40s; }
+.navbar .wfab-listen.hearing svg line:nth-of-type(2) { animation-delay: -.20s; }
+.navbar .wfab-listen.hearing svg line:nth-of-type(3) { animation-delay: 0s; }
+.navbar .wfab-listen.hearing svg line:nth-of-type(4) { animation-delay: -.25s; }
+.navbar .wfab-listen.hearing svg line:nth-of-type(5) { animation-delay: -.45s; }
+@keyframes eqbar { 0%, 100% { transform: scaleY(.35); } 50% { transform: scaleY(1); } }
+
+/* Sending: amber and a turning arc, so "gone up" cannot be mistaken for "heard". It follows the
+   clip's own progress, so it clears when the transcription actually settles. */
+.navbar .wfab-listen.sending { color: #f5a524; border-color: #f5a524; background: transparent; }
+.navbar .wfab-listen.sending svg line { animation: none; transform: scaleY(.4); }
+.navbar .wfab-listen.sending::after {
+  border-color: #f5a524 transparent #f5a524 transparent;
+  animation: listenspin .8s linear infinite;
+}
+@keyframes listenspin { to { transform: rotate(360deg); } }
 .ph-conv.tappable { cursor: pointer; }
 .ph-conv.tappable:active { opacity: .6; }

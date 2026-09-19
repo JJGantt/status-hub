@@ -458,8 +458,17 @@ export function makeListener({ onStatus = () => {}, onState = () => {} } = {}) {
     rec.onstop = () => {
       const blob = new Blob(bucket, { type });
       if (take && blob.size) {
+        // The button follows the CLIP, not a timer: 'busy' while it is going up and being
+        // transcribed, then back to listening the moment that settles. Anything else would be the
+        // button claiming a state it does not know.
+        const relay = (t, kind) => {
+          onStatus(t, kind);
+          if (kind === 'busy') onState('sending');
+          else if (on) onState('listening');
+        };
+        onState('sending');
         sendVoice({ blob, dry: false, quick: true, dur, source: LISTENER_SOURCE,
-                    ...(from ? { capture_start: from, capture_end: to } : {}) }, { onStatus });
+                    ...(from ? { capture_start: from, capture_end: to } : {}) }, { onStatus: relay });
       }
     };
     try { rec.stop(); } catch (_) {}
@@ -507,13 +516,13 @@ export function makeListener({ onStatus = () => {}, onState = () => {} } = {}) {
         // The window is the UTTERANCE, not the segment. A segment starts before he speaks (that is how
         // the onset is kept), so its own start would overlap the previous one and collapse two real
         // commands into one.
-        if (rms >= thr) { if (!heard) spokeAt = Date.now(); heard = true; silence = 0; onStatus('Hearing you…', 'rec'); return; }
+        if (rms >= thr) { if (!heard) { spokeAt = Date.now(); onState('hearing'); } heard = true; silence = 0; onStatus('Hearing you…', 'rec'); return; }
         if (heard) {
           if (!silence) silence = now;
           else if (now - silence >= HANG_MS) {       // utterance over → send it, keep listening
             silence = 0;
             cut(true); startSegment();
-            onStatus('Listening…', 'rec');
+            onState('listening'); onStatus('Listening…', 'rec');
           }
           return;
         }

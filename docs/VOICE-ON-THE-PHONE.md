@@ -39,6 +39,21 @@ then acts on it.
 **It mutes the other listeners** while engaged (`voice_muted`), for the same reason the button does:
 an always-on phone mic and an always-on room mic must not both route the same words.
 
+## The button is the only indicator
+
+Nothing else on screen says whether the microphone is open, so all three states live in the button
+and `on` holds through every one of them — the distinction that matters most is open vs off.
+
+| state | the button |
+|---|---|
+| engaged, waiting | red outline, bars sat low, ring pulsing slowly |
+| hearing him | filled red, bars moving as a level meter |
+| sending | amber, bars still, ring turning |
+
+Waiting and hearing differ in SHAPE, not just speed, so a glance is enough. The sending state follows
+the clip's own progress through `sendVoice` rather than a timer, so it clears when the transcription
+actually settles — a button that guessed would be claiming a state it does not know.
+
 **It disengages itself** on `pagehide` and when the page is hidden. A microphone left open behind a
 backgrounded page is the one outcome worth defending against automatically.
 

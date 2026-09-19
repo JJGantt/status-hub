@@ -190,10 +190,26 @@ function pushActivity(a) { for (const f of activitySubs) { try { f(a); } catch (
 // check rather than trusting the reference.
 // (`micStream`/`micPending` are declared at the top of the file with the rest of boot()'s state — boot()
 // runs above this point, and a `let` it touches would still be in the temporal dead zone here.)
-function micLive() { return micStream && micStream.getTracks().some((t) => t.readyState === 'live'); }
+// A TRACK THAT WENT SILENT STILL SAYS IT IS LIVE. An audio interruption on iOS — anything else on
+// the page or the phone taking the audio session — leaves a capture track producing zeros with
+// `readyState` unchanged at 'live'. Reusing it then is permanent: every recording afterwards is
+// silence, the VAD never hears speech, and each one is dropped at the grace timeout with nothing
+// sent. Measured 2026-09-19, after the page started playing alarm tones.
+//
+// `micDirty` is set by anything that could have taken the session, and by the grace timeout itself,
+// which is the one signal that means "we just recorded silence" whatever the cause.
+let micDirty = false;
+export function dirtyMic() { micDirty = true; }
+function micLive() {
+  if (micDirty) return false;
+  return micStream && micStream.getTracks().some((t) => t.readyState === 'live');
+}
 function mic() {
   if (micLive()) return Promise.resolve(micStream);
-  micStream = null;
+  // Let go of the old tracks before asking for new ones: a silent-but-live track still holds the
+  // device, and a fresh getUserMedia can hand back the same dead capture rather than a new one.
+  if (micStream) { try { micStream.getTracks().forEach((t) => t.stop()); } catch (_) {} }
+  micStream = null; micDirty = false;
   if (!micPending) {
     micPending = navigator.mediaDevices.getUserMedia({ audio: true })
       .then((s) => { micStream = s; return s; })
@@ -210,6 +226,9 @@ function releaseMic() {
 export function holdMic() {
   const warm = () => { if (document.visibilityState === 'visible') mic().catch(() => {}); };
   warm();
+  // Anything on this page that PLAYS audio may have taken the session with it — the alarm, a tone
+  // preview in Settings, the sound bench. They say so rather than this trying to detect it.
+  document.addEventListener('hub:audioplayed', () => { dirtyMic(); if (document.visibilityState === 'visible') setTimeout(warm, 400); });
   document.addEventListener('visibilitychange', () => (document.hidden ? releaseMic() : warm()));
   window.addEventListener('pagehide', releaseMic);
 }
@@ -299,7 +318,11 @@ export function makeRecorder({ onStatus = () => {}, onState = () => {}, quick, a
         const thr = Math.max(floor * 2.5, 0.02);
         if (rms >= thr) { spoke = true; heardSpeech = true; silence = 0; }   // speaking
         else if (spoke) { if (!silence) silence = now; else if (now - silence >= HANG_MS) { trace('vad:silence'); stop(); } }  // trailing silence → send
-        else if (now - t0 > GRACE_MS) { trace('vad:grace'); stop(); }   // pressed but never spoke → give up (upload() drops it)
+        // Pressed but never spoke → give up (upload() drops it). ALSO the self-heal: reaching here
+        // means eight seconds of silence arrived from a microphone he was talking into, so the
+        // stream is assumed dead and the next press re-acquires. Costs one lost attempt instead of
+        // every attempt until the page happens to reload.
+        else if (now - t0 > GRACE_MS) { trace('vad:grace'); dirtyMic(); stop(); }
       }, 60);
       vadRan = true;
     } catch (_) { /* no Web Audio → falls back to tap-to-stop */ }

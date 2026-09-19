@@ -144,6 +144,9 @@ export async function open() {
     try { if (preview) { preview.pause(); } } catch (_) {}
     preview = new Audio('/alarm-' + slug + '.m4a');
     preview.play().catch(() => {});
+    // Playing this may have taken the audio session, which leaves the cached mic silent-but-live.
+    // Say so; voiceagent re-acquires rather than recording silence on the next press.
+    document.dispatchEvent(new CustomEvent('hub:audioplayed'));
   };
   back.querySelector('#set-alarm-sound').addEventListener('change', (e) => {
     save('alarm_sound', e.target.value);

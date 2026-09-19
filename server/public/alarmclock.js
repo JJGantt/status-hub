@@ -108,6 +108,7 @@ function overlay(title, at) {
 // cannot see from inside.
 function makeNoise() {
   const a = sound();   // whatever was preloaded; the tone is chosen long before this
+  document.dispatchEvent(new CustomEvent('hub:audioplayed'));   // the mic's cached stream is now suspect
   try { a.currentTime = 0; } catch (_) {}
   a.play().then(() => {
     beaconSound({ path: 'media', ok: true });
@@ -144,6 +145,7 @@ function stopRing() {
   clearTimeout(ringEndT); ringEndT = null;
   ringing = null;
   document.body.classList.remove('alarming');
+  document.dispatchEvent(new CustomEvent('hub:audioplayed'));   // and again once it stops, so the mic re-warms
   const el = document.getElementById('alarmfire');
   if (el) el.remove();
   schedule();

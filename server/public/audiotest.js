@@ -47,6 +47,8 @@ function osc(label, extra) {
   done(label, { state: c.state, ...(extra || {}) });
 }
 function done(label, info) {
+  // The bench plays audio too, so it owes the same warning as anything else here.
+  try { document.dispatchEvent(new CustomEvent('hub:audioplayed')); } catch (_) {}
   const bits = Object.entries(info).map(([k, v]) => `${k}=${v}`).join(' ');
   say(`${label} · ${bits}`);
   beacon({ test: label, ...info });

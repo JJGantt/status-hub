@@ -123,10 +123,31 @@ async function keepAwake() {
   } catch (_) { lock = null; }
 }
 
+// ---- saying whether it is actually armed --------------------------------------------------------
+// A CLOCK NOBODY CAN CHECK IS THE WHOLE PROBLEM AGAIN. AlarmKit reported holding an alarm it never
+// rang; the way not to repeat that is for this to report what it can actually do, not that it
+// loaded. `audio` is the one that matters — a suspended context means the beeps are silent — and it
+// rides /api/clientlog into the hub log, where it can be read from anywhere.
+function beacon() {
+  const n = nextItem();
+  const body = {
+    ev: 'alarmclock',
+    audio: actx ? actx.state : 'none',
+    lock: !!lock,
+    visible: document.visibilityState === 'visible',
+    next: n ? new Date(n.at).toISOString() : null,
+    in_s: n ? Math.round((n.at - Date.now()) / 1000) : null,
+    armed: !!fireT,
+    ringing: !!ringT,
+  };
+  try { navigator.sendBeacon('/api/clientlog', new Blob([JSON.stringify(body)], { type: 'application/json' })); } catch (_) {}
+}
+
 // ---- wiring -----------------------------------------------------------------------------------
-// The first touch anywhere is what authorises sound and takes the lock. There is no button to press:
-// a page that needs arming and does not say so is the failure this is here to prevent, so it arms
-// itself off any interaction the page was already going to get.
+// The app's WebView sets mediaTypesRequiringUserActionForPlayback = [], so inside StatusHub the
+// context starts without a gesture and the page is armed the moment it loads. In a plain browser it
+// starts suspended and the first touch promotes it — hence both paths, and hence the beacon, which
+// is what distinguishes the two from outside.
 ['pointerdown', 'touchstart', 'keydown'].forEach((ev) =>
   document.addEventListener(ev, () => { unlock(); keepAwake(); }, { passive: true }));
 document.addEventListener('visibilitychange', () => { keepAwake(); schedule(); });
@@ -134,5 +155,11 @@ document.addEventListener('visibilitychange', () => { keepAwake(); schedule(); }
 // streams on a phone once already.
 document.addEventListener('hub:stream', load);
 setInterval(load, RELOAD_MS);
+// A HEARTBEAT, which is the one shape of timer that cannot be replaced by an event: a page that has
+// been closed, reloaded away or silently suspended sends nothing, so its liveness can only be read
+// from the silence.
+setInterval(beacon, 60000);
+unlock();          // succeeds immediately inside the app; stays suspended in a browser until touched
 keepAwake();
 load();
+setTimeout(beacon, 2000);

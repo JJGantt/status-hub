@@ -278,6 +278,10 @@ body.tv.phonehome .ph-list .ding{display:flex;align-items:baseline;gap:5px;paddi
 body.tv.phonehome .ph-list .ding-n{flex:1 1 auto;min-width:0;font-size:9px;color:#8b96a5;
   overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 body.tv.phonehome .ph-list .heath{display:none}   /* the date is the day the map already has selected */
+/* The sheet moves #heatinfo in with its class, so the rule above reaches it — and the heading is where
+   the day's SET TOTAL is written, which the sheet has room for and the small view carries on the clock
+   strip instead. */
+body.tv.phonehome .sectsheet .ph-list .heath{display:block}
 body.tv.phonehome .ph-list .dex-n .stagedbadge{font-size:7px}
 /* The clocks. One row, and the same treatment as the totals line so the column reads as two of the
    same thing rather than a panel and a bare row. */

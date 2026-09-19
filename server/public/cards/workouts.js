@@ -4,6 +4,10 @@ import { state, esc, localNowNaive, paintScrolled, heatPick, scrollableX } from 
 import { withHistory } from '../heathistory.js';
 import { exerciseVolumeChips } from './muscle.js';
 let heatSelDate=null, heatReq=0;
+// date -> sets, for every cell the map has drawn: what the SETS tally reads for a day picked on the
+// map. Merged on each render rather than rebuilt, because the sheet draws a longer history than the
+// card behind it, and a day picked in the sheet stays picked after it closes with its cell gone.
+const heatCounts={};
 let lastHeatExercises=null; // exercises for the open day-detail (for the repeat-set popup)
 // Back to now: the day detail returns to today, the same as a fresh load, where nothing has been
 // picked yet and render() defaults it. The reset button is meant to leave the page as it opens.
@@ -19,6 +23,7 @@ export function render(s){
  // In the expanded sheet the grid carries its full history in front of the live window; everywhere
  // else it is the window the frame ships. See heathistory.js.
  const H=withHistory(Object.assign({weeks:[],months:[]},s.heatmap,heatPick(s,'heatmap')),'heatmap',hw,s.today);
+ for(const col of H.weeks||[])for(const d of col)if(d.level>=0)heatCounts[d.date]=d.count;
  // Eight steps, one per level from lib/heatmap.js: [0]=a day with no sets, black; then 1-6, 7-12,
  // 13-18, 19-24, 25-30, 31-36, 37+ sets. The last two continue the greens at the same hue and
  // saturation, spaced like the steps before them, and stop short of white: the today outline is
@@ -46,7 +51,9 @@ export function render(s){
 //  - SESSION (middle, only while active): total time since the FIRST set of the current session — a run
 //    of sets each within 20min of the previous. Once 20min pass with no new set the session is over and
 //    this side disappears (resets to zero); the next set starts a fresh session.
-//  - SETS (right, always): `sets_today` off the payload — sets in the current 4am day, small.
+//  - SETS (right, always): `sets_today` off the payload — sets in the current 4am day, small. A day
+//    picked on the map replaces it with that day's total (`heatCounts`), and picking today hands it
+//    back to the live figure.
 const SESSION_GAP_S=20*60;          // a >20min gap between sets ends the session
 function fmtSince(s){
  if(s<3600) return Math.floor(s/60)+':'+String(Math.floor(s%60)).padStart(2,'0');
@@ -93,10 +100,12 @@ function tickRest(){
    html+='<div class="rt-side rt-mid"><div class=rt-label>Session</div>'+
      '<div class="rt-time rt-session">'+fmtSession(sess)+'</div></div>';
  }
- // right — sets logged so far today (server-counted, 4am day). Deliberately small: it is a tally,
- // not a clock, so it holds the far edge without competing with the digits beside it.
+ // right — sets logged so far today (server-counted, 4am day), or the total of the day picked on the
+ // map. Deliberately small: it is a tally, not a clock, so it holds the far edge without competing
+ // with the digits beside it. The clocks beside it stay live either way — they are about now.
+ const picked=heatSelDate&&heatSelDate!==d.today&&heatSelDate in heatCounts;
  html+='<div class="rt-side rt-right"><div class=rt-label>Sets</div>'+
-   '<div class="rt-time rt-count">'+(d.sets_today||0)+'</div></div>';
+   '<div class="rt-time rt-count">'+(picked?heatCounts[heatSelDate]:(d.sets_today||0))+'</div></div>';
  // The rep watcher, under the clocks: what the watch's counted sets are being logged
  // as right now. Only useful BEFORE a set, so it sits where the eye already goes.
  const rw=(state.last||{}).rep_watcher;
@@ -217,7 +226,7 @@ async function loadHeatDay(date){
  hi.innerHTML=h;
  if(sp&&stick)sp.scrollTop=sp.scrollHeight; // scroll to the newest set
 }
-function selectDay(date){ if(date===heatSelDate)return; heatSelDate=date; markHeatCell(date); loadHeatDay(date); }
+function selectDay(date){ if(date===heatSelDate)return; heatSelDate=date; markHeatCell(date); loadHeatDay(date); tickRest(); }
 
 // Repeat-last-set popup: weight is fixed (the exercise's last set weight); only reps is prompted.
 // On confirm it POSTs a new set at "now"; realtime on `sets` refreshes the heatmap + timer.

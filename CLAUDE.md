@@ -385,6 +385,15 @@ It also beats app.css's `body.tv.wallportrait` block on equal specificity, by lo
   rather than a second way of drawing a ring. The mini produce rings move with them, because
   `/api/nutrition-day` rolls that day's own produce; without it three of the seven would report today
   beside a day in August.
+- **THE SETS TALLY FOLLOWS THE SELECTED DAY too.** The clock strip's right-hand figure is today's
+  `sets_today` until a day is picked on the training map, then that day's total; picking today hands
+  it back to the live figure. It reads the count off the cell the map has already drawn
+  (`heatCounts` in `cards/workouts.js`), not off the day detail's fetch, so scrubbing moves it with
+  the finger instead of a beat behind. The clocks beside it stay live: they are about now. In the
+  expanded sheet the total is the day heading (`2026-09-17 · 21 sets`). `#heatinfo` moves into the
+  sheet with its `ph-list` class, so the small view's `.heath{display:none}` reaches it there and
+  the sheet has to say `display:block` again — the small view has the strip to carry the number, the
+  sheet does not.
 - **Which day it is, is pinned to the left of the strip** and does not scroll with it (`.ds-here`).
   The day names inside the strip sit at their own midnights, so today's is off the left end whenever
   the strip is on now — leaving the page with no date on it anywhere but tomorrow's.

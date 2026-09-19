@@ -95,7 +95,11 @@ function render(s){
 }
 
 // liveStream, not a bare EventSource: this is the stream whose silent death froze the wall.
-liveStream('/api/stream',{message:e=>{try{render(JSON.parse(e.data));}catch(_){}}});
+// `hub:stream` lets anything else on the page ride THIS stream instead of opening its own — two
+// EventSources on one phone is a mistake already made here once. Dispatched after the render so a
+// listener sees the same state the cards do, and outside its try so a card blowing up cannot also
+// silence the alarm clock.
+liveStream('/api/stream',{message:e=>{try{render(JSON.parse(e.data));}catch(_){}document.dispatchEvent(new CustomEvent('hub:stream'));}});
 
 // ---- layout ----
 // desktop = plain document-flow rows that scroll (defined in index.html / app.css; nothing to init).

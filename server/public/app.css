@@ -1283,3 +1283,37 @@ body.tv.phonewall .pane-todo .daycardwrap{padding:12px 14px 14px;flex:0 0 auto}
 #daycard .cw-more{font-size:11px}
 #daycard .cw-sc{margin-left:5px;font-size:11px}
 #daycard .cw-sc.k-potential{padding:0 3px;font-size:10px}
+
+/* ---- the alarm firing (alarmclock.js) ----------------------------------------------------------
+   Nothing of this is in the document until something rings; the module builds #alarmfire on demand
+   and removes it on STOP. The whole screen is the indicator because the phone is across the room. */
+#alarmfire {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 22px;
+  background: #ff3b30;
+  color: #fff;
+  text-align: center;
+  padding: 24px;
+  animation: alarmflash .9s steps(1, end) infinite;
+}
+#alarmfire .af-when { font-size: 22vw; font-weight: 800; letter-spacing: -.03em; font-variant-numeric: tabular-nums; line-height: 1; }
+#alarmfire .af-what { font-size: 22px; font-weight: 700; opacity: .95; }
+#alarmfire .af-stop {
+  margin-top: 10px;
+  font: inherit;
+  font-size: 24px;
+  font-weight: 800;
+  letter-spacing: .06em;
+  color: #ff3b30;
+  background: #fff;
+  border: 0;
+  border-radius: 16px;
+  padding: 20px 56px;
+}
+@keyframes alarmflash { 50% { opacity: .55; } }

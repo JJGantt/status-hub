@@ -5,3 +5,4 @@
 // public/dist/index.js, which is the one script the page actually loads.
 
 import '../core.js';   // renders the REAL hub cards from /api/stream into the .rows
+import '../alarmclock.js';   // same clock on the desktop/detail page, so either open tab rings

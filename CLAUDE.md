@@ -107,30 +107,37 @@ the existing `StatusHubControls` bundle (the `WidgetBundle` at the bottom of
 `apps/Controls/RecordControl.swift`); a widget and its button intents share `UserDefaults.standard`,
 since they are one process already.
 
-## `/alarm` — a page that rings itself
+## The hub page IS the alarm clock
 
-`server/public/alarm.html`, served at `/alarm`. A phone left on it is the alarm clock: it holds a
-LOCAL timer to the next `alarm`-marked item from `/api/due-widget` and beeps through Web Audio when
-it arrives, so nothing has to be delivered at the moment itself.
+`public/alarmclock.js`, imported by `pages/phone-home.js` and `pages/index.js`. It holds a LOCAL
+timer to the next `alarm`-marked item from `/api/due-widget` and beeps through Web Audio when it
+arrives, so nothing has to be delivered at the moment itself.
 
 It exists because both halves of the device path were measured failing silently on the same night —
-AlarmKit acked an alarm it never presented, and four silent pushes carrying a new alarm to a sleeping
-phone were refused. This has neither dependency.
+AlarmKit acked an alarm (`held:2`) it never presented, and four silent pushes carrying a new alarm to
+a sleeping phone were refused. This has neither dependency.
 
-Three things are load-bearing rather than decoration, and each is a way it can quietly stop being an
+**On the hub's own page, not a page of its own.** A standalone `/alarm` was the obvious build and the
+wrong one: the iOS app loads `/`, so a separate URL is a thing to remember to open on exactly the
+night it matters. `public/alarm.html` still serves at `/alarm` as the same clock standalone, for a
+spare device.
+
+Four things are load-bearing rather than decoration, and each is a way it quietly stops being an
 alarm:
 
-- **TEST arms it.** iOS will not let a page make noise until a gesture has authorised the
-  `AudioContext`. Untapped, the page looks fine and is silent at the moment it matters, which is why
-  the state is on screen (`SOUND READY` / `SOUND OFF`) rather than assumed.
-- **The wake lock is the mechanism.** Timers in a locked phone do not run on any schedule worth
-  betting a morning on. iOS drops the lock on every visibility change, so it is re-taken on
-  `visibilitychange`, not taken once.
+- **The first touch arms the sound.** iOS will not let a page make noise until a gesture has
+  authorised the `AudioContext`, so it is built on the first `pointerdown`/`touchstart`/`keydown`
+  the page receives. No button to press: a page that needs arming and does not say so fails exactly
+  once, at 4am.
+- **The wake lock is the mechanism, not a nicety.** A locked phone does not run timers on any
+  schedule worth betting a morning on. iOS drops the lock on every visibility change, so it is
+  re-taken on `visibilitychange` rather than taken once.
 - **The timer re-arms in steps.** `setTimeout` is capped and drifts across hours, so only the final
-  short hop is the real one.
-
-The `EventSource` is how a change made at 4am reaches an already-open page — no push, no APNs. The
-two-minute reload behind it is a backstop for a socket gone deaf while still looking open.
+  short hop under a minute is the real one.
+- **It rides `hub:stream`, not its own EventSource.** `core.js` dispatches that after every render,
+  which is how a change made at 4am reaches an already-open page with no push involved. A second
+  EventSource on one phone is a mistake already made here. The two-minute reload behind it is the
+  backstop for a socket gone deaf while still looking open.
 
 ## An alarm rings from the phone, and the hub can only ask
 

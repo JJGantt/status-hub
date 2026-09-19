@@ -129,6 +129,13 @@ alarm:
   authorised the `AudioContext`, so it is built on the first `pointerdown`/`touchstart`/`keydown`
   the page receives. No button to press: a page that needs arming and does not say so fails exactly
   once, at 4am.
+- **A RUNNING AUDIOCONTEXT IS NOT AUDIBLE SOUND.** An alarm has been seen flashing on screen with
+  `actx.state === 'running'`, oscillators scheduled, and nothing coming out of the phone. WKWebView
+  audio plays under the app's audio session, and the app set none — so it ran ambient, which the
+  ring/silent switch silences. `nativeAudio()` asks the native side for a `.playback` session for
+  the duration of the ring (`alarmAudio` in `StatusHubApp.swift`), and gives it back on stop because
+  `.playback` cannot record and the voice features need the microphone. In a plain browser there is
+  no session to claim and it no-ops, so a browser tab is still silenceable.
 - **The wake lock is the mechanism, not a nicety.** A locked phone does not run timers on any
   schedule worth betting a morning on. iOS drops the lock on every visibility change, so it is
   re-taken on `visibilitychange` rather than taken once.

@@ -1,6 +1,7 @@
 import SwiftUI
 import WebKit
 #if os(iOS)
+import AVFoundation      // the alarm claims a .playback session while ringing (see "alarmAudio")
 import UIKit
 import UserNotifications      // setBadgeCount, driven by the page via the "badge" message handler
 import WidgetKit              // reloadAllTimelines — a placed widget caches its timeline
@@ -417,6 +418,29 @@ struct HubWebView {
                 // redraws when its timeline is rebuilt — so rebuild it now rather than leaving it
                 // showing whatever it fetched last.
                 DispatchQueue.main.async { WidgetCenter.shared.reloadAllTimelines() }
+            case "alarmAudio":
+                // A WEB PAGE CANNOT ESCAPE THE MUTE SWITCH BY ITSELF. WKWebView audio plays under
+                // whatever session the app holds, and this app set none — so it ran ambient, which
+                // the ring/silent switch silences. Measured: an alarm flashed on screen with its
+                // AudioContext reporting `running` and made no sound at all. `.playback` is the
+                // category that ignores the switch, and claiming it is the only way the page's beeps
+                // are reliably audible.
+                //
+                // Held ONLY while ringing and given straight back, because `.playback` cannot record
+                // and the voice features here do. A session taken for the whole run would trade the
+                // alarm for the microphone.
+                let on = (message.body as? NSNumber)?.boolValue ?? false
+                DispatchQueue.main.async {
+                    let s = AVAudioSession.sharedInstance()
+                    do {
+                        if on {
+                            try s.setCategory(.playback, mode: .default, options: [])
+                            try s.setActive(true)
+                        } else {
+                            try s.setActive(false, options: [.notifyOthersOnDeactivation])
+                        }
+                    } catch { NSLog("alarmAudio \(on): \(error)") }
+                }
             default: break
             }
             #endif
@@ -429,6 +453,7 @@ struct HubWebView {
         let cfg = WKWebViewConfiguration()
         cfg.userContentController.add(coordinator, name: "badge")          // page -> native badge updates
         cfg.userContentController.add(coordinator, name: "reloadWidgets")  // page -> refresh the widget
+        cfg.userContentController.add(coordinator, name: "alarmAudio")     // page -> claim a .playback session while ringing
         cfg.mediaTypesRequiringUserActionForPlayback = []
         cfg.websiteDataStore = .default()          // persistent cookies → stays signed in across launches
         #if os(iOS)

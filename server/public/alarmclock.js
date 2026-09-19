@@ -47,6 +47,15 @@ function beep(at, freq) {
   o.connect(g); g.connect(actx.destination);
   o.start(at); o.stop(at + 0.36);
 }
+// A RUNNING AUDIOCONTEXT IS NOT AUDIBLE SOUND, which is the whole reason this exists. An alarm has
+// been seen flashing on screen with `actx.state === 'running'`, its oscillators scheduled, and
+// nothing coming out of the phone — WKWebView audio plays under the app's audio session, and an app
+// that sets none runs ambient, which the ring/silent switch silences. The native side swaps to
+// `.playback` for the duration (see "alarmAudio" in StatusHubApp.swift). No-ops in a browser, which
+// has no such session to claim.
+function nativeAudio(on) {
+  try { window.webkit.messageHandlers.alarmAudio.postMessage(on); } catch (_) {}
+}
 function burst() {
   try {
     if (!actx || actx.state !== 'running') return;
@@ -71,6 +80,7 @@ function overlay(title, at) {
 }
 function startRing(it) {
   if (ringT) return;
+  nativeAudio(true);   // BEFORE unlock(): the session has to be ours before the context makes noise
   unlock();
   ringing = it;
   const d = new Date(it.at);
@@ -84,6 +94,7 @@ function startRing(it) {
 }
 function stopRing() {
   clearInterval(ringT); ringT = null;
+  nativeAudio(false);   // give the microphone back; .playback cannot record
   clearTimeout(ringEndT); ringEndT = null;
   ringing = null;
   document.body.classList.remove('alarming');

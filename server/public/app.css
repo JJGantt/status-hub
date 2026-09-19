@@ -1317,3 +1317,13 @@ body.tv.phonewall .pane-todo .daycardwrap{padding:12px 14px 14px;flex:0 0 auto}
   padding: 20px 56px;
 }
 @keyframes alarmflash { 50% { opacity: .55; } }
+
+/* ---- sound bench (audiotest.js) — temporary, remove with it ---- */
+.audiotest-row { display: flex; flex-wrap: wrap; gap: 8px; }
+.audiotest-row button {
+  flex: 1 1 auto; font: inherit; font-size: 15px; font-weight: 700;
+  color: #e9edf2; background: #1b2027; border: 1px solid #2b323c;
+  border-radius: 12px; padding: 16px 10px;
+}
+.audiotest-row button:active { background: #2b323c; }
+#audiotest-out { margin-top: 10px; font-size: 13px; color: #7c8794; word-break: break-all; }

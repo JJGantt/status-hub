@@ -10,3 +10,4 @@ import '../core.js';   // renders the REAL hub cards from /api/stream into the .
 import '../expand.js';   // tap the expand glyph on either heat map -> full-screen scrollable sheet
 import '../phone-home.js';   // this page's own middle -- the week, the sessions list, the conversation tail
 import '../alarmclock.js';   // rings on this page, since the iOS app is what has it open
+import '../audiotest.js';   // sound bench on the reports pane — which audio path survives Guided Access

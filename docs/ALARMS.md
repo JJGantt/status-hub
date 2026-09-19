@@ -44,10 +44,27 @@ looks like it does:
   broken generally. Retiring it on that evidence was a mistake. What it does mean: AlarmKit cannot be
   relied on for the Guided Access path until it is tested there specifically.
 
-**Both paths ring.** The page does not suppress itself when `armed` is true, and must not: inside
-Guided Access AlarmKit reports holding an alarm it may never present, so gating on that trades a
-duplicate noise for a silent morning. The only case where both are audible is app open, NOT in
-Guided Access — narrow, and the wrong side to err on.
+## Whose job is it to ring
+
+Per alarm, one of them makes the noise:
+
+| | **`armed`** (AlarmKit holds it) | **not armed** |
+|---|---|---|
+| **In Guided Access** | the page rings — AlarmKit will not present | the page rings |
+| **Not in Guided Access** | the page stays quiet, AlarmKit rings | the page rings |
+
+`armed` alone is not enough to decide, which is why this needs the session state: inside Guided
+Access AlarmKit reports holding an alarm it may never present, so suppressing on `armed` there trades
+a duplicate noise for a silent morning.
+
+**The page cannot detect a Guided Access session** — there is no web API, and the giveaway (Web Audio
+being silenced) is not measurable from inside the audio graph. `GuidedAccess` in `StatusHubApp.swift`
+pushes `window.__guidedAccess` into the page on every load and on
+`guidedAccessStatusDidChangeNotification`, since a session can start or end while the page sits
+untouched. `hub:guidedaccess` re-decides immediately rather than waiting for the two-minute reload.
+
+**Undefined means ring** — a plain browser, or the app before the flag lands. A duplicate is
+recoverable; a silence is the failure this exists to prevent.
 
 ## The tones
 
@@ -55,9 +72,11 @@ Guided Access — narrow, and the wrong side to err on.
 (`app_settings.alarm_sound`) and previews it on change. Three read as alarms (`classic`, `radar`,
 `pulse`) and four as music (`sunrise`, `ripple`, `bells`, `tide`).
 
-Generated rather than committed as recordings, because each has to loop seamlessly and sit where a
-phone speaker carries across a room — both are numbers in that file, and a tone that clicks at its
-loop point is unbearable long before ten minutes are up. Adding one is a `KIT` entry and a re-run.
+The `.m4a` files are committed and served straight from `public/` — 180KB for the set, nothing is
+generated at request time. The script is how they are AUTHORED: each one has to loop seamlessly and
+sit where a phone speaker carries across a room, and both of those are numbers in that file rather
+than something to re-edit in an audio tool. A tone that clicks at its loop point is unbearable long
+before ten minutes are up. Adding one is a `KIT` entry, a re-run, and committing the result.
 
 `alarmclock.js` preloads the chosen tone whenever the feed reloads, not when the alarm fires: first
 fetching the file at 7am over a bad connection turns a ring into a pause. It skips the swap while

@@ -149,6 +149,18 @@ function stopRing() {
   schedule();
 }
 
+// WHOSE JOB IS IT TO RING. Both paths existing means deciding, per alarm, which one makes the noise.
+//
+// Inside a Guided Access session AlarmKit's alert does not present, so the page is the only thing
+// that will ring and `armed` must be ignored. Outside one, an armed alarm is AlarmKit's and ringing
+// here too is just a duplicate. The page cannot detect a session itself — the native side pushes
+// `window.__guidedAccess` (see GuidedAccess in StatusHubApp.swift).
+//
+// Undefined means a plain browser, or the app before the flag has arrived. Ring in that case: a
+// duplicate is recoverable, a silence is the failure this whole system exists to prevent.
+const mustRing = () => window.__guidedAccess !== false;
+const ringsHere = (x) => mustRing() || !x.armed;
+
 // ---- the schedule -----------------------------------------------------------------------------
 // A LOCAL TIMER TO THE MOMENT, never a poll asking whether it has arrived. Nothing changes anywhere
 // when 8:30 happens, so the only thing that can notice is something already awake — which this is.
@@ -179,7 +191,7 @@ async function load() {
     // ring becomes a pause. Skipped while ringing, so a settings change cannot swap the file out
     // from under a sound that is currently playing.
     if (!ringing) sound(cfg && cfg.alarm_sound);
-    items = (d.items || []).filter((x) => x.alarm && x.when);
+    items = (d.items || []).filter((x) => x.alarm && x.when && ringsHere(x));
     // DEALT WITH ELSEWHERE IS STILL DEALT WITH. Clearing the item on the watch or another phone drops
     // it from this feed, and a page still beeping about something already handled is noise nobody can
     // trace back to a cause. The feed is the state; STOP is only one way of changing it.
@@ -214,6 +226,7 @@ function beacon() {
     // the half of "will it ring" that the AudioContext state never covered.
     media: media ? media.readyState : null,
     tone: slug,
+    guided: window.__guidedAccess === undefined ? null : window.__guidedAccess,
     lock: !!lock,
     visible: document.visibilityState === 'visible',
     next: n ? new Date(n.at).toISOString() : null,
@@ -235,6 +248,7 @@ document.addEventListener('visibilitychange', () => { keepAwake(); schedule(); }
 // `hub:stream` rides core.js's existing EventSource — a second one on this page is what put two
 // streams on a phone once already.
 document.addEventListener('hub:stream', load);
+document.addEventListener('hub:guidedaccess', load);   // a session starting or ending changes whose alarm rings
 setInterval(load, RELOAD_MS);
 // A HEARTBEAT, which is the one shape of timer that cannot be replaced by an event: a page that has
 // been closed, reloaded away or silently suspended sends nothing, so its liveness can only be read

@@ -24,6 +24,34 @@ import AppKit
 // iOS restores the idle timer itself when the app leaves the foreground, so passing false is belt
 // and braces — but it is what stops a backgrounded StatusHub holding the screen open over whatever
 // the user switched to.
+// WHETHER A GUIDED ACCESS SESSION IS RUNNING, pushed into the page.
+//
+// The page needs this and cannot find it out: there is no web API for it, and the thing that gives it
+// away — Web Audio being silenced — is not measurable from inside the audio graph. It decides whether
+// the page's own alarm should ring on top of an AlarmKit one. Inside a session AlarmKit's alert does
+// not present, measured on device, so the page is the only thing that will make noise; outside one,
+// ringing anyway is just a duplicate.
+//
+// Pushed on every page load AND on the system notification, because a session can start or end while
+// the page sits there untouched — which is exactly what happens on the nights this is for.
+final class GuidedAccess {
+    static let shared = GuidedAccess()
+    private weak var web: WKWebView?
+    private init() {
+        NotificationCenter.default.addObserver(
+            self, selector: #selector(changed),
+            name: UIAccessibility.guidedAccessStatusDidChangeNotification, object: nil)
+    }
+    func attach(_ w: WKWebView) { web = w; push() }
+    @objc private func changed() { push() }
+    func push() {
+        let on = UIAccessibility.isGuidedAccessEnabled
+        let js = "window.__guidedAccess=\(on);"
+            + "document.dispatchEvent(new CustomEvent('hub:guidedaccess',{detail:\(on)}));"
+        DispatchQueue.main.async { self.web?.evaluateJavaScript(js, completionHandler: nil) }
+    }
+}
+
 enum StayAwake {
     static func apply(_ on: Bool) {
         UIApplication.shared.isIdleTimerDisabled = on
@@ -394,6 +422,7 @@ struct HubWebView {
         // the APNs token via a same-origin (cookie-authed) fetch.
         func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
             PushManager.shared.attach(webView)
+            GuidedAccess.shared.attach(webView)   // the page cannot see this for itself; the alarm needs it
             RecordLaunch.shared.fireIfPending()   // statushub://record cold launch → auto-start the voice FAB
             ItemLaunch.shared.fireIfPending()     // statushub://item/<id> cold launch → open that item
             PaneLaunch.shared.fireIfPending()     // statushub://pane/<name> cold launch → land there

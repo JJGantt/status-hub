@@ -120,7 +120,7 @@ phone to look.
 | `GET /api/alarms` | what the phone should hold right now: every marked item due inside `ALARM_WINDOW_DAYS`. `at` is an ABSOLUTE instant (`instantFromLocal`), not the naive stamp the rest of the API speaks, so a phone that has travelled resolves nothing itself. |
 | `POST /api/todos/alarm` | sets or clears the mark. Nothing infers it from priority or wording. |
 | `POST /api/alarms/ack` | the phone reporting the whole SET it holds, after every sync. Arms the items in it, disarms the ones that are not, and diffs first so an unchanged sync writes nothing. |
-| `nudgeAlarms()` | a silent push off the `list_items` subscription, for rows that are or were marked. |
+| `nudgeAlarms()` | a silent push off the `list_items` subscription, for rows that are or were marked. Retries on widening gaps until every in-window alarm is acked. |
 | `Sources/AlarmSync.swift` | reads the feed and makes the device match it. |
 | `Controls/AlarmWidget.swift` | the alert's Live Activity. |
 
@@ -128,6 +128,15 @@ phone to look.
 cancels what is not in it. That is what makes a dropped wake cheap: iOS throttles background pushes on
 its own heuristics and delivers none at all after a force-quit, so the worst a missed one costs is an
 alarm created since the last sync registering late, never the next alarm failing to ring.
+
+**A refused wake is retried until the phone acks.** `unarmedAlarms()` is the stop condition rather
+than a count, so a wake that landed costs one push and one cheap read and only a refused one keeps
+trying — `ALARM_RETRY_MS`, four attempts widening across twenty minutes. Widening, because what is
+being waited on is iOS restoring a budget it took away, and stacking attempts into the minute it
+refused spends them on the refusal. The window alone does not cover an alarm created while the phone
+sits idle overnight: that is both when the wake is most likely to be dropped and when nothing
+follows to pick the phone up, and two pushes a quarter of an hour apart is already enough for the
+second to be refused outright.
 
 **The sync runs from `scenePhase`, not from the app delegate.** This app is a SwiftUI `WindowGroup`,
 so it is scene-based, and UIKit does not promise to call `applicationDidBecomeActive` in a scene-based
@@ -180,10 +189,15 @@ difference is COLOUR, not opacity — a colour emoji stays legible as itself at 
 states have to differ in hue to be told apart. One glyph either way, so there is no second symbol to
 learn, and the grey one is a warning readable before the moment rather than after sleeping through it.
 
-**An alarm does not also notify.** `dueTick` skips the push for `r.alarm`: the full-screen alert has
-already broken silent mode and Focus, and a banner behind it repeats it quieter at the same second.
-The consequence to know: the notification is what carries the Done / 1 Hour / Tomorrow buttons, so an
-alarm-grade item is actionable only from a list.
+**An alarm notifies only if the phone never confirmed it.** `dueTick` skips the push when
+`r.alarm && r.alarm_armed_at`: the full-screen alert has already broken silent mode and Focus, and a
+banner behind it repeats it quieter at the same second. The consequence to know: the notification is
+what carries the Done / 1 Hour / Tomorrow buttons, so an alarm-grade item that rings is actionable
+only from a list.
+
+An item still unconfirmed when its moment arrives DOES notify, because otherwise nothing fires at
+all — a wake iOS threw away is silent and permanent, and the mark alone never made anything ring. A
+redundant banner costs a buzz; a missing one costs the morning, so the unconfirmed case notifies.
 
 ## Widget drawing files stay WidgetKit-free
 

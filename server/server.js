@@ -3966,7 +3966,7 @@ async function dueTick() {
   if (!dueDirty && (!dueNextAt || nowET < dueNextAt)) return;
   let rows;
   // Every list, not just todo — "reminder" is a predicate (has a due), not a place.
-  try { rows = await sb('list_items?deleted=eq.false&completed_at=is.null&due=not.is.null&select=id,list_name,text,title,due,scheduled_at,priority,series_id,alarm'); } catch (_) { return; }
+  try { rows = await sb('list_items?deleted=eq.false&completed_at=is.null&due=not.is.null&select=id,list_name,text,title,due,scheduled_at,priority,series_id,alarm,alarm_armed_at'); } catch (_) { return; }
   // Only once the read succeeded: a failed read must leave the state dirty so the next tick retries.
   dueDirty = false;
   dueNextAt = '';
@@ -3986,15 +3986,20 @@ async function dueTick() {
     // old ledger row deleted by hand. Do not shorten this key: see the note in CLAUDE.md.
     const dk = `reminder:${r.id}:${r.due}`;
     try { if ((await sb(`notifications?dedupe_key=eq.${encodeURIComponent(dk)}&select=id&limit=1`)).length) continue; } catch (_) { continue; }
-    // AN ALARM DOES NOT ALSO NOTIFY. The alarm already broke silent mode and a Focus with a
-    // full-screen alert; a banner behind it says the same thing quieter, at the same second.
+    // AN ALARM THE PHONE HOLDS DOES NOT ALSO NOTIFY. It already broke silent mode and a Focus with a
+    // full-screen alert; a banner behind it says the same thing quieter, at the same second. The cost
+    // is real: the notification is what carries the Done / 1 Hour / Tomorrow buttons, so an item that
+    // rings can only be acted on from a list.
     //
-    // The cost is real and is the reason this is a choice rather than an obvious cleanup: the
-    // notification is what carried the Done / 1 Hour / Tomorrow buttons, so an alarm-grade item can
-    // only be acted on from a list. And if the phone never registered the alarm, nothing fires at
-    // all — which is exactly what `armed` on the chip exists to make visible BEFORE the moment
-    // arrives, rather than discovering it by sleeping through something.
-    if (r.alarm) { console.log(`[due] ${r.id} is an alarm — not notifying`); continue; }
+    // AN ALARM THE PHONE NEVER TOOK STILL NOTIFIES, because otherwise nothing fires at all. Marking
+    // an item `alarm` is only a REQUEST; `alarm_armed_at` is the phone confirming it holds it (POST
+    // /api/alarms/ack). Absent that confirmation the silent wake carrying the alarm to the device was
+    // most likely thrown away — iOS throttles background pushes, and a second one a quarter of an
+    // hour behind the first is dropped outright — so the quieter banner is the only thing left
+    // between him and sleeping through it. A banner that is redundant costs a buzz; a missing one
+    // costs the whole morning, so the unconfirmed case notifies.
+    if (r.alarm && r.alarm_armed_at) { console.log(`[due] ${r.id} is an alarm the phone holds — not notifying`); continue; }
+    if (r.alarm) console.log(`[due] ${r.id} is an alarm the phone never confirmed — notifying instead`);
     const handler = DUE_HANDLERS.push;
     if (handler === DUE_HANDLERS.push && !apns.configured()) continue;   // nothing to deliver through
     await handler({ ...r, emoji: emojiOf[r.list_name] }, dk);
@@ -4094,24 +4099,72 @@ async function syncBadge() {
 //
 // An AlarmKit alarm is registered ON the device, so a change here cannot ring anything by itself;
 // the phone has to re-read /api/alarms and reschedule. This is the only way that happens without him
-// opening the app, and it is best-effort ON PURPOSE: iOS throttles background pushes on its own
+// opening the app, and any ONE push is best-effort: iOS throttles background pushes on its own
 // heuristics and delivers none at all after a force-quit. The app's foreground sync is the
 // guarantee — this is what usually makes the guarantee unnecessary.
+//
+// A single push is not enough on its own, and the failure is silent: an alarm created while the
+// phone sits idle overnight is exactly when the wake is most likely to be dropped and least likely
+// to be followed by someone picking the phone up. So the push RETRIES until the device acks, and
+// `dueTick` notifies anyway for anything still unconfirmed when its moment arrives.
 //
 // Silent, because apns.js turns a push with no title and no body into a background one; `alarms: 1`
 // rides alongside so the app can tell this apart from the badge-only pushes it also now wakes for.
 // Debounced, because one voice command writes a row more than once (insert, then a due) and each
 // write is otherwise a wake.
 let alarmNudgeT = null;
+let alarmRetryT = null;
 const ALARM_NUDGE_MS = 4000;
+// Widening gaps rather than a fixed interval, because the thing being waited on is iOS restoring a
+// budget it took away — stacking attempts into the minute it was refused spends them on the refusal.
+// Bounded at four: past twenty minutes the foreground sync is the realistic path, the chip already
+// shows the alarm unconfirmed, and dueTick's notification is underneath it either way.
+const ALARM_RETRY_MS = [30e3, 120e3, 300e3, 900e3];
+
+async function pushNudge() {
+  let tokens = [];
+  try { tokens = await sb('device_tokens?platform=eq.ios&select=token,environment'); } catch (_) { return 0; }
+  for (const { token, environment } of tokens) await apns.send(token, { environment, payload: { alarms: 1 } });
+  return tokens.length;
+}
+
+// Which alarm-grade items the phone has NOT confirmed, over the same window the feed serves. Anything
+// outside that window is not yet the phone's job to hold, so it can never be the reason to retry.
+async function unarmedAlarms() {
+  const now = etNowString();
+  const until = plusMinutes(now, ALARM_WINDOW_DAYS * 1440);
+  let rows = [];
+  try {
+    rows = await sb('list_items?deleted=eq.false&completed_at=is.null&alarm=eq.true'
+      + '&due=not.is.null&select=id,due,alarm_armed_at');
+  } catch (_) { return []; }
+  return (rows || []).filter((r) => {
+    const at = dueMoment(r.due);
+    return at >= now && at <= until && !r.alarm_armed_at;
+  });
+}
+
+// RETRY UNTIL THE PHONE SAYS IT HAS THEM — the stop condition is the ack, not a count of attempts.
+// A wake that landed therefore costs one push and one cheap read; only a wake that was thrown away
+// keeps trying, so the cost falls entirely on the case that is actually broken.
+function retryUnarmed(step) {
+  clearTimeout(alarmRetryT);
+  if (step >= ALARM_RETRY_MS.length) return;
+  alarmRetryT = setTimeout(async () => {
+    const pending = await unarmedAlarms();
+    if (!pending.length) return console.log('[alarms] every alarm in the window is armed');
+    const n = await pushNudge();
+    console.log(`[alarms] ${pending.length} unarmed, re-woke ${n} device(s) (try ${step + 1}/${ALARM_RETRY_MS.length})`);
+    retryUnarmed(step + 1);
+  }, ALARM_RETRY_MS[step]);
+}
+
 function nudgeAlarms() {
   if (!apns.configured() || alarmNudgeT) return;
   alarmNudgeT = setTimeout(async () => {
     alarmNudgeT = null;
-    let tokens = [];
-    try { tokens = await sb('device_tokens?platform=eq.ios&select=token,environment'); } catch (_) { return; }
-    for (const { token, environment } of tokens) await apns.send(token, { environment, payload: { alarms: 1 } });
-    console.log(`[alarms] woke ${tokens.length} device(s)`);
+    console.log(`[alarms] woke ${await pushNudge()} device(s)`);
+    retryUnarmed(0);
   }, ALARM_NUDGE_MS);
 }
 

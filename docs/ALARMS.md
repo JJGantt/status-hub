@@ -49,6 +49,20 @@ Guided Access AlarmKit reports holding an alarm it may never present, so gating 
 duplicate noise for a silent morning. The only case where both are audible is app open, NOT in
 Guided Access — narrow, and the wrong side to err on.
 
+## The tones
+
+`server/tools/make-alarms.py` generates `public/alarm-<slug>.m4a`; Settings → Alarm sound picks one
+(`app_settings.alarm_sound`) and previews it on change. Three read as alarms (`classic`, `radar`,
+`pulse`) and four as music (`sunrise`, `ripple`, `bells`, `tide`).
+
+Generated rather than committed as recordings, because each has to loop seamlessly and sit where a
+phone speaker carries across a room — both are numbers in that file, and a tone that clicks at its
+loop point is unbearable long before ten minutes are up. Adding one is a `KIT` entry and a re-run.
+
+`alarmclock.js` preloads the chosen tone whenever the feed reloads, not when the alarm fires: first
+fetching the file at 7am over a bad connection turns a ring into a pause. It skips the swap while
+ringing, so changing the setting cannot pull the file out from under a sound already playing.
+
 ## The surf alarm — the scenario this was built for
 
 The most-used case, end to end.

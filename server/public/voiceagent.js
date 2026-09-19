@@ -417,6 +417,114 @@ export function makeRecorder({ onStatus = () => {}, onState = () => {}, quick, a
     }, start, stop };
 }
 
+// ---- always-on listening, on the phone -----------------------------------
+// THE OTHER SHAPE OF MICROPHONE. The FAB above is press/press: it records exactly what he chose to
+// record and ends when he says so, with nothing deciding on his behalf. This is what the Mac and the
+// ESP already do — the mic stays open, each utterance is cut at the silence after it and sent on its
+// own, and it keeps going until he turns it off.
+//
+// THE RECORDER RUNS THE WHOLE TIME, and utterances are cut out of it rather than started by speech.
+// Starting a MediaRecorder when the VAD first hears something loses the onset of the word that
+// triggered it — the failure the Mac spent a long time on — so instead a segment is already running
+// before he speaks, ends at the silence, and the next one starts in the same tick. The silence
+// carried at the front of a clip costs nothing; a missing first syllable costs the command.
+//
+// Silence alone is never uploaded: a segment that never crossed the threshold is dropped, because
+// Whisper does not return an empty string for silence, it invents a plausible sentence.
+export function makeListener({ onStatus = () => {}, onState = () => {} } = {}) {
+  const HANG_MS = phoneHangMs;          // same trailing-silence setting the FAB used to use
+  const IDLE_CYCLE_MS = 30000;          // recycle an unspoken segment rather than buffer forever
+  let on = false, actx = null, vadT = null, rec = null, chunks = [], mime = '';
+  let heard = false, segStart = 0, stream = null;
+
+  // MediaRecorder delivers its final chunk to ondataavailable AFTER stop() resolves, so a segment can
+  // only be assembled in onstop. Each segment therefore carries its own decision — send or discard —
+  // rather than the caller trying to read `chunks` at the moment it asks for the cut.
+  function cut(send) {
+    if (!rec || rec.state === 'inactive') return;
+    const take = send && heard;
+    const dur = (performance.now() - segStart) / 1000;
+    const bucket = chunks, type = mime || 'audio/webm';
+    chunks = [];
+    rec.onstop = () => {
+      const blob = new Blob(bucket, { type });
+      if (take && blob.size) sendVoice({ blob, dry: false, quick: true, dur }, { onStatus });
+    };
+    try { rec.stop(); } catch (_) {}
+    rec = null;
+  }
+
+  function startSegment() {
+    if (!stream) return;
+    chunks = []; heard = false; segStart = performance.now();
+    try {
+      rec = new MediaRecorder(stream, { ...(mime ? { mimeType: mime } : {}), audioBitsPerSecond: VOICE_BPS });
+    } catch (_) { rec = null; return; }
+    rec.ondataavailable = (e) => { if (e.data && e.data.size) chunks.push(e.data); };
+    try { rec.start(); } catch (_) {}
+  }
+
+  async function engage() {
+    if (on) return;
+    on = true; onState('listening'); onStatus('Listening…', 'rec');
+    let s;
+    try { s = await mic(); }
+    catch (_) { on = false; onState('idle'); onStatus('Mic permission denied', 'err'); return; }
+    if (!on) return;                      // turned off while the mic was opening
+    stream = s;
+    mime = pickListenMime();
+    muteOthers(true);                     // an always-on phone mic and an always-on room mic must not both route
+    startSegment();
+    try {
+      actx = new (window.AudioContext || window.webkitAudioContext)();
+      if (actx.resume) actx.resume();
+      const an = actx.createAnalyser(); an.fftSize = 1024;
+      actx.createMediaStreamSource(stream).connect(an);
+      const buf = new Uint8Array(an.fftSize);
+      let floor = Infinity, silence = 0;
+      vadT = setInterval(() => {
+        if (!on) return;
+        an.getByteTimeDomainData(buf);
+        let acc = 0; for (let i = 0; i < buf.length; i++) { const d = (buf[i] - 128) / 128; acc += d * d; }
+        const rms = Math.sqrt(acc / buf.length), now = performance.now();
+        if (rms < floor) floor = rms;     // quietest frame so far, same as the FAB's VAD used
+        const thr = Math.max(floor * 2.5, 0.02);
+        if (rms >= thr) { heard = true; silence = 0; onStatus('Hearing you…', 'rec'); return; }
+        if (heard) {
+          if (!silence) silence = now;
+          else if (now - silence >= HANG_MS) {       // utterance over → send it, keep listening
+            silence = 0;
+            cut(true); startSegment();
+            onStatus('Listening…', 'rec');
+          }
+          return;
+        }
+        // Nothing said for a while: recycle the segment so an idle hour is not one enormous blob.
+        if (now - segStart > IDLE_CYCLE_MS) { cut(false); startSegment(); }
+      }, 60);
+    } catch (_) { /* no Web Audio: the mode cannot segment, so it stays a plain open mic */ }
+  }
+
+  function disengage() {
+    if (!on) return;
+    on = false;
+    if (vadT) { clearInterval(vadT); vadT = null; }
+    if (actx) { try { actx.close(); } catch (_) {} actx = null; }
+    cut(true);                            // whatever he was mid-way through still counts
+    stream = null;
+    muteOthers(false);
+    dirtyMic();                           // this mode holds the mic hard; make the next press re-acquire
+    onState('idle'); onStatus('', 'clear');
+  }
+
+  return { engage, disengage, toggle() { on ? disengage() : engage(); }, get on() { return on; } };
+}
+function pickListenMime() {
+  for (const m of ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4', 'audio/ogg'])
+    if (window.MediaRecorder && MediaRecorder.isTypeSupported(m)) return m;
+  return '';
+}
+
 // ---- bottom activity bar -------------------------------------------------
 // Singleton: ONE shared activity popup per page — used by the page view (boot), the wall (tv.js), and the
 // navbar's voice buttons, so they all drive the same floating overlay.

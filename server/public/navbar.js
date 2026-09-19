@@ -3,7 +3,7 @@
 // the single voice button — one dynamic route (Sonnet handles the simple stuff, escalates to Opus
 // when it needs to) — tap-to-talk, driving the shared activity popup.
 // Mounted once per page by core.js.
-import { makeRecorder, activityBar, enqueuePhoto, pendingPhotoCount, bindTap } from './voiceagent.js';
+import { makeRecorder, makeListener, activityBar, enqueuePhoto, pendingPhotoCount, bindTap } from './voiceagent.js';
 import { open as openSettings } from './settings.js';
 
 const CHAT = '<svg viewBox="0 0 24 24" width="21" height="21" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
@@ -25,9 +25,9 @@ const CAL = '<svg viewBox="0 0 24 24" width="21" height="21" fill="none" stroke=
 // each one holds where it was left, deliberately. This is the way back to now without a reload.
 // Broadcast rather than called: whoever owns a scroll position listens, and nothing here has to know
 // what those are or import them.
-const KEYBOARD = '<svg viewBox="0 0 24 24" width="21" height="21" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
-  '<rect x="2" y="6" width="20" height="12" rx="2"></rect>' +
-  '<path d="M6 10h.01M10 10h.01M14 10h.01M18 10h.01M6 14h.01M18 14h.01M9 14h6"></path></svg>';
+// Bars rising and falling — a mic that is listening rather than one you hold down.
+const EAR = '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">' +
+  '<path d="M4 10v4M8 6v12M12 3v18M16 6v12M20 10v4"></path></svg>';
 const RESET = '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
   '<path d="M3 12a9 9 0 1 0 3-6.7"></path><polyline points="3 4 3 10 9 10"></polyline></svg>';
 
@@ -47,7 +47,10 @@ export function mountNavbar() {
     const b = document.createElement('button');
     b.className = 'wfab ' + cls; b.type = 'button'; b.setAttribute('aria-label', label);
     b.innerHTML = svg;
-    const rec = makeRecorder({ onStatus, quick: true, autoStop: true,
+    // NO SILENCE DETECTION HERE. This button records exactly what he chose to record: one tap opens
+    // the mic, the next sends it. Nothing ends a recording on his behalf, because a pause mid-sentence
+    // is not the end of a sentence — the always-on button beside it is where a machine gets to decide.
+    const rec = makeRecorder({ onStatus, quick: true, autoStop: false,
       onState: (s) => { b.classList.toggle('rec', s === 'rec'); b.classList.toggle('armed', s === 'armed'); } });
     bindTap(b, () => rec.toggle());
     // The native app (opened via statushub://record from a home-screen shortcut) calls this to start the
@@ -154,26 +157,43 @@ export function mountNavbar() {
   // It opens the whole chat rather than a bare input, because composing a reply means seeing what
   // you are replying to — which is the only thing the home page's tail of the thread cannot give
   // you while the keyboard is covering half the screen.
+  // OPENING THE CHAT IS NOW THE THREAD'S OWN JOB. The one-line prompt/reply strip on the home page is
+  // already the conversation in miniature, so tapping it is the obvious way in — and it frees the slot
+  // beside the microphone for the button that needed one. The sheet it opens is unchanged: the whole
+  // thread, because composing a reply means seeing what you are replying to.
   const chatSheet = document.getElementById('ph-chat');
   if (chatSheet) {
-    const kb = document.createElement('button');
-    kb.className = 'wfab wfab-kb'; kb.type = 'button'; kb.setAttribute('aria-label', 'Type a message');
-    kb.innerHTML = KEYBOARD;
     const log = document.getElementById('ai-log');
-    kb.addEventListener('click', () => {
+    const openChat = () => {
       chatSheet.classList.add('open');
       // The newest line first, then the focus — focusing first makes iOS scroll the page itself to
       // the input and the log lands wherever that left it.
       if (log) log.scrollTop = log.scrollHeight;
       const t = document.getElementById('ai-text');
       if (t) requestAnimationFrame(() => t.focus());
-    });
+    };
+    const strip = document.getElementById('ph-conv');
+    if (strip) { strip.classList.add('tappable'); strip.addEventListener('click', openChat); }
     const close = () => { chatSheet.classList.remove('open'); const t = document.getElementById('ai-text'); if (t) t.blur(); };
     const x = document.getElementById('ph-chat-x');
     if (x) x.addEventListener('click', close);
     // Back to now closes it, like every other sheet on the page.
     window.addEventListener('hubreset', close);
-    right.appendChild(kb);
+  }
+  // ALWAYS-ON, in the slot the keyboard had. Engaged, the phone behaves like the Mac and the ESP: it
+  // listens, cuts each utterance at the silence after it, sends it, and keeps listening until this is
+  // pressed again. The microphone beside it stays the deliberate one.
+  if (document.getElementById('ph-conv')) {
+    const ear = document.createElement('button');
+    ear.className = 'wfab wfab-listen'; ear.type = 'button'; ear.setAttribute('aria-label', 'Always-on listening');
+    ear.innerHTML = EAR;
+    const lis = makeListener({ onStatus,
+      onState: (st) => { ear.classList.toggle('on', st === 'listening'); } });
+    bindTap(ear, () => lis.toggle());
+    // Leaving the page cannot leave a microphone open behind it.
+    window.addEventListener('pagehide', () => lis.disengage());
+    document.addEventListener('visibilitychange', () => { if (document.hidden) lis.disengage(); });
+    right.appendChild(ear);
   }
   right.appendChild(mkVoice('wfab-fast', SPARKLE, 'Voice command'));
 

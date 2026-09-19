@@ -1327,3 +1327,19 @@ body.tv.phonewall .pane-todo .daycardwrap{padding:12px 14px 14px;flex:0 0 auto}
 }
 .audiotest-row button:active { background: #2b323c; }
 #audiotest-out { margin-top: 10px; font-size: 13px; color: #7c8794; word-break: break-all; }
+
+/* ---- always-on listening + the tappable conversation strip ---- */
+/* Sized like the camera beside it, and POSITIONED so the ring below anchors to the button rather
+   than to the navbar — .wfab carries no position of its own. */
+.navbar .wfab-listen { width: 46px; height: 46px; position: relative; }
+/* On: it has to be obvious at a glance that the microphone is still open. Nothing else on the screen
+   says so, and forgetting is how a phone ends up listening to a room all afternoon. */
+.navbar .wfab-listen.on { color: #ff453a; border-color: #ff453a; }
+.navbar .wfab-listen.on::after {
+  content: ''; position: absolute; inset: -3px;
+  border: 2px solid #ff453a; border-radius: 50%;
+  animation: listenpulse 1.6s ease-in-out infinite;
+}
+@keyframes listenpulse { 0%, 100% { opacity: .9; transform: scale(1); } 50% { opacity: .25; transform: scale(1.12); } }
+.ph-conv.tappable { cursor: pointer; }
+.ph-conv.tappable:active { opacity: .6; }

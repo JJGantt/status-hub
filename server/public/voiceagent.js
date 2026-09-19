@@ -271,6 +271,19 @@ export function bindTap(el, fn) {
 // lowest that transcribed cleanly; 64k reaches fullband, the same as the unconstrained default (192k).
 // 96k is deliberate headroom over that cliff, since the phone's WebKit may place its steps elsewhere —
 // with no size cap on the server, the extra bytes only cost upload time.
+// Global mute: a phone microphone that is capturing is an explicit, hard-coded-route input — while it
+// is open, every always-on auto-routing listener (Mac wake-word, wake-free, ESP) must go deaf. Same
+// shared voice_muted flag the push-to-talk dictation uses; the listeners react to it via realtime.
+//
+// MODULE SCOPE, because both microphones need it. It lived inside makeRecorder, so makeListener's
+// call to it threw a ReferenceError — which left the always-on button stuck on, since the throw
+// happened before the state reset. A bare identifier is assumed global, so nothing catches this at
+// build time.
+function muteOthers(on) {
+  fetch('/api/settings', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ key: 'voice_muted', value: on ? '1' : '0' }) }).catch(() => {});
+}
+
 const VOICE_BPS = 96000;
 
 // A self-contained recorder: getUserMedia → MediaRecorder → upload to /api/voice-command.
@@ -330,13 +343,6 @@ export function makeRecorder({ onStatus = () => {}, onState = () => {}, quick, a
   function stopVAD() {
     if (vadTimer) { clearInterval(vadTimer); vadTimer = null; }
     if (actx) { try { actx.close(); } catch (_) {} actx = null; }
-  }
-  // Global mute: an explicit FAB command is an explicit, hard-coded-route input — while it's capturing,
-  // every always-on auto-routing listener (Mac wake-word, wake-free, ESP) must go deaf. Same shared
-  // voice_muted flag the push-to-talk dictation uses; the listeners react to it via realtime.
-  function muteOthers(on) {
-    fetch('/api/settings', { method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ key: 'voice_muted', value: on ? '1' : '0' }) }).catch(() => {});
   }
   // A tap has to LOOK live from the instant it lands. getUserMedia takes a beat on a phone — longer
   // after the page has been backgrounded — and `recording` only flipped once it resolved, so the button
@@ -505,16 +511,22 @@ export function makeListener({ onStatus = () => {}, onState = () => {} } = {}) {
     } catch (_) { /* no Web Audio: the mode cannot segment, so it stays a plain open mic */ }
   }
 
+  // The state reset is in a `finally` on purpose. Anything in the teardown throwing used to leave the
+  // button lit with the mode already off — a control that will not turn off is worse than one that
+  // fails loudly, because there is nothing left to press.
   function disengage() {
     if (!on) return;
     on = false;
-    if (vadT) { clearInterval(vadT); vadT = null; }
-    if (actx) { try { actx.close(); } catch (_) {} actx = null; }
-    cut(true);                            // whatever he was mid-way through still counts
-    stream = null;
-    muteOthers(false);
-    dirtyMic();                           // this mode holds the mic hard; make the next press re-acquire
-    onState('idle'); onStatus('', 'clear');
+    try {
+      if (vadT) { clearInterval(vadT); vadT = null; }
+      if (actx) { try { actx.close(); } catch (_) {} actx = null; }
+      cut(true);                          // whatever he was mid-way through still counts
+      stream = null;
+      muteOthers(false);
+      dirtyMic();                         // this mode holds the mic hard; make the next press re-acquire
+    } finally {
+      onState('idle'); onStatus('', 'clear');
+    }
   }
 
   return { engage, disengage, toggle() { on ? disengage() : engage(); }, get on() { return on; } };

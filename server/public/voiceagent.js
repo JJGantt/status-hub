@@ -437,11 +437,12 @@ export function makeRecorder({ onStatus = () => {}, onState = () => {}, quick, a
 //
 // Silence alone is never uploaded: a segment that never crossed the threshold is dropped, because
 // Whisper does not return an empty string for silence, it invents a plausible sentence.
+const LISTENER_SOURCE = 'phone';   // its name among the listeners; see docs/LISTENERS.md
 export function makeListener({ onStatus = () => {}, onState = () => {} } = {}) {
   const HANG_MS = phoneHangMs;          // same trailing-silence setting the FAB used to use
   const IDLE_CYCLE_MS = 30000;          // recycle an unspoken segment rather than buffer forever
   let on = false, actx = null, vadT = null, rec = null, chunks = [], mime = '';
-  let heard = false, segStart = 0, stream = null;
+  let heard = false, segStart = 0, stream = null, spokeAt = 0;
 
   // MediaRecorder delivers its final chunk to ondataavailable AFTER stop() resolves, so a segment can
   // only be assembled in onstop. Each segment therefore carries its own decision — send or discard —
@@ -452,9 +453,14 @@ export function makeListener({ onStatus = () => {}, onState = () => {} } = {}) {
     const dur = (performance.now() - segStart) / 1000;
     const bucket = chunks, type = mime || 'audio/webm';
     chunks = [];
+    const from = spokeAt ? new Date(spokeAt).toISOString() : null;
+    const to = new Date().toISOString();
     rec.onstop = () => {
       const blob = new Blob(bucket, { type });
-      if (take && blob.size) sendVoice({ blob, dry: false, quick: true, dur }, { onStatus });
+      if (take && blob.size) {
+        sendVoice({ blob, dry: false, quick: true, dur, source: LISTENER_SOURCE,
+                    ...(from ? { capture_start: from, capture_end: to } : {}) }, { onStatus });
+      }
     };
     try { rec.stop(); } catch (_) {}
     rec = null;
@@ -462,7 +468,7 @@ export function makeListener({ onStatus = () => {}, onState = () => {} } = {}) {
 
   function startSegment() {
     if (!stream) return;
-    chunks = []; heard = false; segStart = performance.now();
+    chunks = []; heard = false; spokeAt = 0; segStart = performance.now();
     try {
       rec = new MediaRecorder(stream, { ...(mime ? { mimeType: mime } : {}), audioBitsPerSecond: VOICE_BPS });
     } catch (_) { rec = null; return; }
@@ -479,7 +485,10 @@ export function makeListener({ onStatus = () => {}, onState = () => {} } = {}) {
     if (!on) return;                      // turned off while the mic was opening
     stream = s;
     mime = pickListenMime();
-    muteOthers(true);                     // an always-on phone mic and an always-on room mic must not both route
+    // IT DOES NOT MUTE ANYTHING. The Mac and the ESP already listen at the same time and the worker
+    // collapses whichever of them heard the same utterance, so a third always-on mic is a peer under
+    // that same rule rather than something the others have to stand down for. The deliberate button
+    // still mutes, because a hard-routed command is not a listener.
     startSegment();
     try {
       actx = new (window.AudioContext || window.webkitAudioContext)();
@@ -495,7 +504,10 @@ export function makeListener({ onStatus = () => {}, onState = () => {} } = {}) {
         const rms = Math.sqrt(acc / buf.length), now = performance.now();
         if (rms < floor) floor = rms;     // quietest frame so far, same as the FAB's VAD used
         const thr = Math.max(floor * 2.5, 0.02);
-        if (rms >= thr) { heard = true; silence = 0; onStatus('Hearing you…', 'rec'); return; }
+        // The window is the UTTERANCE, not the segment. A segment starts before he speaks (that is how
+        // the onset is kept), so its own start would overlap the previous one and collapse two real
+        // commands into one.
+        if (rms >= thr) { if (!heard) spokeAt = Date.now(); heard = true; silence = 0; onStatus('Hearing you…', 'rec'); return; }
         if (heard) {
           if (!silence) silence = now;
           else if (now - silence >= HANG_MS) {       // utterance over → send it, keep listening
@@ -522,7 +534,6 @@ export function makeListener({ onStatus = () => {}, onState = () => {} } = {}) {
       if (actx) { try { actx.close(); } catch (_) {} actx = null; }
       cut(true);                          // whatever he was mid-way through still counts
       stream = null;
-      muteOthers(false);
       dirtyMic();                         // this mode holds the mic hard; make the next press re-acquire
     } finally {
       onState('idle'); onStatus('', 'clear');
@@ -749,6 +760,13 @@ async function deliverVoice(item, onStatus, owner) {
   qp.set('client_now', item.client_now);               // this device's own wall clock, wherever it is
   qp.set('client_msg_id', item.id);
   if (item.dur > 0) qp.set('dur', item.dur.toFixed(1));
+  // The capture window, when the caller knows it. This is what lets a listener be collapsed against
+  // the other mics that heard the same words — see docs/LISTENERS.md. A clip uploads after it was
+  // recorded, sometimes much later out of the outbox, so arrival time says nothing about when it was
+  // spoken and only these two do.
+  if (item.capture_start) qp.set('capture_start', item.capture_start);
+  if (item.capture_end) qp.set('capture_end', item.capture_end);
+  if (item.source) qp.set('source', item.source);
   const where = item.dry ? null : await hereNow();      // a dictation into the text box goes nowhere yet
   if (where) for (const k of ['lat', 'lon', 'acc']) qp.set(k, String(where[k]));
   const r = await fetch('/api/voice-command?' + qp, {

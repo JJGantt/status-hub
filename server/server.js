@@ -2162,8 +2162,23 @@ app.post('/api/voice-command', async (req, res) => {
     const quick = String(req.query.quick || '') === '1';
     const client_now = CLIENT_NOW_RE.test(String(req.query.client_now || '')) ? String(req.query.client_now) : null;
     const location = parseLocation(req.query);
+    // THE CAPTURE WINDOW IS WHAT MAKES A LISTENER A PEER. The worker collapses two mics that heard the
+    // same utterance by overlapping [capture_start, capture_end] (_duplicate_of_recent), which is how
+    // the Mac and the ESP listen at the same time without running every command twice. Web clips
+    // carried neither, so a third always-on device could not take part: its row fell back to
+    // arrival-time proximity, and a clip that uploads after it is recorded arrives too late for that
+    // to mean anything. Any caller that knows when its utterance began and ended sends both and joins
+    // the same collapse — see docs/LISTENERS.md.
+    const isoAt = (v) => { const t = Date.parse(String(v || '')); return Number.isFinite(t) ? new Date(t).toISOString() : null; };
+    const capture_start = isoAt(req.query.capture_start);
+    const capture_end = isoAt(req.query.capture_end);
+    // A listener names itself, so a new device is a label rather than a code change here. Unknown or
+    // absent falls back to the two the FAB has always used.
+    const srcRaw = String(req.query.source || '').trim().toLowerCase();
+    const source = /^[a-z0-9][a-z0-9-]{0,23}$/.test(srcRaw) ? srcRaw : (quick ? 'web-quick' : 'web');
     const id = crypto.randomUUID();   // chosen here so the caller can wait on it (/api/voice-reply/:id)
-    await sbWrite('voice_requests', 'POST', { id, transcript, source: quick ? 'web-quick' : 'web', focus: 'hub',
+    await sbWrite('voice_requests', 'POST', { id, transcript, source, focus: 'hub',
+      ...(capture_start ? { capture_start } : {}), ...(capture_end ? { capture_end } : {}),
       ...(client_now ? { client_now } : {}), ...(location ? { location } : {}) });
     markSeen(msgId, id);
     res.json({ transcript, enqueued: true, id });

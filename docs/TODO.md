@@ -222,3 +222,22 @@ build that is no longer installed keeps being sent to. Delete a token when APNs 
   (~12h with the stale period), so it can never be a permanent display; and the **iPhone 12 Pro Max
   has no Dynamic Island**, so it would be Lock Screen only. Best fit is a countdown *timer*; second
   best is a single "N overdue" card. Needs push-to-start since reminders fire with the app closed.
+
+### Speaker ID for the phone's always-on listener
+
+The ESP and the Mac gate always-on capture on ECAPA against the enrolled voiceprint
+(`voiceid_accept_threshold`); the phone's always-on mode does not yet, so it will enqueue whatever it
+hears, television included. It is the same situation and wants the same gate — `docs/LISTENERS.md`.
+
+The awkward part is WHERE. `_verify_jared` and the bank live in `voice-pipeline/server/server.py` on
+Fly, and it gates the ESP before a row ever exists. The phone's audio arrives at the hub instead, and
+the hub is Node and cannot run ECAPA. Three ways out, in preference order:
+
+1. **Gate in the worker.** It already runs every `voice_requests` row and its image already carries
+   speechbrain + the ECAPA weights (`server/Dockerfile` downloads them). A row flagged as coming from
+   an always-on listener gets scored before it runs, and every listener is then gated by one piece of
+   code wherever its audio came from. Needs the worker to fetch the kept clip.
+2. **An HTTP scorer on `jared-voice`.** Natural home for the bank, but its HTTP surface is
+   `websockets`' `process_request`, which hands over headers rather than a body — so posting audio to
+   it is not the few lines it looks like.
+3. **Score on the phone.** No, unless the voiceprint should live on the device.

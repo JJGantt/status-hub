@@ -110,6 +110,13 @@ so the user record that follows does not say it twice.
 machine claims it, pulls the repo, launches with `--remote-control`, and publishes the row as the most
 recently active session. The Pi clones from GitHub if it has no checkout; the Mac uses the one it has.
 
+**The model is named at launch on both machines** — `DESK_MODEL` in the orchestrator's config, and
+`PI_DESK_MODEL` in pi-desk's `launch.sh`, both opus. Left to settings, a session takes whatever
+`/model` last wrote to `~/.claude/settings.json`, and a wrong value there is invisible from an
+interactive session in the home directory: `~/.claude/settings.local.json` is also the PROJECT
+settings file for the project rooted at `~`, so it outranks the machine default for exactly the
+sessions Jared opens himself, and for none of the ones dispatched into a repo.
+
 **Adopted.** Every 30s the Mac lists `claude` processes that have a controlling tty — which excludes
 the voice worker's SDK client and the MCP children — and any process no row owns becomes a row.
 

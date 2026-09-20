@@ -62,3 +62,20 @@ backgrounded page is the one outcome worth defending against automatically.
 Tapping the one-line prompt/reply strip on the home page (`#ph-conv`) opens the full thread sheet —
 it is the conversation in miniature, so it is the obvious way into the whole of it, and it frees the
 navbar slot the keyboard button held for the always-on button.
+
+## A dead microphone is detected by the EMPTY TRANSCRIPT, not by the VAD
+
+An iOS capture track that loses the audio session produces zeros while still reporting
+`readyState: 'live'` (see `ALARMS.md`). The recovery first hung off `vad:grace` — but only the
+auto-stopping recorders run a VAD, and `cardRec`, the microphone inside the session view, passes no
+`autoStop` at all. It therefore had NO recovery: it uploaded silence, the hub answered
+`{transcript: '', enqueued: false}`, and the prompt vanished with no row and no error, permanently,
+because nothing ever marked the stream dirty.
+
+So the signal is the one EVERY recorder produces: a clip with real bytes in it coming back with an
+empty transcript. Whisper returns empty for silence, so that is the microphone reporting zeros.
+`deliverVoice` marks the stream dirty there and the next press re-acquires. Clips under 2KB are
+exempt — too short to contain anything is not evidence of a dead device.
+
+The loud failure is covered separately: a track that ENDS announces it, so `mic()` attaches an
+`ended` listener when it acquires.

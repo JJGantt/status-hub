@@ -212,7 +212,14 @@ function mic() {
   micStream = null; micDirty = false;
   if (!micPending) {
     micPending = navigator.mediaDevices.getUserMedia({ audio: true })
-      .then((s) => { micStream = s; return s; })
+      .then((s) => {
+        micStream = s;
+        // The loud way a capture dies: the track ends and says so. Marking it here means the next
+        // caller re-acquires instead of building a MediaRecorder over a finished device. (The quiet
+        // way — still 'live', producing zeros — is caught by the empty transcript in deliverVoice.)
+        for (const t of s.getTracks()) t.addEventListener('ended', () => { micDirty = true; });
+        return s;
+      })
       .finally(() => { micPending = null; });
   }
   return micPending;
@@ -783,7 +790,25 @@ async function deliverVoice(item, onStatus, owner) {
   const j = await r.json().catch(() => ({}));
   if (!r.ok || j.error) throw Object.assign(new Error(j.error || 'Send failed'), { refused: true });
   if (j.duplicate) { onStatus('', 'clear'); pushPending({ state: 'clear' }); }  // an earlier attempt already enqueued it
-  else if (!j.transcript) { onStatus('Didn’t catch that — try again', 'err'); if (!item.dry) pushPending({ state: 'clear' }); }
+  else if (!j.transcript) {
+    // NOTHING CAME BACK FROM A CLIP THAT HAD AUDIO IN IT. Whisper returns empty for silence, so this
+    // is the evidence EVERY recorder produces that the microphone handed us zeros — and the stream
+    // it came from stays `readyState: 'live'` while doing it, so nothing else will ever notice.
+    //
+    // The self-heal used to hang off `vad:grace`, which only the auto-stopping recorders run. The
+    // session card's microphone runs no VAD at all, so it had no recovery path: it uploaded silence,
+    // the hub answered with an empty transcript, and the prompt vanished with no row and no error —
+    // permanently, since nothing marked the stream dirty. Hanging it here instead covers every
+    // recorder, whatever it does about silence.
+    //
+    // Bytes are the qualifier: a clip too short to contain anything is not evidence of a dead mic.
+    if ((item.blob ? item.blob.size : 0) > 2048) {
+      dirtyMic();
+      clientLog({ ev: 'mic-empty-transcript', bytes: item.blob.size, dur: item.dur, dry: !!item.dry });
+    }
+    onStatus('Didn’t catch that — try again', 'err');
+    if (!item.dry) pushPending({ state: 'clear' });
+  }
   else if (item.dry) { owner.onTranscript(j.transcript); onStatus('', 'clear'); }   // compose mode: into the text box
   else {                                                                     // show what was heard, then stream the run
     if (_card) _card.optimistic({ text: j.transcript, kind: 'text' });       // the spoken command as its own live user bubble

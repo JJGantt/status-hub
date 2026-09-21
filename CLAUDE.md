@@ -272,8 +272,8 @@ not the silent push that carries a new alarm to a sleeping phone. `dueTick`'s no
 layer underneath it, not the mechanism.
 
 **It notifies ONCE**, the same as any dated item — one banner at the moment, never a repeat until
-it is cleared. Repeating is the page's job, and the page's alone: it rings on a loop for
-`RING_MAX_MS`. A notification that re-fires every minute is a second alarm nobody asked for.
+it is cleared. Repeating is the page's job, and the page's alone: it rings on a loop until STOP.
+A notification that re-fires every minute is a second alarm nobody asked for.
 
 ## Widget drawing files stay WidgetKit-free
 

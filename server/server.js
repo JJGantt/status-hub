@@ -146,6 +146,7 @@ async function routingConfig() {
   };
 }
 const { buildVariants } = require('./lib/variants');
+const { createSurfAlarms } = require('./lib/surfalarm');
 const apns = require('./lib/apns');
 const weightReminder = require('./lib/weightReminder');
 
@@ -512,6 +513,18 @@ function surfBand(rk) {
 const SURFHIST_BACKSTOP_MS = 15 * 60 * 1000;
 let surfHistCache = { at: 0, body: null };
 const dirtySurfHist = () => { surfHistCache = { at: 0, body: null }; };
+
+// The surf alarm (lib/surfalarm.js, docs/ALARMS.md): the conditions live in `surf_alarms`, and the
+// hub re-decides on every new snapshot and every rule change, both of which arrive over realtime.
+// The 15-minute tick is the backstop behind that subscription, not the mechanism: it asks only for
+// the newest snapshot's timestamp, and reads nothing at all when no alarm is set.
+const surfAlarms = createSurfAlarms({
+  sb, sbWrite, uuid: () => crypto.randomUUID(),
+  nowLocal: nowNaiveLocal, today: () => localDate(), tz: getTZ,
+  log: (m) => console.log(m),
+});
+const SURF_ALARM_BACKSTOP_MS = 15 * 60 * 1000;
+setInterval(() => surfAlarms.tick('backstop'), SURF_ALARM_BACKSTOP_MS);
 
 
 // ---- dashboard source-row cache ------------------------------------------------------------
@@ -909,7 +922,9 @@ function startRealtime() {
     .on('postgres_changes', { event: '*', schema: 'public', table: 'exercise_muscles' }, changed)
     // A new snapshot changes both the card's current reading and the heatmap behind it.
     .on('postgres_changes', { event: '*', schema: 'public', table: 'surf_snapshots' },
-      (p) => { dirtySurfHist(); changed(p); })
+      (p) => { dirtySurfHist(); changed(p); surfAlarms.tick('snapshot'); })
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'surf_alarms' },
+      () => { seen(); surfAlarms.tick('rule'); })
     // The rep watcher, so setting it appears at once rather than on the next periodic
     // frame. Its whole value is confirming BEFORE a set that sets are being logged as
     // the right thing, and a delay there defeats the purpose. workset_reports is NOT
@@ -979,6 +994,8 @@ function startRealtime() {
       // only as "the clock starts now" so a channel that comes back deaf still trips
       // the watchdog instead of looking healthy forever.
       if (status === 'SUBSCRIBED') lastRealtimeEvent = Date.now();
+      // Whatever arrived while the socket was down was missed, so re-decide from the current state.
+      if (status === 'SUBSCRIBED') surfAlarms.tick('subscribe');
     });
 }
 

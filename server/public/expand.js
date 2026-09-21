@@ -24,7 +24,9 @@ const SECTIONS = {
   // THE HEAT MAPS open by tapping the map. A tap on a day still picks that day on the way in — the
   // card's own click lands after the sheet opens — so the sheet and the rings behind it are on the
   // day that was tapped.
-  nut: { host: '#nutritionlog', move: ['#nutritionlog'], title: 'Nutrition', heat: '#nutheat', cards: HEATS,
+  // The food list is `#nutinfo`, which the phone's page keeps BESIDE the map and the health wall inside
+  // it; moving both covers the two, since an element inside another being moved is left where it is.
+  nut: { host: '#nutritionlog', move: ['#nutritionlog', '#nutinfo'], title: 'Nutrition', heat: '#nutheat', cards: HEATS,
          tap: '#nutheat', scroller: '#nutheat' },
   wk:  { host: '#workouts', move: ['#workouts', '#heatinfo'], title: 'Workouts', heat: '#heatwrap', cards: HEATS,
          tap: '#heatwrap', scroller: '#heatwrap' },
@@ -78,8 +80,9 @@ function ensureSheet() {
 
 function openSheet(key) {
   const sec = SECTIONS[key];
-  const els = sec.move.map((s) => document.querySelector(s)).filter(Boolean);
-  if (els.length !== sec.move.length) return;
+  const found = sec.move.map((s) => document.querySelector(s)).filter(Boolean);
+  if (found.length !== sec.move.length) return;
+  const els = found.filter((el, i) => !found.slice(0, i).some((p) => p.contains(el)));
   ensureSheet();
   sheet.dataset.sec = key;
   sheet.querySelector('.ss-title').textContent = sec.title;

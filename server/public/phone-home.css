@@ -282,6 +282,11 @@ body.tv.phonehome .ph-list .heath{display:none}   /* the date is the day the map
    the day's SET TOTAL is written, which the sheet has room for and the small view carries on the clock
    strip instead. */
 body.tv.phonehome .sectsheet .ph-list .heath{display:block}
+/* The food list moves into the sheet beside the map rather than inside it, so here the MAP keeps its
+   own height and the list takes the rest — the reverse of app.css, where the list is inside the map's
+   block and that block is what grows. */
+body.tv.phonehome .sectsheet[data-sec="nut"] #nutritionlog{flex:0 0 auto}
+body.tv.phonehome .sectsheet[data-sec="nut"] #nutinfo{flex:1 1 auto;height:auto;min-height:0;padding:4px 14px 24px}
 body.tv.phonehome .ph-list .dex-n .stagedbadge{font-size:7px}
 /* The clocks. One row, and the same treatment as the totals line so the column reads as two of the
    same thing rather than a panel and a bare row. */

@@ -12,25 +12,20 @@ import AppKit
 #if os(iOS)
 // HOLDING THE SCREEN AWAKE while the app is in front.
 //
-// This is for the ALARM path, not for reading the wall. A new alarm only reaches the device over a
-// push, and iOS rations the background kind hard — measured here, a phone refused four in a row
-// overnight while alert pushes to the same device in the same minutes arrived, and a passive alert
-// carrying `content-available` did not wake it either. A push to an ACTIVE app is not rationed at
-// all: the same phone fetched and acked one second after a nudge with the app on screen. So an alarm
-// decided at 4am registers immediately if the app is still in front, and not at all if the screen
-// has locked behind it. Auto-Lock is what decides which of those happens, so the app takes it over
-// rather than leaving the alarm to a Settings toggle nobody will remember to set.
+// This is for the ALARM, not for reading the wall. The hub page is the phone's alarm clock, and it
+// rings only while it is running: once the screen locks behind it, its timer stops and the morning is
+// the TV's alone. Auto-Lock is what decides that, so the app takes it over rather than leaving the
+// alarm to a Settings toggle nobody will remember to set.
 //
 // iOS restores the idle timer itself when the app leaves the foreground, so passing false is belt
 // and braces — but it is what stops a backgrounded StatusHub holding the screen open over whatever
 // the user switched to.
 // WHETHER A GUIDED ACCESS SESSION IS RUNNING, pushed into the page.
 //
-// The page needs this and cannot find it out: there is no web API for it, and the thing that gives it
-// away — Web Audio being silenced — is not measurable from inside the audio graph. It decides whether
-// the page's own alarm should ring on top of an AlarmKit one. Inside a session AlarmKit's alert does
-// not present, measured on device, so the page is the only thing that will make noise; outside one,
-// ringing anyway is just a duplicate.
+// The page cannot find this out for itself: there is no web API for it, and the thing that gives it
+// away — Web Audio being silenced — is not measurable from inside the audio graph. It rides the page's
+// alarm beacon, which is how the night-before setup (open, in Guided Access) is checked from the hub
+// log.
 //
 // Pushed on every page load AND on the system notification, because a session can start or end while
 // the page sits there untouched — which is exactly what happens on the nights this is for.
@@ -138,23 +133,11 @@ struct StatusHubApp: App {
                         if !name.isEmpty { PaneLaunch.shared.request(name) }
                     }
                 }
-                // BECOMING ACTIVE, from the scene rather than from the app delegate. This app is a
-                // SwiftUI `WindowGroup`, so it is scene-based, and UIKit does not promise to call
-                // `applicationDidBecomeActive` in a scene-based app — which is why the alarm sync it
-                // was hung off never ran. `scenePhase` is the supported signal here.
-                //
-                // This is the run that MATTERS: an AlarmKit alarm is registered on the device, the
-                // permission prompt can only be raised with someone looking at it, and the silent
-                // push behind it is best-effort. Opening the app is the one guaranteed moment.
-                .onChange(of: scenePhase) { _, phase in
-                    StayAwake.apply(phase == .active)
-                    guard phase == .active else { return }
-                    AlarmSync.sync(why: "scenePhase", mayPrompt: true)
-                }
-                .task {
-                    StayAwake.apply(true)
-                    AlarmSync.sync(why: "launch", mayPrompt: true)
-                }
+                // From the scene rather than from the app delegate: this app is a SwiftUI `WindowGroup`,
+                // so it is scene-based, and UIKit does not promise to call `applicationDidBecomeActive`
+                // in a scene-based app. `scenePhase` is the supported signal here.
+                .onChange(of: scenePhase) { _, phase in StayAwake.apply(phase == .active) }
+                .task { StayAwake.apply(true) }
             #endif
             #if os(macOS)
                 // Landscape: the Mac app renders the wall (?mode=mac) — the TV dashboard + a docked chat
@@ -453,7 +436,7 @@ struct HubWebView {
         // the APNs token via a same-origin (cookie-authed) fetch.
         func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
             PushManager.shared.attach(webView)
-            GuidedAccess.shared.attach(webView)   // the page cannot see this for itself; the alarm needs it
+            GuidedAccess.shared.attach(webView)   // the page cannot see this for itself; its beacon reports it
             RecordLaunch.shared.fireIfPending()   // statushub://record cold launch → auto-start the voice FAB
             ItemLaunch.shared.fireIfPending()     // statushub://item/<id> cold launch → open that item
             PaneLaunch.shared.fireIfPending()     // statushub://pane/<name> cold launch → land there

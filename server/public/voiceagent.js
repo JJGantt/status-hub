@@ -351,7 +351,7 @@ export function makeRecorder({ onStatus = () => {}, onState = () => {}, quick, a
       const an = actx.createAnalyser(); an.fftSize = 1024;
       actx.createMediaStreamSource(stream).connect(an);
       const buf = new Uint8Array(an.fftSize), t0 = performance.now();
-      let floor = Infinity, spoke = false, silence = 0;
+      let floor = Infinity, spoke = false, silence = 0, peak = 0;
       const HANG_MS = phoneHangMs, GRACE_MS = Math.max(8000, phoneHangMs + 3000);   // trailing-silence from the phone_silence_s setting
       vadTimer = setInterval(() => {
         if (!recording) return;
@@ -364,6 +364,7 @@ export function makeRecorder({ onStatus = () => {}, onState = () => {}, quick, a
         // as speech — no trailing-silence stop, just a hang until the grace timer gave up. A minimum
         // needs no such pause, because the gaps between words are themselves near the floor.
         if (rms < floor) floor = rms;
+        if (rms > peak) peak = rms;
         const thr = Math.max(floor * 2.5, 0.02);
         if (rms >= thr) { spoke = true; heardSpeech = true; silence = 0; }   // speaking
         else if (spoke) { if (!silence) silence = now; else if (now - silence >= HANG_MS) { trace('vad:silence'); stop(); } }  // trailing silence → send
@@ -371,7 +372,10 @@ export function makeRecorder({ onStatus = () => {}, onState = () => {}, quick, a
         // means eight seconds of silence arrived from a microphone he was talking into, so the
         // stream is assumed dead and the next press re-acquires. Costs one lost attempt instead of
         // every attempt until the page happens to reload.
-        else if (now - t0 > GRACE_MS) { trace('vad:grace'); dirtyMic(); stop(); }
+        // The context state and the loudest frame say WHICH silence this was: a suspended context
+        // (built outside the tap's gesture) reads flat whatever the mic hears; a running one at peak 0
+        // is a dead capture; a running one with a real peak is a threshold that never let him in.
+        else if (now - t0 > GRACE_MS) { trace('vad:grace', { actx: actx && actx.state, peak: +peak.toFixed(4), floor: +floor.toFixed(4) }); dirtyMic(); stop(); }
       }, 60);
       vadRan = true;
     } catch (_) { /* no Web Audio → falls back to tap-to-stop */ }

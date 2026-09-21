@@ -16,8 +16,16 @@ to be silence. That is wrong for a button someone is holding a thought in front 
 mid-sentence is not the end of a sentence, and the give-up path dropped the clip without sending
 anything. `autoStop: false` in `navbar.js` — the recording ends when he ends it.
 
-The give-up path still exists inside the recorder for the always-on caller, and it now also marks the
-mic dirty; see the microphone section of `ALARMS.md` for why that matters.
+**The session view's microphone is the same button** (`at.rec` in `cards/repos.js`, `autoStop: false`).
+With `autoStop` on, the VAD judges each clip, and one it thinks is silent is thrown away inside
+`send()` with no message. On his phone it judged whole spoken follow-ups silent, so the press
+recorded, discarded his words and showed nothing. Any press-to-talk button has to send what it
+recorded, so none of them may set `autoStop`.
+
+`autoStop: true` remains on the new-session dictation (`beginDictation` in `cards/repos.js`) and on
+the `/mic` web clip, so both can still drop a clip that way. `vad:grace` in the hub log (`fly logs |
+grep tap`) carries the analyser's `actx` state and the `peak`/`floor` RMS it saw, which shows WHICH
+kind of silence it was: a suspended context, a dead capture, or a threshold he never crossed.
 
 ## The always-on button
 
@@ -73,8 +81,8 @@ navbar slot the keyboard button held for the always-on button.
 
 An iOS capture track that loses the audio session produces zeros while still reporting
 `readyState: 'live'` (see `ALARMS.md`). The recovery first hung off `vad:grace` — but only the
-auto-stopping recorders run a VAD, and `cardRec`, the microphone inside the session view, passes no
-`autoStop` at all. It therefore had NO recovery: it uploaded silence, the hub answered
+auto-stopping recorders run a VAD, and the press-to-talk ones — `cardRec` in the chat sheet, the
+navbar's, the session view's — pass no `autoStop`. It therefore had NO recovery: it uploaded silence, the hub answered
 `{transcript: '', enqueued: false}`, and the prompt vanished with no row and no error, permanently,
 because nothing ever marked the stream dirty.
 

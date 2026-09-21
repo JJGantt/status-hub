@@ -647,9 +647,12 @@ async function openSession(id) {
   box.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); sendWords(box.value); } });
   // Spoken words go straight in, as they do on the watch and as this pane's launcher sends a dictated
   // prompt: `dryWhen` has the hub transcribe without enqueueing a voice command, and the transcript
-  // is sent as the follow-up. Trailing silence ends the recording; a second tap ends it sooner.
+  // is sent as the follow-up. PRESS TO START, PRESS TO SEND — the same as the navbar's button, and
+  // nothing else ends it. `autoStop` would hand both decisions to the VAD: it ends the recording at a
+  // pause, and a clip it judges silent is DISCARDED with no message. On the phone it judged whole
+  // spoken commands silent, so a press here recorded, then threw the words away, and said nothing.
   at.rec = makeRecorder({
-    autoStop: true,
+    autoStop: false,
     dryWhen: () => true,
     onStatus: (t, kind) => { if (cur === at && kind !== 'prompt') status.textContent = t || ''; },
     onState: (s) => { mic.classList.toggle('ai-rec', s === 'rec'); mic.classList.toggle('ai-armed', s === 'armed'); },

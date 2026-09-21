@@ -30,7 +30,7 @@ const { getTZ, setTZ, DAY_START_HOUR, localDate, nutritionWindow, lastNTrainingD
 const { buildWorkoutHeatmap } = require('./lib/heatmap');
 const { buildWeightPlot } = require('./lib/weightplot');
 const { getWeather } = require('./lib/weather');
-const { transcribe, extFor } = require('./lib/transcribe');
+const { transcribe, clipSeconds, extFor } = require('./lib/transcribe');
 const { buildNutritionLog, buildGoalResolver, calorieColor } = require('./lib/nutritionlog');
 const { computeScore, tasksScore, taskDeadline, completionValue, completionStamp, bandPoints, toPoints, TASK_GRACE_MIN, TASK_LATE_ZERO_H, TASK_DRAIN_FULL_H } = require('./lib/score');
 
@@ -2120,6 +2120,11 @@ function parseLocation(src) {
 // temp file is gone when this handler ends. Runs after the reply and swallows its own failure, so it can
 // neither slow a command down nor fail one.
 const CLIP_BUCKET = 'voice-clips';
+
+// A damaged capture (see /api/voice-command) keeps about 11% of its recorded time and a sound one over
+// 99%, so half sits far from both. Under a second the device's own timing is too coarse to judge by.
+const CAPTURE_MIN_KEPT = 0.5;
+const CAPTURE_CHECK_MIN_S = 1;
 async function keepClip(id, file, contentType, bytes, dur) {
   try {
     const type = contentType.split(';')[0].trim();
@@ -2148,10 +2153,22 @@ app.post('/api/voice-command', async (req, res) => {
     const { size } = await fs.promises.stat(tmp);
     if (!size) return res.status(400).json({ error: 'no audio' });
     const ct = String(req.headers['content-type'] || 'audio/webm');
+    const dur = parseFloat(req.query.dur);
+    // A CLIP THAT HOLDS A FRACTION OF WHAT WAS RECORDED IS REFUSED, NOT TRANSCRIBED. The phone's
+    // capture can drop most of its frames while still producing a valid file: 36.7s of talking came
+    // up as 4.2s of chopped fragments, one frame kept in about nine. Whisper hears that as noise and
+    // writes "Thank you." — which would then be enqueued and acted on as his command. Only the
+    // device knows how long it recorded, so the check needs its `dur`; a clip that keeps well under
+    // half of it is damaged (a sound one keeps over 99%). The page resets its microphone on
+    // `capture: 'damaged'` — see captureDamaged() in voiceagent.js.
+    const heldS = dur >= CAPTURE_CHECK_MIN_S ? await clipSeconds(tmp) : null;
+    if (heldS != null && heldS < dur * CAPTURE_MIN_KEPT) {
+      console.log(`[voice-command] DAMAGED ${size} bytes ${ct}: holds ${heldS.toFixed(2)}s of ${dur.toFixed(1)}s recorded, refused`);
+      return res.json({ transcript: '', enqueued: false, capture: 'damaged', held_s: +heldS.toFixed(2), dur });
+    }
     const { transcript, segments } = await transcribe(tmp, ct, GROQ_API_KEY);
     // Bytes per second of speech is what decides whether a clip fits Groq's cap, and it is set by the
     // recording device, not by us — so every clip reports it.
-    const dur = parseFloat(req.query.dur);
     console.log(`[voice-command] ${size} bytes ${ct}` +
       (dur > 0 ? ` ${dur.toFixed(1)}s ${Math.round(size * 8 / dur / 1000)} kbps` : '') +
       (segments ? ` re-encoded into ${segments} segment(s)` : ''));

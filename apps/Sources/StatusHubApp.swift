@@ -52,6 +52,34 @@ final class GuidedAccess {
     }
 }
 
+// THE ALARM BORROWS THE AUDIO SESSION AND HANDS BACK WHAT IT FOUND (see "alarmAudio" below).
+//
+// Giving it back means restoring the category, not just deactivating. WebKit sets `.playAndRecord`
+// itself when the page opens the microphone, and deactivating leaves the category exactly where the
+// alarm put it — `.playback`, which cannot record — so every capture after an alarm or a sound-bench
+// press ran under a category that forbids it. The category, mode and options are taken when the alarm
+// claims the session and put back when it lets go; a release with nothing claimed does nothing.
+enum AlarmAudio {
+    private static var found: (AVAudioSession.Category, AVAudioSession.Mode, AVAudioSession.CategoryOptions)?
+
+    static func hold(_ on: Bool) {
+        let s = AVAudioSession.sharedInstance()
+        if on {
+            if found == nil { found = (s.category, s.mode, s.categoryOptions) }
+            do {
+                try s.setCategory(.playback, mode: .default, options: [])
+                try s.setActive(true)
+            } catch { NSLog("alarmAudio claim: \(error)") }
+        } else {
+            guard let (category, mode, options) = found else { return }
+            found = nil
+            // Separately, so a refused deactivation cannot keep the category from coming back.
+            do { try s.setCategory(category, mode: mode, options: options) } catch { NSLog("alarmAudio restore: \(error)") }
+            do { try s.setActive(false, options: [.notifyOthersOnDeactivation]) } catch { NSLog("alarmAudio release: \(error)") }
+        }
+    }
+}
+
 enum StayAwake {
     static func apply(_ on: Bool) {
         UIApplication.shared.isIdleTimerDisabled = on
@@ -459,17 +487,7 @@ struct HubWebView {
                 // and the voice features here do. A session taken for the whole run would trade the
                 // alarm for the microphone.
                 let on = (message.body as? NSNumber)?.boolValue ?? false
-                DispatchQueue.main.async {
-                    let s = AVAudioSession.sharedInstance()
-                    do {
-                        if on {
-                            try s.setCategory(.playback, mode: .default, options: [])
-                            try s.setActive(true)
-                        } else {
-                            try s.setActive(false, options: [.notifyOthersOnDeactivation])
-                        }
-                    } catch { NSLog("alarmAudio \(on): \(error)") }
-                }
+                DispatchQueue.main.async { AlarmAudio.hold(on) }
             default: break
             }
             #endif

@@ -145,7 +145,8 @@ alarm:
   signal the page could see said it was working. `media.readyState` now rides in the beacon next to
   the context state, because the element having its bytes is the half that actually predicts noise.
 - **`nativeAudio()`** asks the native side for a `.playback` session for the duration of the ring
-  (`alarmAudio` in `StatusHubApp.swift`) and gives it back on stop, because `.playback` cannot record
+  (`alarmAudio` in `StatusHubApp.swift`) and gives it back on stop — restoring the category it found,
+  not just deactivating, because `.playback` cannot record
   and the voice features need the microphone. That covers the mute switch, which is a different
   failure from the Guided Access one. In a plain browser there is no session to claim and it no-ops.
 - **The wake lock is the mechanism, not a nicety.** A locked phone does not run timers on any

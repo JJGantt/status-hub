@@ -36,8 +36,14 @@ syllable costs the command.
 Whisper does not return an empty string for silence — it invents a plausible sentence, and the worker
 then acts on it.
 
-**It mutes the other listeners** while engaged (`voice_muted`), for the same reason the button does:
-an always-on phone mic and an always-on room mic must not both route the same words.
+**It mutes nothing.** The Mac and the ESP already listen at the same time and the worker collapses
+whichever of them heard the same utterance by capture window (`LISTENERS.md`), so the phone joins as
+a peer. Only the microphone button mutes the others, because a hard-routed command is not a listener.
+
+**Each segment's recorder fills its own array.** With no timeslice, a `MediaRecorder` delivers
+essentially the whole segment in its final `dataavailable`, which fires after `stop()` — by which
+time the next segment is running. Pushed into a shared array, that audio lands in the NEXT clip: one
+upload holds half its segment and the next holds two recordings glued together.
 
 ## The button is the only indicator
 
@@ -79,3 +85,29 @@ exempt — too short to contain anything is not evidence of a dead device.
 
 The loud failure is covered separately: a track that ENDS announces it, so `mic()` attaches an
 `ended` listener when it acquires.
+
+## A capture that DROPS FRAMES is caught by the hub, from the clip
+
+The phone's capture can keep one audio frame in about nine while its track reports live and unmuted:
+36.7 seconds of talking arrives as 4.2 seconds of chopped fragments, at an effective 5.5kHz where a
+sound clip is 48kHz — a sample-rate mismatch somewhere beneath the page. Whisper hears the fragments
+as noise and writes `Thank you.`, which would otherwise be enqueued and acted on. Nothing the page can
+read shows it; the clip does.
+
+So `/api/voice-command` measures every clip that carries a `dur` of a second or more: `clipSeconds`
+(`lib/transcribe.js`) reads the audio's length off its packet timestamps with an ffmpeg stream copy,
+tens of milliseconds, and a clip holding under half its recorded time is refused as
+`{capture: 'damaged'}` before transcription. Measured over every stored clip, sound ones hold 95-101%
+and damaged ones 11-12%. The hub log line is `[voice-command] DAMAGED`.
+
+The page's recovery escalates (`captureDamaged` in `voiceagent.js`). First a fresh capture: every
+track stopped and the device asked for again, and the always-on mode re-engages onto it
+(`hub:micreset`). If a clip recorded AFTER that reset is damaged too, the fault is below the stream and
+the page reloads, which discards every AudioContext, media element and capture the page owns at once.
+The reload waits for the outbox to drop the clip — resent on load it would be refused, and reload again.
+
+**The trigger is not yet known.** Every damaged clip beacons `ev: "mic-damaged"` to the hub log with
+the track's settings (`sampleRate`, device label), the audio devices present, how long the page has
+been up and whether Guided Access is on; every device arriving or leaving beacons `mic-devicechange`.
+A route change under the held capture (AirPods, a car) is the first suspect. Read those two side by
+side the next time it happens. Fly keeps only the last hundred or so log lines, so read them soon.

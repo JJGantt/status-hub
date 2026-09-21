@@ -238,6 +238,14 @@ export function holdMic() {
   document.addEventListener('hub:audioplayed', () => { dirtyMic(); if (document.visibilityState === 'visible') setTimeout(warm, 400); });
   document.addEventListener('visibilitychange', () => (document.hidden ? releaseMic() : warm()));
   window.addEventListener('pagehide', releaseMic);
+  // A device arriving or leaving (AirPods, a car) re-routes a held capture, which makes it the first
+  // suspect for a damaged one (see captureDamaged). Logged rather than acted on: re-acquiring here would
+  // cut off a recording in progress and cost the next tap a cold start, on no evidence yet that a route
+  // change is what breaks it. `mic-devicechange` beside `mic-damaged` in the hub log settles that.
+  try {
+    navigator.mediaDevices.addEventListener('devicechange', () =>
+      audioDevices().then((devices) => clientLog({ ev: 'mic-devicechange', devices, visible: !document.hidden })));
+  } catch (_) {}
 }
 
 // TEMPORARY. Every pointer event and every recorder state change, reported to the hub's log, because
@@ -454,12 +462,16 @@ export function makeListener({ onStatus = () => {}, onState = () => {} } = {}) {
   // MediaRecorder delivers its final chunk to ondataavailable AFTER stop() resolves, so a segment can
   // only be assembled in onstop. Each segment therefore carries its own decision — send or discard —
   // rather than the caller trying to read `chunks` at the moment it asks for the cut.
+  //
+  // AND EACH RECORDER FILLS ITS OWN ARRAY. That late final chunk is most of the segment (there is no
+  // timeslice, so it is usually all of it), and it arrives after the next segment has started. Pushed
+  // into a shared `chunks`, it landed in the NEXT clip: one upload came up holding 48% of its segment
+  // and the next 258%, the second being two recordings glued together.
   function cut(send) {
     if (!rec || rec.state === 'inactive') return;
     const take = send && heard;
     const dur = (performance.now() - segStart) / 1000;
     const bucket = chunks, type = mime || 'audio/webm';
-    chunks = [];
     const from = spokeAt ? new Date(spokeAt).toISOString() : null;
     const to = new Date().toISOString();
     rec.onstop = () => {
@@ -484,11 +496,12 @@ export function makeListener({ onStatus = () => {}, onState = () => {} } = {}) {
 
   function startSegment() {
     if (!stream) return;
-    chunks = []; heard = false; spokeAt = 0; segStart = performance.now();
+    const own = [];
+    chunks = own; heard = false; spokeAt = 0; segStart = performance.now();
     try {
       rec = new MediaRecorder(stream, { ...(mime ? { mimeType: mime } : {}), audioBitsPerSecond: VOICE_BPS });
     } catch (_) { rec = null; return; }
-    rec.ondataavailable = (e) => { if (e.data && e.data.size) chunks.push(e.data); };
+    rec.ondataavailable = (e) => { if (e.data && e.data.size) own.push(e.data); };
     try { rec.start(); } catch (_) {}
   }
 
@@ -542,19 +555,23 @@ export function makeListener({ onStatus = () => {}, onState = () => {} } = {}) {
   // The state reset is in a `finally` on purpose. Anything in the teardown throwing used to leave the
   // button lit with the mode already off — a control that will not turn off is worse than one that
   // fails loudly, because there is nothing left to press.
-  function disengage() {
+  function disengage(send = true) {
     if (!on) return;
     on = false;
     try {
       if (vadT) { clearInterval(vadT); vadT = null; }
       if (actx) { try { actx.close(); } catch (_) {} actx = null; }
-      cut(true);                          // whatever he was mid-way through still counts
+      cut(send);                          // whatever he was mid-way through still counts
       stream = null;
       dirtyMic();                         // this mode holds the mic hard; make the next press re-acquire
     } finally {
       onState('idle'); onStatus('', 'clear');
     }
   }
+  // A capture the hub found damaged is replaced under every recorder at once (captureDamaged). This
+  // mode holds its stream for as long as it is on, so it re-engages onto the new one — dropping the
+  // segment in progress, which was recorded on the damaged capture.
+  document.addEventListener('hub:micreset', () => { if (on) { disengage(false); engage(); } });
 
   return { engage, disengage, toggle() { on ? disengage() : engage(); }, get on() { return on; } };
 }
@@ -743,6 +760,7 @@ async function sendVoice(clip, owner) {
   try { await voiceBox.put(item); }
   catch (_) {                                          // no IndexedDB (a private window) — memory is the only copy there is
     try { await deliverVoice(item, owner.onStatus, owner); } catch (e) { voiceFailed(e, item, owner.onStatus); }
+    if (reloadForCapture) location.reload();
     return;
   }
   voiceOwners.set(item.id, owner);
@@ -790,6 +808,11 @@ async function deliverVoice(item, onStatus, owner) {
   const j = await r.json().catch(() => ({}));
   if (!r.ok || j.error) throw Object.assign(new Error(j.error || 'Send failed'), { refused: true });
   if (j.duplicate) { onStatus('', 'clear'); pushPending({ state: 'clear' }); }  // an earlier attempt already enqueued it
+  else if (j.capture === 'damaged') {
+    captureDamaged(item, j);
+    onStatus('Didn’t catch that — try again', 'err');
+    if (!item.dry) pushPending({ state: 'clear' });
+  }
   else if (!j.transcript) {
     // NOTHING CAME BACK FROM A CLIP THAT HAD AUDIO IN IT. Whisper returns empty for silence, so this
     // is the evidence EVERY recorder produces that the microphone handed us zeros — and the stream
@@ -809,12 +832,53 @@ async function deliverVoice(item, onStatus, owner) {
     onStatus('Didn’t catch that — try again', 'err');
     if (!item.dry) pushPending({ state: 'clear' });
   }
-  else if (item.dry) { owner.onTranscript(j.transcript); onStatus('', 'clear'); }   // compose mode: into the text box
+  else if (item.dry) { captureResetAt = 0; owner.onTranscript(j.transcript); onStatus('', 'clear'); }   // compose mode: into the text box
   else {                                                                     // show what was heard, then stream the run
+    captureResetAt = 0;
     if (_card) _card.optimistic({ text: j.transcript, kind: 'text' });       // the spoken command as its own live user bubble
     pushPending({ state: 'prompt', text: j.transcript });                    // and in every other view of the thread
     onStatus(j.transcript, 'prompt'); onStatus('Thinking…', 'busy');
   }
+}
+
+// ---- a capture that drops frames ------------------------------------------------------------------
+// THE HUB MEASURES EVERY CLIP against how long it was recorded and answers `capture: 'damaged'` when
+// most of it is missing (/api/voice-command). The phone's capture can keep one frame in about nine —
+// 36.7s of talking arriving as 4.2s of fragments, an effective 5.5kHz, which is a sample-rate
+// mismatch somewhere beneath the page — while its track still reports live and unmuted. Nothing on the
+// page can see it; only the clip shows it.
+//
+// Recovery escalates. First a fresh capture: every track stopped and the device asked for again, under
+// every recorder at once. If a clip recorded on that fresh capture is damaged too, the fault is below
+// the stream, and the page reloads — the one thing that throws away everything a page owns that
+// touches audio (both AudioContexts, every media element, WebKit's capture for this page) together.
+// The reload waits until the outbox has let go of the clip: resent on load, it would be refused and
+// reload again.
+let captureResetAt = 0, reloadForCapture = false;
+function captureDamaged(item, j) {
+  const escalate = captureResetAt > 0 && item.createdAt > captureResetAt;
+  diagnoseCapture({ held_s: j.held_s, dur: j.dur, bytes: item.blob ? item.blob.size : 0,
+    source: item.source || (item.dry ? 'dry' : 'fab'), action: escalate ? 'reload' : 'reacquire' });
+  if (escalate) { reloadForCapture = true; return; }
+  captureResetAt = Date.now();
+  releaseMic();
+  document.dispatchEvent(new CustomEvent('hub:micreset'));
+  if (document.visibilityState === 'visible') mic().catch(() => {});
+}
+// Everything the page can say about the capture, taken BEFORE it is released: which device, at what
+// rate, and what else was plugged in. This is how the cause gets found the next time it happens.
+function diagnoseCapture(fields) {
+  const t = micStream && micStream.getAudioTracks()[0];
+  const track = t ? { state: t.readyState, muted: t.muted, label: t.label, ...(t.getSettings ? t.getSettings() : {}) } : null;
+  audioDevices().then((devices) => clientLog({ ev: 'mic-damaged', ...fields, track, devices,
+    page_s: Math.round(performance.now() / 1000), guided: window.__guidedAccess }));
+}
+function audioDevices() {
+  try {
+    return navigator.mediaDevices.enumerateDevices()
+      .then((ds) => ds.filter((d) => d.kind.startsWith('audio')).map((d) => `${d.kind}:${d.label}`))
+      .catch(() => null);
+  } catch (_) { return Promise.resolve(null); }
 }
 
 function voiceFailed(err, item, onStatus) {
@@ -852,6 +916,7 @@ async function voicePass() {
     }
     await voiceBox.del(item.id).catch(() => {});       // a failed delete only means a resend, which the server drops
     voiceOwners.delete(item.id);
+    if (reloadForCapture) { location.reload(); return; }   // only now that the damaged clip is out of the box
   }
 }
 

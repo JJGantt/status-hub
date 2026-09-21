@@ -130,3 +130,11 @@ arrived from a microphone he was talking into, whatever the cause, so it costs o
 rather than every attempt until a reload. Re-acquiring also stops the old tracks first: a
 silent-but-live track still holds the device, and `getUserMedia` will otherwise hand back the same
 dead capture.
+
+**Letting go of the session restores its category.** `AlarmAudio.hold` in `StatusHubApp.swift` saves
+the category, mode and options when the alarm (or the bench's OSC+SESSION) claims `.playback`, and
+puts them back on release before deactivating. Deactivating alone leaves the session on `.playback`,
+which cannot record, underneath every capture that follows.
+
+A capture can also break without going silent — dropping most of its frames while still sounding like
+something. The hub catches that one by measuring the clip; see `VOICE-ON-THE-PHONE.md`.

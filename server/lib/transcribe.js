@@ -49,6 +49,23 @@ async function whisper(file, type, name, key) {
   return (await r.text()).trim();
 }
 
+// How many seconds of audio a clip actually holds, read off its packet timestamps by a stream copy —
+// nothing is decoded, so it costs tens of milliseconds whatever the length. null when ffmpeg cannot
+// read it, which says nothing either way.
+function clipSeconds(file) {
+  return new Promise((resolve) => {
+    const p = spawn('ffmpeg', ['-hide_banner', '-nostats', '-i', file, '-map', '0:a:0', '-c', 'copy', '-f', 'null', '-'],
+      { stdio: ['ignore', 'ignore', 'pipe'] });
+    let err = '';
+    p.stderr.on('data', (d) => { err = (err + d).slice(-4000); });
+    p.on('error', () => resolve(null));
+    p.on('close', () => {
+      const m = [...err.matchAll(/time=(\d+):(\d+):(\d+(?:\.\d+)?)/g)].pop();
+      resolve(m ? +m[1] * 3600 + +m[2] * 60 + parseFloat(m[3]) : null);
+    });
+  });
+}
+
 // → { transcript, segments } — segments is 0 when the clip went up as recorded.
 async function transcribe(file, contentType, key) {
   const ct = String(contentType || 'audio/webm');
@@ -68,4 +85,4 @@ async function transcribe(file, contentType, key) {
   }
 }
 
-module.exports = { transcribe, extFor, GROQ_MAX_BYTES, SEGMENT_S };
+module.exports = { transcribe, clipSeconds, extFor, GROQ_MAX_BYTES, SEGMENT_S };

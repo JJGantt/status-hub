@@ -28,8 +28,7 @@ const BEEP_MS = 1400;
 const SOUND = (slug) => `/alarm-${slug || 'classic'}.m4a`;
 
 // HOW LONG IT RINGS. Left unbounded it rang for 53 minutes into an empty room, because STOP was the
-// only thing that ended it. Matched to ALARM_NAG_MIN on the server so the loud layer and the quiet
-// one give up together — two layers that stop at different times is two behaviours to remember.
+// only thing that ended it. ALARM_RING_MIN on the server is the same number.
 const RING_MAX_MS = 10 * 60 * 1000;
 
 let items = [], fireT = null, ringT = null, ringEndT = null, ringing = null, actx = null, lock = null;

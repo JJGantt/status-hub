@@ -3995,16 +3995,9 @@ function dueMoment(due) {
   return /T\d/.test(d) ? d : d.slice(0, 10) + 'T09:00:00';
 }
 
-// Two local-naive stamps as milliseconds, so one can be subtracted from the other. Both are read in
-// the same zone, so treating them as UTC cancels out — this converts nothing, it only subtracts.
-const naiveMs = (s) => Date.parse(String(s).slice(0, 19) + 'Z');
-
-// How long an alarm the phone never confirmed keeps asking. A reminder is one banner because it is
-// something to notice; an alarm is something being slept through, and a single banner at the moment
-// is the one shape guaranteed not to work for that. It stops the instant the item is completed —
-// that is the real stop condition — and this only bounds how long it tries, because a banner nobody
-// has answered in ten minutes is not going to be answered by an eleventh.
-const ALARM_NAG_MIN = 10;
+// How long the page rings an alarm before giving up — RING_MAX_MS in public/alarmclock.js is the same
+// number. The notification is not part of it: an alarm item notifies once, like any dated item.
+const ALARM_RING_MIN = 10;
 
 // When a dated item stops being on time: the SCORING deadline, as a local-naive stamp. A timed item is
 // late at its own moment; a date-only one is on time for its whole day and late at the next day's 4am
@@ -4111,25 +4104,10 @@ async function dueTick() {
     // alarm into no alarm at all rather than into a banner. A redundant notification costs a buzz; a
     // suppressed one costs the morning. `/alarm` left open is what actually makes noise now, and
     // this is the layer under it.
-    // AND IT KEEPS ASKING. The key carries the minute, so the minute tick sends one a minute until
-    // the item is completed (which takes it out of this query) or the phone arms it after all (which
-    // takes the branch above). Derived from how late it is rather than counted anywhere, so there is
-    // no state to drift and a restart resumes at the right number instead of starting over.
-    let key = dk;
-    if (r.alarm) {
-      const late = Math.floor((naiveMs(nowET) - naiveMs(dueMoment(r.due))) / 60000);
-      if (late >= ALARM_NAG_MIN) continue;
-      if (late > 0) key = `${dk}:r${late}`;
-      // Hold the tick open. It otherwise sleeps to the next FUTURE due, and a nag is the one thing
-      // that needs it back in a minute with nothing scheduled to bring it — an already-overdue row
-      // never sets the wake, so without this the second banner never goes out.
-      dueNextAt = earlierOf(dueNextAt, plusMinutes(nowET, 1));
-      console.log(`[due] ${r.id} is an alarm the phone never confirmed — notifying (${late + 1}/${ALARM_NAG_MIN})`);
-    }
-    try { if ((await sb(`notifications?dedupe_key=eq.${encodeURIComponent(key)}&select=id&limit=1`)).length) continue; } catch (_) { continue; }
+    try { if ((await sb(`notifications?dedupe_key=eq.${encodeURIComponent(dk)}&select=id&limit=1`)).length) continue; } catch (_) { continue; }
     const handler = DUE_HANDLERS.push;
     if (handler === DUE_HANDLERS.push && !apns.configured()) continue;   // nothing to deliver through
-    await handler({ ...r, emoji: emojiOf[r.list_name] }, key);
+    await handler({ ...r, emoji: emojiOf[r.list_name] }, dk);
     console.log(`[due] fired ${r.id} [${r.list_name}] "${String(r.title || r.text).slice(0, 40)}"`);
     // Nothing to re-arm. Every occurrence of a recurring thing is its own row with its own due
     // (data-layer migration 00085), so each one fires once and then stays put — which is also what
@@ -4158,7 +4136,7 @@ async function closeExempt(nowET, rows) {
     // An ALARM is closed only once its ring is over. The page stops ringing the moment the item
     // leaves the feed, and a timed exempt item's deadline is its own moment, so closing on time
     // would silence the alarm in the minute it starts.
-    if (r.alarm) deadline += ALARM_NAG_MIN * 60000;
+    if (r.alarm) deadline += ALARM_RING_MIN * 60000;
     if (deadline > now) {
       next = earlierOf(next, new Date(deadline).toISOString().slice(0, 19));
       continue;

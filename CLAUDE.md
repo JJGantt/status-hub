@@ -158,11 +158,10 @@ alarm:
   which is how a change made at 4am reaches an already-open page with no push involved. A second
   EventSource on one phone is a mistake already made here. The two-minute reload behind it is the
   backstop for a socket gone deaf while still looking open.
-- **The ring is bounded** (`RING_MAX_MS`, matched to the server's `ALARM_NAG_MIN`). With STOP as the
-  only way out it rang for 53 minutes into an empty room. The loud layer and the quiet one give up
-  together, because two layers stopping at different times is two behaviours to remember. It also
-  stops when the item leaves the feed, so clearing it anywhere else ends the noise — the feed is the
-  state, and STOP is only one way of changing it.
+- **The ring is bounded** (`RING_MAX_MS`, the same number as the server's `ALARM_RING_MIN`). With
+  STOP as the only way out it rang for 53 minutes into an empty room. It also stops when the item
+  leaves the feed, so clearing it anywhere else ends the noise — the feed is the state, and STOP is
+  only one way of changing it.
 
 ## An alarm rings from the phone, and the hub can only ask
 
@@ -272,14 +271,9 @@ own speaker, so it depends on neither thing measured to fail here: not AlarmKit'
 not the silent push that carries a new alarm to a sleeping phone. `dueTick`'s notification is the
 layer underneath it, not the mechanism.
 
-**And it keeps asking**, once a minute for `ALARM_NAG_MIN`. One banner is right for a reminder,
-which is something to notice; an alarm is something being slept through, and a single banner at the
-moment is the one shape guaranteed not to work for that. The dedupe key carries the minute
-(`…:r<n>`), derived from how late the item is rather than counted anywhere, so nothing drifts and a
-restart resumes at the right number. Completing the item is the real stop condition — it leaves
-`dueTick`'s query — and the phone arming it late stops it too, by taking the branch above. The nag
-also has to hold the tick open (`dueNextAt`), because the tick otherwise sleeps to the next FUTURE
-due and an already-overdue row never sets one.
+**It notifies ONCE**, the same as any dated item — one banner at the moment, never a repeat until
+it is cleared. Repeating is the page's job, and the page's alone: it rings on a loop for
+`RING_MAX_MS`. A notification that re-fires every minute is a second alarm nobody asked for.
 
 ## Widget drawing files stay WidgetKit-free
 

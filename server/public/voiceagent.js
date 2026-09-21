@@ -37,8 +37,9 @@ export function applyActivitySettings(s) {
 let _activityBar = null;        // shared activity-popup singleton — declared up here so boot() (below) can call activityBar() without a TDZ error
 let _outboxBusy = false;        // photo-outbox reentrancy latch — up here for the same reason: boot() runs runPhotoOutbox()
 let _card = null;               // the conversation card (null on pages without it)
-let micStream = null;           // the page's one held microphone — see holdMic(); up here for the same reason
+let micStream = null;           // the page's one microphone, open only while something records — see claimMic(); up here for the same reason
 let micPending = null;          // an in-flight getUserMedia, so concurrent callers share one acquisition
+let micUsers = 0;               // how many recorders hold it right now; the device closes at zero
 let _voiceChain = Promise.resolve();   // voice-outbox passes run one after another — see runVoiceOutbox()
 let _voiceBacklogStatus = () => {};    // where a resent clip with no live recorder reports; boot() points it at the activity bar
 const voiceOwners = new Map();         // clip id -> the live recorder that took it: { onStatus, onTranscript }
@@ -68,7 +69,7 @@ function setMode(mode) {
 if (!KIOSK) boot();
 
 function boot() {
-  holdMic();                       // the microphone is open for as long as the hub is on screen
+  watchMic();                      // the microphone opens only while something is recording
   const activity = activityBar();
   // Heard-you pop. The UI plays it ITSELF the instant the words land on screen — synced to the paint.
   const popSound = new Audio('/pop.m4a');
@@ -177,19 +178,25 @@ const activitySubs = [];
 export function onActivity(fn) { activitySubs.push(fn); }
 function pushActivity(a) { for (const f of activitySubs) { try { f(a); } catch (_) {} } }
 
-// ONE microphone, held for as long as the hub is on screen.
+// ONE microphone, OPEN ONLY WHILE SOMETHING IS RECORDING.
 //
-// iOS takes up to two seconds to hand over a capture device — measured at 2,017ms on his phone from the
-// tap to the first captured frame — and acquiring per recording put that wait between every tap and the
-// red fill. So the hub warms the stream when the page comes up and keeps it, and a recording is just a
-// MediaRecorder over a device that is already open.
+// A recorder claims it when a recording starts (a tap, or the always-on listener being engaged) and
+// lets go when it ends; the device closes when nothing holds it. An open capture keeps the phone's
+// audio session in `.playAndRecord`, which takes it out from under anything playing — the alarm's
+// `.playback` claim included, which reduced a ring to its first moment. So the page does not hold the
+// mic just because it is on screen.
 //
-// Released the moment the page is hidden, and re-warmed when it comes back: iOS interrupts a
-// backgrounded capture anyway, and the recording indicator has no business staying lit over another app.
-// A track can also end under us (another app takes the mic, the OS interrupts) — hence the readyState
-// check rather than trusting the reference.
-// (`micStream`/`micPending` are declared at the top of the file with the rest of boot()'s state — boot()
-// runs above this point, and a `let` it touches would still be in the temporal dead zone here.)
+// The cost is the acquisition on every tap: iOS takes up to two seconds to hand over a capture device
+// (measured at 2,017ms from tap to first frame). The button shows the tap at once (`arming`), so the
+// wait reads as the mic opening rather than as a dropped press.
+//
+// Released the moment the page is hidden too: iOS interrupts a backgrounded capture anyway, and the
+// recording indicator has no business staying lit over another app. A track can also end under us
+// (another app takes the mic, the OS interrupts) — hence the readyState check rather than trusting
+// the reference.
+// (`micStream`/`micPending`/`micUsers` are declared at the top of the file with the rest of boot()'s
+// state — boot() runs above this point, and a `let` it touches would still be in the temporal dead
+// zone here.)
 // A TRACK THAT WENT SILENT STILL SAYS IT IS LIVE. An audio interruption on iOS — anything else on
 // the page or the phone taking the audio session — leaves a capture track producing zeros with
 // `readyState` unchanged at 'live'. Reusing it then is permanent: every recording afterwards is
@@ -229,22 +236,28 @@ function releaseMic() {
   if (s) s.getTracks().forEach((t) => t.stop());
   if (micPending) micPending.then((p) => p.getTracks().forEach((t) => t.stop())).catch(() => {});
 }
-// Called by every surface that can record (the hub's boot, and the /mic web-clip).
-export function holdMic() {
-  // NEVER WHILE A SOUND IS PLAYING. A capture needs `.playAndRecord`, and opening one takes the
-  // session there out from under whatever is playing — the alarm's `.playback` claim included, which
-  // reduces a ring to its first moment. So a warm is only ever the idle-time head start; a press that
-  // records still acquires through mic() whatever is playing, because then he asked for it.
-  let playing = false;
-  const warm = () => { if (!playing && document.visibilityState === 'visible') mic().catch(() => {}); };
-  warm();
+async function claimMic() {
+  micUsers++;
+  try { return await mic(); } catch (e) { unclaimMic(); throw e; }
+}
+function unclaimMic() {
+  micUsers = Math.max(0, micUsers - 1);
+  if (!micUsers) releaseMic();
+}
+// Called by every surface that can record (the hub's boot, and the /mic web-clip). Opens nothing: it
+// only wires the events that make a held capture suspect or unwanted.
+export function watchMic() {
   // Anything on this page that PLAYS audio may have taken the session with it — the alarm, a tone
-  // preview in Settings, the sound bench. They say so rather than this trying to detect it:
-  // `hub:audioplaying` as the sound starts and `hub:audioplayed` once it is over.
-  document.addEventListener('hub:audioplaying', () => { playing = true; dirtyMic(); });
-  document.addEventListener('hub:audioplayed', () => { playing = false; dirtyMic(); if (document.visibilityState === 'visible') setTimeout(warm, 400); });
-  document.addEventListener('visibilitychange', () => (document.hidden ? releaseMic() : warm()));
-  window.addEventListener('pagehide', releaseMic);
+  // preview in Settings, the sound bench. They say so rather than this trying to detect it
+  // (`hub:audioplaying` as the sound starts, `hub:audioplayed` once it is over), and a capture held
+  // across either is re-acquired by the next claim.
+  document.addEventListener('hub:audioplaying', dirtyMic);
+  document.addEventListener('hub:audioplayed', dirtyMic);
+  // Hidden closes the device whoever holds it, and forgets the holders: each recorder's own release
+  // afterwards finds nothing left to close.
+  const drop = () => { micUsers = 0; releaseMic(); };
+  document.addEventListener('visibilitychange', () => { if (document.hidden) drop(); });
+  window.addEventListener('pagehide', drop);
   // A device arriving or leaving (AirPods, a car) re-routes a held capture, which makes it the first
   // suspect for a damaged one (see captureDamaged). Logged rather than acted on: re-acquiring here would
   // cut off a recording in progress and cost the next tap a cold start, on no evidence yet that a route
@@ -319,6 +332,7 @@ const VOICE_BPS = 96000;
 export function makeRecorder({ onStatus = () => {}, onState = () => {}, quick, autoStop, dryWhen, onTranscript }) {
   let recording = false, rec = null, chunks = [], stream = null, startedAt = 0;
   let arming = false;                 // tapped, mic not open yet — see start()
+  let claimed = false;                // holds one of the page's mic claims — see claimMic()
   let sending = false;                // stopped, clip still on its way up — see stop()
   let heardSpeech = false;            // the VAD crossed its threshold at least once this recording
   let vadRan = false;                 // the VAD actually got a Web Audio graph (it can't on every browser)
@@ -378,9 +392,10 @@ export function makeRecorder({ onStatus = () => {}, onState = () => {}, quick, a
     arming = true; onState('armed');          // the tap is acknowledged here, not when the mic opens
     trace('start:arming');
     let s;
-    try { s = await mic(); }     // already open in the normal case, so this resolves in the same tick
+    try { s = await claimMic(); }
     catch (_) { arming = false; onState('idle'); onStatus('Mic permission denied', 'err'); return; }
-    if (!arming) return;         // tapped again while arming → cancelled; the mic stays warm for the next one
+    claimed = true;
+    if (!arming) { release(); return; }   // tapped again while arming → cancelled, and the mic closes
     arming = false; stream = s;
     const mime = pickMime();
     chunks = []; heardSpeech = false; vadRan = false;
@@ -411,10 +426,11 @@ export function makeRecorder({ onStatus = () => {}, onState = () => {}, quick, a
     try { if (live) rec.stop(); } catch (_) {}
     if (!live) release();          // no onstop is coming, so let go of the mic here instead
   }
-  // The page owns the microphone (see mic() above), so a finished recording drops its reference and
-  // leaves the device open for the next tap. Stopping the tracks here is what used to make every tap
-  // pay the acquisition cost again.
-  function release() { stream = null; }
+  // A finished recording lets go of the microphone, which closes it unless another recorder holds it.
+  function release() {
+    stream = null;
+    if (claimed) { claimed = false; unclaimMic(); }
+  }
   async function upload(mime) {
     trace('upload:begin');
     try { await send(mime); } finally { sending = false; onState('idle'); trace('upload:end'); }
@@ -464,6 +480,7 @@ export function makeListener({ onStatus = () => {}, onState = () => {} } = {}) {
   const HANG_MS = phoneHangMs;          // same trailing-silence setting the FAB used to use
   const IDLE_CYCLE_MS = 30000;          // recycle an unspoken segment rather than buffer forever
   let on = false, actx = null, vadT = null, rec = null, chunks = [], mime = '';
+  let claimed = false;                // holds one of the page's mic claims while engaged
   let heard = false, segStart = 0, stream = null, spokeAt = 0;
 
   // MediaRecorder delivers its final chunk to ondataavailable AFTER stop() resolves, so a segment can
@@ -516,10 +533,10 @@ export function makeListener({ onStatus = () => {}, onState = () => {} } = {}) {
     if (on) return;
     on = true; onState('listening'); onStatus('Listening…', 'rec');
     let s;
-    try { s = await mic(); }
+    try { s = await claimMic(); }
     catch (_) { on = false; onState('idle'); onStatus('Mic permission denied', 'err'); return; }
-    if (!on) return;                      // turned off while the mic was opening
-    stream = s;
+    if (!on) { unclaimMic(); return; }    // turned off while the mic was opening
+    claimed = true; stream = s;
     mime = pickListenMime();
     // IT DOES NOT MUTE ANYTHING. The Mac and the ESP already listen at the same time and the worker
     // collapses whichever of them heard the same utterance, so a third always-on mic is a peer under
@@ -570,7 +587,7 @@ export function makeListener({ onStatus = () => {}, onState = () => {} } = {}) {
       if (actx) { try { actx.close(); } catch (_) {} actx = null; }
       cut(send);                          // whatever he was mid-way through still counts
       stream = null;
-      dirtyMic();                         // this mode holds the mic hard; make the next press re-acquire
+      if (claimed) { claimed = false; unclaimMic(); }   // this mode was holding it; let it close
     } finally {
       onState('idle'); onStatus('', 'clear');
     }
@@ -870,7 +887,6 @@ function captureDamaged(item, j) {
   captureResetAt = Date.now();
   releaseMic();
   document.dispatchEvent(new CustomEvent('hub:micreset'));
-  if (document.visibilityState === 'visible') mic().catch(() => {});
 }
 // Everything the page can say about the capture, taken BEFORE it is released: which device, at what
 // rate, and what else was plugged in. This is how the cause gets found the next time it happens.

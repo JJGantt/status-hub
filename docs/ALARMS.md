@@ -146,14 +146,15 @@ previews went in.
 
 So every player here — the alarm, the Settings preview, the bench — dispatches `hub:audioplaying`
 as its sound starts and `hub:audioplayed` once it is over, and `voiceagent` marks the stream dirty
-and re-acquires. **Add both to anything new that plays audio**; there is no way to detect this from
-the track itself.
+so the next recording acquires a fresh one. **Add both to anything new that plays audio**; there is
+no way to detect this from the track itself.
 
-**The re-acquire waits for `hub:audioplayed`, and that is what keeps the alarm audible.** A capture
-needs `.playAndRecord`, so opening one while a sound plays takes the session out from under it —
-the alarm's `.playback` claim included — and the ring is reduced to its first moment. For the alarm,
-over means `stopRing`, not the end of one pass of the loop. `holdMic`'s idle-time warm (and the one
-on `visibilitychange`) stays shut in between; only a press that actually records acquires then.
+**Nothing holds the microphone unless something is recording, and that is what keeps the alarm
+audible.** A capture needs `.playAndRecord`, so an open one takes the session out from under
+whatever plays — the alarm's `.playback` claim included — and the ring is reduced to its first
+moment. So the mic opens when a recording starts and closes when it ends (`claimMic` in
+`voiceagent.js`). The always-on listener is a recording for as long as it is engaged, so with it on
+the mic is open and the same thing applies.
 
 Underneath that, `vad:grace` marks the mic dirty too. Reaching it means eight seconds of silence
 arrived from a microphone he was talking into, whatever the cause, so it costs one lost attempt

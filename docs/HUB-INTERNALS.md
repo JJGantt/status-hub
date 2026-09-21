@@ -248,15 +248,18 @@ minimal fullscreen voice launcher; `/calendar` = the standalone calendar page (n
 button gets there); `/tv-calendar` = the calendar wall (§ CLAUDE.md's walls note). The phone's page is
 NOT a scaled wall — see CLAUDE.md, "The phone's home page is not a wall".
 
-### The microphone is held open, not acquired per recording
+### The microphone is open only while something records
 
-`holdMic()` warms one `getUserMedia` stream when a recording surface comes up and keeps it for as long
-as the page is visible; a recording is a MediaRecorder over a device that is already open. iOS takes up
-to two seconds to hand over a capture device — 2,017ms measured on his phone — and acquiring per
-recording put that wait between every tap and the red fill. Warm, it is 1ms.
+A recorder claims the one `getUserMedia` stream when a recording starts — a tap, or the always-on
+listener being engaged — and lets go when it ends; the device closes when nothing holds it
+(`claimMic`/`unclaimMic`). Keeping it warm while the page is up is the obvious way to make a tap
+instant (iOS takes up to two seconds to hand over a capture device, 2,017ms measured on his phone),
+and it breaks every sound the page plays: an open capture holds the audio session in
+`.playAndRecord`, and it cut the alarm's ring to a blip. So each tap pays the acquisition, and
+`arming` shows the tap at once so the wait reads as the mic opening.
 
-It is released when the page is hidden and re-warmed when it returns: iOS interrupts a backgrounded
-capture anyway, and the recording indicator should not stay lit over another app. A track can also end
+It is dropped when the page is hidden, whoever holds it: iOS interrupts a backgrounded capture
+anyway, and the recording indicator should not stay lit over another app. A track can also end
 under us when something else takes the mic, so possession is decided by `readyState`, never by holding
 a reference. `micStream`/`micPending` — and both outbox stores — are declared at the top of the file
 with the rest of `boot()`'s state, because `boot()` runs above them and a binding it reaches before

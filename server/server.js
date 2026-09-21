@@ -2283,10 +2283,9 @@ app.post('/api/clientlog', express.json({ limit: '16kb' }), (req, res) => {
   res.status(204).end();
 });
 
-// IN GUIDED ACCESS, ALARMKIT HOLDS NOTHING. Its alarm fires at the same instant as the page's and
-// takes the audio session, and inside Guided Access it does not present — so the page's sound is cut
-// off a moment after it starts and nothing replaces it. Measured 2026-09-21: page overlay up, a hint
-// of sound, then silence, with two AlarmKit alarms armed for the same minute.
+// IN GUIDED ACCESS, ALARMKIT HOLDS NOTHING. Inside a session its alarm does not present, so it adds
+// nothing to the page's ring — and one that fires anyway stays registered afterwards in a state
+// AlarmSync never cancels (it removes only `.scheduled` alarms). The page is the alarm there.
 //
 // The page is the only thing that knows the session state (the native side hands it
 // `window.__guidedAccess`), and it says so in its beacon. While that is fresh and true, /api/alarms

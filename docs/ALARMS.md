@@ -39,10 +39,11 @@ looks like it does:
   Guided Access session `<audio>` plays and an oscillator makes no sound at all. This is why the
   alarm is a FILE. An alarm built on oscillators flashed its overlay, reported `state: "running"`,
   scheduled its beeps and was silent through the entire morning of 2026-09-19.
-- **AlarmKit must hold nothing.** Inside a session an armed AlarmKit alarm does not present — and it
-  still fires, at the same instant as the page, and takes the audio session: the page's overlay comes
-  up, its sound starts and is cut off a moment later, and nothing replaces it. That is specific to
-  Guided Access; outside a session AlarmKit rings normally and is the right path.
+- **AlarmKit holds nothing in a session.** Inside Guided Access an AlarmKit alarm does not present,
+  so it contributes nothing there — and one that fires anyway stays registered afterwards, no longer
+  `.scheduled`, where AlarmSync (which cancels only scheduled ones) never removes it. Whether it also
+  competes with the page for the audio session is untested; a ring cut to a blip is the microphone
+  re-opening mid-ring (see "Playing a sound breaks the microphone").
 
 ## Whose job is it to ring
 

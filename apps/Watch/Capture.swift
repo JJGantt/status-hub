@@ -1,4 +1,5 @@
 import Foundation
+import WatchKit
 
 /// The watch's one microphone, shared by every page that records: the prompt page (a command for the
 /// hub), a session page (a follow-up typed into that session), and the always-on listener. One owner at
@@ -183,6 +184,9 @@ final class Capture: ObservableObject {
         Task {
             do {
                 let heard = try await Hub.sendAudio(clip, msgId: UUID().uuidString, listener: window)
+                // Nothing on screen marks a listener's command going up, so the wrist does. No id is the
+                // hub hearing no words: nothing was enqueued, and nothing taps.
+                if heard.id != nil { WKInterfaceDevice.current().play(.success) }
                 Hub.log("listener-sent", ["id": heard.id ?? "", "words": (heard.transcript ?? "").count])
             } catch {
                 Hub.log("listener-failed", ["error": String(describing: error).prefix(120).description])

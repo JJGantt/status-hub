@@ -1620,7 +1620,8 @@ has no WKWebView.
   press. That is what keeps it clear of the failure that made the phone's buttons press-only
   (`VOICE-ON-THE-PHONE.md`) — a VAD that cut commands mid-sentence and threw away clips it judged
   silent. The lock beside Cancel holds a recording open through any silence; the press still sends
-  it. The level comes with each buffer from the tap, which is why the recorder is a tap and not
+  it. A command the silence sent taps the wrist (`.success`) once the hub has enqueued it, since no
+  press told him it went; a pressed one does not. The level comes with each buffer from the tap, which is why the recorder is a tap and not
   AVAudioRecorder, whose meters answer only when asked on a timer. Every end logs `mic-end` with the
   numbers it decided on: tune the multiplier or the minimum from those, not by feel.
 - **A recording outlives the wrist dropping** by the watch's `UIBackgroundModes: audio` (in
@@ -1631,7 +1632,8 @@ has no WKWebView.
   is the phone's always-on mode on the wrist: the recorder runs continuously and `Recorder.cut` swaps
   the file inside the tap, so no sample falls between two utterances; each utterance goes up as
   source `watch` with its own `capture_start`/`capture_end`, a segment nobody spoke in is dropped at
-  30s of audio and never uploaded, and it mutes nothing (`LISTENERS.md`). Uploads are fire-and-forget,
+  30s of audio and never uploaded, and it mutes nothing (`LISTENERS.md`). Each utterance the hub
+  enqueues taps the wrist (`.success`); one it heard no words in taps nothing. Uploads are fire-and-forget,
   with no outbox behind them yet.
 - **Recording sets `voice_muted`**, as the phone's microphone does, so the Mac and the ESP do not
   enqueue the same sentence a second time. The flag has no expiry, so every way out of a recording

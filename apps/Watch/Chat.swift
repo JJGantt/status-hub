@@ -33,6 +33,9 @@ final class Chat: ObservableObject {
     private var clip: Recorder.Clip?
     private var msgId = UUID().uuidString
     private var requestId: String?
+    /// The silence ended this recording, not a press, so nothing in his hand said it was sent: the watch
+    /// taps his wrist once the hub has taken the command.
+    private var confirmSend = false
     private var task: Task<Void, Never>?
     private var stream: Task<Void, Never>?
     private var loading = false
@@ -91,15 +94,16 @@ final class Chat: ObservableObject {
         failure = nil
         // A command ends itself at the silence after he speaks; the lock on the recording bar holds it
         // open. A session's follow-up does not (Sessions.startRecording): only a press ends that.
-        capture.start(for: .hub, onSilence: { [weak self] in self?.stopRecording() }) { [weak self] error in
+        capture.start(for: .hub, onSilence: { [weak self] in self?.stopRecording(bySilence: true) }) { [weak self] error in
             self?.failure = (error as? Recorder.Failure) == .denied ? .micDenied : .message(error.localizedDescription)
         }
     }
 
     /// Ends the recording and sends it.
-    func stopRecording() {
+    func stopRecording(bySilence: Bool = false) {
         guard capture.owner == .hub, let finished = capture.stop() else { return }
         discardClip()
+        confirmSend = bySilence
         clip = finished
         msgId = UUID().uuidString
         requestId = nil
@@ -183,6 +187,7 @@ final class Chat: ObservableObject {
                         return
                     }
                     requestId = id
+                    if confirmSend { WKInterfaceDevice.current().play(.success) }
                 }
                 let outcome = try await Hub.outcome(requestId!)
                 if Task.isCancelled { return }

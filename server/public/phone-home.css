@@ -323,10 +323,6 @@ body.tv.phonehome #heatinfo .du{display:none}
 body.tv.phonehome #heatinfo .dx{margin:0}
 body.tv.phonehome #heatinfo .wk-n{flex:0 0 auto;margin-left:6px;padding-left:6px;font-size:10px;
   font-weight:700;color:#c7cdd6;border-left:1px solid rgba(255,255,255,.18)}
-/* The expand glyph is sized for a canvas scaled to about a third, so at native size it is a 64px
-   button over the map. A corner mark instead, at the top right. */
-body.tv.phonehome .expand-btn{width:20px;height:20px;left:auto;right:0;top:-1px}
-body.tv.phonehome .expand-btn svg{width:12px;height:12px}
 
 /* ---- the training section, and the body beside it ----------------------------------------------
    The figures take the height of the WHOLE section — map, clocks and list — because beside the map

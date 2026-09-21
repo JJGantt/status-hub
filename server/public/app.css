@@ -81,13 +81,6 @@ body.tv.phonewall #tv-routing .rt-chip{padding:4px 4px;gap:4px}
 body.tv.phonewall #tv-routing .rt-chip .rt-k{font-size:19px}
 body.tv.phonewall #tv-routing .rt-chip .rt-v{font-size:22px}
 
-/* ===== Expandable sections (phone wall): a minimal corner icon opens nutrition / workouts full-screen ===== */
-/* the corner glyph lives INSIDE the CSS-scaled wall shell (~0.36×), so it's sized generously to stay tappable
-   yet read as a small, unobtrusive icon on screen. LEFT-aligned so it covers the oldest cells, not recent days. */
-.expand-btn{position:absolute;top:0;left:0;z-index:30;width:64px;height:64px;padding:0;border:none;
-  background:none;color:#7c8794;display:flex;align-items:center;justify-content:center;cursor:pointer;
-  -webkit-tap-highlight-color:transparent}
-.expand-btn:active{color:#fff}
 /* full-screen sheet: heatmap across the top, list below. position:fixed → NATIVE size (outside the scaled
    shell), so the expanded view is fully readable + easy to tap. The whole delegation host is moved in, so
    tap-a-day + the list buttons keep working. Hidden until .open. */
@@ -121,7 +114,6 @@ body.tv .sectsheet .hcell{width:17px!important;height:17px!important;max-width:n
    rest of the gesture to the pane underneath */
 .sectsheet[data-sec="nut"] #nutheat,.sectsheet[data-sec="wk"] #workouts #heatwrap{
   overscroll-behavior-x:contain;-webkit-overflow-scrolling:touch}
-.sectsheet .expand-btn{display:none}                     /* the host's own corner icon travels with it — hide it inside the sheet */
 /* SURF, EXPANDED. The card it comes from is a fifth of a phone screen and deliberately bare — no
    weekday letters, no hour labels, thirty pixels a grid — because at that size a label is unreadable
    and the picture answers it anyway. This is the other half of that bargain: the same plots given the

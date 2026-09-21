@@ -1,5 +1,5 @@
-// expand.js — phone wall (the main mobile UI). A minimal expand icon on the nutrition + workout sections
-// opens each as a full-screen sheet: heatmap across the top, list below. The WHOLE delegation host is moved
+// expand.js — the phone's section sheets. Tapping the thing that summarises a section opens it full-screen:
+// the heat maps, the surf plots, the body figures, the weigh-in plot. The WHOLE delegation host is moved
 // into the sheet (nutrition taps are delegated on #nutritionlog; workout taps on #workouts) so tapping a day
 // and the list's buttons keep working — the point of expanding is to make those EASIER to use, not disable
 // them. Elements are moved (and restored on close) so the live render + all handlers stay intact.
@@ -14,37 +14,36 @@ import { loadHistory, onHistoryLoaded, pinRight } from './heathistory.js';
 
 const HEATS = [workouts, nutritionlog];
 const SECTIONS = {
-  // `icon` = element the corner glyph is placed on. `move` = ordered elements pulled into the sheet body
+  // `host` = the element the tap is bound on. `move` = ordered elements pulled into the sheet body
   // (their event delegation + listeners travel with them). Restored to their exact spots on close.
   // `heat` = the scroll container holding that section's grid, pinned to its newest column on open.
   // `cards` = the modules to re-run once the elements have moved, because every one of these draws
   // itself to the size and window the surface gives it and the sheet is a different surface.
-  // `tap` = open by tapping this, instead of by a corner glyph.
-  nut: { icon: '#nutritionlog', move: ['#nutritionlog'], title: 'Nutrition', heat: '#nutheat', cards: HEATS },
-  wk:  { icon: '#workouts',     move: ['#workouts', '#heatinfo'], title: 'Workouts', heat: '#heatwrap', cards: HEATS },
-  // SURF opens by tapping the plots themselves. A corner glyph is 64px square and this card is a
-  // fifth of a phone screen — the glyph would cover the thing it opens. The card is deliberately bare
-  // and short (see phone-home.css); this is the other half of that bargain, where it gets the height
-  // to be read and its labels back.
-  surf: { icon: '#surf', move: ['#surf'], title: 'Surf', cards: [surf], tap: '.surfheat, .surfwater' },
+  // `tap` = what opens it inside the host. `scroller` = what a drag moves under the finger.
+  //
+  // THE HEAT MAPS open by tapping the map. A tap on a day still picks that day on the way in — the
+  // card's own click lands after the sheet opens — so the sheet and the rings behind it are on the
+  // day that was tapped.
+  nut: { host: '#nutritionlog', move: ['#nutritionlog'], title: 'Nutrition', heat: '#nutheat', cards: HEATS,
+         tap: '#nutheat', scroller: '#nutheat' },
+  wk:  { host: '#workouts', move: ['#workouts', '#heatinfo'], title: 'Workouts', heat: '#heatwrap', cards: HEATS,
+         tap: '#heatwrap', scroller: '#heatwrap' },
+  // SURF opens by tapping the plots themselves. The card is deliberately bare and short (see
+  // phone-home.css); this is the other half of that bargain, where it gets the height to be read and
+  // its labels back.
+  surf: { host: '#surf', move: ['#surf'], title: 'Surf', cards: [surf], tap: '.surfheat, .surfwater' },
   // THE BODY opens the same way, and for the same reason the small one does not select a muscle:
   // two whole figures in 133px puts a region at a few pixels. Expanded, the figures are aimable and
   // the volume bars come with them — twenty-three of them, which is the one thing the phone's home
   // screen has never had room for.
-  body: { icon: '#body', move: ['#body', '#volume'], title: 'Muscles', cards: [muscle], tap: '#body' },
+  body: { host: '#body', move: ['#body', '#volume'], title: 'Muscles', cards: [muscle], tap: '#body' },
   // THE WEIGHT PAGE — every weigh-in, the trend, the intake bars and the maintenance curves — opens by
   // tapping the weigh-in plot over the food map, which is its summary. The card lives in the page's
   // markup hidden, so it renders on every frame and is simply MOVED here, like the rest.
   // `scroller` is what a drag moves under the finger: the plot scrolls with the heat maps.
-  wt: { icon: '#weightweeks', move: ['#weightcard'], title: 'Weight', cards: [maintviz],
+  wt: { host: '#weightweeks', move: ['#weightcard'], title: 'Weight', cards: [maintviz],
         heat: '#maintviz .mv-scroll', tap: '#weightweeks', scroller: '.wp-scroll' },
 };
-
-// corner "expand" glyph (diagonal arrows). Big in the SVG because it lives INSIDE the ~0.36×-scaled wall
-// shell, so it reads small on screen.
-const ICON = '<svg viewBox="0 0 24 24" width="46" height="46" fill="none" stroke="currentColor" ' +
-  'stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">' +
-  '<path d="M15 3h6v6M21 3l-8 8M9 21H3v-6M3 21l8-8"/></svg>';
 
 let sheet = null;
 let restore = [];
@@ -113,38 +112,31 @@ function mount() {
   // main mobile UI only = the wall on a phone-sized viewport. (Big-screen kiosk / desktop are untouched.)
   if (!document.body.classList.contains('tv') || window.innerWidth >= 1400) return;
   for (const key of Object.keys(SECTIONS)) {
-    const host = document.querySelector(SECTIONS[key].icon);
-    if (!host) continue;
-    if (SECTIONS[key].tap) { bindTap(host, key); continue; }
-    if (host.querySelector('.expand-btn')) continue;
-    if (getComputedStyle(host).position === 'static') host.style.position = 'relative';
-    const b = document.createElement('button');
-    b.className = 'expand-btn';
-    b.type = 'button';
-    b.dataset.sec = key;
-    b.setAttribute('aria-label', 'Expand ' + SECTIONS[key].title);
-    b.innerHTML = ICON;
-    b.addEventListener('click', (e) => { e.stopPropagation(); e.preventDefault(); openSheet(key); });
-    host.appendChild(b);
+    const host = document.querySelector(SECTIONS[key].host);
+    if (host) bindTap(host, key);
   }
 }
 
-// TAP TO OPEN, on a thing that also scrolls sideways. The surf plots and the weigh-in plot are horizontal scrollers, so the
-// gesture that opens the sheet and the gesture that drags the timeline start identically — a plain
-// click handler turns every flick into an open. Bound on the HOST and delegated, because the card
-// rebuilds its innards on every broadcast and a listener on those would be thrown away twice a minute.
+// TAP TO OPEN, on a thing that also scrolls sideways. The heat maps, the surf plots and the weigh-in plot
+// are horizontal scrollers, so the gesture that opens the sheet and the gesture that drags them start
+// identically — a plain click handler turns every flick into an open. Bound on the HOST and delegated,
+// because the card rebuilds its innards on every broadcast and a listener on those would be thrown away
+// twice a minute.
 //
 // A tap is: the pointer barely moved, AND the scroller under it did not. The second test is what
-// catches a flick that was answered by momentum rather than by the finger.
+// catches a flick that was answered by momentum rather than by the finger. pointerup JUDGES it and the
+// click that follows OPENS it: a heat map's card picks the tapped day in its own click handler on this
+// same host, registered first, so opening on the click is what guarantees the day is picked before the
+// sheet moves the map.
 function bindTap(host, key) {
   if (host.dataset.ssTap) return;
   host.dataset.ssTap = '1';
-  let x = 0, y = 0, left = 0;
+  let x = 0, y = 0, left = 0, tapped = false;
   const scroller = SECTIONS[key].scroller || '.surfscroll';
   const scrollerAt = (e) => (e.target.closest ? e.target.closest(scroller) : null);
   host.addEventListener('pointerdown', (e) => {
     const box = scrollerAt(e);
-    x = e.clientX; y = e.clientY; left = box ? box.scrollLeft : 0;
+    x = e.clientX; y = e.clientY; left = box ? box.scrollLeft : 0; tapped = false;
   }, { passive: true });
   host.addEventListener('pointerup', (e) => {
     if (openKey) return;                                          // already in the sheet
@@ -152,10 +144,12 @@ function bindTap(host, key) {
     if (Math.abs(e.clientX - x) > 6 || Math.abs(e.clientY - y) > 6) return;
     const box = scrollerAt(e);
     if (box && Math.abs(box.scrollLeft - left) > 2) return;
-    openSheet(key);
+    tapped = true;
   }, { passive: true });
+  host.addEventListener('click', () => { if (tapped) { tapped = false; openSheet(key); } });
 }
 
-function boot() { mount(); if (!document.querySelector('.expand-btn')) setTimeout(mount, 400); }
+// Once more a beat later, for a host the first render had not drawn yet; bindTap is idempotent.
+function boot() { mount(); setTimeout(mount, 400); }
 if (document.readyState === 'loading') window.addEventListener('DOMContentLoaded', boot);
 else boot();

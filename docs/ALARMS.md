@@ -84,33 +84,32 @@ ringing, so changing the setting cannot pull the file out from under a sound alr
 
 ## The surf alarm — the scenario this was built for
 
-The most-used case, end to end.
+The most-used case, end to end. No session and no model is involved after the conditions are set.
 
 1. `surf-report/capture.mjs` mirrors Surfline into `surf_snapshots` on the Pi's cron, about four
    snapshots a day. See that repo for the publish windows.
-2. A session watches `surf_snapshots` over Supabase realtime — **not a poll**; the table is in the
-   publication already (data-layer `00040`). It does that with `server/tools/surf-watch.mjs`, run
-   as a **background Bash task** from `server/`:
+2. The conditions for one morning are a `surf_alarms` row (data-layer `00111`), written by the
+   `set_surf_alarm` tool. They are Jared's for that morning — ask, never reuse a previous night's.
+   `rules` is an ORDERED list, first match wins:
 
-       WATCH_UNTIL=2026-09-22T06:45:00-04:00 node tools/surf-watch.mjs
+       [{"hours":[8,9], "not_fair":[10,11], "wake":"07:00"}, {"hours":[8,9], "wake":"08:30"}]
 
-   A session cannot hold a subscription itself; the harness wakes it when a background task EXITS.
-   So the script subscribes, and exits the moment a new snapshot lands (0) or `WATCH_UNTIL` passes
-   with none (3). It costs nothing while it waits. One run is one snapshot: after deciding, the
-   session starts it again for the next capture, until the deadline. `--selftest` connects and exits.
-   Its 10-minute poll is only the backstop for a channel that goes deaf while reporting SUBSCRIBED.
-   Set `WATCH_UNTIL` a little before the earliest time the alarm could move to, since a capture
-   after that cannot change anything.
-
-   Monitor is the wrong tool here: it expires after at most thirty minutes and has to be re-armed,
-   which is a model turn every half hour all night. Its WebSocket source cannot join a Supabase channel either,
-   because joining means sending a frame and it only receives.
-3. A new capture lands overnight. The session reads the morning's hours and applies Jared's rules
-   (they live with him, not here — ask, do not infer) to decide a wake time.
-4. It moves the item's `due`. That write goes out over realtime → the hub's `/api/stream` →
-   `core.js` dispatches `hub:stream` → `alarmclock.js` reloads `/api/due-widget` and re-arms.
-   **No push is involved anywhere in that chain**, which is the entire point.
-5. At the moment, the page plays `alarm.m4a` on loop and `dueTick` sends a notification underneath.
+   A rule matches when every hour in `hours` is Fair or better AND no hour in `not_fair` is; any
+   other hour does not matter. No match means no alarm. Both lists empty is an unconditional
+   "otherwise", which has to be last. Order alone can often say the same thing — a wider window
+   listed first wins whenever it is fair — and `not_fair` is for saying it directly.
+3. The hub decides (`server/lib/surfalarm.js`). It already subscribes to `surf_snapshots`, so every
+   new capture re-decides, and so does any change to `surf_alarms` (in the realtime publication).
+   A 15-minute backstop reads only the newest snapshot's timestamp, and nothing when no alarm is set.
+   `decided` on the row records the last answer: which snapshot, which rule, what time.
+4. The decision drives the row's `outputs`, a registry in that file — a new form of alarm is one
+   more entry there. Today there is one, `item`: an alarm-marked `list_items` row the hub creates,
+   moves and deletes, holding its id in `state`. A moment that has arrived is never moved, a wake
+   time already past is recorded as `late` and changes nothing, and an item he deleted or completed
+   himself is not put back (re-engaging with the tool forgets it). Moving the item's `due` goes out
+   over realtime → `/api/stream` → `hub:stream` → `alarmclock.js` reloads and re-arms. **No push is
+   involved in that chain**, which is the entire point.
+5. At the moment, the page plays the alarm tone on loop and `dueTick` sends a notification underneath.
 
 Measured 2026-09-19: the alarm moved 8:30 → 7:00 at 05:00, and the phone's beacon showed the new
 moment **within one minute**, over the stream, with the phone untouched.
@@ -126,6 +125,19 @@ moment **within one minute**, over the stream, with the phone untouched.
 `audio`, `media` (readyState), `lock`, `visible`, `next`, `armed`. That beacon exists because every
 failure here has been a silent one that reported success — `audio: "running"` was true the whole
 morning nothing came out of the speaker.
+
+## Testing an alarm
+
+**A test proves only the path and the phone state it ran in.** The AlarmKit path works with the
+phone in hand — the app is in front, so the push lands and the phone acks within a second — and
+that says nothing about the case that matters, a phone locked, off, or in Guided Access overnight.
+An ack (`held`, `alarm_armed_at`) is the phone saying it accepted an alarm, not that it will ring.
+
+So before any test that makes his phone ring or notify, **tell Jared which path it exercises and
+what state the phone has to be in, and run it with him**: he sets the phone up, then the alarm goes
+about a minute out, not five. The overnight surf path is tested as it will run: the app open on `/`,
+in Guided Access, plugged in, and the ring confirmed by him hearing it and by the `alarmclock`
+beacon below — never by an ack.
 
 ## Playing a sound breaks the microphone, unless you say so
 

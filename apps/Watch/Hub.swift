@@ -128,10 +128,21 @@ enum Hub {
     /// Uploads a recorded clip, transcribed with the same Groq Whisper as the phone's microphone. The
     /// hub enqueues what it heard as a command, or with `dry` only hands the words back. A resend with
     /// the same `msgId` is answered with the first send's id instead of running the command twice.
-    static func sendAudio(_ clip: Recorder.Clip, msgId: String, dry: Bool = false) async throws -> Heard {
+    ///
+    /// `listener` is set for an utterance the always-on listener cut: it goes up as the listener `watch`
+    /// with the utterance's own window, which is what lets the worker collapse it against the Mac or the
+    /// ESP hearing the same sentence (docs/LISTENERS.md).
+    static func sendAudio(_ clip: Recorder.Clip, msgId: String, dry: Bool = false,
+                          listener: (start: Date, end: Date)? = nil) async throws -> Heard {
         try blockInSimulator("voice-command")
         var query = "client_msg_id=\(msgId)&client_now=\(clientNow())&dur=\(String(format: "%.1f", clip.duration))"
             + (dry ? "&dry=1" : "")
+        if let listener {
+            let iso = ISO8601DateFormatter()
+            iso.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+            query += "&source=watch&quick=1&capture_start=\(iso.string(from: listener.start))"
+                + "&capture_end=\(iso.string(from: listener.end))"
+        }
         // Where he is, for "near me" and a pickup point; a dictation (dry) goes nowhere yet.
         if !dry, let l = await Here.shared.fix() {
             query += String(format: "&lat=%.5f&lon=%.5f&acc=%.0f",
@@ -150,6 +161,12 @@ enum Hub {
         try blockInSimulator("followup")
         _ = try await call("/api/sessions/followup", method: "POST",
                            body: ["id": session, "text": text, "client_msg_id": msgId])
+    }
+
+    /// One of the hub's app settings, as the text it is stored as; nil when unset.
+    static func setting(_ key: String) async throws -> String? {
+        let all = try JSONSerialization.jsonObject(with: try await call("/api/settings")) as? [String: Any]
+        return all?[key].map { "\($0)" }
     }
 
     /// The global `voice_muted` flag every always-on listener obeys. Best effort, as on the phone.

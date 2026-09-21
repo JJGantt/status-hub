@@ -1307,7 +1307,7 @@ callers; only the HTTP response is filtered.
 | `voice_speak_replies` | Read the reply aloud. |
 | `voiceid_threshold` / `voiceprint` | Wake-free speaker-ID — the "it's Jared" bar and the exemplar bank. |
 | `wakefree_pause_s` | ESP only, and only until its voiceprint loads. Wake-free endpoints on Jared's verified presence, with a pause tolerance that scales with utterance length — neither mic consults this. |
-| `phone_silence_s` / `mac_silence_s` / `esp_silence_s` | Trailing-silence cutoff, per capture source. |
+| `phone_silence_s` / `watch_silence_s` / `mac_silence_s` / `esp_silence_s` | Trailing-silence cutoff, per capture source. The watch's defaults to 2 when unset (its lock covers a long command), the rest to 3. |
 | `agent_mode` / `agent_cwd` | Full-agent (coding) mode toggle + working dir for the worker. |
 | `weight_reminder_enabled` / `_mode` / `_time` | The daily weigh-in push (On/Off, Manual/Dynamic, time). |
 | `push_enabled` | Master push toggle. |
@@ -1579,7 +1579,9 @@ has no WKWebView.
   and `detail` (what a page loaded), `page` / `paged` / `bottom` (the scroll state around each double
   tap), `control` (a press of the bottom control, with its mode), `record` (a finger tap on the text),
   `record-refused` / `mic-refused` / `mic-failed` / `mic-open` (why a recording did or did not start —
-  each refusal used to return in silence), `stream-open` / `stream-end` / `stream-error`, and `frame` (each stream frame for the
+  each refusal used to return in silence), `mic-end` (what the silence endpoint saw when it ended a
+  recording: floor, threshold, peak, hang, seconds), `mic-lock`, `listener-sent` / `listener-failed`,
+  `stream-open` / `stream-end` / `stream-error`, and `frame` (each stream frame for the
   session on screen, to see whether the stream reaches the wrist live). Read it before guessing at a
   report from the wrist.
 - **The real watch app runs in a simulator against the live hub.** Simulator-only code, compiled out
@@ -1587,9 +1589,11 @@ has no WKWebView.
   `-autopage chat|session` stands in for double tap every two seconds, and `-opensession <row id>`
   opens a session as its notification would. Recording and stopping there never reaches the hub
   (`blockInSimulator` in `Hub.swift` — a test tap once sent a stray "you" into his conversation) and
-  never mutes the room mics. Real clicks on the Simulator window (System Events `click at`, with
-  Window › Point Accurate and no bezel, so one watch point is one screen point) press the real
-  controls; the simulator cannot make a double tap. The built app needs `WKWatchOnly` and no
+  never mutes the room mics. Do not click the Simulator window with System Events: that moves his
+  pointer. Reach a state with a launch argument instead; the simulator cannot make a double tap
+  either way. **A recording in the simulator records from the Mac's microphone**, so the silence
+  endpoint is tested by feeding `Endpointer` levels, never by playing sound into the room — the Mac's
+  own always-on mic hears it too. The built app needs `WKWatchOnly` and no
   `WKCompanionAppBundleIdentifier` (then an ad-hoc `codesign`) to install on an unpaired watch
   simulator. Use an SE 3 device type for his watch: the 46mm geometry differs.
 - **A session's reply notification opens it** (§6b). `WatchAppDelegate` registers the `SESSION_REPLY`
@@ -1602,11 +1606,33 @@ has no WKWebView.
   on-screen conversation whenever it becomes active. The category is registered at launch, so the watch app has
   to have run once for the button to appear.
 - **A command is a recorded clip, sent the way the phone's microphone sends one.** `Watch/Recorder.swift`
-  records AAC, mono, 16 kHz, and `Hub.sendAudio` uploads the file to `/api/voice-command` (source
+  records AAC, mono, 16 kHz through an AVAudioEngine tap, and `Hub.sendAudio` uploads the file to `/api/voice-command` (source
   `web`): the hub transcribes it with the same Groq Whisper, and the worker treats it as push-to-talk —
   no addressing gate, no duplicate-drop, no spoken reply on the TV. The hub answers with the
   transcript, shown until the turn lands, and the request id, and the watch waits on
   `/api/voice-reply/:id`. No id means the hub heard no words: nothing is enqueued and the watch buzzes.
+- **A command ends itself at the silence after it; a session follow-up does not.** The prompt page
+  starts its recording with `onSilence`, a session page without. `Endpointer` (`Watch/Capture.swift`)
+  is the phone's always-on rule (`makeListener`): the floor is the quietest buffer so far, speech is
+  2.5x above it and at least 0.02, and once speech has been heard `watch_silence_s` (default 2) below
+  that line ends it, exactly as a press would. **Nothing ends before speech crosses the line, and the
+  endpoint never discards anything**: a recording whose speech never registers simply waits for the
+  press. That is what keeps it clear of the failure that made the phone's buttons press-only
+  (`VOICE-ON-THE-PHONE.md`) — a VAD that cut commands mid-sentence and threw away clips it judged
+  silent. The lock beside Cancel holds a recording open through any silence; the press still sends
+  it. The level comes with each buffer from the tap, which is why the recorder is a tap and not
+  AVAudioRecorder, whose meters answer only when asked on a timer. Every end logs `mic-end` with the
+  numbers it decided on: tune the multiplier or the minimum from those, not by feel.
+- **A recording outlives the wrist dropping** by the watch's `UIBackgroundModes: audio` (in
+  `project.yml`). That key, not `WKBackgroundModes`, which takes only session types. A recording can
+  only START with the app in front; once running it continues behind the watch face with the
+  microphone indicator showing, so a command still ends at its silence with the wrist down.
+- **The always-on listener is built and nothing engages it yet** (`Capture.listen` / `unlisten`). It
+  is the phone's always-on mode on the wrist: the recorder runs continuously and `Recorder.cut` swaps
+  the file inside the tap, so no sample falls between two utterances; each utterance goes up as
+  source `watch` with its own `capture_start`/`capture_end`, a segment nobody spoke in is dropped at
+  30s of audio and never uploaded, and it mutes nothing (`LISTENERS.md`). Uploads are fire-and-forget,
+  with no outbox behind them yet.
 - **Recording sets `voice_muted`**, as the phone's microphone does, so the Mac and the ESP do not
   enqueue the same sentence a second time. The flag has no expiry, so every way out of a recording
   (send, Cancel) writes the unmute, and the writes are chained so an unmute cannot land ahead of its

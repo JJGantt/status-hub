@@ -17,26 +17,40 @@ func snippet(_ s: String) -> AttributedString {
 }
 
 /// The row a recording shows under its page: a red dot, the time recorded once the microphone is
-/// actually open, and Cancel.
+/// actually open, Cancel, and — on a recording that ends itself at the silence after speech — the lock
+/// that holds it open until a press sends it.
 struct RecordingBar: View {
     let since: Date?
     let cancel: () -> Void
+    @ObservedObject private var capture = Capture.shared
 
     var body: some View {
-        HStack {
+        HStack(spacing: 6) {
             HStack(spacing: 6) {
                 Circle().fill(Color.red).frame(width: 10, height: 10)
                 if let since {
                     Text(since, style: .timer)
                         .font(.system(size: 14, weight: .medium, design: .monospaced))
                         .foregroundColor(.red)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.6)
                 }
             }
-            Spacer()
-            Button("Cancel", action: cancel)
+            Spacer(minLength: 0)
+            if capture.endsOnSilence {
+                Button(action: capture.toggleLock) {
+                    Image(systemName: capture.locked ? "lock.fill" : "lock.open")
+                }
+                .tint(capture.locked ? .orange : .gray)
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+                .frame(width: 36)
+            }
+            Button(action: cancel) { Text("Cancel").lineLimit(1).fixedSize() }
                 .tint(.red)
                 .buttonStyle(.bordered)
                 .controlSize(.small)
+                .fixedSize()
         }
     }
 }

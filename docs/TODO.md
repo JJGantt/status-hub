@@ -81,12 +81,11 @@ the route and the `trace()` calls.
 
 ### Watch: does a recording survive the wrist dropping?
 
-The watch records while the app is in front (`Watch/Recorder.swift`). Whether watchOS keeps the
-microphone running when the wrist drops mid-sentence is untested; if it does not, the clip ends where
-the screen went dark. Test on the device with a long command, wrist down halfway through. If it cuts,
-the known ways to hold the app in front are an extended runtime session or a workout session (Capital
-Grille's watch app runs one). A workout session ends Watchset's or StrokeSaver's, because the watch
-runs one at a time.
+The watch app declares `UIBackgroundModes: audio`, which should keep a recording started on screen
+running behind the watch face. Untested on the device: record a long command, drop the wrist halfway,
+and check the clip holds all of it and the `mic-end` line arrives. If it cuts, the known ways to hold
+the app in front are an extended runtime session or a workout session (the restaurant app's watch app runs
+one). A workout session ends Watchset's or StrokeSaver's, because the watch runs one at a time.
 
 ### Confirm the iPhone honours the recorder's bitrate
 

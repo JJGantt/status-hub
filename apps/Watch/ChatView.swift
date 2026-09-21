@@ -4,7 +4,7 @@ import WatchKit
 /// The prompt page: the shared hub conversation on black. A reply opens at its top. The bottom control
 /// (and double tap, bound to it alone) pages down while more is below and records at the bottom; a tap
 /// anywhere on the thread also records. The next press sends (`PagedScroll`, shared with a session's
-/// page).
+/// page), and so does the silence after he speaks unless the recording is locked (`Capture`).
 struct ChatView: View {
     @EnvironmentObject private var chat: Chat
     @ObservedObject private var capture = Capture.shared

@@ -24,7 +24,9 @@ room.
    `POST /api/voice-command?source=<name>&capture_start=…&capture_end=…`; the hub transcribes and
    inserts. A listener that speaks Supabase directly (the Mac does) can insert the row itself.
 
-That is all of it. `source` is free-form (`mac`, `fly`, `phone`, …) and nothing branches on it.
+That is all of it. `source` is free-form (`mac`, `fly`, `phone`, …) and nothing branches on it. The
+watch has a listener built to this contract as `watch` (`Capture.listen` in the watch app), with
+nothing on screen engaging it yet.
 
 ## Why the window is the whole thing
 

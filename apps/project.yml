@@ -141,6 +141,11 @@ targets:
         ITSAppUsesNonExemptEncryption: false
         NSMicrophoneUsageDescription: Status Hub uses the microphone for voice commands.
         NSLocationWhenInUseUsageDescription: For nearby requests.   # Watch/Location.swift
+        # A recording started on screen keeps going with the wrist lowered, so a command still ends at
+        # its silence and the listener keeps listening (Watch/Capture.swift). UIBackgroundModes, not
+        # WKBackgroundModes: the watch's key only takes session types, and audio is not one.
+        UIBackgroundModes:
+          - audio
         # statushub://record is what the complication opens — straight into recording.
         CFBundleURLTypes:
           - CFBundleURLName: com.jaredgantt.statushub.watch

@@ -20,7 +20,7 @@
      15-week one — because its maps scroll: the box decides what is on screen and the rest is a drag
      away, and a trim cannot carry the archive anyway (see heatPick in shared.js).
 
-     Swipe panes: [sessions] [home] [misc] [maint] [lists] [reports], landing on home. There is no
+     Swipe panes: [sessions] [home] [misc] [lists] [reports], landing on home. There is no
      chat pane — the hub conversation is on this page, and the navbar's microphone is how you answer
      it, so the pane left of home is the sessions view instead. -->
 <!-- TYPING TO THE HUB. The conversation is on the home page and the navbar's microphone answers it,
@@ -93,6 +93,11 @@
                    chart: cards/weightweeks.js insets the box by half a column at each end, in calc
                    from --cols and the grid's gap, so --hgap must equal the gap in `.heat`. -->
               <div class="hw-wplot" id="weightweeks" data-history></div>
+              <!-- THE WEIGHT PAGE, opened by tapping the plot above (expand.js, `wt`). Hidden here and
+                   moved into the sheet, so it renders on every frame like any card: every weigh-in,
+                   the trend, the intake bars and the maintenance curves the calorie target is built
+                   on (cards/maintviz.js). -->
+              <div class="card maintcard" id="weightcard"><div id="maintviz"></div></div>
               <div class="ph-block" id="nutritionlog" data-history>
                 <div id="nutheat" class="nutheat"></div>
               </div>
@@ -169,12 +174,6 @@
   <div class="card statuscard"><div class="fit" id="feeder"><h2>Cat Feeder</h2><div class=big>…</div></div></div>
   <div class="card statuscard"><div class="fit" id="mics"><h2>Voice System</h2><div class=big>…</div></div></div>
   <div class="card statuscard"><div class="fit" id="tv-routing"></div></div>
-</section>
-
-<section class="pane pane-maint">
-  <!-- maintenance-window visualization: the data the adaptive calorie target is based on
-       (cards/maintviz.js renders it from the stream's maintenance.viz). -->
-  <div class="card maintcard"><div id="maintviz"></div></div>
 </section>
 
 <section class="pane pane-todo">

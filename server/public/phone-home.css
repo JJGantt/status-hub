@@ -553,3 +553,9 @@ body.tv.phonehome .ph-convline.work .ph-convt{display:flex;gap:4px;align-items:b
 body.tv.phonehome .ph-caret{flex:0 0 auto;color:#7d8b9c;animation:phcaret 1.1s ease-in-out infinite}
 body.tv.phonehome .ph-worktxt{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 @keyframes phcaret{0%,100%{opacity:.25}50%{opacity:1}}
+/* THE WEIGHT PAGE lives hidden beside the weigh-in plot and is only ever seen in the sheet that plot
+   opens (expand.js, `wt`). Styled as the swipe pane it used to be: a card on a scrolling body. */
+body.tv.phonehome #weightcard{display:none}
+body.tv.phonehome .sectsheet[data-sec="wt"] .ss-body{overflow-y:auto;padding:10px 12px 58px}
+body.tv.phonehome .sectsheet[data-sec="wt"] #weightcard{display:block;flex:0 0 auto;background:#151a20!important;
+  border:1px solid #222a33;border-radius:12px}

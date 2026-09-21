@@ -9,6 +9,7 @@ import * as workouts from './cards/workouts.js';
 import * as nutritionlog from './cards/nutritionlog.js';
 import * as surf from './cards/surf.js';
 import * as muscle from './cards/muscle.js';
+import * as maintviz from './cards/maintviz.js';
 import { loadHistory, onHistoryLoaded, pinRight } from './heathistory.js';
 
 const HEATS = [workouts, nutritionlog];
@@ -31,6 +32,12 @@ const SECTIONS = {
   // the volume bars come with them — twenty-three of them, which is the one thing the phone's home
   // screen has never had room for.
   body: { icon: '#body', move: ['#body', '#volume'], title: 'Muscles', cards: [muscle], tap: '#body' },
+  // THE WEIGHT PAGE — every weigh-in, the trend, the intake bars and the maintenance curves — opens by
+  // tapping the weigh-in plot over the food map, which is its summary. The card lives in the page's
+  // markup hidden, so it renders on every frame and is simply MOVED here, like the rest.
+  // `scroller` is what a drag moves under the finger: the plot scrolls with the heat maps.
+  wt: { icon: '#weightweeks', move: ['#weightcard'], title: 'Weight', cards: [maintviz],
+        heat: '#maintviz .mv-scroll', tap: '#weightweeks', scroller: '.wp-scroll' },
 };
 
 // corner "expand" glyph (diagonal arrows). Big in the SVG because it lives INSIDE the ~0.36×-scaled wall
@@ -122,7 +129,7 @@ function mount() {
   }
 }
 
-// TAP TO OPEN, on a thing that also scrolls sideways. The plots are a horizontal scroller, so the
+// TAP TO OPEN, on a thing that also scrolls sideways. The surf plots and the weigh-in plot are horizontal scrollers, so the
 // gesture that opens the sheet and the gesture that drags the timeline start identically — a plain
 // click handler turns every flick into an open. Bound on the HOST and delegated, because the card
 // rebuilds its innards on every broadcast and a listener on those would be thrown away twice a minute.
@@ -133,7 +140,8 @@ function bindTap(host, key) {
   if (host.dataset.ssTap) return;
   host.dataset.ssTap = '1';
   let x = 0, y = 0, left = 0;
-  const scrollerAt = (e) => (e.target.closest ? e.target.closest('.surfscroll') : null);
+  const scroller = SECTIONS[key].scroller || '.surfscroll';
+  const scrollerAt = (e) => (e.target.closest ? e.target.closest(scroller) : null);
   host.addEventListener('pointerdown', (e) => {
     const box = scrollerAt(e);
     x = e.clientX; y = e.clientY; left = box ? box.scrollLeft : 0;

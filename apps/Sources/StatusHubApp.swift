@@ -54,11 +54,16 @@ final class GuidedAccess {
 
 // THE ALARM BORROWS THE AUDIO SESSION AND HANDS BACK WHAT IT FOUND (see "alarmAudio" below).
 //
-// Giving it back means restoring the category, not just deactivating. WebKit sets `.playAndRecord`
-// itself when the page opens the microphone, and deactivating leaves the category exactly where the
-// alarm put it — `.playback`, which cannot record — so every capture after an alarm or a sound-bench
-// press ran under a category that forbids it. The category, mode and options are taken when the alarm
-// claims the session and put back when it lets go; a release with nothing claimed does nothing.
+// Giving it back means restoring the category, and ONLY that. WebKit sets `.playAndRecord` itself when
+// the page opens the microphone, so leaving the alarm's `.playback` in place made every capture after
+// an alarm run under a category that forbids recording. The category, mode and options are taken when
+// the alarm claims the session and put back when it lets go; a release with nothing claimed does nothing.
+//
+// It does NOT deactivate the session. WebKit keeps its own idea of whether the session is active and
+// does not re-activate one it believes is already up, so a session switched off behind its back gives
+// the next capture silence. That stayed hidden while the page held its microphone open all the time —
+// a deactivation with a capture running is refused — and surfaced the moment the mic began opening
+// only to record: the first taps after a ring recorded nothing.
 enum AlarmAudio {
     private static var found: (AVAudioSession.Category, AVAudioSession.Mode, AVAudioSession.CategoryOptions)?
 
@@ -73,9 +78,7 @@ enum AlarmAudio {
         } else {
             guard let (category, mode, options) = found else { return }
             found = nil
-            // Separately, so a refused deactivation cannot keep the category from coming back.
             do { try s.setCategory(category, mode: mode, options: options) } catch { NSLog("alarmAudio restore: \(error)") }
-            do { try s.setActive(false, options: [.notifyOthersOnDeactivation]) } catch { NSLog("alarmAudio release: \(error)") }
         }
     }
 }

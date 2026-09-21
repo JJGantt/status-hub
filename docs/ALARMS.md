@@ -162,10 +162,14 @@ rather than every attempt until a reload. Re-acquiring also stops the old tracks
 silent-but-live track still holds the device, and `getUserMedia` will otherwise hand back the same
 dead capture.
 
-**Letting go of the session restores its category.** `AlarmAudio.hold` in `StatusHubApp.swift` saves
-the category, mode and options when the alarm (or the bench's OSC+SESSION) claims `.playback`, and
-puts them back on release before deactivating. Deactivating alone leaves the session on `.playback`,
-which cannot record, underneath every capture that follows.
+**Letting go of the session restores its category, and does not deactivate it.** `AlarmAudio.hold`
+in `StatusHubApp.swift` saves the category, mode and options when the alarm (or the bench's
+OSC+SESSION) claims `.playback`, and puts them back on release; left on `.playback`, the session
+cannot record underneath every capture that follows. Deactivating is the trap: WebKit keeps its own
+idea of whether the session is active and does not re-activate one it believes is up, so the next
+capture records silence. With no capture open when the ring stops — the mic opens only to record —
+a deactivation succeeds, and the first taps after a ring record nothing until the app is restarted.
+The fix is in the app, so a build older than it still has this.
 
 A capture can also break without going silent — dropping most of its frames while still sounding like
 something. The hub catches that one by measuring the clip; see `VOICE-ON-THE-PHONE.md`.

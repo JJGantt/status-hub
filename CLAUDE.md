@@ -648,6 +648,11 @@ It also beats app.css's `body.tv.wallportrait` block on equal specificity, by lo
   not, the second test being what catches a flick answered by momentum rather than by the finger. It
   is delegated from the card, which persists, rather than bound to the plots, which are rebuilt twice
   a minute.
+- **THE WEIGH-IN PLOT OPENS THE WEIGHT PAGE** (`expand.js`, `data-sec="wt"`) — every weigh-in, the
+  trend, the intake bars and the maintenance curves (`cards/maintviz.js`). The home page is meant to be
+  the only screen, with everything else reached by tapping the thing that summarises it, not swiping. `#weightcard` sits hidden beside the plot so it renders on every frame and is moved
+  into the sheet, like every other section. The plot scrolls with the heat maps, so it opens through
+  `bindTap` with `.wp-scroll` as the scroller, not a plain click.
 - **The day's totals are ON THE RINGS**, one under each gauge — `2699 / 3060` under Cal, `134 / 178`
   under P. That is the totals line split four ways and attached to the thing each number belongs to,
   so it needs no labels and there is no separate band: `#nutinfo` carries `data-noband` and
@@ -657,7 +662,7 @@ It also beats app.css's `body.tv.wallportrait` block on equal specificity, by lo
   automatic minimum is its CONTENT, so a plain `1fr` sizes each ring to its svg's intrinsic width and
   the ring column stands far taller than the one it is supposed to match.
 
-Its panes are [sessions] [home] [misc] [maint] [lists] [reports], landing on home — index 1, which is
+Its panes are [sessions] [home] [misc] [lists] [reports], landing on home — index 1, which is
 what `panes.clientWidth` means in `phone-home.js` and what the reset returns to. Driven by
 `phone-home.js` rather than `wall.js`, since there is no canvas to scale and only the paging is left.
 

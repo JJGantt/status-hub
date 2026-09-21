@@ -241,8 +241,8 @@ an idle robot otherwise look identical. `SELF_CYCLING` means the robot left slee
 cycling on its own and nothing here is driving it.
 
 **Surfaces (same code, different chrome):** desktop `/page` = scrolling rows; phone = swipe panes on
-`/`, in the markup order of `phone-home.html` — sessions · home · misc · maint · lists · reports,
-landing on home (index 1). No chat pane: the hub conversation is on the home pane, and the sessions
+`/`, in the markup order of `phone-home.html` — sessions · home · misc · lists · reports,
+landing on home (index 1). The weight page (`maintviz`) is no pane: tapping the weigh-in plot opens it as a sheet. No chat pane: the hub conversation is on the home pane, and the sessions
 view takes the slot left of it; TV `/tv` = the home wall + a voice panel (auth `?token=`); the `/mic` page = a
 minimal fullscreen voice launcher; `/calendar` = the standalone calendar page (navbar's calendar
 button gets there); `/tv-calendar` = the calendar wall (§ CLAUDE.md's walls note). The phone's page is
@@ -939,7 +939,7 @@ cards/repos.js ──POST /api/repos/open──▶ desk_commands ──realtime�
 orchestrator ──beat(30s)──▶ worker_presence(worker='desk') ──▶ the list greys out when the Mac sleeps
 ```
 
-- **Card:** `public/cards/repos.js` — 6th phone swipe pane, self-fetching. The age column doubles as
+- **Card:** `public/cards/repos.js` — the phone's sessions swipe pane, self-fetching. The age column doubles as
   launch feedback (blue → green/red) while it polls `/api/repos/cmd/:id`.
 - **Endpoints:** `GET /api/repos` (repos + desk presence) · `POST /api/repos/open` (enqueue) ·
   `GET /api/repos/cmd/:id` (pending → running → done | error | expired) · `GET /api/failures` +

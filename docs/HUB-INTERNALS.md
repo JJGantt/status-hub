@@ -1644,7 +1644,13 @@ has no WKWebView.
   second off naive wall-clock digits exactly as `workouts.js` does) over every exercise logged today,
   each drawn as the wall's `data-recent` row — the one a set just went onto at the top, the rest
   scrolling below — fed by `/api/workout-now`. The strip stays one line as on the wall, stepping
-  smaller, and wraps only when one line would be unreadable.
+  smaller, and wraps only when one line would be unreadable; on a 44mm screen that is always. A set
+  row does the same (16pt down to 9, then eliding repeated weights) and wraps as its last step, since
+  five sets at a three-digit weight fit no single line there. **Nothing on this page may report a
+  width wider than it was offered**: the ScrollView lays its content out again at the width the
+  content reports, so one overflowing row widens every row on the page past both edges of the glass.
+  `Flow` offers an item wider than a line (a long exercise name) the line's width for that reason.
+  The size steps are ONE `ForEach` inside `ViewThatFits`, which traps on duplicate child ids.
 - **The token comes from the phone.** The watch has no web view to sign in with and shares neither
   cookies nor Keychain with the phone. `Sources/WatchLink.swift` reads the `hub` cookie from the web
   view's cookie store (falling back to the Keychain password) and sends it as WatchConnectivity

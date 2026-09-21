@@ -236,22 +236,33 @@ struct Flow: Layout {
     }
 
     func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
-        for (i, p) in arrange(bounds.width, subviews).origins.enumerated() {
-            subviews[i].place(at: CGPoint(x: bounds.minX + p.x, y: bounds.minY + p.y), proposal: .unspecified)
+        let laid = arrange(bounds.width, subviews)
+        for (i, p) in laid.origins.enumerated() {
+            subviews[i].place(at: CGPoint(x: bounds.minX + p.x, y: bounds.minY + p.y), proposal: laid.proposals[i])
         }
     }
 
-    private func arrange(_ width: CGFloat, _ subviews: Subviews) -> (origins: [CGPoint], size: CGSize) {
-        var origins: [CGPoint] = []
+    /// A child wider than a whole line (a long exercise name) is offered the line's width, so its text
+    /// wraps. Left at its ideal width it made the Flow wider than the screen, and a ScrollView lays its
+    /// content out again at the width it reports, so the whole page overflowed both edges.
+    private func arrange(_ width: CGFloat, _ subviews: Subviews)
+        -> (origins: [CGPoint], proposals: [ProposedViewSize], size: CGSize) {
+        var origins: [CGPoint] = [], proposals: [ProposedViewSize] = []
         var x: CGFloat = 0, y: CGFloat = 0, line: CGFloat = 0, widest: CGFloat = 0
         for s in subviews {
-            let size = s.sizeThatFits(.unspecified)
+            var proposal = ProposedViewSize.unspecified
+            var size = s.sizeThatFits(proposal)
+            if size.width > width {
+                proposal = ProposedViewSize(width: width, height: nil)
+                size = s.sizeThatFits(proposal)
+            }
             if x > 0 && x + size.width > width { x = 0; y += line + lineSpacing; line = 0 }
             origins.append(CGPoint(x: x, y: y))
+            proposals.append(proposal)
             x += size.width + spacing
             line = max(line, size.height)
             widest = max(widest, x - spacing)
         }
-        return (origins, CGSize(width: widest, height: y + line))
+        return (origins, proposals, CGSize(width: widest, height: y + line))
     }
 }

@@ -165,45 +165,68 @@ private struct LiftRow: View {
 
 /// The set row. One line: it shrinks from 16 toward 9 until it fits, and only past that drops a weight
 /// that repeats the set before it — as cards/workouts.js does, cheapest first. The tally keeps its size.
+/// Past the smallest single line the sets wrap: five sets at a three-digit weight do not fit a 44mm
+/// screen at any size, and a line that does not fit widens the whole page past both edges.
 private struct SetsRow: View {
     let sets: [WorkoutNow.Lift]
 
+    /// Every size in full, then every size eliding repeated weights. One list, because ViewThatFits
+    /// traps on duplicate child ids and two ForEach over the same sizes give each size twice.
+    private static let steps: [(size: CGFloat, elide: Bool)] =
+        [false, true].flatMap { e in stride(from: 16, through: 9, by: -1).map { (CGFloat($0), e) } }
+
     var body: some View {
         ViewThatFits(in: .horizontal) {
-            ForEach(Array(stride(from: 16, through: 9, by: -1)), id: \.self) { fs in row(CGFloat(fs), elide: false) }
-            ForEach(Array(stride(from: 16, through: 9, by: -1)), id: \.self) { fs in row(CGFloat(fs), elide: true) }
+            ForEach(Self.steps.indices, id: \.self) { i in row(Self.steps[i].size, elide: Self.steps[i].elide) }
+            Flow(spacing: 10, lineSpacing: 2) {
+                ForEach(Array(sets.enumerated()), id: \.offset) { i, _ in lift(i, 13, elide: true) }
+                tally
+            }
         }
     }
 
     private func row(_ fs: CGFloat, elide: Bool) -> some View {
         HStack(alignment: .firstTextBaseline, spacing: 0) {
-            ForEach(Array(sets.enumerated()), id: \.offset) { i, st in
-                let carry = elide && i > 0 && sets[i - 1].weight_lbs == st.weight_lbs
-                HStack(alignment: .firstTextBaseline, spacing: 0) {
-                    if !carry {
-                        Text(st.weight_lbs == 0 ? "BW" : js(st.weight_lbs ?? 0))
-                            .font(.system(size: fs * 0.8125, weight: .bold).monospacedDigit())
-                            .foregroundColor(Color(hex: "#c7cdd6"))
+            ForEach(Array(sets.enumerated()), id: \.offset) { i, _ in
+                lift(i, fs, elide: elide)
+                    .padding(.leading, i == 0 ? 0 : fs * 0.625)
+                    .padding(.trailing, i == sets.count - 1 ? 0 : fs * 0.625)
+                    .overlay(alignment: .leading) {
+                        if i > 0 { Rectangle().fill(Color.white.opacity(0.18)).frame(width: 1) }
                     }
-                    Text("×").font(.system(size: fs)).foregroundColor(Color(hex: "#5c6675"))
-                        .padding(.horizontal, fs * 0.19)
-                    Text(String(st.reps ?? 0)).font(.system(size: fs, weight: .bold).monospacedDigit())
-                        .foregroundColor(Color(hex: "#c7cdd6"))
-                }
-                .padding(.leading, i == 0 ? 0 : fs * 0.625)
-                .padding(.trailing, i == sets.count - 1 ? 0 : fs * 0.625)
-                .overlay(alignment: .leading) {
-                    if i > 0 { Rectangle().fill(Color.white.opacity(0.18)).frame(width: 1) }
-                }
             }
             Spacer(minLength: 0)
-            Text(String(sets.count)).font(.system(size: 17, weight: .bold).monospacedDigit())
-                .foregroundColor(Color(hex: "#e6eaf0"))
-                .padding(.leading, 13)
-                .overlay(alignment: .leading) { Rectangle().fill(Color.white.opacity(0.5)).frame(width: 2) }
+            tally
         }
         .lineLimit(1)
         .fixedSize(horizontal: true, vertical: false)
+    }
+
+    /// One set, `weight × reps`; eliding, a weight that repeats the set before it is left out.
+    private func lift(_ i: Int, _ fs: CGFloat, elide: Bool) -> some View {
+        let st = sets[i]
+        let carry = elide && i > 0 && sets[i - 1].weight_lbs == st.weight_lbs
+        return HStack(alignment: .firstTextBaseline, spacing: 0) {
+            if !carry {
+                Text(st.weight_lbs == 0 ? "BW" : js(st.weight_lbs ?? 0))
+                    .font(.system(size: fs * 0.8125, weight: .bold).monospacedDigit())
+                    .foregroundColor(Color(hex: "#c7cdd6"))
+            }
+            Text("×").font(.system(size: fs)).foregroundColor(Color(hex: "#5c6675"))
+                .padding(.horizontal, fs * 0.19)
+            Text(String(st.reps ?? 0)).font(.system(size: fs, weight: .bold).monospacedDigit())
+                .foregroundColor(Color(hex: "#c7cdd6"))
+        }
+        .lineLimit(1)
+        .fixedSize()
+    }
+
+    private var tally: some View {
+        Text(String(sets.count)).font(.system(size: 17, weight: .bold).monospacedDigit())
+            .foregroundColor(Color(hex: "#e6eaf0"))
+            .padding(.leading, 13)
+            .overlay(alignment: .leading) { Rectangle().fill(Color.white.opacity(0.5)).frame(width: 2) }
+            .fixedSize()
     }
 }
 

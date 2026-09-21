@@ -17,9 +17,7 @@ function scheduleReset() {
 }
 
 const rec = makeRecorder({
-  // Press to start, press to send, like the navbar's button. autoStop would let the VAD end it at a
-  // pause and discard a clip it judged silent without a word.
-  quick: true, autoStop: false,
+  quick: true,
   onState: (s) => { btn.classList.toggle('rec', s === 'rec'); btn.classList.toggle('armed', s === 'armed'); },
   onStatus: (t, kind) => {
     clearTimeout(resetTimer);

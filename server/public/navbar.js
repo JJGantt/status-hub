@@ -54,7 +54,7 @@ export function mountNavbar() {
     // NO SILENCE DETECTION HERE. This button records exactly what he chose to record: one tap opens
     // the mic, the next sends it. Nothing ends a recording on his behalf, because a pause mid-sentence
     // is not the end of a sentence — the always-on button beside it is where a machine gets to decide.
-    const rec = makeRecorder({ onStatus, quick: true, autoStop: false,
+    const rec = makeRecorder({ onStatus, quick: true,
       onState: (s) => { b.classList.toggle('rec', s === 'rec'); b.classList.toggle('armed', s === 'armed'); } });
     bindTap(b, () => rec.toggle());
     // The native app (opened via statushub://record from a home-screen shortcut) calls this to start the

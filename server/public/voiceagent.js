@@ -333,11 +333,11 @@ const VOICE_BPS = 96000;
 // onState reports the button's one visual state: 'armed' (tapped — the mic is opening, or the clip is
 // on its way up), 'rec' (actually capturing) or 'idle'. Callers paint it; nothing else infers it.
 //
-// PRESS TO START, PRESS TO SEND, and nothing else ends a recording or decides whether it is sent. It
-// used to take `autoStop`, which ran a VAD over the clip: it ended the recording at a pause, and a clip
-// it judged silent was discarded without a word. On his phone it judged whole spoken commands silent,
-// so buttons that used it recorded, threw the words away and showed nothing. A button someone pressed
-// has already said he is talking; the always-on listener (makeListener) is where a machine decides.
+// PRESS TO START, PRESS TO SEND, and nothing else ends a recording or decides whether it is sent. DO
+// NOT ADD A VAD HERE: one ends a recording at a pause and discards a clip it judges silent without a
+// word, and on his phone it judges whole spoken commands silent — the button records, throws the
+// words away and shows nothing. A pressed button has already said he is talking; the always-on
+// listener (makeListener) is where a machine decides.
 export function makeRecorder({ onStatus = () => {}, onState = () => {}, quick, dryWhen, onTranscript }) {
   let recording = false, rec = null, chunks = [], stream = null, startedAt = 0;
   let arming = false;                 // tapped, mic not open yet — see start()

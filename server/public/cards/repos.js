@@ -179,8 +179,7 @@ async function launch(li, prompt, target) {
 // typing it into a fresh prompt on the Mac afterwards.
 //
 // PRESS TO START, PRESS TO SEND, like every press-to-talk button here: the machine's button starts it,
-// and tapping the row (or that button) again sends it. No `autoStop` — the VAD would end it at a pause
-// and discard a clip it judged silent without a word. Leaving for something else (another row, a
+// and tapping the row (or that button) again sends it. Leaving for something else (another row, a
 // session, the reset) CANCELS: that recording has lost what it was for.
 //
 // `dryWhen: () => true` is the whole trick: the recorder then posts to /api/voice-command?dry=1, which
@@ -193,7 +192,6 @@ function beginDictation(li, target) {
   li.className = 'rec';
   li.dataset.say = target === 'mac' ? 'Listening… → Mac' : 'Listening… → Pi';
   const rec = recorder = makeRecorder({
-    autoStop: false,
     dryWhen: () => true,
     onStatus: (t) => { if (armed === li && t) li.dataset.say = t; },
     // The recorder is idle again. If no transcript took the row first, the clip failed or was
@@ -671,12 +669,8 @@ async function openSession(id) {
   box.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); sendWords(box.value); } });
   // Spoken words go straight in, as they do on the watch and as this pane's launcher sends a dictated
   // prompt: `dryWhen` has the hub transcribe without enqueueing a voice command, and the transcript
-  // is sent as the follow-up. PRESS TO START, PRESS TO SEND — the same as the navbar's button, and
-  // nothing else ends it. `autoStop` would hand both decisions to the VAD: it ends the recording at a
-  // pause, and a clip it judges silent is DISCARDED with no message. On the phone it judged whole
-  // spoken commands silent, so a press here recorded, then threw the words away, and said nothing.
+  // is sent as the follow-up. PRESS TO START, PRESS TO SEND, the same as every mic button (makeRecorder).
   at.rec = makeRecorder({
-    autoStop: false,
     dryWhen: () => true,
     onStatus: (t, kind) => { if (cur === at && kind !== 'prompt') status.textContent = t || ''; },
     onState: (s) => { mic.classList.toggle('ai-rec', s === 'rec'); mic.classList.toggle('ai-armed', s === 'armed'); },

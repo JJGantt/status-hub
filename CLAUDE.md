@@ -158,10 +158,10 @@ alarm:
   which is how a change made at 4am reaches an already-open page with no push involved. A second
   EventSource on one phone is a mistake already made here. The two-minute reload behind it is the
   backstop for a socket gone deaf while still looking open.
-- **The ring is bounded** (`RING_MAX_MS`, the same number as the server's `ALARM_RING_MIN`). With
-  STOP as the only way out it rang for 53 minutes into an empty room. It also stops when the item
-  leaves the feed, so clearing it anywhere else ends the noise — the feed is the state, and STOP is
-  only one way of changing it.
+- **The ring is unbounded, and STOP completes the item.** An alarm that gives up is not an alarm.
+  The feed is the state: STOP posts the completion, the item leaves the feed, and every surface
+  ringing it stops together. Clearing it anywhere else ends the noise the same way. `closeExempt`
+  never closes an alarm item, since that would end the ring in the minute it starts.
 
 ## An alarm rings from the phone, and the hub can only ask
 

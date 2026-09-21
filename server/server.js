@@ -3994,10 +3994,6 @@ function dueMoment(due) {
   return /T\d/.test(d) ? d : d.slice(0, 10) + 'T09:00:00';
 }
 
-// How long the page rings an alarm before giving up — RING_MAX_MS in public/alarmclock.js is the same
-// number. The notification is not part of it: an alarm item notifies once, like any dated item.
-const ALARM_RING_MIN = 10;
-
 // When a dated item stops being on time: the SCORING deadline, as a local-naive stamp. A timed item is
 // late at its own moment; a date-only one is on time for its whole day and late at the next day's 4am
 // origin. Everything that calls an item overdue reads this — chip colour and dimming, the badge, the
@@ -4130,12 +4126,11 @@ async function closeExempt(nowET, rows) {
   let next = '';
   for (const r of rows || []) {
     if (!(Number(r.priority) < 0)) continue;   // exempt items only — what the old query's filter said
-    let deadline = taskDeadline(r.scheduled_at || r.due);
+    // An ALARM is never closed here. The page rings it until STOP, and STOP is what completes it;
+    // closing it on time would silence the alarm in the minute it starts.
+    if (r.alarm) continue;
+    const deadline = taskDeadline(r.scheduled_at || r.due);
     if (deadline == null) continue;
-    // An ALARM is closed only once its ring is over. The page stops ringing the moment the item
-    // leaves the feed, and a timed exempt item's deadline is its own moment, so closing on time
-    // would silence the alarm in the minute it starts.
-    if (r.alarm) deadline += ALARM_RING_MIN * 60000;
     if (deadline > now) {
       next = earlierOf(next, new Date(deadline).toISOString().slice(0, 19));
       continue;

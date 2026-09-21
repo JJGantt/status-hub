@@ -27,12 +27,12 @@ const BEEP_MS = 1400;
 // seamlessly, because a click every two seconds for ten minutes is its own kind of failure.
 const SOUND = (slug) => `/alarm-${slug || 'classic'}.m4a`;
 
-// HOW LONG IT RINGS. Left unbounded it rang for 53 minutes into an empty room, because STOP was the
-// only thing that ended it. ALARM_RING_MIN on the server is the same number.
-const RING_MAX_MS = 10 * 60 * 1000;
+// IT RINGS UNTIL IT IS STOPPED. No cap: an alarm that gives up is not an alarm. STOP completes the
+// item, which takes it out of the feed on every surface, so stopping here stops it everywhere.
 
-let items = [], fireT = null, ringT = null, ringEndT = null, ringing = null, actx = null, lock = null;
+let items = [], fireT = null, ringT = null, ringing = null, actx = null, lock = null;
 let media = null, slug = 'classic';
+let stopping = false, watchT = null;   // see keepPlaying()
 
 // Built ahead of time and kept, so the bytes are on the device before they are needed rather than
 // being fetched at the moment the alarm is due — over a bad connection that is the difference
@@ -43,9 +43,45 @@ function sound(want) {
     media = new Audio(SOUND(slug));
     media.loop = true;
     media.preload = 'auto';
+    // `loop` is asked for and NOT trusted: on 2026-09-21 at 01:13 the file played once and stopped,
+    // with nothing on the page having stopped it. So every way the element can go quiet is watched,
+    // and each one restarts it while the alarm is ringing. `stopping` is how stopRing's own pause is
+    // told apart from one that arrived from outside.
+    for (const ev of ['ended', 'pause', 'stalled', 'suspend', 'error', 'abort', 'emptied'])
+      media.addEventListener(ev, () => keepPlaying(ev));
     try { media.load(); } catch (_) {}
   }
   return media;
+}
+function mediaState() {
+  if (!media) return null;
+  return { t: Math.round(media.currentTime * 100) / 100, paused: media.paused, ended: media.ended,
+           ready: media.readyState, err: media.error ? media.error.code : null };
+}
+function keepPlaying(why) {
+  if (!ringing || stopping) return;
+  beaconSound({ path: 'media', ev: why, ...mediaState() });
+  try { media.currentTime = 0; } catch (_) {}
+  const p = media.play();
+  if (p && p.catch) p.catch((e) => {
+    beaconSound({ path: 'media', ev: 'replay-failed', error: String(e.name || e) });
+    unlock(); burst();
+    if (!ringT) ringT = setInterval(burst, BEEP_MS);
+  });
+}
+// A RING-ONLY BACKSTOP behind the events above, because a media element can also stop advancing with
+// no event at all — `paused` false, `currentTime` frozen. It runs only while ringing and only asks
+// the element it is watching, so it is not a poll of anything else.
+function watchRing() {
+  let last = -1;
+  clearInterval(watchT);
+  watchT = setInterval(() => {
+    if (!ringing || !media) return;
+    const t = media.currentTime;
+    const stuck = media.paused || media.ended || (t === last && !media.seeking);
+    last = t;
+    if (stuck) keepPlaying('stuck');
+  }, 3000);
 }
 const fired = new Set();
 const keyOf = (it) => `${it.id}:${it.when}`;
@@ -98,7 +134,14 @@ function overlay(title, at) {
   el.innerHTML = `<div class="af-when">${esc(at)}</div>`
     + `<div class="af-what">${esc(title || '')}</div>`
     + `<button class="af-stop" type="button">STOP</button>`;
-  el.querySelector('.af-stop').addEventListener('click', stopRing);
+  el.querySelector('.af-stop').addEventListener('click', () => {
+    // Complete the item, not just quiet this page: the feed is the state, and every other surface
+    // ringing this alarm stops when it leaves. Exempt, so completing costs nothing on the score.
+    const id = ringing && ringing.id;
+    stopRing('stop');
+    if (id) fetch('/api/todos/complete', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+                                           body: JSON.stringify({ id }) }).catch(() => {});
+  });
   document.body.appendChild(el);
   return el;
 }
@@ -110,7 +153,8 @@ function makeNoise() {
   document.dispatchEvent(new CustomEvent('hub:audioplaying'));   // the mic stays shut until stopRing
   try { a.currentTime = 0; } catch (_) {}
   a.play().then(() => {
-    beaconSound({ path: 'media', ok: true });
+    beaconSound({ path: 'media', ok: true, ...mediaState() });
+    watchRing();
   }).catch((e) => {
     beaconSound({ path: 'media', ok: false, error: String(e.name || e) });
     unlock();
@@ -134,14 +178,16 @@ function startRing(it) {
   overlay(it.title, when).classList.add('on');
   document.body.classList.add('alarming');
   makeNoise();
-  ringEndT = setTimeout(stopRing, RING_MAX_MS);
   try { if (navigator.vibrate) navigator.vibrate([600, 300, 600, 300, 600]); } catch (_) {}
 }
-function stopRing() {
+function stopRing(why) {
+  beaconSound({ ev: 'stop', why: why || '?', ...mediaState() });
   clearInterval(ringT); ringT = null;
+  clearInterval(watchT); watchT = null;
+  stopping = true;
   try { if (media) { media.pause(); media.currentTime = 0; } } catch (_) {}
+  stopping = false;
   nativeAudio(false);   // give the microphone back; .playback cannot record
-  clearTimeout(ringEndT); ringEndT = null;
   ringing = null;
   document.body.classList.remove('alarming');
   document.dispatchEvent(new CustomEvent('hub:audioplayed'));   // over: the mic may re-warm now, and not before
@@ -196,7 +242,7 @@ async function load() {
     // DEALT WITH ELSEWHERE IS STILL DEALT WITH. Clearing the item on the watch or another phone drops
     // it from this feed, and a page still beeping about something already handled is noise nobody can
     // trace back to a cause. The feed is the state; STOP is only one way of changing it.
-    if (ringing && !items.some((x) => x.id === ringing.id)) return stopRing();
+    if (ringing && !items.some((x) => x.id === ringing.id)) return stopRing('feed');
     schedule();
   } catch (_) { /* keep the schedule already held rather than losing it to a blip */ }
 }
@@ -233,7 +279,8 @@ function beacon() {
     next: n ? new Date(n.at).toISOString() : null,
     in_s: n ? Math.round((n.at - Date.now()) / 1000) : null,
     armed: !!fireT,
-    ringing: !!ringT,
+    ringing: !!ringing,      // the ring, not the fallback beeper — `!!ringT` reported false through a whole media ring
+    ...(ringing ? { play: mediaState() } : {}),
   };
   try { navigator.sendBeacon('/api/clientlog', new Blob([JSON.stringify(body)], { type: 'application/json' })); } catch (_) {}
 }

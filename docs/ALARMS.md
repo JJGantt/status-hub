@@ -112,8 +112,8 @@ The most-used case, end to end. No session and no model is involved after the co
    more entry there. Today there is one, `item`: an alarm-marked `list_items` row the hub creates,
    moves and deletes, holding its id in `state`. It goes on the `l_alarms` list and is EXEMPT —
    an alarm is not a task, and waking up earns nothing. Exempt items close themselves when their
-   moment passes; `closeExempt` waits out the ring for an alarm, since closing it pulls it from the
-   feed and the page stops ringing. A moment that has arrived is never moved, a wake
+   moment passes, but never an alarm: that would pull it from the feed and end the ring in the minute
+   it starts. STOP is what completes it. A moment that has arrived is never moved, a wake
    time already past is recorded as `late` and changes nothing, and an item he deleted or completed
    himself is not put back (re-engaging with the tool forgets it). Moving the item's `due` goes out
    over realtime → `/api/stream` → `hub:stream` → `alarmclock.js` reloads and re-arms. **No push is

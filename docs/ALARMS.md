@@ -39,10 +39,10 @@ looks like it does:
   Guided Access session `<audio>` plays and an oscillator makes no sound at all. This is why the
   alarm is a FILE. An alarm built on oscillators flashed its overlay, reported `state: "running"`,
   scheduled its beeps and was silent through the entire morning of 2026-09-19.
-- **AlarmKit is suspect for the same reason.** An alarm it had acked (`held:2`) passed in silence —
-  but that test ran inside Guided Access, so it is confounded and does NOT establish that AlarmKit is
-  broken generally. Retiring it on that evidence was a mistake. What it does mean: AlarmKit cannot be
-  relied on for the Guided Access path until it is tested there specifically.
+- **AlarmKit must hold nothing.** Inside a session an armed AlarmKit alarm does not present — and it
+  still fires, at the same instant as the page, and takes the audio session: the page's overlay comes
+  up, its sound starts and is cut off a moment later, and nothing replaces it. That is specific to
+  Guided Access; outside a session AlarmKit rings normally and is the right path.
 
 ## Whose job is it to ring
 
@@ -50,12 +50,17 @@ Per alarm, one of them makes the noise:
 
 | | **`armed`** (AlarmKit holds it) | **not armed** |
 |---|---|---|
-| **In Guided Access** | the page rings — AlarmKit will not present | the page rings |
+| **In Guided Access** | the page rings — and the phone is told to drop it (below) | the page rings |
 | **Not in Guided Access** | the page stays quiet, AlarmKit rings | the page rings |
 
-`armed` alone is not enough to decide, which is why this needs the session state: inside Guided
-Access AlarmKit reports holding an alarm it may never present, so suppressing on `armed` there trades
-a duplicate noise for a silent morning.
+**In Guided Access the hub takes the alarms off the phone.** The page reports the session in its
+beacon (`guided`), and at once when it changes. While that is fresh and true, `/api/alarms` serves an
+empty set and `unarmedAlarms()` expects nothing, and the change itself wakes the phone to sync — a
+push to an app in front is not rationed — so AlarmSync cancels what it holds. When the session ends,
+or the page stops beaconing, AlarmKit gets its alarms back. `inGuidedAccess()` in `server.js`.
+
+The page still ignores `armed` inside a session, for the moment between a session starting and the
+phone syncing.
 
 **The page cannot detect a Guided Access session** — there is no web API, and the giveaway (Web Audio
 being silenced) is not measurable from inside the audio graph. `GuidedAccess` in `StatusHubApp.swift`
@@ -104,7 +109,10 @@ The most-used case, end to end. No session and no model is involved after the co
    `decided` on the row records the last answer: which snapshot, which rule, what time.
 4. The decision drives the row's `outputs`, a registry in that file — a new form of alarm is one
    more entry there. Today there is one, `item`: an alarm-marked `list_items` row the hub creates,
-   moves and deletes, holding its id in `state`. A moment that has arrived is never moved, a wake
+   moves and deletes, holding its id in `state`. It goes on the `l_alarms` list and is EXEMPT —
+   an alarm is not a task, and waking up earns nothing. Exempt items close themselves when their
+   moment passes; `closeExempt` waits out the ring for an alarm, since closing it pulls it from the
+   feed and the page stops ringing. A moment that has arrived is never moved, a wake
    time already past is recorded as `late` and changes nothing, and an item he deleted or completed
    himself is not put back (re-engaging with the tool forgets it). Moving the item's `due` goes out
    over realtime → `/api/stream` → `hub:stream` → `alarmclock.js` reloads and re-arms. **No push is

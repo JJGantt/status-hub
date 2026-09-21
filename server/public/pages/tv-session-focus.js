@@ -6,6 +6,7 @@
 
 import '../core.js';   // renders the REAL hub cards from /api/stream into the .rows
 import '../tv.js';   // the kiosk's activity popup + heard-you pop (kiosk only; every other surface boots voiceagent)
+import '../alarmclock.js';   // the wall rings too: the kiosk's chromium plays through the Pi's HDMI sink to the TV
 import '../wall.js';   // on a phone-sized viewport, scale the whole 1920x1080 shell to fit (phone "wall mode")
 import '../wallmode.js';   // follow the wall_mode setting, so the TV can be switched between walls by voice
 import '../expand.js';   // phone-wall expand icons -> full-screen section sheets (nutrition / workouts)

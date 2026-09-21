@@ -126,19 +126,6 @@ moment **within one minute**, over the stream, with the phone untouched.
 failure here has been a silent one that reported success — `audio: "running"` was true the whole
 morning nothing came out of the speaker.
 
-## Testing an alarm
-
-**A test proves only the path and the phone state it ran in.** The AlarmKit path works with the
-phone in hand — the app is in front, so the push lands and the phone acks within a second — and
-that says nothing about the case that matters, a phone locked, off, or in Guided Access overnight.
-An ack (`held`, `alarm_armed_at`) is the phone saying it accepted an alarm, not that it will ring.
-
-So before any test that makes his phone ring or notify, **tell Jared which path it exercises and
-what state the phone has to be in, and run it with him**: he sets the phone up, then the alarm goes
-about a minute out, not five. The overnight surf path is tested as it will run: the app open on `/`,
-in Guided Access, plugged in, and the ring confirmed by him hearing it and by the `alarmclock`
-beacon below — never by an ack.
-
 ## Playing a sound breaks the microphone, unless you say so
 
 Anything on the hub page that plays audio can take the iOS audio session, and a capture track that

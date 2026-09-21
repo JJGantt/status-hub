@@ -231,11 +231,18 @@ function releaseMic() {
 }
 // Called by every surface that can record (the hub's boot, and the /mic web-clip).
 export function holdMic() {
-  const warm = () => { if (document.visibilityState === 'visible') mic().catch(() => {}); };
+  // NEVER WHILE A SOUND IS PLAYING. A capture needs `.playAndRecord`, and opening one takes the
+  // session there out from under whatever is playing — the alarm's `.playback` claim included, which
+  // reduces a ring to its first moment. So a warm is only ever the idle-time head start; a press that
+  // records still acquires through mic() whatever is playing, because then he asked for it.
+  let playing = false;
+  const warm = () => { if (!playing && document.visibilityState === 'visible') mic().catch(() => {}); };
   warm();
   // Anything on this page that PLAYS audio may have taken the session with it — the alarm, a tone
-  // preview in Settings, the sound bench. They say so rather than this trying to detect it.
-  document.addEventListener('hub:audioplayed', () => { dirtyMic(); if (document.visibilityState === 'visible') setTimeout(warm, 400); });
+  // preview in Settings, the sound bench. They say so rather than this trying to detect it:
+  // `hub:audioplaying` as the sound starts and `hub:audioplayed` once it is over.
+  document.addEventListener('hub:audioplaying', () => { playing = true; dirtyMic(); });
+  document.addEventListener('hub:audioplayed', () => { playing = false; dirtyMic(); if (document.visibilityState === 'visible') setTimeout(warm, 400); });
   document.addEventListener('visibilitychange', () => (document.hidden ? releaseMic() : warm()));
   window.addEventListener('pagehide', releaseMic);
   // A device arriving or leaving (AirPods, a car) re-routes a held capture, which makes it the first

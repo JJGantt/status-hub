@@ -20,6 +20,9 @@ function beacon(fields) {
       new Blob([JSON.stringify({ ev: OUT, ...fields })], { type: 'application/json' }));
   } catch (_) {}
 }
+// The bench plays audio too, so it owes the same notice as anything else here: `hub:audioplaying` as
+// a sound starts and `hub:audioplayed` once it is over, which is when the mic may re-acquire.
+function notice(ev) { try { document.dispatchEvent(new CustomEvent(ev)); } catch (_) {} }
 function nativeAudio(on) {
   try { window.webkit.messageHandlers.alarmAudio.postMessage(on); return true; } catch (_) { return false; }
 }
@@ -33,6 +36,8 @@ function ctx() {
 function osc(label, extra) {
   const c = ctx();
   if (!c) return done(label, { error: 'no AudioContext' });
+  notice('hub:audioplaying');
+  setTimeout(() => notice('hub:audioplayed'), 1300);   // the last beep ends 1.2s in
   const t = c.currentTime;
   for (let i = 0; i < 3; i++) {
     const o = c.createOscillator(), g = c.createGain();
@@ -47,8 +52,6 @@ function osc(label, extra) {
   done(label, { state: c.state, ...(extra || {}) });
 }
 function done(label, info) {
-  // The bench plays audio too, so it owes the same warning as anything else here.
-  try { document.dispatchEvent(new CustomEvent('hub:audioplayed')); } catch (_) {}
   const bits = Object.entries(info).map(([k, v]) => `${k}=${v}`).join(' ');
   say(`${label} · ${bits}`);
   beacon({ test: label, ...info });
@@ -62,6 +65,8 @@ const TESTS = [
   // real tone so what is heard here is what will be heard at 7am.
   ['FILE', () => {
     const a = new Audio('/alarm.m4a');   // the real alarm tone, not the UI blip
+    ['pause', 'ended', 'error'].forEach((ev) => a.addEventListener(ev, () => notice('hub:audioplayed'), { once: true }));
+    notice('hub:audioplaying');
     a.play().then(() => done('FILE', { played: true }))
       .catch((e) => done('FILE', { played: false, error: String(e.name || e) }));
   }],
@@ -71,7 +76,7 @@ const TESTS = [
   // Not audio at all. Proves the press arrived and the page is live even when everything is silent.
   ['VIBRATE', () => { let ok = false; try { ok = !!(navigator.vibrate && navigator.vibrate([400, 200, 400])); } catch (_) {} done('VIBRATE', { vibrate: ok }); }],
   // Hands the session back, so the microphone works again after OSC+SESSION.
-  ['RELEASE', () => done('RELEASE', { native: nativeAudio(false) })],
+  ['RELEASE', () => { const native = nativeAudio(false); notice('hub:audioplayed'); done('RELEASE', { native }); }],
 ];
 
 export function mount() {

@@ -142,11 +142,15 @@ export async function open() {
   const playTone = () => {
     const slug = back.querySelector('#set-alarm-sound').value;
     try { if (preview) { preview.pause(); } } catch (_) {}
-    preview = new Audio('/alarm-' + slug + '.m4a');
-    preview.play().catch(() => {});
-    // Playing this may have taken the audio session, which leaves the cached mic silent-but-live.
-    // Say so; voiceagent re-acquires rather than recording silence on the next press.
-    document.dispatchEvent(new CustomEvent('hub:audioplayed'));
+    const a = preview = new Audio('/alarm-' + slug + '.m4a');
+    // Playing this may have taken the audio session, which leaves the cached mic silent-but-live, and
+    // a mic re-acquired mid-tone takes the session back and cuts the preview. So say when it starts
+    // and when it is over; voiceagent re-acquires only after. Only the CURRENT preview says it is over,
+    // so the one a second press replaces cannot let the mic in under the next.
+    const over = () => { if (preview === a) document.dispatchEvent(new CustomEvent('hub:audioplayed')); };
+    ['pause', 'ended', 'error'].forEach((ev) => a.addEventListener(ev, over));
+    document.dispatchEvent(new CustomEvent('hub:audioplaying'));
+    a.play().catch(over);
   };
   back.querySelector('#set-alarm-sound').addEventListener('change', (e) => {
     save('alarm_sound', e.target.value);

@@ -546,11 +546,7 @@ fired from `dirtyNutDay()` / `dirtyWorkoutDay()`, which every write path already
 path) · `/api/nutrition-day` also takes `date=today`, so a client with no 4am-origin day of its own
 gets the server's, and ships that day's own `produce` fill gauges beside its totals and targets so a
 surface pointing the rings at a selected day moves all seven of them together ·
-`/api/alarms/ack` (the phone reporting the set of AlarmKit alarms it holds; arms and disarms
-`list_items.alarm_armed_at`) ·
-`/api/alarms` (the dated items marked `alarm`, inside a 7-day window, each with an ABSOLUTE instant —
-what the phone registers with AlarmKit; see status-hub's CLAUDE.md) · `/api/todos/alarm` (sets or
-clears that mark) ·
+`/api/todos/alarm` (sets or clears a dated item's `alarm` mark; what rings is `docs/ALARMS.md`) ·
 `/api/todos` (lists + the derived `due` view) · `/api/calendar` (month grid(s) of every
 dated item — every occurrence is a real row, so nothing is projected; `?month=` pages, `?wall=1` adds
 the day timeline and reads `calendar_months` for the spread, `?day=1` is the timeline alone and
@@ -652,9 +648,7 @@ Consequences worth knowing:
   a `list_items` change dirtied it — a moment passing is not a row changing, so the clock stays and the
   query goes. It reads `list_items` where `due` is past, dedupes against
   `notifications.dedupe_key`, and hands off to a **named handler** in `DUE_HANDLERS` rather than
-  calling `pushAll` directly. Only `push` exists today; the seam earns its ten lines because the
-  second handler is already scheduled — AlarmKit ([TODO.md](TODO.md)), which fires on-device and
-  breaks through Focus.
+  calling `pushAll` directly. Only `push` exists today.
 - **`kind` is gone** from `/api/todos/clear` — one table, one thing to clear.
 - **Recurrence is materialised, not stored.** There is no `repeat_every` column (data-layer
   `00085`/`00086`). `add_to_list`'s `repeat_every` is an instruction executed once: it writes one

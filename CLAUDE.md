@@ -107,12 +107,19 @@ the existing `StatusHubControls` bundle (the `WidgetBundle` at the bottom of
 `apps/Controls/RecordControl.swift`); a widget and its button intents share `UserDefaults.standard`,
 since they are one process already.
 
-## Alarms: two paths, and Guided Access is the lock
+## Alarms: the TV and the hub page, mirrored
 
-`docs/ALARMS.md` is the whole picture — which path covers which case, why neither covers both, and
-the surf scenario end to end. The one thing to carry into any change here: **the programmatic path
-requires the app open in Guided Access**, because that is Jared's lock, not an optional extra. So
-anything Guided Access suppresses is unusable for it — which is Web Audio, and possibly AlarmKit.
+`docs/ALARMS.md` is the whole picture — the mirror rule, the surf scenario end to end, and what has
+to be true the night before. An alarm rings on the TV (`tv-ring` on the Pi) and on any open hub page,
+and both apply one rule: past its moment and still in the feed means ringing. STOP anywhere completes
+the item and silences both.
+
+**Nothing registers an alarm on the phone.** AlarmKit is the obvious tool and it does not fit: its
+Stop completes nothing, so the TV rings on after it, and a change decided at 4am cannot reach a
+sleeping phone to move it, because the push that would carry it is rationed and refused. So the phone
+rings only while the app is open, and overnight it is open in Guided Access — Jared's lock, not an
+optional extra. Anything Guided Access suppresses is unusable here, which is why the alarm is an audio
+FILE: Web Audio is silenced inside a session.
 
 ## The hub page IS the alarm clock
 
@@ -121,9 +128,8 @@ anything Guided Access suppresses is unusable for it — which is Web Audio, and
 timer to the next `alarm`-marked item from `/api/due-widget` and plays `alarm.m4a` on a loop when it
 arrives, so nothing has to be delivered at the moment itself.
 
-It exists because both halves of the device path were measured failing silently on the same night —
-AlarmKit acked an alarm (`held:2`) it never presented, and four silent pushes carrying a new alarm to
-a sleeping phone were refused. This has neither dependency.
+A page already open needs nothing delivered at the moment itself, which is the whole reason it is the
+phone's ringer: a push to a sleeping phone is rationed and refused.
 
 **On the hub's own page, not a page of its own.** A standalone `/alarm` was the obvious build and the
 wrong one: the iOS app loads `/`, so a separate URL is a thing to remember to open on exactly the
@@ -168,117 +174,12 @@ alarm:
   ringing it stops together. Clearing it anywhere else ends the noise the same way. `closeExempt`
   never closes an alarm item, since that would end the ring in the minute it starts.
 
-## An alarm rings from the phone, and the hub can only ask
+## An alarm notifies too, once
 
-`list_items.alarm` marks a dated item alarm-grade: iOS 26's AlarmKit rings it through silent mode and
-through a Focus, the same as the Clock app. Everything about the design follows from one fact — **an
-AlarmKit alarm is registered ON the device.** No push rings one, and there is no push-to-start the way
-a Live Activity has. So the hub's whole role is to publish what should be registered and to ask the
-phone to look.
-
-| | |
-|---|---|
-| `GET /api/alarms` | what the phone should hold right now: every marked item due inside `ALARM_WINDOW_DAYS`. `at` is an ABSOLUTE instant (`instantFromLocal`), not the naive stamp the rest of the API speaks, so a phone that has travelled resolves nothing itself. |
-| `POST /api/todos/alarm` | sets or clears the mark. Nothing infers it from priority or wording. |
-| `POST /api/alarms/ack` | the phone reporting the whole SET it holds, after every sync. Arms the items in it, disarms the ones that are not, and diffs first so an unchanged sync writes nothing. |
-| `nudgeAlarms()` | a silent push off the `list_items` subscription, for rows that are or were marked. Retries on widening gaps until every in-window alarm is acked. |
-| `Sources/AlarmSync.swift` | reads the feed and makes the device match it. |
-| `Controls/AlarmWidget.swift` | the alert's Live Activity. |
-
-**The sync carries a WINDOW, not a change.** Every run registers everything in the next week and
-cancels what is not in it. That is what makes a dropped wake cheap: iOS throttles background pushes on
-its own heuristics and delivers none at all after a force-quit, so the worst a missed one costs is an
-alarm created since the last sync registering late, never the next alarm failing to ring.
-
-**A refused wake is retried until the phone acks.** `unarmedAlarms()` is the stop condition rather
-than a count, so a wake that landed costs one push and one cheap read and only a refused one keeps
-trying — `ALARM_RETRY_MS`, four attempts widening across twenty minutes. Widening, because what is
-being waited on is iOS restoring a budget it took away, and stacking attempts into the minute it
-refused spends them on the refusal. The window alone does not cover an alarm created while the phone
-sits idle overnight: that is both when the wake is most likely to be dropped and when nothing
-follows to pick the phone up, and two pushes a quarter of an hour apart is already enough for the
-second to be refused outright.
-
-**The last attempt changes CHANNEL, not just timing** (`escalateWake`). A background push and an
-alert push are delivered on different terms and only the first is rationed — a phone here refused
-four background pushes while alert pushes to the same device in the same minutes arrived — so once
-the silent wakes have been refused, another one of the same is the least useful thing to send. The
-escalation goes out as an alert carrying `content-available` (`wake: true` in `apns.js`) at
-`interruption-level: passive`, which buys the reliable delivery class without lighting the screen or
-making a sound. That combination is the whole point: a 4am wake to register an alarm has to cost a
-silent line in Notification Centre, not a wake-up three hours early.
-
-**The sync runs from `scenePhase`, not from the app delegate.** This app is a SwiftUI `WindowGroup`,
-so it is scene-based, and UIKit does not promise to call `applicationDidBecomeActive` in a scene-based
-app. `AlarmSync.sync(why:)` is called from `.onChange(of: scenePhase)` and `.task` in
-`StatusHubApp.swift`; the delegate calls it too, and the `why` in every beacon names which fired.
-Foreground is the guarantee, the silent push is the speed.
-
-**Only a foreground run may prompt.** `mayPrompt` gates `requestAuthorization()` — the permission
-prompt is a question someone has to be looking at to answer, and the system gives one chance at it.
-
-**Every exit beacons** to `/api/clientlog` as `ev: "alarm-sync"` with the trigger and the
-authorization state: `start`, `asked`, `unauthorized`, `no-feed`, `done`, `limit`. This is the only
-trace the device side leaves — scheduling is local and the wake is a fire-and-forget push — so
-without it a silent failure is indistinguishable from a declined one. A push-driven run reports the
-application state in its trigger (`push:background` / `push:active`), which is the only way to tell
-work done while suspended from work done on screen.
-
-**The alarm id is derived, not stored.** `HubAlarm.id` is sha256 of (item id, moment), so the sync is
-a set difference against `AlarmManager.shared.alarms` with no local bookkeeping to drift — and moving
-an item is a different id, so the old alarm is cancelled and the new one scheduled without anything
-having to notice it moved.
-
-**The alert is a Live Activity.** AlarmKit draws no UI of its own: it requires a widget extension
-declaring an `ActivityConfiguration` over `AlarmAttributes<Metadata>`, which is
-`Controls/AlarmWidget.swift` in the `StatusHubControls` bundle. Without one, scheduling succeeds and
-nothing appears.
-
-**None of it is a capability.** `com.apple.developer.alarmkit` does not exist, and putting it in an
-entitlements file is what makes a device build fail with "provisioning profile doesn't include…". The
-whole cost in the project is three Info.plist keys — `NSAlarmKitUsageDescription`,
-`NSSupportsLiveActivities`, `UIBackgroundModes: remote-notification` — so no profile is regenerated
-and the rejected Xcode login does not gate it. It does need the **iOS 26 SDK**: both iOS workflows
-select the newest Xcode on the runner and fail with a named error below SDK 26, because the failure
-otherwise is "no such module AlarmKit" deep inside a Swift file.
-
-`UIBackgroundModes` also means the app wakes for the **badge-only** silent pushes.
-`didReceiveRemoteNotification` answers `.noData` immediately for anything without an `alarms` key: an
-app that claims work it did not do gets woken less often.
-
-## An alarm is a REQUEST until the phone confirms it
-
-`list_items.alarm` asks; `list_items.alarm_armed_at` is the phone's answer. The hub cannot see whether
-an alarm will ring, so `/api/alarms/ack` carries the whole set the phone holds. A set rather than an
-event, because a message about one alarm cannot express a cancellation and nothing else would clear
-the flag on an alarm the phone dropped.
-
-**The chip carries both states** (`chip()` in `cards/dayline.js`, so every day surface gets it at
-once): a ⏰ in full colour is armed and will ring, a GREY one is asked for and unconfirmed. The
-difference is COLOUR, not opacity — a colour emoji stays legible as itself at low opacity, so the two
-states have to differ in hue to be told apart. One glyph either way, so there is no second symbol to
-learn, and the grey one is a warning readable before the moment rather than after sleeping through it.
-
-**THE ACK DOES NOT MEAN IT WILL RING.** `alarm_armed_at` records the phone saying it holds an alarm,
-and an alarm registered, acked (`held:2`) and left untouched was measured going off in complete
-silence. AlarmKit confirms holding an alarm it then does not present. So the ack establishes that the
-phone accepted the alarm and nothing more, and anything that treats it as a promise is wrong.
-
-**So `dueTick` always notifies, alarm or not.** It used to skip the push for an armed item on the
-reasoning that a full-screen alert had already broken silent mode and a banner only repeats it
-quieter. That trade only holds if the alert happens, and it does not — the skip converted a failed
-alarm into no alarm at all. A redundant notification costs a buzz; a suppressed one costs the
-morning. The cost of always sending is that the Done / 1 Hour / Tomorrow buttons now ride on every
-dated item, which is the right way round.
-
-**`/alarm` is what actually makes noise.** A phone left on that page rings from its own timer and its
-own speaker, so it depends on neither thing measured to fail here: not AlarmKit's presentation, and
-not the silent push that carries a new alarm to a sleeping phone. `dueTick`'s notification is the
-layer underneath it, not the mechanism.
-
-**It notifies ONCE**, the same as any dated item — one banner at the moment, never a repeat until
-it is cleared. Repeating is the page's job, and the page's alone: it rings on a loop until STOP.
-A notification that re-fires every minute is a second alarm nobody asked for.
+`dueTick` sends an alarm item's notification like any dated item's: one banner at its moment, never
+repeated. The TV and the open page are what make noise; the notification is the layer under them,
+and a redundant one costs a buzz where a missing one costs the morning. Repeating is the ringers' job
+alone — a notification that re-fires every minute is a second alarm nobody asked for.
 
 ## Widget drawing files stay WidgetKit-free
 

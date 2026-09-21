@@ -146,27 +146,6 @@ The scoring itself is built and live (`lib/score.js`, data-layer `00085`-`00087`
   rather than a failure — but if it turns out to be annoying, the fix is a horizon reminder, not a
   background job that quietly extends lists forever.
 
-### AlarmKit — what is still open
-The alarm path is built and in use; how it works is in this repo's `CLAUDE.md`. What remains:
-
-1. **Prove the background wake on the device.** Still open, and the obstacle sits one step earlier
-   than this item assumed: DELIVERY, not scheduling. `didReceiveRemoteNotification` fires whether the
-   app is suspended or on screen, so the trigger carries the application state
-   (`push:background` / `push:active`) in the `alarm-sync` beacon to tell the two apart. Neither has
-   been seen from a sleeping phone yet, because the phone never ran at all — across a burst of five
-   pushes (2026-09-19, 23:42 to 00:18) only the first produced a run, and the rest were refused with
-   no beacon and no feed fetch behind them. A clean sample needs ONE push after hours of quiet rather
-   than one behind a burst that has already spent the budget, so the measurement to make is a single
-   overnight wake. Until it exists, assume a wake reaches a sleeping phone rarely — which is what
-   `dueTick`'s notification for an unconfirmed alarm is there to cover.
-2. **Find the per-app cap on scheduled alarms.** `AlarmError.maximumLimitReached` is handled (stop,
-   keeping the soonest), and it beacons — but the number decides whether a 7-day window is right.
-3. **A tap on the alert goes nowhere.** `HubAlarmMetadata` carries the item id so it can open that
-   item; wiring it to the existing `statushub://` handling is a small follow-on.
-4. **Nothing decides which items ring except Jared's words.** `add_to_list`'s `alarm` and `set_alarm`
-   are the way in, and both tool descriptions refuse to infer it. That is the intended shape, not a
-   gap — recorded here because it is the question anyone extending this will reach for first.
-
 ### A session notification should carry a SUMMARY, not the raw reply
 
 What lands on a lock screen is the first three hundred characters of an answer written for a screen,
@@ -216,8 +195,8 @@ build that is no longer installed keeps being sent to. Delete a token when APNs 
 
 ## Dropped (deliberately, not forgotten)
 
-- **Sub-minute look-ahead scheduler** — Jared's call. If AlarmKit schedules on-device the precision
-  is already there, and for plain push reminders a 60s scan is fine.
+- **Sub-minute look-ahead scheduler** — Jared's call. The alarm ringers hold their own timers to the
+  second, and for plain push reminders a 60s scan is fine.
 - **Live Activities** — "not that important" for now. Worth knowing if it comes back: 8h hard cap
   (~12h with the stale period), so it can never be a permanent display; and the **iPhone 12 Pro Max
   has no Dynamic Island**, so it would be Lock Screen only. Best fit is a countdown *timer*; second

@@ -1,30 +1,26 @@
 # Alarms
 
-Two paths, for two different situations. They are not primary and backup — neither can do the
-other's job.
+Two ringers, one rule. An alarm-marked item rings on the **TV** (`tv-ring.service` on the Pi) and on
+**any open hub page** (`alarmclock.js`), and each one holds its own timer to the moment, so nothing has
+to be delivered at the moment itself.
 
-| | **AlarmKit** | **The page clock** |
+| | **The TV** | **The hub page** |
 |---|---|---|
-| For | an alarm Jared sets himself | an alarm set PROGRAMMATICALLY while he is asleep |
-| Set when | he is holding the phone | any time, including 4am |
-| Rings via | iOS, natively | `alarmclock.js` playing `alarm.m4a` |
-| Needs | nothing open | the app open, screen on |
-| Breaks when | the alarm has to CHANGE while the phone sleeps | the app is closed or backgrounded |
+| Rings via | `tv-ring.py` playing the tone through HDMI with `ffmpeg` | `alarmclock.js` playing the tone as a media element |
+| Needs | the Pi up and the TV on | the app open, screen on |
+| Covers | every alarm, whether or not the phone is open | the phone, whenever the app is open |
 
-## Why neither one covers both
+## Nothing registers an alarm on the phone
 
-**A sleeping phone cannot be told about a new alarm.** An AlarmKit alarm is registered ON the
-device, so the hub can only push a silent wake asking the phone to re-read `/api/alarms`. iOS rations
-those hard: measured 2026-09-19, four in a row were refused overnight, and a passive alert push
-carrying `content-available` was refused too. A push to an ACTIVE app is not rationed at all — the
-same phone fetched and acked one second later with the app on screen. So whether a 4am decision
-reaches the phone comes down entirely to whether the app is in front.
+**A sleeping phone cannot be told about a new alarm.** A push is the only way to reach it, and iOS
+rations the background kind hard: four in a row were refused overnight, and a passive alert push
+carrying `content-available` was refused too. A push to an ACTIVE app is not rationed at all. So an
+alarm decided or moved at 4am reaches the phone only if the app is in front — which is the page clock,
+already holding the stream.
 
-That is the whole reason the page clock exists. It needs nothing delivered at the moment itself: it
-holds a local timer and already has the stream.
-
-**And a page can only ring while it is running**, which is why AlarmKit keeps its job for ordinary
-alarms. Requiring the app be open to set a 9am alarm would be absurd.
+**That is why AlarmKit is not used**, though it is the obvious tool: an alarm registered on the device
+goes stale the moment the hub moves it, and its Stop button completes nothing, so stopping it would
+leave the TV ringing. A phone alarm that is not the app is the Clock app, set by hand.
 
 ## GUIDED ACCESS IS THE LOCK — this is the constraint everything else follows from
 
@@ -39,11 +35,6 @@ looks like it does:
   Guided Access session `<audio>` plays and an oscillator makes no sound at all. This is why the
   alarm is a FILE. An alarm built on oscillators flashed its overlay, reported `state: "running"`,
   scheduled its beeps and was silent through the entire morning of 2026-09-19.
-- **AlarmKit holds nothing in a session.** Inside Guided Access an AlarmKit alarm does not present,
-  so it contributes nothing there — and one that fires anyway stays registered afterwards, no longer
-  `.scheduled`, where AlarmSync (which cancels only scheduled ones) never removes it. Whether it also
-  competes with the page for the audio session is untested; a ring cut to a blip is the microphone
-  re-opening mid-ring (see "Playing a sound breaks the microphone").
 
 ## The TV and the page are a mirror
 
@@ -52,7 +43,7 @@ moment has passed and which is still in `/api/due-widget` is ringing, and both r
 rule whenever they look: `dueNow()` in `alarmclock.js`, `due_now()` in `tv-ring.py`. So:
 
 - the TV rings whether or not the app is open, and a restart of `tv-ring` mid-ring resumes the ring;
-- the page rings whenever it is open, in Guided Access or not, and whatever AlarmKit holds;
+- the page rings whenever it is open, in Guided Access or not;
 - opening the app in the middle of the TV's ring joins it, STOP and all, however long it has been
   ringing;
 - STOP anywhere completes the item, the item leaves the feed, and every ringer goes quiet.
@@ -61,19 +52,11 @@ STOP reaches the TV in under a second because the hub announces its own completi
 (`announceListWrite` in `server.js`) instead of waiting for the realtime echo, which takes seconds —
 long enough for STOP to look as if it had not reached the TV.
 
-**AlarmKit is outside the mirror.** Its Stop button completes nothing, so an AlarmKit alert stopped
-on the phone leaves the TV and the page ringing, and with the app open outside Guided Access both the
-page and AlarmKit ring. **In Guided Access the hub takes the alarms off the phone**, which removes
-that duplicate for the overnight case: the page reports the session in its beacon (`guided`), and at
-once when it changes. While that is fresh and true, `/api/alarms` serves an empty set and
-`unarmedAlarms()` expects nothing, and the change itself wakes the phone to sync — a push to an app in
-front is not rationed — so AlarmSync cancels what it holds. When the session ends, or the page stops
-beaconing, AlarmKit gets its alarms back. `inGuidedAccess()` in `server.js`.
-
 **The page cannot detect a Guided Access session** — there is no web API, and the giveaway (Web Audio
 being silenced) is not measurable from inside the audio graph. `GuidedAccess` in `StatusHubApp.swift`
 pushes `window.__guidedAccess` into the page on every load and on
-`guidedAccessStatusDidChangeNotification`, and the page forwards it in its beacon at once.
+`guidedAccessStatusDidChangeNotification`, and the page forwards it in its beacon (`guided`) at
+once. Nothing acts on it; it is how the night-before setup is checked from the hub log.
 
 ## The tones
 
@@ -119,16 +102,17 @@ The most-used case, end to end. No session and no model is involved after the co
    it starts. STOP is what completes it. A moment that has arrived is never moved, a wake
    time already past is recorded as `late` and changes nothing, and an item he deleted or completed
    himself is not put back (re-engaging with the tool forgets it). Moving the item's `due` goes out
-   over realtime → `/api/stream` → `hub:stream` → `alarmclock.js` reloads and re-arms. **No push is
-   involved in that chain**, which is the entire point.
-5. At the moment, the page plays the alarm tone on loop and `dueTick` sends a notification underneath.
+   over realtime → `/api/stream` → `hub:stream` → `alarmclock.js` reloads and re-arms, and over
+   `/api/list-stream` to `tv-ring`. **No push is involved in either chain**, which is the entire point.
+5. At the moment, the TV and any open page play the alarm tone on loop and `dueTick` sends a
+   notification underneath.
 
 Measured 2026-09-21: the 05:00 capture landed at 05:00:10, the hub decided at 05:00:11 and the alarm
-item existed by 05:00:17 — the phone had acked it and the TV's beacon named 07:00 within a minute,
-nobody awake. At 07:00 the TV started on the second; STOP on the phone completed the item and the
-TV stopped six seconds later, off the feed.
+item existed by 05:00:17 — the TV's beacon named 07:00 within a minute, nobody awake. At 07:00 the
+TV started on the second.
 
-**What has to be true the night before**, and each of these has failed at least once:
+**What has to be true the night before**, and each of these has failed at least once. The TV needs
+nothing but to be on; these are for the phone to ring as well:
 
 - The app is open on `/`, in Guided Access, **plugged in** — a lit screen all night will flatten it.
 - The item is marked `alarm` (`list_items.alarm`); the page rings nothing else.

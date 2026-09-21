@@ -9,7 +9,7 @@
 // thread. All skipped on the TV wall (no mic; it renders the conversation itself via tv.js).
 import { esc, localNowNaive, liveStream, KIOSK } from './shared.js';
 
-let phoneHangMs = 3000;   // phone trailing-silence (ms) for the FAB VAD; overridden by the phone_silence_s setting
+let phoneHangMs = 3000;   // the always-on listener's trailing silence (ms); overridden by the phone_silence_s setting
 // How long a FINISHED row — the reply, or an error — holds on the kiosk's activity bar before it hides.
 // There the running states (Listening / Thinking / each tool call) are sticky and ignore this entirely;
 // only the terminal row is on a timer. A new command still clears it immediately, because show() resets the
@@ -43,6 +43,9 @@ let micUsers = 0;               // how many recorders hold it right now; the dev
 let _voiceChain = Promise.resolve();   // voice-outbox passes run one after another — see runVoiceOutbox()
 let _voiceBacklogStatus = () => {};    // where a resent clip with no live recorder reports; boot() points it at the activity bar
 const voiceOwners = new Map();         // clip id -> the live recorder that took it: { onStatus, onTranscript }
+// One clip's upload + transcription, up here because boot() starts the outbox. A ten-minute clip at
+// VOICE_BPS is ~7MB and Groq answers in seconds, so two minutes means the request is not coming back.
+const VOICE_SEND_MS = 120000;
 // Both durable outboxes, up here because boot() drains them at load (idbBox is a hoisted declaration).
 const photoBox = idbBox('hub-photo-outbox');
 const voiceBox = idbBox('hub-voice-outbox');
@@ -200,11 +203,11 @@ function pushActivity(a) { for (const f of activitySubs) { try { f(a); } catch (
 // A TRACK THAT WENT SILENT STILL SAYS IT IS LIVE. An audio interruption on iOS — anything else on
 // the page or the phone taking the audio session — leaves a capture track producing zeros with
 // `readyState` unchanged at 'live'. Reusing it then is permanent: every recording afterwards is
-// silence, the VAD never hears speech, and each one is dropped at the grace timeout with nothing
-// sent. Measured 2026-09-19, after the page started playing alarm tones.
+// silence. Measured 2026-09-19, after the page started playing alarm tones.
 //
-// `micDirty` is set by anything that could have taken the session, and by the grace timeout itself,
-// which is the one signal that means "we just recorded silence" whatever the cause.
+// `micDirty` is set by anything that could have taken the session, and by an empty transcript from a
+// clip with bytes in it (deliverVoice), which is the one signal that means "we just recorded silence"
+// whatever the cause.
 let micDirty = false;
 export function dirtyMic() { micDirty = true; }
 function micLive() {
@@ -329,67 +332,28 @@ const VOICE_BPS = 96000;
 // Exported so the wall-mode push-to-talk button (wall.js) can reuse the exact same pipeline.
 // onState reports the button's one visual state: 'armed' (tapped — the mic is opening, or the clip is
 // on its way up), 'rec' (actually capturing) or 'idle'. Callers paint it; nothing else infers it.
-export function makeRecorder({ onStatus = () => {}, onState = () => {}, quick, autoStop, dryWhen, onTranscript }) {
+//
+// PRESS TO START, PRESS TO SEND, and nothing else ends a recording or decides whether it is sent. It
+// used to take `autoStop`, which ran a VAD over the clip: it ended the recording at a pause, and a clip
+// it judged silent was discarded without a word. On his phone it judged whole spoken commands silent,
+// so buttons that used it recorded, threw the words away and showed nothing. A button someone pressed
+// has already said he is talking; the always-on listener (makeListener) is where a machine decides.
+export function makeRecorder({ onStatus = () => {}, onState = () => {}, quick, dryWhen, onTranscript }) {
   let recording = false, rec = null, chunks = [], stream = null, startedAt = 0;
   let arming = false;                 // tapped, mic not open yet — see start()
   let claimed = false;                // holds one of the page's mic claims — see claimMic()
   let sending = false;                // stopped, clip still on its way up — see stop()
-  let heardSpeech = false;            // the VAD crossed its threshold at least once this recording
-  let vadRan = false;                 // the VAD actually got a Web Audio graph (it can't on every browser)
-  let actx = null, vadTimer = null;
+  let discard = false;                // cancel(): this recording ends without being sent
   const pickMime = () => {
     for (const m of ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4', 'audio/ogg'])
       if (window.MediaRecorder && MediaRecorder.isTypeSupported(m)) return m;
     return '';
   };
-  // Voice-activity auto-stop (FAB): once speech begins, end + send on a short trailing silence — the
-  // "return to baseline" behavior the ESP/server use, so the quick mic is press-once with no second tap.
-  function startVAD() {
-    stopVAD();                       // never leave a previous interval or context running
-    try {
-      actx = new (window.AudioContext || window.webkitAudioContext)(); if (actx.resume) actx.resume();
-      const an = actx.createAnalyser(); an.fftSize = 1024;
-      actx.createMediaStreamSource(stream).connect(an);
-      const buf = new Uint8Array(an.fftSize), t0 = performance.now();
-      let floor = Infinity, spoke = false, silence = 0, peak = 0;
-      const HANG_MS = phoneHangMs, GRACE_MS = Math.max(8000, phoneHangMs + 3000);   // trailing-silence from the phone_silence_s setting
-      vadTimer = setInterval(() => {
-        if (!recording) return;
-        an.getByteTimeDomainData(buf);
-        let s = 0; for (let i = 0; i < buf.length; i++) { const d = (buf[i] - 128) / 128; s += d * d; }
-        const rms = Math.sqrt(s / buf.length), now = performance.now();
-        // The noise floor is the QUIETEST frame heard so far, tracked for the whole recording. It used
-        // to be the mean of an opening 350ms calibration window, which assumed a pause before speaking:
-        // talk immediately and his own voice set the threshold above itself, so the clip never counted
-        // as speech — no trailing-silence stop, just a hang until the grace timer gave up. A minimum
-        // needs no such pause, because the gaps between words are themselves near the floor.
-        if (rms < floor) floor = rms;
-        if (rms > peak) peak = rms;
-        const thr = Math.max(floor * 2.5, 0.02);
-        if (rms >= thr) { spoke = true; heardSpeech = true; silence = 0; }   // speaking
-        else if (spoke) { if (!silence) silence = now; else if (now - silence >= HANG_MS) { trace('vad:silence'); stop(); } }  // trailing silence → send
-        // Pressed but never spoke → give up (upload() drops it). ALSO the self-heal: reaching here
-        // means eight seconds of silence arrived from a microphone he was talking into, so the
-        // stream is assumed dead and the next press re-acquires. Costs one lost attempt instead of
-        // every attempt until the page happens to reload.
-        // The context state and the loudest frame say WHICH silence this was: a suspended context
-        // (built outside the tap's gesture) reads flat whatever the mic hears; a running one at peak 0
-        // is a dead capture; a running one with a real peak is a threshold that never let him in.
-        else if (now - t0 > GRACE_MS) { trace('vad:grace', { actx: actx && actx.state, peak: +peak.toFixed(4), floor: +floor.toFixed(4) }); dirtyMic(); stop(); }
-      }, 60);
-      vadRan = true;
-    } catch (_) { /* no Web Audio → falls back to tap-to-stop */ }
-  }
-  function stopVAD() {
-    if (vadTimer) { clearInterval(vadTimer); vadTimer = null; }
-    if (actx) { try { actx.close(); } catch (_) {} actx = null; }
-  }
   // A tap has to LOOK live from the instant it lands. getUserMedia takes a beat on a phone — longer
   // after the page has been backgrounded — and `recording` only flipped once it resolved, so the button
   // sat unchanged through that window, the press read as dropped, and the retap started a SECOND capture
-  // on top of the first. Both then shared one `chunks`/`vadTimer`/`actx`: the orphaned VAD stopped the
-  // live recording on its own clock and the orphaned stream held the mic open, so what reached Groq was
-  // an empty clip — which it transcribes as "Thank you." rather than as nothing.
+  // on top of the first. Both then shared one `chunks`, and the orphaned stream held the mic open, so
+  // what reached Groq was an empty clip — which it transcribes as "Thank you." rather than as nothing.
   // `arming` is set synchronously, before the await, so a second tap can only ever be a stop.
   async function start() {
     if (recording || arming || sending) return;
@@ -402,23 +366,28 @@ export function makeRecorder({ onStatus = () => {}, onState = () => {}, quick, a
     if (!arming) { release(); return; }   // tapped again while arming → cancelled, and the mic closes
     arming = false; stream = s;
     const mime = pickMime();
-    chunks = []; heardSpeech = false; vadRan = false;
+    chunks = [];
     rec = new MediaRecorder(stream, { ...(mime ? { mimeType: mime } : {}), audioBitsPerSecond: VOICE_BPS });
     rec.ondataavailable = (e) => { if (e.data && e.data.size) chunks.push(e.data); };
-    rec.onstop = () => upload(mime);
+    // A recording can end WITHOUT stop(): hiding the page closes the mic under it, and so does a
+    // capture reset. The state has to follow, or `recording` stays true over a dead recorder and the
+    // next tap is spent stopping it — a press that does nothing, which reads as the button failing.
+    rec.onstop = () => {
+      if (recording) { recording = false; sending = true; onState('armed'); trace('stop:external'); }
+      upload(mime);
+    };
     rec.start(); recording = true; startedAt = performance.now(); onState('rec');   // capturing for real now — full fill
     trace('start:recording', { mime });
     muteOthers(true);   // mute every other listener (Mac + ESP) while this explicit command records
-    onStatus(autoStop ? 'Listening…' : 'Listening… tap to send', 'rec');
-    // No duration cap. A recording ends when HE stops talking (the VAD below) or taps again —
-    // never on a clock. A wall-clock cap cut long instructions off mid-sentence.
-    if (autoStop) startVAD();
+    onStatus('Listening… tap to send', 'rec');
+    // No duration cap: a recording ends when he taps again, never on a clock. A wall-clock cap cut
+    // long instructions off mid-sentence.
   }
   function stop() {
     // Tapped again before the mic ever opened: cancel the arming rather than fall through as a no-op.
     if (arming) { arming = false; onState('idle'); onStatus('', 'clear'); return; }
     if (!recording) return;
-    recording = false; stopVAD();
+    recording = false;
     const live = rec && rec.state !== 'inactive';
     // The tap that ends a recording has to land visibly too. Stopping is instant, but the clip then
     // spends a second or two being uploaded and transcribed with nothing on the button to show for it,
@@ -445,11 +414,10 @@ export function makeRecorder({ onStatus = () => {}, onState = () => {}, quick, a
     const dry = typeof dryWhen === 'function' && dryWhen();
     const blob = new Blob(chunks, { type: mime || 'audio/webm' });
     chunks = [];
-    // Nothing worth sending: no bytes at all, or the VAD watched the whole clip and never once crossed
-    // the noise floor. Uploading silence is worse than uploading nothing, because Whisper does not
-    // return an empty string for it — it invents a plausible phrase ("Thank you."), and the worker then
-    // acts on that. A dictation caller is told, so it can leave its own "nothing heard" state.
-    if (!blob.size || (autoStop && vadRan && !heardSpeech)) {
+    if (discard) { discard = false; onStatus('', 'clear'); return; }
+    // No bytes at all: nothing to send. A dictation caller is told, so it can leave its own state.
+    // A clip WITH bytes always goes up — the hub's transcript is the judge of whether it held words.
+    if (!blob.size) {
       if (dry && typeof onTranscript === 'function') onTranscript('');
       onStatus('', 'clear');
       return;
@@ -462,7 +430,11 @@ export function makeRecorder({ onStatus = () => {}, onState = () => {}, quick, a
       trace('toggle', { recording, arming, sending, recState: rec ? rec.state : null });
       if (sending) return;
       (recording || arming) ? stop() : start();
-    }, start, stop };
+    },
+    // Ends the recording WITHOUT sending it — for a caller whose recording has lost its purpose (he
+    // navigated away from what it was for). stop() always sends; that is what a stop tap means.
+    cancel() { if (recording) discard = true; stop(); },
+    start, stop };
 }
 
 // ---- always-on listening, on the phone -----------------------------------
@@ -481,7 +453,7 @@ export function makeRecorder({ onStatus = () => {}, onState = () => {}, quick, a
 // Whisper does not return an empty string for silence, it invents a plausible sentence.
 const LISTENER_SOURCE = 'phone';   // its name among the listeners; see docs/LISTENERS.md
 export function makeListener({ onStatus = () => {}, onState = () => {} } = {}) {
-  const HANG_MS = phoneHangMs;          // same trailing-silence setting the FAB used to use
+  const HANG_MS = phoneHangMs;          // phone_silence_s
   const IDLE_CYCLE_MS = 30000;          // recycle an unspoken segment rather than buffer forever
   let on = false, actx = null, vadT = null, rec = null, chunks = [], mime = '';
   let claimed = false;                // holds one of the page's mic claims while engaged
@@ -559,7 +531,7 @@ export function makeListener({ onStatus = () => {}, onState = () => {} } = {}) {
         an.getByteTimeDomainData(buf);
         let acc = 0; for (let i = 0; i < buf.length; i++) { const d = (buf[i] - 128) / 128; acc += d * d; }
         const rms = Math.sqrt(acc / buf.length), now = performance.now();
-        if (rms < floor) floor = rms;     // quietest frame so far, same as the FAB's VAD used
+        if (rms < floor) floor = rms;     // quietest frame so far — the gaps between words sit near it
         const thr = Math.max(floor * 2.5, 0.02);
         // The window is the UTTERANCE, not the segment. A segment starts before he speaks (that is how
         // the onset is kept), so its own start would overlap the previous one and collapse two real
@@ -831,8 +803,12 @@ async function deliverVoice(item, onStatus, owner) {
   if (item.source) qp.set('source', item.source);
   const where = item.dry ? null : await hereNow();      // a dictation into the text box goes nowhere yet
   if (where) for (const k of ['lat', 'lon', 'acc']) qp.set(k, String(where[k]));
+  // BOUNDED. Every clip on the page goes through one serial outbox, so a request that never answers
+  // (a phone between networks) would hold every mic button in its sending state indefinitely. On
+  // timeout it is a network failure: the clip stays in the box and the button is free again.
   const r = await fetch('/api/voice-command?' + qp, {
-    method: 'POST', headers: { 'Content-Type': item.type }, body: item.blob });
+    method: 'POST', headers: { 'Content-Type': item.type }, body: item.blob,
+    ...(AbortSignal.timeout ? { signal: AbortSignal.timeout(VOICE_SEND_MS) } : {}) });
   const j = await r.json().catch(() => ({}));
   if (!r.ok || j.error) throw Object.assign(new Error(j.error || 'Send failed'), { refused: true });
   if (j.duplicate) { onStatus('', 'clear'); pushPending({ state: 'clear' }); }  // an earlier attempt already enqueued it
@@ -846,11 +822,8 @@ async function deliverVoice(item, onStatus, owner) {
     // is the evidence EVERY recorder produces that the microphone handed us zeros — and the stream
     // it came from stays `readyState: 'live'` while doing it, so nothing else will ever notice.
     //
-    // The self-heal used to hang off `vad:grace`, which only the auto-stopping recorders run. The
-    // session card's microphone runs no VAD at all, so it had no recovery path: it uploaded silence,
-    // the hub answered with an empty transcript, and the prompt vanished with no row and no error —
-    // permanently, since nothing marked the stream dirty. Hanging it here instead covers every
-    // recorder, whatever it does about silence.
+    // Here rather than in any recorder, because every recorder produces this and none of them judges
+    // silence itself.
     //
     // Bytes are the qualifier: a clip too short to contain anything is not evidence of a dead mic.
     if ((item.blob ? item.blob.size : 0) > 2048) {

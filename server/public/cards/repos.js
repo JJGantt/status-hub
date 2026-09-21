@@ -142,6 +142,9 @@ async function load() {
   desk = d.desk || { online: false };
   machines = d.machines || { mac: desk.online, pi: false };
   if (cur) return;   // a session was opened while this was in flight; the list must not replace it
+  // Nor while a row is being dictated to: redrawing detaches that row, and the recording then has no
+  // row left to tap for sending or to show its status.
+  if (armed) return;
   el.innerHTML = html(d);
   wire(el);
 }
@@ -173,37 +176,56 @@ async function launch(li, prompt, target) {
 
 // Tapping a repo DICTATES the session's opening message rather than launching bare. The session is
 // going to want to know what you came for, and saying it while the terminal is still opening beats
-// typing it into a fresh prompt on the Mac afterwards. Tap again to cancel.
+// typing it into a fresh prompt on the Mac afterwards.
+//
+// PRESS TO START, PRESS TO SEND, like every press-to-talk button here: the machine's button starts it,
+// and tapping the row (or that button) again sends it. No `autoStop` — the VAD would end it at a pause
+// and discard a clip it judged silent without a word. Leaving for something else (another row, a
+// session, the reset) CANCELS: that recording has lost what it was for.
 //
 // `dryWhen: () => true` is the whole trick: the recorder then posts to /api/voice-command?dry=1, which
 // transcribes and returns the text INSTEAD of enqueueing it as a voice command — this is a prompt for
 // a session, not something the voice worker should act on.
 function beginDictation(li, target) {
-  if (armed === li) { cancelDictation(); return; }
+  if (armed === li) { finishDictation(); return; }
   if (armed) cancelDictation();
   armed = li;
   li.className = 'rec';
-  li.dataset.say = target === 'mac' ? 'Listening… \u2192 Mac' : 'Listening… \u2192 Pi';
-  recorder = makeRecorder({
-    autoStop: true,                                  // trailing-silence stop, same as the voice FAB
+  li.dataset.say = target === 'mac' ? 'Listening… → Mac' : 'Listening… → Pi';
+  const rec = recorder = makeRecorder({
+    autoStop: false,
     dryWhen: () => true,
     onStatus: (t) => { if (armed === li && t) li.dataset.say = t; },
+    // The recorder is idle again. If no transcript took the row first, the clip failed or was
+    // refused: its status stays on the row briefly, and the row is let go so it can be used again.
+    onState: (s) => {
+      if (s !== 'idle' || armed !== li || recorder !== rec) return;
+      armed = null; recorder = null;
+      li.className = 'bad';
+      setTimeout(() => { if (armed !== li) { li.className = ''; delete li.dataset.say; } }, 2500);
+    },
     onTranscript: (text) => {
       const prompt = String(text || '').trim();
       armed = null; recorder = null;
       li.className = ''; delete li.dataset.say;
       // Nothing said → don't silently open a bare session; the tap was probably a mistake.
-      if (!prompt) { li.className = 'bad'; li.dataset.say = 'Nothing heard'; 
+      if (!prompt) { li.className = 'bad'; li.dataset.say = 'Nothing heard';
         setTimeout(() => { li.className = ''; delete li.dataset.say; }, 2500); return; }
       launch(li, prompt, target);
     },
   });
-  recorder.start();
+  rec.start();
+}
+
+// The second press: end the recording and send it. The row keeps `armed` until the transcript (or
+// the failure) arrives, so its status line shows the upload.
+function finishDictation() {
+  if (recorder) recorder.stop();
 }
 
 function cancelDictation() {
   if (!armed) return;
-  try { recorder && recorder.stop(); } catch (_) {}
+  try { recorder && recorder.cancel(); } catch (_) {}
   armed.className = ''; delete armed.dataset.say;
   armed = null; recorder = null;
 }
@@ -240,6 +262,7 @@ function wire(el) {
     li.addEventListener('click', () => openSession(li.dataset.id)));
   el.querySelectorAll('li[data-path]').forEach((li) => {
     li.addEventListener('click', () => {
+      if (armed === li) { finishDictation(); return; }   // recording into this row: the tap sends it
       // First tap opens the machine choice; tapping the row again closes it. Only one row at a time,
       // so the pane never shows two half-made decisions.
       const open = li.classList.contains('pick');
@@ -481,18 +504,19 @@ function paintBody({ open = false, top = false, follow = false } = {}) {
 
 // His words into the open conversation. The text stays in the box until the hub has taken it, and a
 // resend of the same words carries the same id, so a lost answer cannot type them twice.
-async function sendWords(text) {
+// `at` is the session the words are FOR — a spoken follow-up still transcribing when he leaves the
+// view goes to the session he spoke it into, not to nothing.
+async function sendWords(text, at = cur) {
   const el = document.getElementById('repospane');
-  const at = cur;
   text = String(text || '').trim();
   // Pictures alone are a message: "look at this" with nothing typed is the common case for a screenshot.
-  const pics = shots.filter((a) => a.name).map((a) => a.name);
+  const pics = cur === at ? shots.filter((a) => a.name).map((a) => a.name) : [];   // the tray belongs to the open view
   if (!el || !at || (!text && !pics.length) || at.sending) return;
   const status = el.querySelector('.sv-status');
   const say = (t) => { if (status && cur === at) status.textContent = t || ''; };
   if (!at.msg || at.msg.text !== text) at.msg = { text, id: newMsgId() };
   at.sending = true;
-  el.querySelector('.sv').classList.add('sending');
+  if (cur === at) el.querySelector('.sv').classList.add('sending');
   say('');
   try {
     const r = await fetch('/api/sessions/followup', {
@@ -590,7 +614,7 @@ async function openSession(id) {
     if (!r.ok) return false;
     d = await r.json();
   } catch (_) { return false; }
-  if (cur && cur.rec) cur.rec.stop();
+  if (cur && cur.rec) cur.rec.cancel();   // leaving mid-recording abandons it; a clip already stopped still sends
   cur = { id: d.id, key: keyOfRow(d), detail: d, working: !!d.working, activity: [], pending: [], msg: null, sending: false, rec: null };
   const at = cur;
   const pane = el.closest('.pane');
@@ -658,10 +682,10 @@ async function openSession(id) {
     onState: (s) => { mic.classList.toggle('ai-rec', s === 'rec'); mic.classList.toggle('ai-armed', s === 'armed'); },
     onTranscript: (t) => {
       const words = String(t || '').trim();
-      if (cur !== at || !words) return;
+      if (!words) return;
       // Spoken while an earlier message is still going up: held in the box rather than dropped.
-      if (at.sending) box.value = (box.value.trim() ? box.value.trim() + ' ' : '') + words;
-      else sendWords(words);
+      if (at.sending && cur === at) box.value = (box.value.trim() ? box.value.trim() + ' ' : '') + words;
+      else sendWords(words, at);
     },
   });
   bindTap(mic, () => at.rec.toggle());
@@ -671,7 +695,7 @@ async function openSession(id) {
 // Back to the list, from the view's own button or from anything that needs the list on screen.
 async function showList() {
   const el = document.getElementById('repospane');
-  if (cur && cur.rec) cur.rec.stop();
+  if (cur && cur.rec) cur.rec.cancel();   // leaving mid-recording abandons it; a clip already stopped still sends
   cur = null;
   const pane = el && el.closest('.pane');
   if (pane) pane.classList.remove('sv-open');

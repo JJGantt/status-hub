@@ -2,35 +2,38 @@
 
 Two microphones, deliberately different. Neither is a fallback for the other.
 
-| | **The microphone button** | **The always-on button** |
+| | **Every microphone button** | **The always-on button** |
 |---|---|---|
-| Shape | tap to open, tap to send | tap to engage, tap to disengage |
+| Shape | press to start, press to send | tap to engage, tap to disengage |
 | Ends a clip | he does, and only he | the silence after each utterance |
-| Sends | once | every utterance, until disengaged |
+| Sends | once, whatever it recorded | every utterance, until disengaged |
 | Mirrors | nothing — it is the deliberate one | what the Mac and the ESP already do |
 
-## The microphone button does not decide anything
+## A microphone button does not decide anything
 
-It used to auto-stop on trailing silence, and gave up entirely after eight seconds of what it judged
-to be silence. That is wrong for a button someone is holding a thought in front of: a pause
-mid-sentence is not the end of a sentence, and the give-up path dropped the clip without sending
-anything. `autoStop: false` in `navbar.js` — the recording ends when he ends it.
+There are five, and they are one recorder (`makeRecorder` in `voiceagent.js`) with different
+destinations:
 
-**The session view's microphone is the same button** (`at.rec` in `cards/repos.js`, `autoStop: false`).
-With `autoStop` on, the VAD judges each clip, and one it thinks is silent is thrown away inside
-`send()` with no message. On his phone it judged whole spoken follow-ups silent, so the press
-recorded, discarded his words and showed nothing. Any press-to-talk button has to send what it
-recorded, so none of them may set `autoStop`.
+| button | where | its words go |
+|---|---|---|
+| navbar | every page's bottom bar | a voice command |
+| chat sheet | `cardRec`, `voiceagent.js` | a voice command, or the text box while pictures are pending |
+| session view | `at.rec`, `cards/repos.js` | that session, as a follow-up |
+| new session | `beginDictation`, `cards/repos.js` — starts from the machine button, sends on a tap of the row | the new session's first message |
+| `/mic` | `mic.js` | a voice command |
 
-`autoStop: true` remains on the new-session dictation (`beginDictation` in `cards/repos.js`) and on
-the `/mic` web clip, so both can still drop a clip that way. `vad:grace` in the hub log (`fly logs |
-grep tap`) carries the analyser's `actx` state and the `peak`/`floor` RMS it saw, which shows WHICH
-kind of silence it was: a suspended context, a dead capture, or a threshold he never crossed.
+The recorder has no voice-activity detection and no timer: a recording ends on the second press and
+everything recorded is sent. **Do not give it one.** A VAD on this path ends a recording at a
+mid-sentence pause and discards any clip it judges silent, with no message — and on his phone it
+judges whole spoken commands silent, so the button records, throws the words away and shows nothing.
+That is why there is no `autoStop` option to turn on for one button. `docs/HUB-INTERNALS.md` has the
+recorder's other guarantees (a recording ended underneath it still sends; an upload is bounded;
+`cancel()` is the only way to end one without sending).
 
 ## The always-on button
 
-`makeListener()` in `voiceagent.js`. Engaged, it holds the mic, watches level against the same
-noise-floor threshold the old VAD used, and cuts a clip at `phone_silence_s` of trailing silence.
+`makeListener()` in `voiceagent.js`. Engaged, it holds the mic, watches level against a noise floor
+(the quietest frame so far), and cuts a clip at `phone_silence_s` of trailing silence.
 Each one goes up on its own through `sendVoice` — the same outbox the button uses — and it keeps
 listening until pressed again.
 
@@ -46,7 +49,7 @@ then acts on it.
 
 **It mutes nothing.** The Mac and the ESP already listen at the same time and the worker collapses
 whichever of them heard the same utterance by capture window (`LISTENERS.md`), so the phone joins as
-a peer. Only the microphone button mutes the others, because a hard-routed command is not a listener.
+a peer. Only the microphone buttons mute the others, because a hard-routed command is not a listener.
 
 **Each segment's recorder fills its own array.** With no timeslice, a `MediaRecorder` delivers
 essentially the whole segment in its final `dataavailable`, which fires after `stop()` — by which
@@ -77,14 +80,11 @@ Tapping the one-line prompt/reply strip on the home page (`#ph-conv`) opens the 
 it is the conversation in miniature, so it is the obvious way into the whole of it, and it frees the
 navbar slot the keyboard button held for the always-on button.
 
-## A dead microphone is detected by the EMPTY TRANSCRIPT, not by the VAD
+## A dead microphone is detected by the EMPTY TRANSCRIPT
 
 An iOS capture track that loses the audio session produces zeros while still reporting
-`readyState: 'live'` (see `ALARMS.md`). The recovery first hung off `vad:grace` — but only the
-auto-stopping recorders run a VAD, and the press-to-talk ones — `cardRec` in the chat sheet, the
-navbar's, the session view's — pass no `autoStop`. It therefore had NO recovery: it uploaded silence, the hub answered
-`{transcript: '', enqueued: false}`, and the prompt vanished with no row and no error, permanently,
-because nothing ever marked the stream dirty.
+`readyState: 'live'` (see `ALARMS.md`). Nothing on the page can see that, and no recorder judges
+silence itself.
 
 So the signal is the one EVERY recorder produces: a clip with real bytes in it coming back with an
 empty transcript. Whisper returns empty for silence, so that is the microphone reporting zeros.

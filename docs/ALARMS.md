@@ -157,9 +157,8 @@ clock. pi-config's README has what fails here (the PipeWire sink, and why it is 
 
 Anything on the hub page that plays audio can take the iOS audio session, and a capture track that
 loses it **goes silent while still reporting `readyState: 'live'`**. `voiceagent.js` caches the mic
-stream and reuses it on that flag, so once it happens every later recording is silence: the VAD never
-hears speech, each clip is dropped at the grace timeout, and nothing is sent. It does not recover
-until the page reloads. Measured 2026-09-19, hours of voice commands lost to it after the tone
+stream and reuses it on that flag, so once it happens every later recording is silence and comes
+back as an empty transcript. Left alone it does not recover until the page reloads. Measured 2026-09-19, hours of voice commands lost to it after the tone
 previews went in.
 
 So every player here — the alarm, the Settings preview, the bench — dispatches `hub:audioplaying`
@@ -174,9 +173,9 @@ moment. So the mic opens when a recording starts and closes when it ends (`claim
 `voiceagent.js`). The always-on listener is a recording for as long as it is engaged, so with it on
 the mic is open and the same thing applies.
 
-Underneath that, `vad:grace` marks the mic dirty too. Reaching it means eight seconds of silence
-arrived from a microphone he was talking into, whatever the cause, so it costs one lost attempt
-rather than every attempt until a reload. Re-acquiring also stops the old tracks first: a
+Underneath that, an EMPTY TRANSCRIPT from a clip with real bytes marks the mic dirty too
+(`deliverVoice`). That is the microphone having handed over zeros, whatever the cause, so it costs one
+lost attempt rather than every attempt until a reload. Re-acquiring also stops the old tracks first: a
 silent-but-live track still holds the device, and `getUserMedia` will otherwise hand back the same
 dead capture.
 

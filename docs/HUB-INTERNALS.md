@@ -282,13 +282,34 @@ mouse press and more for a finger. The click still arrives afterwards — `preve
 `pointerdown` does not reliably suppress it — so `bindTap` swallows it, and lets through only a click
 with no `pointerdown` in front of it and `detail === 0`, which is a keyboard Enter or Space.
 
-The VAD's noise floor is the quietest frame heard so far, tracked across the whole recording, not the
-mean of an opening calibration window. A window assumes a pause before speaking; talk immediately and
-your own voice sets the threshold above itself, so the clip never registers as speech — no
-trailing-silence stop, just a hang until the grace timer gives up. That floor is also what makes it
-safe to DROP a clip the VAD watched end to end without once crossing it. Dropping matters because
-Whisper does not return an empty string for silence: it invents a plausible phrase — "Thank you." is
-the usual one — and the worker then acts on it as a command.
+### Every press-to-talk button is press to start, press to send — nothing else ends or drops a clip
+
+`makeRecorder` has no voice-activity detection and no timer. Every caller — the navbar button, the
+chat sheet (`cardRec`), the session view (`at.rec`), the new-session dictation (`beginDictation`) and
+the `/mic` page — records until the second press and then sends whatever it recorded. A clip with any
+bytes in it always goes up; the hub's transcript is the only judge of whether it held words, and an
+empty one comes back as the "Didn't catch that" status rather than as silence. **Do not add a VAD to
+this path.** A VAD here ends a recording at a pause and discards any clip it judges silent without a
+word, and on his phone it judges whole spoken commands silent — so the press records, throws the words
+away and shows nothing. The one place a machine decides where speech ends is the always-on listener
+(`makeListener`).
+
+The cost is that an accidental press on a silent room uploads silence, and Whisper can answer that
+with an invented phrase ("Thank you." is the usual one). That is accepted: a press is a deliberate act,
+and losing a real command silently is the worse failure.
+
+Three more ways a press can be lost, each handled in the recorder rather than in a caller:
+
+- **A recording that ends underneath it** — the page hidden (which closes the mic), or a capture
+  reset — fires the MediaRecorder's `stop` without `stop()` having run. `onstop` brings the state
+  along and the clip is still sent (`stop:external` in the tap trace). Without it `recording` stays
+  true over a dead recorder and the next press is spent stopping it.
+- **An upload that never answers.** Every clip goes through one serial outbox, so a hung request
+  holds every mic button on the page in its sending state. `deliverVoice` aborts after `VOICE_SEND_MS`
+  (two minutes); the clip stays in the outbox and the button is free.
+- **A caller abandoning a recording** uses `cancel()`, which ends it WITHOUT sending. `stop()` always
+  sends — that is what a stop press means — so leaving the session view or picking another project
+  mid-recording cancels, and a clip already stopped still goes to the session it was spoken into.
 
 ### A recorded clip is kept until the server has it, and no command is too long
 
@@ -1469,7 +1490,7 @@ dirty, and the whole list greyed when desk presence is stale. Home Screen famili
 - **A tap does not launch a session.** Opening a bare session leaves you typing the actual request
   into a fresh prompt afterwards, so a tap dictates the session's **first message** instead. A widget
   extension has no microphone, so it hands the choice to the app (`statushub://repo/<path>`) and the
-  recording happens on the repos pane.
+  recording happens on the repos pane: it starts on arrival, and tapping the row sends it.
 - **Two taps, and the confirm matters more here.** Tap a row to select, tap ▶ to hand over. This one
   starts a process on a real machine; a stray tap that opens a terminal is worse than one that opens
   options. Same extension-local `UserDefaults` arm store, same 20s expiry with a second timeline

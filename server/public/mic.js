@@ -1,5 +1,5 @@
 // Home-screen "Voice" web-clip: one big button that runs the SAME recorder + pipeline as the hub's
-// bottom-right voice FAB. Tap → listen (VAD auto-stops) → transcribe → enqueue. Shows the transcribed
+// bottom-right voice FAB. Tap → listen → tap → transcribe → enqueue. Shows the transcribed
 // command + a "Sent" confirmation, then resets. The reply itself runs on the hub (and is spoken if
 // speak-replies is on); this page is purely a fast launcher.
 import { makeRecorder, bindTap, watchMic } from './voiceagent.js';
@@ -17,7 +17,9 @@ function scheduleReset() {
 }
 
 const rec = makeRecorder({
-  quick: true, autoStop: true,
+  // Press to start, press to send, like the navbar's button. autoStop would let the VAD end it at a
+  // pause and discard a clip it judged silent without a word.
+  quick: true, autoStop: false,
   onState: (s) => { btn.classList.toggle('rec', s === 'rec'); btn.classList.toggle('armed', s === 'armed'); },
   onStatus: (t, kind) => {
     clearTimeout(resetTimer);

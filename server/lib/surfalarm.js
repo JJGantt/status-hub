@@ -26,10 +26,12 @@ function localHour(ts, tz) {
   return { date: `${p.year}-${p.month}-${p.day}`, hour: +p.hour % 24 };
 }
 
-// Rules are ORDERED and the first match wins. A rule matches when EVERY hour it lists is Fair or
-// better on `day`; hours it does not list are unconstrained, so "fair at 8 and 9" is satisfied by a
-// morning that is fair from 6 to noon. An hour the forecast does not cover is not fair. An empty
-// list matches unconditionally — the "otherwise" rule.
+// Rules are ORDERED and the first match wins. A rule matches when every hour in `hours` is Fair or
+// better on `day` AND no hour in `not_fair` is; any hour in neither list is unconstrained. So "fair at
+// 8 and 9 and nothing after" is {hours:[8,9], not_fair:[10,11]}, and the same intent can also be had
+// by ORDER: a wider window listed first wins whenever it is fair, leaving the narrower rule below it
+// to match only when it is not. An hour the forecast does not cover counts as not fair. A rule with
+// both lists empty matches unconditionally — the "otherwise" rule.
 function decide(rules, rows, day, tz) {
   const fair = new Map();
   for (const r of rows || []) {
@@ -38,7 +40,10 @@ function decide(rules, rows, day, tz) {
   }
   for (let i = 0; i < (rules || []).length; i++) {
     const hours = rules[i].hours || [];
-    if (hours.every((h) => fair.get(h) === true)) return { rule: i, wake: rules[i].wake };
+    const notFair = rules[i].not_fair || [];
+    if (hours.every((h) => fair.get(h) === true) && notFair.every((h) => fair.get(h) !== true)) {
+      return { rule: i, wake: rules[i].wake };
+    }
   }
   return { rule: null, wake: null };
 }

@@ -120,8 +120,10 @@ The most-used case, end to end. No session and no model is involved after the co
    involved in that chain**, which is the entire point.
 5. At the moment, the page plays the alarm tone on loop and `dueTick` sends a notification underneath.
 
-Measured 2026-09-19: the alarm moved 8:30 → 7:00 at 05:00, and the phone's beacon showed the new
-moment **within one minute**, over the stream, with the phone untouched.
+Measured 2026-09-21: the 05:00 capture landed at 05:00:10, the hub decided at 05:00:11 and the alarm
+item existed by 05:00:17 — the phone had acked it and the TV's beacon named 07:00 within a minute,
+nobody awake. At 07:00 the TV started on the second; STOP on the phone completed the item and the
+TV stopped six seconds later, off the feed.
 
 **What has to be true the night before**, and each of these has failed at least once:
 

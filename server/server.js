@@ -3265,6 +3265,12 @@ app.get('/api/calendar', async (req, res) => {
 // button on every surface does and what almost every completion is. The value is a local wall-clock
 // reading in the same shape `due` is stored in; completionStamp is what decides that, because the
 // band is what has to read it back.
+//
+// The hub's OWN writes announce themselves the moment they land (`announceListWrite`) rather than
+// waiting for their realtime echo, which takes seconds. A ring on the TV stops only when the feed
+// changes, so a STOP that waits for the echo leaves the TV ringing long enough to read as not having
+// worked. The echo still arrives and repeats the announcement; that is one redundant reload per tap.
+function announceListWrite() { dirtyRows(); pushLists(); broadcast(); }
 app.post('/api/todos/complete', express.json(), async (req, res) => {
   try {
     const b = req.body || {};
@@ -3283,6 +3289,7 @@ app.post('/api/todos/complete', express.json(), async (req, res) => {
     await sbWrite(`list_items?id=eq.${encodeURIComponent(id)}`, 'PATCH',
       { completed_at: completedAt, updated: now });
     res.json({ ok: true, completed_at: completedAt });
+    announceListWrite();
     syncBadge().catch(() => {});   // don't make the caller wait on APNs
   } catch (e) { res.status(500).json({ error: String(e.message || e) }); }
 });
@@ -3298,6 +3305,7 @@ app.post('/api/todos/clear', express.json(), async (req, res) => {
     // number here: the pane re-reads /api/badge after every load anyway, and syncBadge() pushes the
     // authoritative count to the devices a moment later.
     res.json({ ok: true });
+    announceListWrite();
     syncBadge().catch(() => {});   // don't make the caller wait on APNs
   } catch (e) { res.status(500).json({ error: String(e.message || e) }); }
 });
@@ -3315,6 +3323,7 @@ app.post('/api/todos/snooze', express.json(), async (req, res) => {
     if (!Number.isFinite(hours) || hours <= 0 || hours > 24 * 30) return res.status(400).json({ error: 'hours out of range' });
     const due = etStringAt(new Date(Date.now() + hours * 3600 * 1000));
     await sbWrite(`list_items?id=eq.${encodeURIComponent(id)}`, 'PATCH', { due, updated: new Date().toISOString() });
+    announceListWrite();
     res.json({ ok: true, due, badge: await overdueCount() });
     syncBadge().catch(() => {});
   } catch (e) { res.status(500).json({ error: String(e.message || e) }); }

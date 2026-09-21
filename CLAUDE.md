@@ -554,6 +554,12 @@ It also beats app.css's `body.tv.wallportrait` block on equal specificity, by lo
   the only screen, with everything else reached by tapping the thing that summarises it, not swiping. `#weightcard` sits hidden beside the plot so it renders on every frame and is moved
   into the sheet, like every other section. The plot scrolls with the heat maps, so it opens through
   `bindTap` with `.wp-scroll` as the scroller, not a plain click.
+- **THE HEAT MAPS OPEN THE SAME WAY** (`data-sec="nut"` / `"wk"`), and a tap on a day opens the sheet
+  ON that day: `bindTap` judges the tap on pointerup and opens on the click after it, so the card's own
+  click on the same host — which picks the day — has already run. Open on pointerup and the sheet moves
+  the map out from under the click. The food list is `#nutinfo`, BESIDE `#nutritionlog` here and inside
+  it on the health wall, so the section moves both and skips whichever is already inside the other.
+  No section has a corner button any more.
 - **The day's totals are ON THE RINGS**, one under each gauge — `2699 / 3060` under Cal, `134 / 178`
   under P. That is the totals line split four ways and attached to the thing each number belongs to,
   so it needs no labels and there is no separate band: `#nutinfo` carries `data-noband` and

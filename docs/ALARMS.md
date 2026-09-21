@@ -45,32 +45,35 @@ looks like it does:
   competes with the page for the audio session is untested; a ring cut to a blip is the microphone
   re-opening mid-ring (see "Playing a sound breaks the microphone").
 
-## Whose job is it to ring
+## The TV and the page are a mirror
 
-Per alarm, one of them makes the noise:
+**Ringing is a state of the feed, not an event anyone has to witness.** An alarm-marked item whose
+moment has passed and which is still in `/api/due-widget` is ringing, and both ringers apply that one
+rule whenever they look: `dueNow()` in `alarmclock.js`, `due_now()` in `tv-ring.py`. So:
 
-| | **`armed`** (AlarmKit holds it) | **not armed** |
-|---|---|---|
-| **In Guided Access** | the page rings — and the phone is told to drop it (below) | the page rings |
-| **Not in Guided Access** | the page stays quiet, AlarmKit rings | the page rings |
+- the TV rings whether or not the app is open, and a restart of `tv-ring` mid-ring resumes the ring;
+- the page rings whenever it is open, in Guided Access or not, and whatever AlarmKit holds;
+- opening the app in the middle of the TV's ring joins it, STOP and all, however long it has been
+  ringing;
+- STOP anywhere completes the item, the item leaves the feed, and every ringer goes quiet.
 
-**In Guided Access the hub takes the alarms off the phone.** The page reports the session in its
-beacon (`guided`), and at once when it changes. While that is fresh and true, `/api/alarms` serves an
-empty set and `unarmedAlarms()` expects nothing, and the change itself wakes the phone to sync — a
-push to an app in front is not rationed — so AlarmSync cancels what it holds. When the session ends,
-or the page stops beaconing, AlarmKit gets its alarms back. `inGuidedAccess()` in `server.js`.
+STOP reaches the TV in under a second because the hub announces its own completion at once
+(`announceListWrite` in `server.js`) instead of waiting for the realtime echo, which takes seconds —
+long enough for STOP to look as if it had not reached the TV.
 
-The page still ignores `armed` inside a session, for the moment between a session starting and the
-phone syncing.
+**AlarmKit is outside the mirror.** Its Stop button completes nothing, so an AlarmKit alert stopped
+on the phone leaves the TV and the page ringing, and with the app open outside Guided Access both the
+page and AlarmKit ring. **In Guided Access the hub takes the alarms off the phone**, which removes
+that duplicate for the overnight case: the page reports the session in its beacon (`guided`), and at
+once when it changes. While that is fresh and true, `/api/alarms` serves an empty set and
+`unarmedAlarms()` expects nothing, and the change itself wakes the phone to sync — a push to an app in
+front is not rationed — so AlarmSync cancels what it holds. When the session ends, or the page stops
+beaconing, AlarmKit gets its alarms back. `inGuidedAccess()` in `server.js`.
 
 **The page cannot detect a Guided Access session** — there is no web API, and the giveaway (Web Audio
 being silenced) is not measurable from inside the audio graph. `GuidedAccess` in `StatusHubApp.swift`
 pushes `window.__guidedAccess` into the page on every load and on
-`guidedAccessStatusDidChangeNotification`, since a session can start or end while the page sits
-untouched. `hub:guidedaccess` re-decides immediately rather than waiting for the two-minute reload.
-
-**Undefined means ring** — a plain browser, or the app before the flag lands. A duplicate is
-recoverable; a silence is the failure this exists to prevent.
+`guidedAccessStatusDidChangeNotification`, and the page forwards it in its beacon at once.
 
 ## The tones
 
@@ -151,7 +154,8 @@ Two things on the wall, from the same feed and the same moment as the phone:
   the hub log like the phone's.
 
 Both stop when the item leaves the feed, which is what the phone's STOP does. Neither gives up on a
-clock. pi-config's README has what fails here (the PipeWire sink, and why it is left unforced).
+clock. The rule for when either one rings is the mirror above. pi-config's README has what fails
+here (the PipeWire sink, and why it is left unforced).
 
 ## Playing a sound breaks the microphone, unless you say so
 

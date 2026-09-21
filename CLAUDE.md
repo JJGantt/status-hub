@@ -159,6 +159,10 @@ alarm:
   which is how a change made at 4am reaches an already-open page with no push involved. A second
   EventSource on one phone is a mistake already made here. The two-minute reload behind it is the
   backstop for a socket gone deaf while still looking open.
+- **Ringing is a state of the feed.** Past its moment and still in the feed means ringing, here and
+  on the TV alike, whenever either one looks — so opening the app mid-ring joins the TV's ring, and
+  its STOP silences both. There is no grace window on starting a ring; `docs/ALARMS.md` § The TV and
+  the page are a mirror.
 - **The ring is unbounded, and STOP completes the item.** An alarm that gives up is not an alarm.
   The feed is the state: STOP posts the completion, the item leaves the feed, and every surface
   ringing it stops together. Clearing it anywhere else ends the noise the same way. `closeExempt`

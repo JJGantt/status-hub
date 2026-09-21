@@ -83,7 +83,8 @@ function watchRing() {
     if (stuck) keepPlaying('stuck');
   }, 3000);
 }
-const fired = new Set();
+// Alarms STOPPED on this page, so the moment between STOP and the feed catching up cannot ring again.
+const stopped = new Set();
 const keyOf = (it) => `${it.id}:${it.when}`;
 
 // ---- sound: the FALLBACK path ------------------------------------------------------------------
@@ -138,6 +139,7 @@ function overlay(title, at) {
     // Complete the item, not just quiet this page: the feed is the state, and every other surface
     // ringing this alarm stops when it leaves. Exempt, so completing costs nothing on the score.
     const id = ringing && ringing.id;
+    if (ringing) stopped.add(keyOf(ringing));
     stopRing('stop');
     if (id) fetch('/api/todos/complete', { method: 'POST', headers: { 'Content-Type': 'application/json' },
                                            body: JSON.stringify({ id }) }).catch(() => {});
@@ -196,37 +198,32 @@ function stopRing(why) {
   schedule();
 }
 
-// WHOSE JOB IS IT TO RING. Both paths existing means deciding, per alarm, which one makes the noise.
-//
-// Inside a Guided Access session AlarmKit's alert does not present, so the page is the only thing
-// that will ring and `armed` must be ignored. Outside one, an armed alarm is AlarmKit's and ringing
-// here too is just a duplicate. The page cannot detect a session itself — the native side pushes
-// `window.__guidedAccess` (see GuidedAccess in StatusHubApp.swift).
-//
-// Undefined means a plain browser, or the app before the flag has arrived. Ring in that case: a
-// duplicate is recoverable, a silence is the failure this whole system exists to prevent.
-const mustRing = () => window.__guidedAccess !== false;
-const ringsHere = (x) => mustRing() || !x.armed;
-
 // ---- the schedule -----------------------------------------------------------------------------
+// RINGING IS A STATE OF THE FEED, not an event this page has to witness. An alarm whose moment has
+// passed and which is still in the feed is ringing — on the TV, and here the moment this page looks.
+// So opening the app in the middle of the TV's ring joins it, and STOP here silences both. The TV
+// (`tv-ring.py` in pi-config) follows the same rule, which is what keeps the two a mirror.
+//
+// Every alarm rings here, whatever AlarmKit holds and whether or not Guided Access is on: the page
+// is the phone's alarm whenever it is open.
+const timed = () => items
+  .map((x) => ({ ...x, at: new Date(x.when).getTime() }))
+  .filter((x) => Number.isFinite(x.at) && !stopped.has(keyOf(x)))
+  .sort((a, b) => a.at - b.at);
+const dueNow = () => timed().find((x) => x.at <= Date.now()) || null;
+const nextItem = () => timed().find((x) => x.at > Date.now()) || null;
+
 // A LOCAL TIMER TO THE MOMENT, never a poll asking whether it has arrived. Nothing changes anywhere
 // when 8:30 happens, so the only thing that can notice is something already awake — which this is.
-function nextItem() {
-  const now = Date.now();
-  return items
-    .map((x) => ({ ...x, at: new Date(x.when).getTime() }))
-    .filter((x) => Number.isFinite(x.at) && x.at > now - 60000 && !fired.has(keyOf(x)))
-    .sort((a, b) => a.at - b.at)[0] || null;
-}
 function schedule() {
   clearTimeout(fireT); fireT = null;
+  if (!ringing) { const d = dueNow(); if (d) return startRing(d); }
   const n = nextItem();
   if (!n) return;
   // setTimeout is capped and drifts over hours, so re-arm in steps and let only the final short hop
   // be the real one. A phone that dozed through part of the gap still lands on the right minute.
   const ms = n.at - Date.now();
-  if (ms > 60000) { fireT = setTimeout(schedule, Math.min(ms - 30000, 900000)); return; }
-  fireT = setTimeout(() => { fired.add(keyOf(n)); startRing(n); }, Math.max(ms, 0));
+  fireT = setTimeout(schedule, ms > 60000 ? Math.min(ms - 30000, 900000) : Math.max(ms, 0));
 }
 async function load() {
   try {
@@ -238,7 +235,7 @@ async function load() {
     // ring becomes a pause. Skipped while ringing, so a settings change cannot swap the file out
     // from under a sound that is currently playing.
     if (!ringing) sound(cfg && cfg.alarm_sound);
-    items = (d.items || []).filter((x) => x.alarm && x.when && ringsHere(x));
+    items = (d.items || []).filter((x) => x.alarm && x.when);
     // DEALT WITH ELSEWHERE IS STILL DEALT WITH. Clearing the item on the watch or another phone drops
     // it from this feed, and a page still beeping about something already handled is noise nobody can
     // trace back to a cause. The feed is the state; STOP is only one way of changing it.
@@ -292,13 +289,18 @@ function beacon() {
 // is what distinguishes the two from outside.
 ['pointerdown', 'touchstart', 'keydown'].forEach((ev) =>
   document.addEventListener(ev, () => { unlock(); keepAwake(); }, { passive: true }));
-document.addEventListener('visibilitychange', () => { keepAwake(); schedule(); });
+// Coming back into view re-reads rather than re-scheduling what it held: an alarm stopped elsewhere
+// while this page was suspended is still in the stale list, and would ring until the stream caught up.
+document.addEventListener('visibilitychange', () => {
+  keepAwake();
+  if (document.visibilityState === 'visible') load();
+});
 // `hub:stream` rides core.js's existing EventSource — a second one on this page is what put two
 // streams on a phone once already.
 document.addEventListener('hub:stream', load);
-// A session starting or ending changes whose alarm rings — here, and on the hub, which stops AlarmKit
-// holding anything while it is on, so the beacon goes at once rather than within the minute.
-document.addEventListener('hub:guidedaccess', () => { load(); beacon(); });
+// A session starting or ending changes what the hub lets AlarmKit hold, so the beacon goes at once
+// rather than within the minute.
+document.addEventListener('hub:guidedaccess', beacon);
 setInterval(load, RELOAD_MS);
 // A HEARTBEAT, which is the one shape of timer that cannot be replaced by an event: a page that has
 // been closed, reloaded away or silently suspended sends nothing, so its liveness can only be read

@@ -135,6 +135,22 @@ moment **within one minute**, over the stream, with the phone untouched.
 failure here has been a silent one that reported success — `audio: "running"` was true the whole
 morning nothing came out of the speaker.
 
+## The TV rings too
+
+Two things on the wall, from the same feed and the same moment as the phone:
+
+- **The overlay** is `alarmclock.js`, loaded by the four wall pages. Its sound goes nowhere: the
+  kiosk's Chromium renders audio to nothing on the Pi (no stream reaches PipeWire even from a running
+  `AudioContext`), so on the wall the module is the picture and the beacon (`guided: null`).
+- **The sound** is `tv-ring.service` on the Pi (`pi-config/scripts/tv-ring.py`): the same feed
+  (`/api/due-widget`, alarm-marked items), re-read on every `/api/list-stream` push, a local timer to
+  the moment, and the chosen tone through HDMI-2 with `ffmpeg` straight to ALSA. It beacons
+  `ev: "tvring"` every minute — `next`, `in_s`, `ringing`, `player` — so the TV's state reads from
+  the hub log like the phone's.
+
+Both stop when the item leaves the feed, which is what the phone's STOP does. Neither gives up on a
+clock. pi-config's README has what fails here (the PipeWire sink, and why it is left unforced).
+
 ## Playing a sound breaks the microphone, unless you say so
 
 Anything on the hub page that plays audio can take the iOS audio session, and a capture track that

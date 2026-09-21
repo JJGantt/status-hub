@@ -116,7 +116,8 @@ anything Guided Access suppresses is unusable for it — which is Web Audio, and
 
 ## The hub page IS the alarm clock
 
-`public/alarmclock.js`, imported by `pages/phone-home.js` and `pages/index.js`. It holds a LOCAL
+`public/alarmclock.js`, imported by `pages/phone-home.js`, `pages/index.js` and the four wall pages
+(where it is the overlay only — the TV's sound is `tv-ring` on the Pi, `docs/ALARMS.md`). It holds a LOCAL
 timer to the next `alarm`-marked item from `/api/due-widget` and plays `alarm.m4a` on a loop when it
 arrives, so nothing has to be delivered at the moment itself.
 

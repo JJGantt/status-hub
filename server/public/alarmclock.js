@@ -250,7 +250,9 @@ document.addEventListener('visibilitychange', () => { keepAwake(); schedule(); }
 // `hub:stream` rides core.js's existing EventSource — a second one on this page is what put two
 // streams on a phone once already.
 document.addEventListener('hub:stream', load);
-document.addEventListener('hub:guidedaccess', load);   // a session starting or ending changes whose alarm rings
+// A session starting or ending changes whose alarm rings — here, and on the hub, which stops AlarmKit
+// holding anything while it is on, so the beacon goes at once rather than within the minute.
+document.addEventListener('hub:guidedaccess', () => { load(); beacon(); });
 setInterval(load, RELOAD_MS);
 // A HEARTBEAT, which is the one shape of timer that cannot be replaced by an event: a page that has
 // been closed, reloaded away or silently suspended sends nothing, so its liveness can only be read

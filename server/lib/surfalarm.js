@@ -76,12 +76,13 @@ function makeOutputs({ sb, sbWrite, uuid }) {
           return state;
         }
         if (!at) return {};
-        // The list's own default, as add_to_list does when no priority was said.
-        const [list] = await sb('lists?id=eq.l_todo&select=default_priority');
+        // An alarm is not a task: it goes on the alarms list, and it is EXEMPT, because waking up is
+        // not something to earn points for. Exempt items close themselves once their moment passes;
+        // closeExempt in server.js waits out the ring for an alarm before doing so.
         const fresh = uuid();
         await sbWrite('list_items', 'POST', {
-          id: fresh, list_id: 'l_todo', text: 'Surf, Mayport Poles', title: 'Surf',
-          due: at, scheduled_at: at, priority: (list && list.default_priority) || 0, alarm: true,
+          id: fresh, list_id: 'l_alarms', text: 'Surf, Mayport Poles', title: 'Surf',
+          due: at, scheduled_at: at, priority: -1, alarm: true,
           deleted: false, created: stamp, updated: stamp,
         });
         return { id: fresh };

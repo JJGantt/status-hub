@@ -2278,8 +2278,32 @@ app.post('/api/attach', express.raw({ type: () => true, limit: '30mb' }), async 
 // server error) so a failure that's otherwise invisible in the phone's console lands in the app log.
 app.post('/api/clientlog', express.json({ limit: '16kb' }), (req, res) => {
   try { console.log('[clientlog]', JSON.stringify(req.body).slice(0, 900)); } catch (_) {}
+  const b = req.body || {};
+  if (b.ev === 'alarmclock' && typeof b.guided === 'boolean') noteGuidedAccess(b.guided);
   res.status(204).end();
 });
+
+// IN GUIDED ACCESS, ALARMKIT HOLDS NOTHING. Its alarm fires at the same instant as the page's and
+// takes the audio session, and inside Guided Access it does not present — so the page's sound is cut
+// off a moment after it starts and nothing replaces it. Measured 2026-09-21: page overlay up, a hint
+// of sound, then silence, with two AlarmKit alarms armed for the same minute.
+//
+// The page is the only thing that knows the session state (the native side hands it
+// `window.__guidedAccess`), and it says so in its beacon. While that is fresh and true, /api/alarms
+// serves an empty set so AlarmSync cancels what the phone holds; when it flips, the phone is woken to
+// sync — a push to an app in front is not rationed. Stale means the page stopped beaconing, which is
+// no longer the Guided Access setup, so AlarmKit gets its alarms back.
+const GUIDED_FRESH_MS = 3 * 60 * 1000;
+let phoneGuided = { on: false, at: 0 };
+const inGuidedAccess = () => phoneGuided.on && Date.now() - phoneGuided.at < GUIDED_FRESH_MS;
+function noteGuidedAccess(on) {
+  const was = inGuidedAccess();
+  phoneGuided = { on, at: Date.now() };
+  if (was !== inGuidedAccess()) {
+    console.log(`[alarms] Guided Access ${on ? 'on — AlarmKit stands down' : 'off — AlarmKit holds alarms again'}`);
+    nudgeAlarms();
+  }
+}
 
 // Thumbnails for the chat thread — proxies the private bucket behind the hub auth gate.
 app.get('/api/attachment', async (req, res) => {
@@ -3346,6 +3370,10 @@ app.get('/api/alarms', async (req, res) => {
       res.json({ alarms: [], window_days: ALARM_WINDOW_DAYS, tz: getTZ() });
       return void console.log('[alarms] feed disabled — serving empty so the phone cancels its own');
     }
+    if (inGuidedAccess()) {
+      res.json({ alarms: [], window_days: ALARM_WINDOW_DAYS, tz: getTZ() });
+      return void console.log('[alarms] phone is in Guided Access — serving empty, the page rings instead');
+    }
     const now = etNowString();
     const until = plusMinutes(now, ALARM_WINDOW_DAYS * 1440);
     const rows = await sb('list_items?deleted=eq.false&completed_at=is.null&alarm=eq.true'
@@ -4125,8 +4153,12 @@ async function closeExempt(nowET, rows) {
   let next = '';
   for (const r of rows || []) {
     if (!(Number(r.priority) < 0)) continue;   // exempt items only — what the old query's filter said
-    const deadline = taskDeadline(r.scheduled_at || r.due);
+    let deadline = taskDeadline(r.scheduled_at || r.due);
     if (deadline == null) continue;
+    // An ALARM is closed only once its ring is over. The page stops ringing the moment the item
+    // leaves the feed, and a timed exempt item's deadline is its own moment, so closing on time
+    // would silence the alarm in the minute it starts.
+    if (r.alarm) deadline += ALARM_NAG_MIN * 60000;
     if (deadline > now) {
       next = earlierOf(next, new Date(deadline).toISOString().slice(0, 19));
       continue;
@@ -4230,6 +4262,7 @@ async function pushNudge() {
 // Which alarm-grade items the phone has NOT confirmed, over the same window the feed serves. Anything
 // outside that window is not yet the phone's job to hold, so it can never be the reason to retry.
 async function unarmedAlarms() {
+  if (inGuidedAccess()) return [];      // the phone is meant to hold nothing, so nothing is unarmed
   const now = etNowString();
   const until = plusMinutes(now, ALARM_WINDOW_DAYS * 1440);
   let rows = [];

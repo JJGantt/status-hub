@@ -329,27 +329,6 @@ function etStringAt(d) {
 }
 const etNowString = () => etStringAt(new Date());
 
-// The INVERSE of etStringAt: a local-naive stamp in the display timezone -> the absolute instant it
-// names, as ISO-8601 UTC. Everything else in this server stays naive because nothing needed the
-// instant — an AlarmKit alarm does, because it is registered on the phone against a real `Date` and
-// the phone must not re-apply a zone of its own on top.
-//
-// Two passes, and the second is not decoration: the zone's offset has to be read AT the instant, and
-// the instant is what is being solved for. One pass lands within an hour of the answer; the second
-// settles the two hours a year where the first read was on the wrong side of a DST change.
-function instantFromLocal(naive) {
-  const m = /^(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2})(?::(\d{2}))?/.exec(String(naive || ''));
-  if (!m) return null;
-  const wall = Date.UTC(+m[1], +m[2] - 1, +m[3], +m[4], +m[5], +(m[6] || 0));
-  let t = wall;
-  for (let i = 0; i < 2; i++) {
-    const seen = Date.parse(etStringAt(new Date(t)) + 'Z');   // what a clock in the zone reads at t
-    if (!Number.isFinite(seen)) return null;
-    t = wall - (seen - t);                                    // ...so correct by exactly the offset
-  }
-  return new Date(t).toISOString();
-}
-
 // ---- assemble dashboard data ----
 // ---- surf: latest Surfline snapshot -> current + 7-day per-day rollup ----
 // Data is collected by the Pi (repo JJGantt/surf-report) into surf_snapshots.
@@ -956,11 +935,6 @@ function startRealtime() {
         // backstop instead of the mechanism that keeps a cleared task from lingering on his phone.
         dirtyDue();
         syncBadge().catch((e) => console.log('[badge] error', e.message));
-        // …and only an ALARM-grade row is worth waking the phone for. Reading both sides catches the
-        // mark being taken off as well as put on; a hard DELETE carries only the primary key, so
-        // that one is missed and waits for the next foreground sync (the purge job is its only
-        // source, and it deletes rows that were soft-deleted weeks ago).
-        if ((p && p.new && p.new.alarm) || (p && p.old && p.old.alarm)) nudgeAlarms();
       })
     .on('postgres_changes', { event: '*', schema: 'public', table: 'lists' },
       () => { seen(); pushLists(); })
@@ -1201,11 +1175,8 @@ app.get('/mic', (req, res) => {
   res.setHeader('Cache-Control', 'no-cache');
   res.type('html').send(MIC_HTML);
 });
-// A phone left on this page IS the alarm clock. It rings from its own timer and its own speaker, so
-// it depends on neither of the two things measured to fail here: AlarmKit acks an alarm it then does
-// not present, and the silent push that carries a new alarm to a sleeping phone is refused. Its own
-// page rather than a corner of the hub, because the job is to be left running untouched for eight
-// hours and nothing else on the hub wants that.
+// A spare device left on this page IS an alarm clock: the same clock as the hub page, standalone. It
+// rings from its own timer and its own speaker, so nothing has to be delivered at the moment itself.
 app.get('/alarm', (req, res) => {
   res.setHeader('Cache-Control', 'no-cache');
   res.type('html').send(ALARM_HTML);
@@ -2278,31 +2249,8 @@ app.post('/api/attach', express.raw({ type: () => true, limit: '30mb' }), async 
 // server error) so a failure that's otherwise invisible in the phone's console lands in the app log.
 app.post('/api/clientlog', express.json({ limit: '16kb' }), (req, res) => {
   try { console.log('[clientlog]', JSON.stringify(req.body).slice(0, 900)); } catch (_) {}
-  const b = req.body || {};
-  if (b.ev === 'alarmclock' && typeof b.guided === 'boolean') noteGuidedAccess(b.guided);
   res.status(204).end();
 });
-
-// IN GUIDED ACCESS, ALARMKIT HOLDS NOTHING. Inside a session its alarm does not present, so it adds
-// nothing to the page's ring — and one that fires anyway stays registered afterwards in a state
-// AlarmSync never cancels (it removes only `.scheduled` alarms). The page is the alarm there.
-//
-// The page is the only thing that knows the session state (the native side hands it
-// `window.__guidedAccess`), and it says so in its beacon. While that is fresh and true, /api/alarms
-// serves an empty set so AlarmSync cancels what the phone holds; when it flips, the phone is woken to
-// sync — a push to an app in front is not rationed. Stale means the page stopped beaconing, which is
-// no longer the Guided Access setup, so AlarmKit gets its alarms back.
-const GUIDED_FRESH_MS = 3 * 60 * 1000;
-let phoneGuided = { on: false, at: 0 };
-const inGuidedAccess = () => phoneGuided.on && Date.now() - phoneGuided.at < GUIDED_FRESH_MS;
-function noteGuidedAccess(on) {
-  const was = inGuidedAccess();
-  phoneGuided = { on, at: Date.now() };
-  if (was !== inGuidedAccess()) {
-    console.log(`[alarms] Guided Access ${on ? 'on — AlarmKit stands down' : 'off — AlarmKit holds alarms again'}`);
-    nudgeAlarms();
-  }
-}
 
 // Thumbnails for the chat thread — proxies the private bucket behind the hub auth gate.
 app.get('/api/attachment', async (req, res) => {
@@ -2607,7 +2555,7 @@ app.get('/api/todos', async (req, res) => {
   try {
     const [listNames, items] = await Promise.all([
       sb('lists?select=id,name,emoji&order=name'),
-      sb('list_items?deleted=eq.false&completed_at=is.null&select=id,list_id,list_name,text,title,due,scheduled_at,priority,series_id,alarm,alarm_armed_at&order=created.asc'),
+      sb('list_items?deleted=eq.false&completed_at=is.null&select=id,list_id,list_name,text,title,due,scheduled_at,priority,series_id,alarm&order=created.asc'),
     ]);
     const all = items || [];
     // Grouped by `list_id`, and the id is sent on so the composer can post it back. `list_name` is a
@@ -2643,7 +2591,7 @@ function itemTitle(row) {
 app.get('/api/due-widget', async (req, res) => {
   try {
     const [rows, listRows] = await Promise.all([
-      sb('list_items?deleted=eq.false&completed_at=is.null&due=not.is.null&select=id,list_name,text,title,due,scheduled_at,priority,series_id,alarm,alarm_armed_at&order=scheduled_at.asc'),
+      sb('list_items?deleted=eq.false&completed_at=is.null&due=not.is.null&select=id,list_name,text,title,due,scheduled_at,priority,series_id,alarm&order=scheduled_at.asc'),
       sb('lists?select=name,emoji'),
     ]);
     const emojiOf = {};
@@ -2658,7 +2606,6 @@ app.get('/api/due-widget', async (req, res) => {
       heat: overdueHeat(r, nowET),
       priority: r.priority || 0,
       alarm: !!r.alarm,
-      armed: !!r.alarm_armed_at,
       when: r.scheduled_at || r.due,
       repeating: !!r.series_id,
     }));
@@ -3024,7 +2971,7 @@ app.get('/api/calendar', async (req, res) => {
       // The one surface that draws COMPLETED items as well as outstanding ones. Seeing a day fill in
       // with things that got done is half the point of marking them done; every other surface is a
       // list of what is left, and a finished item on it is noise.
-      sb('list_items?deleted=eq.false&due=not.is.null&select=id,list_name,text,title,due,scheduled_at,priority,series_id,completed_at,alarm,alarm_armed_at'),
+      sb('list_items?deleted=eq.false&due=not.is.null&select=id,list_name,text,title,due,scheduled_at,priority,series_id,completed_at,alarm'),
     ]);
     const emojiOf = {};
     for (const l of listRows || []) emojiOf[l.name] = l.emoji;
@@ -3053,12 +3000,7 @@ app.get('/api/calendar', async (req, res) => {
       grace: !r.completed_at && (r.priority || 0) >= 0 && chipState(r, nowET) === 'grace',
       expired: !r.completed_at && (r.priority || 0) >= 0 && chipState(r, nowET) === 'expired',
       priority: r.priority || 0,
-      // AN ALARM, and whether the PHONE has said so. Marking an item `alarm` is a request — the alarm
-      // itself lives on the device, so the hub cannot see that it will ring. `armed` is the phone's
-      // own ack (POST /api/alarms/ack); until it lands, the chip shows the clock faintly rather than
-      // claiming something nobody has confirmed.
       alarm: !!r.alarm,
-      armed: !!r.alarm_armed_at,
       ...scoreFields(r, nowET),
       repeating: !!r.series_id,
     });
@@ -3340,91 +3282,6 @@ app.post('/api/todos/alarm', express.json(), async (req, res) => {
     await sbWrite(`list_items?id=eq.${encodeURIComponent(id)}`, 'PATCH',
       { alarm, updated: new Date().toISOString() });
     res.json({ ok: true, id, alarm });
-    // The realtime subscription wakes the phone off this write, so there is nothing to do here.
-  } catch (e) { res.status(500).json({ error: String(e.message || e) }); }
-});
-
-// ---- the alarm feed -------------------------------------------------------
-//
-// What the phone should have registered with AlarmKit right now. Read natively (HubAPI, X-Hub-Token)
-// rather than through the WebView, because the moment this matters most is a background wake, where
-// there is no page.
-//
-// A WINDOW, not a change list. Every sync registers everything in the next week and cancels whatever
-// is no longer here, so a wake that iOS threw away costs at most an item created since the last sync
-// rather than the next alarm. That also makes the app's side a pure diff with no state to keep.
-//
-// `at` is an absolute instant, not the naive stamp the rest of the API speaks: the zone rule lives
-// here (server computes, clients render), and a phone that has travelled must not resolve 4pm
-// against wherever it happens to be.
-const ALARM_WINDOW_DAYS = 7;
-// ALARMKIT IS FOR ALARMS JARED SETS HIMSELF. It was briefly switched off here after an alarm it had
-// acked (`held:2`) passed in silence — but that test ran inside a Guided Access session, which is
-// now known to silence audio paths (it mutes Web Audio while letting a media element through), so it
-// never established that AlarmKit is broken. Switching it off on that evidence was wrong.
-//
-// What IS established is narrower and unaffected by it: a CHANGE cannot reach a sleeping phone,
-// because the silent push carrying it is rationed and refused. That is why `alarmclock.js` exists
-// and why it is not a backup — see docs/ALARMS.md. AlarmKit keeps the ordinary case, where he is
-// holding the phone and the app registers the alarm in under a second.
-//
-// Kept as a switch rather than deleted code: the feed is a WINDOW the phone makes itself match, so
-// serving it empty is how alarms already on the device get cancelled. Deleting the route would
-// strand them there instead.
-const ALARMKIT_ENABLED = true;
-app.get('/api/alarms', async (req, res) => {
-  try {
-    if (!ALARMKIT_ENABLED) {
-      res.json({ alarms: [], window_days: ALARM_WINDOW_DAYS, tz: getTZ() });
-      return void console.log('[alarms] feed disabled — serving empty so the phone cancels its own');
-    }
-    if (inGuidedAccess()) {
-      res.json({ alarms: [], window_days: ALARM_WINDOW_DAYS, tz: getTZ() });
-      return void console.log('[alarms] phone is in Guided Access — serving empty, the page rings instead');
-    }
-    const now = etNowString();
-    const until = plusMinutes(now, ALARM_WINDOW_DAYS * 1440);
-    const rows = await sb('list_items?deleted=eq.false&completed_at=is.null&alarm=eq.true'
-      + '&due=not.is.null&select=id,list_name,text,title,due&order=due.asc');
-    const alarms = [];
-    for (const r of rows || []) {
-      const at = dueMoment(r.due);                       // a date-only due rings at 9am, as it notifies
-      if (at < now || at > until) continue;              // already gone, or past the window
-      const iso = instantFromLocal(at);
-      if (iso) alarms.push({ id: r.id, at: iso, title: itemTitle(r) });
-    }
-    res.json({ alarms, window_days: ALARM_WINDOW_DAYS, tz: getTZ() });
-    // LOGGED, because this is the only evidence that the phone's side ran at all. Nothing else in the
-    // alarm path leaves a trace here: the wake is a push (fire and forget), and scheduling happens on
-    // the device. A fetch appearing shortly after a wake is also the whole proof that a BACKGROUND
-    // wake can do the work — which is the one thing about this design that is undocumented.
-    console.log(`[alarms] fetched by ${req.get('X-Hub-Token') ? 'app' : 'browser'} -> ${alarms.length}`);
-  } catch (e) { res.status(500).json({ error: String(e.message || e) }); }
-});
-
-// WHAT THE PHONE ACTUALLY HOLDS. Posted after every sync (AlarmSync), as the full set of item ids it
-// has registered with AlarmKit right now — the same shape as the feed, because the phone's whole job
-// is to make one equal the other.
-//
-// A SET, not an event, for the same reason the feed is a window: a message saying "I scheduled this
-// one" cannot express a cancellation, and nothing else would ever clear the flag on an item whose
-// alarm the phone dropped. Diffed before writing, so a sync that changed nothing costs no writes and
-// does not wake every open surface through realtime.
-app.post('/api/alarms/ack', express.json(), async (req, res) => {
-  try {
-    const ids = Array.isArray(req.body && req.body.ids) ? req.body.ids.map(String) : [];
-    const have = new Set(ids);
-    const rows = await sb('list_items?deleted=eq.false&alarm=eq.true&select=id,alarm_armed_at');
-    const now = new Date().toISOString();
-    const arm = [], disarm = [];
-    for (const r of rows || []) {
-      if (have.has(r.id) && !r.alarm_armed_at) arm.push(r.id);
-      else if (!have.has(r.id) && r.alarm_armed_at) disarm.push(r.id);
-    }
-    for (const id of arm) await sbWrite(`list_items?id=eq.${encodeURIComponent(id)}`, 'PATCH', { alarm_armed_at: now });
-    for (const id of disarm) await sbWrite(`list_items?id=eq.${encodeURIComponent(id)}`, 'PATCH', { alarm_armed_at: null });
-    if (arm.length || disarm.length) console.log(`[alarms] ack: +${arm.length} -${disarm.length} (phone holds ${ids.length})`);
-    res.json({ ok: true, armed: arm.length, disarmed: disarm.length });
   } catch (e) { res.status(500).json({ error: String(e.message || e) }); }
 });
 
@@ -4017,8 +3874,7 @@ function lateMoment(due) {
 //
 // The scheduler below finds due items; it does not deliver them. Delivery is a named handler, so a
 // second channel is a new entry here rather than surgery on the loop. Today there is exactly one —
-// APNs — and this seam is worth its ten lines only because the second one is already written down:
-// AlarmKit (docs/TODO.md), which fires on-device and breaks through Focus.
+// APNs.
 //
 // Handlers receive the whole item and the dedupe key. They must be idempotent-safe to skip: the
 // ledger check happens before dispatch, not inside them.
@@ -4079,7 +3935,7 @@ async function dueTick() {
   if (!dueDirty && (!dueNextAt || nowET < dueNextAt)) return;
   let rows;
   // Every list, not just todo — "reminder" is a predicate (has a due), not a place.
-  try { rows = await sb('list_items?deleted=eq.false&completed_at=is.null&due=not.is.null&select=id,list_name,text,title,due,scheduled_at,priority,series_id,alarm,alarm_armed_at'); } catch (_) { return; }
+  try { rows = await sb('list_items?deleted=eq.false&completed_at=is.null&due=not.is.null&select=id,list_name,text,title,due,scheduled_at,priority,series_id,alarm'); } catch (_) { return; }
   // Only once the read succeeded: a failed read must leave the state dirty so the next tick retries.
   dueDirty = false;
   dueNextAt = '';
@@ -4098,16 +3954,8 @@ async function dueTick() {
     // to fire again at its new moment. Including the due gets that for free instead of needing the
     // old ledger row deleted by hand. Do not shorten this key: see the note in CLAUDE.md.
     const dk = `reminder:${r.id}:${r.due}`;
-    // AN ALARM NOTIFIES TOO, always. This used to skip the push whenever `alarm_armed_at` was set,
-    // on the reasoning that a full-screen alert had already broken silent mode and a banner behind it
-    // only repeats it quieter. The premise is false: an alarm registered, acked (`held:2`) and left
-    // untouched was measured going off in complete silence — AlarmKit confirms holding an alarm it
-    // then does not present, so the ack says the phone accepted it, never that it will ring.
-    //
-    // That makes the ack the one thing this must not trust, because acting on it turns a failed
-    // alarm into no alarm at all rather than into a banner. A redundant notification costs a buzz; a
-    // suppressed one costs the morning. `/alarm` left open is what actually makes noise now, and
-    // this is the layer under it.
+    // AN ALARM NOTIFIES TOO, always. The TV and the open hub page are what make noise; this is the
+    // layer under them, and a redundant notification costs a buzz where a missing one costs the morning.
     try { if ((await sb(`notifications?dedupe_key=eq.${encodeURIComponent(dk)}&select=id&limit=1`)).length) continue; } catch (_) { continue; }
     const handler = DUE_HANDLERS.push;
     if (handler === DUE_HANDLERS.push && !apns.configured()) continue;   // nothing to deliver through
@@ -4206,98 +4054,6 @@ async function syncBadge() {
   try { tokens = await sb('device_tokens?platform=eq.ios&select=token,environment'); } catch (_) { return; }
   for (const { token, environment } of tokens) await apns.send(token, { environment, badge: n });
   console.log(`[badge] -> ${n}`);
-}
-// ---- waking the phone to reschedule ----------------------------------------
-//
-// An AlarmKit alarm is registered ON the device, so a change here cannot ring anything by itself;
-// the phone has to re-read /api/alarms and reschedule. This is the only way that happens without him
-// opening the app, and any ONE push is best-effort: iOS throttles background pushes on its own
-// heuristics and delivers none at all after a force-quit. The app's foreground sync is the
-// guarantee — this is what usually makes the guarantee unnecessary.
-//
-// A single push is not enough on its own, and the failure is silent: an alarm created while the
-// phone sits idle overnight is exactly when the wake is most likely to be dropped and least likely
-// to be followed by someone picking the phone up. So the push RETRIES until the device acks, and
-// `dueTick` notifies anyway for anything still unconfirmed when its moment arrives.
-//
-// Silent, because apns.js turns a push with no title and no body into a background one; `alarms: 1`
-// rides alongside so the app can tell this apart from the badge-only pushes it also now wakes for.
-// Debounced, because one voice command writes a row more than once (insert, then a due) and each
-// write is otherwise a wake.
-let alarmNudgeT = null;
-let alarmRetryT = null;
-const ALARM_NUDGE_MS = 4000;
-// Widening gaps rather than a fixed interval, because the thing being waited on is iOS restoring a
-// budget it took away — stacking attempts into the minute it was refused spends them on the refusal.
-// Bounded at four: past twenty minutes the foreground sync is the realistic path, the chip already
-// shows the alarm unconfirmed, and dueTick's notification is underneath it either way.
-const ALARM_RETRY_MS = [30e3, 120e3, 300e3, 900e3];
-
-async function pushNudge() {
-  let tokens = [];
-  try { tokens = await sb('device_tokens?platform=eq.ios&select=token,environment'); } catch (_) { return 0; }
-  for (const { token, environment } of tokens) await apns.send(token, { environment, payload: { alarms: 1 } });
-  return tokens.length;
-}
-
-// Which alarm-grade items the phone has NOT confirmed, over the same window the feed serves. Anything
-// outside that window is not yet the phone's job to hold, so it can never be the reason to retry.
-async function unarmedAlarms() {
-  if (inGuidedAccess()) return [];      // the phone is meant to hold nothing, so nothing is unarmed
-  const now = etNowString();
-  const until = plusMinutes(now, ALARM_WINDOW_DAYS * 1440);
-  let rows = [];
-  try {
-    rows = await sb('list_items?deleted=eq.false&completed_at=is.null&alarm=eq.true'
-      + '&due=not.is.null&select=id,list_name,text,title,due,alarm_armed_at');
-  } catch (_) { return []; }
-  return (rows || []).filter((r) => {
-    const at = dueMoment(r.due);
-    return at >= now && at <= until && !r.alarm_armed_at;
-  });
-}
-
-// THE LAST ATTEMPT CHANGES CHANNEL rather than repeating a refused one. A background push and an
-// alert push are delivered on different terms and only the first is rationed, so once the silent
-// wakes have been refused the useful move is the other channel, not another one of the same.
-// `passive` is what makes that affordable: the push goes out in the reliable class but does not light
-// the screen or make a sound, so a 4am wake to register an alarm costs a silent line in Notification
-// Centre instead of waking him three hours early. `content-available` rides alongside the alert so
-// the app still gets its background run. The title is the item's own, since this is visible.
-async function escalateWake(pending) {
-  let tokens = [];
-  try { tokens = await sb('device_tokens?platform=eq.ios&select=token,environment'); } catch (_) { return 0; }
-  const title = itemTitle(pending[0]) || 'Alarm';
-  for (const { token, environment } of tokens) {
-    await apns.send(token, { environment, title, interruptionLevel: 'passive', wake: true, payload: { alarms: 1 } });
-  }
-  return tokens.length;
-}
-
-// RETRY UNTIL THE PHONE SAYS IT HAS THEM — the stop condition is the ack, not a count of attempts.
-// A wake that landed therefore costs one push and one cheap read; only a wake that was thrown away
-// keeps trying, so the cost falls entirely on the case that is actually broken.
-function retryUnarmed(step) {
-  clearTimeout(alarmRetryT);
-  if (step >= ALARM_RETRY_MS.length) return;
-  alarmRetryT = setTimeout(async () => {
-    const pending = await unarmedAlarms();
-    if (!pending.length) return console.log('[alarms] every alarm in the window is armed');
-    const last = step === ALARM_RETRY_MS.length - 1;
-    const n = last ? await escalateWake(pending) : await pushNudge();
-    console.log(`[alarms] ${pending.length} unarmed, ${last ? 'escalated to a visible wake on' : 're-woke'} ${n} device(s)`
-      + ` (try ${step + 1}/${ALARM_RETRY_MS.length})`);
-    retryUnarmed(step + 1);
-  }, ALARM_RETRY_MS[step]);
-}
-
-function nudgeAlarms() {
-  if (!apns.configured() || alarmNudgeT) return;
-  alarmNudgeT = setTimeout(async () => {
-    alarmNudgeT = null;
-    console.log(`[alarms] woke ${await pushNudge()} device(s)`);
-    retryUnarmed(0);
-  }, ALARM_NUDGE_MS);
 }
 
 // A BACKSTOP. The badge is pushed by the `list_items` subscription and by `dueTick` when something

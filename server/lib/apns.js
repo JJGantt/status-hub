@@ -75,14 +75,7 @@ function authToken(env) {
 // action buttons on the notification. `payload` carries app-visible data alongside `aps` — the
 // reminder's id rides there so an action knows which row it is acting on.
 // Resolves { ok, status, detail } and never rejects.
-// `wake` adds `content-available` to a push that ALSO has an alert, so the app gets a background run
-// off a notification the user can see. It exists because the two push types are delivered on
-// different terms: a background push (no alert) is rationed and refused at iOS's discretion, while an
-// alert push is not — a phone here refused four background pushes in a row while alert pushes to the
-// same device in the same minutes arrived. Pairing it with `interruptionLevel: 'passive'` buys the
-// reliable delivery class without lighting the screen or making a sound. Ignored on a silent push,
-// which already carries `content-available` and is the rationed form this is meant to escape.
-function send(deviceToken, { title, body, payload, environment, sound, interruptionLevel, badge, category, wake } = {}) {
+function send(deviceToken, { title, body, payload, environment, sound, interruptionLevel, badge, category } = {}) {
   return new Promise((resolve) => {
     if (!configured(environment)) return resolve({ ok: false, status: 0, detail: 'apns not configured for ' + (environment || ENV) });
     let jwt;
@@ -115,7 +108,6 @@ function send(deviceToken, { title, body, payload, environment, sound, interrupt
     const aps = silent
       ? { 'content-available': 1 }                                   // badge-only: nothing displayed
       : { alert: { title, body }, sound: sound || 'default' };
-    if (!silent && wake) aps['content-available'] = 1;   // show it AND give the app a background run
     if (!silent && interruptionLevel) aps['interruption-level'] = interruptionLevel;
     if (Number.isInteger(badge)) aps.badge = badge;
     if (category && !silent) aps.category = category;   // selects the action buttons the app registered

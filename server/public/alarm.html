@@ -5,11 +5,8 @@
 <title>Alarm</title>
 <!--
   A PAGE THAT RINGS ITSELF.
-  The device alarm path cannot be relied on here: AlarmKit acks an alarm it then fails to present,
-  and the silent push that carries a new alarm to a sleeping phone is rationed and refused. Both
-  failures are silent. This page has neither dependency — it is already open, already holds the
-  stream, and owns a speaker. It rings from a LOCAL timer to the moment, so nothing has to be
-  delivered at the moment itself.
+  It is already open, already holds the stream, and owns a speaker. It rings from a LOCAL timer to
+  the moment, so nothing has to be delivered at the moment itself.
 
   Left open on a phone, it is the alarm clock. Everything here follows from that: the screen must
   stay lit (wake lock), the sound must be unlocked by a tap before it is needed (iOS will not play

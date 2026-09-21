@@ -55,8 +55,8 @@ function decide(rules, rows, day, tz) {
 
 function makeOutputs({ sb, sbWrite, uuid }) {
   return {
-    // An alarm-marked list item. The page clock, AlarmKit and dueTick's notification all ring from
-    // one of these, so this single output reaches all three.
+    // An alarm-marked list item. The TV, the hub page and dueTick's notification all ring from one of
+    // these, so this single output reaches all three.
     item: {
       async apply({ at, now, state }) {
         const stamp = now.slice(0, 19);

@@ -201,7 +201,6 @@ body.ss-open #bodyinfo,body.touch.ss-open #bodyinfo,body.tv.phonewall.ss-open #b
    Drawn a touch smaller than the text beside it: a colour glyph at the same nominal size reads
    bigger than the letters around it. */
 .cw-al{font-size:.85em;line-height:1;margin-right:2px;flex:none}
-.cw-al.pend{filter:grayscale(1) brightness(1.5) contrast(.8);opacity:.7}
 .sectsheet .card h2,.sectsheet #workouts h2{display:none}
 /* NUTRITION: #nutritionlog = heat (top) + full-day totals & food list (scroll) + trend plot (kept, bottom) */
 .sectsheet[data-sec="nut"] #nutritionlog{flex:1 1 auto;min-height:0;display:flex;flex-direction:column;padding:12px 14px;gap:10px}

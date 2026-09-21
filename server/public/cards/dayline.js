@@ -28,12 +28,8 @@ export function chip(it, withTime) {
   // when. The day column never does — the hour row a chip sits on already said it, and repeating it
   // spends the width the title needs.
   const tm = withTime && it.time ? `<span class="cw-t">${esc(it.time)}</span>` : '';
-  // AN ALARM, and whether the phone has confirmed it. One glyph, two states, and the difference is
-  // only brightness: full means the phone has this alarm registered and it WILL ring; faint means it
-  // has been asked for and not yet confirmed. A second symbol would be a thing to learn for a state
-  // that normally resolves itself within seconds — and the faint one is the warning, seen before the
-  // moment arrives rather than by sleeping through it.
-  const al = it.alarm ? `<span class="cw-al${it.armed ? '' : ' pend'}">\u23f0</span>` : '';
+  // AN ALARM: it rings on the TV and on any open hub page, not just notifies.
+  const al = it.alarm ? '<span class="cw-al">\u23f0</span>' : '';
   return `<span class="${cls}" style="--c:${esc(it.color)}">${imp}${al}${tm}<span class="cw-l">${esc(it.title)}</span>${sc}</span>`;
 }
 

@@ -1,10 +1,8 @@
 // THE PAGE IS THE ALARM CLOCK.
 //
-// Neither half of the device alarm path can be relied on here, and both were measured failing
-// silently on the same night: AlarmKit acked an alarm (`held:2`) that it then never presented, and
-// four silent pushes carrying a new alarm to a sleeping phone were refused outright. A page that is
-// already open has neither dependency — it holds its own timer to the moment and owns a speaker, so
-// nothing has to be delivered at the moment itself.
+// The phone's alarm, beside the TV's. A page that is already open holds its own timer to the moment
+// and owns a speaker, so nothing has to be delivered at the moment itself — which matters, because a
+// push to a sleeping phone is rationed and refused.
 //
 // It lives on the hub's own phone page rather than a page of its own, because the phone is already
 // showing this one: the iOS app loads `/`, and asking someone to park a second URL somewhere is a
@@ -204,8 +202,8 @@ function stopRing(why) {
 // So opening the app in the middle of the TV's ring joins it, and STOP here silences both. The TV
 // (`tv-ring.py` in pi-config) follows the same rule, which is what keeps the two a mirror.
 //
-// Every alarm rings here, whatever AlarmKit holds and whether or not Guided Access is on: the page
-// is the phone's alarm whenever it is open.
+// Every alarm rings here, whether or not Guided Access is on: the page is the phone's alarm whenever
+// it is open.
 const timed = () => items
   .map((x) => ({ ...x, at: new Date(x.when).getTime() }))
   .filter((x) => Number.isFinite(x.at) && !stopped.has(keyOf(x)))
@@ -257,9 +255,8 @@ async function keepAwake() {
 }
 
 // ---- saying whether it is actually armed --------------------------------------------------------
-// A CLOCK NOBODY CAN CHECK IS THE WHOLE PROBLEM AGAIN. AlarmKit reported holding an alarm it never
-// rang; the way not to repeat that is for this to report what it can actually do, not that it
-// loaded. `audio` is the one that matters — a suspended context means the beeps are silent — and it
+// A CLOCK NOBODY CAN CHECK IS THE WHOLE PROBLEM. So this reports what it can actually do, not that
+// it loaded. `audio` is the one that matters — a suspended context means the beeps are silent — and it
 // rides /api/clientlog into the hub log, where it can be read from anywhere.
 function beacon() {
   const n = nextItem();
@@ -298,8 +295,8 @@ document.addEventListener('visibilitychange', () => {
 // `hub:stream` rides core.js's existing EventSource — a second one on this page is what put two
 // streams on a phone once already.
 document.addEventListener('hub:stream', load);
-// A session starting or ending changes what the hub lets AlarmKit hold, so the beacon goes at once
-// rather than within the minute.
+// `guided` in the beacon is how the night-before setup is checked from the hub log, so a session
+// starting or ending beacons at once rather than within the minute.
 document.addEventListener('hub:guidedaccess', beacon);
 setInterval(load, RELOAD_MS);
 // A HEARTBEAT, which is the one shape of timer that cannot be replaced by an event: a page that has

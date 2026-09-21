@@ -89,7 +89,22 @@ The most-used case, end to end.
 1. `surf-report/capture.mjs` mirrors Surfline into `surf_snapshots` on the Pi's cron, about four
    snapshots a day. See that repo for the publish windows.
 2. A session watches `surf_snapshots` over Supabase realtime — **not a poll**; the table is in the
-   publication already (data-layer `00040`).
+   publication already (data-layer `00040`). It does that with `server/tools/surf-watch.mjs`, run
+   as a **background Bash task** from `server/`:
+
+       WATCH_UNTIL=2026-09-22T06:45:00-04:00 node tools/surf-watch.mjs
+
+   A session cannot hold a subscription itself; the harness wakes it when a background task EXITS.
+   So the script subscribes, and exits the moment a new snapshot lands (0) or `WATCH_UNTIL` passes
+   with none (3). It costs nothing while it waits. One run is one snapshot: after deciding, the
+   session starts it again for the next capture, until the deadline. `--selftest` connects and exits.
+   Its 10-minute poll is only the backstop for a channel that goes deaf while reporting SUBSCRIBED.
+   Set `WATCH_UNTIL` a little before the earliest time the alarm could move to, since a capture
+   after that cannot change anything.
+
+   Monitor is the wrong tool here: it expires after at most thirty minutes and has to be re-armed,
+   which is a model turn every half hour all night. Its WebSocket source cannot join a Supabase channel either,
+   because joining means sending a frame and it only receives.
 3. A new capture lands overnight. The session reads the morning's hours and applies Jared's rules
    (they live with him, not here — ask, do not infer) to decide a wake time.
 4. It moves the item's `due`. That write goes out over realtime → the hub's `/api/stream` →

@@ -16,41 +16,33 @@ func snippet(_ s: String) -> AttributedString {
     return a
 }
 
-/// The row a recording shows under its page: a red dot, the time recorded once the microphone is
-/// actually open, Cancel, and — on a recording that ends itself at the silence after speech — the lock
-/// that holds it open until a press sends it.
+/// The row a recording shows under its page: two buttons of one size, the lock on the left and Cancel
+/// on the right. The lock appears only on a recording that ends itself at the silence after speech,
+/// and holds it open until a press sends it; without it, Cancel keeps its place and the left half is
+/// empty. The stop control at the bottom edge is what says a recording is under way.
 struct RecordingBar: View {
-    let since: Date?
     let cancel: () -> Void
     @ObservedObject private var capture = Capture.shared
 
     var body: some View {
-        HStack(spacing: 6) {
-            HStack(spacing: 6) {
-                Circle().fill(Color.red).frame(width: 10, height: 10)
-                if let since {
-                    Text(since, style: .timer)
-                        .font(.system(size: 14, weight: .medium, design: .monospaced))
-                        .foregroundColor(.red)
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.6)
-                }
-            }
-            Spacer(minLength: 0)
+        HStack(spacing: 8) {
             if capture.endsOnSilence {
                 Button(action: capture.toggleLock) {
                     Image(systemName: capture.locked ? "lock.fill" : "lock.open")
+                        .frame(maxWidth: .infinity)
                 }
                 .tint(capture.locked ? .orange : .gray)
                 .buttonStyle(.bordered)
                 .controlSize(.small)
-                .frame(width: 36)
+            } else {
+                Color.clear.frame(maxWidth: .infinity, maxHeight: 0)
             }
-            Button(action: cancel) { Text("Cancel").lineLimit(1).fixedSize() }
-                .tint(.red)
-                .buttonStyle(.bordered)
-                .controlSize(.small)
-                .fixedSize()
+            Button(action: cancel) {
+                Text("Cancel").lineLimit(1).frame(maxWidth: .infinity)
+            }
+            .tint(.red)
+            .buttonStyle(.bordered)
+            .controlSize(.small)
         }
     }
 }

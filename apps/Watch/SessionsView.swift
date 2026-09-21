@@ -128,7 +128,7 @@ struct SessionView: View {
 
     @ViewBuilder private var status: some View {
         if recording {
-            RecordingBar(since: capture.since) { sessions.cancelRecording(key) }
+            RecordingBar { sessions.cancelRecording(key) }
         } else if sessions.busy.contains(key) {
             ProgressView().frame(width: 24, height: 24)
         } else if let failure = sessions.failures[key] {

@@ -16,8 +16,6 @@ final class Capture: ObservableObject {
     }
 
     @Published private(set) var owner: Owner?
-    /// When the microphone actually opened; nil while it is still opening.
-    @Published private(set) var since: Date?
     /// This recording ends itself at the silence after speech, so it can be locked open.
     @Published private(set) var endsOnSilence = false
     /// Locked open: the silence no longer ends it, only a press does.
@@ -132,7 +130,6 @@ final class Capture: ObservableObject {
             }
             guard arming else { recorder.cancel(); return }   // stopped while the microphone opened
             arming = false
-            since = Date()
             Hub.log("mic-open", ["owner": String(describing: owner)])
             opened()
         }
@@ -140,7 +137,6 @@ final class Capture: ObservableObject {
 
     private func reset() {
         owner = nil
-        since = nil
         onSilence = nil
         endsOnSilence = false
         locked = false
@@ -148,7 +144,7 @@ final class Capture: ObservableObject {
 
     /// One buffer of audio from the recorder.
     private func heard(_ level: Float, _ seconds: TimeInterval) {
-        guard let owner, since != nil, endsOnSilence else { return }
+        guard let owner, !arming, endsOnSilence else { return }   // nothing counts until the mic is open
         let wasHeard = endpoint.heard
         endpoint.hang = Self.hang
         let ended = endpoint.feed(level, seconds)

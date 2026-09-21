@@ -92,7 +92,7 @@ struct ChatView: View {
 
     @ViewBuilder private var status: some View {
         if recording {
-            RecordingBar(since: capture.since, cancel: chat.cancelRecording)
+            RecordingBar(cancel: chat.cancelRecording)
                 .id("recording")
         } else if chat.waiting {
             HStack {

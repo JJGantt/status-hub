@@ -51,7 +51,7 @@ struct SessionsView: View {
 }
 
 /// One conversation: the last prompt and the reply to it, the tool calls of the turn it is running,
-/// and a reply of his own. The bottom control (and double tap, bound to it alone) pages down while more
+/// and a reply of his own. The bottom control (and double tap, bound to it alone: a follow-up has no lock) pages down while more
 /// is below and records at the bottom; a tap anywhere on the text also records. The next press sends;
 /// a parked session is resumed with the words.
 struct SessionView: View {

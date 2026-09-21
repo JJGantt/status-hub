@@ -20,9 +20,13 @@ func snippet(_ s: String) -> AttributedString {
 /// on the right. The lock appears only on a recording that ends itself at the silence after speech,
 /// and holds it open until a press sends it; without it, Cancel keeps its place and the left half is
 /// empty. The stop control at the bottom edge is what says a recording is under way.
+///
+/// Until it is locked, the lock holds double tap, so the gesture that started the recording locks it
+/// and the next one — back on the bottom control — sends it.
 struct RecordingBar: View {
     let cancel: () -> Void
     @ObservedObject private var capture = Capture.shared
+    @Environment(\.onScreen) private var onScreen
 
     var body: some View {
         HStack(spacing: 8) {
@@ -34,6 +38,7 @@ struct RecordingBar: View {
                 .tint(capture.locked ? .orange : .gray)
                 .buttonStyle(.bordered)
                 .controlSize(.small)
+                .handGestureShortcut(.primaryAction, isEnabled: onScreen && capture.lockHoldsDoubleTap)
             } else {
                 Color.clear.frame(maxWidth: .infinity, maxHeight: 0)
             }
@@ -147,12 +152,14 @@ extension ScrollPosition {
     }
 }
 
-/// The one control a conversation page puts under double tap, at the bottom edge. What it does depends
-/// on where the page stands: pages down while more is below (a chevron, the text fading out under it),
-/// records at the bottom (a mic), and sends while recording (a stop). It never disappears and never
-/// hands the gesture to anything else. Two buttons trading the gesture at the bottom — a chevron, then
-/// the page-sized record button — was how a double tap there pressed the whole page, how a tap where the
-/// chevron had been landed in empty space, and how the view crept back up under it.
+/// The control a conversation page puts under double tap, at the bottom edge. What it does depends on
+/// where the page stands: pages down while more is below (a chevron, the text fading out under it),
+/// records at the bottom (a mic), and sends while recording (a stop). It never disappears. It gives the
+/// gesture up in one case only — to the recording bar's lock while a command records unlocked
+/// (`holdsDoubleTap`) — and exactly one binding is live at any moment. Two buttons trading the gesture
+/// by position at the bottom — a chevron, then the page-sized record button — was how a double tap there
+/// pressed the whole page, how a tap where the chevron had been landed in empty space, and how the view
+/// crept back up under it.
 struct BottomControl: View {
     enum Mode { case more, record, stop }
 
@@ -162,6 +169,8 @@ struct BottomControl: View {
 
     let mode: Mode
     let enabled: Bool
+    /// False while the recording bar's lock holds double tap instead.
+    var holdsDoubleTap = true
     let action: () -> Void
     @Environment(\.onScreen) private var onScreen
 
@@ -185,9 +194,9 @@ struct BottomControl: View {
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
-                // The page's only double-tap binding, and live only while the page is the one showing:
+                // Live only while the page is the one showing and the lock is not holding the gesture:
                 // every page stays alive in the TabView, and two live bindings leave the system to pick.
-                .handGestureShortcut(.primaryAction, isEnabled: onScreen && enabled)
+                .handGestureShortcut(.primaryAction, isEnabled: onScreen && enabled && holdsDoubleTap)
                 .disabled(!enabled)
                 // Clear of the page dots under it: a tap on those changes page, and in a simulator test
                 // one aimed at this control did.
@@ -227,6 +236,8 @@ struct PagedScroll<Content: View>: View {
     @Binding var atBottom: Bool
     /// Runs before the control pages: the prompt page lets go of the reply it was holding.
     var willPage: () -> Void = {}
+    /// The recording bar's lock holds double tap for now (`Capture.lockHoldsDoubleTap`).
+    var lockHoldsDoubleTap = false
     /// Starts a recording at the bottom, or sends the one under way.
     let record: () -> Void
     @ViewBuilder let content: () -> Content
@@ -253,7 +264,10 @@ struct PagedScroll<Content: View>: View {
             paging = false
             Hub.log("paged", scroll.fields(name))
         }
-        .overlay { BottomControl(mode: mode, enabled: mode != .record || canRecord, action: press) }
+        .overlay {
+            BottomControl(mode: mode, enabled: mode != .record || canRecord, holdsDoubleTap: !lockHoldsDoubleTap,
+                          action: press)
+        }
         .background(Color.black.ignoresSafeArea())
         #if targetEnvironment(simulator)
         .task { await autoPage() }

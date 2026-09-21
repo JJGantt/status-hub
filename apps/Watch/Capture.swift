@@ -20,6 +20,9 @@ final class Capture: ObservableObject {
     @Published private(set) var endsOnSilence = false
     /// Locked open: the silence no longer ends it, only a press does.
     @Published private(set) var locked = false
+    /// Double tap belongs to the recording bar's lock rather than the page's bottom control: a recording
+    /// that would end itself, not yet locked. Once locked it goes back to the bottom control, which sends.
+    var lockHoldsDoubleTap: Bool { endsOnSilence && !locked }
 
     /// Seconds of trailing silence that end an utterance: `watch_silence_s` in the hub's settings, read
     /// at every start and kept for the next, since a start does not wait on the hub.

@@ -1514,8 +1514,9 @@ has no WKWebView.
   draw the running command's tool calls under it, and what the model says between them in full, in
   plain text rather than the tool calls' grey monospace (`ActivityLines`). The hub stores none of those, so they show only
   while the page is watching and clear when the next command starts (`working`) or this one ends
-  (`done`). A tap anywhere on it, or the double-tap gesture, starts recording; the next tap sends.
-  Cancel throws the clip away.
+  (`done`). A tap anywhere on it, or the double-tap gesture, starts recording, which ends itself at the
+  silence after he speaks. A double tap during it locks it open and the next double tap sends; a tap
+  on the text or the stop sends at any point. Cancel throws the clip away.
 - **The sessions page** lists `/api/sessions` one row per conversation — running first, then parked,
   most recently active first within each, the order `n` counts in — and follows `/api/session-stream`.
   A tapped row opens its session on top of the whole row of pages (the `NavigationStack` is
@@ -1539,15 +1540,19 @@ has no WKWebView.
   until he scrolls or pages, re-aiming on every change in the content's height — a single jump on a
   cold launch lands short while the thread is still laying out. The thread is the newest 40 rows,
   about twenty exchanges.
-  Each page has one control at its bottom edge (`BottomControl`), and it is the only thing bound to
-  double tap (`handGestureShortcut`, live only while its page is the one showing — every page stays
-  alive in the TabView, and two live bindings leave the system to pick). It pages down while more is
-  below (a chevron; text fades out of a 28pt strip under it, and a page moves the last line showing
-  above the strip to the top edge of the screen), records at the bottom (a mic in the same spot), and
-  sends while recording (a stop). It never hides and never hands the gesture on. Handing it on was the
-  first design and it failed on his watch through build 23: at the bottom the chevron vanished and the
-  record button — the whole page of text — took double tap, so a double tap there pressed the whole
-  page, a tap where the chevron had been hit empty space, and the view crept back up under his finger.
+  Each page has one control at its bottom edge (`BottomControl`), and it holds double tap
+  (`handGestureShortcut`, live only while its page is the one showing — every page stays alive in the
+  TabView, and two live bindings leave the system to pick). It pages down while more is below (a
+  chevron; text fades out of a 28pt strip under it, and a page moves the last line showing above the
+  strip to the top edge of the screen), records at the bottom (a mic in the same spot), and sends while
+  recording (a stop). It never hides. **It gives the gesture up in exactly one state**: a command
+  recording that the silence would end and that is not locked, when the recording bar's lock holds it
+  (`Capture.lockHoldsDoubleTap`, read by both bindings so they cannot both be live). That is the only
+  handover, because handing the gesture on BY POSITION was the first design and it failed on his watch
+  through build 23: at the bottom the chevron vanished and the record button — the whole page of text —
+  took double tap, so a double tap there pressed the whole page, a tap where the chevron had been hit
+  empty space, and the view crept back up under his finger. The lock is a small button of its own,
+  handed the gesture by recording state, not by where the view stands.
   The control sits 9pt up, clear of the page dots, which change page when tapped. A finger tap anywhere
   on the text still records. Where the view stands comes from `onScrollGeometryChange` (`trackScroll`
   in `Watch/WatchUI.swift`).
@@ -1620,7 +1625,7 @@ has no WKWebView.
   press. That is what keeps it clear of the failure that made the phone's buttons press-only
   (`VOICE-ON-THE-PHONE.md`) — a VAD that cut commands mid-sentence and threw away clips it judged
   silent. The lock beside Cancel holds a recording open through any silence; the press still sends
-  it. A command the silence sent taps the wrist (`.success`) once the hub has enqueued it, since no
+  it. Double tap walks the three states: it starts the recording, locks it, then sends it. A command the silence sent taps the wrist (`.success`) once the hub has enqueued it, since no
   press told him it went; a pressed one does not. The level comes with each buffer from the tap, which is why the recorder is a tap and not
   AVAudioRecorder, whose meters answer only when asked on a timer. Every end logs `mic-end` with the
   numbers it decided on: tune the multiplier or the minimum from those, not by feel.

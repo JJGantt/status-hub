@@ -2,9 +2,10 @@ import SwiftUI
 import WatchKit
 
 /// The prompt page: the shared hub conversation on black. A reply opens at its top. The bottom control
-/// (and double tap, bound to it alone) pages down while more is below and records at the bottom; a tap
-/// anywhere on the thread also records. The next press sends (`PagedScroll`, shared with a session's
-/// page), and so does the silence after he speaks unless the recording is locked (`Capture`).
+/// (and double tap) pages down while more is below and records at the bottom; a tap anywhere on the
+/// thread also records (`PagedScroll`, shared with a session's page). The silence after he speaks sends
+/// the recording. During it double tap moves to the recording bar's lock, so the next double tap locks
+/// it open and the one after sends; a tap on the text or the stop sends at any point.
 struct ChatView: View {
     @EnvironmentObject private var chat: Chat
     @ObservedObject private var capture = Capture.shared
@@ -21,7 +22,8 @@ struct ChatView: View {
     var body: some View {
         ScrollViewReader { proxy in
             PagedScroll(name: "chat", recording: recording, canRecord: !chat.waiting, atBottom: $atBottom,
-                        willPage: { pinned = false }, record: chat.toggleRecording) {
+                        willPage: { pinned = false }, lockHoldsDoubleTap: recording && capture.lockHoldsDoubleTap,
+                        record: chat.toggleRecording) {
                 recordButton { thread }
                 status
             }

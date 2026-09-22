@@ -651,13 +651,17 @@ async function sstAhead() {
 // — so the number itself is bare. A sign as well would say the same thing twice.
 const TYPE_COLORS = { Offshore: '#34c759', 'Cross-shore': '#ffcc00', Onshore: '#ff3b30' };
 
-// WATER TEMPERATURE AS A COLOUR, cold blue to warm orange. The stops are the WETSUIT thresholds,
-// which is the only reading of "warm" that decides anything: boardshorts above 75F, a springsuit
-// around 62-68, a 4/3 near 55, a hood and gloves under 50. Interpolated between them rather than
-// stepped, so a degree of change shows. NO GREEN anywhere in it — green already means offshore wind
-// on the same screen.
-const WATER_STOPS = [[45, '#3a7bd5'], [55, '#5aa9e6'], [62, '#9fcfe8'], [68, '#e8e2d0'],
-                     [75, '#ffc65c'], [82, '#ff9f45'], [86, '#ff7a3c']];
+// WATER TEMPERATURE AS A COLOUR, cold blue to warm orange, spread across the range MAYPORT ITSELF
+// RUNS: 51F in February to 88F in July, measured (station MYPF1 in `water_readings`). A generic
+// wetsuit chart is the wrong scale here even though its thresholds are real — it spends most of its
+// range below 70F, which is January and February on this coast, and saturates by the mid 80s, so
+// May through September, the whole season he is in the water, comes out one flat colour. Anchored
+// on the local span instead, half the ramp falls in the 70s and 80s and a few degrees there show.
+//
+// Interpolated between the stops rather than stepped. NO GREEN anywhere in it and nothing that
+// reaches red — those two already mean offshore and onshore wind on the same screens.
+const WATER_STOPS = [[51, '#2f6fd0'], [60, '#4f9fe0'], [66, '#8fc6e6'], [72, '#dfe0d8'],
+                     [78, '#ffd066'], [83, '#ffab4a'], [88, '#ff7a3c']];
 function waterColor(f) {
   if (f == null || !Number.isFinite(f)) return null;
   const rgb = (h) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16));

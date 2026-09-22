@@ -7,7 +7,7 @@
 // two EventSources on one phone. wall.js scales a 1920x1080 canvas down to phone size; this page is
 // laid out at the phone's own size and has nothing to scale, so its paging lives in phone-home.js.
 import '../core.js';   // renders the REAL hub cards from /api/stream into the .rows
-import '../expand.js';   // tap the expand glyph on either heat map -> full-screen scrollable sheet
+import '../expand.js';   // tap what summarises a section -> its full-screen sheet
 import '../phone-home.js';   // this page's own middle -- the week, the sessions list, the conversation tail
 import '../alarmclock.js';   // rings on this page, since the iOS app is what has it open
 import '../audiotest.js';   // sound bench on the reports pane — which audio path survives Guided Access

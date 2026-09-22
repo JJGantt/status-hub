@@ -486,7 +486,12 @@ tick();
 // `lists` here the moment either changes, so a reminder added by voice is on the wall as it is
 // spoken. This is a wall — nobody is standing at it to notice a dead stream — so it goes through
 // liveStream, which judges the connection by whether the server's `ping` keeps arriving.
-liveStream('/api/list-stream', { lists: () => columns.forEach(load) });
+// The push is also passed on as `hub:lists`, for anything else on the page that shows dated items
+// (the phone's month calendar) — one stream per page, not one per card.
+liveStream('/api/list-stream', { lists: () => {
+  columns.forEach(load);
+  document.dispatchEvent(new CustomEvent('hub:lists'));
+} });
 
 // The phone's lists pane mounts itself: it is plain markup in the page, with no module of its own to
 // do it. The walls mount their column from their own page script, because they choose the endpoint.

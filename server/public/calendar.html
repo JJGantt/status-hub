@@ -8,18 +8,6 @@
      lists the modules this page runs, and is where you add or remove one. -->
 <script type="module" src="dist/calendar.js"></script>
 </head><body class="cal">
-<div class="calpage" id="calpage">
-  <header class="cal-head">
-    <button class="cal-nav" id="cal-prev" type="button" aria-label="Previous month">&#8249;</button>
-    <h1 class="cal-title" id="cal-title"></h1>
-    <button class="cal-nav" id="cal-next" type="button" aria-label="Next month">&#8250;</button>
-  </header>
-  <div class="cal-main">
-    <div class="cal-gridwrap">
-      <div class="cal-dow" id="cal-dow"></div>
-      <div class="cal-grid" id="cal-grid"></div>
-    </div>
-    <aside class="cal-agenda" id="cal-agenda"></aside>
-  </div>
-</div>
+<!-- cards/month.js builds the calendar inside this. -->
+<div class="calpage" id="calpage"></div>
 </body></html>

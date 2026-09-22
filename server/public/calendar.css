@@ -1,5 +1,6 @@
-/* The phone/desktop calendar page — everything it needs that app.css does not have. Loaded ONLY by
-   calendar.html (the TV wall has its own tv-calendar.css). Phone-first: compact grid with color
+/* The month calendar (cards/month.js) — everything it needs that app.css does not have. Loaded by
+   calendar.html and by the phone's home page, whose calendar sheet holds it (the TV wall has its own
+   tv-calendar.css). Phone-first: compact grid with color
    dots, agenda below; from 900px the cells grow chips and the agenda moves beside the grid. */
 
 body.cal{padding:12px}

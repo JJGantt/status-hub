@@ -100,8 +100,9 @@ export function mountNavbar() {
     tog.setAttribute('aria-label', 'Back to the wall');
     tog.onclick = () => { location.href = '/'; };
     left.appendChild(tog);
-  } else {
-    // Everywhere the navbar mounts except the calendar itself: the way IN to the calendar.
+  } else if (!document.body.classList.contains('phonehome')) {
+    // Everywhere the navbar mounts except the calendar itself and the phone's home page, where the
+    // calendar opens by tapping the day strip: the way IN to the calendar.
     const cal = document.createElement('button');
     cal.className = 'nav-toggle'; cal.type = 'button'; cal.innerHTML = CAL;
     cal.setAttribute('aria-label', 'Calendar');

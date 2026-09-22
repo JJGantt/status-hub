@@ -560,3 +560,11 @@ body.tv.phonehome #weightcard{display:none}
 body.tv.phonehome .sectsheet[data-sec="wt"] .ss-body{overflow-y:auto;padding:10px 12px 58px}
 body.tv.phonehome .sectsheet[data-sec="wt"] #weightcard{display:block;flex:0 0 auto;background:#151a20!important;
   border:1px solid #222a33;border-radius:12px}
+/* THE CALENDAR lives hidden under the day strip and is only ever seen in the sheet the strip opens
+   (expand.js, `cal`): the month, the day, the lists, one scrolling column of cards. */
+body.tv.phonehome #calsheet{display:none}
+body.tv.phonehome .sectsheet[data-sec="cal"] .ss-body{overflow-y:auto;padding:10px 12px 70px}
+body.tv.phonehome .sectsheet[data-sec="cal"] #calsheet{display:flex;flex-direction:column;gap:10px;flex:0 0 auto}
+body.tv.phonehome #calsheet .card{background:#151a20!important;border:1px solid #222a33;border-radius:12px}
+body.tv.phonehome #calsheet .calmonth{padding:12px}
+body.tv.phonehome #calsheet .daycardwrap{padding:12px 14px 14px}

@@ -1,5 +1,5 @@
 // expand.js — the phone's section sheets. Tapping the thing that summarises a section opens it full-screen:
-// the heat maps, the surf plots, the body figures, the weigh-in plot. The WHOLE delegation host is moved
+// the heat maps, the surf plots, the body figures, the weigh-in plot, the day strip. The WHOLE delegation host is moved
 // into the sheet (nutrition taps are delegated on #nutritionlog; workout taps on #workouts) so tapping a day
 // and the list's buttons keep working — the point of expanding is to make those EASIER to use, not disable
 // them. Elements are moved (and restored on close) so the live render + all handlers stay intact.
@@ -43,6 +43,11 @@ const SECTIONS = {
   // tapping the weigh-in plot over the food map, which is its summary. The card lives in the page's
   // markup hidden, so it renders on every frame and is simply MOVED here, like the rest.
   // `scroller` is what a drag moves under the finger: the plot scrolls with the heat maps.
+  // THE CALENDAR — the month, the day as a timeline, and every list — opens by tapping TODAY on the
+  // day strip, or the day named at its left edge. Every other day on the strip is a tap target of
+  // its own (`.ds-hit`, which opens that day in place), so those are `skip`ped rather than opening this.
+  cal: { host: '#ph-strip', move: ['#calsheet'], title: 'Calendar', cards: [],
+         tap: '.ds-scroll, .ds-here', skip: '.ds-hit', scroller: '.ds-scroll' },
   wt: { host: '#weightweeks', move: ['#weightcard'], title: 'Weight', cards: [maintviz],
         heat: '#maintviz .mv-scroll', tap: '#weightweeks', scroller: '.wp-scroll' },
 };
@@ -92,7 +97,19 @@ function openSheet(key) {
   els.forEach((el) => body.appendChild(el));
   document.body.classList.add('ss-open');
   openKey = key;
+  // For a section whose content re-reads on its own terms rather than from the status frame.
+  document.dispatchEvent(new CustomEvent('hub:sheetopen', { detail: key }));
   requestAnimationFrame(() => { sheet.classList.add('open'); repaint(key); loadHistory(); });
+}
+
+// Open a section by name — for a launch from outside the page (a widget tap), which has no element
+// to have tapped. False when this page has no such section.
+export function openSection(key) {
+  if (!SECTIONS[key]) return false;
+  if (openKey === key) return true;
+  if (openKey) closeSheet();
+  openSheet(key);
+  return openKey === key;
 }
 
 function closeSheet() {
@@ -120,8 +137,8 @@ function mount() {
   }
 }
 
-// TAP TO OPEN, on a thing that also scrolls sideways. The heat maps, the surf plots and the weigh-in plot
-// are horizontal scrollers, so the gesture that opens the sheet and the gesture that drags them start
+// TAP TO OPEN, on a thing that also scrolls sideways. The heat maps, the surf plots, the weigh-in plot
+// and the day strip are horizontal scrollers, so the gesture that opens the sheet and the gesture that drags them start
 // identically — a plain click handler turns every flick into an open. Bound on the HOST and delegated,
 // because the card rebuilds its innards on every broadcast and a listener on those would be thrown away
 // twice a minute.
@@ -144,6 +161,7 @@ function bindTap(host, key) {
   host.addEventListener('pointerup', (e) => {
     if (openKey) return;                                          // already in the sheet
     if (!e.target.closest || !e.target.closest(SECTIONS[key].tap)) return;
+    if (SECTIONS[key].skip && e.target.closest(SECTIONS[key].skip)) return;
     if (Math.abs(e.clientX - x) > 6 || Math.abs(e.clientY - y) > 6) return;
     const box = scrollerAt(e);
     if (box && Math.abs(box.scrollLeft - left) > 2) return;

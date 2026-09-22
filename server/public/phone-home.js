@@ -8,6 +8,8 @@
 import { esc, md, state } from './shared.js';
 import { mount } from './cards/dayline.js';
 import { mountStrip } from './cards/daystrip.js';
+import { mountMonth } from './cards/month.js';
+import { openSection } from './expand.js';
 import { mountSessions } from './cards/sessions.js';
 import { onThread, onPending, onActivity } from './voiceagent.js';
 import { loadHistory, onHistoryLoaded, pinRight } from './heathistory.js';
@@ -25,6 +27,15 @@ mount(null, {
   url: '/api/calendar?day=1&full=1&ahead=60',
   onload: (d) => { if (strip) strip.paint(d); },
 });
+
+// The month, in the calendar sheet the strip opens (expand.js, `cal`), above the day and the lists.
+// It re-reads on the page's one list stream (`hub:lists`, from cards/dayline.js) and whenever the
+// sheet opens, which is also what catches a push missed while the phone slept.
+const month = mountMonth(document.getElementById('calmonth'));
+if (month) {
+  document.addEventListener('hub:lists', month.load);
+  document.addEventListener('hub:sheetopen', (e) => { if (e.detail === 'cal') month.load(); });
+}
 
 // ---- the whole archive, in the two maps -----------------------------------
 //
@@ -294,7 +305,7 @@ onThread((row) => { if (!row) { resync(); return; } takeRow(row); settle(row); p
 
 // ---- the swipe panes -----------------------------------------------------
 //
-// [sessions] [home] [misc] [lists] [reports], landing on home — index 1, which is what
+// [sessions] [home] [misc] [reports], landing on home — index 1, which is what
 // `clientWidth` means here and what the reset returns to. The wall's version of this (wall.js) also
 // scales a 1920x1080 canvas down to fit; there is nothing to scale here — the page is laid out at the
 // phone's own size — so only the paging is left.
@@ -305,6 +316,8 @@ if (panes) {
   // the part of the hub it actually depicts rather than on whatever pane was last open — the due
   // widget is useless if tapping it drops you on the chat pane.
   window.__showPane = (name) => {
+    // The lists are in the calendar sheet here, not a pane of their own.
+    if (name === 'todo') return openSection('cal');
     const el = panes.querySelector(`.pane-${String(name).replace(/[^a-z]/g, '')}`);
     if (!el) return false;
     // scroll-snap owns the physics; setting scrollLeft to the pane's offset lands it exactly.

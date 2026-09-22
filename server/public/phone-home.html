@@ -2,6 +2,7 @@
 <meta name=viewport content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
 <title>Status Hub</title>
 <link rel="stylesheet" href="app.css">
+<link rel="stylesheet" href="calendar.css">
 <link rel="stylesheet" href="phone-home.css">
 <!-- One bundle per page, built by build.js from public/pages/phone-home.js — that file
      lists the modules this page runs, and is where you add or remove one. -->
@@ -20,7 +21,7 @@
      15-week one — because its maps scroll: the box decides what is on screen and the rest is a drag
      away, and a trim cannot carry the archive anyway (see heatPick in shared.js).
 
-     Swipe panes: [sessions] [home] [misc] [lists] [reports], landing on home. There is no
+     Swipe panes: [sessions] [home] [misc] [reports], landing on home. There is no
      chat pane — the hub conversation is on this page, and the navbar's microphone is how you answer
      it, so the pane left of home is the sessions view instead. -->
 <!-- TYPING TO THE HUB. The conversation is on the home page and the navbar's microphone answers it,
@@ -71,6 +72,14 @@
          height is left becomes more lanes. -->
     <div class="row-card ph-dayrow">
       <div class="card ph-daycard"><div class="ph-strip" id="ph-strip"></div></div>
+    </div>
+    <!-- THE CALENDAR, opened by tapping today on the strip above (expand.js, `cal`): the month
+         (cards/month.js), the day as a timeline (cards/dayline.js mounts #daycard itself), and every
+         list (cards/todo.js). Hidden here and moved into the sheet, so each keeps rendering. -->
+    <div id="calsheet">
+      <div class="card calmonth"><div id="calmonth"></div></div>
+      <div class="card daycardwrap"><div id="daycard"></div></div>
+      <div class="card todocard"><div id="todopane"></div></div>
     </div>
 
     <!-- FOOD and TRAINING, STACKED, with the body beside the workout half — the wall's arrangement.
@@ -176,13 +185,6 @@
   <div class="card statuscard"><div class="fit" id="tv-routing"></div></div>
 </section>
 
-<section class="pane pane-todo">
-  <!-- Today as a vertical TIMELINE — the dial's grammar, at phone scale (cards/dayline.js mounts
-       #daycard itself). It is here rather than on the home column because the home column's strip
-       is a glance and this is the one you work through. Then the lists themselves. -->
-  <div class="card daycardwrap"><div id="daycard"></div></div>
-  <div class="card todocard"><div id="todopane"></div></div>
-</section>
 
 
 <section class="pane pane-reports">

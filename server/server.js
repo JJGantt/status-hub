@@ -599,6 +599,21 @@ const liveBuoy = createLiveBuoy({
 });
 liveBuoy.start();
 
+// Seed both from what is already stored, so a deploy does not blank the live readings until the next
+// report — and a station that has gone quiet still shows its last reading, with its age.
+(async () => {
+  const since = new Date(Date.now() - 3 * 3600 * 1000).toISOString();
+  try {
+    const rows = await sb(`water_readings?station=eq.MYPF1&wind_kts=not.is.null&ts=gte.${encodeURIComponent(since)}`
+      + '&select=ts,wind_kts,wind_dir_deg,gust_kts&order=ts.desc&limit=40');
+    liveWind.seed(rows);
+  } catch (e) { console.log('[live-wind] seed failed:', e.message); }
+  try {
+    const rows = await sb(`wave_readings?ts=gte.${encodeURIComponent(since)}&select=*&order=ts.desc&limit=40`);
+    liveBuoy.seed(rows);
+  } catch (e) { console.log('[live-buoy] seed failed:', e.message); }
+})();
+
 // ---- the surf feed: what the surf app (surf-app repo, Gnarcast) reads ------------------------------
 // One payload: the surf card's own data, the live wind against the forecast, the buoys, and the
 // forecast's next twelve hours ready to paint. Served at /api/surf/live and PUSHED on

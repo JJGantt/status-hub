@@ -170,12 +170,22 @@ function createLiveBuoy({ store, onReading = () => {}, log = () => {} }) {
     };
   }
 
+  /// The newest reading per station, handed in at boot — see livewind's `seed`: a deploy must not
+  /// leave the sea blank until the next half-hourly report.
+  function seed(rows) {
+    for (const r of rows || []) {
+      const cur = latest.get(r.station);
+      if (!cur || r.ts > cur.ts) latest.set(r.station, { ...r, ts: new Date(r.ts).toISOString() });
+    }
+    for (const [id, r] of latest) if (!lastTs.has(id)) lastTs.set(id, r.ts);
+  }
+
   function start() {
     tick();
     setInterval(tick, TICK_MS);
   }
 
-  return { start, tick, view, blend };
+  return { start, tick, view, blend, seed };
 }
 
 module.exports = { createLiveBuoy, merge, table };

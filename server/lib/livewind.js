@@ -144,12 +144,22 @@ function createLiveWind({ store, onReading = () => {}, log = () => {} }) {
     return { ...c, forecast, delta_kts: forecast && c.avg30 ? r1(c.avg30.kts - forecast.kts) : null };
   }
 
+  /// Readings already stored, handed in at boot. A deploy empties this module's memory, and the
+  /// station goes quiet for hours at a time — without this the hub would have no wind at all until it
+  /// reports again, which is exactly when knowing the last reading and its age matters most.
+  function seed(rows) {
+    if (readings.length || !rows || !rows.length) return;
+    readings = rows.map((r) => ({ ts: new Date(r.ts).toISOString(), kts: r.wind_kts, gust: r.gust_kts, dir: r.wind_dir_deg }))
+      .sort((a, b) => (a.ts < b.ts ? 1 : -1));
+    lastTs = readings[0].ts;
+  }
+
   function start() {
     tick();
     setInterval(tick, TICK_MS);
   }
 
-  return { start, tick, current, view, readings: () => readings.slice() };
+  return { start, tick, current, view, seed, readings: () => readings.slice() };
 }
 
 module.exports = { createLiveWind, windType, parse, average };

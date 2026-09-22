@@ -91,7 +91,9 @@ final class Recorder {
         self.sink = nil
         engine.inputNode.removeTap(onBus: 0)
         engine.stop()
-        try? AVAudioSession.sharedInstance().setActive(false)
+        // Hand the session back rather than just dropping it, so nothing is left looking like an app
+        // holding the audio route.
+        try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
         return sink
     }
 }

@@ -28,9 +28,11 @@ final class Capture: ObservableObject {
     /// at every start and kept for the next, since a start does not wait on the hub.
     private static var hang: TimeInterval = 2
 
-    /// Audio nobody has spoken in, after which the listener drops its segment and starts another rather
-    /// than growing one file for as long as the room stays quiet (the phone's IDLE_CYCLE_MS).
-    private static let idleCycle: TimeInterval = 30
+    /// Audio nobody has spoken in, after which a recording is closed rather than left holding the
+    /// microphone — and with it the mute on every room mic. The listener starts another segment instead
+    /// of growing one file for as long as the room stays quiet (the phone's IDLE_CYCLE_MS). A locked
+    /// recording is held open deliberately, so it is exempt.
+    private static let unspoken: TimeInterval = 30
 
     private let recorder = Recorder()
     /// Started, microphone not open yet. A stop in this window cancels instead of sending.
@@ -145,24 +147,31 @@ final class Capture: ObservableObject {
         locked = false
     }
 
-    /// One buffer of audio from the recorder.
+    /// One buffer of audio from the recorder. Every recording is measured, even one that only a press
+    /// can end, because the cap on a recording nobody speaks into protects all of them.
     private func heard(_ level: Float, _ seconds: TimeInterval) {
-        guard let owner, !arming, endsOnSilence else { return }   // nothing counts until the mic is open
+        guard let owner, !arming else { return }   // nothing counts until the mic is open
         let wasHeard = endpoint.heard
         endpoint.hang = Self.hang
         let ended = endpoint.feed(level, seconds)
         segment += seconds
         if endpoint.heard && !wasHeard { spokeAt = Date() }
-        if owner == .listener {
-            if ended {
-                logEnd("silence")
-                cutUtterance()
-            } else if !endpoint.heard && segment >= Self.idleCycle {
+        if !endpoint.heard && !locked && segment >= Self.unspoken {
+            if owner == .listener {
                 recorder.drop()
                 endpoint.restart()
                 segment = 0
+            } else {
+                logEnd("unspoken")
+                cancel()
             }
-        } else if ended && !locked {
+            return
+        }
+        guard endsOnSilence, ended else { return }
+        if owner == .listener {
+            logEnd("silence")
+            cutUtterance()
+        } else if !locked {
             logEnd("silence")
             onSilence?()
         }
@@ -200,7 +209,7 @@ final class Capture: ObservableObject {
         Hub.log("mic-end", ["reason": reason, "owner": owner.map { String(describing: $0) } ?? "", "hang": endpoint.hang,
                             "floor": endpoint.floor.isFinite ? Double(endpoint.floor) : -1,
                             "threshold": Double(endpoint.threshold), "peak": Double(endpoint.peak),
-                            "seconds": segment])
+                            "spoken": endpoint.spoken, "seconds": segment])
     }
 
     private static func readHang() async {
@@ -224,13 +233,21 @@ final class Capture: ObservableObject {
 /// in voiceagent.js): the room's floor is the quietest buffer so far, speech is anything 2.5× above it
 /// (and above 0.02 whatever the floor), and once speech has been heard, `hang` seconds below that line
 /// end it. Before any speech nothing ends — that is the leeway at the start — so a recording whose
-/// speech never crossed the line is not cut short or thrown away; it simply waits for a press, as
-/// every recording did before it could end itself.
+/// speech never crossed the line is not cut short or thrown away; it waits for a press, or for the cap
+/// on a recording nobody speaks into.
 struct Endpointer {
+    /// Speech has to last this long, unbroken by `hang` of quiet, before an utterance has begun. **One
+    /// buffer over the line is not speech**: a recording nobody spoke into ran 88 seconds on his watch,
+    /// ended on a peak of 0.021 against a 0.02 line, and went up as "Thank you. Thank you." — which is
+    /// what Whisper writes for silence, and the worker then ran it.
+    static let minSpeech: TimeInterval = 0.4
+
     var hang: TimeInterval
     private(set) var floor: Float = .infinity
     private(set) var peak: Float = 0
     private(set) var heard = false
+    /// Seconds over the line in the run of speech being counted now.
+    private(set) var spoken: TimeInterval = 0
     private var quiet: TimeInterval = 0
 
     init(hang: TimeInterval) { self.hang = hang }
@@ -242,12 +259,16 @@ struct Endpointer {
         floor = min(floor, level)
         peak = max(peak, level)
         if level >= threshold {
-            heard = true
+            spoken += seconds
+            if spoken >= Self.minSpeech { heard = true }
             quiet = 0
             return false
         }
-        guard heard else { return false }
         quiet += seconds
+        guard heard else {
+            if quiet >= hang { spoken = 0 }   // a gap ends a run of speech too short to have counted
+            return false
+        }
         return quiet >= hang
     }
 
@@ -255,6 +276,7 @@ struct Endpointer {
     mutating func restart() {
         heard = false
         quiet = 0
+        spoken = 0
         peak = 0
     }
 }

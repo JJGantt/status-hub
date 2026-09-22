@@ -163,13 +163,26 @@ been heard, `watch_silence_s` below that line ends it exactly as a press would. 
 Trailing silence in the hub's Settings; unset, it is 2 seconds. It is read at every start and kept for
 the next, since a start does not wait on the hub.
 
-**Nothing ends before speech crosses the line, and the endpoint never discards anything.** A
-recording whose speech never registers simply waits for the press. That is what keeps it clear of the
-failure that made the phone's buttons press-only (`VOICE-ON-THE-PHONE.md`): a VAD that cut commands
-mid-sentence and threw away clips it judged silent.
+**Nothing ends before speech crosses the line**, and a recording whose speech never registers is
+never cut short mid-sentence. That is what keeps it clear of the failure that made the phone's buttons
+press-only (`VOICE-ON-THE-PHONE.md`): a VAD that cut commands mid-sentence and threw away clips it
+judged silent.
 
-Every end logs `mic-end` with the numbers it decided on (floor, threshold, peak, hang, seconds of
-audio). Tune the multiplier or the minimum from those, not by feel.
+**One buffer over the line is not speech.** Speech has to last `Endpointer.minSpeech` (0.4s), unbroken
+by a hang of quiet, before the utterance counts as begun. Without that a single blip of room noise
+arms the endpoint, which is how a recording nobody spoke into ran 88 seconds on his watch, ended on a
+peak of 0.021 against a 0.02 line, and went up as "Thank you. Thank you." — what Whisper writes for
+silence, which the worker then ran as a command.
+
+**A recording nobody speaks into is closed, not held.** After `Capture.unspoken` (30s) of audio with
+no speech in it, a command or a follow-up is cancelled and its clip thrown away, and the listener
+starts a fresh segment. The microphone and the mute it puts on every room mic are not left open
+because a recording started by accident — which the Smart Stack and the complication make easy. A
+**locked** recording is exempt: holding it open through silence is exactly what the lock is for.
+
+Every end logs `mic-end` with the numbers it decided on: `reason` (`silence` or `unspoken`), floor,
+threshold, peak, seconds spoken and seconds of audio. Tune the multiplier, the minimum or the minimum
+speech from those, not by feel.
 
 ### The recording bar, the lock, and double tap
 
@@ -319,7 +332,7 @@ wrist. Fly keeps only the recent lines, so read it soon.
 | `control` | a press of the bottom control, with its mode |
 | `record` | a finger tap on the text |
 | `record-refused`, `mic-refused`, `mic-failed`, `mic-open` | why a recording did or did not start |
-| `mic-end` | what the silence endpoint saw when it ended a recording |
+| `mic-end` | what the endpoint saw when a recording ended, and why (`silence`, `unspoken`) |
 | `mic-lock` | the lock toggled |
 | `listener-sent`, `listener-failed` | an always-on utterance going up |
 | `stream-open`, `stream-end`, `stream-error` | the event streams |

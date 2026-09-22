@@ -49,13 +49,16 @@ wrong day.
 It is committed, but XcodeGen rewrites it from `apps/project.yml`. Edit `project.yml` and run
 `xcodegen generate`; anything changed in Xcode's project editor is lost at the next generate.
 
-## A build made on this Mac cannot receive push
+## A build signed for development cannot receive push
 
-This Mac's keychain holds only an Apple Development identity, so a local build carries
-`aps-environment: development` and registers a **sandbox** APNs token — which the hub, sending to
-the production gateway, answers with `BadDeviceToken`. The distribution certificate exists only in
-this repo's GitHub secrets, so a build meant to receive real notifications has to come from
-`ios-adhoc.yml` or `ios-testflight.yml`. Local builds are for iterating on UI.
+A build signed with an Apple Development identity carries `aps-environment: development` and
+registers a **sandbox** APNs token — which the hub, sending to the production gateway, answers with
+`BadDeviceToken`. So a build meant to receive real notifications has to be signed for DISTRIBUTION.
+This repo's distribution certificate exists only in its GitHub secrets (`ios-adhoc.yml`,
+`ios-testflight.yml`). The Mac now holds a second one — Gnarcast's, in the `gnarcast-build` keychain
+(surf-app `tools/testflight.sh`), which archives, signs and uploads to TestFlight from this Mac in
+about three minutes; it is a team certificate, so StatusHub could be shipped the same way, which has
+not been tried yet.
 
 **The build machines sign with one permanent development certificate** (secrets `IOS_DEV_P12` /
 `IOS_DEV_P12_PASSWORD`, local copy `~/.appstoreconnect/private_keys/statushub-ci-development.p12`),
@@ -73,9 +76,10 @@ is how builds 1 and 2 sat unused.
 
 ## Checking the Swift compiles, on this Mac
 
-Xcode 26 ships without the iOS and watchOS **device platforms**, so nothing builds for a device here.
-Do not run `xcodebuild -downloadPlatform` to fix that — it pulls the multi-GB simulator runtime,
-which has filled this disk before; the device platforms come from Xcode → Settings → Components.
+Xcode 26.6 here has the iOS and watchOS **device platforms**: surf-app builds for
+`generic/platform=iOS` and archives for TestFlight on this Mac. Never run `xcodebuild -downloadPlatform`
+— it pulls the multi-GB simulator runtime, and this disk has about 6GB free; a missing platform comes
+from Xcode → Settings → Components.
 
 When a watchOS simulator runtime is installed (`xcrun simctl list runtimes`), the watch app and its
 extension build for the simulator with no signing, which proves the Info.plist, assets, embedding and

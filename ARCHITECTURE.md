@@ -212,8 +212,8 @@ Produce tracking rides on nutrition rather than its own table: `nutrition_entrie
   `/api/voice-command` like the phone's microphone), with the running command's tool calls and
   in-between text live; the nutrition card's pace rings
   over today's log; and the home wall's rest clocks over today's sets. A complication and the Record control (watchOS 26, which an Ultra's
-  Action button can run) open it straight into recording. See
-  [docs/HUB-INTERNALS.md](docs/HUB-INTERNALS.md) §9c.
+  Action button can run) open it straight into recording, and a command ends itself at the silence
+  after it. See [docs/WATCH.md](docs/WATCH.md).
 - **ESP32** — the voice mic (see §5).
 - **iPhone push** — native APNs notifications (see §7).
 

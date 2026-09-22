@@ -788,4 +788,4 @@ it settles, and on the same answer for the same geometry whatever was drawn the 
 
 `ARCHITECTURE.md` is the ecosystem view — it covers voice-pipeline, data-layer, devices and hosting
 too, and lives here because this is the most active repo. `docs/HUB-INTERNALS.md` is the map of this
-server and app. `docs/TODO.md` is the open-work list.
+server and app. `docs/WATCH.md` is the watch app. `docs/TODO.md` is the open-work list.

@@ -647,6 +647,24 @@ async function sstAhead() {
   return sstCache.rows;
 }
 
+// WIND, AS ONE HUE BY SPEED. The rating band owns the traffic light and the size band owns white
+// through blue, so the wind band takes the hue neither uses: pale pink when it is calm, deep magenta
+// when it is howling. Direction is not in the colour — it is two words in the middle of the watch,
+// where it can say "Onshore" rather than be decoded.
+const WIND_RAMP = [[0, [247, 214, 236]], [6, [240, 107, 192]], [10, [214, 31, 142]],
+                   [14, [156, 15, 102]], [20, [94, 5, 64]]];
+function windColor(kts) {
+  if (kts == null) return null;
+  const v = Math.max(0, Math.min(20, kts));
+  let [lo, hi] = [WIND_RAMP[0], WIND_RAMP[WIND_RAMP.length - 1]];
+  for (let i = 0; i < WIND_RAMP.length - 1; i++) {
+    if (v >= WIND_RAMP[i][0] && v <= WIND_RAMP[i + 1][0]) { lo = WIND_RAMP[i]; hi = WIND_RAMP[i + 1]; break; }
+  }
+  const t = hi[0] === lo[0] ? 0 : (v - lo[0]) / (hi[0] - lo[0]);
+  const c = lo[1].map((x, i) => Math.round(x + (hi[1][i] - x) * t));
+  return '#' + c.map((x) => x.toString(16).padStart(2, '0')).join('');
+}
+
 // THE HEAT MAP'S SIZE COLOURS, for a snapshot's own rows. `/api/surf/history` builds the same ramp
 // over the bands present in ITS window — flat white up to a foot, then the blue ramp by height — and
 // this repeats that over the forecast's, so a colour means the same size wherever the app draws it.
@@ -706,6 +724,7 @@ async function surfLive() {
       ft: r.sMin == null ? null : `${r.sMin}-${r.sMax}${r.sPlus ? '+' : ''}`,
       size_color: sizeColor(r),
       wind_kts: r.wSpd == null ? null : Math.round(r.wSpd), wind_type: r.wType || null,
+      wind_color: windColor(r.wSpd),
     }));
 
   // WATER: measured by the buoys right now, and the marine model's next day beside it, at the hours

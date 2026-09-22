@@ -161,7 +161,9 @@ extension ScrollPosition {
 /// pressed the whole page, how a tap where the chevron had been landed in empty space, and how the view
 /// crept back up under it.
 struct BottomControl: View {
-    enum Mode { case more, record, stop }
+    /// `glyph` is home's: the state of the microphone and the command drawn in this same spot, since
+    /// that page has one indicator and it is here.
+    enum Mode: Equatable { case more, record, stop, glyph(String, Color), working }
 
     /// The strip along the screen's bottom edge that text fades out of while the chevron shows. Text
     /// scrolls to the very edge, so without it the chevron always sits on some line.
@@ -172,6 +174,8 @@ struct BottomControl: View {
     /// False while the recording bar's lock holds double tap instead.
     var holdsDoubleTap = true
     let action: () -> Void
+    /// Held rather than pressed. Home engages always-on listening this way, since the press records.
+    var onHold: (() -> Void)?
     @Environment(\.onScreen) private var onScreen
 
     var body: some View {
@@ -186,20 +190,25 @@ struct BottomControl: View {
                         .allowsHitTesting(false)
                 }
                 Button(action: action) {
-                    Image(systemName: symbol)
-                        .font(.system(size: mode == .more ? 16 : 13, weight: .semibold))
-                        .foregroundColor(mode == .stop ? .red : .gray)
-                        .opacity(enabled ? 1 : 0.4)
-                        .frame(width: 44, height: 18)
-                        .contentShape(Rectangle())
+                    Group {
+                        if mode == .working {
+                            ProgressView().controlSize(.mini)
+                        } else {
+                            Image(systemName: symbol)
+                                .font(.system(size: mode == .more ? 16 : 13, weight: .semibold))
+                                .foregroundColor(colour)
+                        }
+                    }
+                    .opacity(enabled ? 1 : 0.4)
+                    .frame(width: 44, height: 18)
+                    .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
+                .onLongPressGesture(minimumDuration: 0.6) { onHold?() }
                 // Live only while the page is the one showing and the lock is not holding the gesture:
                 // every page stays alive in the TabView, and two live bindings leave the system to pick.
                 .handGestureShortcut(.primaryAction, isEnabled: onScreen && enabled && holdsDoubleTap)
                 .disabled(!enabled)
-                // Clear of the page dots under it: a tap on those changes page, and in a simulator test
-                // one aimed at this control did.
                 .padding(.bottom, 9)
             }
         }
@@ -212,6 +221,16 @@ struct BottomControl: View {
         case .more: "chevron.compact.down"
         case .record: "mic.fill"
         case .stop: "stop.fill"
+        case .glyph(let name, _): name
+        case .working: ""
+        }
+    }
+
+    private var colour: Color {
+        switch mode {
+        case .stop: .red
+        case .glyph(_, let colour): colour
+        default: .gray
         }
     }
 }

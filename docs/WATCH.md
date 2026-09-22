@@ -21,7 +21,9 @@ build), so a fix that has not been installed is not mistaken for one that failed
 ## Pages
 
 Five, swiped left to right: **sessions · home · prompt · nutrition · workout**. The app opens on home.
-`RootView` in `StatusHubWatchApp.swift` holds them in a paged `TabView` inside a `NavigationStack`.
+`RootView` in `StatusHubWatchApp.swift` holds them in a paged `TabView` inside a `NavigationStack`,
+with the page dots off (`indexDisplayMode: .never`) — a strip of screen spent saying what a swipe
+already says.
 
 A page loads when it comes on screen and holds its event stream open only while it is showing
 (`follow()`), reloading after every reconnect, since a change may have gone by. `Hub.listen` reads all
@@ -38,12 +40,11 @@ to what is happening now, over the always-on listening toggle. While a command r
 and the worker's newest step; otherwise the newest reply, which opens the prompt page when tapped. It
 is the page being built out, so expect it to change.
 
-**It draws no clock, and the one it cannot draw is the system's.** watchOS puts the time in the top
-right of every app, and nothing hides it: the invisible-`VideoPlayer` trick that is passed around does
-nothing on watchOS 26.5 — measured three ways, as a background, as a full-size overlay at 0.001 opacity
-and with a real looping clip playing. What DOES work is a toolbar item: `ToolbarItem(.topBarTrailing)`
-moves the clock to the middle of the strip and gives the top right to the app. It is scoped to this
-page, so the prompt page keeps its clock where it was.
+**The system's clock is left alone.** watchOS puts the time in the top right of every app and nothing
+hides it — the invisible-`VideoPlayer` trick that is passed around does nothing on watchOS 26.5,
+measured three ways (as a background, as a full-size overlay at 0.001 opacity, and with a real looping
+clip playing). A `ToolbarItem` does move it, but it moves it to the LEFT of the strip rather than the
+middle, so the page draws no clock and puts nothing in the toolbar.
 
 It records exactly as the prompt page does — the same `Chat`, the same microphone, the same
 `CommandStatus` row (recording bar, the wait with Cancel, or Retry) and the same three-step double tap
@@ -51,8 +52,8 @@ It records exactly as the prompt page does — the same `Chat`, the same microph
 while either is showing. Its bottom control holds double tap on the same terms as a conversation page
 (§ Double tap and scrolling); there is nothing to page, so it only records and sends.
 
-**The microphone's whole state is one glyph**, in that top-right slot, so what the watch is doing can
-be read at a glance and in one place:
+**The microphone's whole state is one glyph, and it is the control at the bottom edge** — the state is
+drawn in the spot that acts on it, and the page has no second indicator:
 
 | | |
 |---|---|
@@ -62,11 +63,11 @@ be read at a glance and in one place:
 | red `lock.fill` | that recording locked open |
 | a spinner | the hub has it: transcribing, then running it |
 
-A tap on it engages or drops always-on listening. During a recording it does nothing: the recording
-has its own controls.
+A press records, and sends what is recording, exactly as the mic and the stop do on every other page.
+A **hold** engages or drops always-on listening.
 
-**Nothing else on the page says any of that.** The spinner is in the glyph rather than beside the
-text, and there is no Retry here — a command that failed is picked up on the prompt page, which shows
+**Nothing else on the page says any of that.** The spinner is the glyph rather than a second thing
+beside the text, and there is no Retry here — a command that failed is picked up on the prompt page, which shows
 the whole of it. Under the conversation there is the recording bar while a command records (the lock
 and Cancel), Cancel alone across the width while the hub has it, and nothing otherwise. With the wrist down and the app still showing (`isLuminanceReduced`), the
 conversation dims.

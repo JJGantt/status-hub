@@ -80,7 +80,8 @@ struct RootView: View {
                 NutritionView().tag(Page.nutrition)
                 WorkoutView().tag(Page.workout)
             }
-            .tabViewStyle(.page)
+            // No page dots: they are a strip of screen spent saying what a swipe already says.
+            .tabViewStyle(.page(indexDisplayMode: .never))
             .navigationDestination(for: String.self) { key in SessionView(key: key) }
         }
         .onOpenURL { url in

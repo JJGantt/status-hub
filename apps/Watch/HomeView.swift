@@ -27,15 +27,14 @@ struct HomeView: View {
         .padding(.horizontal, 8)
         .padding(.bottom, BottomControl.fade)   // clear of the bottom control
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        // The one indicator is the control at the bottom edge: what the microphone and the command are
+        // doing is drawn in the spot that acts on them.
         .overlay {
-            BottomControl(mode: recording ? .stop : .record, enabled: recording || !chat.waiting,
-                          holdsDoubleTap: !(recording && capture.lockHoldsDoubleTap), action: press)
+            BottomControl(mode: mode, enabled: recording || !chat.waiting,
+                          holdsDoubleTap: !(recording && capture.lockHoldsDoubleTap), action: press,
+                          onHold: { if !recording { chat.toggleListening() } })
         }
         .background(Color.black.ignoresSafeArea())
-        // The state glyph goes in the toolbar, which moves the system clock to the middle of the strip
-        // and leaves the top right — the only way to put anything in that strip, since watchOS draws the
-        // time over every app and offers no way to hide it.
-        .toolbar { ToolbarItem(placement: .topBarTrailing) { state } }
         .recordsWhenAsked()
     }
 
@@ -53,30 +52,14 @@ struct HomeView: View {
         }
     }
 
-    /// What the microphone and the command are doing, in one glyph, wherever the page is looked at:
-    /// idle, always-on listening, recording a command the silence will end, that recording locked open,
-    /// or — as the spinner itself — the hub transcribing and running what was sent. A tap engages or
-    /// drops always-on listening; during a recording it does nothing, since the recording has its own
-    /// controls.
-    private var state: some View {
-        Button(action: { if !recording { chat.toggleListening() } }) {
-            if chat.waiting {
-                ProgressView().controlSize(.mini)
-            } else {
-                Image(systemName: symbol).foregroundColor(colour)
-            }
-        }
-        .buttonStyle(.plain)
-    }
-
-    private var symbol: String {
-        if recording { return capture.locked ? "lock.fill" : "mic.fill" }
-        return capture.listens ? "waveform" : "waveform.slash"
-    }
-
-    private var colour: Color {
-        if recording { return .red }
-        return capture.listens ? .orange : .gray
+    /// What the microphone and the command are doing, in one glyph at the bottom edge: idle, always-on
+    /// listening, recording a command the silence will end, that recording locked open, or — as the
+    /// spinner itself — the hub transcribing and running what was sent. A press records or sends, as it
+    /// does on every page; a hold engages or drops always-on listening.
+    private var mode: BottomControl.Mode {
+        if recording { return .glyph(capture.locked ? "lock.fill" : "mic.fill", .red) }
+        if chat.waiting { return .working }
+        return .glyph(capture.listens ? "waveform" : "waveform.slash", capture.listens ? .orange : .gray)
     }
 
     /// His words while the hub works on them, with the worker's newest step under them; otherwise the

@@ -110,6 +110,43 @@ enum HubError: LocalizedError {
 
 /// The hub calls the watch makes. Same host and header as the phone's native calls.
 enum Hub {
+    /// How long a call waits for the watch to have any connection before it fails. When the phone goes
+    /// off or out of range the watch has no route at all until it brings up its own Wi-Fi or cellular,
+    /// and a request made in that gap fails on the spot under URLSession's defaults.
+    static let connectionWait: TimeInterval = 60
+
+    /// Waits for a connection instead of failing. `timeoutIntervalForResource` is the only limit that
+    /// applies while a task waits, so it is the wait plus the longest call (60s: a clip being
+    /// transcribed, a reply the hub holds open).
+    private static let session: URLSession = {
+        let c = URLSessionConfiguration.default
+        c.waitsForConnectivity = true
+        c.timeoutIntervalForResource = connectionWait + 60
+        return URLSession(configuration: c)
+    }()
+
+    /// The same with no overall limit, for the event streams, which stay open as long as their page is
+    /// showing. A stream opened with no connection simply starts when one arrives.
+    private static let streamSession: URLSession = {
+        let c = URLSessionConfiguration.default
+        c.waitsForConnectivity = true
+        return URLSession(configuration: c)
+    }()
+
+    /// Sends once more when the connection dropped mid-request, which is what the switch from the phone
+    /// to the watch's own radio does to a request already on the wire; the resend waits for the new
+    /// route. Safe for every call here: a command and a follow-up carry a `client_msg_id` the hub
+    /// answers a resend with, and the rest are reads, a log line, or setting a value. `note` is off for
+    /// the log's own post, so a resent log line does not log another.
+    private static func resending<T>(note: Bool = true, _ send: () async throws -> T) async throws -> T {
+        do {
+            return try await send()
+        } catch let e as URLError where e.code == .networkConnectionLost {
+            if note { log("resend") }
+            return try await send()
+        }
+    }
+
     /// The conversation every surface shows, scoped by the hub to its current context, in whichever
     /// mode (hub or agent) is active.
     static func thread() async throws -> [Message] {
@@ -150,7 +187,7 @@ enum Hub {
         }
         var r = try request("/api/voice-command?" + query, method: "POST", timeout: 60)
         r.setValue("audio/mp4", forHTTPHeaderField: "Content-Type")
-        let (data, resp) = try await URLSession.shared.upload(for: r, fromFile: clip.url)
+        let (data, resp) = try await resending { try await session.upload(for: r, fromFile: clip.url) }
         try await check(resp)
         return try JSONDecoder().decode(Heard.self, from: data)
     }
@@ -261,15 +298,15 @@ enum Hub {
     /// A server-sent event stream, open until the hub or the network drops it. The hub pings every
     /// 25s, so a minute without a byte is a dead connection rather than a quiet one.
     static func stream(_ path: String) async throws -> URLSession.AsyncBytes {
-        let (bytes, resp) = try await URLSession.shared.bytes(for: try request(path, timeout: 60))
+        let (bytes, resp) = try await streamSession.bytes(for: try request(path, timeout: 60))
         try await check(resp)
         return bytes
     }
 
     private static func call(_ path: String, method: String = "GET", body: [String: Any]? = nil,
                              timeout: TimeInterval = 20) async throws -> Data {
-        let (data, resp) = try await URLSession.shared.data(for: try request(path, method: method, body: body,
-                                                                              timeout: timeout))
+        let r = try request(path, method: method, body: body, timeout: timeout)
+        let (data, resp) = try await resending(note: path != "/api/clientlog") { try await session.data(for: r) }
         try await check(resp)
         return data
     }

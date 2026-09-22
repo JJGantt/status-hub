@@ -275,6 +275,17 @@ watch app is installed (`sessionWatchStateDidChange` — context sent before tha
 every cookie change. The watch keeps it in its own Keychain and, whenever it has none, asks with a
 message, which wakes the phone app in the background. A 401 drops the stored token and asks again.
 
+## It waits for a connection
+
+With the phone off or out of range the watch has no route at all until it brings up its own Wi-Fi or
+cellular, and the phone keeps carrying traffic for a few seconds while it shuts down — so a request
+can start on the phone's link and lose it mid-flight. Every call goes through `Hub.session`, which
+sets `waitsForConnectivity`: a request made in the gap waits up to `Hub.connectionWait` (60s) for a
+route instead of failing on the spot, and one whose connection drops mid-flight is sent once more
+(`resending`), which is safe because commands and follow-ups carry a `client_msg_id`. The event
+streams use `streamSession`, the same with no overall limit. `URLSession.shared` fails at once with
+no connection, so a new call must not use it.
+
 ## It logs what it does to the hub
 
 `Hub.log` posts to `/api/clientlog`, which prints one `[clientlog]` line per event:
@@ -292,6 +303,7 @@ wrist. Fly keeps only the recent lines, so read it soon.
 | `mic-lock` | the lock toggled |
 | `listener-sent`, `listener-failed` | an always-on utterance going up |
 | `stream-open`, `stream-end`, `stream-error` | the event streams |
+| `resend` | a call's connection dropped mid-flight and it was sent again |
 | `frame` | each stream frame for the session on screen |
 
 ## Running it in the simulator

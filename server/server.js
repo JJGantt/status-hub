@@ -647,22 +647,17 @@ async function sstAhead() {
   return sstCache.rows;
 }
 
-// WIND, AS ONE HUE BY SPEED. The rating band owns the traffic light and the size band owns white
-// through blue, so the wind band takes the hue neither uses: pale pink when it is calm, deep magenta
-// when it is howling. Direction is not in the colour — it is two words in the middle of the watch,
-// where it can say "Onshore" rather than be decoded.
-const WIND_RAMP = [[0, [247, 214, 236]], [6, [240, 107, 192]], [10, [214, 31, 142]],
-                   [14, [156, 15, 102]], [20, [94, 5, 64]]];
-function windColor(kts) {
+// WIND AS A SIGNED NUMBER, which says strength and direction in one glyph: OFFSHORE is positive, the
+// wind that holds a wave up, ONSHORE negative, the wind that pulls it apart. Cross-shore takes no sign
+// — it is neither, and a sign would claim it was. A colour band could not carry the sign at all, which
+// is why the wind is written rather than shaded.
+const TYPE_COLORS = { Offshore: '#34c759', 'Cross-shore': '#ffcc00', Onshore: '#ff3b30' };
+function windLabel(kts, type) {
   if (kts == null) return null;
-  const v = Math.max(0, Math.min(20, kts));
-  let [lo, hi] = [WIND_RAMP[0], WIND_RAMP[WIND_RAMP.length - 1]];
-  for (let i = 0; i < WIND_RAMP.length - 1; i++) {
-    if (v >= WIND_RAMP[i][0] && v <= WIND_RAMP[i + 1][0]) { lo = WIND_RAMP[i]; hi = WIND_RAMP[i + 1]; break; }
-  }
-  const t = hi[0] === lo[0] ? 0 : (v - lo[0]) / (hi[0] - lo[0]);
-  const c = lo[1].map((x, i) => Math.round(x + (hi[1][i] - x) * t));
-  return '#' + c.map((x) => x.toString(16).padStart(2, '0')).join('');
+  const n = Math.round(kts);
+  if (type === 'Offshore') return `+${n}`;
+  if (type === 'Onshore') return `-${n}`;
+  return `${n}`;
 }
 
 // THE HEAT MAP'S SIZE COLOURS, for a snapshot's own rows. `/api/surf/history` builds the same ramp
@@ -697,9 +692,8 @@ async function surfLive() {
       ft: r.sMin == null ? null : `${r.sMin}-${r.sMax}`,
       wind_kts: r.wSpd == null ? null : Math.round(r.wSpd), wind_type: r.wType || null,
     }));
-  // Wind TYPE wears one colour everywhere the app draws it: offshore is what grooms a wave, onshore
-  // what breaks one up.
-  const TYPE_COLORS = { Offshore: '#34c759', 'Cross-shore': '#ffcc00', Onshore: '#ff3b30' };
+  // Wind TYPE wears one colour everywhere the app draws it (TYPE_COLORS above): offshore is what
+  // grooms a wave, onshore what breaks one up.
   const wind = liveWind.view(snap);
   if (wind) {
     wind.type_color = TYPE_COLORS[wind.type] || '#8b96a5';
@@ -724,7 +718,7 @@ async function surfLive() {
       ft: r.sMin == null ? null : `${r.sMin}-${r.sMax}${r.sPlus ? '+' : ''}`,
       size_color: sizeColor(r),
       wind_kts: r.wSpd == null ? null : Math.round(r.wSpd), wind_type: r.wType || null,
-      wind_color: windColor(r.wSpd),
+      wind_label: windLabel(r.wSpd, r.wType), wind_color: TYPE_COLORS[r.wType] || '#8b96a5',
     }));
 
   // WATER: measured by the buoys right now, and the marine model's next day beside it, at the hours

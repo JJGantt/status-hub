@@ -162,10 +162,16 @@ function makeNoise() {
     if (!ringT) ringT = setInterval(burst, BEEP_MS);
   });
 }
+// Which page this is, so the hub's alarm log can tell the phone from a wall's overlay. The device is
+// read off the request's user agent.
+const SURFACE = document.body.classList.contains('phonehome') ? 'phone' : (location.pathname.slice(1) || 'home');
+// An EVENT: `at` names it (ring, stop, sound, the media element going quiet), unlike the minute's
+// heartbeat, which has no `at`. The hub logs each one (alarm_log).
 function beaconSound(f) {
+  const { ev, ...rest } = f;
   try {
-    navigator.sendBeacon('/api/clientlog',
-      new Blob([JSON.stringify({ ev: 'alarmclock', ...f })], { type: 'application/json' }));
+    navigator.sendBeacon('/api/clientlog', new Blob([JSON.stringify(
+      { ev: 'alarmclock', at: ev || (rest.path ? 'sound' : 'event'), surface: SURFACE, ...rest })], { type: 'application/json' }));
   } catch (_) {}
 }
 
@@ -173,6 +179,7 @@ function startRing(it) {
   if (ringing) return;
   nativeAudio(true);   // BEFORE any playback: the session has to be ours before the sound starts
   ringing = it;
+  beaconSound({ ev: 'ring', id: it.id, when: it.when });
   const d = new Date(it.at);
   const when = `${((d.getHours() + 11) % 12) + 1}:${String(d.getMinutes()).padStart(2, '0')}`;
   overlay(it.title, when).classList.add('on');
@@ -181,7 +188,7 @@ function startRing(it) {
   try { if (navigator.vibrate) navigator.vibrate([600, 300, 600, 300, 600]); } catch (_) {}
 }
 function stopRing(why) {
-  beaconSound({ ev: 'stop', why: why || '?', ...mediaState() });
+  beaconSound({ ev: 'stop', why: why || '?', id: ringing ? ringing.id : null, ...mediaState() });
   clearInterval(ringT); ringT = null;
   clearInterval(watchT); watchT = null;
   stopping = true;
@@ -262,6 +269,7 @@ function beacon() {
   const n = nextItem();
   const body = {
     ev: 'alarmclock',
+    surface: SURFACE,
     audio: actx ? actx.state : 'none',
     // What the element can actually do. readyState >= 2 means the bytes are on the device, which is
     // the half of "will it ring" that the AudioContext state never covered.

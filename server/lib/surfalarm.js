@@ -105,7 +105,7 @@ function canon(v) {
   return JSON.stringify(v === undefined ? null : v);
 }
 
-function createSurfAlarms({ sb, sbWrite, uuid, nowLocal, today, tz, log }) {
+function createSurfAlarms({ sb, sbWrite, uuid, nowLocal, today, tz, log, record = () => {} }) {
   const OUTPUTS = makeOutputs({ sb, sbWrite, uuid });
   let snap = null;                 // { captured_at, rows } — rows are ~64KB, so fetched only when new
   let busy = false; let again = false;
@@ -149,6 +149,9 @@ function createSurfAlarms({ sb, sbWrite, uuid, nowLocal, today, tz, log }) {
         patch.updated = now.slice(0, 19);
         await sbWrite(`surf_alarms?day=eq.${a.day}`, 'PATCH', patch);
         log(`[surf-alarm] ${a.day} (${why}): rule ${d.rule == null ? 'none' : d.rule} -> ${at || 'no alarm'}${late ? ' (already past, left alone)' : ''}`);
+        // One row per new forecast or rule change — the decision history `decided` overwrites.
+        record('decision', { day: a.day, why, snapshot: decided.snapshot, rule: d.rule, at, late,
+                             was: (a.decided && a.decided.at) || null, item: (state.item && state.item.id) || null });
       }
     }
   }

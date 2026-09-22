@@ -272,6 +272,55 @@ async function sbWrite(path, method, body) {
   if (!r.ok) throw new Error(`supabase ${method} ${path} -> ${r.status}`);
 }
 
+// ---- the alarm log (data-layer 00113) ---------------------------------------------------------
+// What happened to every alarm, durably. Stdout here is a buffer of about a hundred lines, and an
+// alarm is audited the morning after — so without this the phone's half of any alarm was gone
+// within the hour. EVENTS only: a beacon that says nothing new writes nothing (noteRinger). Never
+// throws into the caller.
+function alarmLog(source, ev, detail = {}, itemId = null) {
+  sbWrite('alarm_log', 'POST', { source, ev, item_id: itemId, detail })
+    .catch((e) => console.log('[alarm-log] write failed:', e.message));
+}
+
+// THE RINGERS' LAST WORD. Every alarm clock — the TV's tv-ring and each page running alarmclock.js —
+// beacons its state once a minute. Held here per source so the log records a CHANGE, or a ringer
+// coming back after a silence, rather than every beat; and so an alarm's due moment can say what
+// each ringer last reported, which is the question every audit starts with.
+const RINGER_SILENCE_MS = 5 * 60 * 1000;
+const ringers = new Map();   // source -> { at, state }
+function ringerSource(b, req) {
+  if (b.ev === 'tvring') return 'tv';
+  const ua = String(req.get('user-agent') || '');
+  const device = /iPhone|iPad/.test(ua) ? 'iphone' : /Macintosh/.test(ua) ? 'mac' : /Linux/.test(ua) ? 'pi' : 'other';
+  return `${b.surface || 'page'}@${device}`;
+}
+function ringerState(b) {
+  if (b.ev === 'tvring') return { next: b.next, ringing: b.ringing, player: b.player, tone: b.tone };
+  return { next: b.next, armed: b.armed, ringing: b.ringing, guided: b.guided, visible: b.visible,
+           lock: b.lock, audio: b.audio, loaded: b.media >= 2, tone: b.tone };
+}
+function noteRinger(b, req) {
+  const source = ringerSource(b, req);
+  // Something the ringer reports AS an event — a ring, a stop, the sound failing — is logged as itself.
+  const beat = b.ev === 'tvring' ? b.at === 'beat' : !b.at;
+  if (!beat) {
+    const { ev, at, ...detail } = b;
+    return alarmLog(source, at, detail, b.id || null);
+  }
+  const state = ringerState(b);
+  const now = Date.now();
+  const prev = ringers.get(source);
+  ringers.set(source, { at: now, state });
+  if (!prev) return alarmLog(source, 'state', state);                 // first heard since the hub started
+  if (now - prev.at > RINGER_SILENCE_MS) return alarmLog(source, 'resumed', { silent_s: Math.round((now - prev.at) / 1000), ...state });
+  const changed = Object.keys(state).filter((k) => state[k] !== prev.state[k]);
+  if (changed.length) alarmLog(source, 'state', { changed, ...state });
+}
+function ringerReport() {
+  const now = Date.now();
+  return Object.fromEntries([...ringers].map(([s, r]) => [s, { heard_s_ago: Math.round((now - r.at) / 1000), ...r.state }]));
+}
+
 // Best-effort audit trail for every hub nutrition write (add/edit/delete). before/after are
 // full row snapshots (or null) — enough to fully reverse any action. NEVER throws into the
 // caller: a failed audit insert must not fail the user's action, so it logs and swallows.
@@ -501,6 +550,7 @@ const surfAlarms = createSurfAlarms({
   sb, sbWrite, uuid: () => crypto.randomUUID(),
   nowLocal: nowNaiveLocal, today: () => localDate(), tz: getTZ,
   log: (m) => console.log(m),
+  record: (ev, detail) => alarmLog('hub', ev, detail),
 });
 const SURF_ALARM_BACKSTOP_MS = 15 * 60 * 1000;
 setInterval(() => surfAlarms.tick('backstop'), SURF_ALARM_BACKSTOP_MS);
@@ -2249,6 +2299,8 @@ app.post('/api/attach', express.raw({ type: () => true, limit: '30mb' }), async 
 // server error) so a failure that's otherwise invisible in the phone's console lands in the app log.
 app.post('/api/clientlog', express.json({ limit: '16kb' }), (req, res) => {
   try { console.log('[clientlog]', JSON.stringify(req.body).slice(0, 900)); } catch (_) {}
+  const b = req.body || {};
+  if (b.ev === 'alarmclock' || b.ev === 'tvring') noteRinger(b, req);
   res.status(204).end();
 });
 
@@ -3961,6 +4013,7 @@ async function dueTick() {
     if (handler === DUE_HANDLERS.push && !apns.configured()) continue;   // nothing to deliver through
     await handler({ ...r, emoji: emojiOf[r.list_name] }, dk);
     console.log(`[due] fired ${r.id} [${r.list_name}] "${String(r.title || r.text).slice(0, 40)}"`);
+    if (r.alarm) alarmLog('hub', 'due', { title: itemTitle(r), due: r.due, ringers: ringerReport() }, r.id);
     // Nothing to re-arm. Every occurrence of a recurring thing is its own row with its own due
     // (data-layer migration 00085), so each one fires once and then stays put — which is also what
     // lets it sit there visibly overdue and drain the score until it is dealt with.

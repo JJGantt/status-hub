@@ -19,7 +19,7 @@ build), so a fix that has not been installed is not mistaken for one that failed
 
 ## Pages
 
-Four, swiped left to right: **sessions · prompt · nutrition · workout**. The app opens on the prompt.
+Five, swiped left to right: **sessions · home · prompt · nutrition · workout**. The app opens on home.
 `RootView` in `StatusHubWatchApp.swift` holds them in a paged `TabView` inside a `NavigationStack`.
 
 A page loads when it comes on screen and holds its event stream open only while it is showing
@@ -30,9 +30,27 @@ dispatches on.
 Every page stays alive side by side in the TabView, so anything that binds double tap or acts on a
 request asks `onScreen` (an environment value `RootView` sets per page) first.
 
+### Home
+
+`HomeView`: the page meant to sit on the wrist as the watch face does — the time, the date, and the
+hub conversation cut down to what is happening now. While a command runs that is his words and the
+worker's newest step; otherwise the newest reply, three lines of it, which opens the prompt page when
+tapped. It is the page being built out, so expect it to change.
+
+It records exactly as the prompt page does — the same `Chat`, the same microphone, the same
+`CommandStatus` row (recording bar, the wait with Cancel, or Retry) and the same three-step double tap
+— so home and the prompt page are two views of one command, and `follow()` keeps `Chat`'s stream open
+while either is showing. Its bottom control holds double tap on the same terms as a conversation page
+(§ Double tap and scrolling); there is nothing to page, so it only records and sends.
+
+The time is a `DateFormatter` built from the locale's `jmm` pattern with the AM/PM removed, which
+follows the wearer's 12- or 24-hour setting. The FormatStyle hour options pad the hour to two digits
+on watchOS whatever they are asked. With the wrist down and the app still showing
+(`isLuminanceReduced`), everything but the time dims.
+
 ### The prompt page
 
-The shared hub thread on black — `/api/voice-messages?focus=hub&mode=active`, the same
+One right of home. The whole shared hub thread on black — `/api/voice-messages?focus=hub&mode=active`, the same
 current-context thread the phone and the TV show, in whichever mode `agent_mode` selects, newest 40
 rows. It follows `/api/voice-stream`: a `message` frame reloads the thread, and the worker's
 `activity` frames draw the running command's tool calls under it, and what the model says between
@@ -205,7 +223,9 @@ The complication (circular and corner) opens `statushub://record`. The Record co
 (`RecordControl`, watchOS 26 — Control Center, the Smart Stack, and the Action button on an Ultra)
 runs `RecordIntent`, an `OpenIntent`, which launches the app and runs `perform()` in it: the file is
 compiled into both targets, and `WATCH_APP` gates the app-only call. Both set `Chat.recordRequested`;
-the app switches to the prompt page and records as soon as it is active.
+the app switches to home and records as soon as it is active. The page that acts on the request is
+whichever is showing (`recordsWhenAsked`, which checks `onScreen`), so home and the prompt page cannot
+both start one.
 
 Without an Action button, the no-touch path is the Smart Stack: with Settings → Gestures → Double Tap →
 Smart Stack set to Select and Record pinned, two double taps from the watch face open it recording

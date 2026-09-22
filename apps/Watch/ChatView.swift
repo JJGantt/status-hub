@@ -1,9 +1,9 @@
 import SwiftUI
 import WatchKit
 
-/// The prompt page: the shared hub conversation on black. A reply opens at its top. The bottom control
-/// (and double tap) pages down while more is below and records at the bottom; a tap anywhere on the
-/// thread also records (`PagedScroll`, shared with a session's page). The silence after he speaks sends
+/// The prompt page, one right of home: the whole shared hub conversation on black. A reply opens at its
+/// top. The bottom control (and double tap) pages down while more is below and records at the bottom;
+/// a tap anywhere on the thread also records (`PagedScroll`, shared with a session's page). The silence after he speaks sends
 /// the recording. During it double tap moves to the recording bar's lock, so the next double tap locks
 /// it open and the one after sends; a tap on the text or the stop sends at any point.
 struct ChatView: View {
@@ -25,7 +25,7 @@ struct ChatView: View {
                         willPage: { pinned = false }, lockHoldsDoubleTap: recording && capture.lockHoldsDoubleTap,
                         record: chat.toggleRecording) {
                 recordButton { thread }
-                status
+                CommandStatus().id(recording ? "recording" : "status")
             }
             // Jumps to a view go through the reader, which finds any view with an id; paging moves by a
             // distance instead (PagedScroll).
@@ -43,14 +43,10 @@ struct ChatView: View {
                 guard now == .active else { return }
                 pinned = true
                 jump(proxy)
-                recordIfAsked()
             }
-            .onAppear {
-                jump(proxy)
-                recordIfAsked()
-            }
+            .onAppear { jump(proxy) }
         }
-        .onChange(of: chat.recordRequested) { _, _ in recordIfAsked() }
+        .recordsWhenAsked()
     }
 
     private func jump(_ proxy: ScrollViewProxy, animated: Bool = false) {
@@ -92,10 +88,27 @@ struct ChatView: View {
         .contentShape(Rectangle())
     }
 
-    @ViewBuilder private var status: some View {
-        if recording {
+    /// The whole thread records under a finger: a tap starts, the next one sends. Double tap is not
+    /// bound here — it belongs to the bottom control alone (BottomControl says why).
+    private func recordButton<Label: View>(@ViewBuilder label: () -> Label) -> some View {
+        Button(action: {
+            Hub.log("record", ["view": "chat", "atBottom": atBottom, "recording": recording])
+            chat.toggleRecording()
+        }, label: label)
+            .buttonStyle(.plain)
+            .disabled(chat.waiting)
+    }
+}
+
+/// What the hub command is doing, under the page that records it (home and the prompt page): the
+/// recording bar, the wait for the hub with Cancel, or what went wrong with Retry. Nothing while idle.
+struct CommandStatus: View {
+    @EnvironmentObject private var chat: Chat
+    @ObservedObject private var capture = Capture.shared
+
+    var body: some View {
+        if capture.owner == .hub {
             RecordingBar(cancel: chat.cancelRecording)
-                .id("recording")
         } else if chat.waiting {
             HStack {
                 ProgressView().frame(width: 24, height: 24)
@@ -126,21 +139,30 @@ struct ChatView: View {
             }
         }
     }
+}
 
-    /// The whole thread records under a finger: a tap starts, the next one sends. Double tap is not
-    /// bound here — it belongs to the bottom control alone (BottomControl says why).
-    private func recordButton<Label: View>(@ViewBuilder label: () -> Label) -> some View {
-        Button(action: {
-            Hub.log("record", ["view": "chat", "atBottom": atBottom, "recording": recording])
-            chat.toggleRecording()
-        }, label: label)
-            .buttonStyle(.plain)
-            .disabled(chat.waiting)
+extension View {
+    /// Starts the recording a launch asked for (the complication, the Record control) once this page is
+    /// the one showing and the app is in front. Every page stays alive in the TabView, so without
+    /// `onScreen` two pages would both try.
+    func recordsWhenAsked() -> some View { modifier(RecordWhenAsked()) }
+}
+
+private struct RecordWhenAsked: ViewModifier {
+    @EnvironmentObject private var chat: Chat
+    @Environment(\.scenePhase) private var phase
+    @Environment(\.onScreen) private var onScreen
+
+    func body(content: Content) -> some View {
+        content
+            .onAppear(perform: start)
+            .onChange(of: phase) { _, _ in start() }
+            .onChange(of: onScreen) { _, _ in start() }
+            .onChange(of: chat.recordRequested) { _, _ in start() }
     }
 
-    /// A launch from the complication or the Record control: start recording without a tap.
-    private func recordIfAsked() {
-        guard chat.recordRequested, phase == .active else { return }
+    private func start() {
+        guard chat.recordRequested, phase == .active, onScreen else { return }
         chat.recordRequested = false
         chat.startRecording()
     }

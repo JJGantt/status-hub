@@ -118,6 +118,9 @@ function createLiveWind({ store, onReading = () => {}, log = () => {} }) {
       station: STATION,
       at: newest.ts, age_min: age,
       kts: newest.kts, gust: newest.gust, dir: newest.dir,
+      // Where it BLOWS, not where it comes from: the direction an arrow points. A compass point has to
+      // be turned around in your head before it means anything.
+      dir_to: newest.dir == null ? null : (newest.dir + 180) % 360,
       type: windType(newest.dir), compass: compass(newest.dir),
       // What a decision should act on: one six-minute reading is a gust as often as a trend.
       avg30: average(readings.filter((r) => r.ts >= since)),

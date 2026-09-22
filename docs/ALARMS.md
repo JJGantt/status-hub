@@ -56,7 +56,7 @@ long enough for STOP to look as if it had not reached the TV.
 being silenced) is not measurable from inside the audio graph. `GuidedAccess` in `StatusHubApp.swift`
 pushes `window.__guidedAccess` into the page on every load and on
 `guidedAccessStatusDidChangeNotification`, and the page forwards it in its beacon (`guided`) at
-once. Nothing acts on it; it is how the night-before setup is checked from the hub log.
+once. Nothing acts on it; it is how the night-before setup is checked, from `alarm_log`.
 
 ## The tones
 
@@ -119,10 +119,28 @@ nothing but to be on; these are for the phone to ring as well:
 - The page is on a current bundle. A deploy after the page loaded leaves it holding old code, and
   `goStale` used to wait for a `visibilitychange` that never comes on a parked screen.
 
-**Read `ev: "alarmclock"` in the hub log to check any of it.** The page beacons every minute with
-`audio`, `media` (readyState), `lock`, `visible`, `next`, `armed`. That beacon exists because every
-failure here has been a silent one that reported success — `audio: "running"` was true the whole
-morning nothing came out of the speaker.
+**Read `alarm_log` to check any of it** — the section below. The page beacons every minute with
+`audio`, `media` (readyState), `lock`, `visible`, `next`, `armed`, `guided`. That beacon exists
+because every failure here has been a silent one that reported success — `audio: "running"` was
+true the whole morning nothing came out of the speaker.
+
+## Auditing a morning: `alarm_log`
+
+The hub's stdout is not a record: Fly keeps about the last hundred lines, so a morning's beacons are
+gone within the hour. What happened is in the `alarm_log` table (data-layer `00113`), written by
+`alarmLog` in `server.js`, one row per EVENT:
+
+| source | ev | when |
+|---|---|---|
+| `hub` | `decision` | every surf-alarm decision — each new forecast or rule change — with the snapshot, the rule, the time, the one it replaced and the item. `surf_alarms.decided` keeps only the latest. |
+| `hub` | `due` | an alarm item's moment, with `ringers`: what each ringer last reported and how many seconds ago |
+| `tv`, `<surface>@<device>` | `ring`, `stop`, `sound`, `ended`, `stuck`, `player-died`… | what a ringer reports as an event |
+| same | `state` / `resumed` | a CHANGE in a ringer's armed state (`changed` lists the fields), or a ringer heard again after five minutes of silence; the first row after a hub restart carries the user agent |
+
+A ringer's minute heartbeat that says nothing new writes nothing, which is what keeps this to tens
+of rows a day. Sources are `tv` (tv-ring on the Pi) and a page's alarm clock as surface@device:
+`phone@iphone` is the home page in the app, `tv@pi` the wall's overlay. A page's heartbeat stopping
+is visible only as the `resumed` row when it comes back, and in the `due` row's `heard_s_ago`.
 
 ## The TV rings too
 
@@ -134,8 +152,8 @@ Two things on the wall, from the same feed and the same moment as the phone:
 - **The sound** is `tv-ring.service` on the Pi (`pi-config/scripts/tv-ring.py`): the same feed
   (`/api/due-widget`, alarm-marked items), re-read on every `/api/list-stream` push, a local timer to
   the moment, and the chosen tone through HDMI-2 with `ffmpeg` straight to ALSA. It beacons
-  `ev: "tvring"` every minute — `next`, `in_s`, `ringing`, `player` — so the TV's state reads from
-  the hub log like the phone's.
+  `ev: "tvring"` every minute — `next`, `in_s`, `ringing`, `player` — and its rings, stops and state
+  changes land in `alarm_log` like the phone's.
 
 Both stop when the item leaves the feed, which is what the phone's STOP does. Neither gives up on a
 clock. The rule for when either one rings is the mirror above. pi-config's README has what fails

@@ -291,7 +291,8 @@ const ringers = new Map();   // source -> { at, state }
 function ringerSource(b, req) {
   if (b.ev === 'tvring') return 'tv';
   const ua = String(req.get('user-agent') || '');
-  const device = /iPhone|iPad/.test(ua) ? 'iphone' : /Macintosh/.test(ua) ? 'mac' : /Linux/.test(ua) ? 'pi' : 'other';
+  // The Pi's kiosk Chromium reports itself as `X11; CrOS x86_64`, not as Linux.
+  const device = /iPhone|iPad/.test(ua) ? 'iphone' : /Macintosh/.test(ua) ? 'mac' : /X11|Linux/.test(ua) ? 'pi' : 'other';
   return `${b.surface || 'page'}@${device}`;
 }
 function ringerState(b) {

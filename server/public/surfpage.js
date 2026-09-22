@@ -1,7 +1,7 @@
 // The surf app's page (surf.html): paints /api/surf/stream, which the hub pushes whenever a wind
 // reading, a buoy reading or a forecast arrives. Every value arrives finished — colours, labels, the
 // hours — so this only lays them out.
-import { esc, liveStream } from './shared.js';
+import { esc, liveStream, state } from './shared.js';
 import * as surf from './cards/surf.js';
 
 const num = (v, unit) => (v == null ? '—' : `${v}${unit || ''}`);
@@ -50,7 +50,10 @@ function paint(d) {
   // The heat map is rebuilt only for a new forecast: rebuilding it on every reading would throw away
   // where it was scrolled to every ten minutes.
   const at = d.surf && d.surf.capturedAt;
-  if (at !== captured) { captured = at; surf.render({ surf: d.surf }); }
+  // The card re-renders itself from `state.last` once its history arrives. With no status stream on
+  // this page, this is that frame's only writer.
+  state.last = { surf: d.surf };
+  if (at !== captured) { captured = at; surf.render(state.last); }
 }
 
 liveStream('/api/surf/stream', { surf: (e) => { try { paint(JSON.parse(e.data)); } catch (_) {} } });

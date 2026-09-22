@@ -621,7 +621,7 @@ async function surfLive() {
   const hours = ((snap && snap.rows) || [])
     .filter((r) => r.ts >= now - 3600 && r.ts < now + 12 * 3600)
     .map((r) => ({
-      t: etStringAt(new Date(r.ts * 1000)).slice(11, 16),
+      t: (() => { const h = +etStringAt(new Date(r.ts * 1000)).slice(11, 13); return `${h % 12 || 12}${h < 12 ? 'a' : 'p'}`; })(),
       rating: ratingLabel(r.rk), color: SURF_BAND_COLORS[surfBand(r.rk)] || '#8b96a5',
       ft: r.sMin == null ? null : `${r.sMin}-${r.sMax}`,
       wind_kts: r.wSpd == null ? null : Math.round(r.wSpd), wind_type: r.wType || null,

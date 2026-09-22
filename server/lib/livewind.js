@@ -17,8 +17,11 @@
 // tick; nothing retries.
 
 const STATION = 'MYPF1';
+// SIX hours, not two: the window is what the API has to find something in, and the station goes quiet
+// for hours at a time (17:36Z to at least 19:54Z on 2026-09-22, both NOAA sources agreeing). Asked for
+// two, a gap answers "No data was found" and the hub holds a reading it cannot date against anything.
 const FEED = 'https://api.tidesandcurrents.noaa.gov/api/prod/datagetter?station=8720218&product=wind' +
-             '&range=2&units=english&time_zone=gmt&format=json&application=status-hub';
+             '&range=6&units=english&time_zone=gmt&format=json&application=status-hub';
 const TICK_MS = 5 * 60 * 1000;
 const KEEP_MS = 3 * 3600 * 1000;       // readings held in memory, for the averages and the endpoint
 

@@ -22,10 +22,13 @@ const STATION = 'MYPF1';
 // jetties, a mile from the break, reporting hourly through the National Weather Service. Hourly is
 // poor next to six minutes, which is why it is only ever consulted once the dock's newest reading is
 // older than that anyway.
+// From AVIATION WEATHER, not api.weather.gov: the same METARs, but the weather service's own feed runs
+// an hour behind — measured at 22:56Z with 21:52Z as its newest while this one already had 22:52Z.
+// The hourly report is issued at :52 and lands here a few minutes later, so the fallback is at worst an
+// hour old just before the next one, and it speaks knots already.
 const FALLBACK_STATION = 'KNRB';
-const FALLBACK = 'https://api.weather.gov/stations/KNRB/observations?limit=6';
+const FALLBACK = 'https://aviationweather.gov/api/data/metar?ids=KNRB&format=json&hours=3';
 const FALLBACK_AFTER_MIN = 40;
-const KMH_TO_KTS = 0.539957;
 // SIX hours, not two: the window is what the API has to find something in, and the station goes quiet
 // for hours at a time (17:36Z to at least 19:54Z on 2026-09-22, both NOAA sources agreeing). Asked for
 // two, a gap answers "No data was found" and the hub holds a reading it cannot date against anything.
@@ -83,18 +86,16 @@ function average(rs) {
   return { kts: r1(kts), dir, type: windType(dir), compass: compass(dir), n: w.length };
 }
 
-// The NWS observation list, newest first: wind in km/h, direction in degrees true, gusts often null.
+// Aviation Weather's METAR list: `obsTime` in epoch seconds, `wspd`/`wgst` in knots, `wdir` in degrees
+// true — or the string `VRB` when the wind is too light to have a direction, which is a null here.
 function parseFallback(json) {
   const out = [];
-  for (const f of (json && json.features) || []) {
-    const p = f.properties || {};
-    const kmh = p.windSpeed && p.windSpeed.value;
-    const dir = p.windDirection && p.windDirection.value;
-    const gust = p.windGust && p.windGust.value;
-    if (!p.timestamp || kmh == null) continue;
-    out.push({ ts: new Date(p.timestamp).toISOString(), kts: r1(kmh * KMH_TO_KTS),
-               gust: gust == null ? null : r1(gust * KMH_TO_KTS),
-               dir: kmh > 0 && dir != null ? dir : null });
+  for (const m of Array.isArray(json) ? json : []) {
+    if (!m || !m.obsTime || m.wspd == null) continue;
+    const dir = typeof m.wdir === 'number' ? m.wdir : null;
+    out.push({ ts: new Date(m.obsTime * 1000).toISOString(), kts: r1(m.wspd),
+               gust: m.wgst == null ? null : r1(m.wgst),
+               dir: m.wspd > 0 ? dir : null });
   }
   return out.sort((a, b) => (a.ts < b.ts ? 1 : -1));
 }

@@ -132,7 +132,7 @@ gone within the hour. What happened is in the `alarm_log` table (data-layer `001
 
 | source | ev | when |
 |---|---|---|
-| `hub` | `decision` | every surf-alarm decision — each new forecast or rule change — with the snapshot, the rule, the time, the one it replaced and the item. `surf_alarms.decided` keeps only the latest. |
+| `hub` | `decision` | every surf-alarm decision that differs from the last — so every new forecast, since the snapshot is part of it, and a rule change only when it changes the outcome — with the snapshot, the rule, the time, the one it replaced and the item. `surf_alarms.decided` keeps only the latest. |
 | `hub` | `due` | an alarm item's moment, with `ringers`: what each ringer last reported and how many seconds ago |
 | `tv`, `<surface>@<device>` | `ring`, `stop`, `sound`, `ended`, `stuck`, `player-died`… | what a ringer reports as an event |
 | same | `state` / `resumed` | a CHANGE in a ringer's armed state (`changed` lists the fields), or a ringer heard again after five minutes of silence; the first row after a hub restart carries the user agent |

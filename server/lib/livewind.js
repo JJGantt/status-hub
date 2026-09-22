@@ -12,13 +12,14 @@
 // is 30 to 90 minutes stale. CO-OPS serves each reading about six minutes after it is taken.
 //
 // A TIMER, and the only way: the API answers requests and pushes nothing, so nothing can tell the hub
-// that a reading arrived. Ten minutes, against a station that reports every six. A failed fetch waits
-// for the next tick; nothing retries.
+// that a reading arrived. FIVE minutes, against a station that reports every six: shorter than its
+// cadence, so the hub is never more than one reading behind it. A failed fetch waits for the next
+// tick; nothing retries.
 
 const STATION = 'MYPF1';
 const FEED = 'https://api.tidesandcurrents.noaa.gov/api/prod/datagetter?station=8720218&product=wind' +
              '&range=2&units=english&time_zone=gmt&format=json&application=status-hub';
-const TICK_MS = 10 * 60 * 1000;
+const TICK_MS = 5 * 60 * 1000;
 const KEEP_MS = 3 * 3600 * 1000;       // readings held in memory, for the averages and the endpoint
 
 // THE SHORE, in the terms Surfline labels this spot's wind with: FROM within 67.5 degrees of 97.5

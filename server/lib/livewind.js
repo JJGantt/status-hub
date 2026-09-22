@@ -17,6 +17,15 @@
 // tick; nothing retries.
 
 const STATION = 'MYPF1';
+// THE FALLBACK, for when the dock goes quiet — it did for 27 hours on 17 July and five on 22
+// September, and 2% of the last 96 days sits inside a gap. KNRB is the naval air station at the
+// jetties, a mile from the break, reporting hourly through the National Weather Service. Hourly is
+// poor next to six minutes, which is why it is only ever consulted once the dock's newest reading is
+// older than that anyway.
+const FALLBACK_STATION = 'KNRB';
+const FALLBACK = 'https://api.weather.gov/stations/KNRB/observations?limit=6';
+const FALLBACK_AFTER_MIN = 40;
+const KMH_TO_KTS = 0.539957;
 // SIX hours, not two: the window is what the API has to find something in, and the station goes quiet
 // for hours at a time (17:36Z to at least 19:54Z on 2026-09-22, both NOAA sources agreeing). Asked for
 // two, a gap answers "No data was found" and the hub holds a reading it cannot date against anything.
@@ -74,12 +83,30 @@ function average(rs) {
   return { kts: r1(kts), dir, type: windType(dir), compass: compass(dir), n: w.length };
 }
 
+// The NWS observation list, newest first: wind in km/h, direction in degrees true, gusts often null.
+function parseFallback(json) {
+  const out = [];
+  for (const f of (json && json.features) || []) {
+    const p = f.properties || {};
+    const kmh = p.windSpeed && p.windSpeed.value;
+    const dir = p.windDirection && p.windDirection.value;
+    const gust = p.windGust && p.windGust.value;
+    if (!p.timestamp || kmh == null) continue;
+    out.push({ ts: new Date(p.timestamp).toISOString(), kts: r1(kmh * KMH_TO_KTS),
+               gust: gust == null ? null : r1(gust * KMH_TO_KTS),
+               dir: kmh > 0 && dir != null ? dir : null });
+  }
+  return out.sort((a, b) => (a.ts < b.ts ? 1 : -1));
+}
+
 /**
  * `store(rows)` persists new readings (water_readings); `onReading()` is told whenever one arrives.
  */
 function createLiveWind({ store, onReading = () => {}, log = () => {} }) {
   let readings = [];          // newest first, the last KEEP_MS
+  let fallback = [];          // the same, from KNRB, only while the dock is quiet
   let lastTs = null;
+  let lastFallbackTs = null;
   let failing = false;
 
   async function tick() {
@@ -97,10 +124,19 @@ function createLiveWind({ store, onReading = () => {}, log = () => {} }) {
     if (failing) log('[live-wind] fetching again');
     failing = false;
     const fresh = parse(json).filter((r) => !lastTs || r.ts > lastTs);
+    if (fresh.length) {
+      lastTs = fresh.reduce((a, r) => (r.ts > a ? r.ts : a), lastTs || '');
+      const cut = new Date(Date.now() - KEEP_MS).toISOString();
+      const all = [...fresh, ...readings].sort((a, b) => (a.ts < b.ts ? 1 : -1));
+      // KEEP_MS bounds the averages, not the memory: a station that has been quiet for five hours
+      // still has a last reading, and dropping it leaves the hub with no wind at all rather than an
+      // old one with its age on it.
+      readings = all.filter((r) => r.ts >= cut);
+      if (!readings.length && all.length) readings = [all[0]];
+    }
+    // Always: it no-ops unless the dock's newest reading is already too old to be the answer.
+    await tickFallback();
     if (!fresh.length) return;
-    lastTs = fresh.reduce((a, r) => (r.ts > a ? r.ts : a), lastTs || '');
-    const cut = new Date(Date.now() - KEEP_MS).toISOString();
-    readings = [...fresh, ...readings].sort((a, b) => (a.ts < b.ts ? 1 : -1)).filter((r) => r.ts >= cut);
     // Wind only: the water temperature on these rows is the Pi's hourly NDBC collector's, and a
     // merge upsert leaves a column it is not given alone.
     try { await store(fresh.map((r) => ({ station: STATION, ts: r.ts, wind_kts: r.kts, wind_dir_deg: r.dir, gust_kts: r.gust }))); }
@@ -108,14 +144,40 @@ function createLiveWind({ store, onReading = () => {}, log = () => {} }) {
     onReading();
   }
 
+  /// Only when the dock has nothing recent: one hourly observation from the naval station, kept apart
+  /// from the dock's own readings so the archive stays one instrument.
+  async function tickFallback() {
+    const dock = readings[0];
+    if (dock && Date.now() - Date.parse(dock.ts) < FALLBACK_AFTER_MIN * 60000) return;
+    let rows = [];
+    try {
+      const r = await fetch(FALLBACK, { headers: { 'User-Agent': 'gnarcast (status-hub)' } });
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      rows = parseFallback(await r.json());
+    } catch (e) { return log(`[live-wind] fallback failed: ${e.message}`); }
+    if (!rows.length) return;
+    const added = rows.filter((r) => !lastFallbackTs || r.ts > lastFallbackTs);
+    fallback = rows.slice(0, 12);
+    if (!added.length) return;
+    lastFallbackTs = rows[0].ts;
+    try { await store(added.map((r) => ({ station: FALLBACK_STATION, ts: r.ts, wind_kts: r.kts, wind_dir_deg: r.dir, gust_kts: r.gust }))); }
+    catch (e) { log(`[live-wind] fallback store failed: ${e.message}`); }
+    log(`[live-wind] dock quiet — using ${FALLBACK_STATION}, newest ${rows[0].ts}`);
+    onReading();
+  }
+
   /** The newest reading and the last half-hour's average, or null when nothing recent is held. */
   function current() {
-    const newest = readings[0];
+    // Whichever instrument has the newer reading: the dock at six minutes, or the naval station when
+    // the dock has stopped. `station` says which, because a wind from a mile inland is not the same
+    // measurement and a surface should be able to say so.
+    const best = fallback[0] && (!readings[0] || fallback[0].ts > readings[0].ts) ? fallback : readings;
+    const newest = best[0];
     if (!newest) return null;
     const age = Math.round((Date.now() - Date.parse(newest.ts)) / 60000);
     const since = new Date(Date.parse(newest.ts) - 30 * 60000).toISOString();
     return {
-      station: STATION,
+      station: best === fallback ? FALLBACK_STATION : STATION,
       at: newest.ts, age_min: age,
       kts: newest.kts, gust: newest.gust, dir: newest.dir,
       // Where it BLOWS, not where it comes from: the direction an arrow points. A compass point has to
@@ -123,7 +185,7 @@ function createLiveWind({ store, onReading = () => {}, log = () => {} }) {
       dir_to: newest.dir == null ? null : (newest.dir + 180) % 360,
       type: windType(newest.dir), compass: compass(newest.dir),
       // What a decision should act on: one six-minute reading is a gust as often as a trend.
-      avg30: average(readings.filter((r) => r.ts >= since)),
+      avg30: average(best.filter((r) => r.ts >= since)),
     };
   }
 

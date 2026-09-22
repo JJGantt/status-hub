@@ -24,6 +24,9 @@ final class Recorder {
     /// Each buffer's RMS level (0…1) and how many seconds of audio it held, delivered on the main actor in
     /// the order they were recorded.
     var onLevel: ((Float, TimeInterval) -> Void)?
+    /// The system took the microphone (Siri, a call, another app recording) — `true` — or gave it back,
+    /// `false`. A recording cannot survive the first; the second is when a new one may start.
+    var onInterruption: ((Bool) -> Void)?
 
     private let engine = AVAudioEngine()
     private var sink: Sink?
@@ -45,6 +48,12 @@ final class Recorder {
             // Main queue, not a Task: a queue keeps the buffers in order, which the endpoint's running
             // count of silent seconds depends on.
             DispatchQueue.main.async { MainActor.assumeIsolated { self?.onLevel?(level, seconds) } }
+        }
+        NotificationCenter.default.addObserver(forName: AVAudioSession.interruptionNotification,
+                                               object: session, queue: .main) { [weak self] note in
+            let raw = note.userInfo?[AVAudioSessionInterruptionTypeKey] as? UInt ?? 0
+            let began = AVAudioSession.InterruptionType(rawValue: raw) == .began
+            MainActor.assumeIsolated { self?.onInterruption?(began) }
         }
         engine.prepare()
         do {
@@ -87,6 +96,8 @@ final class Recorder {
 
     @discardableResult
     private func halt() -> Sink? {
+        NotificationCenter.default.removeObserver(self, name: AVAudioSession.interruptionNotification,
+                                                 object: AVAudioSession.sharedInstance())
         guard let sink else { return nil }
         self.sink = nil
         engine.inputNode.removeTap(onBus: 0)

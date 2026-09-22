@@ -282,6 +282,12 @@ room mics, not a command someone is holding the watch to say. Each utterance the
 wrist (`.success`); one it heard no words in taps nothing. Uploads are fire-and-forget, with no outbox
 behind them yet.
 
+**Siri, a call or another app recording takes the microphone**, and no recording survives that. The
+interruption notification is what says so (`Recorder.onInterruption`): words already recorded are sent
+(`onTaken`, which every caller passes), a listener utterance that had begun goes up, and when the
+microphone comes back listening picks it up again. Without that handling always-on listening ended at
+the first Siri and the glyph went on claiming it was listening.
+
 **A deliberate command comes first.** Starting a command or a follow-up takes the microphone off the
 listener — whatever it had heard by then still goes up — and the listener takes it back when that
 recording is sent or cancelled (`resumeSoon`, scheduled rather than immediate so it cannot grab the

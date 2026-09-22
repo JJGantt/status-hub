@@ -157,7 +157,7 @@ final class Sessions: ObservableObject {
             return
         }
         failures[key] = nil
-        capture.start(for: .session(key)) { [weak self] error in
+        capture.start(for: .session(key), onTaken: { [weak self] in self?.stopRecording(key) }) { [weak self] error in
             self?.failures[key] = (error as? Recorder.Failure) == .denied ? .micDenied : .message(error.localizedDescription)
         }
     }

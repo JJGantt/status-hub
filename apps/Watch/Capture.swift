@@ -51,6 +51,8 @@ final class Capture: ObservableObject {
     private var endpoint = Endpointer(hang: Capture.hang)
     /// Runs when the silence ends the recording: the owner sends it as if it had been pressed.
     private var onSilence: (() -> Void)?
+    /// Runs when the system takes the microphone mid-recording, for the same reason.
+    private var onTaken: (() -> Void)?
     /// When the listener's current utterance first crossed the threshold, and how much audio its
     /// segment holds.
     private var spokeAt: Date?
@@ -60,6 +62,7 @@ final class Capture: ObservableObject {
 
     private init() {
         recorder.onLevel = { [weak self] level, seconds in self?.heard(level, seconds) }
+        recorder.onInterruption = { [weak self] began in self?.interrupted(began) }
     }
 
     /// Starts recording for `owner`, which is set at once so a second tap while the microphone opens is
@@ -67,9 +70,14 @@ final class Capture: ObservableObject {
     /// phone's microphone, so one sentence cannot arrive twice.
     ///
     /// With `onSilence`, the recording ends itself once he has spoken and then stopped for the trailing
-    /// silence, and calls it; `toggleLock()` holds it open. Without, only a press ends it.
-    func start(for owner: Owner, onSilence: (() -> Void)? = nil, onFailure: @escaping @MainActor (Error) -> Void) {
-        begin(owner, onSilence: onSilence, onFailure: onFailure) { [weak self] in self?.setMuted(true) }
+    /// silence, and calls it; `toggleLock()` holds it open. Without, only a press ends it. `onTaken` is
+    /// the same ending forced from outside — the system taking the microphone — and every caller wants
+    /// one, because words already recorded are worth sending however the recording ended.
+    func start(for owner: Owner, onSilence: (() -> Void)? = nil, onTaken: (() -> Void)? = nil,
+               onFailure: @escaping @MainActor (Error) -> Void) {
+        begin(owner, onSilence: onSilence, onTaken: onTaken, onFailure: onFailure) { [weak self] in
+            self?.setMuted(true)
+        }
     }
 
     /// Engages or drops always-on listening: the microphone is held, each utterance is cut at the
@@ -91,7 +99,7 @@ final class Capture: ObservableObject {
     /// Takes the microphone for the listener. Only while nothing else owns it: a command and a
     /// follow-up come first, and the listener takes it back when they give it up.
     private func listen() {
-        begin(.listener, onSilence: nil, onFailure: { [weak self] error in
+        begin(.listener, onSilence: nil, onTaken: nil, onFailure: { [weak self] error in
             self?.listens = false
             self?.listenFailure?(error)
         }) {}
@@ -134,8 +142,8 @@ final class Capture: ObservableObject {
         Hub.log("mic-lock", ["locked": locked])
     }
 
-    private func begin(_ owner: Owner, onSilence: (() -> Void)?, onFailure: @escaping @MainActor (Error) -> Void,
-                       opened: @escaping () -> Void) {
+    private func begin(_ owner: Owner, onSilence: (() -> Void)?, onTaken: (() -> Void)?,
+                       onFailure: @escaping @MainActor (Error) -> Void, opened: @escaping () -> Void) {
         // A command or a follow-up takes the microphone off the listener, which picks it up again when
         // they give it back (`resume`). Whatever it had heard by then still goes up.
         if owner != .listener, self.owner == .listener { unlisten() }
@@ -145,6 +153,7 @@ final class Capture: ObservableObject {
         }
         self.owner = owner
         self.onSilence = onSilence
+        self.onTaken = onTaken
         endsOnSilence = onSilence != nil || owner == .listener
         locked = false
         endpoint = Endpointer(hang: Self.hang)
@@ -174,6 +183,7 @@ final class Capture: ObservableObject {
     private func reset() {
         owner = nil
         onSilence = nil
+        onTaken = nil
         endsOnSilence = false
         locked = false
     }
@@ -186,6 +196,24 @@ final class Capture: ObservableObject {
         Task { @MainActor in
             guard listens, owner == nil, !opening else { return }
             listen()
+        }
+    }
+
+    /// Siri, a call or another app recording takes the microphone away mid-recording, and nothing can
+    /// keep a recording through it. Words already recorded are sent (`onTaken`); a listener utterance
+    /// that had begun goes up and the rest of the segment is dropped. When the microphone comes back,
+    /// listening picks it up again — without this, always-on listening ended silently at the first Siri
+    /// and the glyph went on claiming it was listening.
+    private func interrupted(_ began: Bool) {
+        guard began else { return resumeSoon() }
+        Hub.log("mic-interrupted", ["owner": owner.map { String(describing: $0) } ?? "", "heard": endpoint.heard])
+        switch owner {
+        case .listener:
+            unlisten()          // sends what was heard, if anything
+        case .some:
+            if endpoint.heard, let taken = onTaken { taken() } else { cancel() }
+        case .none:
+            break
         }
     }
 

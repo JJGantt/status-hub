@@ -91,7 +91,8 @@ final class Chat: ObservableObject {
         failure = nil
         // A command ends itself at the silence after he speaks; the lock on the recording bar holds it
         // open. A session's follow-up does not (Sessions.startRecording): only a press ends that.
-        capture.start(for: .hub, onSilence: { [weak self] in self?.stopRecording() }) { [weak self] error in
+        capture.start(for: .hub, onSilence: { [weak self] in self?.stopRecording() },
+                      onTaken: { [weak self] in self?.stopRecording() }) { [weak self] error in
             self?.failure = (error as? Recorder.Failure) == .denied ? .micDenied : .message(error.localizedDescription)
         }
     }

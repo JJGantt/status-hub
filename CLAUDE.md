@@ -664,6 +664,17 @@ grids' entirely, which is what gives the plots that width. And the water trace's
 rather than rounding out to whole degrees with one either side, which at this height flattens a
 three-degree swing into a line across the middle of the box.
 
+## `/surf` is the surf app's page, not the hub's
+
+`public/surf.html` at `/surf` is what Gnarcast (the `surf-app` repo) shows in its web view: the live
+readings (`wind`, `buoys`), the forecast's next hours, and the surf heat map, painted by
+`surfpage.js` from `/api/surf/stream`. It loads no `core.js` and rides no status stream, so
+`surfpage.js` is the only writer of `state.last` there — and it has to write it, because the surf card
+re-renders itself from `state.last` when its history arrives and would draw an empty card otherwise.
+The heat map sits inside the same `.sectsheet[data-sec="surf"]` wrapper as the phone's expanded surf
+sheet, so it takes that sheet's full layout rather than a third one; a change to those rules reaches
+both.
+
 ## The split body figures carry the WHOLE artwork, and only a viewBox hides half of it
 
 `cards/muscle.js` splits the one 72x93 figure into a front and a back by emitting the same `<g>`

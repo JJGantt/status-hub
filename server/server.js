@@ -652,6 +652,24 @@ async function surfLive() {
     if (wind.forecast) wind.forecast.type_color = TYPE_COLORS[wind.forecast.type] || '#8b96a5';
   }
   for (const h of hours) h.wind_color = TYPE_COLORS[h.wind_type] || '#8b96a5';
+  // THE DAY THE WATCH DRAWS: 6am to 6pm, the twelve hours worth surfing, as one ring. Today's until
+  // 6pm, then tomorrow's — after the window closes the useful question is the next one, not the one
+  // that just ended.
+  const nowLocal = etNowString();
+  const dayDate = +nowLocal.slice(11, 13) < 18 ? nowLocal.slice(0, 10)
+    : localDate(new Date(Date.now() + 86400000));
+  const dayHours = ((snap && snap.rows) || []).map((r) => {
+    const local = etStringAt(new Date(r.ts * 1000));
+    return { local, r };
+  }).filter(({ local }) => local.slice(0, 10) === dayDate && +local.slice(11, 13) >= 6 && +local.slice(11, 13) < 18)
+    .map(({ local, r }) => ({
+      h: +local.slice(11, 13),
+      t: (() => { const h = +local.slice(11, 13); return `${h % 12 || 12}${h < 12 ? 'a' : 'p'}`; })(),
+      rating: ratingLabel(r.rk), color: SURF_BAND_COLORS[surfBand(r.rk)] || '#8b96a5',
+      ft: r.sMin == null ? null : `${r.sMin}-${r.sMax}`,
+      wind_kts: r.wSpd == null ? null : Math.round(r.wSpd), wind_type: r.wType || null,
+    }));
+
   // WATER: measured by the buoys right now, and the marine model's next day beside it, at the hours
   // worth naming rather than all 24 of them.
   const sea = liveBuoy.blend();
@@ -665,6 +683,7 @@ async function surfLive() {
   const water = { now_f: sea ? sea.water_f : null,
                   next: sst.length ? [6, 12, 24].map(at).filter(Boolean) : [] };
   return { surf: buildSurf(snap), wind, sea, buoys: liveBuoy.view(), hours, water,
+           day: { date: dayDate, today: dayDate === nowLocal.slice(0, 10), hours: dayHours },
            weather: getWeather(), generated_at: new Date().toISOString() };
 }
 const surfClients = new Set();

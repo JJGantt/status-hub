@@ -1,0 +1,26 @@
+/* The surf app's page (surf.html) — read in the Gnarcast app at the phone's own size. */
+body.surfapp{background:#06080a;margin:0;padding:env(safe-area-inset-top) 0 env(safe-area-inset-bottom);
+  color:#e6eaf0;-webkit-text-size-adjust:100%}
+.sp{display:flex;flex-direction:column;gap:10px;padding:10px 12px 24px}
+.sp-live{display:flex;flex-direction:column;gap:8px}
+.sp-card{background:#11161c;border:1px solid #222a33;border-radius:12px;padding:10px 12px}
+.sp-h{display:flex;align-items:baseline;gap:8px;font-size:12px;font-weight:700;color:#8b96a5;
+  text-transform:uppercase;letter-spacing:.06em}
+.sp-sub{font-weight:600;text-transform:none;letter-spacing:0;color:#6b7684}
+.sp-age{margin-left:auto;font-weight:600;text-transform:none;letter-spacing:0;color:#6b7684}
+.sp-big{font-size:26px;font-weight:800;margin:4px 0 2px;display:flex;align-items:baseline;gap:6px;flex-wrap:wrap}
+.sp-u{font-size:14px;font-weight:700;color:#8b96a5;margin-left:1px}
+.sp-row{display:flex;align-items:baseline;gap:6px;font-size:14px;margin-top:3px;flex-wrap:wrap}
+.sp-dim{color:#8b96a5}
+.sp-k{font-size:11px;font-weight:700;color:#6b7684;text-transform:uppercase;letter-spacing:.05em;min-width:0}
+.sp-k + *{margin-right:8px}
+.sp-chip{font-size:11px;font-weight:800;padding:2px 7px;border-radius:999px;color:#06080a;background:var(--c)}
+.sp-hours{display:grid;grid-template-columns:repeat(13,minmax(0,1fr));gap:3px}
+.sp-hr{display:flex;flex-direction:column;align-items:center;gap:2px;min-width:0}
+.sp-hc{width:100%;height:18px;border-radius:3px}
+.sp-ht,.sp-hf,.sp-hw{font-size:9px;color:#8b96a5;font-variant-numeric:tabular-nums;white-space:nowrap}
+.sp-hw{font-weight:700}
+/* The heat map is the expanded surf sheet's layout (app.css .sectsheet[data-sec="surf"]) in the page
+   rather than over it. */
+.sp-surf.sectsheet{position:static;inset:auto;z-index:auto;background:none;display:flex}
+.sp-surf .ss-body{padding:0;overflow:visible}

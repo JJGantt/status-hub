@@ -148,6 +148,7 @@ async function routingConfig() {
 const { buildVariants } = require('./lib/variants');
 const { createSurfAlarms } = require('./lib/surfalarm');
 const { createLiveWind } = require('./lib/livewind');
+const { createLiveBuoy } = require('./lib/livebuoy');
 const apns = require('./lib/apns');
 const weightReminder = require('./lib/weightReminder');
 
@@ -236,6 +237,7 @@ const MIC_HTML = fs.readFileSync(path.join(__dirname, 'public', 'mic.html'), 'ut
 // wallmode.js can put it on the TV when wall_mode says 'calendar'.
 const ALARM_HTML = fs.readFileSync(path.join(__dirname, 'public', 'alarm.html'), 'utf8');
 const CAL_HTML = fs.readFileSync(path.join(__dirname, 'public', 'calendar.html'), 'utf8');
+const SURF_HTML = fs.readFileSync(path.join(__dirname, 'public', 'surf.html'), 'utf8');
 const TV_CAL_HTML = fs.readFileSync(path.join(__dirname, 'public', 'tv-calendar.html'), 'utf8');
 
 const app = express();
@@ -574,10 +576,74 @@ const liveWind = createLiveWind({
     });
     if (!r.ok) throw new Error(`water_readings upsert -> ${r.status} ${(await r.text()).slice(0, 120)}`);
   },
-  onReading: () => surfAlarms.tick('wind'),
+  onReading: () => { surfAlarms.tick('wind'); pushSurfLive(); },
   log: (m) => console.log(m),
 });
 liveWind.start();
+
+// THE LIVE SWELL (lib/livebuoy.js): the two wave buoys either side of Mayport, read every ten
+// minutes, kept in wave_readings, carried in the status frame as `buoys` and in the surf feed.
+async function upsertRows(table, conflict, rows) {
+  const r = await fetch(`${SUPABASE_URL}/rest/v1/${table}?on_conflict=${conflict}`, {
+    method: 'POST',
+    headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}`,
+               'Content-Type': 'application/json', Prefer: 'resolution=merge-duplicates' },
+    body: JSON.stringify(rows),
+  });
+  if (!r.ok) throw new Error(`${table} upsert -> ${r.status} ${(await r.text()).slice(0, 120)}`);
+}
+const liveBuoy = createLiveBuoy({
+  store: (rows) => upsertRows('wave_readings', 'station,ts', rows),
+  onReading: () => pushSurfLive(),
+  log: (m) => console.log(m),
+});
+liveBuoy.start();
+
+// ---- the surf feed: what the surf app (surf-app repo, Gnarcast) reads ------------------------------
+// One payload: the surf card's own data, the live wind against the forecast, the buoys, and the
+// forecast's next twelve hours ready to paint. Served at /api/surf/live and PUSHED on
+// /api/surf/stream whenever a wind reading, a buoy reading or a forecast arrives — the app page rides
+// that instead of the whole status stream.
+let surfSnap = null;                    // the newest surf_snapshots row, refetched only when it changes
+async function latestSurfSnap() {
+  try {
+    const [head] = await sb('surf_snapshots?slug=eq.mayport-poles&select=captured_at&order=captured_at.desc&limit=1');
+    if (head && (!surfSnap || surfSnap.captured_at !== head.captured_at)) {
+      const [full] = await sb(`surf_snapshots?slug=eq.mayport-poles&captured_at=eq.${encodeURIComponent(head.captured_at)}&select=slug,captured_at,rows`);
+      if (full) surfSnap = full;
+    }
+  } catch (_) { /* keep the copy already held */ }
+  return surfSnap;
+}
+async function surfLive() {
+  const snap = await latestSurfSnap();
+  const now = Date.now() / 1000;
+  const hours = ((snap && snap.rows) || [])
+    .filter((r) => r.ts >= now - 3600 && r.ts < now + 12 * 3600)
+    .map((r) => ({
+      t: etStringAt(new Date(r.ts * 1000)).slice(11, 16),
+      rating: ratingLabel(r.rk), color: SURF_BAND_COLORS[surfBand(r.rk)] || '#8b96a5',
+      ft: r.sMin == null ? null : `${r.sMin}-${r.sMax}`,
+      wind_kts: r.wSpd == null ? null : Math.round(r.wSpd), wind_type: r.wType || null,
+    }));
+  // Wind TYPE wears one colour everywhere the app draws it: offshore is what grooms a wave, onshore
+  // what breaks one up.
+  const TYPE_COLORS = { Offshore: '#34c759', 'Cross-shore': '#ffcc00', Onshore: '#ff3b30' };
+  const wind = liveWind.view(snap);
+  if (wind) {
+    wind.type_color = TYPE_COLORS[wind.type] || '#8b96a5';
+    if (wind.forecast) wind.forecast.type_color = TYPE_COLORS[wind.forecast.type] || '#8b96a5';
+  }
+  for (const h of hours) h.wind_color = TYPE_COLORS[h.wind_type] || '#8b96a5';
+  return { surf: buildSurf(snap), wind, buoys: liveBuoy.view(), hours, generated_at: new Date().toISOString() };
+}
+const surfClients = new Set();
+async function pushSurfLive() {
+  if (!surfClients.size) return;
+  let frame;
+  try { frame = 'event: surf\ndata: ' + JSON.stringify(await surfLive()) + '\n\n'; } catch (_) { return; }
+  for (const res of surfClients) { try { res.write(frame); } catch {} }
+}
 
 // THE WIND VETO (docs/ALARMS.md): measured ONSHORE wind at or over `surf_veto_kts` (default 8) rules
 // the rest of today's hours out of a surf alarm, whatever the forecast said. The half-hour average,
@@ -880,7 +946,7 @@ async function buildStatus() {
       else break;
     }
   }
-  return { today, litter, feeder, surf, wind: liveWind.view((surfRows || [])[0]), weather: getWeather(), nutrition, maintenance, pace: paceData, volume, heatmap, nutrition_log,
+  return { today, litter, feeder, surf, wind: liveWind.view((surfRows || [])[0]), buoys: liveBuoy.view(), weather: getWeather(), nutrition, maintenance, pace: paceData, volume, heatmap, nutrition_log,
     heatmap_home, nutrition_log_home, weight_plot, weight_plot_phone,
     last_set_at, session_start_at, sets_today, rep_watcher, routing, mics, score, desk_focus: deskFocus,
     // THE BUILD THIS FRAME CAME FROM. A page that has been open for hours never re-requests its own
@@ -990,7 +1056,7 @@ function startRealtime() {
     .on('postgres_changes', { event: '*', schema: 'public', table: 'exercise_muscles' }, changed)
     // A new snapshot changes both the card's current reading and the heatmap behind it.
     .on('postgres_changes', { event: '*', schema: 'public', table: 'surf_snapshots' },
-      (p) => { dirtySurfHist(); changed(p); surfAlarms.tick('snapshot'); })
+      (p) => { dirtySurfHist(); changed(p); surfAlarms.tick('snapshot'); pushSurfLive(); })
     .on('postgres_changes', { event: '*', schema: 'public', table: 'surf_alarms' },
       () => { seen(); surfAlarms.tick('rule'); })
     // The rep watcher, so setting it appears at once rather than on the next periodic
@@ -2336,6 +2402,24 @@ app.post('/api/attach', express.raw({ type: () => true, limit: '30mb' }), async 
 
 // Client error sink: the phone POSTs a failed quick-photo's real reason here (step, file type/size,
 // server error) so a failure that's otherwise invisible in the phone's console lands in the app log.
+app.get('/api/surf/live', async (req, res) => {
+  try { res.json(await surfLive()); } catch (e) { res.status(500).json({ error: String(e.message || e) }); }
+});
+app.get('/api/surf/stream', async (req, res) => {
+  res.set({ 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache',
+            Connection: 'keep-alive', 'X-Accel-Buffering': 'no' });
+  res.flushHeaders();
+  surfClients.add(res);
+  try { res.write('event: surf\ndata: ' + JSON.stringify(await surfLive()) + '\n\n'); } catch (_) {}
+  const ka = setInterval(() => { try { res.write(PING); } catch {} }, 25000);
+  req.on('close', () => { clearInterval(ka); surfClients.delete(res); });
+});
+// The surf app's page (surf-app repo): the live readings and the surf heat map, full screen.
+app.get('/surf', (req, res) => {
+  res.setHeader('Cache-Control', 'no-cache');
+  res.type('html').send(SURF_HTML);
+});
+
 // The live wind and the readings behind it (lib/livewind.js) — the same `wind` the status frame
 // carries, plus the last few hours of six-minute readings for a surface that wants to draw them.
 app.get('/api/wind', async (req, res) => {

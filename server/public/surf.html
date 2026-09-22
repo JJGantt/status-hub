@@ -1,0 +1,18 @@
+<!doctype html><html><head><meta charset=utf-8>
+<meta name=viewport content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<title>Gnarcast</title>
+<link rel="stylesheet" href="app.css">
+<link rel="stylesheet" href="surf.css">
+<!-- One bundle per page, built by build.js from public/pages/surf.js. -->
+<script type="module" src="dist/surf.js"></script>
+</head><body class="tv phonewall surfapp">
+<!-- THE SURF APP'S PAGE (surf-app repo, Gnarcast), painted by surfpage.js from /api/surf/stream: the
+     live readings, the forecast's next hours, and the surf heat map. The heat map is the surf card
+     inside the same wrapper the phone's expanded surf sheet uses, so it is that sheet's full layout
+     — gutter, weekday letters, key, hourly rules — and not a third one. -->
+<main class="sp">
+  <section class="sp-live" id="sp-live"></section>
+  <section class="sp-hours" id="sp-hours"></section>
+  <div class="sectsheet open sp-surf" data-sec="surf"><div class="ss-body"><div class="fit" id="surf"></div></div></div>
+</main>
+</body></html>

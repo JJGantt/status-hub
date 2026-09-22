@@ -3,6 +3,7 @@
 // hours — so this only lays them out.
 import { esc, liveStream, state } from './shared.js';
 import * as surf from './cards/surf.js';
+import * as weather from './cards/weather.js';
 
 const num = (v, unit) => (v == null ? '—' : `${v}${unit || ''}`);
 const age = (m) => (m == null ? '' : m < 60 ? `${m}m` : `${Math.floor(m / 60)}h ${m % 60}m`);
@@ -34,9 +35,20 @@ function seaHtml(sea, buoys) {
     `<div class="sp-big">${num(sea.wvht_ft)}<span class="sp-u">ft</span> @ ${num(sea.dpd_s, 's')} ${esc(sea.mwd_compass || '')}</div>` +
     part('Swell', sea.swh_ft, sea.swp_s, sea.swd) +
     part('Wind waves', sea.wwh_ft, sea.wwp_s, sea.wwd) +
-    (sea.water_f != null ? `<div class="sp-row sp-dim"><span class="sp-k">Water</span>${sea.water_f}°</div>` : '') +
     '<div class="sp-row sp-dim">' + (buoys || []).map((b) =>
       `<span class="sp-k">${esc(b.name)}</span>${num(b.wvht_ft, ' ft')}`).join('') + '</div>' +
+    '</div>';
+}
+
+// WATER: what the buoys read now, and the marine model's next day beside it.
+const hourLabel = (h) => `${(+h) % 12 || 12}${+h < 12 ? 'a' : 'p'}`;
+function waterHtml(w) {
+  if (!w || (w.now_f == null && !(w.next || []).length)) return '';
+  return '<div class="sp-card">' +
+    '<div class="sp-h">Water</div>' +
+    `<div class="sp-big">${num(w.now_f)}<span class="sp-u">°</span></div>` +
+    ((w.next || []).length ? '<div class="sp-row sp-dim">' + w.next.map((n) =>
+      `<span class="sp-k">${esc(hourLabel(n.t))}</span>${num(n.f, '°')}`).join('') + '</div>' : '') +
     '</div>';
 }
 
@@ -49,15 +61,17 @@ function hoursHtml(hours) {
 
 let captured = null;
 function paint(d) {
-  document.getElementById('sp-live').innerHTML = windHtml(d.wind) + seaHtml(d.sea, d.buoys);
+  document.getElementById('sp-live').innerHTML = windHtml(d.wind) + seaHtml(d.sea, d.buoys) + waterHtml(d.water);
   document.getElementById('sp-hours').innerHTML = hoursHtml(d.hours);
   // The heat map is rebuilt only for a new forecast: rebuilding it on every reading would throw away
   // where it was scrolled to every ten minutes.
   const at = d.surf && d.surf.capturedAt;
   // The card re-renders itself from `state.last` once its history arrives. With no status stream on
   // this page, this is that frame's only writer.
-  state.last = { surf: d.surf };
+  state.last = { surf: d.surf, weather: d.weather };
   if (at !== captured) { captured = at; surf.render(state.last); }
+  // Rain chance, the hub's own card (cards/weather.js): 7 days x 24 hours, drawn from the same frame.
+  weather.render(state.last);
 }
 
 liveStream('/api/surf/stream', { surf: (e) => { try { paint(JSON.parse(e.data)); } catch (_) {} } });

@@ -24,3 +24,9 @@ body.surfapp{background:#06080a;margin:0;padding:env(safe-area-inset-top) 0 env(
    rather than over it. */
 .sp-surf.sectsheet{position:static;inset:auto;z-index:auto;background:none;display:flex}
 .sp-surf .ss-body{padding:0;overflow:visible}
+/* RAIN: the card is written for a wall — its own 24-hour band and three graded guides. Here it is a
+   strip under the heat map, 6am to midnight with one guide at 3pm, as on the phone's home page. */
+.sp-rain{display:flex;flex-direction:column;gap:6px;background:#11161c;border:1px solid #222a33;
+  border-radius:12px;padding:10px 12px}
+.sp-rain #weather{height:104px;display:flex;flex-direction:column;--wx-h0:6;--wx-h1:24;--wx-guide:15}
+.sp-rain .wx-peak span{font-size:12px}

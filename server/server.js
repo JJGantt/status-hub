@@ -615,6 +615,21 @@ async function latestSurfSnap() {
   } catch (_) { /* keep the copy already held */ }
   return surfSnap;
 }
+// The SEA-TEMPERATURE forecast (Open-Meteo's marine model, kept as station `open-meteo` in
+// water_readings by surf-report's collector). Hourly and slow-moving, so it is read once every half
+// hour rather than on every push.
+let sstCache = { at: 0, rows: [] };
+async function sstAhead() {
+  if (Date.now() - sstCache.at < 30 * 60 * 1000) return sstCache.rows;
+  try {
+    const from = new Date(Date.now() - 3600 * 1000).toISOString();
+    const rows = await sb('water_readings?station=eq.open-meteo&lead_hours=not.is.null'
+      + `&ts=gte.${encodeURIComponent(from)}&select=ts,water_f&order=ts.asc&limit=48`);
+    sstCache = { at: Date.now(), rows: rows || [] };
+  } catch (_) { /* keep what is held */ }
+  return sstCache.rows;
+}
+
 async function surfLive() {
   const snap = await latestSurfSnap();
   const now = Date.now() / 1000;
@@ -635,8 +650,20 @@ async function surfLive() {
     if (wind.forecast) wind.forecast.type_color = TYPE_COLORS[wind.forecast.type] || '#8b96a5';
   }
   for (const h of hours) h.wind_color = TYPE_COLORS[h.wind_type] || '#8b96a5';
-  return { surf: buildSurf(snap), wind, sea: liveBuoy.blend(), buoys: liveBuoy.view(), hours,
-           generated_at: new Date().toISOString() };
+  // WATER: measured by the buoys right now, and the marine model's next day beside it, at the hours
+  // worth naming rather than all 24 of them.
+  const sea = liveBuoy.blend();
+  const sst = await sstAhead();
+  const at = (h) => {
+    const want = Date.now() + h * 3600 * 1000;
+    const r = sst.reduce((a, b) => (Math.abs(Date.parse(b.ts) - want) < Math.abs(Date.parse(a.ts) - want) ? b : a), sst[0]);
+    return r && Math.abs(Date.parse(r.ts) - want) < 2 * 3600 * 1000
+      ? { t: etStringAt(new Date(r.ts)).slice(11, 13), f: r.water_f } : null;
+  };
+  const water = { now_f: sea ? sea.water_f : null,
+                  next: sst.length ? [6, 12, 24].map(at).filter(Boolean) : [] };
+  return { surf: buildSurf(snap), wind, sea, buoys: liveBuoy.view(), hours, water,
+           weather: getWeather(), generated_at: new Date().toISOString() };
 }
 const surfClients = new Set();
 async function pushSurfLive() {

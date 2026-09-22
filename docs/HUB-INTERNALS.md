@@ -125,7 +125,7 @@ Supabase ──▶ server.js buildStatus() ──▶ /api/status payload ──�
 | `weight_plot` | the home wall's weekly weigh-in average, one point per heat-map week column | `lib/weightplot` |
 | `litter` / `feeder` / `surf` | those device/status cards | Supabase rows (`device_status`, snapshots); litter through `buildLitter` |
 | `weather` | the rain-chance grid beside surf — 7 days x 24 hours, the drawn window, the week's peak and the palette | `lib/weather` (NWS gridpoint, cached 15m; **the only outbound fetch in the frame**, and it never blocks it — `getWeather()` returns the last good copy and refreshes behind the caller) |
-| `wind` | the live wind at the break — the dock's newest reading, its half-hour average, its type (onshore / offshore / cross-shore) and compass point, and beside it the forecast for this hour and the difference. No surface draws it yet | `lib/livewind` (NDBC MYPF1, read every 10m — a timer because NDBC publishes files, not events) |
+| `wind` | the live wind at the break — the dock's newest reading, its half-hour average, its type (onshore / offshore / cross-shore) and compass point, and beside it the forecast for this hour and the difference. No surface draws it yet | `lib/livewind` (the MYPF1 dock via NOAA CO-OPS 8720218, read every 10m — a timer because the API pushes nothing) |
 | `rep_watcher` | what the Apple-Watch rep watcher is logging as | `sets`/watcher state |
 | `last_set_at` / `session_start_at` | the rest clock + "since last set" | derived from `sets` |
 | `routing` / `mics` | voice liveness strip (ESP/Mac/Pi + always-on/inject) | `voice_presence`, `worker_presence`, `app_settings` |

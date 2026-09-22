@@ -133,10 +133,11 @@ The forecast the morning is decided on is old by the time it matters. Surfline r
 time. The wind is what moves in that gap.
 
 `surfVeto` in `server.js`: when the half-hour average of the MEASURED wind (`lib/livewind.js`, the
-MYPF1 dock 2.2 miles away, read every ten minutes) is ONSHORE at or over `surf_veto_kts` (Settings,
-default 8, 0 turns it off), every hour of TODAY from the current one on counts as not Fair. Only
-while the reading is fresh (75 minutes: the station reaches NDBC about 35 minutes late) and only for
-today's alarm. Every new reading re-runs the decision until the wake time, so a veto that lifts brings
+Mayport Bar Pilots dock 2.2 miles away — NDBC's MYPF1, read from NOAA CO-OPS as 8720218 every ten
+minutes) is ONSHORE at or over `surf_veto_kts` (Settings, default 8, 0 turns it off), every hour of
+TODAY from the current one on counts as not Fair. Only while the reading is fresh (30 minutes: CO-OPS
+serves a reading about six minutes after it is taken) and only for today's alarm. NDBC's own file is
+the wrong source for this: it is rewritten about hourly, so its newest reading is 30-90 minutes old. Every new reading re-runs the decision until the wake time, so a veto that lifts brings
 the alarm back, and the moment itself is never moved.
 
 What the history since July says, and why the rule is this one:

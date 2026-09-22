@@ -93,7 +93,8 @@ The most-used case, end to end. No session and no model is involved after the co
 3. The hub decides (`server/lib/surfalarm.js`). It already subscribes to `surf_snapshots`, so every
    new capture re-decides, and so does any change to `surf_alarms` (in the realtime publication).
    A 15-minute backstop reads only the newest snapshot's timestamp, and nothing when no alarm is set.
-   `decided` on the row records the last answer: which snapshot, which rule, what time.
+   Every new LIVE WIND reading re-decides too, for the veto below. `decided` on the row records the
+   last answer: which snapshot, which rule, what time, and the veto when it changed the answer.
 4. The decision drives the row's `outputs`, a registry in that file — a new form of alarm is one
    more entry there. Today there is one, `item`: an alarm-marked `list_items` row the hub creates,
    moves and deletes, holding its id in `state`. It goes on the `l_alarms` list and is EXEMPT —
@@ -123,6 +124,36 @@ nothing but to be on; these are for the phone to ring as well:
 `audio`, `media` (readyState), `lock`, `visible`, `next`, `armed`, `guided`. That beacon exists
 because every failure here has been a silent one that reported success — `audio: "running"` was
 true the whole morning nothing came out of the speaker.
+
+## The wind veto: the live wind can rule a Fair forecast out
+
+The forecast the morning is decided on is old by the time it matters. Surfline runs its model at
+00/06/12/18Z and each run reaches the site 7-10 hours later, so what the hub holds at 5am is the
+**8pm** run from the night before, and the 2am run lands around 10am to noon — too late for a wake
+time. The wind is what moves in that gap.
+
+`surfVeto` in `server.js`: when the half-hour average of the MEASURED wind (`lib/livewind.js`, the
+MYPF1 dock 2.2 miles away, read every ten minutes) is ONSHORE at or over `surf_veto_kts` (Settings,
+default 8, 0 turns it off), every hour of TODAY from the current one on counts as not Fair. Only
+while the reading is fresh (75 minutes: the station reaches NDBC about 35 minutes late) and only for
+today's alarm. Every new reading re-runs the decision until the wake time, so a veto that lifts brings
+the alarm back, and the moment itself is never moved.
+
+What the history since July says, and why the rule is this one:
+
+- **Wind cannot make an hour Fair, only rule it out.** On light offshore wind a 1-2 ft morning is still
+  rated Fair only 15-20% of the time — swell decides that. Onshore at 8 kt or more has never been rated
+  Fair, at any size, which is where the default sits.
+- **4 kt onshore is too aggressive.** Surfline rates 2-3 ft mornings Fair 11-23% of the time at 4-6 kt
+  onshore, and it re-rated several light-onshore mornings Fair after the fact.
+- **The direction differing from the forecast is not a signal at light wind.** Measured offshore or
+  cross-shore where the forecast said otherwise, at 2-3 kt, happened on six Fair hours and every one
+  stayed Fair in Surfline's own revision.
+- **The wind that spoils a morning builds after dawn.** On the 38 hours the 5am forecast called Fair,
+  the dock read 7 kt or less at 6am every time, including the four hours Surfline later downgraded
+  (Sep 1 and Sep 3), where it built to 8-11 kt onshore by 8-9am. So a veto that looked only at the
+  decision moment would never have fired; its value is that it keeps looking until the wake time,
+  which matters most for a later alarm.
 
 ## Auditing a morning: `alarm_log`
 

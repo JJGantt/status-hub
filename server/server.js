@@ -630,6 +630,25 @@ async function sstAhead() {
   return sstCache.rows;
 }
 
+// THE HEAT MAP'S SIZE COLOURS, for a snapshot's own rows. `/api/surf/history` builds the same ramp
+// over the bands present in ITS window — flat white up to a foot, then the blue ramp by height — and
+// this repeats that over the forecast's, so a colour means the same size wherever the app draws it.
+// They differ only if the archive holds a band the next ten days do not.
+function snapshotSizeColors(rows) {
+  const combos = new Map();
+  for (const r of rows || []) {
+    if (r.sMax == null) continue;
+    const key = `${r.sMin}|${r.sMax}|${r.sPlus ? 1 : 0}`;
+    if (!combos.has(key)) combos.set(key, { min: r.sMin, max: r.sMax, plus: !!r.sPlus });
+  }
+  const order = [...combos.entries()].sort((a, b) =>
+    (a[1].max - b[1].max) || ((a[1].plus ? 1 : 0) - (b[1].plus ? 1 : 0)) || (a[1].min - b[1].min));
+  const nFlat = order.filter(([, v]) => v.max <= SURF_SIZE_FLAT_MAX).length;
+  const colors = Array(nFlat).fill(SURF_SIZE_FLAT).concat(sizeRamp(Math.max(0, order.length - nFlat)));
+  const byKey = new Map(order.map(([k], i) => [k, colors[i]]));
+  return (r) => (r && r.sMax != null ? byKey.get(`${r.sMin}|${r.sMax}|${r.sPlus ? 1 : 0}`) || null : null);
+}
+
 async function surfLive() {
   const snap = await latestSurfSnap();
   const now = Date.now() / 1000;
@@ -658,6 +677,7 @@ async function surfLive() {
   const nowLocal = etNowString();
   const dayDate = +nowLocal.slice(11, 13) < 18 ? nowLocal.slice(0, 10)
     : localDate(new Date(Date.now() + 86400000));
+  const sizeColor = snapshotSizeColors((snap && snap.rows) || []);
   const dayHours = ((snap && snap.rows) || []).map((r) => {
     const local = etStringAt(new Date(r.ts * 1000));
     return { local, r };
@@ -666,7 +686,8 @@ async function surfLive() {
       h: +local.slice(11, 13),
       t: (() => { const h = +local.slice(11, 13); return `${h % 12 || 12}${h < 12 ? 'a' : 'p'}`; })(),
       rating: ratingLabel(r.rk), color: SURF_BAND_COLORS[surfBand(r.rk)] || '#8b96a5',
-      ft: r.sMin == null ? null : `${r.sMin}-${r.sMax}`,
+      ft: r.sMin == null ? null : `${r.sMin}-${r.sMax}${r.sPlus ? '+' : ''}`,
+      size_color: sizeColor(r),
       wind_kts: r.wSpd == null ? null : Math.round(r.wSpd), wind_type: r.wType || null,
     }));
 

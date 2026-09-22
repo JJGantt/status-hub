@@ -21,7 +21,7 @@
      15-week one — because its maps scroll: the box decides what is on screen and the rest is a drag
      away, and a trim cannot carry the archive anyway (see heatPick in shared.js).
 
-     Swipe panes: [sessions] [home] [misc] [reports], landing on home. There is no
+     Swipe panes: [sessions] [home] [reports], landing on home. There is no
      chat pane — the hub conversation is on this page, and the navbar's microphone is how you answer
      it, so the pane left of home is the sessions view instead. -->
 <!-- TYPING TO THE HUB. The conversation is on the home page and the navbar's microphone answers it,
@@ -80,6 +80,16 @@
       <div class="card calmonth"><div id="calmonth"></div></div>
       <div class="card daycardwrap"><div id="daycard"></div></div>
       <div class="card todocard"><div id="todopane"></div></div>
+    </div>
+    <!-- UTILITIES, opened from the navbar (expand.js, `util`): the litter robot and the feeder. -->
+    <div id="utilsheet" class="devcards">
+      <div class="card statuscard"><div class="fit" id="litter"><h2>Litter-Robot</h2><div class=big>…</div></div></div>
+      <div class="card statuscard"><div class="fit" id="feeder"><h2>Cat Feeder</h2><div class=big>…</div></div></div>
+    </div>
+    <!-- THE VOICE SYSTEM — the mics and the routing — shown at the bottom of Settings (settings.js). -->
+    <div id="voicesys" class="devcards">
+      <div class="card statuscard"><div class="fit" id="mics"><h2>Voice System</h2><div class=big>…</div></div></div>
+      <div class="card statuscard"><div class="fit" id="tv-routing"></div></div>
     </div>
 
     <!-- FOOD and TRAINING, STACKED, with the body beside the workout half — the wall's arrangement.
@@ -175,15 +185,6 @@
 </div>
 </section>
 
-<section class="pane pane-misc">
-  <!-- The devices: the litter robot and the feeder, and whether the mics are alive. They came off
-       the home column when it had to fit one screen — none of them changes hour to hour, and all
-       three are a chip strip, which is the one shape a swipe pane has room to spare for. -->
-  <div class="card statuscard"><div class="fit" id="litter"><h2>Litter-Robot</h2><div class=big>…</div></div></div>
-  <div class="card statuscard"><div class="fit" id="feeder"><h2>Cat Feeder</h2><div class=big>…</div></div></div>
-  <div class="card statuscard"><div class="fit" id="mics"><h2>Voice System</h2><div class=big>…</div></div></div>
-  <div class="card statuscard"><div class="fit" id="tv-routing"></div></div>
-</section>
 
 
 

@@ -47,6 +47,8 @@ const voiceOwners = new Map();         // clip id -> the live recorder that took
 // VOICE_BPS is ~7MB and Groq answers in seconds, so two minutes means the request is not coming back.
 const VOICE_SEND_MS = 120000;
 // Both durable outboxes, up here because boot() drains them at load (idbBox is a hoisted declaration).
+// The PHOTO outbox is drained and never filled: the navbar camera that queued into it is gone, and a
+// picture now goes through the composer. This only empties whatever that camera left behind.
 const photoBox = idbBox('hub-photo-outbox');
 const voiceBox = idbBox('hub-voice-outbox');
 let activeMode = 'hub';         // which mode's conversation the panel shows — follows agent_mode, live
@@ -649,13 +651,6 @@ function idbBox(name) {
   };
 }
 
-async function outboxBadge() {
-  let n = 0;
-  try { n = ((await photoBox.all()) || []).length; } catch (_) {}
-  try { window.dispatchEvent(new CustomEvent('hub-photo-outbox', { detail: { pending: n } })); } catch (_) {}
-}
-export async function pendingPhotoCount() { try { return ((await photoBox.all()) || []).length; } catch (_) { return 0; } }
-
 const shrinkTwice = async (file) => {                  // the iOS canvas decode can miss transiently; one retry before the raw fallback
   try { return await shrink(file); } catch (_) { return await shrink(file); }
 };
@@ -722,21 +717,7 @@ export async function runPhotoOutbox(onStatus) {
     }
   } finally {
     _outboxBusy = false;
-    outboxBadge();
   }
-}
-
-// Capture entry point (navbar camera button): persist FIRST, then kick the processor. Resolves as soon as
-// the photo is safely on disk; the upload+send proceed in the background and survive interruption.
-export async function enqueuePhoto(file, onStatus) {
-  const item = { id: uid(), createdAt: Date.now(), file, type: (file && file.type) || '',
-    client_now: localNowNaive(), clientMsgId: uid(), path: null, text: '' };
-  await photoBox.put(item);                            // from here the photo cannot be lost
-  outboxBadge();
-  // Show it in the conversation the instant it's taken (where a chat card exists), not only once the worker
-  // replies. Keyed by clientMsgId so the outbox can attach the uploaded path, and the server row can replace it.
-  if (_card) { try { _card.optimistic({ localImages: [URL.createObjectURL(file)], clientId: item.clientMsgId, kind: 'photo' }); } catch (_) {} }
-  runPhotoOutbox(onStatus);                            // fire-and-forget; resumes later if this send is interrupted (shows 'Uploading photo…' first)
 }
 
 // ===== durable voice outbox ==============================================================

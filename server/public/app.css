@@ -774,15 +774,16 @@ body.tv.phonewall .pane-repos.sv-open #repospane{flex:1 1 auto;min-height:0;disp
   background:repeating-linear-gradient(45deg,#39434f 0 2px,#7c8794 2px 4px)}
 .mv-math{margin-top:9px;font-size:12px;color:#c7ced8;font-variant-numeric:tabular-nums;background:#0e1318;
   border:1px solid #222a33;border-radius:8px;padding:8px 10px}
-/* the misc pane renders at NATIVE phone scale — undo the wall's canvas-sized chrome/type inside it */
-body.tv.phonewall .pane-misc .card{flex:0 0 auto;background:#151a20!important;border:1px solid #222a33}
-body.tv.phonewall .pane-misc .card h2{display:block}
-body.tv.phonewall .pane-misc .devstrip{gap:18px 28px}
-body.tv.phonewall .pane-misc .devicon{height:22px}
-body.tv.phonewall .pane-misc .devchip{background:#0e1318;border:1px solid #222a33;padding:5px 11px;gap:6px}
-body.tv.phonewall .pane-misc .devchip .dc-l{font-size:12px}
-body.tv.phonewall .pane-misc .devchip .dc-v{font-size:15px}
-body.tv.phonewall .pane-misc .devchip .dc-v .dot{width:9px;height:9px;margin-right:6px}
+/* the device cards at NATIVE phone scale — a wall's misc pane, and the phone home page's utilities
+   sheet and Settings (.devcards) — undo the wall's canvas-sized chrome/type inside them */
+body.tv.phonewall .pane-misc .card,body.tv .devcards .card{flex:0 0 auto;background:#151a20!important;border:1px solid #222a33}
+body.tv.phonewall .pane-misc .card h2,body.tv .devcards .card h2{display:block}
+body.tv.phonewall .pane-misc .devstrip,body.tv .devcards .devstrip{gap:18px 28px}
+body.tv.phonewall .pane-misc .devicon,body.tv .devcards .devicon{height:22px}
+body.tv.phonewall .pane-misc .devchip,body.tv .devcards .devchip{background:#0e1318;border:1px solid #222a33;padding:5px 11px;gap:6px}
+body.tv.phonewall .pane-misc .devchip .dc-l,body.tv .devcards .devchip .dc-l{font-size:12px}
+body.tv.phonewall .pane-misc .devchip .dc-v,body.tv .devcards .devchip .dc-v{font-size:15px}
+body.tv.phonewall .pane-misc .devchip .dc-v .dot,body.tv .devcards .devchip .dc-v .dot{width:9px;height:9px;margin-right:6px}
 body.tv.phonewall .rows{height:100%}
 
 /* ===== MAC APP (body.tv.mac, from ?mode=mac): the landscape wall rendered INTERACTIVELY. Layout is a

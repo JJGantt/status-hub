@@ -305,7 +305,7 @@ onThread((row) => { if (!row) { resync(); return; } takeRow(row); settle(row); p
 
 // ---- the swipe panes -----------------------------------------------------
 //
-// [sessions] [home] [misc] [reports], landing on home — index 1, which is what
+// [sessions] [home] [reports], landing on home — index 1, which is what
 // `clientWidth` means here and what the reset returns to. The wall's version of this (wall.js) also
 // scales a 1920x1080 canvas down to fit; there is nothing to scale here — the page is laid out at the
 // phone's own size — so only the paging is left.

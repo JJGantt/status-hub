@@ -3,7 +3,7 @@
 // the single voice button — one dynamic route (Sonnet handles the simple stuff, escalates to Opus
 // when it needs to) — tap-to-talk, driving the shared activity popup.
 // Mounted once per page by core.js.
-import { makeRecorder, makeListener, activityBar, enqueuePhoto, pendingPhotoCount, bindTap } from './voiceagent.js';
+import { makeRecorder, makeListener, activityBar, bindTap } from './voiceagent.js';
 import { open as openSettings } from './settings.js';
 
 const CHAT = '<svg viewBox="0 0 24 24" width="21" height="21" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
@@ -15,8 +15,10 @@ const GEAR = '<svg viewBox="0 0 24 24" width="21" height="21" fill="none" stroke
   '<circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1Z"></path></svg>';
 const SWAP = '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
   '<path d="M16 3l4 4-4 4M20 7H8M8 21l-4-4 4-4M4 17h12"></path></svg>';
-const CAMERA = '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
-  '<path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2Z"></path><circle cx="12" cy="13" r="4"></circle></svg>';
+// Four tiles — the utilities: the devices around the house.
+const UTIL = '<svg viewBox="0 0 24 24" width="21" height="21" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+  '<rect x="3" y="3" width="7" height="7" rx="1.5"></rect><rect x="14" y="3" width="7" height="7" rx="1.5"></rect>' +
+  '<rect x="3" y="14" width="7" height="7" rx="1.5"></rect><rect x="14" y="14" width="7" height="7" rx="1.5"></rect></svg>';
 const CAL = '<svg viewBox="0 0 24 24" width="21" height="21" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
   '<rect x="3" y="4" width="18" height="18" rx="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>';
 
@@ -100,9 +102,16 @@ export function mountNavbar() {
     tog.setAttribute('aria-label', 'Back to the wall');
     tog.onclick = () => { location.href = '/'; };
     left.appendChild(tog);
-  } else if (!document.body.classList.contains('phonehome')) {
-    // Everywhere the navbar mounts except the calendar itself and the phone's home page, where the
-    // calendar opens by tapping the day strip: the way IN to the calendar.
+  } else if (document.body.classList.contains('phonehome')) {
+    // The phone's home page opens its calendar by tapping the day strip, so this slot is the
+    // utilities sheet instead (expand.js, `util`).
+    const util = document.createElement('button');
+    util.className = 'nav-toggle'; util.type = 'button'; util.innerHTML = UTIL;
+    util.setAttribute('aria-label', 'Utilities');
+    util.onclick = () => { if (window.__openSection) window.__openSection('util'); };
+    left.appendChild(util);
+  } else {
+    // Everywhere else the navbar mounts, except the calendar itself: the way IN to the calendar.
     const cal = document.createElement('button');
     cal.className = 'nav-toggle'; cal.type = 'button'; cal.innerHTML = CAL;
     cal.setAttribute('aria-label', 'Calendar');
@@ -120,49 +129,9 @@ export function mountNavbar() {
   }
   const right = document.createElement('div'); right.className = 'navbar-grp';
 
-  // One-shot photo: camera ONLY (no library — `capture` skips straight to the camera sheet), shrinks +
-  // uploads + sends immediately as a photo-only message. For "one photo is all the context I need" —
-  // the composer's attach button (review tray, add text) is for anything more deliberate than that.
-  const camIn = document.createElement('input');
-  camIn.type = 'file'; camIn.accept = 'image/*'; camIn.style.display = 'none';
-  camIn.setAttribute('capture', 'environment');
-  const camBtn = document.createElement('button');
-  camBtn.className = 'wfab wfab-cam'; camBtn.type = 'button'; camBtn.setAttribute('aria-label', 'Quick photo');
-  camBtn.innerHTML = CAMERA;
-  camBtn.style.position = 'relative';
-  // Count badge: photos captured but not yet sent (persisted in the durable outbox, so never lost).
-  // Driven live by the outbox's 'hub-photo-outbox' event; seeded with the current count on mount.
-  const camBadge = document.createElement('span');
-  camBadge.style.cssText = 'position:absolute;top:-3px;right:-3px;min-width:17px;height:17px;padding:0 4px;border-radius:9px;background:#e0492f;color:#fff;font-size:11px;line-height:17px;text-align:center;font-weight:700;pointer-events:none;';
-  camBadge.hidden = true;
-  camBtn.appendChild(camBadge);
-  const setCamBadge = (n) => { camBadge.textContent = String(n || 0); camBadge.hidden = !n; };
-  window.addEventListener('hub-photo-outbox', (e) => setCamBadge((e.detail && e.detail.pending) || 0));
-  pendingPhotoCount().then(setCamBadge);
-  camBtn.addEventListener('click', () => camIn.click());
-  camIn.addEventListener('change', async () => {
-    const f = camIn.files && camIn.files[0]; camIn.value = '';
-    if (!f) return;
-    camBtn.disabled = true; camBtn.classList.add('busy');
-    try {
-      // persist-first: resolves as soon as the photo is safely queued; the upload+send proceed in the
-      // background and survive a screen-lock, resuming automatically when the hub is reopened.
-      await enqueuePhoto(f, (t, kind) => {
-        if (!t) return;
-        if (kind === 'done') activity.done(t);
-        else if (kind === 'wait') activity.err(t);
-        else activity.busy(t);
-      });
-    } catch (e) { activity.err(String(e.message || e)); }
-    finally { camBtn.disabled = false; camBtn.classList.remove('busy'); }
-  });
-  right.appendChild(camBtn);
-  // TYPE TO THE HUB. The microphone beside it is the fast way and the camera is the wordless one;
-  // this is the one for words you would rather not say out loud, or that a transcript gets wrong.
-  // It opens the whole chat rather than a bare input, because composing a reply means seeing what
-  // you are replying to — which is the only thing the home page's tail of the thread cannot give
-  // you while the keyboard is covering half the screen.
-  // OPENING THE CHAT IS NOW THE THREAD'S OWN JOB. The one-line prompt/reply strip on the home page is
+  // TYPE TO THE HUB — and send a picture, which is the composer's attach button: there is no separate
+  // camera path. This is the one for words you would rather not say out loud, or that a transcript gets
+  // wrong. OPENING THE CHAT IS THE THREAD'S OWN JOB. The one-line prompt/reply strip on the home page is
   // already the conversation in miniature, so tapping it is the obvious way in — and it frees the slot
   // beside the microphone for the button that needed one. The sheet it opens is unchanged: the whole
   // thread, because composing a reply means seeing what you are replying to.
@@ -211,6 +180,5 @@ export function mountNavbar() {
 
   const bar = document.createElement('div'); bar.className = 'navbar';
   bar.appendChild(left); bar.appendChild(right);
-  bar.appendChild(camIn);
   document.body.appendChild(bar);
 }

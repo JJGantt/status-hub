@@ -10,6 +10,8 @@ import * as nutritionlog from './cards/nutritionlog.js';
 import * as surf from './cards/surf.js';
 import * as muscle from './cards/muscle.js';
 import * as maintviz from './cards/maintviz.js';
+import * as litter from './cards/litter.js';
+import * as feeder from './cards/feeder.js';
 import { loadHistory, onHistoryLoaded, pinRight } from './heathistory.js';
 
 const HEATS = [workouts, nutritionlog];
@@ -48,6 +50,9 @@ const SECTIONS = {
   // its own (`.ds-hit`, which opens that day in place), so those are `skip`ped rather than opening this.
   cal: { host: '#ph-strip', move: ['#calsheet'], title: 'Calendar', cards: [],
          tap: '.ds-scroll, .ds-here', skip: '.ds-hit', scroller: '.ds-scroll' },
+  // UTILITIES — the litter robot and the feeder — has no summary on the page to tap; the navbar's
+  // utilities button opens it through openSection, so it has no `host`.
+  util: { move: ['#utilsheet'], title: 'Utilities', cards: [litter, feeder] },
   wt: { host: '#weightweeks', move: ['#weightcard'], title: 'Weight', cards: [maintviz],
         heat: '#maintviz .mv-scroll', tap: '#weightweeks', scroller: '.wp-scroll' },
 };
@@ -111,6 +116,9 @@ export function openSection(key) {
   openSheet(key);
   return openKey === key;
 }
+// The navbar is on pages without these sections and does not import this module; a button there
+// reaches it through the window.
+window.__openSection = openSection;
 
 function closeSheet() {
   if (!sheet) return;
@@ -132,7 +140,7 @@ function mount() {
   // main mobile UI only = the wall on a phone-sized viewport. (Big-screen kiosk / desktop are untouched.)
   if (!document.body.classList.contains('tv') || window.innerWidth >= 1400) return;
   for (const key of Object.keys(SECTIONS)) {
-    const host = document.querySelector(SECTIONS[key].host);
+    const host = SECTIONS[key].host && document.querySelector(SECTIONS[key].host);
     if (host) bindTap(host, key);
   }
 }

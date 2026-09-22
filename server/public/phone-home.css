@@ -568,3 +568,11 @@ body.tv.phonehome .sectsheet[data-sec="cal"] #calsheet{display:flex;flex-directi
 body.tv.phonehome #calsheet .card{background:#151a20!important;border:1px solid #222a33;border-radius:12px}
 body.tv.phonehome #calsheet .calmonth{padding:12px}
 body.tv.phonehome #calsheet .daycardwrap{padding:12px 14px 14px}
+/* UTILITIES and THE VOICE SYSTEM live hidden beside the calendar. The first is only ever seen in the
+   sheet the navbar's utilities button opens (expand.js, `util`); the second at the bottom of Settings,
+   which moves it in while the panel is open (settings.js). */
+body.tv.phonehome #utilsheet,body.tv.phonehome #voicesys{display:none}
+body.tv.phonehome .sectsheet[data-sec="util"] .ss-body{overflow-y:auto;padding:10px 12px 70px}
+body.tv.phonehome .sectsheet[data-sec="util"] #utilsheet{display:flex;flex-direction:column;gap:12px;flex:0 0 auto}
+body.tv.phonehome .settings-panel #voicesys{display:flex;flex-direction:column;gap:12px;margin-top:18px}
+body.tv.phonehome .devcards .card{border-radius:12px}

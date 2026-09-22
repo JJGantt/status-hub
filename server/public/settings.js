@@ -134,7 +134,13 @@ export async function open() {
     '</div>';
   document.body.appendChild(back);
 
-  const close = () => back.remove();
+  // THE VOICE SYSTEM — the mics and the routing — sits at the bottom of Settings on the phone's home
+  // page (#voicesys there). It is MOVED in for as long as the panel is open and put back on close, so
+  // its cards keep rendering on every frame like any other; a page without it has nothing to move.
+  const vs = document.getElementById('voicesys');
+  const vsAt = vs ? document.createComment('voicesys') : null;
+  if (vs) { vs.before(vsAt); back.querySelector('.settings-panel').appendChild(vs); }
+  const close = () => { if (vs) vsAt.replaceWith(vs); back.remove(); };
   back.addEventListener('click', (e) => { if (e.target === back) close(); });
   // Picking a tone previews it: choosing an alarm you have not heard is choosing blind, and this is
   // the only place it can be auditioned before 7am. One element reused, so a second press replaces

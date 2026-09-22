@@ -576,3 +576,11 @@ body.tv.phonehome .sectsheet[data-sec="util"] .ss-body{overflow-y:auto;padding:1
 body.tv.phonehome .sectsheet[data-sec="util"] #utilsheet{display:flex;flex-direction:column;gap:12px;flex:0 0 auto}
 body.tv.phonehome .settings-panel #voicesys{display:flex;flex-direction:column;gap:12px;margin-top:18px}
 body.tv.phonehome .devcards .card{border-radius:12px}
+/* The routing strip's phone sizes in app.css are for a wall scaled to about a third; here it is read
+   at native size, in a panel narrower than a wall's strip, so it takes the base sizes and wraps. */
+body.tv.phonehome .devcards #tv-routing .devstrip,body.tv.phonehome .devcards #tv-routing .devchips{flex-wrap:wrap;
+  justify-content:flex-start;gap:8px 10px}
+body.tv.phonehome .devcards #tv-routing .rt-flag{font-size:14px}
+body.tv.phonehome .devcards #tv-routing .rt-chip{padding:4px 8px;gap:5px}
+body.tv.phonehome .devcards #tv-routing .rt-chip .rt-k{font-size:12px}
+body.tv.phonehome .devcards #tv-routing .rt-chip .rt-v{font-size:15px}

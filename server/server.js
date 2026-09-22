@@ -1279,11 +1279,18 @@ for (const doc of ['privacy', 'terms']) {
   });
 }
 
+// THE SURF APP'S PAGE AND FEEDS ARE PUBLIC, and deliberately: Gnarcast (the surf-app repo) shows them
+// with nothing to sign in to, and nothing in them is personal — a surf forecast, the wind and the
+// buoys, all of it public NOAA and Surfline data. The page's bundle and stylesheets ride along,
+// because it cannot render without them. Everything else stays behind the gate.
+const PUBLIC_SURF = new Set(['/surf', '/api/surf/live', '/api/surf/stream', '/api/surf/history',
+                             '/app.css', '/surf.css', '/dist/surf.js']);
+
 // Auth gate — everything below requires the cookie (or x-hub-token header). The browser
 // sends the cookie on same-origin module/css fetches automatically, so static assets are
 // served behind this gate too.
 app.use((req, res, next) => {
-  if (authed(req)) return next();
+  if (authed(req) || PUBLIC_SURF.has(req.path)) return next();
   // Kiosk device-token: ?token=<TV_TOKEN> on any request authenticates and seeds the cookie
   // so the Pi's subsequent same-origin fetches (SSE, /api/*) are authorized too.
   if (TV_TOKEN && req.query.token === TV_TOKEN) {

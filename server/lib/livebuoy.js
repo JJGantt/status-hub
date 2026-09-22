@@ -79,6 +79,14 @@ async function head(url) {
   return r.text();
 }
 
+// The swell and wind-wave directions arrive as compass POINTS, not degrees, so the blend takes the
+// heavier station's — averaging two labels means inventing a number they never gave.
+function pickPoint(rs, field, w) {
+  let best = null, bestW = -1;
+  rs.forEach((r, i) => { if (r[field] && w[i] > bestW) { best = r[field]; bestW = w[i]; } });
+  return best;
+}
+
 /**
  * `store(rows)` persists new readings (wave_readings); `onReading()` is told whenever one arrives.
  */
@@ -126,12 +134,48 @@ function createLiveBuoy({ store, onReading = () => {}, log = () => {} }) {
     return out;
   }
 
+  // ONE SEA FOR MAYPORT, which sits between the two buoys. Measured over 45 days they barely differ —
+  // 0.31 ft mean absolute difference in total height, 0.11 ft in swell, 0.6s in swell period — so the
+  // blend is not resolving a disagreement, it is cancelling each buoy's noise and giving one number to
+  // read. Weighted by INVERSE DISTANCE (22 mi N, 30 mi S → 0.58 / 0.42), and it falls back to whichever
+  // station is reporting. Directions are averaged circularly; a compass point comes from the result.
+  function blend() {
+    const rs = view();
+    if (!rs.length) return null;
+    const w = rs.map((r) => 1 / r.miles);
+    const total = w.reduce((a, b) => a + b, 0);
+    const mix = (field) => {
+      let sum = 0, weight = 0;
+      rs.forEach((r, i) => { if (r[field] != null) { sum += r[field] * w[i]; weight += w[i]; } });
+      return weight ? r1(sum / weight) : null;
+    };
+    const dir = (field) => {
+      let x = 0, y = 0, weight = 0;
+      rs.forEach((r, i) => {
+        if (r[field] == null) return;
+        x += Math.cos(r[field] * Math.PI / 180) * w[i]; y += Math.sin(r[field] * Math.PI / 180) * w[i]; weight += w[i];
+      });
+      return weight ? Math.round((Math.atan2(y, x) * 180 / Math.PI + 360) % 360) : null;
+    };
+    const mwd = dir('mwd_deg');
+    return {
+      from: rs.map((r) => r.station),
+      weights: rs.map((r, i) => Math.round((w[i] / total) * 100) / 100),
+      age_min: Math.min(...rs.map((r) => r.age_min)),
+      wvht_ft: mix('wvht_ft'), dpd_s: mix('dpd_s'), apd_s: mix('apd_s'),
+      mwd_deg: mwd, mwd_compass: compass(mwd),
+      swh_ft: mix('swh_ft'), swp_s: mix('swp_s'), swd: pickPoint(rs, 'swd', w),
+      wwh_ft: mix('wwh_ft'), wwp_s: mix('wwp_s'), wwd: pickPoint(rs, 'wwd', w),
+      water_f: mix('water_f'),
+    };
+  }
+
   function start() {
     tick();
     setInterval(tick, TICK_MS);
   }
 
-  return { start, tick, view };
+  return { start, tick, view, blend };
 }
 
 module.exports = { createLiveBuoy, merge, table };

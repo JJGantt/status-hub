@@ -25,14 +25,18 @@ function part(label, ft, s, dir) {
   if (ft == null) return '';
   return `<div class="sp-row"><span class="sp-k">${label}</span>${num(ft, ' ft')} @ ${num(s, 's')} ${esc(dir || '')}</div>`;
 }
-function buoyHtml(b) {
+// ONE SEA, blended from the buoys either side (lib/livebuoy.js), with each buoy's own total under it —
+// the blend is what to read, the two are there to show it is not hiding a disagreement.
+function seaHtml(sea, buoys) {
+  if (!sea) return '';
   return '<div class="sp-card">' +
-    `<div class="sp-h">${esc(b.name)}<span class="sp-sub">${b.miles} mi ${esc(b.bearing)}</span>` +
-    `<span class="sp-age">${esc(age(b.age_min))}</span></div>` +
-    `<div class="sp-big">${num(b.wvht_ft)}<span class="sp-u">ft</span> @ ${num(b.dpd_s, 's')} ${esc(b.mwd_compass || '')}</div>` +
-    part('Swell', b.swh_ft, b.swp_s, b.swd) +
-    part('Wind waves', b.wwh_ft, b.wwp_s, b.wwd) +
-    (b.water_f != null ? `<div class="sp-row sp-dim"><span class="sp-k">Water</span>${b.water_f}°</div>` : '') +
+    `<div class="sp-h">Sea<span class="sp-age">${esc(age(sea.age_min))}</span></div>` +
+    `<div class="sp-big">${num(sea.wvht_ft)}<span class="sp-u">ft</span> @ ${num(sea.dpd_s, 's')} ${esc(sea.mwd_compass || '')}</div>` +
+    part('Swell', sea.swh_ft, sea.swp_s, sea.swd) +
+    part('Wind waves', sea.wwh_ft, sea.wwp_s, sea.wwd) +
+    (sea.water_f != null ? `<div class="sp-row sp-dim"><span class="sp-k">Water</span>${sea.water_f}°</div>` : '') +
+    '<div class="sp-row sp-dim">' + (buoys || []).map((b) =>
+      `<span class="sp-k">${esc(b.name)}</span>${num(b.wvht_ft, ' ft')}`).join('') + '</div>' +
     '</div>';
 }
 
@@ -45,7 +49,7 @@ function hoursHtml(hours) {
 
 let captured = null;
 function paint(d) {
-  document.getElementById('sp-live').innerHTML = windHtml(d.wind) + (d.buoys || []).map(buoyHtml).join('');
+  document.getElementById('sp-live').innerHTML = windHtml(d.wind) + seaHtml(d.sea, d.buoys);
   document.getElementById('sp-hours').innerHTML = hoursHtml(d.hours);
   // The heat map is rebuilt only for a new forecast: rebuilding it on every reading would throw away
   // where it was scrolled to every ten minutes.

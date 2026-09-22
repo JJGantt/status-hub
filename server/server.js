@@ -635,7 +635,8 @@ async function surfLive() {
     if (wind.forecast) wind.forecast.type_color = TYPE_COLORS[wind.forecast.type] || '#8b96a5';
   }
   for (const h of hours) h.wind_color = TYPE_COLORS[h.wind_type] || '#8b96a5';
-  return { surf: buildSurf(snap), wind, buoys: liveBuoy.view(), hours, generated_at: new Date().toISOString() };
+  return { surf: buildSurf(snap), wind, sea: liveBuoy.blend(), buoys: liveBuoy.view(), hours,
+           generated_at: new Date().toISOString() };
 }
 const surfClients = new Set();
 async function pushSurfLive() {

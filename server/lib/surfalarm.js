@@ -32,11 +32,14 @@ function localHour(ts, tz) {
 // by ORDER: a wider window listed first wins whenever it is fair, leaving the narrower rule below it
 // to match only when it is not. An hour the forecast does not cover counts as not fair. A rule with
 // both lists empty matches unconditionally — the "otherwise" rule.
-function decide(rules, rows, day, tz) {
+//
+// `notFairFrom` is the wind veto: every hour of `day` from that one on counts as not Fair, whatever
+// the forecast rated it. Null when there is no veto.
+function decide(rules, rows, day, tz, notFairFrom = null) {
   const fair = new Map();
   for (const r of rows || []) {
     const { date, hour } = localHour(r.ts, tz);
-    if (date === day) fair.set(hour, SCALE.indexOf(r.rk) >= MIN_RATING);
+    if (date === day) fair.set(hour, notFairFrom != null && hour >= notFairFrom ? false : SCALE.indexOf(r.rk) >= MIN_RATING);
   }
   for (let i = 0; i < (rules || []).length; i++) {
     const hours = rules[i].hours || [];
@@ -105,7 +108,7 @@ function canon(v) {
   return JSON.stringify(v === undefined ? null : v);
 }
 
-function createSurfAlarms({ sb, sbWrite, uuid, nowLocal, today, tz, log, record = () => {} }) {
+function createSurfAlarms({ sb, sbWrite, uuid, nowLocal, today, tz, log, record = () => {}, veto = async () => null }) {
   const OUTPUTS = makeOutputs({ sb, sbWrite, uuid });
   let snap = null;                 // { captured_at, rows } — rows are ~64KB, so fetched only when new
   let busy = false; let again = false;
@@ -126,9 +129,17 @@ function createSurfAlarms({ sb, sbWrite, uuid, nowLocal, today, tz, log, record 
     if (!alarms.length) return;
     const s = await latestSnapshot();
     const now = nowLocal();
+    // THE WIND VETO — the live wind ruling out the rest of TODAY (the hub's surfVeto). It speaks for
+    // the hours from now on, so it touches only today's alarm, and only while it holds: every new
+    // reading re-runs this, and a veto that lifts before the wake time brings the alarm back.
+    const v = await veto();
+    const vetoFrom = v ? Number(now.slice(11, 13)) : null;
     for (const a of alarms) {
       if (!a.engaged && !Object.keys(a.state || {}).length) continue;
-      const d = a.engaged && s ? decide(a.rules, s.rows, a.day, tz()) : { rule: null, wake: null };
+      const plain = a.engaged && s ? decide(a.rules, s.rows, a.day, tz()) : { rule: null, wake: null };
+      const d = v && a.day === today() && a.engaged && s ? decide(a.rules, s.rows, a.day, tz(), vetoFrom) : plain;
+      // Recorded only when it CHANGED the answer, so a windy morning with no alarm at stake writes nothing.
+      const vetoed = d.rule !== plain.rule ? { kts: Math.round(v.kts), type: v.type, threshold: v.threshold, from: vetoFrom, overruled: plain.wake } : null;
       const at = d.wake ? `${a.day}T${d.wake}` : null;
       // A wake time that has already passed is not rung late and does not cancel anything.
       const late = !!(at && at <= now);
@@ -141,7 +152,8 @@ function createSurfAlarms({ sb, sbWrite, uuid, nowLocal, today, tz, log, record 
           if (!Object.keys(state[name]).length) delete state[name];
         }
       }
-      const decided = { snapshot: s ? s.captured_at : null, rule: d.rule, at, ...(late ? { late: true } : {}) };
+      const decided = { snapshot: s ? s.captured_at : null, rule: d.rule, at, ...(late ? { late: true } : {}),
+                        ...(vetoed ? { veto: vetoed } : {}) };
       const patch = {};
       if (canon(decided) !== canon(a.decided)) patch.decided = decided;
       if (canon(state) !== canon(a.state || {})) patch.state = state;
@@ -151,7 +163,8 @@ function createSurfAlarms({ sb, sbWrite, uuid, nowLocal, today, tz, log, record 
         log(`[surf-alarm] ${a.day} (${why}): rule ${d.rule == null ? 'none' : d.rule} -> ${at || 'no alarm'}${late ? ' (already past, left alone)' : ''}`);
         // One row per new forecast or rule change — the decision history `decided` overwrites.
         record('decision', { day: a.day, why, snapshot: decided.snapshot, rule: d.rule, at, late,
-                             was: (a.decided && a.decided.at) || null, item: (state.item && state.item.id) || null });
+                             was: (a.decided && a.decided.at) || null, item: (state.item && state.item.id) || null,
+                             ...(vetoed ? { veto: vetoed } : {}) });
       }
     }
   }

@@ -147,6 +147,7 @@ async function routingConfig() {
 }
 const { buildVariants } = require('./lib/variants');
 const { createSurfAlarms } = require('./lib/surfalarm');
+const { createLiveWind } = require('./lib/livewind');
 const apns = require('./lib/apns');
 const weightReminder = require('./lib/weightReminder');
 
@@ -554,9 +555,43 @@ const surfAlarms = createSurfAlarms({
   nowLocal: nowNaiveLocal, today: () => localDate(), tz: getTZ,
   log: (m) => console.log(m),
   record: (ev, detail) => alarmLog('hub', ev, detail),
+  veto: surfVeto,
 });
 const SURF_ALARM_BACKSTOP_MS = 15 * 60 * 1000;
 setInterval(() => surfAlarms.tick('backstop'), SURF_ALARM_BACKSTOP_MS);
+
+// THE LIVE WIND (lib/livewind.js): the dock's measured wind, read every ten minutes. Each new reading
+// is kept in water_readings beside the Pi's hourly collector — same station, same (station, ts) key,
+// so the two write the same rows — rides the status frame as `wind`, and re-runs the surf alarm,
+// because a reading can bring the wind veto on or lift it.
+const liveWind = createLiveWind({
+  store: async (rows) => {
+    const r = await fetch(`${SUPABASE_URL}/rest/v1/water_readings?on_conflict=station,ts`, {
+      method: 'POST',
+      headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}`,
+                 'Content-Type': 'application/json', Prefer: 'resolution=merge-duplicates' },
+      body: JSON.stringify(rows),
+    });
+    if (!r.ok) throw new Error(`water_readings upsert -> ${r.status} ${(await r.text()).slice(0, 120)}`);
+  },
+  onReading: () => surfAlarms.tick('wind'),
+  log: (m) => console.log(m),
+});
+liveWind.start();
+
+// THE WIND VETO (docs/ALARMS.md): measured ONSHORE wind at or over `surf_veto_kts` (default 8) rules
+// the rest of today's hours out of a surf alarm, whatever the forecast said. The half-hour average,
+// not one reading — a six-minute reading is a gust as often as a trend — and only while it is fresh:
+// the station reaches NDBC about 35 minutes late, so 75 minutes allows one missed post. 0 turns it off.
+async function surfVeto() {
+  let threshold = 8;
+  try { const v = parseFloat((await settingsAll()).surf_veto_kts); if (Number.isFinite(v)) threshold = v; } catch (_) {}
+  if (!(threshold > 0)) return null;
+  const c = liveWind.current();
+  if (!c || c.age_min > 75 || !c.avg30) return null;
+  const a = c.avg30;
+  return a.type === 'Onshore' && a.kts >= threshold ? { kts: a.kts, dir: a.dir, type: a.type, threshold } : null;
+}
 
 
 // ---- dashboard source-row cache ------------------------------------------------------------
@@ -844,7 +879,7 @@ async function buildStatus() {
       else break;
     }
   }
-  return { today, litter, feeder, surf, weather: getWeather(), nutrition, maintenance, pace: paceData, volume, heatmap, nutrition_log,
+  return { today, litter, feeder, surf, wind: liveWind.view((surfRows || [])[0]), weather: getWeather(), nutrition, maintenance, pace: paceData, volume, heatmap, nutrition_log,
     heatmap_home, nutrition_log_home, weight_plot, weight_plot_phone,
     last_set_at, session_start_at, sets_today, rep_watcher, routing, mics, score, desk_focus: deskFocus,
     // THE BUILD THIS FRAME CAME FROM. A page that has been open for hours never re-requests its own
@@ -2300,6 +2335,14 @@ app.post('/api/attach', express.raw({ type: () => true, limit: '30mb' }), async 
 
 // Client error sink: the phone POSTs a failed quick-photo's real reason here (step, file type/size,
 // server error) so a failure that's otherwise invisible in the phone's console lands in the app log.
+// The live wind and the readings behind it (lib/livewind.js) — the same `wind` the status frame
+// carries, plus the last few hours of six-minute readings for a surface that wants to draw them.
+app.get('/api/wind', async (req, res) => {
+  let snap = null;
+  try { [snap] = await sb('surf_snapshots?slug=eq.mayport-poles&select=captured_at,rows&order=captured_at.desc&limit=1'); } catch (_) {}
+  res.json({ now: liveWind.view(snap), readings: liveWind.readings() });
+});
+
 app.post('/api/clientlog', express.json({ limit: '16kb' }), (req, res) => {
   try { console.log('[clientlog]', JSON.stringify(req.body).slice(0, 900)); } catch (_) {}
   const b = req.body || {};

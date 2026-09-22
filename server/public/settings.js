@@ -47,6 +47,9 @@ export async function open() {
   const toneCur = TONES.some(([v]) => v === cur.alarm_sound) ? cur.alarm_sound : 'classic';
   const toneOptsHtml = TONES.map(([v, label]) =>
     '<option value="' + v + '"' + (v === toneCur ? ' selected' : '') + '>' + label + '</option>').join('');
+  // The surf alarm's wind veto (server.js surfVeto): 0 turns it off, so it is read and saved on its
+  // own rather than through the positive-only numbers below.
+  const vetoKts = (() => { const n = parseFloat(cur.surf_veto_kts); return Number.isFinite(n) && n >= 0 ? n : 8; })();
   const wfThresh = sil('voiceid_threshold', 0.30);
   const wfPause = sil('wakefree_pause_s', 2);
 
@@ -69,6 +72,8 @@ export async function open() {
         '<select class="settings-text" id="set-alarm-sound">' + toneOptsHtml + '</select></label>' +
       '<div class="settings-row"><span>Preview</span>' +
         '<button class="settings-text" type="button" id="set-alarm-play">Play</button></div>' +
+      '<label class="settings-row"><span>Onshore wind veto (kt)</span>' +
+        '<input class="settings-num" type="number" step="1" min="0" max="30" inputmode="numeric" id="set-veto-kts" value="' + vetoKts + '"></label>' +
 
       '<div class="settings-sec">Session</div>' +
       '<label class="settings-row"><span>Idle reset (minutes)</span>' +
@@ -204,6 +209,10 @@ export async function open() {
   back.querySelector('#set-reset-min').addEventListener('change', (e) => {
     const m = parseInt(e.target.value, 10);
     if (Number.isFinite(m) && m > 0) save('session_reset_s', Math.round(m * 60));
+  });
+  back.querySelector('#set-veto-kts').addEventListener('change', (e) => {
+    const v = parseFloat(e.target.value);
+    if (Number.isFinite(v) && v >= 0) save('surf_veto_kts', v);
   });
   back.querySelectorAll('.settings-num').forEach((inp) => {
     inp.addEventListener('change', () => {

@@ -381,8 +381,9 @@ device builds:
   a stray "you" into his conversation) and never mute the room mics.
 
 The built app needs `WKWatchOnly` and no `WKCompanionAppBundleIdentifier` (then an ad-hoc `codesign`)
-to install on an unpaired watch simulator. Use an SE 3 device type for his watch: the 46mm geometry
-differs.
+to install on an unpaired watch simulator. **One watch simulator is kept on this Mac** — a Series 11
+46mm, the largest this runtime offers — because each device costs over a gigabyte of disk. Screenshots
+are that geometry; a 44mm screen is narrower, and a row that fits here can still overflow there.
 
 - **Do not click the Simulator window with System Events**: that moves his pointer. Reach a state
   with a launch argument instead; the simulator cannot make a double tap either way.

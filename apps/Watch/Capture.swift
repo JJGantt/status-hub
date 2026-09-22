@@ -275,7 +275,9 @@ final class Capture: ObservableObject {
         let window = from.map { (start: $0, end: Date()) }
         Task {
             do {
-                let heard = try await Hub.sendAudio(clip, msgId: UUID().uuidString, listener: window)
+                let heard = try await Awake.hold("sending a heard command") {
+                    try await Hub.sendAudio(clip, msgId: UUID().uuidString, listener: window)
+                }
                 // Nothing on screen marks a listener's command going up, so the wrist does. No id is the
                 // hub hearing no words: nothing was enqueued, and nothing taps.
                 if heard.id != nil { WKInterfaceDevice.current().play(.success) }

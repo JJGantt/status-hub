@@ -184,7 +184,12 @@ final class Chat: ObservableObject {
             do {
                 if requestId == nil {
                     guard let clip else { waiting = false; return }
-                    let heard = try await Hub.sendAudio(clip, msgId: msgId)
+                    let began = Date()
+                    let heard = try await Awake.hold("sending a voice command") {
+                        try await Hub.sendAudio(clip, msgId: msgId)
+                    }
+                    Hub.log("sent", ["ms": Int(Date().timeIntervalSince(began) * 1000),
+                                     "id": heard.id ?? "", "words": (heard.transcript ?? "").count])
                     if let text = heard.transcript, !text.isEmpty { pending = text }
                     guard let id = heard.id else {
                         // The hub heard no words, so there is no command.
@@ -214,6 +219,7 @@ final class Chat: ObservableObject {
                 failure = .noToken
             } catch {
                 if Task.isCancelled { return }
+                Hub.log("send-failed", ["error": String(describing: error).prefix(120).description])
                 failure = .message(error.localizedDescription)
             }
             waiting = false

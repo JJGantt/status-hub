@@ -108,6 +108,21 @@ enum HubError: LocalizedError {
     }
 }
 
+/// Holds the process awake while a piece of work runs. **The send is the one part of a command that
+/// happens with no audio running**: the recording has just ended, so nothing is keeping a watch app
+/// alive, and with the wrist down it is suspended in seconds — mid-upload. An expiring activity buys
+/// the time to finish; it is best effort and the system can take it back, which is what `expired` says.
+enum Awake {
+    static func hold<T>(_ reason: String, _ work: () async throws -> T) async rethrows -> T {
+        let done = DispatchSemaphore(value: 0)
+        ProcessInfo.processInfo.performExpiringActivity(withReason: reason) { expired in
+            if expired { done.signal() } else { done.wait() }
+        }
+        defer { done.signal() }
+        return try await work()
+    }
+}
+
 /// The hub calls the watch makes. Same host and header as the phone's native calls.
 enum Hub {
     /// How long a call waits for the watch to have any connection before it fails. When the phone goes

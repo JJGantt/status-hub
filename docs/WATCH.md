@@ -282,6 +282,12 @@ room mics, not a command someone is holding the watch to say. Each utterance the
 wrist (`.success`); one it heard no words in taps nothing. Uploads are fire-and-forget, with no outbox
 behind them yet.
 
+**The send is the moment the app has nothing keeping it awake.** Recording is what holds a watch app
+in the background, and it has just ended — with the wrist down the app would be suspended mid-upload.
+Every clip therefore goes up inside `Awake.hold` (an expiring activity), which is best effort: the
+system can take it back, and the `sent` / `send-failed` log lines carry how long a send took, so a
+send being cut off is visible rather than a command that quietly never arrived.
+
 **Siri, a call or another app recording takes the microphone**, and no recording survives that. The
 interruption notification is what says so (`Recorder.onInterruption`): words already recorded are sent
 (`onTaken`, which every caller passes), a listener utterance that had begun goes up, and when the
@@ -372,6 +378,7 @@ wrist. Fly keeps only the recent lines, so read it soon.
 | `mic-end` | what the endpoint saw when a recording ended, and why (`silence`, `unspoken`) |
 | `mic-lock` | the lock toggled |
 | `listener-sent`, `listener-failed` | an always-on utterance going up |
+| `sent`, `send-failed` | a command's clip going up, with how long it took |
 | `listen-alive` | always-on listening still has the microphone, with minutes since it was engaged — one line per twenty silent segments, about five minutes. **This is how long watchOS lets it hold the microphone with the wrist down**, which is otherwise unknown: read the gap between the last line and when it was engaged |
 | `stream-open`, `stream-end`, `stream-error` | the event streams |
 | `resend` | a call's connection dropped mid-flight and it was sent again |

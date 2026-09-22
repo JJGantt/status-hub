@@ -561,8 +561,8 @@ const SURF_ALARM_BACKSTOP_MS = 15 * 60 * 1000;
 setInterval(() => surfAlarms.tick('backstop'), SURF_ALARM_BACKSTOP_MS);
 
 // THE LIVE WIND (lib/livewind.js): the dock's measured wind, read every ten minutes. Each new reading
-// is kept in water_readings beside the Pi's hourly collector — same station, same (station, ts) key,
-// so the two write the same rows — rides the status frame as `wind`, and re-runs the surf alarm,
+// is kept in water_readings beside the Pi's hourly NDBC collector — the same station under its NDBC
+// id, the same (station, ts) key, so the two write the same rows — rides the status frame as `wind`, and re-runs the surf alarm,
 // because a reading can bring the wind veto on or lift it.
 const liveWind = createLiveWind({
   store: async (rows) => {
@@ -582,13 +582,14 @@ liveWind.start();
 // THE WIND VETO (docs/ALARMS.md): measured ONSHORE wind at or over `surf_veto_kts` (default 8) rules
 // the rest of today's hours out of a surf alarm, whatever the forecast said. The half-hour average,
 // not one reading — a six-minute reading is a gust as often as a trend — and only while it is fresh:
-// the station reaches NDBC about 35 minutes late, so 75 minutes allows one missed post. 0 turns it off.
+// a reading reaches the API about six minutes after it is taken and is fetched every ten, so 30
+// minutes allows one missed fetch. 0 turns it off.
 async function surfVeto() {
   let threshold = 8;
   try { const v = parseFloat((await settingsAll()).surf_veto_kts); if (Number.isFinite(v)) threshold = v; } catch (_) {}
   if (!(threshold > 0)) return null;
   const c = liveWind.current();
-  if (!c || c.age_min > 75 || !c.avg30) return null;
+  if (!c || c.age_min > 30 || !c.avg30) return null;
   const a = c.avg30;
   return a.type === 'Onshore' && a.kts >= threshold ? { kts: a.kts, dir: a.dir, type: a.type, threshold } : null;
 }

@@ -2,25 +2,24 @@
 // THE LIVE WIND — what the wind is doing at the break right now, measured rather than forecast.
 //
 // Every other wind number in the system is Surfline's model output, and the forecast a morning alarm
-// decides on was run at 8pm the night before (docs/ALARMS.md). MYPF1, the Mayport Bar Pilots dock
-// 2.2 miles from the Poles, measures the wind every six minutes. This reads the HEAD of that
-// station's realtime file — about the newest hour — and hands on each reading it has not seen.
+// decides on was run at 8pm the night before (docs/ALARMS.md). The Mayport Bar Pilots dock, 2.2 miles
+// from the Poles, measures the wind every six minutes — each reading a two-minute average speed and
+// direction, and the peak gust of a few seconds inside it.
 //
-// A TIMER, and the only way: NDBC publishes files, not events, so nothing can tell the hub that a
-// reading arrived. Ten minutes, against a station that reports every six and reaches the site about
-// 35 minutes late, so a tick is rarely more than one reading behind. A failed fetch waits for the
-// next tick; nothing retries.
+// READ FROM NOAA's TIDES-AND-CURRENTS API (CO-OPS station 8720218), NOT NDBC. It is one station under
+// two ids — NDBC calls it MYPF1, which is the id the rows are kept under — but NDBC rewrites its file
+// about once an hour, near :30, with the newest reading already half an hour old, so a reading there
+// is 30 to 90 minutes stale. CO-OPS serves each reading about six minutes after it is taken.
+//
+// A TIMER, and the only way: the API answers requests and pushes nothing, so nothing can tell the hub
+// that a reading arrived. Ten minutes, against a station that reports every six. A failed fetch waits
+// for the next tick; nothing retries.
 
 const STATION = 'MYPF1';
-const FEED = `https://www.ndbc.noaa.gov/data/realtime2/${STATION}.txt`;
-// NDBC answers 403 to a request without a browser user agent (surf-report/ndbc.mjs).
-const UA = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 ' +
-           '(KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36';
-// The file is ~1MB newest-first; its first 2KB is the newest dozen readings.
-const HEAD_BYTES = 2048;
+const FEED = 'https://api.tidesandcurrents.noaa.gov/api/prod/datagetter?station=8720218&product=wind' +
+             '&range=2&units=english&time_zone=gmt&format=json&application=status-hub';
 const TICK_MS = 10 * 60 * 1000;
 const KEEP_MS = 3 * 3600 * 1000;       // readings held in memory, for the averages and the endpoint
-const MS_TO_KTS = 1.943844;
 
 // THE SHORE, in the terms Surfline labels this spot's wind with: FROM within 67.5 degrees of 97.5
 // is onshore, the opposite sector offshore, the two between cross-shore. Read off Surfline's own
@@ -39,34 +38,19 @@ const POINTS = ['N', 'NNE', 'NE', 'ENE', 'E', 'ESE', 'SE', 'SSE', 'S', 'SSW', 'S
 const compass = (dir) => (dir == null ? null : POINTS[Math.round(dir / 22.5) % 16]);
 const r1 = (v) => Math.round(v * 10) / 10;
 
-// NDBC standard meteorological format, columns looked up by NAME from the header (see
-// surf-report/ndbc.mjs, which this mirrors). Missing is `MM`; every field is range-checked against
-// what the instrument can report. The last line of a byte range is usually cut short and is dropped.
-function parse(text) {
-  const lines = text.split('\n');
-  const head = (lines.find((l) => l.startsWith('#YY')) || '').replace(/^#/, '').trim().split(/\s+/);
-  const col = (n) => head.indexOf(n);
-  const num = (f, n, lo, hi) => {
-    const i = col(n);
-    if (i < 0 || i >= f.length || f[i] === 'MM') return null;
-    const v = Number(f[i]);
-    return Number.isFinite(v) && v >= lo && v <= hi ? v : null;
-  };
+// CO-OPS wind JSON: `data` is oldest-first, each { t: 'YYYY-MM-DD HH:MM' in GMT, s: speed, d: degrees
+// true the wind blows FROM, g: gust }. `units=english` is KNOTS for wind, which is what surf_hours
+// keeps. Every field is range-checked; a missing one is an empty string.
+function parse(json) {
   const out = [];
-  for (const line of lines) {
-    if (!line || line.startsWith('#')) continue;
-    const f = line.trim().split(/\s+/);
-    if (f.length < head.length) continue;
-    const ts = new Date(Date.UTC(+f[0], +f[1] - 1, +f[2], +f[3], +f[4]));
-    if (Number.isNaN(ts.getTime())) continue;
-    const spd = num(f, 'WSPD', 0, 60), gst = num(f, 'GST', 0, 80);
-    const wtmp = num(f, 'WTMP', -2, 40);
-    // No direction beside a real speed is calm air, not a dropout: the vane has no flow to point into.
-    const dir = spd != null && spd > 0 ? num(f, 'WDIR', 0, 360) : null;
-    if (spd == null && wtmp == null) continue;
-    out.push({ ts: ts.toISOString(), kts: spd == null ? null : r1(spd * MS_TO_KTS),
-               gust: gst == null ? null : r1(gst * MS_TO_KTS), dir,
-               water_f: wtmp == null ? null : r1(wtmp * 9 / 5 + 32) });
+  for (const r of (json && json.data) || []) {
+    const ts = new Date(String(r.t).replace(' ', 'T') + ':00Z');
+    const n = (v, lo, hi) => { const x = Number(v); return v !== '' && Number.isFinite(x) && x >= lo && x <= hi ? x : null; };
+    const kts = n(r.s, 0, 120);
+    if (Number.isNaN(ts.getTime()) || kts == null) continue;
+    // No direction beside a zero speed is calm air, not a dropout: the vane has no flow to point into.
+    out.push({ ts: ts.toISOString(), kts: r1(kts), gust: n(r.g, 0, 160) == null ? null : r1(Number(r.g)),
+               dir: kts > 0 ? n(r.d, 0, 360) : null });
   }
   return out;
 }
@@ -95,11 +79,12 @@ function createLiveWind({ store, onReading = () => {}, log = () => {} }) {
   let failing = false;
 
   async function tick() {
-    let text;
+    let json;
     try {
-      const r = await fetch(FEED, { headers: { 'User-Agent': UA, Range: `bytes=0-${HEAD_BYTES - 1}` } });
+      const r = await fetch(FEED);
       if (!r.ok) throw new Error(`HTTP ${r.status}`);
-      text = await r.text();
+      json = await r.json();
+      if (json.error) throw new Error(json.error.message || 'api error');
     } catch (e) {
       if (!failing) log(`[live-wind] fetch failed: ${e.message}`);
       failing = true;
@@ -107,12 +92,14 @@ function createLiveWind({ store, onReading = () => {}, log = () => {} }) {
     }
     if (failing) log('[live-wind] fetching again');
     failing = false;
-    const fresh = parse(text).filter((r) => !lastTs || r.ts > lastTs);
+    const fresh = parse(json).filter((r) => !lastTs || r.ts > lastTs);
     if (!fresh.length) return;
     lastTs = fresh.reduce((a, r) => (r.ts > a ? r.ts : a), lastTs || '');
     const cut = new Date(Date.now() - KEEP_MS).toISOString();
     readings = [...fresh, ...readings].sort((a, b) => (a.ts < b.ts ? 1 : -1)).filter((r) => r.ts >= cut);
-    try { await store(fresh.map((r) => ({ station: STATION, ts: r.ts, wind_kts: r.kts, wind_dir_deg: r.dir, gust_kts: r.gust, water_f: r.water_f }))); }
+    // Wind only: the water temperature on these rows is the Pi's hourly NDBC collector's, and a
+    // merge upsert leaves a column it is not given alone.
+    try { await store(fresh.map((r) => ({ station: STATION, ts: r.ts, wind_kts: r.kts, wind_dir_deg: r.dir, gust_kts: r.gust }))); }
     catch (e) { log(`[live-wind] store failed: ${e.message}`); }
     onReading();
   }

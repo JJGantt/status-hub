@@ -311,7 +311,9 @@ function noteRinger(b, req) {
   const now = Date.now();
   const prev = ringers.get(source);
   ringers.set(source, { at: now, state });
-  if (!prev) return alarmLog(source, 'state', state);                 // first heard since the hub started
+  // First heard since the hub started: the user agent rides along once, so a source named from it
+  // can be traced to the actual device.
+  if (!prev) return alarmLog(source, 'state', { ...state, ua: String(req.get('user-agent') || '').slice(0, 160) });
   if (now - prev.at > RINGER_SILENCE_MS) return alarmLog(source, 'resumed', { silent_s: Math.round((now - prev.at) / 1000), ...state });
   const changed = Object.keys(state).filter((k) => state[k] !== prev.state[k]);
   if (changed.length) alarmLog(source, 'state', { changed, ...state });

@@ -73,6 +73,16 @@ function merge(txt, spec) {
   return out.sort((a, b) => (a.ts < b.ts ? 1 : -1));
 }
 
+// The newest row, with each missing field filled from the most recent row that has one. Bounded to
+// the few reports in the fetched head, so nothing here is more than a couple of hours old.
+function coalesce(rows) {
+  const out = { ...rows[0] };
+  for (const r of rows.slice(1)) {
+    for (const k of Object.keys(r)) if (out[k] == null && k !== 'ts') out[k] = r[k];
+  }
+  return out;
+}
+
 async function head(url) {
   const r = await fetch(url, { headers: { 'User-Agent': UA, Range: `bytes=0-${HEAD_BYTES - 1}` } });
   if (!r.ok) throw new Error(`${url.split('/').pop()} HTTP ${r.status}`);
@@ -103,8 +113,11 @@ function createLiveBuoy({ store, onReading = () => {}, log = () => {} }) {
         const [txt, spec] = await Promise.all([head(`${base}.txt`), head(`${base}.spec`)]);
         const rows = merge(table(txt), table(spec));
         if (!rows.length) continue;
-        // The newest row can be missing its `.spec` half for a few minutes; hold on to the fuller one.
-        latest.set(st.id, rows[0]);
+        // The two files are published separately, so the newest row often holds one half: a `.spec`
+        // row with the swell split and no period or water, or the reverse. The newest READING keeps
+        // its timestamp and takes whatever it is missing from the reports behind it — a number half an
+        // hour old beside one that is current, rather than a blank.
+        latest.set(st.id, coalesce(rows));
         const since = lastTs.get(st.id);
         const add = rows.filter((r) => !since || r.ts > since);
         if (add.length) { lastTs.set(st.id, rows[0].ts); fresh = fresh.concat(add.map((r) => ({ station: st.id, ...r }))); }

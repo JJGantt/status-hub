@@ -647,18 +647,9 @@ async function sstAhead() {
   return sstCache.rows;
 }
 
-// WIND AS A SIGNED NUMBER, which says strength and direction in one glyph: OFFSHORE is positive, the
-// wind that holds a wave up, ONSHORE negative, the wind that pulls it apart. Cross-shore takes no sign
-// — it is neither, and a sign would claim it was. A colour band could not carry the sign at all, which
-// is why the wind is written rather than shaded.
+// The wind's DIRECTION is the colour it is written in — green offshore, amber cross-shore, red onshore
+// — so the number itself is bare. A sign as well would say the same thing twice.
 const TYPE_COLORS = { Offshore: '#34c759', 'Cross-shore': '#ffcc00', Onshore: '#ff3b30' };
-function windLabel(kts, type) {
-  if (kts == null) return null;
-  const n = Math.round(kts);
-  if (type === 'Offshore') return `+${n}`;
-  if (type === 'Onshore') return `-${n}`;
-  return `${n}`;
-}
 
 // THE HEAT MAP'S SIZE COLOURS, for a snapshot's own rows. `/api/surf/history` builds the same ramp
 // over the bands present in ITS window — flat white up to a foot, then the blue ramp by height — and
@@ -716,9 +707,16 @@ async function surfLive() {
       t: (() => { const h = +local.slice(11, 13); return `${h % 12 || 12}${h < 12 ? 'a' : 'p'}`; })(),
       rating: ratingLabel(r.rk), color: SURF_BAND_COLORS[surfBand(r.rk)] || '#8b96a5',
       ft: r.sMin == null ? null : `${r.sMin}-${r.sMax}${r.sPlus ? '+' : ''}`,
+      // The exact height as well as the band: Surfline's own range is coarse (1-2, 2-3), so a whole
+      // morning reads as one bucket while the raw numbers climb through it. The midpoint of the raw
+      // pair to one decimal is the aggregate — every swell train, transformed to what breaks here.
+      ft_exact: r.sRawMin == null || r.sRawMax == null ? null
+        : Math.round(((r.sRawMin + r.sRawMax) / 2) * 10) / 10,
       size_color: sizeColor(r),
+      swp_s: r.swP == null ? null : Math.round(r.swP),
+      swh_ft: r.swH == null ? null : Math.round(r.swH * 10) / 10,
       wind_kts: r.wSpd == null ? null : Math.round(r.wSpd), wind_type: r.wType || null,
-      wind_label: windLabel(r.wSpd, r.wType), wind_color: TYPE_COLORS[r.wType] || '#8b96a5',
+      wind_color: TYPE_COLORS[r.wType] || '#8b96a5',
     }));
 
   // WATER: measured by the buoys right now, and the marine model's next day beside it, at the hours

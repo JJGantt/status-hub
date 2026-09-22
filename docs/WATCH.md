@@ -59,9 +59,15 @@ be read at a glance and in one place:
 | orange `waveform` | always-on listening |
 | red `mic.fill` | recording a command, which the silence will end |
 | red `lock.fill` | that recording locked open |
+| a spinner | the hub has it: transcribing, then running it |
 
 A tap on it engages or drops always-on listening. During a recording it does nothing: the recording
-has its own controls. With the wrist down and the app still showing (`isLuminanceReduced`), the
+has its own controls.
+
+**Nothing else on the page says any of that.** The spinner is in the glyph rather than beside the
+text, and there is no Retry here — a command that failed is picked up on the prompt page, which shows
+the whole of it. Under the conversation there is the recording bar while a command records (the lock
+and Cancel), Cancel alone across the width while the hub has it, and nothing otherwise. With the wrist down and the app still showing (`isLuminanceReduced`), the
 conversation dims.
 
 ### The prompt page
@@ -215,10 +221,12 @@ point; Cancel throws the clip away.
 
 ### Haptics
 
-- A command the **silence** sent taps the wrist (`.success`) once the hub has enqueued it, since no
-  press told him it went. A pressed one does not.
+- **The microphone closing taps the wrist** (`.stop`), on a command the silence ended and on one a
+  press ended alike. That is the moment nothing else reports: the silence decides it, and by then the
+  watch may be back at his side.
 - The hub hearing no words in a clip buzzes `.failure`: nothing was enqueued.
-- A finished command buzzes `.notification`.
+- A finished command buzzes `.notification` — the one that makes a sound, so a reply arriving is heard
+  as well as felt.
 
 ### The wrist can drop mid-recording
 

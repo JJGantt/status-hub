@@ -46,7 +46,10 @@ function waterHtml(w) {
   if (!w || (w.now_f == null && !(w.next || []).length)) return '';
   return '<div class="sp-card">' +
     '<div class="sp-h">Water</div>' +
-    `<div class="sp-big">${num(w.now_f)}<span class="sp-u">°</span></div>` +
+    // The temperature is written in its own colour (`waterColor` in server.js): the wetsuit scale,
+    // cold blue to warm orange. The watch draws the same number the same way.
+    `<div class="sp-big"${w.now_color ? ` style="color:${esc(w.now_color)}"` : ''}>` +
+      `${num(w.now_f)}<span class="sp-u">°</span></div>` +
     ((w.next || []).length ? '<div class="sp-row sp-dim">' + w.next.map((n) =>
       `<span class="sp-k">${esc(hourLabel(n.t))}</span>${num(n.f, '°')}`).join('') + '</div>' : '') +
     '</div>';

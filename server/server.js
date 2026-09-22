@@ -651,6 +651,28 @@ async function sstAhead() {
 // — so the number itself is bare. A sign as well would say the same thing twice.
 const TYPE_COLORS = { Offshore: '#34c759', 'Cross-shore': '#ffcc00', Onshore: '#ff3b30' };
 
+// WATER TEMPERATURE AS A COLOUR, cold blue to warm orange. The stops are the WETSUIT thresholds,
+// which is the only reading of "warm" that decides anything: boardshorts above 75F, a springsuit
+// around 62-68, a 4/3 near 55, a hood and gloves under 50. Interpolated between them rather than
+// stepped, so a degree of change shows. NO GREEN anywhere in it — green already means offshore wind
+// on the same screen.
+const WATER_STOPS = [[45, '#3a7bd5'], [55, '#5aa9e6'], [62, '#9fcfe8'], [68, '#e8e2d0'],
+                     [75, '#ffc65c'], [82, '#ff9f45'], [86, '#ff7a3c']];
+function waterColor(f) {
+  if (f == null || !Number.isFinite(f)) return null;
+  const rgb = (h) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16));
+  const hex = (c) => '#' + c.map((v) => Math.round(v).toString(16).padStart(2, '0')).join('');
+  if (f <= WATER_STOPS[0][0]) return WATER_STOPS[0][1];
+  for (let i = 1; i < WATER_STOPS.length; i++) {
+    const [t1, c1] = WATER_STOPS[i];
+    if (f > t1) continue;
+    const [t0, c0] = WATER_STOPS[i - 1];
+    const k = (f - t0) / (t1 - t0);
+    return hex(rgb(c0).map((v, j) => v + (rgb(c1)[j] - v) * k));
+  }
+  return WATER_STOPS[WATER_STOPS.length - 1][1];
+}
+
 // THE HEAT MAP'S SIZE COLOURS, for a snapshot's own rows. `/api/surf/history` builds the same ramp
 // over the bands present in ITS window — flat white up to a foot, then the blue ramp by height — and
 // this repeats that over the forecast's, so a colour means the same size wherever the app draws it.
@@ -729,7 +751,8 @@ async function surfLive() {
     return r && Math.abs(Date.parse(r.ts) - want) < 2 * 3600 * 1000
       ? { t: etStringAt(new Date(r.ts)).slice(11, 13), f: r.water_f } : null;
   };
-  const water = { now_f: sea ? sea.water_f : null,
+  if (sea) sea.water_color = waterColor(sea.water_f);
+  const water = { now_f: sea ? sea.water_f : null, now_color: sea ? sea.water_color : null,
                   next: sst.length ? [6, 12, 24].map(at).filter(Boolean) : [] };
   return { surf: buildSurf(snap), wind, sea, buoys: liveBuoy.view(), hours, water,
            day: { date: dayDate, today: dayDate === nowLocal.slice(0, 10), hours: dayHours },

@@ -17,7 +17,6 @@ struct HomeView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            listenToggle
             now.opacity(dimmed ? 0.5 : 1)
             Spacer(minLength: 0)
             CommandStatus()
@@ -30,22 +29,32 @@ struct HomeView: View {
                           holdsDoubleTap: !(recording && capture.lockHoldsDoubleTap), action: press)
         }
         .background(Color.black.ignoresSafeArea())
+        // The state glyph goes in the toolbar, which moves the system clock to the middle of the strip
+        // and leaves the top right — the only way to put anything in that strip, since watchOS draws the
+        // time over every app and offers no way to hide it.
+        .toolbar { ToolbarItem(placement: .topBarTrailing) { state } }
         .recordsWhenAsked()
     }
 
-    /// Always-on listening: off, engaged, or hearing someone. The watch is a listener among the room
-    /// mics while it is on, so this is the one control that changes what the watch does when nobody is
-    /// touching it.
-    private var listenToggle: some View {
-        Button(action: chat.toggleListening) {
-            Image(systemName: capture.listens ? "waveform" : "waveform.slash")
-                .font(.system(size: 14, weight: .semibold))
-                .frame(maxWidth: .infinity)
+    /// What the microphone is doing, in one glyph, wherever the page is looked at: idle, always-on
+    /// listening, recording a command the silence will end, or that recording locked open. A tap
+    /// engages or drops always-on listening; during a recording it does nothing, since the recording
+    /// has its own controls.
+    private var state: some View {
+        Button(action: { if !recording { chat.toggleListening() } }) {
+            Image(systemName: symbol).foregroundColor(colour)
         }
-        .tint(capture.hearing ? .red : capture.listens ? .orange : .gray)
-        .buttonStyle(.bordered)
-        .controlSize(.small)
-        .frame(width: 54)
+        .buttonStyle(.plain)
+    }
+
+    private var symbol: String {
+        if recording { return capture.locked ? "lock.fill" : "mic.fill" }
+        return capture.listens ? "waveform" : "waveform.slash"
+    }
+
+    private var colour: Color {
+        if recording { return .red }
+        return capture.listens ? .orange : .gray
     }
 
     /// His words while the hub works on them, with the worker's newest step under them; otherwise the

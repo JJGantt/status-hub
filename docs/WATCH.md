@@ -37,8 +37,12 @@ to what is happening now, over the always-on listening toggle. While a command r
 and the worker's newest step; otherwise the newest reply, which opens the prompt page when tapped. It
 is the page being built out, so expect it to change.
 
-**It draws no clock.** watchOS puts the time in the top right of every app and there is no supported
-way to hide or restyle it, so a second one is the same number twice.
+**It draws no clock, and the one it cannot draw is the system's.** watchOS puts the time in the top
+right of every app, and nothing hides it: the invisible-`VideoPlayer` trick that is passed around does
+nothing on watchOS 26.5 — measured three ways, as a background, as a full-size overlay at 0.001 opacity
+and with a real looping clip playing. What DOES work is a toolbar item: `ToolbarItem(.topBarTrailing)`
+moves the clock to the middle of the strip and gives the top right to the app. It is scoped to this
+page, so the prompt page keeps its clock where it was.
 
 It records exactly as the prompt page does — the same `Chat`, the same microphone, the same
 `CommandStatus` row (recording bar, the wait with Cancel, or Retry) and the same three-step double tap
@@ -46,10 +50,19 @@ It records exactly as the prompt page does — the same `Chat`, the same microph
 while either is showing. Its bottom control holds double tap on the same terms as a conversation page
 (§ Double tap and scrolling); there is nothing to page, so it only records and sends.
 
-The listening toggle is the one control that changes what the watch does when nobody is touching it,
-and it wears all three of its states: grey and struck through when off, orange while listening, red
-while someone is talking in front of it. With the wrist down and the app still showing
-(`isLuminanceReduced`), the conversation dims.
+**The microphone's whole state is one glyph**, in that top-right slot, so what the watch is doing can
+be read at a glance and in one place:
+
+| | |
+|---|---|
+| grey `waveform.slash` | idle |
+| orange `waveform` | always-on listening |
+| red `mic.fill` | recording a command, which the silence will end |
+| red `lock.fill` | that recording locked open |
+
+A tap on it engages or drops always-on listening. During a recording it does nothing: the recording
+has its own controls. With the wrist down and the app still showing (`isLuminanceReduced`), the
+conversation dims.
 
 ### The prompt page
 

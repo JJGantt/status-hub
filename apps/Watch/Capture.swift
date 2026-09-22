@@ -23,8 +23,6 @@ final class Capture: ObservableObject {
     /// Always-on listening is engaged: the microphone is the listener's whenever nothing else wants it,
     /// and it takes it back when a command or a follow-up gives it up.
     @Published private(set) var listens = false
-    /// The listener has someone talking in front of it right now.
-    @Published private(set) var hearing = false
     /// A page may start a recording now: nothing owns the microphone, or only the listener does, and a
     /// deliberate command takes it from the listener and hands it back when it is done.
     var free: Bool { owner == nil || owner == .listener }
@@ -178,7 +176,6 @@ final class Capture: ObservableObject {
         onSilence = nil
         endsOnSilence = false
         locked = false
-        hearing = false
     }
 
     /// Back to listening once the microphone is free again, if listening is engaged. Scheduled rather
@@ -201,7 +198,6 @@ final class Capture: ObservableObject {
         let ended = endpoint.feed(level, seconds)
         segment += seconds
         if endpoint.heard && !wasHeard { spokeAt = Date() }
-        if owner == .listener, hearing != endpoint.heard { hearing = endpoint.heard }
         if !endpoint.heard && !locked && segment >= Self.unspoken {
             if owner == .listener {
                 recorder.drop()

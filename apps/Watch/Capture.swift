@@ -59,6 +59,11 @@ final class Capture: ObservableObject {
     private var segment: TimeInterval = 0
     /// Held while listening is engaged, for a microphone failure on a later re-engage.
     private var listenFailure: (@MainActor (Error) -> Void)?
+    /// When listening was engaged, and how many silent segments it has rolled since — the evidence for
+    /// how long watchOS actually lets it hold the microphone with the wrist down. A roll is audio
+    /// arriving, not a timer, so a line only appears while the microphone is genuinely still feeding.
+    private var listenSince: Date?
+    private var rolls = 0
 
     private init() {
         recorder.onLevel = { [weak self] level, seconds in self?.heard(level, seconds) }
@@ -89,9 +94,12 @@ final class Capture: ObservableObject {
         Hub.log("listen", ["on": listens])
         if listens {
             listenFailure = onFailure
+            listenSince = Date()
+            rolls = 0
             if owner == nil { listen() }
         } else {
             listenFailure = nil
+            listenSince = nil
             unlisten()
         }
     }
@@ -231,6 +239,12 @@ final class Capture: ObservableObject {
                 recorder.drop()
                 endpoint.restart()
                 segment = 0
+                rolls += 1
+                // Every twentieth roll, about five minutes of listening. Fly keeps only the recent log
+                // lines, so a beat a minute would flush everything else out of them.
+                if rolls % 20 == 0, let since = listenSince {
+                    Hub.log("listen-alive", ["minutes": Int(Date().timeIntervalSince(since) / 60)])
+                }
             } else {
                 logEnd("unspoken")
                 cancel()

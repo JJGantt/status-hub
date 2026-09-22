@@ -372,6 +372,7 @@ wrist. Fly keeps only the recent lines, so read it soon.
 | `mic-end` | what the endpoint saw when a recording ended, and why (`silence`, `unspoken`) |
 | `mic-lock` | the lock toggled |
 | `listener-sent`, `listener-failed` | an always-on utterance going up |
+| `listen-alive` | always-on listening still has the microphone, with minutes since it was engaged — one line per twenty silent segments, about five minutes. **This is how long watchOS lets it hold the microphone with the wrist down**, which is otherwise unknown: read the gap between the last line and when it was engaged |
 | `stream-open`, `stream-end`, `stream-error` | the event streams |
 | `resend` | a call's connection dropped mid-flight and it was sent again |
 | `frame` | each stream frame for the session on screen |

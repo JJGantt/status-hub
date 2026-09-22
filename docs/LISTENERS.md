@@ -25,8 +25,7 @@ room.
    inserts. A listener that speaks Supabase directly (the Mac does) can insert the row itself.
 
 That is all of it. `source` is free-form (`mac`, `fly`, `phone`, …) and nothing branches on it. The
-watch has a listener built to this contract as `watch` (`Capture.listen` in the watch app), with
-nothing on screen engaging it yet.
+watch is one as `watch`, engaged from its home page (`Capture.toggleListening`).
 
 ## Why the window is the whole thing
 

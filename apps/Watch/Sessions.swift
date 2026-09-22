@@ -150,7 +150,7 @@ final class Sessions: ObservableObject {
     }
 
     func startRecording(_ key: String) {
-        guard capture.owner == nil, !busy.contains(key), row(for: key) != nil else {
+        guard capture.free, !busy.contains(key), row(for: key) != nil else {
             // Each of these used to return in silence, which from the wrist is a record tap doing nothing.
             Hub.log("record-refused", ["view": "session", "owner": String(describing: capture.owner),
                                        "busy": busy.contains(key), "row": row(for: key)?.id ?? "none"])

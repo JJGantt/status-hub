@@ -87,7 +87,7 @@ final class Chat: ObservableObject {
     }
 
     func startRecording() {
-        guard capture.owner == nil, !waiting else {
+        guard capture.free, !waiting else {
             Hub.log("record-refused", ["view": "chat", "owner": String(describing: capture.owner), "waiting": waiting])
             return
         }
@@ -109,6 +109,15 @@ final class Chat: ObservableObject {
         requestId = nil
         pending = nil
         run()
+    }
+
+    /// Always-on listening, engaged from home: the watch joins the Mac and the ESP as a listener until
+    /// it is turned off again.
+    func toggleListening() {
+        failure = nil
+        capture.toggleListening { [weak self] error in
+            self?.failure = (error as? Recorder.Failure) == .denied ? .micDenied : .message(error.localizedDescription)
+        }
     }
 
     /// Ends the recording and throws it away.

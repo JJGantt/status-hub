@@ -20,6 +20,15 @@ final class Capture: ObservableObject {
     @Published private(set) var endsOnSilence = false
     /// Locked open: the silence no longer ends it, only a press does.
     @Published private(set) var locked = false
+    /// Always-on listening is engaged: the microphone is the listener's whenever nothing else wants it,
+    /// and it takes it back when a command or a follow-up gives it up.
+    @Published private(set) var listens = false
+    /// The listener has someone talking in front of it right now.
+    @Published private(set) var hearing = false
+    /// A page may start a recording now: nothing owns the microphone, or only the listener does, and a
+    /// deliberate command takes it from the listener and hands it back when it is done.
+    var free: Bool { owner == nil || owner == .listener }
+
     /// Double tap belongs to the recording bar's lock rather than the page's bottom control: a recording
     /// that would end itself, not yet locked. Once locked it goes back to the bottom control, which sends.
     var lockHoldsDoubleTap: Bool { endsOnSilence && !locked }
@@ -32,7 +41,7 @@ final class Capture: ObservableObject {
     /// microphone — and with it the mute on every room mic. The listener starts another segment instead
     /// of growing one file for as long as the room stays quiet (the phone's IDLE_CYCLE_MS). A locked
     /// recording is held open deliberately, so it is exempt.
-    private static let unspoken: TimeInterval = 30
+    private static let unspoken: TimeInterval = 15
 
     private let recorder = Recorder()
     /// Started, microphone not open yet. A stop in this window cancels instead of sending.
@@ -48,6 +57,8 @@ final class Capture: ObservableObject {
     /// segment holds.
     private var spokeAt: Date?
     private var segment: TimeInterval = 0
+    /// Held while listening is engaged, for a microphone failure on a later re-engage.
+    private var listenFailure: (@MainActor (Error) -> Void)?
 
     private init() {
         recorder.onLevel = { [weak self] level, seconds in self?.heard(level, seconds) }
@@ -63,16 +74,33 @@ final class Capture: ObservableObject {
         begin(owner, onSilence: onSilence, onFailure: onFailure) { [weak self] in self?.setMuted(true) }
     }
 
-    /// The always-on listener: holds the microphone, cuts each utterance at the silence after it and
-    /// sends it as its own command, until `unlisten`. It is a peer of the Mac and the ESP, not a command
-    /// someone is holding the watch to say, so it mutes nothing and names itself `watch` with the
-    /// utterance's own window (docs/LISTENERS.md). Nothing on screen engages it yet.
-    func listen(onFailure: @escaping @MainActor (Error) -> Void) {
-        begin(.listener, onSilence: nil, onFailure: onFailure) {}
+    /// Engages or drops always-on listening: the microphone is held, each utterance is cut at the
+    /// silence after it and sent as its own command, and it keeps going until it is dropped. It is a
+    /// peer of the Mac and the ESP, not a command someone is holding the watch to say, so it mutes
+    /// nothing and names itself `watch` with the utterance's own window (docs/LISTENERS.md).
+    func toggleListening(onFailure: @escaping @MainActor (Error) -> Void) {
+        listens.toggle()
+        Hub.log("listen", ["on": listens])
+        if listens {
+            listenFailure = onFailure
+            if owner == nil { listen() }
+        } else {
+            listenFailure = nil
+            unlisten()
+        }
     }
 
-    /// Stops listening. An utterance under way still counts and goes up.
-    func unlisten() {
+    /// Takes the microphone for the listener. Only while nothing else owns it: a command and a
+    /// follow-up come first, and the listener takes it back when they give it up.
+    private func listen() {
+        begin(.listener, onSilence: nil, onFailure: { [weak self] error in
+            self?.listens = false
+            self?.listenFailure?(error)
+        }) {}
+    }
+
+    /// Gives the microphone up. An utterance under way still counts and goes up.
+    private func unlisten() {
         guard owner == .listener else { return }
         let from = spokeAt
         if endpoint.heard, let clip = stop() { upload(clip, from: from) } else { cancel() }
@@ -83,9 +111,10 @@ final class Capture: ObservableObject {
         guard owner != nil else { return nil }
         let muted = owner != .listener
         reset()
-        if arming { arming = false; return nil }
+        if arming { arming = false; resumeSoon(); return nil }
         let clip = recorder.stop()
         if muted { setMuted(false) }
+        resumeSoon()
         return clip
     }
 
@@ -94,9 +123,10 @@ final class Capture: ObservableObject {
         guard owner != nil else { return }
         let muted = owner != .listener
         reset()
-        if arming { arming = false; return }
+        if arming { arming = false; resumeSoon(); return }
         recorder.cancel()
         if muted { setMuted(false) }
+        resumeSoon()
     }
 
     /// Holds the recording open through silences, or lets the silence end it again.
@@ -108,6 +138,9 @@ final class Capture: ObservableObject {
 
     private func begin(_ owner: Owner, onSilence: (() -> Void)?, onFailure: @escaping @MainActor (Error) -> Void,
                        opened: @escaping () -> Void) {
+        // A command or a follow-up takes the microphone off the listener, which picks it up again when
+        // they give it back (`resume`). Whatever it had heard by then still goes up.
+        if owner != .listener, self.owner == .listener { unlisten() }
         guard self.owner == nil, !opening else {
             Hub.log("mic-refused", ["owner": String(describing: self.owner), "opening": opening])
             return
@@ -145,6 +178,18 @@ final class Capture: ObservableObject {
         onSilence = nil
         endsOnSilence = false
         locked = false
+        hearing = false
+    }
+
+    /// Back to listening once the microphone is free again, if listening is engaged. Scheduled rather
+    /// than immediate: a command TAKES the microphone off the listener, and an immediate resume would
+    /// take it back before that command had started.
+    private func resumeSoon() {
+        guard listens else { return }
+        Task { @MainActor in
+            guard listens, owner == nil, !opening else { return }
+            listen()
+        }
     }
 
     /// One buffer of audio from the recorder. Every recording is measured, even one that only a press
@@ -156,6 +201,7 @@ final class Capture: ObservableObject {
         let ended = endpoint.feed(level, seconds)
         segment += seconds
         if endpoint.heard && !wasHeard { spokeAt = Date() }
+        if owner == .listener, hearing != endpoint.heard { hearing = endpoint.heard }
         if !endpoint.heard && !locked && segment >= Self.unspoken {
             if owner == .listener {
                 recorder.drop()

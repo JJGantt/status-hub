@@ -1,7 +1,8 @@
 import SwiftUI
 
-/// The page the app opens on: the time, and the shared hub conversation cut down to what is happening
-/// now — his words and the worker's newest step while a command runs, otherwise the newest reply. It
+/// The page the app opens on: the shared hub conversation cut down to what is happening now — his
+/// words and the worker's newest step while a command runs, otherwise the newest reply — over the
+/// always-on listening toggle. It
 /// records exactly as the prompt page does (the silence ends a command; double tap starts, locks,
 /// sends) through the same `Chat` and the same microphone, so the two pages are two views of one
 /// command. A tap on the reply opens the prompt page, one to the right, where the whole thread is.
@@ -14,32 +15,10 @@ struct HomeView: View {
 
     private var recording: Bool { capture.owner == .hub }
 
-    /// The time as a watch face shows it: the wearer's 12- or 24-hour clock, no AM/PM, no leading zero.
-    /// Built from the locale's own pattern because the FormatStyle hour options pad the hour on watchOS.
-    private static let clock: DateFormatter = {
-        let f = DateFormatter()
-        let pattern = DateFormatter.dateFormat(fromTemplate: "jmm", options: 0, locale: .current) ?? "h:mm"
-        f.dateFormat = pattern.replacingOccurrences(of: "a", with: "").trimmingCharacters(in: .whitespaces)
-        return f
-    }()
-
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            TimelineView(.everyMinute) { ctx in
-                VStack(alignment: .leading, spacing: 0) {
-                    Text(Self.clock.string(from: ctx.date))
-                        .font(.system(size: 46, weight: .semibold, design: .rounded))
-                        .monospacedDigit()
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.7)
-                    Text(ctx.date, format: .dateTime.weekday(.abbreviated).day())
-                        .font(.system(size: 13, weight: .medium))
-                        .foregroundColor(.gray)
-                }
-            }
-            if !recording {
-                now.opacity(dimmed ? 0.5 : 1)
-            }
+        VStack(alignment: .leading, spacing: 8) {
+            listenToggle
+            now.opacity(dimmed ? 0.5 : 1)
             Spacer(minLength: 0)
             CommandStatus()
         }
@@ -52,6 +31,21 @@ struct HomeView: View {
         }
         .background(Color.black.ignoresSafeArea())
         .recordsWhenAsked()
+    }
+
+    /// Always-on listening: off, engaged, or hearing someone. The watch is a listener among the room
+    /// mics while it is on, so this is the one control that changes what the watch does when nobody is
+    /// touching it.
+    private var listenToggle: some View {
+        Button(action: chat.toggleListening) {
+            Image(systemName: capture.listens ? "waveform" : "waveform.slash")
+                .font(.system(size: 14, weight: .semibold))
+                .frame(maxWidth: .infinity)
+        }
+        .tint(capture.hearing ? .red : capture.listens ? .orange : .gray)
+        .buttonStyle(.bordered)
+        .controlSize(.small)
+        .frame(width: 54)
     }
 
     /// His words while the hub works on them, with the worker's newest step under them; otherwise the
@@ -75,7 +69,7 @@ struct HomeView: View {
                 Text(snippet(reply))
                     .font(.system(size: 13))
                     .foregroundColor(.white)
-                    .lineLimit(3)
+                    .lineLimit(5)
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
             .buttonStyle(.plain)

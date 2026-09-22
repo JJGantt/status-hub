@@ -32,10 +32,13 @@ request asks `onScreen` (an environment value `RootView` sets per page) first.
 
 ### Home
 
-`HomeView`: the page meant to sit on the wrist as the watch face does — the time, the date, and the
-hub conversation cut down to what is happening now. While a command runs that is his words and the
-worker's newest step; otherwise the newest reply, three lines of it, which opens the prompt page when
-tapped. It is the page being built out, so expect it to change.
+`HomeView`: the page meant to sit on the wrist as the watch face does — the hub conversation cut down
+to what is happening now, over the always-on listening toggle. While a command runs that is his words
+and the worker's newest step; otherwise the newest reply, which opens the prompt page when tapped. It
+is the page being built out, so expect it to change.
+
+**It draws no clock.** watchOS puts the time in the top right of every app and there is no supported
+way to hide or restyle it, so a second one is the same number twice.
 
 It records exactly as the prompt page does — the same `Chat`, the same microphone, the same
 `CommandStatus` row (recording bar, the wait with Cancel, or Retry) and the same three-step double tap
@@ -43,10 +46,10 @@ It records exactly as the prompt page does — the same `Chat`, the same microph
 while either is showing. Its bottom control holds double tap on the same terms as a conversation page
 (§ Double tap and scrolling); there is nothing to page, so it only records and sends.
 
-The time is a `DateFormatter` built from the locale's `jmm` pattern with the AM/PM removed, which
-follows the wearer's 12- or 24-hour setting. The FormatStyle hour options pad the hour to two digits
-on watchOS whatever they are asked. With the wrist down and the app still showing
-(`isLuminanceReduced`), everything but the time dims.
+The listening toggle is the one control that changes what the watch does when nobody is touching it,
+and it wears all three of its states: grey and struck through when off, orange while listening, red
+while someone is talking in front of it. With the wrist down and the app still showing
+(`isLuminanceReduced`), the conversation dims.
 
 ### The prompt page
 
@@ -174,7 +177,7 @@ arms the endpoint, which is how a recording nobody spoke into ran 88 seconds on 
 peak of 0.021 against a 0.02 line, and went up as "Thank you. Thank you." — what Whisper writes for
 silence, which the worker then ran as a command.
 
-**A recording nobody speaks into is closed, not held.** After `Capture.unspoken` (30s) of audio with
+**A recording nobody speaks into is closed, not held.** After `Capture.unspoken` (15s) of audio with
 no speech in it, a command or a follow-up is cancelled and its clip thrown away, and the listener
 starts a fresh segment. The microphone and the mute it puts on every room mic are not left open
 because a recording started by accident — which the Smart Stack and the complication make easy. A
@@ -245,10 +248,9 @@ Smart Stack set to Select and Record pinned, two double taps from the watch face
 (verified on an SE 3, watchOS 26.5). An app holding a workout session (Watchset while it captures)
 sits above even pinned items.
 
-### The always-on listener — built, not reachable
+### The always-on listener
 
-`Capture.listen` / `unlisten`, with nothing on screen calling them yet. It is the phone's always-on
-mode on the wrist: the recorder runs continuously and `Recorder.cut` swaps the file inside the tap, so
+`Capture.toggleListening`, from home's toggle. It is the phone's always-on mode on the wrist: the recorder runs continuously and `Recorder.cut` swaps the file inside the tap, so
 no sample falls between two utterances. Each utterance goes up as source `watch` with its own
 `capture_start` / `capture_end`, which is what lets the worker collapse it against the Mac or the ESP
 hearing the same sentence (`LISTENERS.md`). A segment nobody spoke in is dropped at 30s of audio and
@@ -256,6 +258,12 @@ never uploaded, because Whisper invents a sentence for silence. It mutes nothing
 room mics, not a command someone is holding the watch to say. Each utterance the hub enqueues taps the
 wrist (`.success`); one it heard no words in taps nothing. Uploads are fire-and-forget, with no outbox
 behind them yet.
+
+**A deliberate command comes first.** Starting a command or a follow-up takes the microphone off the
+listener — whatever it had heard by then still goes up — and the listener takes it back when that
+recording is sent or cancelled (`resumeSoon`, scheduled rather than immediate so it cannot grab the
+microphone back before the command has started). So `Capture.free` is what a page asks before
+recording, not `owner == nil`.
 
 ## Double tap and scrolling
 

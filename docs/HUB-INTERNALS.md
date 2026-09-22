@@ -164,7 +164,7 @@ were never the problem.
 |---|---|
 | `core.js` | Boot: opens the SSE stream, is the render orchestrator (calls every card's `render(s)`), then inits the layout. |
 | `shared.js` | Shared helpers (`esc`, `state`, local-time formatting) + the `state.last` cache, `liveStream()` (every SSE connection on every page), `PIN_SVG` (the mark on a pinned session, used by every surface that shows focus), the staleness hairline, and `paintScrolled()` — how a card rebuilds sideways-scrolling content each frame without throwing away where it is scrolled to. |
-| `navbar.js` | Bottom bar: settings gear, the calendar link (on `/calendar` itself, a back-to-the-wall toggle instead) + the single voice FAB (`wfab-fast`). Exposes `window.__startVoiceCommand` for the native launcher. |
+| `navbar.js` | Bottom bar: settings gear, the calendar link (on `/calendar` itself, a back-to-the-wall toggle instead; on the phone's home page, the utilities sheet) + the single voice FAB (`wfab-fast`). Exposes `window.__startVoiceCommand` for the native launcher. |
 | `voiceagent.js` | The in-app conversation pipeline: `makeRecorder` (mic → `/api/voice-command`), the activity popup, the conversation card, and the durable photo and voice outboxes (IndexedDB) that resend whatever a failed upload left on the phone. |
 | `settings.js` | The gear panel — reads/writes `app_settings` via `/api/settings` (§7). |
 | `tv-focus.js` | The sessions wall's mount, and nothing else — it hands `cards/sessions.js` its three elements and stops. The tab shape is CSS over the shared `.hw-row` markup (`tv-focus.css`), so the numbering, the pin, the unread mark and the activity line are the same ones every other surface draws. |
@@ -175,7 +175,7 @@ were never the problem.
 | `heathistory.js` | The heat-grid columns older than the status frame carries — fetched once from `/api/heat-history` and drawn only inside the sheet. |
 | `tv.js` | KIOSK ONLY, and the guard matters: the activity popup and the heard-you pop, off `/api/voice-stream`. Every other surface boots `voiceagent.js`, which drives the same popup from the same stream — running both left the phone holding a second EventSource open for the life of the page. |
 | `wallmode.js` | Follows `app_settings.wall_mode` so voice can switch the TV between the walls. Acts only on kiosk paths (`/tv`, `/tv-session-focus`, `/tv-calendar`, `/tv-home`), never on the phone's `/`. |
-| `calendar.js` | The `/calendar` page: paints the server-computed month grid + day agenda from `/api/calendar`; tap a day, page months. Read-only — writes stay with voice and the todo pane. Re-reads on an `/api/list-stream` push, never on a timer. |
+| `cards/month.js` | The month calendar: paints the server-computed month grid + day agenda from `/api/calendar`; tap a day, page months. Read-only — writes stay with voice and the lists. Mounted in the phone home page's calendar sheet and by `calendar.js` for the standalone `/calendar` page; each surface decides what makes it re-read (a push, never a timer). |
 | `cards/weather.js` | The rain-chance grid, in the surf card on the home wall and in the phone's misc pane with it. Paints only: the grid, the drawn window, the peak and the colours are all decided in `lib/weather`. Carries no day letters and no sky icons — the leftmost column is today by definition, and in this climate NWS says "chance of showers and thunderstorms" six days in seven, so the icon discriminated nothing the colour did not. |
 | `cards/dayline.js` | THE day column, on every surface that has one — and the look-ahead beside it, painted from the same response into the element `mount` was given as `ahead` — the calendar wall, the home wall, the phone's lists pane. `mount(null, {onload})` is a surface that wants the PAYLOAD and no column of its own: the phone's home page, which draws the same days as a horizontal strip (`cards/daystrip.js`) and still shares this one's fetch and clock. Owns the fetch, the clock and the reload rules: it re-reads on an `/api/list-stream` push and when the server says a chip changes state, and otherwise just moves the now-line against the clock (each hour row carries its 24h number). Mounts `#daycard` itself; the walls mount their column, because they choose the endpoint. |
 | `tv-calendar.js` | The calendar wall's middle (only `tv-calendar.html` loads it): the month grid(s) out of the `/api/calendar?wall=1` payload that `dayline.js` fetched for the column beside them. Display-only. |
@@ -241,11 +241,12 @@ an idle robot otherwise look identical. `SELF_CYCLING` means the robot left slee
 cycling on its own and nothing here is driving it.
 
 **Surfaces (same code, different chrome):** desktop `/page` = scrolling rows; phone = swipe panes on
-`/`, in the markup order of `phone-home.html` — sessions · home · misc · lists · reports,
-landing on home (index 1). The weight page (`maintviz`) is no pane: tapping the weigh-in plot opens it as a sheet. No chat pane: the hub conversation is on the home pane, and the sessions
+`/`, in the markup order of `phone-home.html` — sessions · home · reports, landing on home (index 1).
+Everything else is a sheet (`expand.js`): the weight page opens from the weigh-in plot, the calendar
+and lists from the day strip, utilities from the navbar, the voice system at the bottom of Settings. No chat pane: the hub conversation is on the home pane, and the sessions
 view takes the slot left of it; TV `/tv` = the home wall + a voice panel (auth `?token=`); the `/mic` page = a
-minimal fullscreen voice launcher; `/calendar` = the standalone calendar page (navbar's calendar
-button gets there); `/tv-calendar` = the calendar wall (§ CLAUDE.md's walls note). The phone's page is
+minimal fullscreen voice launcher; `/calendar` = the standalone calendar page (the navbar's calendar
+button gets there everywhere but the phone's home page, where the day strip opens the same month); `/tv-calendar` = the calendar wall (§ CLAUDE.md's walls note). The phone's page is
 NOT a scaled wall — see CLAUDE.md, "The phone's home page is not a wall".
 
 ### The microphone is open only while something records

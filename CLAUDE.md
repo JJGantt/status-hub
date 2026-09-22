@@ -236,8 +236,8 @@ stripped down around the sessions list so it reads across a room and eventually 
 
 `public/tv-calendar.html` (`/tv-calendar`) is the calendar wall — the shared frame with the freed
 middle painted by `tv-calendar.js`: a day timeline plus `calendar_months` months of grid.
-Display-only. The phone's interactive calendar is `public/calendar.html` at `/calendar` — a separate
-standalone page, not a wall.
+Display-only. The phone's interactive calendar is the month in the home page's calendar sheet
+(`cards/month.js`); the same module runs standalone at `/calendar` (`public/calendar.html`), not a wall.
 
 Voice picks between them with `set_wall`, which writes `app_settings.wall_mode`; `wallmode.js` maps
 that to a path and the kiosk navigates itself, because nothing can reach in and navigate it. Modes
@@ -396,9 +396,14 @@ It also beats app.css's `body.tv.wallportrait` block on equal specificity, by lo
 - **The strip keeps going past midnight**, ruled and labelled at each day boundary, which is what
   makes the look-ahead cost nothing here: scroll right and you are in tomorrow. There is no separate
   list of the next six days; one costs a third of the screen to say less.
-- **No status strip.** The litter robot, the feeder, the mics and the routing chips are in the misc
-  pane. None of them changes hour to hour, and all four are a chip strip, which is the one shape a
-  swipe pane has room to spare for.
+- **No status strip.** None of the devices changes hour to hour. The litter robot and the feeder are
+  the UTILITIES sheet, opened by the navbar button in the slot the calendar used (`expand.js`,
+  `util` — it has no summary on the page to tap, so it opens through `openSection`). The mics and the
+  routing chips are at the bottom of SETTINGS: `#voicesys` sits hidden in the page and `settings.js`
+  moves it into the panel while it is open, so the cards keep rendering on every frame. The routing
+  strip's phone sizes in app.css are for a wall scaled to a third, so phone-home.css resizes it there.
+- **There is no camera button.** A picture goes through the chat composer's attach button. The photo
+  outbox the navbar camera filled (`hub-photo-outbox`) is only drained now, for anything it left queued.
 - **The session panel is the list and nothing else.** No head, no reply: a phone has nowhere to put
   a model's answer, and the wall spends a column on one because it is read word by word from a chair.
 - **The voice column is the tail of the thread** (`#ph-conv`), rendered as MARKDOWN. A reply is
@@ -560,6 +565,11 @@ It also beats app.css's `body.tv.wallportrait` block on equal specificity, by lo
   the map out from under the click. The food list is `#nutinfo`, BESIDE `#nutritionlog` here and inside
   it on the health wall, so the section moves both and skips whichever is already inside the other.
   No section has a corner button any more.
+- **THE DAY STRIP OPENS THE CALENDAR** (`data-sec="cal"`): the month (`cards/month.js`), today as a
+  timeline (`#daycard`) and every list (`#todopane`), one scrolling column. A tap on TODAY opens it, or
+  on the day named at the strip's left edge; every other day on the strip is its own tap target
+  (`.ds-hit`, which opens that day in place), so the section `skip`s those. The month re-reads on the
+  page's one list stream, which cards/dayline.js passes on as `hub:lists`, and on `hub:sheetopen`.
 - **The day's totals are ON THE RINGS**, one under each gauge — `2699 / 3060` under Cal, `134 / 178`
   under P. That is the totals line split four ways and attached to the thing each number belongs to,
   so it needs no labels and there is no separate band: `#nutinfo` carries `data-noband` and
@@ -569,8 +579,11 @@ It also beats app.css's `body.tv.wallportrait` block on equal specificity, by lo
   automatic minimum is its CONTENT, so a plain `1fr` sizes each ring to its svg's intrinsic width and
   the ring column stands far taller than the one it is supposed to match.
 
-Its panes are [sessions] [home] [misc] [lists] [reports], landing on home — index 1, which is
-what `panes.clientWidth` means in `phone-home.js` and what the reset returns to. Driven by
+Its panes are [sessions] [home] [reports], landing on home — index 1, which is what
+`panes.clientWidth` means in `phone-home.js` and what the reset returns to. Everything else is a SHEET
+opened by tapping what summarises it (the calendar and the lists, the weight page, the heat maps, surf,
+the body) or from the navbar (utilities, settings). A widget's launch into the old lists pane
+(`__showPane('todo')`) opens the calendar sheet instead. Driven by
 `phone-home.js` rather than `wall.js`, since there is no canvas to scale and only the paging is left.
 
 **SESSIONS sits immediately left of home**, where the walls put their chat pane. It is the one pane
@@ -706,7 +719,7 @@ the phone about which session is pinned.
 ## The day column is one module
 
 `cards/dayline.js` draws it everywhere — the calendar wall beside its months, the home wall's middle
-column, and the phone's lists pane (`#daycard`, which it mounts itself). `mount` also takes a NULL
+column, and the phone home page's calendar sheet (`#daycard`, which it mounts itself). `mount` also takes a NULL
 column, which is the phone home page: it wants the look-ahead and no hour rows, and it still has to
 be the same mount, because the look-ahead and the day are one answer to one question and a second
 fetch on its own clock is a second chance to be showing a different day. Surfaces differ in CSS size

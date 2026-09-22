@@ -8,8 +8,9 @@ token the phone hands over.
 
 ## Shipping it
 
-**It ships inside the iOS app**, so it reaches the watch with a TestFlight build of the app
-(`gh workflow run ios-testflight.yml`), installed when the phone updates. Do not install a local build
+**It ships inside the iOS app**, so it reaches the watch with a TestFlight build of the app —
+`apps/tools/testflight.sh`, built and uploaded from this Mac in a few minutes — installed when the
+phone updates. The GitHub workflow is the fallback for when the Mac is away (`CLAUDE.md`). Do not install a local build
 of the iOS app to try the watch: that build cannot receive push (`CLAUDE.md`). How to prove the Swift
 compiles on this Mac, with or without a simulator runtime, is in `CLAUDE.md` § Checking the Swift
 compiles.

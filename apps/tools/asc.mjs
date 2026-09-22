@@ -18,6 +18,7 @@
 //   node asc.mjs add-tester <group> <email> [first] [last] — put an address in a group
 //   node asc.mjs public-link <group> on|off  — the shareable join link, external groups only
 //   node asc.mjs builds                      — the builds TestFlight is offering, and when they expire
+//   node asc.mjs next-build                  — the build number to upload next (one past the highest)
 //
 // TestFlight shows the app to anyone signed in with an Apple ID that has ever been a tester, but it
 // only lets them INSTALL while that Apple ID is currently in a group — the state a phone reports as
@@ -127,6 +128,13 @@ if (cmd === 'devices') {
     if (/already (exist|been used|registered)|not available/i.test(e.message)) console.log(`${identifier} is already registered — nothing to do.\n${e.message}`);
     else throw e;
   }
+} else if (cmd === 'next-build') {
+  // The build number to upload next: one past the highest TestFlight has, whoever uploaded it. Both
+  // paths ask Apple rather than counting locally, so a build made on the Mac and one made on a runner
+  // cannot pick the same number.
+  const { data } = await api('GET', '/v1/builds?filter[app]=6805268657&limit=200&fields[builds]=version');
+  const highest = data.reduce((n, b) => Math.max(n, parseInt(b.attributes.version, 10) || 0), 0);
+  console.log(highest + 1);
 } else if (cmd === 'builds') {
   // A build stops being installable 90 days after upload, and TestFlight words that on the phone as
   // the tester not having access rather than as an expiry — so "it says I am not a tester" is only

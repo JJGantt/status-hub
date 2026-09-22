@@ -68,11 +68,24 @@ its key; ten of those filled the account and every archive then failed with "max
 certificates". It lasts a year: when it expires, make a new one and replace both secrets — never let
 Xcode mint them again.
 
-**Ship to his phone through TestFlight.** It installs over the air; an Ad Hoc `.ipa` has to be
-pushed from the Mac with `devicectl`, so it needs the phone on the Mac's network — a build made while
-he was out never got installed. The App Store Connect app is "JaredHub" (id `6805268657`) and its
-internal group `internal_main` receives every build. Without a group an upload reaches no one, which
-is how builds 1 and 2 sat unused.
+**Ship to his phone through TestFlight, and build it HERE.**
+
+    apps/tools/testflight.sh        # archive, sign, upload, a few minutes
+
+This Mac has the device platforms and the team's Apple Distribution identity (in the `gnarcast-build`
+keychain), so it needs nothing from GitHub. **`ios-testflight.yml` is the fallback, for when this Mac
+is away** — macOS runners bill at a 10x multiplier and six builds in an afternoon exhausted the
+account's allowance, which stops the workflow dead with "recent account payments have failed or your
+spending limit needs to be increased".
+
+The build number comes from TestFlight itself (`asc.mjs next-build`, one past the highest), floored by
+a local mark file, because Apple does not list a build for some minutes after it is uploaded and the
+API's answer alone can hand back a number that is already taken.
+
+TestFlight installs over the air; an Ad Hoc `.ipa` has to be pushed from the Mac with `devicectl`, so
+it needs the phone on the Mac's network — a build made while he was out never got installed. The App
+Store Connect app is "JaredHub" (id `6805268657`) and its internal group `internal_main` receives
+every build. Without a group an upload reaches no one, which is how builds 1 and 2 sat unused.
 
 ## Checking the Swift compiles, on this Mac
 

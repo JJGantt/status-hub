@@ -602,7 +602,9 @@ liveBuoy.start();
 // Seed both from what is already stored, so a deploy does not blank the live readings until the next
 // report — and a station that has gone quiet still shows its last reading, with its age.
 (async () => {
-  const since = new Date(Date.now() - 3 * 3600 * 1000).toISOString();
+  // TWELVE hours, not three: the point of seeding is the case where the station has been quiet for a
+  // while, and a three-hour window missed a gap that was already three and a half hours old.
+  const since = new Date(Date.now() - 12 * 3600 * 1000).toISOString();
   try {
     const rows = await sb(`water_readings?station=eq.MYPF1&wind_kts=not.is.null&ts=gte.${encodeURIComponent(since)}`
       + '&select=ts,wind_kts,wind_dir_deg,gust_kts&order=ts.desc&limit=40');

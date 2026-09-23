@@ -557,7 +557,7 @@ const surfAlarms = createSurfAlarms({
   nowLocal: nowNaiveLocal, today: () => localDate(), tz: getTZ,
   log: (m) => console.log(m),
   record: (ev, detail) => alarmLog('hub', ev, detail),
-  veto: surfVeto, boost: surfBoost,
+  veto: surfVeto,
 });
 const SURF_ALARM_BACKSTOP_MS = 15 * 60 * 1000;
 setInterval(() => surfAlarms.tick('backstop'), SURF_ALARM_BACKSTOP_MS);
@@ -817,36 +817,6 @@ async function surfVeto() {
   if (!c || c.age_min > 30 || !c.avg30) return null;
   const a = c.avg30;
   return a.type === 'Onshore' && a.kts >= threshold ? { kts: a.kts, dir: a.dir, type: a.type, threshold } : null;
-}
-
-// THE WIND UPGRADE (docs/ALARMS.md): measured OFFSHORE wind under `surf_boost_kts` (default 8) lets an
-// hour the forecast put one step below Fair count as Fair — but only where the forecast's own wind for
-// that hour is not offshore, so it fires only where the dock is measuring the forecast's stated reason
-// to be wrong. `decide` holds that per-hour test; this only says whether the measurement qualifies and
-// how far ahead it may speak for.
-//
-// MEASURED, from the dock at Mayport, 2025-12-31 to 2026-09-22. An offshore 30-minute average under
-// 8 kt at 5am is still offshore at 8am on 86.9% of days and at 9am on 85.0% (n=107), against an
-// unconditional 57.4% at 9am — and in June-September, 88.2%. It goes fully ONSHORE by 9am on 3 days in
-// 107 (2.8%), 1 in 51 in season, so the realistic cost is a mediocre wake rather than a wrong one; the
-// usual way it decays is a clock round to cross-shore, median 22 degrees by 9am.
-//
-// UNTIL_HOUR is 10 because that is where the measurement stops earning its place: 75.7% year-round at
-// 10am against 85.0% at 9am. The land breeze is what is being relied on — the overnight drainage flow
-// that holds until the sun turns it into a sea breeze — and late morning is when that turns.
-//
-// Waiting does NOT improve it: conditioning on 6am or 7am instead gives 83.1% and 84.6% at 9am. That
-// matters, because a decision taken at 7am cannot drive a 7am alarm.
-const BOOST_UNTIL_HOUR = 10;
-async function surfBoost() {
-  let threshold = 8;
-  try { const v = parseFloat((await settingsAll()).surf_boost_kts); if (Number.isFinite(v)) threshold = v; } catch (_) {}
-  if (!(threshold > 0)) return null;
-  const c = liveWind.current();
-  if (!c || c.age_min > 30 || !c.avg30) return null;
-  const a = c.avg30;
-  if (a.type !== 'Offshore' || a.kts > threshold) return null;
-  return { kts: a.kts, dir: a.dir, type: a.type, threshold, until: BOOST_UNTIL_HOUR };
 }
 
 

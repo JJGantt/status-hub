@@ -90,6 +90,11 @@ export async function open() {
         '<input class="settings-num" type="number" min="0" max="600" step="10" inputmode="numeric" ' +
         'data-key="watch_reading_wpm" value="' + sil('watch_reading_wpm', 0) + '"></label>' +
 
+      '<div class="settings-sec">Uploaded clips must sound like you</div>' +
+      '<label class="settings-row"><span>Watch / phone listening<br><small>0 = accept anything</small></span>' +
+        '<input class="settings-num" type="number" min="0" max="0.9" step="0.01" inputmode="decimal" ' +
+        'data-key="voice_upload_accept" value="' + sil('voice_upload_accept', 0.22) + '"></label>' +
+
       '<div class="settings-sec">Always-on voice (wake-free)</div>' +
       '<div class="settings-seg" id="set-wf-enabled">' +
         '<button type="button" data-v="0"' + (wfOn ? '' : ' class="on"') + '>Off</button>' +

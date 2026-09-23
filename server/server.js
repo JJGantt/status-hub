@@ -2530,7 +2530,12 @@ async function soundsLikeHim(id, file, source) {
       (VERIFY_TOKEN ? `&token=${encodeURIComponent(VERIFY_TOKEN)}` : '');
     const r = await fetch(url, { signal: AbortSignal.timeout(20000) });
     const sim = parseFloat(await r.text());
-    const bar = parseFloat((await settingsAll()).voiceid_accept_threshold) || 0.22;
+    // ITS OWN SETTING, not the room mics'. `voiceid_accept_threshold` is the ESP's whole-clip gate and
+    // reads 0 (off) today; sharing it would mean a number tuned for a puck streaming raw audio silently
+    // deciding what a watch may say, and a 0 there quietly opening this. Unset here is 0.22; 0 is off.
+    const raw = parseFloat((await settingsAll()).voice_upload_accept);
+    const bar = Number.isFinite(raw) && raw >= 0 ? raw : 0.22;
+    if (bar === 0) return { ok: true, sim, why: 'gate off' };
     if (!Number.isFinite(sim) || sim <= 0) return { ok: true, sim, why: 'could not tell' };
     return { ok: sim >= bar, sim, bar };
   } catch (e) {

@@ -300,6 +300,14 @@ resend after a dropped connection gets the first send's id back instead of runni
 is known, Retry only waits again; after a worker error it uploads the clip as a new attempt. **Cancel
 while waiting stops waiting — a command the hub already has still runs.**
 
+### A control per page
+
+Control Center, the Smart Stack and an Ultra's Action button each hold a button per page —
+**Sessions · Nutrition · Workout** — which opens the app there rather than in the app to then swipe
+(`OpenPageIntent` → `Router` → `RootView`). Record is the odd one out: it opens home AND starts
+recording. Each control is its own type, because a `ControlWidget` is built by the system and cannot
+carry stored properties of its own; the shared part is `pageControl(_:_:_:)`.
+
 ### Two launchers, one request
 
 The complication (circular and corner) opens `statushub://record`. The Record control

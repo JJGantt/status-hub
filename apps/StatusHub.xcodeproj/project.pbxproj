@@ -54,6 +54,7 @@
 		C97CE9C67CFCE106140773BB /* Views.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7E727AC7945D69F9313E83AC /* Views.swift */; };
 		CDDBE30861DC50F9003C9B3C /* StatusHubWatchWidgets.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 7A798171A56FC30D0250CDD7 /* StatusHubWatchWidgets.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		D19716A696E535763020C4F4 /* Theme.swift in Sources */ = {isa = PBXBuildFile; fileRef = A3ED88961E8E93D6EBE0EA46 /* Theme.swift */; };
+		D3E5EB61797DC506EFFC29B3 /* Router.swift in Sources */ = {isa = PBXBuildFile; fileRef = 04D43ADC9891823E1EFA0E4C /* Router.swift */; };
 		D8B3EEDED01AB105C95F173D /* Auth.swift in Sources */ = {isa = PBXBuildFile; fileRef = 88D699B5FDC0F7476374CF07 /* Auth.swift */; };
 		D998A2EA11DB625A5E768785 /* Models.swift in Sources */ = {isa = PBXBuildFile; fileRef = B47214768CCEE8C99EEF5958 /* Models.swift */; };
 		E5F01E32A844356CC4D3F449 /* WatchUI.swift in Sources */ = {isa = PBXBuildFile; fileRef = E15B459BE174F4274C78B54E /* WatchUI.swift */; };
@@ -127,6 +128,7 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		04D43ADC9891823E1EFA0E4C /* Router.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Router.swift; sourceTree = "<group>"; };
 		0AD761F7ECC2DBF3FA1641B0 /* RingsWidget.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RingsWidget.swift; sourceTree = "<group>"; };
 		12B2F6A89FA87D30EEC5ED56 /* Info-iOS.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = "Info-iOS.plist"; sourceTree = "<group>"; };
 		1395E04227DD7450E1CBC8AD /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
@@ -227,6 +229,7 @@
 				38BD5AA187D80545B616356B /* Nutrition.swift */,
 				7300D161B8F2C8E565CA4FAB /* NutritionView.swift */,
 				14EB30894FADCF33B66D0455 /* Recorder.swift */,
+				04D43ADC9891823E1EFA0E4C /* Router.swift */,
 				3DA8801FE7845595DD403F04 /* Sessions.swift */,
 				AC7643D7992852F757EF0A7E /* SessionsView.swift */,
 				C00E5B1C61B9780EE2BE1945 /* StatusHubWatchApp.swift */,
@@ -482,6 +485,7 @@
 				1C569FFA9D76D921D56B85D8 /* RecordIntent.swift in Sources */,
 				51D9EC4E888D09D03D22734A /* Recorder.swift in Sources */,
 				0A405A9C2335E55FE66C39DB /* RingsView.swift in Sources */,
+				D3E5EB61797DC506EFFC29B3 /* Router.swift in Sources */,
 				EBD52912FF3B6259E305FBFA /* Sessions.swift in Sources */,
 				4D60B234E0ADF4D9465FE606 /* SessionsView.swift in Sources */,
 				77A3FC66BCC0B5FAA82C04C6 /* StatusHubWatchApp.swift in Sources */,

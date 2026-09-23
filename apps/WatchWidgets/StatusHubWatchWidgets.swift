@@ -7,6 +7,9 @@ struct StatusHubWatchWidgets: WidgetBundle {
         RecordComplication()
         if #available(watchOS 26.0, *) {
             RecordControl()
+            SessionsControl()
+            NutritionControl()
+            WorkoutControl()
         }
     }
 }
@@ -22,6 +25,38 @@ struct RecordControl: ControlWidget {
             }
         }
         .displayName("Record")
+    }
+}
+
+/// A control per page: Control Center, the Smart Stack and an Ultra's Action button can each open the
+/// app where he was going. The Record control is the odd one out — it opens home AND starts recording;
+/// these only travel. One type each, because a `ControlWidget` is built by the system and so cannot
+/// carry stored properties of its own.
+@available(watchOS 26.0, *)
+private func pageControl(_ page: WatchPage, _ title: LocalizedStringResource,
+                         _ symbol: String) -> some ControlWidgetConfiguration {
+    StaticControlConfiguration(kind: "com.jaredgantt.statushub.watch." + page.rawValue) {
+        ControlWidgetButton(action: OpenPageIntent(page)) {
+            Label(String(localized: title), systemImage: symbol)
+        }
+    }
+    .displayName(title)
+}
+
+@available(watchOS 26.0, *)
+struct SessionsControl: ControlWidget {
+    var body: some ControlWidgetConfiguration { pageControl(.sessions, "Sessions", "terminal.fill") }
+}
+
+@available(watchOS 26.0, *)
+struct NutritionControl: ControlWidget {
+    var body: some ControlWidgetConfiguration { pageControl(.nutrition, "Nutrition", "circle.dashed") }
+}
+
+@available(watchOS 26.0, *)
+struct WorkoutControl: ControlWidget {
+    var body: some ControlWidgetConfiguration {
+        pageControl(.workout, "Workout", "figure.strengthtraining.traditional")
     }
 }
 

@@ -9,6 +9,7 @@ struct StatusHubWatchApp: App {
     @StateObject private var sessions = Sessions.shared
     @StateObject private var nutrition = Nutrition()
     @StateObject private var workout = Workout()
+    @StateObject private var router = Router.shared
 
     init() {
         // Activate WatchConnectivity at launch so a token the phone already sent is picked up at once.
@@ -25,6 +26,7 @@ struct StatusHubWatchApp: App {
                 .environmentObject(sessions)
                 .environmentObject(nutrition)
                 .environmentObject(workout)
+                .environmentObject(router)
         }
     }
 }
@@ -79,12 +81,23 @@ final class WatchAppDelegate: NSObject, WKApplicationDelegate, UNUserNotificatio
 /// Four pages, left to right: the sessions, home — the conversation — the rings and today's log, and
 /// the workout block. Home is where the app opens.
 struct RootView: View {
-    enum Page { case sessions, home, nutrition, workout }
+    enum Page {
+        case sessions, home, nutrition, workout
+
+        init(_ asked: WatchPage) {
+            switch asked {
+            case .sessions: self = .sessions
+            case .nutrition: self = .nutrition
+            case .workout: self = .workout
+            }
+        }
+    }
 
     @EnvironmentObject private var chat: Chat
     @EnvironmentObject private var sessions: Sessions
     @EnvironmentObject private var nutrition: Nutrition
     @EnvironmentObject private var workout: Workout
+    @EnvironmentObject private var router: Router
     @Environment(\.scenePhase) private var phase
     @State private var page = Page.home
 
@@ -110,6 +123,12 @@ struct RootView: View {
         // A record request (complication or Record control) always lands on home, whichever page was
         // showing.
         .onChange(of: chat.recordRequested) { _, asked in if asked { page = .home } }
+        // A control that names a page (Control Center, the Action button, the Smart Stack) turns to it.
+        .onChange(of: router.asked, initial: true) { _, asked in
+            guard let asked else { return }
+            page = Page(asked)
+            router.asked = nil
+        }
         // A session opened from its notification lands on the sessions page, even on a cold launch.
         .onChange(of: sessions.path) { _, path in if !path.isEmpty { page = .sessions } }
         .onAppear {

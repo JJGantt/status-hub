@@ -46,7 +46,23 @@ segment's own start would overlap the previous one and collapse two real command
 
 ## Speaker ID
 
-The ESP and the Mac gate on it: ECAPA-TDNN against the enrolled voiceprint, accepted at
+**A listener that UPLOADS a clip is scored by the hub** (`soundsLikeHim` in `status-hub/server.js`):
+the clip goes to the voice server as 16k mono WAV, `/verify` answers the top-3 cosine against the
+voiceprint, and anything under `voiceid_accept_threshold` (0.22 when unset) is never enqueued. That is
+the phone and the watch, which hand over a finished file rather than streaming — until 2026-09-23 they
+were the only mics in the house with no gate at all, and eleven minutes of watch listening sent a
+podcast, a television and a room to the worker.
+
+Measured on the day it shipped: one of his own dictations scores 0.52, a synthesised voice 0.08.
+
+**A gate that cannot run lets the command through.** A voice server that is down, a missing voiceprint
+and a clip that will not decode all answer 0, which the hub reads as "cannot tell" — eating his
+commands because a service is unreachable is the worse failure.
+
+**A press is its own proof.** Only always-on sources are scored; the deliberate button on a phone or a
+watch identifies whoever is holding it.
+
+The ESP and the Mac gate on it in the stream itself: ECAPA-TDNN against the enrolled voiceprint, accepted at
 `app_settings.voiceid_accept_threshold`. A room mic has to know it is him and not the television.
 
 The phone's always-on mode is the same situation — engaging it is what puts the phone INTO the

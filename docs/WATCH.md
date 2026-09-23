@@ -61,11 +61,12 @@ A tap anywhere on the conversation is the same press as the control. The page ca
 second indicator of a state the control already holds, and a failure is the one thing it adds — an
 icon and Retry under the thread, since a command that failed has nowhere else to be picked up.
 
-**The system's clock is left alone.** watchOS puts the time in the top right of every app and nothing
-hides it — the invisible-`VideoPlayer` trick that is passed around does nothing on watchOS 26.5,
-measured four ways: as a background, as a full-size overlay at 0.001 opacity, with a real looping clip
-playing, and visible at full opacity behind the content. A `ToolbarItem` does move it, but to the LEFT
-of the strip rather than the middle, so the page draws no clock and puts nothing in the toolbar.
+**The system's clock is hidden**, by `persistentSystemOverlays(.hidden)` — the one thing that works.
+`statusBarHidden` is unavailable on watchOS; the invisible-`VideoPlayer` trick that is passed around
+does nothing, measured four ways (as a background, as a full-size overlay at 0.001 opacity, with a real
+looping clip playing, and visible at full opacity behind the content); a `ToolbarItem` only moves the
+time to the left of the strip. The page draws no clock of its own either: it is for the conversation,
+and the watch face is one press of the crown away.
 
 ### The sessions page
 

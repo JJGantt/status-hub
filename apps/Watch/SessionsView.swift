@@ -107,6 +107,10 @@ struct SessionView: View {
     @EnvironmentObject private var sessions: Sessions
     @ObservedObject private var capture = Capture.shared
 
+    /// Held on the newest reply until he scrolls: the turns lay out after the jump, and a single jump
+    /// lands short of the spot it aimed at.
+    @State private var pinned = true
+
     private var detail: SessionDetail? { sessions.details[key] }
     private var activity: [ActivityLine] { sessions.activity[key] ?? [] }
     private var recording: Bool { capture.owner == .session(key) }
@@ -129,8 +133,14 @@ struct SessionView: View {
             // answer is what he came for, and the prompt is his own words. The same landing whenever a
             // new reply arrives. Work in progress — his words, a recording, tool calls — lands at the
             // bottom (`tail`, PagedScroll's end marker), so that is where the view follows it instead.
-            .onChange(of: detail?.last_reply) { _, _ in toReply(proxy, animated: true) }
-            .onChange(of: detail == nil) { _, _ in toReply(proxy) }
+            .onChange(of: detail?.last_reply) { _, _ in pinned = true; toReply(proxy, animated: true) }
+            .onChange(of: detail == nil) { _, _ in pinned = true; toReply(proxy) }
+            .onScrollGeometryChange(for: CGFloat.self) { $0.contentSize.height } action: { _, _ in
+                if pinned { toReply(proxy) }
+            }
+            .onScrollPhaseChange { _, now in
+                if now == .interacting || now == .tracking { pinned = false }
+            }
             .onAppear { toReply(proxy) }
             .onChange(of: activity.count) { old, new in if new > old { toBottom(proxy) } }
             .onChange(of: sessions.sent[key]) { _, new in if new != nil { toBottom(proxy) } }
@@ -141,6 +151,7 @@ struct SessionView: View {
         // screen this page spends on the answer. A leading toolbar item leaves the clock where watchOS
         // puts it; a trailing one would push the time to the other end of the strip.
         .navigationBarBackButtonHidden(true)
+        .persistentSystemOverlays(.hidden)   // the session's name has the line to itself
         .toolbar {
             ToolbarItem(placement: .topBarLeading) {
                 Text(sessions.row(for: key)?.name ?? "")

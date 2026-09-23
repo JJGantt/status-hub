@@ -783,7 +783,17 @@ async function surfLive() {
       return { date, today: date === today, hours: dayRows.get(date).map(hourOf),
                water_f: f, water_color: waterColor(f) };
     });
+  // WHICH DAY TO OPEN ON, and WHERE NOW IS — both from the break's clock, not the watch's. The watch
+  // can be in another timezone and its `Calendar.current` is the phone's, so a spoke placed there
+  // lands on the wrong hour the moment he travels.
+  //
+  // `open_day` is today until 6pm and the next day after: the ring is the twelve hours worth surfing,
+  // so once they are behind you the useful question is the next set, not the set that just ended.
+  // The crown still reaches every day, today included; this only says where it starts.
+  const nowH = +nowLocal.slice(11, 13) + +nowLocal.slice(14, 16) / 60;
+  const openDay = nowH < 18 ? 0 : Math.min(1, days.length - 1);
   return { surf: buildSurf(snap), wind, sea, buoys: liveBuoy.view(), hours, water, days,
+           now_hour: Math.round(nowH * 100) / 100, open_day: Math.max(0, openDay),
            weather: getWeather(), generated_at: new Date().toISOString() };
 }
 const surfClients = new Set();

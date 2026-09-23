@@ -134,7 +134,7 @@ time. The wind is what moves in that gap.
 
 `surfVeto` in `server.js`: when the half-hour average of the MEASURED wind (`lib/livewind.js`, the
 Mayport Bar Pilots dock 2.2 miles away — NDBC's MYPF1, read from NOAA CO-OPS as 8720218 every ten
-minutes) is ONSHORE at or over `surf_veto_kts` (Settings, default 8, 0 turns it off), every hour of
+minutes) is ONSHORE at or over `surf_veto_kts` (Settings, default 12, 0 turns it off), every hour of
 TODAY from the current one on counts as not Fair. Only while the reading is fresh (30 minutes: CO-OPS
 serves a reading about six minutes after it is taken) and only for today's alarm. NDBC's own file is
 the wrong source for this: it is rewritten about hourly, so its newest reading is 30-90 minutes old. Every new reading re-runs the decision until the wake time, so a veto that lifts brings
@@ -143,14 +143,30 @@ the alarm back, and the moment itself is never moved.
 What the history since July says, and why the rule is this one:
 
 - **Wind cannot make an hour Fair, only rule it out.** On light offshore wind a 1-2 ft morning is still
-  rated Fair only 15-20% of the time — swell decides that. Onshore at 8 kt or more has never been rated
-  Fair, at any size, which is where the default sits.
+  rated Fair only 15-20% of the time — swell decides that.
+- **THE THRESHOLD LEANS LENIENT, and the asymmetry is the reason.** Suppressing a real alarm costs the
+  session; letting one through costs a look out of the window. Onshore at 8 kt or more has never been
+  rated Fair — 0 of 351 hours across the archive, 0 of 43 in the 6-11am window — and the strongest
+  onshore wind on any Fair morning hour is 5.1 kt. So 12 sits well clear of anything that has ever been
+  surfable and fires only on wind that has plainly ruined the morning.
+- **The state it guards against does not lift within a morning.** Of 149 hours at measured onshore
+  8 kt or more, NONE was offshore two hours later, against 10.2% going the other way. It builds: median
+  measured speed across 7-11am on those days runs 16.4, 14.9, 15.6, 15.8, 16.6 kt.
+- **It has never yet changed an outcome.** Over 96 days of snapshots the cell where it can bite — the
+  5am capture rating an hour Fair while the measurement is onshore at the threshold — is empty; on all
+  13 mornings the condition held, the forecast had already called every hour not Fair. It is insurance
+  that has not paid out, which is an argument for leaving it alone rather than for tuning it.
 - **4 kt onshore is too aggressive.** Surfline rates 2-3 ft mornings Fair 11-23% of the time at 4-6 kt
   onshore, and it re-rated several light-onshore mornings Fair after the fact.
 - **The direction differing from the forecast is not a signal at light wind.** Measured offshore or
   cross-shore where the forecast said otherwise, at 2-3 kt, happened on six Fair hours and every one
   stayed Fair in Surfline's own revision.
-- **The wind that spoils a morning builds after dawn.** On the 38 hours the 5am forecast called Fair,
+- **The wind that spoils a morning builds after dawn** — but check this one before relying on it. Over
+  2026-06-19 onward, 20 forecast-Fair hours were downgraded by the final capture and the veto would
+  have caught none of them: every one spoiled under light or offshore measured wind. Reading the two
+  days below out of the snapshot archive does not reproduce the account given here either, which may be
+  a different choice of decision capture. If catching post-dawn downgrades is the goal, wind alone does
+  not do it. On the 38 hours the 5am forecast called Fair,
   the dock read 7 kt or less at 6am every time, including the four hours Surfline later downgraded
   (Sep 1 and Sep 3), where it built to 8-11 kt onshore by 8-9am. So a veto that looked only at the
   decision moment would never have fired; its value is that it keeps looking until the wake time,

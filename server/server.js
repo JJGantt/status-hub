@@ -799,13 +799,21 @@ async function pushSurfLive() {
   for (const res of surfClients) { try { res.write(frame); } catch {} }
 }
 
-// THE WIND VETO (docs/ALARMS.md): measured ONSHORE wind at or over `surf_veto_kts` (default 8) rules
+// The veto LEANS LENIENT — it takes an unambiguously blown-out morning to suppress an alarm, not a
+// marginal one. Measured across the archive, no hour at onshore 8 kt or more has ever been rated Fair
+// (0 of 351), and in the 6-11am window the strongest onshore wind on a Fair hour is 5.1 kt — so 12
+// sits three bands clear of anything that has ever been surfable and still only fires on wind that has
+// plainly ruined the morning. The asymmetry is the argument: suppressing a real alarm costs the
+// session, and letting one through costs a look at the window.
+const VETO_DEFAULT_KTS = 12;
+
+// THE WIND VETO (docs/ALARMS.md): measured ONSHORE wind at or over `surf_veto_kts` (default 12) rules
 // the rest of today's hours out of a surf alarm, whatever the forecast said. The half-hour average,
 // not one reading — a six-minute reading is a gust as often as a trend — and only while it is fresh:
 // a reading reaches the API about six minutes after it is taken and is fetched every ten, so 30
 // minutes allows one missed fetch. 0 turns it off.
 async function surfVeto() {
-  let threshold = 8;
+  let threshold = VETO_DEFAULT_KTS;
   try { const v = parseFloat((await settingsAll()).surf_veto_kts); if (Number.isFinite(v)) threshold = v; } catch (_) {}
   if (!(threshold > 0)) return null;
   const c = liveWind.current();

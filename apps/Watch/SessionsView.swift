@@ -1,7 +1,14 @@
 import SwiftUI
 
-/// The page left of the prompt: one row per conversation the hub knows, running first, then parked,
-/// most recently active first within each. A tap opens one.
+/// The page left of home: one row per conversation the hub knows, running first, then parked, most
+/// recently active first within each. A tap opens one.
+///
+/// A row carries the same three marks as the phone's list (`cards/sessions.js`, `phone-home.css`),
+/// because they answer different questions and are read together: the WHITE edge is the focused
+/// session — where a spoken follow-up goes — with a pin beside its name when he pinned it there; the
+/// AMBER edge is a finished reply nobody has opened, which also takes back the dimming a parked row
+/// gets, since a finished session is the one most worth reading; the DOT is a session working now.
+/// Under each name is what its machine is doing, live off `/api/session-stream`.
 struct SessionsView: View {
     @EnvironmentObject private var sessions: Sessions
 
@@ -24,30 +31,62 @@ struct SessionsView: View {
     private static let build = Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "?"
 
     private func row(_ s: SessionRow) -> some View {
-        HStack(alignment: .firstTextBaseline, spacing: 6) {
+        let unread = s.unread == true
+        let focused = s.id == sessions.focus
+        return HStack(alignment: .top, spacing: 6) {
+            // The edge: amber over white, as on the phone, where a focused unread row shows both.
+            Rectangle()
+                .fill(unread ? Self.amber : focused ? Color.white : Color.clear)
+                .frame(width: 2)
             if let n = s.n {
                 Text("\(n)")
                     .font(.system(size: 12, weight: .semibold, design: .monospaced))
                     .foregroundColor(.gray)
             }
             VStack(alignment: .leading, spacing: 2) {
-                Text(s.name)
-                    .font(.system(size: 14))
-                    .foregroundColor(s.running ? .white : .gray)
-                    .lineLimit(2)
+                HStack(spacing: 4) {
+                    if focused && sessions.pinned {
+                        Image(systemName: "pin.fill").font(.system(size: 9)).foregroundColor(.gray)
+                    }
+                    Text(s.name)
+                        .font(.system(size: 14))
+                        .foregroundColor(unread || focused ? .white : s.running ? Self.name : .gray)
+                        .lineLimit(2)
+                }
                 if let say = s.say, !say.isEmpty {
                     Text(snippet(say))
                         .font(.system(size: 11))
                         .foregroundColor(.gray)
-                        .lineLimit(3)
+                        .lineLimit(2)
                 }
+                step(s, unread: unread)
             }
             Spacer(minLength: 0)
-            if s.working == true || !(sessions.activity[s.key] ?? []).isEmpty {
-                Circle().fill(Color.green).frame(width: 7, height: 7)
+            if s.working == true {
+                Circle().fill(Color.green).frame(width: 7, height: 7).padding(.top, 4)
             }
         }
+        // A parked session is dimmed, unless it is holding a reply nobody has read.
+        .opacity(s.running || unread ? 1 : 0.5)
     }
+
+    /// What this session's machine is doing, newest step only: a tool call in teal, what the model says
+    /// between them in a plain light. The line is always there, however empty — a row that grows when a
+    /// tool fires and shrinks when one stops makes the whole list jump every few seconds.
+    private func step(_ s: SessionRow, unread: Bool) -> some View {
+        let line = sessions.activity[s.key]?.last
+        return Text(line?.text ?? " ")
+            .font(.system(size: 9, design: line?.thought == true ? .default : .monospaced))
+            .foregroundColor(line == nil ? .clear : unread ? Self.unreadStep : line?.thought == true ? Self.said : Self.tool)
+            .lineLimit(1)
+            .frame(height: 11, alignment: .leading)
+    }
+
+    private static let amber = Color(hex: "#e0a03a")
+    private static let name = Color(hex: "#c7cdd6")
+    private static let tool = Color(hex: "#4fd1c5")
+    private static let said = Color(hex: "#d5dde6")
+    private static let unreadStep = Color(hex: "#e6c88a")
 }
 
 /// One conversation: the last prompt and the reply to it, the tool calls of the turn it is running,
@@ -88,7 +127,10 @@ struct SessionView: View {
             .onChange(of: sessions.sent[key]) { _, new in if new != nil { toBottom(proxy) } }
             .onChange(of: recording) { _, now in if now { toBottom(proxy) } }
         }
-        .task { await sessions.loadDetail(key) }
+        .task {
+            sessions.markSeen(key)   // opening it is reading it, here as on the phone
+            await sessions.loadDetail(key)
+        }
     }
 
     private func toBottom(_ proxy: ScrollViewProxy) {

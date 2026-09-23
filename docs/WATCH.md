@@ -97,6 +97,17 @@ first within each, the order `n` counts in — and follows `/api/session-stream`
 over up to three lines of what it last said: the list's `say`, which the hub already cuts to 120
 characters, drawn smaller and grey with its markdown's bold and code dropped.
 
+**A row carries the same three marks as the phone's list** (`cards/sessions.js`, `phone-home.css`),
+because they answer different questions and are read together: a **white** left edge is the focused
+session — where a spoken follow-up goes — with a pin beside its name when he pinned it there; an
+**amber** left edge is a finished reply nobody has opened, which also takes back the dimming a parked
+row gets, since a finished session is the one most worth reading; a green **dot** is a session working
+now. Under each name is what that machine is doing, live off `/api/session-stream` — a tool call in
+teal, what the model says between them in a plain light — and the line is always there, however empty,
+because a row that grows when a tool fires and shrinks when one stops makes the whole list jump every
+few seconds. Opening a session marks it seen (`POST /api/sessions/seen`), so the mark clears on the
+phone and the wall too.
+
 A tapped row opens its session on top of the whole row of pages (the `NavigationStack` is `RootView`'s,
 around the `TabView`), not inside the sessions page: there the page row took sideways swipes and the
 watch's own swipe back never fired. The session has no title bar.
@@ -400,6 +411,9 @@ to install on an unpaired watch simulator. **One watch simulator is kept on this
 46mm, the largest this runtime offers — because each device costs over a gigabyte of disk. Screenshots
 are that geometry; a 44mm screen is narrower, and a row that fits here can still overflow there.
 
+- **The simulator is watchOS 26.5 and his watch is 27**, so what a simulator proves about layout is
+  not proof about his watch, and a system behaviour measured here (what hides the clock, how a gesture
+  resolves) can differ there. Installing the 27 runtime is a multi-GB download this disk cannot take.
 - **Do not click the Simulator window with System Events**: that moves his pointer. Reach a state
   with a launch argument instead; the simulator cannot make a double tap either way.
 - **A recording in the simulator records from the Mac's microphone.** Test the silence endpoint by

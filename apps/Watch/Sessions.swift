@@ -16,6 +16,9 @@ struct SessionRow: Decodable, Identifiable, Equatable {
     /// The start of what it last said (its prompt until it has replied), whitespace collapsed and cut
     /// to 120 characters by the hub.
     let say: String?
+    /// A finished reply nobody has opened. The hub decides it (`reply_at` against `seen_at`) so every
+    /// surface agrees; tool calls and thoughts do not set it, so it marks an answer and nothing else.
+    let unread: Bool?
 
     var name: String { sessionName(custom_title, label, repo) ?? id }
     var running: Bool { status == "resident" }
@@ -67,6 +70,7 @@ final class Sessions: ObservableObject {
         await load()
         let key = rows.first { $0.id == rowId }?.key ?? rowId
         path = [key]
+        markSeen(key)
         // Asked here, not left to the view: when this conversation is already the one on screen the view
         // does not appear again, and an app that was in the background missed the stream's `done`, so
         // nothing else would fetch the reply the notification is about.
@@ -75,6 +79,9 @@ final class Sessions: ObservableObject {
 
     /// One row per conversation: its running row if it has one, else its newest parked one.
     @Published private(set) var list: [SessionRow] = []
+    /// The focused session — where a spoken follow-up goes — and whether he pinned it there.
+    @Published private(set) var focus: String?
+    @Published private(set) var pinned = false
     @Published private(set) var details: [String: SessionDetail] = [:]
     /// Each conversation's tool calls since its last reply, and what it said between them, as its
     /// machine reports them. Live only: the hub does not store them.
@@ -117,7 +124,12 @@ final class Sessions: ObservableObject {
     }
 
     func load() async {
-        struct Lists: Decodable { let resident: [SessionRow]; let evicted: [SessionRow] }
+        struct Lists: Decodable {
+            let resident: [SessionRow]
+            let evicted: [SessionRow]
+            let focus: String?
+            let pinned: Bool?
+        }
         if loading { reloadAfter = true; return }
         loading = true
         defer { loading = false }
@@ -127,6 +139,8 @@ final class Sessions: ObservableObject {
                 rows = l.resident + l.evicted
                 var seen = Set<String>()
                 list = rows.filter { seen.insert($0.key).inserted }
+                focus = l.focus
+                pinned = l.pinned ?? false
             }
         } while reloadAfter
     }
@@ -134,6 +148,13 @@ final class Sessions: ObservableObject {
     /// The row a conversation's words go to: its running row, else its newest parked one.
     func row(for key: String) -> SessionRow? {
         rows.first { $0.key == key && $0.running } ?? rows.first { $0.key == key }
+    }
+
+    /// Opening a session is reading it: the mark clears on every surface, not just this one, because
+    /// the phone and the wall are looking at the same list.
+    func markSeen(_ key: String) {
+        guard let r = row(for: key), r.unread == true else { return }
+        Task { _ = try? await Hub.seen(r.id) }
     }
 
     func loadDetail(_ key: String) async {

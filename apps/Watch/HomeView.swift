@@ -32,7 +32,7 @@ struct HomeView: View {
         .overlay {
             BottomControl(mode: mode, enabled: recording || !chat.waiting,
                           holdsDoubleTap: !(recording && capture.lockHoldsDoubleTap), action: press,
-                          onHold: { if !recording { chat.toggleListening() } })
+                          onHold: { if !recording { chat.toggleListening() } }, big: true)
         }
         .background(Color.black.ignoresSafeArea())
         .recordsWhenAsked()

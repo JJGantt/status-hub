@@ -221,6 +221,11 @@ enum Hub {
         return all?[key].map { "\($0)" }
     }
 
+    /// A session has been read here, so its unread mark clears everywhere.
+    static func seen(_ id: String) async throws {
+        _ = try await call("/api/sessions/seen", method: "POST", body: ["id": id])
+    }
+
     /// The global `voice_muted` flag every always-on listener obeys. Best effort, as on the phone.
     static func muteOthers(_ on: Bool) async {
         _ = try? await call("/api/settings", method: "POST", body: ["key": "voice_muted", "value": on ? "1" : "0"])

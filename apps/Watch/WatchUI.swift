@@ -176,7 +176,12 @@ struct BottomControl: View {
     let action: () -> Void
     /// Held rather than pressed. Home engages always-on listening this way, since the press records.
     var onHold: (() -> Void)?
+    /// Home's control is the page's only one and its state indicator, so it takes a target worth
+    /// hitting; a conversation page's sits under text and stays small.
+    var big = false
     @Environment(\.onScreen) private var onScreen
+    /// A hold has just fired, so the press that ends it is not also acted on.
+    @State private var held = false
 
     var body: some View {
         // A full-height column reaching past the safe area puts the control on the screen's physical
@@ -189,22 +194,27 @@ struct BottomControl: View {
                         .frame(height: Self.fade)
                         .allowsHitTesting(false)
                 }
-                Button(action: action) {
+                Button(action: { if held { held = false } else { action() } }) {
                     Group {
                         if mode == .working {
-                            ProgressView().controlSize(.mini)
+                            ProgressView().controlSize(big ? .small : .mini)
                         } else {
                             Image(systemName: symbol)
-                                .font(.system(size: mode == .more ? 16 : 13, weight: .semibold))
+                                .font(.system(size: big ? 20 : mode == .more ? 16 : 13, weight: .semibold))
                                 .foregroundColor(colour)
                         }
                     }
                     .opacity(enabled ? 1 : 0.4)
-                    .frame(width: 44, height: 18)
+                    .frame(width: big ? 110 : 44, height: big ? 34 : 18)
                     .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
-                .onLongPressGesture(minimumDuration: 0.6) { onHold?() }
+                // A Button's own gesture swallows `onLongPressGesture` on watchOS, so the hold runs
+                // beside it and cancels the press it ends.
+                .simultaneousGesture(LongPressGesture(minimumDuration: 0.5).onEnded { _ in
+                    held = true
+                    onHold?()
+                })
                 // Live only while the page is the one showing and the lock is not holding the gesture:
                 // every page stays alive in the TabView, and two live bindings leave the system to pick.
                 .handGestureShortcut(.primaryAction, isEnabled: onScreen && enabled && holdsDoubleTap)

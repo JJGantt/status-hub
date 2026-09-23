@@ -61,9 +61,9 @@ private struct DayStanding: View {
     let openList: () -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 7) {
+        VStack(alignment: .leading, spacing: 4) {
             if let h = history {
-                WeightPlot(plot: h.weight).frame(height: 38)
+                WeightPlot(plot: h.weight).frame(height: 28)
                 IntakeCalendar(weeks: h.weeks).frame(height: 7 * 8)
             }
             standing
@@ -370,11 +370,17 @@ private struct WeightPlot: View {
             line.move(to: pts[0])
             for p in pts.dropFirst() { line.addLine(to: p) }
             ctx.stroke(line, with: .color(Color(hex: "#7fb0ff")), style: StrokeStyle(lineWidth: 1.5, lineCap: .round))
-            for a in plot.axis {
+            // **Two numbers, the high and the low of what is drawn.** Three stacked in a box this
+            // short are crunched, and the middle one is the one a reader infers from the two either
+            // side. Each is CLAMPED inside the box: centred on a line at the very edge, half the
+            // glyph falls outside the canvas and the number reads as cut off.
+            let ends = plot.axis.sorted { $0.y < $1.y }
+            for a in [ends.first, ends.last].compactMap({ $0 }) {
                 let t = ctx.resolve(Text(a.v).font(.system(size: 9, weight: .semibold))
                     .foregroundColor(Color(hex: "#6b7686")))
                 let m = t.measure(in: CGSize(width: 100, height: 100))
-                ctx.draw(t, in: CGRect(x: 0, y: a.y * size.height - m.height / 2, width: m.width, height: m.height))
+                let y = min(max(a.y * size.height - m.height / 2, 0), size.height - m.height)
+                ctx.draw(t, in: CGRect(x: 0, y: y, width: m.width, height: m.height))
             }
         }
     }
@@ -389,10 +395,18 @@ private struct IntakeCalendar: View {
     var body: some View {
         Canvas { ctx, size in
             guard !weeks.isEmpty else { return }
-            let w = size.width / CGFloat(weeks.count), h = size.height / 7
-            for (col, week) in weeks.enumerated() {
+            // **A cell is SQUARE**, its side taken from the seven rows, and the box then holds as many
+            // weeks as that leaves room for — newest against the right edge, older ones dropping off
+            // the left. Dividing the width by the number of weeks instead makes each cell as wide as
+            // the data is long, which at ten weeks is a cell three times wider than it is tall.
+            let side = size.height / 7
+            let fits = max(1, Int(size.width / side))
+            let shown = Array(weeks.suffix(fits))
+            let left = size.width - CGFloat(shown.count) * side
+            for (col, week) in shown.enumerated() {
                 for (row, day) in week.enumerated() {
-                    let box = CGRect(x: CGFloat(col) * w, y: CGFloat(row) * h, width: w, height: h)
+                    let box = CGRect(x: left + CGFloat(col) * side, y: CGFloat(row) * side,
+                                     width: side, height: side)
                     ctx.fill(Path(box.insetBy(dx: 0.25, dy: 0.25)),
                              with: .color(day.c.map { Color(hex: $0) } ?? Color(hex: "#151b22")))
                     if day.t == 1 {

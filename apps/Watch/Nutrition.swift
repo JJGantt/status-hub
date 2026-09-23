@@ -91,11 +91,13 @@ final class Nutrition: ObservableObject {
         expiry = nil
     }
 
-    /// The history is a tap away rather than part of every load: it is ten weeks of days and a plot,
-    /// and most of the time the page is the log.
+    /// The history is a tap away rather than part of every load: it is months of days and a plot, and
+    /// most of the time the page is the log. **But once it has been fetched it is kept current**, by
+    /// `load()` below — it was fetched exactly once and never again, so a meal logged after that
+    /// moment moved the rings and left today's cell on the heat map showing the colour it had before
+    /// the food, for as long as the app stayed up.
     func loadHistory() async {
-        guard history == nil else { return }
-        history = try? await Hub.json("/api/nut-history?weeks=10")
+        history = try? await Hub.json("/api/nut-history?weeks=30")
     }
 
     func load() async {
@@ -114,6 +116,8 @@ final class Nutrition: ObservableObject {
                 refetchWhenFramesEnd(f.frames.count)
             }
             if let d = try? await today { day = d }
+            // Only for someone who has already opened it: this runs on every nutrition change.
+            if history != nil { await loadHistory() }
         } while reloadAfter
     }
 

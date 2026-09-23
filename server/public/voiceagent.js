@@ -320,8 +320,10 @@ export function bindTap(el, fn) {
 // happened before the state reset. A bare identifier is assumed global, so nothing catches this at
 // build time.
 function muteOthers(on) {
-  fetch('/api/settings', { method: 'POST', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ key: 'voice_muted', value: on ? '1' : '0' }) }).catch(() => {});
+  // The phone HOLDS the mute rather than setting the flag: every mic is deaf while ANY source holds
+  // one, so a phone finishing cannot wake the room while the Mac is still dictating (/api/voice-mute).
+  fetch('/api/voice-mute', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ holder: 'phone', on: !!on }) }).catch(() => {});
 }
 
 const VOICE_BPS = 96000;

@@ -1240,6 +1240,8 @@ function startRealtime() {
       // When the agent_mode toggle flips (from anywhere — voice, another device), tell the voice panel to
       // switch to that mode's conversation live, so the on-screen context always matches the active mode.
       if (p.new && p.new.key === 'agent_mode') pushVoice('mode', { agent: agentModeOn(p.new.value) });
+      // A holder written straight into the table (the Mac's listener) is a mute taken or given back.
+      if (p.new && String(p.new.key || '').startsWith(MUTE_HOLD)) recomputeMute().catch(() => {});
     })
     // Dated items and the lists that colour them. `list_items` DOES feed the status frame now — the
     // health bar's gold band is earned by clearing dated items and drained by leaving them — so a
@@ -1962,6 +1964,54 @@ app.get('/api/heat-history', async (req, res) => {
 // voice pipeline reads it from app_settings directly with the service key and it has never been read
 // by any client here, but it was 92% of this response, fetched twice on every cold load.
 const SETTINGS_SERVER_ONLY = new Set(['voiceprint']);
+// ---- the mute has HOLDERS ----------------------------------------------------------------------
+// Every microphone in the house goes deaf while an explicit command is being captured, and that was
+// one flag — `voice_muted` — written 1 and 0 by whoever was capturing. Two sources capturing at once
+// is the ordinary case (a watch recording while he dictates on the Mac), and the one that finished
+// FIRST wrote 0 and woke every mic mid-dictation: on 2026-09-23 the Mac's listener heard the rest of
+// a dictation 0.7s after push-to-talk had muted it, and ran it as a command.
+//
+// So a mute is HELD, by name. `voice_mute_<holder>` carries the instant it was taken and is emptied
+// when it is given back; `voice_muted` stays what every listener reads, and is recomputed here — the
+// hub is one process, so the recompute is serialised however many devices write at once.
+//
+// A holder that dies mid-capture would hold the mute forever, so one older than MUTE_STALE_MS is
+// ignored: past that it is a crash, not a sentence.
+const MUTE_HOLD = 'voice_mute_';
+const MUTE_STALE_MS = 15 * 60 * 1000;
+
+function mutedBy(all) {
+  const now = Date.now();
+  return Object.entries(all)
+    .filter(([k, v]) => k.startsWith(MUTE_HOLD) && v)
+    .filter(([, v]) => { const t = Date.parse(v); return !Number.isFinite(t) || now - t < MUTE_STALE_MS; })
+    .map(([k]) => k.slice(MUTE_HOLD.length));
+}
+
+/// Recomputes `voice_muted` from the holders. Called after a holder writes here, and off the realtime
+/// subscription for a holder written straight into the table (the Mac's listener does that).
+async function recomputeMute() {
+  const all = await settingsAll();
+  const held = mutedBy(all).length > 0 ? '1' : '0';
+  if ((all.voice_muted || '0') === held) return;
+  await putSetting('voice_muted', held);
+  dirtySettings();
+  console.log('[mute]', held === '1' ? `held by ${mutedBy(all).join(', ')}` : 'released');
+}
+
+// Take or give back one holder's mute. Every capture path uses this rather than writing `voice_muted`.
+app.post('/api/voice-mute', express.json(), async (req, res) => {
+  try {
+    const holder = String((req.body && req.body.holder) || '').trim().toLowerCase();
+    if (!/^[a-z0-9][a-z0-9-]{0,23}$/.test(holder)) return res.status(400).json({ error: 'holder required' });
+    const on = !!(req.body && req.body.on);
+    await putSetting(MUTE_HOLD + holder, on ? new Date().toISOString() : '');
+    dirtySettings();
+    await recomputeMute();
+    res.json({ ok: true });
+  } catch (e) { res.status(500).json({ error: String(e.message || e) }); }
+});
+
 app.get('/api/settings', async (req, res) => {
   try {
     const all = await settingsAll();   // realtime-invalidated cache — see settingsAll()

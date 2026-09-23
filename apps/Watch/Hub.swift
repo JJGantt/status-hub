@@ -226,9 +226,11 @@ enum Hub {
         _ = try await call("/api/sessions/seen", method: "POST", body: ["id": id])
     }
 
-    /// The global `voice_muted` flag every always-on listener obeys. Best effort, as on the phone.
+    /// Takes the mute for the watch, or gives it back. Every microphone in the house is deaf while any
+    /// source holds one (`/api/voice-mute`), so giving this one back cannot wake them while another is
+    /// still capturing. Best effort, as on the phone.
     static func muteOthers(_ on: Bool) async {
-        _ = try? await call("/api/settings", method: "POST", body: ["key": "voice_muted", "value": on ? "1" : "0"])
+        _ = try? await call("/api/voice-mute", method: "POST", body: ["holder": "watch", "on": on])
     }
 
     struct Outcome: Decodable {

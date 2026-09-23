@@ -57,14 +57,15 @@ drawn in the spot that acts on it, and the page has no second indicator:
 
 | | |
 |---|---|
-| grey `waveform.slash` | idle |
+| grey `mic.fill` | idle — press to record |
 | orange `waveform` | always-on listening |
-| red `mic.fill` | recording a command, which the silence will end |
-| red `lock.fill` | that recording locked open |
+| red `lock.open` | recording a command, which the silence will end; press to lock it |
+| red `lock.fill` | locked open; press to send |
 | a spinner | the hub has it: transcribing, then running it |
 
-A press records, and sends what is recording, exactly as the mic and the stop do on every other page.
-A **hold** engages or drops always-on listening.
+**One press walks the whole command**: record, lock, send. There is no separate lock button — the
+control is the state and the step at once — and Cancel across the width is the only other thing a
+recording puts on the page. A **hold** engages or drops always-on listening.
 
 **Nothing else on the page says any of that.** The spinner is the glyph rather than a second thing
 beside the text, and there is no Retry here — a command that failed is picked up on the prompt page, which shows
@@ -219,18 +220,16 @@ Every end logs `mic-end` with the numbers it decided on: `reason` (`silence` or 
 threshold, peak, seconds spoken and seconds of audio. Tune the multiplier, the minimum or the minimum
 speech from those, not by feel.
 
-### The recording bar, the lock, and double tap
+### The lock is a step, not a button
 
-While a command records, the page shows two buttons of one size: the **lock** on the left and
-**Cancel** on the right (`RecordingBar`). The stop control at the bottom edge is what says a recording
-is under way; there is no timer. On a recording with no silence endpoint (a session follow-up) there
-is no lock, and Cancel keeps its place with the left half empty.
+While a command records, the page shows **Cancel** across the width and nothing else (`RecordingBar`).
+The control at the bottom edge carries the recording: it is an open lock while recording, a closed
+lock once locked, and pressing it walks that on — record, lock, send. Double tap is the same press, so
+the three states are one gesture repeated. A finger tap on the conversation text presses it too, and
+Cancel throws the clip away.
 
-The lock holds the recording open through any silence. **Double tap walks three states**: the first
-starts the recording, the second locks it, the third sends it. While a command records unlocked,
-double tap belongs to the lock (`Capture.lockHoldsDoubleTap`); once locked it returns to the bottom
-control, which sends (§ Double tap and scrolling). A finger tap on the text or the stop sends at any
-point; Cancel throws the clip away.
+The lock holds the recording open through any silence; a follow-up has no silence endpoint, so its
+control is a mic and then a stop, with no lock in between.
 
 ### Haptics
 
@@ -318,10 +317,9 @@ recording, not `owner == nil`.
 showing — two live bindings leave the system to pick). It is a mic that records and a stop that sends,
 and on home it is also the state glyph. It never hides.
 
-**It gives the gesture up in exactly one state**: a command recording that the silence would end and
-that is not locked, when the recording bar's lock holds it. `Capture.lockHoldsDoubleTap` is read by
-both bindings, so they cannot both be live. That walks the three states of a command — start, lock,
-send — and it is the only handover.
+**It is the only binding, in every state.** A command's three steps — start, lock, send — are three
+presses of this one control, so nothing hands the gesture anywhere and nothing can hold two bindings
+at once.
 
 **Scrolling is a finger or the crown, never the gesture.** The control used to page the view down
 while anything was below, and hand the gesture to recording only at the bottom; that is gone, along

@@ -22,8 +22,7 @@ struct ChatView: View {
     var body: some View {
         ScrollViewReader { proxy in
             PagedScroll(name: "chat", recording: recording, canRecord: !chat.waiting,
-                        lockHoldsDoubleTap: recording && capture.lockHoldsDoubleTap,
-                        record: chat.toggleRecording) {
+                        locks: true, locked: capture.locked, record: chat.press) {
                 recordButton { thread }
                 CommandStatus().id(recording ? "recording" : "status")
             }
@@ -92,7 +91,7 @@ struct ChatView: View {
     private func recordButton<Label: View>(@ViewBuilder label: () -> Label) -> some View {
         Button(action: {
             Hub.log("record", ["view": "chat", "recording": recording])
-            chat.toggleRecording()
+            chat.press()
         }, label: label)
             .buttonStyle(.plain)
             .disabled(chat.waiting)

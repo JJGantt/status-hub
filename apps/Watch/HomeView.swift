@@ -30,8 +30,7 @@ struct HomeView: View {
         // The one indicator is the control at the bottom edge: what the microphone and the command are
         // doing is drawn in the spot that acts on them.
         .overlay {
-            BottomControl(mode: mode, enabled: recording || !chat.waiting,
-                          holdsDoubleTap: !(recording && capture.lockHoldsDoubleTap), action: press,
+            BottomControl(mode: mode, enabled: recording || !chat.waiting, action: press,
                           onHold: { if !recording { chat.toggleListening() } }, big: true)
         }
         .background(Color.black.ignoresSafeArea())
@@ -57,9 +56,9 @@ struct HomeView: View {
     /// spinner itself — the hub transcribing and running what was sent. A press records or sends, as it
     /// does on every page; a hold engages or drops always-on listening.
     private var mode: BottomControl.Mode {
-        if recording { return .glyph(capture.locked ? "lock.fill" : "mic.fill", .red) }
+        if recording { return .glyph(capture.locked ? "lock.fill" : "lock.open", .red) }
         if chat.waiting { return .working }
-        return .glyph(capture.listens ? "waveform" : "waveform.slash", capture.listens ? .orange : .gray)
+        return .glyph(capture.listens ? "waveform" : "mic.fill", capture.listens ? .orange : .gray)
     }
 
     /// His words while the hub works on them, with the worker's newest step under them; otherwise the
@@ -91,7 +90,7 @@ struct HomeView: View {
     }
 
     private func press() {
-        Hub.log("control", ["view": "home", "mode": recording ? "stop" : "record"])
-        chat.toggleRecording()
+        Hub.log("control", ["view": "home", "recording": recording, "locked": capture.locked])
+        chat.press()
     }
 }

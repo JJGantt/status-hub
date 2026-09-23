@@ -16,39 +16,19 @@ func snippet(_ s: String) -> AttributedString {
     return a
 }
 
-/// The row a recording shows under its page: two buttons of one size, the lock on the left and Cancel
-/// on the right. The lock appears only on a recording that ends itself at the silence after speech,
-/// and holds it open until a press sends it; without it, Cancel keeps its place and the left half is
-/// empty. The stop control at the bottom edge is what says a recording is under way.
-///
-/// Until it is locked, the lock holds double tap, so the gesture that started the recording locks it
-/// and the next one — back on the bottom control — sends it.
+/// Cancel, across the width, under the page a recording belongs to. It is all a recording puts on the
+/// page: the control at the bottom edge says what the recording is doing and walks it on
+/// (`BottomControl`).
 struct RecordingBar: View {
     let cancel: () -> Void
-    @ObservedObject private var capture = Capture.shared
-    @Environment(\.onScreen) private var onScreen
 
     var body: some View {
-        HStack(spacing: 8) {
-            if capture.endsOnSilence {
-                Button(action: capture.toggleLock) {
-                    Image(systemName: capture.locked ? "lock.fill" : "lock.open")
-                        .frame(maxWidth: .infinity)
-                }
-                .tint(capture.locked ? .orange : .gray)
-                .buttonStyle(.bordered)
-                .controlSize(.small)
-                .handGestureShortcut(.primaryAction, isEnabled: onScreen && capture.lockHoldsDoubleTap)
-            } else {
-                Color.clear.frame(maxWidth: .infinity, maxHeight: 0)
-            }
-            Button(action: cancel) {
-                Text("Cancel").lineLimit(1).frame(maxWidth: .infinity)
-            }
-            .tint(.red)
-            .buttonStyle(.bordered)
-            .controlSize(.small)
+        Button(action: cancel) {
+            Text("Cancel").lineLimit(1).frame(maxWidth: .infinity)
         }
+        .tint(.red)
+        .buttonStyle(.bordered)
+        .controlSize(.small)
     }
 }
 
@@ -83,11 +63,11 @@ struct ActivityLines: View {
     }
 }
 
-/// The control every page puts under double tap, at the bottom edge: a mic that records, a stop that
-/// sends, and on home the state of the microphone drawn in the same spot. **Double tap always starts a
-/// prompt** — scrolling is a finger or the crown, never the gesture. It never disappears, and it gives
-/// the gesture up in one case only: to the recording bar's lock while a command records unlocked
-/// (`holdsDoubleTap`), so exactly one binding is live at any moment.
+/// The one control every page puts at its bottom edge, and the only thing bound to double tap.
+/// **A command walks the whole way through it**: press to record, press again to lock it open through
+/// silence, press again to send. It is the state as much as the button — a mic idle, an open lock
+/// recording, a closed lock locked, a spinner while the hub has it — and it never hides. Scrolling is
+/// a finger or the crown, never the gesture.
 struct BottomControl: View {
     /// `glyph` is home's: the state of the microphone and the command drawn in this same spot, since
     /// that page has one indicator and it is here.
@@ -98,8 +78,6 @@ struct BottomControl: View {
 
     let mode: Mode
     let enabled: Bool
-    /// False while the recording bar's lock holds double tap instead.
-    var holdsDoubleTap = true
     let action: () -> Void
     /// Held rather than pressed. Home engages always-on listening this way, since the press records.
     var onHold: (() -> Void)?
@@ -137,9 +115,9 @@ struct BottomControl: View {
                     held = true
                     onHold?()
                 })
-                // Live only while the page is the one showing and the lock is not holding the gesture:
-                // every page stays alive in the TabView, and two live bindings leave the system to pick.
-                .handGestureShortcut(.primaryAction, isEnabled: onScreen && enabled && holdsDoubleTap)
+                // Live only while the page is the one showing: every page stays alive in the TabView,
+                // and two live bindings leave the system to pick.
+                .handGestureShortcut(.primaryAction, isEnabled: onScreen && enabled)
                 .disabled(!enabled)
                 .padding(.bottom, 9)
             }
@@ -180,9 +158,10 @@ struct PagedScroll<Content: View>: View {
     let recording: Bool
     /// Whether a recording may start now — not while the page is waiting on a command or a send.
     var canRecord = true
-    /// The recording bar's lock holds double tap for now (`Capture.lockHoldsDoubleTap`).
-    var lockHoldsDoubleTap = false
-    /// Starts a recording, or sends the one under way.
+    /// Whether this page's recording is one the silence ends, so the lock is a step in it.
+    var locks = false
+    var locked = false
+    /// Walks the recording on: starts it, locks it, sends it.
     let record: () -> Void
     @ViewBuilder let content: () -> Content
 
@@ -197,14 +176,21 @@ struct PagedScroll<Content: View>: View {
         }
         .scrollIndicators(.never)
         .overlay {
-            BottomControl(mode: recording ? .stop : .record, enabled: recording || canRecord,
-                          holdsDoubleTap: !lockHoldsDoubleTap, action: press)
+            BottomControl(mode: mode, enabled: recording || canRecord, action: press)
         }
         .background(Color.black.ignoresSafeArea())
     }
 
+    /// A command walks the control: the mic records, the open lock holds it through the silence, the
+    /// closed lock sends. A follow-up has no silence to hold off, so it records and sends.
+    private var mode: BottomControl.Mode {
+        guard recording else { return .record }
+        guard locks else { return .stop }
+        return .glyph(locked ? "lock.fill" : "lock.open", .red)
+    }
+
     private func press() {
-        Hub.log("control", ["view": name, "mode": recording ? "stop" : "record"])
+        Hub.log("control", ["view": name, "recording": recording, "locked": locked])
         record()
     }
 }

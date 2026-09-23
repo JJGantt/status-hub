@@ -79,8 +79,11 @@ final class Chat: ObservableObject {
         } while reloadAfter
     }
 
-    func toggleRecording() {
-        if capture.owner == .hub { stopRecording() } else { startRecording() }
+    /// What a press of the control does, in order: start the recording, lock it open through the
+    /// silence, then send it. A tap on the thread is the same press.
+    func press() {
+        guard capture.owner == .hub else { return startRecording() }
+        if capture.locked { stopRecording() } else { capture.toggleLock() }
     }
 
     func startRecording() {

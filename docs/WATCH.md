@@ -100,6 +100,16 @@ where watchOS puts it (a trailing one moves the clock to the other end of the st
 opened the session from the right takes it away again, so a title bar with a button in it would cost
 the top of the screen for nothing.
 
+**A long reply creeps down on its own** while he is reading it (`PagedScroll.creep`), at
+`watch_reading_wpm` in the hub's settings — words a minute, 0 to leave the page still. A line of reply
+text is about five words at 13pt and a line about sixteen points tall, so the speed is those points a
+second: 200 wpm, ordinary silent reading, is a line every second and a half. It waits two seconds
+before moving, because a reply lands on its first line and is read from there, and the distance is
+measured AFTER that beat — the page lands on its newest reply during it, and a distance measured
+before the landing crawls at a fraction of the speed asked for. **It moves only while he is looking**:
+the wrist dropping dims the screen (`isLuminanceReduced`) and stops it, the app leaving the front stops
+it, and his finger or the crown ends it until the session is opened again.
+
 **A recording running in a session is marked in the list**: a red square in its row, beside the green
 working dot, so a recording started in one and left there can be found from anywhere in the app.
 

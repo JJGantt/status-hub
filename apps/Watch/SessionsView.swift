@@ -113,7 +113,8 @@ struct SessionView: View {
 
     var body: some View {
         ScrollViewReader { proxy in
-            PagedScroll(name: "session", recording: recording, canRecord: !sessions.busy.contains(key),
+            PagedScroll(name: "session", readingWPM: sessions.readingWPM,
+                        recording: recording, canRecord: !sessions.busy.contains(key),
                         cancel: recording ? { sessions.cancelRecording(key) } : nil,
                         record: { sessions.toggleRecording(key) }) {
                 Button {

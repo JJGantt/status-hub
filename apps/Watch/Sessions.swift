@@ -115,6 +115,9 @@ final class Sessions: ObservableObject {
     /// The focused session — where a spoken follow-up goes — and whether he pinned it there.
     @Published private(set) var focus: String?
     @Published private(set) var pinned = false
+    /// How fast a session's reply creeps down the screen once he has had a beat to start reading, in
+    /// words a minute: `watch_reading_wpm` in the hub's settings, 0 to leave the page still.
+    @Published private(set) var readingWPM: Double = 0
     @Published private(set) var details: [String: SessionDetail] = [:]
     /// Each conversation's tool calls since its last reply, and what it said between them, as its
     /// machine reports them. Live only: the hub does not store them.
@@ -137,6 +140,9 @@ final class Sessions: ObservableObject {
 
     /// The page is on screen: load now, and follow every session's activity until `deactivate`.
     func activate() {
+        Task {
+            if let v = try? await Hub.setting("watch_reading_wpm"), let wpm = Double(v) { readingWPM = wpm }
+        }
         // The conversation on screen too: a turn that finished while the app was away sent its `done`
         // to a stream that was not listening.
         Task {

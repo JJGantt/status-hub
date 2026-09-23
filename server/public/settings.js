@@ -85,6 +85,11 @@ export async function open() {
       row('ESP (Hey&nbsp;Rhasspy)', 'esp_silence_s', sil('esp_silence_s', 3)) +
       row('Mac', 'mac_silence_s', sil('mac_silence_s', 3)) +
 
+      '<div class="settings-sec">Watch reading speed (words a minute)</div>' +
+      '<label class="settings-row"><span>Session replies<br><small>0 = do not scroll</small></span>' +
+        '<input class="settings-num" type="number" min="0" max="600" step="10" inputmode="numeric" ' +
+        'data-key="watch_reading_wpm" value="' + sil('watch_reading_wpm', 0) + '"></label>' +
+
       '<div class="settings-sec">Always-on voice (wake-free)</div>' +
       '<div class="settings-seg" id="set-wf-enabled">' +
         '<button type="button" data-v="0"' + (wfOn ? '' : ' class="on"') + '>Off</button>' +

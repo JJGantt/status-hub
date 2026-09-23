@@ -80,16 +80,14 @@ enum HubAPI {
 }
 
 final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDelegate {
-    // Buttons on a reminder notification. All three are BACKGROUND actions (no .foreground option),
-    // so tapping one acts without launching the app or changing what's on screen. iOS shows these
-    // only once the banner is expanded — pulled down, or long-pressed.
+    // The one button on a reminder notification: **Done**, which COMPLETES the item — it scores, and
+    // the item stays on the day as something that happened. Anything else is dismissing the
+    // notification, which is the system's own gesture and needs no button of ours. There is no snooze:
+    // a dated item that has not happened yet is moved by asking, not by a button that silently rewrites
+    // its time. A BACKGROUND action (no .foreground), so it acts without launching the app.
     private static let reminderCategory = UNNotificationCategory(
         identifier: "REMINDER",
-        actions: [
-            UNNotificationAction(identifier: "REMINDER_DONE",       title: "Done",    options: []),
-            UNNotificationAction(identifier: "REMINDER_SNOOZE_1H",  title: "1 Hour",  options: []),
-            UNNotificationAction(identifier: "REMINDER_SNOOZE_24H", title: "Tomorrow", options: []),
-        ],
+        actions: [UNNotificationAction(identifier: "REMINDER_DONE", title: "Done", options: [])],
         intentIdentifiers: [], options: [])
 
     func application(_ application: UIApplication,
@@ -142,12 +140,10 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
             return completionHandler()
         }
         switch response.actionIdentifier {
+        // COMPLETE, not clear. `clear` deletes the item: no points, and no record that it happened —
+        // which is what Done did until the scoring existed, and why pressing it seemed to do nothing.
         case "REMINDER_DONE":
-            HubAPI.post("/api/todos/clear", ["id": id], done: completionHandler)
-        case "REMINDER_SNOOZE_1H":
-            HubAPI.post("/api/todos/snooze", ["id": id, "hours": 1], done: completionHandler)
-        case "REMINDER_SNOOZE_24H":
-            HubAPI.post("/api/todos/snooze", ["id": id, "hours": 24], done: completionHandler)
+            HubAPI.post("/api/todos/complete", ["id": id], done: completionHandler)
         default:
             completionHandler()
         }

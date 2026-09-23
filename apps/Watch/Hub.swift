@@ -221,6 +221,12 @@ enum Hub {
         return all?[key].map { "\($0)" }
     }
 
+    /// Marks a dated item done — the Done button on its notification. It SCORES: the item stays on the
+    /// day as something that happened, where clearing it would delete it and score nothing.
+    static func complete(_ id: String) async {
+        _ = try? await call("/api/todos/complete", method: "POST", body: ["id": id])
+    }
+
     /// A session has been read here, so its unread mark clears everywhere.
     static func seen(_ id: String) async throws {
         _ = try await call("/api/sessions/seen", method: "POST", body: ["id": id])

@@ -34,9 +34,18 @@ final class WatchAppDelegate: NSObject, WKApplicationDelegate, UNUserNotificatio
         actions: [UNNotificationAction(identifier: "SESSION_OPEN", title: "Open", options: [.foreground])],
         intentIdentifiers: [], options: [])
 
+    /// A dated item's notification, forwarded from the phone. Registered HERE as well so its Done is
+    /// answered on the wrist by the watch itself: completing the item (which scores it) rather than
+    /// waking the phone to do it.
+    private static let reminderCategory = UNNotificationCategory(
+        identifier: "REMINDER",
+        actions: [UNNotificationAction(identifier: "REMINDER_DONE", title: "Done", options: [])],
+        intentIdentifiers: [], options: [])
+
     func applicationDidFinishLaunching() {
         UNUserNotificationCenter.current().delegate = self
-        UNUserNotificationCenter.current().setNotificationCategories([Self.sessionCategory])
+        UNUserNotificationCenter.current().setNotificationCategories([Self.sessionCategory,
+                                                                       Self.reminderCategory])
     }
 
     // Shown even while the app is open, as on the phone.
@@ -47,9 +56,17 @@ final class WatchAppDelegate: NSObject, WKApplicationDelegate, UNUserNotificatio
 
     func userNotificationCenter(_ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse,
                                 withCompletionHandler completionHandler: @escaping () -> Void) {
+        let info = response.notification.request.content.userInfo
+        if response.actionIdentifier == "REMINDER_DONE", let item = info["reminder_id"] as? String {
+            Task { @MainActor in
+                await Hub.complete(item)
+                completionHandler()
+            }
+            return
+        }
         let opens = response.actionIdentifier == "SESSION_OPEN"
             || response.actionIdentifier == UNNotificationDefaultActionIdentifier
-        if opens, let id = response.notification.request.content.userInfo["session_id"] as? String {
+        if opens, let id = info["session_id"] as? String {
             Task { @MainActor in await Sessions.shared.open(rowId: id) }
         }
         completionHandler()

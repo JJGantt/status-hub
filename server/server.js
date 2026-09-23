@@ -4313,7 +4313,7 @@ const itemBody = (item) => {
 };
 
 const DUE_HANDLERS = {
-  // category + the row id give the notification its Done / 1 hour / Tomorrow buttons and tell the
+  // category + the row id give the notification its Done button and tell the
   // app which item an action refers to. `reminder_id` keeps its name: the app's notification
   // actions and the APNs category are built around it, and renaming it would break every
   // notification already sitting in Notification Centre on the phone.

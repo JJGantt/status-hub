@@ -173,8 +173,12 @@ struct CommandBar: View {
                       cancel: cancel, big: true)
     }
 
+    /// The colour is the stake: amber while the silence could still end it, red once it is locked open
+    /// and only a press will send it.
     private var mode: BottomControl.Mode {
-        if recording { return .glyph(capture.locked ? "lock.fill" : "lock.open", .red) }
+        if recording {
+            return capture.locked ? .glyph("lock.fill", .red) : .glyph("lock.open", Color(hex: "#d6c042"))
+        }
         if chat.waiting { return .working(running: chat.pending != nil) }
         return .glyph(capture.listens ? "waveform" : "mic.fill", capture.listens ? .orange : .gray)
     }
@@ -310,7 +314,7 @@ struct PagedScroll<Content: View>: View {
     private var mode: BottomControl.Mode {
         guard recording else { return .record }
         guard locks else { return .stop }
-        return .glyph(locked ? "lock.fill" : "lock.open", .red)
+        return locked ? .glyph("lock.fill", .red) : .glyph("lock.open", Color(hex: "#d6c042"))
     }
 
     private func press() {

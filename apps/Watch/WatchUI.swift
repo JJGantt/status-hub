@@ -108,8 +108,14 @@ struct BottomControl: View {
                         }
                     }
                     .opacity(enabled ? 1 : 0.4)
-                    // A wide target with the glyph at ITS trailing edge: the thumb gets a big button and
-                    // the eye gets a mark in the corner rather than one floating mid-screen.
+                    // **The mark is centred in a box of its own, and that box is what sits in the
+                    // corner.** Every state draws a different symbol — a microphone, two padlocks, a
+                    // spinner — and each has its own width, so aligning the SYMBOL to the corner moves
+                    // the mark each time the state changes: the eye reads that as the control sliding.
+                    // A fixed box centred on one point holds it still whatever is in it.
+                    .frame(width: big ? 34 : 18, height: big ? 34 : 18)
+                    // A wide target around that box: the thumb gets a big button and the eye gets a
+                    // mark in the corner rather than one floating mid-screen.
                     .frame(width: big ? 96 : 44, height: big ? 34 : 18, alignment: big ? .trailing : .center)
                     .contentShape(Rectangle())
                 }
@@ -202,9 +208,14 @@ extension View {
     /// A page takes it back and puts its own first line there.
     /// A scroll view ALSO insets its content by that safe area, which is the part that shows: the page
     /// reaches the top and its first line still starts below the strip. Both have to go.
+    ///
+    /// **The margin left behind is the corner curve, not spare space.** The display is a rounded
+    /// rectangle, so a full-width line drawn hard against the top has its first and last words under
+    /// the curve and clipped — invisible in a simulator screenshot, which is a flat rectangle, and
+    /// plain on the wrist. This is the smallest inset that clears it.
     func topOfTheScreen() -> some View {
         ignoresSafeArea(edges: .top)
-            .contentMargins(.top, 2, for: .scrollContent)
+            .contentMargins(.top, 12, for: .scrollContent)
     }
 }
 

@@ -3,6 +3,9 @@ import SwiftUI
 /// The page to the right of the prompt: the hub nutrition card's four pace rings, then today's log.
 struct NutritionView: View {
     @EnvironmentObject private var nutrition: Nutrition
+    /// The day's totals are behind the rings: they are the same four numbers again, and the rings
+    /// already say how the day is going. A tap opens them.
+    @State private var totals = false
 
     var body: some View {
         ScrollView {
@@ -11,12 +14,16 @@ struct NutritionView: View {
                 TimelineView(.periodic(from: .now, by: 1)) { ctx in
                     RingsStrip(rings: nutrition.rings(at: ctx.date))
                 }
-                if let day = nutrition.day { DayLog(day: day) }
+                .contentShape(Rectangle())
+                .onTapGesture { totals.toggle() }
+                if let day = nutrition.day { DayLog(day: day, totals: totals) }
             }
             .padding(.horizontal, 4)
+            .padding(.bottom, CommandBar.height)
         }
         .scrollIndicators(.never)
         .background(Color.black.ignoresSafeArea())
+        .overlay { CommandBar(view: "nutrition") }
     }
 }
 
@@ -46,18 +53,9 @@ private struct RingCell: View {
     private static let glyphInk = Color(hex: "#c7ced8")
 
     var body: some View {
-        VStack(spacing: 1) {
-            Canvas { ctx, size in draw(ctx, k: size.width / 80) }
-                .aspectRatio(1, contentMode: .fit)
-            // String(), not interpolation: an interpolated Int is localised to "2,600", which the card
-            // never prints.
-            Text(String(ring.consumed) + " / " + String(ring.goal))
-                .font(.system(size: 11))
-                .foregroundColor(mutedText)
-                .lineLimit(1)
-                .minimumScaleFactor(0.5)
-        }
-        .frame(maxWidth: .infinity)
+        Canvas { ctx, size in draw(ctx, k: size.width / 80) }
+            .aspectRatio(1, contentMode: .fit)
+            .frame(maxWidth: .infinity)
     }
 
     private func draw(_ ctx: GraphicsContext, k: CGFloat) {
@@ -101,7 +99,7 @@ private struct RingCell: View {
             let bl = t.firstBaseline(in: m)
             ctx.draw(t, in: CGRect(x: c.x - m.width / 2, y: baseline * k - bl, width: m.width, height: m.height))
         }
-        text(glyph, size: 14, color: Self.glyphInk, baseline: 37)
+        text(glyph, size: 19, color: Self.glyphInk, baseline: 38)
         text((ring.dev > 0 ? "+" : "") + String(ring.dev), size: 13, color: Color(hex: ring.devColor), baseline: 54)
     }
 }
@@ -110,10 +108,11 @@ private struct RingCell: View {
 /// every entry newest first with staged ones on top. Display only.
 private struct DayLog: View {
     let day: NutritionDay
+    let totals: Bool
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            band.padding(.bottom, 8)
+            if totals { band.padding(.bottom, 8) }
             if day.entries.isEmpty {
                 Text("No food logged").font(.system(size: 12)).foregroundColor(Color(hex: "#556666"))
             } else {
@@ -161,36 +160,67 @@ private struct DayLog: View {
     }
 }
 
-/// `.dex`: name (and the STAGED badge), then the kcal/P/C/F chips and the time an eaten entry was
-/// logged for. A staged row is tinted with a gold bar down its left edge.
+/// One logged meal: its name on a line, its macros on the next, and a rule above it. **No boxes** —
+/// a number in a box of its own costs a row's worth of height to say what a space already says — and
+/// never more than one line of macros, so a day's log is read by scrolling rather than by paging.
+/// A tap opens its ingredients, each one drawn the same way: what it is, then what is in it.
 private struct EntryRow: View {
     let entry: NutritionDay.Entry
+    @State private var open = false
 
     private static let gold = Color(red: 214 / 255, green: 192 / 255, blue: 66 / 255)
 
     var body: some View {
         let staged = entry.staged ?? false
-        VStack(alignment: .leading, spacing: 4) {
+        let parts = entry.ingredients ?? []
+        VStack(alignment: .leading, spacing: 3) {
             HStack(alignment: .firstTextBaseline, spacing: 6) {
                 Text(entry.name ?? "—")
                     .font(.system(size: 13, weight: .semibold))
                     .foregroundColor(staged ? Color(hex: "#cdd3db") : inkText)
+                    .lineLimit(2)
                 if staged { badge }
             }
-            Flow(spacing: 4, lineSpacing: 4) {
-                chip(String(mn(entry.calories)) + " kcal")
-                chip(String(mn(entry.protein_g)) + "g P")
-                chip(String(mn(entry.carbs_g)) + "g C")
-                chip(String(mn(entry.fat_g)) + "g F")
-                if !staged, let t = clock(entry.occurred_at) { chip(t) }
+            macros(entry.calories, entry.protein_g, entry.carbs_g, entry.fat_g,
+                   time: staged ? nil : clock(entry.occurred_at))
+            if open {
+                ForEach(Array(parts.enumerated()), id: \.offset) { _, part in
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(part.label)
+                            .font(.system(size: 11.5))
+                            .foregroundColor(Color(hex: "#aeb6c0"))
+                            .lineLimit(2)
+                        macros(part.calories, part.protein_g, part.carbs_g, part.fat_g, time: nil)
+                    }
+                    .padding(.top, 5)
+                    .padding(.leading, 9)
+                }
             }
         }
-        .padding(.vertical, 9)
+        .padding(.vertical, 8)
         .padding(.leading, staged ? 11 : 0)
         .frame(maxWidth: .infinity, alignment: .leading)
+        .contentShape(Rectangle())
+        .onTapGesture { if !parts.isEmpty { open.toggle() } }
         .background(staged ? Self.gold.opacity(0.08) : Color.clear)
         .overlay(alignment: .leading) { if staged { Rectangle().fill(Self.gold).frame(width: 3) } }
         .overlay(alignment: .top) { Rectangle().fill(Color(hex: "#222a33")).frame(height: 1) }
+    }
+
+    /// One line: calories, then each macro with its letter, and the time an eaten entry was logged for.
+    private func macros(_ cal: Double?, _ p: Double?, _ c: Double?, _ f: Double?, time: String?) -> some View {
+        let dim = Color(hex: "#7d8894")
+        var t = Text(String(mn(cal))).foregroundColor(Color(hex: "#c7ced8"))
+            + Text(" cal").foregroundColor(dim)
+        for (v, label) in [(p, "P"), (c, "C"), (f, "F")] {
+            t = t + Text("  " + String(mn(v))).foregroundColor(Color(hex: "#c7ced8"))
+                + Text(label).foregroundColor(dim)
+        }
+        if let time { t = t + Text("  " + time).foregroundColor(dim) }
+        return t
+            .font(.system(size: 11.5))
+            .lineLimit(1)
+            .minimumScaleFactor(0.75)
     }
 
     private var badge: some View {
@@ -202,20 +232,13 @@ private struct EntryRow: View {
             .overlay(RoundedRectangle(cornerRadius: 5).stroke(Self.gold.opacity(0.4), lineWidth: 1))
     }
 
-    private func chip(_ s: String) -> some View {
-        Text(s)
-            .font(.system(size: 11.5))
-            .foregroundColor(Color(hex: "#c7ced8"))
-            .padding(.vertical, 3).padding(.horizontal, 7)
-            .background(RoundedRectangle(cornerRadius: 6).fill(Color(hex: "#0e1318")))
-    }
-
     /// "…T14:07…" → "2:07 PM", the card's fmtTime on the naive-local occurred_at.
     private func clock(_ occurred: String?) -> String? {
         guard let o = occurred, let r = o.range(of: #"T\d{2}:\d{2}"#, options: .regularExpression) else { return nil }
         let hm = o[r].dropFirst().split(separator: ":")
-        guard hm.count == 2, let h = Int(hm[0]) else { return nil }
-        return String(h % 12 == 0 ? 12 : h % 12) + ":" + hm[1] + (h < 12 ? " AM" : " PM")
+        guard let h = Int(hm[0]), let m = Int(hm[1]) else { return nil }
+        let hour = h % 12 == 0 ? 12 : h % 12
+        return String(hour) + ":" + (m < 10 ? "0" : "") + String(m) + (h < 12 ? " AM" : " PM")
     }
 }
 

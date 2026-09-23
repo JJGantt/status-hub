@@ -58,11 +58,7 @@ struct HomeView: View {
             }
             .scrollIndicators(.never)
             .background(Color.black.ignoresSafeArea())
-            .overlay {
-                BottomControl(mode: mode, enabled: recording || !chat.waiting, action: press,
-                              onHold: { if !recording { chat.toggleListening() } },
-                              cancel: cancel, big: true)
-            }
+            .overlay { CommandBar(view: "home") }
             .onChange(of: target) { _, _ in
                 pinned = true
                 jump(proxy, animated: true)
@@ -93,26 +89,4 @@ struct HomeView: View {
         }
     }
 
-    /// What the microphone and the command are doing, in one glyph at the bottom edge: idle, always-on
-    /// listening, recording a command the silence will end, that recording locked open, or the spinner
-    /// while the hub has it — small while it is only being transcribed, and bigger once the worker is
-    /// running the command, which is the part worth waiting through.
-    private var mode: BottomControl.Mode {
-        if recording { return .glyph(capture.locked ? "lock.fill" : "lock.open", .red) }
-        if chat.waiting { return .working(running: chat.pending != nil) }
-        return .glyph(capture.listens ? "waveform" : "mic.fill", capture.listens ? .orange : .gray)
-    }
-
-    /// There is something to throw away: the recording, or the command the hub still has.
-    private var cancel: (() -> Void)? {
-        if recording { return chat.cancelRecording }
-        if chat.waiting { return chat.cancel }
-        return nil
-    }
-
-    private func press() {
-        Hub.log("control", ["view": "home", "recording": recording, "locked": capture.locked])
-        Capture.trigger = "press"
-        chat.press()
-    }
 }

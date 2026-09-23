@@ -4,11 +4,29 @@ import Foundation
 struct NutritionDay: Decodable {
     struct Targets: Decodable { let protein_g: Double?, carbs_g: Double?, fat_g: Double? }
     struct Entry: Decodable, Identifiable {
+        struct Ingredient: Decodable {
+            let food: String?
+            let name: String?
+            let amount: Double?
+            let unit: String?
+            let calories: Double?, protein_g: Double?, carbs_g: Double?, fat_g: Double?
+
+            /// What it is, with its portion: the stored `name` already reads "2 cup nonfat milk", and
+            /// the parts are there to build one when it does not.
+            var label: String {
+                if let n = name, !n.isEmpty { return n }
+                let food = food ?? ""
+                guard let a = amount else { return food }
+                return [js(a), unit ?? "", food].filter { !$0.isEmpty }.joined(separator: " ")
+            }
+        }
+
         let id: String
         let occurred_at: String?
         let name: String?
         let calories: Double?, protein_g: Double?, carbs_g: Double?, fat_g: Double?
         let staged: Bool?
+        let ingredients: [Ingredient]?
     }
     let date: String
     let total_cal: Double, total_protein: Double, total_carbs: Double, total_fat: Double

@@ -145,39 +145,49 @@ view's own load the reply stays old: a conversation already on screen does not a
 app in the background misses the stream's `done`. The category is registered at launch, so the watch
 app has to have run once for the button to appear.
 
+### The command is on every page
+
+`CommandBar` — the control at the bottom edge and the x beside it — is laid over home, the nutrition
+page, the workout page and the sessions list alike, so a command can be started from wherever he is
+rather than only from the conversation. The control sits at the **bottom right** with a wide tap target
+and its glyph at that target's trailing edge; cancel is an x at the bottom **left**, where a thumb
+reaching for the control cannot catch it. Every page leaves `CommandBar.height` of room under its
+content.
+
 ### The nutrition page
 
-The hub nutrition card's four pace rings (no produce rings) over today's log. The rings are
-`cards/nutrition.js`'s SVG redrawn in a Canvas to the same geometry and colours. The card recomputes
-them every second from the browser clock; the watch instead takes `/api/rings`'s per-minute frames and
-blends between the two either side of now each second. Between two minutes the arcs, both ticks and
-the deviation number all move linearly, so the blend reproduces the card's drain without a copy of
-`lib/pace.js` in Swift. Colours come from a frame, never derived. This is why a frame's `frac` is sent
-to four places: at two it moved the tick in ~8-minute jumps.
+Four pace rings over today's log. The rings are `cards/nutrition.js`'s SVG redrawn in a Canvas to the
+same geometry and colours — the arcs, both ticks and the deviation number inside each ring — and
+nothing else: the `consumed / goal` line each ring used to carry is the same four numbers a second
+time, so **the day's totals are behind a tap on the rings** and the letters (Cal, P, C, F) are bigger
+for the room that frees. The card recomputes its rings every second from the browser clock; the watch
+instead takes `/api/rings`'s per-minute frames and blends between the two either side of now each
+second, so the arcs, the ticks and the deviation all move linearly between two minutes and reproduce
+the card's drain without a copy of `lib/pace.js` in Swift. This is why a frame's `frac` is sent to four
+places: at two it moved the tick in ~8-minute jumps. Colours come from a frame, never derived. The
+watch compiles `Controls/RingsView.swift` for the `/api/rings` types and the palette.
 
-The watch compiles `Controls/RingsView.swift` for the `/api/rings` types and the palette; the widget's
-own views in it go unused. The log is `cards/nutritionlog.js`'s day list (band, then entries newest
-first, staged on top), display only, with the chips wrapping instead of scrolling (`Flow`).
+**An entry is two lines: what it was, then what was in it.** A name, then one line of macros —
+`466 cal 23P 88C 4F 12:30 PM` — with a rule above it and no boxes: a number in a box of its own costs
+a row's height to say what a space already says. A tap opens its ingredients, each drawn the same way,
+what it is over what is in it. Staged entries keep the gold edge and the badge.
 
 ### The workout page
 
-The home wall's `#resttimer` (Last set · Session · Sets, ticking each second off naive wall-clock
-digits exactly as `workouts.js` does) over every exercise logged today, each drawn as the wall's
-`data-recent` row — the one a set just went onto at the top, the rest scrolling below — fed by
-`/api/workout-now`.
+The rest clocks on one line (Last set · Session · Sets, ticking each second off naive wall-clock digits
+exactly as `workouts.js` does), then **one row per exercise: its name, and how many sets of it.** That
+is the whole list. The wall's row — a dumbbell mark, every muscle it trains, every set with its weight,
+shrunk to fit one line — is a paragraph per exercise on a screen this size, and at 9pt it was
+unreadable anyway.
 
-The strip stays one line as on the wall, stepping smaller, and wraps only when one line would be
-unreadable; on a 44mm screen that is always. A set row does the same (16pt down to 9, then eliding
-repeated weights) and wraps as its last step, since five sets at a three-digit weight fit no single
-line there.
+**A tap opens the rest**: the muscles it trains with their weekly sets in each muscle's volume colour,
+then the sets one per line in two columns. One per line because six squeezed into a line is the thing
+being fixed; two columns because one is a column of short strings down half a screen.
 
-- **Nothing on this page may report a width wider than it was offered.** The ScrollView lays its
-  content out again at the width the content reports, so one overflowing row widens every row on the
-  page past both edges of the glass. `Flow` offers an item wider than a line (a long exercise name)
-  the line's width for that reason.
-- **The size steps are ONE `ForEach` inside `ViewThatFits`.** ViewThatFits traps on duplicate child
-  ids, and two ForEach over the same sizes give each size twice — the page crashed the moment it drew
-  an exercise.
+Fed by `/api/workout-now`. **Nothing on this page may report a width wider than it was offered**: the
+ScrollView lays its content out again at the width the content reports, so one overflowing row widens
+every row past both edges of the glass. `Flow` offers an item wider than a line the line's width for
+that reason.
 
 ## Recording a command
 

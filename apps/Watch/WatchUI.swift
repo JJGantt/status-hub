@@ -95,7 +95,9 @@ struct BottomControl: View {
                         }
                     }
                     .opacity(enabled ? 1 : 0.4)
-                    .frame(width: big ? 110 : 44, height: big ? 34 : 18)
+                    // A wide target, with the glyph at ITS trailing edge: the thumb gets a big button
+                    // and the eye gets a mark in the corner rather than one floating mid-screen.
+                    .frame(width: big ? 110 : 44, height: big ? 34 : 18, alignment: big ? .trailing : .center)
                     .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
@@ -110,17 +112,22 @@ struct BottomControl: View {
                 .handGestureShortcut(.primaryAction, isEnabled: onScreen && enabled)
                 .disabled(!enabled)
                 .padding(.bottom, 9)
+                // The control sits at the RIGHT of the row and cancel at the LEFT, so the thumb finds
+                // the one it reaches for on every page and the x is never under it.
+                .frame(maxWidth: .infinity, alignment: .trailing)
+                .padding(.trailing, 6)
                 if let cancel {
                     Button(action: cancel) {
                         Image(systemName: "xmark")
                             .font(.system(size: big ? 18 : 14, weight: .semibold))
                             .foregroundColor(.red)
-                            .frame(width: 40, height: big ? 34 : 18)
+                            .frame(width: 40, height: big ? 34 : 18, alignment: .leading)
                             .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
                     .padding(.bottom, 9)
-                    .frame(maxWidth: .infinity, alignment: .trailing)
+                    .padding(.leading, 6)
+                    .frame(maxWidth: .infinity, alignment: .leading)
                 }
             }
         }
@@ -143,6 +150,48 @@ struct BottomControl: View {
         case .glyph(_, let colour): colour
         default: .gray
         }
+    }
+}
+
+/// **The command, on every page.** A hub command can be started from wherever he is — the rings, the
+/// workout, the sessions list — so the control that carries one is a thing any page lays over itself
+/// rather than a feature of the conversation page. It IS the state: a mic idle, an open lock recording,
+/// a closed lock locked, a spinner while the hub has it, a waveform while always-on listening is on.
+/// A press walks it on, a hold turns listening on or off, and the x beside it throws away whatever is
+/// under way.
+struct CommandBar: View {
+    @EnvironmentObject private var chat: Chat
+    @ObservedObject private var capture = Capture.shared
+    /// What a log line calls the page it is on.
+    let view: String
+
+    /// How much room a page leaves under its content for this.
+    static let height = BottomControl.height
+
+    private var recording: Bool { capture.owner == .hub }
+
+    var body: some View {
+        BottomControl(mode: mode, enabled: recording || !chat.waiting, action: press,
+                      onHold: { if !recording { chat.toggleListening() } },
+                      cancel: cancel, big: true)
+    }
+
+    private var mode: BottomControl.Mode {
+        if recording { return .glyph(capture.locked ? "lock.fill" : "lock.open", .red) }
+        if chat.waiting { return .working(running: chat.pending != nil) }
+        return .glyph(capture.listens ? "waveform" : "mic.fill", capture.listens ? .orange : .gray)
+    }
+
+    private var cancel: (() -> Void)? {
+        if recording { return chat.cancelRecording }
+        if chat.waiting { return chat.cancel }
+        return nil
+    }
+
+    private func press() {
+        Hub.log("control", ["view": view, "recording": recording, "locked": capture.locked])
+        Capture.trigger = "press"
+        chat.press()
     }
 }
 

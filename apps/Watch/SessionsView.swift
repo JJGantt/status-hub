@@ -26,7 +26,9 @@ struct SessionsView: View {
                 .foregroundColor(.gray)
                 .frame(maxWidth: .infinity)
                 .listRowBackground(Color.clear)
+            Color.clear.frame(height: CommandBar.height).listRowBackground(Color.clear)
         }
+        .overlay { CommandBar(view: "sessions") }
     }
 
     private static let build = Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "?"

@@ -26,9 +26,11 @@ struct WorkoutView: View {
                 }
             }
             .padding(.horizontal, 4)
+            .padding(.bottom, CommandBar.height)
         }
         .scrollIndicators(.never)
         .background(Color.black.ignoresSafeArea())
+        .overlay { CommandBar(view: "workout") }
     }
 }
 
@@ -55,16 +57,15 @@ private struct RestStrip: View {
         let active = rest <= Self.sessionGap
         let session = max(0, nowWall - (wallClock(sessionStartAt ?? lastAt) ?? nowWall))
         let parts = Parts(rest: rest, active: active, session: session, sets: setsToday)
+        // One line, always: the clocks are a glance, and a wrapped three-line block is a paragraph.
         return ViewThatFits(in: .horizontal) {
-            oneLine(parts, 1)
             oneLine(parts, 0.85)
             oneLine(parts, 0.72)
-            Flow(spacing: 12 * 0.72, lineSpacing: 4) { sides(parts, 0.72) }
+            oneLine(parts, 0.62)
+            oneLine(parts, 0.54)
         }
-        .padding(.vertical, 6).padding(.horizontal, 10)
+        .padding(.vertical, 4)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(RoundedRectangle(cornerRadius: 10).fill(Color.black))
-        .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color(hex: "#222a33"), lineWidth: 1))
     }
 
     private struct Parts { let rest: Double; let active: Bool; let session: Double; let sets: Int }
@@ -133,116 +134,86 @@ private func wallClock(_ now: Date) -> Double {
     return digitCalendar.date(from: c)?.timeIntervalSince1970 ?? now.timeIntervalSince1970
 }
 
-/// One exercise as `#heatinfo[data-recent]` draws it: the dumbbell mark and the name, each muscle it
-/// trains with that muscle's weekly sets (the name grey — bright for a primary mover, dim for a
-/// synergist — and the number in the muscle's volume colour), then its sets ruled apart and the tally
-/// closing the row.
+/// One exercise: its name, and how many sets of it, on one line. **That is the whole list** — a name
+/// and a count read down a column in a glance, where the wall's row (a mark, the muscles it trains,
+/// every set with its weight) is a paragraph per exercise on a screen this size.
+///
+/// A tap opens the rest of it: the muscles it trains with their weekly sets, then the sets themselves
+/// one per line in two columns. One set per line because the wall's shrink-to-fit row — six sets
+/// squeezed into one line at 9pt — is unreadable on a wrist, and two columns because one is a column
+/// of short strings down half a screen.
 private struct LiftRow: View {
     let exercise: WorkoutNow.Exercise
+    @State private var open = false
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Flow(spacing: 11, lineSpacing: 2) {
-                HStack(alignment: .firstTextBaseline, spacing: 9) {
-                    Dumbbell().frame(width: 15, height: 15).opacity(0.6).alignmentGuide(.firstTextBaseline) { $0.height - 2 }
-                    Text(exercise.name).font(.system(size: 17, weight: .bold)).foregroundColor(Color(hex: "#e6eaf0"))
+        VStack(alignment: .leading, spacing: 5) {
+            HStack(alignment: .firstTextBaseline) {
+                Text(exercise.name)
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundColor(Color(hex: "#e6eaf0"))
+                    .lineLimit(2)
+                Spacer(minLength: 8)
+                Text(String(exercise.sets.count))
+                    .font(.system(size: 15, weight: .bold).monospacedDigit())
+                    .foregroundColor(Color(hex: "#8b96a5"))
+            }
+            if open {
+                muscles
+                sets
+            }
+        }
+        .padding(.vertical, 7)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .contentShape(Rectangle())
+        .onTapGesture { open.toggle() }
+    }
+
+    /// Each muscle it trains with that muscle's weekly sets, in the muscle's own volume colour — the
+    /// wall's chips without the boxes. Wraps, and a synergist is dimmer than a primary mover.
+    private var muscles: some View {
+        Flow(spacing: 9, lineSpacing: 3) {
+            ForEach(Array(exercise.muscles.enumerated()), id: \.offset) { _, m in
+                HStack(alignment: .firstTextBaseline, spacing: 3) {
+                    Text(m.label)
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundColor(Color(hex: m.primary ? "#c7cdd6" : "#6b7686"))
+                    Text(js(m.sets))
+                        .font(.system(size: 11, weight: .bold).monospacedDigit())
+                        .foregroundColor(Color(hex: m.color))
                 }
-                ForEach(Array(exercise.muscles.enumerated()), id: \.offset) { _, m in
-                    HStack(alignment: .firstTextBaseline, spacing: 4) {
-                        Text(m.label).font(.system(size: 12, weight: .semibold))
-                            .foregroundColor(Color(hex: m.primary ? "#c7cdd6" : "#6b7686"))
-                        Text(js(m.sets)).font(.system(size: 15, weight: .bold).monospacedDigit())
-                            .foregroundColor(Color(hex: m.color))
+                .fixedSize()
+            }
+        }
+    }
+
+    /// The sets, one per line, filling two columns down the page: 1 and 2 on the first line, 3 and 4 on
+    /// the next. A weight of 0 is bodyweight, as everywhere else.
+    private var sets: some View {
+        let rows = stride(from: 0, to: exercise.sets.count, by: 2).map { i in
+            (i, i + 1 < exercise.sets.count ? i + 1 : nil)
+        }
+        return VStack(alignment: .leading, spacing: 2) {
+            ForEach(Array(rows.enumerated()), id: \.offset) { _, pair in
+                HStack(spacing: 0) {
+                    setText(pair.0).frame(maxWidth: .infinity, alignment: .leading)
+                    if let second = pair.1 {
+                        setText(second).frame(maxWidth: .infinity, alignment: .leading)
+                    } else {
+                        Color.clear.frame(maxWidth: .infinity, maxHeight: 0)
                     }
-                    .fixedSize()
                 }
             }
-            SetsRow(sets: exercise.sets)
-        }
-        .padding(.horizontal, 2)
-    }
-}
-
-/// The set row. One line: it shrinks from 16 toward 9 until it fits, and only past that drops a weight
-/// that repeats the set before it — as cards/workouts.js does, cheapest first. The tally keeps its size.
-/// Past the smallest single line the sets wrap: five sets at a three-digit weight do not fit a 44mm
-/// screen at any size, and a line that does not fit widens the whole page past both edges.
-private struct SetsRow: View {
-    let sets: [WorkoutNow.Lift]
-
-    /// Every size in full, then every size eliding repeated weights. One list, because ViewThatFits
-    /// traps on duplicate child ids and two ForEach over the same sizes give each size twice.
-    private static let steps: [(size: CGFloat, elide: Bool)] =
-        [false, true].flatMap { e in stride(from: 16, through: 9, by: -1).map { (CGFloat($0), e) } }
-
-    var body: some View {
-        ViewThatFits(in: .horizontal) {
-            ForEach(Self.steps.indices, id: \.self) { i in row(Self.steps[i].size, elide: Self.steps[i].elide) }
-            Flow(spacing: 10, lineSpacing: 2) {
-                ForEach(Array(sets.enumerated()), id: \.offset) { i, _ in lift(i, 13, elide: true) }
-                tally
-            }
         }
     }
 
-    private func row(_ fs: CGFloat, elide: Bool) -> some View {
-        HStack(alignment: .firstTextBaseline, spacing: 0) {
-            ForEach(Array(sets.enumerated()), id: \.offset) { i, _ in
-                lift(i, fs, elide: elide)
-                    .padding(.leading, i == 0 ? 0 : fs * 0.625)
-                    .padding(.trailing, i == sets.count - 1 ? 0 : fs * 0.625)
-                    .overlay(alignment: .leading) {
-                        if i > 0 { Rectangle().fill(Color.white.opacity(0.18)).frame(width: 1) }
-                    }
-            }
-            Spacer(minLength: 0)
-            tally
-        }
-        .lineLimit(1)
-        .fixedSize(horizontal: true, vertical: false)
-    }
-
-    /// One set, `weight × reps`; eliding, a weight that repeats the set before it is left out.
-    private func lift(_ i: Int, _ fs: CGFloat, elide: Bool) -> some View {
-        let st = sets[i]
-        let carry = elide && i > 0 && sets[i - 1].weight_lbs == st.weight_lbs
-        return HStack(alignment: .firstTextBaseline, spacing: 0) {
-            if !carry {
-                Text(st.weight_lbs == 0 ? "BW" : js(st.weight_lbs ?? 0))
-                    .font(.system(size: fs * 0.8125, weight: .bold).monospacedDigit())
-                    .foregroundColor(Color(hex: "#c7cdd6"))
-            }
-            Text("×").font(.system(size: fs)).foregroundColor(Color(hex: "#5c6675"))
-                .padding(.horizontal, fs * 0.19)
-            Text(String(st.reps ?? 0)).font(.system(size: fs, weight: .bold).monospacedDigit())
-                .foregroundColor(Color(hex: "#c7cdd6"))
-        }
-        .lineLimit(1)
-        .fixedSize()
-    }
-
-    private var tally: some View {
-        Text(String(sets.count)).font(.system(size: 17, weight: .bold).monospacedDigit())
-            .foregroundColor(Color(hex: "#e6eaf0"))
-            .padding(.leading, 13)
-            .overlay(alignment: .leading) { Rectangle().fill(Color.white.opacity(0.5)).frame(width: 2) }
-            .fixedSize()
-    }
-}
-
-/// The wall's dumbbell: collar, plate, bar, plate, collar, from its 44×40 SVG, fitted into the box.
-private struct Dumbbell: View {
-    var body: some View {
-        Canvas { ctx, size in
-            let k = min(size.width / 44, size.height / 40)
-            let dx = (size.width - 44 * k) / 2, dy = (size.height - 40 * k) / 2
-            let rects: [(CGFloat, CGFloat, CGFloat, CGFloat, CGFloat)] = [
-                (0, 12, 7, 16, 2), (8, 4, 10, 32, 2), (18, 15, 8, 10, 0), (26, 4, 10, 32, 2), (37, 12, 7, 16, 2),
-            ]
-            for (x, y, w, h, r) in rects {
-                let rect = CGRect(x: dx + x * k, y: dy + y * k, width: w * k, height: h * k)
-                ctx.fill(Path(roundedRect: rect, cornerRadius: r * k), with: .color(.white))
-            }
-        }
+    private func setText(_ i: Int) -> some View {
+        let st = exercise.sets[i]
+        let weight = (st.weight_lbs ?? 0) == 0 ? "BW" : js(st.weight_lbs ?? 0)
+        return (Text(weight).foregroundColor(Color(hex: "#c7cdd6"))
+                + Text(" × ").foregroundColor(Color(hex: "#5c6675"))
+                + Text(String(st.reps ?? 0)).foregroundColor(Color(hex: "#c7cdd6")))
+            .font(.system(size: 13, weight: .semibold).monospacedDigit())
+            .lineLimit(1)
     }
 }

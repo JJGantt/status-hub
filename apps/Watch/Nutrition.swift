@@ -35,6 +35,21 @@ struct NutritionDay: Decodable {
     let entries: [Entry]
 }
 
+/// `/api/nut-history`: the intake calendar and the weigh-in plot over the same weeks, so a column is
+/// the same week in both.
+struct NutHistory: Decodable {
+    struct Cell: Decodable { let c: String?; let t: Int? }
+    struct Point: Decodable { let x: Double?; let y: Double? }
+    struct Plot: Decodable {
+        /// The three values written over the plot's left end: a label and where on the box it sits.
+        struct Axis: Decodable { let v: String; let y: Double }
+        let points: [Point]
+        let axis: [Axis]
+    }
+    let weeks: [[Cell]]
+    let weight: Plot
+}
+
 /// One ring at one instant — the values `cards/nutrition.js` draws each second.
 struct RingNow {
     let base: Double, over: Double
@@ -51,6 +66,8 @@ struct RingNow {
 final class Nutrition: ObservableObject {
     @Published private(set) var feed: RingsFeed?
     @Published private(set) var day: NutritionDay?
+    /// The calendar and the plot behind the rings, loaded when he first turns to them.
+    @Published private(set) var history: NutHistory?
 
     /// The start of the minute the hub built `feed` in. Its clock is minute-resolution, so frame `t`
     /// describes `anchor + t` minutes.
@@ -72,6 +89,13 @@ final class Nutrition: ObservableObject {
         stream = nil
         expiry?.cancel()
         expiry = nil
+    }
+
+    /// The history is a tap away rather than part of every load: it is ten weeks of days and a plot,
+    /// and most of the time the page is the log.
+    func loadHistory() async {
+        guard history == nil else { return }
+        history = try? await Hub.json("/api/nut-history?weeks=10")
     }
 
     func load() async {

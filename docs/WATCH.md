@@ -176,6 +176,19 @@ the card's drain without a copy of `lib/pace.js` in Swift. This is why a frame's
 places: at two it moved the tick in ~8-minute jumps. Colours come from a frame, never derived. The
 watch compiles `Controls/RingsView.swift` for the `/api/rings` types and the palette.
 
+**The rings are the page's heading and a switch.** They sit outside the scroll view, so scrolling the
+log never takes them, and a tap turns what is under them between two things worth a screen:
+
+- **the day** — the weigh-in plot, the intake calendar under it on the same weeks (a column is the same
+  week in both, which is why they are drawn together), each total over its goal in a line or two, and
+  the last thing eaten as one line that opens the log;
+- **the log** — everything eaten today.
+
+Both come from `/api/nut-history?weeks=N` and `/api/nutrition-day`. The history loads on the first tap,
+not with the page: it is ten weeks of days and a plot, and most of the time the page is the log. The
+calendar draws its cells with **no gaps** — at eight points a gap is a third of the mark, and the grid
+reads as black ruled by colour — and rings today's cell.
+
 **An entry is two lines: what it was, then what was in it.** A name, then one line of macros —
 `466 cal 23P 88C 4F 12:30 PM` — with a rule above it and no boxes: a number in a box of its own costs
 a row's height to say what a space already says. A tap opens its ingredients, each drawn the same way,

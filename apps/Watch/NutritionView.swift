@@ -19,12 +19,15 @@ struct NutritionView: View {
                 RingsStrip(rings: nutrition.rings(at: ctx.date))
             }
             .contentShape(Rectangle())
-            .onTapGesture { day.toggle() }
+            .onTapGesture {
+                day.toggle()
+                if day { Task { await nutrition.loadHistory() } }
+            }
             ScrollView {
                 VStack(alignment: .leading, spacing: 8) {
                     if let today = nutrition.day {
                         if day {
-                            DayStanding(day: today)
+                            DayStanding(day: today, history: nutrition.history, openList: { day = false })
                         } else {
                             DayLog(day: today, open: $open)
                         }
@@ -42,12 +45,45 @@ struct NutritionView: View {
     }
 }
 
-/// Where the day stands: each total over its goal, in one line if they fit and two if they do not.
-/// **No box and no date** — the page is today, and a number over its goal says what it is.
+/// What the rings turn over to: the weigh-in plot, the intake calendar under it on the same weeks, and
+/// the day's standing under both. The wall draws these three together for a reason — a column is the
+/// same week in each — and on a wrist they are the whole screen, which is why the log is the other
+/// side of the tap rather than beneath them.
 private struct DayStanding: View {
     let day: NutritionDay
+    let history: NutHistory?
+    let openList: () -> Void
 
     var body: some View {
+        VStack(alignment: .leading, spacing: 7) {
+            if let h = history {
+                WeightPlot(plot: h.weight).frame(height: 38)
+                IntakeCalendar(weeks: h.weeks).frame(height: 7 * 8)
+            }
+            standing
+            // The last thing eaten, in a line: the whole day on one screen, and a tap for the rest.
+            if let last = day.entries.first {
+                Button(action: openList) {
+                    HStack(alignment: .firstTextBaseline, spacing: 6) {
+                        Text(last.name ?? "—")
+                            .font(.system(size: 12))
+                            .foregroundColor(Color(hex: "#c7ced8"))
+                            .lineLimit(1)
+                        Spacer(minLength: 4)
+                        (Text(String(mn(last.calories))).foregroundColor(Color(hex: "#c7ced8"))
+                            + Text(" cal").foregroundColor(Color(hex: "#7d8894")))
+                            .font(.system(size: 12).monospacedDigit())
+                            .fixedSize()
+                    }
+                }
+                .buttonStyle(.plain)
+            }
+        }
+    }
+
+    /// Each total over its goal, in one line if they fit and two if they do not. **No box and no
+    /// date** — the page is today, and a number over its goal says what it is.
+    private var standing: some View {
         let tm = day.target_macros
         return Flow(spacing: 10, lineSpacing: 3) {
             pair(mn(day.total_cal), (day.target_cal ?? 0) > 0 ? day.target_cal : nil, "cal")
@@ -307,5 +343,57 @@ struct Flow: Layout {
             widest = max(widest, x - spacing)
         }
         return (origins, proposals, CGSize(width: widest, height: y + line))
+    }
+}
+
+/// The weigh-in plot, as the wall draws it: a line across the weeks with its three axis values written
+/// over the left end rather than in a gutter — a gutter would inset the data, and being uninset is the
+/// point. The first column is deliberately blank, so the line starts where the calendar's first week
+/// does.
+private struct WeightPlot: View {
+    let plot: NutHistory.Plot
+
+    var body: some View {
+        Canvas { ctx, size in
+            let pts = plot.points.compactMap { p -> CGPoint? in
+                guard let x = p.x, let y = p.y else { return nil }
+                return CGPoint(x: x * size.width, y: y * size.height)
+            }
+            guard pts.count > 1 else { return }
+            var line = Path()
+            line.move(to: pts[0])
+            for p in pts.dropFirst() { line.addLine(to: p) }
+            ctx.stroke(line, with: .color(Color(hex: "#7fb0ff")), style: StrokeStyle(lineWidth: 1.5, lineCap: .round))
+            for a in plot.axis {
+                let t = ctx.resolve(Text(a.v).font(.system(size: 9, weight: .semibold))
+                    .foregroundColor(Color(hex: "#6b7686")))
+                let m = t.measure(in: CGSize(width: 100, height: 100))
+                ctx.draw(t, in: CGRect(x: 0, y: a.y * size.height - m.height / 2, width: m.width, height: m.height))
+            }
+        }
+    }
+}
+
+/// The intake calendar: a column per week, a cell per day, coloured by how the day went against its own
+/// goal. **No gaps** — at this size a gap is a third of the mark, and the grid reads as black ruled by
+/// colour rather than as a week of days. Today keeps a ring around it.
+private struct IntakeCalendar: View {
+    let weeks: [[NutHistory.Cell]]
+
+    var body: some View {
+        Canvas { ctx, size in
+            guard !weeks.isEmpty else { return }
+            let w = size.width / CGFloat(weeks.count), h = size.height / 7
+            for (col, week) in weeks.enumerated() {
+                for (row, day) in week.enumerated() {
+                    let box = CGRect(x: CGFloat(col) * w, y: CGFloat(row) * h, width: w, height: h)
+                    ctx.fill(Path(box.insetBy(dx: 0.25, dy: 0.25)),
+                             with: .color(day.c.map { Color(hex: $0) } ?? Color(hex: "#151b22")))
+                    if day.t == 1 {
+                        ctx.stroke(Path(box.insetBy(dx: 0.5, dy: 0.5)), with: .color(.white), lineWidth: 1)
+                    }
+                }
+            }
+        }
     }
 }

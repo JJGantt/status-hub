@@ -30,15 +30,8 @@ struct HomeView: View {
         // doing is drawn in the spot that acts on them.
         .overlay {
             BottomControl(mode: mode, enabled: recording || !chat.waiting, action: press,
-                          onHold: { if !recording { chat.toggleListening() } }, big: true)
-        }
-        // Cancel sits in the corner beside it, and only while there is something to throw away.
-        .overlay(alignment: .bottomTrailing) {
-            if recording || chat.waiting {
-                CancelX(cancel: recording ? chat.cancelRecording : chat.cancel)
-                    .padding(.bottom, 9)
-                    .padding(.trailing, 2)
-            }
+                          onHold: { if !recording { chat.toggleListening() } },
+                          cancel: cancel, big: true)
         }
         .background(Color.black.ignoresSafeArea())
         .recordsWhenAsked()
@@ -80,6 +73,13 @@ struct HomeView: View {
             }
             .buttonStyle(.plain)
         }
+    }
+
+    /// There is something to throw away: the recording, or the command the hub still has.
+    private var cancel: (() -> Void)? {
+        if recording { return chat.cancelRecording }
+        if chat.waiting { return chat.cancel }
+        return nil
     }
 
     private func press() {

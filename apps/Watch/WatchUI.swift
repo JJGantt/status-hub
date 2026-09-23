@@ -16,38 +16,6 @@ func snippet(_ s: String) -> AttributedString {
     return a
 }
 
-/// Throwing away what is under way, as a mark in the corner rather than a word across the page: home
-/// is the state glyph and the conversation, and Cancel is the one thing that has to be reachable
-/// without being read.
-struct CancelX: View {
-    let cancel: () -> Void
-
-    var body: some View {
-        Button(action: cancel) {
-            Image(systemName: "xmark")
-                .font(.system(size: 20, weight: .semibold))
-                .foregroundColor(.red)
-                .frame(width: 44, height: 34)
-                .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-    }
-}
-
-/// Cancel, across the width, under a conversation page's own recording (home uses `CancelX`).
-struct RecordingBar: View {
-    let cancel: () -> Void
-
-    var body: some View {
-        Button(action: cancel) {
-            Text("Cancel").lineLimit(1).frame(maxWidth: .infinity)
-        }
-        .tint(.red)
-        .buttonStyle(.bordered)
-        .controlSize(.small)
-    }
-}
-
 /// One step of a running turn, as the machine running it reports it: a tool call, or what the model
 /// said between two of them (`thought`).
 struct ActivityLine: Equatable {
@@ -97,6 +65,10 @@ struct BottomControl: View {
     let action: () -> Void
     /// Held rather than pressed. Home engages always-on listening this way, since the press records.
     var onHold: (() -> Void)?
+    /// Throws away what is under way — the recording, or the command the hub still has. Drawn as an x
+    /// in the corner OF THIS ROW, so cancel is beside the control on every page rather than a word
+    /// across one of them.
+    var cancel: (() -> Void)?
     /// Home's control is the page's only one and its state indicator, so it takes a target worth
     /// hitting; a conversation page's sits under text and stays small.
     var big = false
@@ -136,6 +108,18 @@ struct BottomControl: View {
                 .handGestureShortcut(.primaryAction, isEnabled: onScreen && enabled)
                 .disabled(!enabled)
                 .padding(.bottom, 9)
+                if let cancel {
+                    Button(action: cancel) {
+                        Image(systemName: "xmark")
+                            .font(.system(size: big ? 18 : 14, weight: .semibold))
+                            .foregroundColor(.red)
+                            .frame(width: 40, height: big ? 34 : 18)
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .padding(.bottom, 9)
+                    .frame(maxWidth: .infinity, alignment: .trailing)
+                }
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -177,6 +161,8 @@ struct PagedScroll<Content: View>: View {
     /// Whether this page's recording is one the silence ends, so the lock is a step in it.
     var locks = false
     var locked = false
+    /// Throws away what is under way; nil when there is nothing to throw away.
+    var cancel: (() -> Void)?
     /// Walks the recording on: starts it, locks it, sends it.
     let record: () -> Void
     @ViewBuilder let content: () -> Content
@@ -192,7 +178,7 @@ struct PagedScroll<Content: View>: View {
         }
         .scrollIndicators(.never)
         .overlay {
-            BottomControl(mode: mode, enabled: recording || canRecord, action: press)
+            BottomControl(mode: mode, enabled: recording || canRecord, action: press, cancel: cancel)
         }
         .background(Color.black.ignoresSafeArea())
     }

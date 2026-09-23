@@ -22,7 +22,9 @@ struct ChatView: View {
     var body: some View {
         ScrollViewReader { proxy in
             PagedScroll(name: "chat", recording: recording, canRecord: !chat.waiting,
-                        locks: true, locked: capture.locked, record: chat.press) {
+                        locks: true, locked: capture.locked,
+                        cancel: recording ? chat.cancelRecording : chat.waiting ? chat.cancel : nil,
+                        record: chat.press) {
                 recordButton { thread }
                 CommandStatus().id(recording ? "recording" : "status")
             }
@@ -98,24 +100,18 @@ struct ChatView: View {
     }
 }
 
-/// What the hub command is doing, under the page that records it (home and the prompt page): the
-/// recording bar, the wait for the hub with Cancel, or what went wrong with Retry. Nothing while idle.
+/// What the hub command is doing under the prompt page: the wait for the hub, or what went wrong with
+/// Retry. Nothing while idle, and nothing while recording — the control at the bottom edge says that,
+/// with the x beside it to throw it away.
 struct CommandStatus: View {
     @EnvironmentObject private var chat: Chat
     @ObservedObject private var capture = Capture.shared
 
     var body: some View {
         if capture.owner == .hub {
-            RecordingBar(cancel: chat.cancelRecording)
+            EmptyView()
         } else if chat.waiting {
-            HStack {
-                ProgressView().frame(width: 24, height: 24)
-                Spacer()
-                Button("Cancel", action: chat.cancel)
-                    .tint(.red)
-                    .buttonStyle(.bordered)
-                    .controlSize(.small)
-            }
+            ProgressView().frame(width: 24, height: 24)
         } else if let failure = chat.failure {
             VStack(alignment: .leading, spacing: 6) {
                 switch failure {

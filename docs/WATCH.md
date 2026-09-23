@@ -222,8 +222,9 @@ speech from those, not by feel.
 
 ### The lock is a step, not a button
 
-While a command records, home shows one more mark: a red **x** in the bottom corner beside the control
-(`CancelX`), there only while there is something to throw away — the recording, or the command the hub
+**Cancel is a red x on the bottom row**, in the corner beside the control, drawn by `BottomControl`
+itself so it is the same mark in the same place on every page — home, the prompt page and a session
+alike. It is there only while there is something to throw away: the recording, or the command the hub
 is still working on. The control at the bottom edge carries the recording: it is an open lock while recording, a closed
 lock once locked, and pressing it walks that on — record, lock, send. Double tap is the same press, so
 the three states are one gesture repeated. A finger tap on the conversation text presses it too, and

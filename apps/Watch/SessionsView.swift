@@ -105,6 +105,7 @@ struct SessionView: View {
     var body: some View {
         ScrollViewReader { proxy in
             PagedScroll(name: "session", recording: recording, canRecord: !sessions.busy.contains(key),
+                        cancel: recording ? { sessions.cancelRecording(key) } : nil,
                         record: { sessions.toggleRecording(key) }) {
                 Button {
                     Hub.log("record", ["view": "session", "recording": recording])
@@ -168,9 +169,7 @@ struct SessionView: View {
     }
 
     @ViewBuilder private var status: some View {
-        if recording {
-            RecordingBar { sessions.cancelRecording(key) }
-        } else if sessions.busy.contains(key) {
+        if sessions.busy.contains(key) {
             ProgressView().frame(width: 24, height: 24)
         } else if let failure = sessions.failures[key] {
             VStack(alignment: .leading, spacing: 6) {

@@ -5,6 +5,9 @@ import SwiftUI
 /// scrolling below it.
 struct WorkoutView: View {
     @EnvironmentObject private var workout: Workout
+    /// One exercise open at a time, and **the newest is open by default** — the set just logged is the
+    /// one being looked at, and a set landing on another exercise moves the opening to it.
+    @State private var open: String?
 
     var body: some View {
         ScrollView {
@@ -17,7 +20,7 @@ struct WorkoutView: View {
                     }
                 }
                 ForEach(Array((workout.now?.exercises ?? []).enumerated()), id: \.offset) { i, ex in
-                    LiftRow(exercise: ex)
+                    LiftRow(exercise: ex, open: open == ex.name, toggle: { open = open == ex.name ? nil : ex.name })
                         .padding(.top, i == 0 ? 0 : 9)
                         // Ruled apart like the hub's day list (`.dex`), since the rows no longer stand alone.
                         .overlay(alignment: .top) {
@@ -28,6 +31,7 @@ struct WorkoutView: View {
             .padding(.horizontal, 4)
             .padding(.bottom, CommandBar.height)
         }
+        .onChange(of: workout.now?.exercises.first?.name, initial: true) { _, newest in open = newest }
         .scrollIndicators(.never)
         .topOfTheScreen()
         .background(Color.black.ignoresSafeArea())
@@ -39,10 +43,10 @@ private let clockGreen = Color(hex: "#39d353")
 private let clockAmber = Color(hex: "#d6c042")
 private let clockGrey = Color(hex: "#8b96a5")
 
-/// `#resttimer` on the home wall: "Last set" and its clock (green, amber past five minutes, grey once
-/// the session is over), "Session" and its clock while a session is live, and today's tally against
-/// the far edge. One line as on the wall, stepped smaller until it fits; only when one line would be
-/// too small to read on a watch do the three wrap.
+/// The wall's `#resttimer`, cut to what a wrist reads: **the time since the last set on the left, the
+/// day's sets on the right**, one line, no box and no words. A clock symbol carries "since the last
+/// set" where the wall spells it out, and the session clock rides beside it under a stopwatch — the
+/// labels were half the line for two numbers whose meaning the symbols give away.
 private struct RestStrip: View {
     let lastAt: String
     let sessionStartAt: String?
@@ -57,39 +61,29 @@ private struct RestStrip: View {
         let rest = max(0, nowWall - (wallClock(lastAt) ?? nowWall))
         let active = rest <= Self.sessionGap
         let session = max(0, nowWall - (wallClock(sessionStartAt ?? lastAt) ?? nowWall))
-        let parts = Parts(rest: rest, active: active, session: session, sets: setsToday)
-        // One line, always: the clocks are a glance, and a wrapped three-line block is a paragraph.
-        return ViewThatFits(in: .horizontal) {
-            oneLine(parts, 0.85)
-            oneLine(parts, 0.72)
-            oneLine(parts, 0.62)
-            oneLine(parts, 0.54)
+        return HStack(alignment: .firstTextBaseline, spacing: 10) {
+            value(since(rest), "clock", active ? (rest >= 300 ? clockAmber : clockGreen) : clockGrey)
+            if active { value(sessionClock(session), "stopwatch", clockGreen) }
+            Spacer(minLength: 0)
+            (Text(String(setsToday)).foregroundColor(clockGrey)
+                + Text(" sets").foregroundColor(clockGrey.opacity(0.6)))
+                .font(.system(size: 15, weight: .heavy).monospacedDigit())
+                .lineLimit(1)
         }
         .padding(.vertical, 4)
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
-    private struct Parts { let rest: Double; let active: Bool; let session: Double; let sets: Int }
-
-    private func oneLine(_ p: Parts, _ k: CGFloat) -> some View {
-        HStack(alignment: .firstTextBaseline, spacing: 12 * k) {
-            side("Last set", since(p.rest), p.active ? (p.rest >= 300 ? clockAmber : clockGreen) : clockGrey, k)
-            if p.active { side("Session", sessionClock(p.session), clockGreen, k) }
-            Spacer(minLength: 0)
-            side("Sets", String(p.sets), clockGrey, k)
-        }
-    }
-
-    @ViewBuilder private func sides(_ p: Parts, _ k: CGFloat) -> some View {
-        side("Last set", since(p.rest), p.active ? (p.rest >= 300 ? clockAmber : clockGreen) : clockGrey, k)
-        if p.active { side("Session", sessionClock(p.session), clockGreen, k) }
-        side("Sets", String(p.sets), clockGrey, k)
-    }
-
-    private func side(_ label: String, _ value: String, _ color: Color, _ k: CGFloat) -> some View {
-        HStack(alignment: .firstTextBaseline, spacing: 6 * k) {
-            Text(label).font(.system(size: 14 * k, weight: .heavy)).foregroundColor(clockGrey)
-            Text(value).font(.system(size: 22 * k, weight: .heavy).monospacedDigit()).foregroundColor(color)
+    /// The number first, its symbol after it: the value is what is read and the symbol only says which
+    /// clock it is.
+    private func value(_ text: String, _ symbol: String, _ colour: Color) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 3) {
+            Text(text)
+                .font(.system(size: 17, weight: .heavy).monospacedDigit())
+                .foregroundColor(colour)
+            Image(systemName: symbol)
+                .font(.system(size: 10, weight: .semibold))
+                .foregroundColor(clockGrey.opacity(0.7))
         }
         .lineLimit(1)
         .fixedSize()
@@ -145,7 +139,8 @@ private func wallClock(_ now: Date) -> Double {
 /// of short strings down half a screen.
 private struct LiftRow: View {
     let exercise: WorkoutNow.Exercise
-    @State private var open = false
+    let open: Bool
+    let toggle: () -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 5) {
@@ -159,50 +154,36 @@ private struct LiftRow: View {
                     .font(.system(size: 15, weight: .bold).monospacedDigit())
                     .foregroundColor(Color(hex: "#8b96a5"))
             }
-            if open {
-                muscles
-                sets
-            }
+            if open { detail }
         }
         .padding(.vertical, 7)
         .frame(maxWidth: .infinity, alignment: .leading)
         .contentShape(Rectangle())
-        .onTapGesture { open.toggle() }
+        .onTapGesture { toggle() }
     }
 
-    /// Each muscle it trains with that muscle's weekly sets, in the muscle's own volume colour — the
-    /// wall's chips without the boxes. Wraps, and a synergist is dimmer than a primary mover.
-    private var muscles: some View {
-        Flow(spacing: 9, lineSpacing: 3) {
-            ForEach(Array(exercise.muscles.enumerated()), id: \.offset) { _, m in
-                HStack(alignment: .firstTextBaseline, spacing: 3) {
-                    Text(m.label)
-                        .font(.system(size: 11, weight: .semibold))
-                        .foregroundColor(Color(hex: m.primary ? "#c7cdd6" : "#6b7686"))
-                    Text(js(m.sets))
-                        .font(.system(size: 11, weight: .bold).monospacedDigit())
-                        .foregroundColor(Color(hex: m.color))
-                }
-                .fixedSize()
+    /// **Two columns: the sets, and what they train.** The sets run down the left one per line, and
+    /// each muscle with its weekly sets runs down the right in that muscle's own volume colour — a
+    /// synergist dimmer than a primary mover. Two kinds of number, each with a column of its own, so
+    /// neither has to be read past the other.
+    private var detail: some View {
+        HStack(alignment: .top, spacing: 10) {
+            VStack(alignment: .leading, spacing: 2) {
+                ForEach(Array(exercise.sets.enumerated()), id: \.offset) { i, _ in setText(i) }
             }
-        }
-    }
-
-    /// The sets, one per line, filling two columns down the page: 1 and 2 on the first line, 3 and 4 on
-    /// the next. A weight of 0 is bodyweight, as everywhere else.
-    private var sets: some View {
-        let rows = stride(from: 0, to: exercise.sets.count, by: 2).map { i in
-            (i, i + 1 < exercise.sets.count ? i + 1 : nil)
-        }
-        return VStack(alignment: .leading, spacing: 2) {
-            ForEach(Array(rows.enumerated()), id: \.offset) { _, pair in
-                HStack(spacing: 0) {
-                    setText(pair.0).frame(maxWidth: .infinity, alignment: .leading)
-                    if let second = pair.1 {
-                        setText(second).frame(maxWidth: .infinity, alignment: .leading)
-                    } else {
-                        Color.clear.frame(maxWidth: .infinity, maxHeight: 0)
+            Spacer(minLength: 0)
+            VStack(alignment: .trailing, spacing: 2) {
+                ForEach(Array(exercise.muscles.enumerated()), id: \.offset) { _, m in
+                    HStack(alignment: .firstTextBaseline, spacing: 3) {
+                        Text(m.label)
+                            .font(.system(size: 11, weight: .semibold))
+                            .foregroundColor(Color(hex: m.primary ? "#c7cdd6" : "#6b7686"))
+                        Text(js(m.sets))
+                            .font(.system(size: 11, weight: .bold).monospacedDigit())
+                            .foregroundColor(Color(hex: m.color))
                     }
+                    .lineLimit(1)
+                    .fixedSize()
                 }
             }
         }

@@ -3,28 +3,68 @@ import SwiftUI
 /// The page to the right of the prompt: the hub nutrition card's four pace rings, then today's log.
 struct NutritionView: View {
     @EnvironmentObject private var nutrition: Nutrition
-    /// The day's totals are behind the rings: they are the same four numbers again, and the rings
-    /// already say how the day is going. A tap opens them.
-    @State private var totals = false
+    /// **The rings stay; what is under them is what changes.** A tap on them turns the page over: the
+    /// day itself — where it stands against the goal, and the history behind it — or the list of what
+    /// was eaten. Two things worth a screen, one screen, and the rings above both.
+    @State private var day = false
+    /// One entry's ingredients at a time: opening another closes it, so the log stays a list rather
+    /// than becoming a page of everything.
+    @State private var open: String?
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 10) {
-                // Redrawn every second, as the card's setInterval(tickRings, 1000).
-                TimelineView(.periodic(from: .now, by: 1)) { ctx in
-                    RingsStrip(rings: nutrition.rings(at: ctx.date))
-                }
-                .contentShape(Rectangle())
-                .onTapGesture { totals.toggle() }
-                if let day = nutrition.day { DayLog(day: day, totals: totals) }
+        VStack(alignment: .leading, spacing: 8) {
+            // Redrawn every second, as the card's setInterval(tickRings, 1000). Outside the scroll view
+            // on purpose: they are the page's own heading, and scrolling the log should not take them.
+            TimelineView(.periodic(from: .now, by: 1)) { ctx in
+                RingsStrip(rings: nutrition.rings(at: ctx.date))
             }
-            .padding(.horizontal, 4)
-            .padding(.bottom, CommandBar.height)
+            .contentShape(Rectangle())
+            .onTapGesture { day.toggle() }
+            ScrollView {
+                VStack(alignment: .leading, spacing: 8) {
+                    if let today = nutrition.day {
+                        if day {
+                            DayStanding(day: today)
+                        } else {
+                            DayLog(day: today, open: $open)
+                        }
+                    }
+                }
+                .padding(.bottom, CommandBar.height)
+            }
+            .scrollIndicators(.never)
         }
-        .scrollIndicators(.never)
+        .padding(.horizontal, 4)
         .topOfTheScreen()
+        .frame(maxWidth: .infinity, alignment: .leading)
         .background(Color.black.ignoresSafeArea())
         .overlay { CommandBar(view: "nutrition") }
+    }
+}
+
+/// Where the day stands: each total over its goal, in one line if they fit and two if they do not.
+/// **No box and no date** — the page is today, and a number over its goal says what it is.
+private struct DayStanding: View {
+    let day: NutritionDay
+
+    var body: some View {
+        let tm = day.target_macros
+        return Flow(spacing: 10, lineSpacing: 3) {
+            pair(mn(day.total_cal), (day.target_cal ?? 0) > 0 ? day.target_cal : nil, "cal")
+            pair(mn(day.total_protein), tm?.protein_g, "P")
+            pair(mn(day.total_carbs), tm?.carbs_g, "C")
+            pair(mn(day.total_fat), tm?.fat_g, "F")
+        }
+    }
+
+    private func pair(_ v: Int, _ goal: Double?, _ label: String) -> some View {
+        let dim = Color(hex: "#7d8894")
+        var t = Text(String(v)).foregroundColor(Color(hex: "#e6eaf0"))
+        if let goal { t = t + Text("/" + js(goal)).foregroundColor(dim) }
+        return (t + Text(label == "cal" ? " cal" : label).foregroundColor(dim))
+            .font(.system(size: 12, weight: .semibold).monospacedDigit())
+            .lineLimit(1)
+            .fixedSize()
     }
 }
 
@@ -109,55 +149,20 @@ private struct RingCell: View {
 /// every entry newest first with staged ones on top. Display only.
 private struct DayLog: View {
     let day: NutritionDay
-    let totals: Bool
+    @Binding var open: String?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            if totals { band.padding(.bottom, 8) }
             if day.entries.isEmpty {
                 Text("No food logged").font(.system(size: 12)).foregroundColor(Color(hex: "#556666"))
             } else {
-                ForEach(day.entries) { EntryRow(entry: $0) }
+                ForEach(day.entries) { entry in
+                    EntryRow(entry: entry, open: open == entry.id) {
+                        open = open == entry.id ? nil : entry.id
+                    }
+                }
             }
         }
-    }
-
-    /// `.nutday`: the date, then each total over its goal. With nothing logged it is the date alone.
-    private var band: some View {
-        let tm = day.target_macros
-        return Flow(spacing: 12, lineSpacing: 4) {
-            Text(dateLabel(day.date))
-                .font(.system(size: 12, weight: .heavy)).tracking(0.6).foregroundColor(mutedText)
-            if !day.entries.isEmpty {
-                seg(mn(day.total_cal), (day.target_cal ?? 0) > 0 ? day.target_cal : nil, "cal")
-                seg(mn(day.total_protein), tm?.protein_g, "P")
-                seg(mn(day.total_carbs), tm?.carbs_g, "C")
-                seg(mn(day.total_fat), tm?.fat_g, "F")
-            }
-        }
-        .padding(.vertical, 7).padding(.horizontal, 11)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(RoundedRectangle(cornerRadius: 10).fill(Color(hex: "#11171e")))
-        .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color(hex: "#222a33"), lineWidth: 1))
-    }
-
-    private func seg(_ v: Int, _ goal: Double?, _ label: String) -> Text {
-        var t = Text(String(v)).font(.system(size: 12, weight: .heavy)).foregroundColor(Color(hex: "#e6eaf0"))
-        if let goal {
-            t = t + Text("/" + js(goal)).font(.system(size: 12, weight: .semibold)).foregroundColor(mutedText)
-        }
-        return t + Text(" " + label).font(.system(size: 12)).foregroundColor(mutedText)
-    }
-
-    /// "SA 9/13", the card's own weekday letters.
-    private func dateLabel(_ date: String) -> String {
-        let p = date.split(separator: "-").compactMap { Int($0) }
-        guard p.count == 3 else { return date }
-        var cal = Calendar(identifier: .gregorian)
-        cal.timeZone = TimeZone(identifier: "UTC")!
-        let d = cal.date(from: DateComponents(year: p[0], month: p[1], day: p[2], hour: 12))!
-        let dow = ["SU", "M", "TU", "W", "TH", "F", "SA"][cal.component(.weekday, from: d) - 1]
-        return dow + " " + String(p[1]) + "/" + String(p[2])
     }
 }
 
@@ -167,7 +172,8 @@ private struct DayLog: View {
 /// A tap opens its ingredients, each one drawn the same way: what it is, then what is in it.
 private struct EntryRow: View {
     let entry: NutritionDay.Entry
-    @State private var open = false
+    let open: Bool
+    let toggle: () -> Void
 
     private static let gold = Color(red: 214 / 255, green: 192 / 255, blue: 66 / 255)
 
@@ -182,8 +188,11 @@ private struct EntryRow: View {
                     .lineLimit(2)
                 if staged { badge }
             }
-            macros(entry.calories, entry.protein_g, entry.carbs_g, entry.fat_g,
-                   time: staged ? nil : clock(entry.occurred_at))
+            HStack(alignment: .firstTextBaseline, spacing: 6) {
+                macros(entry.calories, entry.protein_g, entry.carbs_g, entry.fat_g)
+                Spacer(minLength: 4)
+                if !staged, let t = clock(entry.occurred_at) { time(t) }
+            }
             if open {
                 ForEach(Array(parts.enumerated()), id: \.offset) { _, part in
                     VStack(alignment: .leading, spacing: 2) {
@@ -191,7 +200,7 @@ private struct EntryRow: View {
                             .font(.system(size: 11.5))
                             .foregroundColor(Color(hex: "#aeb6c0"))
                             .lineLimit(2)
-                        macros(part.calories, part.protein_g, part.carbs_g, part.fat_g, time: nil)
+                        macros(part.calories, part.protein_g, part.carbs_g, part.fat_g)
                     }
                     .padding(.top, 5)
                     .padding(.leading, 9)
@@ -202,14 +211,15 @@ private struct EntryRow: View {
         .padding(.leading, staged ? 11 : 0)
         .frame(maxWidth: .infinity, alignment: .leading)
         .contentShape(Rectangle())
-        .onTapGesture { if !parts.isEmpty { open.toggle() } }
+        .onTapGesture { if !parts.isEmpty { toggle() } }
         .background(staged ? Self.gold.opacity(0.08) : Color.clear)
         .overlay(alignment: .leading) { if staged { Rectangle().fill(Self.gold).frame(width: 3) } }
         .overlay(alignment: .top) { Rectangle().fill(Color(hex: "#222a33")).frame(height: 1) }
     }
 
-    /// One line: calories, then each macro with its letter, and the time an eaten entry was logged for.
-    private func macros(_ cal: Double?, _ p: Double?, _ c: Double?, _ f: Double?, time: String?) -> some View {
+    /// One line: calories, then each macro with its letter. Every number is bright and every unit is
+    /// dim, so the line reads as numbers with their units attached rather than as words.
+    private func macros(_ cal: Double?, _ p: Double?, _ c: Double?, _ f: Double?) -> some View {
         let dim = Color(hex: "#7d8894")
         var t = Text(String(mn(cal))).foregroundColor(Color(hex: "#c7ced8"))
             + Text(" cal").foregroundColor(dim)
@@ -217,11 +227,20 @@ private struct EntryRow: View {
             t = t + Text("  " + String(mn(v))).foregroundColor(Color(hex: "#c7ced8"))
                 + Text(label).foregroundColor(dim)
         }
-        if let time { t = t + Text("  " + time).foregroundColor(dim) }
         return t
             .font(.system(size: 11.5))
             .lineLimit(1)
             .minimumScaleFactor(0.75)
+    }
+
+    /// When it was eaten, against the right edge: `12:30P`, the half of the day attached to the time
+    /// with no space, dim like a unit — which is what it is.
+    private func time(_ t: (clock: String, half: String)) -> some View {
+        (Text(t.clock).foregroundColor(Color(hex: "#c7ced8"))
+            + Text(t.half).foregroundColor(Color(hex: "#7d8894")))
+            .font(.system(size: 11.5))
+            .lineLimit(1)
+            .fixedSize()
     }
 
     private var badge: some View {
@@ -233,13 +252,13 @@ private struct EntryRow: View {
             .overlay(RoundedRectangle(cornerRadius: 5).stroke(Self.gold.opacity(0.4), lineWidth: 1))
     }
 
-    /// "…T14:07…" → "2:07 PM", the card's fmtTime on the naive-local occurred_at.
-    private func clock(_ occurred: String?) -> String? {
+    /// "…T14:07…" → ("2:07", "P") off the naive-local occurred_at.
+    private func clock(_ occurred: String?) -> (clock: String, half: String)? {
         guard let o = occurred, let r = o.range(of: #"T\d{2}:\d{2}"#, options: .regularExpression) else { return nil }
         let hm = o[r].dropFirst().split(separator: ":")
         guard let h = Int(hm[0]), let m = Int(hm[1]) else { return nil }
         let hour = h % 12 == 0 ? 12 : h % 12
-        return String(hour) + ":" + (m < 10 ? "0" : "") + String(m) + (h < 12 ? " AM" : " PM")
+        return (String(hour) + ":" + (m < 10 ? "0" : "") + String(m), h < 12 ? "A" : "P")
     }
 }
 

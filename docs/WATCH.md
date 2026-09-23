@@ -387,6 +387,26 @@ wrist. Fly keeps only the recent lines, so read it soon.
 | `resend` | a call's connection dropped mid-flight and it was sent again |
 | `frame` | each stream frame for the session on screen |
 
+## Hiding the system clock
+
+watchOS draws the time over the top right corner of every app, composited above the app's own content
+— there is no way to draw around it and no public modifier for it. One underscored SwiftUI modifier
+turns it off, on the scene's root view:
+
+    WindowGroup {
+        RootView()
+            ._statusBarHidden(true)
+    }
+
+It works. **Verified by removing it and looking**, which is the only way to know: with the modifier the
+clock is absent, without it `11:02` sits over the top-right of the screen. The SIMULATOR renders the
+clock faithfully, so this is testable without a device — a screenshot that shows no clock is evidence,
+not a capture artefact.
+
+It is underscored, which is a promise of instability rather than a private-API rejection risk: the
+symbol is visible to the compiler in SwiftUI, not looked up at runtime. So it can stop working in any
+watchOS release without warning, and the check above is what to re-run when it does.
+
 ## Running it in the simulator
 
 The real app runs in a watchOS simulator against the live hub. Simulator-only code, compiled out of

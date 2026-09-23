@@ -18,6 +18,9 @@ struct StatusHubWatchApp: App {
     var body: some Scene {
         WindowGroup {
             RootView()
+                // The system clock sits over the top right of every watch app. This underscored
+                // modifier is the only switch for it and it does work — docs/WATCH.md.
+                ._statusBarHidden(true)
                 .environmentObject(chat)
                 .environmentObject(sessions)
                 .environmentObject(nutrition)

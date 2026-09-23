@@ -55,7 +55,23 @@ the phone and the watch, which hand over a finished file rather than streaming �
 were the only mics in the house with no gate at all, and eleven minutes of watch listening sent a
 podcast, a television and a room to the worker.
 
-Measured on the day it shipped: one of his own dictations scores 0.52, a synthesised voice 0.08.
+**0.30 is measured, not chosen.** Every stored watch-listener clip was scored against the voiceprint
+on 2026-09-23 — eleven minutes of always-on listening that had caught a podcast, a television and the
+room, plus three real commands:
+
+| | |
+|---|---|
+| him, through the watch | 0.33, 0.37, 0.37 |
+| him, pressed on a phone | 0.39, 0.45, 0.52 |
+| the room (podcast, television, a passing sentence) | 0.26 and below — twenty-one clips |
+| near-silence, whoever it was | under 0.13 |
+
+So his speech and the room separate at about 0.3, and the bar sits in that gap. The old default of 0.22
+would have passed the two loudest podcast clips. Three positive samples is thin, so read the
+`[voice-command] … voice accepted/REFUSED sim=` lines as more arrive and move it if they crowd the bar.
+
+Scoring is not free: the voice server is one small machine running ECAPA, and a batch of back-to-back
+verifies answered 502. One clip at a time, which is what a listener does anyway.
 
 **A gate that cannot run lets the command through.** A voice server that is down, a missing voiceprint
 and a clip that will not decode all answer 0, which the hub reads as "cannot tell" — eating his

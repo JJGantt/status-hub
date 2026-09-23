@@ -111,20 +111,24 @@ function createLiveWind({ store, onReading = () => {}, log = () => {} }) {
   let failing = false;
 
   async function tick() {
-    let json;
+    let json = null;
     try {
       const r = await fetch(FEED);
       if (!r.ok) throw new Error(`HTTP ${r.status}`);
       json = await r.json();
       if (json.error) throw new Error(json.error.message || 'api error');
+      if (failing) log('[live-wind] fetching again');
+      failing = false;
     } catch (e) {
+      // NO EARLY RETURN HERE. The dock going quiet reads as an API ERROR ("No data was found. This
+      // product may not be offered at this station at the requested time.") at least as often as it
+      // reads as stale readings, so returning on a failed fetch skips the fallback in precisely the
+      // case the fallback exists for — and the wind then sits hours old with a current KNRB report
+      // available the whole time.
       if (!failing) log(`[live-wind] fetch failed: ${e.message}`);
       failing = true;
-      return;
     }
-    if (failing) log('[live-wind] fetching again');
-    failing = false;
-    const fresh = parse(json).filter((r) => !lastTs || r.ts > lastTs);
+    const fresh = json ? parse(json).filter((r) => !lastTs || r.ts > lastTs) : [];
     if (fresh.length) {
       lastTs = fresh.reduce((a, r) => (r.ts > a ? r.ts : a), lastTs || '');
       const cut = new Date(Date.now() - KEEP_MS).toISOString();

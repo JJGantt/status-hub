@@ -56,10 +56,10 @@ final class WatchAppDelegate: NSObject, WKApplicationDelegate, UNUserNotificatio
     }
 }
 
-/// Five pages, left to right: the sessions, home, the prompt, the rings and today's log, and the
-/// workout block. Home is where the app opens.
+/// Four pages, left to right: the sessions, home — the conversation — the rings and today's log, and
+/// the workout block. Home is where the app opens.
 struct RootView: View {
-    enum Page { case sessions, home, chat, nutrition, workout }
+    enum Page { case sessions, home, nutrition, workout }
 
     @EnvironmentObject private var chat: Chat
     @EnvironmentObject private var sessions: Sessions
@@ -75,8 +75,7 @@ struct RootView: View {
         NavigationStack(path: $sessions.path) {
             TabView(selection: $page) {
                 SessionsView().tag(Page.sessions).environment(\.onScreen, page == .sessions)
-                HomeView(openThread: { page = .chat }).tag(Page.home).environment(\.onScreen, page == .home)
-                ChatView().tag(Page.chat).environment(\.onScreen, page == .chat)
+                HomeView().tag(Page.home).environment(\.onScreen, page == .home)
                 NutritionView().tag(Page.nutrition)
                 WorkoutView().tag(Page.workout)
             }
@@ -113,8 +112,7 @@ struct RootView: View {
     private func follow() {
         let live = phase == .active
         if live && page == .sessions { sessions.activate() } else { sessions.deactivate() }
-        // Home and the prompt page are two views of the one conversation.
-        if live && (page == .home || page == .chat) { chat.activate() } else { chat.deactivate() }
+        if live && page == .home { chat.activate() } else { chat.deactivate() }
         if live && page == .nutrition { nutrition.activate() } else { nutrition.deactivate() }
         if live && page == .workout { workout.activate() } else { workout.deactivate() }
     }

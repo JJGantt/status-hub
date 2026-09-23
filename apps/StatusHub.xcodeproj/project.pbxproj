@@ -38,7 +38,6 @@
 		7876C764C368F15A396CAEDC /* Auth.swift in Sources */ = {isa = PBXBuildFile; fileRef = 88D699B5FDC0F7476374CF07 /* Auth.swift */; };
 		80C001EA5124225A4538240B /* StatusHubApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = DBE4FD566029B00F912457DA /* StatusHubApp.swift */; };
 		86F3FAF2206C002FF5A79054 /* Chat.swift in Sources */ = {isa = PBXBuildFile; fileRef = 65394C860C697D281720B76A /* Chat.swift */; };
-		8E8CD9763A8A0BD031DBF5E5 /* ChatView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C3E42D965464DC9CD4478CCB /* ChatView.swift */; };
 		8F4734EA7CF078B6F76963FB /* StatusHubWatchWidgets.swift in Sources */ = {isa = PBXBuildFile; fileRef = 73F9EE0177B282256E68470C /* StatusHubWatchWidgets.swift */; };
 		99C55A70179E1025B9004EF9 /* RecordControl.swift in Sources */ = {isa = PBXBuildFile; fileRef = FAC9C25A7B946678D80BA77A /* RecordControl.swift */; };
 		9F6DFFB0796E9EE6B110235A /* RecordIntent.swift in Sources */ = {isa = PBXBuildFile; fileRef = F62C833499BAA9A4A1C9F660 /* RecordIntent.swift */; };
@@ -163,7 +162,6 @@
 		AF1D1C7A5D148A4366347C65 /* ReposView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReposView.swift; sourceTree = "<group>"; };
 		B47214768CCEE8C99EEF5958 /* Models.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Models.swift; sourceTree = "<group>"; };
 		C00E5B1C61B9780EE2BE1945 /* StatusHubWatchApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StatusHubWatchApp.swift; sourceTree = "<group>"; };
-		C3E42D965464DC9CD4478CCB /* ChatView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatView.swift; sourceTree = "<group>"; };
 		D2181310AB9F5E005371B8B0 /* Location.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Location.swift; sourceTree = "<group>"; };
 		D45C11A97894E271FE097B5B /* reminder.caf */ = {isa = PBXFileReference; path = reminder.caf; sourceTree = "<group>"; };
 		D87B899987639512DD905DCE /* WatchLink.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchLink.swift; sourceTree = "<group>"; };
@@ -222,7 +220,6 @@
 			children = (
 				3EE13DD050BF1BC4B943C3CC /* Capture.swift */,
 				65394C860C697D281720B76A /* Chat.swift */,
-				C3E42D965464DC9CD4478CCB /* ChatView.swift */,
 				9C61C65954CA9A7056B2B127 /* HomeView.swift */,
 				FD06B420AFC554D37540118C /* Hub.swift */,
 				1395E04227DD7450E1CBC8AD /* Info.plist */,
@@ -477,7 +474,6 @@
 				48D80B4A545868D78E2DC799 /* Auth.swift in Sources */,
 				12D0DCB4808D439F40DEDCC4 /* Capture.swift in Sources */,
 				86F3FAF2206C002FF5A79054 /* Chat.swift in Sources */,
-				8E8CD9763A8A0BD031DBF5E5 /* ChatView.swift in Sources */,
 				1962BCC150815491A3F92EB1 /* HomeView.swift in Sources */,
 				C4250430822C333D041CEEA1 /* Hub.swift in Sources */,
 				2D7BBEABB20A4F0C080608E0 /* Location.swift in Sources */,

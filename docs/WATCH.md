@@ -20,7 +20,8 @@ build), so a fix that has not been installed is not mistaken for one that failed
 
 ## Pages
 
-Five, swiped left to right: **sessions · home · prompt · nutrition · workout**. The app opens on home.
+Four, swiped left to right: **sessions · home · nutrition · workout**. The app opens on home, which
+IS the conversation — there is no separate prompt page.
 `RootView` in `StatusHubWatchApp.swift` holds them in a paged `TabView` inside a `NavigationStack`,
 with the page dots off (`indexDisplayMode: .never`) — a strip of screen spent saying what a swipe
 already says.
@@ -33,63 +34,38 @@ dispatches on.
 Every page stays alive side by side in the TabView, so anything that binds double tap or acts on a
 request asks `onScreen` (an environment value `RootView` sets per page) first.
 
-### Home
+### Home — the conversation
 
-`HomeView`: the page meant to sit on the wrist as the watch face does — the hub conversation cut down
-to what is happening now, over the always-on listening toggle. While a command runs that is his words
-and the worker's newest step; otherwise the newest reply, which opens the prompt page when tapped. It
-is the page being built out, so expect it to change.
+`HomeView`: the last ten exchanges of the shared hub thread, each in full — his words as the hub
+transcribed them, the reply as it was written — over `/api/voice-messages?focus=hub&mode=active`,
+the same current-context thread the phone and the TV show, in whichever mode `agent_mode` selects. It
+follows `/api/voice-stream`: a `message` frame reloads the thread, and the worker's `activity` frames
+draw the running command's tool calls under it (`ActivityLines`), which the hub does not store, so they
+show only while the page is watching.
+
+**A command walks the page**, and each step lands the view on a TOP, because a reply is read from its
+first line rather than scrolled to the end:
+
+| | screen | control | x | wrist |
+|---|---|---|---|---|
+| the command goes (silence, or a press) | — | the spinner | appears | tapped |
+| the hub has transcribed it | his words appended in full, the view on their top | the spinner, larger and brighter: the worker is running it now, not hearing it | stays | — |
+| the reply lands | the reply appended in full, the view on ITS top | back to the microphone | goes | tapped, with the sound |
+
+The thread ends in most of a screen of empty space, which is what lets the newest thing in it rise to
+the top: a scroll view stops at the end of its content, and on a short thread that leaves the
+transcript stranded mid-screen. The view holds that spot through the laying out that follows (`pinned`)
+until he scrolls himself.
+
+A tap anywhere on the conversation is the same press as the control. The page carries nothing else: no
+second indicator of a state the control already holds, and a failure is the one thing it adds — an
+icon and Retry under the thread, since a command that failed has nowhere else to be picked up.
 
 **The system's clock is left alone.** watchOS puts the time in the top right of every app and nothing
 hides it — the invisible-`VideoPlayer` trick that is passed around does nothing on watchOS 26.5,
-measured three ways (as a background, as a full-size overlay at 0.001 opacity, and with a real looping
-clip playing). A `ToolbarItem` does move it, but it moves it to the LEFT of the strip rather than the
-middle, so the page draws no clock and puts nothing in the toolbar.
-
-It records exactly as the prompt page does — the same `Chat`, the same microphone, the same
-`CommandStatus` row (recording bar, the wait with Cancel, or Retry) and the same three-step double tap
-— so home and the prompt page are two views of one command, and `follow()` keeps `Chat`'s stream open
-while either is showing. Its bottom control holds double tap on the same terms as a conversation page
-(§ Double tap and scrolling); there is nothing to page, so it only records and sends.
-
-**The microphone's whole state is one glyph, and it is the control at the bottom edge** — the state is
-drawn in the spot that acts on it, and the page has no second indicator:
-
-| | |
-|---|---|
-| grey `mic.fill` | idle — press to record |
-| orange `waveform` | always-on listening |
-| red `lock.open` | recording a command, which the silence will end; press to lock it |
-| red `lock.fill` | locked open; press to send |
-| a spinner | the hub has it: transcribing, then running it |
-
-**One press walks the whole command**: record, lock, send. There is no separate lock button — the
-control is the state and the step at once — and Cancel across the width is the only other thing a
-recording puts on the page. A **hold** engages or drops always-on listening.
-
-**Nothing else on the page says any of that.** The spinner is the glyph rather than a second thing
-beside the text, and there is no Retry here — a command that failed is picked up on the prompt page, which shows
-the whole of it. Under the conversation there is the recording bar while a command records (the lock
-and Cancel), Cancel alone across the width while the hub has it, and nothing otherwise. With the wrist down and the app still showing (`isLuminanceReduced`), the
-conversation dims.
-
-### The prompt page
-
-One right of home. The whole shared hub thread on black — `/api/voice-messages?focus=hub&mode=active`, the same
-current-context thread the phone and the TV show, in whichever mode `agent_mode` selects, newest 40
-rows. It follows `/api/voice-stream`: a `message` frame reloads the thread, and the worker's
-`activity` frames draw the running command's tool calls under it, and what the model says between
-them in full, in plain text rather than the tool calls' grey monospace (`ActivityLines`). The hub
-stores none of those, so they show only while the page is watching and clear when the next command
-starts (`working`) or this one ends (`done`).
-
-A reply is read from its top: the page scrolls the newest reply's top to the top of the screen and
-holds that spot (`pinned`) from the moment the app opens or comes back to the front until he scrolls
-or pages, re-aiming on every change in the content's height — a single jump on a cold launch lands
-short while the thread is still laying out.
-
-Recording from it is § Recording a command. Thread rows are their own view (`ThreadRow`) so SwiftUI
-skips re-parsing their markdown when the page rebuilds.
+measured four ways: as a background, as a full-size overlay at 0.001 opacity, with a real looping clip
+playing, and visible at full opacity behind the content. A `ToolbarItem` does move it, but to the LEFT
+of the strip rather than the middle, so the page draws no clock and puts nothing in the toolbar.
 
 ### The sessions page
 
@@ -190,8 +166,8 @@ order.
 
 ### It ends itself at the silence
 
-A command recorded from the prompt page ends itself once he has spoken and then stopped:
-`Chat.startRecording` passes `onSilence`, and a session page does not.
+A command recorded from home ends itself once he has spoken and then stopped: `Chat.startRecording`
+passes `onSilence`, and a session page does not.
 
 `Endpointer` (in `Capture.swift`) is the phone's always-on rule (`makeListener` in `voiceagent.js`):
 the floor is the quietest buffer so far, speech is 2.5x above it and at least 0.02, and once speech has
@@ -223,8 +199,7 @@ speech from those, not by feel.
 ### The lock is a step, not a button
 
 **Cancel is a red x on the bottom row**, in the corner beside the control, drawn by `BottomControl`
-itself so it is the same mark in the same place on every page — home, the prompt page and a session
-alike. It is there only while there is something to throw away: the recording, or the command the hub
+itself so it is the same mark in the same place on every page — home and a session alike. It is there only while there is something to throw away: the recording, or the command the hub
 is still working on. The control at the bottom edge carries the recording: it is an open lock while recording, a closed
 lock once locked, and pressing it walks that on — record, lock, send. Double tap is the same press, so
 the three states are one gesture repeated. A finger tap on the conversation text presses it too, and
@@ -275,8 +250,8 @@ The complication (circular and corner) opens `statushub://record`. The Record co
 runs `RecordIntent`, an `OpenIntent`, which launches the app and runs `perform()` in it: the file is
 compiled into both targets, and `WATCH_APP` gates the app-only call. Both set `Chat.recordRequested`;
 the app switches to home and records as soon as it is active. The page that acts on the request is
-whichever is showing (`recordsWhenAsked`, which checks `onScreen`), so home and the prompt page cannot
-both start one.
+whichever is showing (`recordsWhenAsked`, which checks `onScreen`), so two pages cannot both start
+one.
 
 Without an Action button, the no-touch path is the Smart Stack: with Settings → Gestures → Double Tap →
 Smart Stack set to Select and Record pinned, two double taps from the watch face open it recording
@@ -331,10 +306,9 @@ depending on how it was last moved, so the maths was right in one and wrong in t
 watch the geometry went on reporting content below after the view had stopped at its end — so every
 double tap asked for a scroll that could not happen and recording never got the gesture at all.
 
-Both conversation pages scroll through one component, `PagedScroll` (`Watch/WatchUI.swift`), so the
-control and the handover cannot differ between them. A tap on the text records as well, and the prompt
-page still jumps to the top of the newest reply and holds that spot until he scrolls or a new one
-lands.
+A session's page scrolls through `PagedScroll` (`Watch/WatchUI.swift`), which is the control over a
+scroll view and nothing more; home has its own scrolling, because it is the one page that lands the
+view on the top of each new thing. A tap on the text records on both.
 
 ## The token comes from the phone
 

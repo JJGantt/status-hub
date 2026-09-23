@@ -55,7 +55,7 @@ struct ActivityLines: View {
 struct BottomControl: View {
     /// `glyph` is home's: the state of the microphone and the command drawn in this same spot, since
     /// that page has one indicator and it is here.
-    enum Mode: Equatable { case record, stop, glyph(String, Color), working }
+    enum Mode: Equatable { case record, stop, glyph(String, Color), working(running: Bool) }
 
     /// How much room the control needs at the foot of a page, so text does not run under it.
     static let height: CGFloat = 34
@@ -84,8 +84,10 @@ struct BottomControl: View {
             ZStack(alignment: .bottom) {
                 Button(action: { if held { held = false } else { action() } }) {
                     Group {
-                        if mode == .working {
-                            ProgressView().controlSize(big ? .small : .mini)
+                        if case .working(let running) = mode {
+                            ProgressView()
+                                .controlSize(running ? .large : big ? .small : .mini)
+                                .tint(running ? .white : .gray)
                         } else {
                             Image(systemName: symbol)
                                 .font(.system(size: big ? 20 : 15, weight: .semibold))
@@ -194,5 +196,80 @@ struct PagedScroll<Content: View>: View {
     private func press() {
         Hub.log("control", ["view": name, "recording": recording, "locked": locked])
         record()
+    }
+}
+
+/// What went wrong with the last command, under the conversation, with a Retry. The control at the
+/// bottom edge says everything else — recording, locked, the hub working — so this is only ever the
+/// failure.
+struct CommandStatus: View {
+    @EnvironmentObject private var chat: Chat
+
+    var body: some View {
+        if let failure = chat.failure {
+            VStack(alignment: .leading, spacing: 6) {
+                switch failure {
+                case .noToken:
+                    Image(systemName: "iphone").foregroundColor(.gray)
+                case .micDenied:
+                    Image(systemName: "mic.slash").foregroundColor(.gray)
+                case .message(let m) where !m.isEmpty:
+                    Text(m)
+                        .foregroundColor(.red)
+                        .font(.system(size: 11))
+                        .lineLimit(3)
+                default:
+                    EmptyView()
+                }
+                Button("Retry", action: chat.retry)
+                    .buttonStyle(.bordered)
+                    .controlSize(.small)
+            }
+        }
+    }
+}
+
+extension View {
+    /// Starts the recording a launch asked for (the complication, the Record control) once this page is
+    /// the one showing and the app is in front. Every page stays alive in the TabView, so without
+    /// `onScreen` two pages would both try.
+    func recordsWhenAsked() -> some View { modifier(RecordWhenAsked()) }
+}
+
+private struct RecordWhenAsked: ViewModifier {
+    @EnvironmentObject private var chat: Chat
+    @Environment(\.scenePhase) private var phase
+    @Environment(\.onScreen) private var onScreen
+
+    func body(content: Content) -> some View {
+        content
+            .onAppear(perform: start)
+            .onChange(of: phase) { _, _ in start() }
+            .onChange(of: onScreen) { _, _ in start() }
+            .onChange(of: chat.recordRequested) { _, _ in start() }
+    }
+
+    private func start() {
+        guard chat.recordRequested, phase == .active, onScreen else { return }
+        chat.recordRequested = false
+        chat.startRecording()
+    }
+}
+
+/// One message of the thread. Its own view so that SwiftUI, finding its inputs unchanged, skips it
+/// instead of parsing its markdown again every time the page is rebuilt.
+struct ThreadRow: View {
+    let text: String
+    let user: Bool
+    var session = false
+
+    /// The tint a session's relayed reply wears on every surface (the web hub's .ai-msg-session text).
+    private static let sessionTint = Color(red: 0.62, green: 0.89, blue: 0.83)
+
+    var body: some View {
+        Text(inlineMarkdown(text))
+            .foregroundColor(user ? .gray : session ? Self.sessionTint : .white)
+            .font(.system(size: user ? 12 : 13, weight: user ? .medium : .regular))
+            .frame(maxWidth: .infinity, alignment: .leading)
     }
 }

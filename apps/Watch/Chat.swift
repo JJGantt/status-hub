@@ -15,6 +15,9 @@ final class Chat: ObservableObject {
     }
 
     @Published private(set) var thread: [Message] = []
+    /// What home draws: the last ten exchanges. The hub sends forty rows, which is more than a wrist
+    /// reads and slower to lay out than it is worth.
+    var recent: [Message] { Array(thread.suffix(20)) }
     /// What the hub heard, shown until it lands in the thread.
     @Published private(set) var pending: String?
     @Published private(set) var waiting = false

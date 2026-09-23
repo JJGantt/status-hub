@@ -96,6 +96,9 @@ because a row that grows when a tool fires and shrinks when one stops makes the 
 few seconds. Opening a session marks it seen (`POST /api/sessions/seen`), so the mark clears on the
 phone and the wall too.
 
+The list is a **ScrollView, not a List**: a watchOS List puts every row in a grey rounded slab, and
+this page is a list of names — rules separate them, as they do on the food log and the exercises.
+
 A tapped row opens its session on top of the whole row of pages (the `NavigationStack` is `RootView`'s,
 around the `TabView`), not inside the sessions page: there the page row took sideways swipes and the
 watch's own swipe back never fired. The session has no title bar.
@@ -106,10 +109,10 @@ watcher firing or a job finishing — and lands with the top of the newest reply
 screen, since the answer is what he opened it for. The history above it costs nothing once the landing
 is right.
 
-**Its name is on the clock's line and there is no back arrow.** A leading `ToolbarItem` leaves the time
-where watchOS puts it (a trailing one moves the clock to the other end of the strip); the swipe that
-opened the session from the right takes it away again, so a title bar with a button in it would cost
-the top of the screen for nothing.
+**Its name is on the clock's line, and the name is how it closes.** A leading `ToolbarItem` holds it
+(a trailing one moves the clock to the other end of the strip), and tapping it pops the session. The
+swipe back watchOS gives a pushed view does not survive a page row that also takes sideways swipes, so
+the way out is the thing at the top that says which session this is.
 
 **A long reply creeps down on its own** while he is reading it (`PagedScroll.creep`), at
 `watch_reading_wpm` in the hub's settings — words a minute, 0 to leave the page still. A line of reply

@@ -14,20 +14,34 @@ struct SessionsView: View {
     @ObservedObject private var capture = Capture.shared
 
     var body: some View {
+        // A ScrollView, not a List: a watchOS List puts every row in a grey rounded slab, and this page
+        // is a list of names. Rows are ruled apart the way the food log and the exercises are — the rule
+        // does the separating and costs two pixels.
+        //
         // A row pushes onto the app's root stack (RootView), so the session covers every page.
-        List {
-            ForEach(sessions.list) { s in
-                NavigationLink(value: s.key) { row(s) }
+        ScrollView {
+            VStack(alignment: .leading, spacing: 0) {
+                ForEach(Array(sessions.list.enumerated()), id: \.offset) { i, s in
+                    NavigationLink(value: s.key) { row(s) }
+                        .buttonStyle(.plain)
+                        .overlay(alignment: .top) {
+                            if i > 0 { Rectangle().fill(Color(hex: "#222a33")).frame(height: 1) }
+                        }
+                }
+                // Which build is on the wrist, so a fix that has not arrived is not taken for one that
+                // failed. The TestFlight build number: CI stamps the run number into CFBundleVersion.
+                Text("Build \(Self.build)")
+                    .font(.system(size: 11))
+                    .foregroundColor(.gray)
+                    .frame(maxWidth: .infinity)
+                    .padding(.top, 10)
+                Color.clear.frame(height: CommandBar.height)
             }
-            // Which build is on the wrist, so a fix that has not arrived is not taken for one that
-            // failed. The TestFlight build number: CI stamps the run number into CFBundleVersion.
-            Text("Build \(Self.build)")
-                .font(.system(size: 11))
-                .foregroundColor(.gray)
-                .frame(maxWidth: .infinity)
-                .listRowBackground(Color.clear)
-            Color.clear.frame(height: CommandBar.height).listRowBackground(Color.clear)
+            .padding(.horizontal, 4)
         }
+        .scrollIndicators(.never)
+        .topOfTheScreen()
+        .background(Color.black.ignoresSafeArea())
         .overlay { CommandBar(view: "sessions") }
     }
 
@@ -77,6 +91,9 @@ struct SessionsView: View {
                 }
             }
         }
+        .padding(.vertical, 8)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .contentShape(Rectangle())
         // A parked session is dimmed, unless it is holding a reply nobody has read.
         .opacity(s.running || unread ? 1 : 0.5)
     }
@@ -155,11 +172,17 @@ struct SessionView: View {
         .navigationBarBackButtonHidden(true)
         .toolbar {
             ToolbarItem(placement: .topBarLeading) {
-                Text(sessions.row(for: key)?.name ?? "")
-                    .font(.system(size: 15, weight: .semibold))
-                    .foregroundColor(.white)
-                    .lineLimit(1)
-                    .truncationMode(.tail)
+                // **The name closes it.** The swipe back watchOS gives a pushed view does not survive a
+                // page row that also takes sideways swipes, so the way out is the thing at the top that
+                // says which session this is.
+                Button { sessions.path.removeLast() } label: {
+                    Text(sessions.row(for: key)?.name ?? "")
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundColor(.white)
+                        .lineLimit(1)
+                        .truncationMode(.tail)
+                }
+                .buttonStyle(.plain)
             }
         }
         .task {

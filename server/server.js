@@ -727,7 +727,10 @@ async function surfLive() {
   for (const r of (snap && snap.rows) || []) {
     const local = etStringAt(new Date(r.ts * 1000));
     const h = +local.slice(11, 13);
-    if (h < 6 || h >= 18) continue;
+    // 6am THROUGH 6pm INCLUSIVE — thirteen hours, not twelve. The watch lays them round its edge in
+    // thirteen slots, which is what puts the day's boundary at exactly bottom centre and noon at
+    // exactly top centre (6.5/13 = 0.5). Twelve hours cannot do both: 6pm lands back on 6am's mark.
+    if (h < 6 || h > 18) continue;
     const d = local.slice(0, 10);
     if (!dayRows.has(d)) dayRows.set(d, []);
     dayRows.get(d).push({ local, r });

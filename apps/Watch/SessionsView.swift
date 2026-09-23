@@ -37,7 +37,9 @@ struct SessionsView: View {
                     .padding(.top, 10)
                 Color.clear.frame(height: CommandBar.height)
             }
-            .padding(.horizontal, 4)
+            // 8pt, matching every other page: a rule or a name run to the edge has its ends under
+            // the display's corner arc at 4.
+            .padding(.horizontal, 8)
         }
         .scrollIndicators(.never)
         .topOfTheScreen()

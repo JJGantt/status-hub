@@ -18,6 +18,11 @@ struct NutritionView: View {
             TimelineView(.periodic(from: .now, by: 1)) { ctx in
                 RingsStrip(rings: nutrition.rings(at: ctx.date))
             }
+            // **The outer two rings sit in the corners, and the corners are curved.** The strip is
+            // outside the scroll view, so the page's top content margin never reaches it, and a round
+            // thing pushed flat against a round corner loses its shoulder. Measured against the
+            // device's own framebuffer mask: at this width the arc clears from 7pt down.
+            .padding(.top, 8)
             .contentShape(Rectangle())
             .onTapGesture {
                 day.toggle()
@@ -37,7 +42,9 @@ struct NutritionView: View {
             }
             .scrollIndicators(.never)
         }
-        .padding(.horizontal, 4)
+        // 8pt rather than 4: the corner arc eats the outer rings and the ends of the rules at this
+        // height, and the four pixels buy back the shoulder on both.
+        .padding(.horizontal, 8)
         .topOfTheScreen()
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(Color.black.ignoresSafeArea())

@@ -28,7 +28,9 @@ struct WorkoutView: View {
                         }
                 }
             }
-            .padding(.horizontal, 4)
+            // 8pt, matching every other page: a rule or a name run to the edge has its ends under
+            // the display's corner arc at 4.
+            .padding(.horizontal, 8)
             .padding(.bottom, CommandBar.height)
         }
         .onChange(of: workout.now?.exercises.first?.name, initial: true) { _, newest in open = newest }

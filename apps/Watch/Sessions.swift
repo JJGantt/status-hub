@@ -52,15 +52,26 @@ struct SessionDetail: Decodable, Equatable {
 
     var name: String { sessionName(custom_title, label, repo) ?? id }
 
-    /// What the page shows: the newest prompt, and every reply since it — a session can answer more
-    /// than once without being asked again. Everything older is context he can ask the session for.
-    var latest: (prompt: String?, replies: [String]) {
-        let turns = turns ?? []
-        guard let start = turns.lastIndex(where: { !($0.prompt ?? "").isEmpty }) else {
-            return (last_prompt, [last_reply].compactMap { $0 }.filter { !$0.isEmpty })
+    /// What the page shows: the last few exchanges, oldest first. A turn with no prompt is a reply the
+    /// session produced on its own, so it belongs under the prompt above it rather than starting a
+    /// block of its own. Further back than this is context he can ask the session for, and a wrist is
+    /// not where it would be read.
+    static let exchanges = 5
+
+    var recent: [SessionTurn] {
+        guard let turns, !turns.isEmpty else {
+            let fallback = SessionTurn(at: nil, prompt: last_prompt, reply: last_reply)
+            return (last_prompt ?? last_reply) == nil ? [] : [fallback]
         }
-        let block = turns[start...]
-        return (block.first?.prompt, block.compactMap { $0.reply }.filter { !$0.isEmpty })
+        // Count back `exchanges` PROMPTS, keeping the unprompted replies that follow each of them.
+        var prompts = 0
+        var start = turns.startIndex
+        for i in turns.indices.reversed() where !(turns[i].prompt ?? "").isEmpty {
+            prompts += 1
+            start = i
+            if prompts == Self.exchanges { break }
+        }
+        return Array(turns[start...])
     }
 }
 

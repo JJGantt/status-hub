@@ -89,11 +89,19 @@ A tapped row opens its session on top of the whole row of pages (the `Navigation
 around the `TabView`), not inside the sessions page: there the page row took sideways swipes and the
 watch's own swipe back never fired. The session has no title bar.
 
-**A session shows its newest exchange and opens on the answer.** The page draws the last prompt and
-EVERY reply since it — a session can report more than once without being asked again, a watcher firing
-or a job finishing — and lands with the top of the newest reply at the top of the screen, since the
-answer is what he opened it for. Older turns are context, and asking the session for them is cheaper
-than a wrist scrolling through them.
+**A session opens on its newest answer.** The page draws the last `SessionDetail.exchanges` (5)
+prompts with every reply under each — a session can report more than once without being asked again, a
+watcher firing or a job finishing — and lands with the top of the newest reply at the top of the
+screen, since the answer is what he opened it for. The history above it costs nothing once the landing
+is right.
+
+**Its name is on the clock's line and there is no back arrow.** A leading `ToolbarItem` leaves the time
+where watchOS puts it (a trailing one moves the clock to the other end of the strip); the swipe that
+opened the session from the right takes it away again, so a title bar with a button in it would cost
+the top of the screen for nothing.
+
+**A recording running in a session is marked in the list**: a red square in its row, beside the green
+working dot, so a recording started in one and left there can be found from anywhere in the app.
 
 Everything it keeps is keyed by `claude_session_id`, not by row: a resume makes a new row for the
 same conversation, and keyed by row the page would lose a session the moment it resumed. A session

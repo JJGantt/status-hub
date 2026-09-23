@@ -11,6 +11,7 @@ import SwiftUI
 /// Under each name is what its machine is doing, live off `/api/session-stream`.
 struct SessionsView: View {
     @EnvironmentObject private var sessions: Sessions
+    @ObservedObject private var capture = Capture.shared
 
     var body: some View {
         // A row pushes onto the app's root stack (RootView), so the session covers every page.
@@ -62,8 +63,16 @@ struct SessionsView: View {
                 step(s, unread: unread)
             }
             Spacer(minLength: 0)
-            if s.working == true {
-                Circle().fill(Color.green).frame(width: 7, height: 7).padding(.top, 4)
+            VStack(alignment: .trailing, spacing: 4) {
+                if s.working == true {
+                    Circle().fill(Color.green).frame(width: 7, height: 7).padding(.top, 4)
+                }
+                Spacer(minLength: 0)
+                // A recording running in THIS session, while he is somewhere else in the app: the one
+                // thing about a session he needs to find again in a hurry.
+                if capture.owner == .session(s.key) {
+                    RoundedRectangle(cornerRadius: 2).fill(Color.red).frame(width: 9, height: 9)
+                }
             }
         }
         // A parked session is dimmed, unless it is holding a reply nobody has read.
@@ -126,6 +135,20 @@ struct SessionView: View {
             .onChange(of: sessions.sent[key]) { _, new in if new != nil { toBottom(proxy) } }
             .onChange(of: recording) { _, now in if now { toBottom(proxy) } }
         }
+        // The session's name on the clock's line, and NO back arrow: the swipe that opened it from the
+        // right is what takes it away again, and a title bar with a button in it costs the top of a
+        // screen this page spends on the answer. A leading toolbar item leaves the clock where watchOS
+        // puts it; a trailing one would push the time to the other end of the strip.
+        .navigationBarBackButtonHidden(true)
+        .toolbar {
+            ToolbarItem(placement: .topBarLeading) {
+                Text(sessions.row(for: key)?.name ?? "")
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundColor(.white)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+            }
+        }
         .task {
             sessions.markSeen(key)   // opening it is reading it, here as on the phone
             await sessions.loadDetail(key)
@@ -148,19 +171,21 @@ struct SessionView: View {
     }
 
     private var content: some View {
-        let latest = detail?.latest ?? (prompt: nil, replies: [])
+        let turns = detail?.recent ?? []
         return VStack(alignment: .leading, spacing: 10) {
-            if let prompt = latest.prompt, !prompt.isEmpty {
-                words(prompt)
-            }
-            // Every reply since that prompt: a watcher can report more than once without being asked
-            // again. The newest one is what the page opens on.
-            ForEach(Array(latest.replies.enumerated()), id: \.offset) { i, reply in
-                Text(inlineMarkdown(reply))
-                    .foregroundColor(.white)
-                    .font(.system(size: 13))
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .id(i == latest.replies.count - 1 ? "reply" : "reply\(i)")
+            // The last few exchanges, oldest first. The page opens on the newest reply, so the history
+            // above it costs nothing to carry and is there when he scrolls up.
+            ForEach(Array(turns.enumerated()), id: \.offset) { i, turn in
+                if let prompt = turn.prompt, !prompt.isEmpty {
+                    words(prompt)
+                }
+                if let reply = turn.reply, !reply.isEmpty {
+                    Text(inlineMarkdown(reply))
+                        .foregroundColor(.white)
+                        .font(.system(size: 13))
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .id(i == turns.count - 1 ? "reply" : "reply\(i)")
+                }
             }
             if let mine = sessions.sent[key] {
                 words(mine)

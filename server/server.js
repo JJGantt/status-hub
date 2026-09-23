@@ -148,7 +148,7 @@ async function routingConfig() {
 }
 const { buildVariants } = require('./lib/variants');
 const { createSurfAlarms } = require('./lib/surfalarm');
-const { createLiveWind } = require('./lib/livewind');
+const { createLiveWind, windType } = require('./lib/livewind');
 const { createLiveBuoy } = require('./lib/livebuoy');
 const apns = require('./lib/apns');
 const weightReminder = require('./lib/weightReminder');
@@ -697,6 +697,40 @@ function snapshotSizeColors(rows) {
   return (r) => (r && r.sMax != null ? byKey.get(`${r.sMin}|${r.sMax}|${r.sPlus ? 1 : 0}`) || null : null);
 }
 
+// THE FORWARD CORRECTION, FIRST CUT. When the measured wind has genuinely diverged from what was
+// forecast for this hour, the same error is carried into the hours AHEAD with a decaying weight —
+// full at the next hour, gone by CORRECTION_HOURS — and those hours get a corrected wind beside their
+// forecast one. Only today, and only hours still to come: there is nothing to correct in the past.
+//
+// THE DECAY IS A PLACEHOLDER AND IS MARKED AS ONE. A linear taper over five hours is a guess; the real
+// curve is the autocorrelation of forecast error, which the archive can answer per variable (captures
+// in `surf_snapshots` against the dock and buoy records — surf-app/docs/TODO.md). Nothing should be
+// judged on these numbers until that is fitted, and wind and swell will not share a curve.
+const CORRECTION_HOURS = 5;
+function applyCorrection(days, wind, nowHour) {
+  if (!wind || !wind.diverged || !wind.forecast || !days.length || !days[0].today) return;
+  const dKts = wind.delta_kts;
+  const m = wind.avg30 || wind;
+  const dDir = m.dir != null && wind.forecast.dir != null
+    ? ((m.dir - wind.forecast.dir + 540) % 360) - 180 : null;
+  for (const h of days[0].hours) {
+    const ahead = h.h - nowHour;
+    if (ahead <= 0) continue;
+    const w = Math.max(0, 1 - ahead / CORRECTION_HOURS);
+    if (!w) continue;
+    h.adj = Math.round(w * 100) / 100;
+    if (dKts != null && h.wind_kts != null) h.wind_kts_adj = Math.max(0, Math.round(h.wind_kts + dKts * w));
+    if (dDir != null && h.wind_type) {
+      const base = wind.forecast.dir != null ? wind.forecast.dir : null;
+      if (base != null) {
+        const t = windType((h.wind_kts_adj != null || true) ? (360 + Math.round(base + dDir * w)) % 360 : base);
+        h.wind_type_adj = t;
+        h.wind_color_adj = TYPE_COLORS[t] || '#8b96a5';
+      }
+    }
+  }
+}
+
 async function surfLive() {
   const snap = await latestSurfSnap();
   const now = Date.now() / 1000;
@@ -804,6 +838,7 @@ async function surfLive() {
   // and its `Calendar.current` is the phone's, so a spoke placed there lands on the wrong hour the
   // moment he travels. The watch always opens on days[0], which is today.
   const nowH = +nowLocal.slice(11, 13) + +nowLocal.slice(14, 16) / 60;
+  applyCorrection(days, wind, Math.floor(nowH));
   return { surf: buildSurf(snap), wind, sea, buoys: liveBuoy.view(), hours, water, days,
            now_hour: Math.round(nowH * 100) / 100,
            weather: getWeather(), generated_at: new Date().toISOString() };
@@ -2738,7 +2773,26 @@ app.post('/api/attach', express.raw({ type: () => true, limit: '30mb' }), async 
 // Client error sink: the phone POSTs a failed quick-photo's real reason here (step, file type/size,
 // server error) so a failure that's otherwise invisible in the phone's console lands in the app log.
 app.get('/api/surf/live', async (req, res) => {
-  try { res.json(await surfLive()); } catch (e) { res.status(500).json({ error: String(e.message || e) }); }
+  try {
+    const out = await surfLive();
+    // DEV ONLY: force a divergence, to see what the correction looks like when the wind happens to
+    // agree with the model. `?div_kts=8&div_dir=50` — nothing reads these but a person testing.
+    const k = parseFloat(req.query.div_kts), d = parseFloat(req.query.div_dir);
+    const nowOverride = parseFloat(req.query.div_now);   // pretend it is this hour
+    if (Number.isFinite(nowOverride)) out.now_hour = nowOverride;
+    if (out.wind && out.wind.forecast && (Number.isFinite(k) || Number.isFinite(d))) {
+      out.wind.diverged = true;
+      if (Number.isFinite(k)) out.wind.delta_kts = k;
+      if (Number.isFinite(d) && out.wind.forecast.dir != null) {
+        const nd = (out.wind.forecast.dir + d + 360) % 360;
+        out.wind.dir = nd; out.wind.dir_to = (nd + 180) % 360;
+        out.wind.avg30 = { ...(out.wind.avg30 || {}), dir: nd };
+        out.wind.delta_dir = Math.abs(d);
+      }
+      applyCorrection(out.days, out.wind, Math.floor(out.now_hour || 12));
+    }
+    res.json(out);
+  } catch (e) { res.status(500).json({ error: String(e.message || e) }); }
 });
 app.get('/api/surf/stream', async (req, res) => {
   res.set({ 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache',

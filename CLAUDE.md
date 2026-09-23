@@ -82,6 +82,14 @@ The build number comes from TestFlight itself (`asc.mjs next-build`, one past th
 a local mark file, because Apple does not list a build for some minutes after it is uploaded and the
 API's answer alone can hand back a number that is already taken.
 
+**Apple caps uploads per app at about 20 a day.** Measured on 2026-09-23: 21 builds were accepted in a
+rolling 24 hours and the next was refused with `Upload limit reached. The upload limit for your
+application has been reached. Please wait 1 day and try again.` (iris-code 90382). It is a ROLLING
+window, so slots come back one at a time, 24 hours after each upload — the times are in
+`/v1/builds?filter[app]=…&fields[builds]=uploadedDate`. While it is closed, an Ad Hoc build installs
+straight to the phone with `xcrun devicectl device install app` (that build is distribution-signed, so
+push still works), which the cap does not touch.
+
 TestFlight installs over the air; an Ad Hoc `.ipa` has to be pushed from the Mac with `devicectl`, so
 it needs the phone on the Mac's network — a build made while he was out never got installed. The App
 Store Connect app is "JaredHub" (id `6805268657`) and its internal group `internal_main` receives

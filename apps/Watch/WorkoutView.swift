@@ -174,6 +174,10 @@ private struct LiftRow: View {
                 ForEach(Array(exercise.sets.enumerated()), id: \.offset) { i, _ in setText(i) }
             }
             Spacer(minLength: 0)
+            // **This column is read at its RIGHT edge: the value last, the muscle it names in front
+            // of it.** The strip above is the other way round — the clock's value first, its mark
+            // after — because that one is read at the LEFT edge. Each column puts its figures on the
+            // side the eye runs down, which is the outside of the screen in both cases.
             VStack(alignment: .trailing, spacing: 2) {
                 ForEach(Array(exercise.muscles.enumerated()), id: \.offset) { _, m in
                     HStack(alignment: .firstTextBaseline, spacing: 3) {

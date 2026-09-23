@@ -61,12 +61,22 @@ A tap anywhere on the conversation is the same press as the control. The page ca
 second indicator of a state the control already holds, and a failure is the one thing it adds — an
 icon and Retry under the thread, since a command that failed has nowhere else to be picked up.
 
-**The system's clock is hidden**, by `persistentSystemOverlays(.hidden)` — the one thing that works.
-`statusBarHidden` is unavailable on watchOS; the invisible-`VideoPlayer` trick that is passed around
-does nothing, measured four ways (as a background, as a full-size overlay at 0.001 opacity, with a real
-looping clip playing, and visible at full opacity behind the content); a `ToolbarItem` only moves the
-time to the left of the strip. The page draws no clock of its own either: it is for the conversation,
-and the watch face is one press of the crown away.
+**The system's clock is hidden**, by `._statusBarHidden(true)` on the root view in
+`StatusHubWatchApp.swift` — an underscored SwiftUI modifier, and the only thing that hides it. Measured
+on watchOS 26.5, each alone:
+
+| | |
+|---|---|
+| `._statusBarHidden(true)` | **hides it** |
+| `persistentSystemOverlays(.hidden)` | does nothing |
+| `statusBarHidden(_:)` | does not compile — unavailable on watchOS |
+| an invisible `VideoPlayer` | does nothing, in four variants: as a background, as a full-size overlay at 0.001 opacity, with a real looping clip playing, and visible at full opacity behind the content |
+| a `ToolbarItem` | only moves the time to the left of the strip |
+
+Underscored means unsupported, so a watchOS release can take it away — which would show as the clock
+simply coming back, not as a build failure. Nothing here ships to the App Store, so private API is a
+risk to the look rather than to the app. The page draws no clock of its own either: it is for the
+conversation, and the watch face is one press of the crown away.
 
 ### The sessions page
 

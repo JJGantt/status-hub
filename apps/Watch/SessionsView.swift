@@ -151,7 +151,6 @@ struct SessionView: View {
         // screen this page spends on the answer. A leading toolbar item leaves the clock where watchOS
         // puts it; a trailing one would push the time to the other end of the strip.
         .navigationBarBackButtonHidden(true)
-        .persistentSystemOverlays(.hidden)   // the session's name has the line to itself
         .toolbar {
             ToolbarItem(placement: .topBarLeading) {
                 Text(sessions.row(for: key)?.name ?? "")

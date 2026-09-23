@@ -76,11 +76,6 @@ struct HomeView: View {
             .onAppear { jump(proxy) }
         }
         .recordsWhenAsked()
-        // **The system clock, hidden.** `persistentSystemOverlays(.hidden)` is what does it on watchOS —
-        // the invisible-`VideoPlayer` trick that is passed around does nothing, and a toolbar item only
-        // moves the time to the other end of the strip. The page draws no clock of its own: what it is
-        // for is the conversation, and the watch face is one press of the crown away.
-        .persistentSystemOverlays(.hidden)
     }
 
     /// Where the view settles: the top of his words while they are being worked on, otherwise the top

@@ -697,16 +697,33 @@ function snapshotSizeColors(rows) {
   return (r) => (r && r.sMax != null ? byKey.get(`${r.sMin}|${r.sMax}|${r.sPlus ? 1 : 0}`) || null : null);
 }
 
-// THE FORWARD CORRECTION, FIRST CUT. When the measured wind has genuinely diverged from what was
-// forecast for this hour, the same error is carried into the hours AHEAD with a decaying weight —
-// full at the next hour, gone by CORRECTION_HOURS — and those hours get a corrected wind beside their
-// forecast one. Only today, and only hours still to come: there is nothing to correct in the past.
+// THE FORWARD CORRECTION. When the measured wind has diverged from what was forecast for this hour,
+// the same error is carried into the hours AHEAD with a decaying weight, and those hours get a
+// corrected wind beside the forecast one. Only today, and only hours still to come.
 //
-// THE DECAY IS A PLACEHOLDER AND IS MARKED AS ONE. A linear taper over five hours is a guess; the real
-// curve is the autocorrelation of forecast error, which the archive can answer per variable (captures
-// in `surf_snapshots` against the dock and buoy records — surf-app/docs/TODO.md). Nothing should be
-// judged on these numbers until that is fitted, and wind and swell will not share a curve.
-const CORRECTION_HOURS = 5;
+// THE WEIGHTS ARE FITTED, NOT CHOSEN. `w(k)` is the regression slope of the error at hour T+k on the
+// error at T through the origin — which IS the optimal multiplier — measured over 2026-06-19 to
+// 2026-09-23, both errors taken from the SAME capture because that is how this runs: one forecast in
+// hand, its error watched as it evolves. Correcting with these cuts speed error by 30% at k=1, 14% at
+// k=2 and 9% at k=3; past k=6 the gain is under a percent and the interval includes zero, which is why
+// it stops rather than tapering to something small.
+//
+// FITTED AT SHORT LEAD ONLY, and that is the whole reason the numbers look modest. Slopes pooled over
+// every lead time come out far higher (0.78 at k=1 against 0.66) because at five days out the "error"
+// is the run having the synoptic pattern wrong — a multi-day offset that barely decays. Production
+// never sees that: the capture in hand is a median 8 hours old. Applying the pooled weights here
+// measurably INCREASES error past k=6, so they are the answer to the question as posed and the wrong
+// answer for this code.
+//
+// SPEED AND DIRECTION DECAY DIFFERENTLY and cannot share a table — direction is worth nothing past
+// three hours, where speed still carries at six.
+//
+// One season only: late June to late September, about fourteen independent weather blocks. The sea
+// breeze dominates that, so these are summer constants and want re-fitting after a winter.
+const DECAY_KTS = [0, 0.65, 0.45, 0.37, 0.27, 0.20, 0.13];
+const DECAY_DIR = [0, 0.40, 0.22, 0.12];
+const decay = (table, k) => (k >= 1 && k < table.length ? table[k] : 0);
+
 function applyCorrection(days, wind, nowHour) {
   if (!wind || !wind.diverged || !wind.forecast || !days.length || !days[0].today) return;
   const dKts = wind.delta_kts;
@@ -714,16 +731,18 @@ function applyCorrection(days, wind, nowHour) {
   const dDir = m.dir != null && wind.forecast.dir != null
     ? ((m.dir - wind.forecast.dir + 540) % 360) - 180 : null;
   for (const h of days[0].hours) {
-    const ahead = h.h - nowHour;
-    if (ahead <= 0) continue;
-    const w = Math.max(0, 1 - ahead / CORRECTION_HOURS);
-    if (!w) continue;
-    h.adj = Math.round(w * 100) / 100;
-    if (dKts != null && h.wind_kts != null) h.wind_kts_adj = Math.max(0, Math.round(h.wind_kts + dKts * w));
-    if (dDir != null && h.wind_type) {
-      const base = wind.forecast.dir != null ? wind.forecast.dir : null;
+    const k = h.h - nowHour;
+    if (k <= 0) continue;
+    const wS = decay(DECAY_KTS, k), wD = decay(DECAY_DIR, k);
+    if (!wS && !wD) continue;
+    h.adj = Math.round(Math.max(wS, wD) * 100) / 100;
+    if (wS && dKts != null && h.wind_kts != null) {
+      h.wind_kts_adj = Math.max(0, Math.round(h.wind_kts + dKts * wS));
+    }
+    if (wD && dDir != null && h.wind_type) {
+      const base = wind.forecast.dir;
       if (base != null) {
-        const t = windType((h.wind_kts_adj != null || true) ? (360 + Math.round(base + dDir * w)) % 360 : base);
+        const t = windType((360 + Math.round(base + dDir * wD)) % 360);
         h.wind_type_adj = t;
         h.wind_color_adj = TYPE_COLORS[t] || '#8b96a5';
       }

@@ -156,6 +156,43 @@ What the history since July says, and why the rule is this one:
   decision moment would never have fired; its value is that it keeps looking until the wake time,
   which matters most for a later alarm.
 
+### The mirror rule — measured offshore wind LIFTING an hour — does not work
+
+The veto only ever removes hours, so the symmetric rule is the obvious next build: lift an hour the
+forecast put exactly one step below Fair, when the forecast's own wind for that hour is not offshore
+and the dock is measuring offshore under 8 kt — that is, only where the measurement contradicts the
+forecast's stated reason for the lower rating. It is narrow, it has a mechanism behind it, and it
+still fails. Backtested against Surfline's own later ratings across the whole snapshot archive:
+
+- **It fires on 12 mornings in 95 and is wrong on 9 of them.** Nine unearned 5am wakes across a summer
+  to catch three real ones. The failure modes are not symmetric — a veto that fires wrongly costs a
+  lie-in, this costs a wake — so 75% wrong is disqualifying on its own.
+- **The effect is not separable from the control.** 25% day-level precision against 11.5% for hours
+  that met the forecast conditions while the measurement did not qualify; the 95% interval on that
+  difference runs **-12 to +42 points**, day-level Fisher p = 0.27. An hour-level test looks
+  significant and is pseudo-replication: no candidate morning has a mixed outcome, so a morning's five
+  hours are one observation.
+- **The 15-20% figure above is what the rule runs into.** The unconditional base rate for these hours
+  is 14.3%. Narrowing by wind does not escape it.
+- **A size floor is the natural fix and cannot be measured.** `sRawMax` is absent from every row before
+  September; the `sMax` fallback is an integer that flattens every earlier candidate to the same value.
+  On `swH`, which is present throughout, tightening makes precision worse.
+- **The speed cap is inert.** "Offshore and under 8 kt" and "offshore at any speed" select the
+  identical hours, because every measured-offshore 5am in the archive is already under 8 kt. Any
+  future version should re-derive that clause rather than carry it as reassurance it is not providing.
+
+The honest verdict is that the sample cannot decide it, and the rule fires about once every eight
+days, so it is roughly a year before it could. **Two data problems sit underneath that and are worth
+fixing whatever happens to the rule:**
+
+- **The decision forecast is old.** Captures are a median 8 hours apart, so the one in hand at 5am is a
+  median 14.5 hours old in June-August — from the previous afternoon. Capturing more often is a bigger
+  lever on the alarm than any rule layered on top of it.
+- **There is no settled rating to score against.** The last capture covering an hour lands a median 7.5
+  hours after it, and **26% of hours whose last capture says Fair did not say Fair in the one before**.
+  Ground truth here is same-day and unstable, which is why a single late revision must not be read as
+  the final word on a morning. Keeping a capture at least 24 hours after each hour would give one.
+
 ## Auditing a morning: `alarm_log`
 
 The hub's stdout is not a record: Fly keeps about the last hundred lines, so a morning's beacons are

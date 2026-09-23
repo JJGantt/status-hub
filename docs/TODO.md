@@ -79,6 +79,24 @@ the route and the `trace()` calls.
 
 ## Not started
 
+### Capture the surf forecast more often, and keep one capture a day old
+
+Both come out of the backtest in `docs/ALARMS.md` that rejected the wind-upgrade rule, and both matter
+whatever is built on top of the forecast.
+
+Captures are a median **8 hours** apart (p90 16 h, max 45.7 h), so the forecast the alarm decides on at
+5am is a median **14.5 hours old in June-August** — from the previous afternoon. Nothing clever
+downstream recovers that; capturing on a tighter cadence is the largest single improvement available to
+the alarm.
+
+Separately, nothing here ever scores a morning against a SETTLED rating. The last capture covering an
+hour lands a median 7.5 hours after it, and 26% of hours whose last capture says Fair did not say Fair
+in the one before — so "Surfline revised it to Fair" can be a flip that flips back. Keeping a capture
+at least 24 hours after each hour would give a stable label to measure any future rule against; today
+there is exactly one such hour in 2520.
+
+`surf-report` owns the capture schedule.
+
 ### Watch: does a recording survive the wrist dropping?
 
 The watch app declares `UIBackgroundModes: audio`, which should keep a recording started on screen

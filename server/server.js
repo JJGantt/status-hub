@@ -641,7 +641,7 @@ async function sstAhead() {
   try {
     const from = new Date(Date.now() - 3600 * 1000).toISOString();
     const rows = await sb('water_readings?station=eq.open-meteo&lead_hours=not.is.null'
-      + `&ts=gte.${encodeURIComponent(from)}&select=ts,water_f&order=ts.asc&limit=48`);
+      + `&ts=gte.${encodeURIComponent(from)}&select=ts,water_f&order=ts.asc&limit=400`);
     sstCache = { at: Date.now(), rows: rows || [] };
   } catch (_) { /* keep what is held */ }
   return sstCache.rows;
@@ -717,18 +717,22 @@ async function surfLive() {
     if (wind.forecast) wind.forecast.type_color = TYPE_COLORS[wind.forecast.type] || '#8b96a5';
   }
   for (const h of hours) h.wind_color = TYPE_COLORS[h.wind_type] || '#8b96a5';
-  // THE DAY THE WATCH DRAWS: 6am to 6pm, the twelve hours worth surfing, as one ring. Today's until
-  // 6pm, then tomorrow's — after the window closes the useful question is the next one, not the one
-  // that just ended.
+  // EVERY DAY THE WATCH CAN TURN TO: 6am to 6pm, the twelve hours worth surfing, one entry per day
+  // from today to the end of the forecast. The watch draws one of them round its edge and the crown
+  // picks which; its other pane lays all of them out as a grid, so the same array is the ring and the
+  // heat map and the two cannot disagree about a day.
   const nowLocal = etNowString();
-  const dayDate = +nowLocal.slice(11, 13) < 18 ? nowLocal.slice(0, 10)
-    : localDate(new Date(Date.now() + 86400000));
   const sizeColor = snapshotSizeColors((snap && snap.rows) || []);
-  const dayHours = ((snap && snap.rows) || []).map((r) => {
+  const dayRows = new Map();
+  for (const r of (snap && snap.rows) || []) {
     const local = etStringAt(new Date(r.ts * 1000));
-    return { local, r };
-  }).filter(({ local }) => local.slice(0, 10) === dayDate && +local.slice(11, 13) >= 6 && +local.slice(11, 13) < 18)
-    .map(({ local, r }) => ({
+    const h = +local.slice(11, 13);
+    if (h < 6 || h >= 18) continue;
+    const d = local.slice(0, 10);
+    if (!dayRows.has(d)) dayRows.set(d, []);
+    dayRows.get(d).push({ local, r });
+  }
+  const hourOf = ({ local, r }) => ({
       h: +local.slice(11, 13),
       t: (() => { const h = +local.slice(11, 13); return `${h % 12 || 12}${h < 12 ? 'a' : 'p'}`; })(),
       rating: ratingLabel(r.rk), color: SURF_BAND_COLORS[surfBand(r.rk)] || '#8b96a5',
@@ -743,7 +747,7 @@ async function surfLive() {
       swh_ft: r.swH == null ? null : Math.round(r.swH * 10) / 10,
       wind_kts: r.wSpd == null ? null : Math.round(r.wSpd), wind_type: r.wType || null,
       wind_color: TYPE_COLORS[r.wType] || '#8b96a5',
-    }));
+  });
 
   // WATER: measured by the buoys right now, and the marine model's next day beside it, at the hours
   // worth naming rather than all 24 of them.
@@ -758,8 +762,28 @@ async function surfLive() {
   if (sea) sea.water_color = waterColor(sea.water_f);
   const water = { now_f: sea ? sea.water_f : null, now_color: sea ? sea.water_color : null,
                   next: sst.length ? [6, 12, 24].map(at).filter(Boolean) : [] };
-  return { surf: buildSurf(snap), wind, sea, buoys: liveBuoy.view(), hours, water,
-           day: { date: dayDate, today: dayDate === nowLocal.slice(0, 10), hours: dayHours },
+
+  // EACH DAY ALSO CARRIES ITS WATER, taken at local noon, because the watch plots it as a line under
+  // the grid and a plot has to have one value per column. The marine model runs about a week where
+  // the surf forecast runs ten days, so the last days come back null and the line simply stops —
+  // which is honest, and better than carrying the last value forward as though it were forecast.
+  const today = nowLocal.slice(0, 10);
+  const noonWater = (date) => {
+    const want = Date.parse(`${date}T12:00:00-04:00`);
+    let best = null, bestGap = Infinity;
+    for (const r of sst) {
+      const gap = Math.abs(Date.parse(r.ts) - want);
+      if (gap < bestGap) { bestGap = gap; best = r; }
+    }
+    return best && bestGap < 6 * 3600 * 1000 ? Math.round(best.water_f * 10) / 10 : null;
+  };
+  const days = [...dayRows.keys()].filter((d) => d >= today).sort()
+    .map((date) => {
+      const f = date === today && water.now_f != null ? water.now_f : noonWater(date);
+      return { date, today: date === today, hours: dayRows.get(date).map(hourOf),
+               water_f: f, water_color: waterColor(f) };
+    });
+  return { surf: buildSurf(snap), wind, sea, buoys: liveBuoy.view(), hours, water, days,
            weather: getWeather(), generated_at: new Date().toISOString() };
 }
 const surfClients = new Set();

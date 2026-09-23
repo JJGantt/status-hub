@@ -1,10 +1,13 @@
 /* The surf app's page (surf.html) — read in the Gnarcast app at the phone's own size. */
-/* app.css pins `body.tv` to one screen with `height:100vh; overflow:hidden` — right for the kiosk,
-   which never scrolls, and wrong here: this page is taller than a phone and has to scroll. */
 body.surfapp{background:#06080a;margin:0;padding:env(safe-area-inset-top) 0 env(safe-area-inset-bottom);
-  color:#e6eaf0;-webkit-text-size-adjust:100%;
-  height:auto;min-height:100vh;overflow-y:auto;overflow-x:hidden;cursor:auto;
-  -webkit-overflow-scrolling:touch}
+  color:#e6eaf0;-webkit-text-size-adjust:100%;cursor:auto;-webkit-overflow-scrolling:touch}
+/* THIS PAGE SCROLLS, and app.css pins a phone-sized wall to one screen TWICE: `body.tv` and, more
+   specifically, `body.tv.phonewall` — which is (0,2,1) and beats a plain `body.surfapp` whatever
+   order the files load in. The page needs `phonewall` for every card's phone branch, so the release
+   has to carry both of those classes as well as its own. Losing it is silent: the body stays exactly
+   one screen tall with `overflow:hidden`, so everything below the fold is clipped and simply
+   unreachable rather than visibly broken. */
+body.tv.phonewall.surfapp{height:auto;min-height:100vh;overflow-y:auto;overflow-x:hidden}
 .sp{display:flex;flex-direction:column;gap:10px;padding:10px 12px 24px}
 .sp-live{display:flex;flex-direction:column;gap:8px}
 .sp-card{background:#11161c;border:1px solid #222a33;border-radius:12px;padding:10px 12px}

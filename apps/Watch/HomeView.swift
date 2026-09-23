@@ -57,6 +57,7 @@ struct HomeView: View {
                 }
             }
             .scrollIndicators(.never)
+            .topOfTheScreen()
             .background(Color.black.ignoresSafeArea())
             .overlay { CommandBar(view: "home") }
             .onChange(of: target) { _, _ in

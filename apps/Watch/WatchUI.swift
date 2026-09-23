@@ -77,11 +77,24 @@ struct BottomControl: View {
     @State private var held = false
 
     var body: some View {
-        // A full-height column reaching past the safe area puts the control on the screen's physical
-        // bottom edge in either scroll frame. Its empty top takes no touches, so taps reach the page.
+        // A full-height column reaching past the safe area puts the row on the screen's physical bottom
+        // edge. Its empty top takes no touches, so taps reach the page. **The two buttons are an HStack,
+        // not layers**: as overlapping full-width layers the one drawn on top swallowed the other's
+        // taps, and cancel — the one with no second way to press it — was the one that stopped working.
         VStack(spacing: 0) {
             Spacer(minLength: 0)
-            ZStack(alignment: .bottom) {
+            HStack(spacing: 0) {
+                if let cancel {
+                    Button(action: cancel) {
+                        Image(systemName: "xmark")
+                            .font(.system(size: big ? 18 : 14, weight: .semibold))
+                            .foregroundColor(.red)
+                            .frame(width: big ? 54 : 40, height: big ? 34 : 18, alignment: .leading)
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                }
+                Spacer(minLength: 0)
                 Button(action: { if held { held = false } else { action() } }) {
                     Group {
                         if case .working(let running) = mode {
@@ -95,9 +108,9 @@ struct BottomControl: View {
                         }
                     }
                     .opacity(enabled ? 1 : 0.4)
-                    // A wide target, with the glyph at ITS trailing edge: the thumb gets a big button
-                    // and the eye gets a mark in the corner rather than one floating mid-screen.
-                    .frame(width: big ? 110 : 44, height: big ? 34 : 18, alignment: big ? .trailing : .center)
+                    // A wide target with the glyph at ITS trailing edge: the thumb gets a big button and
+                    // the eye gets a mark in the corner rather than one floating mid-screen.
+                    .frame(width: big ? 96 : 44, height: big ? 34 : 18, alignment: big ? .trailing : .center)
                     .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
@@ -111,25 +124,9 @@ struct BottomControl: View {
                 // and two live bindings leave the system to pick.
                 .handGestureShortcut(.primaryAction, isEnabled: onScreen && enabled)
                 .disabled(!enabled)
-                .padding(.bottom, 9)
-                // The control sits at the RIGHT of the row and cancel at the LEFT, so the thumb finds
-                // the one it reaches for on every page and the x is never under it.
-                .frame(maxWidth: .infinity, alignment: .trailing)
-                .padding(.trailing, 6)
-                if let cancel {
-                    Button(action: cancel) {
-                        Image(systemName: "xmark")
-                            .font(.system(size: big ? 18 : 14, weight: .semibold))
-                            .foregroundColor(.red)
-                            .frame(width: 40, height: big ? 34 : 18, alignment: .leading)
-                            .contentShape(Rectangle())
-                    }
-                    .buttonStyle(.plain)
-                    .padding(.bottom, 9)
-                    .padding(.leading, 6)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                }
             }
+            .padding(.horizontal, 6)
+            .padding(.bottom, 9)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .ignoresSafeArea(edges: .bottom)
@@ -192,6 +189,18 @@ struct CommandBar: View {
         Hub.log("control", ["view": view, "recording": recording, "locked": capture.locked])
         Capture.trigger = "press"
         chat.press()
+    }
+}
+
+extension View {
+    /// **The strip the clock sat in belongs to the page.** watchOS keeps a safe area at the top for the
+    /// time, and with the time hidden (`._statusBarHidden`) that is a band of black above everything.
+    /// A page takes it back and puts its own first line there.
+    /// A scroll view ALSO insets its content by that safe area, which is the part that shows: the page
+    /// reaches the top and its first line still starts below the strip. Both have to go.
+    func topOfTheScreen() -> some View {
+        ignoresSafeArea(edges: .top)
+            .contentMargins(.top, 2, for: .scrollContent)
     }
 }
 

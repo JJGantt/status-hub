@@ -145,13 +145,22 @@ view's own load the reply stays old: a conversation already on screen does not a
 app in the background misses the stream's `done`. The category is registered at launch, so the watch
 app has to have run once for the button to appear.
 
+### The pages start at the top of the screen
+
+With the clock hidden there is no reason for the band it sat in. `topOfTheScreen()` takes it back, and
+it takes BOTH halves: `ignoresSafeArea(edges: .top)` for the page, and `contentMargins(.top, …)` for
+the scroll view, which insets its own content by that same safe area — with only the first, the page
+reaches the top and its first line still starts below the strip.
+
 ### The command is on every page
 
 `CommandBar` — the control at the bottom edge and the x beside it — is laid over home, the nutrition
 page, the workout page and the sessions list alike, so a command can be started from wherever he is
 rather than only from the conversation. The control sits at the **bottom right** with a wide tap target
 and its glyph at that target's trailing edge; cancel is an x at the bottom **left**, where a thumb
-reaching for the control cannot catch it. Every page leaves `CommandBar.height` of room under its
+reaching for the control cannot catch it. **The two are an HStack, not layers.** As two full-width
+layers in a ZStack the one drawn on top swallowed the other's taps, and cancel — the only one with no
+second way to press it — was what stopped working. Every page leaves `CommandBar.height` of room under its
 content.
 
 ### The nutrition page

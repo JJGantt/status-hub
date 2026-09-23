@@ -51,7 +51,10 @@ struct HomeView: View {
                 // The whole page records under a finger, as the thread always has: a tap starts a
                 // command, the next locks it, the next sends it.
                 .contentShape(Rectangle())
-                .onTapGesture { chat.press() }
+                .onTapGesture {
+                    Capture.trigger = "tap"
+                    chat.press()
+                }
             }
             .scrollIndicators(.never)
             .background(Color.black.ignoresSafeArea())
@@ -109,6 +112,7 @@ struct HomeView: View {
 
     private func press() {
         Hub.log("control", ["view": "home", "recording": recording, "locked": capture.locked])
+        Capture.trigger = "press"
         chat.press()
     }
 }

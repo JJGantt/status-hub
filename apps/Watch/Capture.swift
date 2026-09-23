@@ -37,6 +37,12 @@ final class Capture: ObservableObject {
     /// recording is held open deliberately, so it is exempt.
     private static let unspoken: TimeInterval = 15
 
+    /// The longest a command may record unlocked. The silence normally ends one in a couple of seconds,
+    /// so a recording still running after this heard speech the whole time without a gap — a room, a
+    /// television, a conversation — which is what an accidental start sounds like. The lock is how a
+    /// long one is held open deliberately, and it is exempt.
+    private static let longest: TimeInterval = 60
+
     private let recorder = Recorder()
     /// Started, microphone not open yet. A stop in this window cancels instead of sending.
     private var arming = false
@@ -53,6 +59,11 @@ final class Capture: ObservableObject {
     /// segment holds.
     private var spokeAt: Date?
     private var segment: TimeInterval = 0
+    /// What started the recording being opened — a press, a tap on the page, or a launcher (the
+    /// complication, the Record control, the Smart Stack). In the hub log beside `mic-open`, because a
+    /// recording nobody meant to start is otherwise indistinguishable from one he asked for.
+    static var trigger = "press"
+
     /// Held while listening is engaged, for a microphone failure on a later re-engage.
     private var listenFailure: (@MainActor (Error) -> Void)?
     /// When listening was engaged, and how many silent segments it has rolled since — the evidence for
@@ -179,7 +190,7 @@ final class Capture: ObservableObject {
             }
             guard arming else { recorder.cancel(); return }   // stopped while the microphone opened
             arming = false
-            Hub.log("mic-open", ["owner": String(describing: owner)])
+            Hub.log("mic-open", ["owner": String(describing: owner), "how": Self.trigger])
             opened()
         }
     }
@@ -230,7 +241,9 @@ final class Capture: ObservableObject {
         let ended = endpoint.feed(level, seconds)
         segment += seconds
         if endpoint.heard && !wasHeard { spokeAt = Date() }
-        if !endpoint.heard && !locked && segment >= Self.unspoken {
+        // Accidentally recording: nobody spoke into it, or it has run on and on unlocked. Either way
+        // the microphone closes and the clip is thrown away rather than sent.
+        if !locked && (segment >= Self.longest || (!endpoint.heard && segment >= Self.unspoken)) {
             if owner == .listener {
                 recorder.drop()
                 endpoint.restart()
@@ -242,7 +255,7 @@ final class Capture: ObservableObject {
                     Hub.log("listen-alive", ["minutes": Int(Date().timeIntervalSince(since) / 60)])
                 }
             } else {
-                logEnd("unspoken")
+                logEnd(endpoint.heard ? "too-long" : "unspoken")
                 cancel()
             }
             return

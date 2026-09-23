@@ -26,9 +26,13 @@ final class Chat: ObservableObject {
     /// reports them. The hub does not store them, so they show while a command runs and clear when the
     /// next starts or this one finishes.
     @Published private(set) var activity: [ActivityLine] = []
-    /// Set by the complication's statushub://record and by the Record control; the prompt page starts
-    /// recording once it is on screen.
+    /// Set by the complication's statushub://record and by the Record control; home starts recording
+    /// once it is on screen. It carries WHEN it was asked for: a request that nothing consumed (the app
+    /// was not in front, the watch went back to its face) must not start a recording minutes later, on
+    /// whatever raise of the wrist happens to bring the app back.
     @Published var recordRequested = false
+    private(set) var requestedAt = Date.distantPast
+    static let requestWindow: TimeInterval = 20
 
     private let capture = Capture.shared
     // Kept across a retry: the clip until its command has run, the msgId so a resend cannot enqueue
@@ -45,7 +49,13 @@ final class Chat: ObservableObject {
         PhoneLink.shared.onToken = { [weak self] in self?.tokenArrived() }
     }
 
-    func requestRecording() { recordRequested = true }
+    func requestRecording() {
+        requestedAt = Date()
+        recordRequested = true
+    }
+
+    /// A launcher's request is still worth acting on.
+    var requestIsFresh: Bool { Date().timeIntervalSince(requestedAt) < Self.requestWindow }
 
     /// The page is on screen: load now, and follow the conversation and the tool calls of the hub
     /// command running until `deactivate`.

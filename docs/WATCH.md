@@ -89,6 +89,12 @@ A tapped row opens its session on top of the whole row of pages (the `Navigation
 around the `TabView`), not inside the sessions page: there the page row took sideways swipes and the
 watch's own swipe back never fired. The session has no title bar.
 
+**A session shows its newest exchange and opens on the answer.** The page draws the last prompt and
+EVERY reply since it — a session can report more than once without being asked again, a watcher firing
+or a job finishing — and lands with the top of the newest reply at the top of the screen, since the
+answer is what he opened it for. Older turns are context, and asking the session for them is cheaper
+than a wrist scrolling through them.
+
 Everything it keeps is keyed by `claude_session_id`, not by row: a resume makes a new row for the
 same conversation, and keyed by row the page would lose a session the moment it resumed. A session
 opens to its last prompt and the whole reply to it (`GET /api/sessions/:id`) and the tool calls of the
@@ -186,8 +192,20 @@ arms the endpoint, which is how a recording nobody spoke into ran 88 seconds on 
 peak of 0.021 against a 0.02 line, and went up as "Thank you. Thank you." — what Whisper writes for
 silence, which the worker then ran as a command.
 
-**A recording nobody speaks into is closed, not held.** After `Capture.unspoken` (15s) of audio with
-no speech in it, a command or a follow-up is cancelled and its clip thrown away, and the listener
+**A recording nobody meant to start is closed.** Two caps, both skipped while the recording is locked,
+because holding one open through anything is what the lock is for:
+
+- `Capture.unspoken` (15s of audio with no speech in it) — nobody is talking to it.
+- `Capture.longest` (60s unlocked) — the silence ends a real command in a couple of seconds, so one
+  still running heard speech the whole time without a gap: a room, a television, a conversation.
+
+A **launcher's** request expires too (`Chat.requestWindow`, 20s): the complication and the Record
+control set a flag home acts on when it is next on screen, and without the window a request nothing
+consumed starts a recording on whatever raise of the wrist brings the app back. Every `mic-open` line
+carries `how` — press, tap or launcher — because a recording nobody meant to start is otherwise
+indistinguishable from one he asked for.
+
+After `Capture.unspoken` of audio with no speech in it, a command or a follow-up is cancelled and its clip thrown away, and the listener
 starts a fresh segment. The microphone and the mute it puts on every room mic are not left open
 because a recording started by accident — which the Smart Stack and the complication make easy. A
 **locked** recording is exempt: holding it open through silence is exactly what the lock is for.

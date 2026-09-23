@@ -115,14 +115,13 @@ struct SessionView: View {
                     .disabled(sessions.busy.contains(key))
                 status
             }
-            // A new reply is read from its top. Work in progress — his words, a recording, tool calls —
-            // lands at the bottom (`tail`, PagedScroll's end marker), so that is where the view follows
-            // it. Opening a session leaves its prompt and reply at the top. Jumps to a view go through
-            // the reader; paging moves by a distance instead.
-            .onChange(of: detail?.last_reply) { old, new in
-                guard old != nil, new != old else { return }
-                withAnimation(.easeOut(duration: 0.2)) { proxy.scrollTo("reply", anchor: .top) }
-            }
+            // **A session opens ON its newest reply**, not at the top of the prompt above it: the
+            // answer is what he came for, and the prompt is his own words. The same landing whenever a
+            // new reply arrives. Work in progress — his words, a recording, tool calls — lands at the
+            // bottom (`tail`, PagedScroll's end marker), so that is where the view follows it instead.
+            .onChange(of: detail?.last_reply) { _, _ in toReply(proxy, animated: true) }
+            .onChange(of: detail == nil) { _, _ in toReply(proxy) }
+            .onAppear { toReply(proxy) }
             .onChange(of: activity.count) { old, new in if new > old { toBottom(proxy) } }
             .onChange(of: sessions.sent[key]) { _, new in if new != nil { toBottom(proxy) } }
             .onChange(of: recording) { _, now in if now { toBottom(proxy) } }
@@ -133,21 +132,35 @@ struct SessionView: View {
         }
     }
 
+    /// The top of the newest reply at the top of the screen. `PagedScroll` leaves most of a screen of
+    /// room under the content, which is what lets the last block rise that far.
+    private func toReply(_ proxy: ScrollViewProxy, animated: Bool = false) {
+        guard detail != nil else { return }
+        if animated {
+            withAnimation(.easeOut(duration: 0.2)) { proxy.scrollTo("reply", anchor: .top) }
+        } else {
+            proxy.scrollTo("reply", anchor: .top)
+        }
+    }
+
     private func toBottom(_ proxy: ScrollViewProxy) {
         withAnimation(.easeOut(duration: 0.2)) { proxy.scrollTo("tail", anchor: .bottom) }
     }
 
     private var content: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            if let prompt = detail?.last_prompt, !prompt.isEmpty {
+        let latest = detail?.latest ?? (prompt: nil, replies: [])
+        return VStack(alignment: .leading, spacing: 10) {
+            if let prompt = latest.prompt, !prompt.isEmpty {
                 words(prompt)
             }
-            if let reply = detail?.last_reply, !reply.isEmpty {
+            // Every reply since that prompt: a watcher can report more than once without being asked
+            // again. The newest one is what the page opens on.
+            ForEach(Array(latest.replies.enumerated()), id: \.offset) { i, reply in
                 Text(inlineMarkdown(reply))
                     .foregroundColor(.white)
                     .font(.system(size: 13))
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    .id("reply")
+                    .id(i == latest.replies.count - 1 ? "reply" : "reply\(i)")
             }
             if let mine = sessions.sent[key] {
                 words(mine)

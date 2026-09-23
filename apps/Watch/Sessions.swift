@@ -27,7 +27,17 @@ struct SessionRow: Decodable, Identifiable, Equatable {
     var key: String { claude_session_id ?? id }
 }
 
-/// `/api/sessions/:id`: one session with its last prompt and the whole reply to it.
+/// One exchange of a session: what he asked, and what came back. A turn with no prompt is a reply the
+/// session produced on its own — a watcher firing, a job reporting — and those belong to the prompt
+/// above them.
+struct SessionTurn: Decodable, Equatable {
+    let at: String?
+    let prompt: String?
+    let reply: String?
+}
+
+/// `/api/sessions/:id`: one session with its last prompt, the whole reply to it, and the turns behind
+/// them.
 struct SessionDetail: Decodable, Equatable {
     let id: String
     let label: String?
@@ -38,8 +48,20 @@ struct SessionDetail: Decodable, Equatable {
     let claude_session_id: String?
     let last_prompt: String?
     let last_reply: String?
+    let turns: [SessionTurn]?
 
     var name: String { sessionName(custom_title, label, repo) ?? id }
+
+    /// What the page shows: the newest prompt, and every reply since it — a session can answer more
+    /// than once without being asked again. Everything older is context he can ask the session for.
+    var latest: (prompt: String?, replies: [String]) {
+        let turns = turns ?? []
+        guard let start = turns.lastIndex(where: { !($0.prompt ?? "").isEmpty }) else {
+            return (last_prompt, [last_reply].compactMap { $0 }.filter { !$0.isEmpty })
+        }
+        let block = turns[start...]
+        return (block.first?.prompt, block.compactMap { $0.reply }.filter { !$0.isEmpty })
+    }
 }
 
 /// The name a session goes by everywhere: the one Jared gave it, else the router's label, else its repo.

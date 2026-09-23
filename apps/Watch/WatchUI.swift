@@ -173,7 +173,9 @@ struct PagedScroll<Content: View>: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 10) {
                 content()
-                Color.clear.frame(height: 1).id("tail")
+                // Room under the content for its last block to rise to the TOP of the screen: a scroll
+                // view stops at the end of what it holds, which would strand a short reply mid-screen.
+                Color.clear.frame(height: WKInterfaceDevice.current().screenBounds.height * 0.8).id("tail")
             }
             .padding(.horizontal, 8)
             .padding(.bottom, BottomControl.height)
@@ -252,6 +254,11 @@ private struct RecordWhenAsked: ViewModifier {
     private func start() {
         guard chat.recordRequested, phase == .active, onScreen else { return }
         chat.recordRequested = false
+        guard chat.requestIsFresh else {
+            Hub.log("record-stale", ["age": Int(Date().timeIntervalSince(chat.requestedAt))])
+            return
+        }
+        Capture.trigger = "launcher"
         chat.startRecording()
     }
 }

@@ -181,9 +181,15 @@ function createLiveWind({ store, onReading = () => {}, log = () => {} }) {
     if (!newest) return null;
     const age = Math.round((Date.now() - Date.parse(newest.ts)) / 60000);
     const since = new Date(Date.parse(newest.ts) - 30 * 60000).toISOString();
+    const onFallback = best === fallback;
     return {
-      station: best === fallback ? FALLBACK_STATION : STATION,
+      station: onFallback ? FALLBACK_STATION : STATION,
       at: newest.ts, age_min: age,
+      // STALE IS AGAINST THE STATION'S OWN CADENCE, not one number. The dock reports every six
+      // minutes and KNRB once an hour, so a 40-minute-old reading is broken from one and the
+      // freshest the other will ever give. A surface flagging both the same way cries wolf through
+      // every hour of an outage, which is the half of the hour a reader stops believing it.
+      stale: age > (onFallback ? 90 : 30),
       kts: newest.kts, gust: newest.gust, dir: newest.dir,
       // Where it BLOWS, not where it comes from: the direction an arrow points. A compass point has to
       // be turned around in your head before it means anything.

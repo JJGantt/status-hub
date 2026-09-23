@@ -215,7 +215,7 @@ extension View {
     /// plain on the wrist. This is the smallest inset that clears it.
     func topOfTheScreen() -> some View {
         ignoresSafeArea(edges: .top)
-            .contentMargins(.top, 12, for: .scrollContent)
+            .contentMargins(.top, 14, for: .scrollContent)
     }
 }
 

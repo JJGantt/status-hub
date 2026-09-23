@@ -32,31 +32,45 @@ struct RecordControl: ControlWidget {
 /// app where he was going. The Record control is the odd one out — it opens home AND starts recording;
 /// these only travel. One type each, because a `ControlWidget` is built by the system and so cannot
 /// carry stored properties of its own.
-@available(watchOS 26.0, *)
-private func pageControl(_ page: WatchPage, _ title: LocalizedStringResource,
-                         _ symbol: String) -> some ControlWidgetConfiguration {
-    StaticControlConfiguration(kind: "com.jaredgantt.statushub.watch." + page.rawValue) {
-        ControlWidgetButton(action: OpenPageIntent(page)) {
-            Label(String(localized: title), systemImage: symbol)
-        }
-    }
-    .displayName(title)
-}
-
+///
+/// **Everything the system reads off a control is written here as a literal** — the `kind`, the title
+/// and the symbol. A control is described to Control Center before the extension runs, so a value the
+/// declaration computes is a value the gallery has to render without: built by concatenation, not one
+/// of these kinds appears in the extension binary at all (`strings` on it finds only the Record kind,
+/// which is spelled out). Say each one in full, however much it repeats.
 @available(watchOS 26.0, *)
 struct SessionsControl: ControlWidget {
-    var body: some ControlWidgetConfiguration { pageControl(.sessions, "Sessions", "terminal.fill") }
+    var body: some ControlWidgetConfiguration {
+        StaticControlConfiguration(kind: "com.jaredgantt.statushub.watch.sessions") {
+            ControlWidgetButton(action: OpenPageIntent(.sessions)) {
+                Label("Sessions", systemImage: "terminal.fill")
+            }
+        }
+        .displayName("Sessions")
+    }
 }
 
 @available(watchOS 26.0, *)
 struct NutritionControl: ControlWidget {
-    var body: some ControlWidgetConfiguration { pageControl(.nutrition, "Nutrition", "circle.dashed") }
+    var body: some ControlWidgetConfiguration {
+        StaticControlConfiguration(kind: "com.jaredgantt.statushub.watch.nutrition") {
+            ControlWidgetButton(action: OpenPageIntent(.nutrition)) {
+                Label("Nutrition", systemImage: "circle.dashed")
+            }
+        }
+        .displayName("Nutrition")
+    }
 }
 
 @available(watchOS 26.0, *)
 struct WorkoutControl: ControlWidget {
     var body: some ControlWidgetConfiguration {
-        pageControl(.workout, "Workout", "figure.strengthtraining.traditional")
+        StaticControlConfiguration(kind: "com.jaredgantt.statushub.watch.workout") {
+            ControlWidgetButton(action: OpenPageIntent(.workout)) {
+                Label("Workout", systemImage: "figure.strengthtraining.traditional")
+            }
+        }
+        .displayName("Workout")
     }
 }
 

@@ -725,9 +725,18 @@ async function surfLive() {
   const nowLocal = etNowString();
   const sizeColor = snapshotSizeColors((snap && snap.rows) || []);
   const dayRows = new Map();
+  // AIR TEMPERATURE over the WHOLE local day, not just the drawn hours: the day's low is a pre-dawn
+  // number and taking it from 6am onward would report the morning's low as the day's.
+  const air = new Map();
   for (const r of (snap && snap.rows) || []) {
     const local = etStringAt(new Date(r.ts * 1000));
     const h = +local.slice(11, 13);
+    if (r.aT != null) {
+      const d = local.slice(0, 10);
+      const cur = air.get(d);
+      if (!cur) air.set(d, { lo: r.aT, hi: r.aT });
+      else { cur.lo = Math.min(cur.lo, r.aT); cur.hi = Math.max(cur.hi, r.aT); }
+    }
     // TWELVE HOURS, 6am through 5pm, and twelve is not negotiable: the watch lays them round its edge
     // as a CLOCK FACE — 6 at the bottom, 9 at the left, 12 at the top, 3 at the right — so an hour has
     // to be a twelfth of the ring or the positions stop meaning the time. Each one owns the block from
@@ -786,8 +795,10 @@ async function surfLive() {
   const days = [...dayRows.keys()].filter((d) => d >= today).sort()
     .map((date) => {
       const f = date === today && water.now_f != null ? water.now_f : noonWater(date);
+      const a = air.get(date);
       return { date, today: date === today, hours: dayRows.get(date).map(hourOf),
-               water_f: f, water_color: waterColor(f) };
+               water_f: f, water_color: waterColor(f),
+               air_hi: a ? Math.round(a.hi) : null, air_lo: a ? Math.round(a.lo) : null };
     });
   // WHERE NOW IS, from the BREAK's clock and not the watch's: the watch can be in another timezone
   // and its `Calendar.current` is the phone's, so a spoke placed there lands on the wrong hour the

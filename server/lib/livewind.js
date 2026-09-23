@@ -217,7 +217,24 @@ function createLiveWind({ store, onReading = () => {}, log = () => {} }) {
                      type: f.wType || windType(f.wDir), compass: compass(f.wDir), rating: f.rk || null };
       }
     }
-    return { ...c, forecast, delta_kts: forecast && c.avg30 ? r1(c.avg30.kts - forecast.kts) : null };
+    if (forecast) forecast.dir_to = forecast.dir == null ? null : (forecast.dir + 180) % 360;
+    // DIVERGENCE: the measured wind disagreeing with what the forecast said for this hour, by enough
+    // to mean something. Judged on the HALF-HOUR AVERAGE, not the newest reading — a single six-minute
+    // reading is a gust as often as a trend, and a divergence that has not held is not one.
+    //
+    // Three ways to qualify, and each is above this spot's own noise: the forecast's wind speed is off
+    // by a mean 1.5 kt here, so 4 is a real gap; direction moves a median 11 degrees an hour, so 40 is
+    // a real swing; and a SECTOR disagreement counts at any size, because offshore against onshore is
+    // the difference between a surfable morning and a blown-out one however few knots it is.
+    const m = c.avg30 || c;
+    const gap = forecast && forecast.dir != null && m.dir != null
+      ? (() => { const d = Math.abs(m.dir - forecast.dir) % 360; return d > 180 ? 360 - d : d; })() : null;
+    const delta = forecast && m.kts != null ? r1(m.kts - forecast.kts) : null;
+    const diverged = !!(forecast && (
+      (delta != null && Math.abs(delta) >= 4)
+      || (gap != null && gap >= 40)
+      || (forecast.type && m.type && forecast.type !== m.type)));
+    return { ...c, forecast, delta_kts: delta, delta_dir: gap, diverged };
   }
 
   /// Readings already stored, handed in at boot. A deploy empties this module's memory, and the

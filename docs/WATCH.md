@@ -311,47 +311,30 @@ recording is sent or cancelled (`resumeSoon`, scheduled rather than immediate so
 microphone back before the command has started). So `Capture.free` is what a page asks before
 recording, not `owner == nil`.
 
-## Double tap and scrolling
+## Double tap, and scrolling
 
-Both conversation pages (the prompt and a session) scroll through one component, `PagedScroll`
-(`Watch/WatchUI.swift`), so paging, the bottom and the double-tap handover cannot differ between them.
-It owns the scroll state and hands its page only `atBottom`, which flips a few times a scroll: a page
-holding the per-frame state itself rebuilds its whole thread every frame of a page, and stutters.
-
-**Each page has one control at its bottom edge (`BottomControl`), and it holds double tap**
-(`handGestureShortcut`, live only while its page is the one showing — two live bindings leave the
-system to pick). It pages down while more is below (a chevron; text fades out of a 28pt strip under
-it, and a page moves the last line showing above the strip to the top edge of the screen), records at
-the bottom (a mic in the same spot), and sends while recording (a stop). It never hides. The control
-sits 9pt up, clear of the page dots, which change page when tapped. A finger tap anywhere on the text
-still records.
+**Double tap always starts a prompt.** Every page has one control at its bottom edge
+(`BottomControl`) and it holds the gesture (`handGestureShortcut`, live only while its page is the one
+showing — two live bindings leave the system to pick). It is a mic that records and a stop that sends,
+and on home it is also the state glyph. It never hides.
 
 **It gives the gesture up in exactly one state**: a command recording that the silence would end and
 that is not locked, when the recording bar's lock holds it. `Capture.lockHoldsDoubleTap` is read by
-both bindings, so they cannot both be live. That is the only handover, because handing the gesture on
-BY POSITION fails: with the chevron vanishing at the bottom and the page-sized record button taking
-double tap, a double tap there pressed the whole page, a tap where the chevron had been hit empty
-space, and the view crept back up under his finger (his watch, through build 23). The lock is a small
-button of its own, handed the gesture by recording state, not by where the view stands.
+both bindings, so they cannot both be live. That walks the three states of a command — start, lock,
+send — and it is the only handover.
 
-The paging math rests on things measured in the watchOS 26.5 simulator, all easy to get wrong:
+**Scrolling is a finger or the crown, never the gesture.** The control used to page the view down
+while anything was below, and hand the gesture to recording only at the bottom; that is gone, along
+with the scroll-geometry machinery it needed. What it cost is worth knowing, because it is why nothing
+here should measure a scroll view again: the same scroll view reports its geometry in two frames
+depending on how it was last moved, so the maths was right in one and wrong in the other, and on his
+watch the geometry went on reporting content below after the view had stopped at its end — so every
+double tap asked for a scroll that could not happen and recording never got the gesture at all.
 
-- **The same scroll view reports its geometry in two frames** depending on how it was last moved.
-  After a jump to a view (`ScrollViewReader`, which every open and pin uses) `visibleRect` is the safe
-  area alone with zero `contentInsets`; after `ScrollPosition.scrollTo(y:)` it is the whole screen
-  with the strips as insets. Math on `contentOffset` and the insets is right in one frame and wrong in
-  the other: a short first page, the chevron drawn mid-screen, and a last page aimed where the view
-  cannot go. `ScrollState` therefore keeps only the safe area's edges (`visibleRect` less the insets,
-  the same in both frames), and the strips' height comes from the screen
-  (`WKInterfaceDevice.screenBounds`). `scrollTo(y:)` puts y at the safe area's top, so a page's
-  target is the new top edge plus the strip under the clock. The control is a full-height column that
-  ignores the bottom safe area, which lands it on the physical edge in either frame.
-- **Being at the bottom is not read from the scroll geometry at all.** On his watch (not reproducible
-  in the 46mm simulator) the geometry kept reporting content below after the view had stopped at its
-  end, so each double tap asked for a scroll that could not happen. A 1pt view after the last content
-  (`scrollEnd`) reports where it really is on screen, and the page is at the bottom when that is
-  within a line of the screen's bottom edge — true by construction whenever the view has stopped at
-  its end.
+Both conversation pages scroll through one component, `PagedScroll` (`Watch/WatchUI.swift`), so the
+control and the handover cannot differ between them. A tap on the text records as well, and the prompt
+page still jumps to the top of the newest reply and holds that spot until he scrolls or a new one
+lands.
 
 ## The token comes from the phone
 
@@ -382,7 +365,6 @@ wrist. Fly keeps only the recent lines, so read it soon.
 | event | what it says |
 |---|---|
 | `thread`, `detail` | what a page loaded |
-| `page`, `paged`, `bottom` | the scroll state around each double tap |
 | `control` | a press of the bottom control, with its mode |
 | `record` | a finger tap on the text |
 | `record-refused`, `mic-refused`, `mic-failed`, `mic-open` | why a recording did or did not start |

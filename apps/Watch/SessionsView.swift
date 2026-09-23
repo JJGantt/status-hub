@@ -90,14 +90,13 @@ struct SessionsView: View {
 }
 
 /// One conversation: the last prompt and the reply to it, the tool calls of the turn it is running,
-/// and a reply of his own. The bottom control (and double tap, bound to it alone: a follow-up has no lock) pages down while more
-/// is below and records at the bottom; a tap anywhere on the text also records. The next press sends;
-/// a parked session is resumed with the words.
+/// and a reply of his own. Double tap records a follow-up (bound to the bottom control alone: a
+/// follow-up has no lock), as does a tap anywhere on the text; the next press sends, and a parked
+/// session is resumed with the words. Scrolling is his finger or the crown.
 struct SessionView: View {
     let key: String
     @EnvironmentObject private var sessions: Sessions
     @ObservedObject private var capture = Capture.shared
-    @State private var atBottom = false
 
     private var detail: SessionDetail? { sessions.details[key] }
     private var activity: [ActivityLine] { sessions.activity[key] ?? [] }
@@ -106,9 +105,9 @@ struct SessionView: View {
     var body: some View {
         ScrollViewReader { proxy in
             PagedScroll(name: "session", recording: recording, canRecord: !sessions.busy.contains(key),
-                        atBottom: $atBottom, record: { sessions.toggleRecording(key) }) {
+                        record: { sessions.toggleRecording(key) }) {
                 Button {
-                    Hub.log("record", ["view": "session", "atBottom": atBottom, "recording": recording])
+                    Hub.log("record", ["view": "session", "recording": recording])
                     sessions.toggleRecording(key)
                 } label: { content }
                     .buttonStyle(.plain)

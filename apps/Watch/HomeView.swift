@@ -25,7 +25,7 @@ struct HomeView: View {
             controls
         }
         .padding(.horizontal, 8)
-        .padding(.bottom, BottomControl.fade)   // clear of the bottom control
+        .padding(.bottom, BottomControl.height)   // clear of the bottom control
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         // The one indicator is the control at the bottom edge: what the microphone and the command are
         // doing is drawn in the spot that acts on them.

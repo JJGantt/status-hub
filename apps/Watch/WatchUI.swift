@@ -83,91 +83,18 @@ struct ActivityLines: View {
     }
 }
 
-/// Where a scroll view stands: enough to page it by the double-tap gesture, and to know it has reached
-/// the end — which is when double tap goes back to recording. Kept in terms of the SAFE AREA, the one
-/// frame the scroll geometry reports consistently. Measured in the watchOS 26.5 simulator, the same
-/// scroll view reports two frames depending on how it was last moved: after a jump to a view
-/// (ScrollViewReader) `visibleRect` is the safe area alone with zero `contentInsets`; after
-/// `scrollTo(y:)` it is the whole screen with the strips as insets. Math on `contentOffset` and the
-/// insets directly was right in one frame and wrong in the other — short pages, a chevron mid-screen,
-/// and an end the view could never reach.
-struct ScrollState: Equatable {
-    /// The safe area's top and bottom edges, in the content's coordinates.
-    var safeTop: CGFloat = 0
-    var safeBottom: CGFloat = 0
-    /// The content's height, so a view holding a position can re-aim as content lays out or grows.
-    var content: CGFloat = 0
-    /// Where the end of the content actually is on the screen: the bottom of a marker placed after the
-    /// last view (`scrollEnd`), in screen points from the top. Unknown until that marker lays out.
-    var endY: CGFloat = .infinity
-
-    /// How far below the safe area the content runs, by the scroll geometry. Paging aims with it.
-    var below: CGFloat { content - safeBottom }
-    /// The end of the content is on screen, or within a line of the bottom edge. Read from where the
-    /// last view really is, NOT from the scroll geometry: on his watch the geometry said content was
-    /// left below after the view had stopped at its end, so every double tap asked for a scroll that
-    /// could not happen and recording was never handed the gesture. A view that has stopped at its end
-    /// always has its end on screen, whatever the geometry reports.
-    var atBottom: Bool { endY <= WKInterfaceDevice.current().screenBounds.height + 12 }
-
-    /// For a log line (`Hub.log`): enough to see from the hub what the page's scroll looked like.
-    func fields(_ view: String) -> [String: Any] {
-        ["view": view, "safeTop": Int(safeTop), "safeBottom": Int(safeBottom), "content": Int(content),
-         "endY": endY.isFinite ? Int(endY) : -1, "atBottom": atBottom,
-         "screen": Int(WKInterfaceDevice.current().screenBounds.height)]
-    }
-}
-
-extension View {
-    /// Keeps `state` current as the scroll view this modifies moves or its content changes.
-    func trackScroll(_ state: Binding<ScrollState>) -> some View {
-        onScrollGeometryChange(for: ScrollState.self) { g in
-            ScrollState(safeTop: g.visibleRect.minY + g.contentInsets.top,
-                        safeBottom: g.visibleRect.maxY - g.contentInsets.bottom,
-                        content: g.contentSize.height)
-        } action: { _, new in
-            var s = new
-            s.endY = state.wrappedValue.endY   // owned by the end marker
-            state.wrappedValue = s
-        }
-    }
-
-    /// Marks the end of a scroll view's content. Goes on the last view inside it.
-    func scrollEnd(_ state: Binding<ScrollState>) -> some View {
-        onGeometryChange(for: CGFloat.self) { $0.frame(in: .global).maxY } action: { state.wrappedValue.endY = $0 }
-    }
-}
-
-extension ScrollPosition {
-    /// One screen further down: the last line showing above the page-down marker becomes the top line
-    /// at the screen's edge. `scrollTo(y:)` puts y at the safe area's top, so the target is that new top
-    /// edge plus the strip under the clock. The strips come from the screen, not the scroll geometry,
-    /// which reports them only in one of its frames.
-    mutating func pageDown(from s: ScrollState) {
-        let lastLine: CGFloat = 18   // about one line of reply text, kept on screen as the new top line
-        let safe = s.safeBottom - s.safeTop
-        let strips = WKInterfaceDevice.current().screenBounds.height - safe   // under the clock + bottom edge
-        let top = s.safeBottom + strips - BottomControl.fade - lastLine
-        scrollTo(y: min(max(top, s.safeTop), s.content - safe))
-    }
-}
-
-/// The control a conversation page puts under double tap, at the bottom edge. What it does depends on
-/// where the page stands: pages down while more is below (a chevron, the text fading out under it),
-/// records at the bottom (a mic), and sends while recording (a stop). It never disappears. It gives the
-/// gesture up in one case only — to the recording bar's lock while a command records unlocked
-/// (`holdsDoubleTap`) — and exactly one binding is live at any moment. Two buttons trading the gesture
-/// by position at the bottom — a chevron, then the page-sized record button — was how a double tap there
-/// pressed the whole page, how a tap where the chevron had been landed in empty space, and how the view
-/// crept back up under it.
+/// The control every page puts under double tap, at the bottom edge: a mic that records, a stop that
+/// sends, and on home the state of the microphone drawn in the same spot. **Double tap always starts a
+/// prompt** — scrolling is a finger or the crown, never the gesture. It never disappears, and it gives
+/// the gesture up in one case only: to the recording bar's lock while a command records unlocked
+/// (`holdsDoubleTap`), so exactly one binding is live at any moment.
 struct BottomControl: View {
     /// `glyph` is home's: the state of the microphone and the command drawn in this same spot, since
     /// that page has one indicator and it is here.
-    enum Mode: Equatable { case more, record, stop, glyph(String, Color), working }
+    enum Mode: Equatable { case record, stop, glyph(String, Color), working }
 
-    /// The strip along the screen's bottom edge that text fades out of while the chevron shows. Text
-    /// scrolls to the very edge, so without it the chevron always sits on some line.
-    static let fade: CGFloat = 28
+    /// How much room the control needs at the foot of a page, so text does not run under it.
+    static let height: CGFloat = 34
 
     let mode: Mode
     let enabled: Bool
@@ -189,18 +116,13 @@ struct BottomControl: View {
         VStack(spacing: 0) {
             Spacer(minLength: 0)
             ZStack(alignment: .bottom) {
-                if mode == .more {
-                    LinearGradient(colors: [Color.black.opacity(0), .black, .black], startPoint: .top, endPoint: .bottom)
-                        .frame(height: Self.fade)
-                        .allowsHitTesting(false)
-                }
                 Button(action: { if held { held = false } else { action() } }) {
                     Group {
                         if mode == .working {
                             ProgressView().controlSize(big ? .small : .mini)
                         } else {
                             Image(systemName: symbol)
-                                .font(.system(size: big ? 20 : mode == .more ? 16 : 13, weight: .semibold))
+                                .font(.system(size: big ? 20 : 15, weight: .semibold))
                                 .foregroundColor(colour)
                         }
                     }
@@ -228,7 +150,6 @@ struct BottomControl: View {
 
     private var symbol: String {
         switch mode {
-        case .more: "chevron.compact.down"
         case .record: "mic.fill"
         case .stop: "stop.fill"
         case .glyph(let name, _): name
@@ -251,87 +172,39 @@ extension EnvironmentValues {
     @Entry var onScreen: Bool = true
 }
 
-/// The scrolling both conversation pages share, so paging, finding the bottom and the bottom control
-/// are one piece of code on the prompt page and a session alike. It owns where the view stands; a page
-/// reads only `atBottom`, which flips a few times a scroll rather than every frame, so the page's own
-/// views are not rebuilt while it moves. The prompt page rebuilt its whole thread, forty rows of
-/// markdown, on every frame of a page, and stuttered.
+/// The scrolling both conversation pages share, so the bottom control and the double-tap handover
+/// cannot differ between them. Scrolling is his finger or the crown; the gesture is the prompt's.
 struct PagedScroll<Content: View>: View {
     /// What a log line calls this page: "chat" or "session".
     let name: String
     let recording: Bool
     /// Whether a recording may start now — not while the page is waiting on a command or a send.
     var canRecord = true
-    @Binding var atBottom: Bool
-    /// Runs before the control pages: the prompt page lets go of the reply it was holding.
-    var willPage: () -> Void = {}
     /// The recording bar's lock holds double tap for now (`Capture.lockHoldsDoubleTap`).
     var lockHoldsDoubleTap = false
-    /// Starts a recording at the bottom, or sends the one under way.
+    /// Starts a recording, or sends the one under way.
     let record: () -> Void
     @ViewBuilder let content: () -> Content
-
-    @State private var scroll = ScrollState()
-    @State private var position = ScrollPosition(idType: String.self)
-    @State private var paging = false
 
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 10) {
                 content()
-                Color.clear.frame(height: 1).id("tail").scrollEnd($scroll)
+                Color.clear.frame(height: 1).id("tail")
             }
             .padding(.horizontal, 8)
-            .padding(.bottom, 8)
+            .padding(.bottom, BottomControl.height)
         }
         .scrollIndicators(.never)
-        .scrollPosition($position)
-        .trackScroll($scroll)
-        .onChange(of: scroll.atBottom, initial: true) { _, now in atBottom = now }
-        .onScrollPhaseChange { _, now in
-            guard paging, now == .idle else { return }
-            paging = false
-            Hub.log("paged", scroll.fields(name))
-        }
         .overlay {
-            BottomControl(mode: mode, enabled: mode != .record || canRecord, holdsDoubleTap: !lockHoldsDoubleTap,
-                          action: press)
+            BottomControl(mode: recording ? .stop : .record, enabled: recording || canRecord,
+                          holdsDoubleTap: !lockHoldsDoubleTap, action: press)
         }
         .background(Color.black.ignoresSafeArea())
-        #if targetEnvironment(simulator)
-        .task { await autoPage() }
-        #endif
     }
-
-    private var mode: BottomControl.Mode { recording ? .stop : scroll.atBottom ? .record : .more }
 
     private func press() {
-        guard mode != .more else { return page() }
-        var f = scroll.fields(name)
-        f["mode"] = mode == .stop ? "stop" : "record"
-        Hub.log("control", f)
+        Hub.log("control", ["view": name, "mode": recording ? "stop" : "record"])
         record()
     }
-
-    private func page() {
-        willPage()
-        Hub.log("page", scroll.fields(name))
-        paging = true
-        withAnimation(.easeOut(duration: 0.25)) { position.pageDown(from: scroll) }
-    }
-
-    #if targetEnvironment(simulator)
-    /// `-autopage chat` (or `session`) at launch pages every two seconds until the bottom, standing in
-    /// for the double tap a simulator cannot make, so the real pages can be watched scrolling there.
-    private func autoPage() async {
-        let args = ProcessInfo.processInfo.arguments
-        guard let i = args.firstIndex(of: "-autopage"), i + 1 < args.count, args[i + 1] == name else { return }
-        try? await Task.sleep(nanoseconds: 4_000_000_000)
-        for _ in 0..<10 {
-            if scroll.atBottom { Hub.log("bottom", scroll.fields(name)); return }
-            page()
-            try? await Task.sleep(nanoseconds: 2_000_000_000)
-        }
-    }
-    #endif
 }

@@ -2,15 +2,15 @@ import SwiftUI
 import WatchKit
 
 /// The prompt page, one right of home: the whole shared hub conversation on black. A reply opens at its
-/// top. The bottom control (and double tap) pages down while more is below and records at the bottom;
-/// a tap anywhere on the thread also records (`PagedScroll`, shared with a session's page). The silence after he speaks sends
-/// the recording. During it double tap moves to the recording bar's lock, so the next double tap locks
-/// it open and the one after sends; a tap on the text or the stop sends at any point.
+/// top, and scrolling is his finger or the crown. Double tap starts a recording, wherever the view
+/// stands, as does a tap anywhere on the thread (`PagedScroll`, shared with a session's page). The
+/// silence after he speaks sends it. During it double tap moves to the recording bar's lock, so the
+/// next double tap locks it open and the one after sends; a tap on the text or the stop sends at any
+/// point.
 struct ChatView: View {
     @EnvironmentObject private var chat: Chat
     @ObservedObject private var capture = Capture.shared
     @Environment(\.scenePhase) private var phase
-    @State private var atBottom = false
     /// Whether the view is held at `scrollTarget`, the top of the newest reply. Set when the app opens or
     /// comes back to the front and when a reply arrives, and kept until he scrolls or pages himself: a
     /// thread still laying out (two hundred rows on a cold launch) or still growing moves the spot, so a
@@ -21,14 +21,13 @@ struct ChatView: View {
 
     var body: some View {
         ScrollViewReader { proxy in
-            PagedScroll(name: "chat", recording: recording, canRecord: !chat.waiting, atBottom: $atBottom,
-                        willPage: { pinned = false }, lockHoldsDoubleTap: recording && capture.lockHoldsDoubleTap,
+            PagedScroll(name: "chat", recording: recording, canRecord: !chat.waiting,
+                        lockHoldsDoubleTap: recording && capture.lockHoldsDoubleTap,
                         record: chat.toggleRecording) {
                 recordButton { thread }
                 CommandStatus().id(recording ? "recording" : "status")
             }
-            // Jumps to a view go through the reader, which finds any view with an id; paging moves by a
-            // distance instead (PagedScroll).
+            // Jumps to a view go through the reader, which finds any view with an id.
             .onChange(of: scrollTarget) { _, _ in
                 pinned = true
                 jump(proxy, animated: true)
@@ -92,7 +91,7 @@ struct ChatView: View {
     /// bound here — it belongs to the bottom control alone (BottomControl says why).
     private func recordButton<Label: View>(@ViewBuilder label: () -> Label) -> some View {
         Button(action: {
-            Hub.log("record", ["view": "chat", "atBottom": atBottom, "recording": recording])
+            Hub.log("record", ["view": "chat", "recording": recording])
             chat.toggleRecording()
         }, label: label)
             .buttonStyle(.plain)

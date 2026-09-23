@@ -44,7 +44,6 @@ struct SessionsView: View {
         .scrollIndicators(.never)
         .topOfTheScreen()
         .background(Color.black.ignoresSafeArea())
-        .overlay { CommandBar(view: "sessions") }
     }
 
     private static let build = Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "?"
@@ -138,10 +137,7 @@ struct SessionView: View {
 
     var body: some View {
         ScrollViewReader { proxy in
-            PagedScroll(name: "session", readingWPM: sessions.readingWPM,
-                        recording: recording, canRecord: !sessions.busy.contains(key),
-                        cancel: recording ? { sessions.cancelRecording(key) } : nil,
-                        record: { sessions.toggleRecording(key) }) {
+            PagedScroll(name: "session", readingWPM: sessions.readingWPM, recording: recording) {
                 Button {
                     Hub.log("record", ["view": "session", "recording": recording])
                     sessions.toggleRecording(key)

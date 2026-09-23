@@ -45,21 +45,20 @@ struct HomeView: View {
                     Color.clear.frame(height: WKInterfaceDevice.current().screenBounds.height * 0.8).id("tail")
                 }
                 .padding(.horizontal, 8)
-                .padding(.bottom, BottomControl.height)
+                .padding(.bottom, CommandBar.height)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .opacity(dimmed ? 0.6 : 1)
-                // The whole page records under a finger, as the thread always has: a tap starts a
-                // command, the next locks it, the next sends it.
+                // The whole page records under a finger, as the thread always has. The lock is its
+                // own mark on the bar now, so a tap is only ever start or send.
                 .contentShape(Rectangle())
                 .onTapGesture {
                     Capture.trigger = "tap"
-                    chat.press()
+                    if recording { chat.stopRecording() } else { chat.startRecording() }
                 }
             }
             .scrollIndicators(.never)
             .topOfTheScreen()
             .background(Color.black.ignoresSafeArea())
-            .overlay { CommandBar(view: "home") }
             .onChange(of: target) { _, _ in
                 pinned = true
                 jump(proxy, animated: true)

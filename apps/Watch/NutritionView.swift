@@ -48,7 +48,6 @@ struct NutritionView: View {
         .topOfTheScreen()
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(Color.black.ignoresSafeArea())
-        .overlay { CommandBar(view: "nutrition") }
     }
 }
 

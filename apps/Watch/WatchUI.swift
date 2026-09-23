@@ -47,160 +47,113 @@ struct ActivityLines: View {
     }
 }
 
-/// The one control every page puts at its bottom edge, and the only thing bound to double tap.
-/// **A command walks the whole way through it**: press to record, press again to lock it open through
-/// silence, press again to send. It is the state as much as the button — a mic idle, an open lock
-/// recording, a closed lock locked, a spinner while the hub has it — and it never hides. Scrolling is
-/// a finger or the crown, never the gesture.
-struct BottomControl: View {
-    /// `glyph` is home's: the state of the microphone and the command drawn in this same spot, since
-    /// that page has one indicator and it is here.
-    enum Mode: Equatable { case record, stop, glyph(String, Color), working(running: Bool) }
+/// **The one control in the app, and it does not move.** It is a single overlay over the whole row
+/// of pages rather than one per page, so a swipe slides the PAGES underneath it while the three marks
+/// stay exactly where the thumb left them. Same bar, same three places, on every page and inside an
+/// open session; the only thing a page changes is where a command GOES, which is the session on top
+/// of the stack when one is open and the hub when none is.
+///
+/// Three slots, each read by its position:
+/// - **left** throws away what is under way, and is nothing at all when there is nothing to throw away.
+/// - **middle** is the recording's lock while one runs — open and orange as it starts, closed and red
+///   once pressed — and the always-on listener's switch when none is running.
+/// - **right** is the command itself: a microphone at rest, a red square while recording, and ONE
+///   spinner whenever the hub is working. The transcript and the command are the same wait to him, so
+///   they are the same mark rather than two spinners that differ in a way only the code knows about.
+struct CommandBar: View {
+    @EnvironmentObject private var chat: Chat
+    @EnvironmentObject private var sessions: Sessions
+    @ObservedObject private var capture = Capture.shared
 
-    /// How much room the control needs at the foot of a page, so text does not run under it.
-    static let height: CGFloat = 34
+    /// The room a page leaves under its content. It is the slot (34) plus the bar's own bottom
+    /// padding (9) and a hair, so the bottom row of every page is EMPTY and belongs to the bar — a
+    /// page that reserves only the slot has its last line of text under the marks.
+    static let height: CGFloat = 46
+    /// The side of every slot's box. Each mark centres in one of these, so a mark that changes size —
+    /// a microphone to a square to a spinner — never shifts the spot the eye is already holding.
+    private static let slot: CGFloat = 34
 
-    let mode: Mode
-    let enabled: Bool
-    let action: () -> Void
-    /// Held rather than pressed. Home engages always-on listening this way, since the press records.
-    var onHold: (() -> Void)?
-    /// Throws away what is under way — the recording, or the command the hub still has. Drawn as an x
-    /// in the corner OF THIS ROW, so cancel is beside the control on every page rather than a word
-    /// across one of them.
-    var cancel: (() -> Void)?
-    /// Home's control is the page's only one and its state indicator, so it takes a target worth
-    /// hitting; a conversation page's sits under text and stays small.
-    var big = false
-    @Environment(\.onScreen) private var onScreen
-    /// A hold has just fired, so the press that ends it is not also acted on.
-    @State private var held = false
+    /// Where a command goes. A session pushed on the stack owns the command while it is open.
+    private var target: String? { sessions.path.last }
+    private var mine: Capture.Owner { target.map(Capture.Owner.session) ?? .hub }
+    private var recording: Bool { capture.owner == mine }
+    /// The hub has it and is working: a clip being transcribed and a command being run are one wait.
+    private var working: Bool { target.map { sessions.busy.contains($0) } ?? chat.waiting }
 
     var body: some View {
-        // A full-height column reaching past the safe area puts the row on the screen's physical bottom
-        // edge. Its empty top takes no touches, so taps reach the page. **The two buttons are an HStack,
-        // not layers**: as overlapping full-width layers the one drawn on top swallowed the other's
-        // taps, and cancel — the one with no second way to press it — was the one that stopped working.
+        // A full-height column reaching past the safe area puts the row on the screen's physical
+        // bottom edge. Its empty top takes no touches, so taps still reach the page underneath.
         VStack(spacing: 0) {
             Spacer(minLength: 0)
             HStack(spacing: 0) {
-                if let cancel {
-                    Button(action: cancel) {
-                        Image(systemName: "xmark")
-                            .font(.system(size: big ? 18 : 14, weight: .semibold))
-                            .foregroundColor(.red)
-                            .frame(width: big ? 54 : 40, height: big ? 34 : 18, alignment: .leading)
-                            .contentShape(Rectangle())
-                    }
-                    .buttonStyle(.plain)
-                }
+                slot { if let cancel { mark("xmark", .red, action: cancel) } }
                 Spacer(minLength: 0)
-                Button(action: { if held { held = false } else { action() } }) {
-                    Group {
-                        if case .working(let running) = mode {
-                            ProgressView()
-                                .controlSize(running ? .large : big ? .small : .mini)
-                                .tint(running ? .white : .gray)
-                        } else {
-                            Image(systemName: symbol)
-                                .font(.system(size: big ? 20 : 15, weight: .semibold))
-                                .foregroundColor(colour)
-                        }
-                    }
-                    .opacity(enabled ? 1 : 0.4)
-                    // **The mark is centred in a box of its own, and that box is what sits in the
-                    // corner.** Every state draws a different symbol — a microphone, two padlocks, a
-                    // spinner — and each has its own width, so aligning the SYMBOL to the corner moves
-                    // the mark each time the state changes: the eye reads that as the control sliding.
-                    // A fixed box centred on one point holds it still whatever is in it.
-                    .frame(width: big ? 34 : 18, height: big ? 34 : 18)
-                    // A wide target around that box: the thumb gets a big button and the eye gets a
-                    // mark in the corner rather than one floating mid-screen.
-                    .frame(width: big ? 96 : 44, height: big ? 34 : 18, alignment: big ? .trailing : .center)
-                    .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                // A Button's own gesture swallows `onLongPressGesture` on watchOS, so the hold runs
-                // beside it and cancels the press it ends.
-                .simultaneousGesture(LongPressGesture(minimumDuration: 0.5).onEnded { _ in
-                    held = true
-                    onHold?()
-                })
-                // Live only while the page is the one showing: every page stays alive in the TabView,
-                // and two live bindings leave the system to pick.
-                .handGestureShortcut(.primaryAction, isEnabled: onScreen && enabled)
-                .disabled(!enabled)
+                slot { middle }
+                Spacer(minLength: 0)
+                slot { primary }
             }
-            .padding(.horizontal, 6)
+            // 12pt: the bottom corners are curved, and a mark in the outer slot loses its edge to the
+            // arc at less than this.
+            .padding(.horizontal, 12)
             .padding(.bottom, 9)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .ignoresSafeArea(edges: .bottom)
     }
 
-    private var symbol: String {
-        switch mode {
-        case .record: "mic.fill"
-        case .stop: "stop.fill"
-        case .glyph(let name, _): name
-        case .working: ""
+    private func slot<V: View>(@ViewBuilder _ content: () -> V) -> some View {
+        content().frame(width: Self.slot, height: Self.slot)
+    }
+
+    /// The command. A press starts the recording, and the next press sends it — the lock is its own
+    /// mark now, so this one never has to mean three things at once.
+    @ViewBuilder private var primary: some View {
+        if working {
+            ProgressView().controlSize(.large).tint(.white)
+        } else {
+            mark(recording ? "square.fill" : "mic.fill", recording ? .red : .white) {
+                Hub.log("control", ["target": target ?? "hub", "recording": recording])
+                Capture.trigger = "press"
+                if let target { sessions.toggleRecording(target) }
+                else if recording { chat.stopRecording() } else { chat.startRecording() }
+            }
+            .handGestureShortcut(.primaryAction)
         }
     }
 
-    private var colour: Color {
-        switch mode {
-        case .stop: .red
-        case .glyph(_, let colour): colour
-        default: .gray
-        }
-    }
-}
-
-/// **The command, on every page.** A hub command can be started from wherever he is — the rings, the
-/// workout, the sessions list — so the control that carries one is a thing any page lays over itself
-/// rather than a feature of the conversation page. It IS the state: a mic idle, an open lock recording,
-/// a closed lock locked, a spinner while the hub has it, a waveform while always-on listening is on.
-/// A press walks it on, a hold turns listening on or off, and the x beside it throws away whatever is
-/// under way.
-struct CommandBar: View {
-    @EnvironmentObject private var chat: Chat
-    @ObservedObject private var capture = Capture.shared
-    /// What a log line calls the page it is on.
-    let view: String
-
-    /// How much room a page leaves under its content for this.
-    static let height = BottomControl.height
-
-    private var recording: Bool { capture.owner == .hub }
-
-    var body: some View {
-        BottomControl(mode: mode, enabled: recording || !chat.waiting, action: press,
-                      onHold: { if !recording { chat.toggleListening() } },
-                      cancel: cancel, big: true)
-    }
-
-    /// The colour is the stake: amber while the silence could still end it, red once it is locked open
-    /// and only a press will send it.
-    private var mode: BottomControl.Mode {
+    /// The lock while a recording runs, the always-on listener's switch when none does.
+    @ViewBuilder private var middle: some View {
         if recording {
-            return capture.locked ? .glyph("lock.fill", .red) : .glyph("lock.open", Color(hex: "#d6c042"))
+            mark(capture.locked ? "lock.fill" : "lock.open", capture.locked ? .red : .orange) {
+                capture.toggleLock()
+            }
+        } else {
+            mark("waveform", capture.listens ? .orange : Color(hex: "#5c6675")) {
+                chat.toggleListening()
+            }
         }
-        if chat.waiting { return .working(running: chat.pending != nil) }
-        return .glyph(capture.listens ? "waveform" : "mic.fill", capture.listens ? .orange : .gray)
     }
 
     private var cancel: (() -> Void)? {
-        if recording { return chat.cancelRecording }
-        if chat.waiting { return chat.cancel }
+        if recording {
+            return { if let target { sessions.cancelRecording(target) } else { chat.cancelRecording() } }
+        }
+        if working && target == nil { return chat.cancel }
         return nil
     }
 
-    private func press() {
-        Hub.log("control", ["view": view, "recording": recording, "locked": capture.locked])
-        Capture.trigger = "press"
-        chat.press()
+    private func mark(_ symbol: String, _ colour: Color, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: symbol)
+                .font(.system(size: 20, weight: .semibold))
+                .foregroundColor(colour)
+                .frame(width: Self.slot, height: Self.slot)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
     }
 }
+
 
 extension View {
     /// **The strip the clock sat in belongs to the page.** watchOS keeps a safe area at the top for the
@@ -240,15 +193,6 @@ struct PagedScroll<Content: View>: View {
     /// Reading speed for the creep down a long reply, in words a minute; 0 leaves the page still.
     var readingWPM: Double = 0
     let recording: Bool
-    /// Whether a recording may start now — not while the page is waiting on a command or a send.
-    var canRecord = true
-    /// Whether this page's recording is one the silence ends, so the lock is a step in it.
-    var locks = false
-    var locked = false
-    /// Throws away what is under way; nil when there is nothing to throw away.
-    var cancel: (() -> Void)?
-    /// Walks the recording on: starts it, locks it, sends it.
-    let record: () -> Void
     @ViewBuilder let content: () -> Content
 
     @State private var position = ScrollPosition(idType: String.self)
@@ -269,7 +213,7 @@ struct PagedScroll<Content: View>: View {
                 Color.clear.frame(height: WKInterfaceDevice.current().screenBounds.height * 0.8).id("tail")
             }
             .padding(.horizontal, 8)
-            .padding(.bottom, BottomControl.height)
+            .padding(.bottom, CommandBar.height)
         }
         .scrollIndicators(.never)
         .scrollPosition($position)
@@ -291,9 +235,6 @@ struct PagedScroll<Content: View>: View {
         .onChange(of: phase) { _, _ in creep() }
         .onChange(of: contentHeight) { _, _ in creep() }
         .task { creep() }
-        .overlay {
-            BottomControl(mode: mode, enabled: recording || canRecord, action: press, cancel: cancel)
-        }
         .background(Color.black.ignoresSafeArea())
     }
 
@@ -320,18 +261,6 @@ struct PagedScroll<Content: View>: View {
         withAnimation(.linear(duration: 0)) { position.scrollTo(y: offset) }
     }
 
-    /// A command walks the control: the mic records, the open lock holds it through the silence, the
-    /// closed lock sends. A follow-up has no silence to hold off, so it records and sends.
-    private var mode: BottomControl.Mode {
-        guard recording else { return .record }
-        guard locks else { return .stop }
-        return locked ? .glyph("lock.fill", .red) : .glyph("lock.open", Color(hex: "#d6c042"))
-    }
-
-    private func press() {
-        Hub.log("control", ["view": name, "recording": recording, "locked": locked])
-        record()
-    }
 }
 
 /// What went wrong with the last command, under the conversation, with a Retry. The control at the

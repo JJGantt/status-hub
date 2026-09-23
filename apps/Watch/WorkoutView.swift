@@ -37,7 +37,6 @@ struct WorkoutView: View {
         .scrollIndicators(.never)
         .topOfTheScreen()
         .background(Color.black.ignoresSafeArea())
-        .overlay { CommandBar(view: "workout") }
     }
 }
 

@@ -116,6 +116,10 @@ struct RootView: View {
             .tabViewStyle(.page(indexDisplayMode: .never))
             .navigationDestination(for: String.self) { key in SessionView(key: key) }
         }
+        // **The bar lives HERE, once, above everything.** Inside a page it would be part of that
+        // page's content and would slide away with it on every swipe; over the whole stack it is
+        // welded to the screen and the pages move underneath it.
+        .overlay { CommandBar() }
         .onOpenURL { url in
             guard url.scheme == "statushub", url.host == "record" else { return }
             chat.requestRecording()

@@ -5,6 +5,7 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const { pipeline } = require('stream/promises');
+const { execFile } = require('child_process');
 const { createClient } = require('@supabase/supabase-js');
 const WebSocket = require('ws');
 const heicConvert = require('heic-convert');
@@ -2488,6 +2489,60 @@ function parseLocation(src) {
 // neither slow a command down nor fail one.
 const CLIP_BUCKET = 'voice-clips';
 
+// ---- IS IT HIM? speaker ID for the devices that UPLOAD a clip -------------------------------------
+// The Mac and the ESP score every utterance against his voiceprint before it becomes a command, and
+// the phone and the watch never could: the model (ECAPA) lives in the voice server, and those two hand
+// this a finished file instead of streaming. So an always-on watch sent whatever it heard — on
+// 2026-09-23, eleven minutes of it sent a podcast, a television and a room to the worker, and only the
+// worker's own "didn't catch that" kept any of it from running.
+//
+// The clip goes to the voice server as 16k mono WAV (it reads the bucket with the service key it
+// already has) and comes back as the top-3 cosine against the voiceprint. Below
+// `voiceid_accept_threshold` — the same bar the room mics use — it is not enqueued.
+//
+// **A gate that cannot run lets the command through.** A voice server that is down, a missing
+// voiceprint and a clip that will not decode all answer 0, and 0 means "cannot tell": eating his
+// commands because a service is unreachable is a worse failure than running a stray one.
+const VOICE_VERIFY_URL = process.env.VOICE_VERIFY_URL || 'https://jared-voice.fly.dev/verify';
+const VERIFY_TOKEN = process.env.VERIFY_TOKEN || '';
+// A press is its own proof: someone holding a watch to their mouth has identified themselves, which is
+// why the phone's own button has never been gated either (docs/LISTENERS.md). Only always-on captures
+// are scored.
+const GATED_SOURCES = new Set(['watch', 'phone']);
+
+async function soundsLikeHim(id, file, source) {
+  if (!GATED_SOURCES.has(source)) return { ok: true, why: 'not a listener' };
+  const wav = `${os.tmpdir()}/verify-${id}.wav`;
+  const object = `${CLIP_BUCKET}/verify/${id}.wav`;
+  try {
+    // 16k mono, which is what ECAPA is fed everywhere else in the pipeline.
+    await new Promise((resolve, reject) => {
+      execFile('ffmpeg', ['-v', 'error', '-y', '-i', file, '-ac', '1', '-ar', '16000', wav],
+        (e) => (e ? reject(e) : resolve()));
+    });
+    const put = await fetch(`${SUPABASE_URL}/storage/v1/object/${object}`, {
+      method: 'POST',
+      headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}`, 'Content-Type': 'audio/wav' },
+      body: await fs.openAsBlob(wav, { type: 'audio/wav' }),
+    });
+    if (!put.ok) throw new Error(`upload -> ${put.status}`);
+    const url = `${VOICE_VERIFY_URL}?p=${encodeURIComponent(object)}` +
+      (VERIFY_TOKEN ? `&token=${encodeURIComponent(VERIFY_TOKEN)}` : '');
+    const r = await fetch(url, { signal: AbortSignal.timeout(20000) });
+    const sim = parseFloat(await r.text());
+    const bar = parseFloat((await settingsAll()).voiceid_accept_threshold) || 0.22;
+    if (!Number.isFinite(sim) || sim <= 0) return { ok: true, sim, why: 'could not tell' };
+    return { ok: sim >= bar, sim, bar };
+  } catch (e) {
+    return { ok: true, why: `verify failed: ${e.message || e}` };
+  } finally {
+    fs.promises.unlink(wav).catch(() => {});
+    fetch(`${SUPABASE_URL}/storage/v1/object/${object}`, {
+      method: 'DELETE', headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` },
+    }).catch(() => {});
+  }
+}
+
 // A damaged capture (see /api/voice-command) keeps about 11% of its recorded time and a sound one over
 // 99%, so half sits far from both. Under a second the device's own timing is too coarse to judge by.
 const CAPTURE_MIN_KEPT = 0.5;
@@ -2561,6 +2616,12 @@ app.post('/api/voice-command', async (req, res) => {
     const srcRaw = String(req.query.source || '').trim().toLowerCase();
     const source = /^[a-z0-9][a-z0-9-]{0,23}$/.test(srcRaw) ? srcRaw : (quick ? 'web-quick' : 'web');
     const id = crypto.randomUUID();   // chosen here so the caller can wait on it (/api/voice-reply/:id)
+    // An always-on device's clip has to sound like him before it becomes a command.
+    const him = await soundsLikeHim(id, tmp, source);
+    console.log(`[voice-command] ${source} voice ${him.ok ? 'accepted' : 'REFUSED'}` +
+      (him.sim != null ? ` sim=${him.sim.toFixed(2)}${him.bar ? ` bar=${him.bar}` : ''}` : '') +
+      (him.why ? ` (${him.why})` : ''));
+    if (!him.ok) return res.json({ transcript, enqueued: false, notHim: true });
     await sbWrite('voice_requests', 'POST', { id, transcript, source, focus: 'hub',
       ...(capture_start ? { capture_start } : {}), ...(capture_end ? { capture_end } : {}),
       ...(client_now ? { client_now } : {}), ...(location ? { location } : {}) });

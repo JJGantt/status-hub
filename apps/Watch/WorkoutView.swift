@@ -67,8 +67,11 @@ private struct RestStrip: View {
             value(since(rest), "clock", active ? (rest >= 300 ? clockAmber : clockGreen) : clockGrey)
             if active { value(sessionClock(session), "stopwatch", clockGreen) }
             Spacer(minLength: 0)
-            (Text(String(setsToday)).foregroundColor(clockGrey)
-                + Text(" sets").foregroundColor(clockGrey.opacity(0.6)))
+            // The day's total, read at the RIGHT edge like every other figure on that side of this
+            // page: the word first, the number against the edge, lining up with the muscle counts
+            // under it. The clocks on the left are the mirror of this, value first.
+            (Text("sets ").foregroundColor(clockGrey.opacity(0.6))
+                + Text(String(setsToday)).foregroundColor(clockGrey))
                 .font(.system(size: 15, weight: .heavy).monospacedDigit())
                 .lineLimit(1)
         }

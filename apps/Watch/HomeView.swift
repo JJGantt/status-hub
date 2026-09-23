@@ -22,7 +22,6 @@ struct HomeView: View {
         VStack(alignment: .leading, spacing: 8) {
             now.opacity(dimmed ? 0.5 : 1)
             Spacer(minLength: 0)
-            controls
         }
         .padding(.horizontal, 8)
         .padding(.bottom, BottomControl.height)   // clear of the bottom control
@@ -33,22 +32,16 @@ struct HomeView: View {
             BottomControl(mode: mode, enabled: recording || !chat.waiting, action: press,
                           onHold: { if !recording { chat.toggleListening() } }, big: true)
         }
+        // Cancel sits in the corner beside it, and only while there is something to throw away.
+        .overlay(alignment: .bottomTrailing) {
+            if recording || chat.waiting {
+                CancelX(cancel: recording ? chat.cancelRecording : chat.cancel)
+                    .padding(.bottom, 9)
+                    .padding(.trailing, 2)
+            }
+        }
         .background(Color.black.ignoresSafeArea())
         .recordsWhenAsked()
-    }
-
-    /// The recording bar while a command records (the lock and Cancel), and Cancel alone across the
-    /// bottom while the hub has it. Nothing at all otherwise.
-    @ViewBuilder private var controls: some View {
-        if recording {
-            RecordingBar(cancel: chat.cancelRecording)
-        } else if chat.waiting {
-            Button("Cancel", action: chat.cancel)
-                .tint(.red)
-                .buttonStyle(.bordered)
-                .controlSize(.small)
-                .frame(maxWidth: .infinity)
-        }
     }
 
     /// What the microphone and the command are doing, in one glyph at the bottom edge: idle, always-on

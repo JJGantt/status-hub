@@ -16,9 +16,25 @@ func snippet(_ s: String) -> AttributedString {
     return a
 }
 
-/// Cancel, across the width, under the page a recording belongs to. It is all a recording puts on the
-/// page: the control at the bottom edge says what the recording is doing and walks it on
-/// (`BottomControl`).
+/// Throwing away what is under way, as a mark in the corner rather than a word across the page: home
+/// is the state glyph and the conversation, and Cancel is the one thing that has to be reachable
+/// without being read.
+struct CancelX: View {
+    let cancel: () -> Void
+
+    var body: some View {
+        Button(action: cancel) {
+            Image(systemName: "xmark")
+                .font(.system(size: 20, weight: .semibold))
+                .foregroundColor(.red)
+                .frame(width: 44, height: 34)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+    }
+}
+
+/// Cancel, across the width, under a conversation page's own recording (home uses `CancelX`).
 struct RecordingBar: View {
     let cancel: () -> Void
 

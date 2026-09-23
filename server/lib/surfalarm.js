@@ -35,11 +35,24 @@ function localHour(ts, tz) {
 //
 // `notFairFrom` is the wind veto: every hour of `day` from that one on counts as not Fair, whatever
 // the forecast rated it. Null when there is no veto.
-function decide(rules, rows, day, tz, notFairFrom = null) {
+//
+// `boost` is the veto's opposite and is deliberately NOT its mirror image. The veto can be blunt
+// because its failure mode is safe — nobody is woken. An upgrade's failure mode is being woken at 6am
+// for nothing, so it is narrow: { from, until } bounds the hours, and inside them an hour only turns
+// Fair when the forecast put it EXACTLY one step below Fair and the forecast's own wind for that hour
+// is not offshore. That second test is what makes it coherent rather than a thumb on the scale — it
+// only fires where the forecast's stated reason for the lower rating is a wind direction the dock is
+// measuring to be wrong. A two-step jump on wind alone is never credible, so POOR never becomes Fair.
+function decide(rules, rows, day, tz, notFairFrom = null, boost = null) {
   const fair = new Map();
   for (const r of rows || []) {
     const { date, hour } = localHour(r.ts, tz);
-    if (date === day) fair.set(hour, notFairFrom != null && hour >= notFairFrom ? false : SCALE.indexOf(r.rk) >= MIN_RATING);
+    if (date !== day) continue;
+    if (notFairFrom != null && hour >= notFairFrom) { fair.set(hour, false); continue; }
+    const rated = SCALE.indexOf(r.rk) >= MIN_RATING;
+    const lifted = !rated && boost && hour >= boost.from && hour <= boost.until
+      && SCALE.indexOf(r.rk) === MIN_RATING - 1 && r.wType !== 'Offshore';
+    fair.set(hour, rated || !!lifted);
   }
   for (let i = 0; i < (rules || []).length; i++) {
     const hours = rules[i].hours || [];
@@ -108,7 +121,8 @@ function canon(v) {
   return JSON.stringify(v === undefined ? null : v);
 }
 
-function createSurfAlarms({ sb, sbWrite, uuid, nowLocal, today, tz, log, record = () => {}, veto = async () => null }) {
+function createSurfAlarms({ sb, sbWrite, uuid, nowLocal, today, tz, log, record = () => {},
+                            veto = async () => null, boost = async () => null }) {
   const OUTPUTS = makeOutputs({ sb, sbWrite, uuid });
   let snap = null;                 // { captured_at, rows } — rows are ~64KB, so fetched only when new
   let busy = false; let again = false;
@@ -133,13 +147,25 @@ function createSurfAlarms({ sb, sbWrite, uuid, nowLocal, today, tz, log, record 
     // the hours from now on, so it touches only today's alarm, and only while it holds: every new
     // reading re-runs this, and a veto that lifts before the wake time brings the alarm back.
     const v = await veto();
-    const vetoFrom = v ? Number(now.slice(11, 13)) : null;
+    const nowHour = Number(now.slice(11, 13));
+    const vetoFrom = v ? nowHour : null;
+    // THE UPGRADE, and only when there is no veto to overrule: the two cannot both hold — one wants
+    // measured onshore wind and the other measured offshore — but reading it that way means a veto is
+    // never softened by a stale idea of the morning. It speaks from now to its own last hour.
+    const b = v ? null : await boost();
+    const boostWindow = b && nowHour <= b.until ? { from: nowHour, until: b.until } : null;
     for (const a of alarms) {
       if (!a.engaged && !Object.keys(a.state || {}).length) continue;
+      const live = a.day === today() && a.engaged && s;
       const plain = a.engaged && s ? decide(a.rules, s.rows, a.day, tz()) : { rule: null, wake: null };
-      const d = v && a.day === today() && a.engaged && s ? decide(a.rules, s.rows, a.day, tz(), vetoFrom) : plain;
+      let d = plain;
+      if (live && v) d = decide(a.rules, s.rows, a.day, tz(), vetoFrom);
+      else if (live && boostWindow) d = decide(a.rules, s.rows, a.day, tz(), null, boostWindow);
       // Recorded only when it CHANGED the answer, so a windy morning with no alarm at stake writes nothing.
-      const vetoed = d.rule !== plain.rule ? { kts: Math.round(v.kts), type: v.type, threshold: v.threshold, from: vetoFrom, overruled: plain.wake } : null;
+      const vetoed = v && d.rule !== plain.rule ? { kts: Math.round(v.kts), type: v.type, threshold: v.threshold, from: vetoFrom, overruled: plain.wake } : null;
+      const boosted = b && boostWindow && d.rule !== plain.rule
+        ? { kts: Math.round(b.kts), dir: b.dir, type: b.type, threshold: b.threshold,
+            from: boostWindow.from, until: boostWindow.until, was: plain.wake } : null;
       const at = d.wake ? `${a.day}T${d.wake}` : null;
       // A wake time that has already passed is not rung late and does not cancel anything.
       const late = !!(at && at <= now);
@@ -153,7 +179,7 @@ function createSurfAlarms({ sb, sbWrite, uuid, nowLocal, today, tz, log, record 
         }
       }
       const decided = { snapshot: s ? s.captured_at : null, rule: d.rule, at, ...(late ? { late: true } : {}),
-                        ...(vetoed ? { veto: vetoed } : {}) };
+                        ...(vetoed ? { veto: vetoed } : {}), ...(boosted ? { boost: boosted } : {}) };
       const patch = {};
       if (canon(decided) !== canon(a.decided)) patch.decided = decided;
       if (canon(state) !== canon(a.state || {})) patch.state = state;
@@ -164,7 +190,7 @@ function createSurfAlarms({ sb, sbWrite, uuid, nowLocal, today, tz, log, record 
         // One row per new forecast or rule change — the decision history `decided` overwrites.
         record('decision', { day: a.day, why, snapshot: decided.snapshot, rule: d.rule, at, late,
                              was: (a.decided && a.decided.at) || null, item: (state.item && state.item.id) || null,
-                             ...(vetoed ? { veto: vetoed } : {}) });
+                             ...(vetoed ? { veto: vetoed } : {}), ...(boosted ? { boost: boosted } : {}) });
       }
     }
   }

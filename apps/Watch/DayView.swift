@@ -251,8 +251,8 @@ private enum Geo {
     static let figureGap: CGFloat = 2
     static let headGap: CGFloat = 6
     static let listInset: CGFloat = 5.5
-    static let rowPitch: CGFloat = 11.5
-    static let listSize: CGFloat = 7
+    static let rowPitch: CGFloat = 15
+    static let listSize: CGFloat = 11
     static let valueSize: CGFloat = 7
     static let labelSize: CGFloat = 5.5
     static let labelGap: CGFloat = 1
@@ -261,8 +261,8 @@ private enum Geo {
     /// bottom edge floats 1.5pt over the feet. Measured on the simulator render against the artwork;
     /// re-measure if the value font changes.
     static let footDrop: CGFloat = 1.5
-    static let replySize: CGFloat = 6.5
-    static let replyLeading: CGFloat = 1.5
+    static let replySize: CGFloat = 11
+    static let replyLeading: CGFloat = 2
 
     static let ruleInk = Color(hex: "#222a33")
     static let gutterInk = Color(hex: "#1e252e")

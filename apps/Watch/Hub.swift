@@ -216,6 +216,12 @@ enum Hub {
     }
 
     /// One of the hub's app settings, as the text it is stored as; nil when unset.
+    /// Writes one of the hub's Settings — for a switch the watch flips (the Speak control) that the
+    /// phone's Settings page shows too.
+    static func putSetting(_ key: String, _ value: String) async {
+        _ = try? await call("/api/settings", method: "POST", body: ["key": key, "value": value])
+    }
+
     static func setting(_ key: String) async throws -> String? {
         let all = try JSONSerialization.jsonObject(with: try await call("/api/settings")) as? [String: Any]
         return all?[key].map { "\($0)" }

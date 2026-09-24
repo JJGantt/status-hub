@@ -8,6 +8,7 @@ struct StatusHubWatchWidgets: WidgetBundle {
         if #available(watchOS 26.0, *) {
             RecordControl()
             ListenControl()
+            SpeakControl()
             SessionsControl()
             NutritionControl()
             WorkoutControl()
@@ -40,6 +41,19 @@ struct ListenControl: ControlWidget {
             }
         }
         .displayName("Listen")
+    }
+}
+
+/// Spoken session replies, on and off. A tap on the wrist says which: up for on, down for off.
+@available(watchOS 26.0, *)
+struct SpeakControl: ControlWidget {
+    var body: some ControlWidgetConfiguration {
+        StaticControlConfiguration(kind: "com.jaredgantt.statushub.watch.speak") {
+            ControlWidgetButton(action: SpeakIntent()) {
+                Label("Speak", systemImage: "speaker.wave.2.fill")
+            }
+        }
+        .displayName("Speak")
     }
 }
 

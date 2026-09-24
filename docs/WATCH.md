@@ -226,6 +226,10 @@ element by element; `Geo` holds its numbers, the mockup's halved.
 - **Under each column, three rows:** the three newest meals EATEN (staged ones are left out — planned
   is not eaten) and the three exercises a set went onto most recently. Each list opens its full view.
 - **The reply** is the hub thread's newest answer, full width with a small right inset, scrolling.
+- **Type:** the lists and the reply are 11pt. The numbers by the feet stay 7pt: at 8pt `59:59` touches
+  the front figure, and the figures are not to be moved or shrunk to make room.
+
+An open session's name has a small back chevron before it; the two are one button that closes it.
 
 The full views keep their heading and the heading is the way back: the food log sits under the four
 rings in a row, and a tap on the rings returns; the exercise list sits under its clocks, and a tap on
@@ -356,7 +360,7 @@ while waiting stops waiting — a command the hub already has still runs.**
 
 ### A control per page
 
-Control Center, the Smart Stack and an Ultra's Action button each hold **Record · Listen · Sessions · Nutrition ·
+Control Center, the Smart Stack and an Ultra's Action button each hold **Record · Listen · Speak · Sessions · Nutrition ·
 Workout**, which open the app on that page (`OpenPageIntent` → `Router` → `RootView`); Nutrition and
 Workout both land on the health page. Record is the odd one out: it opens home AND starts recording.
 Each control is its own type, spelled out in full — the `kind`, title and symbol are literals, because
@@ -368,6 +372,23 @@ before debugging: the controls still register correctly (the simulator log shows
 controls` for every kind) and the same control draws normally in the Smart Stack, and a build that is
 byte-identical to one that worked (files, plists, entitlements, asset catalog) still shows blank tiles
 until the reinstall. Toggling Low Power Mode, the fix circulating for watchOS 26, does not clear it.
+
+**Listen and Speak are switches that open the app to flip.** A control cannot run the microphone or
+read the app's state (that needs an App Group, which this account cannot enable), so each is an
+`OpenIntent` that launches the app and toggles there. Listen turns always-on listening on or off, which
+then carries on with the wrist down (background audio); the blue edge shows it. Speak flips
+`session_speech` (see Spoken replies) and taps the wrist up for on, down for off.
+
+### Spoken replies
+
+With `session_speech` on (the Speak control, or Settings → Watch sessions on the phone), a reply to a
+follow-up SENT FROM THE WATCH is read aloud as it lands (`Speaker`, the system voice — nothing leaves the
+watch), and every follow-up carries `Sessions.spokenFormat` so the reply is written to be heard. Only
+those replies: a session answering something typed on the Mac is not spoken. **The always-on listener
+stands aside while it speaks** (`Capture.hush`), so it does not transcribe the watch's own voice, and
+takes the microphone back when it finishes — paused, not switched off. Starting a recording stops the
+speaking at once. The setting is on the hub so the phone shows the same switch; the watch reads it when
+it comes to the front.
 
 ### Two launchers, one request
 

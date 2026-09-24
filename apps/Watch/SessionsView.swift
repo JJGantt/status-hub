@@ -173,12 +173,20 @@ struct SessionView: View {
                 // **The name closes it.** The swipe back watchOS gives a pushed view does not survive a
                 // page row that also takes sideways swipes, so the way out is the thing at the top that
                 // says which session this is.
+                // A small chevron before the name says it is a way back without having to know it; the
+                // name and the chevron are one button.
                 Button { sessions.path.removeLast() } label: {
-                    Text(sessions.row(for: key)?.name ?? "")
-                        .font(.system(size: 15, weight: .semibold))
-                        .foregroundColor(.white)
-                        .lineLimit(1)
-                        .truncationMode(.tail)
+                    HStack(spacing: 4) {
+                        Image(systemName: "chevron.left")
+                            .font(.system(size: 11, weight: .semibold))
+                            .foregroundColor(Color(hex: "#7d8894"))
+                        Text(sessions.row(for: key)?.name ?? "")
+                            .font(.system(size: 15, weight: .semibold))
+                            .foregroundColor(.white)
+                            .lineLimit(1)
+                            .truncationMode(.tail)
+                    }
+                    .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
             }

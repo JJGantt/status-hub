@@ -23,6 +23,9 @@ final class Capture: ObservableObject {
     /// Always-on listening is engaged: the microphone is the listener's whenever nothing else wants it,
     /// and it takes it back when a command or a follow-up gives it up.
     @Published private(set) var listens = false
+    /// The listener standing aside while the watch speaks a reply (`Speaker`): `listens` stays on and it
+    /// takes the microphone back when the speaking ends. Paused, not switched off.
+    private(set) var hushed = false
     /// A page may start a recording now: nothing owns the microphone, or only the listener does, and a
     /// deliberate command takes it from the listener and hands it back when it is done.
     var free: Bool { owner == nil || owner == .listener }
@@ -88,6 +91,7 @@ final class Capture: ObservableObject {
     /// one, because words already recorded are worth sending however the recording ended.
     func start(for owner: Owner, onSilence: (() -> Void)? = nil, onTaken: (() -> Void)? = nil,
                onFailure: @escaping @MainActor (Error) -> Void) {
+        Speaker.shared.stop()   // his voice comes first: a recording ends any reply being read out
         begin(owner, onSilence: onSilence, onTaken: onTaken, onFailure: onFailure) { [weak self] in
             self?.setMuted(true)
             // The wrist is told the moment the microphone is actually live, not when it was asked
@@ -109,7 +113,7 @@ final class Capture: ObservableObject {
             listenFailure = onFailure
             listenSince = Date()
             rolls = 0
-            if owner == nil { listen() }
+            if owner == nil && !hushed { listen() }
         } else {
             listenFailure = nil
             listenSince = nil
@@ -212,10 +216,15 @@ final class Capture: ObservableObject {
     /// Back to listening once the microphone is free again, if listening is engaged. Scheduled rather
     /// than immediate: a command TAKES the microphone off the listener, and an immediate resume would
     /// take it back before that command had started.
+    func hush(_ on: Bool) {
+        hushed = on
+        if on { unlisten() } else { resumeSoon() }
+    }
+
     private func resumeSoon() {
-        guard listens else { return }
+        guard listens, !hushed else { return }
         Task { @MainActor in
-            guard listens, owner == nil, !opening else { return }
+            guard listens, !hushed, owner == nil, !opening else { return }
             listen()
         }
     }

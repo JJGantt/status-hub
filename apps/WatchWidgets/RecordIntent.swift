@@ -60,6 +60,34 @@ struct ListenIntent: OpenIntent {
     }
 }
 
+/// What the Speak control opens.
+enum SpeakTarget: String, AppEnum {
+    case replies
+
+    static var typeDisplayRepresentation: TypeDisplayRepresentation = "Status Hub"
+    static var caseDisplayRepresentations: [SpeakTarget: DisplayRepresentation] = [.replies: "Speak"]
+}
+
+/// Turns spoken session replies on or off — the Speak control's action. The setting lives on the hub
+/// (`session_speech`), so the phone's Settings shows and changes the same switch.
+struct SpeakIntent: OpenIntent {
+    static var title: LocalizedStringResource = "Speak"
+
+    @Parameter(title: "Target") var target: SpeakTarget
+
+    init() {
+        target = .replies
+    }
+
+    @MainActor
+    func perform() async throws -> some IntentResult {
+        #if WATCH_APP
+        Speaker.toggle()
+        #endif
+        return .result()
+    }
+}
+
 /// Which page of the app a control opens. `record` is the microphone's: it lands on home and starts
 /// recording. The rest are places — a control per page, so Control Center (and the Action button, and
 /// the Smart Stack) can put him where he was going rather than in the app to then swipe.

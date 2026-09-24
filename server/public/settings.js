@@ -90,6 +90,11 @@ export async function open() {
         '<input class="settings-num" type="number" min="0" max="600" step="10" inputmode="numeric" ' +
         'data-key="watch_reading_wpm" value="' + sil('watch_reading_wpm', 0) + '"></label>' +
 
+      '<div class="settings-sec">Watch sessions</div>' +
+      '<label class="settings-row"><span>Speak replies<br><small>1 = on, 0 = off</small></span>' +
+        '<input class="settings-num" type="number" min="0" max="1" step="1" inputmode="numeric" ' +
+        'data-key="session_speech" value="' + (cur.session_speech === '1' ? 1 : 0) + '"></label>' +
+
       '<div class="settings-sec">Watch edge line (pixels)</div>' +
       '<label class="settings-row"><span>Thickness</span>' +
         '<input class="settings-num" type="number" min="1" max="8" step="1" inputmode="numeric" ' +

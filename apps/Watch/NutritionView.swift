@@ -368,8 +368,11 @@ private struct WeightPlot: View {
             let shown = min(weeks, max(1, Int(size.width / side)))
             let first = weeks - shown
             let left = size.width - CGFloat(shown) * side
+            // The FIRST visible week is left out: the two axis values are written over the plot's
+            // left end, and the line running under them made both unreadable. It starts on the
+            // second column instead, which is still on the column it belongs to.
             let pts = plot.points.enumerated().compactMap { i, p -> CGPoint? in
-                guard i >= first, let y = p.y else { return nil }
+                guard i > first, let y = p.y else { return nil }
                 return CGPoint(x: left + (CGFloat(i - first) + 0.5) * side, y: y * size.height)
             }
             guard pts.count > 1 else { return }

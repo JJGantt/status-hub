@@ -137,7 +137,7 @@ struct SessionView: View {
 
     var body: some View {
         ScrollViewReader { proxy in
-            PagedScroll(name: "session", readingWPM: sessions.readingWPM, recording: recording) {
+            PagedScroll {
                 Button {
                     Hub.log("record", ["view": "session", "recording": recording])
                     sessions.toggleRecording(key)

@@ -111,8 +111,10 @@ struct CommandBorder: View {
                 let t = ctx.date.timeIntervalSinceReferenceDate.truncatingRemainder(dividingBy: 2.4) / 2.4
                 ZStack {
                     line(style.ring)
-                    GlassEdge(inset: width / 2).trimmedPath(t, 0.18)
-                        .stroke(ink(style.working), lineWidth: width)
+                    // Centred ON the outline and twice the line's width, so it reaches the line's inner
+                    // edge and runs off past the glass on the other side, like the fill under it.
+                    GlassEdge(inset: 0).trimmedPath(t, 0.18)
+                        .stroke(ink(style.working), lineWidth: width * 2)
                 }
             }
         }
@@ -127,7 +129,7 @@ struct CommandBorder: View {
             if band > 0 {
                 GlassEdge(inset: width + band / 2).stroke(Color.black, lineWidth: band)
             }
-            GlassEdge(inset: width / 2).stroke(ink(hex), lineWidth: width)
+            BeyondEdge(inset: width).fill(ink(hex), style: FillStyle(eoFill: true))
         }
     }
 
@@ -169,8 +171,7 @@ struct CommandBorder: View {
 /// radii in from the side, where a circular arc of the same radius would begin at 1.0 — so a one-pixel
 /// line drawn on a circle leaves the bezel at every corner.
 struct GlassEdge: Shape {
-    /// How far inside the glass's outline the path runs: half a stroke's width puts the whole stroke on
-    /// the glass.
+    /// How far inside the glass's outline the path runs.
     let inset: CGFloat
     /// The 46mm display's corner radius in points (`DeviceCornerRadius` in its device profile).
     static let radius: CGFloat = 50
@@ -217,6 +218,20 @@ struct GlassEdge: Shape {
         out.addPath(whole.trimmedPath(from: from, to: min(1, to)))
         if to > 1 { out.addPath(whole.trimmedPath(from: 0, to: to - 1)) }
         return out
+    }
+}
+
+/// **Everything from `inset` inside the glass's outline outward**, off the edge of the screen: the line
+/// is this filled, not a stroke along the outline. A stroke only covers the outline as drawn, and the
+/// real glass is not exactly that curve — where a corner meets the top and bottom edges a sliver of
+/// glass lies outside it, and text scrolling past showed there, beyond the line. A fill has no outside.
+struct BeyondEdge: Shape {
+    let inset: CGFloat
+
+    func path(in r: CGRect) -> Path {
+        var p = Path(r.insetBy(dx: -20, dy: -20))
+        p.addPath(GlassEdge(inset: inset).path(in: r))
+        return p
     }
 }
 

@@ -166,8 +166,11 @@ command goes to the session instead of the hub):
 corner as the three cubic curves of the device's framebuffer mask (the 46mm simulator's
 `framebufferMask` PDF), in units of the display's 50pt corner radius. It is a continuous corner — at
 the top edge the glass begins 1.31 radii from the side, where a circle would begin at 1.0 — so a thin
-line drawn on a circle leaves the bezel at every corner. Checked against the mask: the line lies on the
-outermost row of the glass along the straights and on the glass's own soft rim in the corners.
+line drawn on a circle leaves the bezel at every corner. **The line is a FILL of everything from its
+inner edge outward** (`BeyondEdge`, even-odd against a rect past the screen), never a stroke along the
+outline: the real glass is not exactly that curve, and where a corner meets the top and bottom edges a
+stroke leaves a sliver of glass outside it in which text shows beyond the line. The working sweep is a
+stroke centred on the outline at twice the line's width for the same reason.
 **Every part of it is a hub setting** (Settings → Watch edge), so it is tuned without a build
 (`BorderStyle` in `WatchSettings.swift`): the line's thickness (`watch_border_px`, 3), an opaque black
 band just inside it (`watch_border_band_px`, 2; 0 for none), and each state's colour

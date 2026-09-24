@@ -370,7 +370,7 @@ one.
 
 Without an Action button, the no-touch path is the Smart Stack: with Settings → Gestures → Double Tap →
 Smart Stack set to Select and Record pinned, two double taps from the watch face open it recording
-(verified on an SE 3, watchOS 26.5). An app holding a workout session (Watchset while it captures)
+(verified on watchOS 26.5). An app holding a workout session (Watchset while it captures)
 sits above even pinned items.
 
 ### The always-on listener
@@ -495,9 +495,11 @@ device builds:
   a stray "you" into his conversation) and never mute the room mics.
 
 The built app needs `WKWatchOnly` and no `WKCompanionAppBundleIdentifier` (then an ad-hoc `codesign`)
-to install on an unpaired watch simulator. **One watch simulator is kept on this Mac** — a Series 11
-46mm, the largest this runtime offers — because each device costs over a gigabyte of disk. Screenshots
-are that geometry; a 44mm screen is narrower, and a row that fits here can still overflow there.
+to install on an unpaired watch simulator. **His watch is a Series 12, 46mm**, and the one watch
+simulator kept on this Mac is a Series 11 46mm — the same 416x496 screen and the same corner mask — so
+a screenshot here is his geometry, and the device's framebuffer mask (named by `framebufferMask` in the
+simulator's `profile.plist`) is the true outline of his glass. Only one is kept because each device
+costs over a gigabyte of disk.
 
 - **The simulator is watchOS 26.5 and his watch is 27**, so what a simulator proves about layout is
   not proof about his watch, and a system behaviour measured here (what hides the clock, how a gesture

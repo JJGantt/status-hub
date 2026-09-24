@@ -82,13 +82,15 @@ final class WatchAppDelegate: NSObject, WKApplicationDelegate, UNUserNotificatio
 /// the workout block. Home is where the app opens.
 struct RootView: View {
     enum Page {
-        case sessions, home, nutrition, workout
+        case sessions, home, health
 
+        /// Food and training are one page now, so the two controls that named them land in the
+        /// same place. The controls keep their separate names because that is what he is choosing
+        /// between in Control Center.
         init(_ asked: WatchPage) {
             switch asked {
             case .sessions: self = .sessions
-            case .nutrition: self = .nutrition
-            case .workout: self = .workout
+            case .nutrition, .workout: self = .health
             }
         }
     }
@@ -109,8 +111,7 @@ struct RootView: View {
             TabView(selection: $page) {
                 SessionsView().tag(Page.sessions).environment(\.onScreen, page == .sessions)
                 HomeView().tag(Page.home).environment(\.onScreen, page == .home)
-                NutritionView().tag(Page.nutrition)
-                WorkoutView().tag(Page.workout)
+                HealthView().tag(Page.health)
             }
             // No page dots: they are a strip of screen spent saying what a swipe already says.
             .tabViewStyle(.page(indexDisplayMode: .never))
@@ -119,7 +120,12 @@ struct RootView: View {
         // **The bar lives HERE, once, above everything.** Inside a page it would be part of that
         // page's content and would slide away with it on every swipe; over the whole stack it is
         // welded to the screen and the pages move underneath it.
-        .overlay { CommandBar() }
+        //
+        // The health page is the one exception, and it is about space rather than taste: it fits a
+        // day of food and training on one screen with nothing scrolling, and the 46pt the bar
+        // reserves is the difference between that fitting and not. A session opened on top of it
+        // still gets the bar, because a session is where commands go.
+        .overlay { if page != .health || !sessions.path.isEmpty { CommandBar() } }
         .onOpenURL { url in
             guard url.scheme == "statushub", url.host == "record" else { return }
             chat.requestRecording()
@@ -156,7 +162,9 @@ struct RootView: View {
         let live = phase == .active
         if live && page == .sessions { sessions.activate() } else { sessions.deactivate() }
         if live && page == .home { chat.activate() } else { chat.deactivate() }
-        if live && page == .nutrition { nutrition.activate() } else { nutrition.deactivate() }
-        if live && page == .workout { workout.activate() } else { workout.deactivate() }
+        // One page, both streams: the health page draws food and training together, so it follows
+        // both or neither.
+        if live && page == .health { nutrition.activate(); workout.activate() }
+        else { nutrition.deactivate(); workout.deactivate() }
     }
 }

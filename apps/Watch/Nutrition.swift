@@ -47,6 +47,8 @@ struct NutHistory: Decodable {
         let axis: [Axis]
     }
     let weeks: [[Cell]]
+    /// The training map, in the same shape as the food one so both draw through one routine.
+    let sets: [[Cell]]?
     let weight: Plot
 }
 

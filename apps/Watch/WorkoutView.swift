@@ -1,9 +1,9 @@
 import SwiftUI
 
-/// The page right of nutrition: the home wall's rest clocks (cards/workouts.js), then every exercise
-/// logged today in the wall's `data-recent` row, the one a set just went onto first and the rest
-/// scrolling below it.
-struct WorkoutView: View {
+/// Every exercise logged today, the one a set just went onto first and the rest scrolling below it.
+/// **Reached by tapping the newest exercise on the health page**, the same way the food log is reached
+/// by tapping the newest meal: the summary line is the way into the list it summarises.
+struct ExerciseList: View {
     @EnvironmentObject private var workout: Workout
     /// One exercise open at a time, and **the newest is open by default** — the set just logged is the
     /// one being looked at, and a set landing on another exercise moves the opening to it.
@@ -12,11 +12,13 @@ struct WorkoutView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 10) {
+                // The rest clocks live here now rather than on the health page: that page is a day at
+                // a glance and these are a live number, read while training with the list open.
                 // `.resttimer:empty` — no set ever logged, no strip.
                 if let n = workout.now, let last = n.last_set_at {
                     TimelineView(.periodic(from: .now, by: 1)) { ctx in
-                        RestStrip(lastAt: last, sessionStartAt: n.session_start_at, setsToday: n.sets_today ?? 0,
-                                  now: ctx.date)
+                        RestStrip(lastAt: last, sessionStartAt: n.session_start_at,
+                                  setsToday: n.sets_today ?? 0, now: ctx.date)
                     }
                 }
                 ForEach(Array((workout.now?.exercises ?? []).enumerated()), id: \.offset) { i, ex in
@@ -48,7 +50,7 @@ private let clockGrey = Color(hex: "#8b96a5")
 /// day's sets on the right**, one line, no box and no words. A clock symbol carries "since the last
 /// set" where the wall spells it out, and the session clock rides beside it under a stopwatch — the
 /// labels were half the line for two numbers whose meaning the symbols give away.
-private struct RestStrip: View {
+struct RestStrip: View {
     let lastAt: String
     let sessionStartAt: String?
     let setsToday: Int
@@ -141,7 +143,7 @@ private func wallClock(_ now: Date) -> Double {
 /// one per line in two columns. One set per line because the wall's shrink-to-fit row — six sets
 /// squeezed into one line at 9pt — is unreadable on a wrist, and two columns because one is a column
 /// of short strings down half a screen.
-private struct LiftRow: View {
+struct LiftRow: View {
     let exercise: WorkoutNow.Exercise
     let open: Bool
     let toggle: () -> Void

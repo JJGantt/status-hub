@@ -1,115 +1,122 @@
 import SwiftUI
 
-/// The page to the right of the prompt: the hub nutrition card's four pace rings, then today's log.
-struct NutritionView: View {
+/// **The health page: food and training on one screen.** They were two pages and a swipe apart, which
+/// put the two halves of the same day in two places. The rings run DOWN the left because four of them
+/// across the top is a band of chrome above everything else; standing in a column they are a gutter,
+/// and the width they free is what makes room for two heat maps stacked on the right.
+///
+/// Every line on it is a way into the thing it summarises, and nothing is a rotation through screens:
+/// the rings are the day's numbers, so they open the numbers; the newest meal is the food log's last
+/// line, so it opens the log; the newest exercise is the exercise list's last line, so it opens that.
+/// From anywhere but the overview, the rings are the way back.
+struct HealthView: View {
     @EnvironmentObject private var nutrition: Nutrition
-    /// **The rings stay; what is under them is what changes**, and each way in is the thing it is
-    /// about. The rings are the day's numbers, so tapping them shows the numbers. The one meal
-    /// surfaced at the bottom is the log's newest line, so tapping it opens the log. Nothing here is
-    /// a rotation through three screens: each tap is on the thing it opens.
-    private enum Panel { case day, numbers, log }
-    @State private var panel: Panel = .day
-    /// One entry's ingredients at a time: opening another closes it, so the log stays a list rather
-    /// than becoming a page of everything.
+    @EnvironmentObject private var workout: Workout
+    private enum Panel { case overview, numbers, food, exercises }
+    @State private var panel: Panel = .overview
+    /// One entry's ingredients at a time, so the log stays a list rather than a page of everything.
     @State private var open: String?
 
     var body: some View {
-        // 4, the same air the plot and the heat map have between them.
-        VStack(alignment: .leading, spacing: 4) {
-            // Redrawn every second, as the card's setInterval(tickRings, 1000). Outside the scroll view
-            // on purpose: they are the page's own heading, and scrolling the log should not take them.
+        HStack(alignment: .top, spacing: 6) {
+            // Redrawn every second, as the card's setInterval(tickRings, 1000). Outside the scroller
+            // on purpose: they are the page's heading, and scrolling what is beside them must not
+            // take them with it.
             TimelineView(.periodic(from: .now, by: 1)) { ctx in
-                RingsStrip(rings: nutrition.rings(at: ctx.date))
+                RingsColumn(rings: nutrition.rings(at: ctx.date))
             }
-            // **The outer two rings sit in the corners, and the corners are curved.** The strip is
-            // outside the scroll view, so the page's top content margin never reaches it, and a round
-            // thing pushed flat against a round corner loses its shoulder. Measured against the
-            // device's own framebuffer mask: at this width the arc clears from 7pt down.
-            .padding(.top, 8)
+            .frame(width: 40)
             .contentShape(Rectangle())
-            // **From anywhere else, the rings are the way back.** Opening the log is a tap on the
-            // meal; closing it is a tap on the rings, rather than a second gesture to learn. Only
-            // from the resting day view do they turn over to the numbers.
-            .onTapGesture { panel = panel == .day ? .numbers : .day }
-            ScrollView {
-                VStack(alignment: .leading, spacing: 8) {
-                    if let today = nutrition.day {
+            .onTapGesture { panel = panel == .overview ? .numbers : .overview }
+
+            // **The overview does not scroll.** It is a day of food and training sized to the screen
+            // it is read on, so everything is on it or it is the wrong size — a scroller here would
+            // hide the second half of the day behind a gesture. The lists it opens DO scroll, because
+            // a list has no length the screen can dictate.
+            switch panel {
+            case .overview:
+                VStack(alignment: .leading, spacing: 4) { overview }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+            case .numbers, .food, .exercises:
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 4) {
                         switch panel {
-                        case .day:
-                            DayStanding(day: today, history: nutrition.history,
-                                        openList: { panel = .log })
-                        case .numbers:
-                            DayNumbers(day: today)
-                        case .log:
-                            DayLog(day: today, open: $open)
+                        case .numbers: if let d = nutrition.day { DayNumbers(day: d) }
+                        case .food: if let d = nutrition.day { DayLog(day: d, open: $open) }
+                        default: ExerciseList()
                         }
                     }
+                    .padding(.bottom, CommandBar.height)
                 }
-                .padding(.bottom, CommandBar.height)
+                .scrollIndicators(.never)
             }
-            .scrollIndicators(.never)
         }
-        // 8pt rather than 4: the corner arc eats the outer rings and the ends of the rules at this
-        // height, and the four pixels buy back the shoulder on both.
+        // 8pt rather than 4: the corner arc eats the top ring and the ends of a full-width rule.
         .padding(.horizontal, 8)
+        .padding(.top, 8)
         .task { await nutrition.loadHistory() }
         .topOfTheScreen(scrollTop: 0)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(Color.black.ignoresSafeArea())
     }
-}
 
-/// The page's resting state: the weigh-in plot, the intake calendar under it on the same weeks, and
-/// the newest thing eaten under both. **The day's totals are not here** — they are what the rings are
-/// for, so they live behind a tap on the rings and this view keeps the room. The wall draws these three together for a reason — a column is the
-/// same week in each — and on a wrist they are the whole screen, which is why the log is the other
-/// side of the tap rather than beneath them.
-private struct DayStanding: View {
-    let day: NutritionDay
-    let history: NutHistory?
-    let openList: () -> Void
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            if let h = history {
-                WeightPlot(plot: h.weight).frame(height: 28)
-                IntakeCalendar(weeks: h.weeks).frame(height: 7 * 8)
-            }
-            // The last thing eaten, in a line: the whole day on one screen, and a tap for the rest.
-            if let last = day.entries.first {
-                Button(action: openList) {
-                    HStack(alignment: .firstTextBaseline, spacing: 6) {
-                        Text(last.name ?? "—")
-                            .font(.system(size: 12))
-                            .foregroundColor(Color(hex: "#c7ced8"))
-                            .lineLimit(1)
-                        Spacer(minLength: 4)
-                        (Text(String(mn(last.calories))).foregroundColor(Color(hex: "#c7ced8"))
-                            + Text(" cal").foregroundColor(Color(hex: "#7d8894")))
-                            .font(.system(size: 12).monospacedDigit())
-                            .fixedSize()
-                    }
-                }
-                .buttonStyle(.plain)
-            }
+    /// The day at rest: the weigh-in trend, the two heat maps, and one line under each saying what the
+    /// last thing was. A cell is square and 10pt, so a map is 70pt tall whatever its width, and the
+    /// two of them plus the plot and the two lines come to about 218pt — which is what has to fit in
+    /// the 240 this column has, with the bar gone, WITHOUT scrolling. Those sizes are the budget: grow
+    /// one and something else has to give it back.
+    @ViewBuilder private var overview: some View {
+        if let h = nutrition.history {
+            WeightPlot(plot: h.weight).frame(height: 32)
+            IntakeCalendar(weeks: h.weeks).frame(height: 7 * 10)
         }
+        if let last = nutrition.day?.entries.first {
+            summary(last.name ?? "—", String(mn(last.calories)) + " cal") { panel = .food }
+        }
+        if let sets = nutrition.history?.sets {
+            IntakeCalendar(weeks: sets).frame(height: 7 * 10)
+        }
+        if let ex = workout.now?.exercises.first {
+            summary(ex.name, String(ex.sets.count)) { panel = .exercises }
+        }
+    }
+
+    /// One line: what it was on the left, its figure against the right edge, the whole row a way in.
+    private func summary(_ name: String, _ value: String, _ open: @escaping () -> Void) -> some View {
+        Button(action: open) {
+            HStack(alignment: .firstTextBaseline, spacing: 6) {
+                Text(name)
+                    .font(.system(size: 12))
+                    .foregroundColor(Color(hex: "#c7ced8"))
+                    .lineLimit(1)
+                Spacer(minLength: 4)
+                Text(value)
+                    .font(.system(size: 12).monospacedDigit())
+                    .foregroundColor(Color(hex: "#7d8894"))
+                    .fixedSize()
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
     }
 }
 
-/// The card's `.rings` row: Cal, P, C, F, spread evenly with a 6pt gap. A macro the hub did not send
-/// draws nothing, as the card's `ring()` returns '' for it.
-private struct RingsStrip: View {
+/// The four pace rings standing in a column down the left edge. Same cell the row used; what changes
+/// is only which way they are stacked.
+private struct RingsColumn: View {
     let rings: [String: RingNow]
     private let keys = [("Cal", "calories"), ("P", "protein_g"), ("C", "carbs_g"), ("F", "fat_g")]
 
     var body: some View {
-        HStack(alignment: .top, spacing: 6) {
+        VStack(spacing: 4) {
             ForEach(keys, id: \.1) { glyph, key in
                 if let r = rings[key] { RingCell(glyph: glyph, ring: r) }
             }
         }
     }
 }
+
+
 
 /// One ring, drawn to `cards/nutrition.js`'s SVG: an 80-unit box, a r=34 circle on a 7-unit stroke,
 /// arcs from twelve o'clock clockwise with round caps, ticks from r=29 to r=39.5, the glyph on a

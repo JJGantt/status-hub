@@ -1989,19 +1989,26 @@ app.get('/api/nut-history', async (req, res) => {
     if (hit && Date.now() - hit.at < NUT_HISTORY_MS) return res.json(hit.body);
     const st = await buildStatus();
     const today = nutritionWindow().day;
-    const [nutRows, weightRows, targetRows] = await Promise.all([
+    const [nutRows, weightRows, targetRows, setRows] = await Promise.all([
       sbRange(`nutrition_entries?occurred_at=gte.${daysBefore(today, weeks * 7 + 7)}T00:00:00&staged=eq.false` +
         '&select=occurred_at,calories,protein_g,fat_g&order=occurred_at'),
       sb('weight_log?select=date,weight_lbs&order=date.asc'),
       sb('nutrition_targets?select=date,calories&order=date.asc'),
+      sbRange(`sets?occurred_at=gte.${daysBefore(today, weeks * 7 + 7)}T00:00:00&select=occurred_at&order=occurred_at`),
     ]);
     const weights = (weightRows || []).map((r) => ({ date: String(r.date).slice(0, 10), weight: Number(r.weight_lbs) }));
     const log = buildNutritionLog(nutRows || [], weights, st.maintenance.target, st.maintenance.maintenance,
       today, targetRows || [], weeks, await surplusCal(), 150, st.pace.fraction);
     // Only what a cell needs: the colour and whether it is today. A week of full cells is six fields
     // each that nothing on the wrist reads.
+    // The training map comes back in the SAME shape as the food one — a colour and a today flag per
+    // cell — so a client draws both with one routine instead of carrying the level ramp itself. The
+    // ramp is cards/workouts.js's, one step per level from lib/heatmap.js.
+    const SETS_RAMP = ['#000', '#0e4429', '#006d32', '#158c3a', '#26a641', '#39d353', '#43f461', '#8cfc94'];
     const body = {
       weeks: (log.weeks || []).map((w) => w.map((d) => ({ c: d.color, t: d.today ? 1 : 0 }))),
+      sets: (buildWorkoutHeatmap(setRows || [], weeks, today).weeks || [])
+        .map((w) => w.map((d) => ({ c: d.level < 0 ? null : SETS_RAMP[d.level], t: d.today ? 1 : 0 }))),
       weight: buildWeightPlot(weights, weeks, today),
     };
     nutHistoryCache.set(weeks, { body, at: Date.now() });

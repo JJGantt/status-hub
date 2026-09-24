@@ -28,8 +28,9 @@ final class Capture: ObservableObject {
     var free: Bool { owner == nil || owner == .listener }
 
     /// Seconds of trailing silence that end an utterance: `watch_silence_s` in the hub's settings, read
-    /// at every start and kept for the next, since a start does not wait on the hub.
-    private static var hang: TimeInterval = 2
+    /// at every start and kept for the next, since a start does not wait on the hub. Unset, 3 — the
+    /// same as every other capture source; at 2 an ordinary pause mid-sentence ended the command.
+    private static var hang: TimeInterval = 3
 
     /// Audio nobody has spoken in, after which a recording is closed rather than left holding the
     /// microphone — and with it the mute on every room mic. The listener starts another segment instead
@@ -89,6 +90,11 @@ final class Capture: ObservableObject {
                onFailure: @escaping @MainActor (Error) -> Void) {
         begin(owner, onSilence: onSilence, onTaken: onTaken, onFailure: onFailure) { [weak self] in
             self?.setMuted(true)
+            // The wrist is told the moment the microphone is actually live, not when it was asked
+            // for: opening it takes a beat, and words spoken before this are not recorded. Commands
+            // and follow-ups only — the always-on listener opens through `listen()`, and a tap on
+            // every utterance it picks up would be noise.
+            WKInterfaceDevice.current().play(.start)
         }
     }
 

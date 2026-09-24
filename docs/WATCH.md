@@ -269,7 +269,7 @@ passes `onSilence`, and a session page does not.
 `Endpointer` (in `Capture.swift`) is the phone's always-on rule (`makeListener` in `voiceagent.js`):
 the floor is the quietest buffer so far, speech is 2.5x above it and at least 0.02, and once speech has
 been heard, `watch_silence_s` below that line ends it exactly as a press would. The setting is under
-Trailing silence in the hub's Settings; unset, it is 2 seconds. It is read at every start and kept for
+Trailing silence in the hub's Settings; unset, it is 3 seconds, like every other capture source. It is read at every start and kept for
 the next, since a start does not wait on the hub.
 
 **Nothing ends before speech crosses the line**, and a recording whose speech never registers is
@@ -314,6 +314,9 @@ Cancel throws the clip away. A follow-up in a session has no silence endpoint, s
 
 ### Haptics
 
+- **The microphone opening taps the wrist** (`.start`, a tap with a rising tone), at the moment it is
+  actually live rather than when it was asked for — opening takes a beat, and words spoken before it
+  are lost. Commands and follow-ups only; the always-on listener opens silently.
 - **The microphone closing taps the wrist** (`.stop`), on a command the silence ended and on one a
   press ended alike. That is the moment nothing else reports: the silence decides it, and by then the
   watch may be back at his side.

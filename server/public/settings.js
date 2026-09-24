@@ -81,7 +81,7 @@ export async function open() {
 
       '<div class="settings-sec">Trailing silence (seconds)</div>' +
       row('Phone', 'phone_silence_s', sil('phone_silence_s', 3)) +
-      row('Watch', 'watch_silence_s', sil('watch_silence_s', 2)) +
+      row('Watch', 'watch_silence_s', sil('watch_silence_s', 3)) +
       row('ESP (Hey&nbsp;Rhasspy)', 'esp_silence_s', sil('esp_silence_s', 3)) +
       row('Mac', 'mac_silence_s', sil('mac_silence_s', 3)) +
 

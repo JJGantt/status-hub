@@ -67,14 +67,14 @@ struct HealthView: View {
     /// one and something else has to give it back.
     @ViewBuilder private var overview: some View {
         if let h = nutrition.history {
-            WeightPlot(plot: h.weight).frame(height: 32)
-            IntakeCalendar(weeks: h.weeks).frame(height: 7 * 10)
+            WeightPlot(plot: h.weight, side: heatSide).frame(height: 32)
+            IntakeCalendar(weeks: h.weeks).frame(height: 7 * heatSide)
         }
         if let last = nutrition.day?.entries.first {
             summary(last.name ?? "—", String(mn(last.calories)) + " cal") { panel = .food }
         }
         if let sets = nutrition.history?.sets {
-            IntakeCalendar(weeks: sets).frame(height: 7 * 10)
+            IntakeCalendar(weeks: sets).frame(height: 7 * heatSide)
         }
         if let ex = workout.now?.exercises.first {
             summary(ex.name, String(ex.sets.count)) { panel = .exercises }
@@ -349,14 +349,28 @@ struct Flow: Layout {
 /// over the left end rather than in a gutter — a gutter would inset the data, and being uninset is the
 /// point. The first column is deliberately blank, so the line starts where the calendar's first week
 /// does.
+/// One heat-map cell's side on the health page. The maps are seven of these tall, and the weigh-in plot
+/// places each week on a column this wide — one number, so the plot and the maps cannot disagree.
+private let heatSide: CGFloat = 10
+
 private struct WeightPlot: View {
     let plot: NutHistory.Plot
+    /// The heat maps' cell side. **The plot is drawn on the maps' columns**: a map shows only the newest
+    /// weeks that fit as square cells, right-aligned, so spreading the whole history across the plot's
+    /// width put each week over some other week's column. Each week's point sits on its column's centre
+    /// instead, over exactly the weeks the maps below show — the hub aligns its plot the same way.
+    let side: CGFloat
 
     var body: some View {
         Canvas { ctx, size in
-            let pts = plot.points.compactMap { p -> CGPoint? in
-                guard let x = p.x, let y = p.y else { return nil }
-                return CGPoint(x: x * size.width, y: y * size.height)
+            // `points` is one per week column, oldest first, the same weeks as the maps.
+            let weeks = plot.points.count
+            let shown = min(weeks, max(1, Int(size.width / side)))
+            let first = weeks - shown
+            let left = size.width - CGFloat(shown) * side
+            let pts = plot.points.enumerated().compactMap { i, p -> CGPoint? in
+                guard i >= first, let y = p.y else { return nil }
+                return CGPoint(x: left + (CGFloat(i - first) + 0.5) * side, y: y * size.height)
             }
             guard pts.count > 1 else { return }
             var line = Path()

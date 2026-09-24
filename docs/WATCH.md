@@ -376,7 +376,8 @@ while waiting stops waiting — a command the hub already has still runs.**
 
 Control Center, the Smart Stack and an Ultra's Action button each hold **Hub · Listen · Speak · Sessions · Nutrition ·
 Workout**, which open the app on that page (`OpenPageIntent` → `Router` → `RootView`); Nutrition and
-Workout both land on the health page. Hub (the mic control; `RecordControl` in the code) is the odd one out: it opens home AND starts a command. It is labelled Hub because it sends a command to the hub — a recording is only how.
+Workout both land on the health page. Every control closes an open session first: a session is pushed over the whole row of pages, so
+turning the page beneath it would leave the session on screen. Hub (the mic control; `RecordControl` in the code) is the odd one out: it opens home AND starts a command. It is labelled Hub because it sends a command to the hub — a recording is only how.
 Each control is its own type, spelled out in full — the `kind`, title and symbol are literals, because
 Control Center reads them before the extension runs and a computed one is not there to read.
 

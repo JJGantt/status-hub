@@ -131,12 +131,17 @@ struct RootView: View {
             guard url.scheme == "statushub", url.host == "record" else { return }
             chat.requestRecording()
         }
-        // A record request (complication or Record control) always lands on home, whichever page was
-        // showing.
-        .onChange(of: chat.recordRequested) { _, asked in if asked { page = .home } }
+        // A record request (complication or Hub control) always lands on home, whichever page was
+        // showing — and a command, not a follow-up, so an open session closes.
+        // **Every control closes an open session.** A session is pushed over the whole row of pages, so
+        // turning the page underneath it changes nothing he can see: the session stays on top.
+        .onChange(of: chat.recordRequested) { _, asked in
+            if asked { sessions.path = []; page = .home }
+        }
         // A control that names a page (Control Center, the Action button, the Smart Stack) turns to it.
         .onChange(of: router.asked, initial: true) { _, asked in
             guard let asked else { return }
+            sessions.path = []
             page = Page(asked)
             router.asked = nil
         }

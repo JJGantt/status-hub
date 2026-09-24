@@ -8,6 +8,9 @@ struct ExerciseList: View {
     /// One exercise open at a time, and **the newest is open by default** — the set just logged is the
     /// one being looked at, and a set landing on another exercise moves the opening to it.
     @State private var open: String?
+    /// A tap on the clocks at the top. The day page passes its way back here: the strip is this list's
+    /// heading, the way the rings are the food log's.
+    var onHeader: (() -> Void)? = nil
 
     var body: some View {
         ScrollView {
@@ -20,6 +23,8 @@ struct ExerciseList: View {
                         RestStrip(lastAt: last, sessionStartAt: n.session_start_at,
                                   setsToday: n.sets_today ?? 0, now: ctx.date)
                     }
+                    .contentShape(Rectangle())
+                    .onTapGesture { onHeader?() }
                 }
                 ForEach(Array((workout.now?.exercises ?? []).enumerated()), id: \.offset) { i, ex in
                     LiftRow(exercise: ex, open: open == ex.name, toggle: { open = open == ex.name ? nil : ex.name })
@@ -42,9 +47,9 @@ struct ExerciseList: View {
     }
 }
 
-private let clockGreen = Color(hex: "#39d353")
-private let clockAmber = Color(hex: "#d6c042")
-private let clockGrey = Color(hex: "#8b96a5")
+let clockGreen = Color(hex: "#39d353")
+let clockAmber = Color(hex: "#d6c042")
+let clockGrey = Color(hex: "#8b96a5")
 
 /// The wall's `#resttimer`, cut to what a wrist reads: **the time since the last set on the left, the
 /// day's sets on the right**, one line, no box and no words. A clock symbol carries "since the last
@@ -56,17 +61,11 @@ struct RestStrip: View {
     let setsToday: Int
     let now: Date
 
-    /// SESSION_GAP_S: more than 20 minutes between sets ends the session.
-    private static let sessionGap: Double = 20 * 60
-
     var body: some View {
-        let nowWall = wallClock(now)
-        let rest = max(0, nowWall - (wallClock(lastAt) ?? nowWall))
-        let active = rest <= Self.sessionGap
-        let session = max(0, nowWall - (wallClock(sessionStartAt ?? lastAt) ?? nowWall))
+        let c = RestClock(lastAt: lastAt, sessionStartAt: sessionStartAt, now: now)
         return HStack(alignment: .firstTextBaseline, spacing: 10) {
-            value(since(rest), "clock", active ? (rest >= 300 ? clockAmber : clockGreen) : clockGrey)
-            if active { value(sessionClock(session), "stopwatch", clockGreen) }
+            value(c.restText, "clock", c.restColour)
+            if let session = c.sessionText { value(session, "stopwatch", clockGreen) }
             Spacer(minLength: 0)
             // The day's total, read at the RIGHT edge like every other figure on that side of this
             // page: the word first, the number against the edge, lining up with the muscle counts
@@ -75,6 +74,10 @@ struct RestStrip: View {
                 + Text(String(setsToday)).foregroundColor(clockGrey))
                 .font(.system(size: 15, weight: .heavy).monospacedDigit())
                 .lineLimit(1)
+                // The count never gives way: past an hour the session clock is seven characters, and
+                // the line was cutting the count to "S…" rather than narrowing the clocks.
+                .fixedSize()
+                .layoutPriority(1)
         }
         .padding(.vertical, 4)
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -87,25 +90,48 @@ struct RestStrip: View {
             Text(text)
                 .font(.system(size: 17, weight: .heavy).monospacedDigit())
                 .foregroundColor(colour)
+                .minimumScaleFactor(0.5)
             Image(systemName: symbol)
                 .font(.system(size: 10, weight: .semibold))
                 .foregroundColor(clockGrey.opacity(0.7))
         }
         .lineLimit(1)
-        .fixedSize()
     }
 
-    /// fmtSince: m:ss inside the hour, then "Hh Mm", then "Dd Hh".
-    private func since(_ s: Double) -> String {
-        let n = Int(s)
-        if n < 3600 { return String(n / 60) + ":" + two(n % 60) }
-        if n < 86400 { return String(n / 3600) + "h " + String((n % 3600) / 60) + "m" }
-        return String(n / 86400) + "d " + String((n % 86400) / 3600) + "h"
+}
+
+/// The two training clocks, worked out once so every surface that shows them agrees: the time since the
+/// last set, and the running session. The exercise list's strip and the day page both read this.
+struct RestClock {
+    /// SESSION_GAP_S: more than 20 minutes between sets ends the session.
+    static let sessionGap: Double = 20 * 60
+
+    let rest: Double
+    let session: Double
+    /// A set inside the last 20 minutes: the session is still running.
+    var active: Bool { rest <= Self.sessionGap }
+
+    init(lastAt: String, sessionStartAt: String?, now: Date) {
+        let nowWall = wallClock(now)
+        rest = max(0, nowWall - (wallClock(lastAt) ?? nowWall))
+        session = max(0, nowWall - (wallClock(sessionStartAt ?? lastAt) ?? nowWall))
     }
 
-    /// fmtSession: h:mm:ss once past the hour, else m:ss.
-    private func sessionClock(_ s: Double) -> String {
-        let n = Int(s), h = n / 3600, m = (n % 3600) / 60, sec = n % 60
+    /// **m:ss inside the hour, then whole hours only** — `3h`, `12h`, `72h`. Past an hour the minutes
+    /// are noise, and dropping them is what keeps the value narrow enough to sit beside the figures'
+    /// feet on the day page at any length of rest; `12h 24m` would not fit there.
+    var restText: String {
+        let n = Int(rest)
+        return n < 3600 ? String(n / 60) + ":" + two(n % 60) : String(n / 3600) + "h"
+    }
+
+    /// Green while the rest is short, amber past five minutes, grey once the session has ended.
+    var restColour: Color { active ? (rest >= 300 ? clockAmber : clockGreen) : clockGrey }
+
+    /// fmtSession: h:mm:ss once past the hour, else m:ss. Nil once the session has ended.
+    var sessionText: String? {
+        guard active else { return nil }
+        let n = Int(session), h = n / 3600, m = (n % 3600) / 60, sec = n % 60
         return h > 0 ? String(h) + ":" + two(m) + ":" + two(sec) : String(m) + ":" + two(sec)
     }
 

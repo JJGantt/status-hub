@@ -82,7 +82,7 @@ final class WatchAppDelegate: NSObject, WKApplicationDelegate, UNUserNotificatio
 /// the workout block. Home is where the app opens.
 struct RootView: View {
     enum Page {
-        case sessions, home, health
+        case sessions, home, day, health
 
         /// Food and training are one page now, so the two controls that named them land in the
         /// same place. The controls keep their separate names because that is what he is choosing
@@ -111,21 +111,17 @@ struct RootView: View {
             TabView(selection: $page) {
                 SessionsView().tag(Page.sessions).environment(\.onScreen, page == .sessions)
                 HomeView().tag(Page.home).environment(\.onScreen, page == .home)
+                DayView().tag(Page.day)
                 HealthView().tag(Page.health)
             }
             // No page dots: they are a strip of screen spent saying what a swipe already says.
             .tabViewStyle(.page(indexDisplayMode: .never))
             .navigationDestination(for: String.self) { key in SessionView(key: key) }
         }
-        // **The bar lives HERE, once, above everything.** Inside a page it would be part of that
-        // page's content and would slide away with it on every swipe; over the whole stack it is
-        // welded to the screen and the pages move underneath it.
-        //
-        // The health page is the one exception, and it is about space rather than taste: it fits a
-        // day of food and training on one screen with nothing scrolling, and the 46pt the bar
-        // reserves is the difference between that fitting and not. A session opened on top of it
-        // still gets the bar, because a session is where commands go.
-        .overlay { if page != .health || !sessions.path.isEmpty { CommandBar() } }
+        // **The bar lives HERE, once, above everything, on every page.** Inside a page it would be part
+        // of that page's content and would slide away with it on every swipe; over the whole stack it
+        // is welded to the screen and the pages move underneath it. There is no page it leaves.
+        .overlay { CommandBar() }
         .onOpenURL { url in
             guard url.scheme == "statushub", url.host == "record" else { return }
             chat.requestRecording()
@@ -161,10 +157,11 @@ struct RootView: View {
     private func follow() {
         let live = phase == .active
         if live && page == .sessions { sessions.activate() } else { sessions.deactivate() }
-        if live && page == .home { chat.activate() } else { chat.deactivate() }
+        // The day page shows the newest reply, so it follows the thread as home does.
+        if live && (page == .home || page == .day) { chat.activate() } else { chat.deactivate() }
         // One page, both streams: the health page draws food and training together, so it follows
         // both or neither.
-        if live && page == .health { nutrition.activate(); workout.activate() }
+        if live && (page == .health || page == .day) { nutrition.activate(); workout.activate() }
         else { nutrition.deactivate(); workout.deactivate() }
     }
 }

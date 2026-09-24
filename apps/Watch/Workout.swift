@@ -10,6 +10,8 @@ struct WorkoutNow: Decodable {
     let session_start_at: String?
     let sets_today: Int?
     let exercises: [Exercise]
+    /// Body-map region id → fill for the figures, the week's training (see BodyFigure).
+    let body: [String: String]?
 }
 
 @MainActor

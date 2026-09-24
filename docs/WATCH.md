@@ -20,8 +20,10 @@ build), so a fix that has not been installed is not mistaken for one that failed
 
 ## Pages
 
-Four, swiped left to right: **sessions · home · nutrition · workout**. The app opens on home, which
-IS the conversation — there is no separate prompt page.
+Four, swiped left to right: **sessions · home · day · health**. The app opens on home, which IS the
+conversation — there is no separate prompt page. New layouts are added as NEW pages beside the old
+ones rather than by reshaping a page in place, and the ones that lose are deleted; `day` and `health`
+are two layouts of the same food-and-training data, and one of them is expected to go.
 `RootView` in `StatusHubWatchApp.swift` holds them in a paged `TabView` inside a `NavigationStack`,
 with the page dots off (`indexDisplayMode: .never`) — a strip of screen spent saying what a swipe
 already says.
@@ -157,62 +159,87 @@ reaches the top and its first line still starts below the strip.
 
 ### The command is on every page
 
-`CommandBar` — the control at the bottom edge and the x beside it — is laid over home, the nutrition
-page, the workout page and the sessions list alike, so a command can be started from wherever he is
-rather than only from the conversation. The control sits at the **bottom right** with a wide tap target
-and its glyph at that target's trailing edge; cancel is an x at the bottom **left**, where a thumb
-reaching for the control cannot catch it. **The two are an HStack, not layers.** As two full-width
-layers in a ZStack the one drawn on top swallowed the other's taps, and cancel — the only one with no
-second way to press it — was what stopped working. Every page leaves `CommandBar.height` of room under its
-content.
+`CommandBar` is ONE overlay on `RootView`'s whole navigation stack, not one per page: inside a page it
+would be part of that page's content and slide away with it on every swipe. Over the stack it is
+welded to the screen and the pages move underneath it. It shows on every page and inside a session,
+with no exception; every page leaves `CommandBar.height` (46pt) empty at its foot for it.
+
+**Four marks, each placed at an exact x rather than laid out in a row.** In a row, an absent mark
+gives its width to the others and the rest slide — the empty cancel slot once pushed the middle mark
+17pt off centre. Placed, a mark appearing or going moves nothing:
+
+- **hard left** — cancel, a red x, only while there is something to throw away;
+- **0.3 of the width** — the speech toggle, only inside a session;
+- **dead centre** — the recording's lock while one runs (open and orange as it starts, closed and red
+  once pressed), and the always-on listener's switch when none is;
+- **hard right** — the command: a microphone, a red square while recording, and ONE spinner for any
+  wait (a clip being transcribed and a command running are the same wait to him).
+
+A command goes to the open session when one is on top of the stack, and to the hub otherwise. The bar
+sits on a translucent black band with a hairline, so a list scrolled to its end reads behind the marks
+rather than under them.
 
 ### The nutrition page
 
-Four pace rings over today's log. The rings are `cards/nutrition.js`'s SVG redrawn in a Canvas to the
-same geometry and colours — the arcs, both ticks and the deviation number inside each ring — and
-nothing else: the `consumed / goal` line each ring used to carry is the same four numbers a second
-time, so **the day's totals are behind a tap on the rings** and the letters (Cal, P, C, F) are bigger
-for the room that frees. The card recomputes its rings every second from the browser clock; the watch
-instead takes `/api/rings`'s per-minute frames and blends between the two either side of now each
-second, so the arcs, the ticks and the deviation all move linearly between two minutes and reproduce
-the card's drain without a copy of `lib/pace.js` in Swift. This is why a frame's `frac` is sent to four
-places: at two it moved the tick in ~8-minute jumps. Colours come from a frame, never derived. The
-watch compiles `Controls/RingsView.swift` for the `/api/rings` types and the palette.
-
-**The rings are the page's heading and a switch.** They sit outside the scroll view, so scrolling the
-log never takes them, and a tap turns what is under them between two things worth a screen:
-
-- **the day** — the weigh-in plot, the intake calendar under it on the same weeks (a column is the same
-  week in both, which is why they are drawn together), each total over its goal in a line or two, and
-  the last thing eaten as one line that opens the log;
-- **the log** — everything eaten today.
-
-Both come from `/api/nut-history?weeks=N` and `/api/nutrition-day`. The history loads on the first tap,
-not with the page: it is ten weeks of days and a plot, and most of the time the page is the log. The
-calendar draws its cells with **no gaps** — at eight points a gap is a third of the mark, and the grid
-reads as black ruled by colour — and rings today's cell.
-
-**An entry is two lines: what it was, then what was in it.** A name, then one line of macros —
-`466 cal 23P 88C 4F 12:30 PM` — with a rule above it and no boxes: a number in a box of its own costs
-a row's height to say what a space already says. A tap opens its ingredients, each drawn the same way,
-what it is over what is in it. Staged entries keep the gold edge and the badge.
+Replaced by the day and health pages below. The pieces it was built from are shared by both:
+`RingCell` is `cards/nutrition.js`'s ring redrawn in a Canvas to the same geometry and colours, fed by
+`/api/rings`'s per-minute frames blended each second so the arcs, ticks and deviation move linearly
+between minutes without a copy of `lib/pace.js` in Swift; `DayLog` is today's log, one entry to two
+lines (name, then `466 cal 23P 88C 4F 12:30P`) that tap open to their ingredients, staged entries on
+top with the gold edge.
 
 ### The workout page
 
-The rest clocks on one line (Last set · Session · Sets, ticking each second off naive wall-clock digits
-exactly as `workouts.js` does), then **one row per exercise: its name, and how many sets of it.** That
-is the whole list. The wall's row — a dumbbell mark, every muscle it trains, every set with its weight,
-shrunk to fit one line — is a paragraph per exercise on a screen this size, and at 9pt it was
-unreadable anyway.
+Now `ExerciseList`, the training detail both the day and health pages open: the rest clocks on one
+line, then one row per exercise — its name and how many sets — tapping open to the muscles it trains
+(weekly sets in each muscle's colour) beside its sets. **Nothing in it may report a width wider than it
+was offered**: the ScrollView lays its content out again at the width the content reports, so one
+overflowing row widens every row past the glass. The set count on the clocks line never truncates;
+past an hour the clocks shrink to make room, and at three digits of sets with a session over an hour
+the session clock still clips.
 
-**A tap opens the rest**: the muscles it trains with their weekly sets in each muscle's volume colour,
-then the sets one per line in two columns. One per line because six squeezed into a line is the thing
-being fixed; two columns because one is a column of short strings down half a screen.
+**The rest clocks are `RestClock`**, shared by this list and the day page so they cannot disagree: the
+time since the last set is **m:ss inside the hour and whole hours after it** (`3h`, `12h`, `72h`) —
+past an hour the minutes are noise, and the short form is what fits beside the figures' feet; the
+session clock is m:ss, then h:mm:ss, and only while a set landed within 20 minutes.
 
-Fed by `/api/workout-now`. **Nothing on this page may report a width wider than it was offered**: the
-ScrollView lays its content out again at the width the content reports, so one overflowing row widens
-every row past both edges of the glass. `Flow` offers an item wider than a line the line's width for
-that reason.
+### The day page
+
+`DayView`: **food on the left, training on the right, the newest reply underneath**, on one screen with
+nothing scrolling but the reply. It was drawn as a mockup at this screen's own pixels and signed off
+element by element; `Geo` holds its numbers, the mockup's halved.
+
+- **Two equal columns with a gutter line between them from the top to the foot of the lists.**
+  Nothing crosses it: the training clocks live on the training side.
+- **Left:** the four rings packed 2x2, 4pt apart. **Right:** the body figures at the same height.
+- **The training numbers stand beside the figures' feet** — `last` over the rest time at the left,
+  the session clock centred between the figures, `sets` over the count at the right — one font and
+  size for all three values, one for both labels, and the INK of every value ending on the feet's last
+  row (`Geo.footDrop` corrects for a text frame ending below its digits). They fit because the figures
+  taper at the feet, not because the figures were shrunk: `59:59`, `72h`, `1:41:12` and three digits of
+  sets were each rendered and none touches the artwork. Change a size or move the figures and rerun
+  that check.
+- **Under each column, three rows:** the three newest meals EATEN (staged ones are left out — planned
+  is not eaten) and the three exercises a set went onto most recently. Each list opens its full view.
+- **The reply** is the hub thread's newest answer, full width with a small right inset, scrolling.
+
+The full views keep their heading and the heading is the way back: the food log sits under the four
+rings in a row, and a tap on the rings returns; the exercise list sits under its clocks, and a tap on
+the clocks returns.
+
+**The figures are the web's artwork, drawn natively.** `BodyPaths.swift` is GENERATED from
+`server/lib/bodymap.js` by `apps/tools/gen-body.mjs` — rerun it when the artwork changes — and
+`BodyFigure` parses those paths and draws one half of the 72x93 drawing through a CLIPPED 36-wide
+window; without the clip the other half paints beside it. Each region's colour comes from
+`/api/workout-now`'s `body`, which the hub builds with `lib/musclemap.js` — the same region→muscle
+mapping the browser's muscle card imports, so a region is one colour on the wrist and the wall.
+
+### The health page
+
+`HealthView`: the four rings in a column down the left, and beside them the weigh-in plot, both heat
+maps and one line each for the newest meal and exercise. The earlier consolidation; it fits one screen
+only without the bar, and the bar now shows on every page, so its foot is covered. Kept until the day
+page settles which layout stays.
 
 ## Recording a command
 
@@ -280,15 +307,10 @@ speech from those, not by feel.
 
 ### The lock is a step, not a button
 
-**Cancel is a red x on the bottom row**, in the corner beside the control, drawn by `BottomControl`
-itself so it is the same mark in the same place on every page — home and a session alike. It is there only while there is something to throw away: the recording, or the command the hub
-is still working on. The control at the bottom edge carries the recording: it is an open lock while recording, a closed
-lock once locked, and pressing it walks that on — record, lock, send. Double tap is the same press, so
-the three states are one gesture repeated. A finger tap on the conversation text presses it too, and
-Cancel throws the clip away.
-
-The lock holds the recording open through any silence; a follow-up has no silence endpoint, so its
-control is a mic and then a stop, with no lock in between.
+The lock is its own mark in the bar's centre, so the command mark never has to mean three things.
+Press the command to start, the lock to hold the recording open through any silence, the command again
+to send; double tap is the command. A finger tap on the conversation text starts or sends too.
+Cancel throws the clip away. A follow-up in a session has no silence endpoint, so its lock is moot.
 
 ### Haptics
 
@@ -327,11 +349,11 @@ while waiting stops waiting — a command the hub already has still runs.**
 
 ### A control per page
 
-Control Center, the Smart Stack and an Ultra's Action button each hold a button per page —
-**Sessions · Nutrition · Workout** — which opens the app there rather than in the app to then swipe
-(`OpenPageIntent` → `Router` → `RootView`). Record is the odd one out: it opens home AND starts
-recording. Each control is its own type, because a `ControlWidget` is built by the system and cannot
-carry stored properties of its own; the shared part is `pageControl(_:_:_:)`.
+Control Center, the Smart Stack and an Ultra's Action button each hold **Sessions · Nutrition ·
+Workout**, which open the app on that page (`OpenPageIntent` → `Router` → `RootView`); Nutrition and
+Workout both land on the health page. Record is the odd one out: it opens home AND starts recording.
+Each control is its own type, spelled out in full — the `kind`, title and symbol are literals, because
+Control Center reads them before the extension runs and a computed one is not there to read.
 
 ### Two launchers, one request
 
@@ -379,14 +401,11 @@ recording, not `owner == nil`.
 
 ## Double tap, and scrolling
 
-**Double tap always starts a prompt.** Every page has one control at its bottom edge
-(`BottomControl`) and it holds the gesture (`handGestureShortcut`, live only while its page is the one
-showing — two live bindings leave the system to pick). It is a mic that records and a stop that sends,
-and on home it is also the state glyph. It never hides.
-
-**It is the only binding, in every state.** A command's three steps — start, lock, send — are three
-presses of this one control, so nothing hands the gesture anywhere and nothing can hold two bindings
-at once.
+**Double tap is the command.** It is bound to the command mark on the one `CommandBar`
+(`handGestureShortcut(.primaryAction)`): it starts a recording and, pressed again, sends it. The bar is
+a single view over every page, so there is exactly one binding and nothing has to decide which page's
+control owns the gesture. The lock is a separate mark and is not on double tap: holding a recording
+open through silence is a deliberate press, never something a gesture does on the way to sending.
 
 **Scrolling is a finger or the crown, never the gesture.** The control used to page the view down
 while anything was below, and hand the gesture to recording only at the bottom; that is gone, along

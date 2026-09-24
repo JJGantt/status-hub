@@ -121,7 +121,7 @@ private struct RingsColumn: View {
 /// One ring, drawn to `cards/nutrition.js`'s SVG: an 80-unit box, a r=34 circle on a 7-unit stroke,
 /// arcs from twelve o'clock clockwise with round caps, ticks from r=29 to r=39.5, the glyph on a
 /// baseline at 37 and the deviation number on one at 54. Then `consumed / goal` under it (`.rtot`).
-private struct RingCell: View {
+struct RingCell: View {
     let glyph: String
     let ring: RingNow
 
@@ -182,7 +182,7 @@ private struct RingCell: View {
 
 /// Today's entries from the hub's nutrition log (`cards/nutritionlog.js` loadNutDay): the day band, then
 /// every entry newest first with staged ones on top. Display only.
-private struct DayLog: View {
+struct DayLog: View {
     let day: NutritionDay
     @Binding var open: String?
 
@@ -298,7 +298,7 @@ private struct EntryRow: View {
 }
 
 /// The card's `mn`: a macro number, rounded.
-private func mn(_ v: Double?) -> Int { Int((v ?? 0).rounded()) }
+func mn(_ v: Double?) -> Int { Int((v ?? 0).rounded()) }
 
 /// A number printed the way JavaScript prints it: no ".0" on a whole one.
 func js(_ v: Double) -> String { v == v.rounded() ? String(Int(v)) : String(v) }

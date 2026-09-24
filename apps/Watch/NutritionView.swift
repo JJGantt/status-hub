@@ -14,7 +14,8 @@ struct NutritionView: View {
     @State private var open: String?
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        // 4, the same air the plot and the heat map have between them.
+        VStack(alignment: .leading, spacing: 4) {
             // Redrawn every second, as the card's setInterval(tickRings, 1000). Outside the scroll view
             // on purpose: they are the page's own heading, and scrolling the log should not take them.
             TimelineView(.periodic(from: .now, by: 1)) { ctx in
@@ -26,7 +27,10 @@ struct NutritionView: View {
             // device's own framebuffer mask: at this width the arc clears from 7pt down.
             .padding(.top, 8)
             .contentShape(Rectangle())
-            .onTapGesture { panel = panel == .numbers ? .day : .numbers }
+            // **From anywhere else, the rings are the way back.** Opening the log is a tap on the
+            // meal; closing it is a tap on the rings, rather than a second gesture to learn. Only
+            // from the resting day view do they turn over to the numbers.
+            .onTapGesture { panel = panel == .day ? .numbers : .day }
             ScrollView {
                 VStack(alignment: .leading, spacing: 8) {
                     if let today = nutrition.day {
@@ -49,7 +53,7 @@ struct NutritionView: View {
         // height, and the four pixels buy back the shoulder on both.
         .padding(.horizontal, 8)
         .task { await nutrition.loadHistory() }
-        .topOfTheScreen()
+        .topOfTheScreen(scrollTop: 0)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(Color.black.ignoresSafeArea())
     }

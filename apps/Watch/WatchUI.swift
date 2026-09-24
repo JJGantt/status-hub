@@ -85,24 +85,48 @@ struct CommandBar: View {
         // bottom edge. Its empty top takes no touches, so taps still reach the page underneath.
         VStack(spacing: 0) {
             Spacer(minLength: 0)
-            HStack(spacing: 0) {
-                slot { if let cancel { mark("xmark", .red, action: cancel) } }
-                Spacer(minLength: 0)
-                slot { middle }
-                Spacer(minLength: 0)
-                slot { primary }
+            // **Every mark is placed at an exact x, not laid out beside its neighbours.** Cancel hard
+            // left, the command hard right, and the lock DEAD CENTRE — which is the whole reason this
+            // is not an HStack. Laid out in a row, a mark that is absent gives its width to the others
+            // and the rest slide: the empty cancel slot collapsed to nothing and pushed the middle
+            // mark 17pt off centre. Placed, a mark appearing or going moves nothing at all, and the
+            // one in the middle is in the middle whatever else is on screen.
+            GeometryReader { g in
+                let edge = 12 + Self.slot / 2
+                ZStack {
+                    at(edge, g) { if let cancel { mark("xmark", .red, action: cancel) } }
+                    at(g.size.width * 0.3, g) { speak }
+                    at(g.size.width / 2, g) { middle }
+                    at(g.size.width - edge, g) { primary }
+                }
             }
-            // 12pt: the bottom corners are curved, and a mark in the outer slot loses its edge to the
-            // arc at less than this.
-            .padding(.horizontal, 12)
+            .frame(height: Self.slot)
+            .padding(.top, 5)
             .padding(.bottom, 9)
+            // **The bar sits on its own plane.** Reserving the row in each page's padding is not
+            // enough on its own — a list scrolled to its end still runs a line under the marks. A band
+            // dark enough to read a white glyph against, and sheer enough to see that there is more
+            // underneath, separates the two without hiding what is there. The hairline is what stops
+            // it reading as the page simply fading out.
+            .background {
+                Color.black.opacity(0.72)
+                    .overlay(alignment: .top) {
+                        Rectangle().fill(Color(hex: "#222a33").opacity(0.8)).frame(height: 1)
+                    }
+                    .ignoresSafeArea(edges: .bottom)
+            }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .ignoresSafeArea(edges: .bottom)
     }
 
-    private func slot<V: View>(@ViewBuilder _ content: () -> V) -> some View {
-        content().frame(width: Self.slot, height: Self.slot)
+    /// A mark centred on an exact x. `Color.clear` underneath holds the box open when the mark is
+    /// absent, so nothing around it can claim the space and shift.
+    private func at<V: View>(_ x: CGFloat, _ g: GeometryProxy,
+                             @ViewBuilder _ content: () -> V) -> some View {
+        ZStack { Color.clear; content() }
+            .frame(width: Self.slot, height: Self.slot)
+            .position(x: x, y: g.size.height / 2)
     }
 
     /// The command. A press starts the recording, and the next press sends it — the lock is its own
@@ -118,6 +142,16 @@ struct CommandBar: View {
                 else if recording { chat.stopRecording() } else { chat.startRecording() }
             }
             .handGestureShortcut(.primaryAction)
+        }
+    }
+
+    /// Reads a session's replies out loud. It belongs to a session and nothing else, so outside one
+    /// this column is simply empty — and, being a column, empty costs the others nothing.
+    @ViewBuilder private var speak: some View {
+        if let target {
+            mark("speaker.wave.2.fill", sessions.speaks.contains(target) ? .orange : Color(hex: "#5c6675")) {
+                sessions.toggleSpeech(target)
+            }
         }
     }
 
@@ -166,9 +200,12 @@ extension View {
     /// rectangle, so a full-width line drawn hard against the top has its first and last words under
     /// the curve and clipped — invisible in a simulator screenshot, which is a flat rectangle, and
     /// plain on the wrist. This is the smallest inset that clears it.
-    func topOfTheScreen() -> some View {
+    /// `scrollTop` is that inset. It is 0 for a page whose scroll view is NOT the thing at the top of
+    /// the screen — the nutrition page holds its rings above the scroller, so the rings clear the
+    /// curve themselves and the margin would only open a gap under them.
+    func topOfTheScreen(scrollTop: CGFloat = 14) -> some View {
         ignoresSafeArea(edges: .top)
-            .contentMargins(.top, 14, for: .scrollContent)
+            .contentMargins(.top, scrollTop, for: .scrollContent)
     }
 }
 

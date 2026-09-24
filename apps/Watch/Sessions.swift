@@ -205,6 +205,23 @@ final class Sessions: ObservableObject {
         }
     }
 
+    /// **Sessions whose replies are read aloud.** Per session, not per app: speech is something you
+    /// turn on for the piece of work you are listening to, and turning it on in one is no reason for
+    /// another to start talking.
+    @Published private(set) var speaks: Set<String> = []
+
+    /// The instruction that rides with every command sent to a speaking session. It changes how the
+    /// reply is WRITTEN, which is the whole reason this is a mode and not a speaker switch — the watch
+    /// cannot turn a table into something worth hearing after the fact. Format only: the detail he
+    /// asked for still belongs in the answer.
+    static let spokenFormat = "\n\n[This reply is read aloud. Plain spoken words only — never any "
+        + "markdown, tables, code, lists, bullets, paths, URLs or symbols; speak the substance of those "
+        + "instead. Say everything you would otherwise say: this is about the form, not the length.]"
+
+    func toggleSpeech(_ key: String) {
+        if speaks.contains(key) { speaks.remove(key) } else { speaks.insert(key) }
+    }
+
     func toggleRecording(_ key: String) {
         if capture.owner == .session(key) { stopRecording(key) } else { startRecording(key) }
     }
@@ -265,7 +282,10 @@ final class Sessions: ObservableObject {
                     sent[key] = text
                     discard(key)
                 }
-                try await Hub.followUp(row(for: key)?.id ?? key, text: sent[key] ?? "", msgId: msgId)
+                // The directive travels with the command rather than being set on the session once:
+                // a session that restarts forgets a mode, and cannot forget what is in the prompt.
+                let words = (sent[key] ?? "") + (speaks.contains(key) ? Self.spokenFormat : "")
+                try await Hub.followUp(row(for: key)?.id ?? key, text: words, msgId: msgId)
             } catch {
                 failures[key] = .message(error.localizedDescription)
             }

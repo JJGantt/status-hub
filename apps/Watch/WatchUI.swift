@@ -71,6 +71,9 @@ struct CommandBorder: View {
     /// Everything the edge looks like — thickness, the black band, every state's colour — is a hub
     /// setting, so it is tuned without a build (`BorderStyle`).
     @ObservedObject private var style = BorderStyle.shared
+    /// Wrist down: the system redraws the screen too seldom to animate, so anything moving freezes
+    /// wherever it happened to be.
+    @Environment(\.isLuminanceReduced) private var lowered
 
     /// Where a command goes. A session pushed on the stack owns the command while it is open.
     private var target: String? { sessions.path.last }
@@ -111,6 +114,10 @@ struct CommandBorder: View {
         case .recording: line(style.recording)
         case .locked: line(style.locked)
         case .listening: line(style.listening)
+        case .working where lowered:
+            // A sweep frozen mid-way reads as something stuck, so with the wrist down it is the whole
+            // line in the working colour instead, which no other state uses.
+            line(style.working)
         case .working:
             // A dark ring with a bright stretch travelling round it: moving, so "working" can never be
             // mistaken for a colour that means something else.

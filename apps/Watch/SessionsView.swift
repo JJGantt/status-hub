@@ -168,6 +168,11 @@ struct SessionView: View {
                 }
             }
             .onAppear { toNewest(proxy) }
+            // Sending a follow-up is him asking to watch the answer come in: following again from his
+            // words, wherever he had scrolled to.
+            .onChange(of: sessions.sent[key]) { _, words in
+                if words != nil { following = true; toNewest(proxy, animated: true) }
+            }
         }
         // The session's name on the clock's line, and NO back arrow: the swipe that opened it from the
         // right is what takes it away again, and a title bar with a button in it costs the top of a

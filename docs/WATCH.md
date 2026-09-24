@@ -114,8 +114,8 @@ are cleared only after the reply is fetched (`Sessions.sessionFrame`); cleared f
 would be the previous reply for the length of the fetch and the view would jump up to it and back.
 
 **His scrolling ends the following**, finger or crown (any scroll phase he drives); nothing new moves
-the page after that. Letting go with the very end of the page on screen hands it back — from the next
-new item, without a jump. The end is a one-point marker at the bottom of `PagedScroll`, asked whether
+the page after that. Two things hand it back: letting go with the very end of the page on screen (from
+the next new item, without a jump), and sending a follow-up, which jumps to his words. The end is a one-point marker at the bottom of `PagedScroll`, asked whether
 it is VISIBLE (`onScrollVisibilityChange`), not a sum over the scroll view's reported offsets, which
 this app does not trust (§ Double tap, and scrolling).
 
@@ -170,7 +170,7 @@ command goes to the session instead of the hub):
 |---|---|
 | recording, and the silence will end it | amber |
 | locked open through the silence | red |
-| the hub working on it (transcript or command) | white, a bright stretch travelling round a dim ring |
+| the hub working on it (transcript or command) | white, a bright stretch travelling round a dim ring; with the wrist down, the whole line white |
 | always-on listening | blue, dim |
 | idle | none |
 

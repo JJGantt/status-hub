@@ -35,7 +35,7 @@ struct SessionsView: View {
                     .foregroundColor(.gray)
                     .frame(maxWidth: .infinity)
                     .padding(.top, 10)
-                Color.clear.frame(height: CommandBar.height)
+                Color.clear.frame(height: PageInset.bottom)
             }
             // 8pt, matching every other page: a rule or a name run to the edge has its ends under
             // the display's corner arc at 4.

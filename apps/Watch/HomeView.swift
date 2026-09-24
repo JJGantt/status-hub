@@ -45,7 +45,7 @@ struct HomeView: View {
                     Color.clear.frame(height: WKInterfaceDevice.current().screenBounds.height * 0.8).id("tail")
                 }
                 .padding(.horizontal, 8)
-                .padding(.bottom, CommandBar.height)
+                .padding(.bottom, PageInset.bottom)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .opacity(dimmed ? 0.6 : 1)
                 // The whole page records under a finger, as the thread always has. The lock is its

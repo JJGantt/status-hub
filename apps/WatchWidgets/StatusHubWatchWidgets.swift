@@ -7,6 +7,7 @@ struct StatusHubWatchWidgets: WidgetBundle {
         RecordComplication()
         if #available(watchOS 26.0, *) {
             RecordControl()
+            ListenControl()
             SessionsControl()
             NutritionControl()
             WorkoutControl()
@@ -25,6 +26,20 @@ struct RecordControl: ControlWidget {
             }
         }
         .displayName("Record")
+    }
+}
+
+/// Always-on listening, on and off: the job the bar's middle button did before the bar went. Spelled
+/// out in full like Record — Control Center reads the kind, title and symbol before the extension runs.
+@available(watchOS 26.0, *)
+struct ListenControl: ControlWidget {
+    var body: some ControlWidgetConfiguration {
+        StaticControlConfiguration(kind: "com.jaredgantt.statushub.watch.listen") {
+            ControlWidgetButton(action: ListenIntent()) {
+                Label("Listen", systemImage: "waveform")
+            }
+        }
+        .displayName("Listen")
     }
 }
 

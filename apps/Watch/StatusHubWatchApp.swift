@@ -118,10 +118,15 @@ struct RootView: View {
             .tabViewStyle(.page(indexDisplayMode: .never))
             .navigationDestination(for: String.self) { key in SessionView(key: key) }
         }
-        // **The bar lives HERE, once, above everything, on every page.** Inside a page it would be part
-        // of that page's content and would slide away with it on every swipe; over the whole stack it
-        // is welded to the screen and the pages move underneath it. There is no page it leaves.
-        .overlay { CommandBar() }
+        // **The command's state lives HERE, once, above everything, on every page**: the edge of the
+        // glass (`CommandBorder`), which also holds the double-tap binding. Inside a page it would be
+        // part of that page's content and slide with it on a swipe; over the stack it stays put.
+        .overlay { CommandBorder() }
+        // Press and hold anywhere throws away what is under way. It is on the whole stack rather than
+        // a page for the same reason, and does nothing when there is nothing to throw away.
+        .simultaneousGesture(LongPressGesture(minimumDuration: 0.6).onEnded { _ in
+            CommandBorder.cancel(chat: chat, sessions: sessions)
+        })
         .onOpenURL { url in
             guard url.scheme == "statushub", url.host == "record" else { return }
             chat.requestRecording()

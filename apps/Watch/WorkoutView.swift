@@ -38,7 +38,7 @@ struct ExerciseList: View {
             // 8pt, matching every other page: a rule or a name run to the edge has its ends under
             // the display's corner arc at 4.
             .padding(.horizontal, 8)
-            .padding(.bottom, CommandBar.height)
+            .padding(.bottom, PageInset.bottom)
         }
         .onChange(of: workout.now?.exercises.first?.name, initial: true) { _, newest in open = newest }
         .scrollIndicators(.never)

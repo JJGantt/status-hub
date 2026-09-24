@@ -30,6 +30,36 @@ struct RecordIntent: OpenIntent {
     }
 }
 
+/// What the Listen control opens: the one target there is, as with Record.
+enum ListenTarget: String, AppEnum {
+    case listener
+
+    static var typeDisplayRepresentation: TypeDisplayRepresentation = "Status Hub"
+    static var caseDisplayRepresentations: [ListenTarget: DisplayRepresentation] = [.listener: "Listen"]
+}
+
+/// Turns always-on listening on or off: the Listen control's action. The watch shows which by the
+/// edge of the glass (blue while listening), since a control cannot read the app's state without an
+/// App Group, which this account cannot enable. Compiled into both the extension and the app; the
+/// system launches the app and runs `perform()` there, where WATCH_APP is defined.
+struct ListenIntent: OpenIntent {
+    static var title: LocalizedStringResource = "Listen"
+
+    @Parameter(title: "Target") var target: ListenTarget
+
+    init() {
+        target = .listener
+    }
+
+    @MainActor
+    func perform() async throws -> some IntentResult {
+        #if WATCH_APP
+        Chat.shared.toggleListening()
+        #endif
+        return .result()
+    }
+}
+
 /// Which page of the app a control opens. `record` is the microphone's: it lands on home and starts
 /// recording. The rest are places — a control per page, so Control Center (and the Action button, and
 /// the Smart Stack) can put him where he was going rather than in the app to then swipe.

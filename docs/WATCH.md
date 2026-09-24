@@ -159,25 +159,26 @@ reaches the top and its first line still starts below the strip.
 
 ### The command is on every page
 
-`CommandBar` is ONE overlay on `RootView`'s whole navigation stack, not one per page: inside a page it
-would be part of that page's content and slide away with it on every swipe. Over the stack it is
-welded to the screen and the pages move underneath it. It shows on every page and inside a session,
-with no exception; every page leaves `CommandBar.height` (46pt) empty at its foot for it.
+There is no control on screen. **Double tap runs a command, press and hold anywhere throws one away,
+and a line around the very edge of the glass says what is happening** (`CommandBorder`, one overlay on
+`RootView`'s whole navigation stack, so it is the same on every page and inside a session, where a
+command goes to the session instead of the hub):
 
-**Four marks, each placed at an exact x rather than laid out in a row.** In a row, an absent mark
-gives its width to the others and the rest slide — the empty cancel slot once pushed the middle mark
-17pt off centre. Placed, a mark appearing or going moves nothing:
+| state | edge |
+|---|---|
+| recording, and the silence will end it | amber |
+| locked open through the silence | red |
+| the hub working on it (transcript or command) | white, a bright stretch travelling round a dim ring |
+| always-on listening | blue, dim |
+| idle | none |
 
-- **hard left** — cancel, a red x, only while there is something to throw away;
-- **0.3 of the width** — the speech toggle, only inside a session;
-- **dead centre** — the recording's lock while one runs (open and orange as it starts, closed and red
-  once pressed), and the always-on listener's switch when none is;
-- **hard right** — the command: a microphone, a red square while recording, and ONE spinner for any
-  wait (a clip being transcribed and a command running are the same wait to him).
-
-A command goes to the open session when one is on top of the stack, and to the hub otherwise. The bar
-sits on a translucent black band with a hairline, so a list scrolled to its end reads behind the marks
-rather than under them.
+**The line follows Apple's own outline of the glass**, not a rounded rectangle: `GlassEdge` draws each
+corner as the three cubic curves of the device's framebuffer mask (the 46mm simulator's
+`framebufferMask` PDF), in units of the display's 50pt corner radius. It is a continuous corner — at
+the top edge the glass begins 1.31 radii from the side, where a circle would begin at 1.0 — so a thin
+line drawn on a circle leaves the bezel at every corner. Checked against the mask: the line lies on the
+outermost row of the glass along the straights and on the glass's own soft rim in the corners.
+Pages leave only `PageInset.bottom` (12pt) under their content, for the curve.
 
 ### The nutrition page
 
@@ -307,10 +308,10 @@ speech from those, not by feel.
 
 ### The lock is a step, not a button
 
-The lock is its own mark in the bar's centre, so the command mark never has to mean three things.
-Press the command to start, the lock to hold the recording open through any silence, the command again
-to send; double tap is the command. A finger tap on the conversation text starts or sends too.
-Cancel throws the clip away. A follow-up in a session has no silence endpoint, so its lock is moot.
+Double tap walks a command: start, then lock it open through any silence, then send. Unlocked, the
+silence still ends it by itself. A session's follow-up has no silence endpoint, so there the second
+double tap sends. Press and hold anywhere cancels the recording, or the command the hub is still
+working on; it does nothing when there is nothing to throw away.
 
 ### Haptics
 
@@ -352,7 +353,7 @@ while waiting stops waiting — a command the hub already has still runs.**
 
 ### A control per page
 
-Control Center, the Smart Stack and an Ultra's Action button each hold **Sessions · Nutrition ·
+Control Center, the Smart Stack and an Ultra's Action button each hold **Record · Listen · Sessions · Nutrition ·
 Workout**, which open the app on that page (`OpenPageIntent` → `Router` → `RootView`); Nutrition and
 Workout both land on the health page. Record is the odd one out: it opens home AND starts recording.
 Each control is its own type, spelled out in full — the `kind`, title and symbol are literals, because
@@ -411,11 +412,9 @@ recording, not `owner == nil`.
 
 ## Double tap, and scrolling
 
-**Double tap is the command.** It is bound to the command mark on the one `CommandBar`
-(`handGestureShortcut(.primaryAction)`): it starts a recording and, pressed again, sends it. The bar is
-a single view over every page, so there is exactly one binding and nothing has to decide which page's
-control owns the gesture. The lock is a separate mark and is not on double tap: holding a recording
-open through silence is a deliberate press, never something a gesture does on the way to sending.
+**Double tap is the command, and it is the only binding.** With no control on screen it binds to a
+point-sized, invisible button inside `CommandBorder` (`handGestureShortcut(.primaryAction)`). The
+simulator cannot perform the gesture, so the binding is proven only on the watch.
 
 **Scrolling is a finger or the crown, never the gesture.** The control used to page the view down
 while anything was below, and hand the gesture to recording only at the bottom; that is gone, along

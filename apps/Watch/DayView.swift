@@ -66,7 +66,7 @@ struct DayView: View {
         }
         .padding(.horizontal, Geo.pad)
         .padding(.top, Geo.top)
-        .padding(.bottom, CommandBar.height)
+        .padding(.bottom, PageInset.bottom)
         .topOfTheScreen(scrollTop: 0)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .background(Color.black.ignoresSafeArea())
@@ -143,7 +143,7 @@ struct DayView: View {
             .onTapGesture { panel = .overview }
             ScrollView {
                 if let d = nutrition.day { DayLog(day: d, open: $open) }
-                Color.clear.frame(height: CommandBar.height)
+                Color.clear.frame(height: PageInset.bottom)
             }
             .scrollIndicators(.never)
         }

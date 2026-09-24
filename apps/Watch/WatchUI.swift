@@ -47,31 +47,24 @@ struct ActivityLines: View {
     }
 }
 
-/// **The one control in the app, and it does not move.** It is a single overlay over the whole row
-/// of pages rather than one per page, so a swipe slides the PAGES underneath it while the three marks
-/// stay exactly where the thumb left them. Same bar, same three places, on every page and inside an
-/// open session; the only thing a page changes is where a command GOES, which is the session on top
-/// of the stack when one is open and the hub when none is.
+/// **The command's state is the edge of the glass.** There is no control on screen: double tap runs a
+/// command, press and hold throws one away, and a one-pixel line around the very edge of the display
+/// says what is happening — the whole screen stays content. It is ONE overlay over the whole
+/// navigation stack, so it is the same on every page and inside a session, where the command goes
+/// to the session instead of the hub.
 ///
-/// Three slots, each read by its position:
-/// - **left** throws away what is under way, and is nothing at all when there is nothing to throw away.
-/// - **middle** is the recording's lock while one runs — open and orange as it starts, closed and red
-///   once pressed — and the always-on listener's switch when none is running.
-/// - **right** is the command itself: a microphone at rest, a red square while recording, and ONE
-///   spinner whenever the hub is working. The transcript and the command are the same wait to him, so
-///   they are the same mark rather than two spinners that differ in a way only the code knows about.
-struct CommandBar: View {
+/// | state | edge |
+/// |---|---|
+/// | recording, and the silence will end it | amber |
+/// | locked open through the silence | red |
+/// | the hub working on it (transcript or command) | white, a sweep travelling round |
+/// | always-on listening | blue, dim |
+/// | idle | none |
+struct CommandBorder: View {
     @EnvironmentObject private var chat: Chat
     @EnvironmentObject private var sessions: Sessions
     @ObservedObject private var capture = Capture.shared
-
-    /// The room a page leaves under its content. It is the slot (34) plus the bar's own bottom
-    /// padding (9) and a hair, so the bottom row of every page is EMPTY and belongs to the bar — a
-    /// page that reserves only the slot has its last line of text under the marks.
-    static let height: CGFloat = 46
-    /// The side of every slot's box. Each mark centres in one of these, so a mark that changes size —
-    /// a microphone to a square to a spinner — never shifts the spot the eye is already holding.
-    private static let slot: CGFloat = 34
+    @Environment(\.isLuminanceReduced) private var dimmed
 
     /// Where a command goes. A session pushed on the stack owns the command while it is open.
     private var target: String? { sessions.path.last }
@@ -80,114 +73,140 @@ struct CommandBar: View {
     /// The hub has it and is working: a clip being transcribed and a command being run are one wait.
     private var working: Bool { target.map { sessions.busy.contains($0) } ?? chat.waiting }
 
+    private enum State { case recording, locked, working, listening, idle }
+    private var state: State {
+        if recording { return capture.locked ? .locked : .recording }
+        if working { return .working }
+        if capture.listens { return .listening }
+        return .idle
+    }
+
     var body: some View {
-        // A full-height column reaching past the safe area puts the row on the screen's physical
-        // bottom edge. Its empty top takes no touches, so taps still reach the page underneath.
-        VStack(spacing: 0) {
-            Spacer(minLength: 0)
-            // **Every mark is placed at an exact x, not laid out beside its neighbours.** Cancel hard
-            // left, the command hard right, and the lock DEAD CENTRE — which is the whole reason this
-            // is not an HStack. Laid out in a row, a mark that is absent gives its width to the others
-            // and the rest slide: the empty cancel slot collapsed to nothing and pushed the middle
-            // mark 17pt off centre. Placed, a mark appearing or going moves nothing at all, and the
-            // one in the middle is in the middle whatever else is on screen.
-            GeometryReader { g in
-                let edge = 12 + Self.slot / 2
+        ZStack {
+            // Double tap is the command. It needs a control to bind to, and there is no control on
+            // screen, so this one is: a point of nothing that takes no touches of its own.
+            Button(action: primary) { Color.clear.frame(width: 1, height: 1) }
+                .buttonStyle(.plain)
+                .handGestureShortcut(.primaryAction)
+                .accessibilityHidden(true)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+            edge.allowsHitTesting(false)
+        }
+        .ignoresSafeArea()
+    }
+
+    @ViewBuilder private var edge: some View {
+        switch state {
+        case .idle: EmptyView()
+        case .recording: line(Color(hex: "#f2a13d"))
+        case .locked: line(Color(hex: "#e5484d"))
+        case .listening: line(Color(hex: "#3b82f6").opacity(0.7))
+        case .working:
+            // A dim full ring with a bright stretch travelling round it: moving, so "working" can
+            // never be mistaken for a colour that means something else.
+            TimelineView(.animation) { ctx in
+                let t = ctx.date.timeIntervalSinceReferenceDate.truncatingRemainder(dividingBy: 2.4) / 2.4
                 ZStack {
-                    at(edge, g) { if let cancel { mark("xmark", .red, action: cancel) } }
-                    at(g.size.width * 0.3, g) { speak }
-                    at(g.size.width / 2, g) { middle }
-                    at(g.size.width - edge, g) { primary }
+                    line(.white.opacity(0.25))
+                    GlassEdge(width: Self.width).trimmedPath(t, 0.18)
+                        .stroke(Color.white.opacity(dimmed ? 0.6 : 1), lineWidth: Self.width)
                 }
             }
-            .frame(height: Self.slot)
-            .padding(.top, 5)
-            .padding(.bottom, 9)
-            // **The bar sits on its own plane.** Reserving the row in each page's padding is not
-            // enough on its own — a list scrolled to its end still runs a line under the marks. A band
-            // dark enough to read a white glyph against, and sheer enough to see that there is more
-            // underneath, separates the two without hiding what is there. The hairline is what stops
-            // it reading as the page simply fading out.
-            .background {
-                Color.black.opacity(0.72)
-                    .overlay(alignment: .top) {
-                        Rectangle().fill(Color(hex: "#222a33").opacity(0.8)).frame(height: 1)
-                    }
-                    .ignoresSafeArea(edges: .bottom)
-            }
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .ignoresSafeArea(edges: .bottom)
-    }
-
-    /// A mark centred on an exact x. `Color.clear` underneath holds the box open when the mark is
-    /// absent, so nothing around it can claim the space and shift.
-    private func at<V: View>(_ x: CGFloat, _ g: GeometryProxy,
-                             @ViewBuilder _ content: () -> V) -> some View {
-        ZStack { Color.clear; content() }
-            .frame(width: Self.slot, height: Self.slot)
-            .position(x: x, y: g.size.height / 2)
-    }
-
-    /// The command. A press starts the recording, and the next press sends it — the lock is its own
-    /// mark now, so this one never has to mean three things at once.
-    @ViewBuilder private var primary: some View {
-        if working {
-            ProgressView().controlSize(.large).tint(.white)
-        } else {
-            mark(recording ? "square.fill" : "mic.fill", recording ? .red : .white) {
-                Hub.log("control", ["target": target ?? "hub", "recording": recording])
-                Capture.trigger = "press"
-                if let target { sessions.toggleRecording(target) }
-                else if recording { chat.stopRecording() } else { chat.startRecording() }
-            }
-            .handGestureShortcut(.primaryAction)
         }
     }
 
-    /// Reads a session's replies out loud. It belongs to a session and nothing else, so outside one
-    /// this column is simply empty — and, being a column, empty costs the others nothing.
-    @ViewBuilder private var speak: some View {
-        if let target {
-            mark("speaker.wave.2.fill", sessions.speaks.contains(target) ? .orange : Color(hex: "#5c6675")) {
-                sessions.toggleSpeech(target)
-            }
-        }
+    private func line(_ c: Color) -> some View {
+        GlassEdge(width: Self.width).stroke(c.opacity(dimmed ? 0.6 : 1), lineWidth: Self.width)
     }
 
-    /// The lock while a recording runs, the always-on listener's switch when none does.
-    @ViewBuilder private var middle: some View {
-        if recording {
-            mark(capture.locked ? "lock.fill" : "lock.open", capture.locked ? .red : .orange) {
-                capture.toggleLock()
-            }
-        } else {
-            mark("waveform", capture.listens ? .orange : Color(hex: "#5c6675")) {
-                chat.toggleListening()
-            }
-        }
+    /// One pixel on this 2x screen. The line sits entirely inside the glass (GlassEdge insets its path
+    /// by half of it), so the whole pixel is lit rather than half of it under the bezel.
+    static let width: CGFloat = 0.5
+
+    /// Idle: start. Recording: lock it open through the silence, then send. A session's follow-up has
+    /// no silence to hold off, so there the second double tap sends.
+    private func primary() {
+        Hub.log("control", ["target": target ?? "hub", "recording": recording, "locked": capture.locked])
+        Capture.trigger = "double-tap"
+        if let target { sessions.toggleRecording(target); return }
+        if !recording { chat.startRecording() }
+        else if capture.locked { chat.stopRecording() }
+        else { capture.toggleLock() }
     }
 
-    private var cancel: (() -> Void)? {
-        if recording {
-            return { if let target { sessions.cancelRecording(target) } else { chat.cancelRecording() } }
-        }
-        if working && target == nil { return chat.cancel }
-        return nil
-    }
-
-    private func mark(_ symbol: String, _ colour: Color, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            Image(systemName: symbol)
-                .font(.system(size: 20, weight: .semibold))
-                .foregroundColor(colour)
-                .frame(width: Self.slot, height: Self.slot)
-                .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
+    /// Press and hold anywhere: throw away what is under way — the recording, or the command the hub
+    /// is still working on. Nothing happens when there is nothing to throw away.
+    static func cancel(chat: Chat, sessions: Sessions) {
+        let target = sessions.path.last
+        let capture = Capture.shared
+        if let target, capture.owner == .session(target) { sessions.cancelRecording(target) }
+        else if capture.owner == .hub { chat.cancelRecording() }
+        else if target == nil && chat.waiting { chat.cancel() }
     }
 }
 
+/// The outline of the glass itself, inset by half a line width so a stroke along it lies wholly inside
+/// the display. **The corners are Apple's, not a guess**: each is the three cubic curves of the
+/// device's own framebuffer mask (the 46mm simulator's `framebufferMask` PDF), written in units of the
+/// display's corner radius. It is a continuous corner — at the very top edge the glass begins 1.31
+/// radii in from the side, where a circular arc of the same radius would begin at 1.0 — so a one-pixel
+/// line drawn on a circle leaves the bezel at every corner.
+struct GlassEdge: Shape {
+    let width: CGFloat
+    /// The 46mm display's corner radius in points (`DeviceCornerRadius` in its device profile).
+    static let radius: CGFloat = 50
+
+    func path(in r: CGRect) -> Path {
+        let rect = r.insetBy(dx: width / 2, dy: width / 2)
+        let R = Self.radius - width / 2
+        // One corner, as offsets from the corner point along its two edges, in units of R: the
+        // straight edge ends 1.307581 R from the corner and three curves turn it.
+        let k: [(CGFloat, CGFloat)] = [
+            (0, 1.307581),
+            (0, 0.852907), (0.04734106, 0.6880309), (0.1362377, 0.5218087),
+            (0.2251343, 0.3555865), (0.3555865, 0.2251343), (0.5218087, 0.1362377),
+            (0.6880309, 0.04734106), (0.852907, 0), (1.307581, 0),
+        ]
+        // Each corner maps (along the edge before it, along the edge after it) to a point.
+        let corners: [(CGPoint, CGVector, CGVector)] = [
+            (CGPoint(x: rect.minX, y: rect.minY), CGVector(dx: 0, dy: 1), CGVector(dx: 1, dy: 0)),
+            (CGPoint(x: rect.maxX, y: rect.minY), CGVector(dx: -1, dy: 0), CGVector(dx: 0, dy: 1)),
+            (CGPoint(x: rect.maxX, y: rect.maxY), CGVector(dx: 0, dy: -1), CGVector(dx: -1, dy: 0)),
+            (CGPoint(x: rect.minX, y: rect.maxY), CGVector(dx: 1, dy: 0), CGVector(dx: 0, dy: -1)),
+        ]
+        var p = Path()
+        for (i, (c, a, b)) in corners.enumerated() {
+            func pt(_ u: (CGFloat, CGFloat)) -> CGPoint {
+                // u.0 runs along `b` (the edge after), u.1 along `a` (the edge before).
+                CGPoint(x: c.x + (u.1 * a.dx + u.0 * b.dx) * R, y: c.y + (u.1 * a.dy + u.0 * b.dy) * R)
+            }
+            if i == 0 { p.move(to: pt(k[0])) } else { p.addLine(to: pt(k[0])) }
+            for j in stride(from: 1, to: k.count, by: 3) {
+                p.addCurve(to: pt(k[j + 2]), control1: pt(k[j]), control2: pt(k[j + 1]))
+            }
+        }
+        p.closeSubpath()
+        return p
+    }
+
+    /// A stretch of the outline `length` long (as a fraction of it) starting at `from`, wrapping round
+    /// the start of the path.
+    func trimmedPath(_ from: Double, _ length: Double) -> Path {
+        var out = Path()
+        let whole = path(in: CGRect(origin: .zero, size: WKInterfaceDevice.current().screenBounds.size))
+        let to = from + length
+        out.addPath(whole.trimmedPath(from: from, to: min(1, to)))
+        if to > 1 { out.addPath(whole.trimmedPath(from: 0, to: to - 1)) }
+        return out
+    }
+}
+
+/// How far a page's content stops short of the bottom of the glass, so its last line clears the curved
+/// bottom corners when scrolled to the end. The bar that used to live there is gone; this is only the
+/// curve.
+enum PageInset {
+    static let bottom: CGFloat = 12
+}
 
 extension View {
     /// **The strip the clock sat in belongs to the page.** watchOS keeps a safe area at the top for the
@@ -250,7 +269,7 @@ struct PagedScroll<Content: View>: View {
                 Color.clear.frame(height: WKInterfaceDevice.current().screenBounds.height * 0.8).id("tail")
             }
             .padding(.horizontal, 8)
-            .padding(.bottom, CommandBar.height)
+            .padding(.bottom, PageInset.bottom)
         }
         .scrollIndicators(.never)
         .scrollPosition($position)

@@ -46,7 +46,7 @@ struct HealthView: View {
                         default: ExerciseList()
                         }
                     }
-                    .padding(.bottom, CommandBar.height)
+                    .padding(.bottom, PageInset.bottom)
                 }
                 .scrollIndicators(.never)
             }

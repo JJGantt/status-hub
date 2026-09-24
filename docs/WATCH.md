@@ -175,8 +175,9 @@ stroke centred on the outline at twice the line's width for the same reason.
 (`BorderStyle` in `WatchSettings.swift`): the line's thickness (`watch_border_px`, 3), an opaque black
 band just inside it (`watch_border_band_px`, 2; 0 for none), and each state's colour
 (`watch_border_recording`, `_locked`, `_working`, `_ring`, `_listening`). Thicknesses are in PIXELS.
-**Every colour is solid, never translucent**, and the dimmed screen darkens a colour rather than fading
-it: a see-through line lets text scrolling up to the edge show through it. The band is what stops text
+**Every colour is solid, never translucent**: a see-through line lets text scrolling up to the edge
+show through it. With the wrist down the edge keeps its colours and only the system's own dimming of
+the screen applies; the app adds none. The band is what stops text
 reaching the line at all — it disappears just inside it. A colour that is not `#rrggbb`, or a thickness
 that is not a number, falls back to the default rather than drawing something else.
 

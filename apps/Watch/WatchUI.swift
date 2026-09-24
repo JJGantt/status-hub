@@ -64,7 +64,6 @@ struct CommandBorder: View {
     @EnvironmentObject private var chat: Chat
     @EnvironmentObject private var sessions: Sessions
     @ObservedObject private var capture = Capture.shared
-    @Environment(\.isLuminanceReduced) private var dimmed
     /// Everything the edge looks like — thickness, the black band, every state's colour — is a hub
     /// setting, so it is tuned without a build (`BorderStyle`).
     @ObservedObject private var style = BorderStyle.shared
@@ -114,7 +113,7 @@ struct CommandBorder: View {
                     // Centred ON the outline and twice the line's width, so it reaches the line's inner
                     // edge and runs off past the glass on the other side, like the fill under it.
                     GlassEdge(inset: 0).trimmedPath(t, 0.18)
-                        .stroke(ink(style.working), lineWidth: width * 2)
+                        .stroke(solid(style.working), lineWidth: width * 2)
                 }
             }
         }
@@ -129,13 +128,9 @@ struct CommandBorder: View {
             if band > 0 {
                 GlassEdge(inset: width + band / 2).stroke(Color.black, lineWidth: band)
             }
-            BeyondEdge(inset: width).fill(ink(hex), style: FillStyle(eoFill: true))
+            BeyondEdge(inset: width).fill(solid(hex), style: FillStyle(eoFill: true))
         }
     }
-
-    /// A colour as drawn now: with the screen dimmed (wrist down, always-on display) it is mixed toward
-    /// black rather than made see-through.
-    private func ink(_ hex: String) -> Color { solid(hex, dimmed ? 0.6 : 1) }
 
     private var scale: CGFloat { WKInterfaceDevice.current().screenScale }
     /// The thickness and the band in points; the settings are in PIXELS.

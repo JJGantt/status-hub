@@ -71,10 +71,11 @@ final class BorderStyle: ObservableObject {
     }
 }
 
-/// A `#rrggbb` colour multiplied toward black by `k` — a darker SOLID colour, never a transparent one.
-func solid(_ hex: String, _ k: Double) -> Color {
+/// A `#rrggbb` colour, fully opaque. With the wrist down the system dims the whole screen; the edge
+/// adds no dimming of its own.
+func solid(_ hex: String) -> Color {
     let v = UInt32(hex.dropFirst(), radix: 16) ?? 0xffffff
-    return Color(red: Double((v >> 16) & 0xff) / 255 * k,
-                 green: Double((v >> 8) & 0xff) / 255 * k,
-                 blue: Double(v & 0xff) / 255 * k)
+    return Color(red: Double((v >> 16) & 0xff) / 255,
+                 green: Double((v >> 8) & 0xff) / 255,
+                 blue: Double(v & 0xff) / 255)
 }

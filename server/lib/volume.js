@@ -24,7 +24,7 @@ const TARGET_DEFAULT = 14;
 const TARGETS = {
   abs: 8,
   obliques: 8,
-  erectors: 8,        // "Lower back"
+  erectors: 4,        // "Lower back" — RDLs carry it at 0.5; he does not do back extensions
   hip_flexors: 8,
   forearms: 10,
 };

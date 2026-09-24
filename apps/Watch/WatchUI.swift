@@ -65,6 +65,10 @@ struct CommandBorder: View {
     @EnvironmentObject private var sessions: Sessions
     @ObservedObject private var capture = Capture.shared
     @Environment(\.isLuminanceReduced) private var dimmed
+    /// The line's thickness in PIXELS — `watch_border_px` in the hub's Settings, so it can be tuned
+    /// without a build. Kept here between launches so the edge is drawn at the right width at once;
+    /// `refreshWidth()` brings it up to date whenever the app comes to the front.
+    @AppStorage(CommandBorder.widthKey) private var px: Double = 3
 
     /// Where a command goes. A session pushed on the stack owns the command while it is open.
     private var target: String? { sessions.path.last }
@@ -108,20 +112,29 @@ struct CommandBorder: View {
                 let t = ctx.date.timeIntervalSinceReferenceDate.truncatingRemainder(dividingBy: 2.4) / 2.4
                 ZStack {
                     line(.white.opacity(0.25))
-                    GlassEdge(width: Self.width).trimmedPath(t, 0.18)
-                        .stroke(Color.white.opacity(dimmed ? 0.6 : 1), lineWidth: Self.width)
+                    GlassEdge(width: width).trimmedPath(t, 0.18)
+                        .stroke(Color.white.opacity(dimmed ? 0.6 : 1), lineWidth: width)
                 }
             }
         }
     }
 
     private func line(_ c: Color) -> some View {
-        GlassEdge(width: Self.width).stroke(c.opacity(dimmed ? 0.6 : 1), lineWidth: Self.width)
+        GlassEdge(width: width).stroke(c.opacity(dimmed ? 0.6 : 1), lineWidth: width)
     }
 
-    /// One pixel on this 2x screen. The line sits entirely inside the glass (GlassEdge insets its path
-    /// by half of it), so the whole pixel is lit rather than half of it under the bezel.
-    static let width: CGFloat = 0.5
+    /// The thickness in points. The line sits entirely inside the glass (GlassEdge insets its path by
+    /// half of it), so every pixel of it is lit rather than half of one under the bezel.
+    private var width: CGFloat { CGFloat(max(1, px)) / WKInterfaceDevice.current().screenScale }
+
+    static let widthKey = "watch_border_px"
+
+    /// Reads the thickness from the hub. Called when the app comes to the front: one small read per
+    /// activation, and the moment a changed setting could first be seen.
+    static func refreshWidth() async {
+        guard let v = try? await Hub.setting(widthKey), let n = Double(v), n > 0 else { return }
+        UserDefaults.standard.set(n, forKey: widthKey)
+    }
 
     /// Idle: start. Recording: lock it open through the silence, then send. A session's follow-up has
     /// no silence to hold off, so there the second double tap sends.

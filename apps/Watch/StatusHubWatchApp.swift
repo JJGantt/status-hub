@@ -145,6 +145,7 @@ struct RootView: View {
         .onAppear {
             if !sessions.path.isEmpty { page = .sessions }
             follow()
+            Task { await CommandBorder.refreshWidth() }
             #if targetEnvironment(simulator)
             // `-opensession <row id>` at launch: open a session as its notification would, so its page
             // can be watched in a simulator.
@@ -155,7 +156,11 @@ struct RootView: View {
             #endif
         }
         .onChange(of: page) { _, _ in follow() }
-        .onChange(of: phase) { _, _ in follow() }
+        .onChange(of: phase) { _, now in
+            follow()
+            // Coming to the front, not every page swipe: the edge's thickness is a hub setting.
+            if now == .active { Task { await CommandBorder.refreshWidth() } }
+        }
     }
 
     /// A page loads and holds its stream open only while it is the one on screen.

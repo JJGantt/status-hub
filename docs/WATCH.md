@@ -178,6 +178,9 @@ corner as the three cubic curves of the device's framebuffer mask (the 46mm simu
 the top edge the glass begins 1.31 radii from the side, where a circle would begin at 1.0 — so a thin
 line drawn on a circle leaves the bezel at every corner. Checked against the mask: the line lies on the
 outermost row of the glass along the straights and on the glass's own soft rim in the corners.
+**Its thickness is a hub setting, `watch_border_px`** (Settings → Watch edge line, 3 by default), in
+PIXELS, so it can be tuned without a build. The watch reads it when the app launches and whenever it
+comes to the front, and keeps the last value, so the edge is drawn at the right width at once.
 Pages leave only `PageInset.bottom` (12pt) under their content, for the curve.
 
 ### The nutrition page

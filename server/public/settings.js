@@ -90,6 +90,11 @@ export async function open() {
         '<input class="settings-num" type="number" min="0" max="600" step="10" inputmode="numeric" ' +
         'data-key="watch_reading_wpm" value="' + sil('watch_reading_wpm', 0) + '"></label>' +
 
+      '<div class="settings-sec">Watch edge line (pixels)</div>' +
+      '<label class="settings-row"><span>Thickness</span>' +
+        '<input class="settings-num" type="number" min="1" max="8" step="1" inputmode="numeric" ' +
+        'data-key="watch_border_px" value="' + sil('watch_border_px', 3) + '"></label>' +
+
       '<div class="settings-sec">Uploaded clips must sound like you</div>' +
       '<label class="settings-row"><span>Watch / phone listening<br><small>0 = accept anything</small></span>' +
         '<input class="settings-num" type="number" min="0" max="0.9" step="0.01" inputmode="decimal" ' +

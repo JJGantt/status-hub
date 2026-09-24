@@ -270,6 +270,8 @@ struct PagedScroll<Content: View>: View {
     @State private var contentHeight: CGFloat = 0
     /// He has taken the page over with a finger or the crown; it does not creep again until reopened.
     @State private var taken = false
+    /// A creep is moving the page right now. `hold` stops one, and does nothing when there is none.
+    @State private var creeping = false
     @Environment(\.isLuminanceReduced) private var dimmed
     @Environment(\.scenePhase) private var phase
 
@@ -321,20 +323,26 @@ struct PagedScroll<Content: View>: View {
             guard left > 1 else { return }
             let seconds = Double(left / (CGFloat(readingWPM) / 60 * pointsPerWord))
             Hub.log("creep", ["wpm": readingWPM, "points": Int(left), "seconds": Int(seconds)])
+            creeping = true
             withAnimation(.linear(duration: seconds)) { position.scrollTo(y: end) }
         }
     }
 
     /// Stop where it is: an animation in flight is replaced by a jump to the offset it has reached.
+    /// **Only when a creep is actually moving.** Called unconditionally, it ran whenever the content grew
+    /// — which is what loading a session's reply does — and jumped the page back to the offset it had
+    /// recorded before the reply arrived: the top. So a session landed on its newest reply and was pulled
+    /// straight back up, every time the reading speed was 0.
     private func hold() {
+        guard creeping else { return }
+        creeping = false
         withAnimation(.linear(duration: 0)) { position.scrollTo(y: offset) }
     }
 
 }
 
-/// What went wrong with the last command, under the conversation, with a Retry. The control at the
-/// bottom edge says everything else — recording, locked, the hub working — so this is only ever the
-/// failure.
+/// What went wrong with the last command, under the conversation, with a Retry. The edge of the glass
+/// says everything else — recording, locked, the hub working — so this is only ever the failure.
 struct CommandStatus: View {
     @EnvironmentObject private var chat: Chat
 

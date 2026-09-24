@@ -127,9 +127,13 @@ struct SessionView: View {
     @EnvironmentObject private var sessions: Sessions
     @ObservedObject private var capture = Capture.shared
 
-    /// Held on the newest reply until he scrolls: the turns lay out after the jump, and a single jump
-    /// lands short of the spot it aimed at.
-    @State private var pinned = true
+    /// **Following the newest item.** The page stays on whatever is newest — his words, a tool call, the
+    /// reply — until HE scrolls, by finger or crown; then it is his, and nothing new moves it. Scrolling
+    /// back down to the very end hands it back. Also what holds the landing while the turns lay out
+    /// after a jump, since a single jump lands short of the spot it aimed at.
+    @State private var following = true
+    /// The page is scrolled to the end of what it holds.
+    @State private var atEnd = false
 
     private var detail: SessionDetail? { sessions.details[key] }
     private var activity: [ActivityLine] { sessions.activity[key] ?? [] }
@@ -137,7 +141,7 @@ struct SessionView: View {
 
     var body: some View {
         ScrollViewReader { proxy in
-            PagedScroll {
+            PagedScroll(reachedEnd: { atEnd = $0 }) {
                 Button {
                     Hub.log("record", ["view": "session", "recording": recording])
                     sessions.toggleRecording(key)
@@ -146,22 +150,24 @@ struct SessionView: View {
                     .disabled(sessions.busy.contains(key))
                 status
             }
-            // **A session opens ON its newest reply**, not at the top of the prompt above it: the
-            // answer is what he came for, and the prompt is his own words. The same landing whenever a
-            // new reply arrives. Work in progress — his words, a recording, tool calls — lands at the
-            // bottom (`tail`, PagedScroll's end marker), so that is where the view follows it instead.
-            .onChange(of: detail?.last_reply) { _, _ in pinned = true; toReply(proxy, animated: true) }
-            .onChange(of: detail == nil) { _, _ in pinned = true; toReply(proxy) }
+            // **The top of the NEWEST ITEM at the top of the screen**: his words the moment they are
+            // transcribed, then each tool call as it comes, then the reply — whichever is last. Never
+            // an older one: the tool calls and his words stay until the reply that replaces them is
+            // in hand (`Sessions.sessionFrame`).
+            .onChange(of: newest) { _, _ in if following { toNewest(proxy, animated: true) } }
             .onScrollGeometryChange(for: CGFloat.self) { $0.contentSize.height } action: { _, _ in
-                if pinned { toReply(proxy) }
+                if following { toNewest(proxy) }
             }
             .onScrollPhaseChange { _, now in
-                if now == .interacting || now == .tracking { pinned = false }
+                switch now {
+                case .interacting, .tracking, .decelerating: following = false
+                // Let go at the very end: following again, from the next new item on. Not a jump now —
+                // he is already looking at the end.
+                case .idle: if atEnd { following = true }
+                default: break
+                }
             }
-            .onAppear { toReply(proxy) }
-            .onChange(of: activity.count) { old, new in if new > old { toBottom(proxy) } }
-            .onChange(of: sessions.sent[key]) { _, new in if new != nil { toBottom(proxy) } }
-            .onChange(of: recording) { _, now in if now { toBottom(proxy) } }
+            .onAppear { toNewest(proxy) }
         }
         // The session's name on the clock's line, and NO back arrow: the swipe that opened it from the
         // right is what takes it away again, and a title bar with a button in it costs the top of a
@@ -197,19 +203,25 @@ struct SessionView: View {
         }
     }
 
-    /// The top of the newest reply at the top of the screen. `PagedScroll` leaves most of a screen of
-    /// room under the content, which is what lets the last block rise that far.
-    private func toReply(_ proxy: ScrollViewProxy, animated: Bool = false) {
-        guard detail != nil else { return }
-        if animated {
-            withAnimation(.easeOut(duration: 0.2)) { proxy.scrollTo("reply", anchor: .top) }
-        } else {
-            proxy.scrollTo("reply", anchor: .top)
-        }
+    /// The scroll id of the last thing on the page: a tool call, else his words waiting for an answer,
+    /// else the last turn's reply (or its prompt, while the session has not answered it).
+    private var newest: String? {
+        if !activity.isEmpty { return "act\(activity.count - 1)" }
+        if sessions.sent[key] != nil { return "sent" }
+        guard let turns = detail?.recent, let last = turns.last else { return nil }
+        let i = turns.count - 1
+        return (last.reply ?? "").isEmpty ? "prompt\(i)" : "reply\(i)"
     }
 
-    private func toBottom(_ proxy: ScrollViewProxy) {
-        withAnimation(.easeOut(duration: 0.2)) { proxy.scrollTo("tail", anchor: .bottom) }
+    /// The top of the newest item at the top of the screen. `PagedScroll` leaves most of a screen of
+    /// room under the content, which is what lets the last block rise that far.
+    private func toNewest(_ proxy: ScrollViewProxy, animated: Bool = false) {
+        guard let id = newest else { return }
+        if animated {
+            withAnimation(.easeOut(duration: 0.2)) { proxy.scrollTo(id, anchor: .top) }
+        } else {
+            proxy.scrollTo(id, anchor: .top)
+        }
     }
 
     private var content: some View {
@@ -219,18 +231,18 @@ struct SessionView: View {
             // above it costs nothing to carry and is there when he scrolls up.
             ForEach(Array(turns.enumerated()), id: \.offset) { i, turn in
                 if let prompt = turn.prompt, !prompt.isEmpty {
-                    words(prompt)
+                    words(prompt).id("prompt\(i)")
                 }
                 if let reply = turn.reply, !reply.isEmpty {
                     Text(inlineMarkdown(reply))
                         .foregroundColor(.white)
                         .font(.system(size: 13))
                         .frame(maxWidth: .infinity, alignment: .leading)
-                        .id(i == turns.count - 1 ? "reply" : "reply\(i)")
+                        .id("reply\(i)")
                 }
             }
             if let mine = sessions.sent[key] {
-                words(mine)
+                words(mine).id("sent")
             }
             if !activity.isEmpty {
                 ActivityLines(lines: activity)

@@ -122,6 +122,10 @@ final class Sessions: ObservableObject {
     /// His words for a conversation, shown from the moment they are transcribed until its next reply.
     @Published private(set) var sent: [String: String] = [:]
     @Published private(set) var busy: Set<String> = []
+    /// A follow-up the watch handed over, by conversation, with its words, until the reply to it lands.
+    /// The edge keeps sweeping through the whole of it: handing the words over is seconds, the session
+    /// working on them is the real wait.
+    @Published private(set) var awaiting: [String: String] = [:]
     @Published private(set) var failures: [String: Failure] = [:]
 
     private let capture = Capture.shared
@@ -137,13 +141,11 @@ final class Sessions: ObservableObject {
 
     /// The page is on screen: load now, and follow every session's activity until `deactivate`.
     func activate() {
-        Task {
-        }
-        // The conversation on screen too: a turn that finished while the app was away sent its `done`
-        // to a stream that was not listening.
+        // The conversation on screen too, and any the watch is waiting on: a turn that finished while
+        // the app was away sent its `done` to a stream that was not listening.
         Task {
             await load()
-            if let key = path.last { await loadDetail(key) }
+            for key in Set(path.suffix(1) + Array(awaiting.keys)) { await loadDetail(key) }
         }
         guard stream == nil else { return }
         stream = Task {
@@ -196,6 +198,11 @@ final class Sessions: ObservableObject {
         guard let r = row(for: key) else { return }
         if let d: SessionDetail = try? await Hub.json("/api/sessions/" + Hub.pathComponent(r.id)) {
             details[key] = d
+            // The reply to the words the watch sent is in: the wait is over, however the news arrived.
+            if let words = awaiting[key], let t = d.turns?.last, !(t.reply ?? "").isEmpty,
+               (t.prompt ?? "").hasPrefix(String(words.prefix(40))) {
+                awaiting[key] = nil
+            }
             Hub.log("detail", ["row": r.id, "prompt": String((d.last_prompt ?? "").prefix(60)),
                                "reply": String((d.last_reply ?? "").prefix(80)), "replyChars": d.last_reply?.count ?? 0])
         }
@@ -273,6 +280,7 @@ final class Sessions: ObservableObject {
                 // a session that restarts forgets a mode, and cannot forget what is in the prompt.
                 let words = (sent[key] ?? "") + (Speaker.enabled ? Self.spokenFormat : "")
                 try await Hub.followUp(row(for: key)?.id ?? key, text: words, msgId: msgId)
+                awaiting[key] = sent[key]
             } catch {
                 failures[key] = .message(error.localizedDescription)
             }
@@ -307,19 +315,23 @@ final class Sessions: ObservableObject {
             }
             return
         }
-        activity[key] = nil
         // A reply to a follow-up the WATCH sent: the wrist is told, and — with spoken replies on — the
         // reply is read out. Only these: a session answering something typed on the Mac is not
         // something he asked the watch about.
         let mine = sent[key] != nil && failures[key] == nil && !busy.contains(key)
-        if mine {
-            sent[key] = nil
-            msgIds[key] = nil
-            WKInterfaceDevice.current().play(.notification)
-        }
+        if mine { WKInterfaceDevice.current().play(.notification) }
         await load()
         let speak = mine && Speaker.enabled
         if details[key] != nil || speak { await loadDetail(key) }
+        // Only now that the reply is in hand do the tool calls and his pending words go. Cleared first,
+        // the page's newest item would be the PREVIOUS reply for the moment the fetch takes, and a view
+        // following the newest item would jump up to it and back down.
+        activity[key] = nil
+        awaiting[key] = nil
+        if mine {
+            sent[key] = nil
+            msgIds[key] = nil
+        }
         if speak, let reply = details[key]?.last_reply { Speaker.shared.speak(reply) }
     }
 }

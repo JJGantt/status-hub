@@ -105,11 +105,23 @@ A tapped row opens its session on top of the whole row of pages (the `Navigation
 around the `TabView`), not inside the sessions page: there the page row took sideways swipes and the
 watch's own swipe back never fired. The session has no title bar.
 
-**A session opens on its newest answer.** The page draws the last `SessionDetail.exchanges` (5)
+**A session follows its newest item.** The page draws the last `SessionDetail.exchanges` (5)
 prompts with every reply under each — a session can report more than once without being asked again, a
-watcher firing or a job finishing — and lands with the top of the newest reply at the top of the
-screen, since the answer is what he opened it for. The history above it costs nothing once the landing
-is right.
+watcher firing or a job finishing — then his words waiting for an answer, then the tool calls of the
+turn in flight. The top of whichever is LAST sits at the top of the screen: his words the moment they
+are transcribed, each tool call as it arrives, the reply when it lands. The tool calls and his words
+are cleared only after the reply is fetched (`Sessions.sessionFrame`); cleared first, the newest item
+would be the previous reply for the length of the fetch and the view would jump up to it and back.
+
+**His scrolling ends the following**, finger or crown (any scroll phase he drives); nothing new moves
+the page after that. Letting go with the very end of the page on screen hands it back — from the next
+new item, without a jump. The end is a one-point marker at the bottom of `PagedScroll`, asked whether
+it is VISIBLE (`onScrollVisibilityChange`), not a sum over the scroll view's reported offsets, which
+this app does not trust (§ Double tap, and scrolling).
+
+**The edge sweeps until the reply lands**, not just while the words are handed over: `awaiting` holds
+a follow-up from the moment the hub accepts it until its `done` frame, or until a detail fetch shows a
+reply under those words (which is how a `done` missed while the app was away still ends it).
 
 **Its name is on the clock's line, and the name is how it closes.** A leading `ToolbarItem` holds it
 (a trailing one moves the clock to the other end of the strip), and tapping it pops the session. The

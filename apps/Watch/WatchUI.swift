@@ -26,22 +26,26 @@ struct ActivityLine: Equatable {
 /// A running turn's steps, oldest first. A tool call is one grey line; a thought is read in full.
 struct ActivityLines: View {
     let lines: [ActivityLine]
+    /// Scroll ids for the lines, `<prefix><index>`, for a page that scrolls to one of them.
+    var idPrefix = "act"
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
-            ForEach(Array(lines.enumerated()), id: \.offset) { _, line in
-                if line.thought {
-                    Text(inlineMarkdown(line.text))
-                        .font(.system(size: 12))
-                        .foregroundColor(Color(white: 0.78))
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                } else {
-                    Text(line.text)
-                        .font(.system(size: 10, design: .monospaced))
-                        .foregroundColor(.gray)
-                        .lineLimit(2)
-                        .frame(maxWidth: .infinity, alignment: .leading)
+            ForEach(Array(lines.enumerated()), id: \.offset) { i, line in
+                Group {
+                    if line.thought {
+                        Text(inlineMarkdown(line.text))
+                            .font(.system(size: 12))
+                            .foregroundColor(Color(white: 0.78))
+                    } else {
+                        Text(line.text)
+                            .font(.system(size: 10, design: .monospaced))
+                            .foregroundColor(.gray)
+                            .lineLimit(2)
+                    }
                 }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .id("\(idPrefix)\(i)")
             }
         }
     }
@@ -73,7 +77,11 @@ struct CommandBorder: View {
     private var mine: Capture.Owner { target.map(Capture.Owner.session) ?? .hub }
     private var recording: Bool { capture.owner == mine }
     /// The hub has it and is working: a clip being transcribed and a command being run are one wait.
-    private var working: Bool { target.map { sessions.busy.contains($0) } ?? chat.waiting }
+    /// Inside a session that runs until the session's reply lands, not just until the words are handed
+    /// over.
+    private var working: Bool {
+        target.map { sessions.busy.contains($0) || sessions.awaiting[$0] != nil } ?? chat.waiting
+    }
 
     private enum State { case recording, locked, working, listening, idle }
     private var state: State {
@@ -266,6 +274,10 @@ extension EnvironmentValues {
 /// The session page's scroller. Scrolling is his finger or the crown; nothing moves the page on its
 /// own. It holds the content and, under it, room for the last block to rise to the TOP of the screen.
 struct PagedScroll<Content: View>: View {
+    /// Told whether the very end of the page is on screen. Asked of a marker's VISIBILITY rather than
+    /// worked out from offsets: the scroll view's reported geometry is not to be trusted here (§ Double
+    /// tap, and scrolling in docs/WATCH.md).
+    var reachedEnd: (Bool) -> Void = { _ in }
     @ViewBuilder let content: () -> Content
 
     var body: some View {
@@ -274,7 +286,11 @@ struct PagedScroll<Content: View>: View {
                 content()
                 // A scroll view stops at the end of what it holds, which would strand a short reply
                 // mid-screen instead of letting it rise to the top where it is read from.
-                Color.clear.frame(height: WKInterfaceDevice.current().screenBounds.height * 0.8).id("tail")
+                Color.clear.frame(height: WKInterfaceDevice.current().screenBounds.height * 0.8)
+                    .overlay(alignment: .bottom) {
+                        Color.clear.frame(height: 1)
+                            .onScrollVisibilityChange(threshold: 1) { reachedEnd($0) }
+                    }
             }
             .padding(.horizontal, 8)
             .padding(.bottom, PageInset.bottom)

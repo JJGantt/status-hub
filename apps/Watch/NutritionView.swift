@@ -3,10 +3,12 @@ import SwiftUI
 /// The page to the right of the prompt: the hub nutrition card's four pace rings, then today's log.
 struct NutritionView: View {
     @EnvironmentObject private var nutrition: Nutrition
-    /// **The rings stay; what is under them is what changes.** A tap on them turns the page over: the
-    /// day itself — where it stands against the goal, and the history behind it — or the list of what
-    /// was eaten. Two things worth a screen, one screen, and the rings above both.
-    @State private var day = false
+    /// **The rings stay; what is under them is what changes**, and each way in is the thing it is
+    /// about. The rings are the day's numbers, so tapping them shows the numbers. The one meal
+    /// surfaced at the bottom is the log's newest line, so tapping it opens the log. Nothing here is
+    /// a rotation through three screens: each tap is on the thing it opens.
+    private enum Panel { case day, numbers, log }
+    @State private var panel: Panel = .day
     /// One entry's ingredients at a time: opening another closes it, so the log stays a list rather
     /// than becoming a page of everything.
     @State private var open: String?
@@ -24,16 +26,17 @@ struct NutritionView: View {
             // device's own framebuffer mask: at this width the arc clears from 7pt down.
             .padding(.top, 8)
             .contentShape(Rectangle())
-            .onTapGesture {
-                day.toggle()
-                if day { Task { await nutrition.loadHistory() } }
-            }
+            .onTapGesture { panel = panel == .numbers ? .day : .numbers }
             ScrollView {
                 VStack(alignment: .leading, spacing: 8) {
                     if let today = nutrition.day {
-                        if day {
-                            DayStanding(day: today, history: nutrition.history, openList: { day = false })
-                        } else {
+                        switch panel {
+                        case .day:
+                            DayStanding(day: today, history: nutrition.history,
+                                        openList: { panel = .log })
+                        case .numbers:
+                            DayNumbers(day: today)
+                        case .log:
                             DayLog(day: today, open: $open)
                         }
                     }
@@ -45,14 +48,16 @@ struct NutritionView: View {
         // 8pt rather than 4: the corner arc eats the outer rings and the ends of the rules at this
         // height, and the four pixels buy back the shoulder on both.
         .padding(.horizontal, 8)
+        .task { await nutrition.loadHistory() }
         .topOfTheScreen()
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(Color.black.ignoresSafeArea())
     }
 }
 
-/// What the rings turn over to: the weigh-in plot, the intake calendar under it on the same weeks, and
-/// the day's standing under both. The wall draws these three together for a reason — a column is the
+/// The page's resting state: the weigh-in plot, the intake calendar under it on the same weeks, and
+/// the newest thing eaten under both. **The day's totals are not here** — they are what the rings are
+/// for, so they live behind a tap on the rings and this view keeps the room. The wall draws these three together for a reason — a column is the
 /// same week in each — and on a wrist they are the whole screen, which is why the log is the other
 /// side of the tap rather than beneath them.
 private struct DayStanding: View {
@@ -66,7 +71,6 @@ private struct DayStanding: View {
                 WeightPlot(plot: h.weight).frame(height: 28)
                 IntakeCalendar(weeks: h.weeks).frame(height: 7 * 8)
             }
-            standing
             // The last thing eaten, in a line: the whole day on one screen, and a tap for the rest.
             if let last = day.entries.first {
                 Button(action: openList) {
@@ -85,28 +89,6 @@ private struct DayStanding: View {
                 .buttonStyle(.plain)
             }
         }
-    }
-
-    /// Each total over its goal, in one line if they fit and two if they do not. **No box and no
-    /// date** — the page is today, and a number over its goal says what it is.
-    private var standing: some View {
-        let tm = day.target_macros
-        return Flow(spacing: 10, lineSpacing: 3) {
-            pair(mn(day.total_cal), (day.target_cal ?? 0) > 0 ? day.target_cal : nil, "cal")
-            pair(mn(day.total_protein), tm?.protein_g, "P")
-            pair(mn(day.total_carbs), tm?.carbs_g, "C")
-            pair(mn(day.total_fat), tm?.fat_g, "F")
-        }
-    }
-
-    private func pair(_ v: Int, _ goal: Double?, _ label: String) -> some View {
-        let dim = Color(hex: "#7d8894")
-        var t = Text(String(v)).foregroundColor(Color(hex: "#e6eaf0"))
-        if let goal { t = t + Text("/" + js(goal)).foregroundColor(dim) }
-        return (t + Text(label == "cal" ? " cal" : label).foregroundColor(dim))
-            .font(.system(size: 12, weight: .semibold).monospacedDigit())
-            .lineLimit(1)
-            .fixedSize()
     }
 }
 
@@ -415,5 +397,34 @@ private struct IntakeCalendar: View {
                 }
             }
         }
+    }
+}
+
+/// **What the rings turn over to: the day's four totals against their goals, and nothing else.** No
+/// box, no date and no labels beyond the unit — the page is today, and a number over its goal says
+/// what it is. It sits where the plot and the calendar were, because it answers the same question at
+/// a glance that they answer over weeks.
+private struct DayNumbers: View {
+    let day: NutritionDay
+
+    var body: some View {
+        let tm = day.target_macros
+        return Flow(spacing: 10, lineSpacing: 3) {
+            pair(mn(day.total_cal), (day.target_cal ?? 0) > 0 ? day.target_cal : nil, "cal")
+            pair(mn(day.total_protein), tm?.protein_g, "P")
+            pair(mn(day.total_carbs), tm?.carbs_g, "C")
+            pair(mn(day.total_fat), tm?.fat_g, "F")
+        }
+    }
+
+
+    private func pair(_ v: Int, _ goal: Double?, _ label: String) -> some View {
+        let dim = Color(hex: "#7d8894")
+        var t = Text(String(v)).foregroundColor(Color(hex: "#e6eaf0"))
+        if let goal { t = t + Text("/" + js(goal)).foregroundColor(dim) }
+        return (t + Text(label == "cal" ? " cal" : label).foregroundColor(dim))
+            .font(.system(size: 12, weight: .semibold).monospacedDigit())
+            .lineLimit(1)
+            .fixedSize()
     }
 }

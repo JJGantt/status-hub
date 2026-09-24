@@ -134,7 +134,10 @@ if (cmd === 'devices') {
   // cannot pick the same number.
   const { data } = await api('GET', '/v1/builds?filter[app]=6805268657&limit=200&fields[builds]=version');
   const highest = data.reduce((n, b) => Math.max(n, parseInt(b.attributes.version, 10) || 0), 0);
-  console.log(highest + 1);
+  // Written as a STRING, not a number: console.log colours a number whenever FORCE_COLOR is set, and
+  // testflight.sh reads this output as data — a coloured "63" failed its digits check and the upload
+  // silently never happened.
+  process.stdout.write(String(highest + 1) + '\n');
 } else if (cmd === 'builds') {
   // A build stops being installable 90 days after upload, and TestFlight words that on the phone as
   // the tester not having access rather than as an expiry — so "it says I am not a tester" is only

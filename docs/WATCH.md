@@ -168,9 +168,17 @@ corner as the three cubic curves of the device's framebuffer mask (the 46mm simu
 the top edge the glass begins 1.31 radii from the side, where a circle would begin at 1.0 — so a thin
 line drawn on a circle leaves the bezel at every corner. Checked against the mask: the line lies on the
 outermost row of the glass along the straights and on the glass's own soft rim in the corners.
-**Its thickness is a hub setting, `watch_border_px`** (Settings → Watch edge line, 3 by default), in
-PIXELS, so it can be tuned without a build. The watch reads it when the app launches and whenever it
-comes to the front, and keeps the last value, so the edge is drawn at the right width at once.
+**Every part of it is a hub setting** (Settings → Watch edge), so it is tuned without a build
+(`BorderStyle` in `WatchSettings.swift`): the line's thickness (`watch_border_px`, 3), an opaque black
+band just inside it (`watch_border_band_px`, 2; 0 for none), and each state's colour
+(`watch_border_recording`, `_locked`, `_working`, `_ring`, `_listening`). Thicknesses are in PIXELS.
+**Every colour is solid, never translucent**, and the dimmed screen darkens a colour rather than fading
+it: a see-through line lets text scrolling up to the edge show through it. The band is what stops text
+reaching the line at all — it disappears just inside it. A colour that is not `#rrggbb`, or a thickness
+that is not a number, falls back to the default rather than drawing something else.
+
+**One read serves all the watch's hub settings** (`WatchSettings.refresh`: the edge, and spoken
+replies), on launch and whenever the app comes to the front; the last values are kept between launches.
 Pages leave only `PageInset.bottom` (12pt) under their content, for the curve.
 
 ### The nutrition page
@@ -371,7 +379,7 @@ then carries on with the wrist down (background audio); the blue edge shows it. 
 
 ### Spoken replies
 
-With `session_speech` on (the Speak control, or Settings → Watch sessions on the phone), a reply to a
+With `session_speech` on (the Speak control, or Settings → Watch: speak session replies on the phone), a reply to a
 follow-up SENT FROM THE WATCH is read aloud as it lands (`Speaker`, the system voice — nothing leaves the
 watch), and every follow-up carries `Sessions.spokenFormat` so the reply is written to be heard. Only
 those replies: a session answering something typed on the Mac is not spoken. **The always-on listener

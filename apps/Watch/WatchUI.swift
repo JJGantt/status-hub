@@ -65,10 +65,9 @@ struct CommandBorder: View {
     @EnvironmentObject private var sessions: Sessions
     @ObservedObject private var capture = Capture.shared
     @Environment(\.isLuminanceReduced) private var dimmed
-    /// The line's thickness in PIXELS — `watch_border_px` in the hub's Settings, so it can be tuned
-    /// without a build. Kept here between launches so the edge is drawn at the right width at once;
-    /// `refreshWidth()` brings it up to date whenever the app comes to the front.
-    @AppStorage(CommandBorder.widthKey) private var px: Double = 3
+    /// Everything the edge looks like — thickness, the black band, every state's colour — is a hub
+    /// setting, so it is tuned without a build (`BorderStyle`).
+    @ObservedObject private var style = BorderStyle.shared
 
     /// Where a command goes. A session pushed on the stack owns the command while it is open.
     private var target: String? { sessions.path.last }
@@ -102,39 +101,44 @@ struct CommandBorder: View {
     @ViewBuilder private var edge: some View {
         switch state {
         case .idle: EmptyView()
-        case .recording: line(Color(hex: "#f2a13d"))
-        case .locked: line(Color(hex: "#e5484d"))
-        case .listening: line(Color(hex: "#3b82f6").opacity(0.7))
+        case .recording: line(style.recording)
+        case .locked: line(style.locked)
+        case .listening: line(style.listening)
         case .working:
-            // A dim full ring with a bright stretch travelling round it: moving, so "working" can
-            // never be mistaken for a colour that means something else.
+            // A dark ring with a bright stretch travelling round it: moving, so "working" can never be
+            // mistaken for a colour that means something else.
             TimelineView(.animation) { ctx in
                 let t = ctx.date.timeIntervalSinceReferenceDate.truncatingRemainder(dividingBy: 2.4) / 2.4
                 ZStack {
-                    line(.white.opacity(0.25))
-                    GlassEdge(width: width).trimmedPath(t, 0.18)
-                        .stroke(Color.white.opacity(dimmed ? 0.6 : 1), lineWidth: width)
+                    line(style.ring)
+                    GlassEdge(inset: width / 2).trimmedPath(t, 0.18)
+                        .stroke(ink(style.working), lineWidth: width)
                 }
             }
         }
     }
 
-    private func line(_ c: Color) -> some View {
-        GlassEdge(width: width).stroke(c.opacity(dimmed ? 0.6 : 1), lineWidth: width)
+    /// The line, with the black band just inside it. **Every colour is SOLID**: a translucent line lets
+    /// text scrolling up to the edge show through it, so a dim state is a darker colour rather than a
+    /// fainter one — and the band is opaque black, so text disappears just before it reaches the line
+    /// instead of running under it.
+    private func line(_ hex: String) -> some View {
+        ZStack {
+            if band > 0 {
+                GlassEdge(inset: width + band / 2).stroke(Color.black, lineWidth: band)
+            }
+            GlassEdge(inset: width / 2).stroke(ink(hex), lineWidth: width)
+        }
     }
 
-    /// The thickness in points. The line sits entirely inside the glass (GlassEdge insets its path by
-    /// half of it), so every pixel of it is lit rather than half of one under the bezel.
-    private var width: CGFloat { CGFloat(max(1, px)) / WKInterfaceDevice.current().screenScale }
+    /// A colour as drawn now: with the screen dimmed (wrist down, always-on display) it is mixed toward
+    /// black rather than made see-through.
+    private func ink(_ hex: String) -> Color { solid(hex, dimmed ? 0.6 : 1) }
 
-    static let widthKey = "watch_border_px"
-
-    /// Reads the thickness from the hub. Called when the app comes to the front: one small read per
-    /// activation, and the moment a changed setting could first be seen.
-    static func refreshWidth() async {
-        guard let v = try? await Hub.setting(widthKey), let n = Double(v), n > 0 else { return }
-        UserDefaults.standard.set(n, forKey: widthKey)
-    }
+    private var scale: CGFloat { WKInterfaceDevice.current().screenScale }
+    /// The thickness and the band in points; the settings are in PIXELS.
+    private var width: CGFloat { CGFloat(max(1, style.px)) / scale }
+    private var band: CGFloat { CGFloat(max(0, style.bandPx)) / scale }
 
     /// Idle: start. Recording: lock it open through the silence, then send. A session's follow-up has
     /// no silence to hold off, so there the second double tap sends.
@@ -165,13 +169,15 @@ struct CommandBorder: View {
 /// radii in from the side, where a circular arc of the same radius would begin at 1.0 — so a one-pixel
 /// line drawn on a circle leaves the bezel at every corner.
 struct GlassEdge: Shape {
-    let width: CGFloat
+    /// How far inside the glass's outline the path runs: half a stroke's width puts the whole stroke on
+    /// the glass.
+    let inset: CGFloat
     /// The 46mm display's corner radius in points (`DeviceCornerRadius` in its device profile).
     static let radius: CGFloat = 50
 
     func path(in r: CGRect) -> Path {
-        let rect = r.insetBy(dx: width / 2, dy: width / 2)
-        let R = Self.radius - width / 2
+        let rect = r.insetBy(dx: inset, dy: inset)
+        let R = Self.radius - inset
         // One corner, as offsets from the corner point along its two edges, in units of R: the
         // straight edge ends 1.307581 R from the corner and three curves turn it.
         let k: [(CGFloat, CGFloat)] = [

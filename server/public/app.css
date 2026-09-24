@@ -1104,6 +1104,7 @@ body.tv .hmonths{margin-left:0;font-size:11px}
 .settings-row{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:7px 0;font-size:14px;color:#c2cad4}
 .settings-num{width:84px;padding:8px 10px;border-radius:8px;border:1px solid #2a313a;background:#0e1318;color:#e8eaed;font-size:16px;text-align:right}
 .settings-num:focus{outline:none;border-color:#3b82f6}
+.settings-color{width:84px;height:36px;padding:2px;border-radius:8px;border:1px solid #2a313a;background:#0e1318}
 .settings-time{padding:8px 10px;border-radius:8px;border:1px solid #2a313a;background:#0e1318;color:#e8eaed;font-size:16px}
 .settings-time:focus{outline:none;border-color:#3b82f6}
 .settings-text{flex:1;min-width:0;padding:8px 10px;border-radius:8px;border:1px solid #2a313a;background:#0e1318;color:#e8eaed;font-size:16px}

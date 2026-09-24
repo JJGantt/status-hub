@@ -14,7 +14,7 @@ final class Speaker: NSObject, AVSpeechSynthesizerDelegate {
     static let shared = Speaker()
     static let key = "session_speech"
     /// Whether session replies are spoken. Kept here between launches, and brought up to date from the
-    /// hub whenever the app comes to the front (`refresh`).
+    /// hub whenever the app comes to the front (`WatchSettings`).
     static var enabled: Bool { UserDefaults.standard.bool(forKey: key) }
 
     private let synth = AVSpeechSynthesizer()
@@ -71,10 +71,4 @@ final class Speaker: NSObject, AVSpeechSynthesizerDelegate {
         Task { await Hub.putSetting(key, on ? "1" : "0") }
     }
 
-    /// Reads the setting from the hub, so a change made on the phone reaches the watch the next time
-    /// it comes to the front.
-    static func refresh() async {
-        guard let v = try? await Hub.setting(key) else { return }
-        UserDefaults.standard.set(v == "1" || v.lowercased() == "true", forKey: key)
-    }
 }

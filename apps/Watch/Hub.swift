@@ -223,8 +223,12 @@ enum Hub {
     }
 
     static func setting(_ key: String) async throws -> String? {
-        let all = try JSONSerialization.jsonObject(with: try await call("/api/settings")) as? [String: Any]
-        return all?[key].map { "\($0)" }
+        try await settings()[key].map { "\($0)" }
+    }
+
+    /// Every setting the hub serves to a client, in one read.
+    static func settings() async throws -> [String: Any] {
+        (try JSONSerialization.jsonObject(with: try await call("/api/settings")) as? [String: Any]) ?? [:]
     }
 
     /// Marks a dated item done — the Done button on its notification. It SCORES: the item stays on the

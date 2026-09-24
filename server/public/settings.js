@@ -26,6 +26,12 @@ export async function open() {
   const injectOn = ['1', 'true', 'on', 'yes'].includes(String(cur.voice_inject_mode ?? '0').toLowerCase());
   const speakOn = ['1', 'true', 'on', 'yes'].includes(String(cur.voice_speak_replies ?? '0').toLowerCase());
   const pushOn = !['0', 'false', 'off', 'no'].includes(String(cur.push_enabled ?? '1').toLowerCase());
+  const speechOn = ['1', 'true', 'on', 'yes'].includes(String(cur.session_speech ?? '0').toLowerCase());
+  // The watch edge: numbers that may be 0 (the band), and colours as #rrggbb pickers.
+  const num = (k, d) => { const n = parseFloat(cur[k]); return Number.isFinite(n) && n >= 0 ? n : d; };
+  const colour = (label, k, d) => '<label class="settings-row"><span>' + label + '</span>' +
+    '<input class="settings-color" type="color" data-key="' + k + '" value="' +
+    (/^#[0-9a-f]{6}$/i.test(cur[k] || '') ? cur[k] : d) + '"></label>';
   const jaredbotOn = ['1', 'true', 'on', 'yes'].includes(String(cur.jaredbot_enabled ?? '0').toLowerCase());
   const agentCwdRaw = cur.agent_cwd || '';
   const resetMin = (() => { const s = parseFloat(cur.session_reset_s); return Number.isFinite(s) && s > 0 ? Math.round(s / 60) : 5; })();
@@ -85,15 +91,24 @@ export async function open() {
       row('ESP (Hey&nbsp;Rhasspy)', 'esp_silence_s', sil('esp_silence_s', 3)) +
       row('Mac', 'mac_silence_s', sil('mac_silence_s', 3)) +
 
-      '<div class="settings-sec">Watch sessions</div>' +
-      '<label class="settings-row"><span>Speak replies<br><small>1 = on, 0 = off</small></span>' +
-        '<input class="settings-num" type="number" min="0" max="1" step="1" inputmode="numeric" ' +
-        'data-key="session_speech" value="' + (cur.session_speech === '1' ? 1 : 0) + '"></label>' +
+      '<div class="settings-sec">Watch: speak session replies</div>' +
+      '<div class="settings-seg" id="set-session-speech">' +
+        '<button type="button" data-v="0"' + (speechOn ? '' : ' class="on"') + '>Off</button>' +
+        '<button type="button" data-v="1"' + (speechOn ? ' class="on"' : '') + '>On</button>' +
+      '</div>' +
 
-      '<div class="settings-sec">Watch edge line (pixels)</div>' +
-      '<label class="settings-row"><span>Thickness</span>' +
+      '<div class="settings-sec">Watch edge</div>' +
+      '<label class="settings-row"><span>Line (px)</span>' +
         '<input class="settings-num" type="number" min="1" max="8" step="1" inputmode="numeric" ' +
-        'data-key="watch_border_px" value="' + sil('watch_border_px', 3) + '"></label>' +
+        'data-key="watch_border_px" value="' + num('watch_border_px', 3) + '"></label>' +
+      '<label class="settings-row"><span>Black band (px)</span>' +
+        '<input class="settings-num" type="number" min="0" max="8" step="1" inputmode="numeric" data-min0 ' +
+        'data-key="watch_border_band_px" value="' + num('watch_border_band_px', 2) + '"></label>' +
+      colour('Recording', 'watch_border_recording', '#f2a13d') +
+      colour('Locked', 'watch_border_locked', '#e5484d') +
+      colour('Working', 'watch_border_working', '#ffffff') +
+      colour('Working ring', 'watch_border_ring', '#404040') +
+      colour('Listening', 'watch_border_listening', '#295bac') +
 
       '<div class="settings-sec">Uploaded clips must sound like you</div>' +
       '<label class="settings-row"><span>Watch / phone listening<br><small>0 = accept anything</small></span>' +
@@ -232,8 +247,18 @@ export async function open() {
   back.querySelectorAll('.settings-num').forEach((inp) => {
     inp.addEventListener('change', () => {
       const v = parseFloat(inp.value);
-      if (inp.dataset.key && Number.isFinite(v) && v > 0) save(inp.dataset.key, v);
+      // `data-min0` lets 0 through, for a field where 0 means none (the watch edge's black band).
+      const min = 'min0' in inp.dataset ? 0 : Number.MIN_VALUE;
+      if (inp.dataset.key && Number.isFinite(v) && v >= min) save(inp.dataset.key, v);
     });
+  });
+  back.querySelectorAll('.settings-color').forEach((inp) => {
+    inp.addEventListener('change', () => save(inp.dataset.key, inp.value));
+  });
+  back.querySelector('#set-session-speech').addEventListener('click', (e) => {
+    const b = e.target.closest('[data-v]'); if (!b) return;
+    back.querySelectorAll('#set-session-speech button').forEach((x) => x.classList.toggle('on', x === b));
+    save('session_speech', b.dataset.v);   // the watch reads it when it comes to the front
   });
   // Surplus/deficit: signed integer (negative = cut), so it bypasses the positive-only handler above.
   back.querySelector('#set-surplus').addEventListener('change', (e) => {

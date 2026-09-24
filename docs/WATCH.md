@@ -54,10 +54,11 @@ first line rather than scrolled to the end:
 | the hub has transcribed it | his words appended in full, the view on their top | the spinner, larger and brighter: the worker is running it now, not hearing it | stays | — |
 | the reply lands | the reply appended in full, the view on ITS top | back to the microphone | goes | tapped, with the sound |
 
-The thread ends in most of a screen of empty space, which is what lets the newest thing in it rise to
-the top: a scroll view stops at the end of its content, and on a short thread that leaves the
-transcript stranded mid-screen. The view holds that spot through the laying out that follows (`pinned`)
-until he scrolls himself.
+**Nothing is padded under the thread.** A landing puts the top of the newest thing at the top of the
+screen only when there is enough below it to fill the screen; a short one stops where the content ends,
+with what came before it above, as any list does. Blank space added so everything could reach the top
+is exactly what he does not want. The view holds that spot through the laying out that follows
+(`pinned`) until he scrolls himself. The session page lands the same way.
 
 A tap anywhere on the conversation is the same press as the control. The page carries nothing else: no
 second indicator of a state the control already holds, and a failure is the one thing it adds — an

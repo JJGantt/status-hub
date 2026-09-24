@@ -218,8 +218,8 @@ struct SessionView: View {
         return (last.reply ?? "").isEmpty ? "prompt\(i)" : "reply\(i)"
     }
 
-    /// The top of the newest item at the top of the screen. `PagedScroll` leaves most of a screen of
-    /// room under the content, which is what lets the last block rise that far.
+    /// The top of the newest item at the top of the screen, or as near it as the end of the content
+    /// allows: a short last item sits at the bottom with what came before it filling the screen.
     private func toNewest(_ proxy: ScrollViewProxy, animated: Bool = false) {
         guard let id = newest else { return }
         if animated {

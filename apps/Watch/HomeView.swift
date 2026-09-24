@@ -38,11 +38,6 @@ struct HomeView: View {
                         ActivityLines(lines: chat.activity)
                     }
                     CommandStatus()
-                    // Room under the conversation for the newest thing in it to rise to the TOP of the
-                    // screen. Without it the view stops at the end of the content, which on a short
-                    // thread leaves the transcript or the reply stranded mid-screen — and a reply is
-                    // read from its first line.
-                    Color.clear.frame(height: WKInterfaceDevice.current().screenBounds.height * 0.8).id("tail")
                 }
                 .padding(.horizontal, 8)
                 .padding(.bottom, PageInset.bottom)

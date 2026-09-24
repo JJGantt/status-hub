@@ -279,7 +279,8 @@ extension EnvironmentValues {
 }
 
 /// The session page's scroller. Scrolling is his finger or the crown; nothing moves the page on its
-/// own. It holds the content and, under it, room for the last block to rise to the TOP of the screen.
+/// own. It holds the content and nothing under it: a block near the end that cannot reach the top of
+/// the screen stops where the content ends, as any list does.
 struct PagedScroll<Content: View>: View {
     /// Told whether the very end of the page is on screen. Asked of a marker's VISIBILITY rather than
     /// worked out from offsets: the scroll view's reported geometry is not to be trusted here (§ Double
@@ -291,13 +292,8 @@ struct PagedScroll<Content: View>: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 10) {
                 content()
-                // A scroll view stops at the end of what it holds, which would strand a short reply
-                // mid-screen instead of letting it rise to the top where it is read from.
-                Color.clear.frame(height: WKInterfaceDevice.current().screenBounds.height * 0.8)
-                    .overlay(alignment: .bottom) {
-                        Color.clear.frame(height: 1)
-                            .onScrollVisibilityChange(threshold: 1) { reachedEnd($0) }
-                    }
+                Color.clear.frame(height: 1)
+                    .onScrollVisibilityChange(threshold: 1) { reachedEnd($0) }
             }
             .padding(.horizontal, 8)
             .padding(.bottom, PageInset.bottom)

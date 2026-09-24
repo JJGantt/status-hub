@@ -1925,6 +1925,21 @@ app.get('/api/workout-day', async (req, res) => {
 // colour (the wall's `data-recent` row, muscle.js exerciseVolumeChips). Newest first by each
 // exercise's last set, so the one a set just went onto is at the top and the rest scroll below it.
 // buildStatus() has all of it, but as the whole dashboard.
+// The watch draws the body-map artwork itself (its paths are compiled into the app from lib/bodymap.js),
+// so all it needs from here is a colour per region. Only regions that carry one are sent — everything
+// else draws in the artwork's base fill — and the region-to-muscle mapping is the shared one, so a
+// region is the same colour on the wrist as on the wall.
+const BODY_REGIONS = [...require('./lib/bodymap.js').matchAll(/data-r="([^"]+)"/g)].map((m) => m[1]);
+const { muscleForId } = require('./lib/musclemap');
+function bodyColours(muscleColours) {
+  const out = {};
+  for (const id of BODY_REGIONS) {
+    const c = (muscleColours || {})[muscleForId(id)];
+    if (c) out[id] = c;
+  }
+  return out;
+}
+
 app.get('/api/workout-now', async (req, res) => {
   try {
     const st = await buildStatus();
@@ -1940,6 +1955,7 @@ app.get('/api/workout-now', async (req, res) => {
                       muscles: muscles(ex.name) }));
     res.json({
       last_set_at: st.last_set_at, session_start_at: st.session_start_at, sets_today: st.sets_today, exercises,
+      body: bodyColours(V.muscle_colors),
     });
   } catch (e) { res.status(500).json({ error: String(e.message || e) }); }
 });

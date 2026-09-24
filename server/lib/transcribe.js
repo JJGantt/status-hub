@@ -66,8 +66,20 @@ function clipSeconds(file) {
   });
 }
 
+// WHISPER WRITES "Thank you." FOR A CLIP WITH NO SPEECH IN IT — silence, breath, a room. A transcript
+// that is that phrase and nothing else is treated as nothing heard, so it is never run as a command or
+// typed into a session. The cost is that saying only "thank you" is dropped too. The same rule is in
+// voice-pipeline's server.py and mac-listener/listener.py, the other two places speech becomes text.
+const NOTHING_SAID = /^\W*thank\s+you\W*$/i;
+const heard = (t) => (NOTHING_SAID.test(t) ? '' : t);
+
 // → { transcript, segments } — segments is 0 when the clip went up as recorded.
 async function transcribe(file, contentType, key) {
+  const { transcript, segments } = await transcribeAll(file, contentType, key);
+  return { transcript: heard(transcript), segments };
+}
+
+async function transcribeAll(file, contentType, key) {
   const ct = String(contentType || 'audio/webm');
   const { size } = await fs.promises.stat(file);
   if (size <= GROQ_MAX_BYTES) return { transcript: await whisper(file, ct, `clip.${extFor(ct)}`, key), segments: 0 };

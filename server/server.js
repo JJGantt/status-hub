@@ -31,7 +31,7 @@ const { getTZ, setTZ, DAY_START_HOUR, localDate, nutritionWindow, lastNTrainingD
 const { buildWorkoutHeatmap } = require('./lib/heatmap');
 const { buildWeightPlot } = require('./lib/weightplot');
 const { getWeather } = require('./lib/weather');
-const { transcribe, clipSeconds, extFor } = require('./lib/transcribe');
+const { transcribe, NOTHING_SAID, clipSeconds, extFor } = require('./lib/transcribe');
 const { buildNutritionLog, buildGoalResolver, calorieColor } = require('./lib/nutritionlog');
 const { computeScore, tasksScore, taskDeadline, completionValue, completionStamp, bandPoints, toPoints, TASK_GRACE_MIN, TASK_LATE_ZERO_H, TASK_DRAIN_FULL_H } = require('./lib/score');
 
@@ -4213,6 +4213,9 @@ app.post('/api/sessions/:action', express.json(), async (req, res) => {
       const attachments = (Array.isArray((req.body || {}).attachments) ? (req.body || {}).attachments : [])
         .map(String).filter((n) => /^[\w.-]+$/.test(n)).slice(0, 8);
       if (!text && !attachments.length) return res.status(400).json({ error: 'text or attachments required' });
+      // Only "thank you" asks the session for nothing, and from a microphone it is Whisper hearing
+      // silence (lib/transcribe.js). Never typed into a session.
+      if (!attachments.length && NOTHING_SAID.test(text)) return res.json({ ignored: true });
       const msgId = String((req.body || {}).client_msg_id || '').slice(0, 64);
       const seenKey = msgId ? 'followup:' + msgId : '';
       if (seenKey && seenMsgIds.has(seenKey)) return res.json({ id: seenMsgIds.get(seenKey), duplicate: true });

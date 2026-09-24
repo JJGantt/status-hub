@@ -69,7 +69,8 @@ function clipSeconds(file) {
 // WHISPER WRITES "Thank you." FOR A CLIP WITH NO SPEECH IN IT — silence, breath, a room. A transcript
 // that is that phrase and nothing else is treated as nothing heard, so it is never run as a command or
 // typed into a session. The cost is that saying only "thank you" is dropped too. The same rule is in
-// voice-pipeline's server.py and mac-listener/listener.py, the other two places speech becomes text.
+// voice-pipeline's server.py and mac-listener/listener.py, the other two places speech becomes text, and
+// again where a model is started from words: the voice worker, and a session follow-up (server.js).
 const NOTHING_SAID = /^\W*thank\s+you\W*$/i;
 const heard = (t) => (NOTHING_SAID.test(t) ? '' : t);
 
@@ -97,4 +98,4 @@ async function transcribeAll(file, contentType, key) {
   }
 }
 
-module.exports = { transcribe, clipSeconds, extFor, GROQ_MAX_BYTES, SEGMENT_S };
+module.exports = { transcribe, NOTHING_SAID, clipSeconds, extFor, GROQ_MAX_BYTES, SEGMENT_S };

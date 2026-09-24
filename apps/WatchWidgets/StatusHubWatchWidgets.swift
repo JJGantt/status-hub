@@ -23,10 +23,10 @@ struct RecordControl: ControlWidget {
     var body: some ControlWidgetConfiguration {
         StaticControlConfiguration(kind: "com.jaredgantt.statushub.watch.record") {
             ControlWidgetButton(action: RecordIntent()) {
-                Label("Record", systemImage: "mic.fill")
+                Label("Hub", systemImage: "mic.fill")
             }
         }
-        .displayName("Record")
+        .displayName("Hub")
     }
 }
 
@@ -113,7 +113,7 @@ struct RecordComplication: Widget {
                 .containerBackground(.fill.tertiary, for: .widget)
         }
         .configurationDisplayName("Status Hub")
-        .description("Record")
+        .description("Hub")
         .supportedFamilies([.accessoryCircular, .accessoryCorner])
     }
 }

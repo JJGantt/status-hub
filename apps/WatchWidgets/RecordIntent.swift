@@ -6,14 +6,14 @@ enum RecordTarget: String, AppEnum {
     case prompt
 
     static var typeDisplayRepresentation: TypeDisplayRepresentation = "Status Hub"
-    static var caseDisplayRepresentations: [RecordTarget: DisplayRepresentation] = [.prompt: "Record"]
+    static var caseDisplayRepresentations: [RecordTarget: DisplayRepresentation] = [.prompt: "Hub"]
 }
 
 /// Opens the watch app straight into recording: the Record control's action, and so the Action
 /// button's on an Ultra once the control is assigned to it. Compiled into both the widget extension
 /// and the app; the system launches the app and runs perform() there, where WATCH_APP is defined.
 struct RecordIntent: OpenIntent {
-    static var title: LocalizedStringResource = "Record"
+    static var title: LocalizedStringResource = "Hub"
 
     @Parameter(title: "Target") var target: RecordTarget
 

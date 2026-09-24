@@ -358,6 +358,13 @@ Workout both land on the health page. Record is the odd one out: it opens home A
 Each control is its own type, spelled out in full — the `kind`, title and symbol are literals, because
 Control Center reads them before the extension runs and a computed one is not there to read.
 
+**Blank tiles — no name, no icon, on every one of the app's controls — are a stale cache on the watch,
+not the code.** Deleting the app from the watch and reinstalling it clears it. It is worth knowing
+before debugging: the controls still register correctly (the simulator log shows `query returned …
+controls` for every kind) and the same control draws normally in the Smart Stack, and a build that is
+byte-identical to one that worked (files, plists, entitlements, asset catalog) still shows blank tiles
+until the reinstall. Toggling Low Power Mode, the fix circulating for watchOS 26, does not clear it.
+
 ### Two launchers, one request
 
 The complication (circular and corner) opens `statushub://record`. The Record control

@@ -942,7 +942,7 @@ async function fetchStatusRows(win, week, histStart, heatStart) {
     // Staged meals carry no day: they are pending until committed, so there is no window to filter on
     // and every staged row belongs to whatever day it is eaten on. Sum them all.
     sb('nutrition_entries?staged=eq.true&select=calories,protein_g,carbs_g,fat_g'),
-    sb(`sets?occurred_at=gte.${week[0]}T00:00:00&select=occurred_at,exercise,muscles_override`),
+    sb(`sets?occurred_at=gte.${week[0]}T${String(DAY_START_HOUR).padStart(2, '0')}:00:00&select=occurred_at,exercise,muscles_override`),
     sb('weight_log?select=date,weight_lbs&order=date.asc'),
     sbRange(`nutrition_entries?occurred_at=gte.${histStart}T00:00:00&staged=eq.false&select=occurred_at,calories&order=occurred_at`),
     sb('exercise_muscles?select=name,muscle,contribution'),

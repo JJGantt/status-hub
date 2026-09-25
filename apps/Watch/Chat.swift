@@ -46,9 +46,16 @@ final class Chat: ObservableObject {
         var requestId: String?
         var words: String?
         var running = false
+        /// It failed and is kept only so Retry can send it again: not waited on, and its words are not
+        /// shown as pending (the hub has already put them in the thread, or never had them).
+        var failed = false
     }
     private var commands: [Command] = [] {
-        didSet { waiting = !commands.isEmpty; pending = commands.compactMap(\.words) }
+        didSet {
+            let live = commands.filter { !$0.failed }
+            waiting = !live.isEmpty
+            pending = live.compactMap(\.words)
+        }
     }
     private var tasks: [String: Task<Void, Never>] = [:]
     private var stream: Task<Void, Never>?
@@ -150,7 +157,10 @@ final class Chat: ObservableObject {
         failure = nil
         let idle = commands.filter { !$0.running }
         if idle.isEmpty { Task { await load() } }
-        for c in idle { run(c.msgId) }
+        for c in idle {
+            update(c.msgId) { $0.failed = false }
+            run(c.msgId)
+        }
     }
 
     /// Stops waiting on every command. One the hub already has still runs, and its turn appears in the
@@ -235,7 +245,7 @@ final class Chat: ObservableObject {
                     Hub.log("command-failed", ["id": requestId ?? "", "error": String((outcome.error ?? "").prefix(120))])
                     failure = .message(outcome.error ?? "")
                     // The worker ran it and failed, so a retry uploads the clip again as a new attempt.
-                    update(msgId) { $0.requestId = nil; $0.running = false; $0.msgId = UUID().uuidString }
+                    update(msgId) { $0.requestId = nil; $0.running = false; $0.failed = true; $0.msgId = UUID().uuidString }
                     tasks[msgId] = nil
                 } else {
                     Hub.log("answered", ["view": "chat", "id": requestId ?? ""])
@@ -244,10 +254,12 @@ final class Chat: ObservableObject {
                     WKInterfaceDevice.current().play(.notification)
                 }
             } catch HubError.noToken {
+                update(msgId) { $0.failed = true }
                 failure = .noToken
             } catch {
                 if Task.isCancelled { return }
                 Hub.log("send-failed", ["error": String(describing: error).prefix(120).description])
+                update(msgId) { $0.failed = true }
                 failure = .message(error.localizedDescription)
             }
         }

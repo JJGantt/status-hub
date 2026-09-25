@@ -24,11 +24,15 @@ enum HubToken {
         var item: CFTypeRef?
         guard SecItemCopyMatching(q as CFDictionary, &item) == errSecSuccess,
               let data = item as? Data, let s = String(data: data, encoding: .utf8), !s.isEmpty else { return nil }
+        // Mirrored where the Control Center extension can read it (`SharedState`), so a toggle can change
+        // a hub setting without opening the app. A token saved before the mirror existed is copied now.
+        if SharedState.token != s { SharedState.token = s }
         return s
     }
 
     static func set(_ token: String?) {
         SecItemDelete(query as CFDictionary)
+        SharedState.token = token
         guard let token, !token.isEmpty else { return }
         var add = query
         add[kSecValueData as String] = Data(token.utf8)

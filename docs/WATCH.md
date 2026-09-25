@@ -96,7 +96,14 @@ conversation, and the watch face is one press of the crown away.
 Lists `/api/sessions` one row per conversation — running first, then parked, most recently active
 first within each, the order `n` counts in — and follows `/api/session-stream`. Each row is its name
 over up to three lines of what it last said: the list's `say`, which the hub already cuts to 120
-characters, drawn smaller and grey with its markdown's bold and code dropped.
+characters, drawn smaller and grey with its markdown's bold and code dropped. Opening a session marks it read on the hub
+whatever the watch's own copy of the row says, then reloads the list: the hub announces the change on
+the walls' stream, not this one, so without the reload the amber stayed until something else did. A
+reply landing on the session he is looking at is marked read as it lands.
+
+**Who said what is a colour** (`Ink`): his words soft blue, tool calls soft violet, the model's
+in-between text grey, its final reply white; relayed session replies keep their mint on home, and amber
+is left for recording and unread.
 
 **A row carries the same three marks as the phone's list** (`cards/sessions.js`, `phone-home.css`),
 because they answer different questions and are read together: a **white** left edge is the focused
@@ -418,11 +425,15 @@ controls` for every kind) and the same control draws normally in the Smart Stack
 byte-identical to one that worked (files, plists, entitlements, asset catalog) still shows blank tiles
 until the reinstall. Toggling Low Power Mode, the fix circulating for watchOS 26, does not clear it.
 
-**Listen and Speak are switches that open the app to flip.** A control cannot run the microphone or
-read the app's state (that needs an App Group, which this account cannot enable), so each is an
-`OpenIntent` that launches the app and toggles there. Listen turns always-on listening on or off, which
-then carries on with the wrist down (background audio); the blue edge shows it. Speak flips
-`session_speech` (see Spoken replies) and taps the wrist up for on, down for off.
+**Speak is a real toggle, filled while on; Listen is a button that opens the app.** Control Center draws
+a control from the extension, a separate process, and this account cannot enable App Groups, so the two
+share a KEYCHAIN access group instead (`SharedState`, declared on both targets in project.yml, as the
+iPhone app does with its widgets). The app mirrors `session_speech` and the hub token there; Speak's
+`ControlValueProvider` reads the one to draw itself, and its `SetSpeechIntent` writes the flag and the
+hub setting from whichever process runs it. The app asks Control Center to redraw
+(`reloadControls`) whenever the value changes, including when the hub's copy changes. Listen stays an
+`OpenIntent` because the microphone can only run in the app; it turns always-on listening on or off,
+which then carries on with the wrist down (background audio), and the blue edge shows it.
 
 ### Spoken replies
 

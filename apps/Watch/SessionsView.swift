@@ -99,16 +99,16 @@ struct SessionsView: View {
         .opacity(s.running || unread ? 1 : 0.5)
     }
 
-    /// What this session's machine is doing, newest step only: a tool call in teal, what the model says
-    /// between them in a plain light, his own words grey. The line is always there, however empty — a row
+    /// What this session's machine is doing, newest step only, in the colours of `Ink`. The line is
+    /// always there, however empty — a row
     /// that grows when a tool fires and shrinks when one stops makes the whole list jump every few seconds.
     private func step(_ s: SessionRow, unread: Bool) -> some View {
         let line = sessions.activity[s.key]?.last
         let ink: Color = switch line?.kind {
         case nil: .clear
-        case .tool: Self.tool
-        case .thought: Self.said
-        case .said: .gray
+        case .tool: Ink.tool
+        case .thought: Ink.thought
+        case .said: Ink.mine
         }
         return Text(line?.text ?? " ")
             .font(.system(size: 9, design: line?.kind == .tool ? .monospaced : .default))
@@ -119,8 +119,6 @@ struct SessionsView: View {
 
     private static let amber = Color(hex: "#e0a03a")
     private static let name = Color(hex: "#c7cdd6")
-    private static let tool = Color(hex: "#4fd1c5")
-    private static let said = Color(hex: "#d5dde6")
     private static let unreadStep = Color(hex: "#e6c88a")
 }
 
@@ -291,7 +289,7 @@ struct SessionView: View {
     /// His side of the conversation, drawn as the prompt page draws his words.
     private func words(_ text: String) -> some View {
         Text(inlineMarkdown(text))
-            .foregroundColor(.gray)
+            .foregroundColor(Ink.mine)
             .font(.system(size: 12, weight: .medium))
             .frame(maxWidth: .infinity, alignment: .leading)
     }

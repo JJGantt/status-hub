@@ -18,6 +18,16 @@ func snippet(_ s: String) -> AttributedString {
 
 /// One step of a running turn, as the machine running it reports it: a tool call, or what the model
 /// said between two of them (`thought`).
+/// **Who said it, by colour**, the same on every page: his words a soft blue, the model's tool calls a
+/// soft violet, what it says between them grey, and its final reply white (the brightest, since it is
+/// what he reads). Relayed session replies keep their mint on home; amber stays the colour of
+/// recording and of unread, so neither of those is used here.
+enum Ink {
+    static let mine = Color(hex: "#8ab4e8")
+    static let tool = Color(hex: "#b39ddb")
+    static let thought = Color(white: 0.62)
+}
+
 struct ActivityLine: Equatable {
     enum Kind { case tool, thought, said }
     let text: String
@@ -37,15 +47,15 @@ struct ActivityLines: View {
                     case .said:
                         Text(inlineMarkdown(line.text))
                             .font(.system(size: 12, weight: .medium))
-                            .foregroundColor(.gray)
+                            .foregroundColor(Ink.mine)
                     case .thought:
                         Text(inlineMarkdown(line.text))
                             .font(.system(size: 12))
-                            .foregroundColor(Color(white: 0.78))
+                            .foregroundColor(Ink.thought)
                     case .tool:
                         Text(line.text)
                             .font(.system(size: 10, design: .monospaced))
-                            .foregroundColor(.gray)
+                            .foregroundColor(Ink.tool)
                             .lineLimit(2)
                     }
                 }
@@ -396,7 +406,7 @@ struct ThreadRow: View {
 
     var body: some View {
         Text(inlineMarkdown(text))
-            .foregroundColor(user ? .gray : session ? Self.sessionTint : .white)
+            .foregroundColor(user ? Ink.mine : session ? Self.sessionTint : .white)
             .font(.system(size: user ? 12 : 13, weight: user ? .medium : .regular))
             .frame(maxWidth: .infinity, alignment: .leading)
     }

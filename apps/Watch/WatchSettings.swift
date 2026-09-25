@@ -7,8 +7,10 @@ import SwiftUI
 enum WatchSettings {
     @MainActor static func refresh() async {
         guard let all = try? await Hub.settings() else { return }
-        let d = UserDefaults.standard
-        if let v = all[Speaker.key] { d.set(isOn(v), forKey: Speaker.key) }
+        if let v = all[Speaker.key], isOn(v) != SharedState.speech {
+            SharedState.speech = isOn(v)
+            Speaker.redrawControl()
+        }
         BorderStyle.shared.apply(all)
     }
 

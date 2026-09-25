@@ -210,10 +210,19 @@ final class Sessions: ObservableObject {
     }
 
     /// Opening a session is reading it: the mark clears on every surface, not just this one, because
-    /// the phone and the wall are looking at the same list.
+    /// the phone and the wall are looking at the same list. Sent whatever the watch's own copy of the
+    /// row says (that copy can predate the reply), and the list reloaded after, since the hub announces
+    /// the change to the walls' stream and not to this one.
     func markSeen(_ key: String) {
-        guard let r = row(for: key), r.unread == true else { return }
-        Task { _ = try? await Hub.seen(r.id) }
+        guard let r = row(for: key) else { return }
+        Task {
+            do {
+                try await Hub.seen(r.id)
+                await load()
+            } catch {
+                Hub.log("seen-failed", ["row": r.id, "error": String(describing: error).prefix(120).description])
+            }
+        }
     }
 
     func loadDetail(_ key: String) async {
@@ -397,6 +406,8 @@ final class Sessions: ObservableObject {
         // The wrist is told when a follow-up the WATCH sent is answered. Only these: a session answering
         // something typed on the Mac is not something he asked the watch about.
         if answered { WKInterfaceDevice.current().play(.notification) }
+        // A reply landing on the session he is looking at is read as it lands.
+        if path.last == key { markSeen(key) }
     }
 
     /// Speaks the reply this conversation owes, if it is the one on screen and the reply is in. With

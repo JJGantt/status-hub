@@ -60,29 +60,21 @@ struct ListenIntent: OpenIntent {
     }
 }
 
-/// What the Speak control opens.
-enum SpeakTarget: String, AppEnum {
-    case replies
-
-    static var typeDisplayRepresentation: TypeDisplayRepresentation = "Status Hub"
-    static var caseDisplayRepresentations: [SpeakTarget: DisplayRepresentation] = [.replies: "Speak"]
-}
-
-/// Turns spoken session replies on or off — the Speak control's action. The setting lives on the hub
-/// (`session_speech`), so the phone's Settings shows and changes the same switch.
-struct SpeakIntent: OpenIntent {
+/// Turns spoken session replies on or off: the Speak toggle's action. The setting lives on the hub
+/// (`session_speech`), so the phone's Settings shows and changes the same switch; the watch's copy is in
+/// `SharedState`, which is what the toggle reads to draw itself on or off.
+struct SetSpeechIntent: SetValueIntent {
     static var title: LocalizedStringResource = "Speak"
 
-    @Parameter(title: "Target") var target: SpeakTarget
-
-    init() {
-        target = .replies
-    }
+    @Parameter(title: "Speak") var value: Bool
 
     @MainActor
     func perform() async throws -> some IntentResult {
         #if WATCH_APP
-        Speaker.toggle()
+        Speaker.set(value)
+        #else
+        SharedState.speech = value
+        await SharedState.putSetting("session_speech", value ? "1" : "0")
         #endif
         return .result()
     }

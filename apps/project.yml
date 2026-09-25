@@ -127,6 +127,7 @@ targets:
     sources:
       - path: Watch
       - path: WatchWidgets/RecordIntent.swift   # the Record control's intent runs in the app (WATCH_APP)
+      - path: WatchWidgets/SharedState.swift   # what the app and its Control Center extension both read
       - path: Shared/Auth.swift   # Auth.host only — the watch's token comes from the phone, not a password
       - path: Controls/RingsView.swift   # the /api/rings types and the card palette; its widget views go unused
       - path: AssetsWatch.xcassets
@@ -160,6 +161,13 @@ targets:
         TARGETED_DEVICE_FAMILY: "4"
         SKIP_INSTALL: YES
         SWIFT_ACTIVE_COMPILATION_CONDITIONS: $(inherited) WATCH_APP
+    # A keychain group shared with the extension: the Control Center toggles read the app's state and
+    # token from it (WatchWidgets/SharedState.swift).
+    entitlements:
+      path: Watch/StatusHubWatch.entitlements
+      properties:
+        keychain-access-groups:
+          - $(AppIdentifierPrefix)com.jaredgantt.statushub.watch
     dependencies:
       - target: StatusHubWatchWidgets
         embed: true
@@ -171,6 +179,12 @@ targets:
     deploymentTarget: "11.0"
     sources:
       - path: WatchWidgets
+      - path: Shared/Auth.swift   # the hub's host, for SharedState.putSetting
+    entitlements:
+      path: WatchWidgets/StatusHubWatchWidgets.entitlements
+      properties:
+        keychain-access-groups:
+          - $(AppIdentifierPrefix)com.jaredgantt.statushub.watch
     info:
       path: WatchWidgets/Info.plist
       properties:

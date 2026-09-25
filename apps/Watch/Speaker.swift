@@ -1,5 +1,6 @@
 import AVFoundation
 import WatchKit
+import WidgetKit
 
 /// **Reads a session's reply aloud**, on the watch, with the system's own voice — no synthesis machine,
 /// no audio sent anywhere. On when `session_speech` is on (the hub's Settings, and the Speak control in
@@ -13,9 +14,9 @@ import WatchKit
 final class Speaker: NSObject, AVSpeechSynthesizerDelegate {
     static let shared = Speaker()
     static let key = "session_speech"
-    /// Whether session replies are spoken. Kept here between launches, and brought up to date from the
-    /// hub whenever the app comes to the front (`WatchSettings`).
-    static var enabled: Bool { UserDefaults.standard.bool(forKey: key) }
+    /// Whether session replies are spoken. Kept in `SharedState`, where the Control Center toggle reads
+    /// it too, and brought up to date from the hub whenever the app comes to the front (`WatchSettings`).
+    static var enabled: Bool { SharedState.speech }
 
     private let synth = AVSpeechSynthesizer()
 
@@ -61,14 +62,21 @@ final class Speaker: NSObject, AVSpeechSynthesizerDelegate {
         Capture.shared.hush(false)
     }
 
-    /// Flips the setting — the Speak control's action — on the watch at once and on the hub, and taps
-    /// the wrist up for on and down for off, since nothing on screen says which it now is.
-    static func toggle() {
-        let on = !enabled
-        UserDefaults.standard.set(on, forKey: key)
+    /// Sets it — the Speak toggle's action — on the watch at once and on the hub, and taps the wrist up
+    /// for on and down for off.
+    static func set(_ on: Bool) {
+        SharedState.speech = on
         WKInterfaceDevice.current().play(on ? .directionUp : .directionDown)
         if !on { shared.stop() }
+        redrawControl()
         Task { await Hub.putSetting(key, on ? "1" : "0") }
+    }
+
+    /// Control Center draws the toggle from the value it last read; it reads again only when told.
+    static func redrawControl() {
+        if #available(watchOS 26.0, *) {
+            ControlCenter.shared.reloadControls(ofKind: "com.jaredgantt.statushub.watch.speak")
+        }
     }
 
 }

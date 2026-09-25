@@ -303,6 +303,20 @@ each across the full width at 10pt cells, so a map holds as many weeks as the wi
 `Landing.top`, below the corner curve, since it now runs to both edges. It loads its weeks when it
 appears (`loadHistory`) and follows no live stream.
 
+**Each part opens the whole of its history, with a back arrow** (`BackArrow`; a page in the row cannot
+be swiped back from, and a tap on a map picks a day):
+- **A heat map opens `HistoryView`**: that map's every week back to the first meal or set logged
+  (`/api/nut-history?all=1`, each cell carrying its date `d`), scrolled sideways and landing on the
+  newest week, 15pt cells so a finger can pick one. The day picked (today to begin with) is outlined,
+  and under the map is that day's list: its meals (`/api/nutrition-day?date=`, `DayLog`, each opening to
+  its ingredients) or its exercises (`/api/workout-day?date=`, `LiftRow`, each opening to its sets; a past
+  day's rows carry no muscle chips, since those are this week's volume).
+- **The plot opens `WeightChart`**, the phone's weight view (`cards/maintviz.js`) from `/api/weight-view`:
+  every day at 4pt, scrolled sideways and landing on today; weigh-ins as purple dots (faint outside the
+  window the target is fitted over) with the fitted trend across the window, and each day's intake as a
+  blue bar (faint outside the window) under the maintenance (amber) and target (green) steps. The y
+  values sit in a gutter at the right edge and do not scroll.
+
 ## Recording a command
 
 ### One microphone
@@ -593,7 +607,7 @@ device builds:
 - the token comes from `SIMCTL_CHILD_HUB_TOKEN` (the kiosk's, sent as `?token=`);
 - `-opensession <row id>` opens a session as its notification would;
 - `-page <sessions|home|day|health>` lands on a page; `-dayview <totals|muscles>` opens the day page's
-  totals or its muscles page;
+  totals or its muscles page; `-health <weight|food|training>` opens a health page's full view;
 - `DAY_CLOCKS=<rest s>,<session s>` (as `SIMCTL_CHILD_DAY_CLOCKS`) sets the day page's rest and session
   clocks to any length, to check what fits beside the feet;
 - recording and stopping never reach the hub (`blockInSimulator` in `Hub.swift` — a test tap once sent

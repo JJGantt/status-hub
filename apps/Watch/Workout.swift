@@ -36,6 +36,17 @@ final class Workout: ObservableObject {
         stream = nil
     }
 
+    /// One past day's exercises, most recent first, for the history view. The muscle chips are this
+    /// week's and say nothing about a day in the past, so a past day's rows carry none.
+    func day(_ date: String) async -> [WorkoutNow.Exercise] {
+        struct Day: Decodable {
+            struct Ex: Decodable { let name: String; let sets: [WorkoutNow.Lift] }
+            let exercises: [Ex]
+        }
+        guard let d: Day = try? await Hub.json("/api/workout-day?date=" + date) else { return [] }
+        return d.exercises.map { WorkoutNow.Exercise(name: $0.name, sets: $0.sets, muscles: []) }
+    }
+
     func load() async {
         if loading { reloadAfter = true; return }
         loading = true

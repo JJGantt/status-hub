@@ -3,16 +3,44 @@ import SwiftUI
 /// **The health page: the weeks, not the day.** The weigh-in plot over the two heat maps, food then
 /// training, each across the full width, as many weeks as that holds (newest at the right). The day's
 /// rings, meals and exercises are the day page's; nothing here is a list.
+///
+/// **Each is a way into the whole of its history.** The plot opens the weight view (the phone's, every
+/// weigh-in and every day's intake); a map opens that map's whole history, scrolling, with the day
+/// picked on it listed underneath (`HistoryView`). Each full view has a back arrow.
 struct HealthView: View {
     @EnvironmentObject private var nutrition: Nutrition
+    private enum Mode { case overview, weight, food, training }
+    @State private var mode: Mode = .overview
 
     var body: some View {
+        Group {
+            switch mode {
+            case .overview: overview
+            case .weight: WeightChart(back: { mode = .overview })
+            case .food: HistoryView(kind: .food, back: { mode = .overview })
+            case .training: HistoryView(kind: .training, back: { mode = .overview })
+            }
+        }
+        #if targetEnvironment(simulator)
+        // `-health <weight|food|training>` at launch, so each full view can be screenshotted.
+        .onAppear {
+            let args = ProcessInfo.processInfo.arguments
+            guard let i = args.firstIndex(of: "-health"), i + 1 < args.count else { return }
+            mode = ["weight": .weight, "food": .food, "training": .training][args[i + 1]] ?? .overview
+        }
+        #endif
+    }
+
+    private var overview: some View {
         VStack(alignment: .leading, spacing: 4) {
             if let h = nutrition.history {
                 WeightPlot(plot: h.weight, side: heatSide).frame(height: 32)
+                    .contentShape(Rectangle()).onTapGesture { mode = .weight }
                 IntakeCalendar(weeks: h.weeks).frame(height: 7 * heatSide)
+                    .contentShape(Rectangle()).onTapGesture { mode = .food }
                 if let sets = h.sets {
                     IntakeCalendar(weeks: sets).frame(height: 7 * heatSide)
+                        .contentShape(Rectangle()).onTapGesture { mode = .training }
                 }
             }
         }

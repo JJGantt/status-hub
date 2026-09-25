@@ -38,7 +38,8 @@ struct NutritionDay: Decodable {
 /// `/api/nut-history`: the intake calendar and the weigh-in plot over the same weeks, so a column is
 /// the same week in both.
 struct NutHistory: Decodable {
-    struct Cell: Decodable { let c: String?; let t: Int? }
+    /// A day: its colour, whether it is today, and its date, which a tap on the history view asks for.
+    struct Cell: Decodable { let c: String?; let t: Int?; let d: String? }
     struct Point: Decodable { let x: Double?; let y: Double? }
     struct Plot: Decodable {
         /// The three values written over the plot's left end: a label and where on the box it sits.
@@ -70,6 +71,9 @@ final class Nutrition: ObservableObject {
     @Published private(set) var day: NutritionDay?
     /// The calendar and the plot behind the rings, loaded when he first turns to them.
     @Published private(set) var history: NutHistory?
+    /// Every week back to the first meal or set logged, for the history view.
+    @Published private(set) var fullHistory: NutHistory?
+    @Published private(set) var weight: WeightView?
 
     /// The start of the minute the hub built `feed` in. Its clock is minute-resolution, so frame `t`
     /// describes `anchor + t` minutes.
@@ -98,6 +102,19 @@ final class Nutrition: ObservableObject {
     /// `load()` below — it was fetched exactly once and never again, so a meal logged after that
     /// moment moved the rings and left today's cell on the heat map showing the colour it had before
     /// the food, for as long as the app stayed up.
+    func loadFullHistory() async {
+        if let h: NutHistory = try? await Hub.json("/api/nut-history?all=1") { fullHistory = h }
+    }
+
+    func loadWeight() async {
+        if let w: WeightView = try? await Hub.json("/api/weight-view") { weight = w }
+    }
+
+    /// One past day's log, for the history view.
+    func day(_ date: String) async -> NutritionDay? {
+        try? await Hub.json("/api/nutrition-day?date=" + date)
+    }
+
     func loadHistory() async {
         history = try? await Hub.json("/api/nut-history?weeks=30")
     }
@@ -173,4 +190,20 @@ final class Nutrition: ObservableObject {
     }
 
     private func sign(_ v: Double) -> Int { v > 0 ? 1 : v < 0 ? -1 : 0 }
+}
+
+/// The phone's weight view (`cards/maintviz.js`): the weigh-ins, each day's intake, the maintenance and
+/// target curves as they stood each day, and the trend fitted over the window the target is based on.
+struct WeightView: Decodable {
+    struct WeighIn: Decodable { let date: String; let weight: Double; let inwin: Bool }
+    struct Intake: Decodable { let date: String; let calories: Double; let kept: Bool }
+    struct Row: Decodable { let date: String; let maintenance: Double?; let target: Double? }
+    let today: String
+    let window_start: String?
+    let window_end: String?
+    let weighins: [WeighIn]
+    let intake: [Intake]
+    let series: [Row]
+    let slope_lb_day: Double?
+    let weight_at_end: Double?
 }

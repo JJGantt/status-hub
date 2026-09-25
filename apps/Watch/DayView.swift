@@ -376,7 +376,7 @@ private enum Geo {
     static let listInset: CGFloat = 5.5
     static let rowPitch: CGFloat = 15
     static let listSize: CGFloat = 11
-    static let valueSize: CGFloat = 11
+    static let valueSize: CGFloat = 10
     static let totalSize: CGFloat = 16
     static let totalPitch: CGFloat = 23
     static let muscleSize: CGFloat = 14

@@ -266,13 +266,12 @@ The conversation is not on it: that is home's alone.
   Nothing crosses it: the training clocks live on the training side.
 - **Left:** the four rings packed 2x2, 4pt apart. **Right:** the body figures at the same height.
 - **The training numbers stand beside the figures' feet** — `last` over the rest time at the left,
-  the session clock centred between the figures, `sets` over the count at the right — at the lists'
-  11pt, bold and bright (a trailing `h` stays 7pt), the INK of every value ending on the feet's last
+  the session clock centred between the figures, `sets` over the count at the right — at 10pt bold,
+  a point under the lists' numbers, bright (a trailing `h` or `m` stays 7pt), the INK of every value ending on the feet's last
   row (`Geo.footDrop`). **The rest is never more than three digits** (`RestClock.restText`: `m:ss` under ten
-  minutes, `10m`–`59m`, then `3h`), and **the session clock is `h:mm`**, no seconds. Rendered at 11pt
-  against the artwork (`DAY_CLOCKS=<rest s>,<session s>` in the simulator), `11h` clears the feet,
-  `19m` and `59m` touch the front foot, `9:59` runs into it, and a centred `0:41` or `1:41` just fills
-  the gap between the feet.
+  minutes, `10m`–`59m`, then `3h`), and **the session clock is `h:mm`**, no seconds. Rendered at 10pt
+  against the artwork (`DAY_CLOCKS=<rest s>,<session s>` in the simulator), `11h` and `19m` sit clear of
+  the feet, `9:59` just grazes the front foot, and a centred `0:41` or `1:41` fits between the feet.
 - **Under each column, a list to the bottom of the glass, scrolling:** every meal EATEN today (staged
   ones are left out — planned is not eaten) and every exercise today, most recent first. A tap opens
   its full view. The page ignores its bottom safe area so the lists reach the glass.

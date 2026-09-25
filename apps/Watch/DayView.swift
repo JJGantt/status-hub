@@ -311,7 +311,8 @@ private struct Figures: View {
             if let clock {
                 // Green and amber say a session is on; once it has ended the rest is read in the bright
                 // ink, not greyed out.
-                labelled("last", value(clock.restText, clock.active ? clock.restColour : Geo.setsInk), .leading)
+                labelled("last", value(clock.restText, clock.active ? clock.restColour : Geo.setsInk, smallSeconds: true),
+                         .leading)
                     .offset(y: Geo.footDrop)
             }
         }
@@ -344,13 +345,16 @@ private struct Figures: View {
         }
     }
 
-    /// A number the size of the lists' numbers, bold. A trailing unit (`12h`) stays small: it is the
-    /// digits that are read, and the letter at full size costs width beside the feet.
-    private func value(_ v: String, _ ink: Color) -> some View {
+    /// A number just under the lists' size, bold. What is read at a glance is full size and the rest is
+    /// small: a trailing unit (`12h`, `19m`), and with `smallSeconds` the colon and seconds of a rest
+    /// (`9` then a small `:59`), which is also what keeps `m:ss` clear of the front figure's feet.
+    private func value(_ v: String, _ ink: Color, smallSeconds: Bool = false) -> some View {
         let unit = v.last.map { $0.isLetter } == true
-        let digits = unit ? String(v.dropLast()) : v
+        let colon = smallSeconds ? v.firstIndex(of: ":") : nil
+        let digits = unit ? String(v.dropLast()) : colon.map { String(v[..<$0]) } ?? v
+        let tail = unit ? String(v.last!) : colon.map { String(v[$0...]) } ?? ""
         let big = Text(digits).font(.system(size: Geo.valueSize, weight: .bold).monospacedDigit())
-        let small = Text(unit ? String(v.last!) : "").font(.system(size: Geo.unitSize, weight: .bold))
+        let small = Text(tail).font(.system(size: Geo.unitSize, weight: .bold).monospacedDigit())
         return (big + small)
             .foregroundColor(ink)
             .lineLimit(1)

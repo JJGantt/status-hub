@@ -111,28 +111,36 @@ struct RestClock {
     /// A set inside the last 20 minutes: the session is still running.
     var active: Bool { rest <= Self.sessionGap }
 
+    #if targetEnvironment(simulator)
+    /// A rest and a session of any length, for rendering each case (`DAY_CLOCKS=<rest>,<session>`).
+    init(rest: Double, session: Double) { self.rest = rest; self.session = session }
+    #endif
+
     init(lastAt: String, sessionStartAt: String?, now: Date) {
         let nowWall = wallClock(now)
         rest = max(0, nowWall - (wallClock(lastAt) ?? nowWall))
         session = max(0, nowWall - (wallClock(sessionStartAt ?? lastAt) ?? nowWall))
     }
 
-    /// **m:ss inside the hour, then whole hours only** — `3h`, `12h`, `72h`. Past an hour the minutes
-    /// are noise, and dropping them is what keeps the value narrow enough to sit beside the figures'
-    /// feet on the day page at any length of rest; `12h 24m` would not fit there.
+    /// **Never more than three digits**: `m:ss` under ten minutes, where the seconds are what a rest is
+    /// timed by; whole minutes from ten (`10m` to `59m`); whole hours from an hour (`3h`, `72h`). Short
+    /// enough to sit beside the figures' feet on the day page at its full size.
     var restText: String {
         let n = Int(rest)
-        return n < 3600 ? String(n / 60) + ":" + two(n % 60) : String(n / 3600) + "h"
+        if n < 600 { return String(n / 60) + ":" + two(n % 60) }
+        if n < 3600 { return String(n / 60) + "m" }
+        return String(n / 3600) + "h"
     }
 
     /// Green while the rest is short, amber past five minutes, grey once the session has ended.
     var restColour: Color { active ? (rest >= 300 ? clockAmber : clockGreen) : clockGrey }
 
-    /// fmtSession: h:mm:ss once past the hour, else m:ss. Nil once the session has ended.
+    /// Hours and minutes, `h:mm` (`0:41`, `1:41`): a session is timed in minutes, and the seconds only
+    /// widened it. Nil once the session has ended.
     var sessionText: String? {
         guard active else { return nil }
-        let n = Int(session), h = n / 3600, m = (n % 3600) / 60, sec = n % 60
-        return h > 0 ? String(h) + ":" + two(m) + ":" + two(sec) : String(m) + ":" + two(sec)
+        let n = Int(session)
+        return String(n / 3600) + ":" + two((n % 3600) / 60)
     }
 
     private func two(_ n: Int) -> String { n < 10 ? "0" + String(n) : String(n) }

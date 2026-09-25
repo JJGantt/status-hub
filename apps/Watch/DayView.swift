@@ -297,7 +297,7 @@ private struct Figures: View {
 
     var body: some View {
         let colours = now?.body ?? [:]
-        let clock = now?.last_set_at.map { RestClock(lastAt: $0, sessionStartAt: now?.session_start_at, now: date) }
+        let clock = restClock
         HStack(spacing: Geo.figureGap) {
             BodyFigure(back: false, colours: colours)
             BodyFigure(back: true, colours: colours)
@@ -327,6 +327,14 @@ private struct Figures: View {
             }
         }
         .frame(width: Geo.col, height: Geo.block)
+    }
+
+    private var restClock: RestClock? {
+        #if targetEnvironment(simulator)
+        if let v = ProcessInfo.processInfo.environment["DAY_CLOCKS"]?.split(separator: ",").compactMap({ Double($0) }),
+           v.count == 2 { return RestClock(rest: v[0], session: v[1]) }
+        #endif
+        return now?.last_set_at.map { RestClock(lastAt: $0, sessionStartAt: now?.session_start_at, now: date) }
     }
 
     private func labelled(_ label: String, _ v: some View, _ edge: HorizontalAlignment) -> some View {

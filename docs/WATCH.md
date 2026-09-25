@@ -268,10 +268,11 @@ The conversation is not on it: that is home's alone.
 - **The training numbers stand beside the figures' feet** — `last` over the rest time at the left,
   the session clock centred between the figures, `sets` over the count at the right — at the lists'
   11pt, bold and bright (a trailing `h` stays 7pt), the INK of every value ending on the feet's last
-  row (`Geo.footDrop`). **At 11pt only whole hours fit beside the feet**: measured against the
-  artwork, the front figure's feet begin 27.5pt into the column, `72h` is ~20pt wide, while `9:59`
-  (24pt), `59:59` (30.5pt) and a centred `1:41:12` (35pt) run into the feet. So during a session,
-  when the rest is in minutes and the session clock shows, the numbers overlap the artwork.
+  row (`Geo.footDrop`). **The rest is never more than three digits** (`RestClock.restText`: `m:ss` under ten
+  minutes, `10m`–`59m`, then `3h`), and **the session clock is `h:mm`**, no seconds. Rendered at 11pt
+  against the artwork (`DAY_CLOCKS=<rest s>,<session s>` in the simulator), `11h` clears the feet,
+  `19m` and `59m` touch the front foot, `9:59` runs into it, and a centred `0:41` or `1:41` just fills
+  the gap between the feet.
 - **Under each column, a list to the bottom of the glass, scrolling:** every meal EATEN today (staged
   ones are left out — planned is not eaten) and every exercise today, most recent first. A tap opens
   its full view. The page ignores its bottom safe area so the lists reach the glass.
@@ -590,8 +591,11 @@ The real app runs in a watchOS simulator against the live hub. Simulator-only co
 device builds:
 
 - the token comes from `SIMCTL_CHILD_HUB_TOKEN` (the kiosk's, sent as `?token=`);
-- `-autopage chat|session` stands in for double tap every two seconds;
 - `-opensession <row id>` opens a session as its notification would;
+- `-page <sessions|home|day|health>` lands on a page; `-dayview <totals|muscles>` opens the day page's
+  totals or its muscles page;
+- `DAY_CLOCKS=<rest s>,<session s>` (as `SIMCTL_CHILD_DAY_CLOCKS`) sets the day page's rest and session
+  clocks to any length, to check what fits beside the feet;
 - recording and stopping never reach the hub (`blockInSimulator` in `Hub.swift` — a test tap once sent
   a stray "you" into his conversation) and never mute the room mics.
 

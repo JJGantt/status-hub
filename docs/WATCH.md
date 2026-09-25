@@ -243,7 +243,7 @@ top with the gold edge.
 
 ### The workout page
 
-Now `ExerciseList`, the training detail both the day and health pages open: the rest clocks on one
+Now `ExerciseList`, the training detail the day page opens (and the Workout control): the rest clocks on one
 line, then one row per exercise — its name and how many sets — tapping open to the muscles it trains
 (weekly sets in each muscle's colour) beside its sets. **Nothing in it may report a width wider than it
 was offered**: the ScrollView lays its content out again at the width the content reports, so one
@@ -296,10 +296,11 @@ mapping the browser's muscle card imports, so a region is one colour on the wris
 
 ### The health page
 
-`HealthView`: the four rings in a column down the left, and beside them the weigh-in plot, both heat
-maps and one line each for the newest meal and exercise. The earlier consolidation; it fits one screen
-only without the bar, and the bar now shows on every page, so its foot is covered. Kept until the day
-page settles which layout stays.
+`HealthView`: the weeks, not the day. The weigh-in plot over the two heat maps (food, then training),
+each across the full width at 10pt cells, so a map holds as many weeks as the width allows (18 on the
+46mm) with the newest at the right. No rings and no lists: the day's are on the day page. It starts at
+`Landing.top`, below the corner curve, since it now runs to both edges. It loads its weeks when it
+appears (`loadHistory`) and follows no live stream.
 
 ## Recording a command
 
@@ -420,8 +421,9 @@ while waiting stops waiting — a command the hub already has still runs.**
 ### A control per page
 
 Control Center, the Smart Stack and an Ultra's Action button each hold **Hub · Listen · Speak · Sessions · Nutrition ·
-Workout**, which open the app on that page (`OpenPageIntent` → `Router` → `RootView`); Nutrition and
-Workout both land on the health page. Every control closes an open session first: a session is pushed over the whole row of pages, so
+Workout**, which open the app on that page (`OpenPageIntent` → `Router` → `RootView`); Nutrition and Workout
+land on the day page opened straight into a full list (`Router.dayList`): today's food log, or the
+exercise list. Every control closes an open session first: a session is pushed over the whole row of pages, so
 turning the page beneath it would leave the session on screen. Hub (the mic control; `RecordControl` in the code) is the odd one out: it opens home AND starts a command. It is labelled Hub because it sends a command to the hub — a recording is only how.
 Each control is its own type, spelled out in full — the `kind`, title and symbol are literals, because
 Control Center reads them before the extension runs and a computed one is not there to read.

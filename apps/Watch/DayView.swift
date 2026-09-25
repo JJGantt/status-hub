@@ -24,6 +24,7 @@ import WatchKit
 struct DayView: View {
     @EnvironmentObject private var nutrition: Nutrition
     @EnvironmentObject private var workout: Workout
+    @ObservedObject private var router = Router.shared
     private enum Panel { case overview, food, exercises, muscles }
     @State private var panel: Panel = .overview
     /// The rings' tap: the day's totals in place of the lists.
@@ -39,6 +40,12 @@ struct DayView: View {
             case .exercises: ExerciseList(onHeader: { panel = .overview })
             case .muscles: muscles
             }
+        }
+        // A control asked for one of the full lists: open it, whatever the page was showing.
+        .onChange(of: router.dayList, initial: true) { _, asked in
+            guard let asked else { return }
+            panel = asked == .nutrition ? .food : .exercises
+            router.dayList = nil
         }
         #if targetEnvironment(simulator)
         // `-dayview <totals|muscles>` at launch, so each can be screenshotted.
@@ -171,9 +178,17 @@ struct DayView: View {
                     HStack(alignment: .firstTextBaseline) {
                         Text(m.label).lineLimit(1)
                         Spacer(minLength: 4)
-                        Text(Self.sets(m.sets) + " / " + Self.sets(m.target))
-                            .font(.system(size: Geo.muscleSize, weight: .semibold).monospacedDigit())
-                            .fixedSize()
+                        // The goal always takes two digits' room, a one-digit goal padded on its left,
+                        // so every slash and every count before it lines up down the list.
+                        HStack(spacing: 0) {
+                            Text(Self.sets(m.sets) + " / ")
+                            ZStack(alignment: .trailing) {
+                                Text("88").hidden()
+                                Text(Self.sets(m.target))
+                            }
+                        }
+                        .font(.system(size: Geo.muscleSize, weight: .semibold).monospacedDigit())
+                        .fixedSize()
                     }
                     .font(.system(size: Geo.muscleSize))
                     .foregroundColor(Color(hex: m.color))

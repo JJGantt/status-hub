@@ -8,8 +8,14 @@ final class Router: ObservableObject {
     static let shared = Router()
 
     @Published var asked: WatchPage?
+    /// Which of the day page's full lists a control asked for: Nutrition opens today's food log,
+    /// Workout the exercise list. The day page takes it and clears it.
+    @Published var dayList: WatchPage?
 
     private init() {}
 
-    func open(_ page: WatchPage) { asked = page }
+    func open(_ page: WatchPage) {
+        if page != .sessions { dayList = page }
+        asked = page
+    }
 }

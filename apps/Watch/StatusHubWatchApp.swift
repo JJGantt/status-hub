@@ -84,13 +84,12 @@ struct RootView: View {
     enum Page: String {
         case sessions, home, day, health
 
-        /// Food and training are one page now, so the two controls that named them land in the
-        /// same place. The controls keep their separate names because that is what he is choosing
-        /// between in Control Center.
+        /// Nutrition and Workout land on the day page, which opens the list each names
+        /// (`Router.dayList`): today's food log, or the exercise list.
         init(_ asked: WatchPage) {
             switch asked {
             case .sessions: self = .sessions
-            case .nutrition, .workout: self = .health
+            case .nutrition, .workout: self = .day
             }
         }
     }
@@ -178,9 +177,9 @@ struct RootView: View {
         let live = phase == .active
         if live && page == .sessions { sessions.activate() } else { sessions.deactivate() }
         if live && page == .home { chat.activate() } else { chat.deactivate() }
-        // One page, both streams: the health page draws food and training together, so it follows
-        // both or neither.
-        if live && (page == .health || page == .day) { nutrition.activate(); workout.activate() }
+        // The day page draws food and training live, so it follows both or neither. The health page
+        // is weeks, loaded when it appears (`loadHistory`), and needs neither stream.
+        if live && page == .day { nutrition.activate(); workout.activate() }
         else { nutrition.deactivate(); workout.deactivate() }
     }
 }

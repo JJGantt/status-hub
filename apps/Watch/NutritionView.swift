@@ -1,122 +1,31 @@
 import SwiftUI
 
-/// **The health page: food and training on one screen.** They were two pages and a swipe apart, which
-/// put the two halves of the same day in two places. The rings run DOWN the left because four of them
-/// across the top is a band of chrome above everything else; standing in a column they are a gutter,
-/// and the width they free is what makes room for two heat maps stacked on the right.
-///
-/// Every line on it is a way into the thing it summarises, and nothing is a rotation through screens:
-/// the rings are the day's numbers, so they open the numbers; the newest meal is the food log's last
-/// line, so it opens the log; the newest exercise is the exercise list's last line, so it opens that.
-/// From anywhere but the overview, the rings are the way back.
+/// **The health page: the weeks, not the day.** The weigh-in plot over the two heat maps, food then
+/// training, each across the full width, as many weeks as that holds (newest at the right). The day's
+/// rings, meals and exercises are the day page's; nothing here is a list.
 struct HealthView: View {
     @EnvironmentObject private var nutrition: Nutrition
-    @EnvironmentObject private var workout: Workout
-    private enum Panel { case overview, numbers, food, exercises }
-    @State private var panel: Panel = .overview
-    /// One entry's ingredients at a time, so the log stays a list rather than a page of everything.
-    @State private var open: String?
 
     var body: some View {
-        HStack(alignment: .top, spacing: 6) {
-            // Redrawn every second, as the card's setInterval(tickRings, 1000). Outside the scroller
-            // on purpose: they are the page's heading, and scrolling what is beside them must not
-            // take them with it.
-            TimelineView(.periodic(from: .now, by: 1)) { ctx in
-                RingsColumn(rings: nutrition.rings(at: ctx.date))
-            }
-            .frame(width: 40)
-            .contentShape(Rectangle())
-            .onTapGesture { panel = panel == .overview ? .numbers : .overview }
-
-            // **The overview does not scroll.** It is a day of food and training sized to the screen
-            // it is read on, so everything is on it or it is the wrong size — a scroller here would
-            // hide the second half of the day behind a gesture. The lists it opens DO scroll, because
-            // a list has no length the screen can dictate.
-            switch panel {
-            case .overview:
-                VStack(alignment: .leading, spacing: 4) { overview }
-                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-            case .numbers, .food, .exercises:
-                ScrollView {
-                    VStack(alignment: .leading, spacing: 4) {
-                        switch panel {
-                        case .numbers: if let d = nutrition.day { DayNumbers(day: d) }
-                        case .food: if let d = nutrition.day { DayLog(day: d, open: $open) }
-                        default: ExerciseList()
-                        }
-                    }
-                    .padding(.bottom, PageInset.bottom)
+        VStack(alignment: .leading, spacing: 4) {
+            if let h = nutrition.history {
+                WeightPlot(plot: h.weight, side: heatSide).frame(height: 32)
+                IntakeCalendar(weeks: h.weeks).frame(height: 7 * heatSide)
+                if let sets = h.sets {
+                    IntakeCalendar(weeks: sets).frame(height: 7 * heatSide)
                 }
-                .scrollIndicators(.never)
             }
         }
-        // 8pt rather than 4: the corner arc eats the top ring and the ends of a full-width rule.
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        // Full width from the top means the corners: the plot starts at the landing line, below the
+        // curve, and 8pt in from each side.
         .padding(.horizontal, 8)
-        .padding(.top, 8)
+        .padding(.top, Landing.top)
         .task { await nutrition.loadHistory() }
         .topOfTheScreen(scrollTop: 0)
-        .frame(maxWidth: .infinity, alignment: .leading)
         .background(Color.black.ignoresSafeArea())
     }
-
-    /// The day at rest: the weigh-in trend, the two heat maps, and one line under each saying what the
-    /// last thing was. A cell is square and 10pt, so a map is 70pt tall whatever its width, and the
-    /// two of them plus the plot and the two lines come to about 218pt — which is what has to fit in
-    /// the 240 this column has, with the bar gone, WITHOUT scrolling. Those sizes are the budget: grow
-    /// one and something else has to give it back.
-    @ViewBuilder private var overview: some View {
-        if let h = nutrition.history {
-            WeightPlot(plot: h.weight, side: heatSide).frame(height: 32)
-            IntakeCalendar(weeks: h.weeks).frame(height: 7 * heatSide)
-        }
-        if let last = nutrition.day?.entries.first {
-            summary(last.name ?? "—", String(mn(last.calories)) + " cal") { panel = .food }
-        }
-        if let sets = nutrition.history?.sets {
-            IntakeCalendar(weeks: sets).frame(height: 7 * heatSide)
-        }
-        if let ex = workout.now?.exercises.first {
-            summary(ex.name, String(ex.sets.count)) { panel = .exercises }
-        }
-    }
-
-    /// One line: what it was on the left, its figure against the right edge, the whole row a way in.
-    private func summary(_ name: String, _ value: String, _ open: @escaping () -> Void) -> some View {
-        Button(action: open) {
-            HStack(alignment: .firstTextBaseline, spacing: 6) {
-                Text(name)
-                    .font(.system(size: 12))
-                    .foregroundColor(Color(hex: "#c7ced8"))
-                    .lineLimit(1)
-                Spacer(minLength: 4)
-                Text(value)
-                    .font(.system(size: 12).monospacedDigit())
-                    .foregroundColor(Color(hex: "#7d8894"))
-                    .fixedSize()
-            }
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-    }
 }
-
-/// The four pace rings standing in a column down the left edge. Same cell the row used; what changes
-/// is only which way they are stacked.
-private struct RingsColumn: View {
-    let rings: [String: RingNow]
-    private let keys = [("Cal", "calories"), ("P", "protein_g"), ("C", "carbs_g"), ("F", "fat_g")]
-
-    var body: some View {
-        VStack(spacing: 4) {
-            ForEach(keys, id: \.1) { glyph, key in
-                if let r = rings[key] { RingCell(glyph: glyph, ring: r) }
-            }
-        }
-    }
-}
-
-
 
 /// One ring, drawn to `cards/nutrition.js`'s SVG: an 80-unit box, a r=34 circle on a 7-unit stroke,
 /// arcs from twelve o'clock clockwise with round caps, ticks from r=29 to r=39.5, the glyph on a
@@ -303,48 +212,6 @@ func mn(_ v: Double?) -> Int { Int((v ?? 0).rounded()) }
 /// A number printed the way JavaScript prints it: no ".0" on a whole one.
 func js(_ v: Double) -> String { v == v.rounded() ? String(Int(v)) : String(v) }
 
-/// Lays its children left to right and wraps. The hub's rows scroll sideways instead, which a watch
-/// is too narrow for.
-struct Flow: Layout {
-    var spacing: CGFloat = 4
-    var lineSpacing: CGFloat = 4
-
-    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
-        arrange(proposal.width ?? .infinity, subviews).size
-    }
-
-    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
-        let laid = arrange(bounds.width, subviews)
-        for (i, p) in laid.origins.enumerated() {
-            subviews[i].place(at: CGPoint(x: bounds.minX + p.x, y: bounds.minY + p.y), proposal: laid.proposals[i])
-        }
-    }
-
-    /// A child wider than a whole line (a long exercise name) is offered the line's width, so its text
-    /// wraps. Left at its ideal width it made the Flow wider than the screen, and a ScrollView lays its
-    /// content out again at the width it reports, so the whole page overflowed both edges.
-    private func arrange(_ width: CGFloat, _ subviews: Subviews)
-        -> (origins: [CGPoint], proposals: [ProposedViewSize], size: CGSize) {
-        var origins: [CGPoint] = [], proposals: [ProposedViewSize] = []
-        var x: CGFloat = 0, y: CGFloat = 0, line: CGFloat = 0, widest: CGFloat = 0
-        for s in subviews {
-            var proposal = ProposedViewSize.unspecified
-            var size = s.sizeThatFits(proposal)
-            if size.width > width {
-                proposal = ProposedViewSize(width: width, height: nil)
-                size = s.sizeThatFits(proposal)
-            }
-            if x > 0 && x + size.width > width { x = 0; y += line + lineSpacing; line = 0 }
-            origins.append(CGPoint(x: x, y: y))
-            proposals.append(proposal)
-            x += size.width + spacing
-            line = max(line, size.height)
-            widest = max(widest, x - spacing)
-        }
-        return (origins, proposals, CGSize(width: widest, height: y + line))
-    }
-}
-
 /// The weigh-in plot, as the wall draws it: a line across the weeks with its three axis values written
 /// over the left end rather than in a gutter — a gutter would inset the data, and being uninset is the
 /// point. The first column is deliberately blank, so the line starts where the calendar's first week
@@ -425,34 +292,5 @@ private struct IntakeCalendar: View {
                 }
             }
         }
-    }
-}
-
-/// **What the rings turn over to: the day's four totals against their goals, and nothing else.** No
-/// box, no date and no labels beyond the unit — the page is today, and a number over its goal says
-/// what it is. It sits where the plot and the calendar were, because it answers the same question at
-/// a glance that they answer over weeks.
-private struct DayNumbers: View {
-    let day: NutritionDay
-
-    var body: some View {
-        let tm = day.target_macros
-        return Flow(spacing: 10, lineSpacing: 3) {
-            pair(mn(day.total_cal), (day.target_cal ?? 0) > 0 ? day.target_cal : nil, "cal")
-            pair(mn(day.total_protein), tm?.protein_g, "P")
-            pair(mn(day.total_carbs), tm?.carbs_g, "C")
-            pair(mn(day.total_fat), tm?.fat_g, "F")
-        }
-    }
-
-
-    private func pair(_ v: Int, _ goal: Double?, _ label: String) -> some View {
-        let dim = Color(hex: "#7d8894")
-        var t = Text(String(v)).foregroundColor(Color(hex: "#e6eaf0"))
-        if let goal { t = t + Text("/" + js(goal)).foregroundColor(dim) }
-        return (t + Text(label == "cal" ? " cal" : label).foregroundColor(dim))
-            .font(.system(size: 12, weight: .semibold).monospacedDigit())
-            .lineLimit(1)
-            .fixedSize()
     }
 }

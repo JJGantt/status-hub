@@ -597,6 +597,12 @@ deleted by pi-desk after 7 days; optional `lat`/`lon`/`acc`/`place` query → `v
 `/api/voice-activity` · `/api/attach`
 (photo upload) · `/api/register-push` · `/api/notify` (APNs to all devices) · `/api/clientlog`.
 
+**Outside the gate:** `/api/cg/transcribe` — the restaurant watch app's voice input, raw audio → Groq
+Whisper → `{transcript}`, nothing enqueued. That app ships to TestFlight testers, so it cannot hold the hub
+token; it sends its Anthropic key as `X-Owner-Key` instead, and only the owner's (its SHA-256 matches
+`CG_OWNER_KEY_SHA256`, the same hash as `AppGate.ownerKeyHash` in CapitalGrilleApp) gets through. If that
+key is ever rotated, both hashes change together.
+
 **Auth:** the hub password → `sha256("status-hub:"+password)`; sent as the `hub` cookie (web) or the
 `X-Hub-Token` header (native app). The kiosk authenticates via `?token=<TV_TOKEN>` (also seeds the
 cookie). The gate is one `app.use` and it protects **everything defined below it**, static assets

@@ -1478,6 +1478,36 @@ const authed = (req) => getCookie(req, 'hub') === TOKEN || req.headers['x-hub-to
 // looks identical to a successful one from the outside, and did exactly that twice on 2026-08-26.
 // COMMIT is stamped at deploy time; 'dev' locally.
 app.get('/healthz', (req, res) => res.type('text').send('ok ' + (process.env.COMMIT || 'dev')));
+
+// The restaurant watch app's voice input: the same Groq Whisper as /api/voice-command, transcription
+// only. It sits before the auth gate because that app cannot carry the hub token — it ships to TestFlight
+// testers, so anything built into it is public. Instead it sends its Anthropic key, and only the owner's
+// key (matched by SHA-256, the same hash as `AppGate.ownerKeyHash` in CapitalGrilleApp) is let through,
+// and all it can do here is turn a clip into words.
+const CG_OWNER_KEY_SHA256 = '0c4eb3445e20e7d8b5164aca839f65fad2d05683f7556addbf4ca774d9a9c990';
+app.post('/api/cg/transcribe', async (req, res) => {
+  const key = String(req.headers['x-owner-key'] || '');
+  if (!key || crypto.createHash('sha256').update(key).digest('hex') !== CG_OWNER_KEY_SHA256) {
+    req.resume();
+    return res.status(401).json({ error: 'unauthorized' });
+  }
+  if (!GROQ_API_KEY) { req.resume(); return res.status(503).json({ error: 'transcription not configured' }); }
+  const tmp = path.join(os.tmpdir(), 'cg-voice-' + crypto.randomUUID());
+  try {
+    await pipeline(req, fs.createWriteStream(tmp));
+    const { size } = await fs.promises.stat(tmp);
+    if (!size) return res.status(400).json({ error: 'no audio' });
+    const ct = String(req.headers['content-type'] || 'audio/mp4');
+    const started = Date.now();
+    const { transcript } = await transcribe(tmp, ct, GROQ_API_KEY);
+    console.log(`[cg-transcribe] ${size} bytes ${ct} ${Date.now() - started}ms words=${transcript.split(/\s+/).filter(Boolean).length}`);
+    res.json({ transcript });
+  } catch (e) {
+    res.status(e.status || 500).json({ error: String(e.message || e) });
+  } finally {
+    fs.promises.unlink(tmp).catch(() => {});
+  }
+});
 app.get('/login', (req, res) => res.type('html').send(loginHtml()));
 app.post('/login', (req, res) => {
   if ((req.body.password || '') === HUB_PASSWORD) {

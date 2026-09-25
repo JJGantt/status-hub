@@ -126,6 +126,14 @@ final class Sessions: ObservableObject {
     /// The edge keeps sweeping through the whole of it: handing the words over is seconds, the session
     /// working on them is the real wait.
     @Published private(set) var awaiting: [String: String] = [:]
+    /// **Replies owed out loud**, by conversation, with the words they answer. A follow-up sent from the
+    /// watch with speech on owes its reply spoken, and it is spoken when that session is ON SCREEN with
+    /// the reply in hand — the moment it lands if he is looking, else whenever he next opens it (the
+    /// reply notification, the list, or raising the wrist on it). Once, then it is paid. Kept across
+    /// launches, since the app is often closed by the time the answer comes.
+    private var owed: [String: String] = UserDefaults.standard.dictionary(forKey: "owed_speech") as? [String: String] ?? [:] {
+        didSet { UserDefaults.standard.set(owed, forKey: "owed_speech") }
+    }
     @Published private(set) var failures: [String: Failure] = [:]
 
     private let capture = Capture.shared
@@ -199,10 +207,10 @@ final class Sessions: ObservableObject {
         if let d: SessionDetail = try? await Hub.json("/api/sessions/" + Hub.pathComponent(r.id)) {
             details[key] = d
             // The reply to the words the watch sent is in: the wait is over, however the news arrived.
-            if let words = awaiting[key], let t = d.turns?.last, !(t.reply ?? "").isEmpty,
-               (t.prompt ?? "").hasPrefix(String(words.prefix(40))) {
+            if let words = awaiting[key], Self.answers(d, words) {
                 awaiting[key] = nil
             }
+            speakIfOwed(key)
             Hub.log("detail", ["row": r.id, "prompt": String((d.last_prompt ?? "").prefix(60)),
                                "reply": String((d.last_reply ?? "").prefix(80)), "replyChars": d.last_reply?.count ?? 0])
         }
@@ -281,6 +289,7 @@ final class Sessions: ObservableObject {
                 let words = (sent[key] ?? "") + (Speaker.enabled ? Self.spokenFormat : "")
                 try await Hub.followUp(row(for: key)?.id ?? key, text: words, msgId: msgId)
                 awaiting[key] = sent[key]
+                if Speaker.enabled { owed[key] = sent[key] }
             } catch {
                 failures[key] = .message(error.localizedDescription)
             }
@@ -334,8 +343,7 @@ final class Sessions: ObservableObject {
         let mine = sent[key] != nil && failures[key] == nil && !busy.contains(key)
         if mine { WKInterfaceDevice.current().play(.notification) }
         await load()
-        let speak = mine && Speaker.enabled
-        if details[key] != nil || speak { await loadDetail(key) }
+        if details[key] != nil || owed[key] != nil { await loadDetail(key) }
         // Only now that the reply is in hand do the tool calls and his pending words go. Cleared first,
         // the page's newest item would be the PREVIOUS reply for the moment the fetch takes, and a view
         // following the newest item would jump up to it and back down.
@@ -345,6 +353,22 @@ final class Sessions: ObservableObject {
             sent[key] = nil
             msgIds[key] = nil
         }
-        if speak, let reply = details[key]?.last_reply { Speaker.shared.speak(reply) }
+    }
+
+    /// Speaks the reply this conversation owes, if it is the one on screen and the reply is in. With
+    /// speech switched off by then, the debt is dropped rather than kept for later.
+    private func speakIfOwed(_ key: String) {
+        guard let words = owed[key] else { return }
+        guard Speaker.enabled else { owed[key] = nil; return }
+        guard path.last == key, let d = details[key], Self.answers(d, words), let reply = d.turns?.last?.reply else { return }
+        owed[key] = nil
+        Speaker.shared.speak(reply)
+    }
+
+    /// The detail's newest turn is the reply to `words`: the prompt it answers begins with them (the
+    /// session may have had the spoken-format note appended), and it has a reply.
+    private static func answers(_ d: SessionDetail, _ words: String) -> Bool {
+        guard let t = d.turns?.last, !(t.reply ?? "").isEmpty else { return false }
+        return (t.prompt ?? "").hasPrefix(String(words.prefix(40)))
     }
 }

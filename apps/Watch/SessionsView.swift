@@ -134,12 +134,17 @@ struct SessionView: View {
     @ObservedObject private var capture = Capture.shared
 
     /// **Following the newest item.** The page stays on whatever is newest — his words, a tool call, the
-    /// reply — until HE scrolls, by finger or crown; then it is his, and nothing new moves it. Scrolling
-    /// back down to the very end hands it back. Also what holds the landing while the turns lay out
-    /// after a jump, since a single jump lands short of the spot it aimed at.
+    /// reply — until HE scrolls, by finger or crown, at all; then it is his, and nothing moves it until
+    /// the session is opened again or he scrolls it to the very end himself. Also what holds the landing
+    /// while the turns lay out after a jump, since a single jump lands short of the spot it aimed at.
     @State private var following = true
-    /// The page is scrolled to the end of what it holds.
+    /// The very end of the page is on screen.
     @State private var atEnd = false
+    /// He has scrolled since following stopped: only HIS scroll reaching the end hands it back, not the
+    /// page merely being at the end when it stopped.
+    @State private var hisScroll = false
+    /// A jump of the page's own is on its way; the move it makes is not his.
+    @State private var jumping = false
 
     private var detail: SessionDetail? { sessions.details[key] }
     private var activity: [ActivityLine] { sessions.activity[key] ?? [] }
@@ -160,25 +165,35 @@ struct SessionView: View {
             // transcribed, then each tool call as it comes, then the reply — whichever is last. Never
             // an older one: the tool calls and his words stay until the reply that replaces them is
             // in hand (`Sessions.sessionFrame`).
-            .onChange(of: newest) { _, _ in if following { toNewest(proxy, animated: true) } }
-            .onScrollGeometryChange(for: CGFloat.self) { $0.contentSize.height } action: { _, _ in
-                if following { toNewest(proxy) }
+            .onChange(of: newest) { _, _ in if following { toNewest(proxy) } }
+            // **Any movement the page did not make is his.** A drag reports a scroll phase; the crown is
+            // not relied on to, so a move with no jump of ours behind it and no change in the content's
+            // height (which is the page re-laying out, and can clamp the offset) counts as his scroll
+            // too. The page's own jumps are never animated, so each is exactly one move to account for.
+            .onScrollGeometryChange(for: Scroll.self) { Scroll(y: $0.contentOffset.y, h: $0.contentSize.height) } action: { old, new in
+                if new.h != old.h {
+                    if following { toNewest(proxy) }
+                } else if jumping {
+                    jumping = false
+                } else if abs(new.y - old.y) > 0.5 {
+                    scrolled("move")
+                }
             }
             .onScrollPhaseChange { _, now in
                 switch now {
-                case .interacting, .tracking, .decelerating: following = false
-                // Let go at the very end: following again, from the next new item on. Not a jump now —
-                // he is already looking at the end.
-                case .idle: if atEnd { following = true }
+                case .interacting, .tracking, .decelerating: scrolled("drag")
+                // Let go with the very end on screen after scrolling there: following again, from the
+                // next new item on. Not a jump now: he is already looking at the end.
+                case .idle:
+                    if hisScroll && atEnd {
+                        hisScroll = false
+                        following = true
+                        Hub.log("follow", ["on": true, "why": "end"])
+                    }
                 default: break
                 }
             }
             .onAppear { toNewest(proxy) }
-            // Sending a follow-up is him asking to watch the answer come in: following again from his
-            // words, wherever he had scrolled to.
-            .onChange(of: sessions.sent[key]) { _, words in
-                if words != nil { following = true; toNewest(proxy, animated: true) }
-            }
         }
         // The session's name on the clock's line, and NO back arrow: the swipe that opened it from the
         // right is what takes it away again, and a title bar with a button in it costs the top of a
@@ -228,14 +243,21 @@ struct SessionView: View {
 
     /// The top of the newest item at the top of the screen, or as near it as the end of the content
     /// allows: a short last item sits at the bottom with what came before it filling the screen.
-    private func toNewest(_ proxy: ScrollViewProxy, animated: Bool = false) {
+    private func toNewest(_ proxy: ScrollViewProxy) {
         guard let id = newest else { return }
-        if animated {
-            withAnimation(.easeOut(duration: 0.2)) { proxy.scrollTo(id, anchor: .top) }
-        } else {
-            proxy.scrollTo(id, anchor: .top)
-        }
+        jumping = true
+        proxy.scrollTo(id, anchor: .top)
     }
+
+    /// He moved the page: it is his until the session is opened again or he scrolls to the end.
+    private func scrolled(_ how: String) {
+        hisScroll = true
+        guard following else { return }
+        following = false
+        Hub.log("follow", ["on": false, "why": how])
+    }
+
+    private struct Scroll: Equatable { let y: CGFloat; let h: CGFloat }
 
     private var content: some View {
         let turns = detail?.recent ?? []
@@ -274,9 +296,7 @@ struct SessionView: View {
     }
 
     @ViewBuilder private var status: some View {
-        if sessions.busy.contains(key) {
-            ProgressView().frame(width: 24, height: 24)
-        } else if let failure = sessions.failures[key] {
+        if let failure = sessions.failures[key] {
             VStack(alignment: .leading, spacing: 6) {
                 switch failure {
                 case .micDenied:

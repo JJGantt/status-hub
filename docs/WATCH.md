@@ -124,9 +124,13 @@ are transcribed, each tool call as it arrives, the reply when it lands. The tool
 are cleared only after the reply is fetched (`Sessions.sessionFrame`); cleared first, the newest item
 would be the previous reply for the length of the fetch and the view would jump up to it and back.
 
-**His scrolling ends the following**, finger or crown (any scroll phase he drives); nothing new moves
-the page after that. Two things hand it back: letting go with the very end of the page on screen (from
-the next new item, without a jump), and sending a follow-up, which jumps to his words. The end is a one-point marker at the bottom of `PagedScroll`, asked whether
+**His scrolling ends the following**, finger or crown, and nothing moves the page after that until the
+session is opened again or HE scrolls it to the very end (letting go with the end on screen after a
+scroll of his; the page merely sitting at the end does not count). A drag reports a scroll phase; the
+crown is not trusted to, so any move of the offset that is neither one of the page's own jumps nor a
+change in content height counts as his scroll too. The page's jumps are never animated, which makes each
+one exactly one move to discount. Every change of following is logged to the hub as `follow`, with
+`why` (`drag`, `move`, `end`), so a fight on the wrist can be read back afterwards. The end is a one-point marker at the bottom of `PagedScroll`, asked whether
 it is VISIBLE (`onScrollVisibilityChange`), not a sum over the scroll view's reported offsets, which
 this app does not trust (§ Double tap, and scrolling).
 
@@ -408,8 +412,13 @@ then carries on with the wrist down (background audio); the blue edge shows it. 
 ### Spoken replies
 
 With `session_speech` on (the Speak control, or Settings → Watch: speak session replies on the phone), a reply to a
-follow-up SENT FROM THE WATCH is read aloud as it lands (`Speaker`, the system voice — nothing leaves the
-watch), and every follow-up carries `Sessions.spokenFormat` so the reply is written to be heard. Only
+follow-up SENT FROM THE WATCH is read aloud (`Speaker`, the system voice — nothing leaves the watch), and
+every follow-up carries `Sessions.spokenFormat` so the reply is written to be heard. **It is spoken when
+that session is on screen with its reply in hand**: as it lands if he is looking at it, otherwise the
+next time he opens it (the reply notification, the list, or raising the wrist with it open). The debt is
+`Sessions.owed`, kept in UserDefaults because the app is usually closed by the time the answer comes;
+it is paid once, and dropped if speech is off when the session is opened. A watch app cannot start
+speaking with the wrist down, which is why opening is the trigger rather than the reply's arrival. Only
 those replies: a session answering something typed on the Mac is not spoken. **The always-on listener
 stands aside while it speaks** (`Capture.hush`), so it does not transcribe the watch's own voice, and
 takes the microphone back when it finishes — paused, not switched off. Starting a recording stops the

@@ -2004,7 +2004,19 @@ const daysBefore = (date, n) => new Date(Date.parse(date + 'T12:00:00Z') - n * 8
 const nutHistoryCache = new Map();
 app.get('/api/nut-history', async (req, res) => {
   try {
-    const weeks = Math.min(Math.max(parseInt(req.query.weeks, 10) || 10, 2), 30);
+    // `all=1` is the whole history, back to the first meal or set logged (the watch's history view,
+    // which scrolls); otherwise the last `weeks`, at most 30 (the health page at rest).
+    const all = String(req.query.all || '') === '1';
+    let weeks = Math.min(Math.max(parseInt(req.query.weeks, 10) || 10, 2), 30);
+    if (all) {
+      const [firstSet, firstNut] = await Promise.all([
+        sb('sets?select=occurred_at&order=occurred_at.asc&limit=1'),
+        sb('nutrition_entries?staged=eq.false&select=occurred_at&order=occurred_at.asc&limit=1'),
+      ]);
+      const today0 = nutritionWindow().day;
+      weeks = Math.max(2, weeksSpanning(firstSet[0] && dayBucketOf(firstSet[0].occurred_at), today0),
+        weeksSpanning(firstNut[0] && dayBucketOf(firstNut[0].occurred_at), today0));
+    }
     const hit = nutHistoryCache.get(weeks);
     if (hit && Date.now() - hit.at < NUT_HISTORY_MS) return res.json(hit.body);
     const st = await buildStatus();
@@ -2019,20 +2031,37 @@ app.get('/api/nut-history', async (req, res) => {
     const weights = (weightRows || []).map((r) => ({ date: String(r.date).slice(0, 10), weight: Number(r.weight_lbs) }));
     const log = buildNutritionLog(nutRows || [], weights, st.maintenance.target, st.maintenance.maintenance,
       today, targetRows || [], weeks, await surplusCal(), 150, st.pace.fraction);
-    // Only what a cell needs: the colour and whether it is today. A week of full cells is six fields
-    // each that nothing on the wrist reads.
+    // Only what a cell needs: the colour, whether it is today, and its date (`d`), which is what a tap
+    // on the watch's history view asks the day's log for. The other fields nothing on the wrist reads.
     // The training map comes back in the SAME shape as the food one — a colour and a today flag per
     // cell — so a client draws both with one routine instead of carrying the level ramp itself. The
     // ramp is cards/workouts.js's, one step per level from lib/heatmap.js.
     const SETS_RAMP = ['#000', '#0e4429', '#006d32', '#158c3a', '#26a641', '#39d353', '#43f461', '#8cfc94'];
     const body = {
-      weeks: (log.weeks || []).map((w) => w.map((d) => ({ c: d.color, t: d.today ? 1 : 0 }))),
+      weeks: (log.weeks || []).map((w) => w.map((d) => ({ c: d.color, t: d.today ? 1 : 0, d: d.date }))),
       sets: (buildWorkoutHeatmap(setRows || [], weeks, today).weeks || [])
-        .map((w) => w.map((d) => ({ c: d.level < 0 ? null : SETS_RAMP[d.level], t: d.today ? 1 : 0 }))),
+        .map((w) => w.map((d) => ({ c: d.level < 0 ? null : SETS_RAMP[d.level], t: d.today ? 1 : 0, d: d.date }))),
       weight: buildWeightPlot(weights, weeks, today),
     };
     nutHistoryCache.set(weeks, { body, at: Date.now() });
     res.json(body);
+  } catch (e) { res.status(500).json({ error: String(e.message || e) }); }
+});
+
+// The weight view (the phone's cards/maintviz.js), for the watch: the weigh-ins, each day's intake, the
+// maintenance and target curves replayed per day, and the fitted trend over the window. All computed
+// in buildStatus for the phone already; this hands over only that, not the whole dashboard.
+app.get('/api/weight-view', async (req, res) => {
+  try {
+    const st = await buildStatus();
+    const m = st.maintenance || {}, v = m.viz || {};
+    res.json({
+      today: st.today, window_start: m.window_start || null, window_end: m.window_end || null,
+      weighins: (v.weighins || []).map((w) => ({ date: w.date, weight: w.weight, inwin: !!w.inwin })),
+      intake: (v.intake || []).map((d) => ({ date: d.date, calories: d.calories, kept: d.kept != null })),
+      series: (v.series || []).map((r) => ({ date: r.date, maintenance: r.maintenance ?? null, target: r.target ?? null })),
+      slope_lb_day: v.slope_lb_day ?? null, weight_at_end: v.weight_at_end ?? null,
+    });
   } catch (e) { res.status(500).json({ error: String(e.message || e) }); }
 });
 

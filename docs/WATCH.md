@@ -358,11 +358,13 @@ A command, on home or in a session, ends itself once he has spoken and then stop
 `onSilence`.
 
 `Endpointer` (in `Capture.swift`) is the phone's always-on rule (`makeListener` in `voiceagent.js`):
-the floor is the quietest buffer so far, speech is 2.5x above it and at least `watch_speech_min`, and
-once speech has been heard, `watch_silence_s` below that line ends it exactly as a press would. Both are
-hub settings, read together at every start and kept for the next, since a start does not wait on the
-hub: `watch_silence_s` (Trailing silence in Settings; 5 set on 2026-09-25, 3 when unset) and
-`watch_speech_min` (0.02 when unset). **In a quiet room `watch_speech_min` is the whole line**, since
+the floor is the quietest buffer so far (exact zeros, the microphone still opening, are not the
+room), and once speech has been heard, `watch_silence_s` below the speech line ends it exactly as a press
+would. **The speech line has two modes, a switch in Settings (Watch: speech line):** `fixed`, the default,
+is 2.5x the floor and at least `watch_speech_min` (0.02 when unset); `room` drops the fixed number and is
+`watch_speech_ratio` (8 when unset) times the floor, so it follows the room. All of these are hub
+settings, read together at every start and kept for the next, since a start does not wait on the hub;
+`watch_silence_s` is Trailing silence in Settings (5 set on 2026-09-25, 3 when unset). **In `fixed` mode in a quiet room `watch_speech_min` is the whole line**, since
 2.5x a floor of 0.0003-0.0015 is under it, and his ordinary voice dips below 0.02 mid-sentence: a kept
 20s command measured 8s over 0.02 and 16s over 0.005, with dips of 0.010-0.018 inside speech. The
 `mic-end` log (`speech` against `len`) and the kept clips in `voice-clips` are what to tune it from.

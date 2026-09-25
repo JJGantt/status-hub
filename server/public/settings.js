@@ -27,6 +27,7 @@ export async function open() {
   const speakOn = ['1', 'true', 'on', 'yes'].includes(String(cur.voice_speak_replies ?? '0').toLowerCase());
   const pushOn = !['0', 'false', 'off', 'no'].includes(String(cur.push_enabled ?? '1').toLowerCase());
   const speechOn = ['1', 'true', 'on', 'yes'].includes(String(cur.session_speech ?? '0').toLowerCase());
+  const speechMode = String(cur.watch_speech_mode ?? 'fixed');
   // The watch edge: numbers that may be 0 (the band), and colours as #rrggbb pickers.
   const num = (k, d) => { const n = parseFloat(cur[k]); return Number.isFinite(n) && n >= 0 ? n : d; };
   const colour = (label, k, d) => '<label class="settings-row"><span>' + label + '</span>' +
@@ -90,6 +91,20 @@ export async function open() {
       row('Watch', 'watch_silence_s', sil('watch_silence_s', 3)) +
       row('ESP (Hey&nbsp;Rhasspy)', 'esp_silence_s', sil('esp_silence_s', 3)) +
       row('Mac', 'mac_silence_s', sil('mac_silence_s', 3)) +
+
+      // What counts as his voice on the watch (Capture.swift `Endpointer`): a FIXED lowest level, or a
+      // line that follows the ROOM, so many times its quietest level.
+      '<div class="settings-sec">Watch: speech line</div>' +
+      '<div class="settings-seg" id="set-speech-mode">' +
+        '<button type="button" data-v="fixed"' + (speechMode === 'room' ? '' : ' class="on"') + '>Fixed</button>' +
+        '<button type="button" data-v="room"' + (speechMode === 'room' ? ' class="on"' : '') + '>Room</button>' +
+      '</div>' +
+      '<label class="settings-row"><span>Fixed</span>' +
+        '<input class="settings-num" type="number" min="0.001" max="0.1" step="0.001" inputmode="decimal" ' +
+        'data-key="watch_speech_min" value="' + sil('watch_speech_min', 0.02) + '"></label>' +
+      '<label class="settings-row"><span>Room ×</span>' +
+        '<input class="settings-num" type="number" min="1" max="50" step="0.5" inputmode="decimal" ' +
+        'data-key="watch_speech_ratio" value="' + sil('watch_speech_ratio', 8) + '"></label>' +
 
       '<div class="settings-sec">Watch: speak session replies</div>' +
       '<div class="settings-seg" id="set-session-speech">' +
@@ -254,6 +269,11 @@ export async function open() {
   });
   back.querySelectorAll('.settings-color').forEach((inp) => {
     inp.addEventListener('change', () => save(inp.dataset.key, inp.value));
+  });
+  back.querySelector('#set-speech-mode').addEventListener('click', (e) => {
+    const b = e.target.closest('[data-v]'); if (!b) return;
+    back.querySelectorAll('#set-speech-mode button').forEach((x) => x.classList.toggle('on', x === b));
+    save('watch_speech_mode', b.dataset.v);   // read by the watch at the start of each recording
   });
   back.querySelector('#set-session-speech').addEventListener('click', (e) => {
     const b = e.target.closest('[data-v]'); if (!b) return;

@@ -39,6 +39,10 @@ final class Capture: ObservableObject {
     /// guess: in a quiet room the 2.5x-floor line falls below this, so this IS the line, and a voice that
     /// dips under it mid-sentence counts as silence.
     private static var speechMin: Float = 0.02
+    /// `watch_speech_mode`: `fixed` (the default) is the line above; `room` drops it and puts the line at
+    /// `watch_speech_ratio` (8 when unset) times the room's quietest level instead, so it follows the room.
+    private static var followsRoom = false
+    private static var roomRatio: Float = 8
 
     /// Audio nobody has spoken in, after which a recording is closed rather than left holding the
     /// microphone — and with it the mute on every room mic. The listener starts another segment instead
@@ -59,6 +63,7 @@ final class Capture: ObservableObject {
     /// Mute writes run one after another, so an unmute can never land ahead of its own mute.
     private var muteTask: Task<Void, Never>?
     private var endpoint = Endpointer(hang: Capture.hang, minimum: Capture.speechMin)
+
     /// Runs when the silence ends the recording: the owner sends it as if it had been pressed.
     private var onSilence: (() -> Void)?
     /// Runs when the system takes the microphone mid-recording, for the same reason.
@@ -188,7 +193,9 @@ final class Capture: ObservableObject {
         self.onTaken = onTaken
         endsOnSilence = onSilence != nil || owner == .listener
         locked = false
-        endpoint = Endpointer(hang: Self.hang, minimum: Self.speechMin)
+        endpoint = Self.followsRoom
+            ? Endpointer(hang: Self.hang, minimum: 0, ratio: Self.roomRatio)
+            : Endpointer(hang: Self.hang, minimum: Self.speechMin)
         spokeAt = nil
         segment = 0
         arming = true
@@ -335,6 +342,8 @@ final class Capture: ObservableObject {
         guard let all = try? await Hub.settings() else { return }
         if let v = all["watch_silence_s"].flatMap({ Double("\($0)") }), v > 0 { hang = v }
         if let v = all["watch_speech_min"].flatMap({ Float("\($0)") }), v > 0 { speechMin = v }
+        followsRoom = all["watch_speech_mode"].map { "\($0)" } == "room"
+        if let v = all["watch_speech_ratio"].flatMap({ Float("\($0)") }), v > 0 { roomRatio = v }
     }
 
     private func setMuted(_ on: Bool) {
@@ -371,14 +380,21 @@ struct Endpointer {
     private var quiet: TimeInterval = 0
 
     let minimum: Float
+    /// How many times the room's quietest level counts as speech. 2.5 under a fixed `minimum`, which in
+    /// a quiet room is the whole line; with no minimum (the `room` setting) this alone sets it.
+    let ratio: Float
 
-    init(hang: TimeInterval, minimum: Float) { self.hang = hang; self.minimum = minimum }
+    init(hang: TimeInterval, minimum: Float, ratio: Float = 2.5) {
+        self.hang = hang; self.minimum = minimum; self.ratio = ratio
+    }
 
-    var threshold: Float { max(floor * 2.5, minimum) }
+    var threshold: Float { max(floor * ratio, minimum) }
 
     /// Takes one buffer's level and length; true when that buffer ended the utterance.
     mutating func feed(_ level: Float, _ seconds: TimeInterval) -> Bool {
-        floor = min(floor, level)
+        // A buffer of exact digital silence (the microphone still opening) is not the room. Counted, it
+        // would put the room's level, and with `ratio` alone the whole line, at zero.
+        if level > 0 { floor = min(floor, level) }
         peak = max(peak, level)
         if level >= threshold {
             spoken += seconds

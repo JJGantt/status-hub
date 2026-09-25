@@ -177,8 +177,7 @@ struct RootView: View {
     private func follow() {
         let live = phase == .active
         if live && page == .sessions { sessions.activate() } else { sessions.deactivate() }
-        // The day page shows the newest reply, so it follows the thread as home does.
-        if live && (page == .home || page == .day) { chat.activate() } else { chat.deactivate() }
+        if live && page == .home { chat.activate() } else { chat.deactivate() }
         // One page, both streams: the health page draws food and training together, so it follows
         // both or neither.
         if live && (page == .health || page == .day) { nutrition.activate(); workout.activate() }

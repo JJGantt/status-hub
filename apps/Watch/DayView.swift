@@ -1,35 +1,53 @@
 import SwiftUI
 import WatchKit
 
-/// **The day page: food on the left, training on the right, the latest answer underneath.** Built from
-/// a mockup drawn at this screen's own pixels and signed off element by element, so its numbers are
-/// the design rather than a starting point — `Geo` holds them, halved from the mockup's 2x pixels.
+/// **The day page: food on the left, training on the right.** Built from a mockup drawn at this screen's
+/// own pixels and signed off element by element, so its numbers are the design rather than a starting
+/// point — `Geo` holds them, halved from the mockup's 2x pixels.
 ///
-/// - Left: the four pace rings in a packed 2x2, then the three newest meals eaten.
+/// - Left: the four pace rings in a packed 2x2, then every meal eaten today, newest first.
 /// - Right: the body figures at full height, with the rest clocks and the day's set count tucked
-///   beside the feet, then the three newest exercises.
-/// - Under both: the newest reply from the hub, full width, scrolling.
+///   beside the feet, then every exercise today, most recent first.
+///
+/// The lists run to the bottom of the screen and scroll. The conversation is not here: it lives on
+/// home, the one page it is on.
 ///
 /// **The two halves are equal and a gutter runs between them.** Nothing on the right is allowed to
 /// stretch into the left: the clocks are training, so they live on the training side.
+///
+/// **The rings and the figures are switches.** A tap on the rings trades the two lists for the day's
+/// totals, each macro on its own line, and a second tap brings the lists back. A tap on the figures
+/// opens the week's muscles as a page of its own (`muscles`), furthest behind first.
 ///
 /// Each list is a way into the whole of what it summarises — the food log with the rings kept above
 /// it, or the exercise list under its clocks — and in both of those the heading is the way back.
 struct DayView: View {
     @EnvironmentObject private var nutrition: Nutrition
     @EnvironmentObject private var workout: Workout
-    @EnvironmentObject private var chat: Chat
-    private enum Panel { case overview, food, exercises }
+    private enum Panel { case overview, food, exercises, muscles }
     @State private var panel: Panel = .overview
+    /// The rings' tap: the day's totals in place of the lists.
+    @State private var totals = false
     /// One meal's ingredients open at a time in the food log.
     @State private var open: String?
 
     var body: some View {
-        switch panel {
-        case .overview: overview
-        case .food: food
-        case .exercises: ExerciseList(onHeader: { panel = .overview })
+        Group {
+            switch panel {
+            case .overview: overview
+            case .food: food
+            case .exercises: ExerciseList(onHeader: { panel = .overview })
+            case .muscles: muscles
+            }
         }
+        #if targetEnvironment(simulator)
+        // `-dayview <totals|muscles>` at launch, so each can be screenshotted.
+        .onAppear {
+            let args = ProcessInfo.processInfo.arguments
+            guard let i = args.firstIndex(of: "-dayview"), i + 1 < args.count else { return }
+            if args[i + 1] == "totals" { totals = true } else if args[i + 1] == "muscles" { panel = .muscles }
+        }
+        #endif
     }
 
     // MARK: the overview
@@ -41,33 +59,51 @@ struct DayView: View {
                     RingGrid(rings: nutrition.rings(at: ctx.date))
                 }
                 .frame(width: Geo.col, height: Geo.block)
+                .contentShape(Rectangle())
+                .onTapGesture { totals.toggle() }
                 TimelineView(.periodic(from: .now, by: 1)) { ctx in
                     Figures(now: workout.now, date: ctx.date)
                 }
                 .frame(width: Geo.col, height: Geo.block)
+                .contentShape(Rectangle())
+                .onTapGesture { panel = .muscles }
             }
             .padding(.bottom, Geo.headGap)
             rule
-            HStack(alignment: .top, spacing: Geo.gutter) {
-                summary(rows: foodRows) { panel = .food }
-                summary(rows: liftRows) { panel = .exercises }
+            Group {
+                if totals {
+                    TimelineView(.periodic(from: .now, by: 1)) { ctx in
+                        Totals(rings: nutrition.rings(at: ctx.date))
+                    }
+                    .contentShape(Rectangle())
+                    .onTapGesture { totals = false }
+                } else {
+                    HStack(alignment: .top, spacing: Geo.gutter) {
+                        summary(rows: foodRows) { panel = .food }
+                        summary(rows: liftRows) { panel = .exercises }
+                    }
+                }
             }
             .padding(.top, Geo.listInset)
-            .padding(.bottom, Geo.listInset / 2)
-            rule
-            reply
+            .frame(maxHeight: .infinity, alignment: .top)
         }
-        // The gutter is one line from the top of the rings to the foot of the lists: the halves are
-        // separate all the way down, not only where their lists are.
+        .frame(maxHeight: .infinity, alignment: .top)
+        // The gutter is one line from the top of the rings to the bottom of the screen: the halves are
+        // separate all the way down, not only where their lists are. The totals run the full width, so
+        // under them it stops at the rule.
         .overlay(alignment: .topLeading) {
             Rectangle().fill(Geo.gutterInk)
-                .frame(width: 1, height: Geo.block + Geo.headGap + Geo.listInset * 1.5 + Geo.rowPitch * 3)
+                .frame(width: 1)
+                .frame(maxHeight: totals ? Geo.block + Geo.headGap : .infinity, alignment: .top)
                 .offset(x: Geo.col + Geo.gutter / 2)
         }
         .padding(.horizontal, Geo.pad)
         .padding(.top, Geo.top)
         .padding(.bottom, PageInset.bottom)
         .topOfTheScreen(scrollTop: 0)
+        // The lists run to the bottom of the glass: the page's own bottom margin was a band of black
+        // under them.
+        .ignoresSafeArea(edges: .bottom)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .background(Color.black.ignoresSafeArea())
         .task { await nutrition.loadHistory() }
@@ -75,21 +111,22 @@ struct DayView: View {
 
     private var rule: some View { Rectangle().fill(Geo.ruleInk).frame(height: 1) }
 
-    /// The three newest meals EATEN. The log puts staged ones first, but a meal planned and not yet
-    /// eaten is not part of what the day has been; the full log still shows it.
+    /// Every meal EATEN today, newest first. The log puts staged ones first, but a meal planned and not
+    /// yet eaten is not part of what the day has been; the full log still shows it.
     private var foodRows: [(String, String)] {
-        (nutrition.day?.entries ?? []).filter { $0.staged != true }.prefix(3)
+        (nutrition.day?.entries ?? []).filter { $0.staged != true }
             .map { ($0.name ?? "—", String(mn($0.calories))) }
     }
 
-    /// The three exercises a set went onto most recently, with their set counts.
+    /// Every exercise a set went onto today, most recent first, with its set count.
     private var liftRows: [(String, String)] {
-        (workout.now?.exercises ?? []).prefix(3).map { ($0.name, String($0.sets.count)) }
+        (workout.now?.exercises ?? []).map { ($0.name, String($0.sets.count)) }
     }
 
-    /// A list: the name at the left of its half, its figure against the right edge of it.
+    /// A list: the name at the left of its half, its figure against the right edge of it. It fills the
+    /// rest of the screen and scrolls; a tap opens the whole of what it summarises.
     private func summary(rows: [(String, String)], open: @escaping () -> Void) -> some View {
-        Button(action: open) {
+        ScrollView {
             VStack(alignment: .leading, spacing: 0) {
                 ForEach(Array(rows.enumerated()), id: \.offset) { _, row in
                     HStack(alignment: .firstTextBaseline, spacing: 3) {
@@ -100,30 +137,61 @@ struct DayView: View {
                     .font(.system(size: Geo.listSize))
                     .frame(height: Geo.rowPitch)
                 }
+                Color.clear.frame(height: PageInset.bottom)
             }
-            .frame(width: Geo.col, height: Geo.rowPitch * 3, alignment: .topLeading)
             .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-    }
-
-    /// The hub's newest answer, across the full width, scrolling when it runs past the room.
-    private var reply: some View {
-        let last = chat.recent.last { $0.role != "user" && !($0.text ?? "").isEmpty }
-        return ScrollView {
-            Text(inlineMarkdown(last?.text ?? ""))
-                .font(.system(size: Geo.replySize))
-                .foregroundColor(Geo.replyInk)
-                .lineSpacing(Geo.replyLeading)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.top, Geo.listInset / 2)
-                // A little short of the right edge, not the whole width: text run hard against a
-                // rounded screen's side reads as clipped even where it is not.
-                .padding(.trailing, 4)
-                .id(last?.id)
+            .onTapGesture(perform: open)
         }
         .scrollIndicators(.never)
-        .frame(maxHeight: .infinity)
+        .frame(width: Geo.col)
+        .frame(maxHeight: .infinity, alignment: .top)
+    }
+
+    // MARK: the muscles
+
+    /// The week's muscles, furthest behind their goal first (the hub's order), each line in the colour
+    /// its muscle has on the figures. No bars: the colour already says how far along it is.
+    private var muscles: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 0) {
+                Button { panel = .overview } label: {
+                    HStack(spacing: 4) {
+                        Image(systemName: "chevron.left")
+                            .font(.system(size: 11, weight: .semibold))
+                            .foregroundColor(Color(hex: "#7d8894"))
+                        Text("Muscles")
+                            .font(.system(size: 15, weight: .semibold))
+                            .foregroundColor(.white)
+                    }
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .padding(.bottom, 6)
+                ForEach(Array((workout.now?.volume ?? []).enumerated()), id: \.offset) { _, m in
+                    HStack(alignment: .firstTextBaseline) {
+                        Text(m.label).lineLimit(1)
+                        Spacer(minLength: 4)
+                        Text(Self.sets(m.sets) + " / " + Self.sets(m.target))
+                            .font(.system(size: Geo.muscleSize, weight: .semibold).monospacedDigit())
+                            .fixedSize()
+                    }
+                    .font(.system(size: Geo.muscleSize))
+                    .foregroundColor(Color(hex: m.color))
+                    .frame(height: Geo.musclePitch)
+                }
+                Color.clear.frame(height: PageInset.bottom)
+            }
+            .padding(.horizontal, Geo.pad)
+        }
+        .scrollIndicators(.never)
+        .topOfTheScreen(scrollTop: Landing.top)
+        .background(Color.black.ignoresSafeArea())
+    }
+
+    /// A set count as the hub keeps it: whole, or with its half (a muscle a lift trains second counts
+    /// half a set).
+    private static func sets(_ n: Double) -> String {
+        n == n.rounded() ? String(Int(n)) : String(format: "%.1f", n)
     }
 
     // MARK: the food log
@@ -152,6 +220,31 @@ struct DayView: View {
         .topOfTheScreen(scrollTop: 0)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .background(Color.black.ignoresSafeArea())
+    }
+}
+
+/// The day's totals, one macro to a line: what has been eaten, against the goal. In place of the lists
+/// while the rings are tapped.
+private struct Totals: View {
+    let rings: [String: RingNow]
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            ForEach(RingGrid.keys, id: \.1) { glyph, key in
+                if let r = rings[key] {
+                    HStack(alignment: .firstTextBaseline, spacing: 6) {
+                        Text(glyph).foregroundColor(Geo.nameInk)
+                        Spacer(minLength: 4)
+                        Text(String(r.consumed)).font(.system(size: Geo.totalSize, weight: .bold).monospacedDigit())
+                            .foregroundColor(.white)
+                        Text("/ " + String(r.goal)).foregroundColor(Geo.valueInk)
+                    }
+                    .font(.system(size: Geo.totalSize).monospacedDigit())
+                    .frame(height: Geo.totalPitch)
+                }
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
 
@@ -201,7 +294,9 @@ private struct Figures: View {
         // `Geo.footDrop`, so the INK of every number ends on the row the feet end on.
         .overlay(alignment: .bottomLeading) {
             if let clock {
-                labelled("last", clock.restText, clock.restColour, .leading)
+                // Green and amber say a session is on; once it has ended the rest is read in the bright
+                // ink, not greyed out.
+                labelled("last", value(clock.restText, clock.active ? clock.restColour : Geo.setsInk), .leading)
                     .offset(y: Geo.footDrop)
             }
         }
@@ -212,23 +307,28 @@ private struct Figures: View {
         }
         .overlay(alignment: .bottomTrailing) {
             if let sets = now?.sets_today {
-                labelled("sets", String(sets), Geo.setsInk, .trailing)
+                labelled("sets", value(String(sets), Geo.setsInk), .trailing)
                     .offset(y: Geo.footDrop)
             }
         }
         .frame(width: Geo.col, height: Geo.block)
     }
 
-    private func labelled(_ label: String, _ v: String, _ ink: Color, _ edge: HorizontalAlignment) -> some View {
+    private func labelled(_ label: String, _ v: some View, _ edge: HorizontalAlignment) -> some View {
         VStack(alignment: edge, spacing: Geo.labelGap) {
             Text(label).font(.system(size: Geo.labelSize)).foregroundColor(Geo.labelInk)
-            value(v, ink)
+            v
         }
     }
 
+    /// A number the size of the lists' numbers, bold. A trailing unit (`12h`) stays small: it is the
+    /// digits that are read, and the letter at full size costs width beside the feet.
     private func value(_ v: String, _ ink: Color) -> some View {
-        Text(v)
-            .font(.system(size: Geo.valueSize, weight: .bold, design: .rounded).monospacedDigit())
+        let unit = v.last.map { $0.isLetter } == true
+        let digits = unit ? String(v.dropLast()) : v
+        let big = Text(digits).font(.system(size: Geo.valueSize, weight: .bold).monospacedDigit())
+        let small = Text(unit ? String(v.last!) : "").font(.system(size: Geo.unitSize, weight: .bold))
+        return (big + small)
             .foregroundColor(ink)
             .lineLimit(1)
             .fixedSize()
@@ -253,7 +353,12 @@ private enum Geo {
     static let listInset: CGFloat = 5.5
     static let rowPitch: CGFloat = 15
     static let listSize: CGFloat = 11
-    static let valueSize: CGFloat = 7
+    static let valueSize: CGFloat = 11
+    static let totalSize: CGFloat = 16
+    static let totalPitch: CGFloat = 23
+    static let muscleSize: CGFloat = 14
+    static let musclePitch: CGFloat = 21
+    static let unitSize: CGFloat = 7
     static let labelSize: CGFloat = 5.5
     static let labelGap: CGFloat = 1
     /// How far the numbers are dropped so their ink ends on the feet's last row. A text frame ends
@@ -261,14 +366,11 @@ private enum Geo {
     /// bottom edge floats 1.5pt over the feet. Measured on the simulator render against the artwork;
     /// re-measure if the value font changes.
     static let footDrop: CGFloat = 1.5
-    static let replySize: CGFloat = 11
-    static let replyLeading: CGFloat = 2
 
     static let ruleInk = Color(hex: "#222a33")
     static let gutterInk = Color(hex: "#1e252e")
     static let nameInk = Color(hex: "#c7ced8")
     static let valueInk = Color(hex: "#7d8894")
     static let labelInk = Color(hex: "#646e7a")
-    static let setsInk = Color(hex: "#a0aab8")
-    static let replyInk = Color(hex: "#d6dce4")
+    static let setsInk = Color(hex: "#e6ebf0")
 }

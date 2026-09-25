@@ -258,25 +258,28 @@ session clock is m:ss, then h:mm:ss, and only while a set landed within 20 minut
 
 ### The day page
 
-`DayView`: **food on the left, training on the right, the newest reply underneath**, on one screen with
-nothing scrolling but the reply. It was drawn as a mockup at this screen's own pixels and signed off
-element by element; `Geo` holds its numbers, the mockup's halved.
+`DayView`: **food on the left, training on the right**, on one screen. It was drawn as a mockup at this
+screen's own pixels and signed off element by element; `Geo` holds its numbers, the mockup's halved.
+The conversation is not on it: that is home's alone.
 
-- **Two equal columns with a gutter line between them from the top to the foot of the lists.**
+- **Two equal columns with a gutter line between them from the top to the bottom of the glass.**
   Nothing crosses it: the training clocks live on the training side.
 - **Left:** the four rings packed 2x2, 4pt apart. **Right:** the body figures at the same height.
 - **The training numbers stand beside the figures' feet** — `last` over the rest time at the left,
-  the session clock centred between the figures, `sets` over the count at the right — one font and
-  size for all three values, one for both labels, and the INK of every value ending on the feet's last
-  row (`Geo.footDrop` corrects for a text frame ending below its digits). They fit because the figures
-  taper at the feet, not because the figures were shrunk: `59:59`, `72h`, `1:41:12` and three digits of
-  sets were each rendered and none touches the artwork. Change a size or move the figures and rerun
-  that check.
-- **Under each column, three rows:** the three newest meals EATEN (staged ones are left out — planned
-  is not eaten) and the three exercises a set went onto most recently. Each list opens its full view.
-- **The reply** is the hub thread's newest answer, full width with a small right inset, scrolling.
-- **Type:** the lists and the reply are 11pt. The numbers by the feet stay 7pt: at 8pt `59:59` touches
-  the front figure, and the figures are not to be moved or shrunk to make room.
+  the session clock centred between the figures, `sets` over the count at the right — at the lists'
+  11pt, bold and bright (a trailing `h` stays 7pt), the INK of every value ending on the feet's last
+  row (`Geo.footDrop`). **At 11pt only whole hours fit beside the feet**: measured against the
+  artwork, the front figure's feet begin 27.5pt into the column, `72h` is ~20pt wide, while `9:59`
+  (24pt), `59:59` (30.5pt) and a centred `1:41:12` (35pt) run into the feet. So during a session,
+  when the rest is in minutes and the session clock shows, the numbers overlap the artwork.
+- **Under each column, a list to the bottom of the glass, scrolling:** every meal EATEN today (staged
+  ones are left out — planned is not eaten) and every exercise today, most recent first. A tap opens
+  its full view. The page ignores its bottom safe area so the lists reach the glass.
+- **The rings and the figures are switches.** A tap on the rings trades the lists for the day's totals,
+  one macro to a line (eaten bold, `/ goal` dim), full width; a second tap brings the lists back. A tap
+  on the figures opens the week's muscles as a page of their own: every muscle's `sets / goal`, in the
+  colour it has on the figures, furthest behind first — the phone's Priority order, sent sorted by the
+  hub in `/api/workout-now` (`volume`). Its `‹ Muscles` heading is the way back.
 
 An open session's name has a small back chevron before it; the two are one button that closes it.
 

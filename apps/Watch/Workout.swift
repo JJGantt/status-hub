@@ -12,6 +12,9 @@ struct WorkoutNow: Decodable {
     let exercises: [Exercise]
     /// Body-map region id → fill for the figures, the week's training (see BodyFigure).
     let body: [String: String]?
+    /// Every muscle's sets this week against its goal, furthest behind first, in its volume colour.
+    struct Volume: Decodable { let label: String; let sets: Double; let target: Double; let color: String }
+    let volume: [Volume]?
 }
 
 @MainActor

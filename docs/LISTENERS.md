@@ -24,8 +24,12 @@ room.
    `POST /api/voice-command?source=<name>&capture_start=…&capture_end=…`; the hub transcribes and
    inserts. A listener that speaks Supabase directly (the Mac does) can insert the row itself.
 
-That is all of it. `source` is free-form (`mac`, `fly`, `phone`, …) and nothing branches on it. The
-watch is one as `watch`, engaged from its home page (`Capture.toggleListening`).
+That is all of it. `source` is free-form (`mac`, `fly`, `phone`, …) and a new listener needs nothing
+else, but a few labels are read: `watch` and `phone` have their voice checked (`GATED_SOURCES`), and the
+worker treats `fly` and `mac` as room mics (their replies are spoken on the TV) and pushes the reply to
+the phone for `fly`, `mac` and `watch-cmd`. The watch is a listener as `watch`, engaged from its home
+page (`Capture.toggleListening`); a command he presses for on it is `watch-cmd`, which is not a listener
+and not voice-checked, and is labelled only so its reply is pushed while the app is suspended.
 
 ## Why the window is the whole thing
 

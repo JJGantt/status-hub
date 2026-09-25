@@ -194,6 +194,11 @@ enum Hub {
             iso.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
             query += "&source=watch&quick=1&capture_start=\(iso.string(from: listener.start))"
                 + "&capture_end=\(iso.string(from: listener.end))"
+        } else {
+            // A command he pressed for. Named so the worker pushes its reply: the app is suspended the
+            // moment the wrist drops, and the push is the only thing that reaches him then. Not
+            // `watch`, which is the always-on listener and has its voice checked.
+            query += "&source=watch-cmd"
         }
         // Where he is, for "near me" and a pickup point; a dictation (dry) goes nowhere yet.
         if !dry, let l = await Here.shared.fix() {

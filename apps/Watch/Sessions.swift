@@ -48,6 +48,8 @@ struct SessionDetail: Decodable, Equatable {
     let claude_session_id: String?
     let last_prompt: String?
     let last_reply: String?
+    /// When `last_reply` was said. What tells the watch a reply came AFTER words it sent.
+    let reply_at: String?
     let turns: [SessionTurn]?
 
     var name: String { sessionName(custom_title, label, repo) ?? id }
@@ -122,16 +124,21 @@ final class Sessions: ObservableObject {
     /// His words for a conversation, shown from the moment they are transcribed until its next reply.
     @Published private(set) var sent: [String: String] = [:]
     @Published private(set) var busy: Set<String> = []
-    /// A follow-up the watch handed over, by conversation, with its words, until the reply to it lands.
-    /// The edge keeps sweeping through the whole of it: handing the words over is seconds, the session
-    /// working on them is the real wait.
-    @Published private(set) var awaiting: [String: String] = [:]
-    /// **Replies owed out loud**, by conversation, with the words they answer. A follow-up sent from the
-    /// watch with speech on owes its reply spoken, and it is spoken when that session is ON SCREEN with
-    /// the reply in hand — the moment it lands if he is looking, else whenever he next opens it (the
-    /// reply notification, the list, or raising the wrist on it). Once, then it is paid. Kept across
-    /// launches, since the app is often closed by the time the answer comes.
-    private var owed: [String: String] = UserDefaults.standard.dictionary(forKey: "owed_speech") as? [String: String] ?? [:] {
+    /// A follow-up the watch handed over, by conversation, with when the hub took it, until a reply
+    /// lands after that. The edge keeps sweeping through the whole of it: handing the words over is
+    /// seconds, the session working on them is the real wait.
+    ///
+    /// **The answer is the first reply AFTER the words, not a turn that begins with them.** Words sent to
+    /// a session in the middle of a turn are folded into that turn rather than starting one, so no turn
+    /// ever carries them as its prompt, and a match on the prompt kept the edge sweeping after the
+    /// session had long finished.
+    @Published private(set) var awaiting: [String: Date] = [:]
+    /// **Replies owed out loud**, by conversation, with when the words were sent (seconds since 1970).
+    /// A follow-up sent from the watch with speech on owes its reply spoken, and it is spoken when that
+    /// session is ON SCREEN with a reply newer than the words — the moment it lands if he is looking,
+    /// else whenever he next opens it (the reply notification, the list, or raising the wrist on it).
+    /// Once, then it is paid. Kept across launches, since the app is often closed by the time it comes.
+    private var owed: [String: Double] = UserDefaults.standard.dictionary(forKey: "owed_speech") as? [String: Double] ?? [:] {
         didSet { UserDefaults.standard.set(owed, forKey: "owed_speech") }
     }
     @Published private(set) var failures: [String: Failure] = [:]
@@ -207,7 +214,7 @@ final class Sessions: ObservableObject {
         if let d: SessionDetail = try? await Hub.json("/api/sessions/" + Hub.pathComponent(r.id)) {
             details[key] = d
             // The reply to the words the watch sent is in: the wait is over, however the news arrived.
-            if let words = awaiting[key], Self.answers(d, words) {
+            if let since = awaiting[key], Self.replied(d, since) {
                 awaiting[key] = nil
             }
             speakIfOwed(key)
@@ -288,8 +295,9 @@ final class Sessions: ObservableObject {
                 // a session that restarts forgets a mode, and cannot forget what is in the prompt.
                 let words = (sent[key] ?? "") + (Speaker.enabled ? Self.spokenFormat : "")
                 try await Hub.followUp(row(for: key)?.id ?? key, text: words, msgId: msgId)
-                awaiting[key] = sent[key]
-                if Speaker.enabled { owed[key] = sent[key] }
+                let now = Date()
+                awaiting[key] = now
+                if Speaker.enabled { owed[key] = now.timeIntervalSince1970 }
             } catch {
                 failures[key] = .message(error.localizedDescription)
             }
@@ -358,17 +366,23 @@ final class Sessions: ObservableObject {
     /// Speaks the reply this conversation owes, if it is the one on screen and the reply is in. With
     /// speech switched off by then, the debt is dropped rather than kept for later.
     private func speakIfOwed(_ key: String) {
-        guard let words = owed[key] else { return }
+        guard let at = owed[key] else { return }
         guard Speaker.enabled else { owed[key] = nil; return }
-        guard path.last == key, let d = details[key], Self.answers(d, words), let reply = d.turns?.last?.reply else { return }
+        let since = Date(timeIntervalSince1970: at)
+        guard path.last == key, let d = details[key], Self.replied(d, since), let reply = d.last_reply else { return }
         owed[key] = nil
         Speaker.shared.speak(reply)
     }
 
-    /// The detail's newest turn is the reply to `words`: the prompt it answers begins with them (the
-    /// session may have had the spoken-format note appended), and it has a reply.
-    private static func answers(_ d: SessionDetail, _ words: String) -> Bool {
-        guard let t = d.turns?.last, !(t.reply ?? "").isEmpty else { return false }
-        return (t.prompt ?? "").hasPrefix(String(words.prefix(40)))
+    /// The session has replied since `since`: its last reply is stamped after the words went in.
+    private static func replied(_ d: SessionDetail, _ since: Date) -> Bool {
+        guard !(d.last_reply ?? "").isEmpty, let at = d.reply_at.flatMap(Self.stamp) else { return false }
+        return at > since
+    }
+
+    private static func stamp(_ s: String) -> Date? {
+        let f = ISO8601DateFormatter()
+        f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return f.date(from: s) ?? ISO8601DateFormatter().date(from: s)
     }
 }

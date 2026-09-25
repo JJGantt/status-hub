@@ -136,8 +136,11 @@ it is VISIBLE (`onScrollVisibilityChange`), not a sum over the scroll view's rep
 this app does not trust (§ Double tap, and scrolling).
 
 **The edge sweeps until the reply lands**, not just while the words are handed over: `awaiting` holds
-a follow-up from the moment the hub accepts it until its `done` frame, or until a detail fetch shows a
-reply under those words (which is how a `done` missed while the app was away still ends it).
+a follow-up from the moment the hub accepts it until its `done` frame, or until a detail fetch shows
+a reply stamped after it (`reply_at`, which is how a `done` missed while the app was away still ends
+it). A reply AFTER the words, not a turn whose prompt is the words: words sent into a turn already
+running are folded into that turn and never become a prompt, and matching on the prompt left the edge
+sweeping after the session had finished. Spoken replies (`owed`) use the same test.
 
 **Its name is on the clock's line, and the name is how it closes.** A leading `ToolbarItem` holds it
 (a trailing one moves the clock to the other end of the strip), and tapping it pops the session. The

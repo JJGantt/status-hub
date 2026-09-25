@@ -51,6 +51,10 @@ struct SessionDetail: Decodable, Equatable {
     /// When `last_reply` was said. What tells the watch a reply came AFTER words it sent.
     let reply_at: String?
     let turns: [SessionTurn]?
+    /// The turn in flight so far (tool calls, what it says between them, his words), while it runs: the
+    /// steps the stream carried before this view was listening.
+    struct Step: Decodable, Equatable { let state: String; let text: String }
+    let steps: [Step]?
 
     var name: String { sessionName(custom_title, label, repo) ?? id }
 
@@ -229,6 +233,11 @@ final class Sessions: ObservableObject {
         guard let r = row(for: key) else { return }
         if let d: SessionDetail = try? await Hub.json("/api/sessions/" + Hub.pathComponent(r.id)) {
             details[key] = d
+            // Opened mid-turn with nothing heard live yet: start from the turn so far, and let the
+            // stream carry on from there.
+            if d.working == true, (activity[key] ?? []).isEmpty, let steps = d.steps, !steps.isEmpty {
+                activity[key] = steps.compactMap { line($0.state, $0.text, key) }
+            }
             // Everything the watch sent is answered: the wait is over, however the news arrived.
             if let since = awaiting[key], Self.finished(d, since) {
                 awaiting[key] = nil
@@ -368,22 +377,8 @@ final class Sessions: ObservableObject {
             Hub.log("frame", ["row": f.session, "state": f.state ?? "", "text": String((f.text ?? "").prefix(50))])
         }
         guard f.state == "done" else {
-            guard let text = f.text, !text.isEmpty else { return }
-            switch f.state {
-            // A digest of the reply, sent after `done`; the detail fetch brings the reply itself.
-            case "summary": return
-            // His words as the session took them in, or queued behind a turn still running. Words the
-            // watch sent are on screen already (`sent`), so their echo is not drawn a second time.
-            case "said", "queued":
-                let words = text.replacingOccurrences(of: Self.spokenFormat, with: "")
-                    .trimmingCharacters(in: .whitespacesAndNewlines)
-                if (sent[key] ?? []).contains(where: { words.hasPrefix(String($0.prefix(40))) }) { return }
-                activity[key, default: []].append(ActivityLine(text: words, kind: .said))
-            case "text":
-                activity[key, default: []].append(ActivityLine(text: text, kind: .thought))
-            default:
-                activity[key, default: []].append(ActivityLine(text: text, kind: .tool))
-            }
+            guard let text = f.text, let l = line(f.state ?? "tool", text, key) else { return }
+            activity[key, default: []].append(l)
             return
         }
         // A turn ended. It is the ANSWER only if the session is now idle with a reply after the newest
@@ -406,6 +401,24 @@ final class Sessions: ObservableObject {
         if answered { WKInterfaceDevice.current().play(.notification) }
         // A reply landing on the session he is looking at is read as it lands.
         if path.last == key { markSeen(key) }
+    }
+
+    /// One step of a turn as the page draws it, from a frame or from the steps kept on the hub. Nil for
+    /// what is not a step: a `summary` (a digest of the reply, which the detail fetch brings in full)
+    /// and the echo of words the watch sent, which are on screen already.
+    private func line(_ state: String, _ text: String, _ key: String) -> ActivityLine? {
+        guard !text.isEmpty else { return nil }
+        switch state {
+        case "summary": return nil
+        // His words as the session took them in, or queued behind a turn still running.
+        case "said", "queued":
+            let words = text.replacingOccurrences(of: Self.spokenFormat, with: "")
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            if (sent[key] ?? []).contains(where: { words.hasPrefix(String($0.prefix(40))) }) { return nil }
+            return ActivityLine(text: words, kind: .said)
+        case "text": return ActivityLine(text: text, kind: .thought)
+        default: return ActivityLine(text: text, kind: .tool)
+        }
     }
 
     /// Speaks the reply this conversation owes, if it is the one on screen and the reply is in. With

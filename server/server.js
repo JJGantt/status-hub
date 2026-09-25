@@ -3058,6 +3058,21 @@ app.post('/api/voice-reset', async (req, res) => {
 //   state 'text'  — what the session said between tool calls, never its final reply
 //   state 'done'  — the turn finished, `text` is the reply (truncated for the row it lands on) and
 //                   `at` its reply_at; it is also pushed to the phone (notifySessionReply)
+// THE CURRENT TURN'S STEPS, kept so a view opened mid-turn shows the turn so far. The frames are only
+// streamed, so a session opened in the middle of a long turn showed its last finished reply and nothing
+// of what it had done since, until the next tool call. In memory, per session row, cleared by the turn's
+// `done` and capped; a hub restart loses them, which costs only the steps before it.
+const TURN_STEPS_MAX = 300;
+const turnSteps = new Map();
+function keepStep(session, state, text) {
+  if (state === 'done') { turnSteps.delete(session); return; }
+  if (!text) return;
+  const steps = turnSteps.get(session) || [];
+  steps.push({ state, text });
+  if (steps.length > TURN_STEPS_MAX) steps.splice(0, steps.length - TURN_STEPS_MAX);
+  turnSteps.set(session, steps);
+}
+
 app.post('/api/session-activity', express.json(), (req, res) => {
   const b = req.body || {};
   const session = String(b.session || '');
@@ -3083,6 +3098,7 @@ app.post('/api/session-activity', express.json(), (req, res) => {
     if (text) notifySessionReply(session, text, at, typeof b.summary === 'string' ? b.summary : null);
     return res.status(204).end();          // not a step: nothing on a wall should draw it
   }
+  keepStep(session, state, text);
   pushSession({ session, state, text });
   if (done && text && b.summary_coming !== true) notifySessionReply(session, text, at);
   res.status(204).end();
@@ -4245,7 +4261,10 @@ app.get('/api/sessions/:id', async (req, res) => {
       turns = ((await sb(`desk_turns?conversation=eq.${encodeURIComponent(row.claude_session_id || row.id)}` +
         `&select=at,prompt,reply&order=at.desc&limit=${SESSION_TURNS}`)) || []).reverse();
     } catch (e) { console.log('[sessions] turns:', e.message); }
-    res.json({ ...row, turns });
+    // The turn in flight so far, while there is one: the steps the stream carried before this view
+    // was open to hear them.
+    const steps = row.working ? (turnSteps.get(row.id) || []) : [];
+    res.json({ ...row, turns, steps });
   } catch (e) { res.status(500).json({ error: String(e.message || e) }); }
 });
 

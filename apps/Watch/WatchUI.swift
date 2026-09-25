@@ -19,11 +19,13 @@ func snippet(_ s: String) -> AttributedString {
 /// One step of a running turn, as the machine running it reports it: a tool call, or what the model
 /// said between two of them (`thought`).
 struct ActivityLine: Equatable {
+    enum Kind { case tool, thought, said }
     let text: String
-    let thought: Bool
+    let kind: Kind
 }
 
-/// A running turn's steps, oldest first. A tool call is one grey line; a thought is read in full.
+/// A running turn's steps, oldest first. A tool call is one grey line; a thought is read in full; words
+/// said INTO the session — his prompt, as the session took it in — are drawn as his words, in full.
 struct ActivityLines: View {
     let lines: [ActivityLine]
 
@@ -31,11 +33,16 @@ struct ActivityLines: View {
         VStack(alignment: .leading, spacing: 4) {
             ForEach(Array(lines.enumerated()), id: \.offset) { _, line in
                 Group {
-                    if line.thought {
+                    switch line.kind {
+                    case .said:
+                        Text(inlineMarkdown(line.text))
+                            .font(.system(size: 12, weight: .medium))
+                            .foregroundColor(.gray)
+                    case .thought:
                         Text(inlineMarkdown(line.text))
                             .font(.system(size: 12))
                             .foregroundColor(Color(white: 0.78))
-                    } else {
+                    case .tool:
                         Text(line.text)
                             .font(.system(size: 10, design: .monospaced))
                             .foregroundColor(.gray)

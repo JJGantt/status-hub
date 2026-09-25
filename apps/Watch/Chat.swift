@@ -171,7 +171,7 @@ final class Chat: ObservableObject {
             switch frame.row?.state {
             case "tool", "text":
                 if let text = frame.row?.text, !text.isEmpty {
-                    activity.append(ActivityLine(text: text, thought: frame.row?.state == "text"))
+                    activity.append(ActivityLine(text: text, kind: frame.row?.state == "text" ? .thought : .tool))
                 }
             case "working", "done":
                 activity = []

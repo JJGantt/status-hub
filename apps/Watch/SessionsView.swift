@@ -100,13 +100,19 @@ struct SessionsView: View {
     }
 
     /// What this session's machine is doing, newest step only: a tool call in teal, what the model says
-    /// between them in a plain light. The line is always there, however empty — a row that grows when a
-    /// tool fires and shrinks when one stops makes the whole list jump every few seconds.
+    /// between them in a plain light, his own words grey. The line is always there, however empty — a row
+    /// that grows when a tool fires and shrinks when one stops makes the whole list jump every few seconds.
     private func step(_ s: SessionRow, unread: Bool) -> some View {
         let line = sessions.activity[s.key]?.last
+        let ink: Color = switch line?.kind {
+        case nil: .clear
+        case .tool: Self.tool
+        case .thought: Self.said
+        case .said: .gray
+        }
         return Text(line?.text ?? " ")
-            .font(.system(size: 9, design: line?.thought == true ? .default : .monospaced))
-            .foregroundColor(line == nil ? .clear : unread ? Self.unreadStep : line?.thought == true ? Self.said : Self.tool)
+            .font(.system(size: 9, design: line?.kind == .tool ? .monospaced : .default))
+            .foregroundColor(unread && line != nil ? Self.unreadStep : ink)
             .lineLimit(1)
             .frame(height: 11, alignment: .leading)
     }

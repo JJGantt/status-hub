@@ -310,8 +310,21 @@ final class Sessions: ObservableObject {
             Hub.log("frame", ["row": f.session, "state": f.state ?? "", "text": String((f.text ?? "").prefix(50))])
         }
         guard f.state == "done" else {
-            if let text = f.text, !text.isEmpty {
-                activity[key, default: []].append(ActivityLine(text: text, thought: f.state == "text"))
+            guard let text = f.text, !text.isEmpty else { return }
+            switch f.state {
+            // A digest of the reply, sent after `done`; the detail fetch brings the reply itself.
+            case "summary": return
+            // His words as the session took them in, or queued behind a turn still running. Words the
+            // watch sent are on screen already (`sent`), so their echo is not drawn a second time.
+            case "said", "queued":
+                let words = text.replacingOccurrences(of: Self.spokenFormat, with: "")
+                    .trimmingCharacters(in: .whitespacesAndNewlines)
+                if let mine = sent[key], words.hasPrefix(String(mine.prefix(40))) { return }
+                activity[key, default: []].append(ActivityLine(text: words, kind: .said))
+            case "text":
+                activity[key, default: []].append(ActivityLine(text: text, kind: .thought))
+            default:
+                activity[key, default: []].append(ActivityLine(text: text, kind: .tool))
             }
             return
         }

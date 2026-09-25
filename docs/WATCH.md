@@ -66,7 +66,9 @@ curve and the thickest default edge; 58pt in a session, under its title and clea
 draws over what scrolls beneath it. It does not move with the edge: text that shifted whenever a command
 lit the border would jump on every command. With the newest item in place, the one before it ends just
 above the top of the screen instead of showing a sliver cut by the corner. The tool calls of a running
-turn land as one block (`activity`), not line by line.
+turn land as one block (`activity`), not line by line. Within that block a session's echo of his words (`said`, or `queued` behind a running turn) is drawn as
+his words, in full; only tool calls are cut to two lines. Words the watch sent are already on screen, so
+their echo is dropped, and `summary` frames are ignored because the detail fetch brings the reply.
 
 A tap anywhere on the conversation is the same press as the control. The page carries nothing else: no
 second indicator of a state the control already holds, and a failure is the one thing it adds — an

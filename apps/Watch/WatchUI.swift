@@ -38,10 +38,14 @@ struct ActivityLine: Equatable {
 /// said INTO the session — his prompt, as the session took it in — are drawn as his words, in full.
 struct ActivityLines: View {
     let lines: [ActivityLine]
+    /// A line to open extra room above (the newest item, when it is one of these lines), and how much.
+    var lift: (index: Int, by: CGFloat)? = nil
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
             ForEach(Array(lines.enumerated()), id: \.offset) { i, line in
+                // The room above the newest line, as its own spacer so the landing lands on the line.
+                if lift?.index == i { Color.clear.frame(height: max(0, lift!.by - 4)) }
                 Group {
                     switch line.kind {
                     case .said:
@@ -290,6 +294,9 @@ struct BeyondEdge: Shape {
 enum Landing {
     static let top: CGFloat = 32
     static let underTitle: CGFloat = 58
+    /// The gap between items everywhere EXCEPT above the newest one, which gets the landing's height so
+    /// the item before it ends just above the top of the screen. The others need no such room.
+    static let itemGap: CGFloat = 12
 }
 
 /// How far a page's content stops short of the bottom of the glass, so its last line clears the curved

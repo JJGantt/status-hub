@@ -146,6 +146,8 @@ struct SessionView: View {
     /// The page has landed once. Before that, the scroll view moves itself as it lays out (it shifts by
     /// the space under the title as it opens), and none of that is his.
     @State private var landed = false
+    /// The newest item's height, which decides whether it needs room above it (`room`).
+    @State private var newestHeight: CGFloat = 0
 
     private var detail: SessionDetail? { sessions.details[key] }
     private var activity: [ActivityLine] { sessions.activity[key] ?? [] }
@@ -262,27 +264,50 @@ struct SessionView: View {
 
     private var content: some View {
         let turns = detail?.recent ?? []
-        return VStack(alignment: .leading, spacing: Landing.underTitle) {
+        // An ordinary gap between items, and the landing's height above the newest one only (`lift`), so
+        // the item before it is off the top of the screen when it lands.
+        return VStack(alignment: .leading, spacing: Landing.itemGap) {
             // The last few exchanges, oldest first. The page opens on the newest reply, so the history
             // above it costs nothing to carry and is there when he scrolls up.
             ForEach(Array(turns.enumerated()), id: \.offset) { i, turn in
                 if let prompt = turn.prompt, !prompt.isEmpty {
-                    words(prompt).id("prompt\(i)")
+                    room("prompt\(i)")
+                    words(prompt).id("prompt\(i)").modifier(Measure(id: "prompt\(i)", newest: newest, height: $newestHeight))
                 }
                 if let reply = turn.reply, !reply.isEmpty {
+                    room("reply\(i)")
                     Text(inlineMarkdown(reply))
                         .foregroundColor(.white)
                         .font(.system(size: 13))
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .id("reply\(i)")
+                        .modifier(Measure(id: "reply\(i)", newest: newest, height: $newestHeight))
                 }
             }
             if !activity.isEmpty {
-                ActivityLines(lines: activity).id("activity")
+                room("activity")
+                ActivityLines(lines: activity, lift: tallEnough ? activity.lastIndex(where: { $0.kind == .said })
+                    .map { ($0, Landing.underTitle - Landing.itemGap) } : nil)
+                    .id("activity")
+                    // The block stands in for a line inside it: what follows a line of his is the block's.
+                    .modifier(Measure(id: "activity", newest: newest?.hasPrefix("line") == true ? "activity" : newest,
+                                      height: $newestHeight))
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .contentShape(Rectangle())
+    }
+
+    /// The room above the newest item: a spacer of its OWN, not padding on the item. Padding becomes part
+    /// of the frame a scroll lands on, which put the item's text a whole landing's height too low. And
+    /// only when the item is tall enough to reach the landing line: a short last item rests at the end of
+    /// the scroll with what came before it on screen anyway, where the room is only a blank band.
+    @ViewBuilder private func room(_ id: String) -> some View {
+        if id == newest && tallEnough { Color.clear.frame(height: Landing.underTitle - 2 * Landing.itemGap) }
+    }
+
+    private var tallEnough: Bool {
+        newestHeight > WKInterfaceDevice.current().screenBounds.height - Landing.underTitle - PageInset.bottom
     }
 
     /// His side of the conversation, drawn as the prompt page draws his words.
@@ -309,6 +334,19 @@ struct SessionView: View {
                     .buttonStyle(.bordered)
                     .controlSize(.small)
             }
+        }
+    }
+}
+
+/// Reports an item's height when it is the newest one, for the room above it.
+private struct Measure: ViewModifier {
+    let id: String
+    let newest: String?
+    @Binding var height: CGFloat
+
+    func body(content: Content) -> some View {
+        content.onGeometryChange(for: CGFloat.self) { $0.size.height } action: { h in
+            if id == newest { height = h }
         }
     }
 }

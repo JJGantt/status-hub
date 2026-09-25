@@ -18,19 +18,31 @@ struct HomeView: View {
     /// Whether the view is held at `target`. Kept until he scrolls himself: a thread still laying out
     /// moves the spot, so a single jump lands short of it.
     @State private var pinned = true
+    /// The newest item's height, which decides whether it needs room above it (`room`).
+    @State private var newestHeight: CGFloat = 0
 
 
     var body: some View {
         ScrollViewReader { proxy in
             ScrollView {
-                VStack(alignment: .leading, spacing: Landing.top) {
+                // Items sit an ordinary gap apart; only the newest has the landing's height above it, so
+                // the one before it is off the top when it lands (`lift`).
+                VStack(alignment: .leading, spacing: Landing.itemGap) {
                     ForEach(chat.recent) { m in
+                        room(m.id)
                         ThreadRow(text: m.text ?? "", user: m.role == "user", session: m.session_id != nil)
                             .id(m.id)
+                            .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { h in
+                                if m.id == target { newestHeight = h }
+                            }
                     }
                     // What the hub heard, until the turn itself lands in the thread.
                     ForEach(Array(chat.pending.enumerated()), id: \.offset) { i, words in
+                        room("pending\(i)")
                         ThreadRow(text: words, user: true).id("pending\(i)")
+                            .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { h in
+                                if "pending\(i)" == target { newestHeight = h }
+                            }
                     }
                     if !chat.activity.isEmpty {
                         ActivityLines(lines: chat.activity)
@@ -69,6 +81,16 @@ struct HomeView: View {
     /// of the newest thing in the thread.
     private var target: String? {
         chat.pending.isEmpty ? chat.recent.last?.id : "pending\(chat.pending.count - 1)"
+    }
+
+    /// The room above the newest item: a spacer of its OWN, not padding on the item. Padding becomes part
+    /// of the frame a scroll lands on, which put the item's text a whole landing's height too low. And
+    /// only when the item is tall enough to reach the landing line: a short last message rests at the
+    /// end of the scroll with the thread above it on screen anyway, where the room is only a blank band.
+    @ViewBuilder private func room(_ id: String) -> some View {
+        if id == target && newestHeight > WKInterfaceDevice.current().screenBounds.height - Landing.top - PageInset.bottom {
+            Color.clear.frame(height: Landing.top - 2 * Landing.itemGap)
+        }
     }
 
     private func jump(_ proxy: ScrollViewProxy, animated: Bool = false) {

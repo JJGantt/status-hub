@@ -60,12 +60,16 @@ with what came before it above, as any list does. Blank space added so everythin
 is exactly what he does not want. The view holds that spot through the laying out that follows
 (`pinned`) until he scrolls himself. The session page lands the same way.
 
-**The landing spot is fixed, per page, and the gap between items equals it** (`Landing` in
-`WatchUI.swift`): 32pt from the top of the glass on home, where a full-width first line clears the corner
-curve and the thickest default edge; 58pt in a session, under its title and clear of the fade the title
-draws over what scrolls beneath it. It does not move with the edge: text that shifted whenever a command
-lit the border would jump on every command. With the newest item in place, the one before it ends just
-above the top of the screen instead of showing a sliver cut by the corner. The tool calls of a running
+**The landing spot is fixed, per page** (`Landing` in `WatchUI.swift`): 32pt from the top of the glass
+on home, where a full-width first line clears the corner curve and the thickest default edge; 58pt in
+a session, under its title and clear of the fade the title draws over what scrolls beneath it. It does
+not move with the edge: text that shifted whenever a command lit the border would jump on every
+command. **Items sit an ordinary 12pt apart (`Landing.itemGap`); only the newest has room above it**,
+enough that when it lands the item before it ends just above the top of the screen. That room is a
+spacer of its own (`room`), never padding on the item: SwiftUI measures a scroll target INCLUDING
+padding, so padding put the item's text a whole landing too low. And it appears only when the newest
+item is tall enough to reach the landing line (its height is measured): a short last item rests at the
+end of the scroll with the thread above it on screen anyway, where the room was a blank band. The tool calls of a running
 turn land as one block (`activity`), not line by line. Within that block a session's echo of his words (`said`, or `queued` behind a running turn) is drawn as
 his words, in full; only tool calls are cut to two lines. Words the watch sent are already on screen, so
 their echo is dropped, and `summary` frames are ignored because the detail fetch brings the reply.

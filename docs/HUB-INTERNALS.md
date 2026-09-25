@@ -1302,7 +1302,7 @@ callers; only the HTTP response is filtered.
 | `surplus_cal` | Signed kcal over maintenance (+bulk / −cut / 0 maintenance). |
 | `maintenance_min_days` | Aligned-window length before adaptive maintenance goes live (Settings "calibration window"). |
 | `maintenance_phase` | JSON `{start, seed, sign, hold}` — the current goal phase (§4). Written on a `surplus_cal` sign flip. |
-| `session_reset_s` | Idle gap before the hub voice conversation resets context. |
+| `session_reset_s` | Idle gap that starts a new stretch of the hub thread as the surfaces show it, and bounds which worker owns the conversation. The agent itself is not bounded by it: it is replayed the whole day since 4 AM (voice-pipeline `recent_context`). |
 | `voice_reset_at` | When the hub conversation was last reset by hand — a context boundary, like an idle gap. Written by `/api/voice-reset`. |
 | `activity_hold_s` | Seconds a finished activity row (the reply, or an error) holds on the bar. Default 60. |
 | `phone_activity_hold_s` | The same, off the kiosk (phone, Mac app panel). Default 8. |

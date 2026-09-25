@@ -26,12 +26,10 @@ struct ActivityLine: Equatable {
 /// A running turn's steps, oldest first. A tool call is one grey line; a thought is read in full.
 struct ActivityLines: View {
     let lines: [ActivityLine]
-    /// Scroll ids for the lines, `<prefix><index>`, for a page that scrolls to one of them.
-    var idPrefix = "act"
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
-            ForEach(Array(lines.enumerated()), id: \.offset) { i, line in
+            ForEach(Array(lines.enumerated()), id: \.offset) { _, line in
                 Group {
                     if line.thought {
                         Text(inlineMarkdown(line.text))
@@ -45,7 +43,6 @@ struct ActivityLines: View {
                     }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .id("\(idPrefix)\(i)")
             }
         }
     }
@@ -245,6 +242,20 @@ struct BeyondEdge: Shape {
     }
 }
 
+/// **Where the newest item lands**, in points from the top of the glass, and the gap between items.
+/// One place per page, the same with the edge lit or dark: a landing that moved with the border would
+/// make the text jump every time a command started.
+///
+/// Low enough that a full-width first line clears the corner curve and the thickest default edge: text
+/// sits 8pt in from the side, and the glass's corner only comes within 4.5pt of the side (leaving room
+/// for a 2.5pt edge) from about 31pt down. A session's title owns the top down to about 41pt, so there
+/// the landing is just under it. The GAP between items equals the landing, so with the newest item in
+/// place the one before it ends just above the top of the screen rather than showing a sliver.
+enum Landing {
+    static let top: CGFloat = 32
+    static let underTitle: CGFloat = 58
+}
+
 /// How far a page's content stops short of the bottom of the glass, so its last line clears the curved
 /// bottom corners when scrolled to the end. The bar that used to live there is gone; this is only the
 /// curve.
@@ -299,6 +310,7 @@ struct PagedScroll<Content: View>: View {
             .padding(.bottom, PageInset.bottom)
         }
         .scrollIndicators(.never)
+        .topOfTheScreen(scrollTop: Landing.underTitle)
         .background(Color.black.ignoresSafeArea())
     }
 }

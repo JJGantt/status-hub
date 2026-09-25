@@ -211,7 +211,9 @@ struct SessionView: View {
     /// The scroll id of the last thing on the page: a tool call, else his words waiting for an answer,
     /// else the last turn's reply (or its prompt, while the session has not answered it).
     private var newest: String? {
-        if !activity.isEmpty { return "act\(activity.count - 1)" }
+        // The tool calls land as one block: each is a line or two, and the newest alone at the top would
+        // put the rest of the turn above the screen.
+        if !activity.isEmpty { return "activity" }
         if sessions.sent[key] != nil { return "sent" }
         guard let turns = detail?.recent, let last = turns.last else { return nil }
         let i = turns.count - 1
@@ -231,7 +233,7 @@ struct SessionView: View {
 
     private var content: some View {
         let turns = detail?.recent ?? []
-        return VStack(alignment: .leading, spacing: 10) {
+        return VStack(alignment: .leading, spacing: Landing.underTitle) {
             // The last few exchanges, oldest first. The page opens on the newest reply, so the history
             // above it costs nothing to carry and is there when he scrolls up.
             ForEach(Array(turns.enumerated()), id: \.offset) { i, turn in
@@ -250,7 +252,7 @@ struct SessionView: View {
                 words(mine).id("sent")
             }
             if !activity.isEmpty {
-                ActivityLines(lines: activity)
+                ActivityLines(lines: activity).id("activity")
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)

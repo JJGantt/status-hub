@@ -25,7 +25,7 @@ struct HomeView: View {
     var body: some View {
         ScrollViewReader { proxy in
             ScrollView {
-                VStack(alignment: .leading, spacing: 12) {
+                VStack(alignment: .leading, spacing: Landing.top) {
                     ForEach(chat.recent) { m in
                         ThreadRow(text: m.text ?? "", user: m.role == "user", session: m.session_id != nil)
                             .id(m.id)
@@ -52,7 +52,7 @@ struct HomeView: View {
                 }
             }
             .scrollIndicators(.never)
-            .topOfTheScreen()
+            .topOfTheScreen(scrollTop: Landing.top)
             .background(Color.black.ignoresSafeArea())
             .onChange(of: target) { _, _ in
                 pinned = true

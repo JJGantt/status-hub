@@ -81,7 +81,7 @@ final class WatchAppDelegate: NSObject, WKApplicationDelegate, UNUserNotificatio
 /// Four pages, left to right: the sessions, home — the conversation — the rings and today's log, and
 /// the workout block. Home is where the app opens.
 struct RootView: View {
-    enum Page {
+    enum Page: String {
         case sessions, home, day, health
 
         /// Food and training are one page now, so the two controls that named them land in the
@@ -157,6 +157,10 @@ struct RootView: View {
             let args = ProcessInfo.processInfo.arguments
             if let i = args.firstIndex(of: "-opensession"), i + 1 < args.count {
                 Task { await sessions.open(rowId: args[i + 1]) }
+            }
+            // `-page <sessions|home|day|health>`: land on a page, so each can be screenshotted.
+            if let i = args.firstIndex(of: "-page"), i + 1 < args.count, let p = Page(rawValue: args[i + 1]) {
+                page = p
             }
             #endif
         }

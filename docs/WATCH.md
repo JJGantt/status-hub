@@ -174,8 +174,9 @@ whenever it becomes active.
 A tap or double tap records a follow-up: the hub transcribes it without enqueueing anything
 (`/api/voice-command?dry=1`), and `POST /api/sessions/followup` types the words in, or resumes a
 parked session with them (`HUB-INTERNALS.md` §6b). His words stay under the reply until the
-conversation's next `done`. **A follow-up ends only on a press** — it has no silence endpoint and no
-lock.
+conversation's next `done`. **A follow-up records exactly as a command on home does**: it sends
+itself at his silence, a second press locks it open, the next sends (`CommandBorder.press`, one flow
+everywhere).
 
 **A session's reply notification opens it.** `WatchAppDelegate` registers the `SESSION_REPLY`
 category with one foreground action, Open — the button double tap presses on a watch notification —
@@ -203,7 +204,7 @@ command goes to the session instead of the hub):
 | state | edge |
 |---|---|
 | recording, and the silence will end it | amber |
-| only a press ends it: locked on home, or any follow-up in a session (those never end at a silence) | red |
+| locked open through the silence (home and sessions alike) | red |
 | the hub working on it (transcript or command) | white, a bright stretch travelling round a dim ring; with the wrist down, the whole line white |
 | always-on listening | blue, dim |
 | idle | none |
@@ -363,9 +364,9 @@ speech from those, not by feel.
 
 ### The lock is a step, not a button
 
-Double tap walks a command: start, then lock it open through any silence, then send. Unlocked, the
-silence still ends it by itself. A session's follow-up has no silence endpoint, so there the second
-double tap sends. Press and hold anywhere cancels the recording, or the command the hub is still
+Double tap, or a tap on the conversation, walks a command: start, then lock it open through any
+silence, then send. Unlocked, the silence still ends it by itself. Home and a session follow the same
+steps; both go through `CommandBorder.press`. Press and hold anywhere cancels the recording, or the command the hub is still
 working on; it does nothing when there is nothing to throw away.
 
 ### Haptics

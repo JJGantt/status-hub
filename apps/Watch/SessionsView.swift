@@ -123,13 +123,13 @@ struct SessionsView: View {
 }
 
 /// One conversation: the last prompt and the reply to it, the tool calls of the turn it is running,
-/// and a reply of his own. Double tap records a follow-up (bound to the bottom control alone: a
-/// follow-up has no lock), as does a tap anywhere on the text; the next press sends, and a parked
-/// session is resumed with the words. Scrolling is his finger or the crown.
+/// and a reply of his own. Double tap or a tap anywhere on the text is the one press
+/// (`CommandBorder.press`): it records a follow-up that sends itself at his silence, a second press locks
+/// it open and the next sends; a parked session is resumed with the words. Scrolling is his finger or
+/// the crown.
 struct SessionView: View {
     let key: String
     @EnvironmentObject private var sessions: Sessions
-    @ObservedObject private var capture = Capture.shared
 
     /// **Following the newest item.** The page stays on whatever is newest — his words, a tool call, the
     /// reply — until HE scrolls, by finger or crown, at all; then it is his, and nothing moves it until
@@ -149,14 +149,12 @@ struct SessionView: View {
 
     private var detail: SessionDetail? { sessions.details[key] }
     private var activity: [ActivityLine] { sessions.activity[key] ?? [] }
-    private var recording: Bool { capture.owner == .session(key) }
 
     var body: some View {
         ScrollViewReader { proxy in
             PagedScroll(reachedEnd: { atEnd = $0 }) {
                 Button {
-                    Hub.log("record", ["view": "session", "recording": recording])
-                    sessions.toggleRecording(key)
+                    CommandBorder.press(chat: Chat.shared, sessions: sessions, how: "tap")
                 } label: { content }
                     .buttonStyle(.plain)
                 status

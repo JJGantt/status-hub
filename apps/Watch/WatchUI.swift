@@ -75,7 +75,7 @@ struct ActivityLines: View {
 /// | state | edge |
 /// |---|---|
 /// | recording, and the silence will end it | amber |
-/// | only a press ends it: locked, or a session's follow-up | red |
+/// | locked open through the silence | red |
 /// | the hub working on it (transcript or command) | white, a sweep travelling round |
 /// | always-on listening | blue, dim |
 /// | idle | none |
@@ -103,9 +103,7 @@ struct CommandBorder: View {
 
     private enum State { case recording, locked, working, listening, idle }
     private var state: State {
-        // Red is "only your press ends this": a locked command, and a session's follow-up, which never
-        // ends at a silence. Amber is only ever a recording the silence will end.
-        if recording { return capture.locked || !capture.endsOnSilence ? .locked : .recording }
+        if recording { return capture.locked ? .locked : .recording }
         if working { return .working }
         if capture.listens { return .listening }
         return .idle
@@ -173,19 +171,22 @@ struct CommandBorder: View {
     /// no silence to hold off, so there the second double tap sends.
     private func primary() { Self.press(chat: chat, sessions: sessions, how: "double-tap") }
 
-    /// **The one press.** Double tap and a tap on the conversation both come here, so they cannot follow
-    /// different flows: in a session, start then send (a follow-up has no lock); on home, start, then
-    /// lock, then send.
+    /// **The one press.** Double tap and a tap on the conversation both come here, and home and a
+    /// session follow the same flow: start (amber, sends itself at his silence), then lock (red, only a
+    /// press ends it), then send.
     static func press(chat: Chat, sessions: Sessions, how: String) {
         let capture = Capture.shared
         let target = sessions.path.last
         let recording = capture.owner == (target.map(Capture.Owner.session) ?? .hub)
         Hub.log("control", ["target": target ?? "hub", "recording": recording, "locked": capture.locked, "how": how])
         Capture.trigger = how
-        if let target { sessions.toggleRecording(target); return }
-        if !recording { chat.startRecording() }
-        else if capture.locked { chat.stopRecording() }
-        else { capture.toggleLock() }
+        if !recording {
+            if let target { sessions.startRecording(target) } else { chat.startRecording() }
+        } else if capture.locked {
+            if let target { sessions.stopRecording(target) } else { chat.stopRecording() }
+        } else {
+            capture.toggleLock()
+        }
     }
 
     /// Press and hold anywhere: throw away what is under way — the recording, or the command the hub

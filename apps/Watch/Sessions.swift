@@ -249,10 +249,6 @@ final class Sessions: ObservableObject {
         + "markdown, tables, code, lists, bullets, paths, URLs or symbols; speak the substance of those "
         + "instead. Say everything you would otherwise say: this is about the form, not the length.]"
 
-    func toggleRecording(_ key: String) {
-        if capture.owner == .session(key) { stopRecording(key) } else { startRecording(key) }
-    }
-
     func startRecording(_ key: String) {
         guard capture.free, row(for: key) != nil else {
             // Each of these used to return in silence, which from the wrist is a record tap doing nothing.
@@ -262,7 +258,9 @@ final class Sessions: ObservableObject {
         }
         failures[key] = nil
         Hub.log("record-start", ["view": "session", "row": row(for: key)?.id ?? ""])
-        capture.start(for: .session(key), onTaken: { [weak self] in self?.stopRecording(key) }) { [weak self] error in
+        // Ends itself at the silence after he speaks, as a command on home does; a press locks it open.
+        capture.start(for: .session(key), onSilence: { [weak self] in self?.stopRecording(key) },
+                      onTaken: { [weak self] in self?.stopRecording(key) }) { [weak self] error in
             Hub.log("record-failed", ["error": String(describing: error).prefix(120).description])
             self?.failures[key] = (error as? Recorder.Failure) == .denied ? .micDenied : .message(error.localizedDescription)
         }

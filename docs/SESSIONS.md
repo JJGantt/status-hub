@@ -150,16 +150,21 @@ attaches to tmux over SSH and starts one by hand, which is not tracked.
 | `start_session` | target machine | pull, launch, publish the row |
 | `focus_session` | — | pins the follow-up pointer to a session that already exists |
 | `unfocus_session` | — | releases the pin: follow-ups go to the most recently active session again |
-| `follow_up` | machine owning the focused session | text typed into the live session |
+| `follow_up` | machine owning the target session | text typed into the live session, busy or not; the target is the session he NAMED (`session` param), else the focused one. A named parked session is resumed with the words instead. Naming leaves the pin alone |
 | `rename_session` | owning machine | `/rename <name>` typed in — the session renames itself |
 | `end_session` | owning machine | close the tab / tmux session, park the row |
-| `resume_session` | owning machine | `claude --resume <id>` in a new tab or tmux session, with an optional prompt; on a full Pi it waits in `desk_queue` for a slot like new work |
+| `resume_session` | owning machine | `claude --resume <id>` in a new tab or tmux session, with an optional prompt; on a full Pi it waits in `desk_queue` for a slot like new work. Aimed at a session that is still running, both machines type the prompt into it |
+| `transfer_session` | machine GIVING IT UP | close, flush the mirror, ask the other to resume |
+| `get_sessions` | — | the numbered list |
 
 The hub's `POST /api/sessions/followup` (the watch's and the phone's session view) is `follow_up` addressed by session
 id instead of by focus, and for a parked session it writes `resume_session` with the words as the
 prompt instead — HUB-INTERNALS §6b.
-| `transfer_session` | machine GIVING IT UP | close, flush the mirror, ask the other to resume |
-| `get_sessions` | — | the numbered list |
+
+`follow_up`, `resume_session` and `end_session` answer only once the machine has marked the command
+`done` or `error` (`dispatchConfirmed` in data-layer, a realtime subscription opened before the
+insert, up to 20s; past that the tool says it is unconfirmed, never sent). An insert always succeeds, so
+answering at insert time reports delivery for commands the machine then refuses.
 
 All of them are on the fast path (`SAFE_TOOLS`): they route prompts and manage what is running, and
 none of them invents a value.

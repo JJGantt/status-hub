@@ -13,14 +13,12 @@ import WatchKit
 /// scrolling to the end.
 struct HomeView: View {
     @EnvironmentObject private var chat: Chat
-    @ObservedObject private var capture = Capture.shared
     /// Wrist down with the app still showing.
     @Environment(\.isLuminanceReduced) private var dimmed
     /// Whether the view is held at `target`. Kept until he scrolls himself: a thread still laying out
     /// moves the spot, so a single jump lands short of it.
     @State private var pinned = true
 
-    private var recording: Bool { capture.owner == .hub }
 
     var body: some View {
         ScrollViewReader { proxy in
@@ -43,13 +41,9 @@ struct HomeView: View {
                 .padding(.bottom, PageInset.bottom)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .opacity(dimmed ? 0.6 : 1)
-                // The whole page records under a finger, as the thread always has. The lock is its
-                // own mark on the bar now, so a tap is only ever start or send.
+                // The whole page is the same press as double tap: start, lock, send.
                 .contentShape(Rectangle())
-                .onTapGesture {
-                    Capture.trigger = "tap"
-                    if recording { chat.stopRecording() } else { chat.startRecording() }
-                }
+                .onTapGesture { CommandBorder.press(chat: chat, sessions: Sessions.shared, how: "tap") }
             }
             .scrollIndicators(.never)
             .topOfTheScreen(scrollTop: Landing.top)

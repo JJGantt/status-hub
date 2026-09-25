@@ -169,9 +169,17 @@ struct CommandBorder: View {
 
     /// Idle: start. Recording: lock it open through the silence, then send. A session's follow-up has
     /// no silence to hold off, so there the second double tap sends.
-    private func primary() {
-        Hub.log("control", ["target": target ?? "hub", "recording": recording, "locked": capture.locked])
-        Capture.trigger = "double-tap"
+    private func primary() { Self.press(chat: chat, sessions: sessions, how: "double-tap") }
+
+    /// **The one press.** Double tap and a tap on the conversation both come here, so they cannot follow
+    /// different flows: in a session, start then send (a follow-up has no lock); on home, start, then
+    /// lock, then send.
+    static func press(chat: Chat, sessions: Sessions, how: String) {
+        let capture = Capture.shared
+        let target = sessions.path.last
+        let recording = capture.owner == (target.map(Capture.Owner.session) ?? .hub)
+        Hub.log("control", ["target": target ?? "hub", "recording": recording, "locked": capture.locked, "how": how])
+        Capture.trigger = how
         if let target { sessions.toggleRecording(target); return }
         if !recording { chat.startRecording() }
         else if capture.locked { chat.stopRecording() }

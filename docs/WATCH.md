@@ -369,12 +369,11 @@ arms the endpoint, which is how a recording nobody spoke into ran 88 seconds on 
 peak of 0.021 against a 0.02 line, and went up as "Thank you. Thank you." — what Whisper writes for
 silence, which the worker then ran as a command.
 
-**A recording nobody meant to start is closed.** Two caps, both skipped while the recording is locked,
-because holding one open through anything is what the lock is for:
-
-- `Capture.unspoken` (15s of audio with no speech in it) — nobody is talking to it.
-- `Capture.longest` (60s unlocked) — the silence ends a real command in a couple of seconds, so one
-  still running heard speech the whole time without a gap: a room, a television, a conversation.
+**A command or a follow-up has no length limit.** It ends at his silence or his press, however long he
+talks; he did not ask for a cap, and one (60s unlocked, discarding the clip) threw away 40 seconds of
+his words. The one close left is `Capture.unspoken`: 15s of audio with no speech in it at all, skipped
+while locked. `Capture.longest` (60s) applies only to the always-on listener, which starts a fresh file
+after that much unbroken sound.
 
 A **launcher's** request expires too (`Chat.requestWindow`, 20s): the complication and the Record
 control set a flag home acts on when it is next on screen, and without the window a request nothing

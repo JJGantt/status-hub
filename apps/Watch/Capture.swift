@@ -41,10 +41,9 @@ final class Capture: ObservableObject {
     /// recording is held open deliberately, so it is exempt.
     private static let unspoken: TimeInterval = 15
 
-    /// The longest a command may record unlocked. The silence normally ends one in a couple of seconds,
-    /// so a recording still running after this heard speech the whole time without a gap — a room, a
-    /// television, a conversation — which is what an accidental start sounds like. The lock is how a
-    /// long one is held open deliberately, and it is exempt.
+    /// How long the always-on listener lets one stretch of unbroken sound run before it starts a fresh
+    /// file. The listener only: **a command or a follow-up has no length limit**, and ends at his
+    /// silence or his press however long he talks.
     private static let longest: TimeInterval = 60
 
     private let recorder = Recorder()
@@ -261,7 +260,8 @@ final class Capture: ObservableObject {
         if endpoint.heard && !wasHeard { spokeAt = Date() }
         // Accidentally recording: nobody spoke into it, or it has run on and on unlocked. Either way
         // the microphone closes and the clip is thrown away rather than sent.
-        if !locked && (segment >= Self.longest || (!endpoint.heard && segment >= Self.unspoken)) {
+        let tooLong = owner == .listener && segment >= Self.longest
+        if !locked && (tooLong || (!endpoint.heard && segment >= Self.unspoken)) {
             if owner == .listener {
                 recorder.drop()
                 endpoint.restart()
@@ -273,7 +273,7 @@ final class Capture: ObservableObject {
                     Hub.log("listen-alive", ["minutes": Int(Date().timeIntervalSince(since) / 60)])
                 }
             } else {
-                logEnd(endpoint.heard ? "too-long" : "unspoken")
+                logEnd("unspoken")
                 cancel()
             }
             return

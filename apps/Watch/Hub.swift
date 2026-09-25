@@ -256,10 +256,23 @@ enum Hub {
 
     /// Waits for a command to finish. The hub holds each request open until it does, and answers
     /// `pending` when its own wait runs out, so this asks again until the answer is final.
+    ///
+    /// **A connection that drops while waiting is asked again, not reported.** The command is already
+    /// with the hub by now, so a lost wait says nothing about it: lowering the wrist suspends the app
+    /// and kills the open request, and raising it again showed "The request timed out" over a command
+    /// that had finished half a minute after it was sent. Backs off while the hub cannot be reached.
     static func outcome(_ id: String) async throws -> Outcome {
+        var backoff: Double = 1
         while true {
-            let o: Outcome = try await json("/api/voice-reply/\(id)", timeout: 60)
-            if o.status != "pending" { return o }
+            do {
+                let o: Outcome = try await json("/api/voice-reply/\(id)", timeout: 60)
+                if o.status != "pending" { return o }
+                backoff = 1
+            } catch let e as URLError where e.code != .cancelled {
+                log("reply-wait", ["error": e.code.rawValue])
+                try await Task.sleep(for: .seconds(backoff))
+                backoff = min(backoff * 2, 30)
+            }
             try Task.checkCancellation()
         }
     }

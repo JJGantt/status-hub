@@ -376,7 +376,10 @@ A command is sent the way the phone's microphone sends one: `Hub.sendAudio` uplo
 `/api/voice-command` (source `web`), the hub transcribes it with the same Groq Whisper, and the worker
 treats it as push-to-talk — no addressing gate, no duplicate-drop, no spoken reply on the TV. The hub
 answers with the transcript, shown until the turn lands, and the request id, and the watch waits on
-`/api/voice-reply/:id`. No id means the hub heard no words.
+`/api/voice-reply/:id`. No id means the hub heard no words. A connection lost during that wait is asked
+again with backoff (`Hub.outcome`), never shown as a failure: the command is with the hub already, and a
+lowered wrist suspends the app and kills the open request, which used to read "The request timed out"
+over a command that had finished.
 
 **Recording sets `voice_muted`**, as the phone's microphone does, so the Mac and the ESP do not
 enqueue the same sentence a second time. The flag has no expiry, so every way out of a recording

@@ -151,6 +151,7 @@ struct RootView: View {
             if !sessions.path.isEmpty { page = .sessions }
             follow()
             Task { await WatchSettings.refresh() }
+            Hub.flushLog()
             #if targetEnvironment(simulator)
             // `-opensession <row id>` at launch: open a session as its notification would, so its page
             // can be watched in a simulator.
@@ -168,7 +169,7 @@ struct RootView: View {
         .onChange(of: phase) { _, now in
             follow()
             // Coming to the front, not every page swipe: the watch's settings live on the hub.
-            if now == .active { Task { await WatchSettings.refresh() } }
+            if now == .active { Task { await WatchSettings.refresh() }; Hub.flushLog() }
         }
     }
 

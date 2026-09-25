@@ -335,11 +335,27 @@ enum Hub {
     /// A line in the hub's log (`fly logs -a jared-status-hub | grep clientlog`): what the watch showed
     /// and how a page scrolled, so a report from the wrist can be checked against what the watch did.
     /// Fire and forget; a lost line costs nothing.
+    /// **A log line is kept on the watch until the hub has it** (`LogOutbox`), stamped with the watch's
+    /// own time. Sent once and forgotten, every line written while the watch had no connection, or just
+    /// before it slept, was gone, and those are exactly the moments a lost command has to be traced.
     static func log(_ event: String, _ fields: [String: Any] = [:]) {
         var body = fields
         body["src"] = "watch"
         body["ev"] = event
-        Task.detached { _ = try? await call("/api/clientlog", method: "POST", body: body, timeout: 10) }
+        body["t"] = ISO8601DateFormatter().string(from: Date())
+        guard let line = try? JSONSerialization.data(withJSONObject: body),
+              let text = String(data: line, encoding: .utf8) else { return }
+        Task { await LogOutbox.shared.add(text) }
+    }
+
+    /// Sends what the outbox holds. Called after each line and when the app comes to the front.
+    static func flushLog() {
+        Task { await LogOutbox.shared.flush() }
+    }
+
+    fileprivate static func sendLog(_ lines: [String]) async -> Bool {
+        let objects = lines.compactMap { try? JSONSerialization.jsonObject(with: Data($0.utf8)) }
+        return (try? await call("/api/clientlog", method: "POST", body: ["lines": objects], timeout: 20)) != nil
     }
 
     static func json<T: Decodable>(_ path: String, timeout: TimeInterval = 20) async throws -> T {
@@ -404,5 +420,39 @@ enum Hub {
         f.locale = Locale(identifier: "en_US_POSIX")
         f.dateFormat = "yyyy-MM-dd'T'HH:mm:ss"
         return f.string(from: Date())
+    }
+}
+
+/// The log lines the hub has not acknowledged yet, oldest first, kept in UserDefaults so they survive
+/// the app being closed. Sent in batches; a batch leaves only once the hub has answered for it. Capped,
+/// oldest dropped: a watch offline for days must not grow this without end.
+actor LogOutbox {
+    static let shared = LogOutbox()
+    private static let key = "log_outbox"
+    private static let cap = 1000
+    private static let batch = 50
+    private var flushing = false
+
+    func add(_ line: String) async {
+        var lines = UserDefaults.standard.stringArray(forKey: Self.key) ?? []
+        lines.append(line)
+        if lines.count > Self.cap { lines.removeFirst(lines.count - Self.cap) }
+        UserDefaults.standard.set(lines, forKey: Self.key)
+        await flush()
+    }
+
+    func flush() async {
+        guard !flushing else { return }
+        flushing = true
+        defer { flushing = false }
+        while true {
+            let lines = UserDefaults.standard.stringArray(forKey: Self.key) ?? []
+            guard !lines.isEmpty else { return }
+            let sending = Array(lines.prefix(Self.batch))
+            guard await Hub.sendLog(sending) else { return }
+            // Lines added while the batch was in the air are behind it, so only its own count goes.
+            let now = UserDefaults.standard.stringArray(forKey: Self.key) ?? []
+            UserDefaults.standard.set(Array(now.dropFirst(min(sending.count, now.count))), forKey: Self.key)
+        }
     }
 }

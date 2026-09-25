@@ -2865,14 +2865,27 @@ app.get('/api/wind', async (req, res) => {
 // per tool call, and say nothing a step of a command does not.
 const CLIENT_LOG_SOURCES = new Set(['watch', 'phone']);
 const CLIENT_LOG_SKIP = new Set(['frame', 'geo', 'alarmclock', 'tvring']);
-app.post('/api/clientlog', express.json({ limit: '16kb' }), (req, res) => {
-  try { console.log('[clientlog]', JSON.stringify(req.body).slice(0, 900)); } catch (_) {}
+// A client may send one line, or a batch as `{ lines: [...] }`: the watch keeps its lines until they
+// are acknowledged and sends what piled up while it was offline all at once. A kept batch is answered
+// only once it is stored, so a failed write leaves the lines on the watch to be sent again.
+app.post('/api/clientlog', express.json({ limit: '256kb' }), async (req, res) => {
   const b = req.body || {};
-  if (b.ev === 'alarmclock' || b.ev === 'tvring') noteRinger(b, req);
-  if (CLIENT_LOG_SOURCES.has(b.src) && b.ev && !CLIENT_LOG_SKIP.has(b.ev)) {
-    const { src, ev, ...data } = b;
-    sbWrite('client_log', 'POST', { src, ev: String(ev).slice(0, 40), data })
-      .catch((e) => console.log('[clientlog] not kept:', e.message || e));
+  const lines = Array.isArray(b.lines) ? b.lines.filter((l) => l && typeof l === 'object') : [b];
+  const keep = [];
+  for (const l of lines) {
+    try { console.log('[clientlog]', JSON.stringify(l).slice(0, 900)); } catch (_) {}
+    if (l.ev === 'alarmclock' || l.ev === 'tvring') noteRinger(l, req);
+    if (CLIENT_LOG_SOURCES.has(l.src) && l.ev && !CLIENT_LOG_SKIP.has(l.ev)) {
+      const { src, ev, t, ...data } = l;
+      const at = Date.parse(t);
+      // Every row names its time (a batch insert needs the same keys in every row): the device's own
+      // clock when it sent one, which is when it happened rather than when it got here.
+      keep.push({ src, ev: String(ev).slice(0, 40), data, at: new Date(Number.isFinite(at) ? at : Date.now()).toISOString() });
+    }
+  }
+  if (keep.length) {
+    try { await sbWrite('client_log', 'POST', keep); }
+    catch (e) { console.log('[clientlog] not kept:', e.message || e); return res.status(502).end(); }
   }
   res.status(204).end();
 });

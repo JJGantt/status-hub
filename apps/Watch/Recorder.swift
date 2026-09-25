@@ -30,19 +30,34 @@ final class Recorder {
 
     private let engine = AVAudioEngine()
     private var sink: Sink?
+    /// The start chirp's voice, on the same engine as the microphone: one audio session that both plays
+    /// and records, since a session set to record only plays nothing at all.
+    private let player = AVAudioPlayerNode()
+    private var playerWired = false
+    /// Held while the chirp is sounding; the tap keeps none of that audio (`cue`).
+    private let gate = CueGate()
     private var startedAt = Date()
 
     /// Asks for the microphone on first use, then starts recording.
     func start() async throws {
         guard await AVAudioApplication.requestRecordPermission() else { throw Failure.denied }
         let session = AVAudioSession.sharedInstance()
-        try session.setCategory(.record, mode: .default)
+        try session.setCategory(.playAndRecord, mode: .default)
         try session.setActive(true)
+        if !playerWired {
+            engine.attach(player)
+            engine.connect(player, to: engine.mainMixerNode, format: Self.chirp.format)
+            playerWired = true
+        }
         let input = engine.inputNode
         let format = input.outputFormat(forBus: 0)
         guard format.sampleRate > 0, format.channelCount > 0 else { throw Failure.notStarted }
         let sink = try Sink(input: format)
+        let gate = self.gate
         input.installTap(onBus: 0, bufferSize: 4096, format: format) { [weak self] buffer, _ in
+            // The chirp is not his voice: it is neither kept in the clip nor counted by the endpoint,
+            // where it would read as speech and let the silence after it send an empty command.
+            if gate.closed { return }
             let level = sink.write(buffer)
             let seconds = Double(buffer.frameLength) / format.sampleRate
             // Main queue, not a Task: a queue keeps the buffers in order, which the endpoint's running
@@ -66,6 +81,33 @@ final class Recorder {
         self.sink = sink
         startedAt = Date()
     }
+
+    /// **"Talk now."** A short rising chirp from the speaker, played the moment the microphone is live.
+    /// The tap drops what it hears until the chirp's own playback-finished callback opens the gate again,
+    /// so the clip starts after the chirp and never contains it.
+    func cue() {
+        gate.closed = true
+        player.scheduleBuffer(Self.chirp, completionCallbackType: .dataPlayedBack) { [gate] _ in gate.closed = false }
+        player.play()
+    }
+
+    /// Two notes a fifth apart, C6 then G6, 70ms each, with short fades so neither clicks.
+    private static let chirp: AVAudioPCMBuffer = {
+        let rate = 44100.0
+        let format = AVAudioFormat(standardFormatWithSampleRate: rate, channels: 1)!
+        let notes: [Double] = [1046.5, 1568.0]
+        let each = Int(rate * 0.07), fade = Int(rate * 0.005)
+        let buffer = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: AVAudioFrameCount(each * notes.count))!
+        buffer.frameLength = buffer.frameCapacity
+        let out = buffer.floatChannelData![0]
+        for (n, hz) in notes.enumerated() {
+            for i in 0..<each {
+                let env = min(1, Double(min(i, each - 1 - i)) / Double(fade))
+                out[n * each + i] = Float(0.6 * env * sin(2 * .pi * hz * Double(i) / rate))
+            }
+        }
+        return buffer
+    }()
 
     /// Ends the recording and hands back the finished file. The duration is wall-clock, since the file's
     /// own length is not known until the encoder has flushed it.
@@ -101,6 +143,8 @@ final class Recorder {
         guard let sink else { return nil }
         self.sink = nil
         engine.inputNode.removeTap(onBus: 0)
+        player.stop()
+        gate.closed = false
         engine.stop()
         // Hand the session back rather than just dropping it, so nothing is left looking like an app
         // holding the audio route.
@@ -195,5 +239,16 @@ private final class Sink: @unchecked Sendable {
         var sum: Float = 0
         for i in 0..<Int(buffer.frameLength) { sum += samples[i] * samples[i] }
         return (sum / Float(buffer.frameLength)).squareRoot()
+    }
+}
+
+/// Whether the tap is dropping audio while the chirp sounds. Written on the main actor and in the
+/// player's callback, read on the audio thread, so it is only touched under its lock.
+private final class CueGate: @unchecked Sendable {
+    private let lock = NSLock()
+    private var value = false
+    var closed: Bool {
+        get { lock.withLock { value } }
+        set { lock.withLock { value = newValue } }
     }
 }

@@ -98,7 +98,10 @@ final class Capture: ObservableObject {
             // for: opening it takes a beat, and words spoken before this are not recorded. Commands
             // and follow-ups only — the always-on listener opens through `listen()`, and a tap on
             // every utterance it picks up would be noise.
-            WKInterfaceDevice.current().play(.start)
+            // A rising double tap and a chirp from the speaker: loud and plain enough to be the signal
+            // to start talking, where the gentle `.start` tap was easy to miss.
+            WKInterfaceDevice.current().play(.directionUp)
+            self?.recorder.cue()
         }
     }
 

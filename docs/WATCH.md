@@ -371,9 +371,13 @@ working on; it does nothing when there is nothing to throw away.
 
 ### Haptics
 
-- **The microphone opening taps the wrist** (`.start`, a tap with a rising tone), at the moment it is
-  actually live rather than when it was asked for — opening takes a beat, and words spoken before it
-  are lost. Commands and follow-ups only; the always-on listener opens silently.
+- **The microphone opening is a rising double tap and a chirp from the speaker** (`.directionUp` and
+  `Recorder.cue`, two notes a fifth apart), at the moment it is actually live rather than when it was
+  asked for — opening takes a beat, and words spoken before it are lost. The gentle `.start` tap alone
+  was easy to miss. The chirp needs the audio session to play AND record (`.playAndRecord`; set to
+  record only, nothing plays), and the tap drops what the microphone hears until the chirp's
+  playback-finished callback, so the clip never contains it and the endpoint never counts it as
+  speech. Commands and follow-ups only; the always-on listener opens silently.
 - **The microphone closing taps the wrist** (`.stop`), on a command the silence ended and on one a
   press ended alike. That is the moment nothing else reports: the silence decides it, and by then the
   watch may be back at his side.

@@ -311,14 +311,14 @@ private struct Figures: View {
             if let clock {
                 // Green and amber say a session is on; once it has ended the rest is read in the bright
                 // ink, not greyed out.
-                labelled("last", value(clock.restText, clock.active ? clock.restColour : Geo.setsInk, smallSeconds: true),
+                labelled("last", value(clock.restText, clock.active ? clock.restColour : Geo.setsInk, smallTail: true),
                          .leading)
                     .offset(y: Geo.footDrop)
             }
         }
         .overlay(alignment: .bottom) {
             if let session = clock?.sessionText {
-                value(session, clockGreen).offset(y: Geo.footDrop)
+                value(session, clockGreen, smallTail: true).offset(y: Geo.footDrop)
             }
         }
         .overlay(alignment: .bottomTrailing) {
@@ -346,11 +346,12 @@ private struct Figures: View {
     }
 
     /// A number just under the lists' size, bold. What is read at a glance is full size and the rest is
-    /// small: a trailing unit (`12h`, `19m`), and with `smallSeconds` the colon and seconds of a rest
-    /// (`9` then a small `:59`), which is also what keeps `m:ss` clear of the front figure's feet.
-    private func value(_ v: String, _ ink: Color, smallSeconds: Bool = false) -> some View {
+    /// small: a trailing unit (`12h`, `19m`), and with `smallTail` everything from a colon on — a rest's
+    /// seconds (`9` then `:59`), the session's minutes (`1` then `:41`) — which also keeps both clocks
+    /// clear of the figures' feet.
+    private func value(_ v: String, _ ink: Color, smallTail: Bool = false) -> some View {
         let unit = v.last.map { $0.isLetter } == true
-        let colon = smallSeconds ? v.firstIndex(of: ":") : nil
+        let colon = smallTail ? v.firstIndex(of: ":") : nil
         let digits = unit ? String(v.dropLast()) : colon.map { String(v[..<$0]) } ?? v
         let tail = unit ? String(v.last!) : colon.map { String(v[$0...]) } ?? ""
         let big = Text(digits).font(.system(size: Geo.valueSize, weight: .bold).monospacedDigit())

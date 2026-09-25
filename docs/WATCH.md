@@ -128,7 +128,8 @@ would be the previous reply for the length of the fetch and the view would jump 
 session is opened again or HE scrolls it to the very end (letting go with the end on screen after a
 scroll of his; the page merely sitting at the end does not count). A drag reports a scroll phase; the
 crown is not trusted to, so any move of the offset that is neither one of the page's own jumps nor a
-change in content height counts as his scroll too. The page's jumps are never animated, which makes each
+change in content height counts as his scroll too, once the page has landed: before its first landing
+the scroll view moves itself (it shifts by the space under the title as it opens). The page's jumps are never animated, which makes each
 one exactly one move to discount. Every change of following is logged to the hub as `follow`, with
 `why` (`drag`, `move`, `end`), so a fight on the wrist can be read back afterwards. The end is a one-point marker at the bottom of `PagedScroll`, asked whether
 it is VISIBLE (`onScrollVisibilityChange`), not a sum over the scroll view's reported offsets, which

@@ -145,6 +145,9 @@ struct SessionView: View {
     @State private var hisScroll = false
     /// A jump of the page's own is on its way; the move it makes is not his.
     @State private var jumping = false
+    /// The page has landed once. Before that, the scroll view moves itself as it lays out (it shifts by
+    /// the space under the title as it opens), and none of that is his.
+    @State private var landed = false
 
     private var detail: SessionDetail? { sessions.details[key] }
     private var activity: [ActivityLine] { sessions.activity[key] ?? [] }
@@ -175,7 +178,8 @@ struct SessionView: View {
                     if following { toNewest(proxy) }
                 } else if jumping {
                     jumping = false
-                } else if abs(new.y - old.y) > 0.5 {
+                    landed = true
+                } else if landed && abs(new.y - old.y) > 0.5 {
                     scrolled("move")
                 }
             }

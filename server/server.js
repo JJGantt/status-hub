@@ -2859,12 +2859,31 @@ app.get('/api/wind', async (req, res) => {
   res.json({ now: liveWind.view(snap), readings: liveWind.readings() });
 });
 
+// THE WATCH'S AND THE PHONE'S LINES ARE KEPT (client_log, 14 days). The console alone holds about an
+// hour, which is not long enough to trace a command lost on the wrist once he mentions it. The TV's
+// alarm heartbeats and the watch's per-frame lines stay console-only: they are once a minute, or once
+// per tool call, and say nothing a step of a command does not.
+const CLIENT_LOG_SOURCES = new Set(['watch', 'phone']);
+const CLIENT_LOG_SKIP = new Set(['frame', 'geo', 'alarmclock', 'tvring']);
 app.post('/api/clientlog', express.json({ limit: '16kb' }), (req, res) => {
   try { console.log('[clientlog]', JSON.stringify(req.body).slice(0, 900)); } catch (_) {}
   const b = req.body || {};
   if (b.ev === 'alarmclock' || b.ev === 'tvring') noteRinger(b, req);
+  if (CLIENT_LOG_SOURCES.has(b.src) && b.ev && !CLIENT_LOG_SKIP.has(b.ev)) {
+    const { src, ev, ...data } = b;
+    sbWrite('client_log', 'POST', { src, ev: String(ev).slice(0, 40), data })
+      .catch((e) => console.log('[clientlog] not kept:', e.message || e));
+  }
   res.status(204).end();
 });
+
+async function sweepClientLog() {
+  const cutoff = new Date(Date.now() - 14 * 24 * 3600 * 1000).toISOString();
+  try { await sbWrite(`client_log?at=lt.${cutoff}`, 'DELETE'); }
+  catch (e) { console.log('client_log sweep failed:', e.message || e); }
+}
+setInterval(sweepClientLog, 24 * 3600 * 1000);
+sweepClientLog();
 
 // Thumbnails for the chat thread — proxies the private bucket behind the hub auth gate.
 app.get('/api/attachment', async (req, res) => {

@@ -41,9 +41,11 @@ struct HomeView: View {
                 .padding(.bottom, PageInset.bottom)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .opacity(dimmed ? 0.6 : 1)
-                // The whole page is the same press as double tap: start, lock, send.
+                // A tap in the bottom half is the same press as double tap: start, lock, send.
                 .contentShape(Rectangle())
-                .onTapGesture { CommandBorder.press(chat: chat, sessions: Sessions.shared, how: "tap") }
+                .onTapGesture(coordinateSpace: .global) { at in
+                    if CommandBorder.tapPresses(at) { CommandBorder.press(chat: chat, sessions: Sessions.shared, how: "tap") }
+                }
             }
             .scrollIndicators(.never)
             .topOfTheScreen(scrollTop: Landing.top)

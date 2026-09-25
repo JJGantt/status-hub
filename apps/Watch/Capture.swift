@@ -34,6 +34,11 @@ final class Capture: ObservableObject {
     /// at every start and kept for the next, since a start does not wait on the hub. Unset, 3 — the
     /// same as every other capture source; at 2 an ordinary pause mid-sentence ended the command.
     private static var hang: TimeInterval = 3
+    /// The lowest level that counts as his voice whatever the room's floor: `watch_speech_min` in the
+    /// hub's settings, read with `hang`. Unset, 0.02. Tuned from the `mic-end` log and kept clips, not a
+    /// guess: in a quiet room the 2.5x-floor line falls below this, so this IS the line, and a voice that
+    /// dips under it mid-sentence counts as silence.
+    private static var speechMin: Float = 0.02
 
     /// Audio nobody has spoken in, after which a recording is closed rather than left holding the
     /// microphone — and with it the mute on every room mic. The listener starts another segment instead
@@ -53,7 +58,7 @@ final class Capture: ObservableObject {
     private var opening = false
     /// Mute writes run one after another, so an unmute can never land ahead of its own mute.
     private var muteTask: Task<Void, Never>?
-    private var endpoint = Endpointer(hang: Capture.hang)
+    private var endpoint = Endpointer(hang: Capture.hang, minimum: Capture.speechMin)
     /// Runs when the silence ends the recording: the owner sends it as if it had been pressed.
     private var onSilence: (() -> Void)?
     /// Runs when the system takes the microphone mid-recording, for the same reason.
@@ -183,12 +188,12 @@ final class Capture: ObservableObject {
         self.onTaken = onTaken
         endsOnSilence = onSilence != nil || owner == .listener
         locked = false
-        endpoint = Endpointer(hang: Self.hang)
+        endpoint = Endpointer(hang: Self.hang, minimum: Self.speechMin)
         spokeAt = nil
         segment = 0
         arming = true
         opening = true
-        if endsOnSilence { Task { await Self.readHang() } }
+        if endsOnSilence { Task { await Self.readSettings() } }
         Task {
             defer { opening = false }
             do {
@@ -325,9 +330,11 @@ final class Capture: ObservableObject {
                             "spoken": endpoint.spoken, "seconds": segment])
     }
 
-    private static func readHang() async {
-        guard let v = try? await Hub.setting("watch_silence_s"), let s = Double(v), s > 0 else { return }
-        hang = s
+    /// The two silence settings, from one read of the hub's settings.
+    private static func readSettings() async {
+        guard let all = try? await Hub.settings() else { return }
+        if let v = all["watch_silence_s"].flatMap({ Double("\($0)") }), v > 0 { hang = v }
+        if let v = all["watch_speech_min"].flatMap({ Float("\($0)") }), v > 0 { speechMin = v }
     }
 
     private func setMuted(_ on: Bool) {
@@ -344,7 +351,7 @@ final class Capture: ObservableObject {
 
 /// When an utterance is over, decided the way the phone's always-on listener decides it (`makeListener`
 /// in voiceagent.js): the room's floor is the quietest buffer so far, speech is anything 2.5× above it
-/// (and above 0.02 whatever the floor), and once speech has been heard, `hang` seconds below that line
+/// (and above `minimum` whatever the floor), and once speech has been heard, `hang` seconds below that line
 /// end it. Before any speech nothing ends — that is the leeway at the start — so a recording whose
 /// speech never crossed the line is not cut short or thrown away; it waits for a press, or for the cap
 /// on a recording nobody speaks into.
@@ -363,9 +370,11 @@ struct Endpointer {
     private(set) var spoken: TimeInterval = 0
     private var quiet: TimeInterval = 0
 
-    init(hang: TimeInterval) { self.hang = hang }
+    let minimum: Float
 
-    var threshold: Float { max(floor * 2.5, 0.02) }
+    init(hang: TimeInterval, minimum: Float) { self.hang = hang; self.minimum = minimum }
+
+    var threshold: Float { max(floor * 2.5, minimum) }
 
     /// Takes one buffer's level and length; true when that buffer ended the utterance.
     mutating func feed(_ level: Float, _ seconds: TimeInterval) -> Bool {

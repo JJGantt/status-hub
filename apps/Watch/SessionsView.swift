@@ -123,7 +123,7 @@ struct SessionsView: View {
 }
 
 /// One conversation: the last prompt and the reply to it, the tool calls of the turn it is running,
-/// and a reply of his own. Double tap or a tap anywhere on the text is the one press
+/// and a reply of his own. Double tap or a tap in the bottom half of the glass is the one press
 /// (`CommandBorder.press`): it records a follow-up that sends itself at his silence, a second press locks
 /// it open and the next sends; a parked session is resumed with the words. Scrolling is his finger or
 /// the crown.
@@ -153,10 +153,11 @@ struct SessionView: View {
     var body: some View {
         ScrollViewReader { proxy in
             PagedScroll(reachedEnd: { atEnd = $0 }) {
-                Button {
-                    CommandBorder.press(chat: Chat.shared, sessions: sessions, how: "tap")
-                } label: { content }
-                    .buttonStyle(.plain)
+                // A tap in the bottom half of the glass is the press; the top half is for reading.
+                content
+                    .onTapGesture(coordinateSpace: .global) { at in
+                        if CommandBorder.tapPresses(at) { CommandBorder.press(chat: Chat.shared, sessions: sessions, how: "tap") }
+                    }
                 status
             }
             // **The top of the NEWEST ITEM at the top of the screen**: his words the moment they are

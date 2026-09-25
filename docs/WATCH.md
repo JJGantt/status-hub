@@ -70,7 +70,8 @@ turn land as one block (`activity`), not line by line. Within that block a sessi
 his words, in full; only tool calls are cut to two lines. Words the watch sent are already on screen, so
 their echo is dropped, and `summary` frames are ignored because the detail fetch brings the reply.
 
-A tap anywhere on the conversation is the same press as the control. The page carries nothing else: no
+A tap in the BOTTOM HALF of the glass is the same press as the control (`CommandBorder.tapPresses`); the
+top half is for reading, since the whole page as a button kept starting recordings under a finger. The page carries nothing else: no
 second indicator of a state the control already holds, and a failure is the one thing it adds — an
 icon and Retry under the thread, since a command that failed has nowhere else to be picked up.
 
@@ -349,14 +350,18 @@ order.
 
 ### It ends itself at the silence
 
-A command recorded from home ends itself once he has spoken and then stopped: `Chat.startRecording`
-passes `onSilence`, and a session page does not.
+A command, on home or in a session, ends itself once he has spoken and then stopped: both pass
+`onSilence`.
 
 `Endpointer` (in `Capture.swift`) is the phone's always-on rule (`makeListener` in `voiceagent.js`):
-the floor is the quietest buffer so far, speech is 2.5x above it and at least 0.02, and once speech has
-been heard, `watch_silence_s` below that line ends it exactly as a press would. The setting is under
-Trailing silence in the hub's Settings; unset, it is 3 seconds, like every other capture source. It is read at every start and kept for
-the next, since a start does not wait on the hub.
+the floor is the quietest buffer so far, speech is 2.5x above it and at least `watch_speech_min`, and
+once speech has been heard, `watch_silence_s` below that line ends it exactly as a press would. Both are
+hub settings, read together at every start and kept for the next, since a start does not wait on the
+hub: `watch_silence_s` (Trailing silence in Settings; 5 set on 2026-09-25, 3 when unset) and
+`watch_speech_min` (0.02 when unset). **In a quiet room `watch_speech_min` is the whole line**, since
+2.5x a floor of 0.0003-0.0015 is under it, and his ordinary voice dips below 0.02 mid-sentence: a kept
+20s command measured 8s over 0.02 and 16s over 0.005, with dips of 0.010-0.018 inside speech. The
+`mic-end` log (`speech` against `len`) and the kept clips in `voice-clips` are what to tune it from.
 
 **Nothing ends before speech crosses the line**, and a recording whose speech never registers is
 never cut short mid-sentence. That is what keeps it clear of the failure that made the phone's buttons
@@ -545,7 +550,7 @@ double tap asked for a scroll that could not happen and recording never got the 
 
 A session's page scrolls through `PagedScroll` (`Watch/WatchUI.swift`), which is the control over a
 scroll view and nothing more; home has its own scrolling, because it is the one page that lands the
-view on the top of each new thing. A tap on the text records on both.
+view on the top of each new thing. A tap in the bottom half of the glass records on both.
 
 ## The token comes from the phone
 

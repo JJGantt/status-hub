@@ -171,6 +171,13 @@ struct CommandBorder: View {
     /// no silence to hold off, so there the second double tap sends.
     private func primary() { Self.press(chat: chat, sessions: sessions, how: "double-tap") }
 
+    /// **A tap only presses in the bottom half of the glass.** The whole conversation used to be the
+    /// button, so reading, scrolling or resting a finger on the text kept starting recordings. The top
+    /// half is for touching what is there; double tap is unaffected.
+    static func tapPresses(_ at: CGPoint) -> Bool {
+        at.y > WKInterfaceDevice.current().screenBounds.height / 2
+    }
+
     /// **The one press.** Double tap and a tap on the conversation both come here, and home and a
     /// session follow the same flow: start (amber, sends itself at his silence), then lock (red, only a
     /// press ends it), then send.

@@ -1313,6 +1313,7 @@ callers; only the HTTP response is filtered.
 | `voiceid_threshold` / `voiceprint` | Wake-free speaker-ID — the "it's Jared" bar and the exemplar bank. |
 | `wakefree_pause_s` | ESP only, and only until its voiceprint loads. Wake-free endpoints on Jared's verified presence, with a pause tolerance that scales with utterance length — neither mic consults this. |
 | `phone_silence_s` / `watch_silence_s` / `mac_silence_s` / `esp_silence_s` | Trailing-silence cutoff, per capture source. All default to 3 when unset. |
+| `watch_speech_min` | The lowest level the watch counts as speech whatever the room's floor (0.02 when unset). In a quiet room it is the whole line. |
 | `agent_mode` / `agent_cwd` | Full-agent (coding) mode toggle + working dir for the worker. |
 | `weight_reminder_enabled` / `_mode` / `_time` | The daily weigh-in push (On/Off, Manual/Dynamic, time). |
 | `push_enabled` | Master push toggle. |

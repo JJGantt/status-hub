@@ -31,7 +31,7 @@ struct ActivityLines: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
-            ForEach(Array(lines.enumerated()), id: \.offset) { _, line in
+            ForEach(Array(lines.enumerated()), id: \.offset) { i, line in
                 Group {
                     switch line.kind {
                     case .said:
@@ -50,6 +50,7 @@ struct ActivityLines: View {
                     }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
+                .id("line\(i)")
             }
         }
     }

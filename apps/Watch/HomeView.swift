@@ -31,8 +31,8 @@ struct HomeView: View {
                             .id(m.id)
                     }
                     // What the hub heard, until the turn itself lands in the thread.
-                    if let words = chat.pending {
-                        ThreadRow(text: words, user: true).id("pending")
+                    ForEach(Array(chat.pending.enumerated()), id: \.offset) { i, words in
+                        ThreadRow(text: words, user: true).id("pending\(i)")
                     }
                     if !chat.activity.isEmpty {
                         ActivityLines(lines: chat.activity)
@@ -72,7 +72,7 @@ struct HomeView: View {
     /// Where the view settles: the top of his words while they are being worked on, otherwise the top
     /// of the newest thing in the thread.
     private var target: String? {
-        chat.pending != nil ? "pending" : chat.recent.last?.id
+        chat.pending.isEmpty ? chat.recent.last?.id : "pending\(chat.pending.count - 1)"
     }
 
     private func jump(_ proxy: ScrollViewProxy, animated: Bool = false) {

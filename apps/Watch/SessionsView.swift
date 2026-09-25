@@ -161,7 +161,6 @@ struct SessionView: View {
                     sessions.toggleRecording(key)
                 } label: { content }
                     .buttonStyle(.plain)
-                    .disabled(sessions.busy.contains(key))
                 status
             }
             // **The top of the NEWEST ITEM at the top of the screen**: his words the moment they are
@@ -236,10 +235,11 @@ struct SessionView: View {
     /// The scroll id of the last thing on the page: a tool call, else his words waiting for an answer,
     /// else the last turn's reply (or its prompt, while the session has not answered it).
     private var newest: String? {
-        // The tool calls land as one block: each is a line or two, and the newest alone at the top would
-        // put the rest of the turn above the screen.
+        // His newest words take the top, with what the session does about them underneath; with none,
+        // the tool calls land as one block, since each is a line or two and the newest alone at the top
+        // would put the rest of the turn above the screen.
+        if let i = activity.lastIndex(where: { $0.kind == .said }) { return "line\(i)" }
         if !activity.isEmpty { return "activity" }
-        if sessions.sent[key] != nil { return "sent" }
         guard let turns = detail?.recent, let last = turns.last else { return nil }
         let i = turns.count - 1
         return (last.reply ?? "").isEmpty ? "prompt\(i)" : "reply\(i)"
@@ -279,9 +279,6 @@ struct SessionView: View {
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .id("reply\(i)")
                 }
-            }
-            if let mine = sessions.sent[key] {
-                words(mine).id("sent")
             }
             if !activity.isEmpty {
                 ActivityLines(lines: activity).id("activity")

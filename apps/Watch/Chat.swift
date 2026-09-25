@@ -18,8 +18,10 @@ final class Chat: ObservableObject {
     /// What home draws: the last ten exchanges. The hub sends forty rows, which is more than a wrist
     /// reads and slower to lay out than it is worth.
     var recent: [Message] { Array(thread.suffix(20)) }
-    /// What the hub heard, shown until it lands in the thread.
-    @Published private(set) var pending: String?
+    /// What the hub heard of each command still running, oldest first, shown until it lands in the
+    /// thread.
+    @Published private(set) var pending: [String] = []
+    /// A command is on its way or running. Any number can be: firing one blocks nothing.
     @Published private(set) var waiting = false
     @Published private(set) var failure: Failure?
     /// Tool calls of the hub command running now, and what the model says between them, as the worker
@@ -35,12 +37,20 @@ final class Chat: ObservableObject {
     static let requestWindow: TimeInterval = 20
 
     private let capture = Capture.shared
-    // Kept across a retry: the clip until its command has run, the msgId so a resend cannot enqueue
-    // twice, and the request id once known, after which a retry only waits again.
-    private var clip: Recorder.Clip?
-    private var msgId = UUID().uuidString
-    private var requestId: String?
-    private var task: Task<Void, Never>?
+    /// **Commands can overlap.** Each is sent and waited on by itself. Kept across a retry: the clip
+    /// until its command has run, the msgId so a resend cannot enqueue twice, and the request id once
+    /// known, after which a retry only waits again.
+    private struct Command {
+        var msgId = UUID().uuidString
+        var clip: Recorder.Clip?
+        var requestId: String?
+        var words: String?
+        var running = false
+    }
+    private var commands: [Command] = [] {
+        didSet { waiting = !commands.isEmpty; pending = commands.compactMap(\.words) }
+    }
+    private var tasks: [String: Task<Void, Never>] = [:]
     private var stream: Task<Void, Never>?
     private var loading = false
     private var reloadAfter = false
@@ -93,10 +103,11 @@ final class Chat: ObservableObject {
     }
 
     func startRecording() {
-        guard capture.free, !waiting else {
-            Hub.log("record-refused", ["view": "chat", "owner": String(describing: capture.owner), "waiting": waiting])
+        guard capture.free else {
+            Hub.log("record-refused", ["view": "chat", "owner": String(describing: capture.owner)])
             return
         }
+        Hub.log("record-start", ["view": "chat", "running": commands.count])
         failure = nil
         // A command ends itself at the silence after he speaks; the lock on the recording bar holds it
         // open. A session's follow-up does not (Sessions.startRecording): only a press ends that.
@@ -111,12 +122,10 @@ final class Chat: ObservableObject {
     func stopRecording() {
         guard capture.owner == .hub, let finished = capture.stop() else { return }
         WKInterfaceDevice.current().play(.stop)
-        discardClip()
-        clip = finished
-        msgId = UUID().uuidString
-        requestId = nil
-        pending = nil
-        run()
+        Hub.log("record-stop", ["view": "chat", "seconds": finished.duration])
+        let command = Command(clip: finished)
+        commands.append(command)
+        run(command.msgId)
     }
 
     /// Always-on listening, engaged from home: the watch joins the Mac and the ESP as a listener until
@@ -130,37 +139,46 @@ final class Chat: ObservableObject {
 
     /// Ends the recording and throws it away.
     func cancelRecording() {
-        if capture.owner == .hub { capture.cancel() }
-    }
-
-    func retry() {
-        if clip == nil && requestId == nil {
-            failure = nil
-            Task { await load() }
-        } else {
-            run()
+        if capture.owner == .hub {
+            Hub.log("record-cancel", ["view": "chat"])
+            capture.cancel()
         }
     }
 
-    /// Stops waiting. A command the hub already has still runs, and its turn appears in the thread like
-    /// any other; a clip that never reached the hub is dropped.
-    func cancel() {
-        task?.cancel()
-        task = nil
-        waiting = false
-        pending = nil
-        requestId = nil
+    /// Sends again every command that is not on its way now; with none, reloads the thread.
+    func retry() {
         failure = nil
-        discardClip()
+        let idle = commands.filter { !$0.running }
+        if idle.isEmpty { Task { await load() } }
+        for c in idle { run(c.msgId) }
+    }
+
+    /// Stops waiting on every command. One the hub already has still runs, and its turn appears in the
+    /// thread like any other; a clip that never reached the hub is dropped.
+    func cancel() {
+        Hub.log("cancel", ["view": "chat", "commands": commands.count])
+        tasks.values.forEach { $0.cancel() }
+        tasks = [:]
+        for c in commands { if let clip = c.clip { try? FileManager.default.removeItem(at: clip.url) } }
+        commands = []
+        failure = nil
     }
 
     private func tokenArrived() {
         if failure == .noToken { retry() } else { Task { await load() } }
     }
 
-    private func discardClip() {
-        if let clip { try? FileManager.default.removeItem(at: clip.url) }
-        clip = nil
+    private func update(_ msgId: String, _ change: (inout Command) -> Void) {
+        guard let i = commands.firstIndex(where: { $0.msgId == msgId }) else { return }
+        change(&commands[i])
+    }
+
+    private func finish(_ msgId: String) {
+        if let c = commands.first(where: { $0.msgId == msgId }), let clip = c.clip {
+            try? FileManager.default.removeItem(at: clip.url)
+        }
+        commands.removeAll { $0.msgId == msgId }
+        tasks[msgId] = nil
     }
 
     private func voiceFrame(_ event: String, _ data: String) async {
@@ -185,43 +203,44 @@ final class Chat: ObservableObject {
         }
     }
 
-    private func run() {
+    private func run(_ msgId: String) {
+        guard let command = commands.first(where: { $0.msgId == msgId }), !command.running else { return }
         failure = nil
-        waiting = true
-        task?.cancel()
-        task = Task {
+        update(msgId) { $0.running = true }
+        tasks[msgId] = Task {
+            defer { update(msgId) { $0.running = false } }
             do {
+                var requestId = command.requestId
                 if requestId == nil {
-                    guard let clip else { waiting = false; return }
+                    guard let clip = command.clip else { finish(msgId); return }
                     let began = Date()
                     let heard = try await Awake.hold("sending a voice command") {
                         try await Hub.sendAudio(clip, msgId: msgId)
                     }
                     Hub.log("sent", ["ms": Int(Date().timeIntervalSince(began) * 1000),
                                      "id": heard.id ?? "", "words": (heard.transcript ?? "").count])
-                    if let text = heard.transcript, !text.isEmpty { pending = text }
                     guard let id = heard.id else {
                         // The hub heard no words, so there is no command.
-                        discardClip()
-                        pending = nil
-                        waiting = false
+                        Hub.log("heard-nothing", ["view": "chat"])
+                        finish(msgId)
                         WKInterfaceDevice.current().play(.failure)
                         return
                     }
                     requestId = id
+                    update(msgId) { $0.requestId = id; $0.words = heard.transcript }
                 }
                 let outcome = try await Hub.outcome(requestId!)
                 if Task.isCancelled { return }
                 if outcome.status == "error" {
+                    Hub.log("command-failed", ["id": requestId ?? "", "error": String((outcome.error ?? "").prefix(120))])
                     failure = .message(outcome.error ?? "")
                     // The worker ran it and failed, so a retry uploads the clip again as a new attempt.
-                    requestId = nil
-                    msgId = UUID().uuidString
+                    update(msgId) { $0.requestId = nil; $0.running = false; $0.msgId = UUID().uuidString }
+                    tasks[msgId] = nil
                 } else {
+                    Hub.log("answered", ["view": "chat", "id": requestId ?? ""])
                     await load()
-                    pending = nil
-                    requestId = nil
-                    discardClip()
+                    finish(msgId)
                     WKInterfaceDevice.current().play(.notification)
                 }
             } catch HubError.noToken {
@@ -231,7 +250,6 @@ final class Chat: ObservableObject {
                 Hub.log("send-failed", ["error": String(describing: error).prefix(120).description])
                 failure = .message(error.localizedDescription)
             }
-            waiting = false
         }
     }
 }

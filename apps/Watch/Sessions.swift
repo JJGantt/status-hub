@@ -121,9 +121,20 @@ final class Sessions: ObservableObject {
     /// Each conversation's tool calls since its last reply, and what it said between them, as its
     /// machine reports them. Live only: the hub does not store them.
     @Published private(set) var activity: [String: [ActivityLine]] = [:]
-    /// His words for a conversation, shown from the moment they are transcribed until its next reply.
-    @Published private(set) var sent: [String: String] = [:]
+    /// His words for a conversation that the session has not answered yet, oldest first. What is DRAWN
+    /// is the activity list, where each is a `.said` line in the order he spoke it among the tool calls;
+    /// this is what the session's echo of them is matched against, so they are not drawn twice.
+    private var sent: [String: [String]] = [:]
+    /// Conversations with a clip being transcribed or words being handed over right now.
     @Published private(set) var busy: Set<String> = []
+    /// **Commands can overlap.** Each recording is its own `Outgoing`, sent on its own; one still being
+    /// transcribed, or waiting on a session still working on the one before, blocks nothing. Kept until
+    /// its words are in the session, which is what a retry resends.
+    private struct Outgoing { let msgId: String; var clip: Recorder.Clip?; var words: String? }
+    private var outgoing: [String: [Outgoing]] = [:]
+    private var inFlight: [String: Int] = [:] {
+        didSet { busy = Set(inFlight.filter { $0.value > 0 }.keys) }
+    }
     /// A follow-up the watch handed over, by conversation, with when the hub took it, until a reply
     /// lands after that. The edge keeps sweeping through the whole of it: handing the words over is
     /// seconds, the session working on them is the real wait.
@@ -146,10 +157,6 @@ final class Sessions: ObservableObject {
     private let capture = Capture.shared
     /// Every row the hub sent, so a stream frame (which names a row) can be matched to its conversation.
     private var rows: [SessionRow] = []
-    // Kept across a retry: the clip until its words are known, and the msgId so a resend cannot type
-    // the words twice.
-    private var clips: [String: Recorder.Clip] = [:]
-    private var msgIds: [String: String] = [:]
     private var stream: Task<Void, Never>?
     private var loading = false
     private var reloadAfter = false
@@ -213,9 +220,11 @@ final class Sessions: ObservableObject {
         guard let r = row(for: key) else { return }
         if let d: SessionDetail = try? await Hub.json("/api/sessions/" + Hub.pathComponent(r.id)) {
             details[key] = d
-            // The reply to the words the watch sent is in: the wait is over, however the news arrived.
-            if let since = awaiting[key], Self.replied(d, since) {
+            // Everything the watch sent is answered: the wait is over, however the news arrived.
+            if let since = awaiting[key], Self.finished(d, since) {
                 awaiting[key] = nil
+                sent[key] = nil
+                Hub.log("answered", ["row": r.id])
             }
             speakIfOwed(key)
             Hub.log("detail", ["row": r.id, "prompt": String((d.last_prompt ?? "").prefix(60)),
@@ -236,34 +245,42 @@ final class Sessions: ObservableObject {
     }
 
     func startRecording(_ key: String) {
-        guard capture.free, !busy.contains(key), row(for: key) != nil else {
+        guard capture.free, row(for: key) != nil else {
             // Each of these used to return in silence, which from the wrist is a record tap doing nothing.
             Hub.log("record-refused", ["view": "session", "owner": String(describing: capture.owner),
-                                       "busy": busy.contains(key), "row": row(for: key)?.id ?? "none"])
+                                       "row": row(for: key)?.id ?? "none"])
             return
         }
         failures[key] = nil
+        Hub.log("record-start", ["view": "session", "row": row(for: key)?.id ?? ""])
         capture.start(for: .session(key), onTaken: { [weak self] in self?.stopRecording(key) }) { [weak self] error in
+            Hub.log("record-failed", ["error": String(describing: error).prefix(120).description])
             self?.failures[key] = (error as? Recorder.Failure) == .denied ? .micDenied : .message(error.localizedDescription)
         }
     }
 
-    /// Ends the recording and sends it into the session.
+    /// Ends the recording and sends it into the session, alongside anything still on its way.
     func stopRecording(_ key: String) {
         guard capture.owner == .session(key), let clip = capture.stop() else { return }
-        discard(key)
-        clips[key] = clip
-        msgIds[key] = UUID().uuidString
-        sent[key] = nil
-        send(key)
+        Hub.log("record-stop", ["view": "session", "seconds": clip.duration])
+        let item = Outgoing(msgId: UUID().uuidString, clip: clip, words: nil)
+        outgoing[key, default: []].append(item)
+        send(key, item.msgId)
     }
 
     /// Ends the recording and throws it away.
     func cancelRecording(_ key: String) {
-        if capture.owner == .session(key) { capture.cancel() }
+        if capture.owner == .session(key) {
+            Hub.log("record-cancel", ["view": "session"])
+            capture.cancel()
+        }
     }
 
-    func retry(_ key: String) { send(key) }
+    /// Sends again whatever has not reached the session.
+    func retry(_ key: String) {
+        failures[key] = nil
+        for item in outgoing[key] ?? [] { send(key, item.msgId) }
+    }
 
     private func reloadAll() async {
         await load()
@@ -272,41 +289,58 @@ final class Sessions: ObservableObject {
 
     /// The hub transcribes the clip without enqueueing anything (`?dry=1`), then hands the words to the
     /// session: typed in if it is running, resumed with them if it is parked — the hub decides. Once the
-    /// words are known, a retry only resends them.
-    private func send(_ key: String) {
-        guard let msgId = msgIds[key], !busy.contains(key) else { return }
-        failures[key] = nil
-        busy.insert(key)
+    /// words are known, a retry only resends them. The msgId makes a resend unable to type them twice.
+    private func send(_ key: String, _ msgId: String) {
+        guard var item = outgoing[key]?.first(where: { $0.msgId == msgId }) else { return }
+        inFlight[key, default: 0] += 1
         Task {
-            defer { busy.remove(key) }
+            defer { inFlight[key, default: 1] -= 1 }
             do {
-                if sent[key] == nil {
-                    guard let clip = clips[key] else { return }
+                if item.words == nil {
+                    guard let clip = item.clip else { return }
+                    Hub.log("upload", ["view": "session", "seconds": clip.duration])
                     let heard = try await Hub.sendAudio(clip, msgId: msgId, dry: true)
+                    try? FileManager.default.removeItem(at: clip.url)
                     guard let text = heard.transcript, !text.isEmpty else {
-                        discard(key)
+                        Hub.log("heard-nothing", ["view": "session"])
+                        drop(key, msgId)
                         WKInterfaceDevice.current().play(.failure)
                         return
                     }
-                    sent[key] = text
-                    discard(key)
+                    item.words = text
+                    item.clip = nil
+                    update(key, item)
+                    Hub.log("heard", ["view": "session", "words": text.count])
+                    // His words join the turn's lines where he said them, and the page lands on them.
+                    sent[key, default: []].append(text)
+                    activity[key, default: []].append(ActivityLine(text: text, kind: .said))
                 }
                 // The directive travels with the command rather than being set on the session once:
                 // a session that restarts forgets a mode, and cannot forget what is in the prompt.
-                let words = (sent[key] ?? "") + (Speaker.enabled ? Self.spokenFormat : "")
-                try await Hub.followUp(row(for: key)?.id ?? key, text: words, msgId: msgId)
+                let words = (item.words ?? "") + (Speaker.enabled ? Self.spokenFormat : "")
+                let rowId = row(for: key)?.id ?? key
+                try await Hub.followUp(rowId, text: words, msgId: msgId)
+                Hub.log("followup-sent", ["row": rowId, "words": item.words?.count ?? 0])
+                drop(key, msgId)
+                // The wait and the spoken reply follow the NEWEST command: whatever was answered before
+                // it is not what he is waiting on now.
                 let now = Date()
                 awaiting[key] = now
                 if Speaker.enabled { owed[key] = now.timeIntervalSince1970 }
             } catch {
+                Hub.log("send-failed", ["view": "session", "error": String(describing: error).prefix(120).description])
                 failures[key] = .message(error.localizedDescription)
             }
         }
     }
 
-    private func discard(_ key: String) {
-        if let clip = clips[key] { try? FileManager.default.removeItem(at: clip.url) }
-        clips[key] = nil
+    private func update(_ key: String, _ item: Outgoing) {
+        guard let i = outgoing[key]?.firstIndex(where: { $0.msgId == item.msgId }) else { return }
+        outgoing[key]?[i] = item
+    }
+
+    private func drop(_ key: String, _ msgId: String) {
+        outgoing[key]?.removeAll { $0.msgId == msgId }
     }
 
     /// The conversation a stream frame's row belongs to. A row the list has not seen yet — a session
@@ -336,7 +370,7 @@ final class Sessions: ObservableObject {
             case "said", "queued":
                 let words = text.replacingOccurrences(of: Self.spokenFormat, with: "")
                     .trimmingCharacters(in: .whitespacesAndNewlines)
-                if let mine = sent[key], words.hasPrefix(String(mine.prefix(40))) { return }
+                if (sent[key] ?? []).contains(where: { words.hasPrefix(String($0.prefix(40))) }) { return }
                 activity[key, default: []].append(ActivityLine(text: words, kind: .said))
             case "text":
                 activity[key, default: []].append(ActivityLine(text: text, kind: .thought))
@@ -345,22 +379,24 @@ final class Sessions: ObservableObject {
             }
             return
         }
-        // A reply to a follow-up the WATCH sent: the wrist is told, and — with spoken replies on — the
-        // reply is read out. Only these: a session answering something typed on the Mac is not
-        // something he asked the watch about.
-        let mine = sent[key] != nil && failures[key] == nil && !busy.contains(key)
-        if mine { WKInterfaceDevice.current().play(.notification) }
+        // A turn ended. It is the ANSWER only if the session is now idle with a reply after the newest
+        // words the watch sent (`finished`): with commands overlapping, a turn can end while the next
+        // one is already running, and that is not the answer he is waiting on.
+        let waiting = awaiting[key] != nil
         await load()
-        if details[key] != nil || owed[key] != nil { await loadDetail(key) }
-        // Only now that the reply is in hand do the tool calls and his pending words go. Cleared first,
-        // the page's newest item would be the PREVIOUS reply for the moment the fetch takes, and a view
-        // following the newest item would jump up to it and back down.
-        activity[key] = nil
-        awaiting[key] = nil
-        if mine {
-            sent[key] = nil
-            msgIds[key] = nil
+        if details[key] != nil || owed[key] != nil || waiting { await loadDetail(key) }
+        let answered = waiting && awaiting[key] == nil
+        // Only now that the reply is in hand do the tool calls go. Cleared first, the page's newest item
+        // would be the PREVIOUS reply for the moment the fetch takes, and a view following the newest
+        // item would jump up to it and back down. Words he sent that are still being worked on stay.
+        if answered || !waiting {
+            activity[key] = nil
+        } else {
+            activity[key] = activity[key]?.filter { $0.kind == .said }
         }
+        // The wrist is told when a follow-up the WATCH sent is answered. Only these: a session answering
+        // something typed on the Mac is not something he asked the watch about.
+        if answered { WKInterfaceDevice.current().play(.notification) }
     }
 
     /// Speaks the reply this conversation owes, if it is the one on screen and the reply is in. With
@@ -369,14 +405,17 @@ final class Sessions: ObservableObject {
         guard let at = owed[key] else { return }
         guard Speaker.enabled else { owed[key] = nil; return }
         let since = Date(timeIntervalSince1970: at)
-        guard path.last == key, let d = details[key], Self.replied(d, since), let reply = d.last_reply else { return }
+        guard path.last == key, let d = details[key], Self.finished(d, since), let reply = d.last_reply else { return }
         owed[key] = nil
         Speaker.shared.speak(reply)
     }
 
-    /// The session has replied since `since`: its last reply is stamped after the words went in.
-    private static func replied(_ d: SessionDetail, _ since: Date) -> Bool {
-        guard !(d.last_reply ?? "").isEmpty, let at = d.reply_at.flatMap(Self.stamp) else { return false }
+    /// The session has answered everything since `since`: it is idle, and its last reply is stamped
+    /// after the words went in. Idle matters when commands overlap: a turn that ends while the session
+    /// already has the next one is a reply, but not the last one.
+    private static func finished(_ d: SessionDetail, _ since: Date) -> Bool {
+        guard d.working != true, !(d.last_reply ?? "").isEmpty,
+              let at = d.reply_at.flatMap(Self.stamp) else { return false }
         return at > since
     }
 

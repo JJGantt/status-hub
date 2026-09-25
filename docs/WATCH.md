@@ -135,12 +135,20 @@ one exactly one move to discount. Every change of following is logged to the hub
 it is VISIBLE (`onScrollVisibilityChange`), not a sum over the scroll view's reported offsets, which
 this app does not trust (§ Double tap, and scrolling).
 
-**The edge sweeps until the reply lands**, not just while the words are handed over: `awaiting` holds
-a follow-up from the moment the hub accepts it until its `done` frame, or until a detail fetch shows
-a reply stamped after it (`reply_at`, which is how a `done` missed while the app was away still ends
-it). A reply AFTER the words, not a turn whose prompt is the words: words sent into a turn already
-running are folded into that turn and never become a prompt, and matching on the prompt left the edge
-sweeping after the session had finished. Spoken replies (`owed`) use the same test.
+**Commands overlap.** A command can be recorded and sent while earlier ones are still being
+transcribed, handed over or worked on, on home and in a session alike: each is its own item (`Chat`'s
+`commands`, `Sessions`' `outgoing`), sent and retried by itself. His words join the conversation in the
+order he said them (home's `pending`; in a session, `.said` lines in the activity list among the tool
+calls), and the page lands on his newest words.
+
+**The edge sweeps until the last command is answered**: `awaiting` holds the time the NEWEST follow-up
+was accepted, and the wait ends only when a detail fetch shows the session idle with a reply stamped
+after it (`finished`: `working` false and `reply_at` later). Idle matters because a turn can end while
+the session already has the next command, and that reply is not the one he is waiting on; the host
+marks a row not-working, with its reply, before it sends `done`, so the fetch on `done` sees the truth.
+A reply AFTER the words, not a turn whose prompt is the words: words sent into a turn already running
+are folded into it and never become a prompt. Spoken replies (`owed`) use the same test, so only the
+reply to his last command is read, once everything is answered; nothing earlier is queued.
 
 **Its name is on the clock's line, and the name is how it closes.** A leading `ToolbarItem` holds it
 (a trailing one moves the clock to the other end of the strip), and tapping it pops the session. The

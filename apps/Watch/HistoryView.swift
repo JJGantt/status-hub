@@ -1,5 +1,36 @@
 import SwiftUI
 
+/// **A sideways drag the page row does not steal.** The app's pages are themselves swiped left and
+/// right, and that swipe beats a horizontal ScrollView inside a page, so a map in one could not be moved.
+/// This moves its content by hand under a HIGH-PRIORITY drag, which is claimed before the page swipe;
+/// the drag only begins after a few points of travel, so a tap still reaches what is under the finger.
+/// It rests on the newest end (the right) and every drag is clamped to the content.
+struct SideScroll<Content: View>: View {
+    let width: CGFloat
+    @ViewBuilder let content: () -> Content
+    /// How far the content is moved right from resting on its newest end, i.e. how far back it shows.
+    @State private var back: CGFloat = 0
+    @GestureState private var dragging: CGFloat = 0
+
+    var body: some View {
+        GeometryReader { geo in
+            let room = max(0, width - geo.size.width)
+            let shown = min(max(back + dragging, 0), room)
+            content()
+                .frame(width: width, alignment: .leading)
+                .offset(x: geo.size.width - width + shown)
+                .frame(width: geo.size.width, alignment: .leading)
+                .clipped()
+                .contentShape(Rectangle())
+                .highPriorityGesture(
+                    DragGesture(minimumDistance: 6)
+                        .updating($dragging) { v, state, _ in state = v.translation.width }
+                        .onEnded { v in back = min(max(back + v.translation.width, 0), room) }
+                )
+        }
+    }
+}
+
 /// A small back arrow for the health page's full views. A page in the row cannot be swiped back from
 /// (the swipe turns the page), and a tap on the map picks a day, so the way out is its own control.
 struct BackArrow: View {
@@ -10,7 +41,7 @@ struct BackArrow: View {
             Image(systemName: "chevron.left")
                 .font(.system(size: 13, weight: .semibold))
                 .foregroundColor(Color(hex: "#7d8894"))
-                .frame(width: 28, height: 22, alignment: .leading)
+                .frame(width: 22, height: 16, alignment: .leading)
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
@@ -18,7 +49,7 @@ struct BackArrow: View {
 }
 
 /// **The whole history of one heat map, and the day picked on it.** The map is every week back to the
-/// first thing logged, scrolled sideways and landing on the newest; a tap on a cell picks that day, and
+/// first thing logged, dragged sideways (`SideScroll`) and resting on the newest; a tap on a cell picks that day, and
 /// the list under the map is that day's: every meal eaten, each opening to its ingredients, or every
 /// exercise, each opening to its sets. Today is picked to begin with.
 struct HistoryView: View {
@@ -33,7 +64,8 @@ struct HistoryView: View {
     @State private var lifts: [WorkoutNow.Exercise] = []
     @State private var open: String?
 
-    private static let side: CGFloat = 15
+    /// The health page's own cell, so the map opens at the size it was tapped at.
+    private static let side: CGFloat = 10
 
     private var weeks: [[NutHistory.Cell]] {
         guard let h = nutrition.fullHistory else { return [] }
@@ -41,12 +73,17 @@ struct HistoryView: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            BackArrow(action: back)
+        VStack(alignment: .leading, spacing: 4) {
+            // One short row above the map: the way back, and which day the list below is.
+            HStack(spacing: 2) {
+                BackArrow(action: back)
+                if let picked {
+                    Text(Self.label(picked)).font(.system(size: 11)).foregroundColor(Color(hex: "#7d8894"))
+                }
+            }
             map
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
-                    if let picked { Text(Self.label(picked)).font(.system(size: 11)).foregroundColor(Color(hex: "#7d8894")).padding(.bottom, 4) }
                     switch kind {
                     case .food:
                         if let food { DayLog(day: food, open: $open) }
@@ -65,7 +102,7 @@ struct HistoryView: View {
             .scrollIndicators(.never)
         }
         .padding(.horizontal, 8)
-        .padding(.top, Landing.top - 8)
+        .padding(.top, 18)
         .topOfTheScreen(scrollTop: 0)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .background(Color.black.ignoresSafeArea())
@@ -85,26 +122,20 @@ struct HistoryView: View {
         }
     }
 
-    /// The map, a column a week, scrolled sideways and landing on the newest week at the right edge.
+    /// The map, a column a week, dragged sideways and resting on the newest week at the right edge.
     private var map: some View {
-        ScrollViewReader { proxy in
-            ScrollView(.horizontal) {
-                HStack(spacing: 0) {
-                    ForEach(Array(weeks.enumerated()), id: \.offset) { w, week in
-                        VStack(spacing: 0) {
-                            ForEach(Array(week.enumerated()), id: \.offset) { _, day in
-                                cell(day)
-                            }
+        SideScroll(width: CGFloat(weeks.count) * Self.side) {
+            HStack(spacing: 0) {
+                ForEach(Array(weeks.enumerated()), id: \.offset) { _, week in
+                    VStack(spacing: 0) {
+                        ForEach(Array(week.enumerated()), id: \.offset) { _, day in
+                            cell(day)
                         }
-                        .id(w)
                     }
                 }
             }
-            .scrollIndicators(.never)
-            .frame(height: 7 * Self.side)
-            .onAppear { proxy.scrollTo(weeks.count - 1, anchor: .trailing) }
-            .onChange(of: weeks.count) { _, n in proxy.scrollTo(n - 1, anchor: .trailing) }
         }
+        .frame(height: 7 * Self.side)
     }
 
     private func cell(_ day: NutHistory.Cell) -> some View {
@@ -135,7 +166,7 @@ struct HistoryView: View {
 }
 
 /// **The weight view**, as the phone draws it (`cards/maintviz.js`): the whole history at a fixed
-/// density, scrolled sideways and landing on today at the right. Above, every weigh-in as a dot (full
+/// density, dragged sideways (`SideScroll`) and resting on today at the right. Above, every weigh-in as a dot (full
 /// inside the window the target is fitted over, faint outside it) and the fitted trend across that
 /// window; below, each day's intake as a bar (faint outside the window), with the maintenance line
 /// (amber) and the target line (green) as they stood each day. The y values sit at the right edge of the
@@ -154,14 +185,9 @@ struct WeightChart: View {
             BackArrow(action: back)
             if let v = nutrition.weight, let geo = Geometry(v) {
                 ZStack(alignment: .topTrailing) {
-                    ScrollViewReader { proxy in
-                        ScrollView(.horizontal) {
-                            Canvas { ctx, _ in draw(ctx, v, geo) }
-                                .frame(width: geo.width, height: Self.intakeBottom)
-                                .id("chart")
-                        }
-                        .scrollIndicators(.never)
-                        .onAppear { proxy.scrollTo("chart", anchor: .trailing) }
+                    SideScroll(width: geo.width) {
+                        Canvas { ctx, _ in draw(ctx, v, geo) }
+                            .frame(width: geo.width, height: Self.intakeBottom)
                     }
                     .padding(.trailing, Self.gutter)
                     axis(geo)

@@ -48,11 +48,16 @@ struct DayView: View {
             router.dayList = nil
         }
         #if targetEnvironment(simulator)
-        // `-dayview <totals|muscles>` at launch, so each can be screenshotted.
+        // `-dayview <totals|muscles|exercises>` at launch, so each can be screenshotted.
         .onAppear {
             let args = ProcessInfo.processInfo.arguments
             guard let i = args.firstIndex(of: "-dayview"), i + 1 < args.count else { return }
-            if args[i + 1] == "totals" { totals = true } else if args[i + 1] == "muscles" { panel = .muscles }
+            switch args[i + 1] {
+            case "totals": totals = true
+            case "muscles": panel = .muscles
+            case "exercises": panel = .exercises
+            default: break
+            }
         }
         #endif
     }
@@ -331,11 +336,7 @@ private struct Figures: View {
     }
 
     private var restClock: RestClock? {
-        #if targetEnvironment(simulator)
-        if let v = ProcessInfo.processInfo.environment["DAY_CLOCKS"]?.split(separator: ",").compactMap({ Double($0) }),
-           v.count == 2 { return RestClock(rest: v[0], session: v[1]) }
-        #endif
-        return now?.last_set_at.map { RestClock(lastAt: $0, sessionStartAt: now?.session_start_at, now: date) }
+        now?.last_set_at.map { RestClock.current(lastAt: $0, sessionStartAt: now?.session_start_at, now: date) }
     }
 
     private func labelled(_ label: String, _ v: some View, _ edge: HorizontalAlignment) -> some View {

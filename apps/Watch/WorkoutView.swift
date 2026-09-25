@@ -13,19 +13,23 @@ struct ExerciseList: View {
     var onHeader: (() -> Void)? = nil
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 10) {
-                // The rest clocks live here now rather than on the health page: that page is a day at
-                // a glance and these are a live number, read while training with the list open.
-                // `.resttimer:empty` — no set ever logged, no strip.
-                if let n = workout.now, let last = n.last_set_at {
-                    TimelineView(.periodic(from: .now, by: 1)) { ctx in
-                        RestStrip(lastAt: last, sessionStartAt: n.session_start_at,
-                                  setsToday: n.sets_today ?? 0, now: ctx.date)
-                    }
-                    .contentShape(Rectangle())
-                    .onTapGesture { onHeader?() }
+        VStack(alignment: .leading, spacing: 6) {
+            // **The clocks are pinned above the list**, not its first row: they are a live number read
+            // while training, and scrolling to an exercise must not take them off the screen.
+            // `.resttimer:empty` — no set ever logged, no strip.
+            if let n = workout.now, let last = n.last_set_at {
+                TimelineView(.periodic(from: .now, by: 1)) { ctx in
+                    RestStrip(lastAt: last, sessionStartAt: n.session_start_at,
+                              setsToday: n.sets_today ?? 0, now: ctx.date)
                 }
+                .contentShape(Rectangle())
+                .onTapGesture { onHeader?() }
+                .padding(.horizontal, 8)
+                // Low enough that a full-width line clears the corner curve.
+                .padding(.top, Landing.top - 8)
+            }
+            ScrollView {
+                VStack(alignment: .leading, spacing: 10) {
                 ForEach(Array((workout.now?.exercises ?? []).enumerated()), id: \.offset) { i, ex in
                     LiftRow(exercise: ex, open: open == ex.name, toggle: { open = open == ex.name ? nil : ex.name })
                         .padding(.top, i == 0 ? 0 : 9)
@@ -35,14 +39,16 @@ struct ExerciseList: View {
                         }
                 }
             }
-            // 8pt, matching every other page: a rule or a name run to the edge has its ends under
-            // the display's corner arc at 4.
-            .padding(.horizontal, 8)
-            .padding(.bottom, PageInset.bottom)
+                // 8pt, matching every other page: a rule or a name run to the edge has its ends under
+                // the display's corner arc at 4.
+                .padding(.horizontal, 8)
+                .padding(.bottom, PageInset.bottom)
+            }
+            .scrollIndicators(.never)
         }
         .onChange(of: workout.now?.exercises.first?.name, initial: true) { _, newest in open = newest }
-        .scrollIndicators(.never)
-        .topOfTheScreen()
+        .topOfTheScreen(scrollTop: 0)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .background(Color.black.ignoresSafeArea())
     }
 }
@@ -62,7 +68,7 @@ struct RestStrip: View {
     let now: Date
 
     var body: some View {
-        let c = RestClock(lastAt: lastAt, sessionStartAt: sessionStartAt, now: now)
+        let c = RestClock.current(lastAt: lastAt, sessionStartAt: sessionStartAt, now: now)
         return HStack(alignment: .firstTextBaseline, spacing: 10) {
             value(c.restText, "clock", c.restColour)
             if let session = c.sessionText { value(session, "stopwatch", clockGreen) }
@@ -70,9 +76,11 @@ struct RestStrip: View {
             // The day's total, read at the RIGHT edge like every other figure on that side of this
             // page: the word first, the number against the edge, lining up with the muscle counts
             // under it. The clocks on the left are the mirror of this, value first.
-            (Text("sets ").foregroundColor(clockGrey.opacity(0.6))
-                + Text(String(setsToday)).foregroundColor(clockGrey))
-                .font(.system(size: 15, weight: .heavy).monospacedDigit())
+            // The word small and the number big: it is the count that is read, and the width the word
+            // gives back keeps the two clocks at full size beside it.
+            (Text("sets ").font(.system(size: 12, weight: .heavy)).foregroundColor(clockGrey.opacity(0.6))
+                + Text(String(setsToday)).font(.system(size: 22, weight: .heavy).monospacedDigit())
+                .foregroundColor(clockGrey))
                 .lineLimit(1)
                 // The count never gives way: past an hour the session clock is seven characters, and
                 // the line was cutting the count to "S…" rather than narrowing the clocks.
@@ -88,7 +96,7 @@ struct RestStrip: View {
     private func value(_ text: String, _ symbol: String, _ colour: Color) -> some View {
         HStack(alignment: .firstTextBaseline, spacing: 3) {
             Text(text)
-                .font(.system(size: 17, weight: .heavy).monospacedDigit())
+                .font(.system(size: 22, weight: .heavy).monospacedDigit())
                 .foregroundColor(colour)
                 .minimumScaleFactor(0.5)
             Image(systemName: symbol)
@@ -115,6 +123,16 @@ struct RestClock {
     /// A rest and a session of any length, for rendering each case (`DAY_CLOCKS=<rest>,<session>`).
     init(rest: Double, session: Double) { self.rest = rest; self.session = session }
     #endif
+
+    /// The clocks as of `now`, which every surface asks for. In the simulator `DAY_CLOCKS=<rest s>,
+    /// <session s>` sets them to any length, so what fits can be checked.
+    static func current(lastAt: String, sessionStartAt: String?, now: Date) -> RestClock {
+        #if targetEnvironment(simulator)
+        if let v = ProcessInfo.processInfo.environment["DAY_CLOCKS"]?.split(separator: ",").compactMap({ Double($0) }),
+           v.count == 2 { return RestClock(rest: v[0], session: v[1]) }
+        #endif
+        return RestClock(lastAt: lastAt, sessionStartAt: sessionStartAt, now: now)
+    }
 
     init(lastAt: String, sessionStartAt: String?, now: Date) {
         let nowWall = wallClock(now)

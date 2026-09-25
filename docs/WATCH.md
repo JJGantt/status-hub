@@ -243,7 +243,10 @@ top with the gold edge.
 
 ### The workout page
 
-Now `ExerciseList`, the training detail the day page opens (and the Workout control): the rest clocks on one
+Now `ExerciseList`, the training detail the day page opens (and the Workout control). **The clocks
+strip is pinned above the list**, not its first row, since it is the live number read while training;
+its times are 22pt and the count 22pt behind a 12pt "sets", which is what keeps `9:59` and `1:41` full
+size beside it. Under the strip: the rest clocks on one
 line, then one row per exercise — its name and how many sets — tapping open to the muscles it trains
 (weekly sets in each muscle's colour) beside its sets. **Nothing in it may report a width wider than it
 was offered**: the ScrollView lays its content out again at the width the content reports, so one
@@ -303,16 +306,23 @@ each across the full width at 10pt cells, so a map holds as many weeks as the wi
 `Landing.top`, below the corner curve, since it now runs to both edges. It loads its weeks when it
 appears (`loadHistory`) and follows no live stream.
 
+**Both are dragged sideways with `SideScroll`, not a horizontal ScrollView.** The app's pages are
+themselves swiped left and right, and that swipe beats a ScrollView inside a page, so a map in one
+could not be moved at all. `SideScroll` offsets its content by hand under a high-priority drag, claimed
+before the page swipe, that begins only after 6pt of travel so a tap still picks a cell; it rests on
+the newest end and clamps to the content. Not yet tried on the wrist: if the page swipe still wins
+there, the fallback is arrows.
+
 **Each part opens the whole of its history, with a back arrow** (`BackArrow`; a page in the row cannot
 be swiped back from, and a tap on a map picks a day):
 - **A heat map opens `HistoryView`**: that map's every week back to the first meal or set logged
-  (`/api/nut-history?all=1`, each cell carrying its date `d`), scrolled sideways and landing on the
-  newest week, 15pt cells so a finger can pick one. The day picked (today to begin with) is outlined,
-  and under the map is that day's list: its meals (`/api/nutrition-day?date=`, `DayLog`, each opening to
+  (`/api/nut-history?all=1`, each cell carrying its date `d`), resting on the newest week, at the
+  health page's own 10pt cell. The day picked (today to begin with) is outlined and named beside the
+  back arrow, one short row above the map, and under the map is that day's list: its meals (`/api/nutrition-day?date=`, `DayLog`, each opening to
   its ingredients) or its exercises (`/api/workout-day?date=`, `LiftRow`, each opening to its sets; a past
   day's rows carry no muscle chips, since those are this week's volume).
 - **The plot opens `WeightChart`**, the phone's weight view (`cards/maintviz.js`) from `/api/weight-view`:
-  every day at 4pt, scrolled sideways and landing on today; weigh-ins as purple dots (faint outside the
+  every day at 4pt, resting on today; weigh-ins as purple dots (faint outside the
   window the target is fitted over) with the fitted trend across the window, and each day's intake as a
   blue bar (faint outside the window) under the maintenance (amber) and target (green) steps. The y
   values sit in a gutter at the right edge and do not scroll.

@@ -117,7 +117,8 @@ struct RecordComplication: Widget {
         StaticConfiguration(kind: "RecordComplication", provider: Provider()) { _ in
             RecordFace()
                 .widgetURL(URL(string: "statushub://record"))
-                .containerBackground(.fill.tertiary, for: .widget)
+                // No plate behind it: just the microphone on the face.
+                .containerBackground(for: .widget) { Color.clear }
         }
         .configurationDisplayName("Status Hub")
         .description("Hub")
@@ -126,15 +127,10 @@ struct RecordComplication: Widget {
 }
 
 private struct RecordFace: View {
-    @Environment(\.widgetFamily) private var family
-
     var body: some View {
-        ZStack {
-            if family == .accessoryCircular { AccessoryWidgetBackground() }
-            Image(systemName: "mic.fill")
-                .font(.system(size: 18, weight: .semibold))
-                .widgetAccentable()
-        }
+        Image(systemName: "mic.fill")
+            .font(.system(size: 18, weight: .semibold))
+            .widgetAccentable()
     }
 }
 

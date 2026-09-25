@@ -203,7 +203,7 @@ command goes to the session instead of the hub):
 | state | edge |
 |---|---|
 | recording, and the silence will end it | amber |
-| locked open through the silence | red |
+| only a press ends it: locked on home, or any follow-up in a session (those never end at a silence) | red |
 | the hub working on it (transcript or command) | white, a bright stretch travelling round a dim ring; with the wrist down, the whole line white |
 | always-on listening | blue, dim |
 | idle | none |

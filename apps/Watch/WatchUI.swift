@@ -75,7 +75,7 @@ struct ActivityLines: View {
 /// | state | edge |
 /// |---|---|
 /// | recording, and the silence will end it | amber |
-/// | locked open through the silence | red |
+/// | only a press ends it: locked, or a session's follow-up | red |
 /// | the hub working on it (transcript or command) | white, a sweep travelling round |
 /// | always-on listening | blue, dim |
 /// | idle | none |
@@ -103,7 +103,9 @@ struct CommandBorder: View {
 
     private enum State { case recording, locked, working, listening, idle }
     private var state: State {
-        if recording { return capture.locked ? .locked : .recording }
+        // Red is "only your press ends this": a locked command, and a session's follow-up, which never
+        // ends at a silence. Amber is only ever a recording the silence will end.
+        if recording { return capture.locked || !capture.endsOnSilence ? .locked : .recording }
         if working { return .working }
         if capture.listens { return .listening }
         return .idle

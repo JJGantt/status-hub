@@ -1953,9 +1953,13 @@ app.get('/api/workout-now', async (req, res) => {
       .sort((a, b) => String(b.last_at).localeCompare(String(a.last_at)))
       .map((ex) => ({ name: ex.name, sets: ex.sets.map((x) => ({ weight_lbs: x.weight_lbs, reps: x.reps })),
                       muscles: muscles(ex.name) }));
+    // Every muscle's week against its goal, furthest behind first: the phone's Priority order
+    // (cards/muscle.js renderVolume), decided here so the watch only draws it.
+    const volume = Object.values(ix).map((m) => ({ label: m.label, sets: m.sets, target: m.target, color: m.color }))
+      .sort((a, b) => (a.sets / a.target) - (b.sets / b.target) || a.sets - b.sets || a.label.localeCompare(b.label));
     res.json({
       last_set_at: st.last_set_at, session_start_at: st.session_start_at, sets_today: st.sets_today, exercises,
-      body: bodyColours(V.muscle_colors),
+      body: bodyColours(V.muscle_colors), volume,
     });
   } catch (e) { res.status(500).json({ error: String(e.message || e) }); }
 });

@@ -601,7 +601,9 @@ deleted by pi-desk after 7 days; optional `lat`/`lon`/`acc`/`place` query → `v
 Whisper → `{transcript}`, nothing enqueued. That app ships to TestFlight testers, so it cannot hold the hub
 token; it sends its Anthropic key as `X-Owner-Key` instead, and only the owner's (its SHA-256 matches
 `CG_OWNER_KEY_SHA256`, the same hash as `AppGate.ownerKeyHash` in CapitalGrilleApp) gets through. If that
-key is ever rotated, both hashes change together.
+key is ever rotated, both hashes change together. Every request writes one `[cg-transcribe]` line: size, time
+and word count, or `REFUSED` / `FAILED` with the reason. The watch logs its own side of each question to
+Supabase `app_logs` (`voice_*` rows, CapitalGrilleApp `VoiceLog`).
 
 **Auth:** the hub password → `sha256("status-hub:"+password)`; sent as the `hub` cookie (web) or the
 `X-Hub-Token` header (native app). The kiosk authenticates via `?token=<TV_TOKEN>` (also seeds the

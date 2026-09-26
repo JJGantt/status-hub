@@ -1507,21 +1507,30 @@ const CG_OWNER_KEY_SHA256 = '0c4eb3445e20e7d8b5164aca839f65fad2d05683f7556addbf4
 app.post('/api/cg/transcribe', async (req, res) => {
   const key = String(req.headers['x-owner-key'] || '');
   if (!key || crypto.createHash('sha256').update(key).digest('hex') !== CG_OWNER_KEY_SHA256) {
+    console.log(`[cg-transcribe] REFUSED: ${key ? 'not the owner key' : 'no key'}`);
     req.resume();
     return res.status(401).json({ error: 'unauthorized' });
   }
-  if (!GROQ_API_KEY) { req.resume(); return res.status(503).json({ error: 'transcription not configured' }); }
+  if (!GROQ_API_KEY) {
+    console.log('[cg-transcribe] FAILED: GROQ_API_KEY is not set');
+    req.resume();
+    return res.status(503).json({ error: 'transcription not configured' });
+  }
   const tmp = path.join(os.tmpdir(), 'cg-voice-' + crypto.randomUUID());
   try {
     await pipeline(req, fs.createWriteStream(tmp));
     const { size } = await fs.promises.stat(tmp);
-    if (!size) return res.status(400).json({ error: 'no audio' });
+    if (!size) {
+      console.log('[cg-transcribe] FAILED: empty upload');
+      return res.status(400).json({ error: 'no audio' });
+    }
     const ct = String(req.headers['content-type'] || 'audio/mp4');
     const started = Date.now();
     const { transcript } = await transcribe(tmp, ct, GROQ_API_KEY);
     console.log(`[cg-transcribe] ${size} bytes ${ct} ${Date.now() - started}ms words=${transcript.split(/\s+/).filter(Boolean).length}`);
     res.json({ transcript });
   } catch (e) {
+    console.log(`[cg-transcribe] FAILED: ${e.status || 500} ${String(e.message || e).slice(0, 200)}`);
     res.status(e.status || 500).json({ error: String(e.message || e) });
   } finally {
     fs.promises.unlink(tmp).catch(() => {});

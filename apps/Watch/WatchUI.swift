@@ -179,7 +179,10 @@ struct CommandBorder: View {
     /// button, so reading, scrolling or resting a finger on the text kept starting recordings. The top
     /// half is for touching what is there; double tap is unaffected.
     static func tapPresses(_ at: CGPoint) -> Bool {
-        at.y > WKInterfaceDevice.current().screenBounds.height / 2
+        let presses = at.y > WKInterfaceDevice.current().screenBounds.height / 2
+        // Where the finger landed, so a tap that started a recording can be traced to the half it hit.
+        Hub.log("tap", ["y": Int(at.y), "presses": presses])
+        return presses
     }
 
     /// **The one press.** Double tap and a tap on the conversation both come here, and home and a

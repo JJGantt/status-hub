@@ -828,6 +828,25 @@ async function surfLive() {
       ? { t: etStringAt(new Date(r.ts)).slice(11, 13), f: r.water_f } : null;
   };
   if (sea) sea.water_color = waterColor(sea.water_f);
+  // LONGSHORE DRIFT — how hard the water pushes ALONG the beach, and which way, from what the buoys
+  // are reading right now rather than from the forecast. Waves arriving at an angle shove water
+  // sideways; the standard form is sqrt(height) x sin(2 x angle), which peaks at 45 degrees and goes
+  // to zero when they come in straight on. The angle is measured off the same shore normal the wind
+  // labels use, so a drift and a wind type cannot disagree about where the beach faces.
+  //
+  // LEFT AND RIGHT ARE FROM THE WATER'S EDGE LOOKING OUT: facing the ocean, north is to your left.
+  // So a push north reads `left` and a push south reads `right` — the words a person standing there
+  // would use, rather than a compass point to convert in your head.
+  //
+  // It is a NUMBER, not a rating against a normal day. Roughly: a quarter of hours sit under 0.6, a
+  // half between 0.6 and 1.6, a quarter above — measured over the forecast archive, since the buoys'
+  // own record only began this week.
+  if (sea && sea.wvht_ft != null && sea.mwd_deg != null) {
+    const a = ((sea.mwd_deg - 97.5 + 540) % 360) - 180;
+    const v = Math.sqrt(Math.max(0, sea.wvht_ft)) * Math.sin(2 * a * Math.PI / 180);
+    sea.drift = Math.round(Math.abs(v) * 10) / 10;
+    sea.drift_dir = v > 0 ? 'left' : 'right';
+  }
   const water = { now_f: sea ? sea.water_f : null, now_color: sea ? sea.water_color : null,
                   next: sst.length ? [6, 12, 24].map(at).filter(Boolean) : [] };
 

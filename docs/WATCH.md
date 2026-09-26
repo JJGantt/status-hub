@@ -438,7 +438,15 @@ A command is sent the way the phone's microphone sends one: `Hub.sendAudio` uplo
 `/api/voice-command` (source `web`), the hub transcribes it with the same Groq Whisper, and the worker
 treats it as push-to-talk — no addressing gate, no duplicate-drop, no spoken reply on the TV. The hub
 answers with the transcript, shown until the turn lands, and the request id, and the watch waits on
-`/api/voice-reply/:id`. No id means the hub heard no words. A connection lost during that wait is asked
+`/api/voice-reply/:id`. No id means the hub heard no words. **With the wrist down the app is kept running until
+a home command's answer is in** (`StayAwake`): recording keeps a watch app alive, but once the command
+is sent nothing did, so the app was suspended mid-wait, the answer's tap never came, and the screen
+still showed the command working when he looked. `StayAwake` plays silence, mixed with others, while
+`Chat.waiting`, and lets go the moment nothing is; anything that turns the audio session off (a
+recording ending, a spoken reply finishing) calls `sessionReleased()` so it restarts over a live session.
+Home commands only: a session can work for minutes, and he does not want the battery spent on that. It
+does not make the dimmed screen redraw faster (watchOS caps that at about once a second, which is why
+the edge is a steady ring wrist-down); it keeps the app working so the answer lands on time. A connection lost during that wait is asked
 again with backoff (`Hub.outcome`), never shown as a failure: the command is with the hub already, and a
 lowered wrist suspends the app and kills the open request, which used to read "The request timed out"
 over a command that had finished.

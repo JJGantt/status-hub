@@ -55,6 +55,7 @@ final class Chat: ObservableObject {
             let live = commands.filter { !$0.failed }
             waiting = !live.isEmpty
             pending = live.compactMap(\.words)
+            StayAwake.shared.refresh()
         }
     }
     private var tasks: [String: Task<Void, Never>] = [:]

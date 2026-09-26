@@ -60,6 +60,7 @@ final class Speaker: NSObject, AVSpeechSynthesizerDelegate {
     private func finished() {
         try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
         Capture.shared.hush(false)
+        StayAwake.shared.sessionReleased()   // a home command still waiting takes the audio back
     }
 
     /// Sets it — the Speak toggle's action — on the watch at once and on the hub, and taps the wrist up

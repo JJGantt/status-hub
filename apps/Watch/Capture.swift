@@ -158,6 +158,8 @@ final class Capture: ObservableObject {
         let clip = recorder.stop()
         if muted { setMuted(false) }
         resumeSoon()
+        // Ending the recording handed the audio session back; a command still waiting holds it again.
+        StayAwake.shared.sessionReleased()
         return clip
     }
 
@@ -170,6 +172,7 @@ final class Capture: ObservableObject {
         recorder.cancel()
         if muted { setMuted(false) }
         resumeSoon()
+        StayAwake.shared.sessionReleased()
     }
 
     /// Holds the recording open through silences, or lets the silence end it again.

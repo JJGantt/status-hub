@@ -69,6 +69,7 @@
 		E8ABA2047F042D0E11B6C604 /* Workout.swift in Sources */ = {isa = PBXBuildFile; fileRef = F4BAD78C211DC1432CDEB572 /* Workout.swift */; };
 		EBD52912FF3B6259E305FBFA /* Sessions.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3DA8801FE7845595DD403F04 /* Sessions.swift */; };
 		ECC6D21A1ECB983A558C2DC5 /* WatchSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = 951A385F7EE64123592C4DA6 /* WatchSettings.swift */; };
+		ECFE4E33BA03FA448EA542E7 /* StayAwake.swift in Sources */ = {isa = PBXBuildFile; fileRef = D6D77B6FDE8A4317F6D9AF76 /* StayAwake.swift */; };
 		ED30317D3B77A590C83D95BC /* StatusHubApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = DBE4FD566029B00F912457DA /* StatusHubApp.swift */; };
 		EE1E28331D9AE8401BEE3601 /* Push.swift in Sources */ = {isa = PBXBuildFile; fileRef = 835C09DFE3C581C0FCD41116 /* Push.swift */; };
 		F10846CA6E8D579211CF7695 /* Theme.swift in Sources */ = {isa = PBXBuildFile; fileRef = A3ED88961E8E93D6EBE0EA46 /* Theme.swift */; };
@@ -182,6 +183,7 @@
 		CAEDD165B40FC7BE05380CE2 /* BodyPaths.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BodyPaths.swift; sourceTree = "<group>"; };
 		D2181310AB9F5E005371B8B0 /* Location.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Location.swift; sourceTree = "<group>"; };
 		D45C11A97894E271FE097B5B /* reminder.caf */ = {isa = PBXFileReference; path = reminder.caf; sourceTree = "<group>"; };
+		D6D77B6FDE8A4317F6D9AF76 /* StayAwake.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StayAwake.swift; sourceTree = "<group>"; };
 		D87B899987639512DD905DCE /* WatchLink.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchLink.swift; sourceTree = "<group>"; };
 		DBE4FD566029B00F912457DA /* StatusHubApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StatusHubApp.swift; sourceTree = "<group>"; };
 		DE7144970264B4FD475213E8 /* StatusHubMac.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = StatusHubMac.app; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -257,6 +259,7 @@
 				14DD24EA8F44511AAE8A666A /* Speaker.swift */,
 				023AE4E3F83C1C6284A695C9 /* StatusHubWatch.entitlements */,
 				C00E5B1C61B9780EE2BE1945 /* StatusHubWatchApp.swift */,
+				D6D77B6FDE8A4317F6D9AF76 /* StayAwake.swift */,
 				951A385F7EE64123592C4DA6 /* WatchSettings.swift */,
 				E15B459BE174F4274C78B54E /* WatchUI.swift */,
 				F4BAD78C211DC1432CDEB572 /* Workout.swift */,
@@ -522,6 +525,7 @@
 				AB1E6CBD6BB5CFE26977C5A8 /* SharedState.swift in Sources */,
 				4A85806E830267380041B940 /* Speaker.swift in Sources */,
 				77A3FC66BCC0B5FAA82C04C6 /* StatusHubWatchApp.swift in Sources */,
+				ECFE4E33BA03FA448EA542E7 /* StayAwake.swift in Sources */,
 				ECC6D21A1ECB983A558C2DC5 /* WatchSettings.swift in Sources */,
 				E5F01E32A844356CC4D3F449 /* WatchUI.swift in Sources */,
 				E8ABA2047F042D0E11B6C604 /* Workout.swift in Sources */,

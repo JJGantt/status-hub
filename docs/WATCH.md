@@ -444,7 +444,8 @@ is sent nothing did, so the app was suspended mid-wait, the answer's tap never c
 still showed the command working when he looked. `StayAwake` plays silence, mixed with others, while
 `Chat.waiting`, and lets go the moment nothing is; anything that turns the audio session off (a
 recording ending, a spoken reply finishing) calls `sessionReleased()` so it restarts over a live session.
-Home commands only: a session can work for minutes, and he does not want the battery spent on that. It
+Home commands only: a session can work for minutes, and he does not want the battery spent on that. And **one minute at most per wait** (his number): if the answer has not come by then it lets go,
+and nothing restarts it until nothing is waiting. It
 does not make the dimmed screen redraw faster (watchOS caps that at about once a second, which is why
 the edge is a steady ring wrist-down); it keeps the app working so the answer lands on time. A connection lost during that wait is asked
 again with backoff (`Hub.outcome`), never shown as a failure: the command is with the hub already, and a

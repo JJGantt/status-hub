@@ -278,6 +278,9 @@ final class Sessions: ObservableObject {
     /// Ends the recording and sends it into the session, alongside anything still on its way.
     func stopRecording(_ key: String) {
         guard capture.owner == .session(key), let clip = capture.stop() else { return }
+        // The wrist is told the moment the microphone closes, as on home: the silence may have decided
+        // it, and nothing else says so.
+        WKInterfaceDevice.current().play(.stop)
         Hub.log("record-stop", ["view": "session", "seconds": clip.duration])
         let item = Outgoing(msgId: UUID().uuidString, clip: clip, words: nil)
         outgoing[key, default: []].append(item)
@@ -346,6 +349,7 @@ final class Sessions: ObservableObject {
             } catch {
                 Hub.log("send-failed", ["view": "session", "error": String(describing: error).prefix(120).description])
                 failures[key] = .message(error.localizedDescription)
+                WKInterfaceDevice.current().play(.failure)
             }
         }
     }

@@ -245,6 +245,7 @@ final class Chat: ObservableObject {
                 if outcome.status == "error" {
                     Hub.log("command-failed", ["id": requestId ?? "", "error": String((outcome.error ?? "").prefix(120))])
                     failure = .message(outcome.error ?? "")
+                    WKInterfaceDevice.current().play(.failure)
                     // The worker ran it and failed, so a retry uploads the clip again as a new attempt.
                     update(msgId) { $0.requestId = nil; $0.running = false; $0.failed = true; $0.msgId = UUID().uuidString }
                     tasks[msgId] = nil
@@ -262,6 +263,7 @@ final class Chat: ObservableObject {
                 Hub.log("send-failed", ["error": String(describing: error).prefix(120).description])
                 update(msgId) { $0.failed = true }
                 failure = .message(error.localizedDescription)
+                WKInterfaceDevice.current().play(.failure)
             }
         }
     }

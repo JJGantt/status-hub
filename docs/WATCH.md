@@ -417,12 +417,12 @@ working on; it does nothing when there is nothing to throw away.
   record only, nothing plays), and the tap drops what the microphone hears until the chirp's
   playback-finished callback, so the clip never contains it and the endpoint never counts it as
   speech. Commands and follow-ups only; the always-on listener opens silently.
-- **The microphone closing taps the wrist** (`.stop`), on a command the silence ended and on one a
-  press ended alike. That is the moment nothing else reports: the silence decides it, and by then the
-  watch may be back at his side.
-- The hub hearing no words in a clip buzzes `.failure`: nothing was enqueued.
-- A finished command buzzes `.notification` — the one that makes a sound, so a reply arriving is heard
-  as well as felt.
+- **The microphone closing taps the wrist** (`.stop`), on home and in a session, on a recording the
+  silence ended and on one a press ended alike. That is the moment nothing else reports: the silence
+  decides it, and by then the watch may be back at his side.
+- **Every command ends in a second tap, whichever way it ends**: a reply buzzes `.notification` (the one
+  that makes a sound, so it is heard as well as felt); a failure buzzes `.failure`, whether the hub
+  heard no words, the worker failed the command, or the send itself failed.
 
 ### The wrist can drop mid-recording
 

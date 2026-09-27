@@ -491,7 +491,7 @@ which then carries on with the wrist down (background audio), and the blue edge 
 
 ### Spoken replies
 
-With `session_speech` on (the Speak control, or Settings → Watch: speak session replies on the phone), a reply to a
+With `session_speech` on (the watch's Settings page, the Speak control, or Settings → Watch: speak session replies on the phone), a reply to a
 follow-up SENT FROM THE WATCH is read aloud (`Speaker`, the system voice — nothing leaves the watch), and
 every follow-up carries `Sessions.spokenFormat` so the reply is written to be heard. **It is spoken when
 that session is on screen with its reply in hand**: as it lands if he is looking at it, otherwise the
@@ -504,6 +504,19 @@ stands aside while it speaks** (`Capture.hush`), so it does not transcribe the w
 takes the microphone back when it finishes — paused, not switched off. Starting a recording stops the
 speaking at once. The setting is on the hub so the phone shows the same switch; the watch reads it when
 it comes to the front.
+
+**The app plays the voice itself, so it keeps talking with the wrist down.** `AVSpeechSynthesizer.speak`
+hands the words to the system's speech service; the app is not the one making the sound, so a lowered
+wrist suspends it and the voice stops mid-sentence. `Speaker` instead has the synthesizer only render
+(`write`) and plays the buffers through its own `AVAudioEngine` under `.playback` — an app playing audio
+is kept running in the background, as a music app is. Every reply ends in a `speak-end` log line saying
+how (`done`, `stopped`, `failed`).
+
+### The settings page
+
+Left of the sessions page (`SettingsView`): the Speak switch, the same flag the Control Center control
+and the hub's Settings write, so the three always agree. It re-reads the flag each time it appears,
+because the control changes it from the widget extension's process, which the app does not hear.
 
 ### Two launchers, one request
 
@@ -604,6 +617,7 @@ wrist. Fly keeps only the recent lines, so read it soon.
 | `listener-sent`, `listener-failed` | an always-on utterance going up |
 | `sent`, `send-failed` | a command's clip going up, with how long it took |
 | `listen-alive` | always-on listening still has the microphone, with minutes since it was engaged — one line per twenty silent segments, about five minutes. **This is how long watchOS lets it hold the microphone with the wrist down**, which is otherwise unknown: read the gap between the last line and when it was engaged |
+| `speak`, `speak-end`, `speak-failed` | a spoken reply starting (its length) and how it ended |
 | `stream-open`, `stream-end`, `stream-error` | the event streams |
 | `resend` | a call's connection dropped mid-flight and it was sent again |
 | `frame` | each stream frame for the session on screen |

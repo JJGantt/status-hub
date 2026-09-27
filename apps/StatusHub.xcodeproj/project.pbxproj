@@ -65,6 +65,7 @@
 		D3E5EB61797DC506EFFC29B3 /* Router.swift in Sources */ = {isa = PBXBuildFile; fileRef = 04D43ADC9891823E1EFA0E4C /* Router.swift */; };
 		D8B3EEDED01AB105C95F173D /* Auth.swift in Sources */ = {isa = PBXBuildFile; fileRef = 88D699B5FDC0F7476374CF07 /* Auth.swift */; };
 		D998A2EA11DB625A5E768785 /* Models.swift in Sources */ = {isa = PBXBuildFile; fileRef = B47214768CCEE8C99EEF5958 /* Models.swift */; };
+		DC3597BF0721DCD1E37B62FC /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 304AE2984E2F8010825AF2FC /* SettingsView.swift */; };
 		E5F01E32A844356CC4D3F449 /* WatchUI.swift in Sources */ = {isa = PBXBuildFile; fileRef = E15B459BE174F4274C78B54E /* WatchUI.swift */; };
 		E8ABA2047F042D0E11B6C604 /* Workout.swift in Sources */ = {isa = PBXBuildFile; fileRef = F4BAD78C211DC1432CDEB572 /* Workout.swift */; };
 		EBD52912FF3B6259E305FBFA /* Sessions.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3DA8801FE7845595DD403F04 /* Sessions.swift */; };
@@ -147,6 +148,7 @@
 		14DD24EA8F44511AAE8A666A /* Speaker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Speaker.swift; sourceTree = "<group>"; };
 		14EB30894FADCF33B66D0455 /* Recorder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Recorder.swift; sourceTree = "<group>"; };
 		279F09507BAD56AB8AD69831 /* TodoWidget.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TodoWidget.swift; sourceTree = "<group>"; };
+		304AE2984E2F8010825AF2FC /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 		38BD5AA187D80545B616356B /* Nutrition.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Nutrition.swift; sourceTree = "<group>"; };
 		3DA8801FE7845595DD403F04 /* Sessions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sessions.swift; sourceTree = "<group>"; };
 		3EE13DD050BF1BC4B943C3CC /* Capture.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Capture.swift; sourceTree = "<group>"; };
@@ -256,6 +258,7 @@
 				04D43ADC9891823E1EFA0E4C /* Router.swift */,
 				3DA8801FE7845595DD403F04 /* Sessions.swift */,
 				AC7643D7992852F757EF0A7E /* SessionsView.swift */,
+				304AE2984E2F8010825AF2FC /* SettingsView.swift */,
 				14DD24EA8F44511AAE8A666A /* Speaker.swift */,
 				023AE4E3F83C1C6284A695C9 /* StatusHubWatch.entitlements */,
 				C00E5B1C61B9780EE2BE1945 /* StatusHubWatchApp.swift */,
@@ -522,6 +525,7 @@
 				D3E5EB61797DC506EFFC29B3 /* Router.swift in Sources */,
 				EBD52912FF3B6259E305FBFA /* Sessions.swift in Sources */,
 				4D60B234E0ADF4D9465FE606 /* SessionsView.swift in Sources */,
+				DC3597BF0721DCD1E37B62FC /* SettingsView.swift in Sources */,
 				AB1E6CBD6BB5CFE26977C5A8 /* SharedState.swift in Sources */,
 				4A85806E830267380041B940 /* Speaker.swift in Sources */,
 				77A3FC66BCC0B5FAA82C04C6 /* StatusHubWatchApp.swift in Sources */,

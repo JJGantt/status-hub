@@ -9,6 +9,7 @@ enum WatchSettings {
         guard let all = try? await Hub.settings() else { return }
         if let v = all[Speaker.key], isOn(v) != SharedState.speech {
             SharedState.speech = isOn(v)
+            Speaker.reload()
             Speaker.redrawControl()
         }
         BorderStyle.shared.apply(all)

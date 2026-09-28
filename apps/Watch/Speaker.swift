@@ -8,18 +8,18 @@ import WidgetKit
 /// is spoken as it lands, and the follow-up carries `Sessions.spokenFormat` so the reply is written to
 /// be heard.
 ///
-/// **The app plays the voice itself, so it carries on with the wrist down.** `synth.speak` hands the
-/// words to the system's speech service, and the app is not the one making the sound — so when the
-/// wrist drops and the app goes to the background it is suspended mid-sentence, which stops the voice.
-/// Instead the synthesizer only RENDERS (`write`), and the buffers play through the app's own audio
-/// engine under `.playback`: an app playing audio is kept running in the background
-/// (`UIBackgroundModes: audio`), the same way a music app is.
+/// **The app plays the voice itself, and holds the microphone while it does, so it carries on with
+/// the wrist down.** The synthesizer only RENDERS (`write`), and the buffers play through the app's own
+/// audio engine. watchOS keeps an app running with the wrist down while it RECORDS, not while it only
+/// plays: played alone, the app froze the instant the wrist dropped, with the engine and player still
+/// reporting running and no notification at all. So the session is `.playAndRecord` and the microphone
+/// is tapped and its audio discarded for exactly as long as the voice plays (`holdMic`).
 ///
 /// **The always-on listener stands aside while it speaks** (`Capture.hush`) — otherwise it transcribes
 /// the watch's own voice as a command — and picks the microphone back up when the speaking ends. It is
 /// paused, not switched off. Starting a recording stops the speaking at once: his voice wins.
 @MainActor
-final class Speaker: ObservableObject {
+final class Speaker: NSObject, ObservableObject, AVSpeechSynthesizerDelegate {
     static let shared = Speaker()
     static let key = "session_speech"
     /// Whether session replies are spoken. Kept in `SharedState`, where the Control Center toggle reads
@@ -44,9 +44,12 @@ final class Speaker: ObservableObject {
     private var schedule = 0
     private var rendered = false
     private var speaking = false
+    private var micHeld = false
     private var startedAt = Date()
 
-    private init() {
+    private override init() {
+        super.init()
+        synth.delegate = self
         let center = NotificationCenter.default
         let session = AVAudioSession.sharedInstance()
         // Each of these can stop the engine under a reply without any callback firing, which is how a
@@ -87,20 +90,30 @@ final class Speaker: ObservableObject {
         Capture.shared.hush(true)
         let session = AVAudioSession.sharedInstance()
         do {
-            try session.setCategory(.playback, mode: .spokenAudio)
+            // Play AND record: an app holding the microphone is kept running with the wrist down (that
+            // is how a command keeps recording), and a session that only plays is frozen the moment the
+            // wrist drops — the engine and player still report running, no notification comes, and the
+            // voice stops mid-word. So while it speaks the microphone is held and what it hears is
+            // discarded (`holdMic`). The always-on listener has stood aside (`Capture.hush`), so the
+            // microphone is free.
+            try session.setCategory(.playAndRecord, mode: .default)
             try session.setActive(true)
         } catch {
             Hub.log("speak-failed", ["error": String(describing: error).prefix(120).description])
         }
+        turn += 1
+        speaking = true
+        render(words, turn: turn)
+    }
+
+    private func render(_ words: String, turn this: Int) {
         let u = AVSpeechUtterance(string: words)
         u.voice = AVSpeechSynthesisVoice(language: "en-US")
-        turn += 1
-        let this = turn
         buffers = []
         played = 0
         rendered = false
-        speaking = true
         startedAt = Date()
+        holdMic()
         Hub.log("speak", ["chars": words.count, "outputs": Self.outputs()])
         synth.write(u) { [weak self] buffer in
             guard let pcm = buffer as? AVAudioPCMBuffer else { return }
@@ -111,12 +124,9 @@ final class Speaker: ObservableObject {
     /// One rendered piece of the reply. A buffer with no frames is the synthesizer saying it is done.
     private func take(_ pcm: AVAudioPCMBuffer, turn this: Int) {
         guard this == turn, speaking else { return }
-        guard pcm.frameLength > 0 else {
-            rendered = true
-            Hub.log("speak-rendered", ["seconds": seconds(buffers[...]), "ms": ms()])
-            if played == buffers.count { finished("done") }
-            return
-        }
+        // An empty buffer marks the end of a stretch the synthesizer rendered, not of the reply: it sends
+        // several. The end of the reply is the delegate's `didFinish`.
+        guard pcm.frameLength > 0 else { return }
         buffers.append(pcm)
         if wired != pcm.format {
             // A new format means rewiring, which throws away what the player had queued: queue the
@@ -125,6 +135,26 @@ final class Speaker: ObservableObject {
             return
         }
         enqueue(buffers.count - 1)
+    }
+
+    /// Taps the microphone and throws away what it hears. The tap is what makes this a recording app
+    /// for as long as it speaks, which is what keeps it running with the wrist down.
+    private func holdMic() {
+        guard !micHeld else { return }
+        let input = engine.inputNode
+        let format = input.outputFormat(forBus: 0)
+        guard format.sampleRate > 0, format.channelCount > 0 else {
+            Hub.log("speak-mic-failed", ["rate": format.sampleRate])
+            return
+        }
+        input.installTap(onBus: 0, bufferSize: 4096, format: format) { _, _ in }
+        micHeld = true
+    }
+
+    private func releaseMic() {
+        guard micHeld else { return }
+        engine.inputNode.removeTap(onBus: 0)
+        micHeld = false
     }
 
     /// Queues one buffer on the current schedule.
@@ -179,6 +209,18 @@ final class Speaker: ObservableObject {
         resume("wake")
     }
 
+    nonisolated func speechSynthesizer(_ s: AVSpeechSynthesizer, didFinish u: AVSpeechUtterance) {
+        Task { @MainActor in self.renderedAll() }
+    }
+
+    /// Everything is rendered; the reply is over once the player has played it all.
+    private func renderedAll() {
+        guard speaking, !rendered else { return }
+        rendered = true
+        Hub.log("speak-rendered", ["seconds": seconds(buffers[...]), "ms": ms()])
+        if played == buffers.count { finished("done") }
+    }
+
     /// Stops mid-sentence: a recording is starting, and his voice comes first.
     func stop() {
         guard speaking else { return }
@@ -209,6 +251,7 @@ final class Speaker: ObservableObject {
         guard speaking else { return }
         speaking = false
         engine.stop()
+        releaseMic()
         Hub.log("speak-end", ["how": how, "played": seconds(buffers[..<played]), "ms": ms()])
         try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
         Capture.shared.hush(false)

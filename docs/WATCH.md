@@ -507,11 +507,16 @@ takes the microphone back when it finishes — paused, not switched off. Startin
 speaking at once. The setting is on the hub so the phone shows the same switch; the watch reads it when
 it comes to the front.
 
-**The app plays the voice itself, so it keeps talking with the wrist down.** `AVSpeechSynthesizer.speak`
-hands the words to the system's speech service; the app is not the one making the sound, so a lowered
-wrist suspends it and the voice stops mid-sentence. `Speaker` instead has the synthesizer only render
-(`write`) and plays the buffers through its own `AVAudioEngine` under `.playback` — an app playing audio
-is kept running in the background, as a music app is. Every reply ends in a `speak-end` log line saying
+**The app plays the voice itself and holds the microphone while it does, so it keeps talking with
+the wrist down.** watchOS keeps an app running wrist-down while it records, not while it only plays.
+`AVSpeechSynthesizer.speak` is the system speaking, not the app, and stops when the wrist drops; the
+app's own engine under `.playback` freezes the same way, with the engine and player still reporting
+running and no notification firing. So `Speaker` has the synthesizer only render (`write`), plays the
+buffers through its own `AVAudioEngine` under `.playAndRecord`, and taps the microphone and discards
+what it hears for exactly as long as the voice plays (`holdMic`) — the mechanism that keeps a command
+recording wrist-down. The end of a reply is the synthesizer delegate's `didFinish`: `write` hands back
+several empty buffers along the way, one per stretch it renders, so an empty buffer is not the end.
+Every reply ends in a `speak-end` log line saying
 how (`done`, `stopped`, `failed`) and how many seconds of it played.
 
 **A reply can be cut out from under the player without any callback firing** (an interruption, an

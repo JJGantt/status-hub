@@ -512,7 +512,13 @@ hands the words to the system's speech service; the app is not the one making th
 wrist suspends it and the voice stops mid-sentence. `Speaker` instead has the synthesizer only render
 (`write`) and plays the buffers through its own `AVAudioEngine` under `.playback` — an app playing audio
 is kept running in the background, as a music app is. Every reply ends in a `speak-end` log line saying
-how (`done`, `stopped`, `failed`).
+how (`done`, `stopped`, `failed`) and how many seconds of it played.
+
+**A reply can be cut out from under the player without any callback firing** (an interruption, an
+engine configuration change, the media services resetting, the app being suspended), and then it is
+never counted as finished: the voice stops and the listener stays hushed. So `Speaker` keeps every
+rendered buffer and how many have played, and resumes from the first unplayed one on each of those
+notifications and whenever the app comes to the front and finds the player silent (`checkOnWake`).
 
 ### The settings page
 
@@ -624,7 +630,10 @@ wrist. Fly keeps only the recent lines, so read it soon.
 | `listener-sent`, `listener-failed` | an always-on utterance going up |
 | `sent`, `send-failed` | a command's clip going up, with how long it took |
 | `listen-alive` | always-on listening still has the microphone, with minutes since it was engaged — one line per twenty silent segments, about five minutes. **This is how long watchOS lets it hold the microphone with the wrist down**, which is otherwise unknown: read the gap between the last line and when it was engaged |
-| `speak`, `speak-end`, `speak-failed` | a spoken reply starting (its length and output port) and how it ended |
+| `speak`, `speak-end`, `speak-failed` | a spoken reply starting (its length and output port) and how it ended, with seconds played |
+| `speak-rendered` | the synthesizer finished rendering the reply: its total seconds, and how long rendering took |
+| `speak-interrupted`, `speak-config-change`, `speak-media-reset`, `speak-stalled`, `speak-resume` | what cut a reply off, and the resume from where it stopped (seconds played of seconds rendered) |
+| `phase` | the app becoming active, inactive or background: wrist up and down |
 | `stream-open`, `stream-end`, `stream-error` | the event streams |
 | `resend` | a call's connection dropped mid-flight and it was sent again |
 | `frame` | each stream frame for the session on screen |

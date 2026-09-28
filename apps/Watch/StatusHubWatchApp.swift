@@ -167,6 +167,8 @@ struct RootView: View {
         }
         .onChange(of: page) { _, _ in follow() }
         .onChange(of: phase) { _, now in
+            Hub.log("phase", ["to": "\(now)"])
+            if now == .active { Speaker.shared.checkOnWake() }
             follow()
             // Coming to the front, not every page swipe: the watch's settings live on the hub.
             if now == .active { Task { await WatchSettings.refresh() }; Hub.flushLog() }

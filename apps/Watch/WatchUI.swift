@@ -179,7 +179,8 @@ struct CommandBorder: View {
     /// button, so reading, scrolling or resting a finger on the text kept starting recordings. The top
     /// half is for touching what is there; double tap is unaffected.
     static func tapPresses(_ at: CGPoint) -> Bool {
-        let presses = at.y > WKInterfaceDevice.current().screenBounds.height / 2
+        // While a reply is spoken a tap anywhere is a press, and the press stops the voice.
+        let presses = Speaker.shared.isSpeaking || at.y > WKInterfaceDevice.current().screenBounds.height / 2
         // Where the finger landed, so a tap that started a recording can be traced to the half it hit.
         Hub.log("tap", ["y": Int(at.y), "presses": presses])
         return presses
@@ -189,6 +190,12 @@ struct CommandBorder: View {
     /// session follow the same flow: start (amber, sends itself at his silence), then lock (red, only a
     /// press ends it), then send.
     static func press(chat: Chat, sessions: Sessions, how: String) {
+        // A reply being spoken: the press stops it and does nothing else. The next one records.
+        if Speaker.shared.isSpeaking {
+            Hub.log("control", ["speaking": true, "how": how])
+            Speaker.shared.stop()
+            return
+        }
         let capture = Capture.shared
         let target = sessions.path.last
         let recording = capture.owner == (target.map(Capture.Owner.session) ?? .hub)

@@ -27,6 +27,10 @@ final class Speaker: NSObject, ObservableObject, AVSpeechSynthesizerDelegate {
     static var enabled: Bool { SharedState.speech }
     /// The same flag for a view to watch: the Settings page's toggle.
     @Published private(set) var on = SharedState.speech
+    /// How loud the voice plays, in percent of the watch's own volume (10…100, steps of 10): the watch's
+    /// Settings page and the hub's (`watch_speech_volume`). Applies to a reply already playing.
+    @Published private(set) var volume = Speaker.storedVolume
+    static let volumeKey = "watch_speech_volume"
 
     private let synth = AVSpeechSynthesizer()
     private let engine = AVAudioEngine()
@@ -177,6 +181,7 @@ final class Speaker: NSObject, ObservableObject, AVSpeechSynthesizerDelegate {
                 if self.rendered && self.played == self.buffers.count { self.finished("done") }
             }
         }
+        player.volume = Float(volume) / 100
         if !player.isPlaying { player.play() }
     }
 
@@ -273,6 +278,28 @@ final class Speaker: NSObject, ObservableObject, AVSpeechSynthesizerDelegate {
     }
 
     /// Control Center draws the toggle from the value it last read; it reads again only when told.
+    /// Sets the voice's volume here and on the hub.
+    func setVolume(_ percent: Int) {
+        let v = Self.clamp(percent)
+        guard v != volume else { return }
+        apply(volume: v)
+        Task { await Hub.putSetting(Self.volumeKey, "\(v)") }
+    }
+
+    /// Takes a volume the hub sent (`WatchSettings`), without writing it back.
+    func apply(volume v: Int) {
+        volume = Self.clamp(v)
+        UserDefaults.standard.set(volume, forKey: Self.volumeKey)
+        player.volume = Float(volume) / 100
+    }
+
+    private static func clamp(_ v: Int) -> Int { min(100, max(10, (v + 5) / 10 * 10)) }
+
+    private static var storedVolume: Int {
+        let v = UserDefaults.standard.integer(forKey: volumeKey)
+        return v == 0 ? 100 : clamp(v)
+    }
+
     /// Brings the published flag in line after the hub changed it (`WatchSettings`).
     static func reload() { shared.on = SharedState.speech }
 

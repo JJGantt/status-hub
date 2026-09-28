@@ -111,6 +111,9 @@ export async function open() {
         '<button type="button" data-v="0"' + (speechOn ? '' : ' class="on"') + '>Off</button>' +
         '<button type="button" data-v="1"' + (speechOn ? ' class="on"' : '') + '>On</button>' +
       '</div>' +
+      '<label class="settings-row"><span>Volume (%)</span>' +
+        '<input class="settings-num" type="number" min="10" max="100" step="10" inputmode="numeric" ' +
+        'data-key="watch_speech_volume" value="' + num('watch_speech_volume', 100) + '"></label>' +
 
       '<div class="settings-sec">Watch edge</div>' +
       '<label class="settings-row"><span>Line (px)</span>' +

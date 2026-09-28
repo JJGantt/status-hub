@@ -12,6 +12,9 @@ enum WatchSettings {
             Speaker.reload()
             Speaker.redrawControl()
         }
+        if let v = all[Speaker.volumeKey].flatMap({ Double("\($0)") }) {
+            Speaker.shared.apply(volume: Int(v.rounded()))
+        }
         BorderStyle.shared.apply(all)
     }
 

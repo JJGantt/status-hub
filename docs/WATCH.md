@@ -529,10 +529,16 @@ never counted as finished: the voice stops and the listener stays hushed. So `Sp
 rendered buffer and how many have played, and resumes from the first unplayed one on each of those
 notifications and whenever the app comes to the front and finds the player silent (`checkOnWake`).
 
+**While a reply is spoken, the next press only stops it** (`CommandBorder.press`): a double tap, or a tap
+anywhere on the screen (the top half included, which otherwise does nothing). The press after that
+records as usual.
+
 ### The settings page
 
 Left of the sessions page (`SettingsView`): the Speak switch, the same flag the Control Center control
-and the hub's Settings write, so the three always agree. It re-reads the flag each time it appears,
+and the hub's Settings write, so the three always agree, and the voice's volume (`watch_speech_volume`,
+percent of the watch's own volume, 10 to 100 in tens; also on the hub's Settings). The volume applies to
+a reply already playing. It can only make the voice quieter than the watch's volume, never louder. It re-reads the flag each time it appears,
 because the control changes it from the widget extension's process, which the app does not hear.
 
 ### Two launchers, one request

@@ -281,7 +281,8 @@ final class Sessions: ObservableObject {
         // The wrist is told the moment the microphone closes, as on home: the silence may have decided
         // it, and nothing else says so.
         WKInterfaceDevice.current().play(.stop)
-        Hub.log("record-stop", ["view": "session", "seconds": clip.duration, "heard": clip.heard])
+        Hub.log("record-stop", ["view": "session", "seconds": clip.duration, "heard": clip.heard, "peak": clip.peak,
+                                   "chirped": clip.chirped.map { $0 as Any } ?? NSNull()])
         let item = Outgoing(msgId: UUID().uuidString, clip: clip, words: nil)
         outgoing[key, default: []].append(item)
         send(key, item.msgId)

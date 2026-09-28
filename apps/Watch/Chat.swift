@@ -130,7 +130,8 @@ final class Chat: ObservableObject {
     func stopRecording() {
         guard capture.owner == .hub, let finished = capture.stop() else { return }
         WKInterfaceDevice.current().play(.stop)
-        Hub.log("record-stop", ["view": "chat", "seconds": finished.duration, "heard": finished.heard])
+        Hub.log("record-stop", ["view": "chat", "seconds": finished.duration, "heard": finished.heard, "peak": finished.peak,
+                                   "chirped": finished.chirped.map { $0 as Any } ?? NSNull()])
         let command = Command(clip: finished)
         commands.append(command)
         run(command.msgId)

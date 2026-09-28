@@ -17,6 +17,10 @@ final class Recorder {
         /// Seconds of audio the microphone actually delivered into the file. Far short of `duration`
         /// means the microphone went deaf, which the hub would otherwise only report as an empty clip.
         var heard: TimeInterval = 0
+        /// The loudest buffer written (RMS, 0…1): 0 with `heard` > 0 is a live microphone recording silence.
+        var peak: Float = 0
+        /// Whether the start chirp was heard to finish playing; false means the speaker never sounded it.
+        var chirped: Bool?
     }
 
     enum Failure: Error {
@@ -40,6 +44,11 @@ final class Recorder {
     /// Counts off the chirp's length of input; the tap keeps none of that audio (`cue`).
     private let gate = CueGate()
     private var startedAt = Date()
+    /// Whether the first buffer from the microphone has arrived since `start`, logged once as `mic-live`.
+    private let firstBuffer = Flag()
+    /// Whether the chirp played through: nil when none was asked for this recording.
+    private var chirped: Bool?
+    private var observers: [NSObjectProtocol] = []
 
     /// Asks for the microphone on first use, then starts recording.
     func start() async throws {
@@ -47,6 +56,7 @@ final class Recorder {
         let session = AVAudioSession.sharedInstance()
         try session.setCategory(.playAndRecord, mode: .default)
         try session.setActive(true)
+        Hub.log("mic-route", Self.describe(session))
         if !playerWired {
             engine.attach(player)
             engine.connect(player, to: engine.mainMixerNode, format: Self.chirp.format)
@@ -57,7 +67,15 @@ final class Recorder {
         guard format.sampleRate > 0, format.channelCount > 0 else { throw Failure.notStarted }
         let sink = try Sink(input: format)
         let gate = self.gate
+        let firstBuffer = self.firstBuffer
+        firstBuffer.set(false)
+        let opened = Date()
+        chirped = nil
         input.installTap(onBus: 0, bufferSize: 4096, format: format) { [weak self] buffer, _ in
+            if !firstBuffer.getAndSet(true) {
+                let ms = Int(Date().timeIntervalSince(opened) * 1000)
+                DispatchQueue.main.async { Hub.log("mic-live", ["ms": ms, "rate": format.sampleRate]) }
+            }
             // The chirp is not his voice: it is neither kept in the clip nor counted by the endpoint,
             // where it would read as speech and let the silence after it send an empty command.
             let seconds = Double(buffer.frameLength) / format.sampleRate
@@ -67,12 +85,40 @@ final class Recorder {
             // count of silent seconds depends on.
             DispatchQueue.main.async { MainActor.assumeIsolated { self?.onLevel?(level, seconds) } }
         }
-        NotificationCenter.default.addObserver(forName: AVAudioSession.interruptionNotification,
-                                               object: session, queue: .main) { [weak self] note in
-            let raw = note.userInfo?[AVAudioSessionInterruptionTypeKey] as? UInt ?? 0
-            let began = AVAudioSession.InterruptionType(rawValue: raw) == .began
-            MainActor.assumeIsolated { self?.onInterruption?(began) }
-        }
+        let center = NotificationCenter.default
+        observers = [
+            center.addObserver(forName: AVAudioSession.interruptionNotification, object: session,
+                               queue: .main) { [weak self] note in
+                let raw = note.userInfo?[AVAudioSessionInterruptionTypeKey] as? UInt ?? 0
+                let began = AVAudioSession.InterruptionType(rawValue: raw) == .began
+                MainActor.assumeIsolated { self?.onInterruption?(began) }
+            },
+            // The route changing under a recording (headphones, the system taking the speaker) is the
+            // kind of thing that silently changes what the microphone hears.
+            center.addObserver(forName: AVAudioSession.routeChangeNotification, object: session,
+                               queue: .main) { note in
+                let raw = note.userInfo?[AVAudioSessionRouteChangeReasonKey] as? UInt ?? 0
+                MainActor.assumeIsolated {
+                    var fields = Self.describe(session)
+                    fields["reason"] = raw
+                    Hub.log("mic-route-change", fields)
+                }
+            },
+            // A configuration change STOPS the engine, and a stopped engine delivers no more audio: the
+            // recording would carry on looking live and send an empty clip. So it is started again.
+            center.addObserver(forName: .AVAudioEngineConfigurationChange, object: engine,
+                               queue: .main) { [weak self] _ in
+                MainActor.assumeIsolated {
+                    guard let self, self.sink != nil else { return }
+                    do {
+                        try self.engine.start()
+                        Hub.log("mic-engine-restart", ["ok": true])
+                    } catch {
+                        Hub.log("mic-engine-restart", ["ok": false, "error": String(describing: error).prefix(120).description])
+                    }
+                }
+            },
+        ]
         engine.prepare()
         do {
             try engine.start()
@@ -94,8 +140,32 @@ final class Recorder {
         let session = AVAudioSession.sharedInstance()
         let chirp = Double(Self.chirp.frameLength) / Self.chirp.format.sampleRate
         gate.hold(chirp + session.outputLatency + session.inputLatency)
-        player.scheduleBuffer(Self.chirp, completionHandler: nil)
+        chirped = false
+        let asked = Date()
+        player.scheduleBuffer(Self.chirp, completionCallbackType: .dataPlayedBack) { [weak self] _ in
+            let ms = Int(Date().timeIntervalSince(asked) * 1000)
+            DispatchQueue.main.async {
+                MainActor.assumeIsolated {
+                    self?.chirped = true
+                    Hub.log("chirp-done", ["ms": ms])
+                }
+            }
+        }
         player.play()
+        Hub.log("chirp", ["engine": engine.isRunning, "playing": player.isPlaying])
+    }
+
+    /// What the audio session is set to and where sound goes in and out: the first thing to read when a
+    /// recording comes back empty or the chirp is not heard.
+    private static func describe(_ session: AVAudioSession) -> [String: Any] {
+        [
+            "category": session.category.rawValue,
+            "mode": session.mode.rawValue,
+            "inputs": session.currentRoute.inputs.map(\.portType.rawValue).joined(separator: ","),
+            "outputs": session.currentRoute.outputs.map(\.portType.rawValue).joined(separator: ","),
+            "otherAudio": session.isOtherAudioPlaying,
+            "inputAvailable": session.isInputAvailable,
+        ]
     }
 
     /// Two notes a fifth apart, C6 then G6, 70ms each, with short fades so neither clicks.
@@ -120,7 +190,8 @@ final class Recorder {
     /// own length is not known until the encoder has flushed it.
     func stop() -> Clip? {
         guard let sink = halt() else { return nil }
-        return Clip(url: sink.finish(), duration: Date().timeIntervalSince(startedAt), heard: sink.heard)
+        return Clip(url: sink.finish(), duration: Date().timeIntervalSince(startedAt), heard: sink.heard,
+                    peak: sink.peak, chirped: chirped)
     }
 
     /// Ends the recording and throws the file away.
@@ -145,8 +216,8 @@ final class Recorder {
 
     @discardableResult
     private func halt() -> Sink? {
-        NotificationCenter.default.removeObserver(self, name: AVAudioSession.interruptionNotification,
-                                                 object: AVAudioSession.sharedInstance())
+        observers.forEach(NotificationCenter.default.removeObserver)
+        observers = []
         guard let sink else { return nil }
         self.sink = nil
         engine.inputNode.removeTap(onBus: 0)
@@ -170,8 +241,11 @@ private final class Sink: @unchecked Sendable {
     private var file: AVAudioFile?
     private var url: URL
     private var written: TimeInterval = 0
+    private var loudest: Float = 0
     /// Seconds of audio written into the current file.
     var heard: TimeInterval { lock.withLock { written } }
+    /// The loudest buffer written into the current file.
+    var peak: Float { lock.withLock { loudest } }
 
     init(input: AVAudioFormat) throws {
         url = Self.newURL()
@@ -201,6 +275,7 @@ private final class Sink: @unchecked Sendable {
         if out.frameLength > 0, let file {
             try? file.write(from: out)
             written += Double(out.frameLength) / format.sampleRate
+            loudest = max(loudest, level)
         }
         return level
     }
@@ -217,6 +292,7 @@ private final class Sink: @unchecked Sendable {
         file = opened
         url = next
         written = 0
+        loudest = 0
         return done
     }
 
@@ -258,6 +334,15 @@ private final class Sink: @unchecked Sendable {
 
 /// Whether the tap is dropping audio while the chirp sounds. Written on the main actor and in the
 /// player's callback, read on the audio thread, so it is only touched under its lock.
+/// A flag the audio thread can read and set.
+private final class Flag: @unchecked Sendable {
+    private let lock = NSLock()
+    private var value = false
+    func set(_ v: Bool) { lock.withLock { value = v } }
+    /// Sets it and returns what it was.
+    func getAndSet(_ v: Bool) -> Bool { lock.withLock { defer { value = v }; return value } }
+}
+
 private final class CueGate: @unchecked Sendable {
     private let lock = NSLock()
     private var left: TimeInterval = 0

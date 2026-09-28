@@ -417,9 +417,8 @@ working on; it does nothing when there is nothing to throw away.
   record only, nothing plays), and the tap drops the chirp's length of input plus the route latency,
   counted in the microphone's own samples, so the clip never contains it and the endpoint never counts
   it as speech. It must not wait on the chirp's playback-finished callback: that callback does not
-  always come, and a gate waiting on it stays shut for the whole recording, which the hub then refuses
-  as an empty clip. `record-stop` logs `heard`, the seconds actually written, beside the recording's
-  length. Commands and follow-ups only; the always-on listener opens silently.
+  always come (when the speaker does not play the chirp at all), and a gate waiting on it stays shut
+  for the whole recording, which the hub then refuses as an empty clip. Commands and follow-ups only; the always-on listener opens silently.
 - **The microphone closing taps the wrist** (`.stop`), on home and in a session, on a recording the
   silence ended and on one a press ended alike. That is the moment nothing else reports: the silence
   decides it, and by then the watch may be back at his side.
@@ -616,11 +615,16 @@ wrist. Fly keeps only the recent lines, so read it soon.
 | `record` | a finger tap on the text |
 | `record-refused`, `mic-refused`, `mic-failed`, `mic-open` | why a recording did or did not start |
 | `mic-end` | what the endpoint saw when a recording ended, and why (`silence`, `unspoken`) |
+| `mic-route`, `mic-route-change` | the audio session's category and mode, its input and output ports, and whether other audio is playing — at every recording's start, and whenever the route changes under one |
+| `mic-live` | the first buffer from the microphone, with how long after opening it came. A recording with no `mic-live` never heard anything |
+| `mic-engine-restart` | the audio engine was stopped by a configuration change mid-recording and started again (a stopped engine records nothing) |
+| `chirp`, `chirp-done` | the start chirp asked for (whether the engine and player were running) and heard to finish, with how long it took. A `chirp` with no `chirp-done` is a chirp the speaker never played |
+| `record-stop` | a recording stopped: its length, `heard` (seconds actually written to the clip), `peak` (loudest RMS written) and `chirped`. `heard` far short of `seconds` is a deaf microphone; `heard` with `peak` near 0 is a live one hearing silence |
 | `mic-lock` | the lock toggled |
 | `listener-sent`, `listener-failed` | an always-on utterance going up |
 | `sent`, `send-failed` | a command's clip going up, with how long it took |
 | `listen-alive` | always-on listening still has the microphone, with minutes since it was engaged — one line per twenty silent segments, about five minutes. **This is how long watchOS lets it hold the microphone with the wrist down**, which is otherwise unknown: read the gap between the last line and when it was engaged |
-| `speak`, `speak-end`, `speak-failed` | a spoken reply starting (its length) and how it ended |
+| `speak`, `speak-end`, `speak-failed` | a spoken reply starting (its length and output port) and how it ended |
 | `stream-open`, `stream-end`, `stream-error` | the event streams |
 | `resend` | a call's connection dropped mid-flight and it was sent again |
 | `frame` | each stream frame for the session on screen |

@@ -63,7 +63,8 @@ final class Speaker: ObservableObject {
         pending = 0
         rendered = false
         speaking = true
-        Hub.log("speak", ["chars": words.count])
+        Hub.log("speak", ["chars": words.count,
+                          "outputs": session.currentRoute.outputs.map(\.portType.rawValue).joined(separator: ",")])
         synth.write(u) { [weak self] buffer in
             guard let pcm = buffer as? AVAudioPCMBuffer else { return }
             Task { @MainActor in self?.take(pcm, turn: this) }

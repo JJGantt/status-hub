@@ -443,9 +443,13 @@ answers with the transcript, shown until the turn lands, and the request id, and
 `/api/voice-reply/:id`. No id means the hub heard no words. **With the wrist down the app is kept running until
 a home command's answer is in** (`StayAwake`): recording keeps a watch app alive, but once the command
 is sent nothing did, so the app was suspended mid-wait, the answer's tap never came, and the screen
-still showed the command working when he looked. `StayAwake` plays silence, mixed with others, while
-`Chat.waiting`, and lets go the moment nothing is; anything that turns the audio session off (a
-recording ending, a spoken reply finishing) calls `sessionReleased()` so it restarts over a live session.
+still showed the command working when he looked. `StayAwake` holds the microphone and discards what it
+hears while `Chat.waiting`, and lets go the moment nothing is. Playing silence instead looks equivalent
+and is not: a watch app that only plays is frozen the instant the wrist drops (see Spoken replies). It
+stands aside for anything else holding the microphone (a recording, the listener, a spoken reply), which
+keeps the app alive by itself, and each of those makes it let go when they start, since two taps on
+the microphone fight. Anything that turns the audio session off (a recording ending, a spoken reply
+finishing) calls `sessionReleased()` so it takes the microphone back if a command is still waiting.
 Home commands only: a session can work for minutes, and he does not want the battery spent on that. And **one minute at most per wait** (his number): if the answer has not come by then it lets go,
 and nothing restarts it until nothing is waiting. It
 does not make the dimmed screen redraw faster (watchOS caps that at about once a second, which is why

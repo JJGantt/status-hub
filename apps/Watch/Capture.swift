@@ -192,6 +192,9 @@ final class Capture: ObservableObject {
             return
         }
         self.owner = owner
+        // A command waiting on its answer may be holding the microphone to stay awake; this recording
+        // holds it now, and one tap at a time.
+        StayAwake.shared.sessionReleased()
         self.onSilence = onSilence
         self.onTaken = onTaken
         endsOnSilence = onSilence != nil || owner == .listener

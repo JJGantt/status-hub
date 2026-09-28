@@ -44,6 +44,8 @@ final class Speaker: NSObject, ObservableObject, AVSpeechSynthesizerDelegate {
     private var schedule = 0
     private var rendered = false
     private var speaking = false
+    /// Whether a reply is being spoken, which holds the microphone (`StayAwake` stands aside for it).
+    var isSpeaking: Bool { speaking }
     private var micHeld = false
     private var startedAt = Date()
 
@@ -103,6 +105,7 @@ final class Speaker: NSObject, ObservableObject, AVSpeechSynthesizerDelegate {
         }
         turn += 1
         speaking = true
+        StayAwake.shared.sessionReleased()   // the reply holds the microphone now; one tap at a time
         render(words, turn: turn)
     }
 

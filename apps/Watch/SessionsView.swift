@@ -212,7 +212,9 @@ struct SessionView: View {
                 // says which session this is.
                 // A small chevron before the name says it is a way back without having to know it; the
                 // name and the chevron are one button.
-                Button { sessions.path.removeLast() } label: {
+                // Guarded: two taps close enough together that the first pop hasn't dismissed this
+                // button yet would call removeLast() on an already-empty path and crash.
+                Button { if !sessions.path.isEmpty { sessions.path.removeLast() } } label: {
                     HStack(spacing: 4) {
                         Image(systemName: "chevron.left")
                             .font(.system(size: 11, weight: .semibold))
@@ -312,7 +314,11 @@ struct SessionView: View {
                                       height: $newestHeight))
             }
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
+        // At least a screen tall, so a short conversation's blank space below the last line is still
+        // tappable: the tap gesture and its hit-testing (below) are on this view's own frame, which
+        // without a minimum is only as tall as the text, leaving the rest of the visible screen dead —
+        // no press, and no way to stop a reply mid-speech by tapping there.
+        .frame(maxWidth: .infinity, minHeight: WKInterfaceDevice.current().screenBounds.height, alignment: .topLeading)
         .contentShape(Rectangle())
     }
 

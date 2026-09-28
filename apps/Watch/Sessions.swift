@@ -162,8 +162,20 @@ final class Sessions: ObservableObject {
     /// Every row the hub sent, so a stream frame (which names a row) can be matched to its conversation.
     private var rows: [SessionRow] = []
     private var stream: Task<Void, Never>?
-    private var loading = false
+    /// The in-flight `load()`, if one is running: a second caller awaits THIS rather than returning at
+    /// once, so `await load()` keeps its promise that `rows`/`list` are current once it returns. It used
+    /// to just flag a re-run and return immediately, which meant every caller but the one already
+    /// running never actually waited for anything — `open(rowId:)` and `key(forRow:)` read `rows` right
+    /// after their own `await load()`, so a session opened from its notification while another load was
+    /// already in flight (raising the wrist to it is exactly that) could read stale rows and never find
+    /// its own, landing on the raw row id instead of the conversation's real key.
+    private var loadTask: Task<Void, Never>?
     private var reloadAfter = false
+    /// Counts each `loadDetail` call per conversation, so a response from an earlier call that is still
+    /// in flight when a later one returns first — raising and lowering the wrist fast enough calls
+    /// `activate()`, and so `loadDetail`, several times a second, with no guarantee the responses come
+    /// back in the order the requests went out — is dropped instead of overwriting the fresher one.
+    private var detailGen: [String: Int] = [:]
 
     /// The page is on screen: load now, and follow every session's activity until `deactivate`.
     func activate() {
@@ -187,15 +199,26 @@ final class Sessions: ObservableObject {
     }
 
     func load() async {
+        if let t = loadTask {
+            // Ask it to go around again rather than trust the pass already under way, which may have
+            // read before whatever prompted this call, then wait on the SAME task everyone else is:
+            // one fetch in flight, however many callers are waiting on it.
+            reloadAfter = true
+            return await t.value
+        }
+        let t = Task { await self.fetchSessions() }
+        loadTask = t
+        await t.value
+        loadTask = nil
+    }
+
+    private func fetchSessions() async {
         struct Lists: Decodable {
             let resident: [SessionRow]
             let evicted: [SessionRow]
             let focus: String?
             let pinned: Bool?
         }
-        if loading { reloadAfter = true; return }
-        loading = true
-        defer { loading = false }
         repeat {
             reloadAfter = false
             if let l: Lists = try? await Hub.json("/api/sessions") {
@@ -237,11 +260,24 @@ final class Sessions: ObservableObject {
     /// stale one, both looking equally current, since the page never says the stream is behind.
     func loadDetail(_ key: String, resync: Bool = false) async {
         guard let r = row(for: key) else { return }
+        detailGen[key, default: 0] += 1
+        let gen = detailGen[key]!
         if let d: SessionDetail = try? await Hub.json("/api/sessions/" + Hub.pathComponent(r.id)) {
+            guard detailGen[key] == gen else {
+                Hub.log("detail-stale", ["row": r.id]); return
+            }
             details[key] = d
             if d.working == true {
+                // The hub keeps `queued` and `said` as two separate steps and never dedupes them
+                // itself (`keepStep`, server.js) — the same pair `sessionFrame` collapses live, here
+                // un-collapsed, so seeding straight from this array showed his message twice on
+                // anything that seeded from it: a cold open, or (since `resync`) a reconnect.
                 if let steps = d.steps, !steps.isEmpty, resync || (activity[key] ?? []).isEmpty {
-                    activity[key] = steps.compactMap { line($0.state, $0.text, key) }
+                    activity[key] = steps.reduce(into: [ActivityLine]()) { acc, step in
+                        guard let l = line(step.state, step.text, key) else { return }
+                        if l.kind == .said, acc.last(where: { $0.kind == .said })?.text == l.text { return }
+                        acc.append(l)
+                    }
                 }
             } else if resync {
                 // The turn ended during the gap; nothing further is coming for it.
@@ -396,7 +432,10 @@ final class Sessions: ObservableObject {
             // turn was still running, then actually started — and the hub sends both with the same
             // text. Without this, a message that arrived queued showed on the wrist a second time the
             // moment it started: two identical lines for the one thing he said.
-            if l.kind == .said, activity[key]?.contains(where: { $0.kind == .said && $0.text == l.text }) == true {
+            // Checked against the MOST RECENT `.said` line only, not the whole history: a queued/said
+            // pair is always adjacent (nothing but tool calls can fall between them), where the whole
+            // history would also swallow him genuinely saying the same short thing twice in one turn.
+            if l.kind == .said, activity[key]?.last(where: { $0.kind == .said })?.text == l.text {
                 return
             }
             activity[key, default: []].append(l)
@@ -412,7 +451,14 @@ final class Sessions: ObservableObject {
         // Only now that the reply is in hand do the tool calls go. Cleared first, the page's newest item
         // would be the PREVIOUS reply for the moment the fetch takes, and a view following the newest
         // item would jump up to it and back down. Words he sent that are still being worked on stay.
-        if answered || !waiting {
+        // A second command for this conversation can be transcribed and its words shown locally
+        // (`send`) before its OWN network round trip finishes — `awaiting[key]` only takes its
+        // timestamp once that trip is done. A "done" for an EARLIER command landing in that window
+        // reads `awaiting[key]` as still the earlier one, resolves as answered, and would otherwise
+        // wipe the second command's just-shown words along with the first's finished turn. Still
+        // sending anything is what actually says there is more to come, not the timestamp.
+        let stillSending = !(outgoing[key] ?? []).isEmpty || inFlight[key, default: 0] > 0
+        if (answered || !waiting) && !stillSending {
             activity[key] = nil
         } else {
             activity[key] = activity[key]?.filter { $0.kind == .said }

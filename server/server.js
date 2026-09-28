@@ -3146,6 +3146,7 @@ const TURN_STEPS_MAX = 300;
 const turnSteps = new Map();
 function keepStep(session, state, text) {
   if (state === 'done') { turnSteps.delete(session); return; }
+  if (state === 'gone') { turnSteps.delete(session); return; }
   if (!text) return;
   const steps = turnSteps.get(session) || [];
   steps.push({ state, text });
@@ -4237,11 +4238,14 @@ async function buildSessions() {
   // can be thrown away cost 155KB of a 242KB response over 95 parked sessions, which is most of
   // what a phone downloads on a cold load.
   const SAY = 120;
-  const say = (s) => cleanSaid(s.last_reply || s.prompt || '').replace(/\s+/g, ' ').slice(0, SAY);
+  const say = (s) => cleanSaid(s.last_reply || s.last_prompt || '').replace(/\s+/g, ' ').slice(0, SAY);
   const brief = (s) => ({ ...withN(s), say: say(s) });
   // The whole reply goes only to rows something can render in full: everything resident, plus the
   // most recently active parked one, which is what the home wall falls back to when nothing runs.
-  const full = (s) => ({ ...brief(s), last_reply: s.last_reply });
+  // Cleaned the same way `say` is: the two are the same field, and a reply is not where the two
+  // patterns above are expected, but a client showing the whole reply should never be the one place
+  // that regresses if one ever does match a reply.
+  const full = (s) => ({ ...brief(s), last_reply: cleanSaid(s.last_reply) });
   const evicted = (sessions || []).filter((s) => s.status === 'evicted').sort(byActivity);
   return {
     // Resident = running now, reachable over Remote Control. Evicted = closed to free the machine
@@ -4359,6 +4363,7 @@ app.post('/api/sessions/:action', express.json(), async (req, res) => {
     const id = String((req.body || {}).id || '');
     if (!id) return res.status(400).json({ error: 'id required' });
     if (action === 'forget') {
+      keepStep(id, 'gone', '');
       await sbWrite(`desk_sessions?id=eq.${encodeURIComponent(id)}`, 'DELETE');
       return res.json({ ok: true });
     }
@@ -4419,6 +4424,9 @@ app.post('/api/sessions/:action', express.json(), async (req, res) => {
         return res.status(409).json({ error: `the ${to === 'mac' ? 'Mac' : 'Pi'} is not responding`, saved });
       }
       const cmdId = crypto.randomUUID();
+      // The row keeps its id across a transfer, but the conversation now runs as a new session on the
+      // other machine and this id's own record of the turn in flight, if any, is not coming back.
+      keepStep(id, 'gone', '');
       if (await machineAwake(from)) {
         await sbWrite('desk_commands', 'POST',
           { id: cmdId, kind: 'transfer_session', payload: { session: id, target: from, to } });
@@ -4458,6 +4466,9 @@ app.post('/api/sessions/:action', express.json(), async (req, res) => {
     }
     const kind = action === 'resume' ? 'resume_session' : action === 'end' ? 'end_session' : null;
     if (!kind) return res.status(400).json({ error: 'unknown action' });
+    // Ended mid-turn, the tail of `keepStep`'s record of it (up to 300 steps, kept only in memory) is
+    // never going to get its `done` and would sit there until the next deploy otherwise.
+    if (action === 'end') keepStep(id, 'gone', '');
     // The machine that OWNS the session, read from its row. Hardcoding 'pi' sent every Mac session's
     // command to a consumer that rejects the id, while the Mac's never saw it at all.
     const machine = rowsFull[0].worker === 'desk' ? 'mac' : 'pi';

@@ -566,7 +566,12 @@ Measured around 1.5s, which the push waits for.
 `/api/session-activity` (a live session's steps, relayed straight out over SSE — `tool`, `text` for
 what it says between calls, `said` for HIS words arriving mid-turn, `done` for the finished reply.
 `said` exists so a prompt sent while a turn runs lands in the stream where it happened instead of at
-the top of the turn it interrupted) ·
+the top of the turn it interrupted. Every step but `done` is ALSO kept in `turnSteps`, an in-memory
+Map keyed by session id, up to 300 steps — this is `/api/sessions/:id`'s `steps`, what a cold open or a
+stream reconnect seeds a client's activity from. `done` clears a session's entry; nothing else did until
+`forget`, `end` and `transfer` were each made to clear it too — a session ended or handed to the other
+machine mid-turn otherwise orphaned its steps for the life of the Node process, freed only by the next
+deploy) ·
 `/api/repos/cmd/:id` · `/api/sessions` (live desk sessions + the follow-up `focus`; each row carries
 `unread`, a finished reply nobody has opened) · `/api/sessions/seen` (opening one stamps
 `desk_sessions.seen_at`, which is what clears it on every surface) ·
@@ -1110,6 +1115,34 @@ resident, and the newest parked one, which is what the home wall falls back to w
 running. **Adding a field to a session view means adding it to that projection**, or it arrives
 `undefined`. Ninety-odd parked sessions carrying their full replies and five unread timestamps each
 made this a 242KB response; it is 39KB.
+
+### A prompt can carry two things that were never meant for him to read
+
+`server.js`'s `cleanSaid`, applied to `last_prompt`, `say` and every turn's `prompt` before any of them
+reach a client — the watch, the phone thread, the TV — strips two patterns, both confirmed live in
+`desk_turns`, not theoretical:
+
+- **The bracketed line `desk.startSession` appends to a voice-dispatched prompt** (`data-layer/src/
+  desk.ts`), `\n\n[Where Jared was when he asked: lat, lon (within about N m)]` — for the agent to read,
+  never for him; his own words end where it begins.
+- **The stub a message too long for a tty is typed as, instead of itself**
+  (`orchestrator/src/applescript.js`'s `handoff`), naming the file the real words are parked in. Meant
+  to be resolved back to those words before anything is stored (`transcripts.js`'s `resolvePrompt`,
+  called from `turnStart` and from `sessionWatch`'s `queue-operation` handling) — `cleanSaid` is a
+  backstop for the rare case that resolution did not happen (the stash file was swept, or the read
+  raced it): found, at the time this was written, sitting unresolved in `desk_turns` from more than
+  one session, shown as if he had typed an instruction to go read a file.
+
+`cleanSaid` runs at THREE points, and a fourth is documented above it in the code as the one still
+open: the list's `say`, a session's `last_prompt` and each of its `turns[].prompt` (`/api/sessions/:id`),
+and `full()`'s `last_reply` (cleaned for consistency with `say`, though neither pattern is expected to
+ever match a reply rather than a prompt). **A fourth source of exactly this failure mode — text that
+looks like his words but is not — is `fromHim` in `transcripts.js`**: a message queued mid-turn is
+checked against ONE wrapper tag, `<task-notification>`; a second one, `<agent-message` (a subagent's own
+hand-back report to the turn that spawned it), was not excluded, and its own opening line — stating
+plainly it is not from him — displayed on the wrist as if it were his prompt. Both tags are excluded
+now (`NOT_HIM`); if a THIRD synthetic wrapper is ever added to the harness, it needs listing there too,
+not discovered by watching it appear on his screen.
 
 ### Naming a session
 

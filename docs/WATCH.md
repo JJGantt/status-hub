@@ -20,8 +20,8 @@ build), so a fix that has not been installed is not mistaken for one that failed
 
 ## Pages
 
-Four, swiped left to right: **sessions · home · day · health**. The app opens on home, which IS the
-conversation — there is no separate prompt page. New layouts are added as NEW pages beside the old
+Five, swiped left to right: **settings · sessions · home · day · health**. The app opens on home,
+which IS the conversation — there is no separate prompt page. New layouts are added as NEW pages beside the old
 ones rather than by reshaping a page in place, and the ones that lose are deleted; `day` and `health`
 are two layouts of the same food-and-training data, and one of them is expected to go.
 `RootView` in `StatusHubWatchApp.swift` holds them in a paged `TabView` inside a `NavigationStack`,
@@ -35,6 +35,15 @@ dispatches on.
 
 Every page stays alive side by side in the TabView, so anything that binds double tap or acts on a
 request asks `onScreen` (an environment value `RootView` sets per page) first.
+
+### The settings page
+
+Left of the sessions page (`SettingsView`): the Speak switch, the same flag the Control Center control
+and the hub's Settings write, so the three always agree, and the voice's volume (`watch_speech_volume`,
+percent of the watch's own volume, 10 to 100 in tens; also on the hub's Settings). The volume applies to
+a reply already playing. It can only make the voice quieter than the watch's volume, never louder.
+Also here: the `Route` toggle (`watch_speech_route`), `.hold` or `.nowPlaying` — see Spoken replies. It re-reads all three each time it appears,
+because the control changes it from the widget extension's process, which the app does not hear.
 
 ### Home — the conversation
 
@@ -165,6 +174,20 @@ activity was EMPTY — which after a mid-turn drop it never is, so the refetch c
 takes a `resync` flag, set only from `reloadAll`, that replaces local activity with the hub's record
 regardless, and clears it outright if the turn finished during the gap.
 
+**A `loadDetail` response can arrive after a later one for the same conversation, and must not win.**
+Raising and lowering the wrist fast enough calls `activate()`, and so `loadDetail`, several times a
+second (measured — several `phase` transitions inside one second), and nothing guarantees the requests'
+responses land in the order they went out. `detailGen` counts each call per conversation; a response is
+applied only if its call is still the newest one issued, and a superseded one is dropped and logged as
+`detail-stale`.
+
+**The queued/said dedup above is checked against the MOST RECENT `.said` line, not all of them** — a
+queued/said pair is always adjacent (only tool calls can fall between them), where checking the whole
+history would also swallow him genuinely saying the same short thing twice in one turn. The same dedup
+applies when activity is seeded from the hub's `steps` (a cold open, or a resync): the hub does not
+dedupe `queued`/`said` pairs itself before handing them back (`keepStep`, server.js), so seeding straight
+from that array reproduced the exact duplicate the live path already guards against.
+
 **Commands overlap.** A command can be recorded and sent while earlier ones are still being
 transcribed, handed over or worked on, on home and in a session alike: each is its own item (`Chat`'s
 `commands`, `Sessions`' `outgoing`), sent and retried by itself. His words join the conversation in the
@@ -190,7 +213,9 @@ reply to his last command is read, once everything is answered; nothing earlier 
 **Its name is on the clock's line, and the name is how it closes.** A leading `ToolbarItem` holds it
 (a trailing one moves the clock to the other end of the strip), and tapping it pops the session. The
 swipe back watchOS gives a pushed view does not survive a page row that also takes sideways swipes, so
-the way out is the thing at the top that says which session this is.
+the way out is the thing at the top that says which session this is. The pop is guarded
+against an empty path (two taps close enough together that the first has not dismissed the button
+yet would otherwise call `removeLast()` on an already-empty array and crash).
 
 **A recording running in a session is marked in the list**: a red square in its row, beside the green
 working dot, so a recording started in one and left there can be found from anywhere in the app.
@@ -575,15 +600,6 @@ its own Now Playing screen over the session every time a reply starts. Switching
 effect on the NEXT reply — mid-reply would tear down whichever session and command registrations the
 one playing is using.
 
-### The settings page
-
-Left of the sessions page (`SettingsView`): the Speak switch, the same flag the Control Center control
-and the hub's Settings write, so the three always agree, and the voice's volume (`watch_speech_volume`,
-percent of the watch's own volume, 10 to 100 in tens; also on the hub's Settings). The volume applies to
-a reply already playing. It can only make the voice quieter than the watch's volume, never louder.
-Also here: the `Route` toggle (`watch_speech_route`), `.hold` or `.nowPlaying` — see Spoken replies. It re-reads all three each time it appears,
-because the control changes it from the widget extension's process, which the app does not hear.
-
 ### Two launchers, one request
 
 The complication (circular and corner) opens `statushub://record`. The Record control
@@ -646,6 +662,13 @@ A session's page scrolls through `PagedScroll` (`Watch/WatchUI.swift`), which is
 scroll view and nothing more; home has its own scrolling, because it is the one page that lands the
 view on the top of each new thing. A tap in the bottom half of the glass records on both.
 
+**The tap is bound to the conversation's own frame, which is only as tall as its text** — a short
+conversation left the blank space below it unresponsive: no press, no way to stop a reply mid-speech by
+tapping there, because nothing was there to receive the tap. The session view's content is given a
+minimum height of a full screen so the tappable area always reaches the bottom of the glass, whatever
+the conversation's own length. Home has the same shape (its own content var, no minimum) and has not
+been checked for the same gap.
+
 ## The token comes from the phone
 
 The watch has no web view to sign in with and shares neither cookies nor Keychain with the phone.
@@ -675,6 +698,7 @@ wrist. Fly keeps only the recent lines, so read it soon.
 | event | what it says |
 |---|---|
 | `thread`, `detail` | what a page loaded |
+| `detail-stale` | a session-detail response arrived after a later one for the same conversation, and was dropped |
 | `control` | a press of the bottom control, with its mode |
 | `record` | a finger tap on the text |
 | `record-refused`, `mic-refused`, `mic-failed`, `mic-open` | why a recording did or did not start |
@@ -726,7 +750,7 @@ device builds:
 
 - the token comes from `SIMCTL_CHILD_HUB_TOKEN` (the kiosk's, sent as `?token=`);
 - `-opensession <row id>` opens a session as its notification would;
-- `-page <sessions|home|day|health>` lands on a page; `-dayview <totals|muscles>` opens the day page's
+- `-page <settings|sessions|home|day|health>` lands on a page; `-dayview <totals|muscles>` opens the day page's
   totals or its muscles page; `-health <weight|food|training>` opens a health page's full view;
 - `DAY_CLOCKS=<rest s>,<session s>` (as `SIMCTL_CHILD_DAY_CLOCKS`) sets the day page's rest and session
   clocks to any length, to check what fits beside the feet;

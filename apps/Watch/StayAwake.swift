@@ -70,6 +70,9 @@ final class StayAwake {
             let format = input.outputFormat(forBus: 0)
             guard format.sampleRate > 0, format.channelCount > 0 else {
                 Hub.log("stay-awake-failed", ["error": "no microphone format"])
+                // `holding` never becomes true on this path, so `stop()` would be a no-op forever and
+                // the session claimed just above would sit active until something else overrides it.
+                try? session.setActive(false, options: .notifyOthersOnDeactivation)
                 return
             }
             if !holding { input.installTap(onBus: 0, bufferSize: 4096, format: format) { _, _ in } }

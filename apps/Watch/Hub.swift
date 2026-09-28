@@ -307,6 +307,12 @@ enum Hub {
                         event = String(line.dropFirst(7))
                     } else if line.hasPrefix("data: ") {
                         await frame(event, String(line.dropFirst(6)))
+                        // An SSE event's name applies to it alone: a keepalive with no `event:` line of
+                        // its own defaults to "message", not to whatever was last named. Left set, a
+                        // keepalive after any real event kept matching `Hub.follow`'s event-name check,
+                        // which reloads the day/health pages on every keepalive rather than only on a
+                        // real change.
+                        event = ""
                     }
                 }
                 log("stream-end", ["path": path])

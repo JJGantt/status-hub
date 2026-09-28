@@ -229,14 +229,23 @@ final class Sessions: ObservableObject {
         }
     }
 
-    func loadDetail(_ key: String) async {
+    /// `resync` is true only right after the stream reconnects (`reloadAll`): the socket was down for
+    /// some stretch, and whatever the hub kept of the turn (`steps`, the same record a cold open seeds
+    /// from) is what actually happened during the gap, replacing local activity rather than only
+    /// filling it when it was empty. Without this a turn that kept working through a drop showed
+    /// exactly what had streamed in before the drop and nothing since — a live tool-call count with a
+    /// stale one, both looking equally current, since the page never says the stream is behind.
+    func loadDetail(_ key: String, resync: Bool = false) async {
         guard let r = row(for: key) else { return }
         if let d: SessionDetail = try? await Hub.json("/api/sessions/" + Hub.pathComponent(r.id)) {
             details[key] = d
-            // Opened mid-turn with nothing heard live yet: start from the turn so far, and let the
-            // stream carry on from there.
-            if d.working == true, (activity[key] ?? []).isEmpty, let steps = d.steps, !steps.isEmpty {
-                activity[key] = steps.compactMap { line($0.state, $0.text, key) }
+            if d.working == true {
+                if let steps = d.steps, !steps.isEmpty, resync || (activity[key] ?? []).isEmpty {
+                    activity[key] = steps.compactMap { line($0.state, $0.text, key) }
+                }
+            } else if resync {
+                // The turn ended during the gap; nothing further is coming for it.
+                activity[key] = nil
             }
             // Everything the watch sent is answered: the wait is over, however the news arrived.
             if let since = awaiting[key], Self.finished(d, since) {
@@ -304,7 +313,7 @@ final class Sessions: ObservableObject {
 
     private func reloadAll() async {
         await load()
-        for key in details.keys { await loadDetail(key) }
+        for key in details.keys { await loadDetail(key, resync: true) }
     }
 
     /// The hub transcribes the clip without enqueueing anything (`?dry=1`), then hands the words to the

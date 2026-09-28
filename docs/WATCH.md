@@ -154,6 +154,17 @@ whether it has landed, and a snippet of the last turn's prompt and reply — so 
 wrong on the wrist (a stale turn, a jump that never happened, following stuck off) is reproducible from
 the log rather than guessed at.
 
+**A dropped `session-stream` connection can silently lose whatever ran during the gap, so a reconnect
+resyncs rather than just resuming.** The stream carries every tool call and thought as it happens
+(`sessionFrame`); nothing behind it replays what was sent while nobody was listening. Measured: a
+15-second drop mid-turn (`stream-error`, network lost) left the wrist showing exactly what had arrived
+before the drop, indistinguishable from current, while the turn kept working and finished unseen. The
+reconnect callback already re-fetched the session (`reloadAll`), but `loadDetail` only seeded activity
+from the hub's own record of the turn (`steps`, the same field a cold open reads) when the page's local
+activity was EMPTY — which after a mid-turn drop it never is, so the refetch changed nothing. It now
+takes a `resync` flag, set only from `reloadAll`, that replaces local activity with the hub's record
+regardless, and clears it outright if the turn finished during the gap.
+
 **Commands overlap.** A command can be recorded and sent while earlier ones are still being
 transcribed, handed over or worked on, on home and in a session alike: each is its own item (`Chat`'s
 `commands`, `Sessions`' `outgoing`), sent and retried by itself. His words join the conversation in the

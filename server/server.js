@@ -3123,6 +3123,25 @@ app.post('/api/voice-reset', async (req, res) => {
 // streamed, so a session opened in the middle of a long turn showed its last finished reply and nothing
 // of what it had done since, until the next tool call. In memory, per session row, cleared by the turn's
 // `done` and capped; a hub restart loses them, which costs only the steps before it.
+// A prompt carries two things that were never meant for a human to read, and every surface that shows
+// "his words" verbatim (the watch, the phone thread, the TV) has to have them out before he sees them:
+//
+// - The bracketed line `desk.startSession` appends after a voice-dispatched prompt, so the session
+//   knows where he was ("[Where Jared was when he asked: lat, lon (within about N m)]") — for the
+//   agent, not for him; his own words end where it begins.
+// - The stub a message too long for a tty is typed as instead of itself (`orchestrator/src/
+//   applescript.js` `handoff`), naming the file the real words are parked in. It is meant to be
+//   resolved back to those words before anything is stored (`transcripts.js` `resolvePrompt`) — this
+//   is a backstop for the rare case that resolution did not happen (the file was swept, or the read
+//   raced it), since the alternative is showing him an internal instruction to go read a file.
+const WHERE_HE_WAS = /\n\n\[Where Jared was when he asked: [^\]]*\]\s*$/;
+const UNRESOLVED_STASH = /^\[A message from Jared, too long to type into this terminal\. It is in \S+.*\]\s*$/s;
+function cleanSaid(text) {
+  const s = String(text || '');
+  if (UNRESOLVED_STASH.test(s.trim())) return '';
+  return s.replace(WHERE_HE_WAS, '');
+}
+
 const TURN_STEPS_MAX = 300;
 const turnSteps = new Map();
 function keepStep(session, state, text) {
@@ -3148,7 +3167,7 @@ app.post('/api/session-activity', express.json(), (req, res) => {
   const done = state === 'done';
   // A thought or a dictated prompt can run to a paragraph; a tool line or a row's reply never needs
   // more than 400.
-  const text = String(b.text || '').slice(0, ['text', 'said', 'queued'].includes(state) ? 2000 : 400);
+  const text = cleanSaid(String(b.text || '')).slice(0, ['text', 'said', 'queued'].includes(state) ? 2000 : 400);
   const at = typeof b.at === 'string' ? b.at : null;
   // THE NOTIFICATION IS A SENTENCE, and the machine that produced the reply writes it — it already
   // runs Claude, so no key lives anywhere for this. That takes seconds, and `done` cannot wait: it is
@@ -4218,7 +4237,7 @@ async function buildSessions() {
   // can be thrown away cost 155KB of a 242KB response over 95 parked sessions, which is most of
   // what a phone downloads on a cold load.
   const SAY = 120;
-  const say = (s) => (s.last_reply || s.prompt || '').replace(/\s+/g, ' ').slice(0, SAY);
+  const say = (s) => cleanSaid(s.last_reply || s.prompt || '').replace(/\s+/g, ' ').slice(0, SAY);
   const brief = (s) => ({ ...withN(s), say: say(s) });
   // The whole reply goes only to rows something can render in full: everything resident, plus the
   // most recently active parked one, which is what the home wall falls back to when nothing runs.
@@ -4316,11 +4335,13 @@ app.get('/api/sessions/:id', async (req, res) => {
       '&select=id,label,custom_title,repo,worker,status,working,claude_session_id,last_prompt,last_reply,reply_at');
     if (!rows || !rows.length) return res.status(404).json({ error: 'no such session' });
     const row = rows[0];
+    if (row.last_prompt) row.last_prompt = cleanSaid(row.last_prompt);
     // The history is context, not the answer: without it the session still opens on its last turn.
     let turns = [];
     try {
       turns = ((await sb(`desk_turns?conversation=eq.${encodeURIComponent(row.claude_session_id || row.id)}` +
-        `&select=at,prompt,reply&order=at.desc&limit=${SESSION_TURNS}`)) || []).reverse();
+        `&select=at,prompt,reply&order=at.desc&limit=${SESSION_TURNS}`)) || [])
+        .reverse().map((t) => (t.prompt ? { ...t, prompt: cleanSaid(t.prompt) } : t));
     } catch (e) { console.log('[sessions] turns:', e.message); }
     // The turn in flight so far, while there is one: the steps the stream carried before this view
     // was open to hear them.

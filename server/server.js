@@ -950,7 +950,10 @@ async function fetchDeskRows() {
 }
 
 async function fetchStatusRows(win, week, histStart, heatStart) {
-  const nutLogStart = localDate(new Date(Date.now() - 86 * 86400000));
+  // The food map's rows must reach back as far as its grid does — HEAT_WEEKS columns, the first starting
+  // on a Sunday up to six days before that. A fixed day count here outlives the grid it was sized for,
+  // and every day it falls short draws as an empty cell, which reads exactly like deleted entries.
+  const nutLogStart = localDate(new Date(Date.now() - (HEAT_WEEKS * 7 + 7) * 86400000));
   const taskWindowStart = localDate(new Date(Date.now() - 8 * 86400000));  // an effect is gone at 7 days; a day's slack costs nothing
   const key = [win.start, win.end, week[0], histStart, heatStart, nutLogStart, taskWindowStart].join('|');
   if (!rowCache.dirty && rowCache.rows && rowCache.key === key

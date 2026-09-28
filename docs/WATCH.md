@@ -147,6 +147,13 @@ one exactly one move to discount. Every change of following is logged to the hub
 it is VISIBLE (`onScrollVisibilityChange`), not a sum over the scroll view's reported offsets, which
 this app does not trust (§ Double tap, and scrolling).
 
+**What the screen actually holds is logged as `session-shown`**, whenever the reason it might be wrong
+changes: the anchor moving, a turn or an activity line arriving, or the page opening. The `detail` log
+line is only what the HUB sent; this is what the page DID with it — the computed anchor, `following`,
+whether it has landed, and a snippet of the last turn's prompt and reply — so a report of something
+wrong on the wrist (a stale turn, a jump that never happened, following stuck off) is reproducible from
+the log rather than guessed at.
+
 **Commands overlap.** A command can be recorded and sent while earlier ones are still being
 transcribed, handed over or worked on, on home and in a session alike: each is its own item (`Chat`'s
 `commands`, `Sessions`' `outgoing`), sent and retried by itself. His words join the conversation in the
@@ -533,12 +540,30 @@ notifications and whenever the app comes to the front and finds the player silen
 anywhere on the screen (the top half included, which otherwise does nothing). The press after that
 records as usual.
 
+
+**Two ways to keep the app running with the wrist down, picked on the watch's Settings page (`Route`)
+and mirrored on the hub's** (`watch_speech_route`): watchOS keeps a watch app alive wrist-down only
+under specific conditions, and there are two that qualify.
+
+`.hold` (the default, `SpeechRoute.hold`) holds the microphone and discards what it hears for as long as
+the reply plays — the mechanism this file already describes above, measured working.
+
+`.nowPlaying` asks watchOS to treat the reply as a song instead: `.playback` with `routeSharingPolicy:
+.longFormAudio`, published to `MPNowPlayingInfoCenter` with play/pause/stop/toggle registered on
+`MPRemoteCommandCenter`, so a reply gets the Digital Crown and AirPods controls a real audio app gets,
+and never touches the microphone. **Not yet confirmed on a real watch**: whether watchOS keeps an app
+that is never `.playAndRecord` in this route alive wrist-down on this alone, and whether the watch pops
+its own Now Playing screen over the session every time a reply starts. Switching the route only takes
+effect on the NEXT reply — mid-reply would tear down whichever session and command registrations the
+one playing is using.
+
 ### The settings page
 
 Left of the sessions page (`SettingsView`): the Speak switch, the same flag the Control Center control
 and the hub's Settings write, so the three always agree, and the voice's volume (`watch_speech_volume`,
 percent of the watch's own volume, 10 to 100 in tens; also on the hub's Settings). The volume applies to
-a reply already playing. It can only make the voice quieter than the watch's volume, never louder. It re-reads the flag each time it appears,
+a reply already playing. It can only make the voice quieter than the watch's volume, never louder.
+Also here: the `Route` toggle (`watch_speech_route`), `.hold` or `.nowPlaying` — see Spoken replies. It re-reads all three each time it appears,
 because the control changes it from the widget extension's process, which the app does not hear.
 
 ### Two launchers, one request
@@ -649,6 +674,9 @@ wrist. Fly keeps only the recent lines, so read it soon.
 | `speak-rendered` | the synthesizer finished rendering the reply: its total seconds, and how long rendering took |
 | `speak-interrupted`, `speak-config-change`, `speak-media-reset`, `speak-stalled`, `speak-resume` | what cut a reply off, and the resume from where it stopped (seconds played of seconds rendered) |
 | `phase` | the app becoming active, inactive or background: wrist up and down |
+| `speak-activate` | `.nowPlaying`'s asynchronous session activation answering, with whether it will actually play |
+| `speak-pause`, `speak-play` | the Now Playing screen or AirPods paused or resumed a reply (`.nowPlaying` only) |
+| `session-shown` | what the session page actually has on screen and why it was logged (see The sessions page) |
 | `stream-open`, `stream-end`, `stream-error` | the event streams |
 | `resend` | a call's connection dropped mid-flight and it was sent again |
 | `frame` | each stream frame for the session on screen |

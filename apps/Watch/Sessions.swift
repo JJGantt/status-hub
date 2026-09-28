@@ -434,7 +434,7 @@ final class Sessions: ObservableObject {
         let since = Date(timeIntervalSince1970: at)
         guard path.last == key, let d = details[key], Self.finished(d, since), let reply = d.last_reply else { return }
         owed[key] = nil
-        Speaker.shared.speak(reply)
+        Speaker.shared.speak(reply, title: d.name)
     }
 
     /// The session has answered everything since `since`: it is idle, and its last reply is stamped

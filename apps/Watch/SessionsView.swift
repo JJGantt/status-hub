@@ -195,7 +195,10 @@ struct SessionView: View {
                 default: break
                 }
             }
-            .onAppear { toNewest(proxy) }
+            .onAppear { toNewest(proxy); logShown("appear") }
+            .onChange(of: newest) { _, n in logShown("newest") }
+            .onChange(of: activity.count) { _, _ in logShown("activity") }
+            .onChange(of: detail?.turns?.count) { _, _ in logShown("turns") }
         }
         // The session's name on the clock's line, and NO back arrow: the swipe that opened it from the
         // right is what takes it away again, and a title bar with a button in it costs the top of a
@@ -250,6 +253,21 @@ struct SessionView: View {
         guard let id = newest else { return }
         jumping = true
         proxy.scrollTo(id, anchor: .top)
+    }
+
+    /// **What the screen actually holds**, logged whenever the reason it might be wrong changes: the
+    /// data arriving, the anchor moving, or the page opening. A report of something wrong on the wrist
+    /// is otherwise unreproducible — the `detail` log line is what the HUB sent, not what this page did
+    /// with it, and those two can differ (a stale anchor, a scroll that never followed, a turn dropped
+    /// by `newest`'s own rule).
+    private func logShown(_ why: String) {
+        let turns = detail?.recent ?? []
+        Hub.log("session-shown", [
+            "why": why, "row": key, "newest": newest ?? "", "following": following, "landed": landed,
+            "turns": turns.count, "activity": activity.count,
+            "lastPrompt": String((turns.last?.prompt ?? "").prefix(60)),
+            "lastReply": String((turns.last?.reply ?? "").prefix(60)),
+        ])
     }
 
     /// He moved the page: it is his until the session is opened again or he scrolls to the end.

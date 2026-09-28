@@ -15,6 +15,7 @@ enum WatchSettings {
         if let v = all[Speaker.volumeKey].flatMap({ Double("\($0)") }) {
             Speaker.shared.apply(volume: Int(v.rounded()))
         }
+        if let v = all[Speaker.routeKey] { Speaker.shared.apply(route: "\(v)") }
         BorderStyle.shared.apply(all)
     }
 

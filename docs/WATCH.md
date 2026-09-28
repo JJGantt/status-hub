@@ -414,9 +414,12 @@ working on; it does nothing when there is nothing to throw away.
   `Recorder.cue`, two notes a fifth apart), at the moment it is actually live rather than when it was
   asked for — opening takes a beat, and words spoken before it are lost. The gentle `.start` tap alone
   was easy to miss. The chirp needs the audio session to play AND record (`.playAndRecord`; set to
-  record only, nothing plays), and the tap drops what the microphone hears until the chirp's
-  playback-finished callback, so the clip never contains it and the endpoint never counts it as
-  speech. Commands and follow-ups only; the always-on listener opens silently.
+  record only, nothing plays), and the tap drops the chirp's length of input plus the route latency,
+  counted in the microphone's own samples, so the clip never contains it and the endpoint never counts
+  it as speech. It must not wait on the chirp's playback-finished callback: that callback does not
+  always come, and a gate waiting on it stays shut for the whole recording, which the hub then refuses
+  as an empty clip. `record-stop` logs `heard`, the seconds actually written, beside the recording's
+  length. Commands and follow-ups only; the always-on listener opens silently.
 - **The microphone closing taps the wrist** (`.stop`), on home and in a session, on a recording the
   silence ended and on one a press ended alike. That is the moment nothing else reports: the silence
   decides it, and by then the watch may be back at his side.

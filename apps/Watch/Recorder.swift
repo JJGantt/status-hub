@@ -14,6 +14,9 @@ final class Recorder {
     struct Clip {
         let url: URL
         let duration: TimeInterval
+        /// Seconds of audio the microphone actually delivered into the file. Far short of `duration`
+        /// means the microphone went deaf, which the hub would otherwise only report as an empty clip.
+        var heard: TimeInterval = 0
     }
 
     enum Failure: Error {
@@ -34,7 +37,7 @@ final class Recorder {
     /// and records, since a session set to record only plays nothing at all.
     private let player = AVAudioPlayerNode()
     private var playerWired = false
-    /// Held while the chirp is sounding; the tap keeps none of that audio (`cue`).
+    /// Counts off the chirp's length of input; the tap keeps none of that audio (`cue`).
     private let gate = CueGate()
     private var startedAt = Date()
 
@@ -57,9 +60,9 @@ final class Recorder {
         input.installTap(onBus: 0, bufferSize: 4096, format: format) { [weak self] buffer, _ in
             // The chirp is not his voice: it is neither kept in the clip nor counted by the endpoint,
             // where it would read as speech and let the silence after it send an empty command.
-            if gate.closed { return }
-            let level = sink.write(buffer)
             let seconds = Double(buffer.frameLength) / format.sampleRate
+            if gate.swallow(seconds) { return }
+            let level = sink.write(buffer)
             // Main queue, not a Task: a queue keeps the buffers in order, which the endpoint's running
             // count of silent seconds depends on.
             DispatchQueue.main.async { MainActor.assumeIsolated { self?.onLevel?(level, seconds) } }
@@ -83,11 +86,15 @@ final class Recorder {
     }
 
     /// **"Talk now."** A short rising chirp from the speaker, played the moment the microphone is live.
-    /// The tap drops what it hears until the chirp's own playback-finished callback opens the gate again,
-    /// so the clip starts after the chirp and never contains it.
+    /// The tap drops the chirp's length of input, plus the route's latency either way, so the clip
+    /// starts after the chirp and never contains it. Counted in the microphone's own samples rather than
+    /// opened by the chirp's playback callback: that callback does not always come, and a gate waiting
+    /// on it stayed shut for the whole recording and sent an empty clip.
     func cue() {
-        gate.closed = true
-        player.scheduleBuffer(Self.chirp, completionCallbackType: .dataPlayedBack) { [gate] _ in gate.closed = false }
+        let session = AVAudioSession.sharedInstance()
+        let chirp = Double(Self.chirp.frameLength) / Self.chirp.format.sampleRate
+        gate.hold(chirp + session.outputLatency + session.inputLatency)
+        player.scheduleBuffer(Self.chirp, completionHandler: nil)
         player.play()
     }
 
@@ -113,7 +120,7 @@ final class Recorder {
     /// own length is not known until the encoder has flushed it.
     func stop() -> Clip? {
         guard let sink = halt() else { return nil }
-        return Clip(url: sink.finish(), duration: Date().timeIntervalSince(startedAt))
+        return Clip(url: sink.finish(), duration: Date().timeIntervalSince(startedAt), heard: sink.heard)
     }
 
     /// Ends the recording and throws the file away.
@@ -144,7 +151,7 @@ final class Recorder {
         self.sink = nil
         engine.inputNode.removeTap(onBus: 0)
         player.stop()
-        gate.closed = false
+        gate.hold(0)
         engine.stop()
         // Hand the session back rather than just dropping it, so nothing is left looking like an app
         // holding the audio route.
@@ -162,6 +169,9 @@ private final class Sink: @unchecked Sendable {
     private let format: AVAudioFormat
     private var file: AVAudioFile?
     private var url: URL
+    private var written: TimeInterval = 0
+    /// Seconds of audio written into the current file.
+    var heard: TimeInterval { lock.withLock { written } }
 
     init(input: AVAudioFormat) throws {
         url = Self.newURL()
@@ -188,7 +198,10 @@ private final class Sink: @unchecked Sendable {
         }
         lock.lock()
         defer { lock.unlock() }
-        if out.frameLength > 0 { try? file?.write(from: out) }
+        if out.frameLength > 0, let file {
+            try? file.write(from: out)
+            written += Double(out.frameLength) / format.sampleRate
+        }
         return level
     }
 
@@ -203,6 +216,7 @@ private final class Sink: @unchecked Sendable {
         file?.close()
         file = opened
         url = next
+        written = 0
         return done
     }
 
@@ -246,9 +260,15 @@ private final class Sink: @unchecked Sendable {
 /// player's callback, read on the audio thread, so it is only touched under its lock.
 private final class CueGate: @unchecked Sendable {
     private let lock = NSLock()
-    private var value = false
-    var closed: Bool {
-        get { lock.withLock { value } }
-        set { lock.withLock { value = newValue } }
+    private var left: TimeInterval = 0
+    /// Drops the next `seconds` of input.
+    func hold(_ seconds: TimeInterval) { lock.withLock { left = seconds } }
+    /// Whether this buffer falls inside what is being dropped; counts it off either way.
+    func swallow(_ seconds: TimeInterval) -> Bool {
+        lock.withLock {
+            guard left > 0 else { return false }
+            left -= seconds
+            return true
+        }
     }
 }

@@ -160,6 +160,13 @@ transcribed, handed over or worked on, on home and in a session alike: each is i
 order he said them (home's `pending`; in a session, `.said` lines in the activity list among the tool
 calls), and the page lands on his newest words.
 
+**A message that arrived while a turn was still running is shown once, not twice.** The hub streams it
+as `queued` the moment it is taken in, then as `said` once the turn it was behind actually starts it —
+two frames, the same text, at two points in the message's life. `Sessions.sessionFrame` only appends a
+`.said` activity line for the second one if no `.said` line with that exact text is already on screen;
+without it, a message sent from the Mac while the session was busy showed on the wrist first as
+"queued", then a second time as "said" the moment it began.
+
 **The edge sweeps until the last command is answered**: `awaiting` holds the time the NEWEST follow-up
 was accepted, and the wait ends only when a detail fetch shows the session idle with a reply stamped
 after it (`finished`: `working` false and `reply_at` later). Idle matters because a turn can end while

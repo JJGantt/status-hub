@@ -383,6 +383,13 @@ final class Sessions: ObservableObject {
         }
         guard f.state == "done" else {
             guard let text = f.text, let l = line(f.state ?? "tool", text, key) else { return }
+            // "queued" and "said" are the same message at two points in its life — taken in while a
+            // turn was still running, then actually started — and the hub sends both with the same
+            // text. Without this, a message that arrived queued showed on the wrist a second time the
+            // moment it started: two identical lines for the one thing he said.
+            if l.kind == .said, activity[key]?.contains(where: { $0.kind == .said && $0.text == l.text }) == true {
+                return
+            }
             activity[key, default: []].append(l)
             return
         }

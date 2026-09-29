@@ -174,6 +174,17 @@ activity was EMPTY — which after a mid-turn drop it never is, so the refetch c
 takes a `resync` flag, set only from `reloadAll`, that replaces local activity with the hub's record
 regardless, and clears it outright if the turn finished during the gap.
 
+**A finished turn's activity is dropped on ANY detail fetch that finds the session not working, not
+only a reconnect's.** The live "done" frame (`sessionFrame`) is the other place activity is cleared, and
+the two are not ordered against each other: an ordinary detail fetch — the page appearing, a wrist
+raised, `activate()`'s own periodic refresh — can pick up `turns`/`last_reply` already showing the
+finished turn BEFORE that frame has arrived and been processed. Measured: his prompt shown once from
+the newly-finished turn and a second time from the still-live `.said` line nothing had cleared yet,
+on a session he was not even dictating to through the watch. Nothing left sending for the conversation
+(`stillSending`, the same test `sessionFrame` uses) is what says it is really over; something of his
+own still on its way out — his next command, not yet started — keeps its words on screen instead of
+being wiped along with the finished turn's.
+
 **A `loadDetail` response can arrive after a later one for the same conversation, and must not win.**
 Raising and lowering the wrist fast enough calls `activate()`, and so `loadDetail`, several times a
 second (measured — several `phase` transitions inside one second), and nothing guarantees the requests'

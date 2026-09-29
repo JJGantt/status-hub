@@ -253,11 +253,13 @@ final class Sessions: ObservableObject {
     }
 
     /// `resync` is true only right after the stream reconnects (`reloadAll`): the socket was down for
-    /// some stretch, and whatever the hub kept of the turn (`steps`, the same record a cold open seeds
-    /// from) is what actually happened during the gap, replacing local activity rather than only
-    /// filling it when it was empty. Without this a turn that kept working through a drop showed
-    /// exactly what had streamed in before the drop and nothing since — a live tool-call count with a
-    /// stale one, both looking equally current, since the page never says the stream is behind.
+    /// some stretch, and while the session is still working, whatever the hub kept of the turn
+    /// (`steps`, the same record a cold open seeds from) is what actually happened during the gap,
+    /// replacing local activity rather than only filling it when it was empty. Without this a turn that
+    /// kept working through a drop showed exactly what had streamed in before the drop and nothing
+    /// since — a live tool-call count with a stale one, both looking equally current, since the page
+    /// never says the stream is behind. Once the session is NOT working, this fetch's own `turns`/
+    /// `last_reply` are already the complete picture regardless of `resync` — see below.
     func loadDetail(_ key: String, resync: Bool = false) async {
         guard let r = row(for: key) else { return }
         detailGen[key, default: 0] += 1
@@ -279,9 +281,22 @@ final class Sessions: ObservableObject {
                         acc.append(l)
                     }
                 }
-            } else if resync {
-                // The turn ended during the gap; nothing further is coming for it.
-                activity[key] = nil
+            } else {
+                // Not working any more: `turns`/`last_reply`, just fetched, already have the complete,
+                // finished picture, so anything still in `activity` is a live line from a turn that has
+                // since ended — whether or not the stream's own "done" frame for it has been processed
+                // yet by `sessionFrame`, which is the ONLY other place activity is cleared. The two are
+                // not ordered against each other: this fetch can win the race and see the finished turn
+                // before that frame arrives, and did — his prompt showed once from the finished turn and
+                // again from the still-live line nothing had cleared. `resync` no longer gates this: a
+                // stream drop was one way to reach this state, not the only one. Something of his own
+                // still on its way out is the one reason to keep it (`stillSending`, as in `sessionFrame`).
+                let stillSending = !(outgoing[key] ?? []).isEmpty || inFlight[key, default: 0] > 0
+                if stillSending {
+                    activity[key] = activity[key]?.filter { $0.kind == .said }
+                } else {
+                    activity[key] = nil
+                }
             }
             // Everything the watch sent is answered: the wait is over, however the news arrived.
             if let since = awaiting[key], Self.finished(d, since) {

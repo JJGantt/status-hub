@@ -3129,17 +3129,29 @@ app.post('/api/voice-reset', async (req, res) => {
 // - The bracketed line `desk.startSession` appends after a voice-dispatched prompt, so the session
 //   knows where he was ("[Where Jared was when he asked: lat, lon (within about N m)]") — for the
 //   agent, not for him; his own words end where it begins.
+// - The format instruction the watch appends to a follow-up while replies are spoken
+//   (`Sessions.spokenFormat` in apps/Watch/Sessions.swift): "[This reply is read aloud. …]". It rides
+//   in the prompt so a restarted session cannot forget it, which puts it in every stored turn.
+//   Either bracket can be the last one, so both are peeled off the end until neither matches.
 // - The stub a message too long for a tty is typed as instead of itself (`orchestrator/src/
 //   applescript.js` `handoff`), naming the file the real words are parked in. It is meant to be
 //   resolved back to those words before anything is stored (`transcripts.js` `resolvePrompt`) — this
 //   is a backstop for the rare case that resolution did not happen (the file was swept, or the read
 //   raced it), since the alternative is showing him an internal instruction to go read a file.
-const WHERE_HE_WAS = /\n\n\[Where Jared was when he asked: [^\]]*\]\s*$/;
+const FOR_THE_AGENT = [
+  /\s*\[Where Jared was when he asked: [^\]]*\]\s*$/,
+  /\s*\[This reply is read aloud\.[^\]]*\]\s*$/,
+];
 const UNRESOLVED_STASH = /^\[A message from Jared, too long to type into this terminal\. It is in \S+.*\]\s*$/s;
 function cleanSaid(text) {
-  const s = String(text || '');
+  let s = String(text || '');
   if (UNRESOLVED_STASH.test(s.trim())) return '';
-  return s.replace(WHERE_HE_WAS, '');
+  for (let peeled = true; peeled;) {
+    const before = s;
+    for (const re of FOR_THE_AGENT) s = s.replace(re, '');
+    peeled = s !== before;
+  }
+  return s;
 }
 
 const TURN_STEPS_MAX = 300;

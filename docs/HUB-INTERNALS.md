@@ -1116,15 +1116,19 @@ running. **Adding a field to a session view means adding it to that projection**
 `undefined`. Ninety-odd parked sessions carrying their full replies and five unread timestamps each
 made this a 242KB response; it is 39KB.
 
-### A prompt can carry two things that were never meant for him to read
+### A prompt can carry three things that were never meant for him to read
 
-`server.js`'s `cleanSaid`, applied to `last_prompt`, `say` and every turn's `prompt` before any of them
-reach a client — the watch, the phone thread, the TV — strips two patterns, both confirmed live in
-`desk_turns`, not theoretical:
+`server.js`'s `cleanSaid`, applied to `last_prompt`, `say`, every turn's `prompt` and every activity
+frame before any of them reach a client — the watch, the phone thread, the TV — strips three patterns,
+all confirmed live in `desk_turns`, not theoretical:
 
 - **The bracketed line `desk.startSession` appends to a voice-dispatched prompt** (`data-layer/src/
   desk.ts`), `\n\n[Where Jared was when he asked: lat, lon (within about N m)]` — for the agent to read,
   never for him; his own words end where it begins.
+- **The format instruction the watch appends to a follow-up while replies are spoken**
+  (`Sessions.spokenFormat`), `\n\n[This reply is read aloud. …]`. It is in the prompt rather than set on
+  the session because a restarted session forgets a mode, so it is in every stored turn. Either this or
+  the location line can come last, so `cleanSaid` peels both off the end until neither matches.
 - **The stub a message too long for a tty is typed as, instead of itself**
   (`orchestrator/src/applescript.js`'s `handoff`), naming the file the real words are parked in. Meant
   to be resolved back to those words before anything is stored (`transcripts.js`'s `resolvePrompt`,

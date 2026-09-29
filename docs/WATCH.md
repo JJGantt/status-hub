@@ -137,13 +137,35 @@ A tapped row opens its session on top of the whole row of pages (the `Navigation
 around the `TabView`), not inside the sessions page: there the page row took sideways swipes and the
 watch's own swipe back never fired. The session has no title bar.
 
-**A session follows its newest item.** The page draws the last `SessionDetail.exchanges` (5)
-prompts with every reply under each — a session can report more than once without being asked again, a
-watcher firing or a job finishing — then his words waiting for an answer, then the tool calls of the
-turn in flight. The top of whichever is LAST sits at the top of the screen: his words the moment they
-are transcribed, each tool call as it arrives, the reply when it lands. The tool calls and his words
-are cleared only after the reply is fetched (`Sessions.sessionFrame`); cleared first, the newest item
-would be the previous reply for the length of the fetch and the view would jump up to it and back.
+**A session is ONE LIST, the hub's** (`Sessions.logs`, from `GET /api/sessions/:id` and the `ev`
+frames of `/api/session-stream`; server.js, the event log): his words (`prompt`), tool calls, what the
+session says between them (`text`) and its replies, each with its position in the conversation (`seq`,
+given by the hub) and an identity (`id`). The page draws that list and nothing else, oldest first. The
+phone draws the same list by the same rule (`cards/repos.js`), which is what makes the two agree.
+
+**The whole rule** (`Sessions.frame`): the next seq is appended; a gap means the hub has what went by
+while this was not listening, and it is fetched from the last seq held (`/api/sessions/:id/events
+?since=`); an old seq is a duplicate delivery and is ignored. A fetch and a frame that arrived while
+it was in flight are merged by seq (`take`), so they cannot disagree whichever lands first. A frame
+whose epoch is not the one held is a hub that restarted and numbered from one again: the list is
+fetched afresh. There is no separate record of the turn in flight, nothing is cleared when a reply
+lands, and nothing is matched by its text.
+
+**A prompt queued behind a running turn is one event at two moments**, same id: when Claude Code
+takes it (`seen` false, drawn dimmed) and when the model reads it (`seen` true). The page draws a
+prompt at its LATEST occurrence, so it moves from where it was sent to where it was read (`shown`).
+
+**His words show the instant they are transcribed**, before the hub has them: a placeholder
+(`Sessions.placeholders`) carrying the message's own id, dimmed, after everything the session has done.
+The follow-up carries that id to the hub (`client_msg_id`), the hub to the host (`msg`), and the host
+stamps it on the prompt those words become (sessionWatch.js `expectPrompt`) — the one place a text is
+compared, once, against the exact string that machine just typed. The event that comes back carries
+it as `cmd`, and the placeholder is replaced by id. A send the hub refused, or took nothing from (a
+thank-you-shaped transcription), drops its placeholder.
+
+**It lands on his newest words**: a placeholder if any, else the last prompt since the last reply,
+with what the session does about them underneath; with none, the last event — the reply when it lands
+(`newest`). The top of that sits at the top of the screen.
 
 **His scrolling ends the following**, finger or crown, and nothing moves the page after that until the
 session is opened again or HE scrolls it to the very end (letting go with the end on screen after a
@@ -157,69 +179,21 @@ it is VISIBLE (`onScrollVisibilityChange`), not a sum over the scroll view's rep
 this app does not trust (§ Double tap, and scrolling).
 
 **What the screen actually holds is logged as `session-shown`**, whenever the reason it might be wrong
-changes: the anchor moving, a turn or an activity line arriving, or the page opening. The `detail` log
-line is only what the HUB sent; this is what the page DID with it — the computed anchor, `following`,
-whether it has landed, and a snippet of the last turn's prompt and reply — so a report of something
-wrong on the wrist (a stale turn, a jump that never happened, following stuck off) is reproducible from
-the log rather than guessed at.
-
-**A dropped `session-stream` connection can silently lose whatever ran during the gap, so a reconnect
-resyncs rather than just resuming.** The stream carries every tool call and thought as it happens
-(`sessionFrame`); nothing behind it replays what was sent while nobody was listening. Measured: a
-15-second drop mid-turn (`stream-error`, network lost) left the wrist showing exactly what had arrived
-before the drop, indistinguishable from current, while the turn kept working and finished unseen. The
-reconnect callback already re-fetched the session (`reloadAll`), but `loadDetail` only seeded activity
-from the hub's own record of the turn (`steps`, the same field a cold open reads) when the page's local
-activity was EMPTY — which after a mid-turn drop it never is, so the refetch changed nothing. It now
-takes a `resync` flag, set only from `reloadAll`, that replaces local activity with the hub's record
-regardless, and clears it outright if the turn finished during the gap.
-
-**A finished turn's activity is dropped on ANY detail fetch that finds the session not working, not
-only a reconnect's.** The live "done" frame (`sessionFrame`) is the other place activity is cleared, and
-the two are not ordered against each other: an ordinary detail fetch — the page appearing, a wrist
-raised, `activate()`'s own periodic refresh — can pick up `turns`/`last_reply` already showing the
-finished turn BEFORE that frame has arrived and been processed. Measured: his prompt shown once from
-the newly-finished turn and a second time from the still-live `.said` line nothing had cleared yet,
-on a session he was not even dictating to through the watch. Nothing left sending for the conversation
-(`stillSending`, the same test `sessionFrame` uses) is what says it is really over; something of his
-own still on its way out — his next command, not yet started — keeps its words on screen instead of
-being wiped along with the finished turn's.
-
-**A `loadDetail` response can arrive after a later one for the same conversation, and must not win.**
-Raising and lowering the wrist fast enough calls `activate()`, and so `loadDetail`, several times a
-second (measured — several `phase` transitions inside one second), and nothing guarantees the requests'
-responses land in the order they went out. `detailGen` counts each call per conversation; a response is
-applied only if its call is still the newest one issued, and a superseded one is dropped and logged as
-`detail-stale`.
-
-**The queued/said dedup above is checked against the MOST RECENT `.said` line, not all of them** — a
-queued/said pair is always adjacent (only tool calls can fall between them), where checking the whole
-history would also swallow him genuinely saying the same short thing twice in one turn. The same dedup
-applies when activity is seeded from the hub's `steps` (a cold open, or a resync): the hub does not
-dedupe `queued`/`said` pairs itself before handing them back (`keepStep`, server.js), so seeding straight
-from that array reproduced the exact duplicate the live path already guards against.
+changes: the anchor moving, an event or a placeholder arriving, or the page opening — the computed
+anchor, `following`, whether it has landed, the count and last seq held, and the tail of the list —
+so a report of something wrong on the wrist is reproducible from the log rather than guessed at.
 
 **Commands overlap.** A command can be recorded and sent while earlier ones are still being
 transcribed, handed over or worked on, on home and in a session alike: each is its own item (`Chat`'s
-`commands`, `Sessions`' `outgoing`), sent and retried by itself. His words join the conversation in the
-order he said them (home's `pending`; in a session, `.said` lines in the activity list among the tool
-calls), and the page lands on his newest words.
+`commands`, `Sessions`' `outgoing`), sent and retried by itself. Each shows as its own placeholder the
+moment it is transcribed, and each is replaced by its own event.
 
-**A message that arrived while a turn was still running is shown once, not twice.** The hub streams it
-as `queued` the moment it is taken in, then as `said` once the turn it was behind actually starts it —
-two frames, the same text, at two points in the message's life. `Sessions.sessionFrame` only appends a
-`.said` activity line for the second one if no `.said` line with that exact text is already on screen;
-without it, a message sent from the Mac while the session was busy showed on the wrist first as
-"queued", then a second time as "said" the moment it began.
-
-**The edge sweeps until the last command is answered**: `awaiting` holds the time the NEWEST follow-up
-was accepted, and the wait ends only when a detail fetch shows the session idle with a reply stamped
-after it (`finished`: `working` false and `reply_at` later). Idle matters because a turn can end while
-the session already has the next command, and that reply is not the one he is waiting on; the host
-marks a row not-working, with its reply, before it sends `done`, so the fetch on `done` sees the truth.
-A reply AFTER the words, not a turn whose prompt is the words: words sent into a turn already running
-are folded into it and never become a prompt. Spoken replies (`owed`) use the same test, so only the
-reply to his last command is read, once everything is answered; nothing earlier is queued.
+**The edge sweeps until every follow-up sent from here is answered**: `awaiting` holds their message
+ids, and the wait ends when a reply lands AFTER every one of them has been read — a prompt event
+carrying that id, `seen`, with a seq below the reply's (`settle`). A reply to an earlier command, or
+one that came before the words went in, is not the answer he is waiting on. A spoken reply (`owed`)
+is the id of the follow-up sent with speech on, and what is read aloud is the first reply after that
+prompt event, once the session is on screen.
 
 **Its name is on the clock's line, and the name is how it closes.** A leading `ToolbarItem` holds it
 (a trailing one moves the clock to the other end of the strip), and tapping it pops the session. The
@@ -232,15 +206,16 @@ yet would otherwise call `removeLast()` on an already-empty array and crash).
 working dot, so a recording started in one and left there can be found from anywhere in the app.
 
 Everything it keeps is keyed by `claude_session_id`, not by row: a resume makes a new row for the
-same conversation, and keyed by row the page would lose a session the moment it resumed. A session
-opens to its last prompt and the whole reply to it (`GET /api/sessions/:id`) and the tool calls of the
-turn it is running, as its machine reports them. The page refetches the on-screen conversation
-whenever it becomes active.
+same conversation, and keyed by row the page would lose a session the moment it resumed; an `ev`
+frame names its conversation, so nothing has to look a row up. A session opens to the hub's whole
+list (the last ten finished turns, seeded from `desk_turns`, and the turn in flight). The page fetches
+the on-screen conversation's list again whenever it becomes active or the stream reconnects, and a
+conversation nobody has opened is never fetched: its frames only keep the newest event, for its row in
+the list (`latest`).
 
 A tap or double tap records a follow-up: the hub transcribes it without enqueueing anything
 (`/api/voice-command?dry=1`), and `POST /api/sessions/followup` types the words in, or resumes a
-parked session with them (`HUB-INTERNALS.md` §6b). His words stay under the reply until the
-conversation's next `done`. **A follow-up records exactly as a command on home does**: it sends
+parked session with them (`HUB-INTERNALS.md` §6b). **A follow-up records exactly as a command on home does**: it sends
 itself at his silence, a second press locks it open, the next sends (`CommandBorder.press`, one flow
 everywhere).
 
@@ -708,8 +683,8 @@ wrist. Fly keeps only the recent lines, so read it soon.
 
 | event | what it says |
 |---|---|
-| `thread`, `detail` | what a page loaded |
-| `detail-stale` | a session-detail response arrived after a later one for the same conversation, and was dropped |
+| `thread` | what home loaded |
+| `log` | a conversation's list fetched from the hub: from which seq, how many events came, the last seq held |
 | `control` | a press of the bottom control, with its mode |
 | `record` | a finger tap on the text |
 | `record-refused`, `mic-refused`, `mic-failed`, `mic-open` | why a recording did or did not start |
@@ -732,7 +707,7 @@ wrist. Fly keeps only the recent lines, so read it soon.
 | `session-shown` | what the session page actually has on screen and why it was logged (see The sessions page) |
 | `stream-open`, `stream-end`, `stream-error` | the event streams |
 | `resend` | a call's connection dropped mid-flight and it was sent again |
-| `frame` | each stream frame for the session on screen |
+| `frame` | each `ev` frame for the session on screen: its seq and kind |
 
 ## Hiding the system clock
 

@@ -103,16 +103,18 @@ struct SessionsView: View {
     /// always there, however empty — a row
     /// that grows when a tool fires and shrinks when one stops makes the whole list jump every few seconds.
     private func step(_ s: SessionRow, unread: Bool) -> some View {
-        let line = sessions.activity[s.key]?.last
-        let ink: Color = switch line?.kind {
-        case nil: .clear
-        case .tool: Ink.tool
-        case .thought: Ink.thought
-        case .said: Ink.mine
+        // A reply is not a step: the row's own `say` carries it, and a session that has answered shows
+        // nothing live under its name.
+        let ev = sessions.latest[s.key].flatMap { $0.kind == "reply" ? nil : $0 }
+        let ink: Color = switch ev?.kind {
+        case "tool": Ink.tool
+        case "text": Ink.thought
+        case "prompt": Ink.mine
+        default: .clear
         }
-        return Text(line?.text ?? " ")
-            .font(.system(size: 9, design: line?.kind == .tool ? .monospaced : .default))
-            .foregroundColor(unread && line != nil ? Self.unreadStep : ink)
+        return Text(ev?.text ?? " ")
+            .font(.system(size: 9, design: ev?.kind == "tool" ? .monospaced : .default))
+            .foregroundColor(unread && ev != nil ? Self.unreadStep : ink)
             .lineLimit(1)
             .frame(height: 11, alignment: .leading)
     }
@@ -122,8 +124,9 @@ struct SessionsView: View {
     private static let unreadStep = Color(hex: "#e6c88a")
 }
 
-/// One conversation: the last prompt and the reply to it, the tool calls of the turn it is running,
-/// and a reply of his own. Double tap or a tap in the bottom half of the glass is the one press
+/// One conversation: the hub's list of its events — his words, the tool calls, what the session says
+/// between them, its replies — drawn in order, plus his words on their way from this watch. Double tap
+/// or a tap in the bottom half of the glass is the one press
 /// (`CommandBorder.press`): it records a follow-up that sends itself at his silence, a second press locks
 /// it open and the next sends; a parked session is resumed with the words. Scrolling is his finger or
 /// the crown.
@@ -149,8 +152,20 @@ struct SessionView: View {
     /// The newest item's height, which decides whether it needs room above it (`room`).
     @State private var newestHeight: CGFloat = 0
 
-    private var detail: SessionDetail? { sessions.details[key] }
-    private var activity: [ActivityLine] { sessions.activity[key] ?? [] }
+    private var events: [SessionEvent] { sessions.logs[key]?.events ?? [] }
+    private var placeholders: [Placeholder] { sessions.placeholders[key] ?? [] }
+
+    /// What is drawn: every event in order, a prompt at the position of its LATEST occurrence — it
+    /// moves from where it was queued to where the model read it — so one message is one line.
+    private var shown: [SessionEvent] {
+        var seen = Set<String>()
+        var out: [SessionEvent] = []
+        for e in events.reversed() {
+            if e.kind == "prompt" { if !seen.insert(e.id).inserted { continue } }
+            out.append(e)
+        }
+        return out.reversed()
+    }
 
     var body: some View {
         ScrollViewReader { proxy in
@@ -197,8 +212,8 @@ struct SessionView: View {
             }
             .onAppear { toNewest(proxy); logShown("appear") }
             .onChange(of: newest) { _, n in logShown("newest") }
-            .onChange(of: activity.count) { _, _ in logShown("activity") }
-            .onChange(of: detail?.turns?.count) { _, _ in logShown("turns") }
+            .onChange(of: events.count) { _, _ in logShown("events") }
+            .onChange(of: placeholders.count) { _, _ in logShown("placeholders") }
         }
         // The session's name on the clock's line, and NO back arrow: the swipe that opened it from the
         // right is what takes it away again, and a title bar with a button in it costs the top of a
@@ -232,21 +247,21 @@ struct SessionView: View {
         }
         .task {
             sessions.markSeen(key)   // opening it is reading it, here as on the phone
-            await sessions.loadDetail(key)
+            await sessions.loadLog(key)
         }
     }
 
-    /// The scroll id of the last thing on the page: a tool call, else his words waiting for an answer,
-    /// else the last turn's reply (or its prompt, while the session has not answered it).
+    /// The scroll id of the newest thing on the page. His newest words take the top, with what the
+    /// session does about them underneath: words of his still on their way, else the last prompt since
+    /// the last reply; with none, the last event — the reply when it lands.
     private var newest: String? {
-        // His newest words take the top, with what the session does about them underneath; with none,
-        // the tool calls land as one block, since each is a line or two and the newest alone at the top
-        // would put the rest of the turn above the screen.
-        if let i = activity.lastIndex(where: { $0.kind == .said }) { return "line\(i)" }
-        if !activity.isEmpty { return "activity" }
-        guard let turns = detail?.recent, let last = turns.last else { return nil }
-        let i = turns.count - 1
-        return (last.reply ?? "").isEmpty ? "prompt\(i)" : "reply\(i)"
+        if let p = placeholders.last { return "ph\(p.msgId)" }
+        let list = shown
+        let lastReply = list.lastIndex { $0.kind == "reply" } ?? -1
+        if let i = list.indices.reversed().first(where: { $0 > lastReply && list[$0].kind == "prompt" }) {
+            return "ev\(list[i].seq)"
+        }
+        return list.last.map { "ev\($0.seq)" }
     }
 
     /// The top of the newest item at the top of the screen, or as near it as the end of the content
@@ -263,12 +278,11 @@ struct SessionView: View {
     /// with it, and those two can differ (a stale anchor, a scroll that never followed, a turn dropped
     /// by `newest`'s own rule).
     private func logShown(_ why: String) {
-        let turns = detail?.recent ?? []
+        let list = shown
         Hub.log("session-shown", [
             "why": why, "row": key, "newest": newest ?? "", "following": following, "landed": landed,
-            "turns": turns.count, "activity": activity.count,
-            "lastPrompt": String((turns.last?.prompt ?? "").prefix(60)),
-            "lastReply": String((turns.last?.reply ?? "").prefix(60)),
+            "events": events.count, "last": sessions.logs[key]?.last ?? 0, "placeholders": placeholders.count,
+            "tail": list.suffix(3).map { "\($0.kind):\($0.text.prefix(30))" }.joined(separator: " | "),
         ])
     }
 
@@ -283,35 +297,20 @@ struct SessionView: View {
     private struct Scroll: Equatable { let y: CGFloat; let h: CGFloat }
 
     private var content: some View {
-        let turns = detail?.recent ?? []
-        // An ordinary gap between items, and the landing's height above the newest one only (`lift`), so
-        // the item before it is off the top of the screen when it lands.
-        return VStack(alignment: .leading, spacing: Landing.itemGap) {
-            // The last few exchanges, oldest first. The page opens on the newest reply, so the history
-            // above it costs nothing to carry and is there when he scrolls up.
-            ForEach(Array(turns.enumerated()), id: \.offset) { i, turn in
-                if let prompt = turn.prompt, !prompt.isEmpty {
-                    room("prompt\(i)")
-                    words(prompt).id("prompt\(i)").modifier(Measure(id: "prompt\(i)", newest: newest, height: $newestHeight))
-                }
-                if let reply = turn.reply, !reply.isEmpty {
-                    room("reply\(i)")
-                    Text(inlineMarkdown(reply))
-                        .foregroundColor(.white)
-                        .font(.system(size: 13))
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .id("reply\(i)")
-                        .modifier(Measure(id: "reply\(i)", newest: newest, height: $newestHeight))
-                }
+        // An ordinary gap between items, and the landing's height above the newest one only (`room`),
+        // so the item before it is off the top of the screen when it lands.
+        VStack(alignment: .leading, spacing: Landing.itemGap) {
+            // The whole list, oldest first: the page opens on the newest thing, so the history above it
+            // costs nothing to carry and is there when he scrolls up.
+            ForEach(shown, id: \.seq) { e in
+                room("ev\(e.seq)")
+                row(e).id("ev\(e.seq)").modifier(Measure(id: "ev\(e.seq)", newest: newest, height: $newestHeight))
             }
-            if !activity.isEmpty {
-                room("activity")
-                ActivityLines(lines: activity, lift: tallEnough ? activity.lastIndex(where: { $0.kind == .said })
-                    .map { ($0, Landing.underTitle - Landing.itemGap) } : nil)
-                    .id("activity")
-                    // The block stands in for a line inside it: what follows a line of his is the block's.
-                    .modifier(Measure(id: "activity", newest: newest?.hasPrefix("line") == true ? "activity" : newest,
-                                      height: $newestHeight))
+            // His words on their way from this watch, dimmed until the hub has them.
+            ForEach(placeholders, id: \.msgId) { p in
+                room("ph\(p.msgId)")
+                words(p.text).opacity(0.5).id("ph\(p.msgId)")
+                    .modifier(Measure(id: "ph\(p.msgId)", newest: newest, height: $newestHeight))
             }
         }
         // At least a screen tall, so a short conversation's blank space below the last line is still
@@ -332,6 +331,33 @@ struct SessionView: View {
 
     private var tallEnough: Bool {
         newestHeight > WKInterfaceDevice.current().screenBounds.height - Landing.underTitle - PageInset.bottom
+    }
+
+    /// One event, in the colours of `Ink`: his words a soft blue (dimmed while queued, not yet read),
+    /// a tool call violet and cut to two lines, what the session says between calls grey, its reply
+    /// white — the same as home's `ActivityLines` and `ThreadRow`, so who said what reads the same on
+    /// every page.
+    @ViewBuilder private func row(_ e: SessionEvent) -> some View {
+        switch e.kind {
+        case "prompt":
+            words(e.text).opacity(e.seen == false ? 0.5 : 1)
+        case "text":
+            Text(inlineMarkdown(e.text))
+                .font(.system(size: 12))
+                .foregroundColor(Ink.thought)
+                .frame(maxWidth: .infinity, alignment: .leading)
+        case "tool":
+            Text(e.text)
+                .font(.system(size: 10, design: .monospaced))
+                .foregroundColor(Ink.tool)
+                .lineLimit(2)
+                .frame(maxWidth: .infinity, alignment: .leading)
+        default:
+            Text(inlineMarkdown(e.text))
+                .foregroundColor(.white)
+                .font(.system(size: 13))
+                .frame(maxWidth: .infinity, alignment: .leading)
+        }
     }
 
     /// His side of the conversation, drawn as the prompt page draws his words.

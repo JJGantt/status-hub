@@ -102,7 +102,7 @@ struct CommandBorder: View {
     /// Inside a session that runs until the session's reply lands, not just until the words are handed
     /// over.
     private var working: Bool {
-        target.map { sessions.busy.contains($0) || sessions.awaiting[$0] != nil } ?? chat.waiting
+        target.map { sessions.busy.contains($0) || !(sessions.awaiting[$0] ?? []).isEmpty } ?? chat.waiting
     }
 
     private enum State { case recording, locked, working, listening, idle }

@@ -27,58 +27,34 @@ struct SessionRow: Decodable, Identifiable, Equatable {
     var key: String { claude_session_id ?? id }
 }
 
-/// One exchange of a session: what he asked, and what came back. A turn with no prompt is a reply the
-/// session produced on its own — a watcher firing, a job reporting — and those belong to the prompt
-/// above them.
-struct SessionTurn: Decodable, Equatable {
+/// **One event of a conversation's list**, as the hub keeps it (server.js, the event log): his words
+/// (`prompt`), a tool call, what the session says between tool calls (`text`), or its reply. `seq` is
+/// its position in the conversation, given by the hub; `id` its identity. A prompt queued behind a
+/// running turn and later read by the model is one event at two moments, same id, the second marked
+/// `seen`; a prompt this watch sent carries the message's own id as `cmd`.
+struct SessionEvent: Decodable, Equatable {
+    let seq: Int
+    let id: String
+    let kind: String
+    let text: String
+    let seen: Bool?
+    let cmd: String?
     let at: String?
-    let prompt: String?
-    let reply: String?
 }
 
-/// `/api/sessions/:id`: one session with its last prompt, the whole reply to it, and the turns behind
-/// them.
-struct SessionDetail: Decodable, Equatable {
-    let id: String
-    let label: String?
-    let custom_title: String?
-    let repo: String?
-    let status: String?
-    let working: Bool?
-    let claude_session_id: String?
-    let last_prompt: String?
-    let last_reply: String?
-    /// When `last_reply` was said. What tells the watch a reply came AFTER words it sent.
-    let reply_at: String?
-    let turns: [SessionTurn]?
-    /// The turn in flight so far (tool calls, what it says between them, his words), while it runs: the
-    /// steps the stream carried before this view was listening.
-    struct Step: Decodable, Equatable { let state: String; let text: String }
-    let steps: [Step]?
+/// A conversation's list, and the hub epoch it was numbered in: a hub that restarts numbers from one
+/// again, and a list from before it is stale the moment a frame says so.
+struct ConversationLog: Equatable {
+    var epoch: String?
+    var events: [SessionEvent] = []
+    var last: Int { events.last?.seq ?? 0 }
+}
 
-    var name: String { sessionName(custom_title, label, repo) ?? id }
-
-    /// What the page shows: the last few exchanges, oldest first. A turn with no prompt is a reply the
-    /// session produced on its own, so it belongs under the prompt above it rather than starting a
-    /// block of its own. Further back than this is context he can ask the session for, and a wrist is
-    /// not where it would be read.
-    static let exchanges = 5
-
-    var recent: [SessionTurn] {
-        guard let turns, !turns.isEmpty else {
-            let fallback = SessionTurn(at: nil, prompt: last_prompt, reply: last_reply)
-            return (last_prompt ?? last_reply) == nil ? [] : [fallback]
-        }
-        // Count back `exchanges` PROMPTS, keeping the unprompted replies that follow each of them.
-        var prompts = 0
-        var start = turns.startIndex
-        for i in turns.indices.reversed() where !(turns[i].prompt ?? "").isEmpty {
-            prompts += 1
-            start = i
-            if prompts == Self.exchanges { break }
-        }
-        return Array(turns[start...])
-    }
+/// His words sent from this watch that the hub does not have yet: shown the instant they are
+/// transcribed, and replaced by the event that carries the same id back (`cmd`).
+struct Placeholder: Equatable {
+    let msgId: String
+    let text: String
 }
 
 /// The name a session goes by everywhere: the one Jared gave it, else the router's label, else its repo.
@@ -86,8 +62,12 @@ private func sessionName(_ names: String?...) -> String? {
     names.compactMap { $0 }.first { !$0.isEmpty }
 }
 
-/// The sessions page's state, per conversation: the list, each open one's last prompt and reply, the
-/// tool calls it is making, and a reply of his being recorded or sent into it.
+/// The sessions page's state: the list, and per conversation ONE THING — the hub's list of events —
+/// plus what this watch itself is doing to it (words being sent, a wait for their reply).
+///
+/// **The whole rule for the list is in `frame`**: the next seq is appended, a gap is fetched from the
+/// hub, an old seq is ignored. Nothing here reconstructs what happened from text or timing; the phone
+/// keeps the same list by the same rule (`cards/repos.js`).
 @MainActor
 final class Sessions: ObservableObject {
     /// One per app, so a tapped notification can open a session (WatchAppDelegate).
@@ -110,10 +90,9 @@ final class Sessions: ObservableObject {
         let key = rows.first { $0.id == rowId }?.key ?? rowId
         path = [key]
         markSeen(key)
-        // Asked here, not left to the view: when this conversation is already the one on screen the view
-        // does not appear again, and an app that was in the background missed the stream's `done`, so
-        // nothing else would fetch the reply the notification is about.
-        await loadDetail(key)
+        // Fetched here, not left to the view: when this conversation is already the one on screen the
+        // view does not appear again, and an app that was in the background missed the stream.
+        await loadLog(key)
     }
 
     /// One row per conversation: its running row if it has one, else its newest parked one.
@@ -121,14 +100,13 @@ final class Sessions: ObservableObject {
     /// The focused session — where a spoken follow-up goes — and whether he pinned it there.
     @Published private(set) var focus: String?
     @Published private(set) var pinned = false
-    @Published private(set) var details: [String: SessionDetail] = [:]
-    /// Each conversation's tool calls since its last reply, and what it said between them, as its
-    /// machine reports them. Live only: the hub does not store them.
-    @Published private(set) var activity: [String: [ActivityLine]] = [:]
-    /// His words for a conversation that the session has not answered yet, oldest first. What is DRAWN
-    /// is the activity list, where each is a `.said` line in the order he spoke it among the tool calls;
-    /// this is what the session's echo of them is matched against, so they are not drawn twice.
-    private var sent: [String: [String]] = [:]
+    /// Each OPENED conversation's list. A conversation nobody has opened is not fetched: its frames
+    /// only keep `latest` for the list's row.
+    @Published private(set) var logs: [String: ConversationLog] = [:]
+    /// The newest event of every conversation the stream has mentioned, for the list's live line.
+    @Published private(set) var latest: [String: SessionEvent] = [:]
+    /// His words on their way from this watch, per conversation.
+    @Published private(set) var placeholders: [String: [Placeholder]] = [:]
     /// Conversations with a clip being transcribed or words being handed over right now.
     @Published private(set) var busy: Set<String> = []
     /// **Commands can overlap.** Each recording is its own `Outgoing`, sent on its own; one still being
@@ -139,56 +117,40 @@ final class Sessions: ObservableObject {
     private var inFlight: [String: Int] = [:] {
         didSet { busy = Set(inFlight.filter { $0.value > 0 }.keys) }
     }
-    /// A follow-up the watch handed over, by conversation, with when the hub took it, until a reply
-    /// lands after that. The edge keeps sweeping through the whole of it: handing the words over is
-    /// seconds, the session working on them is the real wait.
-    ///
-    /// **The answer is the first reply AFTER the words, not a turn that begins with them.** Words sent to
-    /// a session in the middle of a turn are folded into that turn rather than starting one, so no turn
-    /// ever carries them as its prompt, and a match on the prompt kept the edge sweeping after the
-    /// session had long finished.
-    @Published private(set) var awaiting: [String: Date] = [:]
-    /// **Replies owed out loud**, by conversation, with when the words were sent (seconds since 1970).
-    /// A follow-up sent from the watch with speech on owes its reply spoken, and it is spoken when that
-    /// session is ON SCREEN with a reply newer than the words — the moment it lands if he is looking,
-    /// else whenever he next opens it (the reply notification, the list, or raising the wrist on it).
-    /// Once, then it is paid. Kept across launches, since the app is often closed by the time it comes.
-    private var owed: [String: Double] = UserDefaults.standard.dictionary(forKey: "owed_speech") as? [String: Double] ?? [:] {
+    /// Follow-ups this watch sent, by conversation, whose reply has not come — their message ids. The
+    /// edge sweeps while any is here. Answered when a reply lands after every one of them has been
+    /// read (`settle`): a reply to an EARLIER command, or one that came before the words went in, is
+    /// not the answer he is waiting on.
+    @Published private(set) var awaiting: [String: Set<String>] = [:]
+    /// **A reply owed out loud**, by conversation: the id of the follow-up sent with speech on. Paid
+    /// when the reply that answers it is on screen — as it lands if he is looking, else whenever he
+    /// next opens the session. Kept across launches, since the app is often closed by the time it comes.
+    private var owed: [String: String] = UserDefaults.standard.dictionary(forKey: "owed_speech") as? [String: String] ?? [:] {
         didSet { UserDefaults.standard.set(owed, forKey: "owed_speech") }
     }
     @Published private(set) var failures: [String: Failure] = [:]
 
     private let capture = Capture.shared
-    /// Every row the hub sent, so a stream frame (which names a row) can be matched to its conversation.
+    /// Every row the hub sent, so a conversation's words go to the row running it.
     private var rows: [SessionRow] = []
     private var stream: Task<Void, Never>?
     /// The in-flight `load()`, if one is running: a second caller awaits THIS rather than returning at
-    /// once, so `await load()` keeps its promise that `rows`/`list` are current once it returns. It used
-    /// to just flag a re-run and return immediately, which meant every caller but the one already
-    /// running never actually waited for anything — `open(rowId:)` and `key(forRow:)` read `rows` right
-    /// after their own `await load()`, so a session opened from its notification while another load was
-    /// already in flight (raising the wrist to it is exactly that) could read stale rows and never find
-    /// its own, landing on the raw row id instead of the conversation's real key.
+    /// once, so `await load()` keeps its promise that `rows`/`list` are current once it returns.
     private var loadTask: Task<Void, Never>?
     private var reloadAfter = false
-    /// Counts each `loadDetail` call per conversation, so a response from an earlier call that is still
-    /// in flight when a later one returns first — raising and lowering the wrist fast enough calls
-    /// `activate()`, and so `loadDetail`, several times a second, with no guarantee the responses come
-    /// back in the order the requests went out — is dropped instead of overwriting the fresher one.
-    private var detailGen: [String: Int] = [:]
 
-    /// The page is on screen: load now, and follow every session's activity until `deactivate`.
+    /// The page is on screen: load now, and follow every conversation's events until `deactivate`.
     func activate() {
-        // The conversation on screen too, and any the watch is waiting on: a turn that finished while
-        // the app was away sent its `done` to a stream that was not listening.
+        // The conversation on screen too, and any the watch is waiting on: whatever went by while the
+        // app was away is in the hub's list, not here.
         Task {
             await load()
-            for key in Set(path.suffix(1) + Array(awaiting.keys)) { await loadDetail(key) }
+            for key in Set(path.suffix(1) + Array(awaiting.keys)) { await loadLog(key) }
         }
         guard stream == nil else { return }
         stream = Task {
             await Hub.listen("/api/session-stream", reconnected: { [weak self] in await self?.reloadAll() }) { [weak self] event, data in
-                await self?.sessionFrame(event, data)
+                await self?.frame(event, data)
             }
         }
     }
@@ -201,8 +163,7 @@ final class Sessions: ObservableObject {
     func load() async {
         if let t = loadTask {
             // Ask it to go around again rather than trust the pass already under way, which may have
-            // read before whatever prompted this call, then wait on the SAME task everyone else is:
-            // one fetch in flight, however many callers are waiting on it.
+            // read before whatever prompted this call, then wait on the SAME task everyone else is.
             reloadAfter = true
             return await t.value
         }
@@ -252,62 +213,56 @@ final class Sessions: ObservableObject {
         }
     }
 
-    /// `resync` is true only right after the stream reconnects (`reloadAll`): the socket was down for
-    /// some stretch, and while the session is still working, whatever the hub kept of the turn
-    /// (`steps`, the same record a cold open seeds from) is what actually happened during the gap,
-    /// replacing local activity rather than only filling it when it was empty. Without this a turn that
-    /// kept working through a drop showed exactly what had streamed in before the drop and nothing
-    /// since — a live tool-call count with a stale one, both looking equally current, since the page
-    /// never says the stream is behind. Once the session is NOT working, this fetch's own `turns`/
-    /// `last_reply` are already the complete picture regardless of `resync` — see below.
-    func loadDetail(_ key: String, resync: Bool = false) async {
+    /// The conversation's list from the hub — the whole of it, or with `since` only what comes after
+    /// that seq, which is what a gap in the stream asks for. Merged by seq (`take`), so a fetch and a
+    /// frame that arrived while it was in flight cannot disagree, whichever lands first.
+    func loadLog(_ key: String, since: Int? = nil) async {
         guard let r = row(for: key) else { return }
-        detailGen[key, default: 0] += 1
-        let gen = detailGen[key]!
-        if let d: SessionDetail = try? await Hub.json("/api/sessions/" + Hub.pathComponent(r.id)) {
-            guard detailGen[key] == gen else {
-                Hub.log("detail-stale", ["row": r.id]); return
-            }
-            details[key] = d
-            if d.working == true {
-                // The hub keeps `queued` and `said` as two separate steps and never dedupes them
-                // itself (`keepStep`, server.js) — the same pair `sessionFrame` collapses live, here
-                // un-collapsed, so seeding straight from this array showed his message twice on
-                // anything that seeded from it: a cold open, or (since `resync`) a reconnect.
-                if let steps = d.steps, !steps.isEmpty, resync || (activity[key] ?? []).isEmpty {
-                    activity[key] = steps.reduce(into: [ActivityLine]()) { acc, step in
-                        guard let l = line(step.state, step.text, key) else { return }
-                        if l.kind == .said, acc.last(where: { $0.kind == .said })?.text == l.text { return }
-                        acc.append(l)
-                    }
-                }
-            } else {
-                // Not working any more: `turns`/`last_reply`, just fetched, already have the complete,
-                // finished picture, so anything still in `activity` is a live line from a turn that has
-                // since ended — whether or not the stream's own "done" frame for it has been processed
-                // yet by `sessionFrame`, which is the ONLY other place activity is cleared. The two are
-                // not ordered against each other: this fetch can win the race and see the finished turn
-                // before that frame arrives, and did — his prompt showed once from the finished turn and
-                // again from the still-live line nothing had cleared. `resync` no longer gates this: a
-                // stream drop was one way to reach this state, not the only one. Something of his own
-                // still on its way out is the one reason to keep it (`stillSending`, as in `sessionFrame`).
-                let stillSending = !(outgoing[key] ?? []).isEmpty || inFlight[key, default: 0] > 0
-                if stillSending {
-                    activity[key] = activity[key]?.filter { $0.kind == .said }
-                } else {
-                    activity[key] = nil
-                }
-            }
-            // Everything the watch sent is answered: the wait is over, however the news arrived.
-            if let since = awaiting[key], Self.finished(d, since) {
-                awaiting[key] = nil
-                sent[key] = nil
-                Hub.log("answered", ["row": r.id])
-            }
-            speakIfOwed(key)
-            Hub.log("detail", ["row": r.id, "prompt": String((d.last_prompt ?? "").prefix(60)),
-                               "reply": String((d.last_reply ?? "").prefix(80)), "replyChars": d.last_reply?.count ?? 0])
+        struct Page: Decodable { let epoch: String?; let events: [SessionEvent]? }
+        let path = since.map { "/api/sessions/\(Hub.pathComponent(r.id))/events?since=\($0)" }
+            ?? "/api/sessions/\(Hub.pathComponent(r.id))"
+        guard let p: Page = try? await Hub.json(path) else { return }
+        take(key, p.events ?? [], epoch: p.epoch)
+        Hub.log("log", ["row": r.id, "since": since ?? 0, "got": p.events?.count ?? 0, "last": logs[key]?.last ?? 0])
+    }
+
+    private func reloadAll() async {
+        await load()
+        for key in logs.keys { await loadLog(key) }
+    }
+
+    /// Events into a conversation's list, by seq. An epoch that is not the one held is a hub that
+    /// restarted and numbered from one again: what was held is dropped first. An event carrying a
+    /// message id this watch sent replaces that message's placeholder.
+    private func take(_ key: String, _ events: [SessionEvent], epoch: String?) {
+        var log = logs[key] ?? ConversationLog()
+        if let epoch, let mine = log.epoch, epoch != mine { log.events = [] }
+        if let epoch { log.epoch = epoch }
+        var by = [Int: SessionEvent]()
+        for e in log.events { by[e.seq] = e }
+        for e in events { by[e.seq] = e }
+        log.events = by.values.sorted { $0.seq < $1.seq }
+        logs[key] = log
+        if let last = log.events.last { latest[key] = last }
+        let cmds = Set(events.compactMap(\.cmd))
+        if !cmds.isEmpty { placeholders[key] = placeholders[key]?.filter { !cmds.contains($0.msgId) } }
+        settle(key)
+        speakIfOwed(key)
+    }
+
+    /// The wait ends when a reply lands after every follow-up he is waiting on has been read.
+    private func settle(_ key: String) {
+        guard let waiting = awaiting[key], !waiting.isEmpty, let events = logs[key]?.events,
+              let reply = events.last(where: { $0.kind == "reply" }) else { return }
+        let answered = waiting.allSatisfy { id in
+            events.contains { $0.kind == "prompt" && $0.cmd == id && $0.seen != false && $0.seq < reply.seq }
         }
+        guard answered else { return }
+        awaiting[key] = nil
+        Hub.log("answered", ["row": row(for: key)?.id ?? key])
+        // The wrist is told when a follow-up the WATCH sent is answered. Only these: a session answering
+        // something typed on the Mac is not something he asked the watch about.
+        WKInterfaceDevice.current().play(.notification)
     }
 
     /// The instruction that rides with every follow-up while replies are spoken (`Speaker`). It changes how the
@@ -362,14 +317,11 @@ final class Sessions: ObservableObject {
         for item in outgoing[key] ?? [] { send(key, item.msgId) }
     }
 
-    private func reloadAll() async {
-        await load()
-        for key in details.keys { await loadDetail(key, resync: true) }
-    }
-
     /// The hub transcribes the clip without enqueueing anything (`?dry=1`), then hands the words to the
     /// session: typed in if it is running, resumed with them if it is parked — the hub decides. Once the
-    /// words are known, a retry only resends them. The msgId makes a resend unable to type them twice.
+    /// words are known, a retry only resends them. The msgId makes a resend unable to type them twice,
+    /// and it is what the event for these words carries back (`cmd`), so the placeholder shown the
+    /// moment they are transcribed is replaced by id.
     private func send(_ key: String, _ msgId: String) {
         guard var item = outgoing[key]?.first(where: { $0.msgId == msgId }) else { return }
         inFlight[key, default: 0] += 1
@@ -391,22 +343,24 @@ final class Sessions: ObservableObject {
                     item.clip = nil
                     update(key, item)
                     Hub.log("heard", ["view": "session", "words": text.count])
-                    // His words join the turn's lines where he said them, and the page lands on them.
-                    sent[key, default: []].append(text)
-                    activity[key, default: []].append(ActivityLine(text: text, kind: .said))
+                    // His words on screen the instant they are transcribed, before the hub has them.
+                    placeholders[key, default: []].append(Placeholder(msgId: msgId, text: text))
                 }
                 // The directive travels with the command rather than being set on the session once:
                 // a session that restarts forgets a mode, and cannot forget what is in the prompt.
                 let words = (item.words ?? "") + (Speaker.enabled ? Self.spokenFormat : "")
                 let rowId = row(for: key)?.id ?? key
-                try await Hub.followUp(rowId, text: words, msgId: msgId)
-                Hub.log("followup-sent", ["row": rowId, "words": item.words?.count ?? 0])
+                let ignored = try await Hub.followUp(rowId, text: words, msgId: msgId)
+                Hub.log("followup-sent", ["row": rowId, "words": item.words?.count ?? 0, "ignored": ignored])
                 drop(key, msgId)
-                // The wait and the spoken reply follow the NEWEST command: whatever was answered before
-                // it is not what he is waiting on now.
-                let now = Date()
-                awaiting[key] = now
-                if Speaker.enabled { owed[key] = now.timeIntervalSince1970 }
+                // The hub taking nothing (a thank-you-shaped transcription) sends nothing to the
+                // session: no event will come for it, and nothing is waited on.
+                if ignored {
+                    placeholders[key] = placeholders[key]?.filter { $0.msgId != msgId }
+                    return
+                }
+                awaiting[key, default: []].insert(msgId)
+                if Speaker.enabled { owed[key] = msgId }
             } catch {
                 Hub.log("send-failed", ["view": "session", "error": String(describing: error).prefix(120).description])
                 failures[key] = .message(error.localizedDescription)
@@ -424,108 +378,43 @@ final class Sessions: ObservableObject {
         outgoing[key]?.removeAll { $0.msgId == msgId }
     }
 
-    /// The conversation a stream frame's row belongs to. A row the list has not seen yet — a session
-    /// a resume just opened — is looked up after reloading it.
-    private func key(forRow id: String) async -> String {
-        if let r = rows.first(where: { $0.id == id }) { return r.key }
-        await load()
-        return rows.first(where: { $0.id == id })?.key ?? id
-    }
-
-    private func sessionFrame(_ event: String, _ data: String) async {
-        struct Frame: Decodable { let session: String; let state: String?; let text: String? }
-        guard event == "session", let f = try? JSONDecoder().decode(Frame.self, from: Data(data.utf8)) else { return }
-        let key = await key(forRow: f.session)
+    /// One `ev` frame: an event of some conversation, with its seq. **The whole rule**: the next seq is
+    /// appended; a gap means the hub has what went by, and it is fetched from the last seq held; an
+    /// old seq is a duplicate delivery and is ignored. A conversation not opened here only keeps its
+    /// newest event, for the list's row.
+    private func frame(_ event: String, _ data: String) async {
+        struct Frame: Decodable { let conversation: String; let session: String?; let epoch: String?; let ev: SessionEvent }
+        guard event == "ev", let f = try? JSONDecoder().decode(Frame.self, from: Data(data.utf8)) else { return }
+        let key = f.conversation
+        latest[key] = f.ev
         // Every frame for the conversation on screen, so the hub's log shows whether the stream reaches
         // the wrist live or arrives late in a lump.
         if key == path.last {
-            Hub.log("frame", ["row": f.session, "state": f.state ?? "", "text": String((f.text ?? "").prefix(50))])
+            Hub.log("frame", ["row": f.session ?? "", "seq": f.ev.seq, "kind": f.ev.kind, "text": String(f.ev.text.prefix(50))])
         }
-        guard f.state == "done" else {
-            guard let text = f.text, let l = line(f.state ?? "tool", text, key) else { return }
-            // "queued" and "said" are the same message at two points in its life — taken in while a
-            // turn was still running, then actually started — and the hub sends both with the same
-            // text. Without this, a message that arrived queued showed on the wrist a second time the
-            // moment it started: two identical lines for the one thing he said.
-            // Checked against the MOST RECENT `.said` line only, not the whole history: a queued/said
-            // pair is always adjacent (nothing but tool calls can fall between them), where the whole
-            // history would also swallow him genuinely saying the same short thing twice in one turn.
-            if l.kind == .said, activity[key]?.last(where: { $0.kind == .said })?.text == l.text {
-                return
-            }
-            activity[key, default: []].append(l)
-            return
-        }
-        // A turn ended. It is the ANSWER only if the session is now idle with a reply after the newest
-        // words the watch sent (`finished`): with commands overlapping, a turn can end while the next
-        // one is already running, and that is not the answer he is waiting on.
-        let waiting = awaiting[key] != nil
-        await load()
-        if details[key] != nil || owed[key] != nil || waiting { await loadDetail(key) }
-        let answered = waiting && awaiting[key] == nil
-        // Only now that the reply is in hand do the tool calls go. Cleared first, the page's newest item
-        // would be the PREVIOUS reply for the moment the fetch takes, and a view following the newest
-        // item would jump up to it and back down. Words he sent that are still being worked on stay.
-        // A second command for this conversation can be transcribed and its words shown locally
-        // (`send`) before its OWN network round trip finishes — `awaiting[key]` only takes its
-        // timestamp once that trip is done. A "done" for an EARLIER command landing in that window
-        // reads `awaiting[key]` as still the earlier one, resolves as answered, and would otherwise
-        // wipe the second command's just-shown words along with the first's finished turn. Still
-        // sending anything is what actually says there is more to come, not the timestamp.
-        let stillSending = !(outgoing[key] ?? []).isEmpty || inFlight[key, default: 0] > 0
-        if (answered || !waiting) && !stillSending {
-            activity[key] = nil
-        } else {
-            activity[key] = activity[key]?.filter { $0.kind == .said }
-        }
-        // The wrist is told when a follow-up the WATCH sent is answered. Only these: a session answering
-        // something typed on the Mac is not something he asked the watch about.
-        if answered { WKInterfaceDevice.current().play(.notification) }
-        // A reply landing on the session he is looking at is read as it lands.
-        if path.last == key { markSeen(key) }
-    }
-
-    /// One step of a turn as the page draws it, from a frame or from the steps kept on the hub. Nil for
-    /// what is not a step: a `summary` (a digest of the reply, which the detail fetch brings in full)
-    /// and the echo of words the watch sent, which are on screen already.
-    private func line(_ state: String, _ text: String, _ key: String) -> ActivityLine? {
-        guard !text.isEmpty else { return nil }
-        switch state {
-        case "summary": return nil
-        // His words as the session took them in, or queued behind a turn still running.
-        case "said", "queued":
-            let words = text.replacingOccurrences(of: Self.spokenFormat, with: "")
-                .trimmingCharacters(in: .whitespacesAndNewlines)
-            if (sent[key] ?? []).contains(where: { words.hasPrefix(String($0.prefix(40))) }) { return nil }
-            return ActivityLine(text: words, kind: .said)
-        case "text": return ActivityLine(text: text, kind: .thought)
-        default: return ActivityLine(text: text, kind: .tool)
+        guard let log = logs[key] else { return }
+        if let epoch = f.epoch, let mine = log.epoch, epoch != mine { await loadLog(key); return }
+        let seq = f.ev.seq
+        if seq <= log.last { return }
+        if seq > log.last + 1 { Task { await loadLog(key, since: log.last) } }
+        take(key, [f.ev], epoch: f.epoch)
+        if f.ev.kind == "reply" {
+            // The list's `say` and `unread` follow the row, which the host writes on its own path.
+            await load()
+            // A reply landing on the session he is looking at is read as it lands.
+            if path.last == key { markSeen(key) }
         }
     }
 
-    /// Speaks the reply this conversation owes, if it is the one on screen and the reply is in. With
-    /// speech switched off by then, the debt is dropped rather than kept for later.
+    /// Speaks the reply that answers the follow-up this conversation owes, if the session is on screen
+    /// and that reply is in the list. With speech switched off by then, the debt is dropped.
     private func speakIfOwed(_ key: String) {
-        guard let at = owed[key] else { return }
+        guard let msgId = owed[key] else { return }
         guard Speaker.enabled else { owed[key] = nil; return }
-        let since = Date(timeIntervalSince1970: at)
-        guard path.last == key, let d = details[key], Self.finished(d, since), let reply = d.last_reply else { return }
+        guard path.last == key, let events = logs[key]?.events,
+              let asked = events.first(where: { $0.kind == "prompt" && $0.cmd == msgId && $0.seen != false }),
+              let reply = events.first(where: { $0.kind == "reply" && $0.seq > asked.seq }) else { return }
         owed[key] = nil
-        Speaker.shared.speak(reply, title: d.name)
-    }
-
-    /// The session has answered everything since `since`: it is idle, and its last reply is stamped
-    /// after the words went in. Idle matters when commands overlap: a turn that ends while the session
-    /// already has the next one is a reply, but not the last one.
-    private static func finished(_ d: SessionDetail, _ since: Date) -> Bool {
-        guard d.working != true, !(d.last_reply ?? "").isEmpty,
-              let at = d.reply_at.flatMap(Self.stamp) else { return false }
-        return at > since
-    }
-
-    private static func stamp(_ s: String) -> Date? {
-        let f = ISO8601DateFormatter()
-        f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        return f.date(from: s) ?? ISO8601DateFormatter().date(from: s)
+        Speaker.shared.speak(reply.text, title: row(for: key)?.name ?? "Reply")
     }
 }

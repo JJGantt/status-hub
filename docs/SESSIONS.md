@@ -337,13 +337,20 @@ nothing noticed until the next reconcile tick — up to 30s of an answer sitting
 showed the previous one. The file changing is an event, so `sessionWatch.js` watches it on both
 machines and pushes what it sees straight to the hub:
 
-    transcript append ─ fs.watch ─▶ sessionWatch ─┬─ a prompt ─▶ patch desk_sessions.active_at, working
-                                                  ├─ tool_use  ─▶ POST /api/session-activity ─▶ SSE ─▶ wall
+    transcript append ─ fs.watch ─▶ sessionWatch ─┬─ a prompt ─┬─ patch desk_sessions.active_at, working
+                                                  │            └─ POST /api/session-activity (`said`, or `queued` then
+                                                  │                 `said`, one id; the command's id when this host typed it)
+                                                  ├─ tool_use  ─▶ POST /api/session-activity
                                                   ├─ a step's words, just before its tool_use (state 'text') ─▶ the same
                                                   │    (its text, else its thinking summary: from 2.1.268
                                                   │     Claude Code stops recording text after a tool result)
-                                                  └─ end_turn  ─┬─ POST /api/session-activity ─▶ SSE ─▶ wall
+                                                  └─ end_turn  ─┬─ POST /api/session-activity (`done`, the whole reply)
                                                                 └─ patch desk_sessions.last_reply, active_at  (durable)
+
+    /api/session-activity ─▶ ONE EVENT of the conversation's list (server.js `logFrame`: prompt, tool,
+                             text, reply, each with a seq and an id) ─▶ SSE `ev` ─▶ watch, phone, wall
+
+    Every surface draws that list and nothing else (HUB-INTERNALS.md § The conversation as one list).
 
 Note that the database write is no longer in the delivery path. It still happens, because the reply
 has to outlive the moment, but the wall hears from the machine that has the answer rather than

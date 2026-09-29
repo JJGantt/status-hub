@@ -563,22 +563,21 @@ three hundred characters — usually the preamble. It NEVER blocks the push: no 
 timeout all fall back to the raw reply. Tapping it still opens that session; the payload is untouched.
 Measured around 1.5s, which the push waits for.
 
-`/api/session-activity` (a live session's steps, relayed straight out over SSE — `tool`, `text` for
-what it says between calls, `said` for HIS words arriving mid-turn, `done` for the finished reply.
-`said` exists so a prompt sent while a turn runs lands in the stream where it happened instead of at
-the top of the turn it interrupted. Every step but `done` is ALSO kept in `turnSteps`, an in-memory
-Map keyed by session id, up to 300 steps — this is `/api/sessions/:id`'s `steps`, what a cold open or a
-stream reconnect seeds a client's activity from. `done` clears a session's entry; nothing else did until
-`forget`, `end` and `transfer` were each made to clear it too — a session ended or handed to the other
-machine mid-turn otherwise orphaned its steps for the life of the Node process, freed only by the next
-deploy) ·
+`/api/session-activity` (what a host's transcript watcher saw: `queued`/`said` for HIS words with the
+prompt's id and, when the host typed them for a command, that command's id; `tool`; `text` for what
+it says between calls; `done` with the whole reply and its prompt. **Each becomes one event of the
+conversation's list** — `logFrame` — and goes out as an `ev` frame with its seq; see the event log
+below. The older shape is still relayed alongside — `session` frames, and `turnSteps`/`steps` on
+`/api/sessions/:id` — for the watch build installed before the list existed, and goes when it is off
+the wrist, TODO.md) ·
 `/api/repos/cmd/:id` · `/api/sessions` (live desk sessions + the follow-up `focus`; each row carries
 `unread`, a finished reply nobody has opened) · `/api/sessions/seen` (opening one stamps
 `desk_sessions.seen_at`, which is what clears it on every surface) ·
-`/api/session-stream` (SSE, two frame kinds: `session` — one per tool call, in-between text or finished
-turn, pushed by the orchestrator on either machine — and `sessions`, the whole `/api/sessions` payload,
-pushed whenever `desk_sessions`/`desk_queue`/`desk_focus` change, which is what replaced the walls'
-5s poll — see SESSIONS.md §10) · `/api/reports`
+`/api/session-stream` (SSE: `ev` — one event of a conversation's list, with its seq and the hub's
+epoch; `sessions`, the whole `/api/sessions` payload, pushed whenever `desk_sessions`/`desk_queue`/
+`desk_focus` change, which is what replaced the walls' 5s poll — see SESSIONS.md §10; and, until the
+older watch build is gone, `session`) · `/api/sessions/:id/events?since=N` (the list after seq N,
+what a client fetches when a frame's seq shows a gap) · `/api/reports`
 (list only — `html` is never selected) · `/api/surf/history` (the whole hourly archive as one
 character per hour; `defaultT0` marks the window the card lands on before it is scrolled back) ·
 `/api/wind` (the frame's `wind`, plus the last few hours of six-minute readings) ·
@@ -1033,18 +1032,26 @@ projection, for a surface showing a single session rather than the list.
 
 Tapping a row of the repos pane's sessions list opens that session in place of the list
 (`openSession` in `cards/repos.js`), and `‹ Sessions` goes back. It is the watch's session page at
-phone size, with more room: the conversation's last ten turns, the tool calls and between-call
-thoughts of a turn in flight, and a composer — typed, or spoken through the pane's dry-transcribing
-recorder — whose words go to `/api/sessions/followup`. It opens ON the last turn, its prompt at the
-top of the view; the earlier ones are context, a scroll up. A failed send shows the hub's own `error` and leaves the words
-in the box; resending the same words reuses the `client_msg_id`.
+phone size, with more room, and a composer — typed, or spoken through the pane's dry-transcribing
+recorder — whose words go to `/api/sessions/followup`. A failed send shows the hub's own `error` and
+leaves the words in the box; resending the same words reuses the `client_msg_id`.
+
+**What it shows is the conversation's one list of events, and nothing else** — the same list the watch
+draws by the same rule, which is what makes the two agree. `GET /api/sessions/:id` brings the whole
+list with the hub's `epoch`; `ev` frames on `/api/session-stream` bring each new event with its seq.
+The rule (`frame`): the next seq is appended, a gap is fetched (`/events?since=`), an old seq is
+ignored, a different epoch is a restarted hub and the list is fetched afresh; a fetch and a frame are
+merged by seq (`take`), so they cannot disagree. A prompt queued behind a running turn is one event at
+two moments, same id — dimmed until the model reads it, and drawn where it read it (`shown`). His own
+words show the instant they are sent as a PLACEHOLDER keyed by the message's own id, which the event
+for them carries back as `cmd`; it is replaced by id. The caret shows while the last event is not a
+reply. The header's facts (name, machine, status) come from the row, re-read only when the `sessions`
+frame says the conversation moved to a new row (a resume) or its status changed.
 
 It follows `/api/session-stream`, opened on the first open rather than at mount because
-`#repospane` is in the kiosk's markup too. `session` frames carry the steps. The reply itself is
-taken from the `sessions` frame, not from `done`: `done` is sent off the write path, so the row can
-still hold the previous reply when it arrives, while a `sessions` frame is built from the row after
-the write. Everything is keyed by `claude_session_id`, as on the watch, so a follow-up that resumes
-a parked session carries the view over to the new row.
+`#repospane` is in the kiosk's markup too. Everything is keyed by `claude_session_id`, as on the
+watch, and an `ev` frame names its conversation, so a follow-up that resumes a parked session carries
+the view over to the new row.
 
 A reply renders as inline markdown with whitespace kept, escaped first. **Every link in it is
 `target=_blank`, and that is load-bearing**: followed in place, a link replaces the hub in the app's
@@ -1084,6 +1091,30 @@ across a resume or a transfer, and it bounds itself: 20 turns a conversation, 30
 
 A turn carries what the row carried, so a reply is the same 4000 characters the machines cut
 `last_reply` to.
+
+### The conversation as one list — the event log
+
+**Everything a surface shows of a session is one ordered list of events** (`sessionLog` in server.js):
+`prompt`, `tool`, `text` and `reply`, each with `seq` (its position, given here on arrival) and `id`.
+A host's activity frame becomes one event (`logFrame`): `queued` and `said` are one prompt at two
+moments with the id the host minted for it, the second marked `seen`; `done` becomes the `reply`,
+with the whole text the host now sends, and first a `prompt` for the turn if none was seen — the case
+of a watcher that attached after the words were typed (a resume with words). A prompt this machine
+typed for a hub command carries that command's id (`cmd`) — the sender's own `client_msg_id`, passed
+to the host as `msg` in the follow-up payload — which is how the device that sent the words replaces
+its own placeholder by id.
+
+Kept in memory per conversation, 2000 events, dropped after a day untouched, and seeded on first
+touch from `desk_turns` (a prompt and a reply per finished turn) so a cold open or a restart has the
+history; the tool calls of turns before a restart are gone, as before. `EPOCH` names this process and
+rides in every frame and list: seq starts over on a restart, and a client holding an older epoch
+fetches the list afresh rather than merging two numberings.
+
+This replaces what the same facts used to travel as: the live frames on one road and the row plus
+`desk_turns` on another, unordered against each other and with no identity linking a queued prompt
+to its read, a `done` to the turn it ended, or a device's own words to their echo — which every
+client then reconstructed from text and timing, each by its own rules. What remains of that is the
+two seeds above and the `cmd` stamp, and nothing on a client compares text.
 
 ### Every finished reply is a notification
 

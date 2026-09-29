@@ -218,10 +218,13 @@ enum Hub {
 
     /// Types his words into a running session. A resend with the same `msgId` returns the first send's
     /// command instead of typing the words twice.
-    static func followUp(_ session: String, text: String, msgId: String) async throws {
+    /// True when the hub took nothing: a thank-you-shaped transcription it never types into a session.
+    static func followUp(_ session: String, text: String, msgId: String) async throws -> Bool {
         try blockInSimulator("followup")
-        _ = try await call("/api/sessions/followup", method: "POST",
-                           body: ["id": session, "text": text, "client_msg_id": msgId])
+        let data = try await call("/api/sessions/followup", method: "POST",
+                                  body: ["id": session, "text": text, "client_msg_id": msgId])
+        let j = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any]
+        return (j?["ignored"] as? Bool) == true
     }
 
     /// One of the hub's app settings, as the text it is stored as; nil when unset.

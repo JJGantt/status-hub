@@ -279,10 +279,10 @@ function wire(el) {
 }
 
 // ---- one session, opened in place of the list -------------------------------------------------
-// What the watch's session page shows (apps/Watch/SessionsView.swift), at phone size: the prompt
-// that started the last turn and the whole reply to it, the tool calls of a turn in flight, and a
-// composer whose words go into that conversation — typed in when it is running, resumed with them
-// when it is parked; the hub decides which (`/api/sessions/followup`).
+// What the watch's session page shows (apps/Watch/SessionsView.swift), at phone size: the
+// conversation as the hub's one list of events — prompts, tool calls, what it says between them,
+// replies — and a composer whose words go into that conversation — typed in when it is running,
+// resumed with them when it is parked; the hub decides which (`/api/sessions/followup`).
 //
 // Everything here is keyed by the CONVERSATION (`claude_session_id`), not the row: a resume makes a
 // new row for the same conversation, so the row the view was opened on can stop being the one that
@@ -326,77 +326,69 @@ function inlineMd(text) {
 }
 
 // The last /api/sessions payload's rows, from a fetch or a pushed `sessions` frame. With a session
-// open it is also how the view learns what no `session` frame says: the conversation moving to a new
-// row (a resume), and a reply that has actually been WRITTEN — the `done` frame is sent off the write
-// path, so the row can still hold the previous reply when it arrives.
-const unknown = new Set();   // frame row ids that were not in the list even after re-reading it
+// open it is how the view learns the conversation has moved to a new row (a resume), or the row's
+// status changed — the header's facts. The conversation itself arrives as events and is never
+// re-read for anything the list says.
 function keep(payload) {
   rows = [...(payload.resident || []), ...(payload.evicted || [])];
-  for (const r of rows) unknown.delete(r.id);
   if (!cur) return;
   const now = rows.find((r) => r.status === 'resident' && keyOfRow(r) === cur.key)
            || rows.find((r) => r.id === cur.id);
   if (!now) return;
-  const d = cur.detail;
   const moved = now.id !== cur.id;
   cur.id = now.id;
-  if (moved || now.status !== d.status || !!now.working !== !!d.working
-      || (now.last_reply !== undefined && now.last_reply !== d.last_reply)) reloadDetail();
+  if (moved || now.status !== cur.head.status) reload();
 }
 
-let reading = null;          // one re-read of the list at a time, shared by every frame waiting on it
-async function keyOfFrame(rowId) {
-  if (cur && rowId === cur.id) return cur.key;
-  const hit = () => rows.find((r) => r.id === rowId);
-  if (!hit() && !unknown.has(rowId)) {
-    reading = reading || fetch('/api/sessions').then((r) => r.json()).then(keep)
-      .catch(() => {}).finally(() => { reading = null; });
-    await reading;
-    if (!hit()) unknown.add(rowId);
-  }
-  const r = hit();
-  return r ? keyOfRow(r) : rowId;
+// ---- THE CONVERSATION IS ONE LIST OF EVENTS ---------------------------------------------------
+// Prompt, tool, text and reply, each with a position (`seq`) and an identity (`id`), from the hub
+// (server.js, the event log). What this view holds is that list and nothing else, and the whole rule
+// for keeping it right is below in `frame`: the next seq is appended, a gap is fetched, an old seq is
+// ignored. A prompt queued behind a running turn and later read is one event at two moments, same id,
+// drawn where the model took it. The watch keeps the same list by the same rule (Sessions.swift).
+//
+// The one thing on screen that is not from the hub is a PLACEHOLDER: his words the instant they are
+// sent, before the machine has typed them into the session. It carries the message's own id, and the
+// event that comes back for it does too (`cmd`), so it is replaced by id, never by matching text.
+
+/** Merge events into a list by seq: a fetch that fills a gap and a frame that arrived meanwhile cannot disagree. */
+function absorb(list, events) {
+  const by = new Map(list.map((e) => [e.seq, e]));
+  for (const e of events || []) if (e && Number.isFinite(e.seq)) by.set(e.seq, e);
+  return [...by.values()].sort((a, b) => a.seq - b.seq);
 }
 
-// A tool call or a thought of the open conversation's turn joins the view; a finished turn clears
-// them and re-reads the session. Frames for every other session are dropped.
-let frameChain = Promise.resolve();
-async function frame(a) {
-  if (!cur || !a || !a.session) return;
-  const key = await keyOfFrame(a.session);
-  if (!cur || key !== cur.key) return;
-  if (a.state !== 'done') {
-    if (!a.text) return;
-    // QUEUED is not part of the trajectory yet — it is held apart (below) until the model reads it.
-    if (a.state === 'queued') {
-      if (!cur.pending.includes(a.text)) cur.pending.push(String(a.text));
-      cur.working = true;
-      paintBody({ follow: true });
-      return;
-    }
-    // …and `said` is that moment: it leaves the holding area and takes its real place in the stream.
-    if (a.state === 'said') {
-      cur.pending = cur.pending.filter((q) => q !== a.text);
-      // Words sent from THIS view are already on screen (`mine` above). The frame coming back is the
-      // same sentence, so it CONFIRMS that copy rather than adding one: exactly one optimistic entry
-      // is consumed, so saying the same thing twice still shows twice.
-      const i = cur.activity.findIndex((x) => x.mine && x.text === a.text);
-      if (i >= 0) {
-        cur.activity[i].mine = false;
-        cur.working = true;
-        paintBody({ follow: true });
-        return;
-      }
-    }
-    cur.activity.push({ text: String(a.text), thought: a.state === 'text', said: a.state === 'said' });
-    cur.working = true;
+function take(at, events, epoch) {
+  // A different epoch is a hub that restarted and numbered from one again: what is held is stale.
+  if (epoch && at.epoch && epoch !== at.epoch) at.events = [];
+  if (epoch) at.epoch = epoch;
+  at.events = absorb(at.events, events);
+  at.last = at.events.length ? at.events[at.events.length - 1].seq : 0;
+  for (const e of events || []) if (e && e.cmd) at.placeholders = at.placeholders.filter((p) => p.cmd !== e.cmd);
+}
+
+async function fetchEvents(at, since) {
+  try {
+    const r = await fetch(`/api/sessions/${encodeURIComponent(at.id)}/events${since ? '?since=' + since : ''}`);
+    if (!r.ok) return;
+    const j = await r.json();
+    if (cur !== at) return;
+    take(at, j.events, j.epoch);
     paintBody({ follow: true });
-    return;
-  }
-  cur.id = a.session;
-  cur.activity = [];
-  cur.pending = [];
-  await reloadDetail();
+  } catch (_) { /* the next frame's seq will ask again */ }
+}
+
+// An `ev` frame: one event of some conversation. Only the open one's are taken.
+function frame(a) {
+  if (!cur || !a || !a.ev || a.conversation !== cur.key) return;
+  const at = cur;
+  if (a.session && a.session !== at.id) at.id = a.session;   // the row running the conversation now
+  if (a.epoch !== at.epoch) { fetchEvents(at); return; }
+  const seq = a.ev.seq;
+  if (!Number.isFinite(seq) || seq <= at.last) return;
+  if (seq > at.last + 1) fetchEvents(at, at.last);            // a gap: what went by while this was not listening
+  take(at, [a.ev]);
+  paintBody(a.ev.kind === 'reply' ? { top: true } : { follow: true });
 }
 
 let following = false, connected = false;
@@ -408,22 +400,16 @@ function follow() {
   following = true;
   liveStream('/api/session-stream', {
     sessions: (e) => { try { keep(JSON.parse(e.data)); } catch (_) {} },
-    // ONE AT A TIME, in arrival order. `frame` is async — it may have to look a session up — so fired
-    // unawaited the frames overtake each other whenever one awaits and the next does not: a `said`
-    // arriving before the `queued` it replaces leaves the queued copy stranded below for ever, and one
-    // arriving after its turn's `done` is re-added to a stream that was just cleared. Both looked like
-    // a duplicated prompt. The same chain the orchestrator's sends use, for the same reason.
-    session: (e) => {
-      let a; try { a = JSON.parse(e.data); } catch (_) { return; }
-      frameChain = frameChain.then(() => frame(a)).catch(() => {});
-    },
+    ev: (e) => { let a; try { a = JSON.parse(e.data); } catch (_) { return; } frame(a); },
   }, {
-    // A RE-connect: a turn may have ended while the socket was down, and its frames are not replayed.
-    onOpen: () => { if (connected && cur) reloadDetail(); connected = true; },
+    // A RE-connect: whatever went by while the socket was down is in the list on the hub, not here.
+    onOpen: () => { if (connected && cur) reload(); connected = true; },
   });
 }
 
-async function reloadDetail() {
+// The header's facts and the whole list, from the hub. A merge, not a replacement: a frame that
+// arrived while this was in flight is kept, and a gap either way is filled.
+async function reload() {
   if (!cur) return;
   const at = cur;
   let d;
@@ -433,18 +419,16 @@ async function reloadDetail() {
     d = await r.json();
   } catch (_) { return; }
   if (cur !== at) return;
-  const fresh = d.last_reply !== at.detail.last_reply;
-  at.detail = d;
-  at.working = !!d.working;
-  // A reply that has landed ends the turn whether or not its `done` frame got here.
-  if (fresh) { at.activity = []; at.pending = []; }
+  at.head = d;
+  const before = at.last;
+  take(at, d.events, d.epoch);
   paintHead();
-  paintBody({ top: fresh });
+  paintBody({ top: at.last !== before });
 }
 
 function paintHead() {
   const el = document.getElementById('repospane');
-  const d = cur && cur.detail;
+  const d = cur && cur.head;
   if (!el || !d) return;
   const t = el.querySelector('.sv-title'), w = el.querySelector('.sv-where'), dot = el.querySelector('.sv-bar .sess-dot');
   if (t) t.textContent = nameOf(d);
@@ -452,11 +436,17 @@ function paintHead() {
   if (dot) dot.hidden = d.status !== 'resident';
 }
 
-// The conversation's last finished turns, oldest first (`turns`, from /api/sessions/:id). The last
-// of them is the row's own last_prompt/last_reply, which stands alone when there is no history.
-function turnsOf(d) {
-  if (Array.isArray(d.turns) && d.turns.length) return d.turns;
-  return d.last_reply ? [{ prompt: d.last_prompt, reply: d.last_reply }] : [];
+// What is drawn: every event in order, a prompt at the position of its LATEST occurrence — it moves
+// from where it was queued to where the model read it — and his own words the hub does not have yet
+// after everything it does. The session is working when the last event is not a reply.
+function shown(at) {
+  const seen = new Set(), out = [];
+  for (let i = at.events.length - 1; i >= 0; i--) {
+    const e = at.events[i];
+    if (e.kind === 'prompt') { if (seen.has(e.id)) continue; seen.add(e.id); }
+    out.push(e);
+  }
+  return out.reverse();
 }
 
 // WHERE IT LANDS: the top of the NEWEST THING, whatever that thing is. A finished reply puts its own
@@ -474,20 +464,20 @@ function paintBody({ open = false, top = false, follow = false } = {}) {
   const body = el && el.querySelector('.sv-body');
   if (!body || !cur) return;
   const atEnd = body.scrollHeight - body.scrollTop - body.clientHeight < 60;
+  const list = shown(cur);
+  const working = list.length > 0 && list[list.length - 1].kind !== 'reply';
   body.innerHTML =
-    turnsOf(cur.detail).map((t) => '<div class="sv-turn">' +
-      (t.prompt ? `<div class="sv-words">${inlineMd(t.prompt.trim())}</div>` : '') +
-      `<div class="sv-reply">${inlineMd(String(t.reply || '').trim())}</div></div>`).join('') +
-    cur.activity.map((a) => a.said
-      ? `<div class="sv-words">${saidHtml(a.text)}</div>`
-      : a.thought
-        ? `<div class="sv-thought">${inlineMd(a.text)}</div>`
-        : `<div class="sv-tool">${esc(a.text)}</div>`).join('') +
-    (cur.working ? '<div class="sv-working"><span class="ai-caret">▍</span></div>' : '') +
-    // SENT, NOT YET READ. Below the caret, because that is what it is: waiting behind whatever the
-    // model is still doing. It moves into the stream at the moment the model takes it, which is a
-    // real event in the transcript (`absorbed_mid_turn`) and not a guess.
-    cur.pending.map((t) => `<div class="sv-words sv-queued">${saidHtml(t)}</div>`).join('');
+    list.map((e) => e.kind === 'prompt'
+      // Queued (sent, not yet read) is dimmed; it takes its full colour and its real place when read.
+      ? `<div class="sv-words${e.seen === false ? ' sv-queued' : ''}">${saidHtml(e.text)}</div>`
+      : e.kind === 'reply'
+        ? `<div class="sv-turn"><div class="sv-reply">${inlineMd(String(e.text || '').trim())}</div></div>`
+        : e.kind === 'text'
+          ? `<div class="sv-thought">${inlineMd(e.text)}</div>`
+          : `<div class="sv-tool">${esc(e.text)}</div>`).join('') +
+    (working ? '<div class="sv-working"><span class="ai-caret">▍</span></div>' : '') +
+    // His words the hub does not have yet: sent from here, on their way to being typed in.
+    cur.placeholders.map((p) => `<div class="sv-words sv-queued">${saidHtml(p.text)}</div>`).join('');
   if (open || top) {
     // The last block in the body IS the newest thing. Inside a turn the newest part is the reply, not
     // the prompt that asked for it, so a turn resolves one level further in.
@@ -513,6 +503,7 @@ async function sendWords(text, at = cur) {
   const status = el.querySelector('.sv-status');
   const say = (t) => { if (status && cur === at) status.textContent = t || ''; };
   if (!at.msg || at.msg.text !== text) at.msg = { text, id: newMsgId() };
+  const msgId = at.msg.id;
   at.sending = true;
   if (cur === at) el.querySelector('.sv').classList.add('sending');
   say('');
@@ -527,13 +518,10 @@ async function sendWords(text, at = cur) {
     if (cur === at) {
       const box = el.querySelector('.sv-text');
       if (box && box.value.trim() === text) box.value = '';
-      // Into the stream, not into a slot of its own: what he says mid-turn belongs where it happened,
-      // among the steps that ran before and after it.
-      // OPTIMISTIC, and marked as such. It is his words on screen the instant they are sent, before
-      // the Mac has typed them into the session — but the session then records them and the watcher
-      // sends them back as a `said` frame. Without the mark, that frame is a second copy of the same
-      // sentence, which is exactly what it looked like.
-      at.activity.push({ text: text || '(picture)', said: true, mine: true });
+      // His words on screen the instant they are sent, before the machine has typed them in. Keyed by
+      // the message's own id, which the event for them carries back (`cmd`), so it is replaced by id.
+      // The hub taking nothing (`ignored`: a thank-you-shaped transcription) shows nothing.
+      if (!j.ignored) at.placeholders.push({ cmd: msgId, text: text || '(picture)' });
       for (const a of shots) URL.revokeObjectURL(a.url);
       shots = [];
       const tray = el.querySelector('.sv-tray'); if (tray) tray.innerHTML = '';
@@ -613,8 +601,9 @@ async function openSession(id) {
     d = await r.json();
   } catch (_) { return false; }
   if (cur && cur.rec) cur.rec.cancel();   // leaving mid-recording abandons it; a clip already stopped still sends
-  cur = { id: d.id, key: keyOfRow(d), detail: d, working: !!d.working, activity: [], pending: [], msg: null, sending: false, rec: null };
+  cur = { id: d.id, key: keyOfRow(d), head: d, epoch: null, events: [], last: 0, placeholders: [], msg: null, sending: false, rec: null };
   const at = cur;
+  take(at, d.events, d.epoch);
   const pane = el.closest('.pane');
   if (pane) pane.classList.add('sv-open');
   el.innerHTML =
@@ -731,5 +720,5 @@ export function render() {
   load();
   // Coming back to the app re-reads whichever is showing. Re-reading the list over an open session
   // would put him back on the list every time he switched apps mid-read.
-  window.addEventListener('focus', () => (cur ? reloadDetail() : load()));
+  window.addEventListener('focus', () => (cur ? reload() : load()));
 }

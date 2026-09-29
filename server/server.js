@@ -3166,7 +3166,120 @@ function keepStep(session, state, text) {
   turnSteps.set(session, steps);
 }
 
-app.post('/api/session-activity', express.json(), (req, res) => {
+// ---- A CONVERSATION IS ONE ORDERED LIST OF EVENTS ---------------------------------------------
+//
+// Everything a surface shows of a session — the watch's session page, the phone's — is this list and
+// nothing else: `prompt`, `tool`, `text` (what it says between tool calls) and `reply`, in the order
+// they happened, each with a position (`seq`, given here on arrival) and an identity (`id`). A prompt
+// queued behind a running turn and later read by the model is ONE event at two moments, same id, the
+// second occurrence marking it `seen`; a client draws it where the model took it. A prompt this
+// machine typed for a hub command carries that command's id (`cmd`, from the sender's own
+// `client_msg_id` when it had one), which is how the device that sent the words recognises them
+// coming back and replaces its own placeholder — by id, never by text.
+//
+// Before this, the same facts reached a client down two roads that were not ordered against each
+// other (the live frames, and the row plus `desk_turns`), with no identity linking them, and every
+// consumer reconstructed "what happened, in what order, have I got this already" from text and timing
+// — three of them, each with its own rules, disagreeing in thirteen places. The rule now is the same
+// three lines on every client: the next seq is appended, a gap is fetched, an old seq is ignored.
+//
+// Kept in memory per conversation, capped, and seeded on first touch from `desk_turns` (the finished
+// turns, prompt and reply each) so a cold open or a hub restart has the history. The tool calls of
+// turns before a restart are not recoverable, exactly as before. `EPOCH` names this process: a client
+// holding events numbered by an earlier one sees a different epoch on the next frame and fetches the
+// list afresh, since seq starts over.
+const EPOCH = Date.now().toString(36);
+const LOG_MAX = 2000;                        // events kept per conversation
+const LOG_IDLE_MS = 24 * 3600 * 1000;        // a conversation nobody has touched this long is dropped
+const sessionLog = new Map();                // conversation -> { seq, events, touched }
+const rowConv = new Map();                   // row id -> conversation (claude_session_id, else the row id)
+const flatText = (t) => String(t || '').replace(/\s+/g, ' ').trim();
+
+async function convOfRow(rowId) {
+  if (rowConv.has(rowId)) return rowConv.get(rowId);
+  let conv = rowId;
+  try {
+    const rows = await sb(`desk_sessions?id=eq.${encodeURIComponent(rowId)}&select=id,claude_session_id`);
+    if (rows && rows[0]) conv = rows[0].claude_session_id || rows[0].id;
+  } catch (_) { /* the row id stands in until the list names its conversation */ }
+  rowConv.set(rowId, conv);
+  return conv;
+}
+
+function sweepLogs() {
+  if (sessionLog.size < 50) return;
+  const cutoff = Date.now() - LOG_IDLE_MS;
+  for (const [conv, log] of sessionLog) if (log.touched < cutoff) sessionLog.delete(conv);
+}
+
+async function ensureLog(conv) {
+  let log = sessionLog.get(conv);
+  if (log) { log.touched = Date.now(); return log; }
+  log = { seq: 0, events: [], touched: Date.now() };
+  sessionLog.set(conv, log);
+  try {
+    const turns = ((await sb(`desk_turns?conversation=eq.${encodeURIComponent(conv)}` +
+      `&select=at,prompt,reply&order=at.desc&limit=${SESSION_TURNS}`)) || []).reverse();
+    for (const t of turns) {
+      if (t.prompt) log.events.push({ seq: ++log.seq, id: crypto.randomUUID(), kind: 'prompt', text: cleanSaid(t.prompt), seen: true, at: t.at });
+      if (t.reply) log.events.push({ seq: ++log.seq, id: crypto.randomUUID(), kind: 'reply', text: cleanSaid(t.reply), at: t.at });
+    }
+  } catch (e) { console.log('[sessions] seed:', e.message); }
+  sweepLogs();
+  return log;
+}
+
+function appendEvent(conv, rowId, log, ev) {
+  ev.seq = ++log.seq;
+  log.events.push(ev);
+  if (log.events.length > LOG_MAX) log.events.splice(0, log.events.length - LOG_MAX);
+  log.touched = Date.now();
+  const frame = 'event: ev\ndata: ' + JSON.stringify({ conversation: conv, session: rowId, epoch: EPOCH, ev }) + '\n\n';
+  for (const res of sessionClients) { try { res.write(frame); } catch {} }
+}
+
+/** The events of the turn in flight: everything after the last reply. */
+function sinceLastReply(log) {
+  let i = log.events.length;
+  while (i > 0 && log.events[i - 1].kind !== 'reply') i--;
+  return log.events.slice(i);
+}
+
+/** One activity frame from a host, appended to its conversation's list as the event it is. */
+async function logFrame(rowId, b, state, text, at) {
+  const conv = await convOfRow(rowId);
+  const log = await ensureLog(conv);
+  const live = sinceLastReply(log);
+  if (state === 'queued' || state === 'said') {
+    if (!text) return;
+    let id = typeof b.id === 'string' && b.id ? b.id.slice(0, 64) : null;
+    // A host that sends no id (older than this): a `said` with the words of the last unread prompt is
+    // that prompt being read, not a second one.
+    if (!id && state === 'said') {
+      const q = [...live].reverse().find((e) => e.kind === 'prompt' && e.seen === false && flatText(e.text) === flatText(text));
+      if (q) id = q.id;
+    }
+    appendEvent(conv, rowId, log, { id: id || crypto.randomUUID(), kind: 'prompt', text, seen: state === 'said',
+                                    ...(b.cmd ? { cmd: String(b.cmd).slice(0, 64) } : {}) });
+    return;
+  }
+  if (state === 'text' || state === 'tool') {
+    if (text) appendEvent(conv, rowId, log, { id: crypto.randomUUID(), kind: state, text });
+    return;
+  }
+  if (state === 'done') {
+    // A turn whose prompt never came as a frame (the watcher attached after it was typed — a resume
+    // with words) still has it here, from the host's read of the transcript.
+    const prompt = typeof b.prompt === 'string' ? cleanSaid(b.prompt).slice(0, 4000) : '';
+    if (prompt && !live.some((e) => e.kind === 'prompt' && flatText(e.text) === flatText(prompt))) {
+      appendEvent(conv, rowId, log, { id: crypto.randomUUID(), kind: 'prompt', text: prompt, seen: true });
+    }
+    const reply = typeof b.reply === 'string' && b.reply ? cleanSaid(b.reply).slice(0, 4000) : text;
+    if (reply) appendEvent(conv, rowId, log, { id: crypto.randomUUID(), kind: 'reply', text: reply, ...(at ? { at } : {}) });
+  }
+}
+
+app.post('/api/session-activity', express.json(), async (req, res) => {
   const b = req.body || {};
   const session = String(b.session || '');
   if (!session) return res.status(400).json({ error: 'session required' });
@@ -3191,8 +3304,12 @@ app.post('/api/session-activity', express.json(), (req, res) => {
     if (text) notifySessionReply(session, text, at, typeof b.summary === 'string' ? b.summary : null);
     return res.status(204).end();          // not a step: nothing on a wall should draw it
   }
+  // The old shape (`session` frames, `steps`) is still served for the watch build installed before
+  // the event list existed; both go once it is off the wrist (TODO.md).
   keepStep(session, state, text);
   pushSession({ session, state, text });
+  try { await logFrame(session, b, state, text, at); }
+  catch (e) { console.log('[sessions] log:', e.message); }
   if (done && text && b.summary_coming !== true) notifySessionReply(session, text, at);
   res.status(204).end();
 });
@@ -4219,6 +4336,7 @@ async function buildSessions() {
     sb('desk_queue?claimed=is.null&select=*&order=created.asc'),
     sb('desk_focus?id=eq.current&select=command_id,session_id'),
   ]);
+  for (const s of sessions || []) rowConv.set(s.id, s.claude_session_id || s.id);
   const { session: focusHit, pinned } = await pickFocus((focusRows || [])[0], sessions);
   const focus = focusHit ? focusHit.id : null;
   // The number Jared says out loud. THE RULE IS SHARED WITH `numberSessions` IN data-layer's
@@ -4362,7 +4480,21 @@ app.get('/api/sessions/:id', async (req, res) => {
     // The turn in flight so far, while there is one: the steps the stream carried before this view
     // was open to hear them.
     const steps = row.working ? (turnSteps.get(row.id) || []) : [];
-    res.json({ ...row, turns, steps });
+    const conv = row.claude_session_id || row.id;
+    rowConv.set(row.id, conv);
+    const log = await ensureLog(conv);
+    res.json({ ...row, turns, steps, epoch: EPOCH, events: log.events });
+  } catch (e) { res.status(500).json({ error: String(e.message || e) }); }
+});
+
+// The list, or the part of it after `since` — what a client fetches when a frame's seq shows a gap.
+app.get('/api/sessions/:id/events', async (req, res) => {
+  try {
+    const conv = await convOfRow(String(req.params.id));
+    const log = await ensureLog(conv);
+    const since = Number(req.query.since);
+    const events = Number.isFinite(since) && since > 0 ? log.events.filter((e) => e.seq > since) : log.events;
+    res.json({ epoch: EPOCH, conversation: conv, events });
   } catch (e) { res.status(500).json({ error: String(e.message || e) }); }
 });
 
@@ -4411,7 +4543,11 @@ app.post('/api/sessions/:action', express.json(), async (req, res) => {
       const machine = target.worker === 'desk' ? 'mac' : 'pi';
       const kind = now.live ? 'follow_up' : 'resume_session';
       const payload = { session: target.id, prompt: text, target: machine,
-                        ...(attachments.length ? { attachments } : {}) };
+                        ...(attachments.length ? { attachments } : {}),
+                        // The sender's own message id, which the host stamps on the prompt these words
+                        // become (sessionWatch.js `expectPrompt`), so the sender can replace its
+                        // placeholder for them by id when they come back as an event.
+                        ...(msgId ? { msg: msgId } : {}) };
       if (!(await machineAwake(machine))) {
         const saved = await deadLetter(kind, payload, machine, `the ${machine === 'mac' ? 'Mac' : 'Pi'} is not responding`);
         return res.status(409).json({ error: `the ${machine === 'mac' ? 'Mac' : 'Pi'} is not responding`, saved });

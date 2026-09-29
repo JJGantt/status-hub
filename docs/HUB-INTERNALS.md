@@ -1137,9 +1137,9 @@ all confirmed live in `desk_turns`, not theoretical:
   raced it): found, at the time this was written, sitting unresolved in `desk_turns` from more than
   one session, shown as if he had typed an instruction to go read a file.
 
-`cleanSaid` runs at THREE points, and a fourth is documented above it in the code as the one still
-open: the list's `say`, a session's `last_prompt` and each of its `turns[].prompt` (`/api/sessions/:id`),
-and `full()`'s `last_reply` (cleaned for consistency with `say`, though neither pattern is expected to
+`cleanSaid` runs at FOUR points: every `/api/session-activity` frame (so a live `said`/`queued` line is
+clean before it is kept or pushed), the list's `say`, a session's `last_prompt` and each of its
+`turns[].prompt` (`/api/sessions/:id`), and `full()`'s `last_reply` (cleaned for consistency with `say`, though neither pattern is expected to
 ever match a reply rather than a prompt). **A fourth source of exactly this failure mode — text that
 looks like his words but is not — is `fromHim` in `transcripts.js`**: a message queued mid-turn is
 checked against ONE wrapper tag, `<task-notification>`; a second one, `<agent-message` (a subagent's own

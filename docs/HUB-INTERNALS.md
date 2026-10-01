@@ -555,13 +555,12 @@ dated item — every occurrence is a real row, so nothing is projected; `?month=
 the day timeline and reads `calendar_months` for the spread, `?day=1` is the timeline alone and
 `&full=1` makes it a rolling ±12h window instead of a calendar day — see the dial below, and
 `&ahead=N` adds the N days after today as `ahead`) · `/api/badge` · `/api/repos` ·
-**A session reply's notification is a SUMMARY.** `notifySessionReply` runs the finished answer through
-Haiku (`summarizeReply`, `claude-haiku-4-5-20251001`, `ANTHROPIC_API_KEY`) and pushes that as the body:
-at most six short lines, one per thing done, impersonal and past tense, leading with the question when
-the reply asks one. The raw answer is pages written for a screen, and a lock screen shows its first
-three hundred characters — usually the preamble. It NEVER blocks the push: no key, a bad response or a
-timeout all fall back to the raw reply. Tapping it still opens that session; the payload is untouched.
-Measured around 1.5s, which the push waits for.
+**A session reply's notification is a SUMMARY**, written by the machine that produced the reply, not
+by the hub. The orchestrator (voice-pipeline `sessionWatch.js`, `summarise`) runs the answer through
+`claude -p --model haiku` on its own subscription, posts `done` at once with `summary_coming`, then a
+`summary` frame that `notifySessionReply` pushes as the body. The hub holds no Anthropic key and makes
+no model call. A host that sends no summary, or whose summariser failed, is notified from `done` with
+the raw reply. Tapping it opens that session either way; the payload is untouched.
 
 `/api/session-activity` (what a host's transcript watcher saw: `queued`/`said` for HIS words with the
 prompt's id and, when the host typed them for a command, that command's id; `tool`; `text` for what

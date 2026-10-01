@@ -84,10 +84,7 @@ commands because a service is unreachable is the worse failure.
 **A press is its own proof.** Only always-on sources are scored; the deliberate button on a phone or a
 watch identifies whoever is holding it.
 
-The ESP and the Mac gate on it in the stream itself: ECAPA-TDNN against the enrolled voiceprint, accepted at
-`app_settings.voiceid_accept_threshold`. A room mic has to know it is him and not the television.
-
-The phone's always-on mode is the same situation — engaging it is what puts the phone INTO the
-always-on state — so it belongs behind the same gate, against the same bank and the same threshold.
-**Not yet wired: see `docs/TODO.md`.** The phone's deliberate button needs no gate; someone holding
-it down has already identified themselves.
+The ESP and the Mac gate on it in the stream itself, scoring 2s slices as they arrive (and, at
+`app_settings.voiceid_accept_threshold`, the whole clip — 0 today, so off), so audio that is not him
+never reaches Whisper. An uploaded clip is scored only AFTER the hub has transcribed it: a refused
+clip has already been sent to Groq, and the gate saves the worker run, not the transcription.

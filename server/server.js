@@ -2713,8 +2713,8 @@ const CLIP_BUCKET = 'voice-clips';
 // worker's own "didn't catch that" kept any of it from running.
 //
 // The clip goes to the voice server as 16k mono WAV (it reads the bucket with the service key it
-// already has) and comes back as the top-3 cosine against the voiceprint. Below
-// `voiceid_accept_threshold` — the same bar the room mics use — it is not enqueued.
+// already has) and comes back as the top-3 cosine against the voiceprint. Below `voice_upload_accept`
+// (see the bar below) it is not enqueued.
 //
 // **A gate that cannot run lets the command through.** A voice server that is down, a missing
 // voiceprint and a clip that will not decode all answer 0, and 0 means "cannot tell": eating his

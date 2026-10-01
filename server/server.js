@@ -40,7 +40,7 @@ const { computeScore, tasksScore, taskDeadline, completionValue, completionStamp
 // every reader; the 15-min backstop covers a silently dropped realtime event.
 const settingsCache = { map: null, at: 0 };
 const SETTINGS_BACKSTOP_MS = 15 * 60 * 1000;
-const dirtySettings = () => { settingsCache.map = null; };
+const dirtySettings = () => { settingsCache.map = null; statusEpoch++; };
 
 // Upsert one app_settings row. app_settings is keyed, so this needs the merge-duplicates Prefer
 // header — a plain POST on an existing key 409s (which is why sbWrite, having no Prefer, can't
@@ -913,21 +913,60 @@ async function surfVeto() {
 }
 
 
-// ---- dashboard source-row cache ------------------------------------------------------------
+// ---- dashboard source rows, cached by GROUP ---------------------------------------------------
 // The 30s broadcast tick exists to advance clock-derived fields (pace drain, session clock) — but
 // the DB rows it renders only change on writes, and realtime already announces every write. So the
 // heavy queries are fetched once and reused for every rebuild; a refetch happens only when
-// (a) realtime dirtied the cache, (b) the date windows embedded in the queries rolled over, or
+// (a) a write to that group's table dirtied it, (b) the date window in its queries rolled over, or
 // (c) the 15-min reconciliation backstop lapses (covers a silently dropped realtime event).
 // Presence and device_status rows are NOT cached — they're tiny (~200B/~1KB) and are WRITTEN every
 // couple of minutes by design (worker heartbeats, litter/feeder state mirrors); caching them would
-// make those routine writes dirty the cache and drag the 11 heavy queries along ~720×/day.
+// make those routine writes dirty the cache and drag the heavy queries along ~720×/day.
 // This took Supabase egress from ~143KB × every 30s (≈0.5GB/day, the free-plan quota blowout) to
 // effectively zero at idle.
-const rowCache = { rows: null, key: '', at: 0, dirty: true, gen: 0 };
+//
+// A write dirties only the groups its TABLE feeds: a checked-off list item refetches the two task
+// reads, not the 210 days of intake behind the maintenance estimate. And a group is read on its own,
+// so an endpoint that needs only the rings never touches the surf, task or catalog rows.
+const ROW_GROUPS = {
+  nut: ['nutrition_entries'], weight: ['weight_log'], targets: ['nutrition_targets'],
+  train: ['sets'], catalog: ['exercise_catalog', 'exercise_muscles'], surf: ['surf_snapshots'],
+  tasks: ['list_items'],
+};
 const ROWCACHE_BACKSTOP_MS = 15 * 60 * 1000;
-// `gen` lets a read that began before an invalidation see that it has been overtaken.
-const dirtyRows = () => { rowCache.dirty = true; rowCache.gen++; };
+const rowCache = new Map();   // group -> { rows, key, at, gen, pending, pendingGen, pendingKey }
+// `rowGen[g]` lets a read that began before an invalidation see that it has been overtaken.
+const rowGen = Object.fromEntries(Object.keys(ROW_GROUPS).map((g) => [g, 0]));
+// Moves on every invalidation of anything a status build reads from a cache, so a build in flight can
+// tell whether it is still current enough to share (buildStatus).
+let statusEpoch = 0;
+// Dirty the groups fed by these tables — or every group, with none named (the freshness probe, which
+// cannot say what moved).
+function dirtyRows(...tables) {
+  statusEpoch++;
+  const named = tables.filter(Boolean);
+  for (const [g, ts] of Object.entries(ROW_GROUPS)) {
+    if (!named.length || ts.some((t) => named.includes(t))) rowGen[g]++;
+  }
+}
+// One group's rows. Concurrent callers share one read — several endpoints opening together is the
+// ordinary case, since a page asks for all of its parts at once — and a read overtaken by a write is
+// served but not kept.
+function groupRows(group, key, read) {
+  const c = rowCache.get(group) || {};
+  const gen = rowGen[group];
+  if (c.rows && c.gen === gen && c.key === key && Date.now() - c.at < ROWCACHE_BACKSTOP_MS) return Promise.resolve(c.rows);
+  if (c.pending && c.pendingGen === gen && c.pendingKey === key) return c.pending;
+  const settle = () => { const now = rowCache.get(group); if (now && now.pending === pending) now.pending = null; };
+  const pending = read().then((rows) => {
+    settle();
+    if (rowGen[group] === gen) rowCache.set(group, { rows, key, at: Date.now(), gen });
+    else console.log(`[rowcache] ${group}: a write was announced mid-read: serving this read, leaving it dirty`);
+    return rows;
+  }, (e) => { settle(); throw e; });
+  rowCache.set(group, { ...c, pending, pendingGen: gen, pendingKey: key });
+  return pending;
+}
 
 // The status strip's session fields, on the same terms as the row cache above. These two reads ran on
 // EVERY frame — and a frame is rebuilt on every realtime event as well as every 30s — to answer a
@@ -935,7 +974,7 @@ const dirtyRows = () => { rowCache.dirty = true; rowCache.gen++; };
 // publication now (data-layer 00104), so a change dirties this directly instead of being discovered.
 const deskCache = { rows: null, at: 0, dirty: true };
 const DESKCACHE_BACKSTOP_MS = 15 * 60 * 1000;
-const dirtyDesk = () => { deskCache.dirty = true; };
+const dirtyDesk = () => { deskCache.dirty = true; statusEpoch++; };
 
 async function fetchDeskRows() {
   if (!deskCache.dirty && deskCache.rows && Date.now() - deskCache.at < DESKCACHE_BACKSTOP_MS) {
@@ -949,66 +988,121 @@ async function fetchDeskRows() {
   return rows;
 }
 
-async function fetchStatusRows(win, week, histStart, heatStart) {
-  // The food map's rows must reach back as far as its grid does — HEAT_WEEKS columns, the first starting
-  // on a Sunday up to six days before that. A fixed day count here outlives the grid it was sized for,
-  // and every day it falls short draws as an empty cell, which reads exactly like deleted entries.
-  const nutLogStart = localDate(new Date(Date.now() - (HEAT_WEEKS * 7 + 7) * 86400000));
-  const taskWindowStart = localDate(new Date(Date.now() - 8 * 86400000));  // an effect is gone at 7 days; a day's slack costs nothing
-  const key = [win.start, win.end, week[0], histStart, heatStart, nutLogStart, taskWindowStart].join('|');
-  if (!rowCache.dirty && rowCache.rows && rowCache.key === key
-      && Date.now() - rowCache.at < ROWCACHE_BACKSTOP_MS) return rowCache.rows;
-  const gen = rowCache.gen;
-  const [entries, stagedEntries, setRows, weightRows, histRows, muscleRows, heatRows, catalogRows, nutLogRows, targetRows, surfRows, taskEventRows, openTaskRows] = await Promise.all([
-    sb(`nutrition_entries?occurred_at=gte.${win.start}&occurred_at=lt.${win.end}&staged=eq.false&select=calories,protein_g,carbs_g,fat_g,veg_g,dark_green_g,fruit_g`),
-    // Staged meals carry no day: they are pending until committed, so there is no window to filter on
-    // and every staged row belongs to whatever day it is eaten on. Sum them all.
-    sb('nutrition_entries?staged=eq.true&select=calories,protein_g,carbs_g,fat_g'),
-    sb(`sets?occurred_at=gte.${week[0]}T${String(DAY_START_HOUR).padStart(2, '0')}:00:00&select=occurred_at,exercise,muscles_override`),
-    sb('weight_log?select=date,weight_lbs&order=date.asc'),
-    sbRange(`nutrition_entries?occurred_at=gte.${histStart}T00:00:00&staged=eq.false&select=occurred_at,calories&order=occurred_at`),
-    sb('exercise_muscles?select=name,muscle,contribution'),
-    sbRange(`sets?occurred_at=gte.${heatStart}T00:00:00&select=occurred_at&order=occurred_at`),
-    sb('exercise_catalog?select=name,equipment'),
-    sbRange(`nutrition_entries?occurred_at=gte.${nutLogStart}T00:00:00&staged=eq.false&select=occurred_at,calories,protein_g,fat_g&order=occurred_at`),
-    sb('nutrition_targets?select=date,calories&order=date.asc'),
-    sb('surf_snapshots?select=slug,captured_at,rows&order=captured_at.desc&limit=1'),
-    // The gold band's two inputs, both ordinary `list_items` rows. A completed item persists — it
-    // still draws on the calendar — so it is its own record and there is no separate ledger. The
-    // drain is derived live from whatever is still outstanding, so there is no stored penalty to
-    // fall out of step with the list.
-    sb(`list_items?deleted=eq.false&completed_at=gte.${taskWindowStart}T00:00:00&due=not.is.null&select=scheduled_at,due,completed_at,priority`),
-    sb('list_items?deleted=eq.false&completed_at=is.null&due=not.is.null&select=scheduled_at,due,priority'),
-  ]);
-  const rows = { entries, stagedEntries, setRows, weightRows, histRows, muscleRows, heatRows, catalogRows, nutLogRows, targetRows, surfRows, taskEventRows, openTaskRows };
-  if (gen !== rowCache.gen) {
-    console.log('[rowcache] a write was announced mid-read: serving this read, leaving the cache dirty');
-    return rows;
-  }
-  rowCache.rows = rows;
-  rowCache.key = key; rowCache.at = Date.now(); rowCache.dirty = false;
-  return rows;
+
+// The date windows the status queries are cut to. Every one is derived from the clock, so each is
+// also part of its group's cache key: a window rolling over is a refetch.
+function statusWindows() {
+  const win = nutritionWindow();
+  return {
+    win, today: win.day,
+    week: lastNTrainingDays(7),
+    // Intake history for the maintenance trend + per-day replay (viz paging).
+    histStart: localDate(new Date(Date.now() - 210 * 86400000)),
+    // The frame's workout heatmap window.
+    heatStart: localDate(new Date(Date.now() - HEAT_WEEKS * 7 * 86400000)),
+    // The food map's rows must reach back as far as its grid does — HEAT_WEEKS columns, the first
+    // starting on a Sunday up to six days before that. A fixed day count here outlives the grid it was
+    // sized for, and every day it falls short draws as an empty cell, which reads exactly like deleted
+    // entries.
+    nutLogStart: localDate(new Date(Date.now() - (HEAT_WEEKS * 7 + 7) * 86400000)),
+    taskWindowStart: localDate(new Date(Date.now() - 8 * 86400000)),  // an effect is gone at 7 days; a day's slack costs nothing
+  };
 }
 
-async function buildStatus() {
-  const win = nutritionWindow();
-  const today = win.day;
-  const week = lastNTrainingDays(7);
-  const histStart = localDate(new Date(Date.now() - 210 * 86400000)); // intake history for the maintenance trend + per-day replay (viz paging)
-  const heatStart = localDate(new Date(Date.now() - HEAT_WEEKS * 7 * 86400000)); // the frame's workout heatmap window
+const rowsOf = {
+  nut: (w) => groupRows('nut', [w.win.start, w.win.end, w.histStart, w.nutLogStart].join('|'), async () => {
+    const [entries, stagedEntries, histRows, nutLogRows] = await Promise.all([
+      sb(`nutrition_entries?occurred_at=gte.${w.win.start}&occurred_at=lt.${w.win.end}&staged=eq.false&select=calories,protein_g,carbs_g,fat_g,veg_g,dark_green_g,fruit_g`),
+      // Staged meals carry no day: they are pending until committed, so there is no window to filter on
+      // and every staged row belongs to whatever day it is eaten on. Sum them all.
+      sb('nutrition_entries?staged=eq.true&select=calories,protein_g,carbs_g,fat_g'),
+      sbRange(`nutrition_entries?occurred_at=gte.${w.histStart}T00:00:00&staged=eq.false&select=occurred_at,calories&order=occurred_at`),
+      sbRange(`nutrition_entries?occurred_at=gte.${w.nutLogStart}T00:00:00&staged=eq.false&select=occurred_at,calories,protein_g,fat_g&order=occurred_at`),
+    ]);
+    return { entries, stagedEntries, histRows, nutLogRows };
+  }),
+  weight: () => groupRows('weight', '', async () => ({ weightRows: await sb('weight_log?select=date,weight_lbs&order=date.asc') })),
+  targets: () => groupRows('targets', '', async () => ({ targetRows: await sb('nutrition_targets?select=date,calories&order=date.asc') })),
+  train: (w) => groupRows('train', [w.week[0], w.heatStart].join('|'), async () => {
+    const [setRows, heatRows] = await Promise.all([
+      sb(`sets?occurred_at=gte.${w.week[0]}T${String(DAY_START_HOUR).padStart(2, '0')}:00:00&select=occurred_at,exercise,muscles_override`),
+      sbRange(`sets?occurred_at=gte.${w.heatStart}T00:00:00&select=occurred_at&order=occurred_at`),
+    ]);
+    return { setRows, heatRows };
+  }),
+  catalog: () => groupRows('catalog', '', async () => {
+    const [muscleRows, catalogRows] = await Promise.all([
+      sb('exercise_muscles?select=name,muscle,contribution'),
+      sb('exercise_catalog?select=name,equipment'),
+    ]);
+    return { muscleRows, catalogRows };
+  }),
+  surf: () => groupRows('surf', '', async () => ({ surfRows: await sb('surf_snapshots?select=slug,captured_at,rows&order=captured_at.desc&limit=1') })),
+  // The gold band's two inputs, both ordinary `list_items` rows. A completed item persists — it still
+  // draws on the calendar — so it is its own record and there is no separate ledger. The drain is
+  // derived live from whatever is still outstanding, so there is no stored penalty to fall out of step
+  // with the list.
+  tasks: (w) => groupRows('tasks', w.taskWindowStart, async () => {
+    const [taskEventRows, openTaskRows] = await Promise.all([
+      sb(`list_items?deleted=eq.false&completed_at=gte.${w.taskWindowStart}T00:00:00&due=not.is.null&select=scheduled_at,due,completed_at,priority`),
+      sb('list_items?deleted=eq.false&completed_at=is.null&due=not.is.null&select=scheduled_at,due,priority'),
+    ]);
+    return { taskEventRows, openTaskRows };
+  }),
+};
 
-  const [{ entries, stagedEntries, setRows, weightRows, histRows, muscleRows, heatRows, catalogRows, nutLogRows, targetRows, surfRows, taskEventRows, openTaskRows }, deviceRows, presenceRows, workerRows] = await Promise.all([
-    fetchStatusRows(win, week, histStart, heatStart),
-    sb('device_status?select=*'),
-    sb('voice_presence?select=source,alive_at'),
-    sb('worker_presence?select=worker,last_seen,info'),
+// Recompute only when an input changed. Inputs are compared by IDENTITY, which is what a cached row
+// group hands out: the same array until that group is refetched. So a derived value lives exactly as
+// long as the rows it was derived from, with no invalidation of its own to forget.
+function memo(fn) {
+  let deps = null, val;
+  return (...args) => {
+    if (deps && deps.length === args.length && deps.every((d, i) => d === args[i])) return val;
+    val = fn(...args); deps = args;
+    return val;
+  };
+}
+
+// ---- the dashboard, in PIECES ------------------------------------------------------------------
+// buildStatus() is every card on every wall, and a surface that draws one card must not pay for the
+// rest: the watch's rings used to cost a whole dashboard — 210 days of maintenance replayed day by
+// day, both heat maps, the devices, the mics, the session focus — to send four arcs. Each endpoint
+// below asks for the pieces it draws, and buildStatus is those same pieces put together, so a number
+// cannot come out one way on the wall and another on the wrist.
+
+// Maintenance and the eating window: a function of the intake history, the weigh-ins and the goal
+// settings, so recomputed only when one of them moves. NOT the per-day replay (`historyOf`), which is
+// most of the cost and which only the weight views draw.
+const maintenanceOf = memo((weightRows, histRows, today, surplus, minAlignedDays, phaseKey) => {
+  const intakeTotals = {};
+  for (const e of histRows || []) {
+    const d = dayBucketOf(e.occurred_at);
+    if (d === today) continue; // exclude the in-progress day (partial intake biases low)
+    intakeTotals[d] = (intakeTotals[d] || 0) + (Number(e.calories) || 0);
+  }
+  const intakeByDay = Object.entries(intakeTotals).map(([date, calories]) => ({ date, calories }));
+  const weights = (weightRows || []).map((r) => ({ date: String(r.date).slice(0, 10), weight: Number(r.weight_lbs) }));
+  const phase = JSON.parse(phaseKey);   // caps the live window at the current goal phase
+  const maintenance = estimateMaintenance({ weights, intakeByDay, today, surplus, minAlignedDays, phase });
+  const eatWindow = pace.deriveWindow((histRows || []).map((r) => r.occurred_at));
+  return { weights, intakeByDay, maintenance, eatWindow };
+});
+
+// What every nutrition surface starts from: the day's rows, the goal settings and maintenance.
+async function nutritionCore() {
+  const w = statusWindows();
+  const [nut, { weightRows }, { targetRows }, surplus, minAlignedDays, phase, produceGoal] = await Promise.all([
+    rowsOf.nut(w), rowsOf.weight(), rowsOf.targets(),
+    surplusCal(), maintenanceMinDays(), maintenancePhase(), produceTargets(),
   ]);
+  const m = maintenanceOf(weightRows, nut.histRows, w.today, surplus, minAlignedDays, JSON.stringify(phase ?? null));
+  return { w, today: w.today, ...nut, weightRows, targetRows, surplus, minAlignedDays, produceGoal, ...m };
+}
 
-  const litter = buildLitter((deviceRows || []).find((d) => d.device !== 'cat-feeder') || null);
-  const feeder = (deviceRows || []).find((d) => d.device === 'cat-feeder') || null;
-  const surf = buildSurf((surfRows || [])[0]);
-
-  const sum = (k) => (entries || []).reduce((a, e) => a + (Number(e[k]) || 0), 0);
+// The day's totals and the pace rings at THIS instant — the one piece that moves with the clock, so
+// it is computed per call; it is a few arithmetic passes.
+function paceOf(core) {
+  const sum = (k) => (core.entries || []).reduce((a, e) => a + (Number(e[k]) || 0), 0);
   const nutrition = {
     calories: Math.round(sum('calories')),
     protein_g: Math.round(sum('protein_g')),
@@ -1019,19 +1113,145 @@ async function buildStatus() {
     veg_g: Math.round(sum('veg_g')),
     dark_green_g: Math.round(sum('dark_green_g')),
     fruit_g: Math.round(sum('fruit_g')),
-    target: null, // set to the dynamic goal once maintenance is computed below
+    target: core.maintenance.target_macros, // the macro goal is the live dynamic target
   };
+  // ---- gamified intake pacing (drain bars) ----
+  // What is staged but not eaten. Kept OUT of `nutrition` and out of `consumed` — it is what the day
+  // would become, never what it is — and handed to the pace math separately so the rings can draw it
+  // as a piece past the real arc.
+  const stagedSum = (k) => Math.round((core.stagedEntries || []).reduce((a, e) => a + (Number(e[k]) || 0), 0));
+  const stagedMacros = { calories: stagedSum('calories'), protein_g: stagedSum('protein_g'),
+                         carbs_g: stagedSum('carbs_g'), fat_g: stagedSum('fat_g') };
+  const paceData = pace.computePace({
+    consumed: { calories: nutrition.calories, protein_g: nutrition.protein_g, carbs_g: nutrition.carbs_g, fat_g: nutrition.fat_g },
+    goal: core.maintenance.target_macros,
+    staged: stagedMacros,
+    window: core.eatWindow,
+    nowOff: nowOffsetTZ(),
+  });
+  paceData.window_label = pace.windowLabel(core.eatWindow);
+  // Produce rings are NOT paced. The macro rings are drain gauges (full = on-pace, draining with the
+  // clock); produce starts EMPTY each day and simply fills toward a fixed goal. No window, no marker,
+  // no time term at all — so it goes through computeFill(), never computePace().
+  paceData.produce = pace.computeFill(
+    { veg_g: nutrition.veg_g, dark_green_g: nutrition.dark_green_g, fruit_g: nutrition.fruit_g }, core.produceGoal);
+  return { nutrition, paceData };
+}
 
-  // ---- adaptive maintenance estimate ----
-  const intakeTotals = {};
-  for (const e of histRows || []) {
-    const d = dayBucketOf(e.occurred_at);
-    if (d === today) continue; // exclude the in-progress day (partial intake biases low)
-    intakeTotals[d] = (intakeTotals[d] || 0) + (Number(e.calories) || 0);
+// The per-day replay of maintenance and target, for the surfaces that draw the weight page.
+const historyOf = memo((weights, intakeByDay, today, surplus, minAlignedDays) =>
+  // Phase-less, so past goals are never backfilled.
+  estimateHistory({ weights, intakeByDay, today, surplus, minAlignedDays }));
+function maintenanceWithHistory(core) {
+  const m = core.maintenance;
+  if (!m.viz) return m;
+  let series = historyOf(core.weights, core.intakeByDay, core.today, core.surplus, core.minAlignedDays);
+  // ...but the replay's FINAL point still reflects the old straddled calc, so override ONLY today's point
+  // with the live phase-aware number — the on-plot curve + its labels then agree with the header/math,
+  // while every prior day stays frozen (no backfill). On a copy: the replay is cached.
+  const last = series && series[series.length - 1];
+  if (last && last.date === core.today && m.source !== 'calibrating') {
+    series = series.slice(0, -1).concat({ ...last, avg: m.avg_intake, maintenance: m.maintenance, target: m.target });
   }
-  const intakeByDay = Object.entries(intakeTotals).map(([date, calories]) => ({ date, calories }));
-  const weights = (weightRows || []).map((r) => ({ date: String(r.date).slice(0, 10), weight: Number(r.weight_lbs) }));
-  const surplus = await surplusCal();   // current surplus/deficit setting
+  return { ...m, viz: { ...m.viz, series } };
+}
+
+const volumeOf = memo((setRows, muscleRows, catalogRows, weekKey) => {
+  // ---- weekly per-muscle volume gauges ----
+  const volume = computeVolume(setRows || [], muscleRows || [], weekKey.split(','));
+  volume.exercise_variants = buildVariants(catalogRows || []); // exercise → equipment variants + YouTube how-to links
+  return volume;
+});
+const setClocksOf = memo((heatRows, today) => {
+  const last_set_at = (heatRows && heatRows.length) ? heatRows[heatRows.length - 1].occurred_at : null;
+  // Sets logged so far in the current 4am-origin day — the same figure the day-detail panel heads
+  // its list with, carried on the payload so the rest-timer block can show it without a second read.
+  const sets_today = (heatRows || []).reduce((n, r) => n + (dayBucketOf(r.occurred_at) === today ? 1 : 0), 0);
+  // session_start_at: the first set of the trailing run where consecutive sets are <=20min apart. The
+  // client shows (now - session_start) as the session clock while the last set is <20min old, and lets
+  // it reset to zero once a 20min gap opens (the session ended). A >20min gap breaks the run, so a new
+  // workout's first set becomes the new session start.
+  const SESSION_GAP_MS = 20 * 60 * 1000;
+  let session_start_at = last_set_at;
+  if (heatRows && heatRows.length) {
+    for (let i = heatRows.length - 1; i > 0; i--) {
+      const gap = new Date(heatRows[i].occurred_at).getTime() - new Date(heatRows[i - 1].occurred_at).getTime();
+      if (gap <= SESSION_GAP_MS) session_start_at = heatRows[i - 1].occurred_at;
+      else break;
+    }
+  }
+  return { last_set_at, session_start_at, sets_today };
+});
+
+// The week's training: the muscle gauges and the set clocks.
+async function trainingCore() {
+  const w = statusWindows();
+  const [{ setRows, heatRows }, { muscleRows, catalogRows }] = await Promise.all([rowsOf.train(w), rowsOf.catalog()]);
+  return { w, today: w.today, heatRows,
+    volume: volumeOf(setRows, muscleRows, catalogRows, w.week.join(',')),
+    ...setClocksOf(heatRows, w.today) };
+}
+
+const goalResolverOf = memo((nutLogRows, weights, targetRows, today, surplus, fallbackMaint) =>
+  buildGoalResolver({ rows: nutLogRows || [], weights, targets: targetRows || [], today, surplus, fallbackMaint }));
+
+// ---- overall score (training, nutrition and tasks over the rolling week) ----
+async function scoreOf(core, paceData, train) {
+  const { taskEventRows, openTaskRows } = await rowsOf.tasks(core.w);
+  const { goalForDay } = goalResolverOf(core.nutLogRows, core.weights, core.targetRows, core.today, core.surplus,
+    core.maintenance.maintenance);
+  const dayCPF = {};   // 4am-day bucket -> {cal, protein, fat} actuals
+  for (const e of core.nutLogRows || []) {
+    const d = dayBucketOf(e.occurred_at);
+    const x = (dayCPF[d] = dayCPF[d] || { cal: 0, protein: 0, fat: 0 });
+    x.cal += Number(e.calories) || 0; x.protein += Number(e.protein_g) || 0; x.fat += Number(e.fat_g) || 0;
+  }
+  const weights = core.weights;
+  const wForDay = (ds) => { let w = null; for (const x of weights) { if (x.date <= ds) w = x.weight; else break; } return w; };  // weights are date-asc
+  const scoreDays = core.w.week.map((d) => {
+    const a = dayCPF[d] || { cal: 0, protein: 0, fat: 0 };
+    const calGoal = goalForDay(d);
+    const mt = macroTargets(calGoal, wForDay(d));
+    return { date: d, isToday: d === core.today, fraction: paceData.fraction, cal: a.cal, protein: a.protein, fat: a.fat,
+             calGoal, proteinFloor: mt.protein_g, fatTarget: mt.fat_g };
+  });
+  // surplus signs the goal-aware calorie scoring; the task inputs are the gold band's ledger and the
+  // still-open dated items it drains from.
+  return computeScore({
+    volume: train.volume, days: scoreDays, surplus: core.surplus,
+    taskEvents: taskEventRows || [], openTasks: openTaskRows || [], nowLocal: etNowString(),
+  });
+}
+
+// The whole dashboard. Requests that arrive while one is being built share it, unless something it
+// reads was invalidated after it began; the broadcast always builds its own (`composeStatus`), because
+// a device_status change reaches it without invalidating any cache and must not be answered with a
+// build that started before it.
+let statusBuild = null;
+function buildStatus() {
+  if (statusBuild && statusBuild.epoch === statusEpoch) return statusBuild.promise;
+  const build = { epoch: statusEpoch, promise: null };
+  build.promise = composeStatus().finally(() => { if (statusBuild === build) statusBuild = null; });
+  statusBuild = build;
+  return build.promise;
+}
+
+async function composeStatus() {
+  const [core, train, { surfRows }, deviceRows, presenceRows, workerRows, watcherRows] = await Promise.all([
+    nutritionCore(), trainingCore(), rowsOf.surf(),
+    sb('device_status?select=*'),
+    sb('voice_presence?select=source,alive_at'),
+    sb('worker_presence?select=worker,last_seen,info'),
+    // Alongside the other live reads rather than after the build: it is one more round trip, and
+    // serially it was the frame's second.
+    sb('set_watcher?id=eq.1&select=exercise,weight_lbs,armed_at,last_set_at').catch(() => []),
+  ]);
+  const { today } = core;
+
+  const litter = buildLitter((deviceRows || []).find((d) => d.device !== 'cat-feeder') || null);
+  const feeder = (deviceRows || []).find((d) => d.device === 'cat-feeder') || null;
+  const surf = buildSurf((surfRows || [])[0]);
+
   const routing = await routingConfig();   // agent model / thinking / runner / wake (TV routing panel)
 
   // The session a spoken follow-up would land in — shown on the TV strip so the answer is ambient
@@ -1074,58 +1294,17 @@ async function buildStatus() {
       };
     })(),
   };
-  const minAlignedDays = await maintenanceMinDays();
-  const phase = await maintenancePhase();   // caps the live window at the current goal phase; NOT passed to
-  const maintenance = estimateMaintenance({ weights, intakeByDay, today, surplus, minAlignedDays, phase });
-  // estimateHistory — the per-day replay stays phase-less so past goals are never backfilled.
-  if (maintenance.viz) maintenance.viz.series = estimateHistory({ weights, intakeByDay, today, surplus, minAlignedDays });
-  // ...but the replay's FINAL point still reflects the old straddled calc, so override ONLY today's point
-  // with the live phase-aware number — the on-plot curve + its labels then agree with the header/math,
-  // while every prior day stays frozen (no backfill).
-  if (maintenance.viz && maintenance.viz.series && maintenance.viz.series.length && maintenance.source !== 'calibrating') {
-    const lastPt = maintenance.viz.series[maintenance.viz.series.length - 1];
-    if (lastPt && lastPt.date === today) {
-      lastPt.avg = maintenance.avg_intake;
-      lastPt.maintenance = maintenance.maintenance;
-      lastPt.target = maintenance.target;
-    }
-  }
-  nutrition.target = maintenance.target_macros; // the macro goal is the live dynamic target
+  const maintenance = maintenanceWithHistory(core);
   syncStoredTarget(maintenance.target_macros, today).catch((e) => console.error('target sync:', e.message));
-
-  // ---- gamified intake pacing (drain bars) ----
-  const eatWindow = pace.deriveWindow((histRows || []).map((r) => r.occurred_at));
-  // What is staged but not eaten. Kept OUT of `nutrition` and out of `consumed` — it is what the day
-  // would become, never what it is — and handed to the pace math separately so the rings can draw it
-  // as a piece past the real arc.
-  const stagedSum = (k) => Math.round((stagedEntries || []).reduce((a, e) => a + (Number(e[k]) || 0), 0));
-  const stagedMacros = { calories: stagedSum('calories'), protein_g: stagedSum('protein_g'),
-                         carbs_g: stagedSum('carbs_g'), fat_g: stagedSum('fat_g') };
-  const paceData = pace.computePace({
-    consumed: { calories: nutrition.calories, protein_g: nutrition.protein_g, carbs_g: nutrition.carbs_g, fat_g: nutrition.fat_g },
-    goal: maintenance.target_macros,
-    staged: stagedMacros,
-    window: eatWindow,
-    nowOff: nowOffsetTZ(),
-  });
-  paceData.window_label = pace.windowLabel(eatWindow);
-  // Produce rings are NOT paced. The macro rings are drain gauges (full = on-pace, draining with the
-  // clock); produce starts EMPTY each day and simply fills toward a fixed goal. No window, no marker,
-  // no time term at all — so it goes through computeFill(), never computePace().
-  paceData.produce = pace.computeFill(
-    { veg_g: nutrition.veg_g, dark_green_g: nutrition.dark_green_g, fruit_g: nutrition.fruit_g },
-    await produceTargets(),
-  );
-
-  // ---- weekly per-muscle volume gauges ----
-  const volume = computeVolume(setRows || [], muscleRows || [], week);
-  volume.exercise_variants = buildVariants(catalogRows || []); // exercise → equipment variants + YouTube how-to links
+  const { nutrition, paceData } = paceOf(core);
+  const { volume } = train;
+  const { weights, surplus } = core;
 
   // ---- workout volume heatmap (GitHub-contribution style) ----
-  const heatmap = buildWorkoutHeatmap(heatRows, HEAT_WEEKS, today); // 4am `today`, matching the nutrition heatmap
+  const heatmap = buildWorkoutHeatmap(train.heatRows, HEAT_WEEKS, today); // 4am `today`, matching the nutrition heatmap
 
   // ---- nutrition log: calorie-adherence calendar (per-day historical targets) + calorie/weight trend ----
-  const nutrition_log = buildNutritionLog(nutLogRows || [], weights, maintenance.target, maintenance.maintenance, today, targetRows || [], HEAT_WEEKS, surplus, 150, paceData.fraction);
+  const nutrition_log = buildNutritionLog(core.nutLogRows || [], weights, maintenance.target, maintenance.maintenance, today, core.targetRows || [], HEAT_WEEKS, surplus, 150, paceData.fraction);
 
 
   // `months` is parallel to `weeks` and labels a column only where the month changes, so a slice can
@@ -1145,62 +1324,25 @@ async function buildStatus() {
   // with the map under it, so it has to have a point over every column the map has.
   const weight_plot_phone = buildWeightPlot(weights, HEAT_WEEKS, today);
 
-  // ---- overall score (0.5·training + 0.5·nutrition over the rolling week) ----
-  const { goalForDay } = buildGoalResolver({ rows: nutLogRows || [], weights, targets: targetRows || [], today, surplus, fallbackMaint: maintenance.maintenance });
-  const dayCPF = {};   // 4am-day bucket -> {cal, protein, fat} actuals
-  for (const e of nutLogRows || []) {
-    const d = dayBucketOf(e.occurred_at);
-    const x = (dayCPF[d] = dayCPF[d] || { cal: 0, protein: 0, fat: 0 });
-    x.cal += Number(e.calories) || 0; x.protein += Number(e.protein_g) || 0; x.fat += Number(e.fat_g) || 0;
-  }
-  const wForDay = (ds) => { let w = null; for (const x of weights) { if (x.date <= ds) w = x.weight; else break; } return w; };  // weights are date-asc
-  const scoreDays = week.map((d) => {
-    const a = dayCPF[d] || { cal: 0, protein: 0, fat: 0 };
-    const calGoal = goalForDay(d);
-    const mt = macroTargets(calGoal, wForDay(d));
-    return { date: d, isToday: d === today, fraction: paceData.fraction, cal: a.cal, protein: a.protein, fat: a.fat,
-             calGoal, proteinFloor: mt.protein_g, fatTarget: mt.fat_g };
-  });
-  // surplus signs the goal-aware calorie scoring; the task inputs are the gold band's ledger and the
-  // still-open dated items it drains from.
-  const score = computeScore({
-    volume, days: scoreDays, surplus,
-    taskEvents: taskEventRows || [], openTasks: openTaskRows || [], nowLocal: etNowString(),
-  });
+
+  const score = await scoreOf(core, paceData, train);
 
   // The rep watcher: what the Apple Watch app's counted sets are currently being
   // logged as. Shown under the rest clock so it is visible at a glance whether a set
   // about to be performed will actually be recorded — knowing that BEFORE the set is
   // the only time it helps. Ten minutes with no set clears it, mirrored from the SQL
   // so the UI and the trigger agree on what "live" means.
+  // The watcher is a nicety; a failed read is no watcher, never a failed dashboard.
   let rep_watcher = null;
-  try {
-    const rw = (await sb('set_watcher?id=eq.1&select=exercise,weight_lbs,armed_at,last_set_at'))[0];
-    if (rw && rw.exercise) {
-      const stamp = rw.last_set_at || rw.armed_at;
-      if (stamp && Date.now() - new Date(stamp).getTime() < 10 * 60 * 1000) {
-        rep_watcher = { exercise: rw.exercise, weight_lbs: rw.weight_lbs };
-      }
-    }
-  } catch (_) { /* watcher is a nicety; never fail the dashboard over it */ }
-
-  const last_set_at = (heatRows && heatRows.length) ? heatRows[heatRows.length - 1].occurred_at : null;
-  // Sets logged so far in the current 4am-origin day — the same figure the day-detail panel heads
-  // its list with, carried on the payload so the rest-timer block can show it without a second read.
-  const sets_today = (heatRows || []).reduce((n, r) => n + (dayBucketOf(r.occurred_at) === today ? 1 : 0), 0);
-  // session_start_at: the first set of the trailing run where consecutive sets are <=20min apart. The
-  // client shows (now - session_start) as the session clock while the last set is <20min old, and lets
-  // it reset to zero once a 20min gap opens (the session ended). A >20min gap breaks the run, so a new
-  // workout's first set becomes the new session start.
-  const SESSION_GAP_MS = 20 * 60 * 1000;
-  let session_start_at = last_set_at;
-  if (heatRows && heatRows.length) {
-    for (let i = heatRows.length - 1; i > 0; i--) {
-      const gap = new Date(heatRows[i].occurred_at).getTime() - new Date(heatRows[i - 1].occurred_at).getTime();
-      if (gap <= SESSION_GAP_MS) session_start_at = heatRows[i - 1].occurred_at;
-      else break;
+  const rw = (watcherRows || [])[0];
+  if (rw && rw.exercise) {
+    const stamp = rw.last_set_at || rw.armed_at;
+    if (stamp && Date.now() - new Date(stamp).getTime() < 10 * 60 * 1000) {
+      rep_watcher = { exercise: rw.exercise, weight_lbs: rw.weight_lbs };
     }
   }
+
+  const { last_set_at, session_start_at, sets_today } = train;
   return { today, litter, feeder, surf, wind: liveWind.view((surfRows || [])[0]), buoys: liveBuoy.view(), weather: getWeather(), nutrition, maintenance, pace: paceData, volume, heatmap, nutrition_log,
     heatmap_home, nutrition_log_home, weight_plot, weight_plot_phone,
     last_set_at, session_start_at, sets_today, rep_watcher, routing, mics, score, desk_focus: deskFocus,
@@ -1218,8 +1360,11 @@ let frameSeq = 0, frameSent = 0;
 async function broadcast() {
   const seq = ++frameSeq;
   let frame;
-  try { frame = 'data: ' + JSON.stringify(await buildStatus()) + '\n\n'; }
+  const t0 = Date.now();
+  try { frame = 'data: ' + JSON.stringify(await composeStatus()) + '\n\n'; }
   catch (e) { console.error('broadcast build failed:', e.message); return; }
+  // Only a slow one: this runs every 30s and on every write, and a line per build is noise.
+  if (Date.now() - t0 > 500) console.log(`[timing] broadcast build ${Date.now() - t0}ms`);
   if (seq < frameSent) { console.log('[broadcast] dropped a frame a later build already sent'); return; }
   frameSent = seq;
   for (const res of sseClients) { try { res.write(frame); } catch {} }
@@ -1295,7 +1440,8 @@ function startRealtime() {
   // subscriptions (weight_log … surf_snapshots) exist for the cache: without them an edit would sit
   // invisible until the 15-min backstop refetch.
   const seen = () => { lastRealtimeEvent = Date.now(); };
-  const changed = () => { seen(); dirtyRows(); dirtyNutDay(); dirtyWorkoutDay(); dirtyHeatHistory(); broadcast(); };
+  // `p.table` names what moved, so only the row groups that table feeds are refetched.
+  const changed = (p) => { seen(); dirtyRows(p && p.table); dirtyNutDay(); dirtyWorkoutDay(); dirtyHeatHistory(); broadcast(); };
   hubChannel = supa.channel('hub-changes')
     // device_status is fetched live per build (not cached) — its routine ~2-min state mirrors must
     // rebuild the frame but must NOT drag the heavy cached queries along. Plain broadcast only.
@@ -1341,7 +1487,7 @@ function startRealtime() {
     .on('postgres_changes', { event: '*', schema: 'public', table: 'list_items' },
       (p) => {
         fpSeen();
-        seen(); dirtyRows(); pushLists(); broadcast();
+        seen(); dirtyRows('list_items'); pushLists(); broadcast();
         // A dated item added, snoozed, completed or cleared changes both when the next thing is due
         // and what the icon should read. Pushing the badge here is what lets its own poll be a
         // backstop instead of the mechanism that keeps a cleared task from lingering on his phone.
@@ -1883,14 +2029,23 @@ function pushDay(kind) {
   for (const c of dayClients) { try { c.write(`event: ${kind}\ndata: {}\n\n`); } catch {} }
 }
 const dirtyWorkoutDay = () => { workoutDayCache.clear(); pushDay('workout'); };
-// Compact feed for the iOS home/lock-screen widget. buildStatus() is heavy (many Supabase reads),
-// so the widget gets only the four numbers it draws rather than the whole dashboard payload.
+// How long a heavy read took, in the hub's log: `fly logs -a jared-status-hub | grep timing`.
+function timed(handler) {
+  return (req, res) => {
+    const t0 = Date.now();
+    res.on('finish', () => console.log(`[timing] ${req.path} ${Date.now() - t0}ms`));
+    return handler(req, res);
+  };
+}
+
+// Compact feed for the iOS home/lock-screen widget and the watch's rings: the pace rings and the
+// health bar under them, built from those pieces alone — not the dashboard.
 // Per-minute frames put it around 37KB, once an hour — the frames dominate, and the alternative
 // (coarser steps) is what made the centre number look stuck.
-app.get('/api/rings', async (req, res) => {
+app.get('/api/rings', timed(async (req, res) => {
   try {
-    const st = await buildStatus();
-    const P = st.pace || {};
+    const [core, train] = await Promise.all([nutritionCore(), trainingCore()]);
+    const P = paceOf(core).paceData;
     const m = P.macros || {};
     const KEYS = ['calories', 'protein_g', 'carbs_g', 'fat_g'];
     const consumed = {}, goal = {}, staged = {};
@@ -1934,7 +2089,7 @@ app.get('/api/rings', async (req, res) => {
     // third and together they reach the overall figure. Sent as the already-divided fills the bar
     // draws, rather than raw percentages, so the widget doesn't re-derive the weighting and drift
     // from the wall.
-    const sc = st.score || {};
+    const sc = await scoreOf(core, P, train);
     const third = (v) => Math.max(0, Math.min(100 / 3, (Number(v) || 0) / 3));
     res.json({
       step_min: STEP_MIN,
@@ -1946,7 +2101,7 @@ app.get('/api/rings', async (req, res) => {
       frames,
     });
   } catch (e) { res.status(500).json({ error: String(e.message || e) }); }
-});
+}));
 
 async function workoutDay(date) {
     const hit = workoutDayCache.get(date);
@@ -1985,7 +2140,6 @@ app.get('/api/workout-day', async (req, res) => {
 // tally, and EVERY exercise logged today, each with its muscles' WEEKLY sets in that muscle's volume
 // colour (the wall's `data-recent` row, muscle.js exerciseVolumeChips). Newest first by each
 // exercise's last set, so the one a set just went onto is at the top and the rest scroll below it.
-// buildStatus() has all of it, but as the whole dashboard.
 // The watch draws the body-map artwork itself (its paths are compiled into the app from lib/bodymap.js),
 // so all it needs from here is a colour per region. Only regions that carry one are sent — everything
 // else draws in the artwork's base fill — and the region-to-muscle mapping is the shared one, so a
@@ -2001,9 +2155,9 @@ function bodyColours(muscleColours) {
   return out;
 }
 
-app.get('/api/workout-now', async (req, res) => {
+app.get('/api/workout-now', timed(async (req, res) => {
   try {
-    const st = await buildStatus();
+    const st = await trainingCore();
     const day = await workoutDay(st.today);
     const V = st.volume || {}, ix = {};
     for (const g of V.groups || []) for (const m of g.muscles) ix[m.muscle] = m;
@@ -2023,7 +2177,7 @@ app.get('/api/workout-now', async (req, res) => {
       body: bodyColours(V.muscle_colors), volume,
     });
   } catch (e) { res.status(500).json({ error: String(e.message || e) }); }
-});
+}));
 
 // ---- heat-grid history, for the phone's expanded sheet ----
 // The status frame carries a fixed HEAT_WEEKS window because it is re-pushed on every realtime
@@ -2063,7 +2217,7 @@ function heatPrefix(full) {
 const NUT_HISTORY_MS = 10 * 60 * 1000;
 const daysBefore = (date, n) => new Date(Date.parse(date + 'T12:00:00Z') - n * 86400000).toISOString().slice(0, 10);
 const nutHistoryCache = new Map();
-app.get('/api/nut-history', async (req, res) => {
+app.get('/api/nut-history', timed(async (req, res) => {
   try {
     // `all=1` is the whole history, back to the first meal or set logged (the watch's history view,
     // which scrolls); otherwise the last `weeks`, at most 30 (the health page at rest).
@@ -2080,8 +2234,9 @@ app.get('/api/nut-history', async (req, res) => {
     }
     const hit = nutHistoryCache.get(weeks);
     if (hit && Date.now() - hit.at < NUT_HISTORY_MS) return res.json(hit.body);
-    const st = await buildStatus();
-    const today = nutritionWindow().day;
+    const core = await nutritionCore();
+    const { fraction } = paceOf(core).paceData;
+    const today = core.today;
     const [nutRows, weightRows, targetRows, setRows] = await Promise.all([
       sbRange(`nutrition_entries?occurred_at=gte.${daysBefore(today, weeks * 7 + 7)}T00:00:00&staged=eq.false` +
         '&select=occurred_at,calories,protein_g,fat_g&order=occurred_at'),
@@ -2090,8 +2245,8 @@ app.get('/api/nut-history', async (req, res) => {
       sbRange(`sets?occurred_at=gte.${daysBefore(today, weeks * 7 + 7)}T00:00:00&select=occurred_at&order=occurred_at`),
     ]);
     const weights = (weightRows || []).map((r) => ({ date: String(r.date).slice(0, 10), weight: Number(r.weight_lbs) }));
-    const log = buildNutritionLog(nutRows || [], weights, st.maintenance.target, st.maintenance.maintenance,
-      today, targetRows || [], weeks, await surplusCal(), 150, st.pace.fraction);
+    const log = buildNutritionLog(nutRows || [], weights, core.maintenance.target, core.maintenance.maintenance,
+      today, targetRows || [], weeks, core.surplus, 150, fraction);
     // Only what a cell needs: the colour, whether it is today, and its date (`d`), which is what a tap
     // on the watch's history view asks the day's log for. The other fields nothing on the wrist reads.
     // The training map comes back in the SAME shape as the food one — a colour and a today flag per
@@ -2107,26 +2262,26 @@ app.get('/api/nut-history', async (req, res) => {
     nutHistoryCache.set(weeks, { body, at: Date.now() });
     res.json(body);
   } catch (e) { res.status(500).json({ error: String(e.message || e) }); }
-});
+}));
 
 // The weight view (the phone's cards/maintviz.js), for the watch: the weigh-ins, each day's intake, the
 // maintenance and target curves replayed per day, and the fitted trend over the window. All computed
-// in buildStatus for the phone already; this hands over only that, not the whole dashboard.
-app.get('/api/weight-view', async (req, res) => {
+// for the phone's card already; this builds only that piece, not the whole dashboard.
+app.get('/api/weight-view', timed(async (req, res) => {
   try {
-    const st = await buildStatus();
-    const m = st.maintenance || {}, v = m.viz || {};
+    const core = await nutritionCore();
+    const m = maintenanceWithHistory(core), v = m.viz || {};
     res.json({
-      today: st.today, window_start: m.window_start || null, window_end: m.window_end || null,
+      today: core.today, window_start: m.window_start || null, window_end: m.window_end || null,
       weighins: (v.weighins || []).map((w) => ({ date: w.date, weight: w.weight, inwin: !!w.inwin })),
       intake: (v.intake || []).map((d) => ({ date: d.date, calories: d.calories, kept: d.kept != null })),
       series: (v.series || []).map((r) => ({ date: r.date, maintenance: r.maintenance ?? null, target: r.target ?? null })),
       slope_lb_day: v.slope_lb_day ?? null, weight_at_end: v.weight_at_end ?? null,
     });
   } catch (e) { res.status(500).json({ error: String(e.message || e) }); }
-});
+}));
 
-app.get('/api/heat-history', async (req, res) => {
+app.get('/api/heat-history', timed(async (req, res) => {
   try {
     if (heatHistCache.body && Date.now() - heatHistCache.at < HEATHIST_BACKSTOP_MS) return res.json(heatHistCache.body);
     const today = nutritionWindow().day;
@@ -2154,9 +2309,10 @@ app.get('/api/heat-history', async (req, res) => {
     }
 
     // The nutrition calendar's colour is intake against that day's GOAL, which is maintenance-derived
-    // and phase-aware. Those numbers come off buildStatus() rather than being recomputed here, so a
-    // day cannot be one colour on the card and another in the expanded view.
-    const st = await buildStatus();
+    // and phase-aware. Those numbers come off the same piece the frame is built from (nutritionCore),
+    // so a day cannot be one colour on the card and another in the expanded view.
+    const core = await nutritionCore();
+    const { fraction } = paceOf(core).paceData;
     const [setRows, nutRows, weightRows, targetRows] = await Promise.all([
       sbRange('sets?select=occurred_at&order=occurred_at'),
       sbRange('nutrition_entries?staged=eq.false&select=occurred_at,calories,protein_g,fat_g&order=occurred_at'),
@@ -2166,8 +2322,8 @@ app.get('/api/heat-history', async (req, res) => {
 
     const weights = (weightRows || []).map((r) => ({ date: String(r.date).slice(0, 10), weight: Number(r.weight_lbs) }));
     const heatmap = heatPrefix(buildWorkoutHeatmap(setRows, span, today));
-    const nutrition_log = heatPrefix(buildNutritionLog(nutRows, weights, st.maintenance.target, st.maintenance.maintenance,
-      today, targetRows || [], span, await surplusCal(), 150, st.pace.fraction));
+    const nutrition_log = heatPrefix(buildNutritionLog(nutRows, weights, core.maintenance.target, core.maintenance.maintenance,
+      today, targetRows || [], span, core.surplus, 150, fraction));
     // The weigh-in plot over that same span, for the surfaces that scroll it with the maps — it has
     // to have a point over every column they have, not just the ones the status frame carries.
     const weight_plot = buildWeightPlot(weights, span, today);
@@ -2175,7 +2331,7 @@ app.get('/api/heat-history', async (req, res) => {
     heatHistCache.body = body; heatHistCache.at = Date.now();
     res.json(body);
   } catch (e) { res.status(500).json({ error: String(e.message || e) }); }
-});
+}));
 
 // ---- app settings (voice routing mode + per-device trailing-silence). Read by the worker + devices;
 // edited from the hub settings panel. Returns/accepts a flat {key: value} map. ----
@@ -2325,7 +2481,7 @@ app.post('/api/register-push', express.json(), async (req, res) => {
 const nutDayCache = new Map();   // `${date}|${window day}` -> { body, at }
 const NUTDAY_BACKSTOP_MS = 15 * 60 * 1000;
 const dirtyNutDay = () => { nutDayCache.clear(); pushDay('nutrition'); };
-app.get('/api/nutrition-day', async (req, res) => {
+app.get('/api/nutrition-day', timed(async (req, res) => {
   try {
     // date=today lets a client that has no 4am-origin day of its own (the watch) ask for the current one.
     const asked = String(req.query.date || '').slice(0, 10);
@@ -2393,7 +2549,7 @@ app.get('/api/nutrition-day', async (req, res) => {
     nutDayCache.set(cacheKey, { body, at: Date.now() });
     res.json(body);
   } catch (e) { res.status(500).json({ error: String(e.message || e) }); }
-});
+}));
 
 // "now" as a naive-local wall-clock timestamp in the display TZ → "YYYY-MM-DDTHH:MM:SS"
 // (the format nutrition_entries.occurred_at and sets.occurred_at are stored in).
@@ -4117,7 +4273,7 @@ app.get('/api/calendar', async (req, res) => {
 // waiting for their realtime echo, which takes seconds. A ring on the TV stops only when the feed
 // changes, so a STOP that waits for the echo leaves the TV ringing long enough to read as not having
 // worked. The echo still arrives and repeats the announcement; that is one redundant reload per tap.
-function announceListWrite() { dirtyRows(); pushLists(); broadcast(); }
+function announceListWrite() { dirtyRows('list_items'); pushLists(); broadcast(); }
 app.post('/api/todos/complete', express.json(), async (req, res) => {
   try {
     const b = req.body || {};

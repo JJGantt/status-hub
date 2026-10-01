@@ -29,6 +29,19 @@ Supabase ──▶ server.js buildStatus() ──▶ /api/status payload ──�
 - **Push model:** `/api/stream` is a Server-Sent-Events stream. `core.js` subscribes once; every
   ~30s (and on realtime-invalidated change) the server rebuilds the payload and pushes a `status`
   frame; `core.js` calls each card's `render(s)`.
+- **`buildStatus()` is assembled from PIECES, and a feed that draws one card asks for that piece
+  alone.** `nutritionCore()` (the day's rows, the goal settings, maintenance), `paceOf()` (the totals
+  and rings at this instant — the only clock-driven piece, so computed per call), `trainingCore()`
+  (the muscle gauges and set clocks), `scoreOf()` and `maintenanceWithHistory()` (the per-day replay,
+  most of the build's CPU, drawn only by the weight views). `/api/rings`, `/api/workout-now`,
+  `/api/weight-view`, `/api/nut-history` and `/api/heat-history` each call the pieces they draw;
+  calling `buildStatus()` from a feed is the mistake that made the watch's rings cost the whole
+  dashboard — the devices, the mics, the session focus, both heat maps — on every page open. Each
+  derived value is `memo()`ised on the row arrays it came from, so it lives exactly as long as they do.
+  Requests arriving during a build share it unless something was invalidated after it began
+  (`statusEpoch`); `broadcast()` always builds its own (`composeStatus`), because a `device_status`
+  change reaches it without invalidating any cache. Each feed logs its duration:
+  `fly logs -a jared-status-hub | grep timing` (the broadcast logs only a build over 500ms).
 - **Realtime:** the server subscribes to Supabase realtime on the tables that must invalidate the
   cached payload (nutrition, sets, app_settings, voice_*), so a voice/MCP write reflects in seconds
   rather than waiting for the tick. It also subscribes to `desk_sessions` / `desk_queue` / `desk_focus`
@@ -56,9 +69,9 @@ Supabase ──▶ server.js buildStatus() ──▶ /api/status payload ──�
   refetches, recycles the socket (a miss is evidence the channel is lying), and **logs**, which the
   original failure never did. The probe costs ~147 bytes and ~340ms per run, about one extra heavy
   fetch a day, so it closes the window without undoing the caching it protects.
-- **What "realtime announced nothing" is measured against is `rtEvents`, not `rowCache.dirty`.**
-  `dirty` looks like the right flag and is not: `broadcast()` is what CLEARS it and `broadcast()` runs
-  on every realtime event, so by the time the probe reads it, it has almost always been cleared by the
+- **What "realtime announced nothing" is measured against is `rtEvents`, not the row cache's state.**
+  Whether the cache is dirty looks like the right question and is not: `broadcast()` refetches, which
+  makes it clean again, and `broadcast()` runs on every realtime event, so by the time the probe reads it, it has almost always been cleared by the
   very event the probe is asking about. Testing it made the probe fire after ORDINARY writes — a
   completion realtime delivered in under 20 seconds was declared missing 105 seconds later — and each
   firing recycled a healthy socket. That is not a harmless false positive: a recycle is a real
@@ -78,10 +91,15 @@ Supabase ──▶ server.js buildStatus() ──▶ /api/status payload ──�
   `list_items` handler — `pushLists()`, `dirtyDue()`, `syncBadge()` — on top of the refetch and the
   socket recycle. A subscription that PUSHES rather than invalidating a cache needs its push added
   here as well, or that surface goes stale in exactly the case the probe exists to catch.
-- **A read may mark the row cache clean only if no write was announced while it ran.**
-  `dirtyRows()` bumps `rowCache.gen` and `fetchStatusRows` compares it once its queries return: a
-  read that began before an invalidation still answers its own caller, but is not kept and does not
-  clear `dirty`. Every `list_items` event starts a read, and two writes a second apart are routine, so
+- **The row cache is per GROUP, and a write dirties only the groups its table feeds**
+  (`ROW_GROUPS`: intake, weigh-ins, targets, sets, the exercise catalog, surf, dated items).
+  `dirtyRows(table)` with no table named dirties all of them, which is what the freshness probe does;
+  a realtime handler passes `p.table`. A new cached query goes into a group whose table's subscription
+  calls `changed`, or its edits wait for the 15-minute backstop.
+- **A read may mark its row group clean only if no write was announced while it ran.**
+  `dirtyRows()` bumps that group's `rowGen` and `groupRows` compares it once its queries return: a
+  read that began before an invalidation still answers its own caller, but is not kept. Concurrent
+  callers of one group share a single read. Every `list_items` event starts a read, and two writes a second apart are routine, so
   reads overlap. Without the check the earlier read clears the flag the later event set, and rows
   fetched before the second write sit marked clean until something unrelated dirties the cache. The
   gold band shows it: chips come live from `/api/calendar` and read `+7` at once, while the bar is
@@ -734,7 +752,7 @@ outcomes need distinct verbs. Do not re-merge them.
 
 Two more things that are easy to undo by accident:
 
-- **`list_items` invalidates the row cache.** Its realtime handler calls `dirtyRows()` and
+- **`list_items` invalidates the row cache.** Its realtime handler calls `dirtyRows('list_items')` and
   `broadcast()`, not just `pushLists()`. Without that a completion would not reach the bar until the
   15-minute backstop — the one moment the reward is supposed to land.
 - **Overdue rows escalate in colour** with a server-computed `heat` (1–3). The gold band floors at

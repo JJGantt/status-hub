@@ -13,6 +13,9 @@ import AVFoundation
 final class Recorder {
     struct Clip {
         let url: URL
+        /// When the microphone went live for this file — what a pressed command sends as its
+        /// `capture_start`, since that is the moment a voice-logged set is stamped with.
+        let start: Date
         let duration: TimeInterval
         /// Seconds of audio the microphone actually delivered into the file. Far short of `duration`
         /// means the microphone went deaf, which the hub would otherwise only report as an empty clip.
@@ -190,7 +193,7 @@ final class Recorder {
     /// own length is not known until the encoder has flushed it.
     func stop() -> Clip? {
         guard let sink = halt() else { return nil }
-        return Clip(url: sink.finish(), duration: Date().timeIntervalSince(startedAt), heard: sink.heard,
+        return Clip(url: sink.finish(), start: startedAt, duration: Date().timeIntervalSince(startedAt), heard: sink.heard,
                     peak: sink.peak, chirped: chirped)
     }
 
@@ -205,7 +208,7 @@ final class Recorder {
         guard let sink else { return nil }
         let now = Date()
         defer { startedAt = now }
-        return sink.cut().map { Clip(url: $0, duration: now.timeIntervalSince(startedAt)) }
+        return sink.cut().map { Clip(url: $0, start: startedAt, duration: now.timeIntervalSince(startedAt)) }
     }
 
     /// Keeps recording into a new file and deletes the one it was writing: a stretch nobody spoke in.

@@ -473,8 +473,11 @@ survive the wrist dropping.
 ### Sending it
 
 A command is sent the way the phone's microphone sends one: `Hub.sendAudio` uploads the file to
-`/api/voice-command` (source `web`), the hub transcribes it with the same Groq Whisper, and the worker
-treats it as push-to-talk — no addressing gate, no duplicate-drop, no spoken reply on the TV. The hub
+`/api/voice-command` (source `watch-cmd`), the hub transcribes it with the same Groq Whisper, and the
+worker treats it as push-to-talk — no addressing gate, no spoken reply on the TV, the reply pushed. It
+carries the clip's recording window (`Recorder.Clip.start` plus its duration) as `capture_start` /
+`capture_end`: the start is what a voice-logged set is stamped with (`LISTENERS.md`), and the window is
+what lets the worker drop it as a duplicate only when a room mic heard the same sentence. The hub
 answers with the transcript, shown until the turn lands, and the request id, and the watch waits on
 `/api/voice-reply/:id`. No id means the hub heard no words. **With the wrist down the app is kept running until
 a home command's answer is in** (`StayAwake`): recording keeps a watch app alive, but once the command

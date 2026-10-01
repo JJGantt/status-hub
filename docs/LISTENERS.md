@@ -29,7 +29,10 @@ else, but a few labels are read: `watch` and `phone` have their voice checked (`
 worker treats `fly` and `mac` as room mics (their replies are spoken on the TV) and pushes the reply to
 the phone for `fly`, `mac` and `watch-cmd`. The watch is a listener as `watch`, engaged from its home
 page (`Capture.toggleListening`); a command he presses for on it is `watch-cmd`, which is not a listener
-and not voice-checked, and is labelled only so its reply is pushed while the app is suspended.
+and not voice-checked, and is labelled only so its reply is pushed while the app is suspended. It
+still carries its window — from the microphone going live to the press that ends it — because
+`capture_start` is also the moment the worker hands the data layer as "now", which is what a set
+logged by voice is stamped with. A press without one is stamped when the model calls the tool.
 
 ## Why the window is the whole thing
 

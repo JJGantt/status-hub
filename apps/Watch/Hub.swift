@@ -193,11 +193,16 @@ enum Hub {
         try blockInSimulator("voice-command")
         var query = "client_msg_id=\(msgId)&client_now=\(clientNow())&dur=\(String(format: "%.1f", clip.duration))"
             + (dry ? "&dry=1" : "")
-        if let listener {
-            let iso = ISO8601DateFormatter()
-            iso.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-            query += "&source=watch&quick=1&capture_start=\(iso.string(from: listener.start))"
-                + "&capture_end=\(iso.string(from: listener.end))"
+        let iso = ISO8601DateFormatter()
+        iso.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        // The recording window rides every clip. `capture_start` is what the worker hands the data
+        // layer as "now", so a set he logs by voice lands when he started talking rather than when
+        // the model got round to calling the tool; and it is what the worker collapses two mics
+        // hearing the same sentence on.
+        let window = listener ?? (start: clip.start, end: clip.start.addingTimeInterval(clip.duration))
+        query += "&capture_start=\(iso.string(from: window.start))&capture_end=\(iso.string(from: window.end))"
+        if listener != nil {
+            query += "&source=watch&quick=1"
         } else {
             // A command he pressed for. Named so the worker pushes its reply: the app is suspended the
             // moment the wrist drops, and the push is the only thing that reaches him then. Not

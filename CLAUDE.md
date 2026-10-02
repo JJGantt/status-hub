@@ -644,10 +644,9 @@ prompts (`fetchAttachment`) and prepends a line naming the local files, which th
 itself. A picture with no words is a whole message. It reaches the hub with `?token=`, the way
 everything on that machine does; `X-Hub-Token` is the derived token the iOS app carries and not this.
 
-**A long message goes in as a typed lead plus a paste, and the lead is hidden here.** Past Claude
-Code's paste threshold, `typeable` (voice-pipeline `handoff.js`) types `Jared's message:` and pastes the
-words behind it in one submit, so the transcript holds `Jared's message: <pasted_content>…`;
-`resolvePrompt` strips both, which is why every surface shows only his words. Turns recorded before
+**A long message is pasted as it is, and the paste tags are hidden here.** Past Claude Code's paste
+threshold the transcript holds `<pasted_content>…</pasted_content>`; `resolvePrompt` (voice-pipeline
+`transcripts.js`) strips the tags, which is why every surface shows only his words. Turns recorded before
 this were a stub naming a file in `~/.claude-desk-prompts`, which the same function still resolves —
 and `sessionWatch` still drops those sessions' verbatim echo — until the files are swept at thirty days.
 

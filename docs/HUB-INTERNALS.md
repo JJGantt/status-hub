@@ -1195,7 +1195,7 @@ all confirmed live in `desk_turns`, not theoretical:
   read aloud. …]`. Nothing sends it now, but it is in turns already stored. Either this or the location
   line can come last, so `cleanSaid` peels both off the end until neither matches.
 - **The stub a long message was once typed as, instead of itself**, naming the file the real words
-  were parked in. Nothing types one now (a long message is a typed lead plus a paste), but turns
+  were parked in. Nothing types one now (a long message is simply pasted), but turns
   already stored hold it. Meant
   to be resolved back to those words before anything is stored (`transcripts.js`'s `resolvePrompt`,
   called from `turnStart` and from `sessionWatch`'s `queue-operation` handling) — `cleanSaid` is a

@@ -114,7 +114,7 @@ SDKs instead, which are always installed:
 
     xcrun -sdk iphoneos swiftc -typecheck -target arm64-apple-ios18.0 -D HUB_APP Sources/*.swift Shared/*.swift
     xcrun -sdk watchos swiftc -typecheck -parse-as-library -swift-version 5 -target arm64-apple-watchos11.0 -D WATCH_APP Watch/*.swift WatchWidgets/RecordIntent.swift WatchWidgets/SharedState.swift Shared/Auth.swift Controls/RingsView.swift
-    xcrun -sdk watchos swiftc -typecheck -parse-as-library -swift-version 5 -target arm64-apple-watchos11.0 WatchWidgets/*.swift
+    xcrun -sdk watchos swiftc -typecheck -parse-as-library -swift-version 5 -target arm64-apple-watchos11.0 WatchWidgets/*.swift Shared/Auth.swift
 
 The iOS app's assets, Info.plists and embedding are only proven by the CI archive.
 

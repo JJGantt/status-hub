@@ -2879,7 +2879,9 @@ const VOICE_VERIFY_URL = process.env.VOICE_VERIFY_URL || 'https://jared-voice.fl
 const VERIFY_TOKEN = process.env.VERIFY_TOKEN || '';
 // A press is its own proof: someone holding a watch to their mouth has identified themselves, which is
 // why the phone's own button has never been gated either (docs/LISTENERS.md). Only always-on captures
-// are scored.
+// are scored. This set is also what stamps `always_on` on the request, which is the only thing the
+// worker reads to decide whether a turn may be dropped as overheard — so it is the one list of which
+// uploaded labels are listeners.
 const GATED_SOURCES = new Set(['watch', 'phone']);
 
 async function soundsLikeHim(id, file, source) {
@@ -3000,6 +3002,7 @@ app.post('/api/voice-command', async (req, res) => {
       (him.why ? ` (${him.why})` : ''));
     if (!him.ok) return res.json({ transcript, enqueued: false, notHim: true });
     await sbWrite('voice_requests', 'POST', { id, transcript, source, focus: 'hub',
+      always_on: GATED_SOURCES.has(source),
       ...(capture_start ? { capture_start } : {}), ...(capture_end ? { capture_end } : {}),
       ...(client_now ? { client_now } : {}), ...(location ? { location } : {}) });
     markSeen(msgId, id);

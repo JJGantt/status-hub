@@ -152,6 +152,8 @@ struct SessionView: View {
     /// The newest item's height, which decides whether it needs room above it (`room`).
     @State private var newestHeight: CGFloat = 0
 
+    @ObservedObject private var speaker = Speaker.shared
+
     private var events: [SessionEvent] { sessions.logs[key]?.events ?? [] }
     private var placeholders: [Placeholder] { sessions.placeholders[key] ?? [] }
 
@@ -215,6 +217,13 @@ struct SessionView: View {
             .onChange(of: events.count) { _, _ in logShown("events") }
             .onChange(of: placeholders.count) { _, _ in logShown("placeholders") }
         }
+        // In the corner of the GLASS, not of the safe area, which stops well short of the bottom while
+        // the page scrolls on under it: a clear layer that reaches the screen's edge carries the button.
+        .overlay {
+            Color.clear
+                .overlay(alignment: .bottomTrailing) { playButton }
+                .ignoresSafeArea(.container, edges: .bottom)
+        }
         // The session's name on the clock's line, and NO back arrow: the swipe that opened it from the
         // right is what takes it away again, and a title bar with a button in it costs the top of a
         // screen this page spends on the answer. A leading toolbar item leaves the clock where watchOS
@@ -248,6 +257,28 @@ struct SessionView: View {
         .task {
             sessions.markSeen(key)   // opening it is reading it, here as on the phone
             await sessions.loadLog(key)
+        }
+    }
+
+    /// **The one way a reply is spoken**: plays this session's last reply out loud, or stops it. A bare
+    /// glyph in the corner, over the page, so it costs no row. Its own button, so a tap on it is not the
+    /// press the bottom half of the glass otherwise is (`CommandBorder.tapPresses`).
+    @ViewBuilder private var playButton: some View {
+        if let reply = events.last(where: { $0.kind == "reply" }) {
+            Button {
+                if speaker.isSpeaking { speaker.stop() }
+                else { speaker.speak(reply.text, title: sessions.row(for: key)?.name ?? "Reply") }
+            } label: {
+                Image(systemName: speaker.isSpeaking ? "stop.fill" : "speaker.wave.2.fill")
+                    .font(.system(size: 13))
+                    .foregroundColor(Color(hex: "#7d8894"))
+                    .frame(width: 36, height: 36)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            // Inset far enough to clear the display's corner curve.
+            .padding(.trailing, 6)
+            .padding(.bottom, 4)
         }
     }
 

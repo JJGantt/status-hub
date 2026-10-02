@@ -26,7 +26,6 @@ export async function open() {
   const injectOn = ['1', 'true', 'on', 'yes'].includes(String(cur.voice_inject_mode ?? '0').toLowerCase());
   const speakOn = ['1', 'true', 'on', 'yes'].includes(String(cur.voice_speak_replies ?? '0').toLowerCase());
   const pushOn = !['0', 'false', 'off', 'no'].includes(String(cur.push_enabled ?? '1').toLowerCase());
-  const speechOn = ['1', 'true', 'on', 'yes'].includes(String(cur.session_speech ?? '0').toLowerCase());
   const speechRoute = cur.watch_speech_route === 'nowplaying' ? 'nowplaying' : 'hold';
   const speechMode = String(cur.watch_speech_mode ?? 'fixed');
   // The watch edge: numbers that may be 0 (the band), and colours as #rrggbb pickers.
@@ -107,11 +106,8 @@ export async function open() {
         '<input class="settings-num" type="number" min="1" max="50" step="0.5" inputmode="decimal" ' +
         'data-key="watch_speech_ratio" value="' + sil('watch_speech_ratio', 8) + '"></label>' +
 
-      '<div class="settings-sec">Watch: speak session replies</div>' +
-      '<div class="settings-seg" id="set-session-speech">' +
-        '<button type="button" data-v="0"' + (speechOn ? '' : ' class="on"') + '>Off</button>' +
-        '<button type="button" data-v="1"' + (speechOn ? ' class="on"' : '') + '>On</button>' +
-      '</div>' +
+      // How a reply sounds when the watch plays one (the speaker glyph on a session's page).
+      '<div class="settings-sec">Watch voice</div>' +
       '<label class="settings-row"><span>Volume (%)</span>' +
         '<input class="settings-num" type="number" min="10" max="100" step="10" inputmode="numeric" ' +
         'data-key="watch_speech_volume" value="' + num('watch_speech_volume', 100) + '"></label>' +
@@ -285,11 +281,6 @@ export async function open() {
     const b = e.target.closest('[data-v]'); if (!b) return;
     back.querySelectorAll('#set-speech-mode button').forEach((x) => x.classList.toggle('on', x === b));
     save('watch_speech_mode', b.dataset.v);   // read by the watch at the start of each recording
-  });
-  back.querySelector('#set-session-speech').addEventListener('click', (e) => {
-    const b = e.target.closest('[data-v]'); if (!b) return;
-    back.querySelectorAll('#set-session-speech button').forEach((x) => x.classList.toggle('on', x === b));
-    save('session_speech', b.dataset.v);   // the watch reads it when it comes to the front
   });
   back.querySelector('#set-speech-route').addEventListener('click', (e) => {
     const b = e.target.closest('[data-v]'); if (!b) return;

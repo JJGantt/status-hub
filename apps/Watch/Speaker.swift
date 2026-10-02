@@ -1,13 +1,11 @@
 import AVFoundation
 import MediaPlayer
 import WatchKit
-import WidgetKit
 
 /// **Reads a session's reply aloud**, on the watch, with the system's own voice — no synthesis machine,
-/// no audio sent anywhere. On when `session_speech` is on (the watch's Settings page, the hub's
-/// Settings, and the Speak control in Control Center); then a reply to a follow-up sent FROM the watch
-/// is spoken as it lands. The reply is written exactly as it would be with speech off; only its
-/// markdown syntax is dropped before it is said.
+/// no audio sent anywhere. Only when asked: the speaker glyph at the foot of a session's page plays
+/// that session's last reply (`SessionView.playButton`), and nothing is ever spoken unprompted. The
+/// reply is the one written for the screen; only its markdown syntax is dropped before it is said.
 ///
 /// **Two ways to keep the app running with the wrist down, picked on the watch's Settings page and
 /// mirrored on the hub's** (`watch_speech_route`, `SpeechRoute`): watchOS keeps a watch app alive
@@ -31,12 +29,6 @@ import WidgetKit
 @MainActor
 final class Speaker: NSObject, ObservableObject, AVSpeechSynthesizerDelegate {
     static let shared = Speaker()
-    static let key = "session_speech"
-    /// Whether session replies are spoken. Kept in `SharedState`, where the Control Center toggle reads
-    /// it too, and brought up to date from the hub whenever the app comes to the front (`WatchSettings`).
-    static var enabled: Bool { SharedState.speech }
-    /// The same flag for a view to watch: the Settings page's toggle.
-    @Published private(set) var on = SharedState.speech
     /// How loud the voice plays, in percent of the watch's own volume (10…100, steps of 10): the watch's
     /// Settings page and the hub's (`watch_speech_volume`). Applies to a reply already playing.
     @Published private(set) var volume = Speaker.storedVolume
@@ -57,7 +49,7 @@ final class Speaker: NSObject, ObservableObject, AVSpeechSynthesizerDelegate {
     /// re-queues what is left) are not counted twice.
     private var schedule = 0
     private var rendered = false
-    private var speaking = false
+    @Published private var speaking = false
     /// Whether a reply is being spoken, which holds the microphone (`StayAwake` stands aside for it).
     var isSpeaking: Bool { speaking }
     private var micHeld = false
@@ -380,17 +372,6 @@ final class Speaker: NSObject, ObservableObject, AVSpeechSynthesizerDelegate {
         StayAwake.shared.sessionReleased()   // a home command still waiting takes the audio back
     }
 
-    /// Sets it — the Speak toggle's action — on the watch at once and on the hub, and taps the wrist up
-    /// for on and down for off.
-    static func set(_ on: Bool) {
-        SharedState.speech = on
-        shared.on = on
-        WKInterfaceDevice.current().play(on ? .directionUp : .directionDown)
-        if !on { shared.stop() }
-        redrawControl()
-        Task { await Hub.putSetting(key, on ? "1" : "0") }
-    }
-
     /// Sets the voice's volume here and on the hub.
     func setVolume(_ percent: Int) {
         let v = Self.clamp(percent)
@@ -432,15 +413,6 @@ final class Speaker: NSObject, ObservableObject, AVSpeechSynthesizerDelegate {
 
     private static var storedRoute: SpeechRoute {
         SpeechRoute(rawValue: UserDefaults.standard.string(forKey: routeKey) ?? "") ?? .hold
-    }
-
-    /// Brings the published flag in line after the hub changed it (`WatchSettings`).
-    static func reload() { shared.on = SharedState.speech }
-
-    static func redrawControl() {
-        if #available(watchOS 26.0, *) {
-            ControlCenter.shared.reloadControls(ofKind: "com.jaredgantt.statushub.watch.speak")
-        }
     }
 
 }

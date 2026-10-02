@@ -8,7 +8,6 @@ struct StatusHubWatchWidgets: WidgetBundle {
         if #available(watchOS 26.0, *) {
             RecordControl()
             ListenControl()
-            SpeakControl()
             SessionsControl()
             NutritionControl()
             WorkoutControl()
@@ -42,26 +41,6 @@ struct ListenControl: ControlWidget {
         }
         .displayName("Listen")
     }
-}
-
-/// Spoken session replies, as a real toggle: filled while on. What it shows is read from `SharedState`,
-/// which the app keeps in step with the hub.
-@available(watchOS 26.0, *)
-struct SpeakControl: ControlWidget {
-    var body: some ControlWidgetConfiguration {
-        StaticControlConfiguration(kind: "com.jaredgantt.statushub.watch.speak", provider: SpeechValue()) { on in
-            ControlWidgetToggle(isOn: on, action: SetSpeechIntent()) {
-                Label("Speak", systemImage: "speaker.wave.2.fill")
-            }
-        }
-        .displayName("Speak")
-    }
-}
-
-@available(watchOS 26.0, *)
-struct SpeechValue: ControlValueProvider {
-    var previewValue: Bool { false }
-    func currentValue() async throws -> Bool { SharedState.speech }
 }
 
 /// A control per page: Control Center, the Smart Stack and an Ultra's Action button can each open the

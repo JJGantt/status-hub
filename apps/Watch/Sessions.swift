@@ -122,12 +122,6 @@ final class Sessions: ObservableObject {
     /// read (`settle`): a reply to an EARLIER command, or one that came before the words went in, is
     /// not the answer he is waiting on.
     @Published private(set) var awaiting: [String: Set<String>] = [:]
-    /// **A reply owed out loud**, by conversation: the id of the follow-up sent with speech on. Paid
-    /// when the reply that answers it is on screen — as it lands if he is looking, else whenever he
-    /// next opens the session. Kept across launches, since the app is often closed by the time it comes.
-    private var owed: [String: String] = UserDefaults.standard.dictionary(forKey: "owed_speech") as? [String: String] ?? [:] {
-        didSet { UserDefaults.standard.set(owed, forKey: "owed_speech") }
-    }
     @Published private(set) var failures: [String: Failure] = [:]
 
     private let capture = Capture.shared
@@ -247,7 +241,6 @@ final class Sessions: ObservableObject {
         let cmds = Set(events.compactMap(\.cmd))
         if !cmds.isEmpty { placeholders[key] = placeholders[key]?.filter { !cmds.contains($0.msgId) } }
         settle(key)
-        speakIfOwed(key)
     }
 
     /// The wait ends when a reply lands after every follow-up he is waiting on has been read.
@@ -350,7 +343,6 @@ final class Sessions: ObservableObject {
                     return
                 }
                 awaiting[key, default: []].insert(msgId)
-                if Speaker.enabled { owed[key] = msgId }
             } catch {
                 Hub.log("send-failed", ["view": "session", "error": String(describing: error).prefix(120).description])
                 failures[key] = .message(error.localizedDescription)
@@ -394,17 +386,5 @@ final class Sessions: ObservableObject {
             // A reply landing on the session he is looking at is read as it lands.
             if path.last == key { markSeen(key) }
         }
-    }
-
-    /// Speaks the reply that answers the follow-up this conversation owes, if the session is on screen
-    /// and that reply is in the list. With speech switched off by then, the debt is dropped.
-    private func speakIfOwed(_ key: String) {
-        guard let msgId = owed[key] else { return }
-        guard Speaker.enabled else { owed[key] = nil; return }
-        guard path.last == key, let events = logs[key]?.events,
-              let asked = events.first(where: { $0.kind == "prompt" && $0.cmd == msgId && $0.seen != false }),
-              let reply = events.first(where: { $0.kind == "reply" && $0.seq > asked.seq }) else { return }
-        owed[key] = nil
-        Speaker.shared.speak(reply.text, title: row(for: key)?.name ?? "Reply")
     }
 }

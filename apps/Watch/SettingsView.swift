@@ -1,16 +1,13 @@
 import SwiftUI
 
-/// The page left of the sessions: the watch's own switches, reachable without Control Center.
-/// Each one writes the same place its Control Center control and the hub's Settings do, so all three
-/// always agree.
+/// The page left of the sessions: how a reply sounds when it is played (`SessionView.playButton`).
+/// Each setting writes the same place the hub's Settings page does, so the two always agree.
 struct SettingsView: View {
     @ObservedObject private var speaker = Speaker.shared
 
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 0) {
-                Toggle("Speak", isOn: Binding(get: { speaker.on }, set: { Speaker.set($0) }))
-                    .font(.system(size: 17))
                 // Bare glyphs on black, like every other control here: a system Slider draws its track
                 // and buttons on grey plates.
                 HStack(spacing: 0) {
@@ -31,7 +28,6 @@ struct SettingsView: View {
                     .disabled(speaker.volume >= 100)
                 }
                 .font(.system(size: 17))
-                .padding(.top, 12)
                 // Bare text, highlighted by colour rather than a filled plate: which route keeps the
                 // app alive with the wrist down while it speaks (`Speaker`'s header has the tradeoffs).
                 // Stacked, not a trailing row like Volume: "Now Playing" needs more width than the
@@ -52,8 +48,6 @@ struct SettingsView: View {
         .scrollIndicators(.never)
         .topOfTheScreen()
         .background(Color.black.ignoresSafeArea())
-        // The Control Center control writes the flag from its own process, which this one does not hear.
-        .onAppear { Speaker.reload() }
     }
 
     private func routeButton(_ label: String, _ route: SpeechRoute) -> some View {

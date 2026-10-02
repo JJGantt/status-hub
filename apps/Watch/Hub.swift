@@ -24,15 +24,11 @@ enum HubToken {
         var item: CFTypeRef?
         guard SecItemCopyMatching(q as CFDictionary, &item) == errSecSuccess,
               let data = item as? Data, let s = String(data: data, encoding: .utf8), !s.isEmpty else { return nil }
-        // Mirrored where the Control Center extension can read it (`SharedState`), so a toggle can change
-        // a hub setting without opening the app. A token saved before the mirror existed is copied now.
-        if SharedState.token != s { SharedState.token = s }
         return s
     }
 
     static func set(_ token: String?) {
         SecItemDelete(query as CFDictionary)
-        SharedState.token = token
         guard let token, !token.isEmpty else { return }
         var add = query
         add[kSecValueData as String] = Data(token.utf8)
@@ -233,8 +229,8 @@ enum Hub {
     }
 
     /// One of the hub's app settings, as the text it is stored as; nil when unset.
-    /// Writes one of the hub's Settings — for a switch the watch flips (the Speak control) that the
-    /// phone's Settings page shows too.
+    /// Writes one of the hub's Settings — for one the watch changes (the voice's volume, its route)
+    /// that the phone's Settings page shows too.
     static func putSetting(_ key: String, _ value: String) async {
         _ = try? await call("/api/settings", method: "POST", body: ["key": key, "value": value])
     }

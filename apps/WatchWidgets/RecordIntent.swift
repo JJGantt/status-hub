@@ -60,26 +60,6 @@ struct ListenIntent: OpenIntent {
     }
 }
 
-/// Turns spoken session replies on or off: the Speak toggle's action. The setting lives on the hub
-/// (`session_speech`), so the phone's Settings shows and changes the same switch; the watch's copy is in
-/// `SharedState`, which is what the toggle reads to draw itself on or off.
-struct SetSpeechIntent: SetValueIntent {
-    static var title: LocalizedStringResource = "Speak"
-
-    @Parameter(title: "Speak") var value: Bool
-
-    @MainActor
-    func perform() async throws -> some IntentResult {
-        #if WATCH_APP
-        Speaker.set(value)
-        #else
-        SharedState.speech = value
-        await SharedState.putSetting("session_speech", value ? "1" : "0")
-        #endif
-        return .result()
-    }
-}
-
 /// Which page of the app a control opens. `record` is the microphone's: it lands on home and starts
 /// recording. The rest are places — a control per page, so Control Center (and the Action button, and
 /// the Smart Stack) can put him where he was going rather than in the app to then swipe.

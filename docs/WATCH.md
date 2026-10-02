@@ -38,12 +38,11 @@ request asks `onScreen` (an environment value `RootView` sets per page) first.
 
 ### The settings page
 
-Left of the sessions page (`SettingsView`): the Speak switch, the same flag the Control Center control
-and the hub's Settings write, so the three always agree, and the voice's volume (`watch_speech_volume`,
-percent of the watch's own volume, 10 to 100 in tens; also on the hub's Settings). The volume applies to
-a reply already playing. It can only make the voice quieter than the watch's volume, never louder.
-Also here: the `Route` toggle (`watch_speech_route`), `.hold` or `.nowPlaying` — see Spoken replies. It re-reads all three each time it appears,
-because the control changes it from the widget extension's process, which the app does not hear.
+Left of the sessions page (`SettingsView`): how a played reply sounds. The voice's volume
+(`watch_speech_volume`, percent of the watch's own volume, 10 to 100 in tens; also on the hub's
+Settings) applies to a reply already playing, and can only make the voice quieter than the watch's
+volume, never louder. The `Route` toggle (`watch_speech_route`) is `.hold` or `.nowPlaying` — see
+Spoken replies.
 
 ### Home — the conversation
 
@@ -200,9 +199,7 @@ moment it is transcribed, and each is replaced by its own event.
 **The edge sweeps until every follow-up sent from here is answered**: `awaiting` holds their message
 ids, and the wait ends when a reply lands AFTER every one of them has been read — a prompt event
 carrying that id, `seen`, with a seq below the reply's (`settle`). A reply to an earlier command, or
-one that came before the words went in, is not the answer he is waiting on. A spoken reply (`owed`)
-is the id of the follow-up sent with speech on, and what is read aloud is the first reply after that
-prompt event, once the session is on screen.
+one that came before the words went in, is not the answer he is waiting on.
 
 **Its name is on the clock's line, and the name is how it closes.** A leading `ToolbarItem` holds it
 (a trailing one moves the clock to the other end of the strip), and tapping it pops the session. The
@@ -520,7 +517,7 @@ while waiting stops waiting — a command the hub already has still runs.**
 
 ### A control per page
 
-Control Center, the Smart Stack and an Ultra's Action button each hold **Hub · Listen · Speak · Sessions · Nutrition ·
+Control Center, the Smart Stack and an Ultra's Action button each hold **Hub · Listen · Sessions · Nutrition ·
 Workout**, which open the app on that page (`OpenPageIntent` → `Router` → `RootView`); Nutrition and Workout
 land on the day page opened straight into a full list (`Router.dayList`): today's food log, or the
 exercise list. Every control closes an open session first: a session is pushed over the whole row of pages, so
@@ -535,32 +532,22 @@ controls` for every kind) and the same control draws normally in the Smart Stack
 byte-identical to one that worked (files, plists, entitlements, asset catalog) still shows blank tiles
 until the reinstall. Toggling Low Power Mode, the fix circulating for watchOS 26, does not clear it.
 
-**Speak is a real toggle, filled while on; Listen is a button that opens the app.** Control Center draws
-a control from the extension, a separate process, and this account cannot enable App Groups, so the two
-share a KEYCHAIN access group instead (`SharedState`, declared on both targets in project.yml, as the
-iPhone app does with its widgets). The app mirrors `session_speech` and the hub token there; Speak's
-`ControlValueProvider` reads the one to draw itself, and its `SetSpeechIntent` writes the flag and the
-hub setting from whichever process runs it. The app asks Control Center to redraw
-(`reloadControls`) whenever the value changes, including when the hub's copy changes. Listen stays an
-`OpenIntent` because the microphone can only run in the app; it turns always-on listening on or off,
-which then carries on with the wrist down (background audio), and the blue edge shows it.
+**Listen is a button that opens the app**, an `OpenIntent`, because the microphone can only run in
+the app; it turns always-on listening on or off, which then carries on with the wrist down (background
+audio), and the blue edge shows it. No control shares state with the app: the extension is a separate
+process, this account cannot enable App Groups, and nothing a control draws depends on the app's state.
 
 ### Spoken replies
 
-With `session_speech` on (the watch's Settings page, the Speak control, or Settings → Watch: speak session replies on the phone), a reply to a
-follow-up SENT FROM THE WATCH is read aloud (`Speaker`, the system voice — nothing leaves the watch). The
-reply is written as it would be with speech off; `MarkdownBlock.spoken` drops its markdown syntax before
-it is said. **It is spoken when
-that session is on screen with its reply in hand**: as it lands if he is looking at it, otherwise the
-next time he opens it (the reply notification, the list, or raising the wrist with it open). The debt is
-`Sessions.owed`, kept in UserDefaults because the app is usually closed by the time the answer comes;
-it is paid once, and dropped if speech is off when the session is opened. A watch app cannot start
-speaking with the wrist down, which is why opening is the trigger rather than the reply's arrival. Only
-those replies: a session answering something typed on the Mac is not spoken. **The always-on listener
-stands aside while it speaks** (`Capture.hush`), so it does not transcribe the watch's own voice, and
-takes the microphone back when it finishes — paused, not switched off. Starting a recording stops the
-speaking at once. The setting is on the hub so the phone shows the same switch; the watch reads it when
-it comes to the front.
+**Nothing is spoken unless he asks.** A session's page carries a bare speaker glyph in its bottom right
+corner (`SessionView.playButton`, shown once the session has a reply): a tap reads that session's LAST
+reply aloud (`Speaker`, the system voice — nothing leaves the watch), and the glyph is a stop while it
+plays. There is no mode and no setting that turns speech on; every reply is written for the screen, and
+`MarkdownBlock.spoken` drops its markdown syntax before it is said. The glyph is its own button over
+the page, so a tap on it is not the press the bottom half of the glass otherwise is. **The always-on
+listener stands aside while it speaks** (`Capture.hush`), so it does not transcribe the watch's own
+voice, and takes the microphone back when it finishes — paused, not switched off. Starting a recording
+stops the speaking at once, and so does the press.
 
 **The app plays the voice itself and holds the microphone while it does, so it keeps talking with
 the wrist down.** watchOS keeps an app running wrist-down while it records, not while it only plays.

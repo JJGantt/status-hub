@@ -7,11 +7,6 @@ import SwiftUI
 enum WatchSettings {
     @MainActor static func refresh() async {
         guard let all = try? await Hub.settings() else { return }
-        if let v = all[Speaker.key], isOn(v) != SharedState.speech {
-            SharedState.speech = isOn(v)
-            Speaker.reload()
-            Speaker.redrawControl()
-        }
         if let v = all[Speaker.volumeKey].flatMap({ Double("\($0)") }) {
             Speaker.shared.apply(volume: Int(v.rounded()))
         }
@@ -19,9 +14,6 @@ enum WatchSettings {
         BorderStyle.shared.apply(all)
     }
 
-    private static func isOn(_ v: Any) -> Bool {
-        ["1", "true", "on", "yes"].contains("\(v)".lowercased())
-    }
 }
 
 /// How the edge of the glass looks (`CommandBorder`). Every field is a hub setting; unset, it takes the

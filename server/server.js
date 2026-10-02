@@ -3270,13 +3270,15 @@ app.post('/api/voice-reset', async (req, res) => {
 // Supabase-realtime hop so the on-screen activity bar tracks the run in real time. Not persisted.
 // Live session activity, pushed by the orchestrator on BOTH machines the moment a transcript grows.
 // The same shape as /api/voice-activity and for the same reason: the machine running the work knows
-// what it is doing, so it says so, rather than the hub asking on a timer. Nothing here is stored —
-// the orchestrator writes `last_reply` to Supabase separately, for durability, off this path.
+// what it is doing, so it says so, rather than the hub asking on a timer. The orchestrator writes
+// `last_reply` to Supabase separately, for durability, off this path; what is stored from here is the
+// finished turn's ordered list (`storeTurn`).
 //
 //   state 'tool'  — a tool call, `text` is its one-line description
 //   state 'text'  — what the session said between tool calls, never its final reply
 //   state 'done'  — the turn finished, `text` is the reply (truncated for the row it lands on) and
 //                   `at` its reply_at; it is also pushed to the phone (notifySessionReply)
+//   state 'replay' — the part of a turn this hub asked a host to say again (`logFrame`)
 // THE CURRENT TURN'S STEPS, kept so a view opened mid-turn shows the turn so far. The frames are only
 // streamed, so a session opened in the middle of a long turn showed its last finished reply and nothing
 // of what it had done since, until the next tool call. In memory, per session row, cleared by the turn's
@@ -3342,8 +3344,8 @@ function keepStep(session, state, text) {
 // three lines on every client: the next seq is appended, a gap is fetched, an old seq is ignored.
 //
 // Kept in memory per conversation, capped, and seeded on first touch from `desk_turns` (the finished
-// turns, prompt and reply each) so a cold open or a hub restart has the history. The tool calls of
-// turns before a restart are not recoverable, exactly as before. `EPOCH` names this process: a client
+// turns, each in the order it happened) so a cold open or a hub restart has the history; the turn in
+// flight comes back from the host (`logFrame`). `EPOCH` names this process: a client
 // holding events numbered by an earlier one sees a different epoch on the next frame and fetches the
 // list afresh, since seq starts over.
 const EPOCH = Date.now().toString(36);
@@ -3352,6 +3354,7 @@ const LOG_IDLE_MS = 24 * 3600 * 1000;        // a conversation nobody has touche
 const sessionLog = new Map();                // conversation -> { seq, events, touched }
 const rowConv = new Map();                   // row id -> conversation (claude_session_id, else the row id)
 const flatText = (t) => String(t || '').replace(/\s+/g, ' ').trim();
+const EVENT_KINDS = ['prompt', 'text', 'tool'];   // what a turn holds before its reply
 
 async function convOfRow(rowId) {
   if (rowConv.has(rowId)) return rowConv.get(rowId);
@@ -3377,9 +3380,16 @@ async function ensureLog(conv) {
   sessionLog.set(conv, log);
   try {
     const turns = ((await sb(`desk_turns?conversation=eq.${encodeURIComponent(conv)}` +
-      `&select=at,prompt,reply&order=at.desc&limit=${SESSION_TURNS}`)) || []).reverse();
+      `&select=at,prompt,reply,events&order=at.desc&limit=${SESSION_TURNS}`)) || []).reverse();
     for (const t of turns) {
-      if (t.prompt) log.events.push({ seq: ++log.seq, id: crypto.randomUUID(), kind: 'prompt', text: cleanSaid(t.prompt), seen: true, at: t.at });
+      // The turn in the order it happened, where it was stored that way (`storeTurn`); a turn from
+      // before that has only what opened it.
+      const stored = Array.isArray(t.events) ? t.events.filter((e) => e && EVENT_KINDS.includes(e.kind) && e.text) : [];
+      for (const e of stored) {
+        log.events.push({ seq: ++log.seq, id: e.id || crypto.randomUUID(), kind: e.kind, text: e.text, at: t.at,
+                          ...(e.kind === 'prompt' ? { seen: e.seen !== false, ...(e.cmd ? { cmd: e.cmd } : {}) } : {}) });
+      }
+      if (!stored.length && t.prompt) log.events.push({ seq: ++log.seq, id: crypto.randomUUID(), kind: 'prompt', text: cleanSaid(t.prompt), seen: true, at: t.at });
       if (t.reply) log.events.push({ seq: ++log.seq, id: crypto.randomUUID(), kind: 'reply', text: cleanSaid(t.reply), at: t.at });
     }
   } catch (e) { console.log('[sessions] seed:', e.message); }
@@ -3403,41 +3413,106 @@ function sinceLastReply(log) {
   return log.events.slice(i);
 }
 
-/** One activity frame from a host, appended to its conversation's list as the event it is. */
+// THE LIST SURVIVES A RESTART BECAUSE THE HOST CAN SAY IT AGAIN.
+//
+// This list is in memory, and every deploy empties it. Seeding from `desk_turns` brings back the
+// FINISHED turns; the one in flight exists only on the machine running it, in the transcript. So a
+// host numbers a turn's events (`turn`, the turn's key, and `n`, the position in it — sessionWatch.js
+// in voice-pipeline), and this tracks how far into the current turn the list is (`log.cur`). An event
+// that is not the next one is not appended: the answer is `{ replay, have }`, and the host sends
+// everything after `have` before anything else. An event already held is ignored. Order is therefore
+// the host's, whatever was lost in between.
+//
+// `done` carries the whole turn, which covers a restart with no event after it, and is what is
+// stored: the turn as the transcript has it, not as much of it as this process happened to hear.
+
+/** A host's frame as the list's event, or null when it is not one or says nothing. */
+function hostEvent(e) {
+  const kind = e.state === 'said' || e.state === 'queued' ? 'prompt' : EVENT_KINDS.includes(e.state) ? e.state : null;
+  if (!kind) return null;
+  // A thought or a dictated prompt can run to a paragraph; a tool line never needs more than 400.
+  const text = cleanSaid(String(e.text || '')).slice(0, kind === 'tool' ? 400 : 2000);
+  if (!text) return null;
+  const ev = { id: kind === 'prompt' && typeof e.id === 'string' && e.id ? e.id.slice(0, 64) : crypto.randomUUID(), kind, text };
+  if (kind === 'prompt') { ev.seen = e.state === 'said'; if (e.cmd) ev.cmd = String(e.cmd).slice(0, 64); }
+  return ev;
+}
+
+const numbered = (e) => e && typeof e.turn === 'string' && e.turn && Number.isInteger(e.n) && e.n > 0;
+const heldOf = (log, turn) => (log.cur && log.cur.turn === turn ? log.cur.n : 0);
+
+/** Append a turn's numbered events past what the list holds, in the host's order. */
+function takeEvents(conv, rowId, log, turn, events) {
+  let have = heldOf(log, turn);
+  for (const e of events.filter((x) => x && Number.isInteger(x.n)).sort((x, y) => x.n - y.n)) {
+    if (e.n <= have) continue;
+    const ev = hostEvent(e);
+    if (ev) appendEvent(conv, rowId, log, ev);
+    have = e.n;
+  }
+  log.cur = { turn, n: have };
+}
+
+/** The finished turn, in order, onto its `desk_turns` row (data-layer 00118). One write a turn. */
+function storeTurn(conv, at, reply, events) {
+  const stored = events.map(({ id, kind, text, seen, cmd }) => ({
+    id, kind, text, ...(kind === 'prompt' ? { seen: seen !== false, ...(cmd ? { cmd } : {}) } : {}) }));
+  if (!stored.length) return;
+  sbWrite('rpc/desk_turn_events', 'POST', { conv, turn_at: at, turn_reply: reply, turn_events: stored })
+    .catch((e) => console.log('[sessions] store turn:', e.message));
+}
+
+/**
+ * One activity frame from a host, appended to its conversation's list as the event it is. Returns
+ * what the host is told: `{ replay, have }` when the list is missing part of the turn before this.
+ */
 async function logFrame(rowId, b, state, text, at) {
   const conv = await convOfRow(rowId);
   const log = await ensureLog(conv);
   const live = sinceLastReply(log);
-  if (state === 'queued' || state === 'said') {
-    if (!text) return;
-    let id = typeof b.id === 'string' && b.id ? b.id.slice(0, 64) : null;
-    // A host that sends no id (older than this): a `said` with the words of the last unread prompt is
-    // that prompt being read, not a second one.
-    if (!id && state === 'said') {
-      const q = [...live].reverse().find((e) => e.kind === 'prompt' && e.seen === false && flatText(e.text) === flatText(text));
-      if (q) id = q.id;
-    }
-    appendEvent(conv, rowId, log, { id: id || crypto.randomUUID(), kind: 'prompt', text, seen: state === 'said',
-                                    ...(b.cmd ? { cmd: String(b.cmd).slice(0, 64) } : {}) });
-    return;
+  if (state === 'replay') {
+    if (typeof b.turn === 'string' && Array.isArray(b.events)) takeEvents(conv, rowId, log, b.turn, b.events);
+    return {};
   }
-  if (state === 'text' || state === 'tool') {
-    if (text) appendEvent(conv, rowId, log, { id: crypto.randomUUID(), kind: state, text });
-    return;
+  if (state === 'queued' || state === 'said' || state === 'text' || state === 'tool') {
+    if (numbered(b)) {
+      const have = heldOf(log, b.turn);
+      if (b.n > have + 1) return { replay: true, have };
+      takeEvents(conv, rowId, log, b.turn, [b]);
+      return {};
+    }
+    // A host that numbers nothing (older than the above): appended as it arrives.
+    if (!text) return {};
+    if (state === 'text' || state === 'tool') { appendEvent(conv, rowId, log, { id: crypto.randomUUID(), kind: state, text }); return {}; }
+    appendEvent(conv, rowId, log, { id: typeof b.id === 'string' && b.id ? b.id.slice(0, 64) : crypto.randomUUID(),
+                                    kind: 'prompt', text, seen: state === 'said',
+                                    ...(b.cmd ? { cmd: String(b.cmd).slice(0, 64) } : {}) });
+    return {};
   }
   if (state === 'done') {
-    // A turn whose prompt never came as a frame (the watcher attached after it was typed — a resume
-    // with words) still has it here, from the host's read of the transcript.
-    const prompt = typeof b.prompt === 'string' ? cleanSaid(b.prompt).slice(0, 4000) : '';
-    if (prompt && !live.some((e) => e.kind === 'prompt' && flatText(e.text) === flatText(prompt))) {
-      appendEvent(conv, rowId, log, { id: crypto.randomUUID(), kind: 'prompt', text: prompt, seen: true });
+    const whole = typeof b.turn === 'string' && Array.isArray(b.events);
+    if (whole) takeEvents(conv, rowId, log, b.turn, b.events);
+    else {
+      // The tick's report of a turn end the watcher missed carries no list. A turn whose prompt never
+      // came as a frame still has it here, from the host's read of the transcript.
+      const prompt = typeof b.prompt === 'string' ? cleanSaid(b.prompt).slice(0, 4000) : '';
+      if (prompt && !live.some((e) => e.kind === 'prompt' && flatText(e.text) === flatText(prompt))) {
+        appendEvent(conv, rowId, log, { id: crypto.randomUUID(), kind: 'prompt', text: prompt, seen: true });
+      }
     }
     const reply = typeof b.reply === 'string' && b.reply ? cleanSaid(b.reply).slice(0, 4000) : text;
-    if (reply) appendEvent(conv, rowId, log, { id: crypto.randomUUID(), kind: 'reply', text: reply, ...(at ? { at } : {}) });
+    if (!reply) return {};
+    // The watcher and the tick can both report one turn end; `at` is the turn.
+    const last = log.events[log.events.length - 1];
+    if (last && last.kind === 'reply' && at && last.at === at) return {};
+    const turn = sinceLastReply(log);
+    appendEvent(conv, rowId, log, { id: crypto.randomUUID(), kind: 'reply', text: reply, ...(at ? { at } : {}) });
+    if (at) storeTurn(conv, at, reply, whole ? b.events.map(hostEvent).filter(Boolean) : turn);
   }
+  return {};
 }
 
-app.post('/api/session-activity', express.json(), async (req, res) => {
+app.post('/api/session-activity', express.json({ limit: '8mb' }), async (req, res) => {   // `done` and `replay` carry a whole turn
   const b = req.body || {};
   const session = String(b.session || '');
   if (!session) return res.status(400).json({ error: 'session required' });
@@ -3447,7 +3522,7 @@ app.post('/api/session-activity', express.json(), async (req, res) => {
   // steps that had already happened before he said it.
   // `said` is his words at the moment the model SAW them; `queued` is his words sent but not yet seen,
   // which a view holds apart rather than placing among steps it was never read between.
-  const state = ['done', 'text', 'said', 'queued', 'summary'].includes(b.state) ? b.state : 'tool';
+  const state = ['done', 'text', 'said', 'queued', 'summary', 'replay'].includes(b.state) ? b.state : 'tool';
   const done = state === 'done';
   // A thought or a dictated prompt can run to a paragraph; a tool line or a row's reply never needs
   // more than 400.
@@ -3464,12 +3539,15 @@ app.post('/api/session-activity', express.json(), async (req, res) => {
   }
   // The old shape (`session` frames, `steps`) is still served for the watch build installed before
   // the event list existed; both go once it is off the wrist (TODO.md).
-  keepStep(session, state, text);
-  pushSession({ session, state, text });
-  try { await logFrame(session, b, state, text, at); }
+  if (state !== 'replay') {
+    keepStep(session, state, text);
+    pushSession({ session, state, text });
+  }
+  let answer = {};
+  try { answer = await logFrame(session, b, state, text, at); }
   catch (e) { console.log('[sessions] log:', e.message); }
   if (done && text && b.summary_coming !== true) notifySessionReply(session, text, at);
-  res.status(204).end();
+  res.json(answer);
 });
 
 // Every session's finished reply, pushed to the phone (and from there the watch) — the final message

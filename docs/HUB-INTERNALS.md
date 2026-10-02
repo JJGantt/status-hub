@@ -1098,9 +1098,9 @@ Claude Code's own injected context and compaction summaries, which are passed ov
 
 ### The turns before the last one
 
-`desk_turns` holds each conversation's finished turns (`conversation`, `at`, `prompt`, `reply`), and
-`GET /api/sessions/:id` returns the last ten as `turns`, oldest first, the newest being the row's own
-last turn. Nothing in this repo or on either machine writes it: a trigger on `desk_sessions`
+`desk_turns` holds each conversation's finished turns (`conversation`, `at`, `prompt`, `reply`,
+`events`), and `GET /api/sessions/:id` returns the last ten as `turns`, oldest first, the newest being
+the row's own last turn. The row itself is written by no application code: a trigger on `desk_sessions`
 (data-layer `00105`) records a turn whenever `reply_at`, `last_reply`, `last_prompt` or the
 conversation id changes, in the same transaction as the row — so a client told the row changed can
 already read the turn, and the four places a turn end is written (two machines, each from its watcher
@@ -1110,21 +1110,38 @@ across a resume or a transfer, and it bounds itself: 20 turns a conversation, 30
 A turn carries what the row carried, so a reply is the same 4000 characters the machines cut
 `last_reply` to.
 
+`events` is the one column the hub writes (`storeTurn`, through the `desk_turn_events` function of
+data-layer `00118`, one write a turn): the turn in the order it happened, every prompt where the
+session took it, each tool call and what it said between them. It comes from the host's `done` frame,
+which carries the turn as the transcript has it. The function inserts or updates `events` alone, so it
+and the trigger can land in either order without one overwriting the other. Null on a turn recorded
+before `00118`, which seeds as its prompt then its reply.
+
 ### The conversation as one list — the event log
 
 **Everything a surface shows of a session is one ordered list of events** (`sessionLog` in server.js):
 `prompt`, `tool`, `text` and `reply`, each with `seq` (its position, given here on arrival) and `id`.
 A host's activity frame becomes one event (`logFrame`): `queued` and `said` are one prompt at two
 moments with the id the host minted for it, the second marked `seen`; `done` becomes the `reply`,
-with the whole text the host now sends, and first a `prompt` for the turn if none was seen — the case
-of a watcher that attached after the words were typed (a resume with words). A prompt this machine
+with the whole text the host sends. A prompt this machine
 typed for a hub command carries that command's id (`cmd`) — the sender's own `client_msg_id`, passed
 to the host as `msg` in the follow-up payload — which is how the device that sent the words replaces
 its own placeholder by id.
 
 Kept in memory per conversation, 2000 events, dropped after a day untouched, and seeded on first
-touch from `desk_turns` (a prompt and a reply per finished turn) so a cold open or a restart has the
-history; the tool calls of turns before a restart are gone, as before. `EPOCH` names this process and
+touch from `desk_turns` (each finished turn's `events`, then its reply) so a cold open or a restart
+has the history in order.
+
+**The turn in flight survives a restart because the host can say it again.** Every deploy empties this
+list, and the running turn is in no table. A host numbers a turn's events (`turn`, the uuid of the
+transcript record that opened it, and `n`, the position in it) and keeps the turn's whole list. The hub
+tracks how far into that turn its list is (`log.cur`): an event that is not the next one is NOT
+appended, the answer to it is `{ replay, have }`, and the host sends everything after `have` (state
+`replay`) before its next frame; an event already held is ignored. `done` carries the whole turn, which
+fills a list that heard none of it. A host that restarts mid-turn reads the turn's beginning back from
+the transcript (`loadPrefix` in sessionWatch.js), so its numbering carries on. The trap this closes: a
+prompt lost to a restart was re-added from `done` at the END of its turn, under the tool calls it had
+started. `EPOCH` names this process and
 rides in every frame and list: seq starts over on a restart, and a client holding an older epoch
 fetches the list afresh rather than merging two numberings.
 

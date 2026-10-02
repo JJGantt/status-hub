@@ -344,11 +344,15 @@ machines and pushes what it sees straight to the hub:
                                                   ├─ a step's words, just before its tool_use (state 'text') ─▶ the same
                                                   │    (its text, else its thinking summary: from 2.1.268
                                                   │     Claude Code stops recording text after a tool result)
-                                                  └─ end_turn  ─┬─ POST /api/session-activity (`done`, the whole reply)
+                                                  └─ end_turn  ─┬─ POST /api/session-activity (`done`, the whole reply
+                                                                │    and the turn's ordered events, which the hub stores)
                                                                 └─ patch desk_sessions.last_reply, active_at  (durable)
 
     /api/session-activity ─▶ ONE EVENT of the conversation's list (server.js `logFrame`: prompt, tool,
                              text, reply, each with a seq and an id) ─▶ SSE `ev` ─▶ watch, phone, wall
+
+    Each event carries its turn and its position in it. A hub missing part of the turn (it restarted)
+    answers `{ replay, have }` and the host re-sends from there, so the list's order is the transcript's.
 
     Every surface draws that list and nothing else (HUB-INTERNALS.md § The conversation as one list).
 

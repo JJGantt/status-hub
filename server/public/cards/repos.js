@@ -602,6 +602,7 @@ async function openSession(id) {
   } catch (_) { return false; }
   if (cur && cur.rec) cur.rec.cancel();   // leaving mid-recording abandons it; a clip already stopped still sends
   cur = { id: d.id, key: keyOfRow(d), head: d, epoch: null, events: [], last: 0, placeholders: [], msg: null, sending: false, rec: null };
+  remember(d.id);
   const at = cur;
   take(at, d.events, d.epoch);
   const pane = el.closest('.pane');
@@ -618,9 +619,9 @@ async function openSession(id) {
         '<input class="sv-file" type="file" accept="image/*" multiple hidden>' +
         '<input class="ai-text sv-text" type="text" placeholder="Message…" autocomplete="off">' +
         '<button class="ai-send sv-send" type="button">Send</button>' +
+        '<div class="ai-status sv-status"></div>' +
       '</div>' +
       '<div class="sv-tray"></div>' +
-      '<div class="ai-status sv-status"></div>' +
     '</div>';
   paintHead();
   paintBody({ open: true });
@@ -681,10 +682,21 @@ async function showList() {
   const el = document.getElementById('repospane');
   if (cur && cur.rec) cur.rec.cancel();   // leaving mid-recording abandons it; a clip already stopped still sends
   cur = null;
+  remember(null);
   const pane = el && el.closest('.pane');
   if (pane) pane.classList.remove('sv-open');
   await load();
 }
+
+// AN OPEN SESSION SURVIVES A RELOAD. The page reloads itself whenever a deploy has made it stale, and
+// it does that on the way back to visible — which is exactly when a notification tap has just opened
+// a session. Without this the session opens and the reload lands him on home a beat later. Session
+// storage, so it belongs to this one web view and a fresh launch starts on home as it should.
+const SV_KEY = 'hub:open-session';
+function remember(id) {
+  try { id ? sessionStorage.setItem(SV_KEY, id) : sessionStorage.removeItem(SV_KEY); } catch (_) {}
+}
+function remembered() { try { return sessionStorage.getItem(SV_KEY); } catch (_) { return null; } }
 
 // Back to now: the pane shows the list again, which is what a fresh load shows.
 window.addEventListener('hubreset', () => { if (cur) showList(); });
@@ -718,7 +730,8 @@ export function render() {
   if (mounted) return;                                // self-refreshing; not driven by the status stream
   if (!document.getElementById('repospane')) return;  // absent on kiosk/mac/page → no-op
   mounted = true;
-  load();
+  const back = remembered();
+  if (back) openSession(back).then((ok) => { if (!ok) { remember(null); load(); } }); else load();
   // Coming back to the app re-reads whichever is showing. Re-reading the list over an open session
   // would put him back on the list every time he switched apps mid-read.
   window.addEventListener('focus', () => (cur ? reload() : load()));

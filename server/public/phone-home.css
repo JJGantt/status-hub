@@ -44,9 +44,6 @@ body.tv.phonewall.phonehome .pane-repos .card,body.tv.phonewall.phonehome .pane-
   background:#000!important;border:none;border-radius:0}
 body.tv.phonehome .sv-bar{border-bottom:none}
 body.tv.phonehome .sv-input{border-top:none}
-/* One fixed line, so a message arriving or clearing never moves the composer above it. */
-body.tv.phonehome .sv-status{height:18px;line-height:14px;padding:0 14px 4px;overflow:hidden;white-space:nowrap;
-  text-overflow:ellipsis}
 
 /* ---- health bar: the three scores lying on their side ------------------------------------------ */
 body.tv.phonehome .healthbar{flex:0 0 20px;flex-direction:row;align-items:stretch;padding:0;min-height:0}
@@ -545,10 +542,12 @@ body.tv.phonehome .ph-chat .ai-text{flex:1 1 auto;min-width:0;font-size:16px;pad
 body.tv.phonehome .ph-chat .ai-mic,body.tv.phonehome .ph-chat .ai-send{flex:0 0 auto;padding:9px 12px;
  border-radius:10px;border:1px solid #222a33;background:#0e1318;color:#c7ced8;font-size:14px}
 body.tv.phonehome .ph-chat .ai-mic.rec{background:#7f1d1d;border-color:#b91c1c;color:#fff}
-/* A fixed one-line height, so a message arriving or clearing never moves the composer above it. */
-body.tv.phonehome .ph-chat .ai-status{flex:0 0 auto;font-size:11px;color:#8b96a5;height:18px;
- line-height:14px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;
- padding-top:4px}
+/* Inside the composer row and floating just above it, as the session view's does (app.css .sv-status):
+   it takes no space, so the composer sits on the bottom edge and a failure moves nothing. */
+body.tv.phonehome .ph-chat .ai-input{position:relative}
+body.tv.phonehome .ph-chat .ai-status{position:absolute;left:0;right:0;bottom:100%;font-size:11px;
+ color:#8b96a5;padding:4px 2px;background:#000;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+body.tv.phonehome .ph-chat .ai-status:empty{display:none}
 /* 16px on the input is not a style choice: iOS Safari zooms the page on focus below it. */
 
 /* A command that has been heard but is not in the thread yet — dimmer than his own lines, because it

@@ -311,7 +311,21 @@ onThread((row) => { if (!row) { resync(); return; } takeRow(row); settle(row); p
 // phone's own size — so only the paging is left.
 const panes = document.getElementById('wallpanes');
 if (panes) {
-  requestAnimationFrame(() => { panes.scrollLeft = panes.clientWidth; });
+  // Land on home — or, after a reload, on the pane he was on: the page reloads itself when a deploy
+  // makes it stale, on the way back to visible, and a notification tap that has just opened a session
+  // is exactly that moment (cards/repos.js keeps the session; this keeps the pane it is on). Unless
+  // something has already asked for a pane: a tap on a cold launch can get there before this frame.
+  const PANE_KEY = 'hub:pane';
+  let landing = 1;
+  try { const v = sessionStorage.getItem(PANE_KEY); if (v !== null) landing = +v || 0; } catch (_) {}
+  requestAnimationFrame(() => { if (!panes.dataset.chosen) panes.scrollLeft = landing * panes.clientWidth; });
+  let paneT = null;
+  panes.addEventListener('scroll', () => {
+    clearTimeout(paneT);
+    paneT = setTimeout(() => {
+      try { sessionStorage.setItem(PANE_KEY, String(Math.round(panes.scrollLeft / panes.clientWidth))); } catch (_) {}
+    }, 200);
+  }, { passive: true });
   // Jump to a named pane. The native app calls this when a widget is tapped, so each widget lands on
   // the part of the hub it actually depicts rather than on whatever pane was last open — the due
   // widget is useless if tapping it drops you on the chat pane.
@@ -320,6 +334,7 @@ if (panes) {
     if (name === 'todo') return openSection('cal');
     const el = panes.querySelector(`.pane-${String(name).replace(/[^a-z]/g, '')}`);
     if (!el) return false;
+    panes.dataset.chosen = '1';
     // scroll-snap owns the physics; setting scrollLeft to the pane's offset lands it exactly.
     panes.scrollTo({ left: el.offsetLeft, behavior: 'smooth' });
     return true;

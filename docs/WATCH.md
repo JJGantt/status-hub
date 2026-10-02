@@ -317,8 +317,8 @@ The conversation is not on it: that is home's alone.
   minutes, `10m`–`59m`, then `3h`), and **the session clock is `h:mm`**, no seconds. Rendered at 10pt
   against the artwork (`DAY_CLOCKS=<rest s>,<session s>` in the simulator), `11h`, `19m` and `9:59` (small
   seconds) sit clear of the feet, and a centred `0:41` or `1:41` fits between the feet.
-- **Under each column, a list to the bottom of the glass, scrolling:** every meal EATEN today (staged
-  ones are left out — planned is not eaten) and every exercise today, most recent first. A tap opens
+- **Under each column, a list to the bottom of the glass, scrolling:** every meal in today's log, staged
+  ones on top with the full log's gold edge (planned is not eaten), and every exercise today, most recent first. A tap opens
   its full view. The page ignores its bottom safe area so the lists reach the glass.
 - **The rings and the figures are switches.** A tap on the rings trades the lists for the day's totals,
   one macro to a line (eaten bold, `/ goal` dim), full width; a second tap brings the lists back. A tap

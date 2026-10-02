@@ -5,7 +5,8 @@ import WatchKit
 /// own pixels and signed off element by element, so its numbers are the design rather than a starting
 /// point — `Geo` holds them, halved from the mockup's 2x pixels.
 ///
-/// - Left: the four pace rings in a packed 2x2, then every meal eaten today, newest first.
+/// - Left: the four pace rings in a packed 2x2, then today's log: staged meals on top, then every meal
+///   eaten, newest first.
 /// - Right: the body figures at full height, with the rest clocks and the day's set count tucked
 ///   beside the feet, then every exercise today, most recent first.
 ///
@@ -123,31 +124,37 @@ struct DayView: View {
 
     private var rule: some View { Rectangle().fill(Geo.ruleInk).frame(height: 1) }
 
-    /// Every meal EATEN today, newest first. The log puts staged ones first, but a meal planned and not
-    /// yet eaten is not part of what the day has been; the full log still shows it.
-    private var foodRows: [(String, String)] {
-        (nutrition.day?.entries ?? []).filter { $0.staged != true }
-            .map { ($0.name ?? "—", String(mn($0.calories))) }
+    /// Every meal in today's log in the log's own order: staged ones on top, then what was eaten, newest
+    /// first. A staged row carries the full log's gold edge, since planned is not eaten.
+    private var foodRows: [Row] {
+        (nutrition.day?.entries ?? [])
+            .map { Row(name: $0.name ?? "—", value: String(mn($0.calories)), staged: $0.staged == true) }
     }
 
     /// Every exercise a set went onto today, most recent first, with its set count.
-    private var liftRows: [(String, String)] {
-        (workout.now?.exercises ?? []).map { ($0.name, String($0.sets.count)) }
+    private var liftRows: [Row] {
+        (workout.now?.exercises ?? []).map { Row(name: $0.name, value: String($0.sets.count), staged: false) }
     }
+
+    private struct Row { let name: String; let value: String; let staged: Bool }
 
     /// A list: the name at the left of its half, its figure against the right edge of it. It fills the
     /// rest of the screen and scrolls; a tap opens the whole of what it summarises.
-    private func summary(rows: [(String, String)], open: @escaping () -> Void) -> some View {
+    private func summary(rows: [Row], open: @escaping () -> Void) -> some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 0) {
                 ForEach(Array(rows.enumerated()), id: \.offset) { _, row in
                     HStack(alignment: .firstTextBaseline, spacing: 3) {
-                        Text(row.0).foregroundColor(Geo.nameInk).lineLimit(1)
+                        Text(row.name).foregroundColor(Geo.nameInk).lineLimit(1)
                         Spacer(minLength: 2)
-                        Text(row.1).foregroundColor(Geo.valueInk).fixedSize()
+                        Text(row.value).foregroundColor(Geo.valueInk).fixedSize()
                     }
                     .font(.system(size: Geo.listSize))
+                    .padding(.leading, row.staged ? Geo.stagedInset : 0)
                     .frame(height: Geo.rowPitch)
+                    .overlay(alignment: .leading) {
+                        if row.staged { Rectangle().fill(Geo.stagedInk).frame(width: 2, height: Geo.rowPitch - 4) }
+                    }
                 }
                 Color.clear.frame(height: PageInset.bottom)
             }
@@ -402,4 +409,7 @@ private enum Geo {
     static let valueInk = Color(hex: "#7d8894")
     static let labelInk = Color(hex: "#646e7a")
     static let setsInk = Color(hex: "#e6ebf0")
+    /// The full log's staged gold (`EntryRow`), as a 2pt edge with the name set in past it.
+    static let stagedInk = Color(red: 214 / 255, green: 192 / 255, blue: 66 / 255)
+    static let stagedInset: CGFloat = 5
 }

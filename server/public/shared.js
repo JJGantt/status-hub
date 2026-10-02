@@ -174,7 +174,19 @@ function mdInline(s) {
     .replace(/\*\*([^*\n]+)\*\*/g, '<b>$1</b>')
     .replace(/(^|[\s(])\*([^*\n]+)\*/g, '$1<i>$2</i>')
     .replace(/\[([^\]\n]+)\]\((https?:\/\/[^\s)]+)\)/g,
-      '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>');
+      '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>')
+    // A bare URL, as a model usually writes one. Only after whitespace, `(` or a quote, which a URL already
+    // inside an href or a link's text never is; trailing sentence punctuation stays outside the link,
+    // and a closing `)` only stays in when the URL opened one (Wikipedia's `Foo_(bar)`).
+    .replace(/(^|[\s(]|&quot;)(https?:\/\/[^\s<]+)/g, (_, pre, url) => {
+      let tail = '';
+      for (;;) {
+        const m = url.match(/&quot;$|[.,;:!?']$|\)$/);
+        if (!m || (m[0] === ')' && (url.match(/\(/g) || []).length >= (url.match(/\)/g) || []).length)) break;
+        tail = m[0] + tail; url = url.slice(0, -m[0].length);
+      }
+      return `${pre}<a href="${url}" target="_blank" rel="noopener noreferrer">${url}</a>${tail}`;
+    });
 }
 
 export function md(src) {

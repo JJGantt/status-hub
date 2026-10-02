@@ -158,66 +158,115 @@ export function paintScrolled(host, html, { sel = null, stick = false } = {}) {
   return after;
 }
 
-// ---- markdown, the little of it a model actually writes -------------------------------------
+// ---- markdown -------------------------------------------------------------------------------
 //
-// A reply is written in markdown and was being read as its source: `**bold**`, `- ` and `## ` in the
-// middle of running text, with every newline collapsed. This renders the part that carries meaning —
-// headings, lists, emphasis, code, links — and nothing else.
+// Every reply is written in markdown, and every surface that shows one renders it here: the phone's
+// conversation tail, the chat sheet, the session view. One renderer, so a reply reads the same on each
+// (the watch's `Markdown.swift` covers the same blocks). Headings, lists (nested by indent), fenced
+// code, quotes, rules, tables; inside them code, links, bare URLs, bold and italics.
 //
 // EVERY PATH ESCAPES FIRST. The text is a model's, rendered into an origin already authenticated as
 // Jared, so no tag here ever comes from the input: the input is escaped and then OUR OWN patterns
-// introduce tags around it. A link is rewritten only when its target is http(s), which is what keeps
-// `javascript:` out of an href.
-function mdInline(s) {
-  return esc(s)
-    .replace(/`([^`\n]+)`/g, '<code>$1</code>')
-    .replace(/\*\*([^*\n]+)\*\*/g, '<b>$1</b>')
-    .replace(/(^|[\s(])\*([^*\n]+)\*/g, '$1<i>$2</i>')
-    .replace(/\[([^\]\n]+)\]\((https?:\/\/[^\s)]+)\)/g,
-      '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>')
-    // A bare URL, as a model usually writes one. Only after whitespace, `(` or a quote, which a URL already
-    // inside an href or a link's text never is; trailing sentence punctuation stays outside the link,
-    // and a closing `)` only stays in when the URL opened one (Wikipedia's `Foo_(bar)`).
-    .replace(/(^|[\s(]|&quot;)(https?:\/\/[^\s<]+)/g, (_, pre, url) => {
-      let tail = '';
+// introduce tags around it. Code and links are lifted out before the emphasis rules run, or a `*`
+// inside one would be read as emphasis.
+//
+// A link ALWAYS asks for a new window. Followed in place it would navigate the app's one web view away
+// from the hub, with nothing on screen to come back by; `target=_blank` reaches the app's
+// `createWebViewWith`, which hands the address to Safari. Only http(s) becomes a link, which keeps
+// `javascript:` out of an href; anything else keeps its words and loses its target.
+const MD_MARK = '';                                // a private-use character: where a lifted span goes back
+const MD_HELD = new RegExp(MD_MARK + '(\\d+)' + MD_MARK, 'g');
+export function mdInline(text) {
+  const held = [];
+  const lift = (html) => { held.push(html); return MD_MARK + (held.length - 1) + MD_MARK; };
+  const link = (url, words) => lift(`<a href="${url}" target="_blank" rel="noopener noreferrer">${words}</a>`);
+  return esc(String(text == null ? '' : text).split(MD_MARK).join(''))
+    .replace(/`([^`\n]+)`/g, (_, c) => lift('<code>' + c + '</code>'))
+    .replace(/\[([^\]\n]+)\]\((https?:\/\/[^)\s]+)\)/g, (_, words, url) => link(url, words))
+    .replace(/\[([^\]\n]+)\]\([^)\s]*\)/g, '$1')
+    // A bare address, as a model usually writes one. It stops at an escaped quote and gives back the
+    // punctuation that ends its sentence; a closing `)` stays only when the URL opened one
+    // (Wikipedia's `Foo_(bar)`).
+    .replace(/https?:\/\/(?:(?!&quot;)[^\s<])+/g, (m) => {
+      let url = m;
       for (;;) {
-        const m = url.match(/&quot;$|[.,;:!?']$|\)$/);
-        if (!m || (m[0] === ')' && (url.match(/\(/g) || []).length >= (url.match(/\)/g) || []).length)) break;
-        tail = m[0] + tail; url = url.slice(0, -m[0].length);
+        const t = url.match(/[.,;:!?'\]]$|\)$/);
+        if (!t || (t[0] === ')' && (url.match(/\(/g) || []).length >= (url.match(/\)/g) || []).length)) break;
+        url = url.slice(0, -1);
       }
-      return `${pre}<a href="${url}" target="_blank" rel="noopener noreferrer">${url}</a>${tail}`;
-    });
+      return link(url, url) + m.slice(url.length);
+    })
+    .replace(/\*\*([^*\n]+)\*\*/g, '<strong>$1</strong>')
+    .replace(/(^|[^\w*])\*([^*\s][^*\n]*?)\*(?!\w)/g, '$1<em>$2</em>')
+    .replace(MD_HELD, (_, i) => held[+i]);
 }
+
+const mdCells = (row) => row.trim().replace(/^\|/, '').replace(/\|$/, '').split('|').map((c) => c.trim());
+const mdAlign = (row) => {
+  const cells = mdCells(row);
+  if (!cells.length || !cells.every((c) => /^:?-+:?$/.test(c))) return null;
+  return cells.map((c) => (c.startsWith(':') && c.endsWith(':') ? 'center' : c.endsWith(':') ? 'right' : 'left'));
+};
 
 export function md(src) {
   const lines = String(src == null ? '' : src).replace(/\r\n?/g, '\n').split('\n');
-  let html = '', list = null, code = null;
-  const closeList = () => { if (list) { html += `</${list}>`; list = null; } };
-  for (const raw of lines) {
-    if (/^\s*```/.test(raw)) {
-      if (code === null) { closeList(); code = []; } else { html += `<pre>${esc(code.join('\n'))}</pre>`; code = null; }
+  let html = '', para = [], quote = [], code = null;
+  // Open lists, innermost last, each with the indent its items sit at.
+  const lists = [];
+  const closeLists = (to = 0) => { while (lists.length > to) html += `</li></${lists.pop().tag}>`; };
+  const flush = () => {
+    if (para.length) { html += `<p class=md-p>${para.map(mdInline).join('<br>')}</p>`; para = []; }
+    if (quote.length) { html += `<blockquote class=md-q>${quote.map(mdInline).join('<br>')}</blockquote>`; quote = []; }
+    closeLists();
+  };
+  for (let i = 0; i < lines.length; i++) {
+    const raw = lines[i], line = raw.trim();
+    if (/^```/.test(line)) {
+      if (code === null) { flush(); code = []; } else { html += `<pre class=md-pre>${esc(code.join('\n'))}</pre>`; code = null; }
       continue;
     }
     if (code !== null) { code.push(raw); continue; }
-    const line = raw.trimEnd();
-    if (!line.trim()) { closeList(); continue; }
+    if (!line) { flush(); continue; }
     const h = line.match(/^(#{1,6})\s+(.*)$/);
-    if (h) { closeList(); html += `<div class=md-h>${mdInline(h[2])}</div>`; continue; }
-    const ul = line.match(/^\s*[-*+]\s+(.*)$/);
-    if (ul) {
-      if (list !== 'ul') { closeList(); html += '<ul>'; list = 'ul'; }
-      html += `<li>${mdInline(ul[1])}</li>`; continue;
+    if (h) { flush(); html += `<div class="md-h md-h${h[1].length}">${mdInline(h[2])}</div>`; continue; }
+    if (/^((\*\s*){3,}|(-\s*){3,}|(_\s*){3,})$/.test(line)) { flush(); html += '<hr class=md-hr>'; continue; }
+    // A table is a pipe row with a separator row under it; without the separator it is prose.
+    const align = line.startsWith('|') && i + 1 < lines.length ? mdAlign(lines[i + 1]) : null;
+    if (align) {
+      flush();
+      const row = (cells, tag) => '<tr>' + align.map((a, k) =>
+        `<${tag}${a === 'left' ? '' : ` style="text-align:${a}"`}>${mdInline(cells[k] || '')}</${tag}>`).join('') + '</tr>';
+      let t = `<div class=md-tbl><table><thead>${row(mdCells(line), 'th')}</thead><tbody>`;
+      for (i += 2; i < lines.length && lines[i].trim().startsWith('|'); i++) t += row(mdCells(lines[i]), 'td');
+      i--;
+      html += t + '</tbody></table></div>';
+      continue;
     }
-    const ol = line.match(/^\s*\d+[.)]\s+(.*)$/);
-    if (ol) {
-      if (list !== 'ol') { closeList(); html += '<ol>'; list = 'ol'; }
-      html += `<li>${mdInline(ol[1])}</li>`; continue;
+    const li = raw.match(/^(\s*)([-*+]|\d+[.)])\s+(.*)$/);
+    if (li) {
+      if (para.length || quote.length) flush();
+      const indent = li[1].length, tag = /\d/.test(li[2]) ? 'ol' : 'ul';
+      while (lists.length && lists[lists.length - 1].indent > indent) closeLists(lists.length - 1);
+      const top = lists[lists.length - 1];
+      if (top && top.indent === indent && top.tag === tag) html += '</li><li>';
+      else {
+        if (top && top.indent === indent) closeLists(lists.length - 1);
+        lists.push({ indent, tag });
+        const n = parseInt(li[2], 10);
+        html += `<${tag} class=md-l${tag === 'ol' && n !== 1 ? ` start="${n}"` : ''}><li>`;
+      }
+      html += mdInline(li[3]);
+      continue;
     }
-    closeList();
-    html += `<p>${mdInline(line)}</p>`;
+    const q = line.match(/^>\s?(.*)$/);
+    if (q) { if (para.length || lists.length) flush(); quote.push(q[1]); continue; }
+    // A line under a list item that is not itself an item continues it.
+    if (lists.length && /^\s/.test(raw)) { html += '<br>' + mdInline(line); continue; }
+    if (lists.length || quote.length) flush();
+    para.push(line);
   }
-  if (code !== null) html += `<pre>${esc(code.join('\n'))}</pre>`;
-  closeList();
+  if (code !== null) html += `<pre class=md-pre>${esc(code.join('\n'))}</pre>`;
+  flush();
   return html;
 }
 

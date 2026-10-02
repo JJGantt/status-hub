@@ -7,7 +7,7 @@
 //      Sonnet→Opus escalation when a turn leaves the fast path (its own row + a sticky OPUS chip).
 // Tool-call rows (role='tool') are surfaced ONLY in the activity bar, never in the conversation
 // thread. All skipped on the TV wall (no mic; it renders the conversation itself via tv.js).
-import { esc, localNowNaive, liveStream, KIOSK } from './shared.js';
+import { esc, md, localNowNaive, liveStream, KIOSK } from './shared.js';
 
 let phoneHangMs = 3000;   // the always-on listener's trailing silence (ms); overridden by the phone_silence_s setting
 // How long a FINISHED row — the reply, or an error — holds on the kiosk's activity bar before it hides.
@@ -997,7 +997,8 @@ function initCard() {
       ? local.map((u) => '<img src="' + u + '" alt="" loading=lazy>').join('')
       : atts.map((p) => '<img src="/api/attachment?path=' + encodeURIComponent(p) + '" alt="" loading=lazy>').join('');
     let inner = (local.length || atts.length) ? '<div class=ai-msg-imgs>' + imgs + '</div>' : '';
-    if (t) inner += '<div class=ai-msg-text>' + esc(t).replace(/\n/g, '<br>') + '</div>';
+    // A reply is markdown (`md`); his own words are shown as typed.
+    if (t) inner += '<div class=ai-msg-text>' + (side === 'assistant' ? md(t) : esc(t).replace(/\n/g, '<br>')) + '</div>';
     else if (!local.length && !atts.length) inner += '<div class=ai-msg-text><span class=ai-caret>▍</span></div>';
     // Which worker answered (mac/pi/fly) — dimmed for the expected mac, so a fallback visually pops.
     if (side === 'assistant' && row.worker) {

@@ -434,7 +434,8 @@ It also beats app.css's `body.tv.wallportrait` block on equal specificity, by lo
 - **The voice column is the tail of the thread** (`#ph-conv`), rendered as MARKDOWN. A reply is
   written in markdown, so reading it as plain text collapses every newline and leaves `**bold**` and
   `- ` standing in the prose. `md()` in shared.js covers the part a model actually writes: headings,
-  lists, emphasis, code, links. EVERY path escapes first — the text is a model's, rendered into an
+  lists, emphasis, code, links, tables, bare URLs — the one renderer the chat sheet and the session
+  view use too. EVERY path escapes first — the text is a model's, rendered into an
   origin already authenticated as Jared, so no tag comes from the input; the input is escaped and our
   own patterns put tags around it, and a link is rewritten only when its target is http(s).
   A reply RELAYED FROM A SESSION carries that session's name and the tint the conversation card gives

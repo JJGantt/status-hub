@@ -342,10 +342,8 @@ struct SessionView: View {
         case "prompt":
             words(e.text).opacity(e.seen == false ? 0.5 : 1)
         case "text":
-            Text(inlineMarkdown(e.text))
-                .font(.system(size: 12))
+            Markdown(text: e.text, size: 12)
                 .foregroundColor(Ink.thought)
-                .frame(maxWidth: .infinity, alignment: .leading)
         case "tool":
             Text(e.text)
                 .font(.system(size: 10, design: .monospaced))
@@ -353,10 +351,8 @@ struct SessionView: View {
                 .lineLimit(2)
                 .frame(maxWidth: .infinity, alignment: .leading)
         default:
-            Text(inlineMarkdown(e.text))
+            Markdown(text: e.text)
                 .foregroundColor(.white)
-                .font(.system(size: 13))
-                .frame(maxWidth: .infinity, alignment: .leading)
         }
     }
 

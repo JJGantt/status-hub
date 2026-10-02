@@ -13,7 +13,7 @@
 //
 // Self-fetching (NOT part of the status stream), like the todo pane. No-ops where #repospane is
 // absent (/page). Every wall's markup carries it, hidden on the kiosk, so it mounts there too.
-import { esc, PIN_SVG, liveStream} from '../shared.js';
+import { esc, md, mdInline, PIN_SVG, liveStream} from '../shared.js';
 import { makeRecorder, bindTap } from '../voiceagent.js';
 
 let mounted = false;
@@ -293,38 +293,6 @@ const keyOfRow = (r) => r.claude_session_id || r.id;
 const newMsgId = () => ((self.crypto && crypto.randomUUID)
   ? crypto.randomUUID() : Date.now().toString(36) + Math.random().toString(36).slice(2));
 
-// Inline markdown only, whitespace kept — what `inlineMarkdown` gives the watch. Escaped FIRST: a
-// reply is a model's prose and may hold anything that looks like markup, so the only tags in the
-// result are the ones written here. Code and links are lifted out before the emphasis rules run, or
-// a `*` inside one would be read as emphasis.
-//
-// A link ALWAYS asks for a new window. Followed in place it would navigate the app's one web view
-// away from the hub, with nothing on screen to come back by. `target=_blank` reaches the app's
-// `createWebViewWith` instead, which hands the address to Safari; a build without that handler
-// ignores the tap, which is the safe way round. Only http(s) becomes a link — a relative one would
-// open a second hub inside the first — and anything else keeps its words and loses its target.
-const MARK = '\uE000';                                  // a private-use character: where a lifted span goes back
-const HELD = new RegExp(MARK + '(\\d+)' + MARK, 'g');
-function inlineMd(text) {
-  const held = [];
-  const lift = (html) => { held.push(html); return MARK + (held.length - 1) + MARK; };
-  const link = (url, words) => lift(`<a href="${url}" target="_blank" rel="noopener noreferrer">${words}</a>`);
-  return esc(String(text).split(MARK).join(''))
-    .replace(/```[^\n]*\n([\s\S]*?)```\n?/g, (_, c) => lift('<code class="sv-pre">' + c.replace(/\n$/, '') + '</code>'))
-    .replace(/`([^`\n]+)`/g, (_, c) => lift('<code>' + c + '</code>'))
-    .replace(/\[([^\]\n]+)\]\((https?:\/\/[^)\s]+)\)/g, (_, words, url) => link(url, words))
-    .replace(/\[([^\]\n]+)\]\([^)\s]*\)/g, '$1')
-    // A bare address. It stops at an escaped quote, and gives back the punctuation that ends the
-    // sentence it sits in rather than linking it.
-    .replace(/https?:\/\/(?:(?!&quot;)[^\s<])+/g, (m) => {
-      const url = m.replace(/[.,;:!?)\]']+$/, '');
-      return link(url, url) + m.slice(url.length);
-    })
-    .replace(/\*\*([^*\n]+)\*\*/g, '<strong>$1</strong>')
-    .replace(/(^|[^\w*])\*([^*\s][^*\n]*?)\*(?!\w)/g, '$1<em>$2</em>')
-    .replace(HELD, (_, i) => held[+i]);
-}
-
 // The last /api/sessions payload's rows, from a fetch or a pushed `sessions` frame. With a session
 // open it is how the view learns the conversation has moved to a new row (a resume), or the row's
 // status changed — the header's facts. The conversation itself arrives as events and is never
@@ -471,9 +439,9 @@ function paintBody({ open = false, top = false, follow = false } = {}) {
       // Queued (sent, not yet read) is dimmed; it takes its full colour and its real place when read.
       ? `<div class="sv-words${e.seen === false ? ' sv-queued' : ''}">${saidHtml(e.text)}</div>`
       : e.kind === 'reply'
-        ? `<div class="sv-turn"><div class="sv-reply">${inlineMd(String(e.text || '').trim())}</div></div>`
+        ? `<div class="sv-turn"><div class="sv-reply">${md(String(e.text || '').trim())}</div></div>`
         : e.kind === 'text'
-          ? `<div class="sv-thought">${inlineMd(e.text)}</div>`
+          ? `<div class="sv-thought">${md(e.text)}</div>`
           : `<div class="sv-tool">${esc(e.text)}</div>`).join('') +
     (working ? '<div class="sv-working"><span class="ai-caret">▍</span></div>' : '') +
     // His words the hub does not have yet: sent from here, on their way to being typed in.
@@ -568,13 +536,13 @@ async function uploadShot(file) {
 const ATTACH_RE = /^\[Jared attached [^:\]]*: ([^\]]+?) — read (?:it|them) now\.\]\s*/;
 function saidHtml(text) {
   const m = ATTACH_RE.exec(String(text || ''));
-  if (!m) return inlineMd(String(text || ''));
+  if (!m) return mdInline(String(text || ''));
   const shots = m[1].split(',').map((p) => p.trim().split('/').pop()).filter((n) => /^[\w.-]+$/.test(n));
   const rest = String(text).slice(m[0].length).trim();
   return (shots.length
     ? `<span class="sv-said-shots">${shots.map((n) =>
         `<img src="/api/attachment?path=${encodeURIComponent(n)}" alt="">`).join('')}</span>`
-    : '') + (rest ? inlineMd(rest) : '');
+    : '') + (rest ? mdInline(rest) : '');
 }
 
 // Opening one reads its reply — see `unread` in buildSessions. Fire and forget: the list re-renders

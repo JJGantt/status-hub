@@ -265,14 +265,6 @@ final class Sessions: ObservableObject {
         WKInterfaceDevice.current().play(.notification)
     }
 
-    /// The instruction that rides with every follow-up while replies are spoken (`Speaker`). It changes how the
-    /// reply is WRITTEN, which is the whole reason this is a mode and not a speaker switch — the watch
-    /// cannot turn a table into something worth hearing after the fact. Format only: the detail he
-    /// asked for still belongs in the answer.
-    static let spokenFormat = "\n\n[This reply is read aloud. Plain spoken words only — never any "
-        + "markdown, tables, code, lists, bullets, paths, URLs or symbols; speak the substance of those "
-        + "instead. Say everything you would otherwise say: this is about the form, not the length.]"
-
     func startRecording(_ key: String) {
         guard capture.free, row(for: key) != nil else {
             // Each of these used to return in silence, which from the wrist is a record tap doing nothing.
@@ -346,9 +338,7 @@ final class Sessions: ObservableObject {
                     // His words on screen the instant they are transcribed, before the hub has them.
                     placeholders[key, default: []].append(Placeholder(msgId: msgId, text: text))
                 }
-                // The directive travels with the command rather than being set on the session once:
-                // a session that restarts forgets a mode, and cannot forget what is in the prompt.
-                let words = (item.words ?? "") + (Speaker.enabled ? Self.spokenFormat : "")
+                let words = item.words ?? ""
                 let rowId = row(for: key)?.id ?? key
                 let ignored = try await Hub.followUp(rowId, text: words, msgId: msgId)
                 Hub.log("followup-sent", ["row": rowId, "words": item.words?.count ?? 0, "ignored": ignored])

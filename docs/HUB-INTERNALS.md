@@ -1070,7 +1070,8 @@ It follows `/api/session-stream`, opened on the first open rather than at mount 
 watch, and an `ev` frame names its conversation, so a follow-up that resumes a parked session carries
 the view over to the new row.
 
-A reply renders as inline markdown with whitespace kept, escaped first. **Every link in it is
+A reply renders through `md()` in shared.js, the one markdown renderer every surface uses (headings,
+nested lists, code, quotes, rules, tables, bare URLs), escaped first. **Every link in it is
 `target=_blank`, and that is load-bearing**: followed in place, a link replaces the hub in the app's
 one web view with nothing on screen to come back by. A new-window request reaches the app's
 `createWebViewWith` (`StatusHubApp.swift`), which hands the address to Safari; an app build older
@@ -1173,10 +1174,9 @@ all confirmed live in `desk_turns`, not theoretical:
 - **The bracketed line `desk.startSession` appends to a voice-dispatched prompt** (`data-layer/src/
   desk.ts`), `\n\n[Where Jared was when he asked: lat, lon (within about N m)]` — for the agent to read,
   never for him; his own words end where it begins.
-- **The format instruction the watch appends to a follow-up while replies are spoken**
-  (`Sessions.spokenFormat`), `\n\n[This reply is read aloud. …]`. It is in the prompt rather than set on
-  the session because a restarted session forgets a mode, so it is in every stored turn. Either this or
-  the location line can come last, so `cleanSaid` peels both off the end until neither matches.
+- **A format instruction older watch builds appended while replies were spoken**, `\n\n[This reply is
+  read aloud. …]`. Nothing sends it now, but it is in turns already stored. Either this or the location
+  line can come last, so `cleanSaid` peels both off the end until neither matches.
 - **The stub a message too long for a tty is typed as, instead of itself**
   (`orchestrator/src/applescript.js`'s `handoff`), naming the file the real words are parked in. Meant
   to be resolved back to those words before anything is stored (`transcripts.js`'s `resolvePrompt`,

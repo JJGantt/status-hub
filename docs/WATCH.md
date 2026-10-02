@@ -105,6 +105,15 @@ simply coming back, not as a build failure. Nothing here ships to the App Store,
 risk to the look rather than to the app. The page draws no clock of its own either: it is for the
 conversation, and the watch face is one press of the crown away.
 
+### Replies are markdown
+
+Every reply and thought on the watch, home's thread and a session's alike, is drawn by `Markdown`
+(`Markdown.swift`): headings at their own sizes, nested lists, fenced code, quotes, rules and tables,
+with `inlineMarkdown` doing the inside of each block (bold, italics, code, links, bare http(s) URLs).
+`Text` alone renders only the inline part and runs every block into one paragraph, which is why the
+blocks are split out first. A table wider than the screen scrolls sideways (`ViewThatFits`) instead of
+wrapping each cell to a word a line. A tapped link opens in the watch's own web view.
+
 ### The sessions page
 
 Lists `/api/sessions` one row per conversation — running first, then parked, most recently active
@@ -537,8 +546,9 @@ which then carries on with the wrist down (background audio), and the blue edge 
 ### Spoken replies
 
 With `session_speech` on (the watch's Settings page, the Speak control, or Settings → Watch: speak session replies on the phone), a reply to a
-follow-up SENT FROM THE WATCH is read aloud (`Speaker`, the system voice — nothing leaves the watch), and
-every follow-up carries `Sessions.spokenFormat` so the reply is written to be heard. **It is spoken when
+follow-up SENT FROM THE WATCH is read aloud (`Speaker`, the system voice — nothing leaves the watch). The
+reply is written as it would be with speech off; `MarkdownBlock.spoken` drops its markdown syntax before
+it is said. **It is spoken when
 that session is on screen with its reply in hand**: as it lands if he is looking at it, otherwise the
 next time he opens it (the reply notification, the list, or raising the wrist with it open). The debt is
 `Sessions.owed`, kept in UserDefaults because the app is usually closed by the time the answer comes;

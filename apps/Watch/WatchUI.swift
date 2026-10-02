@@ -1,11 +1,22 @@
 import SwiftUI
 import WatchKit
 
-/// Inline markdown (bold, italics, code) renders; anything else stays as written.
+/// Inline markdown (bold, italics, code, links) renders; blocks are `Markdown`'s job. A bare http(s) URL
+/// is made a link too, since that is how a model usually writes one.
 func inlineMarkdown(_ s: String) -> AttributedString {
-    (try? AttributedString(markdown: s, options: .init(interpretedSyntax: .inlineOnlyPreservingWhitespace)))
+    var a = (try? AttributedString(markdown: s, options: .init(interpretedSyntax: .inlineOnlyPreservingWhitespace)))
         ?? AttributedString(s)
+    guard let detector = linkDetector else { return a }
+    let plain = String(a.characters)
+    for m in detector.matches(in: plain, range: NSRange(plain.startIndex..., in: plain)) {
+        guard let url = m.url, let sr = Range(m.range, in: plain), plain[sr].hasPrefix("http"),
+              let r = Range(m.range, in: a), a[r].link == nil else { continue }
+        a[r].link = url
+    }
+    return a
 }
+
+private let linkDetector = try? NSDataDetector(types: NSTextCheckingResult.CheckingType.link.rawValue)
 
 /// A reply's opening for the line under a title: its markdown syntax gone and none of the bold, code
 /// or link styling kept, so it reads as one quiet run of text.
@@ -53,8 +64,7 @@ struct ActivityLines: View {
                             .font(.system(size: 12, weight: .medium))
                             .foregroundColor(Ink.mine)
                     case .thought:
-                        Text(inlineMarkdown(line.text))
-                            .font(.system(size: 12))
+                        Markdown(text: line.text, size: 12)
                             .foregroundColor(Ink.thought)
                     case .tool:
                         Text(line.text)
@@ -440,9 +450,7 @@ struct ThreadRow: View {
     private static let sessionTint = Color(red: 0.62, green: 0.89, blue: 0.83)
 
     var body: some View {
-        Text(inlineMarkdown(text))
+        Markdown(text: text, size: user ? 12 : 13, weight: user ? .medium : .regular)
             .foregroundColor(user ? Ink.mine : session ? Self.sessionTint : .white)
-            .font(.system(size: user ? 12 : 13, weight: user ? .medium : .regular))
-            .frame(maxWidth: .infinity, alignment: .leading)
     }
 }

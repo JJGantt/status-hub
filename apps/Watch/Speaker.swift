@@ -6,8 +6,8 @@ import WidgetKit
 /// **Reads a session's reply aloud**, on the watch, with the system's own voice — no synthesis machine,
 /// no audio sent anywhere. On when `session_speech` is on (the watch's Settings page, the hub's
 /// Settings, and the Speak control in Control Center); then a reply to a follow-up sent FROM the watch
-/// is spoken as it lands, and the follow-up carries `Sessions.spokenFormat` so the reply is written to
-/// be heard.
+/// is spoken as it lands. The reply is written exactly as it would be with speech off; only its
+/// markdown syntax is dropped before it is said.
 ///
 /// **Two ways to keep the app running with the wrist down, picked on the watch's Settings page and
 /// mirrored on the hub's** (`watch_speech_route`, `SpeechRoute`): watchOS keeps a watch app alive
@@ -105,9 +105,8 @@ final class Speaker: NSObject, ObservableObject, AVSpeechSynthesizerDelegate {
     }
 
     func speak(_ reply: String, title: String = "Reply") {
-        // The reply is asked for in plain speech, but markdown can still slip in; what is SAID is the
-        // text with its syntax gone.
-        let words = String(snippet(reply).characters).trimmingCharacters(in: .whitespacesAndNewlines)
+        // The reply is written markdown; what is SAID is its text with the syntax gone.
+        let words = MarkdownBlock.spoken(reply)
         guard !words.isEmpty else { return }
         halt()
         Capture.shared.hush(true)

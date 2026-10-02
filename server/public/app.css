@@ -666,7 +666,6 @@ body.tv.phonewall .pane-repos.sv-open #repospane{flex:1 1 auto;min-height:0;disp
 .sv-tool{font:12px/1.4 ui-monospace,SFMono-Regular,Menlo,monospace;color:#6b7686;white-space:nowrap;
   overflow:hidden;text-overflow:ellipsis}
 .sv-body code{font:.9em ui-monospace,SFMono-Regular,Menlo,monospace;background:#0e1318;border-radius:4px;padding:1px 4px}
-.sv-body code.sv-pre{display:block;padding:8px 10px;overflow-x:auto;white-space:pre}
 .sv-body strong{color:#f1f4f8}
 .sv-input{flex:0 0 auto;display:flex;align-items:center;gap:8px;padding:10px 12px 4px;border-top:1px solid #222a33}
 /* The status lives inside the composer row and floats just above it, over the foot of the thread, so
@@ -1056,6 +1055,26 @@ body.tv .hmonths{margin-left:0;font-size:11px}
 .ai-msg{max-width:88%}
 .ai-msg-pending{opacity:.55}   /* optimistic bubble in flight; solidifies when the server row replaces it */
 .ai-msg-text{font-size:14px;line-height:1.45;white-space:pre-wrap;word-break:break-word}
+/* Markdown blocks (`md` in shared.js), wherever a reply is shown. Sized in em, so each surface's own
+   font size carries them; a surface that needs it tighter overrides (phone-home.css, .ph-convt). */
+.md-p{margin:0 0 .55em}
+/* A bare URL is one unbroken word, often wider than a phone. */
+.md-p a,.md-l a,.md-q a,.md-tbl a{overflow-wrap:anywhere}
+.md-h{font-weight:700;color:#eef1f5;margin:.6em 0 .25em;line-height:1.25}
+.md-h:first-child{margin-top:0}
+.md-h1{font-size:1.3em}.md-h2{font-size:1.18em}.md-h3{font-size:1.06em}
+.md-l{margin:0 0 .55em;padding-left:1.3em}
+.md-l .md-l{margin:.15em 0 0}
+.md-l li{margin:.1em 0}
+.md-q{margin:0 0 .55em;padding-left:.7em;border-left:2px solid #3a4452;color:#9aa5b3}
+.md-hr{border:0;border-top:1px solid #2a323d;margin:.6em 0}
+.md-pre{margin:0 0 .55em;padding:.5em .7em;background:#0e1318;border-radius:4px;
+  font:.88em/1.4 ui-monospace,SFMono-Regular,Menlo,monospace;white-space:pre;overflow-x:auto}
+.md-tbl{margin:0 0 .55em;overflow-x:auto}
+.md-tbl table{border-collapse:collapse;font-size:.92em}
+.md-tbl th,.md-tbl td{padding:.15em .8em .15em 0;text-align:left;white-space:nowrap}
+.md-tbl th{font-weight:600;border-bottom:1px solid #2a323d}
+.md-p:last-child,.md-l:last-child,.md-q:last-child,.md-pre:last-child,.md-tbl:last-child{margin-bottom:0}
 .ai-msg-user{align-self:flex-end}
 .ai-msg-user .ai-msg-text{color:#6ea8ff;text-align:right}
 .ai-msg-assistant{align-self:flex-start}

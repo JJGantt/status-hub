@@ -2975,8 +2975,7 @@ app.post('/api/voice-command', async (req, res) => {
       (segments ? ` re-encoded into ${segments} segment(s)` : ''));
     if (!transcript) return res.json({ transcript: '', enqueued: false });
     if (dry) return res.json({ transcript, enqueued: false });
-    // The bottom-right quick-add FAB sends ?quick=1 → tag the request so the worker asks Jarvis for a
-    // terse, fits-in-the-status-chip confirmation. The full conversation card omits it (verbose replies).
+    // The navbar mic sends ?quick=1, which tags the request's source `web-quick`.
     const quick = String(req.query.quick || '') === '1';
     const client_now = CLIENT_NOW_RE.test(String(req.query.client_now || '')) ? String(req.query.client_now) : null;
     const location = parseLocation(req.query);
@@ -3288,9 +3287,8 @@ app.post('/api/voice-reset', async (req, res) => {
 // - The bracketed line `desk.startSession` appends after a voice-dispatched prompt, so the session
 //   knows where he was ("[Where Jared was when he asked: lat, lon (within about N m)]") — for the
 //   agent, not for him; his own words end where it begins.
-// - The format instruction the watch appends to a follow-up while replies are spoken
-//   (`Sessions.spokenFormat` in apps/Watch/Sessions.swift): "[This reply is read aloud. …]". It rides
-//   in the prompt so a restarted session cannot forget it, which puts it in every stored turn.
+// - The format instruction older watch builds appended to a follow-up while replies were spoken:
+//   "[This reply is read aloud. …]". Nothing sends it now; it is in turns already stored.
 //   Either bracket can be the last one, so both are peeled off the end until neither matches.
 // - The stub a message too long for a tty is typed as instead of itself (`orchestrator/src/
 //   applescript.js` `handoff`), naming the file the real words are parked in. It is meant to be

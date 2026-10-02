@@ -243,8 +243,8 @@ reaches the top and its first line still starts below the strip.
 
 ### The command is on every page
 
-**Double tap runs a command, press and hold anywhere throws one away, and a line around the very edge
-of the glass says what is happening** (`CommandBorder`, one overlay on
+There is no control on screen. **Double tap runs a command, press and hold anywhere throws one away,
+and a line around the very edge of the glass says what is happening** (`CommandBorder`, one overlay on
 `RootView`'s whole navigation stack, so it is the same on every page and inside a session, where a
 command goes to the session instead of the hub):
 
@@ -448,9 +448,7 @@ speech from those, not by feel.
 Double tap, or a tap on the conversation, walks a command: start, then lock it open through any
 silence, then send. Unlocked, the silence still ends it by itself. Home and a session follow the same
 steps; both go through `CommandBorder.press`. Press and hold anywhere cancels the recording, or the command the hub is still
-working on; it does nothing when there is nothing to throw away. While there is something to throw away
-a bare red X sits at the bottom centre and does the same on a tap — its own button, so the tap is not
-also the bottom-half press that would start a new recording.
+working on; it does nothing when there is nothing to throw away.
 
 ### Haptics
 

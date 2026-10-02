@@ -80,9 +80,9 @@ struct ActivityLines: View {
     }
 }
 
-/// **The command's state is the edge of the glass.** Double tap runs a command, press and hold or the
-/// red X (`cancelMark`) throws one away, and a one-pixel line around the very edge of the display says
-/// what is happening — the whole screen stays content. It is ONE overlay over the whole
+/// **The command's state is the edge of the glass.** There is no control on screen: double tap runs a
+/// command, press and hold throws one away, and a one-pixel line around the very edge of the display
+/// says what is happening — the whole screen stays content. It is ONE overlay over the whole
 /// navigation stack, so it is the same on every page and inside a session, where the command goes
 /// to the session instead of the hub.
 ///
@@ -133,28 +133,8 @@ struct CommandBorder: View {
                 .accessibilityHidden(true)
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
             edge.allowsHitTesting(false)
-            cancelMark
         }
         .ignoresSafeArea()
-    }
-
-    /// **The X: a tap throws away what is under way**, the same as press and hold (`cancel`). A bare red
-    /// glyph at the bottom centre, no background, only while there is something it would cancel — a
-    /// recording here, or a command home is still waiting on. Its own button, so the tap is not also the
-    /// bottom-half press (`tapPresses`) that would start a new recording.
-    @ViewBuilder private var cancelMark: some View {
-        if recording || (target == nil && chat.waiting) {
-            Button { Self.cancel(chat: chat, sessions: sessions) } label: {
-                Image(systemName: "xmark")
-                    .font(.system(size: 15, weight: .bold))
-                    .foregroundColor(.red)
-                    .frame(width: 40, height: 32)
-                    .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
-            .padding(.bottom, 4)
-        }
     }
 
     @ViewBuilder private var edge: some View {

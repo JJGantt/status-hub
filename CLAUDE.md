@@ -644,14 +644,12 @@ prompts (`fetchAttachment`) and prepends a line naming the local files, which th
 itself. A picture with no words is a whole message. It reaches the hub with `?token=`, the way
 everything on that machine does; `X-Hub-Token` is the derived token the iOS app carries and not this.
 
-**A message too long for a tty is stashed, and both halves of that are hidden here.** `sendToTty`
-parks the words in `~/.claude-desk-prompts` and types a one-line stub naming the file, so the STUB is
-what the transcript holds: `turnStart` substitutes the file's contents back, which is why every
-surface shows the words. The stub also asks the session to reply with them verbatim, so they are
-visible in the terminal — and that echo is the same paragraph twice anywhere the stub has already
-been resolved, so `sessionWatch` drops the text frame that quotes it, matched on a flattened middle
-slice of the prompt (the part a quotation reproduces exactly, where its two ends differ). The stash is
-swept at thirty days: deleting a file turns the message back into the stub wherever it is drawn.
+**A long message goes in as a typed lead plus a paste, and the lead is hidden here.** Past Claude
+Code's paste threshold, `typeable` (voice-pipeline `handoff.js`) types `Jared's message:` and pastes the
+words behind it in one submit, so the transcript holds `Jared's message: <pasted_content>…`;
+`resolvePrompt` strips both, which is why every surface shows only his words. Turns recorded before
+this were a stub naming a file in `~/.claude-desk-prompts`, which the same function still resolves —
+and `sessionWatch` still drops those sessions' verbatim echo — until the files are swept at thirty days.
 
 **WORDS SENT FROM THIS VIEW ARE ON SCREEN TWICE UNLESS THE FRAME CONFIRMS THEM.** The composer shows
 them the instant they are sent, before the Mac has typed them into the session — and the session then

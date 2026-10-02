@@ -1194,8 +1194,9 @@ all confirmed live in `desk_turns`, not theoretical:
 - **A format instruction older watch builds appended while replies were spoken**, `\n\n[This reply is
   read aloud. …]`. Nothing sends it now, but it is in turns already stored. Either this or the location
   line can come last, so `cleanSaid` peels both off the end until neither matches.
-- **The stub a message too long for a tty is typed as, instead of itself**
-  (`orchestrator/src/applescript.js`'s `handoff`), naming the file the real words are parked in. Meant
+- **The stub a long message was once typed as, instead of itself**, naming the file the real words
+  were parked in. Nothing types one now (a long message is a typed lead plus a paste), but turns
+  already stored hold it. Meant
   to be resolved back to those words before anything is stored (`transcripts.js`'s `resolvePrompt`,
   called from `turnStart` and from `sessionWatch`'s `queue-operation` handling) — `cleanSaid` is a
   backstop for the rare case that resolution did not happen (the stash file was swept, or the read

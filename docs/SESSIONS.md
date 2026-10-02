@@ -66,7 +66,7 @@ config change ON the Pi by dispatching a session to it.
 | `pid` | the Claude Code process the row belongs to — what liveness and the conversation are read from |
 | `tty` | Mac only: the Terminal tab, and the handle a follow-up is typed into |
 | `working` / `last_reply` / `reply_at` | is a turn in flight; the last COMPLETED answer, and when |
-| `last_prompt` | the prompt that answer was to. A message too long to type into a tty (over 900 characters, on the Mac; line breaks alone are typed) is parked in `~/.claude-desk-prompts` and a one-line stub naming the file is typed instead, so the STUB is what the transcript holds — `turnStart` in the orchestrator's transcripts.js substitutes the file's contents back, which is why every surface shows the words. The stash is swept at thirty days, not one: deleting a file turns his message back into the stub wherever it is drawn — published with it, replaced with it. Earlier turns are kept in `desk_turns`, by trigger (HUB-INTERNALS § The turns before the last one) |
+| `last_prompt` | the prompt that answer was to. A long message is recorded as `Jared's message: <pasted_content>…</pasted_content>` (how it was typed in, voice-pipeline `handoff.js`), and `resolvePrompt` in the orchestrator's transcripts.js strips that back to his words. Turns recorded earlier hold a stub naming a file in `~/.claude-desk-prompts`, which the same function resolves until the file is swept at thirty days. Earlier turns are kept in `desk_turns`, by trigger (HUB-INTERNALS § The turns before the last one) |
 | `active_at` | the last turn boundary (a prompt sent, a turn finished) — what orders, numbers and focuses sessions |
 **A prompt typed while a turn is running is a `queue-operation`, not a `user` record.** Claude Code
 queues it and writes the user record only when the turn consumes it, so a watcher looking at user
@@ -299,9 +299,10 @@ is claimed by nobody and expires unread — so every entry point checks the mach
 writing, and anything that still fails is kept whole in `desk_dead_letters`. It is deliberately not a
 retry queue: work that could not run when it was asked for has usually stopped being wanted.
 
-**A tty takes 1024 bytes.** Writing to a Terminal tab drops everything past that, silently. Launch
-prompts therefore go through a file the shell reads; follow-ups over ~900 characters are stashed and
-the session is told to read the file back. The Pi is unaffected — tmux carried 3000 characters intact.
+**A shell's command line takes 1024 bytes.** That is the tty's canonical-mode limit, and past it the
+rest is dropped silently, so a launch prompt goes through a file the shell reads. A RUNNING session
+holds its tty raw and has no such limit — 20,000 characters arrived intact — so follow-ups are typed
+straight in. The Pi has neither limit; tmux carries any length.
 
 **One utterance, one command.** Two mics endpoint at different pauses, so one spoken thing arrives as
 several rows. Nothing is claimed while any mic still reports hearing him, and among the captures of

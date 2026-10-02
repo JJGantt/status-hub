@@ -4,16 +4,14 @@
 # `.github/workflows/ios-testflight.yml` is the same build on a rented Mac, for when this one is away;
 # macOS runners bill at 10x, so it is the fallback, not the habit.
 #
-# Signs from the `gnarcast-build` keychain, which holds the team's Apple Distribution identity and the
-# account's development identity, unlocked here with its own password so nothing prompts. Profiles are
-# fetched or made with the App Store Connect API key rather than an Xcode account login.
+# Signs the way Xcode does, from the login keychain; profiles are fetched or made with the App Store
+# Connect API key, not an Xcode account login, and distribution signing happens in Apple's cloud.
 #
 # The build number comes from TestFlight itself (`asc.mjs next-build`), so a build made here and one
 # made on a runner can never pick the same number.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 K="$HOME/.appstoreconnect/private_keys"
-KC="$HOME/Library/Keychains/gnarcast-build.keychain-db"
 KEY_ID=P8Y337A8RC
 ISSUER=141a8ead-b829-4e58-b9ff-b8c95f8c4ed9
 TEAM=XMH4AVFC78
@@ -30,7 +28,6 @@ ASKED="$(ASC_KEY_P8="$(cat "$K/AuthKey_$KEY_ID.p8")" ASC_KEY_ID="$KEY_ID" ASC_IS
 MINE=$(( $(cat "$MARK" 2>/dev/null || echo 0) + 1 ))
 BUILD=$(( ASKED > MINE ? ASKED : MINE ))
 
-security unlock-keychain -p "$(cat "$K/gnarcast-build-keychain.password")" "$KC"
 xcodegen generate >/dev/null
 
 AUTH=(-allowProvisioningUpdates -authenticationKeyPath "$K/AuthKey_$KEY_ID.p8"

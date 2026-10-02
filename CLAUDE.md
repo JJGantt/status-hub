@@ -54,11 +54,10 @@ It is committed, but XcodeGen rewrites it from `apps/project.yml`. Edit `project
 A build signed with an Apple Development identity carries `aps-environment: development` and
 registers a **sandbox** APNs token — which the hub, sending to the production gateway, answers with
 `BadDeviceToken`. So a build meant to receive real notifications has to be signed for DISTRIBUTION.
-This repo's distribution certificate exists only in its GitHub secrets (`ios-adhoc.yml`,
-`ios-testflight.yml`). The Mac now holds a second one — Gnarcast's, in the `gnarcast-build` keychain
-(surf-app `tools/testflight.sh`), which archives, signs and uploads to TestFlight from this Mac in
-about three minutes; it is a team certificate, so StatusHub could be shipped the same way, which has
-not been tried yet.
+A distribution certificate on disk exists only in this repo's GitHub secrets (`ios-adhoc.yml`,
+`ios-testflight.yml`). This Mac holds none and needs none: `apps/tools/testflight.sh` archives with the
+login keychain's development identity, and the export is distribution-signed in Apple's cloud, authorised
+by the App Store Connect API key.
 
 **The build machines sign with one permanent development certificate** (secrets `IOS_DEV_P12` /
 `IOS_DEV_P12_PASSWORD`, local copy `~/.appstoreconnect/private_keys/statushub-ci-development.p12`),
@@ -72,8 +71,9 @@ Xcode mint them again.
 
     apps/tools/testflight.sh        # archive, sign, upload, a few minutes
 
-This Mac has the device platforms and the team's Apple Distribution identity (in the `gnarcast-build`
-keychain), so it needs nothing from GitHub. **`ios-testflight.yml` is the fallback, for when this Mac
+This Mac has the device platforms, a development identity in the login keychain and the App Store
+Connect API key, which is all cloud distribution signing asks for, so it needs nothing from GitHub. The
+script reads `~/.appstoreconnect`, which a sandboxed shell cannot: run it as a background task. **`ios-testflight.yml` is the fallback, for when this Mac
 is away** — macOS runners bill at a 10x multiplier and six builds in an afternoon exhausted the
 account's allowance, which stops the workflow dead with "recent account payments have failed or your
 spending limit needs to be increased".

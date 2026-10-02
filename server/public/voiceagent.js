@@ -1140,7 +1140,6 @@ function initCard() {
     if (!text && !items.length) return;
     textEl.value = '';
     const cid = optimistic({ text, localImages: items.map((i) => i.rawUrl).filter(Boolean) });   // show it the instant it's sent
-    setStatus(items.length ? 'Uploading…' : 'Sent — working…');
     try {
       await Promise.all(items.map((i) => i.promise));
       const attachments = items.map((i) => i.path).filter(Boolean);
@@ -1150,7 +1149,6 @@ function initCard() {
         return;
       }
       setPendingPath(cid, attachments);            // let the eventual server row reconcile against the uploaded object
-      setStatus('Sent — working…');
       const where = await hereNow();
       const r = await fetch('/api/voice-text', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -1172,7 +1170,10 @@ function initCard() {
   // Photos pending → the mic composes instead of firing: its transcript joins the text box and the
   // whole thing (text + photos) goes when Send is tapped. Empty tray → fire-and-forget as always.
   const cardRec = makeRecorder({
-    onStatus: (t, kind) => { if (kind !== 'prompt') setStatus(t); },
+    // Only failures and clears reach the line. The red mic already says it is listening, and the
+    // thread's pending bubble (dots, then the transcript) already says it was heard and is being worked
+    // on — a progress line under the composer repeats both and jumps the layout as it comes and goes.
+    onStatus: (t, kind) => { if (kind === 'err' || kind === 'clear') setStatus(t); },
     onState: (s) => { micBtn.classList.toggle('ai-rec', s === 'rec');
                       micBtn.classList.toggle('ai-armed', s === 'armed'); },
     dryWhen: () => attItems.length > 0,

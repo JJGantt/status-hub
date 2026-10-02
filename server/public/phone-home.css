@@ -35,6 +35,15 @@ body.tv.phonehome .rows{display:flex;flex-direction:column;gap:6px;min-height:0;
 body.tv.phonehome .row-card{display:flex;gap:8px;flex:0 0 auto;min-height:0}
 body.tv.phonehome .card{border:none;border-radius:0;background:#000!important;min-height:0}
 body.tv.phonehome .rows .fit{height:auto;padding:0;gap:4px;overflow:hidden}
+/* The sessions and reports panes are the screen, not a card on it: app.css frames both for the walls
+   opened at phone size (an inset, a border, a rounded panel), and on this page that is a rectangle
+   drawn inside the phone's own. The extra `.phonewall` is what outranks those rules. The bottom
+   padding stays, since it is what keeps the composer above the navbar. */
+body.tv.phonewall.phonehome .pane-repos,body.tv.phonewall.phonehome .pane-reports{padding:0 0 70px}
+body.tv.phonewall.phonehome .pane-repos .card,body.tv.phonewall.phonehome .pane-reports .card{
+  background:#000!important;border:none;border-radius:0}
+body.tv.phonehome .sv-bar{border-bottom:none}
+body.tv.phonehome .sv-input{border-top:none}
 
 /* ---- health bar: the three scores lying on their side ------------------------------------------ */
 body.tv.phonehome .healthbar{flex:0 0 20px;flex-direction:row;align-items:stretch;padding:0;min-height:0}

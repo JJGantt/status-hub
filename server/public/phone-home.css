@@ -519,19 +519,22 @@ body.tv.phonehome .ph-convt a{color:#6ea8ff;text-decoration:underline;text-under
    A sheet, not a pane: it covers whatever is open rather than taking a slot in the swipe order, which
    is the whole point of having removed the chat pane. Above the navbar, because the navbar's own
    button is what closes it and the keyboard covers that half of the screen anyway. */
-body.tv.phonehome .ph-chat{position:fixed;inset:0;z-index:1100;display:none;background:#06080a;
+body.tv.phonehome .ph-chat{position:fixed;inset:0;z-index:1100;display:none;background:#000;
  padding:calc(env(safe-area-inset-top, 0px) + 8px) 10px calc(env(safe-area-inset-bottom, 0px) + 8px)}
 body.tv.phonehome .ph-chat.open{display:block}
 body.tv.phonehome .ph-chat .ai-shell{height:100%;display:flex;flex-direction:column;min-height:0}
 body.tv.phonehome .ph-chat .ai-head{flex:0 0 auto;display:flex;align-items:center;gap:8px;
- padding:2px 2px 8px;border-bottom:1px solid #1b222b;margin-bottom:8px}
+ padding:2px 2px 8px;margin-bottom:8px}
 body.tv.phonehome .ph-chat .ai-mode{font-size:12px;font-weight:700;letter-spacing:.05em;
  text-transform:uppercase;color:#8b96a5}
 body.tv.phonehome .ph-chat .ai-reset{margin-left:auto;font-size:11px;padding:4px 9px;border-radius:7px;
  border:1px solid #222a33;background:#0e1318;color:#8b96a5}
 body.tv.phonehome .ph-chat .ph-chat-x{width:32px;height:32px;flex:0 0 auto;border-radius:9px;
  border:1px solid #2a3340;background:rgba(18,24,33,.9);color:#c7ced8;font-size:15px;line-height:1}
-body.tv.phonehome .ph-chat .ai-log{flex:1 1 auto;min-height:0;overflow-y:auto;font-size:13px}
+/* The thread is the sheet, not a panel on it: app.css gives .ai-log a ground, a border and rounded
+   corners for the walls, which here is a rectangle inside the phone's own. */
+body.tv.phonehome .ph-chat .ai-log{flex:1 1 auto;min-height:0;overflow-y:auto;font-size:13px;
+ background:none;border:none;border-radius:0;padding:0 2px}
 body.tv.phonehome .ph-chat .ai-input{flex:0 0 auto;display:flex;gap:6px;align-items:center;
  padding-top:8px}
 body.tv.phonehome .ph-chat .ai-text{flex:1 1 auto;min-width:0;font-size:16px;padding:9px 11px;

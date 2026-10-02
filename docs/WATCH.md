@@ -591,7 +591,7 @@ one playing is using.
 
 ### Two launchers, one request
 
-The complication (circular and corner) opens `statushub://record`. The Record control
+The complication (circular and corner) opens `statushub://record`. It draws nothing — a clear view filling the slot — so the face shows no trace of it and the empty slot is still the button. The Record control
 (`RecordControl`, watchOS 26 — Control Center, the Smart Stack, and the Action button on an Ultra)
 runs `RecordIntent`, an `OpenIntent`, which launches the app and runs `perform()` in it: the file is
 compiled into both targets, and `WATCH_APP` gates the app-only call. Both set `Chat.recordRequested`;

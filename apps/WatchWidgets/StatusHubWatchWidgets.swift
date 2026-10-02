@@ -111,13 +111,14 @@ struct WorkoutControl: ControlWidget {
 }
 
 /// A watch-face button that opens the app straight into recording: `statushub://record`, which the
-/// app answers by starting to record.
+/// app answers by starting to record. It draws nothing: the slot is an invisible tap target that only
+/// its owner knows is there, so the face shows no trace of it.
 struct RecordComplication: Widget {
     var body: some WidgetConfiguration {
         StaticConfiguration(kind: "RecordComplication", provider: Provider()) { _ in
             RecordFace()
                 .widgetURL(URL(string: "statushub://record"))
-                // No plate behind it: just the microphone on the face.
+                // No plate behind it either: the slot is empty on the face.
                 .containerBackground(for: .widget) { Color.clear }
         }
         .configurationDisplayName("Status Hub")
@@ -126,11 +127,11 @@ struct RecordComplication: Widget {
     }
 }
 
+/// Clear, but filling the slot, so the whole complication stays the tap target `widgetURL` opens.
 private struct RecordFace: View {
     var body: some View {
-        Image(systemName: "mic.fill")
-            .font(.system(size: 18, weight: .semibold))
-            .widgetAccentable()
+        Color.clear
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 }
 

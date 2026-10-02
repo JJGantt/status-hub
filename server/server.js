@@ -3299,7 +3299,8 @@ const FOR_THE_AGENT = [
   /\s*\[Where Jared was when he asked: [^\]]*\]\s*$/,
   /\s*\[This reply is read aloud\.[^\]]*\]\s*$/,
 ];
-const UNRESOLVED_STASH = /^\[A message from Jared, too long to type into this terminal\. It is in \S+.*\]\s*$/s;
+// Both wordings the stub has had (orchestrator/src/handoff.js): stored turns keep the older one.
+const UNRESOLVED_STASH = /^\[(?:Jared's message is in \S+?\. |A message from Jared, too long to type into this terminal\. It is in \S+).*\]\s*$/s;
 function cleanSaid(text) {
   let s = String(text || '');
   if (UNRESOLVED_STASH.test(s.trim())) return '';

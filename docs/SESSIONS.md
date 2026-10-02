@@ -110,6 +110,14 @@ so the user record that follows does not say it twice.
 machine claims it, pulls the repo, launches with `--remote-control`, and publishes the row as the most
 recently active session. The Pi clones from GitHub if it has no checkout; the Mac uses the one it has.
 
+**A dispatched session is told it IS the dispatch.** Its prompt is his words, and those can still begin
+"start a session in X and have it…" when the router leaves the addressing in — which the new session
+reads as an order and dispatches the same request again. So a fresh launch with a prompt carries
+`voice-pipeline/orchestrator/dispatched-session.txt` as `--append-system-prompt` (both launchers read
+that one file; a system prompt so every surface still shows only his words), and `start_session`
+refuses a prompt the calling session was itself started with (`desk.redispatch`, keyed on
+`HUB_SESSION_ID`, which only the launchers set).
+
 **The model is named at launch on both machines** — `DESK_MODEL` in the orchestrator's config, and
 `PI_DESK_MODEL` in pi-desk's `launch.sh`, both opus. Left to settings, a session takes whatever
 `/model` last wrote to `~/.claude/settings.json`, and a wrong value there is invisible from an

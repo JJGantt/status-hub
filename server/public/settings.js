@@ -108,9 +108,6 @@ export async function open() {
 
       // How a reply sounds when the watch plays one (the speaker glyph on a session's page).
       '<div class="settings-sec">Watch voice</div>' +
-      '<label class="settings-row"><span>Volume (%)</span>' +
-        '<input class="settings-num" type="number" min="10" max="100" step="10" inputmode="numeric" ' +
-        'data-key="watch_speech_volume" value="' + num('watch_speech_volume', 100) + '"></label>' +
       // Which way the watch app stays alive with the wrist down while it talks: holds the microphone
       // (measured working), or asks watchOS to treat the reply as a song (Now Playing, AirPods, the
       // crown as a volume knob) — not yet confirmed on the watch itself.

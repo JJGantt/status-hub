@@ -38,10 +38,9 @@ request asks `onScreen` (an environment value `RootView` sets per page) first.
 
 ### The settings page
 
-Left of the sessions page (`SettingsView`): how a played reply sounds. The voice's volume
-(`watch_speech_volume`, percent of the watch's own volume, 10 to 100 in tens; also on the hub's
-Settings) applies to a reply already playing, and can only make the voice quieter than the watch's
-volume, never louder. The `Route` toggle (`watch_speech_route`) is `.hold` or `.nowPlaying` — see
+Left of the sessions page (`SettingsView`): how a played reply sounds. There is no voice volume: the
+voice plays at full, and while it plays a session's page shows the system volume control
+(`VolumeKnob`), which takes the Digital Crown and turns the watch's own volume. The `Route` toggle (`watch_speech_route`) is `.hold` or `.nowPlaying` — see
 Spoken replies.
 
 ### Home — the conversation

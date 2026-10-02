@@ -23,17 +23,15 @@ import WatchKit
 /// never `.playAndRecord` in this route alive under this alone, and whether the watch opens its own Now
 /// Playing screen over the session whenever a reply starts.
 ///
+/// **The voice plays at full; the watch's own volume is the only knob**, and while a reply plays the
+/// crown turns it (`VolumeKnob`, shown by `SessionView`).
+///
 /// **The always-on listener stands aside while it speaks** (`Capture.hush`) — otherwise it transcribes
 /// the watch's own voice as a command — and picks the microphone back up when the speaking ends. It is
 /// paused, not switched off. Starting a recording stops the speaking at once: his voice wins.
 @MainActor
 final class Speaker: NSObject, ObservableObject, AVSpeechSynthesizerDelegate {
     static let shared = Speaker()
-    /// How loud the voice plays, in percent of the watch's own volume (10…100, steps of 10): the watch's
-    /// Settings page and the hub's (`watch_speech_volume`). Applies to a reply already playing.
-    @Published private(set) var volume = Speaker.storedVolume
-    static let volumeKey = "watch_speech_volume"
-
     private let synth = AVSpeechSynthesizer()
     private let engine = AVAudioEngine()
     private let player = AVAudioPlayerNode()
@@ -58,7 +56,7 @@ final class Speaker: NSObject, ObservableObject, AVSpeechSynthesizerDelegate {
     private var commandsRegistered = false
 
     /// Which way the reply is kept alive with the wrist down. Kept in `UserDefaults` and mirrored to
-    /// the hub, the same as the volume.
+    /// the hub.
     @Published private(set) var route = Speaker.storedRoute
     static let routeKey = "watch_speech_route"
 
@@ -286,7 +284,6 @@ final class Speaker: NSObject, ObservableObject, AVSpeechSynthesizerDelegate {
                 if self.rendered && self.played == self.buffers.count { self.finished("done") }
             }
         }
-        player.volume = Float(volume) / 100
         if !player.isPlaying { player.play() }
     }
 
@@ -370,28 +367,6 @@ final class Speaker: NSObject, ObservableObject, AVSpeechSynthesizerDelegate {
         try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
         Capture.shared.hush(false)
         StayAwake.shared.sessionReleased()   // a home command still waiting takes the audio back
-    }
-
-    /// Sets the voice's volume here and on the hub.
-    func setVolume(_ percent: Int) {
-        let v = Self.clamp(percent)
-        guard v != volume else { return }
-        apply(volume: v)
-        Task { await Hub.putSetting(Self.volumeKey, "\(v)") }
-    }
-
-    /// Takes a volume the hub sent (`WatchSettings`), without writing it back.
-    func apply(volume v: Int) {
-        volume = Self.clamp(v)
-        UserDefaults.standard.set(volume, forKey: Self.volumeKey)
-        player.volume = Float(volume) / 100
-    }
-
-    private static func clamp(_ v: Int) -> Int { min(100, max(10, (v + 5) / 10 * 10)) }
-
-    private static var storedVolume: Int {
-        let v = UserDefaults.standard.integer(forKey: volumeKey)
-        return v == 0 ? 100 : clamp(v)
     }
 
     /// Sets which route keeps the app alive — the Settings page's segmented control — here and on the

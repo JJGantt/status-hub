@@ -222,6 +222,15 @@ struct SessionView: View {
         .overlay {
             Color.clear
                 .overlay(alignment: .bottomTrailing) { playButton }
+                // While the voice plays the crown is the watch's volume, not the scroll.
+                .overlay(alignment: .bottomLeading) {
+                    if speaker.isSpeaking {
+                        VolumeKnob()
+                            .frame(width: 44, height: 36)
+                            .padding(.leading, 6)
+                            .padding(.bottom, 4)
+                    }
+                }
                 .ignoresSafeArea(.container, edges: .bottom)
         }
         // The session's name on the clock's line, and NO back arrow: the swipe that opened it from the

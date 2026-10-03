@@ -2,10 +2,11 @@ import AVFoundation
 import MediaPlayer
 import WatchKit
 
-/// **Reads a session's reply aloud**, on the watch, with the system's own voice — no synthesis machine,
-/// no audio sent anywhere. Only when asked: the speaker glyph at the foot of a session's page plays
-/// that session's last reply (`SessionView.playButton`), and nothing is ever spoken unprompted. The
-/// reply is the one written for the screen; only its markdown syntax is dropped before it is said.
+/// **Reads a session's reply aloud**, on the watch, in the hub's voice: the reply goes to `/api/tts` and
+/// comes back as audio a chunk at a time (`lib/speech.js` on the server owns the model, the voice and
+/// the splitting, so changing any of them needs no build). Chunk 0 plays the moment it lands and the
+/// rest are fetched while it plays. Only when asked: the speaker glyph at the foot of a session's page
+/// plays that session's last reply (`SessionView.playButton`), and nothing is ever spoken unprompted.
 ///
 /// **Two ways to keep the app running with the wrist down, picked on the watch's Settings page and
 /// mirrored on the hub's** (`watch_speech_route`, `SpeechRoute`): watchOS keeps a watch app alive
@@ -30,9 +31,8 @@ import WatchKit
 /// the watch's own voice as a command — and picks the microphone back up when the speaking ends. It is
 /// paused, not switched off. Starting a recording stops the speaking at once: his voice wins.
 @MainActor
-final class Speaker: NSObject, ObservableObject, AVSpeechSynthesizerDelegate {
+final class Speaker: NSObject, ObservableObject {
     static let shared = Speaker()
-    private let synth = AVSpeechSynthesizer()
     private let engine = AVAudioEngine()
     private let player = AVAudioPlayerNode()
     /// The format the player is wired for; rewired only if a voice renders in a different one.
@@ -62,7 +62,6 @@ final class Speaker: NSObject, ObservableObject, AVSpeechSynthesizerDelegate {
 
     private override init() {
         super.init()
-        synth.delegate = self
         let center = NotificationCenter.default
         let session = AVAudioSession.sharedInstance()
         // Each of these can stop the engine under a reply without any callback firing, which is how a
@@ -108,7 +107,7 @@ final class Speaker: NSObject, ObservableObject, AVSpeechSynthesizerDelegate {
         startAudio { [weak self] ok in
             guard let self, this == self.turn, self.speaking else { return }
             guard ok else { self.finished("no-route"); return }
-            self.render(words, turn: this)
+            self.render(reply, words: words, turn: this)
         }
     }
 
@@ -152,9 +151,7 @@ final class Speaker: NSObject, ObservableObject, AVSpeechSynthesizerDelegate {
         }
     }
 
-    private func render(_ words: String, turn this: Int) {
-        let u = AVSpeechUtterance(string: words)
-        u.voice = AVSpeechSynthesisVoice(language: "en-US")
+    private func render(_ reply: String, words: String, turn this: Int) {
         buffers = []
         played = 0
         rendered = false
@@ -164,17 +161,53 @@ final class Speaker: NSObject, ObservableObject, AVSpeechSynthesizerDelegate {
         case .nowPlaying: setUpNowPlaying(words: words)
         }
         Hub.log("speak", ["chars": words.count, "outputs": Self.outputs(), "route": route.rawValue])
-        synth.write(u) { [weak self] buffer in
-            guard let pcm = buffer as? AVAudioPCMBuffer else { return }
-            Task { @MainActor in self?.take(pcm, turn: this) }
+        Task { await self.fetch(reply, turn: this) }
+    }
+
+    /// Every chunk in order, each played as soon as it is decoded. One at a time is enough: a chunk is
+    /// a second or two to render and ten or so to speak, so the next is always in hand first.
+    private func fetch(_ reply: String, turn this: Int) async {
+        var of = 1
+        var i = 0
+        while i < of {
+            do {
+                let got = try await Hub.tts(reply, chunk: i)
+                guard this == turn, speaking else { return }
+                of = got.of
+                guard let pcm = Self.decode(got.audio) else { throw HubError.status(0) }
+                take(pcm, turn: this)
+                if i == 0 { Task { await Hub.ttsTiming(["first_ms": ms(), "of": of]) } }
+            } catch {
+                guard this == turn, speaking else { return }
+                Hub.log("speak-failed", ["chunk": i, "error": String(describing: error).prefix(120).description])
+                if buffers.isEmpty { finished("failed"); return }
+                break
+            }
+            i += 1
+        }
+        guard this == turn else { return }
+        renderedAll()
+    }
+
+    /// A WAV from the hub as one PCM buffer. AVAudioFile reads only from a file, so it goes through one.
+    private static func decode(_ wav: Data) -> AVAudioPCMBuffer? {
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent("tts-\(UUID().uuidString).wav")
+        defer { try? FileManager.default.removeItem(at: url) }
+        do {
+            try wav.write(to: url)
+            let file = try AVAudioFile(forReading: url)
+            guard let pcm = AVAudioPCMBuffer(pcmFormat: file.processingFormat,
+                                             frameCapacity: AVAudioFrameCount(file.length)) else { return nil }
+            try file.read(into: pcm)
+            return pcm
+        } catch {
+            return nil
         }
     }
 
-    /// One rendered piece of the reply. A buffer with no frames is the synthesizer saying it is done.
+    /// One decoded chunk of the reply.
     private func take(_ pcm: AVAudioPCMBuffer, turn this: Int) {
         guard this == turn, speaking else { return }
-        // An empty buffer marks the end of a stretch the synthesizer rendered, not of the reply: it sends
-        // several. The end of the reply is the delegate's `didFinish`.
         guard pcm.frameLength > 0 else { return }
         buffers.append(pcm)
         if wired != pcm.format {
@@ -207,7 +240,7 @@ final class Speaker: NSObject, ObservableObject, AVSpeechSynthesizerDelegate {
     }
 
     /// Publishes the reply as a track and registers play/pause/stop once. The duration is a rough
-    /// words-per-minute guess — the synthesizer has not rendered anything yet — and is not corrected:
+    /// words-per-minute guess — nothing has been rendered yet — and is not corrected:
     /// good enough for a scrub bar's rough shape, not worth another log line to fix up.
     private func setUpNowPlaying(words: String) {
         registerRemoteCommandsIfNeeded()
@@ -319,10 +352,6 @@ final class Speaker: NSObject, ObservableObject, AVSpeechSynthesizerDelegate {
         resume("wake")
     }
 
-    nonisolated func speechSynthesizer(_ s: AVSpeechSynthesizer, didFinish u: AVSpeechUtterance) {
-        Task { @MainActor in self.renderedAll() }
-    }
-
     /// Everything is rendered; the reply is over once the player has played it all.
     private func renderedAll() {
         guard speaking, !rendered else { return }
@@ -341,7 +370,6 @@ final class Speaker: NSObject, ObservableObject, AVSpeechSynthesizerDelegate {
     /// Silences whatever is playing and drops whatever is still being rendered.
     private func halt() {
         turn += 1
-        synth.stopSpeaking(at: .immediate)
         player.stop()
     }
 

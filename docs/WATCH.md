@@ -38,9 +38,8 @@ request asks `onScreen` (an environment value `RootView` sets per page) first.
 
 ### The settings page
 
-Left of the sessions page (`SettingsView`): how a played reply sounds. There is no voice volume: the
-voice plays at full, and while it plays a session's page shows the system volume control
-(`VolumeKnob`), which takes the Digital Crown and turns the watch's own volume. The `Route` toggle (`watch_speech_route`) is `.hold` or `.nowPlaying` — see
+Left of the sessions page (`SettingsView`): how a played reply is kept alive. There is no voice volume
+(the crown is the volume while it plays — see Spoken replies). The `Route` toggle (`watch_speech_route`) is `.hold` or `.nowPlaying` — see
 Spoken replies.
 
 ### Home — the conversation
@@ -538,9 +537,16 @@ process, this account cannot enable App Groups, and nothing a control draws depe
 
 **Nothing is spoken unless he asks.** A session's page carries a bare speaker glyph in its bottom right
 corner (`SessionView.playButton`, shown once the session has a reply): a tap reads that session's LAST
-reply aloud (`Speaker`, the system voice — nothing leaves the watch), and the glyph is a stop while it
-plays. There is no mode and no setting that turns speech on; every reply is written for the screen, and
-`MarkdownBlock.spoken` drops its markdown syntax before it is said. The glyph is its own button over
+reply aloud (`Speaker`), and the glyph is a stop while it plays. There is no mode and no setting that
+turns speech on.
+
+**The voice is the hub's, not the watch's.** The reply goes to `/api/tts` and comes back as WAV a chunk
+at a time — the same endpoint the phone's session view plays, described in `docs/HUB-INTERNALS.md` §
+Replies read aloud. The server strips the markdown, splits the text, and picks the model and the voice
+(`tts_voice`, on the hub's Settings page), so none of that needs a build. The watch fetches the chunks
+in order, decodes each, and queues it on its player the moment it lands; `/api/tts/timing` logs how long
+the first sound took. While it plays, the session page shows the system volume control (`VolumeKnob`),
+which takes the Digital Crown and turns the watch's own volume; the voice itself plays at full. The glyph is its own button over
 the page, so a tap on it is not the press the bottom half of the glass otherwise is. **The always-on
 listener stands aside while it speaks** (`Capture.hush`), so it does not transcribe the watch's own
 voice, and takes the microphone back when it finishes — paused, not switched off. Starting a recording
@@ -548,14 +554,11 @@ stops the speaking at once, and so does the press.
 
 **The app plays the voice itself and holds the microphone while it does, so it keeps talking with
 the wrist down.** watchOS keeps an app running wrist-down while it records, not while it only plays.
-`AVSpeechSynthesizer.speak` is the system speaking, not the app, and stops when the wrist drops; the
-app's own engine under `.playback` freezes the same way, with the engine and player still reporting
-running and no notification firing. So `Speaker` has the synthesizer only render (`write`), plays the
-buffers through its own `AVAudioEngine` under `.playAndRecord`, and taps the microphone and discards
-what it hears for exactly as long as the voice plays (`holdMic`) — the mechanism that keeps a command
-recording wrist-down. The end of a reply is the synthesizer delegate's `didFinish`: `write` hands back
-several empty buffers along the way, one per stretch it renders, so an empty buffer is not the end.
-Every reply ends in a `speak-end` log line saying
+The app's own engine under `.playback` freezes when the wrist drops, with the engine and player still
+reporting running and no notification firing. So `Speaker` plays the buffers through its own
+`AVAudioEngine` under `.playAndRecord`, and taps the microphone and discards what it hears for exactly
+as long as the voice plays (`holdMic`) — the mechanism that keeps a command recording wrist-down. The
+reply has finished rendering once the last chunk is in hand. Every reply ends in a `speak-end` log line saying
 how (`done`, `stopped`, `failed`) and how many seconds of it played.
 
 **A reply can be cut out from under the player without any callback firing** (an interruption, an

@@ -51,6 +51,10 @@ export async function open() {
     ['classic', 'Classic'], ['radar', 'Radar'], ['pulse', 'Pulse'],
     ['sunrise', 'Sunrise'], ['ripple', 'Ripple'], ['bells', 'Bells'], ['tide', 'Tide'],
   ];
+  const VOICES = ['hannah', 'autumn', 'diana', 'austin', 'daniel', 'troy'];
+  const voiceCur = VOICES.includes(cur.tts_voice) ? cur.tts_voice : 'hannah';
+  const voiceOptsHtml = VOICES.map((v) =>
+    '<option value="' + v + '"' + (v === voiceCur ? ' selected' : '') + '>' + v[0].toUpperCase() + v.slice(1) + '</option>').join('');
   const toneCur = TONES.some(([v]) => v === cur.alarm_sound) ? cur.alarm_sound : 'classic';
   const toneOptsHtml = TONES.map(([v, label]) =>
     '<option value="' + v + '"' + (v === toneCur ? ' selected' : '') + '>' + label + '</option>').join('');
@@ -106,8 +110,11 @@ export async function open() {
         '<input class="settings-num" type="number" min="1" max="50" step="0.5" inputmode="decimal" ' +
         'data-key="watch_speech_ratio" value="' + sil('watch_speech_ratio', 8) + '"></label>' +
 
-      // How a reply sounds when the watch plays one (the speaker glyph on a session's page).
+      // How a reply sounds when it is read aloud: the voice is the server's (`lib/speech.js`), shared by
+      // the phone and the watch; the route is how the watch stays awake while it plays.
       '<div class="settings-sec">Watch voice</div>' +
+      '<label class="settings-row"><span>Voice</span>' +
+        '<select class="settings-text" id="set-tts-voice">' + voiceOptsHtml + '</select></label>' +
       // Which way the watch app stays alive with the wrist down while it talks: holds the microphone
       // (measured working), or asks watchOS to treat the reply as a song (Now Playing, AirPods, the
       // crown as a volume knob) — not yet confirmed on the watch itself.
@@ -218,6 +225,7 @@ export async function open() {
     playTone();
   });
   back.querySelector('#set-alarm-play').addEventListener('click', playTone);
+  back.querySelector('#set-tts-voice').addEventListener('change', (e) => save('tts_voice', e.target.value));
   back.querySelector('.settings-x').addEventListener('click', close);
 
   back.querySelector('#set-wf-enabled').addEventListener('click', (e) => {

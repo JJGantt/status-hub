@@ -2416,9 +2416,6 @@ app.get('/api/settings', async (req, res) => {
     res.json(Object.fromEntries(Object.entries(all).filter(([k]) => !SETTINGS_SERVER_ONLY.has(k))));
   } catch (e) { res.status(500).json({ error: String(e.message || e) }); }
 });
-// TEMPORARY. The voice button's stop tap misbehaves only on his phone, so the phone reports what it
-// actually saw — every pointer event and every state change — into this log. Read it with
-// `fly logs -a jared-status-hub | grep tap`. Delete this route and its caller once that is understood.
 // **A reply in a real voice** (`lib/speech.js`). The client posts the reply's text and which chunk it
 // wants; the answer is that chunk's audio, with the total count in a header so the first request is
 // also the plan. The client asks for chunk 0, plays it, and fetches the rest while it plays.
@@ -2429,7 +2426,8 @@ app.post('/api/tts', express.json({ limit: '256kb' }), async (req, res) => {
   if (!list.length || !(i >= 0 && i < list.length)) return res.status(400).json({ error: 'no such chunk' });
   const t0 = Date.now();
   try {
-    const wav = await speech.synth(list[i], GROQ_API_KEY);
+    const st = await settingsAll();
+    const wav = await speech.synth(list[i], GROQ_API_KEY, { voice: st.tts_voice });
     console.log('[tts]', JSON.stringify({ i, of: list.length, chars: list[i].length, ms: Date.now() - t0, bytes: wav.length }));
     res.set({ 'Content-Type': 'audio/wav', 'X-Chunks': String(list.length), 'Access-Control-Expose-Headers': 'X-Chunks' });
     res.send(wav);
@@ -2439,6 +2437,15 @@ app.post('/api/tts', express.json({ limit: '256kb' }), async (req, res) => {
   }
 });
 
+// How long a play waited for its first sound, and any stall between chunks, as the client measured it.
+app.post('/api/tts/timing', express.json({ limit: '8kb' }), (req, res) => {
+  console.log('[tts-timing]', JSON.stringify(req.body));
+  res.json({ ok: true });
+});
+
+// TEMPORARY. The voice button's stop tap misbehaves only on his phone, so the phone reports what it
+// actually saw — every pointer event and every state change — into this log. Read it with
+// `fly logs -a jared-status-hub | grep tap`. Delete this route and its caller once that is understood.
 app.post('/api/tapdebug', express.json({ limit: '8kb' }), (req, res) => {
   const ua = String(req.headers['user-agent'] || '');
   const surface = ua.includes('StatusHub') ? 'app' : /iPhone|iPad/.test(ua) ? 'ios-safari' : 'other';

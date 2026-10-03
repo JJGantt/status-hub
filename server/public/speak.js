@@ -28,6 +28,8 @@ function finish() {
   const cb = onEnd;
   onEnd = null;
   nativeAudio(false);
+  // The cached microphone waits for this before taking the audio session back (voiceagent.js).
+  document.dispatchEvent(new CustomEvent('hub:audioplayed'));
   cb();
 }
 
@@ -42,7 +44,7 @@ async function fetchChunk(text, i) {
 }
 
 // Plays `text`; `done` runs once when it ends, is stopped, or fails. Timings go to the console and to
-// /api/tapdebug, since the first-sound delay is the number this whole path is judged on.
+// /api/tts/timing, since the first-sound delay is the number this whole path is judged on.
 export async function speak(text, done) {
   stopSpeaking();
   const me = ++run;
@@ -51,6 +53,7 @@ export async function speak(text, done) {
   if (!ctx) ctx = new (window.AudioContext || window.webkitAudioContext)();
   if (ctx.state !== 'running') { try { await ctx.resume(); } catch (_) {} }
   nativeAudio(true);
+  document.dispatchEvent(new CustomEvent('hub:audioplaying'));
   const timing = [];
   try {
     const first = await fetchChunk(text, 0);
@@ -94,7 +97,7 @@ export async function speak(text, done) {
   }
   console.log('[tts]', JSON.stringify(timing));
   try {
-    fetch('/api/tapdebug', { method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ tts: timing }) });
+    fetch('/api/tts/timing', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ surface: 'phone', timing }) });
   } catch (_) {}
 }

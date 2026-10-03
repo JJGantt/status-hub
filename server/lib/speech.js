@@ -8,8 +8,10 @@ const crypto = require('crypto');
 
 const URL = 'https://api.groq.com/openai/v1/audio/speech';
 const MODEL = 'canopylabs/orpheus-v1-english';
-// Orpheus's women are autumn, diana and hannah.
-const VOICE = 'hannah';
+// The voice is the hub setting `tts_voice` (the Settings page), so changing it needs no deploy and no
+// app build. Orpheus's women are autumn, diana and hannah.
+const VOICES = ['autumn', 'diana', 'hannah', 'austin', 'daniel', 'troy'];
+const DEFAULT_VOICE = 'hannah';
 const MAX = 190;   // under the model's per-request input cap
 
 // What is SAID: the reply's text with its markdown syntax gone. Code blocks are skipped outright —
@@ -62,7 +64,8 @@ function chunks(text) {
 const cache = new Map();
 const CACHE_MAX = 400;
 
-async function synth(input, key) {
+async function synth(input, key, { voice } = {}) {
+  const VOICE = VOICES.includes(voice) ? voice : DEFAULT_VOICE;
   const id = crypto.createHash('sha1').update(MODEL + VOICE + input).digest('hex');
   const hit = cache.get(id);
   if (hit) { cache.delete(id); cache.set(id, hit); return hit; }
@@ -90,4 +93,4 @@ async function synth(input, key) {
   return buf;
 }
 
-module.exports = { spoken, chunks, synth };
+module.exports = { spoken, chunks, synth, VOICES, DEFAULT_VOICE };

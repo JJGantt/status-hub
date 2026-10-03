@@ -244,6 +244,21 @@ enum Hub {
         (try JSONSerialization.jsonObject(with: try await call("/api/settings")) as? [String: Any]) ?? [:]
     }
 
+    /// One chunk of a reply read aloud (`/api/tts`), as WAV, and how many chunks the reply has. The hub
+    /// owns everything about the voice — model, voice, how the text is split — so none of it is here.
+    static func tts(_ text: String, chunk i: Int) async throws -> (audio: Data, of: Int) {
+        let r = try request("/api/tts", method: "POST", body: ["text": text, "i": i], timeout: 60)
+        let (data, resp) = try await resending { try await session.data(for: r) }
+        try await check(resp)
+        let of = Int((resp as? HTTPURLResponse)?.value(forHTTPHeaderField: "X-Chunks") ?? "") ?? 1
+        return (data, of)
+    }
+
+    /// What a play measured: how long to the first sound, and how many chunks.
+    static func ttsTiming(_ fields: [String: Any]) async {
+        _ = try? await call("/api/tts/timing", method: "POST", body: fields.merging(["surface": "watch"]) { a, _ in a })
+    }
+
     /// Marks a dated item done — the Done button on its notification. It SCORES: the item stays on the
     /// day as something that happened, where clearing it would delete it and score nothing.
     static func complete(_ id: String) async {

@@ -221,14 +221,14 @@ struct SessionView: View {
         // the page scrolls on under it: a clear layer that reaches the screen's edge carries the button.
         .overlay {
             Color.clear
-                .overlay(alignment: .bottomTrailing) { playButton }
-                // While the voice plays the crown is the watch's volume, not the scroll.
-                .overlay(alignment: .bottomLeading) {
-                    if speaker.isSpeaking {
-                        VolumeKnob()
-                            .frame(width: 44, height: 36)
-                            .padding(.leading, 6)
-                            .padding(.bottom, 4)
+                .overlay(alignment: .bottomTrailing) {
+                    // While the voice plays the crown is the watch's volume, not the scroll. Beside the
+                    // stop glyph rather than in the other corner, where the display's curve cuts it off.
+                    HStack(spacing: 0) {
+                        if speaker.isSpeaking {
+                            VolumeKnob().frame(width: 44, height: 36).padding(.bottom, 4)
+                        }
+                        playButton
                     }
                 }
                 .ignoresSafeArea(.container, edges: .bottom)

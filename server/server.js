@@ -32,6 +32,7 @@ const { buildWorkoutHeatmap } = require('./lib/heatmap');
 const { buildWeightPlot } = require('./lib/weightplot');
 const { getWeather } = require('./lib/weather');
 const { transcribe, NOTHING_SAID, clipSeconds, extFor } = require('./lib/transcribe');
+const speech = require('./lib/speech');
 const { buildNutritionLog, buildGoalResolver, calorieColor } = require('./lib/nutritionlog');
 const { computeScore, tasksScore, taskDeadline, completionValue, completionStamp, bandPoints, toPoints, TASK_GRACE_MIN, TASK_LATE_ZERO_H, TASK_DRAIN_FULL_H } = require('./lib/score');
 
@@ -2418,6 +2419,26 @@ app.get('/api/settings', async (req, res) => {
 // TEMPORARY. The voice button's stop tap misbehaves only on his phone, so the phone reports what it
 // actually saw — every pointer event and every state change — into this log. Read it with
 // `fly logs -a jared-status-hub | grep tap`. Delete this route and its caller once that is understood.
+// **A reply in a real voice** (`lib/speech.js`). The client posts the reply's text and which chunk it
+// wants; the answer is that chunk's audio, with the total count in a header so the first request is
+// also the plan. The client asks for chunk 0, plays it, and fetches the rest while it plays.
+app.post('/api/tts', express.json({ limit: '256kb' }), async (req, res) => {
+  if (!GROQ_API_KEY) return res.status(503).json({ error: 'tts not configured' });
+  const list = speech.chunks((req.body && req.body.text) || '');
+  const i = Number((req.body && req.body.i) || 0);
+  if (!list.length || !(i >= 0 && i < list.length)) return res.status(400).json({ error: 'no such chunk' });
+  const t0 = Date.now();
+  try {
+    const wav = await speech.synth(list[i], GROQ_API_KEY);
+    console.log('[tts]', JSON.stringify({ i, of: list.length, chars: list[i].length, ms: Date.now() - t0, bytes: wav.length }));
+    res.set({ 'Content-Type': 'audio/wav', 'X-Chunks': String(list.length), 'Access-Control-Expose-Headers': 'X-Chunks' });
+    res.send(wav);
+  } catch (e) {
+    console.log('[tts] FAILED', String(e.message || e));
+    res.status(502).json({ error: String(e.message || e).slice(0, 300) });
+  }
+});
+
 app.post('/api/tapdebug', express.json({ limit: '8kb' }), (req, res) => {
   const ua = String(req.headers['user-agent'] || '');
   const surface = ua.includes('StatusHub') ? 'app' : /iPhone|iPad/.test(ua) ? 'ios-safari' : 'other';

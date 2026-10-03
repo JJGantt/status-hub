@@ -651,6 +651,8 @@ body.tv.phonewall .pane-repos.sv-open #repospane{flex:1 1 auto;min-height:0;disp
 .sv-title{flex:1 1 auto;min-width:0;font-size:13px;font-weight:600;color:#e6ebf2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .sv-bar .sess-dot{flex:0 0 auto;width:8px;height:8px;border-radius:50%;background:#39d353}
 .sv-bar .sess-dot[hidden]{display:none}
+.sv-speak{flex:0 0 auto;background:none;border:0;padding:4px;color:#7d8894;display:flex;cursor:pointer}
+.sv-speak.on{color:#e6ebf2}
 .sv-where{flex:0 0 auto;font-size:10px;font-weight:700;letter-spacing:.3px;color:#5d6672;text-transform:uppercase}
 .sv-body{flex:1 1 auto;min-height:0;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:12px 14px;
   display:flex;flex-direction:column;gap:12px}

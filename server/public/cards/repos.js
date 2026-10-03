@@ -15,6 +15,7 @@
 // absent (/page). Every wall's markup carries it, hidden on the kiosk, so it mounts there too.
 import { esc, md, mdInline, PIN_SVG, liveStream} from '../shared.js';
 import { makeRecorder, bindTap } from '../voiceagent.js';
+import { speak, stopSpeaking, speaking } from '../speak.js';
 
 let mounted = false;
 let desk = { online: false };
@@ -552,6 +553,9 @@ function markSeen(id) {
     body: JSON.stringify({ id }) }).catch(() => {});
 }
 
+const SPEAK_SVG = '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 5L6 9H2v6h4l5 4V5z"></path><path d="M15.5 8.5a5 5 0 0 1 0 7"></path><path d="M19 5a10 10 0 0 1 0 14"></path></svg>';
+const STOP_SVG = '<svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><rect x="6" y="6" width="12" height="12" rx="1"></rect></svg>';
+
 async function openSession(id) {
   const el = document.getElementById('repospane');
   if (!el || !id) return false;
@@ -579,7 +583,8 @@ async function openSession(id) {
     '<div class="sv">' +
       '<div class="sv-bar"><button class="sv-back" type="button">‹ Sessions</button>' +
         '<span class="sv-title"></span><span class="sess-dot" title="open and reachable"></span>' +
-        '<span class="sv-where"></span></div>' +
+        '<span class="sv-where"></span>' +
+        '<button class="sv-speak" type="button" aria-label="Read the reply aloud">' + SPEAK_SVG + '</button></div>' +
       '<div class="sv-body"></div>' +
       '<div class="sv-input">' +
         '<button class="ai-mic sv-mic" type="button" aria-label="Tap to talk"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="2" width="6" height="12" rx="3"></rect><path d="M5 11a7 7 0 0 0 14 0"></path><line x1="12" y1="18" x2="12" y2="22"></line></svg></button>' +
@@ -593,6 +598,16 @@ async function openSession(id) {
     '</div>';
   paintHead();
   paintBody({ open: true });
+  // The session's last reply, read aloud in a real voice (speak.js), or stopped.
+  const say = el.querySelector('.sv-speak');
+  say.addEventListener('click', () => {
+    if (speaking()) { stopSpeaking(); return; }
+    const reply = [...at.events].reverse().find((e) => e.kind === 'reply');
+    if (!reply) return;
+    say.classList.add('on');
+    say.innerHTML = STOP_SVG;
+    speak(reply.text, () => { say.classList.remove('on'); say.innerHTML = SPEAK_SVG; });
+  });
   const box = el.querySelector('.sv-text'), mic = el.querySelector('.sv-mic'), status = el.querySelector('.sv-status');
   // PICTURES INTO A TERMINAL SESSION. A session is typed into, so an image cannot be sent to it — what
   // is sent is a PATH. The hub keeps the bytes (`/api/attach`, the same bucket the chat composer uses)

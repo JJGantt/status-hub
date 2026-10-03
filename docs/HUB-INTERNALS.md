@@ -1618,3 +1618,21 @@ Harness: `tools/render-repos.swift`.
 The watch app and its complication extension have their own document: **[WATCH.md](WATCH.md)** — its
 pages, recording (the silence endpoint, the lock, double tap), the always-on listener, scrolling, the
 token handover, logging and the simulator.
+
+## Replies read aloud (`/api/tts`)
+
+The speaker button in the phone's session view (`public/speak.js`) reads that session's last reply in
+Groq's Orpheus voice (`lib/speech.js`). The server strips the markdown and splits the text into
+sentence chunks, the first one a single sentence; the client fetches chunk 0, plays it the moment it
+lands, and keeps two chunks ahead, scheduling each on one AudioContext so the joins are gapless.
+Rendered chunks are cached in memory, so a replay costs nothing. The first-sound delay and any stall
+between chunks land in the hub log as a `[tap]` line carrying `tts`.
+
+The model needs its terms accepted once on the Groq account
+(console.groq.com/playground?model=canopylabs%2Forpheus-v1-english); until then every request is a 502
+whose body says `model_terms_required`.
+
+Kokoro on the Pi does not work for this, because it renders SLOWER than real time and streaming only
+hides the wait while the generator stays ahead of playback. Measured with `kokoro-onnx` 0.5 in
+`~/voice/pi/.venv-kokoro`: the full model renders at 0.8-0.9x real time after an 11 s load, the int8
+model at 0.3-0.4x, and the process peaks at 740 MB.

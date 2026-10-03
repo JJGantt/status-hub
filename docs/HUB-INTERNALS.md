@@ -1622,10 +1622,12 @@ token handover, logging and the simulator.
 ## Replies read aloud (`/api/tts`)
 
 The speaker button in the phone's session view (`public/speak.js`) reads that session's last reply in
-Groq's Orpheus voice (`lib/speech.js`). The server strips the markdown and splits the text into
+Groq's Orpheus voice (`hannah`) (`lib/speech.js`). The server strips the markdown and splits the text into
 sentence chunks, the first one a single sentence; the client fetches chunk 0, plays it the moment it
 lands, and keeps two chunks ahead, scheduling each on one AudioContext so the joins are gapless.
-Rendered chunks are cached in memory, so a replay costs nothing. The first-sound delay and any stall
+Rendered chunks are cached in memory, so a replay costs nothing. The account is on Groq's free tier,
+1200 characters a minute — more than a voice speaks, so a 429 is waited out on the server (it names the
+wait) rather than failed, and the client's lead absorbs it. The first-sound delay and any stall
 between chunks land in the hub log as a `[tap]` line carrying `tts`.
 
 The model needs its terms accepted once on the Groq account

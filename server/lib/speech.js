@@ -8,7 +8,8 @@ const crypto = require('crypto');
 
 const URL = 'https://api.groq.com/openai/v1/audio/speech';
 const MODEL = 'canopylabs/orpheus-v1-english';
-const VOICE = 'troy';
+// Orpheus's women are autumn, diana and hannah.
+const VOICE = 'hannah';
 const MAX = 190;   // under the model's per-request input cap
 
 // What is SAID: the reply's text with its markdown syntax gone. Code blocks are skipped outright —
@@ -65,11 +66,23 @@ async function synth(input, key) {
   const id = crypto.createHash('sha1').update(MODEL + VOICE + input).digest('hex');
   const hit = cache.get(id);
   if (hit) { cache.delete(id); cache.set(id, hit); return hit; }
-  const r = await fetch(URL, {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ model: MODEL, voice: VOICE, input, response_format: 'wav' }),
-  });
+  // The free tier allows 1200 characters a minute, more than a voice speaks in one, so a long reply
+  // fits if its chunks are paced rather than burst: a 429 says how long to wait, and the client is
+  // chunks ahead of the voice, so waiting it out costs nothing audible.
+  let r;
+  for (let attempt = 0; ; attempt++) {
+    r = await fetch(URL, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ model: MODEL, voice: VOICE, input, response_format: 'wav' }),
+    });
+    if (r.status !== 429 || attempt >= 6) break;
+    const body = await r.text();
+    const m = /try again in ([\d.]+)s/.exec(body);
+    const wait = Math.min(20, m ? Number(m[1]) + 0.3 : 2);
+    console.log('[tts] rate limited, waiting', wait, 's');
+    await new Promise((ok) => setTimeout(ok, wait * 1000));
+  }
   if (!r.ok) throw new Error(`groq tts ${r.status}: ${(await r.text()).slice(0, 300)}`);
   const buf = Buffer.from(await r.arrayBuffer());
   cache.set(id, buf);

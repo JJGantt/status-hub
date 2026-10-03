@@ -4631,10 +4631,16 @@ async function buildSessions() {
   // RUNNING FIRST, then parked, by activity within each — the number is the POSITION IN THE LIST,
   // which is where "the second session" comes from, and every surface draws running above parked.
   const rank = (s) => (s.status === 'resident' ? 0 : 1);
-  const numbered = new Map((sessions || [])
+  // ONE ROW PER CONVERSATION, also shared with `numberSessions`: a resume makes a new row for the same
+  // transcript, and the earlier stretches stay parked until retention drops them. Listing them too
+  // showed one conversation several times under several numbers. The first after sorting is kept —
+  // the running row if it runs, else the most recently active.
+  const seenConv = new Set();
+  const listed = (sessions || [])
     .filter((s) => s.status === 'resident' || s.status === 'evicted')
     .sort((a, b) => rank(a) - rank(b) || byActivity(a, b))
-    .map((s, i) => [s.id, i + 1]));
+    .filter((s) => { const c = s.claude_session_id || s.id; if (seenConv.has(c)) return false; seenConv.add(c); return true; });
+  const numbered = new Map(listed.map((s, i) => [s.id, i + 1]));
   // Only the fields something renders. A desk_sessions row carries transcript paths, command ids and
   // five timestamps that no surface here reads — 97 rows of them was most of what was left of this
   // response after the replies came out of it. Adding a field to a session view means adding it here.
@@ -4662,11 +4668,11 @@ async function buildSessions() {
   // patterns above are expected, but a client showing the whole reply should never be the one place
   // that regresses if one ever does match a reply.
   const full = (s) => ({ ...brief(s), last_reply: cleanSaid(s.last_reply) });
-  const evicted = (sessions || []).filter((s) => s.status === 'evicted').sort(byActivity);
+  const evicted = listed.filter((s) => s.status === 'evicted').sort(byActivity);
   return {
     // Resident = running now, reachable over Remote Control. Evicted = closed to free the machine
     // but resumable with full context, which is the distinction the panel has to make obvious.
-    resident: (sessions || []).filter((s) => s.status === 'resident').sort(byActivity).map(full),
+    resident: listed.filter((s) => s.status === 'resident').sort(byActivity).map(full),
     evicted: evicted.map((s, i) => (i === 0 ? full(s) : brief(s))),
     queued: queue || [],
     focus,

@@ -62,7 +62,7 @@ config change ON the Pi by dispatching a session to it.
 | `origin` | `dispatched` (we started it) or `adopted` (Jared did) |
 | `repo` / `label` | where it runs, and what it is called |
 | `status` | see below |
-| `claude_session_id` / `transcript_path` | the conversation, and where to read it |
+| `claude_session_id` / `transcript_path` | the conversation, and where to read it. **This is the session's identity**: a resume makes a new row for the same conversation and `claude --resume` keeps this id, so the tools' permanent handle is `s-` plus its first eight characters (`sessionHandle` in data-layer), never the row `id` |
 | `pid` | the Claude Code process the row belongs to — what liveness and the conversation are read from |
 | `tty` | Mac only: the Terminal tab, and the handle a follow-up is typed into |
 | `working` / `last_reply` / `reply_at` | is a turn in flight; the last COMPLETED answer, and when |
@@ -236,6 +236,9 @@ Numbering the two groups together by age alone put the running sessions at 12 an
 held 1–11, so the badges read 12, 13, 1, 2, 3 down the pane and the second row was not session two. The rule is
 implemented twice — `numberSessions` in `data-layer/src/desk.ts` and in `/api/sessions` — and **the
 two must agree**, or "session three" means one thing to the pane and another to the voice tools.
+**One entry per conversation**: rows sharing a `claude_session_id` are earlier stretches of one
+session, so only the first after sorting is listed or numbered — the running row, else the most
+recently active. Both copies apply that too.
 
 **It is ordered by `active_at`, the last turn boundary** — a prompt sent or a turn finished. `last_seen`
 was the obvious reading of "most recent" and it made the numbers unusable: every row was touched by its

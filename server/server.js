@@ -1653,7 +1653,23 @@ app.get('/healthz', (req, res) => res.type('text').send('ok ' + (process.env.COM
 // key (matched by SHA-256, the same hash as `AppGate.ownerKeyHash` in CapitalGrilleApp) is let through,
 // and all it can do here is turn a clip into words.
 const CG_OWNER_KEY_SHA256 = '0c4eb3445e20e7d8b5164aca839f65fad2d05683f7556addbf4ca774d9a9c990';
+// What the clips are about, as Whisper's vocabulary hint: brand names otherwise come back as ordinary
+// English that sounds alike.
+const CG_WHISPER_PROMPT = 'Someone behind a restaurant bar asking about the menu and restocking: '
+  + 'liquor, wine and cocktail names, mostly brand names of vodka, gin, tequila, whiskey, bourbon and wine.';
+// Each clip's timings go to app_logs (kind voice_hub) under the watch's interaction id, beside the watch's
+// own voice_* rows, because Fly keeps only minutes of stdout. arrived = when the request reached the hub;
+// upload = how long the body took after that; groq = the transcription itself.
+function cgLog(req, started, fields) {
+  const id = String(req.headers['x-interaction-id'] || '');
+  if (!/^[0-9a-f-]{36}$/i.test(id)) return;
+  sbWrite('app_logs', 'POST', {
+    timestamp: new Date(started).toISOString(), interaction_id: id.toLowerCase(), backend: 'hub:transcribe',
+    kind: 'voice_hub', latency_ms: Date.now() - started, ...fields,
+  }).catch((e) => console.log(`[cg-transcribe] log write failed: ${e.message}`));
+}
 app.post('/api/cg/transcribe', async (req, res) => {
+  const arrived = Date.now();
   const key = String(req.headers['x-owner-key'] || '');
   if (!key || crypto.createHash('sha256').update(key).digest('hex') !== CG_OWNER_KEY_SHA256) {
     console.log(`[cg-transcribe] REFUSED: ${key ? 'not the owner key' : 'no key'}`);
@@ -1666,20 +1682,26 @@ app.post('/api/cg/transcribe', async (req, res) => {
     return res.status(503).json({ error: 'transcription not configured' });
   }
   const tmp = path.join(os.tmpdir(), 'cg-voice-' + crypto.randomUUID());
+  let uploaded = null;
   try {
     await pipeline(req, fs.createWriteStream(tmp));
+    uploaded = Date.now();
     const { size } = await fs.promises.stat(tmp);
     if (!size) {
       console.log('[cg-transcribe] FAILED: empty upload');
+      cgLog(req, arrived, { error: 'empty upload', output: `upload ${uploaded - arrived}ms` });
       return res.status(400).json({ error: 'no audio' });
     }
     const ct = String(req.headers['content-type'] || 'audio/mp4');
-    const started = Date.now();
-    const { transcript } = await transcribe(tmp, ct, GROQ_API_KEY);
-    console.log(`[cg-transcribe] ${size} bytes ${ct} ${Date.now() - started}ms words=${transcript.split(/\s+/).filter(Boolean).length}`);
+    const { transcript } = await transcribe(tmp, ct, GROQ_API_KEY, { prompt: CG_WHISPER_PROMPT });
+    const groq = Date.now() - uploaded;
+    console.log(`[cg-transcribe] ${size} bytes ${ct} upload=${uploaded - arrived}ms groq=${groq}ms words=${transcript.split(/\s+/).filter(Boolean).length}`);
+    cgLog(req, arrived, { output: `${size} bytes, upload ${uploaded - arrived}ms, groq ${groq}ms` });
     res.json({ transcript });
   } catch (e) {
     console.log(`[cg-transcribe] FAILED: ${e.status || 500} ${String(e.message || e).slice(0, 200)}`);
+    cgLog(req, arrived, { error: String(e.message || e).slice(0, 200),
+      output: uploaded ? `upload ${uploaded - arrived}ms, failed in groq` : 'failed during upload' });
     res.status(e.status || 500).json({ error: String(e.message || e) });
   } finally {
     fs.promises.unlink(tmp).catch(() => {});

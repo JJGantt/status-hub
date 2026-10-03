@@ -5,6 +5,10 @@
 //
 // Only on request — a play button — and every rendered chunk is kept, so a replay costs nothing.
 const crypto = require('crypto');
+const { execFile } = require('child_process');
+const fs = require('fs/promises');
+const os = require('os');
+const path = require('path');
 
 const URL = 'https://api.groq.com/openai/v1/audio/speech';
 const MODEL = 'canopylabs/orpheus-v1-english';
@@ -64,7 +68,39 @@ function chunks(text) {
 const cache = new Map();
 const CACHE_MAX = 400;
 
-async function synth(input, key, { voice } = {}) {
+// SPEED is applied here, not asked of Groq: Orpheus ignores the `speed` field and returns the same
+// clip. ffmpeg's atempo stretches time without raising the pitch. Through files, not pipes: a WAV
+// written to a pipe has no length in its header, which AVAudioFile on the watch will not read.
+// `tts_speed` on the Settings page; the free tier's 1200 characters a minute is about 1.3x of how fast
+// this voice speaks, so a long reply above that runs out of audio and pauses for the rate limit.
+const DEFAULT_SPEED = 1.2;
+function speedOf(v) {
+  const n = Number(v);
+  return Number.isFinite(n) && n >= 0.8 && n <= 1.6 ? n : DEFAULT_SPEED;
+}
+
+async function tempo(wav, speed) {
+  if (speed === 1) return wav;
+  const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'tts-'));
+  const a = path.join(dir, 'in.wav'), b = path.join(dir, 'out.wav');
+  try {
+    await fs.writeFile(a, wav);
+    await new Promise((ok, no) => execFile('ffmpeg',
+      ['-hide_banner', '-loglevel', 'error', '-i', a, '-filter:a', `atempo=${speed}`, '-y', b],
+      (err) => (err ? no(err) : ok())));
+    return await fs.readFile(b);
+  } finally {
+    fs.rm(dir, { recursive: true, force: true }).catch(() => {});
+  }
+}
+
+async function synth(input, key, { voice, speed } = {}) {
+  const sp = speedOf(speed);
+  const raw = await render(input, key, voice);
+  return tempo(raw, sp);
+}
+
+async function render(input, key, voice) {
   const VOICE = VOICES.includes(voice) ? voice : DEFAULT_VOICE;
   const id = crypto.createHash('sha1').update(MODEL + VOICE + input).digest('hex');
   const hit = cache.get(id);
@@ -93,4 +129,4 @@ async function synth(input, key, { voice } = {}) {
   return buf;
 }
 
-module.exports = { spoken, chunks, synth, VOICES, DEFAULT_VOICE };
+module.exports = { spoken, chunks, synth, VOICES, DEFAULT_VOICE, DEFAULT_SPEED };

@@ -543,7 +543,7 @@ turns speech on.
 **The voice is the hub's, not the watch's.** The reply goes to `/api/tts` and comes back as WAV a chunk
 at a time — the same endpoint the phone's session view plays, described in `docs/HUB-INTERNALS.md` §
 Replies read aloud. The server strips the markdown, splits the text, and picks the model and the voice
-(`tts_voice`, on the hub's Settings page), so none of that needs a build. The watch fetches the chunks
+(`tts_voice` and `tts_speed`, on the hub's Settings page), so none of that needs a build. The watch fetches the chunks
 in order, decodes each, and queues it on its player the moment it lands; `/api/tts/timing` logs how long
 the first sound took. While it plays, the session page shows the system volume control (`VolumeKnob`),
 which takes the Digital Crown and turns the watch's own volume; the voice itself plays at full. The glyph is its own button over

@@ -2427,7 +2427,7 @@ app.post('/api/tts', express.json({ limit: '256kb' }), async (req, res) => {
   const t0 = Date.now();
   try {
     const st = await settingsAll();
-    const wav = await speech.synth(list[i], GROQ_API_KEY, { voice: st.tts_voice });
+    const wav = await speech.synth(list[i], GROQ_API_KEY, { voice: st.tts_voice, speed: st.tts_speed });
     console.log('[tts]', JSON.stringify({ i, of: list.length, chars: list[i].length, ms: Date.now() - t0, bytes: wav.length }));
     res.set({ 'Content-Type': 'audio/wav', 'X-Chunks': String(list.length), 'Access-Control-Expose-Headers': 'X-Chunks' });
     res.send(wav);

@@ -1625,8 +1625,11 @@ The speaker button in the phone's session view (`public/speak.js`) and on the wa
 Groq's Orpheus voice (`tts_voice` on the Settings page, default `hannah`) (`lib/speech.js`). The server strips the markdown and splits the text into
 sentence chunks, the first one a single sentence; the client fetches chunk 0, plays it the moment it
 lands, and keeps two chunks ahead, scheduling each on one AudioContext so the joins are gapless.
-Rendered chunks are cached in memory, so a replay costs nothing. The account is on Groq's free tier,
-1200 characters a minute — more than a voice speaks, so a 429 is waited out on the server (it names the
+Rendered chunks are cached in memory, so a replay costs nothing. Speed (`tts_speed`, default 1.2x) is ffmpeg's `atempo` on
+the server, after the cache, because Orpheus ignores the API's `speed` field; changing it re-renders
+nothing. The account is on Groq's free tier,
+1200 characters a minute — more than this voice speaks below about 1.3x (it speaks ~900 a minute at
+1x), so a 429 is waited out on the server (it names the
 wait) rather than failed, and the client's lead absorbs it. The first-sound delay and any stall
 between chunks land in the hub log as `[tts-timing]`.
 

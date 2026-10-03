@@ -55,6 +55,10 @@ export async function open() {
   const voiceCur = VOICES.includes(cur.tts_voice) ? cur.tts_voice : 'hannah';
   const voiceOptsHtml = VOICES.map((v) =>
     '<option value="' + v + '"' + (v === voiceCur ? ' selected' : '') + '>' + v[0].toUpperCase() + v.slice(1) + '</option>').join('');
+  const SPEEDS = ['1', '1.1', '1.2', '1.3', '1.4', '1.5'];
+  const speedCur = SPEEDS.includes(String(cur.tts_speed)) ? String(cur.tts_speed) : '1.2';
+  const speedOptsHtml = SPEEDS.map((v) =>
+    '<option value="' + v + '"' + (v === speedCur ? ' selected' : '') + '>' + v + '×</option>').join('');
   const toneCur = TONES.some(([v]) => v === cur.alarm_sound) ? cur.alarm_sound : 'classic';
   const toneOptsHtml = TONES.map(([v, label]) =>
     '<option value="' + v + '"' + (v === toneCur ? ' selected' : '') + '>' + label + '</option>').join('');
@@ -115,6 +119,8 @@ export async function open() {
       '<div class="settings-sec">Watch voice</div>' +
       '<label class="settings-row"><span>Voice</span>' +
         '<select class="settings-text" id="set-tts-voice">' + voiceOptsHtml + '</select></label>' +
+      '<label class="settings-row"><span>Speed</span>' +
+        '<select class="settings-text" id="set-tts-speed">' + speedOptsHtml + '</select></label>' +
       // Which way the watch app stays alive with the wrist down while it talks: holds the microphone
       // (measured working), or asks watchOS to treat the reply as a song (Now Playing, AirPods, the
       // crown as a volume knob) — not yet confirmed on the watch itself.
@@ -226,6 +232,7 @@ export async function open() {
   });
   back.querySelector('#set-alarm-play').addEventListener('click', playTone);
   back.querySelector('#set-tts-voice').addEventListener('change', (e) => save('tts_voice', e.target.value));
+  back.querySelector('#set-tts-speed').addEventListener('change', (e) => save('tts_speed', e.target.value));
   back.querySelector('.settings-x').addEventListener('click', close);
 
   back.querySelector('#set-wf-enabled').addEventListener('click', (e) => {

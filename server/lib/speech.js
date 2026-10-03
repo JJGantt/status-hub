@@ -117,8 +117,12 @@ async function render(input, key, voice) {
     });
     if (r.status !== 429 || attempt >= 6) break;
     const body = await r.text();
-    const m = /try again in ([\d.]+)s/.exec(body);
-    const wait = Math.min(20, m ? Number(m[1]) + 0.3 : 2);
+    // The per-minute cap names a wait of seconds; the DAILY cap (3600 characters, 100 requests on the
+    // free tier) names one of minutes or hours, which is not worth holding a play open for.
+    const m = /try again in (?:(\d+)m)?([\d.]+)s/.exec(body);
+    const named = m ? Number(m[1] || 0) * 60 + Number(m[2]) : 2;
+    if (named > 20) { r = new Response(body, { status: 429 }); break; }
+    const wait = named + 0.3;
     console.log('[tts] rate limited, waiting', wait, 's');
     await new Promise((ok) => setTimeout(ok, wait * 1000));
   }

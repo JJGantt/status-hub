@@ -1630,7 +1630,9 @@ the server, after the cache, because Orpheus ignores the API's `speed` field; ch
 nothing. The account is on Groq's free tier,
 1200 characters a minute — more than this voice speaks below about 1.3x (it speaks ~900 a minute at
 1x), so a 429 is waited out on the server (it names the
-wait) rather than failed, and the client's lead absorbs it. The first-sound delay and any stall
+wait) rather than failed, and the client's lead absorbs it. The free tier ALSO caps a day at 3600 characters and 100
+requests — two or three replies — and a 429 for that names a wait of minutes or more, so it fails at
+once rather than holding the play open. The first-sound delay and any stall
 between chunks land in the hub log as `[tts-timing]`.
 
 The model needs its terms accepted once on the Groq account

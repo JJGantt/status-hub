@@ -471,8 +471,13 @@ working on; it does nothing when there is nothing to throw away.
 The watch declares `UIBackgroundModes: audio` (in `project.yml`) — that key, not `WKBackgroundModes`,
 which takes only session types. A recording can only START with the app in front; once running it
 continues behind the watch face with the microphone indicator showing, so a command still ends at its
-silence with the wrist down. Not yet confirmed on the device: `TODO.md` § Watch: does a recording
-survive the wrist dropping.
+silence with the wrist down. Measured on the device: a locked recording ran 31s past the app going
+`inactive` and the 33s clip arrived whole.
+
+**What happens when something else takes the microphone mid-recording is the interruption path below
+(§ The always-on listener)**: words already heard are sent, a recording with no speech yet is cancelled.
+The log shows it as `mic-route-change` with empty `inputs`, then `mic-interrupted`. Which events raise
+it is not established: a notification arriving is not known to, one way or the other.
 
 ### Sending it
 

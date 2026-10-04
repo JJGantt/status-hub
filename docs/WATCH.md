@@ -2,7 +2,7 @@
 
 `StatusHubWatch`: a watchOS 11+ app (`apps/Watch/`, bundle `com.jaredgantt.statushub.watch`) embedded
 by the iOS app, plus its widget extension `StatusHubWatchWidgets` (`apps/WatchWidgets/`,
-`com.jaredgantt.statushub.watch.widgets`) — the complication and, on watchOS 26, the Record control.
+`com.jaredgantt.statushub.watch.widgets`) — the three record complications and, on watchOS 26, the Record control.
 It is native SwiftUI, not a web view: watchOS has no WKWebView. It talks to the hub directly with a
 token the phone hands over.
 
@@ -435,7 +435,9 @@ indistinguishable from one he asked for.
 After `Capture.unspoken` of audio with no speech in it, a command or a follow-up is cancelled and its clip thrown away, and the listener
 starts a fresh segment. The microphone and the mute it puts on every room mic are not left open
 because a recording started by accident — which the Smart Stack and the complication make easy. A
-**locked** recording is exempt: holding it open through silence is exactly what the lock is for.
+**locked** recording is exempt: holding it open through silence is exactly what the lock is for. That
+includes one the `Hub Locked` complication opened, so a stray touch on that slot holds the microphone
+(and the room mics' mute) until a press or a press-and-hold ends it.
 
 Every end logs `mic-end` with the numbers it decided on: `reason` (`silence` or `unspoken`), floor,
 threshold, peak, seconds spoken and seconds of audio. Tune the multiplier, the minimum or the minimum
@@ -445,7 +447,14 @@ speech from those, not by feel.
 
 Double tap, or a tap on the conversation, walks a command: start, then lock it open through any
 silence, then send. Unlocked, the silence still ends it by itself. Home and a session follow the same
-steps; both go through `CommandBorder.press`. Press and hold anywhere cancels the recording, or the command the hub is still
+steps; both go through `CommandBorder.press`.
+
+**The two extra complications each skip the lock** (`Capture.Flow`, chosen per recording and reset when
+it ends). `Hub Silence` starts the same recording as the standard launcher, but its first press SENDS
+rather than locking. `Hub Locked` opens already locked — the red edge, no silence ends it — and its
+first press sends. Once that recording ends, every press is back to the standard three steps.
+
+Press and hold anywhere cancels the recording, or the command the hub is still
 working on; it does nothing when there is nothing to throw away.
 
 ### Haptics
@@ -593,9 +602,12 @@ its own Now Playing screen over the session every time a reply starts. Switching
 effect on the NEXT reply — mid-reply would tear down whichever session and command registrations the
 one playing is using.
 
-### Two launchers, one request
+### Launchers, one request
 
-The complication (circular and corner) opens `statushub://record`. It draws nothing — a clear view filling the slot — so the face shows no trace of it and the empty slot is still the button. The Record control
+Three complications (circular and corner), all invisible: `RecordComplication` opens
+`statushub://record` (the standard flow), `RecordSilenceComplication` `statushub://record?flow=silence`
+and `RecordLockedComplication` `statushub://record?flow=locked`; `onOpenURL` passes the flow through
+`Chat.requestRecording` to the recording. Each draws nothing — a clear view filling the slot — so the face shows no trace of it and the empty slot is still the button — which also means the face does not say which slot is which. The Record control
 (`RecordControl`, watchOS 26 — Control Center, the Smart Stack, and the Action button on an Ultra)
 runs `RecordIntent`, an `OpenIntent`, which launches the app and runs `perform()` in it: the file is
 compiled into both targets, and `WATCH_APP` gates the app-only call. Both set `Chat.recordRequested`;

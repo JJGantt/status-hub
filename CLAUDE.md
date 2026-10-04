@@ -73,7 +73,10 @@ Xcode mint them again.
 
 This Mac has the device platforms, a development identity in the login keychain and the App Store
 Connect API key, which is all cloud distribution signing asks for, so it needs nothing from GitHub. The
-script reads `~/.appstoreconnect`, which a sandboxed shell cannot: run it as a background task. **`ios-testflight.yml` is the fallback, for when this Mac
+script reads `~/.appstoreconnect`, which a sandboxed shell cannot: run it as a background task.
+**From the Pi, do not run it over plain SSH**: an SSH login cannot use the login keychain, so the archive
+compiles and then fails at CodeSign with `errSecInternalComponent`. Run it inside his GUI session
+instead — `osascript -e 'tell application "Terminal" to do script "cd ~/repos/status-hub && apps/tools/testflight.sh > /tmp/tf-run.log 2>&1"'` — and read the log. **`ios-testflight.yml` is the fallback, for when this Mac
 is away** — macOS runners bill at a 10x multiplier and six builds in an afternoon exhausted the
 account's allowance, which stops the workflow dead with "recent account payments have failed or your
 spending limit needs to be increased".

@@ -198,7 +198,8 @@ struct CommandBorder: View {
 
     /// **The one press.** Double tap and a tap on the conversation both come here, and home and a
     /// session follow the same flow: start (amber, sends itself at his silence), then lock (red, only a
-    /// press ends it), then send.
+    /// press ends it), then send. A recording a watch-face launcher started in another flow
+    /// (`Capture.Flow`) skips the lock: its first press sends.
     static func press(chat: Chat, sessions: Sessions, how: String) {
         // A reply being spoken: the press stops it and does nothing else. The next one records.
         if Speaker.shared.isSpeaking {
@@ -209,11 +210,12 @@ struct CommandBorder: View {
         let capture = Capture.shared
         let target = sessions.path.last
         let recording = capture.owner == (target.map(Capture.Owner.session) ?? .hub)
-        Hub.log("control", ["target": target ?? "hub", "recording": recording, "locked": capture.locked, "how": how])
+        Hub.log("control", ["target": target ?? "hub", "recording": recording, "locked": capture.locked,
+                               "flow": capture.flow.rawValue, "how": how])
         Capture.trigger = how
         if !recording {
             if let target { sessions.startRecording(target) } else { chat.startRecording() }
-        } else if capture.locked {
+        } else if capture.pressSends {
             if let target { sessions.stopRecording(target) } else { chat.stopRecording() }
         } else {
             capture.toggleLock()
@@ -435,7 +437,7 @@ private struct RecordWhenAsked: ViewModifier {
             return
         }
         Capture.trigger = "launcher"
-        chat.startRecording()
+        chat.startRecording(flow: chat.requestedFlow)
     }
 }
 

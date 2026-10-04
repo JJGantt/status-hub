@@ -5,6 +5,8 @@ import WidgetKit
 struct StatusHubWatchWidgets: WidgetBundle {
     var body: some Widget {
         RecordComplication()
+        RecordSilenceComplication()
+        RecordLockedComplication()
         if #available(watchOS 26.0, *) {
             RecordControl()
             ListenControl()
@@ -102,6 +104,36 @@ struct RecordComplication: Widget {
         }
         .configurationDisplayName("Status Hub")
         .description("Hub")
+        .supportedFamilies([.accessoryCircular, .accessoryCorner])
+    }
+}
+
+/// Straight into a recording that ends at his silence, where a press SENDS rather than locking it
+/// (`Capture.Flow.silence`). Invisible, like the standard one.
+struct RecordSilenceComplication: Widget {
+    var body: some WidgetConfiguration {
+        StaticConfiguration(kind: "RecordSilenceComplication", provider: Provider()) { _ in
+            RecordFace()
+                .widgetURL(URL(string: "statushub://record?flow=silence"))
+                .containerBackground(for: .widget) { Color.clear }
+        }
+        .configurationDisplayName("Hub Silence")
+        .description("Hub Silence")
+        .supportedFamilies([.accessoryCircular, .accessoryCorner])
+    }
+}
+
+/// Straight into a LOCKED recording — the red edge, no silence ends it — where a press sends
+/// (`Capture.Flow.locked`). Invisible, like the standard one.
+struct RecordLockedComplication: Widget {
+    var body: some WidgetConfiguration {
+        StaticConfiguration(kind: "RecordLockedComplication", provider: Provider()) { _ in
+            RecordFace()
+                .widgetURL(URL(string: "statushub://record?flow=locked"))
+                .containerBackground(for: .widget) { Color.clear }
+        }
+        .configurationDisplayName("Hub Locked")
+        .description("Hub Locked")
         .supportedFamilies([.accessoryCircular, .accessoryCorner])
     }
 }

@@ -34,6 +34,8 @@ final class Chat: ObservableObject {
     /// whatever raise of the wrist happens to bring the app back.
     @Published var recordRequested = false
     private(set) var requestedAt = Date.distantPast
+    /// Which press flow the launcher asked for (`Capture.Flow`): each watch-face complication has its own.
+    private(set) var requestedFlow = Capture.Flow.standard
     static let requestWindow: TimeInterval = 20
 
     private let capture = Capture.shared
@@ -67,8 +69,9 @@ final class Chat: ObservableObject {
         PhoneLink.shared.onToken = { [weak self] in self?.tokenArrived() }
     }
 
-    func requestRecording() {
+    func requestRecording(_ flow: Capture.Flow = .standard) {
         requestedAt = Date()
+        requestedFlow = flow
         recordRequested = true
     }
 
@@ -110,16 +113,16 @@ final class Chat: ObservableObject {
         } while reloadAfter
     }
 
-    func startRecording() {
+    func startRecording(flow: Capture.Flow = .standard) {
         guard capture.free else {
             Hub.log("record-refused", ["view": "chat", "owner": String(describing: capture.owner)])
             return
         }
-        Hub.log("record-start", ["view": "chat", "running": commands.count])
+        Hub.log("record-start", ["view": "chat", "running": commands.count, "flow": flow.rawValue])
         failure = nil
         // A command ends itself at the silence after he speaks; a second press locks it open, and the
         // next sends. A session's follow-up records the same way (Sessions.startRecording).
-        capture.start(for: .hub, onSilence: { [weak self] in self?.stopRecording() },
+        capture.start(for: .hub, flow: flow, onSilence: { [weak self] in self?.stopRecording() },
                       onTaken: { [weak self] in self?.stopRecording() }) { [weak self] error in
             self?.failure = (error as? Recorder.Failure) == .denied ? .micDenied : .message(error.localizedDescription)
         }

@@ -129,7 +129,10 @@ struct RootView: View {
         })
         .onOpenURL { url in
             guard url.scheme == "statushub", url.host == "record" else { return }
-            chat.requestRecording()
+            // `?flow=silence|locked`: which complication it was. None is the standard flow.
+            let flow = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems?
+                .first { $0.name == "flow" }?.value.flatMap(Capture.Flow.init) ?? .standard
+            chat.requestRecording(flow)
         }
         // A record request (complication or Hub control) always lands on home, whichever page was
         // showing — and a command, not a follow-up, so an open session closes.

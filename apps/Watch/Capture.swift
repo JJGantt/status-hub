@@ -15,7 +15,15 @@ final class Capture: ObservableObject {
         case listener
     }
 
+    /// What a press does to a recording in progress, chosen by whatever started it. `standard` is the
+    /// app's own: a press locks the recording open, and the next sends. The two watch-face launchers each
+    /// skip a step: `silence` records as standard does but its first press sends, and `locked` opens
+    /// already locked, so its first press sends too.
+    enum Flow: String { case standard, silence, locked }
+
     @Published private(set) var owner: Owner?
+    /// The current recording's flow; `standard` when nothing is recording.
+    @Published private(set) var flow = Flow.standard
     /// This recording ends itself at the silence after speech, so it can be locked open.
     @Published private(set) var endsOnSilence = false
     /// Locked open: the silence no longer ends it, only a press does.
@@ -98,10 +106,10 @@ final class Capture: ObservableObject {
     /// silence, and calls it; `toggleLock()` holds it open. Without, only a press ends it. `onTaken` is
     /// the same ending forced from outside — the system taking the microphone — and every caller wants
     /// one, because words already recorded are worth sending however the recording ended.
-    func start(for owner: Owner, onSilence: (() -> Void)? = nil, onTaken: (() -> Void)? = nil,
+    func start(for owner: Owner, flow: Flow = .standard, onSilence: (() -> Void)? = nil, onTaken: (() -> Void)? = nil,
                onFailure: @escaping @MainActor (Error) -> Void) {
         Speaker.shared.stop()   // his voice comes first: a recording ends any reply being read out
-        begin(owner, onSilence: onSilence, onTaken: onTaken, onFailure: onFailure) { [weak self] in
+        begin(owner, flow: flow, onSilence: onSilence, onTaken: onTaken, onFailure: onFailure) { [weak self] in
             self?.setMuted(true)
             // The wrist is told the moment the microphone is actually live, not when it was asked
             // for: opening it takes a beat, and words spoken before this are not recorded. Commands
@@ -182,7 +190,10 @@ final class Capture: ObservableObject {
         Hub.log("mic-lock", ["locked": locked])
     }
 
-    private func begin(_ owner: Owner, onSilence: (() -> Void)?, onTaken: (() -> Void)?,
+    /// The next press ends the recording and sends it, rather than locking it open.
+    var pressSends: Bool { locked || flow != .standard }
+
+    private func begin(_ owner: Owner, flow: Flow = .standard, onSilence: (() -> Void)?, onTaken: (() -> Void)?,
                        onFailure: @escaping @MainActor (Error) -> Void, opened: @escaping () -> Void) {
         // A command or a follow-up takes the microphone off the listener, which picks it up again when
         // they give it back (`resume`). Whatever it had heard by then still goes up.
@@ -198,7 +209,8 @@ final class Capture: ObservableObject {
         self.onSilence = onSilence
         self.onTaken = onTaken
         endsOnSilence = onSilence != nil || owner == .listener
-        locked = false
+        self.flow = flow
+        locked = flow == .locked && endsOnSilence
         endpoint = Self.followsRoom
             ? Endpointer(hang: Self.hang, minimum: 0, ratio: Self.roomRatio)
             : Endpointer(hang: Self.hang, minimum: Self.speechMin)
@@ -220,7 +232,7 @@ final class Capture: ObservableObject {
             }
             guard arming else { recorder.cancel(); return }   // stopped while the microphone opened
             arming = false
-            Hub.log("mic-open", ["owner": String(describing: owner), "how": Self.trigger])
+            Hub.log("mic-open", ["owner": String(describing: owner), "how": Self.trigger, "flow": flow.rawValue])
             opened()
         }
     }
@@ -231,6 +243,7 @@ final class Capture: ObservableObject {
         onTaken = nil
         endsOnSilence = false
         locked = false
+        flow = .standard
     }
 
     /// Back to listening once the microphone is free again, if listening is engaged. Scheduled rather

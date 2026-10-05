@@ -78,11 +78,11 @@ final class WatchAppDelegate: NSObject, WKApplicationDelegate, UNUserNotificatio
     }
 }
 
-/// Five pages, left to right: settings, the sessions, home — the conversation — the rings and today's log, and
+/// Four pages, left to right: the sessions, home — the conversation — the rings and today's log, and
 /// the workout block. Home is where the app opens.
 struct RootView: View {
     enum Page: String {
-        case settings, sessions, home, day, health
+        case sessions, home, day, health
 
         /// Nutrition and Workout land on the day page, which opens the list each names
         /// (`Router.dayList`): today's food log, or the exercise list.
@@ -108,7 +108,6 @@ struct RootView: View {
         // back — only a back button and a title bar that cost the top of the screen.
         NavigationStack(path: $sessions.path) {
             TabView(selection: $page) {
-                SettingsView().tag(Page.settings)
                 SessionsView().tag(Page.sessions).environment(\.onScreen, page == .sessions)
                 HomeView().tag(Page.home).environment(\.onScreen, page == .home)
                 DayView().tag(Page.day)
@@ -162,7 +161,7 @@ struct RootView: View {
             if let i = args.firstIndex(of: "-opensession"), i + 1 < args.count {
                 Task { await sessions.open(rowId: args[i + 1]) }
             }
-            // `-page <settings|sessions|home|day|health>`: land on a page, so each can be screenshotted.
+            // `-page <sessions|home|day|health>`: land on a page, so each can be screenshotted.
             if let i = args.firstIndex(of: "-page"), i + 1 < args.count, let p = Page(rawValue: args[i + 1]) {
                 page = p
             }

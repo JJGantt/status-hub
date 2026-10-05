@@ -207,7 +207,7 @@ Produce tracking rides on nutrition rather than its own table: `nutrition_entrie
     the session's first message — a widget extension has no microphone of its own.
   - See [docs/HUB-INTERNALS.md](docs/HUB-INTERNALS.md) §9b.
 - **Apple Watch** — `status-hub/apps/Watch/`, native (watchOS has no web view) and embedded in the
-  iOS app. Five pages: the sessions, each opening to its last reply and live tool calls (with what it
+  iOS app. Four pages: the sessions, each opening to its last reply and live tool calls (with what it
   says between them) and taking a recorded follow-up; home, where it opens — the time and the newest
   reply, recorded into like the thread; the shared hub thread, recorded into (clips go to
   `/api/voice-command` like the phone's microphone), with the running command's tool calls and

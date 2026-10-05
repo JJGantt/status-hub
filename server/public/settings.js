@@ -26,7 +26,6 @@ export async function open() {
   const injectOn = ['1', 'true', 'on', 'yes'].includes(String(cur.voice_inject_mode ?? '0').toLowerCase());
   const speakOn = ['1', 'true', 'on', 'yes'].includes(String(cur.voice_speak_replies ?? '0').toLowerCase());
   const pushOn = !['0', 'false', 'off', 'no'].includes(String(cur.push_enabled ?? '1').toLowerCase());
-  const speechRoute = cur.watch_speech_route === 'nowplaying' ? 'nowplaying' : 'hold';
   const speechMode = String(cur.watch_speech_mode ?? 'fixed');
   // The watch edge: numbers that may be 0 (the band), and colours as #rrggbb pickers.
   const num = (k, d) => { const n = parseFloat(cur[k]); return Number.isFinite(n) && n >= 0 ? n : d; };
@@ -115,19 +114,12 @@ export async function open() {
         'data-key="watch_speech_ratio" value="' + sil('watch_speech_ratio', 8) + '"></label>' +
 
       // How a reply sounds when it is read aloud: the voice is the server's (`lib/speech.js`), shared by
-      // the phone and the watch; the route is how the watch stays awake while it plays.
+      // the phone and the watch.
       '<div class="settings-sec">Watch voice</div>' +
       '<label class="settings-row"><span>Voice</span>' +
         '<select class="settings-text" id="set-tts-voice">' + voiceOptsHtml + '</select></label>' +
       '<label class="settings-row"><span>Speed</span>' +
         '<select class="settings-text" id="set-tts-speed">' + speedOptsHtml + '</select></label>' +
-      // Which way the watch app stays alive with the wrist down while it talks: holds the microphone
-      // (measured working), or asks watchOS to treat the reply as a song (Now Playing, AirPods, the
-      // crown as a volume knob) — not yet confirmed on the watch itself.
-      '<div class="settings-seg" id="set-speech-route">' +
-        '<button type="button" data-v="hold"' + (speechRoute === 'hold' ? ' class="on"' : '') + '>Hold mic</button>' +
-        '<button type="button" data-v="nowplaying"' + (speechRoute === 'nowplaying' ? ' class="on"' : '') + '>Now Playing</button>' +
-      '</div>' +
 
       '<div class="settings-sec">Watch edge</div>' +
       '<label class="settings-row"><span>Line (px)</span>' +
@@ -293,11 +285,6 @@ export async function open() {
     const b = e.target.closest('[data-v]'); if (!b) return;
     back.querySelectorAll('#set-speech-mode button').forEach((x) => x.classList.toggle('on', x === b));
     save('watch_speech_mode', b.dataset.v);   // read by the watch at the start of each recording
-  });
-  back.querySelector('#set-speech-route').addEventListener('click', (e) => {
-    const b = e.target.closest('[data-v]'); if (!b) return;
-    back.querySelectorAll('#set-speech-route button').forEach((x) => x.classList.toggle('on', x === b));
-    save('watch_speech_route', b.dataset.v);   // the watch reads it when it comes to the front
   });
   // Surplus/deficit: signed integer (negative = cut), so it bypasses the positive-only handler above.
   back.querySelector('#set-surplus').addEventListener('change', (e) => {

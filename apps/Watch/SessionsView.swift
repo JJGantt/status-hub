@@ -269,26 +269,38 @@ struct SessionView: View {
         }
     }
 
-    /// **The one way a reply is spoken**: plays this session's last reply out loud, or stops it. A bare
-    /// glyph in the corner, over the page, so it costs no row. Its own button, so a tap on it is not the
-    /// press the bottom half of the glass otherwise is (`CommandBorder.tapPresses`).
+    /// **The one way a reply is spoken**: plays this session's last reply out loud. While it plays the
+    /// corner holds a stop and a pause, which becomes a play while paused: pausing keeps the place, so
+    /// carrying on does not start the reply over. Bare glyphs over the page, so they cost no row. Their
+    /// own buttons, so a tap on one is not the press the bottom half of the glass otherwise is
+    /// (`CommandBorder.tapPresses`).
     @ViewBuilder private var playButton: some View {
         if let reply = events.last(where: { $0.kind == "reply" }) {
-            Button {
-                if speaker.isSpeaking { speaker.stop() }
-                else { speaker.speak(reply.text, title: sessions.row(for: key)?.name ?? "Reply") }
-            } label: {
-                Image(systemName: speaker.isSpeaking ? "stop.fill" : "speaker.wave.2.fill")
-                    .font(.system(size: 13))
-                    .foregroundColor(Color(hex: "#7d8894"))
-                    .frame(width: 36, height: 36)
-                    .contentShape(Rectangle())
+            HStack(spacing: 0) {
+                if speaker.isSpeaking {
+                    glyph("stop.fill") { speaker.stop() }
+                    glyph(speaker.paused ? "play.fill" : "pause.fill") {
+                        speaker.paused ? speaker.unpause() : speaker.pause()
+                    }
+                } else {
+                    glyph("speaker.wave.2.fill") { speaker.speak(reply.text) }
+                }
             }
-            .buttonStyle(.plain)
             // Inset far enough to clear the display's corner curve.
             .padding(.trailing, 6)
             .padding(.bottom, 4)
         }
+    }
+
+    private func glyph(_ name: String, _ action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: name)
+                .font(.system(size: 13))
+                .foregroundColor(Color(hex: "#7d8894"))
+                .frame(width: 36, height: 36)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
     }
 
     /// The scroll id of the newest thing on the page. His newest words take the top, with what the

@@ -16,8 +16,15 @@ function nativeAudio(on) {
 
 export function speaking() { return sources.length > 0 || onEnd !== null; }
 
+// PAUSE HOLDS THE PLACE: the context's clock stops, so every chunk already scheduled waits exactly
+// where it was and chunks still arriving queue behind it. Stopping and playing again starts over.
+export function paused() { return !!ctx && ctx.state === 'suspended' && speaking(); }
+export function pauseSpeaking() { if (ctx && speaking()) ctx.suspend().catch(() => {}); }
+export function resumeSpeaking() { if (ctx && speaking()) ctx.resume().catch(() => {}); }
+
 export function stopSpeaking() {
   run++;
+  if (ctx && ctx.state === 'suspended') ctx.resume().catch(() => {});
   for (const s of sources) { try { s.stop(); } catch (_) {} }
   sources = [];
   finish();

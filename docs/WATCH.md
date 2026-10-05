@@ -20,7 +20,7 @@ build), so a fix that has not been installed is not mistaken for one that failed
 
 ## Pages
 
-Five, swiped left to right: **settings · sessions · home · day · health**. The app opens on home,
+Four, swiped left to right: **sessions · home · day · health**. The app opens on home,
 which IS the conversation — there is no separate prompt page. New layouts are added as NEW pages beside the old
 ones rather than by reshaping a page in place, and the ones that lose are deleted; `day` and `health`
 are two layouts of the same food-and-training data, and one of them is expected to go.
@@ -35,12 +35,6 @@ dispatches on.
 
 Every page stays alive side by side in the TabView, so anything that binds double tap or acts on a
 request asks `onScreen` (an environment value `RootView` sets per page) first.
-
-### The settings page
-
-Left of the sessions page (`SettingsView`): how a played reply is kept alive. There is no voice volume
-(the crown is the volume while it plays — see Spoken replies). The `Route` toggle (`watch_speech_route`) is `.hold` or `.nowPlaying` — see
-Spoken replies.
 
 ### Home — the conversation
 
@@ -273,8 +267,7 @@ the screen applies; the app adds none. The band is what stops text
 reaching the line at all — it disappears just inside it. A colour that is not `#rrggbb`, or a thickness
 that is not a number, falls back to the default rather than drawing something else.
 
-**One read serves all the watch's hub settings** (`WatchSettings.refresh`: the edge, and spoken
-replies), on launch and whenever the app comes to the front; the last values are kept between launches.
+**One read serves all the watch's hub settings** (`WatchSettings.refresh`: the edge), on launch and whenever the app comes to the front; the last values are kept between launches.
 Pages leave only `PageInset.bottom` (12pt) under their content, for the curve.
 
 ### The nutrition page
@@ -551,7 +544,9 @@ process, this account cannot enable App Groups, and nothing a control draws depe
 
 **Nothing is spoken unless he asks.** A session's page carries a bare speaker glyph in its bottom right
 corner (`SessionView.playButton`, shown once the session has a reply): a tap reads that session's LAST
-reply aloud (`Speaker`), and the glyph is a stop while it plays. There is no mode and no setting that
+reply aloud (`Speaker`). While it plays the corner holds a stop and a pause; the pause becomes a play
+while paused, and carries on from the same place (`Speaker.pause` / `unpause`), with everything still
+queued and the microphone still held. There is no mode and no setting that
 turns speech on.
 
 **The voice is the hub's, not the watch's.** The reply goes to `/api/tts` and comes back as WAV a chunk
@@ -586,21 +581,10 @@ anywhere on the screen (the top half included, which otherwise does nothing). Th
 records as usual.
 
 
-**Two ways to keep the app running with the wrist down, picked on the watch's Settings page (`Route`)
-and mirrored on the hub's** (`watch_speech_route`): watchOS keeps a watch app alive wrist-down only
-under specific conditions, and there are two that qualify.
-
-`.hold` (the default, `SpeechRoute.hold`) holds the microphone and discards what it hears for as long as
-the reply plays — the mechanism this file already describes above, measured working.
-
-`.nowPlaying` asks watchOS to treat the reply as a song instead: `.playback` with `routeSharingPolicy:
-.longFormAudio`, published to `MPNowPlayingInfoCenter` with play/pause/stop/toggle registered on
-`MPRemoteCommandCenter`, so a reply gets the Digital Crown and AirPods controls a real audio app gets,
-and never touches the microphone. **Not yet confirmed on a real watch**: whether watchOS keeps an app
-that is never `.playAndRecord` in this route alive wrist-down on this alone, and whether the watch pops
-its own Now Playing screen over the session every time a reply starts. Switching the route only takes
-effect on the NEXT reply — mid-reply would tear down whichever session and command registrations the
-one playing is using.
+**Treating the reply as long-form audio does not keep it running.** `.playback` with
+`routeSharingPolicy: .longFormAudio` and a Now Playing entry is the documented way an audio app plays
+wrist-down, and it is what a reader will reach for to stop the microphone showing as in use. Tried on
+the watch, it did not play wrist-down at all, so holding the microphone is the only route.
 
 ### Launchers, one request
 
@@ -721,8 +705,7 @@ wrist. Fly keeps only the recent lines, so read it soon.
 | `speak-rendered` | the synthesizer finished rendering the reply: its total seconds, and how long rendering took |
 | `speak-interrupted`, `speak-config-change`, `speak-media-reset`, `speak-stalled`, `speak-resume` | what cut a reply off, and the resume from where it stopped (seconds played of seconds rendered) |
 | `phase` | the app becoming active, inactive or background: wrist up and down |
-| `speak-activate` | `.nowPlaying`'s asynchronous session activation answering, with whether it will actually play |
-| `speak-pause`, `speak-play` | the Now Playing screen or AirPods paused or resumed a reply (`.nowPlaying` only) |
+| `speak-pause`, `speak-unpause` | the pause glyph holding a reply, and carrying it on |
 | `session-shown` | what the session page actually has on screen and why it was logged (see The sessions page) |
 | `stream-open`, `stream-end`, `stream-error` | the event streams |
 | `resend` | a call's connection dropped mid-flight and it was sent again |
@@ -755,7 +738,7 @@ device builds:
 
 - the token comes from `SIMCTL_CHILD_HUB_TOKEN` (the kiosk's, sent as `?token=`);
 - `-opensession <row id>` opens a session as its notification would;
-- `-page <settings|sessions|home|day|health>` lands on a page; `-dayview <totals|muscles>` opens the day page's
+- `-page <sessions|home|day|health>` lands on a page; `-dayview <totals|muscles>` opens the day page's
   totals or its muscles page; `-health <weight|food|training>` opens a health page's full view;
 - `DAY_CLOCKS=<rest s>,<session s>` (as `SIMCTL_CHILD_DAY_CLOCKS`) sets the day page's rest and session
   clocks to any length, to check what fits beside the feet;

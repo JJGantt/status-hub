@@ -1625,6 +1625,8 @@ The speaker button in the phone's session view (`public/speak.js`) and on the wa
 Groq's Orpheus voice (`tts_voice` on the Settings page, default `hannah`) (`lib/speech.js`). The server strips the markdown and splits the text into
 sentence chunks, the first one a single sentence; the client fetches chunk 0, plays it the moment it
 lands, and keeps two chunks ahead, scheduling each on one AudioContext so the joins are gapless.
+While it plays the button is a pause, with a stop beside
+it; pausing suspends the AudioContext, so everything scheduled waits in place and carries on from there.
 Rendered chunks are cached in memory, so a replay costs nothing. Speed (`tts_speed`, default 1.2x) is ffmpeg's `atempo` on
 the server, after the cache, because Orpheus ignores the API's `speed` field; changing it re-renders
 nothing. The account is on Groq's free tier,

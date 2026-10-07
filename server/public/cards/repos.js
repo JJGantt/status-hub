@@ -47,7 +47,7 @@ const notable = (b) => !!b && b !== 'main' && b !== 'master';
 // Live and parked sessions, above the project list. This is the "is something being worked on"
 // question, and it belongs here because the answer is always about a repo.
 //
-// The two states are deliberately drawn differently rather than as one list with a label: a RESIDENT
+// The two states are deliberately drawn differently, though they share one list in `n` order: a RESIDENT
 // session is open on the Pi and reachable in the Claude app right now, an EVICTED one was closed to
 // free the machine and has to be resumed first. Confusing them means tapping something expecting it
 // to be live and finding it isn't.
@@ -95,8 +95,10 @@ function sessionsHtml(s) {
     out += '<div class="sess-nofocus">No session is holding follow-ups \u2014 say which one, or start something.</div>';
   }
   out += '<ul>';
-  out += res.map((x) => line(x, true)).join('');
-  out += ev.map((x) => line(x, false)).join('');
+  // In `n` order, running and parked interleaved: the number IS the position, and it counts by
+  // activity alone (buildSessions), so drawing the two groups one after the other would break it.
+  out += [...res, ...ev].sort((a, b) => (a.n || 1e9) - (b.n || 1e9))
+    .map((x) => line(x, x.status === 'resident')).join('');
   out += q.map((x) =>
     `<li class="sess queued"><div class="sess-main"><span class="sess-repo">${esc(x.repo)}</span>` +
     `<span class="sess-say">waiting for a slot</span></div></li>`).join('');

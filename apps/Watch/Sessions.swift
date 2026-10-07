@@ -19,6 +19,9 @@ struct SessionRow: Decodable, Identifiable, Equatable {
     /// A finished reply nobody has opened. The hub decides it (`reply_at` against `seen_at`) so every
     /// surface agrees; tool calls and thoughts do not set it, so it marks an answer and nothing else.
     let unread: Bool?
+    /// The number he says out loud, which is also the row's position: most recently active first,
+    /// running and parked together.
+    let n: Int?
 
     var name: String { sessionName(custom_title, label, repo) ?? id }
     var running: Bool { status == "resident" }
@@ -180,6 +183,7 @@ final class Sessions: ObservableObject {
                 rows = l.resident + l.evicted
                 var seen = Set<String>()
                 list = rows.filter { seen.insert($0.key).inserted }
+                    .sorted { ($0.n ?? .max) < ($1.n ?? .max) }
                 focus = l.focus
                 pinned = l.pinned ?? false
             }

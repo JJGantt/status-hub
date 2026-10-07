@@ -229,11 +229,14 @@ session never re-reads its own file, so its terminal tab keeps the old title.
 
 ### Numbering
 
-Active sessions, **running first and then parked, most recently active first within each, numbered from 1** — which
+Active sessions, **most recently active first, running and parked interleaved, numbered from 1** — which
 is to say: the position in the list on screen. That is where "the second session" comes from; he reads
 it off a surface and says it, and `get_sessions` hands the agent the same list in the same order.
-Numbering the two groups together by age alone put the running sessions at 12 and 13 while parked ones
-held 1–11, so the badges read 12, 13, 1, 2, 3 down the pane and the second row was not session two. The rule is
+**Parking is not activity**: a session evicted to free the Pi or replaced by a dispatch keeps the place
+its last turn earned. Grouping running above parked is the attractive alternative and it breaks the list
+— every eviction shoves a session below everything still open, however recently it was used. Every
+surface therefore draws the rows in `n` order rather than the payload's `resident` then `evicted`, since
+drawing those one after the other would print the numbers out of sequence. The rule is
 implemented twice — `numberSessions` in `data-layer/src/desk.ts` and in `/api/sessions` — and **the
 two must agree**, or "session three" means one thing to the pane and another to the voice tools.
 **One entry per conversation**: rows sharing a `claude_session_id` are earlier stretches of one

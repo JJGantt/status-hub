@@ -4627,19 +4627,22 @@ async function buildSessions() {
   const focus = focusHit ? focusHit.id : null;
   // The number Jared says out loud. THE RULE IS SHARED WITH `numberSessions` IN data-layer's
   // desk.ts and both have to agree, or "session three" means one thing to the pane and another to
-  // the voice tools: active sessions only, MOST RECENTLY ACTIVE FIRST, numbered from 1.
-  // RUNNING FIRST, then parked, by activity within each — the number is the POSITION IN THE LIST,
-  // which is where "the second session" comes from, and every surface draws running above parked.
-  const rank = (s) => (s.status === 'resident' ? 0 : 1);
+  // the voice tools: active sessions only, MOST RECENTLY ACTIVE FIRST, numbered from 1, running and
+  // parked TOGETHER. Parking is not activity — a session evicted to free the Pi, or replaced by a
+  // dispatch, keeps the place its last turn earned, so a list read twice says the same thing.
+  // Running-first grouping is the attractive alternative and it is wrong: every eviction would
+  // shove a session below everything still open, however recently it was used.
   // ONE ROW PER CONVERSATION, also shared with `numberSessions`: a resume makes a new row for the same
   // transcript, and the earlier stretches stay parked until retention drops them. Listing them too
-  // showed one conversation several times under several numbers. The first after sorting is kept —
-  // the running row if it runs, else the most recently active.
+  // showed one conversation several times under several numbers. The row kept is the running one if
+  // it runs, else the most recently active.
+  const rank = (s) => (s.status === 'resident' ? 0 : 1);
   const seenConv = new Set();
   const listed = (sessions || [])
     .filter((s) => s.status === 'resident' || s.status === 'evicted')
     .sort((a, b) => rank(a) - rank(b) || byActivity(a, b))
-    .filter((s) => { const c = s.claude_session_id || s.id; if (seenConv.has(c)) return false; seenConv.add(c); return true; });
+    .filter((s) => { const c = s.claude_session_id || s.id; if (seenConv.has(c)) return false; seenConv.add(c); return true; })
+    .sort(byActivity);
   const numbered = new Map(listed.map((s, i) => [s.id, i + 1]));
   // Only the fields something renders. A desk_sessions row carries transcript paths, command ids and
   // five timestamps that no surface here reads — 97 rows of them was most of what was left of this

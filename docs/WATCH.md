@@ -107,8 +107,8 @@ wrapping each cell to a word a line. A tapped link opens in the watch's own web 
 
 ### The sessions page
 
-Lists `/api/sessions` one row per conversation — running first, then parked, most recently active
-first within each, the order `n` counts in — and follows `/api/session-stream`. Each row is its name
+Lists `/api/sessions` one row per conversation, sorted by `n` — most recently active first, running and
+parked interleaved — and follows `/api/session-stream`. Each row is its name
 over up to three lines of what it last said: the list's `say`, which the hub already cuts to 120
 characters, drawn smaller and grey with its markdown's bold and code dropped. Opening a session marks it read on the hub
 whatever the watch's own copy of the row says, then reloads the list: the hub announces the change on

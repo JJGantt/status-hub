@@ -598,7 +598,7 @@ the watch, it did not play wrist-down at all, so holding the microphone is the o
 
 ### Launchers, one request
 
-Six complications (circular and corner), all invisible. Four record: `RecordComplication` opens
+Six complications (circular and corner), all invisible on the face. The face editor shows a complication's drawing rather than its display name, so each writes a one-word name only in a preview (`context.isPreview`) — clear everywhere, all six are identical blank tiles there. Four record: `RecordComplication` opens
 `statushub://record` (the standard flow), `RecordSilenceComplication` `statushub://record?flow=silence`,
 `RecordLockedComplication` `statushub://record?flow=locked` and `RecordQuickComplication`
 `statushub://record?flow=quick`; `onOpenURL` passes the flow through `Chat.requestRecording` to the

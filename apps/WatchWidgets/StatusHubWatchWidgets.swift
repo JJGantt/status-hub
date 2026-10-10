@@ -99,8 +99,8 @@ struct WorkoutControl: ControlWidget {
 /// its owner knows is there, so the face shows no trace of it.
 struct RecordComplication: Widget {
     var body: some WidgetConfiguration {
-        StaticConfiguration(kind: "RecordComplication", provider: Provider()) { _ in
-            RecordFace()
+        StaticConfiguration(kind: "RecordComplication", provider: Provider()) { entry in
+            RecordFace(entry: entry, name: "Hub")
                 .widgetURL(URL(string: "statushub://record"))
                 // No plate behind it either: the slot is empty on the face.
                 .containerBackground(for: .widget) { Color.clear }
@@ -115,8 +115,8 @@ struct RecordComplication: Widget {
 /// (`Capture.Flow.silence`). Invisible, like the standard one.
 struct RecordSilenceComplication: Widget {
     var body: some WidgetConfiguration {
-        StaticConfiguration(kind: "RecordSilenceComplication", provider: Provider()) { _ in
-            RecordFace()
+        StaticConfiguration(kind: "RecordSilenceComplication", provider: Provider()) { entry in
+            RecordFace(entry: entry, name: "Silence")
                 .widgetURL(URL(string: "statushub://record?flow=silence"))
                 .containerBackground(for: .widget) { Color.clear }
         }
@@ -130,8 +130,8 @@ struct RecordSilenceComplication: Widget {
 /// (`Capture.Flow.locked`). Invisible, like the standard one.
 struct RecordLockedComplication: Widget {
     var body: some WidgetConfiguration {
-        StaticConfiguration(kind: "RecordLockedComplication", provider: Provider()) { _ in
-            RecordFace()
+        StaticConfiguration(kind: "RecordLockedComplication", provider: Provider()) { entry in
+            RecordFace(entry: entry, name: "Locked")
                 .widgetURL(URL(string: "statushub://record?flow=locked"))
                 .containerBackground(for: .widget) { Color.clear }
         }
@@ -146,8 +146,8 @@ struct RecordLockedComplication: Widget {
 /// going (`Capture.Flow.quick`; the seconds are `watch_quick_s` in the hub's Settings). No lock step.
 struct RecordQuickComplication: Widget {
     var body: some WidgetConfiguration {
-        StaticConfiguration(kind: "RecordQuickComplication", provider: Provider()) { _ in
-            RecordFace()
+        StaticConfiguration(kind: "RecordQuickComplication", provider: Provider()) { entry in
+            RecordFace(entry: entry, name: "Quick")
                 .widgetURL(URL(string: "statushub://record?flow=quick"))
                 .containerBackground(for: .widget) { Color.clear }
         }
@@ -161,8 +161,8 @@ struct RecordQuickComplication: Widget {
 /// record ones.
 struct DayComplication: Widget {
     var body: some WidgetConfiguration {
-        StaticConfiguration(kind: "DayComplication", provider: Provider()) { _ in
-            RecordFace()
+        StaticConfiguration(kind: "DayComplication", provider: Provider()) { entry in
+            RecordFace(entry: entry, name: "Day")
                 .widgetURL(URL(string: "statushub://open?page=day"))
                 .containerBackground(for: .widget) { Color.clear }
         }
@@ -176,8 +176,8 @@ struct DayComplication: Widget {
 /// the record ones.
 struct SessionsComplication: Widget {
     var body: some WidgetConfiguration {
-        StaticConfiguration(kind: "SessionsComplication", provider: Provider()) { _ in
-            RecordFace()
+        StaticConfiguration(kind: "SessionsComplication", provider: Provider()) { entry in
+            RecordFace(entry: entry, name: "Sessions")
                 .widgetURL(URL(string: "statushub://open?page=sessions"))
                 .containerBackground(for: .widget) { Color.clear }
         }
@@ -188,19 +188,34 @@ struct SessionsComplication: Widget {
 }
 
 /// Clear, but filling the slot, so the whole complication stays the tap target `widgetURL` opens.
+/// **Except in the face editor**, which shows each complication's drawing and not its
+/// `configurationDisplayName`: drawn clear there, all six are identical blank tiles. A preview
+/// (`context.isPreview`, what the editor's gallery asks for) writes the name; the face never does.
 private struct RecordFace: View {
+    let entry: Entry
+    let name: String
     var body: some View {
-        Color.clear
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
+        ZStack {
+            Color.clear
+            if entry.preview {
+                Text(name)
+                    .font(.system(size: 11, weight: .semibold))
+                    .minimumScaleFactor(0.5)
+                    .lineLimit(1)
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 }
 
 private struct Provider: TimelineProvider {
-    func placeholder(in context: Context) -> Entry { Entry(date: Date()) }
-    func getSnapshot(in context: Context, completion: @escaping (Entry) -> Void) { completion(Entry(date: Date())) }
+    func placeholder(in context: Context) -> Entry { Entry(date: Date(), preview: true) }
+    func getSnapshot(in context: Context, completion: @escaping (Entry) -> Void) {
+        completion(Entry(date: Date(), preview: context.isPreview))
+    }
     func getTimeline(in context: Context, completion: @escaping (Timeline<Entry>) -> Void) {
-        completion(Timeline(entries: [Entry(date: Date())], policy: .never))
+        completion(Timeline(entries: [Entry(date: Date(), preview: false)], policy: .never))
     }
 }
 
-private struct Entry: TimelineEntry { let date: Date }
+private struct Entry: TimelineEntry { let date: Date; let preview: Bool }

@@ -223,8 +223,7 @@ the list (`latest`).
 A tap or double tap records a follow-up: the hub transcribes it without enqueueing anything
 (`/api/voice-command?dry=1`), and `POST /api/sessions/followup` types the words in, or resumes a
 parked session with them (`HUB-INTERNALS.md` §6b). **A follow-up records exactly as a command on home does**: it sends
-itself at his silence, a second press locks it open, the next sends (`CommandBorder.press`, one flow
-everywhere).
+itself at his silence, or the next press sends it (`CommandBorder.press`, one flow everywhere).
 
 **A session's reply notification opens it.** `WatchAppDelegate` registers the `SESSION_REPLY`
 category with one foreground action, Open — the button double tap presses on a watch notification —
@@ -252,7 +251,7 @@ command goes to the session instead of the hub):
 | state | edge |
 |---|---|
 | recording, and the silence will end it | amber |
-| locked open through the silence (home and sessions alike) | red |
+| locked open through the silence (the `Hub Locked` complication only) | red |
 | the hub working on it (transcript or command) | white, a bright stretch travelling round a dim ring; with the wrist down, the whole line white |
 | always-on listening | blue, dim |
 | idle | none |
@@ -438,27 +437,25 @@ After `Capture.unspoken` of audio with no speech in it, a command or a follow-up
 starts a fresh segment. The microphone and the mute it puts on every room mic are not left open
 because a recording started by accident — which the Smart Stack and the complication make easy. A
 **locked** recording is exempt: holding it open through silence is exactly what the lock is for. That
-includes one the `Hub Locked` complication opened, so a stray touch on that slot holds the microphone
+is the one the `Hub Locked` complication opened, so a stray touch on that slot holds the microphone
 (and the room mics' mute) until a press or a press-and-hold ends it.
 
 Every end logs `mic-end` with the numbers it decided on: `reason` (`silence` or `unspoken`), floor,
 threshold, peak, seconds spoken and seconds of audio. Tune the multiplier, the minimum or the minimum
 speech from those, not by feel.
 
-### The lock is a step, not a button
+### A press starts, the next sends; only a complication locks
 
-Double tap, or a tap on the conversation, walks a command: start, then lock it open through any
-silence, then send. Unlocked, the silence still ends it by itself. Home and a session follow the same
-steps; both go through `CommandBorder.press`.
-
-**The other record complications each skip the lock** (`Capture.Flow`, chosen per recording and reset when
-it ends). `Hub Silence` starts the same recording as the standard launcher, but its first press SENDS
-rather than locking. `Hub Locked` opens already locked — the red edge, no silence ends it — and its
-first press sends. `Hub Quick` is `Hub Silence` with a hard cap, for one-sentence commands: it also sends
+Double tap, or a tap on the conversation, starts a command, and the next press sends it; the silence
+after he speaks also sends it by itself. Home and a session follow the same two steps; both go through
+`CommandBorder.press`. **No press locks a recording open.** The only locked recording is the one the
+`Hub Locked` complication opens (`Capture.Flow`, chosen per recording and reset when it ends) — the red
+edge, no silence ends it — and its first press sends. `Hub Silence` now starts exactly what the
+standard launcher does; it stays so a face that holds it keeps working. `Hub Quick` is the standard
+recording with a hard cap, for one-sentence commands: it also sends
 itself `watch_quick_s` seconds (Settings → Watch: quick command, 5 when unset) after the microphone
 opens — counted from the chirp, in seconds of audio — however he is going; a cap reached with no speech
-heard throws the clip away instead, and either logs `mic-end` with `reason: cap`. Once that recording
-ends, every press is back to the standard three steps.
+heard throws the clip away instead, and either logs `mic-end` with `reason: cap`.
 
 Press and hold anywhere cancels the recording, or the command the hub is still
 working on; it does nothing when there is nothing to throw away.
@@ -712,7 +709,6 @@ wrist. Fly keeps only the recent lines, so read it soon.
 | `mic-engine-restart` | the audio engine was stopped by a configuration change mid-recording and started again (a stopped engine records nothing) |
 | `chirp`, `chirp-done` | the start chirp asked for (whether the engine and player were running) and heard to finish, with how long it took. A `chirp` with no `chirp-done` is a chirp the speaker never played |
 | `record-stop` | a recording stopped: its length, `heard` (seconds actually written to the clip), `peak` (loudest RMS written) and `chirped`. `heard` far short of `seconds` is a deaf microphone; `heard` with `peak` near 0 is a live one hearing silence |
-| `mic-lock` | the lock toggled |
 | `listener-sent`, `listener-failed` | an always-on utterance going up |
 | `sent`, `send-failed` | a command's clip going up, with how long it took |
 | `listen-alive` | always-on listening still has the microphone, with minutes since it was engaged — one line per twenty silent segments, about five minutes. **This is how long watchOS lets it hold the microphone with the wrist down**, which is otherwise unknown: read the gap between the last line and when it was engaged |

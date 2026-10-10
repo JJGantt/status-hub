@@ -15,10 +15,10 @@ final class Capture: ObservableObject {
         case listener
     }
 
-    /// What a press does to a recording in progress, chosen by whatever started it. `standard` is the
-    /// app's own: a press locks the recording open, and the next sends. The watch-face launchers each
-    /// skip a step: `silence` records as standard does but its first press sends, and `locked` opens
-    /// already locked, so its first press sends too. `quick` is `silence` with a hard cap: it also sends
+    /// How a recording ends, chosen by whatever started it. A press always sends. `standard` (the app's
+    /// own) also sends itself at his silence; `silence` is the same, kept so the `Hub Silence`
+    /// complication's URL still opens. `locked` — reached only from the `Hub Locked` complication —
+    /// ignores the silence, so only a press ends it. `quick` is `standard` with a hard cap: it also sends
     /// itself `quickCap` seconds after the microphone opens, whatever he is doing — for one-sentence
     /// commands.
     enum Flow: String { case standard, silence, locked, quick }
@@ -26,9 +26,9 @@ final class Capture: ObservableObject {
     @Published private(set) var owner: Owner?
     /// The current recording's flow; `standard` when nothing is recording.
     @Published private(set) var flow = Flow.standard
-    /// This recording ends itself at the silence after speech, so it can be locked open.
+    /// This recording ends itself at the silence after speech, unless it is locked.
     @Published private(set) var endsOnSilence = false
-    /// Locked open: the silence no longer ends it, only a press does.
+    /// Locked open (the `locked` flow): the silence no longer ends it, only a press does.
     @Published private(set) var locked = false
     /// Always-on listening is engaged: the microphone is the listener's whenever nothing else wants it,
     /// and it takes it back when a command or a follow-up gives it up.
@@ -108,7 +108,7 @@ final class Capture: ObservableObject {
     /// phone's microphone, so one sentence cannot arrive twice.
     ///
     /// With `onSilence`, the recording ends itself once he has spoken and then stopped for the trailing
-    /// silence, and calls it; `toggleLock()` holds it open. Without, only a press ends it. `onTaken` is
+    /// silence, and calls it, unless the flow is `locked`. Without, only a press ends it. `onTaken` is
     /// the same ending forced from outside — the system taking the microphone — and every caller wants
     /// one, because words already recorded are worth sending however the recording ended.
     func start(for owner: Owner, flow: Flow = .standard, onSilence: (() -> Void)? = nil, onTaken: (() -> Void)? = nil,
@@ -187,16 +187,6 @@ final class Capture: ObservableObject {
         resumeSoon()
         StayAwake.shared.sessionReleased()
     }
-
-    /// Holds the recording open through silences, or lets the silence end it again.
-    func toggleLock() {
-        guard endsOnSilence else { return }
-        locked.toggle()
-        Hub.log("mic-lock", ["locked": locked])
-    }
-
-    /// The next press ends the recording and sends it, rather than locking it open.
-    var pressSends: Bool { locked || flow != .standard }
 
     private func begin(_ owner: Owner, flow: Flow = .standard, onSilence: (() -> Void)?, onTaken: (() -> Void)?,
                        onFailure: @escaping @MainActor (Error) -> Void, opened: @escaping () -> Void) {

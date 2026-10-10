@@ -285,7 +285,7 @@ final class Sessions: ObservableObject {
         }
         failures[key] = nil
         Hub.log("record-start", ["view": "session", "row": row(for: key)?.id ?? ""])
-        // Ends itself at the silence after he speaks, as a command on home does; a press locks it open.
+        // Ends itself at the silence after he speaks, as a command on home does, or at the next press.
         capture.start(for: .session(key), onSilence: { [weak self] in self?.stopRecording(key) },
                       onTaken: { [weak self] in self?.stopRecording(key) }) { [weak self] error in
             Hub.log("record-failed", ["error": String(describing: error).prefix(120).description])

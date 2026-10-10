@@ -135,8 +135,8 @@ struct SessionsView: View {
 /// One conversation: the hub's list of its events — his words, the tool calls, what the session says
 /// between them, its replies — drawn in order, plus his words on their way from this watch. Double tap
 /// or a tap in the bottom half of the glass is the one press
-/// (`CommandBorder.press`): it records a follow-up that sends itself at his silence, a second press locks
-/// it open and the next sends; a parked session is resumed with the words. Scrolling is his finger or
+/// (`CommandBorder.press`): it records a follow-up that sends itself at his silence, or at the next
+/// press; a parked session is resumed with the words. Scrolling is his finger or
 /// the crown.
 struct SessionView: View {
     let key: String

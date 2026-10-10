@@ -181,8 +181,7 @@ struct CommandBorder: View {
     private var width: CGFloat { CGFloat(max(1, style.px)) / scale }
     private var band: CGFloat { CGFloat(max(0, style.bandPx)) / scale }
 
-    /// Idle: start. Recording: lock it open through the silence, then send. A session's follow-up has
-    /// no silence to hold off, so there the second double tap sends.
+    /// Idle: start. Recording: send.
     private func primary() { Self.press(chat: chat, sessions: sessions, how: "double-tap") }
 
     /// **In a session a tap only presses in the bottom half of the glass**; the top half is for touching
@@ -197,9 +196,9 @@ struct CommandBorder: View {
     }
 
     /// **The one press.** Double tap and a tap on the conversation both come here, and home and a
-    /// session follow the same flow: start (amber, sends itself at his silence), then lock (red, only a
-    /// press ends it), then send. A recording a watch-face launcher started in another flow
-    /// (`Capture.Flow`) skips the lock: its first press sends.
+    /// session follow the same flow: a press starts a recording (amber, sends itself at his silence),
+    /// and the next press sends it. There is no lock step; a locked recording comes only from the
+    /// `Hub Locked` complication (`Capture.Flow.locked`), and a press sends that too.
     static func press(chat: Chat, sessions: Sessions, how: String) {
         // A reply being spoken: the press stops it and does nothing else. The next one records.
         if Speaker.shared.isSpeaking {
@@ -215,10 +214,8 @@ struct CommandBorder: View {
         Capture.trigger = how
         if !recording {
             if let target { sessions.startRecording(target) } else { chat.startRecording() }
-        } else if capture.pressSends {
-            if let target { sessions.stopRecording(target) } else { chat.stopRecording() }
         } else {
-            capture.toggleLock()
+            if let target { sessions.stopRecording(target) } else { chat.stopRecording() }
         }
     }
 

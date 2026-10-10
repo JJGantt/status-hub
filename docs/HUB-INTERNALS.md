@@ -587,7 +587,7 @@ conversation's list** — `logFrame` — and goes out as an `ev` frame with its 
 below. The older shape is still relayed alongside — `session` frames, and `turnSteps`/`steps` on
 `/api/sessions/:id` — for the watch build installed before the list existed, and goes when it is off
 the wrist, TODO.md) ·
-`/api/repos/cmd/:id` · `/api/sessions` (live desk sessions + the follow-up `focus`; each row carries
+`/api/repos/cmd/:id` · `/api/sessions` (live desk sessions + the follow-up `focus`; `?brief=1`, the watch's, drops every row's `last_reply`; each row carries
 `unread`, a finished reply nobody has opened) · `/api/sessions/seen` (opening one stamps
 `desk_sessions.seen_at`, which is what clears it on every surface) ·
 `/api/session-stream` (SSE: `ev` — one event of a conversation's list, with its seq and the hub's

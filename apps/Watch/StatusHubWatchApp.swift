@@ -101,6 +101,10 @@ struct RootView: View {
     @EnvironmentObject private var router: Router
     @Environment(\.scenePhase) private var phase
     @State private var page = Page.home
+    /// The other pages have been loaded behind the first since the app last came to the front.
+    @State private var warmed = false
+    /// The on-screen page's own loads, which the others wait behind.
+    @State private var loadingFirst: [Task<Void, Never>] = []
 
     var body: some View {
         // **A session opens INSIDE the sessions page** (its own NavigationStack, in SessionsView), so the
@@ -184,15 +188,40 @@ struct RootView: View {
         }
     }
 
-    /// A page loads and holds its stream open only while it is the one on screen.
+    /// **The page on screen loads first, then every other page loads behind it**, so a swipe lands on
+    /// data already there. Only the page on screen holds its stream open; the others are a one-shot
+    /// fetch each time the app comes to the front, and the stream's own reload catches them up when
+    /// he swipes to them.
     private func follow() {
         let live = phase == .active
         sessions.onPage = page == .sessions
-        if live && page == .sessions { sessions.activate() } else { sessions.deactivate() }
-        if live && page == .home { chat.activate() } else { chat.deactivate() }
+        var first: [Task<Void, Never>] = []
+        if live && page == .sessions { first.append(sessions.activate()) } else { sessions.deactivate() }
+        if live && page == .home { first.append(chat.activate()) } else { chat.deactivate() }
         // The day page draws food and training live, so it follows both or neither. The health page
         // is weeks, loaded when it appears (`loadHistory`), and needs neither stream.
-        if live && page == .day { nutrition.activate(); workout.activate() }
+        if live && page == .day { first.append(nutrition.activate()); first.append(workout.activate()) }
         else { nutrition.deactivate(); workout.deactivate() }
+        if !live { warmed = false; return }
+        loadingFirst = first
+        guard !warmed else { return }
+        warmed = true
+        Task {
+            // A launch from a complication or a notification turns to its page in the same pass as
+            // this first call, so the page to put first is read a beat later, not now.
+            await Task.yield()
+            let on = page
+            for t in loadingFirst { await t.value }
+            if on == .health { await nutrition.loadHistory() }
+            Hub.log("warm", ["first": on.rawValue])
+            // Everything the other pages draw at rest, side by side. Not the drill-ins (every week of
+            // history, the weight page): those load when opened.
+            async let s: Void = on == .sessions ? () : sessions.load()
+            async let c: Void = on == .home ? () : chat.load()
+            async let n: Void = on == .day ? () : nutrition.load()
+            async let w: Void = on == .day ? () : workout.load()
+            async let h: Void = on == .health ? () : nutrition.loadHistory()
+            _ = await (s, c, n, w, h)
+        }
     }
 }

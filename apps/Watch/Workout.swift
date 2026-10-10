@@ -25,9 +25,13 @@ final class Workout: ObservableObject {
     private var stream: Task<Void, Never>?
 
     /// The page is on screen: load now, and follow changes until `deactivate`.
-    func activate() {
-        Task { await load() }
-        guard stream == nil else { return }
+    @discardableResult func activate() -> Task<Void, Never> {
+        let loaded = Task { await load() }
+        if stream == nil { openStream() }
+        return loaded
+    }
+
+    private func openStream() {
         stream = Task { await Hub.follow("workout") { [weak self] in await self?.load() } }
     }
 

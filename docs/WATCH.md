@@ -27,8 +27,16 @@ are two layouts of the same food-and-training data, and one of them is expected 
 `RootView` in `StatusHubWatchApp.swift` holds them in a paged `TabView`, with the page dots off (`indexDisplayMode: .never`) — a strip of screen spent saying what a swipe
 already says.
 
-A page loads when it comes on screen and holds its event stream open only while it is showing
-(`follow()`), reloading after every reconnect, since a change may have gone by. `Hub.listen` reads all
+A page holds its event stream open only while it is showing (`follow()`), reloading after every
+reconnect, since a change may have gone by. **Every page is loaded each time the app comes to the
+front, the one on screen first**: the others wait for its fetch (the day page's two, or the sessions
+list and the open conversation) and then load side by side — the sessions list, the hub thread, the
+rings and today's log, the training day, 30 weeks of history — so a swipe lands on data already
+there, which its stream then catches up. The page put first is read a beat after the app opens,
+because a complication or a notification turns to its page in the same pass. The drill-ins (every
+week of history, the weight page) still load when opened. The sessions list is fetched with
+`?brief=1`, every row as its one-line `say`: the watch never draws a whole reply from the list, and
+those replies were nearly half the response. `Hub.listen` reads all
 three streams; every frame the hub sends has a `data:` line, keepalives included, and that is what it
 dispatches on.
 
@@ -73,11 +81,11 @@ turn land as one block (`activity`), not line by line. Within that block a sessi
 his words, in full; only tool calls are cut to two lines. Words the watch sent are already on screen, so
 their echo is dropped, and `summary` frames are ignored because the detail fetch brings the reply.
 
-**A tap ANYWHERE on home is the same press as double tap** (`CommandBorder.tapPresses(everywhere:)`),
+**A tap ANYWHERE on home or in a session is the same press as double tap** (`CommandBorder.press`),
 bound on the scroll view rather than its content so the glass under a short thread presses too. That is
 his call, made knowing a finger resting on the text can start a recording: scrolling, the crown and
-swiping to another page are drags, not taps, and still only move. A session keeps the bottom-half rule
-(§ The sessions page). The page carries nothing else: no
+swiping to another page are drags, not taps, and still only move. A session's name and its speaker
+glyphs are buttons, which take their own taps. The page carries nothing else: no
 second indicator of a state the control already holds, and a failure is the one thing it adds — an
 icon and Retry under the thread, since a command that failed has nowhere else to be picked up.
 
@@ -566,7 +574,7 @@ Replies read aloud. The server strips the markdown, splits the text, and picks t
 in order, decodes each, and queues it on its player the moment it lands; `/api/tts/timing` logs how long
 the first sound took. While it plays, the session page shows the system volume control (`VolumeKnob`),
 which takes the Digital Crown and turns the watch's own volume; the voice itself plays at full. The glyph is its own button over
-the page, so a tap on it is not the press the bottom half of the glass otherwise is. **The always-on
+the page, so a tap on it is not the press the rest of the glass is. **The always-on
 listener stands aside while it speaks** (`Capture.hush`), so it does not transcribe the watch's own
 voice, and takes the microphone back when it finishes — paused, not switched off. Starting a recording
 stops the speaking at once, and so does the press.
@@ -662,7 +670,7 @@ double tap asked for a scroll that could not happen and recording never got the 
 
 A session's page scrolls through `PagedScroll` (`Watch/WatchUI.swift`), which is the control over a
 scroll view and nothing more; home has its own scrolling, because it is the one page that lands the
-view on the top of each new thing. A tap records anywhere on home, and in the bottom half of the glass in a session.
+view on the top of each new thing. A tap records anywhere on home and anywhere in a session.
 
 **The tap is bound to the conversation's own frame, which is only as tall as its text** — a short
 conversation left the blank space below it unresponsive: no press, no way to stop a reply mid-speech by

@@ -184,15 +184,10 @@ struct CommandBorder: View {
     /// Idle: start. Recording: send.
     private func primary() { Self.press(chat: chat, sessions: sessions, how: "double-tap") }
 
-    /// **In a session a tap only presses in the bottom half of the glass**; the top half is for touching
-    /// what is there. Home is the whole glass (`everywhere`), because he asked for it: that page is the
-    /// command, and a scroll or a swipe is a drag, which is not a tap. Double tap is unaffected.
-    static func tapPresses(_ at: CGPoint, everywhere: Bool = false) -> Bool {
-        // While a reply is spoken a tap anywhere is a press, and the press stops the voice.
-        let presses = everywhere || Speaker.shared.isSpeaking || at.y > WKInterfaceDevice.current().screenBounds.height / 2
-        // Where the finger landed, so a tap that started a recording can be traced to the half it hit.
-        Hub.log("tap", ["y": Int(at.y), "presses": presses])
-        return presses
+    /// A tap on the glass, home or a session: logged with where it landed, then pressed. Every tap on
+    /// either page presses; double tap is the same press.
+    static func tapped(_ at: CGPoint) {
+        Hub.log("tap", ["y": Int(at.y)])
     }
 
     /// **The one press.** Double tap and a tap on the conversation both come here, and home and a

@@ -4616,7 +4616,7 @@ async function pickFocus(focusRow, sessions) {
 // THE SURFACES DO NOT POLL THIS. `desk_sessions`, `desk_queue` and `desk_focus` are in the realtime
 // publication (data-layer migration 00104), so a change to any of them pushes a fresh payload the
 // moment it happens; a client's own fetch is only the net under a dropped frame or a deaf socket.
-async function buildSessions() {
+async function buildSessions({ brief: allBrief = false } = {}) {
   const [sessions, queue, focusRows] = await Promise.all([
     sb('desk_sessions?select=*&order=last_seen.desc'),
     sb('desk_queue?claimed=is.null&select=*&order=created.asc'),
@@ -4670,7 +4670,9 @@ async function buildSessions() {
   // Cleaned the same way `say` is: the two are the same field, and a reply is not where the two
   // patterns above are expected, but a client showing the whole reply should never be the one place
   // that regresses if one ever does match a reply.
-  const full = (s) => ({ ...brief(s), last_reply: cleanSaid(s.last_reply) });
+  // `?brief=1` (the watch) gets every row as `brief`: it draws one line per row and opens a session
+  // through `/api/sessions/:id`, so a whole reply here is bytes it decodes past.
+  const full = allBrief ? brief : (s) => ({ ...brief(s), last_reply: cleanSaid(s.last_reply) });
   const evicted = listed.filter((s) => s.status === 'evicted').sort(byActivity);
   return {
     // Resident = running now, reachable over Remote Control. Evicted = closed to free the machine
@@ -4697,7 +4699,7 @@ app.post('/api/sessions/seen', express.json(), async (req, res) => {
 });
 
 app.get('/api/sessions', async (req, res) => {
-  try { res.json(await buildSessions()); }
+  try { res.json(await buildSessions({ brief: req.query.brief === '1' })); }
   catch (e) { res.status(500).json({ error: String(e.message || e) }); }
 });
 

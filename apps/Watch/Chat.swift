@@ -80,9 +80,13 @@ final class Chat: ObservableObject {
 
     /// The page is on screen: load now, and follow the conversation and the tool calls of the hub
     /// command running until `deactivate`.
-    func activate() {
-        Task { await load() }
-        guard stream == nil else { return }
+    @discardableResult func activate() -> Task<Void, Never> {
+        let loaded = Task { await load() }
+        if stream == nil { openStream() }
+        return loaded
+    }
+
+    private func openStream() {
         stream = Task {
             await Hub.listen("/api/voice-stream", reconnected: { [weak self] in await self?.load() }) { [weak self] event, data in
                 await self?.voiceFrame(event, data)

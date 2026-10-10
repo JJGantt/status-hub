@@ -59,9 +59,8 @@ struct HomeView: View {
             // scroll, a swipe to another page and the crown are not taps, so they still only move.
             .contentShape(Rectangle())
             .onTapGesture(coordinateSpace: .global) { at in
-                if CommandBorder.tapPresses(at, everywhere: true) {
-                    CommandBorder.press(chat: chat, sessions: Sessions.shared, how: "tap")
-                }
+                CommandBorder.tapped(at)
+                CommandBorder.press(chat: chat, sessions: Sessions.shared, how: "tap")
             }
             .scrollIndicators(.never)
             .topOfTheScreen(scrollTop: Landing.top)

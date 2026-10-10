@@ -134,7 +134,7 @@ struct SessionsView: View {
 
 /// One conversation: the hub's list of its events — his words, the tool calls, what the session says
 /// between them, its replies — drawn in order, plus his words on their way from this watch. Double tap
-/// or a tap in the bottom half of the glass is the one press
+/// or a tap anywhere on the glass is the one press
 /// (`CommandBorder.press`): it records a follow-up that sends itself at his silence, or at the next
 /// press; a parked session is resumed with the words. Scrolling is his finger or
 /// the crown.
@@ -180,12 +180,16 @@ struct SessionView: View {
     var body: some View {
         ScrollViewReader { proxy in
             PagedScroll(reachedEnd: { atEnd = $0 }) {
-                // A tap in the bottom half of the glass is the press; the top half is for reading.
                 content
-                    .onTapGesture(coordinateSpace: .global) { at in
-                        if CommandBorder.tapPresses(at) { CommandBorder.press(chat: Chat.shared, sessions: sessions, how: "tap") }
-                    }
                 status
+            }
+            // **A tap ANYWHERE is the press**, as on home: on the scroll view rather than its content, so
+            // the glass below a short conversation presses too. A scroll, a swipe and the crown are not
+            // taps. The name at the top and the speaker glyphs are buttons, so they take their own taps.
+            .contentShape(Rectangle())
+            .onTapGesture(coordinateSpace: .global) { at in
+                CommandBorder.tapped(at)
+                CommandBorder.press(chat: Chat.shared, sessions: sessions, how: "tap")
             }
             // **The top of the NEWEST ITEM at the top of the screen**: his words the moment they are
             // transcribed, then each tool call as it comes, then the reply — whichever is last. Never
@@ -279,8 +283,7 @@ struct SessionView: View {
     /// **The one way a reply is spoken**: plays this session's last reply out loud. While it plays the
     /// corner holds a stop and a pause, which becomes a play while paused: pausing keeps the place, so
     /// carrying on does not start the reply over. Bare glyphs over the page, so they cost no row. Their
-    /// own buttons, so a tap on one is not the press the bottom half of the glass otherwise is
-    /// (`CommandBorder.tapPresses`).
+    /// own buttons, so a tap on one is not the press the rest of the glass is.
     @ViewBuilder private var playButton: some View {
         if let reply = events.last(where: { $0.kind == "reply" }) {
             HStack(spacing: 0) {

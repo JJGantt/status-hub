@@ -149,21 +149,23 @@ final class Sessions: ObservableObject {
     private var reloadAfter = false
 
     /// The page is on screen: load now, and follow every conversation's events until `deactivate`.
-    func activate() {
+    @discardableResult func activate() -> Task<Void, Never> {
         // The conversation on screen too, and any the watch is waiting on: whatever went by while the
         // app was away is in the hub's list, not here.
-        Task {
+        let loaded = Task {
             await load()
             for key in Set(path.suffix(1) + Array(awaiting.keys)) { await loadLog(key) }
             // Swiping back to a session left open is reading whatever landed in it meanwhile.
             if let key = path.last, row(for: key)?.unread == true { markSeen(key) }
         }
-        guard stream == nil else { return }
-        stream = Task {
-            await Hub.listen("/api/session-stream", reconnected: { [weak self] in await self?.reloadAll() }) { [weak self] event, data in
-                await self?.frame(event, data)
+        if stream == nil {
+            stream = Task {
+                await Hub.listen("/api/session-stream", reconnected: { [weak self] in await self?.reloadAll() }) { [weak self] event, data in
+                    await self?.frame(event, data)
+                }
             }
         }
+        return loaded
     }
 
     func deactivate() {
@@ -193,7 +195,7 @@ final class Sessions: ObservableObject {
         }
         repeat {
             reloadAfter = false
-            if let l: Lists = try? await Hub.json("/api/sessions") {
+            if let l: Lists = try? await Hub.json("/api/sessions?brief=1") {
                 rows = l.resident + l.evicted
                 var seen = Set<String>()
                 list = rows.filter { seen.insert($0.key).inserted }

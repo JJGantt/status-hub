@@ -2,7 +2,7 @@
 
 `StatusHubWatch`: a watchOS 11+ app (`apps/Watch/`, bundle `com.jaredgantt.statushub.watch`) embedded
 by the iOS app, plus its widget extension `StatusHubWatchWidgets` (`apps/WatchWidgets/`,
-`com.jaredgantt.statushub.watch.widgets`) — the three record complications and, on watchOS 26, the Record control.
+`com.jaredgantt.statushub.watch.widgets`) — the watch-face complications (four that record, two that open a page) and, on watchOS 26, the controls.
 It is native SwiftUI, not a web view: watchOS has no WKWebView. It talks to the hub directly with a
 token the phone hands over.
 
@@ -24,8 +24,7 @@ Four, swiped left to right: **sessions · home · day · health**. The app opens
 which IS the conversation — there is no separate prompt page. New layouts are added as NEW pages beside the old
 ones rather than by reshaping a page in place, and the ones that lose are deleted; `day` and `health`
 are two layouts of the same food-and-training data, and one of them is expected to go.
-`RootView` in `StatusHubWatchApp.swift` holds them in a paged `TabView` inside a `NavigationStack`,
-with the page dots off (`indexDisplayMode: .never`) — a strip of screen spent saying what a swipe
+`RootView` in `StatusHubWatchApp.swift` holds them in a paged `TabView`, with the page dots off (`indexDisplayMode: .never`) — a strip of screen spent saying what a swipe
 already says.
 
 A page loads when it comes on screen and holds its event stream open only while it is showing
@@ -74,8 +73,11 @@ turn land as one block (`activity`), not line by line. Within that block a sessi
 his words, in full; only tool calls are cut to two lines. Words the watch sent are already on screen, so
 their echo is dropped, and `summary` frames are ignored because the detail fetch brings the reply.
 
-A tap in the BOTTOM HALF of the glass is the same press as the control (`CommandBorder.tapPresses`); the
-top half is for reading, since the whole page as a button kept starting recordings under a finger. The page carries nothing else: no
+**A tap ANYWHERE on home is the same press as double tap** (`CommandBorder.tapPresses(everywhere:)`),
+bound on the scroll view rather than its content so the glass under a short thread presses too. That is
+his call, made knowing a finger resting on the text can start a recording: scrolling, the crown and
+swiping to another page are drags, not taps, and still only move. A session keeps the bottom-half rule
+(§ The sessions page). The page carries nothing else: no
 second indicator of a state the control already holds, and a failure is the one thing it adds — an
 icon and Retry under the thread, since a command that failed has nowhere else to be picked up.
 
@@ -133,9 +135,16 @@ phone and the wall too.
 The list is a **ScrollView, not a List**: a watchOS List puts every row in a grey rounded slab, and
 this page is a list of names — rules separate them, as they do on the food log and the exercises.
 
-A tapped row opens its session on top of the whole row of pages (the `NavigationStack` is `RootView`'s,
-around the `TabView`), not inside the sessions page: there the page row took sideways swipes and the
-watch's own swipe back never fired. The session has no title bar.
+**A tapped row opens its session INSIDE the sessions page** (a `NavigationStack` of the page's own, in
+`SessionsView`), so the row of pages still swipes with a session open — to home, to the day page — and
+the session is still open when he swipes back. The page row takes the sideways swipe, so the system's
+swipe back never fires; the session's name is the way out (below). The session has no title bar.
+
+**An open session is therefore not the same as one on screen**, and where a command goes is
+`Sessions.target`: the session a recording belongs to while it runs (so the press that ends it ends it,
+whichever page he has swiped to), otherwise the open session only while the sessions page is showing.
+A session left open behind home does not take home's commands. A session's tap in the BOTTOM HALF of the
+glass is the press; its top half is for reading.
 
 **A session is ONE LIST, the hub's** (`Sessions.logs`, from `GET /api/sessions/:id` and the `ev`
 frames of `/api/session-stream`; server.js, the event log): his words (`prompt`), tool calls, what the
@@ -442,10 +451,14 @@ Double tap, or a tap on the conversation, walks a command: start, then lock it o
 silence, then send. Unlocked, the silence still ends it by itself. Home and a session follow the same
 steps; both go through `CommandBorder.press`.
 
-**The two extra complications each skip the lock** (`Capture.Flow`, chosen per recording and reset when
+**The other record complications each skip the lock** (`Capture.Flow`, chosen per recording and reset when
 it ends). `Hub Silence` starts the same recording as the standard launcher, but its first press SENDS
 rather than locking. `Hub Locked` opens already locked — the red edge, no silence ends it — and its
-first press sends. Once that recording ends, every press is back to the standard three steps.
+first press sends. `Hub Quick` is `Hub Silence` with a hard cap, for one-sentence commands: it also sends
+itself `watch_quick_s` seconds (Settings → Watch: quick command, 5 when unset) after the microphone
+opens — counted from the chirp, in seconds of audio — however he is going; a cap reached with no speech
+heard throws the clip away instead, and either logs `mic-end` with `reason: cap`. Once that recording
+ends, every press is back to the standard three steps.
 
 Press and hold anywhere cancels the recording, or the command the hub is still
 working on; it does nothing when there is nothing to throw away.
@@ -523,8 +536,8 @@ while waiting stops waiting — a command the hub already has still runs.**
 Control Center, the Smart Stack and an Ultra's Action button each hold **Hub · Listen · Sessions · Nutrition ·
 Workout**, which open the app on that page (`OpenPageIntent` → `Router` → `RootView`); Nutrition and Workout
 land on the day page opened straight into a full list (`Router.dayList`): today's food log, or the
-exercise list. Every control closes an open session first: a session is pushed over the whole row of pages, so
-turning the page beneath it would leave the session on screen. Hub (the mic control; `RecordControl` in the code) is the odd one out: it opens home AND starts a command. It is labelled Hub because it sends a command to the hub — a recording is only how.
+exercise list. Sessions always lands on the LIST, closing a session left open there; the others leave it
+open for when he swipes back. Hub (the mic control; `RecordControl` in the code) is the odd one out: it opens home AND starts a command. It is labelled Hub because it sends a command to the hub — a recording is only how.
 Each control is its own type, spelled out in full — the `kind`, title and symbol are literals, because
 Control Center reads them before the extension runs and a computed one is not there to read.
 
@@ -588,10 +601,13 @@ the watch, it did not play wrist-down at all, so holding the microphone is the o
 
 ### Launchers, one request
 
-Three complications (circular and corner), all invisible: `RecordComplication` opens
-`statushub://record` (the standard flow), `RecordSilenceComplication` `statushub://record?flow=silence`
-and `RecordLockedComplication` `statushub://record?flow=locked`; `onOpenURL` passes the flow through
-`Chat.requestRecording` to the recording. Each draws nothing — a clear view filling the slot — so the face shows no trace of it and the empty slot is still the button — which also means the face does not say which slot is which. The Record control
+Six complications (circular and corner), all invisible. Four record: `RecordComplication` opens
+`statushub://record` (the standard flow), `RecordSilenceComplication` `statushub://record?flow=silence`,
+`RecordLockedComplication` `statushub://record?flow=locked` and `RecordQuickComplication`
+`statushub://record?flow=quick`; `onOpenURL` passes the flow through `Chat.requestRecording` to the
+recording. Two only travel, as a page's control does (`Router.open`): `DayComplication`
+(`statushub://open?page=day`, the day page with nothing opened on it) and `SessionsComplication`
+(`statushub://open?page=sessions`, always the list). Each draws nothing — a clear view filling the slot — so the face shows no trace of it and the empty slot is still the button — which also means the face does not say which slot is which. The Record control
 (`RecordControl`, watchOS 26 — Control Center, the Smart Stack, and the Action button on an Ultra)
 runs `RecordIntent`, an `OpenIntent`, which launches the app and runs `perform()` in it: the file is
 compiled into both targets, and `WATCH_APP` gates the app-only call. Both set `Chat.recordRequested`;
@@ -649,14 +665,13 @@ double tap asked for a scroll that could not happen and recording never got the 
 
 A session's page scrolls through `PagedScroll` (`Watch/WatchUI.swift`), which is the control over a
 scroll view and nothing more; home has its own scrolling, because it is the one page that lands the
-view on the top of each new thing. A tap in the bottom half of the glass records on both.
+view on the top of each new thing. A tap records anywhere on home, and in the bottom half of the glass in a session.
 
 **The tap is bound to the conversation's own frame, which is only as tall as its text** — a short
 conversation left the blank space below it unresponsive: no press, no way to stop a reply mid-speech by
 tapping there, because nothing was there to receive the tap. The session view's content is given a
 minimum height of a full screen so the tappable area always reaches the bottom of the glass, whatever
-the conversation's own length. Home has the same shape (its own content var, no minimum) and has not
-been checked for the same gap.
+the conversation's own length. Home binds its tap on the scroll view itself, so it has no gap to fill.
 
 ## The token comes from the phone
 

@@ -7,6 +7,9 @@ struct StatusHubWatchWidgets: WidgetBundle {
         RecordComplication()
         RecordSilenceComplication()
         RecordLockedComplication()
+        RecordQuickComplication()
+        DayComplication()
+        SessionsComplication()
         if #available(watchOS 26.0, *) {
             RecordControl()
             ListenControl()
@@ -134,6 +137,52 @@ struct RecordLockedComplication: Widget {
         }
         .configurationDisplayName("Hub Locked")
         .description("Hub Locked")
+        .supportedFamilies([.accessoryCircular, .accessoryCorner])
+    }
+}
+
+/// The fast path, for a one-sentence command: straight into a recording that sends at his silence or
+/// at a press, AND sends itself a fixed number of seconds after the microphone opens however it is
+/// going (`Capture.Flow.quick`; the seconds are `watch_quick_s` in the hub's Settings). No lock step.
+struct RecordQuickComplication: Widget {
+    var body: some WidgetConfiguration {
+        StaticConfiguration(kind: "RecordQuickComplication", provider: Provider()) { _ in
+            RecordFace()
+                .widgetURL(URL(string: "statushub://record?flow=quick"))
+                .containerBackground(for: .widget) { Color.clear }
+        }
+        .configurationDisplayName("Hub Quick")
+        .description("Hub Quick")
+        .supportedFamilies([.accessoryCircular, .accessoryCorner])
+    }
+}
+
+/// Opens the app on the day page — food and training — with nothing opened on it. Invisible, like the
+/// record ones.
+struct DayComplication: Widget {
+    var body: some WidgetConfiguration {
+        StaticConfiguration(kind: "DayComplication", provider: Provider()) { _ in
+            RecordFace()
+                .widgetURL(URL(string: "statushub://open?page=day"))
+                .containerBackground(for: .widget) { Color.clear }
+        }
+        .configurationDisplayName("Hub Day")
+        .description("Hub Day")
+        .supportedFamilies([.accessoryCircular, .accessoryCorner])
+    }
+}
+
+/// Opens the app on the sessions LIST, always: a session left open there is closed. Invisible, like
+/// the record ones.
+struct SessionsComplication: Widget {
+    var body: some WidgetConfiguration {
+        StaticConfiguration(kind: "SessionsComplication", provider: Provider()) { _ in
+            RecordFace()
+                .widgetURL(URL(string: "statushub://open?page=sessions"))
+                .containerBackground(for: .widget) { Color.clear }
+        }
+        .configurationDisplayName("Hub Sessions")
+        .description("Hub Sessions")
         .supportedFamilies([.accessoryCircular, .accessoryCorner])
     }
 }

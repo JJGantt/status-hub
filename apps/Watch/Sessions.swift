@@ -6,7 +6,6 @@ import WatchKit
 /// "session three" means.
 struct SessionRow: Decodable, Identifiable, Equatable {
     let id: String
-    let n: Int?
     let label: String?
     let custom_title: String?
     let repo: String?
@@ -81,8 +80,21 @@ final class Sessions: ObservableObject {
         case message(String)
     }
 
-    /// The sessions page's navigation: empty is the list, one key is that conversation open.
+    /// The sessions page's navigation: empty is the list, one key is that conversation open. It is the
+    /// sessions PAGE's, not the app's: an open session stays open while he swipes to another page and
+    /// back.
     @Published var path: [String] = []
+    /// The sessions page is the one on screen (`RootView.follow`).
+    @Published var onPage = false
+
+    /// **Where a command goes**: the session a recording belongs to while it runs, wherever he has
+    /// swiped since, so the press that ends it ends it; otherwise the session open on the sessions page
+    /// while that page is showing. Nil is the hub. A session left open on the sessions page does not
+    /// take the commands made on home.
+    var target: String? {
+        if case .session(let key)? = capture.owner { return key }
+        return onPage ? path.last : nil
+    }
 
     private init() {}
 
@@ -143,6 +155,8 @@ final class Sessions: ObservableObject {
         Task {
             await load()
             for key in Set(path.suffix(1) + Array(awaiting.keys)) { await loadLog(key) }
+            // Swiping back to a session left open is reading whatever landed in it meanwhile.
+            if let key = path.last, row(for: key)?.unread == true { markSeen(key) }
         }
         guard stream == nil else { return }
         stream = Task {
@@ -388,7 +402,7 @@ final class Sessions: ObservableObject {
             // The list's `say` and `unread` follow the row, which the host writes on its own path.
             await load()
             // A reply landing on the session he is looking at is read as it lands.
-            if path.last == key { markSeen(key) }
+            if onPage && path.last == key { markSeen(key) }
         }
     }
 }

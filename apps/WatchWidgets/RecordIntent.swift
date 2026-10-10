@@ -64,11 +64,11 @@ struct ListenIntent: OpenIntent {
 /// recording. The rest are places — a control per page, so Control Center (and the Action button, and
 /// the Smart Stack) can put him where he was going rather than in the app to then swipe.
 enum WatchPage: String, AppEnum {
-    case sessions, nutrition, workout
+    case sessions, nutrition, workout, day
 
     static var typeDisplayRepresentation: TypeDisplayRepresentation = "Status Hub page"
     static var caseDisplayRepresentations: [WatchPage: DisplayRepresentation] = [
-        .sessions: "Sessions", .nutrition: "Nutrition", .workout: "Workout",
+        .sessions: "Sessions", .nutrition: "Nutrition", .workout: "Workout", .day: "Day",
     ]
 }
 

@@ -53,10 +53,14 @@ struct HomeView: View {
                 .padding(.bottom, PageInset.bottom)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .opacity(dimmed ? 0.6 : 1)
-                // A tap in the bottom half is the same press as double tap: start, lock, send.
-                .contentShape(Rectangle())
-                .onTapGesture(coordinateSpace: .global) { at in
-                    if CommandBorder.tapPresses(at) { CommandBorder.press(chat: chat, sessions: Sessions.shared, how: "tap") }
+            }
+            // **A tap ANYWHERE on home is the same press as double tap**: start, lock, send. On the
+            // scroll view rather than its content, so the glass below a short thread presses too. A
+            // scroll, a swipe to another page and the crown are not taps, so they still only move.
+            .contentShape(Rectangle())
+            .onTapGesture(coordinateSpace: .global) { at in
+                if CommandBorder.tapPresses(at, everywhere: true) {
+                    CommandBorder.press(chat: chat, sessions: Sessions.shared, how: "tap")
                 }
             }
             .scrollIndicators(.never)

@@ -99,6 +99,13 @@ export async function open() {
       row('ESP (Hey&nbsp;Rhasspy)', 'esp_silence_s', sil('esp_silence_s', 3)) +
       row('Mac', 'mac_silence_s', sil('mac_silence_s', 3)) +
 
+      // The Hub Quick complication's hard cap (Capture.swift `quickCap`): seconds from the microphone
+      // opening, after which the command sends whatever it has, silence or not.
+      '<div class="settings-sec">Watch: quick command</div>' +
+      '<label class="settings-row"><span>Cutoff (s)</span>' +
+        '<input class="settings-num" type="number" min="1" max="30" step="0.5" inputmode="decimal" ' +
+        'data-key="watch_quick_s" value="' + sil('watch_quick_s', 5) + '"></label>' +
+
       // What counts as his voice on the watch (Capture.swift `Endpointer`): a FIXED lowest level, or a
       // line that follows the ROOM, so many times its quietest level.
       '<div class="settings-sec">Watch: speech line</div>' +

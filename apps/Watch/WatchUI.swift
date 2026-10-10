@@ -104,8 +104,8 @@ struct CommandBorder: View {
     /// wherever it happened to be.
     @Environment(\.isLuminanceReduced) private var lowered
 
-    /// Where a command goes. A session pushed on the stack owns the command while it is open.
-    private var target: String? { sessions.path.last }
+    /// Where a command goes (`Sessions.target`).
+    private var target: String? { sessions.target }
     private var mine: Capture.Owner { target.map(Capture.Owner.session) ?? .hub }
     private var recording: Bool { capture.owner == mine }
     /// The hub has it and is working: a clip being transcribed and a command being run are one wait.
@@ -185,12 +185,12 @@ struct CommandBorder: View {
     /// no silence to hold off, so there the second double tap sends.
     private func primary() { Self.press(chat: chat, sessions: sessions, how: "double-tap") }
 
-    /// **A tap only presses in the bottom half of the glass.** The whole conversation used to be the
-    /// button, so reading, scrolling or resting a finger on the text kept starting recordings. The top
-    /// half is for touching what is there; double tap is unaffected.
-    static func tapPresses(_ at: CGPoint) -> Bool {
+    /// **In a session a tap only presses in the bottom half of the glass**; the top half is for touching
+    /// what is there. Home is the whole glass (`everywhere`), because he asked for it: that page is the
+    /// command, and a scroll or a swipe is a drag, which is not a tap. Double tap is unaffected.
+    static func tapPresses(_ at: CGPoint, everywhere: Bool = false) -> Bool {
         // While a reply is spoken a tap anywhere is a press, and the press stops the voice.
-        let presses = Speaker.shared.isSpeaking || at.y > WKInterfaceDevice.current().screenBounds.height / 2
+        let presses = everywhere || Speaker.shared.isSpeaking || at.y > WKInterfaceDevice.current().screenBounds.height / 2
         // Where the finger landed, so a tap that started a recording can be traced to the half it hit.
         Hub.log("tap", ["y": Int(at.y), "presses": presses])
         return presses
@@ -208,7 +208,7 @@ struct CommandBorder: View {
             return
         }
         let capture = Capture.shared
-        let target = sessions.path.last
+        let target = sessions.target
         let recording = capture.owner == (target.map(Capture.Owner.session) ?? .hub)
         Hub.log("control", ["target": target ?? "hub", "recording": recording, "locked": capture.locked,
                                "flow": capture.flow.rawValue, "how": how])
@@ -225,7 +225,7 @@ struct CommandBorder: View {
     /// Press and hold anywhere: throw away what is under way — the recording, or the command the hub
     /// is still working on. Nothing happens when there is nothing to throw away.
     static func cancel(chat: Chat, sessions: Sessions) {
-        let target = sessions.path.last
+        let target = sessions.target
         let capture = Capture.shared
         if let target, capture.owner == .session(target) { sessions.cancelRecording(target) }
         else if capture.owner == .hub { chat.cancelRecording() }

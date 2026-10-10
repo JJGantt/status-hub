@@ -18,7 +18,15 @@ struct SessionsView: View {
         // is a list of names. Rows are ruled apart the way the food log and the exercises are — the rule
         // does the separating and costs two pixels.
         //
-        // A row pushes onto the app's root stack (RootView), so the session covers every page.
+        // A row pushes onto this PAGE's own stack, so the row of pages still swipes with a session open
+        // and the session is still there when he swipes back (`Sessions.path`).
+        NavigationStack(path: $sessions.path) {
+            list
+                .navigationDestination(for: String.self) { key in SessionView(key: key) }
+        }
+    }
+
+    private var list: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 0) {
                 ForEach(Array(sessions.list.enumerated()), id: \.offset) { i, s in
@@ -233,9 +241,8 @@ struct SessionView: View {
                 }
                 .ignoresSafeArea(.container, edges: .bottom)
         }
-        // The session's name on the clock's line, and NO back arrow: the swipe that opened it from the
-        // right is what takes it away again, and a title bar with a button in it costs the top of a
-        // screen this page spends on the answer. A leading toolbar item leaves the clock where watchOS
+        // The session's name on the clock's line, and NO system back arrow: a title bar with a button in
+        // it costs the top of a screen this page spends on the answer. A leading toolbar item leaves the clock where watchOS
         // puts it; a trailing one would push the time to the other end of the strip.
         .navigationBarBackButtonHidden(true)
         .toolbar {

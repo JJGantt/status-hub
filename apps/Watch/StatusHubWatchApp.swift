@@ -85,11 +85,11 @@ struct RootView: View {
         case sessions, home, day, health
 
         /// Nutrition and Workout land on the day page, which opens the list each names
-        /// (`Router.dayList`): today's food log, or the exercise list.
+        /// (`Router.dayList`): today's food log, or the exercise list. Day lands on the page itself.
         init(_ asked: WatchPage) {
             switch asked {
             case .sessions: self = .sessions
-            case .nutrition, .workout: self = .day
+            case .nutrition, .workout, .day: self = .day
             }
         }
     }
@@ -103,47 +103,54 @@ struct RootView: View {
     @State private var page = Page.home
 
     var body: some View {
-        // A session opens on top of the whole row of pages, not inside the sessions page: the row takes
-        // sideways swipes, so a session pushed inside one of its pages never got the watch's own swipe
-        // back — only a back button and a title bar that cost the top of the screen.
-        NavigationStack(path: $sessions.path) {
-            TabView(selection: $page) {
-                SessionsView().tag(Page.sessions).environment(\.onScreen, page == .sessions)
-                HomeView().tag(Page.home).environment(\.onScreen, page == .home)
-                DayView().tag(Page.day)
-                HealthView().tag(Page.health)
-            }
-            // No page dots: they are a strip of screen spent saying what a swipe already says.
-            .tabViewStyle(.page(indexDisplayMode: .never))
-            .navigationDestination(for: String.self) { key in SessionView(key: key) }
+        // **A session opens INSIDE the sessions page** (its own NavigationStack, in SessionsView), so the
+        // row of pages still swipes with one open, and it is still open when he swipes back. The page
+        // row takes the sideways swipe, which is why the session's name, not a swipe, is what closes it.
+        TabView(selection: $page) {
+            SessionsView().tag(Page.sessions).environment(\.onScreen, page == .sessions)
+            HomeView().tag(Page.home).environment(\.onScreen, page == .home)
+            DayView().tag(Page.day)
+            HealthView().tag(Page.health)
         }
+        // No page dots: they are a strip of screen spent saying what a swipe already says.
+        .tabViewStyle(.page(indexDisplayMode: .never))
         // **The command's state lives HERE, once, above everything, on every page**: the edge of the
         // glass (`CommandBorder`), which also holds the double-tap binding. Inside a page it would be
-        // part of that page's content and slide with it on a swipe; over the stack it stays put.
+        // part of that page's content and slide with it on a swipe; over the row it stays put.
         .overlay { CommandBorder() }
-        // Press and hold anywhere throws away what is under way. It is on the whole stack rather than
+        // Press and hold anywhere throws away what is under way. It is on the whole row rather than
         // a page for the same reason, and does nothing when there is nothing to throw away.
         .simultaneousGesture(LongPressGesture(minimumDuration: 0.6).onEnded { _ in
             CommandBorder.cancel(chat: chat, sessions: sessions)
         })
         .onOpenURL { url in
-            guard url.scheme == "statushub", url.host == "record" else { return }
-            // `?flow=silence|locked`: which complication it was. None is the standard flow.
-            let flow = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems?
-                .first { $0.name == "flow" }?.value.flatMap(Capture.Flow.init) ?? .standard
-            chat.requestRecording(flow)
+            guard url.scheme == "statushub" else { return }
+            let query = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems ?? []
+            switch url.host {
+            case "record":
+                // `?flow=silence|locked|quick`: which complication it was. None is the standard flow.
+                let flow = query.first { $0.name == "flow" }?.value.flatMap(Capture.Flow.init) ?? .standard
+                chat.requestRecording(flow)
+            case "open":
+                // `?page=day|sessions`: a complication that only travels, as a page's control does.
+                if let p = query.first(where: { $0.name == "page" })?.value.flatMap({ WatchPage(rawValue: $0) }) {
+                    router.open(p)
+                }
+            default: break
+            }
         }
         // A record request (complication or Hub control) always lands on home, whichever page was
-        // showing — and a command, not a follow-up, so an open session closes.
-        // **Every control closes an open session.** A session is pushed over the whole row of pages, so
-        // turning the page underneath it changes nothing he can see: the session stays on top.
+        // showing. A session left open on the sessions page stays open: the command goes to the hub
+        // because home is showing (`Sessions.target`).
         .onChange(of: chat.recordRequested) { _, asked in
-            if asked { sessions.path = []; page = .home }
+            if asked { page = .home }
         }
-        // A control that names a page (Control Center, the Action button, the Smart Stack) turns to it.
+        // A control that names a page (Control Center, the Action button, the Smart Stack, the Day and
+        // Sessions complications) turns to it. Sessions always lands on the LIST, closing any session
+        // left open there; the other pages leave it open for when he swipes back.
         .onChange(of: router.asked, initial: true) { _, asked in
             guard let asked else { return }
-            sessions.path = []
+            if asked == .sessions { sessions.path = [] }
             page = Page(asked)
             router.asked = nil
         }
@@ -180,6 +187,7 @@ struct RootView: View {
     /// A page loads and holds its stream open only while it is the one on screen.
     private func follow() {
         let live = phase == .active
+        sessions.onPage = page == .sessions
         if live && page == .sessions { sessions.activate() } else { sessions.deactivate() }
         if live && page == .home { chat.activate() } else { chat.deactivate() }
         // The day page draws food and training live, so it follows both or neither. The health page

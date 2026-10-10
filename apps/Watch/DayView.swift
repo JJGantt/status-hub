@@ -42,10 +42,15 @@ struct DayView: View {
             case .muscles: muscles
             }
         }
-        // A control asked for one of the full lists: open it, whatever the page was showing.
+        // A control asked for one of the full lists, or for the page itself (the Hub Day complication):
+        // show that, whatever the page was showing.
         .onChange(of: router.dayList, initial: true) { _, asked in
             guard let asked else { return }
-            panel = asked == .nutrition ? .food : .exercises
+            switch asked {
+            case .nutrition: panel = .food
+            case .workout: panel = .exercises
+            default: panel = .overview; totals = false
+            }
             router.dayList = nil
         }
         #if targetEnvironment(simulator)

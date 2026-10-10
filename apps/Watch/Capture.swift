@@ -16,10 +16,12 @@ final class Capture: ObservableObject {
     }
 
     /// What a press does to a recording in progress, chosen by whatever started it. `standard` is the
-    /// app's own: a press locks the recording open, and the next sends. The two watch-face launchers each
+    /// app's own: a press locks the recording open, and the next sends. The watch-face launchers each
     /// skip a step: `silence` records as standard does but its first press sends, and `locked` opens
-    /// already locked, so its first press sends too.
-    enum Flow: String { case standard, silence, locked }
+    /// already locked, so its first press sends too. `quick` is `silence` with a hard cap: it also sends
+    /// itself `quickCap` seconds after the microphone opens, whatever he is doing — for one-sentence
+    /// commands.
+    enum Flow: String { case standard, silence, locked, quick }
 
     @Published private(set) var owner: Owner?
     /// The current recording's flow; `standard` when nothing is recording.
@@ -51,6 +53,9 @@ final class Capture: ObservableObject {
     /// `watch_speech_ratio` (8 when unset) times the room's quietest level instead, so it follows the room.
     private static var followsRoom = false
     private static var roomRatio: Float = 8
+    /// The `quick` flow's hard cap, in seconds of audio from the moment the microphone opened (the
+    /// chirp): `watch_quick_s` in the hub's settings, read with `hang`. Unset, 5.
+    private static var quickCap: TimeInterval = 5
 
     /// Audio nobody has spoken in, after which a recording is closed rather than left holding the
     /// microphone — and with it the mute on every room mic. The listener starts another segment instead
@@ -309,6 +314,13 @@ final class Capture: ObservableObject {
             }
             return
         }
+        // The quick flow's cap: the command goes at `quickCap` however it is going. Nothing heard by
+        // then is nothing to send, and is thrown away rather than handed to Whisper to invent words for.
+        if flow == .quick && owner != .listener && segment >= Self.quickCap {
+            logEnd("cap")
+            if endpoint.heard { onSilence?() } else { cancel() }
+            return
+        }
         guard endsOnSilence, ended else { return }
         if owner == .listener {
             logEnd("silence")
@@ -356,13 +368,14 @@ final class Capture: ObservableObject {
                             "spoken": endpoint.spoken, "seconds": segment])
     }
 
-    /// The two silence settings, from one read of the hub's settings.
+    /// The endpoint's settings and the quick cap, from one read of the hub's settings.
     private static func readSettings() async {
         guard let all = try? await Hub.settings() else { return }
         if let v = all["watch_silence_s"].flatMap({ Double("\($0)") }), v > 0 { hang = v }
         if let v = all["watch_speech_min"].flatMap({ Float("\($0)") }), v > 0 { speechMin = v }
         followsRoom = all["watch_speech_mode"].map { "\($0)" } == "room"
         if let v = all["watch_speech_ratio"].flatMap({ Float("\($0)") }), v > 0 { roomRatio = v }
+        if let v = all["watch_quick_s"].flatMap({ Double("\($0)") }), v > 0 { quickCap = v }
     }
 
     private func setMuted(_ on: Bool) {

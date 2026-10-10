@@ -8,8 +8,9 @@ final class Router: ObservableObject {
     static let shared = Router()
 
     @Published var asked: WatchPage?
-    /// Which of the day page's full lists a control asked for: Nutrition opens today's food log,
-    /// Workout the exercise list. The day page takes it and clears it.
+    /// What the day page should show when a control lands on it: Nutrition opens today's food log,
+    /// Workout the exercise list, Day the page itself with nothing opened. The day page takes it and
+    /// clears it.
     @Published var dayList: WatchPage?
 
     private init() {}

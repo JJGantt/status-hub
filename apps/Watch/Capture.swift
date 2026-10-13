@@ -17,8 +17,8 @@ final class Capture: ObservableObject {
 
     /// How a recording ends, chosen by whatever started it. A press always sends. `standard` (the app's
     /// own) also sends itself at his silence; `silence` is the same, kept so the `Hub Silence`
-    /// complication's URL still opens. `locked` — reached only from the `Hub Locked` complication —
-    /// ignores the silence, so only a press ends it. `quick` is `standard` with a hard cap: it also sends
+    /// complication's URL still opens. `locked` — every session follow-up, and the `Hub Locked`
+    /// complication — ignores the silence, so only a press ends it. `quick` is `standard` with a hard cap: it also sends
     /// itself `quickCap` seconds after the microphone opens, whatever he is doing — for one-sentence
     /// commands.
     enum Flow: String { case standard, silence, locked, quick }

@@ -190,10 +190,10 @@ struct CommandBorder: View {
         Hub.log("tap", ["y": Int(at.y)])
     }
 
-    /// **The one press.** Double tap and a tap on the conversation both come here, and home and a
-    /// session follow the same flow: a press starts a recording (amber, sends itself at his silence),
-    /// and the next press sends it. There is no lock step; a locked recording comes only from the
-    /// `Hub Locked` complication (`Capture.Flow.locked`), and a press sends that too.
+    /// **The one press.** Double tap and a tap on the conversation both come here: a press starts a
+    /// recording and the next press sends it. On home it is amber and also sends itself at his silence;
+    /// in a session it is locked (red, `Capture.Flow.locked`) and only the press sends it, as is a
+    /// recording from the `Hub Locked` complication. There is no lock step.
     static func press(chat: Chat, sessions: Sessions, how: String) {
         // A reply being spoken: the press stops it and does nothing else. The next one records.
         if Speaker.shared.isSpeaking {

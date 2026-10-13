@@ -29,6 +29,18 @@ struct SessionRow: Decodable, Identifiable, Equatable {
     var key: String { claude_session_id ?? id }
 }
 
+/// Work sent to a machine with no room for it yet (`desk_queue`): the Pi holds a new session until a
+/// slot and enough memory are free. Nothing to open until it launches, but it is the work he just
+/// asked for, so the list shows it.
+struct QueuedRow: Decodable, Identifiable, Equatable {
+    let id: String
+    let repo: String?
+    let label: String?
+    let prompt: String?
+
+    var name: String { sessionName(label, repo) ?? "Session" }
+}
+
 /// **One event of a conversation's list**, as the hub keeps it (server.js, the event log): his words
 /// (`prompt`), a tool call, what the session says between tool calls (`text`), or its reply. `seq` is
 /// its position in the conversation, given by the hub; `id` its identity. A prompt queued behind a
@@ -112,6 +124,8 @@ final class Sessions: ObservableObject {
 
     /// One row per conversation: its running row if it has one, else its newest parked one.
     @Published private(set) var list: [SessionRow] = []
+    /// Sessions waiting for a machine to have room, oldest first.
+    @Published private(set) var queued: [QueuedRow] = []
     /// The focused session — where a spoken follow-up goes — and whether he pinned it there.
     @Published private(set) var focus: String?
     @Published private(set) var pinned = false
@@ -186,24 +200,31 @@ final class Sessions: ObservableObject {
         loadTask = nil
     }
 
+    /// The hub's session payload: `/api/sessions`, or a `sessions` frame on the stream, which carries
+    /// the same thing whenever a session starts, ends or queues.
+    private struct Lists: Decodable {
+        let resident: [SessionRow]
+        let evicted: [SessionRow]
+        let queued: [QueuedRow]?
+        let focus: String?
+        let pinned: Bool?
+    }
+
     private func fetchSessions() async {
-        struct Lists: Decodable {
-            let resident: [SessionRow]
-            let evicted: [SessionRow]
-            let focus: String?
-            let pinned: Bool?
-        }
         repeat {
             reloadAfter = false
-            if let l: Lists = try? await Hub.json("/api/sessions?brief=1") {
-                rows = l.resident + l.evicted
-                var seen = Set<String>()
-                list = rows.filter { seen.insert($0.key).inserted }
-                    .sorted { ($0.n ?? .max) < ($1.n ?? .max) }
-                focus = l.focus
-                pinned = l.pinned ?? false
-            }
+            if let l: Lists = try? await Hub.json("/api/sessions?brief=1") { apply(l) }
         } while reloadAfter
+    }
+
+    private func apply(_ l: Lists) {
+        rows = l.resident + l.evicted
+        var seen = Set<String>()
+        list = rows.filter { seen.insert($0.key).inserted }
+            .sorted { ($0.n ?? .max) < ($1.n ?? .max) }
+        queued = l.queued ?? []
+        focus = l.focus
+        pinned = l.pinned ?? false
     }
 
     /// The row a conversation's words go to: its running row, else its newest parked one.
@@ -287,8 +308,8 @@ final class Sessions: ObservableObject {
         }
         failures[key] = nil
         Hub.log("record-start", ["view": "session", "row": row(for: key)?.id ?? ""])
-        // Ends itself at the silence after he speaks, as a command on home does, or at the next press.
-        capture.start(for: .session(key), onSilence: { [weak self] in self?.stopRecording(key) },
+        // Locked open: a follow-up is sent by his next press, never by a pause.
+        capture.start(for: .session(key), flow: .locked, onSilence: { [weak self] in self?.stopRecording(key) },
                       onTaken: { [weak self] in self?.stopRecording(key) }) { [weak self] error in
             Hub.log("record-failed", ["error": String(describing: error).prefix(120).description])
             self?.failures[key] = (error as? Recorder.Failure) == .denied ? .micDenied : .message(error.localizedDescription)
@@ -385,6 +406,10 @@ final class Sessions: ObservableObject {
     /// old seq is a duplicate delivery and is ignored. A conversation not opened here only keeps its
     /// newest event, for the list's row.
     private func frame(_ event: String, _ data: String) async {
+        if event == "sessions" {
+            if let l = try? JSONDecoder().decode(Lists.self, from: Data(data.utf8)) { apply(l) }
+            return
+        }
         struct Frame: Decodable { let conversation: String; let session: String?; let epoch: String?; let ev: SessionEvent }
         guard event == "ev", let f = try? JSONDecoder().decode(Frame.self, from: Data(data.utf8)) else { return }
         let key = f.conversation

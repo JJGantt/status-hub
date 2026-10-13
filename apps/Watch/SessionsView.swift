@@ -1,7 +1,7 @@
 import SwiftUI
 
-/// The page left of home: one row per conversation the hub knows, running first, then parked, most
-/// recently active first within each. A tap opens one.
+/// The page left of home: sessions still queued for a machine on top, then one row per conversation
+/// the hub knows, running first, then parked, most recently active first within each. A tap opens one.
 ///
 /// A row carries the same three marks as the phone's list (`cards/sessions.js`, `phone-home.css`),
 /// because they answer different questions and are read together: the WHITE edge is the focused
@@ -29,12 +29,14 @@ struct SessionsView: View {
     private var list: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 0) {
+                ForEach(Array(sessions.queued.enumerated()), id: \.element.id) { i, q in
+                    queuedRow(q)
+                        .overlay(alignment: .top) { if i > 0 { rule } }
+                }
                 ForEach(Array(sessions.list.enumerated()), id: \.offset) { i, s in
                     NavigationLink(value: s.key) { row(s) }
                         .buttonStyle(.plain)
-                        .overlay(alignment: .top) {
-                            if i > 0 { Rectangle().fill(Color(hex: "#222a33")).frame(height: 1) }
-                        }
+                        .overlay(alignment: .top) { if i > 0 || !sessions.queued.isEmpty { rule } }
                 }
                 // Which build is on the wrist, so a fix that has not arrived is not taken for one that
                 // failed. The TestFlight build number: CI stamps the run number into CFBundleVersion.
@@ -52,6 +54,35 @@ struct SessionsView: View {
         .scrollIndicators(.never)
         .topOfTheScreen()
         .background(Color.black.ignoresSafeArea())
+    }
+
+    private var rule: some View { Rectangle().fill(Color(hex: "#222a33")).frame(height: 1) }
+
+    /// A session waiting for a machine to have room: on top, since it is the newest thing asked for,
+    /// and not a link, since there is nothing running to open yet.
+    private func queuedRow(_ q: QueuedRow) -> some View {
+        HStack(alignment: .top, spacing: 6) {
+            Rectangle().fill(Color.clear).frame(width: 2)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(q.name)
+                    .font(.system(size: 14))
+                    .foregroundColor(Self.name)
+                    .lineLimit(2)
+                if let p = q.prompt, !p.isEmpty {
+                    Text(snippet(p))
+                        .font(.system(size: 11))
+                        .foregroundColor(.gray)
+                        .lineLimit(2)
+                }
+                Text("Queued")
+                    .font(.system(size: 9))
+                    .foregroundColor(Self.amber)
+                    .frame(height: 11, alignment: .leading)
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(.vertical, 8)
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     private static let build = Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "?"
@@ -135,8 +166,8 @@ struct SessionsView: View {
 /// One conversation: the hub's list of its events — his words, the tool calls, what the session says
 /// between them, its replies — drawn in order, plus his words on their way from this watch. Double tap
 /// or a tap anywhere on the glass is the one press
-/// (`CommandBorder.press`): it records a follow-up that sends itself at his silence, or at the next
-/// press; a parked session is resumed with the words. Scrolling is his finger or
+/// (`CommandBorder.press`): it records a follow-up, locked open until the next press sends it; a
+/// parked session is resumed with the words. Scrolling is his finger or
 /// the crown.
 struct SessionView: View {
     let key: String

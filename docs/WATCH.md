@@ -228,10 +228,16 @@ the on-screen conversation's list again whenever it becomes active or the stream
 conversation nobody has opened is never fetched: its frames only keep the newest event, for its row in
 the list (`latest`).
 
+**The list follows the hub's `sessions` frames** on `/api/session-stream`, the same payload as
+`/api/sessions`, pushed whenever a session starts, ends or queues; a session started while the page is
+open appears without leaving it. Sessions still waiting for a machine (`queued`, from `desk_queue`)
+sit on top, marked Queued and not openable, since nothing is running yet.
+
 A tap or double tap records a follow-up: the hub transcribes it without enqueueing anything
 (`/api/voice-command?dry=1`), and `POST /api/sessions/followup` types the words in, or resumes a
-parked session with them (`HUB-INTERNALS.md` §6b). **A follow-up records exactly as a command on home does**: it sends
-itself at his silence, or the next press sends it (`CommandBorder.press`, one flow everywhere).
+parked session with them (`HUB-INTERNALS.md` §6b). **A follow-up is always locked**: red edge, no silence ends it, and the
+next press sends it (`Capture.Flow.locked`, from `Sessions.startRecording`). A session gets talked to
+in long, paused thoughts, and a pause there must not send half of one.
 
 **A session's reply notification opens it.** `WatchAppDelegate` registers the `SESSION_REPLY`
 category with one foreground action, Open — the button double tap presses on a watch notification —
@@ -259,7 +265,7 @@ command goes to the session instead of the hub):
 | state | edge |
 |---|---|
 | recording, and the silence will end it | amber |
-| locked open through the silence (the `Hub Locked` complication only) | red |
+| locked open through the silence (every session follow-up, and the `Hub Locked` complication) | red |
 | the hub working on it (transcript or command) | white, a bright stretch travelling round a dim ring; with the wrist down, the whole line white |
 | always-on listening | blue, dim |
 | idle | none |
@@ -444,21 +450,22 @@ indistinguishable from one he asked for.
 After `Capture.unspoken` of audio with no speech in it, a command or a follow-up is cancelled and its clip thrown away, and the listener
 starts a fresh segment. The microphone and the mute it puts on every room mic are not left open
 because a recording started by accident — which the Smart Stack and the complication make easy. A
-**locked** recording is exempt: holding it open through silence is exactly what the lock is for. That
-is the one the `Hub Locked` complication opened, so a stray touch on that slot holds the microphone
-(and the room mics' mute) until a press or a press-and-hold ends it.
+**locked** recording is exempt: holding it open through silence is exactly what the lock is for. Every
+follow-up is locked, and so is the recording the `Hub Locked` complication opens, so a stray touch on
+that slot or on a session page holds the microphone (and the room mics' mute) until a press or a
+press-and-hold ends it.
 
 Every end logs `mic-end` with the numbers it decided on: `reason` (`silence` or `unspoken`), floor,
 threshold, peak, seconds spoken and seconds of audio. Tune the multiplier, the minimum or the minimum
 speech from those, not by feel.
 
-### A press starts, the next sends; only a complication locks
+### A press starts, the next sends; a session is always locked
 
-Double tap, or a tap on the conversation, starts a command, and the next press sends it; the silence
-after he speaks also sends it by itself. Home and a session follow the same two steps; both go through
-`CommandBorder.press`. **No press locks a recording open.** The only locked recording is the one the
-`Hub Locked` complication opens (`Capture.Flow`, chosen per recording and reset when it ends) — the red
-edge, no silence ends it — and its first press sends. `Hub Silence` now starts exactly what the
+Double tap, or a tap on the conversation, starts a command, and the next press sends it. Home and a
+session follow the same two steps, both through `CommandBorder.press`. On home the silence after he
+speaks also sends it by itself. **In a session it does not**: a follow-up is always locked
+(`Capture.Flow`, chosen per recording and reset when it ends) — the red edge, no silence ends it — and
+so is the recording the `Hub Locked` complication opens; the first press sends either. `Hub Silence` now starts exactly what the
 standard launcher does; it stays so a face that holds it keeps working. `Hub Quick` is the standard
 recording with a hard cap, for one-sentence commands: it also sends
 itself `watch_quick_s` seconds (Settings → Watch: quick command, 5 when unset) after the microphone

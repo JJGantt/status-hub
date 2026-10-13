@@ -169,10 +169,12 @@ The hub's `POST /api/sessions/followup` (the watch's and the phone's session vie
 id instead of by focus, and for a parked session it writes `resume_session` with the words as the
 prompt instead — HUB-INTERNALS §6b.
 
-`follow_up`, `resume_session` and `end_session` answer only once the machine has marked the command
+`start_session`, `follow_up`, `resume_session` and `end_session` answer only once the machine has marked the command
 `done` or `error` (`dispatchConfirmed` in data-layer, a realtime subscription opened before the
 insert, up to 20s; past that the tool says it is unconfirmed, never sent). An insert always succeeds, so
-answering at insert time reports delivery for commands the machine then refuses.
+answering at insert time reports delivery for commands the machine then refuses. For
+`start_session` the verdict also says whether the session LAUNCHED or was QUEUED (the Pi's detail
+starts `queued`), and the tool says which — a queued session is not a started one.
 
 All of them are on the fast path (`SAFE_TOOLS`): they route prompts and manage what is running, and
 none of them invents a value.
@@ -415,6 +417,7 @@ A session any other agent dispatches has no `relay` flag and stays out of the th
 | the wall's footer (`cards/deskfoot.js`) | only the session holding follow-ups | none |
 | **TV session focus** (`/tv-session-focus`) | the running sessions as tabs, and the focused one's reply | none — voice only |
 | the home wall (`/tv`, `tv-home.js`) | three, most recently active first, each with a live line of what it is doing; the focused one's full reply below | none — voice only |
+| the watch (`SessionsView`) | queued sessions on top, then every running and parked one, live off the `sessions` frames | open a session; a follow-up is always locked until the next press |
 | voice (`get_sessions`) | the numbered list, and what each last said | every verb |
 | the hub conversation (web `.ai-msg-session`, watch tint) | a hub-dispatched session's first reply, tinted and named by its label | reply is a fresh command |
 

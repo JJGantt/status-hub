@@ -52,6 +52,10 @@ final class Capture: ObservableObject {
     /// `watch_speech_mode`: `fixed` (the default) is the line above; `room` drops it and puts the line at
     /// `watch_speech_ratio` (8 when unset) times the room's quietest level instead, so it follows the room.
     private static var followsRoom = false
+    /// `watch_speech_mode` = `voice`: Apple's sound classifier decides what is speech (`VoiceDetector`),
+    /// and the level line plays no part. Speech is a window scored at least `watch_voice_min` (0.5 unset).
+    private static var hearsVoice = false
+    private static var voiceMin: Float = 0.5
     private static var roomRatio: Float = 8
     /// The `quick` flow's hard cap, in seconds of audio from the moment the microphone opened (the
     /// chirp): `watch_quick_s` in the hub's settings, read with `hang`. Unset, 5.
@@ -97,9 +101,12 @@ final class Capture: ObservableObject {
     /// arriving, not a timer, so a line only appears while the microphone is genuinely still feeding.
     private var listenSince: Date?
     private var rolls = 0
+    /// The classifier's latest verdict on whether he is talking, 0…1.
+    private var voice: Float = 0
 
     private init() {
         recorder.onLevel = { [weak self] level, seconds in self?.heard(level, seconds) }
+        recorder.onVoice = { [weak self] speech in self?.voice = speech }
         recorder.onInterruption = { [weak self] began in self?.interrupted(began) }
     }
 
@@ -211,6 +218,8 @@ final class Capture: ObservableObject {
             : Endpointer(hang: Self.hang, minimum: Self.speechMin)
         spokeAt = nil
         segment = 0
+        voice = 0
+        recorder.classifies = Self.hearsVoice
         arming = true
         opening = true
         if endsOnSilence { Task { await Self.readSettings() } }
@@ -281,7 +290,9 @@ final class Capture: ObservableObject {
         guard let owner, !arming else { return }   // nothing counts until the mic is open
         let wasHeard = endpoint.heard
         endpoint.hang = Self.hang
-        let ended = endpoint.feed(level, seconds)
+        // With the classifier running, ITS verdict is what counts as speech; if it failed to load, the
+        // level line still ends the recording rather than nothing ending it.
+        let ended = endpoint.feed(level, seconds, voice: recorder.classifying ? voice >= Self.voiceMin : nil)
         segment += seconds
         if endpoint.heard && !wasHeard { spokeAt = Date() }
         // Accidentally recording: nobody spoke into it, or it has run on and on unlocked. Either way
@@ -355,7 +366,8 @@ final class Capture: ObservableObject {
         Hub.log("mic-end", ["reason": reason, "owner": owner.map { String(describing: $0) } ?? "", "hang": endpoint.hang,
                             "floor": endpoint.floor.isFinite ? Double(endpoint.floor) : -1,
                             "threshold": Double(endpoint.threshold), "peak": Double(endpoint.peak),
-                            "spoken": endpoint.spoken, "seconds": segment])
+                            "spoken": endpoint.spoken, "seconds": segment,
+                            "classifier": recorder.classifierLoad ?? -1])
     }
 
     /// The endpoint's settings and the quick cap, from one read of the hub's settings.
@@ -363,7 +375,10 @@ final class Capture: ObservableObject {
         guard let all = try? await Hub.settings() else { return }
         if let v = all["watch_silence_s"].flatMap({ Double("\($0)") }), v > 0 { hang = v }
         if let v = all["watch_speech_min"].flatMap({ Float("\($0)") }), v > 0 { speechMin = v }
-        followsRoom = all["watch_speech_mode"].map { "\($0)" } == "room"
+        let mode = all["watch_speech_mode"].map { "\($0)" }
+        followsRoom = mode == "room"
+        hearsVoice = mode == "voice"
+        if let v = all["watch_voice_min"].flatMap({ Float("\($0)") }), v > 0, v < 1 { voiceMin = v }
         if let v = all["watch_speech_ratio"].flatMap({ Float("\($0)") }), v > 0 { roomRatio = v }
         if let v = all["watch_quick_s"].flatMap({ Double("\($0)") }), v > 0 { quickCap = v }
     }
@@ -412,13 +427,14 @@ struct Endpointer {
 
     var threshold: Float { max(floor * ratio, minimum) }
 
-    /// Takes one buffer's level and length; true when that buffer ended the utterance.
-    mutating func feed(_ level: Float, _ seconds: TimeInterval) -> Bool {
+    /// Takes one buffer's level and length; true when that buffer ended the utterance. `voice`, when
+    /// given, is the classifier's verdict and replaces the level line as what counts as speech.
+    mutating func feed(_ level: Float, _ seconds: TimeInterval, voice: Bool? = nil) -> Bool {
         // A buffer of exact digital silence (the microphone still opening) is not the room. Counted, it
         // would put the room's level, and with `ratio` alone the whole line, at zero.
         if level > 0 { floor = min(floor, level) }
         peak = max(peak, level)
-        if level >= threshold {
+        if voice ?? (level >= threshold) {
             spoken += seconds
             if spoken >= Self.minSpeech { heard = true }
             quiet = 0

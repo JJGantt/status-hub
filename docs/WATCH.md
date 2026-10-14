@@ -415,9 +415,22 @@ A command, on home or in a session, ends itself once he has spoken and then stop
 `Endpointer` (in `Capture.swift`) is the phone's always-on rule (`makeListener` in `voiceagent.js`):
 the floor is the quietest buffer so far (exact zeros, the microphone still opening, are not the
 room), and once speech has been heard, `watch_silence_s` below the speech line ends it exactly as a press
-would. **The speech line has two modes, a switch in Settings (Watch: speech line):** `fixed`, the default,
+would. **The speech line has three modes, a switch in Settings (Watch: speech line):** `fixed`, the default,
 is 2.5x the floor and at least `watch_speech_min` (0.02 when unset); `room` drops the fixed number and is
-`watch_speech_ratio` (8 when unset) times the floor, so it follows the room. All of these are hub
+`watch_speech_ratio` (8 when unset) times the floor, so it follows the room. `voice` drops the level line
+altogether: Apple's built-in sound classifier (`VoiceDetector` in `Recorder.swift`, SoundAnalysis
+`.version1`, on the device) scores every half second, a new window each quarter second, and only a window
+scored `speech` at least `watch_voice_min` (0.5 unset) counts. Any level line is crossed by a snap, a
+tap, a door or a running tap, and each of those restarts the trailing silence; the classifier calls
+them what they are. Measured on 25 of his kept watch commands (run on the Mac, which has the same model):
+kitchen noise in the long weigh-the-ingredients commands — zippers, door slams, glass clinks, the tap
+running for seconds — scored under 0.3, his ordinary commands never went more than about 2s without a
+window over 0.5, and his quiet speech that sat under the 0.02 line still scored as speech. At 0.3 the
+trailing silence itself scores as speech often enough to keep a recording open, which is why the
+default is 0.5. A duration rule (a sound must last N ms to count) is the obvious cheaper fix and does not
+reach far enough: the running tap lasts seconds. The verdict arrives a beat behind the audio, and if the
+model fails to load (`voice-classifier` in the log) the level line ends the recording instead. Its cost
+on the watch is `classifier` in `mic-end`: seconds of work per second of audio. All of these are hub
 settings, read together at every start and kept for the next, since a start does not wait on the hub;
 `watch_silence_s` is Trailing silence in Settings (5 set on 2026-09-25, 3 when unset). **In `fixed` mode in a quiet room `watch_speech_min` is the whole line**, since
 2.5x a floor of 0.0003-0.0015 is under it, and his ordinary voice dips below 0.02 mid-sentence: a kept

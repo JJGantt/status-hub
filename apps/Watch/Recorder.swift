@@ -1,4 +1,5 @@
 import AVFoundation
+import SoundAnalysis
 
 /// The watch's microphone, recorded to temporary .m4a files (AAC, mono, 16 kHz). The hub transcribes a
 /// clip through `/api/voice-command`, the same as the phone's microphone, so nothing here listens for
@@ -37,6 +38,16 @@ final class Recorder {
     /// The system took the microphone (Siri, a call, another app recording) — `true` — or gave it back,
     /// `false`. A recording cannot survive the first; the second is when a new one may start.
     var onInterruption: ((Bool) -> Void)?
+    /// Run Apple's sound classifier over the recording (`watch_speech_mode` = `voice`). Read at `start`.
+    var classifies = false
+    /// How sure the classifier is that the last half second was speech (0…1), on the main actor, about
+    /// four times a second. Only while `classifying`.
+    var onVoice: ((Float) -> Void)?
+    /// The classifier is actually running on this recording: asked for, and the model loaded.
+    var classifying: Bool { detector != nil }
+    /// The classifier's working time as a fraction of the audio it has been fed: its cost on this watch.
+    var classifierLoad: Double? { detector?.load }
+    private var detector: VoiceDetector?
 
     private let engine = AVAudioEngine()
     private var sink: Sink?
@@ -69,6 +80,10 @@ final class Recorder {
         let format = input.outputFormat(forBus: 0)
         guard format.sampleRate > 0, format.channelCount > 0 else { throw Failure.notStarted }
         let sink = try Sink(input: format)
+        let detector = classifies ? VoiceDetector(format: format, report: { [weak self] speech in
+            DispatchQueue.main.async { MainActor.assumeIsolated { self?.onVoice?(speech) } }
+        }) : nil
+        if classifies && detector == nil { Hub.log("voice-classifier", ["ok": false]) }
         let gate = self.gate
         let firstBuffer = self.firstBuffer
         firstBuffer.set(false)
@@ -84,6 +99,7 @@ final class Recorder {
             let seconds = Double(buffer.frameLength) / format.sampleRate
             if gate.swallow(seconds) { return }
             let level = sink.write(buffer)
+            detector?.analyze(buffer)
             // Main queue, not a Task: a queue keeps the buffers in order, which the endpoint's running
             // count of silent seconds depends on.
             DispatchQueue.main.async { MainActor.assumeIsolated { self?.onLevel?(level, seconds) } }
@@ -131,6 +147,7 @@ final class Recorder {
             throw Failure.notStarted
         }
         self.sink = sink
+        self.detector = detector
         startedAt = Date()
     }
 
@@ -224,6 +241,8 @@ final class Recorder {
         guard let sink else { return nil }
         self.sink = nil
         engine.inputNode.removeTap(onBus: 0)
+        detector?.finish()
+        detector = nil
         player.stop()
         gate.hold(0)
         engine.stop()
@@ -358,5 +377,62 @@ private final class CueGate: @unchecked Sendable {
             left -= seconds
             return true
         }
+    }
+}
+
+/// Apple's built-in sound classifier (SoundAnalysis, `.version1`, 303 labels, on the device), asked one
+/// thing: how likely the last half second was to be SPEECH. It is what lets the silence endpoint ignore
+/// a snap, a tap, a door, a zipper or a running tap — loud enough to cross any level line, and none of
+/// them speech. Measured on 25 of his kept watch commands (`docs/WATCH.md` § It ends itself at the
+/// silence): those noises score under 0.3, his talking over 0.5, and his quiet speech that falls under
+/// the level line still scores as speech.
+///
+/// Half-second windows, a new one every quarter second. The analysis runs on its own queue, never the
+/// tap's audio thread, and the verdict reaches `Capture` a beat behind the audio it describes.
+final class VoiceDetector: NSObject, SNResultsObserving, @unchecked Sendable {
+    private let analyzer: SNAudioStreamAnalyzer
+    private let queue = DispatchQueue(label: "voice-detector")
+    private let report: (Float) -> Void
+    /// Frames handed to the analyzer so far; touched only on `queue`.
+    private var position: AVAudioFramePosition = 0
+    private let lock = NSLock()
+    private var busy: TimeInterval = 0
+    private var audio: TimeInterval = 0
+
+    init?(format: AVAudioFormat, report: @escaping (Float) -> Void) {
+        analyzer = SNAudioStreamAnalyzer(format: format)
+        self.report = report
+        super.init()
+        guard let request = try? SNClassifySoundRequest(classifierIdentifier: .version1) else { return nil }
+        request.windowDuration = CMTime(seconds: 0.5, preferredTimescale: 1000)
+        request.overlapFactor = 0.5
+        do { try analyzer.add(request, withObserver: self) } catch { return nil }
+    }
+
+    func analyze(_ buffer: AVAudioPCMBuffer) {
+        queue.async { [self] in
+            let began = Date()
+            analyzer.analyze(buffer, atAudioFramePosition: position)
+            position += AVAudioFramePosition(buffer.frameLength)
+            let spent = Date().timeIntervalSince(began)
+            let seconds = Double(buffer.frameLength) / buffer.format.sampleRate
+            lock.withLock { busy += spent; audio += seconds }
+        }
+    }
+
+    var load: Double { lock.withLock { audio > 0 ? busy / audio : 0 } }
+
+    func finish() {
+        queue.async { [self] in analyzer.completeAnalysis() }
+    }
+
+    func request(_ request: SNRequest, didProduce result: SNResult) {
+        guard let result = result as? SNClassificationResult else { return }
+        report(Float(result.classification(forIdentifier: "speech")?.confidence ?? 0))
+    }
+
+    func request(_ request: SNRequest, didFailWithError error: Error) {
+        let text = String(describing: error).prefix(120).description
+        DispatchQueue.main.async { Hub.log("voice-classifier", ["ok": false, "error": text]) }
     }
 }

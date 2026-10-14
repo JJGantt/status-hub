@@ -106,12 +106,14 @@ export async function open() {
         '<input class="settings-num" type="number" min="1" max="30" step="0.5" inputmode="decimal" ' +
         'data-key="watch_quick_s" value="' + sil('watch_quick_s', 5) + '"></label>' +
 
-      // What counts as his voice on the watch (Capture.swift `Endpointer`): a FIXED lowest level, or a
-      // line that follows the ROOM, so many times its quietest level.
+      // What counts as his voice on the watch (Capture.swift `Endpointer`): a FIXED lowest level, a
+      // line that follows the ROOM, so many times its quietest level, or VOICE — Apple's on-device sound
+      // classifier (`VoiceDetector`), where only speech counts and a snap or a door does not.
       '<div class="settings-sec">Watch: speech line</div>' +
       '<div class="settings-seg" id="set-speech-mode">' +
-        '<button type="button" data-v="fixed"' + (speechMode === 'room' ? '' : ' class="on"') + '>Fixed</button>' +
-        '<button type="button" data-v="room"' + (speechMode === 'room' ? ' class="on"' : '') + '>Room</button>' +
+        ['fixed', 'room', 'voice'].map((v) => '<button type="button" data-v="' + v + '"' +
+          ((speechMode === v || (v === 'fixed' && !['room', 'voice'].includes(speechMode))) ? ' class="on"' : '') + '>' +
+          v[0].toUpperCase() + v.slice(1) + '</button>').join('') +
       '</div>' +
       '<label class="settings-row"><span>Fixed</span>' +
         '<input class="settings-num" type="number" min="0.001" max="0.1" step="0.001" inputmode="decimal" ' +
@@ -119,6 +121,9 @@ export async function open() {
       '<label class="settings-row"><span>Room ×</span>' +
         '<input class="settings-num" type="number" min="1" max="50" step="0.5" inputmode="decimal" ' +
         'data-key="watch_speech_ratio" value="' + sil('watch_speech_ratio', 8) + '"></label>' +
+      '<label class="settings-row"><span>Voice ≥</span>' +
+        '<input class="settings-num" type="number" min="0.05" max="0.95" step="0.05" inputmode="decimal" ' +
+        'data-key="watch_voice_min" value="' + sil('watch_voice_min', 0.5) + '"></label>' +
 
       // How a reply sounds when it is read aloud: the voice is the server's (`lib/speech.js`), shared by
       // the phone and the watch.

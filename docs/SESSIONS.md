@@ -333,21 +333,44 @@ the complete capture was discarded as its duplicate.
 | `LAUNCH_GRACE_S` | 90s | a new session is not declared dead before this — and a row binds only a process that started within this of the row (Mac), which is what keeps a later `claude` in the same tab off an older row |
 | `MIC_QUIET_S` | 2.5s | every mic silent this long before a command is claimed |
 | `TTY_INPUT_MAX` | 900 | above this a follow-up goes by file |
-| `MIN_FREE_MB` / `MAX_SWAP_PCT` | 900 / 70 | Pi only: the admission floor — the only limit on how many sessions run there |
+| `PI_DESK_SESSION_BUDGET_MB` / `_MAX_MB` | 800 / 1200 | Pi only: a session's `memory.high` (over it with anon memory = heavy work, moved to the Mac) and `memory.max` |
+| `PI_DESK_RESERVE_MB` / `MAX_SWAP_PCT` | 300 / 70 | Pi only: free memory kept beyond every session's budget, and the swap ceiling, for admission |
 | retention | 7 / 14 / 30 / 7 days | closed sessions / parked / command log / raw captures |
 
 ---
 
 ### Capacity
 
-The Pi has no session count. A session holds memory for as long as it is open (~250-420MB, growing
-with its conversation) and almost no CPU, since a turn is mostly waiting on the API — so the one limit
-is memory (`makeRoom` in pi-desk). A new session or a resume starts on the Pi when MemAvailable is over
-the floor and swap under its ceiling; otherwise idle sessions are parked, least recently active
-first, until it is. When every resident is mid-turn and memory is still short, the work goes to the
-Mac — a new session as a fresh `open_session`, a resume through the transfer path with its prompt —
-and only with the Mac asleep does it wait in `desk_queue`. A cap on sessions mid-turn would hold a
-request behind busy sessions while the processor idles, which is the failure this replaced.
+**The Pi is not for memory-heavy work.** It has no session count; memory is the one limit, and it is
+enforced per session (`pi-desk/cgroups.js`). `pi-desk.service` is delegated (`Delegate=yes`,
+`DelegateSubgroup=supervisor`): the daemon and tmux server sit in `supervisor/`, and each session in
+`s/<tmux-name>/`, which `launch.sh` joins before exec'ing claude, so claude, its tool servers and every
+command it runs are charged there.
+
+- **Admission** (`makeRoom` / `shortfall`): a new session or resume starts on the Pi only if
+  MemAvailable covers its whole budget, plus what every running session has left before reaching its
+  own budget, plus the reserve — sessions grow after launch, so room is counted against budgets, not
+  current use. Otherwise idle sessions are parked, least recently active first, until it fits; with
+  every resident mid-turn the work goes to the Mac (a fresh `open_session`, or a resume through the
+  transfer path with its prompt); only with the Mac asleep does it wait in `desk_queue`.
+- **Heavy work moves** (`onHeavy`): the kernel rewrites a session's `memory.events` when it crosses
+  `memory.high`, and inotify delivers that. If its anon memory (resident plus swapped) is over budget,
+  the session is closed mid-turn, everything in its cgroup is killed, and it resumes on the Mac with
+  the prompt `Continue` and a system note (`orchestrator/moved-session.txt`) saying the last step was
+  cut off and should be redone. Waiting for the turn to end is not possible: the turn IS the heavy
+  work. With the Mac asleep it stays, with `memory.high` lifted so it is not throttled.
+- **A kill takes the command, not the session.** `tool.sh` is `CLAUDE_CODE_SHELL_PREFIX`: every Bash
+  command and tool server runs at `oom_score_adj` 1000, above claude's 800 and the kiosk's -500, so at
+  a session's `memory.max` or a machine-wide OOM the kernel picks the command.
+- **Cleanup.** Closing a session (`evict`) kills its cgroup, so nothing it started outlives it. At
+  startup, anything in the unit not descended from a live session, the daemon or the tmux server is
+  killed as a leftover.
+- Sessions are told in their system prompt (`pi-desk/pi-session.txt`) to run heavy work on the Mac
+  over SSH.
+
+A per-session `memory.high` crossing also counts page-cache reclaim, so a crossing acts only on anon
+memory over budget. A process moved into a cgroup leaves its existing memory charged where it was, so
+`sessionUsage` takes the larger of the cgroup count and its processes' RSS.
 
 ## 9. Known gaps
 

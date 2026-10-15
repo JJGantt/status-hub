@@ -425,7 +425,12 @@ tap, a door or a running tap, and each of those restarts the trailing silence; t
 them what they are. Measured on 25 of his kept watch commands (run on the Mac, which has the same model):
 kitchen noise in the long weigh-the-ingredients commands — zippers, door slams, glass clinks, the tap
 running for seconds — scored under 0.3, his ordinary commands never went more than about 2s without a
-window over 0.5, and his quiet speech that sat under the 0.02 line still scored as speech. At 0.3 the
+window over 0.5, and his quiet speech that sat under the 0.02 line still scored as speech. On all 158 kept watch commands
+(2026-10-15, classifier pauses bounded by whisper's word span, so trailing chatter and music are not counted),
+the longest pause inside his own words was 0.25s at the median, 1.5s at p90 and 3.25s at p95. Even
+five-minute rambles never paused over 3s. The longer pauses, 6-13s, were all read-the-scale dictations
+(cereal, eggs) where he stops on purpose while pouring. Under Voice those pauses end the recording at any
+trailing silence below them, because the clinks no longer hold it open. At 0.3 the
 trailing silence itself scores as speech often enough to keep a recording open, which is why the
 default is 0.5. A duration rule (a sound must last N ms to count) is the obvious cheaper fix and does not
 reach far enough: the running tap lasts seconds. The verdict arrives a beat behind the audio, and if the

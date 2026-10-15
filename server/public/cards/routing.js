@@ -43,6 +43,6 @@ export function render(s) {
       // number frozen at whatever it was when the machine stopped talking.
       (h ? chip('MEM', h.mem + '%', h.mem_state) : '') +
       (h && h.swap != null ? chip('SWP', h.swap + '%', h.swap_state) : '') +
-      (h && h.sessions != null ? chip('SES', h.sessions + '/' + (h.session_max || '?'), null) : '') +
+      (h && h.sessions != null ? chip('SES', String(h.sessions), null) : '') +
     '</div></div>';
 }

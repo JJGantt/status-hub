@@ -1291,7 +1291,7 @@ async function composeStatus() {
       return {
         mem: i.mem_pct, mem_state: band(i.mem_pct, 80, 92),
         swap: i.swap_pct ?? null, swap_state: i.swap_pct == null ? 'ok' : band(i.swap_pct, 40, 70),
-        sessions: i.sessions ?? null, session_max: i.session_max ?? null,
+        sessions: i.sessions ?? null,
       };
     })(),
   };

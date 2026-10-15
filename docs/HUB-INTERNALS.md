@@ -1030,8 +1030,8 @@ through the command instead.
 `POST /api/sessions/followup` (`{id, text, client_msg_id}`) hands words to one session's conversation,
 which is how the watch and the phone answer the session they are showing. Running, the words are typed in — the same
 `desk_commands` `follow_up` the voice tool writes for the focused session. Parked, the session is
-resumed with the words as its prompt: `resume_session` takes one on both machines, and a full Pi
-queues it for a slot. An asleep machine gets the words dead-lettered, like every desk command from the
+resumed with the words as its prompt: `resume_session` takes one on both machines, and a Pi with no
+memory to spare hands it to the Mac (or queues it while the Mac is asleep). An asleep machine gets the words dead-lettered, like every desk command from the
 hub, and a repeated `client_msg_id` returns the first command rather than sending them twice.
 
 **It asks about the conversation, not the row** (`conversationNow`). A resume makes a new row and leaves

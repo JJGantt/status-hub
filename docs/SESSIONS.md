@@ -93,8 +93,9 @@ so the user record that follows does not say it twice.
   so a machine can sweep only its own abandoned claims.
 - **`desk_focus`** — a single row holding the pin (`session_id`, set by `focus_session`) and the
   dispatch still opening (`command_id`). Unpinned, focus is computed from `active_at`, not stored here.
-- **`desk_queue`** — Pi only: work waiting for a residency slot, new sessions and resumes alike
-  (`resume_id` names the conversation a resume continues). Never expires (unlike a command).
+- **`desk_queue`** — Pi only: work neither machine can take yet — the Pi has no memory to spare and the
+  Mac is asleep — new sessions and resumes alike (`resume_id` names the conversation a resume
+  continues). Never expires (unlike a command). When the Mac wakes, the next pass hands it there.
 - **`desk_dead_letters`** — everything that could not run, with its whole payload.
 - **`transcripts` bucket** — mirrored transcript tails, `<claude_session_id>/<offset>.part`. A
   conversation's parts are cleared in BOTH places that abandon it: when retention forgets the session,
@@ -161,7 +162,7 @@ attaches to tmux over SSH and starts one by hand, which is not tracked.
 | `follow_up` | machine owning the target session | text typed into the live session, busy or not; the target is the session he NAMED (`session` param), else the focused one. A named parked session is resumed with the words instead. Naming leaves the pin alone |
 | `rename_session` | owning machine | `/rename <name>` typed in — the session renames itself |
 | `end_session` | owning machine | close the tab / tmux session, park the row |
-| `resume_session` | owning machine | `claude --resume <id>` in a new tab or tmux session, with an optional prompt; on a full Pi it waits in `desk_queue` for a slot like new work. Aimed at a session that is still running, both machines type the prompt into it |
+| `resume_session` | owning machine | `claude --resume <id>` in a new tab or tmux session, with an optional prompt; a Pi with no memory to spare hands it to the Mac with its conversation, like new work (§ Capacity). Aimed at a session that is still running, both machines type the prompt into it |
 | `transfer_session` | machine GIVING IT UP | close, flush the mirror, ask the other to resume |
 | `get_sessions` | — | the numbered list |
 
@@ -173,8 +174,10 @@ prompt instead — HUB-INTERNALS §6b.
 `done` or `error` (`dispatchConfirmed` in data-layer, a realtime subscription opened before the
 insert, up to 20s; past that the tool says it is unconfirmed, never sent). An insert always succeeds, so
 answering at insert time reports delivery for commands the machine then refuses. For
-`start_session` the verdict also says whether the session LAUNCHED or was QUEUED (the Pi's detail
-starts `queued`), and the tool says which — a queued session is not a started one.
+`start_session` and `resume_session` the verdict also says whether the session LAUNCHED or was QUEUED (the
+Pi's detail starts `queued`), and the tool says which — a queued session is not a started one. A Pi
+detail of `handed to the Mac as <id>` is not a verdict either: `followHandoff` waits on that Mac command
+and reports where the session really started.
 
 All of them are on the fast path (`SAFE_TOOLS`): they route prompts and manage what is running, and
 none of them invents a value.
@@ -330,11 +333,21 @@ the complete capture was discarded as its duplicate.
 | `LAUNCH_GRACE_S` | 90s | a new session is not declared dead before this — and a row binds only a process that started within this of the row (Mac), which is what keeps a later `claude` in the same tab off an older row |
 | `MIC_QUIET_S` | 2.5s | every mic silent this long before a command is claimed |
 | `TTY_INPUT_MAX` | 900 | above this a follow-up goes by file |
-| `RESIDENT_MAX` / `WORKING_MAX` | 3 / 2 | Pi only: memory bound, CPU bound |
-| `MIN_FREE_MB` | 900 | Pi only: below this, launching would OOM the wall display |
+| `MIN_FREE_MB` / `MAX_SWAP_PCT` | 900 / 70 | Pi only: the admission floor — the only limit on how many sessions run there |
 | retention | 7 / 14 / 30 / 7 days | closed sessions / parked / command log / raw captures |
 
 ---
+
+### Capacity
+
+The Pi has no session count. A session holds memory for as long as it is open (~250-420MB, growing
+with its conversation) and almost no CPU, since a turn is mostly waiting on the API — so the one limit
+is memory (`makeRoom` in pi-desk). A new session or a resume starts on the Pi when MemAvailable is over
+the floor and swap under its ceiling; otherwise idle sessions are parked, least recently active
+first, until it is. When every resident is mid-turn and memory is still short, the work goes to the
+Mac — a new session as a fresh `open_session`, a resume through the transfer path with its prompt —
+and only with the Mac asleep does it wait in `desk_queue`. A cap on sessions mid-turn would hold a
+request behind busy sessions while the processor idles, which is the failure this replaced.
 
 ## 9. Known gaps
 

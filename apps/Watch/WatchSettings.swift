@@ -8,6 +8,7 @@ enum WatchSettings {
     @MainActor static func refresh() async {
         guard let all = try? await Hub.settings() else { return }
         BorderStyle.shared.apply(all)
+        Capture.apply(all)
     }
 
 }

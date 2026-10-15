@@ -41,7 +41,8 @@ final class Capture: ObservableObject {
     var free: Bool { owner == nil || owner == .listener }
 
     /// Seconds of trailing silence that end an utterance: `watch_silence_s` in the hub's settings, read
-    /// at every start and kept for the next, since a start does not wait on the hub. Unset, 3 — the
+    /// whenever the app comes to the front and at every start, and kept for the next, since a start does
+    /// not wait on the hub. Unset, 3 — the
     /// same as every other capture source; at 2 an ordinary pause mid-sentence ended the command.
     private static var hang: TimeInterval = 3
     /// The lowest level that counts as his voice whatever the room's floor: `watch_speech_min` in the
@@ -373,6 +374,14 @@ final class Capture: ObservableObject {
     /// The endpoint's settings and the quick cap, from one read of the hub's settings.
     private static func readSettings() async {
         guard let all = try? await Hub.settings() else { return }
+        apply(all)
+    }
+
+    /// Takes the endpoint's settings from a read of the hub's settings. `WatchSettings.refresh` hands
+    /// over the read it makes every time the app comes to the front, so a change made in Settings
+    /// reaches the first recording after the wrist comes up; the read at each start only covers a
+    /// change made while the app stayed in front, and lands one recording late.
+    static func apply(_ all: [String: Any]) {
         if let v = all["watch_silence_s"].flatMap({ Double("\($0)") }), v > 0 { hang = v }
         if let v = all["watch_speech_min"].flatMap({ Float("\($0)") }), v > 0 { speechMin = v }
         let mode = all["watch_speech_mode"].map { "\($0)" }

@@ -431,7 +431,10 @@ default is 0.5. A duration rule (a sound must last N ms to count) is the obvious
 reach far enough: the running tap lasts seconds. The verdict arrives a beat behind the audio, and if the
 model fails to load (`voice-classifier` in the log) the level line ends the recording instead. Its cost
 on the watch is `classifier` in `mic-end`: seconds of work per second of audio. All of these are hub
-settings, read together at every start and kept for the next, since a start does not wait on the hub;
+settings, read together whenever the app comes to the front (`WatchSettings.refresh`) and again at every
+start, and kept for the next, since a start does not wait on the hub. So a change made in Settings
+reaches the first recording after the wrist comes up; one made while the app stays in front lands a
+recording late, because the read at a start applies to the one after it;
 `watch_silence_s` is Trailing silence in Settings (5 set on 2026-09-25, 3 when unset). **In `fixed` mode in a quiet room `watch_speech_min` is the whole line**, since
 2.5x a floor of 0.0003-0.0015 is under it, and his ordinary voice dips below 0.02 mid-sentence: a kept
 20s command measured 8s over 0.02 and 16s over 0.005, with dips of 0.010-0.018 inside speech. The

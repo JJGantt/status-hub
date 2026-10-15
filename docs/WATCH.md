@@ -437,7 +437,9 @@ reach far enough: the running tap lasts seconds. The verdict arrives a beat behi
 model fails to load (`voice-classifier` in the log) the level line ends the recording instead. Its cost
 on the watch is `classifier` in `mic-end`: seconds of work per second of audio. All of these are hub
 settings, read together whenever the app comes to the front (`WatchSettings.refresh`) and again at every
-start, and kept for the next, since a start does not wait on the hub. So a change made in Settings
+start, and kept for the next, since a start does not wait on the hub. They are also kept on the watch
+(`capture-settings` in UserDefaults) and taken back at launch, because a launch from the complication
+starts recording before any read answers; without them that recording runs on the built-in defaults. So a change made in Settings
 reaches the first recording after the wrist comes up; one made while the app stays in front lands a
 recording late, because the read at a start applies to the one after it;
 `watch_silence_s` is Trailing silence in Settings (5 set on 2026-09-25, 3 when unset). **In `fixed` mode in a quiet room `watch_speech_min` is the whole line**, since

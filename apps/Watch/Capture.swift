@@ -106,6 +106,7 @@ final class Capture: ObservableObject {
     private var voice: Float = 0
 
     private init() {
+        if let kept = UserDefaults.standard.dictionary(forKey: Self.storeKey) { Self.take(kept) }
         recorder.onLevel = { [weak self] level, seconds in self?.heard(level, seconds) }
         recorder.onVoice = { [weak self] speech in self?.voice = speech }
         recorder.onInterruption = { [weak self] began in self?.interrupted(began) }
@@ -381,7 +382,23 @@ final class Capture: ObservableObject {
     /// over the read it makes every time the app comes to the front, so a change made in Settings
     /// reaches the first recording after the wrist comes up; the read at each start only covers a
     /// change made while the app stayed in front, and lands one recording late.
+    ///
+    /// **They are kept on the watch** (`capture-settings`) and taken back at launch, because a launch
+    /// from the complication starts recording before any read can answer. Without them the first
+    /// recording after every launch runs on the built-in defaults — the level line at 0.02, which a
+    /// voice with the wrist down sits under for most of a sentence.
     static func apply(_ all: [String: Any]) {
+        var kept: [String: String] = [:]
+        for key in storedKeys { if let v = all[key] { kept[key] = "\(v)" } }
+        UserDefaults.standard.set(kept, forKey: storeKey)
+        take(kept)
+    }
+
+    private static let storeKey = "capture-settings"
+    private static let storedKeys = ["watch_silence_s", "watch_speech_min", "watch_speech_mode", "watch_voice_min",
+                                     "watch_speech_ratio", "watch_quick_s"]
+
+    private static func take(_ all: [String: Any]) {
         if let v = all["watch_silence_s"].flatMap({ Double("\($0)") }), v > 0 { hang = v }
         if let v = all["watch_speech_min"].flatMap({ Float("\($0)") }), v > 0 { speechMin = v }
         let mode = all["watch_speech_mode"].map { "\($0)" }

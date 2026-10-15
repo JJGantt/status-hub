@@ -209,7 +209,9 @@ private struct RecordFace: View {
 }
 
 private struct Provider: TimelineProvider {
-    func placeholder(in context: Context) -> Entry { Entry(date: Date(), preview: true) }
+    // Blank, never the name: the face draws a placeholder REDACTED until the timeline arrives, and
+    // redacted text is a grey bar on the face. The editor's gallery names come from the snapshot.
+    func placeholder(in context: Context) -> Entry { Entry(date: Date(), preview: false) }
     func getSnapshot(in context: Context, completion: @escaping (Entry) -> Void) {
         completion(Entry(date: Date(), preview: context.isPreview))
     }

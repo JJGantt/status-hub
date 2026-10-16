@@ -1401,6 +1401,25 @@ async function seedLastVoiceAt() {
 }
 seedLastVoiceAt();
 
+// What the watch's fallback needs from this server, handed over while it is up: the HASH of the device
+// token, so the `voice-fallback` edge function (data-layer supabase/functions) can check the watch's
+// X-Hub-Token when THIS server cannot be reached. Written at every boot rather than copied by hand, so a
+// changed password reaches it at the next deploy. Service-role only (data-layer 00124).
+async function publishFallbackConfig() {
+  const row = { key: 'hub_token_sha256', value: crypto.createHash('sha256').update(TOKEN).digest('hex'),
+                updated_at: new Date().toISOString() };
+  try {
+    const r = await fetch(`${SUPABASE_URL}/rest/v1/fallback_config?on_conflict=key`, {
+      method: 'POST',
+      headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}`, 'Content-Type': 'application/json',
+                 Prefer: 'resolution=merge-duplicates' },
+      body: JSON.stringify(row),
+    });
+    if (!r.ok) throw new Error(`-> ${r.status}`);
+  } catch (e) { console.log('[fallback-config] could not publish:', e.message); }
+}
+publishFallbackConfig();
+
 // Tell every open calendar surface that dated items changed, so it re-reads /api/calendar. The
 // signal carries no payload on purpose: what each surface needs back differs (the wall wants
 // `calendar_months` months plus today's timeline, the phone wants whichever month it has paged to),

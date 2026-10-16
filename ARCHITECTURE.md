@@ -12,14 +12,15 @@ documents **everything**, not just the hub. Keep it current as pieces change.
 ## 1. Guiding principles
 
 - **The Mac is the primary hub.** 95% of work happens here. The voice *worker* is the exception —
-  the Pi claims first, so voice-started work outlives the laptop closing (§6).
+  Fly claims first, then the Pi, and the Mac is last, so voice-started work outlives the laptop
+  closing (§6).
 - **Supabase (cloud Postgres) is the single source of truth** for all life data. Everything
   reads/writes Supabase; nothing else is authoritative.
 - **One web codebase, many surfaces.** The web hub (desktop / phone / TV) is one codebase, and the
   native iOS/macOS apps are WKWebView shells over it, so every screen shares the same UI. The Home
   Screen widgets and the watch app are the exceptions — they draw natively (§4).
-- **The Pi is an active service host.** It runs the voice worker as a middle-priority fallback
-  (between Mac and Fly) and can host other services. Supabase remains the *data* source of truth,
+- **The Pi is an active service host.** It runs the voice worker as the first fallback (between
+  Fly and the Mac) and can host other services. Supabase remains the *data* source of truth,
   but that's about storage, not about what runs on the Pi.
 
 ---
@@ -29,21 +30,22 @@ documents **everything**, not just the hub. Keep it current as pieces change.
 | Repo | GitHub | What it is | Deployed as |
 |---|---|---|---|
 | `status-hub` | JJGantt/status-hub | Hub web UI + Node server + native app wrappers | Fly `jared-status-hub` |
-| `voice-pipeline` | (private) | ESP wake-word → transcription → worker → Supabase | Fly `jared-voice` (+ Mac launchd) |
+| `voice-pipeline` | (private) | ESP wake-word → transcription → worker → Supabase | Fly `jared-voice` + `jared-voice-worker` (+ Pi systemd, Mac launchd) |
 | `data-layer` | JJGantt/data-layer | Supabase schema (migrations) + the `data` MCP | Supabase `felyggqjjhltwokdfhop` |
 | `govee-mcp` | JJGantt/mcp-govee | Govee light control MCP (LAN + cloud) | runs inside workers |
 | `messages-mcp` | JJGantt/messages-mcp | iMessage/SMS read + send MCP | Mac only (stdio, plus HTTP :27187 for the Pi) |
 | `gmail-mcp` | JJGantt/gmail-mcp | Gmail read/label/draft/send MCP | anywhere (stdio) |
 | `litter-robot` | JJGantt/litter-robot | Litter-Robot 4 auto-resume watcher | Fly `litter-robot-watcher` |
 
-**Fly apps (four):**
+**Fly apps (five):**
 - `jared-status-hub` — the hub server (web + TV + APIs + SSE + push scheduler). ← `status-hub`
-- `jared-voice` — combined: ESP wake-word + Groq transcription **and** the fallback voice worker.
+- `jared-voice` — ESP wake-word + Groq transcription, and the Govee inventory sync.
   ← `voice-pipeline/server`
+- `jared-voice-worker` — the voice worker, first in claim order (§6). ← `voice-pipeline/fly-worker`
 - `litter-robot-watcher` — always-on Litter-Robot watcher (alerts via the hub's app push). ← `litter-robot`
 - `nutrition-track` — **suspended**. ← `~/repos/nutrition-track`
 
-Every Fly-deployed app is built from a repo in `~/repos` on the Mac, so all four are reachable from
+Every Fly-deployed app is built from a repo in `~/repos` on the Mac, so all five are reachable from
 the hub's picker.
 
 **There are TWO Supabase projects, not one** — a distinction the CLI hides, because it only ever
@@ -225,7 +227,7 @@ Produce tracking rides on nutrition rather than its own table: `nutrition_entrie
 End-to-end flow:
 
 ```
-  ESP32 mic ──wss──▶ jared-voice (Fly)              Supabase                Mac/Fly worker
+  ESP32 mic ──wss──▶ jared-voice (Fly)              Supabase              Fly/Pi/Mac worker
   (or Mac mic,        ├ openWakeWord ("Hey Rhasspy")  voice_requests  ◀──┐    claims request
    or web mic FAB)    ├ capture utterance             (the queue)        │    ├ warm Agent SDK (subscription)
                       └ Groq whisper-large-v3-turbo ──▶ INSERT ──────────┘    │  or claude -p (escalation)
@@ -235,10 +237,12 @@ End-to-end flow:
 
 **Directories:**
 - `server/` — **Fly app `jared-voice`**. The wake-word + Groq transcription server (`server.py`)
-  AND the fallback worker (`worker.py`) AND the Govee MCP + `sync_devices`, all started by
-  `entrypoint.sh`. Always-on 1GB machine. Wake word: **`hey_rhasspy`**.
-- `worker/` — the **Mac worker** (`worker.py` via `run.sh`, launchd `com.jaredgantt.voice-worker`,
-  `WORKER_ID=mac`). The primary processor.
+  and the Govee `sync_devices` loop, both started by `entrypoint.sh`. Wake word: **`hey_rhasspy`**.
+- `fly-worker/` — **Fly app `jared-voice-worker`**: the build context for the Fly worker
+  (`worker/worker.py`, `WORKER_ID=fly`), deployed with `fly-worker/deploy.sh`. Its own app so a
+  transcriber deploy does not restart the worker and the two do not share a CPU.
+- `worker/` — the worker itself (`worker.py`), run on the Pi and the Mac via `run.sh` (Mac: launchd
+  `com.jaredgantt.voice-worker`, `WORKER_ID=mac`).
 - `mac-listener/` — Mac-mic openWakeWord listener (`listener.py`, launchd
   `com.jaredgantt.voice-mac-listener`). Needs a mic grant to do anything, so check it is actually
   running (`launchctl list | grep voice-mac-listener`) before concluding the Mac mic is dead.
@@ -255,8 +259,6 @@ End-to-end flow:
   worker POSTs reply text and gets PCM back far faster than the Pi's CPU ONNX Kokoro.
 - `pi-audio/` — the Pi service that plays the spoken reply out of the TV via PipeWire.
 - `firmware/` — ESP32 (PlatformIO). A dumb PCM pump: streams the I2S mic, no on-device logic.
-- `fly-worker/` — ⚠️ **DEAD ORPHAN.** A stale staging copy (no `fly.toml`/`Dockerfile`, not
-  deployable, nothing pushes it). The real Fly worker is in `server/`. **Should be deleted.**
 
 **Request sources** (the `source` field on `voice_requests`): `fly` (ESP), `mac` (Mac listener),
 `web-quick` (hub mic FAB), typed web text.
@@ -269,19 +271,23 @@ Multiple machines run the **same** `worker.py`; only one processes each request.
 heartbeats into `worker_presence`; a worker only claims a request if **no higher-priority worker
 has a fresh heartbeat** (`HEARTBEAT_FRESH_S`).
 
-`worker/run.sh` sets `WORKER_PRIORITY=pi,mac,fly` on every machine, so the order is **Pi → Mac →
-Fly**: the Pi claims whenever it is up, and the Mac is the fallback. That inversion is deliberate —
-work started by voice can run long, and closing the laptop must not kill it. (`worker.py`'s own
-in-file default is `mac,pi`, which applies only if something starts it without `run.sh`.)
+`WORKER_PRIORITY` is `fly,pi,mac` everywhere (`worker/run.sh`'s default, the Pi's `.env`, the Fly
+image), so the order is **Fly → Pi → Mac**. Fly is first because it answers the common Sonnet turn
+faster (2.8s median against the Pi's 4.4s on identical commands; Opus turns cost about the same) and
+does not depend on the house; it has no route to iMessage, Gmail or the feeder, which are rare enough
+not to count. The Mac is last so work started by voice outlives the laptop closing. Measurements:
+`voice-pipeline/docs/WORKER-PLACEMENT.md`.
 
 | Worker | `WORKER_ID` | Where | Runner |
 |---|---|---|---|
+| **Fly** | `fly` | own app `jared-voice-worker` (2GB, volume at `/data`) | warm Agent SDK for Sonnet and for Opus (`WARM_OPUS=1`) (subscription) |
 | **Pi** | `pi` | systemd `voice-worker.service` | warm Agent SDK + `claude -p` (subscription) |
 | **Mac** | `mac` | launchd `com.jaredgantt.voice-worker` | warm Agent SDK + `claude -p` (subscription) |
-| **Fly** | `fly` | inside `jared-voice` | Anthropic API (no subscription login) |
 
-A **live hub context window overrides priority**: it stays pinned to the worker that owns it until
-the window resets or that worker goes silent, so a conversation isn't lost to a needless switch.
+Hub turns follow priority alone. Only in **full-agent (coding) mode** does a live context window
+override it, staying pinned to the worker that claimed the last request until the window resets or
+that worker goes silent — that mode's CLI session lives on one machine. A hub turn is a fresh run
+handed the day's thread from state every worker holds, so it gains nothing from staying put.
 
 - **Claiming latency:** a **Supabase realtime listener** (`RealtimeWaker` in `worker.py`) wakes the
   loop the instant a `voice_requests` row is INSERTed; a slow poll (`IDLE_POLL_S`, 60s) is the
@@ -291,14 +297,15 @@ the window resets or that worker goes silent, so a conversation isn't lost to a 
 - **Model routing — one dynamic route.** Every hub command runs **Sonnet first**, given only the SAFE
   read/actuator tools (`allowed_tools` on the warm SDK client); the gated data-WRITE tools are absent
   from that list, so Sonnet can see them and is *denied* them. If the turn needs one — it emits
-  `__ESCALATE__`, or attempts a gated tool and is denied — it re-runs on a **fresh Opus** with the
-  full toolset. Hub turns are fresh runs with the recent conversation replayed from `voice_messages`;
+  `__ESCALATE__`, or attempts a gated tool and is denied — it re-runs on **Opus** with the
+  full toolset (a fresh `claude -p`, or Fly's warm Opus client). Hub turns are fresh runs with the recent conversation replayed from `voice_messages`;
   only full-agent (coding) mode keeps a `--resume` CLI session, because a shared one let two models
   cross-contaminate each other's context. `voice_requests.tier` is still written by every capture
   path and read by nothing. Full detail: `voice-pipeline/docs/ROUTING.md`.
 - **Subscription vs API key:** the CLI and the Agent SDK silently prefer `ANTHROPIC_API_KEY` over
   the subscription login, so `worker.py` pops it from the environment at import and no subprocess can
-  inherit it. Only the `ApiRunner` — the funded fallback, and Fly's runner — reads the held key.
+  inherit it. Every worker, Fly included, runs on the subscription (`CLAUDE_CODE_OAUTH_TOKEN`); there
+  is no API-billed runner.
 - **The Pi:** runs `worker.py` via systemd `voice-worker.service` (env in `~/.voice-worker.env`),
   from the checkout at **`~/voice-pipeline`**, venv at `~/voice-pipeline/.venv-worker`. There is a
   *second* clone at `~/repos/voice-pipeline` that the service does not use — pulling that one changes
@@ -340,11 +347,10 @@ the window resets or that worker goes silent, so a conversation isn't lost to a 
 
 ## 8. External services
 
-- **Fly.io** — hosting (3 apps above). CLI `fly`, authed as jaredgantt@gmail.com.
+- **Fly.io** — hosting (the apps in §2). CLI `fly`, authed as jaredgantt@gmail.com.
 - **Supabase** — Postgres + realtime (source of truth).
 - **Groq** — `whisper-large-v3-turbo` STT (key is a Fly secret on `jared-voice`).
-- **Anthropic** — Claude subscription (warm Agent SDK + `claude -p`) for the workers; the Console API
-  key funds the fallback `ApiRunner` and Fly.
+- **Anthropic** — Claude subscription (warm Agent SDK + `claude -p`) for every worker, Fly included.
 - **Apple** — APNs (push) + App Store Connect (ASC key on disk; Issuer ID not yet recorded).
 
 ---
@@ -454,8 +460,7 @@ is the bus; the daemon on each machine owns everything local:
 
 ## 10. Known cruft / open items
 
-- ⚠️ `voice-pipeline/fly-worker/` is a dead orphan — no `fly.toml`, no `Dockerfile`, nothing deploys
-  it. The real Fly worker is `voice-pipeline/server/`. Delete it rather than reading it.
+Nothing open.
 
 ---
 

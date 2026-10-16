@@ -2976,6 +2976,15 @@ async function soundsLikeHim(id, file, source) {
 // 99%, so half sits far from both. Under a second the device's own timing is too coarse to judge by.
 const CAPTURE_MIN_KEPT = 0.5;
 const CAPTURE_CHECK_MIN_S = 1;
+// Whether the Mac's voice worker is heartbeating — the only host with a local Whisper.
+async function macWorkerUp() {
+  try {
+    const rows = await sb('worker_presence?worker=eq.mac&select=last_seen,info');
+    const r = rows && rows[0];
+    return !!r && !(r.info || {}).stopping && Date.now() - Date.parse(r.last_seen) < 90e3;
+  } catch { return false; }
+}
+
 async function keepClip(id, file, contentType, bytes, dur) {
   try {
     const type = contentType.split(';')[0].trim();
@@ -2994,7 +3003,7 @@ async function keepClip(id, file, contentType, bytes, dur) {
 app.post('/api/voice-command', async (req, res) => {
   const tmp = path.join(os.tmpdir(), 'voice-' + crypto.randomUUID());
   try {
-    if (!GROQ_API_KEY) { req.resume(); return res.status(503).json({ error: 'transcription not configured' }); }
+    if (!GROQ_API_KEY && !process.env.OPENAI_API_KEY) { req.resume(); return res.status(503).json({ error: 'transcription not configured' }); }
     // ?dry=1 → transcribe only, no enqueue. The chat composer uses this while photos are pending: the
     // transcript lands in the text box so the user sends text + photos together when they're ready.
     const dry = String(req.query.dry || '') === '1';
@@ -3017,13 +3026,23 @@ app.post('/api/voice-command', async (req, res) => {
       console.log(`[voice-command] DAMAGED ${size} bytes ${ct}: holds ${heldS.toFixed(2)}s of ${dur.toFixed(1)}s recorded, refused`);
       return res.json({ transcript: '', enqueued: false, capture: 'damaged', held_s: +heldS.toFixed(2), dur });
     }
-    const { transcript, segments } = await transcribe(tmp, ct, GROQ_API_KEY);
+    // THE LAST TRANSCRIBER IS THE MAC. When Groq and OpenAI both fail, a command is not lost while the Mac
+    // worker is up: the clip is kept and the row is queued 'untranscribed', which the Mac's worker takes,
+    // runs through its local Whisper and turns 'pending' (voice-pipeline worker.py `transcribe_local`).
+    let transcript = '', segments = 0, untranscribed = false;
+    try {
+      ({ transcript, segments } = await transcribe(tmp, ct, GROQ_API_KEY));
+    } catch (e) {
+      if (!e.allFailed || dry || !(await macWorkerUp())) throw e;
+      untranscribed = true;
+      console.log('[voice-command] every transcription provider failed; queued for the Mac\'s local Whisper');
+    }
     // Bytes per second of speech is what decides whether a clip fits Groq's cap, and it is set by the
     // recording device, not by us — so every clip reports it.
     console.log(`[voice-command] ${size} bytes ${ct}` +
       (dur > 0 ? ` ${dur.toFixed(1)}s ${Math.round(size * 8 / dur / 1000)} kbps` : '') +
       (segments ? ` re-encoded into ${segments} segment(s)` : ''));
-    if (!transcript) return res.json({ transcript: '', enqueued: false });
+    if (!transcript && !untranscribed) return res.json({ transcript: '', enqueued: false });
     if (dry) return res.json({ transcript, enqueued: false });
     // The navbar mic sends ?quick=1, which tags the request's source `web-quick`.
     const quick = String(req.query.quick || '') === '1';
@@ -3051,10 +3070,17 @@ app.post('/api/voice-command', async (req, res) => {
       (him.why ? ` (${him.why})` : ''));
     if (!him.ok) return res.json({ transcript, enqueued: false, notHim: true });
     await sbWrite('voice_requests', 'POST', { id, transcript, source, focus: 'hub',
+      ...(untranscribed ? { status: 'untranscribed' } : {}),
       always_on: GATED_SOURCES.has(source),
       ...(capture_start ? { capture_start } : {}), ...(capture_end ? { capture_end } : {}),
       ...(client_now ? { client_now } : {}), ...(location ? { location } : {}) });
     markSeen(msgId, id);
+    if (untranscribed) {
+      // The Mac needs the clip before it can do anything, so it is kept BEFORE the answer here, and the
+      // row only becomes claimable for it once `audio` is on it.
+      await keepClip(id, tmp, ct, size, dur);
+      return res.json({ transcript: '', enqueued: true, id, untranscribed: true });
+    }
     res.json({ transcript, enqueued: true, id });
     await keepClip(id, tmp, ct, size, dur);   // before the finally below deletes the temp file
   } catch (e) {

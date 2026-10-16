@@ -38,18 +38,37 @@ function run(cmd, args) {
 
 // `prompt` is Whisper's own vocabulary hint: text it treats as coming just before the clip, which tilts
 // what it writes towards the words and spellings in it. Optional; most callers send none.
+//
+// Groq first, then OpenAI's Whisper (OPENAI_API_KEY) when Groq fails, so one provider being down does
+// not lose a command. Both take the same form and cap a file at 25 MB. When both fail, the caller can
+// still hand the clip to the Mac's local Whisper (`/api/voice-command`, status 'untranscribed').
+const OPENAI_URL = 'https://api.openai.com/v1/audio/transcriptions';
 async function whisper(file, type, name, key, prompt) {
-  const form = new FormData();
-  form.append('file', await fs.openAsBlob(file, { type }), name);   // file-backed: never held in memory
-  form.append('model', 'whisper-large-v3-turbo');
-  form.append('response_format', 'text');
-  // English, always. Left to detect the language, Whisper picks one per clip from its opening audio,
-  // and a quiet or noisy opening can land it anywhere: a phone command came back as Icelandic.
-  form.append('language', 'en');
-  if (prompt) form.append('prompt', prompt);
-  const r = await fetch(GROQ_URL, { method: 'POST', headers: { Authorization: `Bearer ${key}` }, body: form });
-  if (!r.ok) throw Object.assign(new Error(`transcription failed (${r.status})`), { status: 502 });
-  return (await r.text()).trim();
+  const providers = [
+    key && { url: GROQ_URL, key, model: 'whisper-large-v3-turbo', label: 'groq' },
+    process.env.OPENAI_API_KEY && { url: OPENAI_URL, key: process.env.OPENAI_API_KEY, model: 'whisper-1', label: 'openai' },
+  ].filter(Boolean);
+  let last;
+  for (const p of providers) {
+    try {
+      const form = new FormData();
+      form.append('file', await fs.openAsBlob(file, { type }), name);   // file-backed: never held in memory
+      form.append('model', p.model);
+      form.append('response_format', 'text');
+      // English, always. Left to detect the language, Whisper picks one per clip from its opening audio,
+      // and a quiet or noisy opening can land it anywhere: a phone command came back as Icelandic.
+      form.append('language', 'en');
+      if (prompt) form.append('prompt', prompt);
+      const r = await fetch(p.url, { method: 'POST', headers: { Authorization: `Bearer ${p.key}` }, body: form,
+                                     signal: AbortSignal.timeout(30000) });
+      if (!r.ok) throw new Error(`${p.label} ${r.status}`);
+      return (await r.text()).trim();
+    } catch (e) {
+      last = e;
+      console.log(`[transcribe] ${p.label} failed: ${e.message || e}`);
+    }
+  }
+  throw Object.assign(new Error(`transcription failed (${last ? last.message : 'no provider'})`), { status: 502, allFailed: true });
 }
 
 // How many seconds of audio a clip actually holds, read off its packet timestamps by a stream copy —

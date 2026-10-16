@@ -355,10 +355,17 @@ command it runs are charged there.
   transfer path with its prompt); only with the Mac asleep does it wait in `desk_queue`.
 - **Heavy work moves** (`onHeavy`): the kernel rewrites a session's `memory.events` when it crosses
   `memory.high`, and inotify delivers that. If its anon memory (resident plus swapped) is over budget,
-  the session is closed mid-turn, everything in its cgroup is killed, and it resumes on the Mac with
-  the prompt `Continue` and a system note (`orchestrator/moved-session.txt`) saying the last step was
-  cut off and should be redone. Waiting for the turn to end is not possible: the turn IS the heavy
-  work. With the Mac asleep it stays, with `memory.high` lifted so it is not throttled.
+  the session is closed, everything in its cgroup is killed, and it resumes on the Mac with a system
+  note (`orchestrator/moved-session.txt`) saying why. Waiting for the turn to end is not possible: the
+  turn IS the heavy work. Whether a turn is restarted there depends on the process's own record, read
+  before it is closed (`busy`, not `waiting`):
+  - **mid-turn**: restarted with the prompt `[Moved from the Pi]`, and the note says the cut-off step
+    is redone. The prompt must never be a word like `Continue`: it lands as the answer to whatever the
+    conversation last said, and a session that had just proposed something would take it as approval.
+  - **between turns** (a background job it left running grew after the turn ended, possibly on a
+    question to Jared): resumed idle, no prompt at all, so it waits for him on the Mac.
+
+  With the Mac asleep it stays, with `memory.high` lifted so it is not throttled.
 - **A kill takes the command, not the session.** `tool.sh` is `CLAUDE_CODE_SHELL_PREFIX`: every Bash
   command and tool server runs at `oom_score_adj` 1000, above claude's 800 and the kiosk's -500, so at
   a session's `memory.max` or a machine-wide OOM the kernel picks the command.

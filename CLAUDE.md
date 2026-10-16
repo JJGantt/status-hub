@@ -472,8 +472,11 @@ It also beats app.css's `body.tv.wallportrait` block on equal specificity, by lo
   replacing it. Two sources, and both are needed — the upload's own answer is LOCAL (only the
   recording device knows a clip is in the air), while the worker's `working` activity carries the
   transcript to EVERY device, which is what makes a command spoken at the puck appear here. The
-  placeholder comes down on the matching user row or on the reply, never on a resync replaying
-  history, and a run that reports nothing back drops it after five minutes.
+  placeholder comes down on the matching user row or on the reply. A resync takes it down only on its
+  user row, found ANYWHERE in the thread rather than as the newest message: with the phone asleep a
+  watch command's rows arrive by resync, often behind a later command. Never on an assistant row
+  replayed from history. Matching is a prefix, since `working` carries the transcript cut to 240
+  characters. A run that reports nothing back drops it after five minutes.
   **There is no chat PANE; there is a chat SHEET.** The navbar's keyboard button opens `#ph-chat`
   over the page — the same `ai-shell` markup the walls carry, wired by the same `initCard()` in
   voiceagent.js — with the whole thread, the composer, the mic, the attach tray and Reset context. A

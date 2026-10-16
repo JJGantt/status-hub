@@ -202,6 +202,16 @@ onActivity((a) => {
 });
 function clearAct() { clearTimeout(actT); act = null; }
 
+// Whether a thread row is the one the placeholder stands in for. Whitespace-blind, and a PREFIX is
+// enough: the worker's `working` frame carries the transcript cut to 240 characters, so a long command
+// never equals its own row.
+const norm = (t) => String(t || '').replace(/\s+/g, ' ').trim();
+function isPending(r) {
+  if (!pending || !pending.text || !r || r.role !== 'user') return false;
+  const p = norm(pending.text), t = norm(r.text);
+  return !!p && (t === p || (p.length >= 200 && t.startsWith(p)));
+}
+
 // The row the placeholder was standing in for has arrived — or the reply has, which means the run is
 // over whatever the thread looks like. Only ever called on a LIVE row: a resync replays the whole
 // history, where an old assistant row would take down a placeholder put up a second ago.
@@ -210,10 +220,7 @@ function settle(row) {
   // comes down with it rather than waiting for a `done` that a dropped socket may have eaten.
   if (row.role === 'assistant') clearAct();
   if (!pending) return;
-  const t = String((row && row.text) || '').trim();
-  if (row.role === 'assistant' || (row.role === 'user' && t && t === pending.text.trim())) {
-    clearTimeout(pendingT); pending = null;
-  }
+  if (row.role === 'assistant' || isPending(row)) { clearTimeout(pendingT); pending = null; }
 }
 
 // WHERE IT LANDS: the top of the LAST message at the top of the box, not the bottom of the thread.
@@ -292,11 +299,11 @@ async function resync() {
     const rows = await (await fetch('/api/voice-messages?focus=hub&mode=active&limit=' + TAIL)).json();
     thread = [];
     for (const r of rows || []) takeRow(r);
-    // The placeholder survives a resync unless the row it was standing in for is now in the thread.
-    if (pending && pending.text) {
-      const last = [...thread].reverse().find((r) => r.role === 'user');
-      if (last && last.text.trim() === pending.text.trim()) { clearTimeout(pendingT); pending = null; }
-    }
+    // The placeholder survives a resync unless the row it was standing in for is now in the thread —
+    // ANYWHERE in it, not only as the newest message. A command from the watch reaches this page only
+    // as its `working` frame, so with the phone asleep its rows arrive here, and by then a later
+    // command can be the newest: matched against that alone, the placeholder never came down.
+    if (pending && pending.text && thread.some(isPending)) { clearTimeout(pendingT); pending = null; }
     paintConv(true);
   } catch (_) { /* the next push or resync reconciles */ }
 }

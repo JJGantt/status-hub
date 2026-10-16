@@ -208,7 +208,11 @@ moment it is transcribed, and each is replaced by its own event.
 **The edge sweeps until every follow-up sent from here is answered**: `awaiting` holds their message
 ids, and the wait ends when a reply lands AFTER every one of them has been read — a prompt event
 carrying that id, `seen`, with a seq below the reply's (`settle`). A reply to an earlier command, or
-one that came before the words went in, is not the answer he is waiting on.
+one that came before the words went in, is not the answer he is waiting on. **An id the list does not
+hold two minutes after it was sent is let go**: the hub keeps a conversation's last ten turns
+(`SESSION_TURNS`), so after a hub restart a follow-up from further back is not in the list, and waiting
+for it swept the edge over an idle session until the app was killed. A follow-up being worked on shows
+in the list within seconds of being typed, so the limit never cuts a real wait short.
 
 **Its name is on the clock's line, and the name is how it closes.** A leading `ToolbarItem` holds it
 (a trailing one moves the clock to the other end of the strip), and tapping it pops the session. The

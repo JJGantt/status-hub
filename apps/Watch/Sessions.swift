@@ -151,6 +151,13 @@ final class Sessions: ObservableObject {
     /// read (`settle`): a reply to an EARLIER command, or one that came before the words went in, is
     /// not the answer he is waiting on.
     @Published private(set) var awaiting: [String: Set<String>] = [:]
+    /// When each awaited follow-up was handed over, so one the list no longer reaches can be let go.
+    private var sentAt: [String: Date] = [:]
+    /// A follow-up shows in the list within seconds of being typed (as `queued`, then `said`). One still
+    /// absent after this long is older than the list: the hub keeps a conversation's last SESSION_TURNS
+    /// turns, so after a hub restart a message from fifteen turns ago is simply not in it — and waiting
+    /// for it would sweep the edge until the app was killed.
+    private static let notInList: TimeInterval = 120
     @Published private(set) var failures: [String: Failure] = [:]
 
     private let capture = Capture.shared
@@ -286,12 +293,23 @@ final class Sessions: ObservableObject {
 
     /// The wait ends when a reply lands after every follow-up he is waiting on has been read.
     private func settle(_ key: String) {
-        guard let waiting = awaiting[key], !waiting.isEmpty, let events = logs[key]?.events,
-              let reply = events.last(where: { $0.kind == "reply" }) else { return }
+        guard var waiting = awaiting[key], !waiting.isEmpty, let events = logs[key]?.events else { return }
+        let gone = waiting.filter { id in
+            !events.contains { $0.cmd == id } && Date().timeIntervalSince(sentAt[id] ?? .distantPast) > Self.notInList
+        }
+        if !gone.isEmpty {
+            waiting.subtract(gone)
+            gone.forEach { sentAt[$0] = nil }
+            awaiting[key] = waiting.isEmpty ? nil : waiting
+            Hub.log("await-dropped", ["row": row(for: key)?.id ?? key, "count": gone.count])
+            if waiting.isEmpty { return }
+        }
+        guard let reply = events.last(where: { $0.kind == "reply" }) else { return }
         let answered = waiting.allSatisfy { id in
             events.contains { $0.kind == "prompt" && $0.cmd == id && $0.seen != false && $0.seq < reply.seq }
         }
         guard answered else { return }
+        waiting.forEach { sentAt[$0] = nil }
         awaiting[key] = nil
         Hub.log("answered", ["row": row(for: key)?.id ?? key])
         // The wrist is told when a follow-up the WATCH sent is answered. Only these: a session answering
@@ -384,6 +402,7 @@ final class Sessions: ObservableObject {
                     return
                 }
                 awaiting[key, default: []].insert(msgId)
+                sentAt[msgId] = Date()
             } catch {
                 Hub.log("send-failed", ["view": "session", "error": String(describing: error).prefix(120).description])
                 failures[key] = .message(error.localizedDescription)

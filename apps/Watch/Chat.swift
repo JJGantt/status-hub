@@ -88,15 +88,26 @@ final class Chat: ObservableObject {
 
     private func openStream() {
         stream = Task {
-            await Hub.listen("/api/voice-stream", reconnected: { [weak self] in await self?.load() }) { [weak self] event, data in
+            // Frames that went by while the stream was down are gone, `done` among them, so whatever
+            // tool lines are up describe a run that may have ended: drop them with the reload.
+            await Hub.listen("/api/voice-stream", reconnected: { [weak self] in await self?.caughtUp() }) { [weak self] event, data in
                 await self?.voiceFrame(event, data)
             }
         }
     }
 
+    private func caughtUp() async {
+        activity = []
+        await load()
+    }
+
+    /// Also drops the tool lines. The page goes inactive about two seconds after a command is sent,
+    /// so the run's `done` arrives while the stream is closed; kept, its tool calls sat UNDER the reply
+    /// the next activation loaded, as if they had come after it.
     func deactivate() {
         stream?.cancel()
         stream = nil
+        activity = []
     }
 
     func load() async {
@@ -258,6 +269,8 @@ final class Chat: ObservableObject {
                     tasks[msgId] = nil
                 } else {
                     Hub.log("answered", ["view": "chat", "id": requestId ?? ""])
+                    // The reply IS the end of the run, whether or not its `done` frame got here.
+                    activity = []
                     await load()
                     finish(msgId)
                     WKInterfaceDevice.current().play(.notification)

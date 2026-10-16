@@ -50,7 +50,10 @@ transcribed them, the reply as it was written — over `/api/voice-messages?focu
 the same current-context thread the phone and the TV show, in whichever mode `agent_mode` selects. It
 follows `/api/voice-stream`: a `message` frame reloads the thread, and the worker's `activity` frames
 draw the running command's tool calls under it (`ActivityLines`), which the hub does not store, so they
-show only while the page is watching.
+show only while the page is watching. They clear on `done`, on the command's own answer, on a
+reconnect and when the page goes inactive — never on `done` alone, because the page goes inactive
+seconds after a command is sent and the `done` frame then goes by while the stream is closed, which
+leaves the tool calls drawn under a reply that came after them.
 
 **A command walks the page**, and each step lands the view on a TOP, because a reply is read from its
 first line rather than scrolled to the end:

@@ -306,6 +306,14 @@ handed the day's thread from state every worker holds, so it gains nothing from 
   the subscription login, so `worker.py` pops it from the environment at import and no subprocess can
   inherit it. Every worker, Fly included, runs on the subscription (`CLAUDE_CODE_OAUTH_TOKEN`); there
   is no API-billed runner.
+- **The watch's fallback, the one way in that is not on Fly.** Commands come IN through the hub (the
+  watch, the phone) and `jared-voice` (the ESP), both Fly apps, so the worker chain's redundancy is
+  behind a single door. When the hub does not answer the watch, it sends the clip to Supabase's
+  `voice-fallback` edge function (data-layer), which queues it as status `fallback`. Only the Pi
+  (`FALLBACK_WORKER`) claims that status, read in the same query as its `pending` rows; it runs on
+  Opus as the unrestricted agent, says it came the fallback way, and the first fallback of an outage
+  starts a troubleshooting session. The phone and the ESP have no fallback. Detail: `docs/WATCH.md`
+  § When the hub does not answer.
 - **The Pi:** runs `worker.py` via systemd `voice-worker.service` (env in `~/.voice-worker.env`),
   from the checkout at **`~/voice-pipeline`**, venv at `~/voice-pipeline/.venv-worker`. There is a
   *second* clone at `~/repos/voice-pipeline` that the service does not use — pulling that one changes

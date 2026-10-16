@@ -573,6 +573,28 @@ resend after a dropped connection gets the first send's id back instead of runni
 is known, Retry only waits again; after a worker error it uploads the clip as a new attempt. **Cancel
 while waiting stops waiting — a command the hub already has still runs.**
 
+### When the hub does not answer
+
+The hub is one machine on Fly, and every command the watch sends goes through it. So a command that
+gets no answer from the hub in `Hub.hubPatience` (25s), or gets Fly's proxy answering for it (a 5xx),
+goes to the **fallback** instead (`Hub.sendCommand`): Supabase's `voice-fallback` edge function
+(data-layer `supabase/functions`), which runs off Fly, transcribes the clip with Groq and queues it as
+status `fallback`. Only the Pi's worker claims that status. It runs the command on Opus with every
+tool, opens the reply by saying it came the fallback way, and the first fallback command in thirty
+minutes also starts a session to find out why the hub did not answer.
+
+The patience is the trade. Fly's proxy holds a request open while it looks for a machine it does not
+have, so without a ceiling of its own a command waited the full minute before anything else was tried.
+A hub that is up but slower than 25s gets the command twice, its own copy and the fallback's.
+
+The function checks the same `X-Hub-Token`, against a hash the hub writes to `fallback_config` at every
+boot, and a 401 from it does not throw the token away the way the hub's 401 does: it means the
+function lacks the hash, not that the token is wrong. The outcome is waited on at the function too
+(`Hub.fallbackOutcome`, held open on the row, `pending` after 50s), and it carries the reply's text,
+which the watch puts into the thread itself when `load()` did not bring it — the thread is served by
+the hub that did not answer. Only home commands fall back; a session's follow-up and the always-on
+listener still go to the hub alone.
+
 ### A control per page
 
 Control Center, the Smart Stack and an Ultra's Action button each hold **Hub · Listen · Sessions · Nutrition ·

@@ -47,6 +47,9 @@ final class Chat: ObservableObject {
         var clip: Recorder.Clip?
         var requestId: String?
         var words: String?
+        /// The hub did not answer, so the fallback took it (`Hub.sendCommand`): its outcome is waited on
+        /// there, and its reply is put into the thread here, since the hub's thread may be down with it.
+        var fallback = false
         var running = false
         /// It failed and is kept only so Retry can send it again: not waited on, and its words are not
         /// shown as pending (the hub has already put them in the thread, or never had them).
@@ -240,13 +243,16 @@ final class Chat: ObservableObject {
             defer { update(msgId) { $0.running = false } }
             do {
                 var requestId = command.requestId
+                var fallback = command.fallback
                 if requestId == nil {
                     guard let clip = command.clip else { finish(msgId); return }
                     let began = Date()
-                    let heard = try await Awake.hold("sending a voice command") {
-                        try await Hub.sendAudio(clip, msgId: msgId)
+                    let sent = try await Awake.hold("sending a voice command") {
+                        try await Hub.sendCommand(clip, msgId: msgId)
                     }
-                    Hub.log("sent", ["ms": Int(Date().timeIntervalSince(began) * 1000),
+                    let heard = sent.heard
+                    fallback = sent.fallback
+                    Hub.log("sent", ["ms": Int(Date().timeIntervalSince(began) * 1000), "fallback": fallback,
                                      "id": heard.id ?? "", "words": (heard.transcript ?? "").count])
                     guard let id = heard.id else {
                         // The hub heard no words, so there is no command.
@@ -256,9 +262,9 @@ final class Chat: ObservableObject {
                         return
                     }
                     requestId = id
-                    update(msgId) { $0.requestId = id; $0.words = heard.transcript }
+                    update(msgId) { $0.requestId = id; $0.words = heard.transcript; $0.fallback = fallback }
                 }
-                let outcome = try await Hub.outcome(requestId!)
+                let outcome = fallback ? try await Hub.fallbackOutcome(requestId!) : try await Hub.outcome(requestId!)
                 if Task.isCancelled { return }
                 if outcome.status == "error" {
                     Hub.log("command-failed", ["id": requestId ?? "", "error": String((outcome.error ?? "").prefix(120))])
@@ -272,6 +278,13 @@ final class Chat: ObservableObject {
                     // The reply IS the end of the run, whether or not its `done` frame got here.
                     activity = []
                     await load()
+                    // A fallback reply is shown from its outcome when the thread did not bring it: the
+                    // hub that serves the thread is the thing that did not answer.
+                    if fallback, let id = requestId, !thread.contains(where: { $0.request_id == id }) {
+                        let words = commands.first(where: { $0.msgId == msgId })?.words
+                        thread += [Message(id: id + ":user", role: "user", text: words, request_id: id, session_id: nil),
+                                   Message(id: id + ":reply", role: "assistant", text: outcome.result, request_id: id, session_id: nil)]
+                    }
                     finish(msgId)
                     WKInterfaceDevice.current().play(.notification)
                 }

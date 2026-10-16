@@ -185,8 +185,19 @@ enum Hub {
     /// with the utterance's own window, which is what lets the worker collapse it against the Mac or the
     /// ESP hearing the same sentence (docs/LISTENERS.md).
     static func sendAudio(_ clip: Recorder.Clip, msgId: String, dry: Bool = false,
-                          listener: (start: Date, end: Date)? = nil) async throws -> Heard {
+                          listener: (start: Date, end: Date)? = nil, timeout: TimeInterval = 60) async throws -> Heard {
         try blockInSimulator("voice-command")
+        let query = await commandQuery(clip, msgId: msgId, dry: dry, listener: listener)
+        var r = try request("/api/voice-command?" + query, method: "POST", timeout: timeout)
+        r.setValue("audio/mp4", forHTTPHeaderField: "Content-Type")
+        let (data, resp) = try await resending { try await session.upload(for: r, fromFile: clip.url) }
+        try await check(resp)
+        return try JSONDecoder().decode(Heard.self, from: data)
+    }
+
+    /// What a clip's upload says about it, to the hub and to the fallback alike.
+    private static func commandQuery(_ clip: Recorder.Clip, msgId: String, dry: Bool,
+                                     listener: (start: Date, end: Date)?) async -> String {
         var query = "client_msg_id=\(msgId)&client_now=\(clientNow())&dur=\(String(format: "%.1f", clip.duration))"
             + (dry ? "&dry=1" : "")
         let iso = ISO8601DateFormatter()
@@ -210,11 +221,91 @@ enum Hub {
             query += String(format: "&lat=%.5f&lon=%.5f&acc=%.0f",
                             l.coordinate.latitude, l.coordinate.longitude, l.horizontalAccuracy)
         }
-        var r = try request("/api/voice-command?" + query, method: "POST", timeout: 60)
+        return query
+    }
+
+    // MARK: The fallback, for when the hub does not answer
+
+    /// Supabase's `voice-fallback` edge function (data-layer supabase/functions). It runs off Fly, so it
+    /// is up when the hub is not: it transcribes the clip and queues it for the Pi's worker, which runs
+    /// it on Opus and says it came this way. Same token as the hub; the function checks its hash.
+    static let fallbackURL = "https://felyggqjjhltwokdfhop.supabase.co/functions/v1/voice-fallback"
+
+    /// How long a command waits on the hub before trying the fallback. A healthy hub answers a clip in a
+    /// few seconds, transcription included; a hub with no machine behind it does not answer at all — Fly's
+    /// proxy holds the request open while it looks for one — so without a ceiling of its own a command
+    /// waited out the full minute first. A hub that is merely slow past this gets the command twice (its
+    /// own and the fallback's), which is the price of not waiting a minute on every outage.
+    static let hubPatience: TimeInterval = 25
+
+    /// A command, to the hub or, when the hub cannot be reached, to the fallback. `fallback` says which
+    /// took it, because its outcome is waited on in the same place.
+    static func sendCommand(_ clip: Recorder.Clip, msgId: String) async throws -> (heard: Heard, fallback: Bool) {
+        do {
+            return (try await sendAudio(clip, msgId: msgId, timeout: hubPatience), false)
+        } catch let e where unreachable(e) {
+            log("hub-unreachable", ["error": String(describing: e).prefix(120).description])
+            return (try await sendFallback(clip, msgId: msgId), true)
+        }
+    }
+
+    /// The hub is not there, as against there and refusing: no connection, no answer in time, or Fly's
+    /// proxy answering for a machine it does not have. A 4xx is the hub itself, and the fallback would
+    /// only be told the same thing.
+    static func unreachable(_ e: Error) -> Bool {
+        if let u = e as? URLError {
+            return [.timedOut, .cannotConnectToHost, .cannotFindHost, .dnsLookupFailed, .networkConnectionLost,
+                    .badServerResponse, .secureConnectionFailed, .cannotLoadFromNetwork].contains(u.code)
+        }
+        if case HubError.status(let c) = e { return c >= 500 }
+        return false
+    }
+
+    private static func fallbackRequest(_ query: String, method: String, timeout: TimeInterval) throws -> URLRequest {
+        guard let token = HubToken.get() else { throw HubError.noToken }
+        var r = URLRequest(url: URL(string: fallbackURL + "?" + query)!)
+        r.httpMethod = method
+        r.timeoutInterval = timeout
+        r.setValue(token, forHTTPHeaderField: "X-Hub-Token")
+        return r
+    }
+
+    /// Not `check`: a 401 here means the function does not hold this token's hash yet, which says nothing
+    /// about the token, so it must not be thrown away the way the hub's 401 throws it away.
+    private static func checkFallback(_ resp: URLResponse) throws {
+        let code = (resp as? HTTPURLResponse)?.statusCode ?? 0
+        guard (200..<300).contains(code) else { throw HubError.status(code) }
+    }
+
+    static func sendFallback(_ clip: Recorder.Clip, msgId: String) async throws -> Heard {
+        try blockInSimulator("voice-fallback")
+        let query = await commandQuery(clip, msgId: msgId, dry: false, listener: nil)
+        var r = try fallbackRequest(query, method: "POST", timeout: 60)
         r.setValue("audio/mp4", forHTTPHeaderField: "Content-Type")
         let (data, resp) = try await resending { try await session.upload(for: r, fromFile: clip.url) }
-        try await check(resp)
+        try checkFallback(resp)
         return try JSONDecoder().decode(Heard.self, from: data)
+    }
+
+    /// `outcome`, from the fallback: it holds the wait open on the row itself and answers `pending` when
+    /// its own wait runs out. The reply comes back IN the outcome, since the hub's thread may be down.
+    static func fallbackOutcome(_ id: String) async throws -> Outcome {
+        var backoff: Double = 1
+        while true {
+            do {
+                let r = try fallbackRequest("id=\(id)", method: "GET", timeout: 60)
+                let (data, resp) = try await session.data(for: r)
+                try checkFallback(resp)
+                let o = try JSONDecoder().decode(Outcome.self, from: data)
+                if o.status != "pending" { return o }
+                backoff = 1
+            } catch let e as URLError where e.code != .cancelled {
+                log("reply-wait", ["error": e.code.rawValue, "via": "fallback"])
+                try await Task.sleep(for: .seconds(backoff))
+                backoff = min(backoff * 2, 30)
+            }
+            try Task.checkCancellation()
+        }
     }
 
     /// Types his words into a running session. A resend with the same `msgId` returns the first send's
@@ -280,6 +371,8 @@ enum Hub {
     struct Outcome: Decodable {
         let status: String
         let error: String?
+        /// The reply's text. Only the fallback sends it: the hub's own thread carries the reply otherwise.
+        let result: String?
     }
 
     /// Waits for a command to finish. The hub holds each request open until it does, and answers

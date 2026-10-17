@@ -33,6 +33,7 @@ const { buildWeightPlot } = require('./lib/weightplot');
 const { getWeather } = require('./lib/weather');
 const { transcribe, NOTHING_SAID, clipSeconds, extFor } = require('./lib/transcribe');
 const speech = require('./lib/speech');
+const livemic = require('./lib/livemic');
 const { buildNutritionLog, buildGoalResolver, calorieColor } = require('./lib/nutritionlog');
 const { computeScore, tasksScore, taskDeadline, completionValue, completionStamp, bandPoints, toPoints, TASK_GRACE_MIN, TASK_LATE_ZERO_H, TASK_DRAIN_FULL_H } = require('./lib/score');
 
@@ -5098,6 +5099,10 @@ app.get('/api/day-stream', (req, res) => {
   req.on('close', () => { clearInterval(ka); dayClients.delete(res); });
 });
 
+// The live microphone: a watch listening to what the phone hears (lib/livemic.js, docs/LIVE-MIC.md).
+// The phone's half is a WebSocket, attached to the server below.
+app.get('/api/live-mic', livemic.listen);
+
 // Session SSE: one `event: session` frame per tool call or finished turn, from either machine.
 app.get('/api/session-stream', (req, res) => {
   res.set({ 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache',
@@ -5108,7 +5113,7 @@ app.get('/api/session-stream', (req, res) => {
   req.on('close', () => { clearInterval(ka); sessionClients.delete(res); });
 });
 
-app.listen(PORT, '0.0.0.0', () => {
+const server = app.listen(PORT, '0.0.0.0', () => {
   console.log(`status-hub on :${PORT}`);
   startRealtime();
   // Time-based fields (pace drain, volume drop-off) change with the clock, not just on DB
@@ -5116,6 +5121,7 @@ app.listen(PORT, '0.0.0.0', () => {
   // having connected clients so it's free when nobody's watching.
   setInterval(() => { if (sseClients.size) broadcast(); }, 30000);
 });
+livemic.attach(server, authed);
 
 // ---- daily weight-logging push reminder (APNs). Checks each minute; fires once/day at the
 // configured time unless weight or food is already logged (see lib/weightReminder.js). ----

@@ -210,6 +210,7 @@ body.ss-open #bodyinfo,body.touch.ss-open #bodyinfo,body.tv.phonewall.ss-open #b
   letter-spacing:.02em;transition:background .12s,border-color .12s}
 .feed-btn:hover{background:#1c3026;border-color:#356b4a}
 .feed-btn:active{background:#234032}
+.lm-btn.lm-on{background:#2a1416;color:#f08a8f;border-color:#4a2226}
 .feed-btn.busy{background:#1a2129;color:#8b96a5;border-color:#222a33;cursor:default}
 .feed-sched{margin-top:12px}
 .feed-shead{font-size:12px;color:#8b96a5;letter-spacing:.04em;text-transform:uppercase;margin-bottom:6px}

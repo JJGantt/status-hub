@@ -11,3 +11,4 @@ import '../expand.js';   // tap what summarises a section -> its full-screen she
 import '../phone-home.js';   // this page's own middle -- the week, the sessions list, the conversation tail
 import '../alarmclock.js';   // rings on this page, since the iOS app is what has it open
 import '../audiotest.js';   // sound bench on the reports pane — which audio path survives Guided Access
+import '../cards/livemic.js';   // the live mic's Stream button in Utilities (the app does the capture)

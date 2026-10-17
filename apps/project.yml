@@ -73,6 +73,9 @@ targets:
         NSPhotoLibraryUsageDescription: Status Hub attaches photos of food and nutrition labels.
         # The hub page's navigator.geolocation in the WKWebView (voiceagent.js hereNow) needs it.
         NSLocationWhenInUseUsageDescription: For nearby requests.
+        # The live mic keeps streaming with the phone locked (Sources/LiveMic.swift, docs/LIVE-MIC.md).
+        UIBackgroundModes:
+          - audio
         CFBundleURLTypes:
           - CFBundleURLName: com.jaredgantt.statushub
             CFBundleURLSchemes:

@@ -474,6 +474,10 @@ struct HubWebView {
                 // alarm for the microphone.
                 let on = (message.body as? NSNumber)?.boolValue ?? false
                 DispatchQueue.main.async { AlarmAudio.hold(on) }
+            case "liveMic":
+                // The Stream button in Utilities: the capture is native (LiveMic.swift), the page only asks.
+                let body = message.body
+                DispatchQueue.main.async { LiveMic.shared.handle(body) }
             default: break
             }
             #endif
@@ -487,6 +491,9 @@ struct HubWebView {
         cfg.userContentController.add(coordinator, name: "badge")          // page -> native badge updates
         cfg.userContentController.add(coordinator, name: "reloadWidgets")  // page -> refresh the widget
         cfg.userContentController.add(coordinator, name: "alarmAudio")     // page -> claim a .playback session while ringing
+        #if os(iOS)
+        cfg.userContentController.add(coordinator, name: "liveMic")        // page -> stream the microphone to the watch
+        #endif
         cfg.mediaTypesRequiringUserActionForPlayback = []
         cfg.websiteDataStore = .default()          // persistent cookies → stays signed in across launches
         #if os(iOS)
@@ -505,6 +512,7 @@ struct HubWebView {
         RepoLaunch.shared.webView = wv     // …and statushub://repo/<path>
         ReportLaunch.shared.webView = wv   // …and statushub://report/<id>
         SessionLaunch.shared.webView = wv  // …and a tapped session-reply notification
+        MainActor.assumeIsolated { LiveMic.shared.web = wv }   // so the live mic can report its state to the page
         #endif
         #if os(iOS)
         wv.scrollView.contentInsetAdjustmentBehavior = .never

@@ -61,11 +61,15 @@ crown as the volume while it plays.
 - **It holds the microphone and discards what it hears**, which is what keeps a watch app running
   with the wrist down. A watch app that only plays is frozen when the wrist drops (`Speaker` has the
   measurement).
-- **A quarter second of audio before it plays, and again after running dry** (Jared's number, for the
-  shortest delay), so small jitter is delay, not stutter; a longer stall on LTE is heard as a gap.
-  `RECENT_MS` on the hub matches it: whatever the hub hands a joining watch is delay it keeps all
-  listen, since it never catches up. It does not catch up: a stall that queues audio adds to the delay until the next
-  reconnect.
+- **The buffer adapts.** It starts at a quarter second (Jared's number, for the shortest delay). Each
+  time it runs dry it rebuilds to the next level, half a second then one, so one bad patch costs one
+  gap and the larger cushion covers the next. A minute with no gap steps it back down a level. Whenever
+  more is queued than the level calls for (stepping down, or a stall's backlog arriving at once) it
+  plays 5% fast until it is back, so the delay never ratchets up. watchOS has no pitch-preserving
+  speed-up (`AVAudioUnitTimePitch`, `AVAudioUnitVarispeed` and the mixer's `rate` are all unavailable
+  there), so the catch-up is a resample and raises the pitch slightly while it lasts; it never skips
+  audio. `RECENT_MS` on the hub matches the starting level: whatever the hub hands a joining watch is
+  delay it starts with.
 - **What a switch costs, measured:** the stream died 33s in (`-1005`, connection lost) and reopened 14s
   later, because the watch waits until its new route is up before it reconnects (the first retry is
   immediate; only repeated failures back off); the 3s already
@@ -97,7 +101,8 @@ Both apps log to the hub's `client_log` table (`src` = `watch` / `phone`):
 | `live-listen-conn` | how one stream connection reached the hub, from its metrics when it ends: `cellular`, `proxy` (through the phone), `secs` |
 | `live-listen-remote` | an AirPods play/pause command, taken and ignored |
 | `live-listen-error` / `-open` | the stream dying, and reopening with `gap_ms` since it died |
-| `live-listen-dry` | the watch ran out of audio and is gathering again |
+| `live-listen-dry` | the watch ran out of audio and is gathering again, with the `buffer` (seconds) it now gathers |
+| `live-listen-buffer` | a minute without a gap stepped the buffer down; `buffer` is the new level |
 | `live-listen-route` | audio output changed (AirPods in or out) |
 | `livemic*` | the phone: on/off, `socket-open` / `socket-ended`, `listeners`, `interrupted`, `restart` |
 

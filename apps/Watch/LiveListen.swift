@@ -13,11 +13,17 @@ import WatchKit
 /// app that only plays is frozen the instant the wrist drops, one that records is kept running. What
 /// the microphone hears is thrown away.
 ///
-/// **A quarter second of audio is gathered before it plays**, and again after any gap (`startAfter`), so
-/// small unevenness in the link is heard as delay rather than stutter. Jared's number: the delay it holds
-/// for the whole listen is what he hears, so it is kept as short as a cellular link allows. When the
-/// connection drops (the switch from the phone's Bluetooth to the watch's own LTE does this) it reconnects
-/// and starts again from the hub's last quarter second, dropping what was queued so nothing plays twice.
+/// **The buffer adapts** (`levels`). It starts at a quarter second, Jared's number, as close to live as a
+/// cellular link allows. Each time it runs dry it rebuilds to the next level (half a second, then one),
+/// so one bad patch costs one gap and the cushion covers the next. After a minute with no gap it steps
+/// back down a level. Whenever more is queued than the level calls for (stepping down, or a stall's
+/// backlog arriving all at once) it plays 5% fast until it is back: watchOS has no pitch-preserving
+/// time stretch (AVAudioUnitTimePitch, Varispeed and the mixer's `rate` are all unavailable there), so
+/// the speed-up is a resample and raises the pitch slightly while it lasts. It never skips audio.
+///
+/// When the connection drops (the switch from the phone's Bluetooth to the watch's own LTE does this) it
+/// reconnects and starts again from the hub's last quarter second, dropping what was queued so nothing
+/// plays twice.
 ///
 /// **AirPods connected to the watch play it** (`.allowBluetoothA2DP`): A2DP is output only, so the
 /// watch's own microphone is still the one held.
@@ -39,8 +45,22 @@ final class LiveListen: ObservableObject {
     var isOn: Bool { state != .off }
 
     static let rate: Double = 24000
-    /// Frames queued before playback starts or resumes.
-    private static let startAfter = AVAudioFrameCount(rate / 4)
+    /// The buffer's levels, in seconds: what is gathered before playback starts or resumes, and what it
+    /// steers back to while playing.
+    private static let levels: [Double] = [0.25, 0.5, 1.0]
+    /// A minute with no gap steps the buffer down a level.
+    private static let calmFor: TimeInterval = 60
+    /// Queued past the level by this much, it plays fast until it is back.
+    private static let slack = AVAudioFrameCount(rate * 0.1)
+    private var level = 0
+    private var target: AVAudioFrameCount { AVAudioFrameCount(Self.rate * Self.levels[level]) }
+    /// The last gap, or the last step down: what the minute of calm is counted from.
+    private var calmSince = Date()
+    /// Playing fast to come back to the level (`catchUp`).
+    private var catching = false
+    /// Resamples a packet so it plays 5% fast: the samples are read as if recorded at 25.2 kHz.
+    private lazy var speeder: AVAudioConverter? = AVAudioConverter(from: fastFormat, to: format)
+    private let fastFormat = AVAudioFormat(commonFormat: .pcmFormatFloat32, sampleRate: rate * 1.05, channels: 1, interleaved: false)!
 
     private let engine = AVAudioEngine()
     private let player = AVAudioPlayerNode()
@@ -88,6 +108,9 @@ final class LiveListen: ObservableObject {
         StayAwake.shared.sessionReleased()
         guard startAudio() else { stop(); return }
         state = .connecting
+        level = 0
+        calmSince = Date()
+        catching = false
         Hub.log("live-listen", ["on": true, "outputs": Self.outputs()])
         claimRemote()
         reader = Task { await self.read() }
@@ -169,8 +192,9 @@ final class LiveListen: ObservableObject {
         if state == .live { state = .waiting }
     }
 
-    private func play(_ pcm: AVAudioPCMBuffer) {
-        guard isOn, pcm.frameLength > 0 else { return }
+    private func play(_ decoded: AVAudioPCMBuffer) {
+        guard isOn, decoded.frameLength > 0 else { return }
+        let pcm = playing ? catchUp(decoded) : decoded
         let sched = schedule
         queued += pcm.frameLength
         player.scheduleBuffer(pcm, completionCallbackType: .dataPlayedBack) { [weak self] _ in
@@ -178,20 +202,48 @@ final class LiveListen: ObservableObject {
                 guard let self, sched == self.schedule else { return }
                 self.queued -= min(self.queued, pcm.frameLength)
                 if self.queued == 0 && self.playing {
-                    // Ran dry: gather again before resuming, rather than playing each packet as it lands.
+                    // Ran dry: gather again before resuming, rather than playing each packet as it lands,
+                    // and gather more than last time.
                     self.player.pause()
                     self.playing = false
                     self.state = .waiting
-                    Hub.log("live-listen-dry")
+                    self.level = min(self.level + 1, Self.levels.count - 1)
+                    self.calmSince = Date()
+                    Hub.log("live-listen-dry", ["buffer": Self.levels[self.level]])
+                } else if self.level > 0 && Date().timeIntervalSince(self.calmSince) > Self.calmFor {
+                    self.level -= 1
+                    self.calmSince = Date()
+                    Hub.log("live-listen-buffer", ["buffer": Self.levels[self.level]])
                 }
             }
         }
-        if !playing && queued >= Self.startAfter {
+        if !playing && queued >= target {
             if !engine.isRunning { try? engine.start() }
             player.play()
             playing = true
             state = .live
         }
+    }
+
+    /// A packet as it should be scheduled: as decoded, or resampled to play 5% fast while more is queued
+    /// than the level calls for. Starts catching up past the level plus `slack`, stops at the level.
+    private func catchUp(_ pcm: AVAudioPCMBuffer) -> AVAudioPCMBuffer {
+        if !catching && queued > target + Self.slack { catching = true }
+        else if catching && queued <= target { catching = false }
+        guard catching, let speeder,
+              let fast = AVAudioPCMBuffer(pcmFormat: fastFormat, frameCapacity: pcm.frameLength),
+              let out = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: pcm.frameLength) else { return pcm }
+        fast.frameLength = pcm.frameLength
+        memcpy(fast.floatChannelData![0], pcm.floatChannelData![0], Int(pcm.frameLength) * MemoryLayout<Float>.size)
+        var fed = false
+        var error: NSError?
+        speeder.convert(to: out, error: &error) { _, status in
+            if fed { status.pointee = .noDataNow; return nil }
+            fed = true
+            status.pointee = .haveData
+            return fast
+        }
+        return error == nil && out.frameLength > 0 ? out : pcm
     }
 
     private func claimRemote() {

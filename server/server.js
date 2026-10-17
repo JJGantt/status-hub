@@ -1733,35 +1733,80 @@ app.post('/api/cg/transcribe', async (req, res) => {
     fs.promises.unlink(tmp).catch(() => {});
   }
 });
-// THE ORDER LIST (data-layer 00125): what the restaurant watch heard guests order, one row per item.
-// The watch pulls the items out of a transcript with its own model and posts them here; the table has no
-// anon policy, so this owner-gated route is the only way in. Open orders are the ones not marked done.
+// THE ORDER LIST (data-layer 00125, 00126): what the restaurant watch heard guests order, one row per
+// item, written in two passes by the watch's own model (CapitalGrilleApp/Orders.swift): POST as heard,
+// then /standardize matches each row to the menu and renames it in place. The table has no anon policy,
+// so these owner-gated routes are the only way in. Open orders are the ones not marked done.
+//
+// Which model runs each pass is a hub setting, so switching needs no build: `cg_orders_model_first` /
+// `cg_orders_model_second` in app_settings (a model id, e.g. claude-haiku-4-5), Sonnet when unset.
 const CG_ORDER_KINDS = new Set(['dish', 'wine', 'liquor', 'cocktail', 'other']);
 async function cgOrdersOpen() {
-  return sb('cg_orders?select=id,created_at,kind,item_id,name,qty,note&done_at=is.null&order=created_at.desc&limit=200');
+  return sb('cg_orders?select=id,created_at,kind,item_id,name,qty,note,heard_name,standardized_at'
+    + '&done_at=is.null&order=created_at.desc&limit=200');
+}
+async function cgOrderModels() {
+  const s = await settingsAll().catch(() => ({}));
+  return { first: s.cg_orders_model_first || 'claude-sonnet-5', second: s.cg_orders_model_second || 'claude-sonnet-5' };
 }
 app.get('/api/cg/orders', async (req, res) => {
   if (!cgOwner(req)) return res.status(401).json({ error: 'unauthorized' });
-  try { res.json({ orders: await cgOrdersOpen() }); }
+  try { res.json({ orders: await cgOrdersOpen(), models: await cgOrderModels() }); }
   catch (e) { res.status(502).json({ error: String(e.message || e) }); }
 });
 app.post('/api/cg/orders', express.json({ limit: '64kb' }), async (req, res) => {
   if (!cgOwner(req)) return res.status(401).json({ error: 'unauthorized' });
   const b = req.body || {};
   const id = /^[0-9a-f-]{36}$/i.test(String(b.interaction_id || '')) ? String(b.interaction_id).toLowerCase() : null;
-  const rows = (Array.isArray(b.items) ? b.items : []).map((i) => ({
-    kind: CG_ORDER_KINDS.has(i && i.kind) ? i.kind : 'other',
-    item_id: i && i.item_id ? String(i.item_id).slice(0, 200) : null,
-    name: String((i && i.name) || '').trim().slice(0, 200),
-    qty: Math.max(1, Math.min(99, parseInt(i && i.qty, 10) || 1)),
-    note: i && i.note ? String(i.note).trim().slice(0, 300) : null,
-    heard: b.heard ? String(b.heard).slice(0, 2000) : null,
-    interaction_id: id,
-  })).filter((r) => r.name);
+  // Items arrive as heard (the first pass); an item already carrying a menu id (a build from before the
+  // two passes) counts as standardized.
+  const rows = (Array.isArray(b.items) ? b.items : []).map((i) => {
+    const name = String((i && i.name) || '').trim().slice(0, 200);
+    const matched = !!(i && i.item_id);
+    return {
+      kind: CG_ORDER_KINDS.has(i && i.kind) ? i.kind : 'other',
+      item_id: matched ? String(i.item_id).slice(0, 200) : null,
+      name,
+      heard_name: name,
+      qty: Math.max(1, Math.min(99, parseInt(i && i.qty, 10) || 1)),
+      note: i && i.note ? String(i.note).trim().slice(0, 300) : null,
+      heard: b.heard ? String(b.heard).slice(0, 2000) : null,
+      interaction_id: id,
+      standardized_at: matched ? new Date().toISOString() : null,
+    };
+  }).filter((r) => r.name);
   if (!rows.length) return res.status(400).json({ error: 'no items' });
   try {
-    await sbWrite('cg_orders', 'POST', rows);
-    console.log(`[cg-orders] +${rows.length}: ${rows.map((r) => `${r.qty}x ${r.name}`).join(', ').slice(0, 300)}`);
+    const r = await fetch(`${SUPABASE_URL}/rest/v1/cg_orders`, {
+      method: 'POST',
+      headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}`, 'Content-Type': 'application/json',
+                 Prefer: 'return=representation' },
+      body: JSON.stringify(rows),
+    });
+    if (!r.ok) throw new Error(`supabase POST cg_orders -> ${r.status}`);
+    const added = await r.json();
+    console.log(`[cg-orders] +${rows.length}: ${rows.map((x) => `${x.qty}x ${x.name}`).join(', ').slice(0, 300)}`);
+    res.json({ added, orders: await cgOrdersOpen() });
+  } catch (e) { res.status(502).json({ error: String(e.message || e) }); }
+});
+// The second pass: each row the first pass wrote, matched to the menu ({id, kind, item_id, name, note}) or
+// left as heard ({id} alone). Either way the row is marked standardized.
+app.post('/api/cg/orders/standardize', express.json({ limit: '64kb' }), async (req, res) => {
+  if (!cgOwner(req)) return res.status(401).json({ error: 'unauthorized' });
+  const ups = Array.isArray(req.body && req.body.updates) ? req.body.updates : [];
+  const now = new Date().toISOString();
+  try {
+    for (const u of ups) {
+      if (!/^[0-9a-f-]{36}$/i.test(String(u && u.id || ''))) continue;
+      const patch = { standardized_at: now };
+      if (u.item_id && u.name) {
+        patch.kind = CG_ORDER_KINDS.has(u.kind) ? u.kind : 'other';
+        patch.item_id = String(u.item_id).slice(0, 200);
+        patch.name = String(u.name).trim().slice(0, 200);
+        if (u.note !== undefined) patch.note = u.note ? String(u.note).trim().slice(0, 300) : null;
+      }
+      await sbWrite(`cg_orders?id=eq.${u.id}`, 'PATCH', patch);
+    }
     res.json({ orders: await cgOrdersOpen() });
   } catch (e) { res.status(502).json({ error: String(e.message || e) }); }
 });

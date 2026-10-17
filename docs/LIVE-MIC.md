@@ -65,7 +65,8 @@ crown as the volume while it plays.
   stutter. It does not catch up: a stall that queues audio adds to the delay until the next
   reconnect.
 - **What a switch costs, measured:** the stream died 33s in (`-1005`, connection lost) and reopened 14s
-  later, because the watch waits until its new route is up before it reconnects; the 3s already
+  later, because the watch waits until its new route is up before it reconnects (the first retry is
+  immediate; only repeated failures back off); the 3s already
   queued covered the start of that, so about 11s were silent.
 - **Why there is a switch at all:** watchOS routes an app's traffic through the phone while it is in
   Bluetooth range, then Wi-Fi, then its own LTE, and an app cannot choose. A connection opened through

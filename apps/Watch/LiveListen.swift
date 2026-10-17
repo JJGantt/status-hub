@@ -210,7 +210,7 @@ final class LiveListen: ObservableObject {
     /// Holds the stream open for as long as it listens, reconnecting with backoff. Each packet is a
     /// 2-byte big-endian length and that many bytes; zero is the hub's keepalive.
     private func read() async {
-        var backoff: Double = 1
+        var backoff: Double = 0
         while !Task.isCancelled {
             do {
                 // The hub sends at least a keepalive every 2s, so 5s of nothing is a dead connection: the
@@ -224,7 +224,7 @@ final class LiveListen: ObservableObject {
                 }
                 flush()
                 state = .waiting
-                backoff = 1
+                backoff = 0
                 Hub.log("live-listen-open", ["gap_ms": lostAt.map { Int(Date().timeIntervalSince($0) * 1000) } ?? 0])
                 lostAt = nil
                 var it = bytes.makeAsyncIterator()
@@ -246,8 +246,10 @@ final class LiveListen: ObservableObject {
             if lostAt == nil { lostAt = Date() }
             guard !Task.isCancelled else { return }
             state = .connecting
-            try? await Task.sleep(nanoseconds: UInt64(backoff * 1_000_000_000))
-            backoff = min(backoff * 2, 30)
+            // The first retry goes at once: a stream that died because the route changed is what this is
+            // for, and the request itself waits for the new route. Only repeated failures back off.
+            if backoff > 0 { try? await Task.sleep(nanoseconds: UInt64(backoff * 1_000_000_000)) }
+            backoff = max(1, min(backoff * 2, 30))
         }
     }
 }

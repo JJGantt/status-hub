@@ -1,4 +1,5 @@
 import AVFoundation
+import Network
 import SwiftUI
 import WatchKit
 
@@ -16,6 +17,12 @@ import WatchKit
 /// unevenness of a cellular link is heard as a delay rather than as stutter. When the connection drops
 /// (the switch from the phone's Bluetooth to the watch's own LTE does this) it reconnects with backoff
 /// and starts again from the hub's last two seconds, dropping what was queued so nothing plays twice.
+///
+/// **AirPods connected to the watch play it** (`.allowBluetoothA2DP`): A2DP is output only, so the
+/// watch's own microphone is still the one held.
+///
+/// It logs which way the watch is reaching the internet (`live-listen-path`: through the phone, Wi-Fi
+/// or its own cellular) and how long each reconnect took (`gap_ms`), which is what explains a cut-out.
 @MainActor
 final class LiveListen: ObservableObject {
     static let shared = LiveListen()
@@ -39,6 +46,9 @@ final class LiveListen: ObservableObject {
     /// Frames scheduled on the player and not yet played.
     private var queued: AVAudioFrameCount = 0
     private var playing = false
+    /// When the stream last died, so the reconnect can say how long the gap was.
+    private var lostAt: Date?
+    private var path: NWPathMonitor?
 
     private init() {
         let center = NotificationCenter.default
@@ -51,6 +61,9 @@ final class LiveListen: ObservableObject {
         }
         center.addObserver(forName: .AVAudioEngineConfigurationChange, object: engine, queue: .main) { _ in
             MainActor.assumeIsolated { self.restartAudio("config-change") }
+        }
+        center.addObserver(forName: AVAudioSession.routeChangeNotification, object: session, queue: .main) { _ in
+            MainActor.assumeIsolated { if self.isOn { Hub.log("live-listen-route", ["outputs": Self.outputs()]) } }
         }
         center.addObserver(forName: AVAudioSession.mediaServicesWereResetNotification, object: session, queue: .main) { _ in
             MainActor.assumeIsolated { self.restartAudio("media-reset") }
@@ -66,7 +79,8 @@ final class LiveListen: ObservableObject {
         StayAwake.shared.sessionReleased()
         guard startAudio() else { stop(); return }
         state = .connecting
-        Hub.log("live-listen", ["on": true])
+        Hub.log("live-listen", ["on": true, "outputs": Self.outputs()])
+        watchPath()
         reader = Task { await self.read() }
     }
 
@@ -74,6 +88,9 @@ final class LiveListen: ObservableObject {
         guard isOn else { return }
         reader?.cancel()
         reader = nil
+        path?.cancel()
+        path = nil
+        lostAt = nil
         flush()
         engine.stop()
         releaseMic()
@@ -89,7 +106,7 @@ final class LiveListen: ObservableObject {
     private func startAudio() -> Bool {
         let session = AVAudioSession.sharedInstance()
         do {
-            try session.setCategory(.playAndRecord, mode: .default)
+            try session.setCategory(.playAndRecord, mode: .default, options: [.allowBluetoothA2DP])
             try session.setActive(true)
             if !wired {
                 engine.attach(player)
@@ -169,6 +186,25 @@ final class LiveListen: ObservableObject {
         }
     }
 
+    /// Logs each change in how the watch reaches the internet while it listens: through the phone, over
+    /// Wi-Fi, or on its own cellular. Only while listening.
+    private func watchPath() {
+        let monitor = NWPathMonitor()
+        monitor.pathUpdateHandler = { p in
+            let kinds: [(NWInterface.InterfaceType, String)] = [(.cellular, "cellular"), (.wifi, "wifi"),
+                                                               (.wiredEthernet, "wired"), (.other, "other")]
+            let via = kinds.filter { p.usesInterfaceType($0.0) }.map(\.1).joined(separator: ",")
+            let status = "\(p.status)"
+            Task { @MainActor in Hub.log("live-listen-path", ["status": status, "via": via]) }
+        }
+        monitor.start(queue: DispatchQueue(label: "livelisten.path"))
+        path = monitor
+    }
+
+    private static func outputs() -> String {
+        AVAudioSession.sharedInstance().currentRoute.outputs.map(\.portType.rawValue).joined(separator: ",")
+    }
+
     // MARK: the stream
 
     /// Holds the stream open for as long as it listens, reconnecting with backoff. Each packet is a
@@ -189,7 +225,8 @@ final class LiveListen: ObservableObject {
                 flush()
                 state = .waiting
                 backoff = 1
-                Hub.log("live-listen-open")
+                Hub.log("live-listen-open", ["gap_ms": lostAt.map { Int(Date().timeIntervalSince($0) * 1000) } ?? 0])
+                lostAt = nil
                 var it = bytes.makeAsyncIterator()
                 while let hi = try await it.next(), let lo = try await it.next() {
                     let n = Int(hi) << 8 | Int(lo)
@@ -206,6 +243,7 @@ final class LiveListen: ObservableObject {
             } catch {
                 if !Task.isCancelled { Hub.log("live-listen-error", ["error": String(describing: error).prefix(120).description]) }
             }
+            if lostAt == nil { lostAt = Date() }
             guard !Task.isCancelled else { return }
             state = .connecting
             try? await Task.sleep(nanoseconds: UInt64(backoff * 1_000_000_000))

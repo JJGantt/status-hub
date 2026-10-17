@@ -16,6 +16,9 @@ import WebKit
 /// Packets are AAC-LC, 24 kHz mono, ~32 kbit/s, each sent as a 2-byte big-endian length and its bytes
 /// (`lib/livemic.js` has the wire format). The capture keeps running while the socket reconnects;
 /// what it hears in that gap is dropped, so the watch rejoins at the live edge.
+///
+/// Logs to the hub as `src: phone` (`livemic*` in `client_log`): on and off, each socket opening and
+/// ending, interruptions. A line written while the phone has no connection is lost.
 @MainActor
 final class LiveMic: NSObject, URLSessionWebSocketDelegate {
     static let shared = LiveMic()
@@ -46,7 +49,10 @@ final class LiveMic: NSObject, URLSessionWebSocketDelegate {
         center.addObserver(forName: AVAudioSession.interruptionNotification, object: session, queue: .main) { note in
             let raw = note.userInfo?[AVAudioSessionInterruptionTypeKey] as? UInt ?? 0
             let ended = AVAudioSession.InterruptionType(rawValue: raw) == .ended
-            MainActor.assumeIsolated { if ended { self.restartCapture() } }
+            MainActor.assumeIsolated {
+                if self.state != .off { self.log("livemic-interrupted", ["ended": ended]) }
+                if ended { self.restartCapture() }
+            }
         }
         // A route change (headphones in or out) can change the input format, which the tap was built on.
         center.addObserver(forName: .AVAudioEngineConfigurationChange, object: engine, queue: .main) { _ in
@@ -82,8 +88,9 @@ final class LiveMic: NSObject, URLSessionWebSocketDelegate {
 
     private func start() async {
         guard state == .off || state == .denied else { return }
-        guard await AVAudioApplication.requestRecordPermission() else { set(.denied); return }
+        guard await AVAudioApplication.requestRecordPermission() else { set(.denied); log("livemic-denied"); return }
         set(.connecting)
+        log("livemic", ["on": true])
         guard startCapture() else { stop(); return }
         connect()
     }
@@ -99,6 +106,7 @@ final class LiveMic: NSObject, URLSessionWebSocketDelegate {
         backoff = 1
         try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
         set(.off)
+        log("livemic", ["on": false])
     }
 
     // MARK: capture
@@ -111,7 +119,7 @@ final class LiveMic: NSObject, URLSessionWebSocketDelegate {
             let input = engine.inputNode
             let format = input.outputFormat(forBus: 0)
             guard format.sampleRate > 0, format.channelCount > 0, let enc = Encoder(from: format) else {
-                NSLog("livemic: no usable input format \(format)")
+                log("livemic-failed", ["error": "no input format"])
                 return false
             }
             queue.sync { encoder = enc }
@@ -123,7 +131,7 @@ final class LiveMic: NSObject, URLSessionWebSocketDelegate {
             try engine.start()
             return true
         } catch {
-            NSLog("livemic: capture failed \(error)")
+            log("livemic-failed", ["error": String(describing: error).prefix(120).description])
             stopCapture()
             return false
         }
@@ -137,6 +145,7 @@ final class LiveMic: NSObject, URLSessionWebSocketDelegate {
 
     private func restartCapture() {
         guard state == .connecting || state == .live else { return }
+        log("livemic-restart")
         stopCapture()
         if !startCapture() { stop() }
     }
@@ -151,6 +160,22 @@ final class LiveMic: NSObject, URLSessionWebSocketDelegate {
             message.append(p)
         }
         socket.send(.data(message)) { _ in }   // a failed send surfaces as the socket closing
+    }
+
+    // MARK: the log
+
+    private func log(_ ev: String, _ fields: [String: Any] = [:]) {
+        var line = fields
+        line["src"] = "phone"
+        line["ev"] = ev
+        line["t"] = ISO8601DateFormatter().string(from: Date())
+        guard let token = Auth.token(), let body = try? JSONSerialization.data(withJSONObject: line) else { return }
+        var req = URLRequest(url: URL(string: Auth.host + "/api/clientlog")!)
+        req.httpMethod = "POST"
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        req.setValue(token, forHTTPHeaderField: "X-Hub-Token")
+        req.httpBody = body
+        URLSession.shared.dataTask(with: req).resume()
     }
 
     // MARK: the socket
@@ -179,12 +204,13 @@ final class LiveMic: NSObject, URLSessionWebSocketDelegate {
                        let n = obj["listeners"] as? Int {
                         self.listeners = n
                         self.report()
+                        self.log("livemic-listeners", ["n": n])
                     }
                     self.receive(task, attempt: this)
                 case .success:
                     self.receive(task, attempt: this)
                 case .failure(let error):
-                    NSLog("livemic: socket ended \(error)")
+                    self.log("livemic-socket-ended", ["error": String(describing: error).prefix(120).description])
                     self.reconnect()
                 }
             }
@@ -215,6 +241,7 @@ final class LiveMic: NSObject, URLSessionWebSocketDelegate {
             self.open = true
             self.backoff = 1
             self.set(.live)
+            self.log("livemic-socket-open")
         }
     }
 }

@@ -64,6 +64,9 @@ crown as the volume while it plays.
 - **A second of audio before it plays, and again after running dry**, so a jittery link is a delay, not
   stutter. It does not catch up: a stall that queues audio adds to the delay until the next
   reconnect.
+- **What a switch costs, measured:** the stream died 33s in (`-1005`, connection lost) and reopened 14s
+  later, because the watch waits until its new route is up before it reconnects; the 3s already
+  queued covered the start of that, so about 11s were silent.
 - **Why there is a switch at all:** watchOS routes an app's traffic through the phone while it is in
   Bluetooth range, then Wi-Fi, then its own LTE, and an app cannot choose. A connection opened through
   the phone dies when the phone goes out of range and is reopened over LTE. Start listening once away
@@ -73,8 +76,23 @@ crown as the volume while it plays.
   watch moves to its own LTE, so expect a short gap there.
 - It takes the microphone from the always-on listener (`Capture.hush`) and gives it back when it
   stops. Starting a recording or a spoken reply stops it.
-- It logs `live-listen*` lines to the hub (`fly logs -a jared-status-hub | grep live-listen`); the hub
-  logs `live-mic:` lines when the phone and each watch come and go.
+- **AirPods connected to the watch play it** (`.allowBluetoothA2DP`). A2DP is output only, so the watch's
+  own microphone is still the one held. Untested on the device.
+
+## Reading what happened
+
+Both apps log to the hub's `client_log` table (`src` = `watch` / `phone`):
+
+| ev | says |
+|---|---|
+| `live-listen` | watch on/off, with the audio outputs |
+| `live-listen-path` | how the watch reaches the internet: `via` cellular / wifi / other (other is the phone's Bluetooth link) |
+| `live-listen-error` / `-open` | the stream dying, and reopening with `gap_ms` since it died |
+| `live-listen-dry` | the watch ran out of audio and is gathering again |
+| `live-listen-route` | audio output changed (AirPods in or out) |
+| `livemic*` | the phone: on/off, `socket-open` / `socket-ended`, `listeners`, `interrupted`, `restart` |
+
+The hub also prints `live-mic:` lines when the phone and each watch come and go (`fly logs`).
 
 ## Verified, and not yet
 

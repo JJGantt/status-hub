@@ -1689,10 +1689,15 @@ function cgLog(req, started, fields) {
     kind: 'voice_hub', latency_ms: Date.now() - started, ...fields,
   }).catch((e) => console.log(`[cg-transcribe] log write failed: ${e.message}`));
 }
+// The owner's device, by its Anthropic key. Every /api/cg route but the transcriber's is behind this alone.
+function cgOwner(req) {
+  const key = String(req.headers['x-owner-key'] || '');
+  return !!key && crypto.createHash('sha256').update(key).digest('hex') === CG_OWNER_KEY_SHA256;
+}
 app.post('/api/cg/transcribe', async (req, res) => {
   const arrived = Date.now();
   const key = String(req.headers['x-owner-key'] || '');
-  if (!key || crypto.createHash('sha256').update(key).digest('hex') !== CG_OWNER_KEY_SHA256) {
+  if (!cgOwner(req)) {
     console.log(`[cg-transcribe] REFUSED: ${key ? 'not the owner key' : 'no key'}`);
     req.resume();
     return res.status(401).json({ error: 'unauthorized' });
@@ -1727,6 +1732,49 @@ app.post('/api/cg/transcribe', async (req, res) => {
   } finally {
     fs.promises.unlink(tmp).catch(() => {});
   }
+});
+// THE ORDER LIST (data-layer 00125): what the restaurant watch heard guests order, one row per item.
+// The watch pulls the items out of a transcript with its own model and posts them here; the table has no
+// anon policy, so this owner-gated route is the only way in. Open orders are the ones not marked done.
+const CG_ORDER_KINDS = new Set(['dish', 'wine', 'liquor', 'cocktail', 'other']);
+async function cgOrdersOpen() {
+  return sb('cg_orders?select=id,created_at,kind,item_id,name,qty,note&done_at=is.null&order=created_at.desc&limit=200');
+}
+app.get('/api/cg/orders', async (req, res) => {
+  if (!cgOwner(req)) return res.status(401).json({ error: 'unauthorized' });
+  try { res.json({ orders: await cgOrdersOpen() }); }
+  catch (e) { res.status(502).json({ error: String(e.message || e) }); }
+});
+app.post('/api/cg/orders', express.json({ limit: '64kb' }), async (req, res) => {
+  if (!cgOwner(req)) return res.status(401).json({ error: 'unauthorized' });
+  const b = req.body || {};
+  const id = /^[0-9a-f-]{36}$/i.test(String(b.interaction_id || '')) ? String(b.interaction_id).toLowerCase() : null;
+  const rows = (Array.isArray(b.items) ? b.items : []).map((i) => ({
+    kind: CG_ORDER_KINDS.has(i && i.kind) ? i.kind : 'other',
+    item_id: i && i.item_id ? String(i.item_id).slice(0, 200) : null,
+    name: String((i && i.name) || '').trim().slice(0, 200),
+    qty: Math.max(1, Math.min(99, parseInt(i && i.qty, 10) || 1)),
+    note: i && i.note ? String(i.note).trim().slice(0, 300) : null,
+    heard: b.heard ? String(b.heard).slice(0, 2000) : null,
+    interaction_id: id,
+  })).filter((r) => r.name);
+  if (!rows.length) return res.status(400).json({ error: 'no items' });
+  try {
+    await sbWrite('cg_orders', 'POST', rows);
+    console.log(`[cg-orders] +${rows.length}: ${rows.map((r) => `${r.qty}x ${r.name}`).join(', ').slice(0, 300)}`);
+    res.json({ orders: await cgOrdersOpen() });
+  } catch (e) { res.status(502).json({ error: String(e.message || e) }); }
+});
+// Marks one order done ({id}) or every open one ({all: true}).
+app.post('/api/cg/orders/done', express.json(), async (req, res) => {
+  if (!cgOwner(req)) return res.status(401).json({ error: 'unauthorized' });
+  const b = req.body || {};
+  const which = b.all ? 'done_at=is.null' : /^[0-9a-f-]{36}$/i.test(String(b.id || '')) ? `id=eq.${b.id}` : null;
+  if (!which) return res.status(400).json({ error: 'id or all' });
+  try {
+    await sbWrite(`cg_orders?${which}`, 'PATCH', { done_at: new Date().toISOString() });
+    res.json({ orders: await cgOrdersOpen() });
+  } catch (e) { res.status(502).json({ error: String(e.message || e) }); }
 });
 app.get('/login', (req, res) => res.type('html').send(loginHtml()));
 app.post('/login', (req, res) => {

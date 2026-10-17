@@ -20,7 +20,7 @@ build), so a fix that has not been installed is not mistaken for one that failed
 
 ## Pages
 
-Four, swiped left to right: **sessions · home · day · health**. The app opens on home,
+Five, swiped left to right: **sessions · home · day · health · live**. The app opens on home,
 which IS the conversation — there is no separate prompt page. New layouts are added as NEW pages beside the old
 ones rather than by reshaping a page in place, and the ones that lose are deleted; `day` and `health`
 are two layouts of the same food-and-training data, and one of them is expected to go.
@@ -42,6 +42,9 @@ dispatches on.
 
 Every page stays alive side by side in the TabView, so anything that binds double tap or acts on a
 request asks `onScreen` (an environment value `RootView` sets per page) first.
+
+`live` is the live mic: one control that plays what the phone's microphone hears
+(`LiveListen.swift`, [LIVE-MIC.md](LIVE-MIC.md)). It holds no stream until it is pressed.
 
 ### Home — the conversation
 

@@ -86,6 +86,7 @@ final class Speaker: NSObject, ObservableObject {
         let words = MarkdownBlock.spoken(reply)
         guard !words.isEmpty else { return }
         halt()
+        LiveListen.shared.stop()   // one thing plays at a time
         Capture.shared.hush(true)
         turn += 1
         let this = turn

@@ -89,6 +89,14 @@ the route and the `trace()` calls.
 
 ## Not started
 
+### Live mic: hear what voice processing cuts
+
+Jared wants to hear exactly what Apple's voice processing removes before deciding whether the live mic
+gets a Voice mode beside Room (docs/LIVE-MIC.md § Room, not voice). Record the same scene both ways
+(`.default` vs `.voiceChat` / `setVoiceProcessingEnabled(true)` on the input node) on the phone and on
+the watch, and play them side by side. Check first whether the input node's voice processing is
+available on watchOS at all.
+
 ### Capture the surf forecast more often, and keep one capture a day old
 
 Both come out of the backtest in `docs/ALARMS.md` that rejected the wind-upgrade rule, and both matter

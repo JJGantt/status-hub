@@ -11,7 +11,8 @@ import AVFoundation
 /// frozen the instant the wrist drops, with its engine still reporting running and no notification
 /// (measured with spoken replies, `Speaker`).
 ///
-/// Anything already holding the microphone (a recording, the always-on listener, a reply being spoken)
+/// Anything already holding the microphone (a recording, the always-on listener, a reply being spoken,
+/// the live mic)
 /// keeps the app running by itself, so this stands aside for it.
 ///
 /// It does not make a dimmed screen redraw any faster: with the wrist down watchOS redraws at most about
@@ -60,7 +61,7 @@ final class StayAwake {
     private func start() {
         // A recording, the listener or a spoken reply already holds the microphone, which keeps the app
         // alive by itself; a second tap on it would fight theirs.
-        if Capture.shared.owner != nil || Speaker.shared.isSpeaking { return }
+        if Capture.shared.owner != nil || Speaker.shared.isSpeaking || LiveListen.shared.isOn { return }
         if holding && engine.isRunning { return }
         let session = AVAudioSession.sharedInstance()
         do {

@@ -123,6 +123,7 @@ final class Capture: ObservableObject {
     func start(for owner: Owner, flow: Flow = .standard, onSilence: (() -> Void)? = nil, onTaken: (() -> Void)? = nil,
                onFailure: @escaping @MainActor (Error) -> Void) {
         Speaker.shared.stop()   // his voice comes first: a recording ends any reply being read out
+        LiveListen.shared.stop()   // …and the live mic, which holds the microphone too
         begin(owner, flow: flow, onSilence: onSilence, onTaken: onTaken, onFailure: onFailure) { [weak self] in
             self?.setMuted(true)
             // The wrist is told the moment the microphone is actually live, not when it was asked

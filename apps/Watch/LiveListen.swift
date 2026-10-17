@@ -1,5 +1,5 @@
 import AVFoundation
-import Network
+import MediaPlayer
 import SwiftUI
 import WatchKit
 
@@ -21,8 +21,14 @@ import WatchKit
 /// **AirPods connected to the watch play it** (`.allowBluetoothA2DP`): A2DP is output only, so the
 /// watch's own microphone is still the one held.
 ///
-/// It logs which way the watch is reaching the internet (`live-listen-path`: through the phone, Wi-Fi
-/// or its own cellular) and how long each reconnect took (`gap_ms`), which is what explains a cut-out.
+/// **It is the Now Playing app while it listens** (`claimRemote`). AirPods send play and pause to
+/// whichever app is Now Playing (ear detection, a squeeze); with no claim they went to Music, which then
+/// started playing and took the audio session. Every command is taken here and does nothing: a live
+/// stream has nothing to pause, and taking an AirPod out already moves the sound to the watch.
+///
+/// It logs how each stream connection reached the hub, read from the connection's own metrics when it
+/// ends (`live-listen-conn`: cellular or not, through the phone or not), and how long each reconnect
+/// took (`gap_ms`), which is what explains a cut-out.
 @MainActor
 final class LiveListen: ObservableObject {
     static let shared = LiveListen()
@@ -48,7 +54,9 @@ final class LiveListen: ObservableObject {
     private var playing = false
     /// When the stream last died, so the reconnect can say how long the gap was.
     private var lostAt: Date?
-    private var path: NWPathMonitor?
+    /// The remote-command handlers registered while listening, removed on stop.
+    private var remote: [(MPRemoteCommand, Any)] = []
+    private let metrics = ConnectionLog()
 
     private init() {
         let center = NotificationCenter.default
@@ -80,7 +88,7 @@ final class LiveListen: ObservableObject {
         guard startAudio() else { stop(); return }
         state = .connecting
         Hub.log("live-listen", ["on": true, "outputs": Self.outputs()])
-        watchPath()
+        claimRemote()
         reader = Task { await self.read() }
     }
 
@@ -88,8 +96,7 @@ final class LiveListen: ObservableObject {
         guard isOn else { return }
         reader?.cancel()
         reader = nil
-        path?.cancel()
-        path = nil
+        releaseRemote()
         lostAt = nil
         flush()
         engine.stop()
@@ -186,19 +193,28 @@ final class LiveListen: ObservableObject {
         }
     }
 
-    /// Logs each change in how the watch reaches the internet while it listens: through the phone, over
-    /// Wi-Fi, or on its own cellular. Only while listening.
-    private func watchPath() {
-        let monitor = NWPathMonitor()
-        monitor.pathUpdateHandler = { p in
-            let kinds: [(NWInterface.InterfaceType, String)] = [(.cellular, "cellular"), (.wifi, "wifi"),
-                                                               (.wiredEthernet, "wired"), (.other, "other")]
-            let via = kinds.filter { p.usesInterfaceType($0.0) }.map(\.1).joined(separator: ",")
-            let status = "\(p.status)"
-            Task { @MainActor in Hub.log("live-listen-path", ["status": status, "via": via]) }
+    private func claimRemote() {
+        let center = MPRemoteCommandCenter.shared()
+        for cmd in [center.playCommand, center.pauseCommand, center.togglePlayPauseCommand, center.stopCommand,
+                    center.nextTrackCommand, center.previousTrackCommand] {
+            cmd.isEnabled = true
+            let target = cmd.addTarget { _ in
+                Task { @MainActor in Hub.log("live-listen-remote") }
+                return .success
+            }
+            remote.append((cmd, target))
         }
-        monitor.start(queue: DispatchQueue(label: "livelisten.path"))
-        path = monitor
+        MPNowPlayingInfoCenter.default().nowPlayingInfo = [
+            MPMediaItemPropertyTitle: "Live Mic",
+            MPNowPlayingInfoPropertyIsLiveStream: true,
+            MPNowPlayingInfoPropertyPlaybackRate: 1.0,
+        ]
+    }
+
+    private func releaseRemote() {
+        for (cmd, target) in remote { cmd.removeTarget(target) }
+        remote = []
+        MPNowPlayingInfoCenter.default().nowPlayingInfo = nil
     }
 
     private static func outputs() -> String {
@@ -216,7 +232,7 @@ final class LiveListen: ObservableObject {
                 // The hub sends at least a keepalive every 2s, so 5s of nothing is a dead connection: the
                 // usual way is the move from the phone's Bluetooth to the watch's LTE, which can leave the
                 // old connection silent rather than failed.
-                let bytes = try await Hub.stream("/api/live-mic", idle: 5)
+                let bytes = try await Hub.stream("/api/live-mic", idle: 5, delegate: metrics)
                 guard let decoder = AACDecoder(rate: Self.rate) else {
                     Hub.log("live-listen-decoder-failed")
                     stop()
@@ -251,6 +267,19 @@ final class LiveListen: ObservableObject {
             if backoff > 0 { try? await Task.sleep(nanoseconds: UInt64(backoff * 1_000_000_000)) }
             backoff = max(1, min(backoff * 2, 30))
         }
+    }
+}
+
+/// How a stream connection reached the hub, logged when it ends: the watch picks the route itself
+/// (through the phone, Wi-Fi, its own cellular) and this is the one place an app can read which it was.
+private final class ConnectionLog: NSObject, URLSessionTaskDelegate {
+    func urlSession(_ session: URLSession, task: URLSessionTask, didFinishCollecting metrics: URLSessionTaskMetrics) {
+        guard let m = metrics.transactionMetrics.last else { return }
+        let fields: [String: Any] = [
+            "cellular": m.isCellular, "expensive": m.isExpensive, "constrained": m.isConstrained,
+            "proxy": m.isProxyConnection, "local": m.localAddress ?? "", "secs": Int(metrics.taskInterval.duration),
+        ]
+        Task { @MainActor in Hub.log("live-listen-conn", fields) }
     }
 }
 

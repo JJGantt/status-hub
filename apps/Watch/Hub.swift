@@ -492,8 +492,9 @@ enum Hub {
     /// A server-sent event stream, open until the hub or the network drops it. The hub pings every
     /// 25s, so a minute without a byte is a dead connection rather than a quiet one.
     /// `idle` is how long it waits for the next bytes before counting the stream dead.
-    static func stream(_ path: String, idle: TimeInterval = 60) async throws -> URLSession.AsyncBytes {
-        let (bytes, resp) = try await streamSession.bytes(for: try request(path, timeout: idle))
+    static func stream(_ path: String, idle: TimeInterval = 60,
+                       delegate: URLSessionTaskDelegate? = nil) async throws -> URLSession.AsyncBytes {
+        let (bytes, resp) = try await streamSession.bytes(for: try request(path, timeout: idle), delegate: delegate)
         try await check(resp)
         return bytes
     }

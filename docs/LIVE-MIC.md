@@ -77,6 +77,11 @@ crown as the volume while it plays.
   watch moves to its own LTE, so expect a short gap there.
 - It takes the microphone from the always-on listener (`Capture.hush`) and gives it back when it
   stops. Starting a recording or a spoken reply stops it.
+- **It is the Now Playing app while it listens**, taking every remote command (play, pause, skip) and
+  doing nothing with it. Without that, AirPods' ear detection sent play to Music, which started
+  playing on the watch, took the audio session, and the live mic could not get it back.
+  `NWPathMonitor` is not used to tell the route: on the watch it reported `unsatisfied` while the
+  stream was flowing.
 - **AirPods connected to the watch play it** (`.allowBluetoothA2DP`). A2DP is output only, so the watch's
   own microphone is still the one held. Untested on the device.
 
@@ -87,7 +92,8 @@ Both apps log to the hub's `client_log` table (`src` = `watch` / `phone`):
 | ev | says |
 |---|---|
 | `live-listen` | watch on/off, with the audio outputs |
-| `live-listen-path` | how the watch reaches the internet: `via` cellular / wifi / other (other is the phone's Bluetooth link) |
+| `live-listen-conn` | how one stream connection reached the hub, from its metrics when it ends: `cellular`, `proxy` (through the phone), `secs` |
+| `live-listen-remote` | an AirPods play/pause command, taken and ignored |
 | `live-listen-error` / `-open` | the stream dying, and reopening with `gap_ms` since it died |
 | `live-listen-dry` | the watch ran out of audio and is gathering again |
 | `live-listen-route` | audio output changed (AirPods in or out) |

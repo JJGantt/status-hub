@@ -110,8 +110,17 @@ final class LiveListen: ObservableObject {
         center.addObserver(forName: .AVAudioEngineConfigurationChange, object: engine, queue: .main) { _ in
             MainActor.assumeIsolated { self.restartAudio("config-change") }
         }
-        center.addObserver(forName: AVAudioSession.routeChangeNotification, object: session, queue: .main) { _ in
-            MainActor.assumeIsolated { if self.isOn { Hub.log("live-listen-route", ["outputs": Self.outputs()]) } }
+        // `reason` 1 is a device arriving, 2 one leaving (AirPods out of the ear, or their link dropping),
+        // 8 a configuration change. The rate, IO buffer and latency are what an AirPods route plays at.
+        center.addObserver(forName: AVAudioSession.routeChangeNotification, object: session, queue: .main) { note in
+            let reason = note.userInfo?[AVAudioSessionRouteChangeReasonKey] as? UInt ?? 0
+            MainActor.assumeIsolated {
+                guard self.isOn else { return }
+                Hub.log("live-listen-route", ["outputs": Self.outputs(), "reason": reason,
+                                              "names": session.currentRoute.outputs.map(\.portName).joined(separator: ","),
+                                              "rate": session.sampleRate, "io": session.ioBufferDuration,
+                                              "latency": session.outputLatency])
+            }
         }
         center.addObserver(forName: AVAudioSession.mediaServicesWereResetNotification, object: session, queue: .main) { _ in
             MainActor.assumeIsolated { self.restartAudio("media-reset") }

@@ -100,6 +100,9 @@ crown as the volume while it plays.
   partly received are skipped (`partial`) rather than played twice. The delay grows by the length of
   the drop and the catch-up takes it back. Walking out of the phone's Bluetooth range drops the
   connection while the watch moves to its own LTE, so expect the delay to jump there.
+- **Reconnecting with the wrist down needs the hub token readable while the watch is locked**
+  (`HubToken`, `AfterFirstUnlock`, cached in memory). With the Keychain's default, every reconnect
+  attempt failed `noToken` for over a minute until the wrist came up.
 - It takes the microphone from the always-on listener (`Capture.hush`) and gives it back when it
   stops. Starting a recording or a spoken reply stops it.
 - **It is the Now Playing app while it listens**, taking every remote command (play, pause, skip) and
@@ -123,7 +126,7 @@ Both apps log to the hub's `client_log` table (`src` = `watch` / `phone`):
 | `live-listen-missed` | a resume the hub could not fully cover (past its five minutes, or it restarted): `messages` lost |
 | `live-listen-dry` | the watch ran out of audio and is gathering again, with the `buffer` (seconds) it now gathers |
 | `live-listen-buffer` | a minute without a gap stepped the buffer down; `buffer` is the new level |
-| `live-listen-route` | audio output changed (AirPods in or out) |
+| `live-listen-route` | audio output changed: `outputs`, `names`, `reason` (1 a device arrived, 2 one left, AirPods out or their link dropped; 8 a configuration change), and the route's `rate`, `io` buffer and `latency` |
 | `live-listen-restart` | the audio engine restarted under it: `why` (`config-change`, `interruption`, `media-reset`, `stalled`), `queued` seconds dropped, `running` |
 | `livemic*` | the phone: on/off, `socket-open` / `socket-ended`, `listeners`, `interrupted`, `restart` |
 

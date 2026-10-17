@@ -177,7 +177,10 @@ final class LiveListen: ObservableObject {
         var backoff: Double = 1
         while !Task.isCancelled {
             do {
-                let bytes = try await Hub.stream("/api/live-mic")
+                // The hub sends at least a keepalive every 2s, so 5s of nothing is a dead connection: the
+                // usual way is the move from the phone's Bluetooth to the watch's LTE, which can leave the
+                // old connection silent rather than failed.
+                let bytes = try await Hub.stream("/api/live-mic", idle: 5)
                 guard let decoder = AACDecoder(rate: Self.rate) else {
                     Hub.log("live-listen-decoder-failed")
                     stop()

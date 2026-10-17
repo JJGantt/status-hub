@@ -41,8 +41,10 @@ reaches Express's gate); a watch reads `GET /api/live-mic`.
 - **One phone at a time; the newest wins**, so a phone reconnecting replaces its own stale socket.
 - **It relies on the hub being ONE machine** (`fly.toml`). A second machine would put the phone and the
   watch in different processes and nothing would reach the watch.
-- A zero-length packet every 15s on each listener and a ping on the phone's socket keep Fly's proxy
-  (60s idle) and the watch's URLSession (60s without bytes) from closing them between streams.
+- **A zero-length packet every 2s on each listener is a heartbeat**: the watch counts 5s with no bytes
+  as a dead connection and reconnects. Without it a connection left silent (not failed) by the move
+  from the phone's Bluetooth to the watch's LTE would sit until URLSession's 60s timeout. A ping every
+  15s keeps Fly's proxy (60s idle) from closing the phone's socket between streams.
 
 **Wire format, both directions:** a run of packets, each a 2-byte big-endian length followed by one
 AAC-LC packet (24 kHz, mono, 1024 frames, ~32 kbit/s, about 15 MB an hour). Zero length is a
@@ -62,6 +64,10 @@ crown as the volume while it plays.
 - **A second of audio before it plays, and again after running dry**, so a jittery link is a delay, not
   stutter. It does not catch up: a stall that queues audio adds to the delay until the next
   reconnect.
+- **Why there is a switch at all:** watchOS routes an app's traffic through the phone while it is in
+  Bluetooth range, then Wi-Fi, then its own LTE, and an app cannot choose. A connection opened through
+  the phone dies when the phone goes out of range and is reopened over LTE. Start listening once away
+  from the phone and there is no switch.
 - **A reconnect drops what was queued**, because the hub resends its last two seconds and they would
   otherwise play twice. Walking out of the phone's Bluetooth range drops the connection while the
   watch moves to its own LTE, so expect a short gap there.

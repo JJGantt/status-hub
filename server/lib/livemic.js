@@ -14,9 +14,12 @@ const PATH_UP = '/api/live-mic/up';
 // What a watch that joins (or rejoins, after the switch to its own LTE) is handed first, so it has
 // enough to start playing at once rather than waiting out its own buffer on a live edge.
 const RECENT_MS = 2000;
-// Fly's proxy closes a connection that has sent nothing for 60s, and a watch's URLSession gives up on
-// a stream after 60s of silence. The phone is silent between streams; this keeps both open.
-const KEEPALIVE_MS = 15000;
+// Fly's proxy closes a connection that has sent nothing for 60s; a ping keeps the phone's socket open.
+const PING_MS = 15000;
+// A listener's heartbeat. The watch counts 5s with no bytes as a dead connection (LiveListen.swift), which
+// is how a stream killed silently by the switch from the phone's Bluetooth to the watch's LTE is noticed
+// in seconds rather than at URLSession's 60. Between streams this is the only thing it receives.
+const KEEPALIVE_MS = 2000;
 const KEEPALIVE = Buffer.from([0, 0]);
 
 let source = null;            // the phone's socket, while it streams
@@ -34,7 +37,7 @@ function takeSource(ws) {
   recent = [];
   console.log(`live-mic: source on (${listeners.size} listening)`);
   tellSource();
-  const ping = setInterval(() => { try { ws.ping(); } catch {} }, KEEPALIVE_MS);
+  const ping = setInterval(() => { try { ws.ping(); } catch {} }, PING_MS);
   ws.on('message', (data, isBinary) => {
     if (!isBinary || ws !== source) return;
     const now = Date.now();

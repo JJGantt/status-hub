@@ -11,9 +11,11 @@
 const { WebSocketServer } = require('ws');
 
 const PATH_UP = '/api/live-mic/up';
-// What a watch that joins (or rejoins, after the switch to its own LTE) is handed first, so it has
-// enough to start playing at once rather than waiting out its own buffer on a live edge.
-const RECENT_MS = 2000;
+// What a watch that joins (or rejoins, after the switch to its own LTE) is handed first: exactly the
+// watch's own starting buffer (`startAfter` in LiveListen.swift), so it plays at once. Every millisecond
+// here is delay the watch keeps for the whole listen, since it never catches up; at 2s the watch ran a
+// steady 2s behind.
+const RECENT_MS = 250;
 // Fly's proxy closes a connection that has sent nothing for 60s; a ping keeps the phone's socket open.
 const PING_MS = 15000;
 // A listener's heartbeat. The watch counts 5s with no bytes as a dead connection (LiveListen.swift), which

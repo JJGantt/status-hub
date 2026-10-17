@@ -13,10 +13,11 @@ import WatchKit
 /// app that only plays is frozen the instant the wrist drops, one that records is kept running. What
 /// the microphone hears is thrown away.
 ///
-/// **A second of audio is gathered before it plays**, and again after any gap (`startAfter`), so the
-/// unevenness of a cellular link is heard as a delay rather than as stutter. When the connection drops
-/// (the switch from the phone's Bluetooth to the watch's own LTE does this) it reconnects with backoff
-/// and starts again from the hub's last two seconds, dropping what was queued so nothing plays twice.
+/// **A quarter second of audio is gathered before it plays**, and again after any gap (`startAfter`), so
+/// small unevenness in the link is heard as delay rather than stutter. Jared's number: the delay it holds
+/// for the whole listen is what he hears, so it is kept as short as a cellular link allows. When the
+/// connection drops (the switch from the phone's Bluetooth to the watch's own LTE does this) it reconnects
+/// and starts again from the hub's last quarter second, dropping what was queued so nothing plays twice.
 ///
 /// **AirPods connected to the watch play it** (`.allowBluetoothA2DP`): A2DP is output only, so the
 /// watch's own microphone is still the one held.
@@ -39,7 +40,7 @@ final class LiveListen: ObservableObject {
 
     static let rate: Double = 24000
     /// Frames queued before playback starts or resumes.
-    private static let startAfter = AVAudioFrameCount(rate)
+    private static let startAfter = AVAudioFrameCount(rate / 4)
 
     private let engine = AVAudioEngine()
     private let player = AVAudioPlayerNode()
@@ -158,7 +159,7 @@ final class LiveListen: ObservableObject {
         if !startAudio() { stop() }
     }
 
-    /// Drops everything queued, so a reconnect that resends the hub's last two seconds does not play
+    /// Drops everything queued, so a reconnect that resends the hub's last quarter second does not play
     /// them twice.
     private func flush() {
         schedule += 1

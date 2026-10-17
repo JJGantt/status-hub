@@ -5,8 +5,8 @@ in a room, walk away, and the watch hears the room.
 
     phone (LiveMic.swift) ──WebSocket──▶ hub (lib/livemic.js) ──one long HTTP response──▶ watch (LiveListen.swift)
 
-Delay end to end is about two to three seconds: the hub hands a joining watch its last two seconds,
-and the watch gathers a second before it plays.
+Delay end to end is about half a second to a second: the hub hands a joining watch its last quarter second,
+and the watch gathers a quarter second before it plays.
 
 ## The phone
 
@@ -61,8 +61,10 @@ crown as the volume while it plays.
 - **It holds the microphone and discards what it hears**, which is what keeps a watch app running
   with the wrist down. A watch app that only plays is frozen when the wrist drops (`Speaker` has the
   measurement).
-- **A second of audio before it plays, and again after running dry**, so a jittery link is a delay, not
-  stutter. It does not catch up: a stall that queues audio adds to the delay until the next
+- **A quarter second of audio before it plays, and again after running dry** (Jared's number, for the
+  shortest delay), so small jitter is delay, not stutter; a longer stall on LTE is heard as a gap.
+  `RECENT_MS` on the hub matches it: whatever the hub hands a joining watch is delay it keeps all
+  listen, since it never catches up. It does not catch up: a stall that queues audio adds to the delay until the next
   reconnect.
 - **What a switch costs, measured:** the stream died 33s in (`-1005`, connection lost) and reopened 14s
   later, because the watch waits until its new route is up before it reconnects (the first retry is
@@ -72,7 +74,7 @@ crown as the volume while it plays.
   Bluetooth range, then Wi-Fi, then its own LTE, and an app cannot choose. A connection opened through
   the phone dies when the phone goes out of range and is reopened over LTE. Start listening once away
   from the phone and there is no switch.
-- **A reconnect drops what was queued**, because the hub resends its last two seconds and they would
+- **A reconnect drops what was queued**, because the hub resends its last quarter second and it would
   otherwise play twice. Walking out of the phone's Bluetooth range drops the connection while the
   watch moves to its own LTE, so expect a short gap there.
 - It takes the microphone from the always-on listener (`Capture.hush`) and gives it back when it

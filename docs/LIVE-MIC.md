@@ -78,6 +78,12 @@ crown as the volume while it plays.
   Bluetooth range, then Wi-Fi, then its own LTE, and an app cannot choose. A connection opened through
   the phone dies when the phone goes out of range and is reopened over LTE. Start listening once away
   from the phone and there is no switch.
+- **A stalled output is restarted and its backlog dropped.** Taking AirPods out can leave the engine
+  running and the player scheduled while nothing comes out, with no notification; the stream keeps
+  arriving and queues behind it, and when the output wakes it plays the whole backlog minutes late
+  (catching up at 5% takes about twenty times the backlog). So a packet that arrives while playing,
+  with no buffer finished for 2s, restarts the audio (`live-listen-restart`, `why: stalled`, with the
+  seconds that were `queued` and whether the engine claimed to be `running`).
 - **A reconnect drops what was queued**, because the hub resends its last quarter second and it would
   otherwise play twice. Walking out of the phone's Bluetooth range drops the connection while the
   watch moves to its own LTE, so expect a short gap there.
@@ -104,6 +110,7 @@ Both apps log to the hub's `client_log` table (`src` = `watch` / `phone`):
 | `live-listen-dry` | the watch ran out of audio and is gathering again, with the `buffer` (seconds) it now gathers |
 | `live-listen-buffer` | a minute without a gap stepped the buffer down; `buffer` is the new level |
 | `live-listen-route` | audio output changed (AirPods in or out) |
+| `live-listen-restart` | the audio engine restarted under it: `why` (`config-change`, `interruption`, `media-reset`, `stalled`), `queued` seconds dropped, `running` |
 | `livemic*` | the phone: on/off, `socket-open` / `socket-ended`, `listeners`, `interrupted`, `restart` |
 
 The hub also prints `live-mic:` lines when the phone and each watch come and go (`fly logs`).

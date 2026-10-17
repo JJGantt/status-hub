@@ -19,7 +19,8 @@ import WatchKit
 /// back down a level. Whenever more is queued than the level calls for (stepping down, or a stall's
 /// backlog arriving all at once) it plays 5% fast until it is back: watchOS has no pitch-preserving
 /// time stretch (AVAudioUnitTimePitch, Varispeed and the mixer's `rate` are all unavailable there), so
-/// the speed-up is a resample and raises the pitch slightly while it lasts. It never skips audio.
+/// the speed-up is a resample and raises the pitch slightly while it lasts. It never skips audio that is
+/// playing; a backlog behind an output that stopped draining is dropped instead (`stallAfter`).
 ///
 /// When the connection drops (the switch from the phone's Bluetooth to the watch's own LTE does this) it
 /// reconnects and starts again from the hub's last quarter second, dropping what was queued so nothing
@@ -54,6 +55,12 @@ final class LiveListen: ObservableObject {
     private static let slack = AVAudioFrameCount(rate * 0.1)
     private var level = 0
     private var target: AVAudioFrameCount { AVAudioFrameCount(Self.rate * Self.levels[level]) }
+    /// Playing, with packets arriving and none finishing for this long, means the output has stopped
+    /// draining (an engine that stalled under an AirPods route change with nothing saying so). Restarting
+    /// drops the backlog: left alone it plays out minutes late once the output wakes.
+    private static let stallAfter: TimeInterval = 2
+    /// When a scheduled buffer last finished playing, or playback last started.
+    private var lastPlayed = Date()
     /// The last gap, or the last step down: what the minute of calm is counted from.
     private var calmSince = Date()
     /// Playing fast to come back to the level (`catchUp`).
@@ -175,7 +182,7 @@ final class LiveListen: ObservableObject {
     /// refills from here.
     private func restartAudio(_ why: String) {
         guard isOn else { return }
-        Hub.log("live-listen-restart", ["why": why])
+        Hub.log("live-listen-restart", ["why": why, "queued": Double(queued) / Self.rate, "running": engine.isRunning])
         flush()
         releaseMic()
         engine.stop()
@@ -194,12 +201,14 @@ final class LiveListen: ObservableObject {
 
     private func play(_ decoded: AVAudioPCMBuffer) {
         guard isOn, decoded.frameLength > 0 else { return }
+        if playing && Date().timeIntervalSince(lastPlayed) > Self.stallAfter { restartAudio("stalled") }
         let pcm = playing ? catchUp(decoded) : decoded
         let sched = schedule
         queued += pcm.frameLength
         player.scheduleBuffer(pcm, completionCallbackType: .dataPlayedBack) { [weak self] _ in
             Task { @MainActor in
                 guard let self, sched == self.schedule else { return }
+                self.lastPlayed = Date()
                 self.queued -= min(self.queued, pcm.frameLength)
                 if self.queued == 0 && self.playing {
                     // Ran dry: gather again before resuming, rather than playing each packet as it lands,
@@ -221,6 +230,7 @@ final class LiveListen: ObservableObject {
             if !engine.isRunning { try? engine.start() }
             player.play()
             playing = true
+            lastPlayed = Date()
             state = .live
         }
     }

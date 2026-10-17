@@ -14,8 +14,9 @@ import WebKit
 /// effects as noise and cuts them, which is the opposite of what a phone left in a theatre is for.
 ///
 /// Packets are AAC-LC, 24 kHz mono, ~32 kbit/s, each sent as a 2-byte big-endian length and its bytes
-/// (`lib/livemic.js` has the wire format). The capture keeps running while the socket reconnects;
-/// what it hears in that gap is dropped, so the watch rejoins at the live edge.
+/// (`lib/livemic.js` has the wire format). The capture keeps running while the socket reconnects, and
+/// what it hears in that gap is held (`held`) and sent first when the socket opens, so the hub's copy has
+/// no hole for a resuming watch to miss.
 ///
 /// Logs to the hub as `src: phone` (`livemic*` in `client_log`): on and off, each socket opening and
 /// ending, interruptions. A line written while the phone has no connection is lost.
@@ -36,6 +37,11 @@ final class LiveMic: NSObject, URLSessionWebSocketDelegate {
     private lazy var urls = URLSession(configuration: .default, delegate: self, delegateQueue: .main)
     private nonisolated(unsafe) var socket: URLSessionWebSocketTask?
     private nonisolated(unsafe) var open = false
+    /// Messages encoded while the socket is down, oldest first, sent when it opens. Touched on `queue`.
+    private nonisolated(unsafe) var held: [(message: Data, packets: Int)] = []
+    private nonisolated(unsafe) var heldPackets = 0
+    /// The hub keeps five minutes for a resuming watch (`RING_MS`); holding more than that here buys nothing.
+    private static let holdPackets = Int(5 * 60 * Encoder.rate / 1024)
     /// Counts each connection, so a failure from a socket already replaced does not tear down the new one.
     private var attempt = 0
     private var backoff: Double = 1
@@ -102,6 +108,7 @@ final class LiveMic: NSObject, URLSessionWebSocketDelegate {
         socket?.cancel(with: .normalClosure, reason: nil)
         socket = nil
         open = false
+        queue.async { self.held = []; self.heldPackets = 0 }
         listeners = 0
         backoff = 1
         try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
@@ -152,14 +159,31 @@ final class LiveMic: NSObject, URLSessionWebSocketDelegate {
 
     /// One tap buffer in, its AAC packets out as one message. Runs on `queue`.
     private nonisolated func encode(_ buffer: AVAudioPCMBuffer) {
-        guard let packets = encoder?.encode(buffer), !packets.isEmpty, open, let socket else { return }
+        guard let packets = encoder?.encode(buffer), !packets.isEmpty else { return }
         var message = Data()
         for p in packets {
             message.append(UInt8(p.count >> 8))
             message.append(UInt8(p.count & 0xff))
             message.append(p)
         }
-        socket.send(.data(message)) { _ in }   // a failed send surfaces as the socket closing
+        if open, let socket {
+            socket.send(.data(message)) { _ in }   // a failed send surfaces as the socket closing
+            return
+        }
+        held.append((message, packets.count))
+        heldPackets += packets.count
+        while heldPackets > Self.holdPackets, !held.isEmpty {
+            heldPackets -= held.removeFirst().packets
+        }
+    }
+
+    /// The socket is up: what was held goes first, in order, and only then does `encode` send straight
+    /// through. Runs on `queue`, so nothing encoded meanwhile can overtake it.
+    private nonisolated func release(to socket: URLSessionWebSocketTask) {
+        for h in held { socket.send(.data(h.message)) { _ in } }
+        held = []
+        heldPackets = 0
+        open = true
     }
 
     // MARK: the log
@@ -238,7 +262,7 @@ final class LiveMic: NSObject, URLSessionWebSocketDelegate {
                                 didOpenWithProtocol protocol: String?) {
         MainActor.assumeIsolated {
             guard webSocketTask === self.socket else { return }
-            self.open = true
+            self.queue.async { self.release(to: webSocketTask) }
             self.backoff = 1
             self.set(.live)
             self.log("livemic-socket-open")

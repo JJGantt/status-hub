@@ -16,15 +16,14 @@ import WatchKit
 /// **The buffer adapts** (`levels`). It starts at a quarter second, Jared's number, as close to live as a
 /// cellular link allows. Each time it runs dry it rebuilds to the next level (half a second, then one),
 /// so one bad patch costs one gap and the cushion covers the next. After a minute with no gap it steps
-/// back down a level. Whenever more is queued than the level calls for (stepping down, or a stall's
-/// backlog arriving all at once) it plays 5% fast until it is back: watchOS has no pitch-preserving
-/// time stretch (AVAudioUnitTimePitch, Varispeed and the mixer's `rate` are all unavailable there), so
-/// the speed-up is a resample and raises the pitch slightly while it lasts. It never skips audio that is
-/// playing; a backlog behind an output that stopped draining is dropped instead (`stallAfter`).
+/// back down a level. Whenever more is queued than the level calls for (stepping down, or a backlog
+/// arriving all at once) it plays fast until it is back (`pace`): 20% fast while more than two seconds
+/// behind, easing down to 3% as it closes in, at the same pitch (`Stretch`). It never skips audio;
+/// only a backlog behind an output that stopped draining is dropped (`stallAfter`).
 ///
-/// When the connection drops (the switch from the phone's Bluetooth to the watch's own LTE does this) it
-/// reconnects and starts again from the hub's last quarter second, dropping what was queued so nothing
-/// plays twice.
+/// **A dropped connection loses nothing.** Every message carries the hub's sequence number, and the
+/// reconnect asks for everything after the last one (`lastSeq`), which the hub keeps five minutes of.
+/// What was still queued keeps playing meanwhile, and the backlog that arrives is caught up on.
 ///
 /// **AirPods connected to the watch play it** (`.allowBluetoothA2DP`): A2DP is output only, so the
 /// watch's own microphone is still the one held.
@@ -51,10 +50,14 @@ final class LiveListen: ObservableObject {
     private static let levels: [Double] = [0.25, 0.5, 1.0]
     /// A minute with no gap steps the buffer down a level.
     private static let calmFor: TimeInterval = 60
-    /// Queued past the level by this much, it plays fast until it is back.
-    private static let slack = AVAudioFrameCount(rate * 0.1)
+    /// Queued past the level by this much, in seconds, it plays fast until it is back.
+    private static let slack = 0.1
+    /// The catch-up's top speed, reached this far behind the level, in seconds. Below that it eases off
+    /// in proportion, so the last of it is not a lurch back to normal; never below `minPace`.
+    private static let maxPace = 0.20
+    private static let fullPaceAt = 2.0
+    private static let minPace = 0.03
     private var level = 0
-    private var target: AVAudioFrameCount { AVAudioFrameCount(Self.rate * Self.levels[level]) }
     /// Playing, with packets arriving and none finishing for this long, means the output has stopped
     /// draining (an engine that stalled under an AirPods route change with nothing saying so). Restarting
     /// drops the backlog: left alone it plays out minutes late once the output wakes.
@@ -63,11 +66,20 @@ final class LiveListen: ObservableObject {
     private var lastPlayed = Date()
     /// The last gap, or the last step down: what the minute of calm is counted from.
     private var calmSince = Date()
-    /// Playing fast to come back to the level (`catchUp`).
+    /// Playing fast to come back to the level (`pace`).
     private var catching = false
-    /// Resamples a packet so it plays 5% fast: the samples are read as if recorded at 25.2 kHz.
-    private lazy var speeder: AVAudioConverter? = AVAudioConverter(from: fastFormat, to: format)
-    private let fastFormat = AVAudioFormat(commonFormat: .pcmFormatFloat32, sampleRate: rate * 1.05, channels: 1, interleaved: false)!
+    private var stretch = Stretch()
+    /// Decoded audio not yet handed to the player (`feed`).
+    private var backlog: [Float] = []
+    /// What `feed` keeps scheduled on the player, in frames, and how much it takes from the backlog at once.
+    private static let lead = AVAudioFrameCount(rate * 0.15)
+    private static let chunk = 1024
+    /// The hub's number for the last message received whole, which a reconnect resumes after; nil until
+    /// the first, so a fresh listen joins at the live edge.
+    private var lastSeq: UInt64?
+    /// Packets of the message after `lastSeq` already received when the connection died. The hub resends
+    /// that message whole, so these are skipped rather than played twice.
+    private var partial = 0
 
     private let engine = AVAudioEngine()
     private let player = AVAudioPlayerNode()
@@ -118,6 +130,8 @@ final class LiveListen: ObservableObject {
         level = 0
         calmSince = Date()
         catching = false
+        lastSeq = nil
+        partial = 0
         Hub.log("live-listen", ["on": true, "outputs": Self.outputs()])
         claimRemote()
         reader = Task { await self.read() }
@@ -189,20 +203,52 @@ final class LiveListen: ObservableObject {
         if !startAudio() { stop() }
     }
 
-    /// Drops everything queued, so a reconnect that resends the hub's last quarter second does not play
-    /// them twice.
+    /// Drops everything queued and waiting: on stop, and when the engine went down under it.
     private func flush() {
         schedule += 1
         player.stop()
+        stretch.reset()
+        backlog = []
         queued = 0
         playing = false
         if state == .live { state = .waiting }
     }
 
+    /// A decoded packet in. It joins the backlog, and the player is fed from there.
     private func play(_ decoded: AVAudioPCMBuffer) {
         guard isOn, decoded.frameLength > 0 else { return }
         if playing && Date().timeIntervalSince(lastPlayed) > Self.stallAfter { restartAudio("stalled") }
-        let pcm = playing ? catchUp(decoded) : decoded
+        backlog.append(contentsOf: UnsafeBufferPointer(start: decoded.floatChannelData![0], count: Int(decoded.frameLength)))
+        if !playing && behind >= Self.levels[level] {
+            if !engine.isRunning { try? engine.start() }
+            player.play()
+            playing = true
+            lastPlayed = Date()
+            state = .live
+        }
+        feed()
+    }
+
+    /// Seconds between what is heard and what has arrived: the backlog and what the player holds.
+    private var behind: Double { (Double(backlog.count) + Double(queued)) / Self.rate }
+
+    /// Keeps `lead` scheduled on the player, taken from the backlog at the pace for how far behind it is
+    /// right then. Only a short lead is handed over because the speed is fixed once a buffer is scheduled:
+    /// a reconnect's whole backlog scheduled at once would get the pace of the moment it arrived.
+    private func feed() {
+        guard playing else { return }
+        while queued < Self.lead && !backlog.isEmpty {
+            let take = min(backlog.count, Self.chunk)
+            let samples = backlog.withUnsafeBufferPointer { stretch.process(UnsafeBufferPointer(rebasing: $0[0..<take]), speed: pace()) }
+            backlog.removeFirst(take)
+            guard !samples.isEmpty, let pcm = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: AVAudioFrameCount(samples.count)) else { continue }
+            pcm.frameLength = AVAudioFrameCount(samples.count)
+            samples.withUnsafeBufferPointer { pcm.floatChannelData![0].update(from: $0.baseAddress!, count: samples.count) }
+            enqueue(pcm)
+        }
+    }
+
+    private func enqueue(_ pcm: AVAudioPCMBuffer) {
         let sched = schedule
         queued += pcm.frameLength
         player.scheduleBuffer(pcm, completionCallbackType: .dataPlayedBack) { [weak self] _ in
@@ -210,6 +256,7 @@ final class LiveListen: ObservableObject {
                 guard let self, sched == self.schedule else { return }
                 self.lastPlayed = Date()
                 self.queued -= min(self.queued, pcm.frameLength)
+                self.feed()
                 if self.queued == 0 && self.playing {
                     // Ran dry: gather again before resuming, rather than playing each packet as it lands,
                     // and gather more than last time.
@@ -226,34 +273,16 @@ final class LiveListen: ObservableObject {
                 }
             }
         }
-        if !playing && queued >= target {
-            if !engine.isRunning { try? engine.start() }
-            player.play()
-            playing = true
-            lastPlayed = Date()
-            state = .live
-        }
     }
 
-    /// A packet as it should be scheduled: as decoded, or resampled to play 5% fast while more is queued
-    /// than the level calls for. Starts catching up past the level plus `slack`, stops at the level.
-    private func catchUp(_ pcm: AVAudioPCMBuffer) -> AVAudioPCMBuffer {
-        if !catching && queued > target + Self.slack { catching = true }
-        else if catching && queued <= target { catching = false }
-        guard catching, let speeder,
-              let fast = AVAudioPCMBuffer(pcmFormat: fastFormat, frameCapacity: pcm.frameLength),
-              let out = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: pcm.frameLength) else { return pcm }
-        fast.frameLength = pcm.frameLength
-        memcpy(fast.floatChannelData![0], pcm.floatChannelData![0], Int(pcm.frameLength) * MemoryLayout<Float>.size)
-        var fed = false
-        var error: NSError?
-        speeder.convert(to: out, error: &error) { _, status in
-            if fed { status.pointee = .noDataNow; return nil }
-            fed = true
-            status.pointee = .haveData
-            return fast
-        }
-        return error == nil && out.frameLength > 0 ? out : pcm
+    /// How fast to play now. As recorded at the level; past it by `slack`, faster the further behind,
+    /// `maxPace` from `fullPaceAt` over and easing down in proportion to `minPace`, until back at the level.
+    private func pace() -> Double {
+        let over = behind - Self.levels[level]
+        if !catching && over > Self.slack { catching = true }
+        else if catching && over <= 0 { catching = false }
+        guard catching else { return 1 }
+        return 1 + max(Self.minPace, min(Self.maxPace, Self.maxPace * over / Self.fullPaceAt))
     }
 
     private func claimRemote() {
@@ -289,33 +318,53 @@ final class LiveListen: ObservableObject {
     /// Holds the stream open for as long as it listens, reconnecting with backoff. Each packet is a
     /// 2-byte big-endian length and that many bytes; zero is the hub's keepalive.
     private func read() async {
+        guard let decoder = AACDecoder(rate: Self.rate) else {
+            Hub.log("live-listen-decoder-failed")
+            stop()
+            return
+        }
         var backoff: Double = 0
         while !Task.isCancelled {
             do {
                 // The hub sends at least a keepalive every 2s, so 5s of nothing is a dead connection: the
                 // usual way is the move from the phone's Bluetooth to the watch's LTE, which can leave the
                 // old connection silent rather than failed.
-                let bytes = try await Hub.stream("/api/live-mic", idle: 5, delegate: metrics)
-                guard let decoder = AACDecoder(rate: Self.rate) else {
-                    Hub.log("live-listen-decoder-failed")
-                    stop()
-                    return
-                }
-                flush()
-                state = .waiting
+                let resume = lastSeq.map { "&after=\($0)" } ?? ""
+                let bytes = try await Hub.stream("/api/live-mic?seq=1" + resume, idle: 5, delegate: metrics)
+                if !playing { state = .waiting }
                 backoff = 0
-                Hub.log("live-listen-open", ["gap_ms": lostAt.map { Int(Date().timeIntervalSince($0) * 1000) } ?? 0])
+                Hub.log("live-listen-open", ["gap_ms": lostAt.map { Int(Date().timeIntervalSince($0) * 1000) } ?? 0,
+                                             "resume": lastSeq != nil])
                 lostAt = nil
+                var skip = partial
+                var first = true
                 var it = bytes.makeAsyncIterator()
                 while let hi = try await it.next(), let lo = try await it.next() {
                     let n = Int(hi) << 8 | Int(lo)
-                    guard n > 0 else { continue }
+                    if n == 0 { continue }
+                    if n == 0xFFFF {
+                        // The marker after a whole message: its sequence number.
+                        var seq: UInt64 = 0
+                        for _ in 0..<8 {
+                            guard let b = try await it.next() else { break }
+                            seq = seq << 8 | UInt64(b)
+                        }
+                        if first, let last = lastSeq, seq > last + 1 {
+                            Hub.log("live-listen-missed", ["messages": seq - last - 1])
+                        }
+                        first = false
+                        lastSeq = seq
+                        partial = 0
+                        continue
+                    }
                     var packet = Data(capacity: n)
                     for _ in 0..<n {
                         guard let b = try await it.next() else { break }
                         packet.append(b)
                     }
                     guard packet.count == n else { break }
+                    if skip > 0 { skip -= 1; continue }
+                    partial += 1
                     if let pcm = decoder.decode(packet) { play(pcm) }
                 }
                 Hub.log("live-listen-end")
@@ -324,7 +373,8 @@ final class LiveListen: ObservableObject {
             }
             if lostAt == nil { lostAt = Date() }
             guard !Task.isCancelled else { return }
-            state = .connecting
+            // What is already queued plays on through the reconnect.
+            if !playing { state = .connecting }
             // The first retry goes at once: a stream that died because the route changed is what this is
             // for, and the request itself waits for the new route. Only repeated failures back off.
             if backoff > 0 { try? await Task.sleep(nanoseconds: UInt64(backoff * 1_000_000_000)) }

@@ -33,6 +33,7 @@
 		5D50E610532DA949FF006920 /* OpenTodoItem.swift in Sources */ = {isa = PBXBuildFile; fileRef = 980C6D4E9785922A04236D2D /* OpenTodoItem.swift */; };
 		60AE844C615F02EE05A50C80 /* Views.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7E727AC7945D69F9313E83AC /* Views.swift */; };
 		6188D9BD5163465CBE9D4FFB /* StatusHubWatch.app in Embed Watch Content */ = {isa = PBXBuildFile; fileRef = 94DD1B301CE525AF6B208DC7 /* StatusHubWatch.app */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		62377EFC112DA32097338F77 /* LiveListen.swift in Sources */ = {isa = PBXBuildFile; fileRef = 011F77A80F4DF604831A2925 /* LiveListen.swift */; };
 		68E90B2316D4D69B4288AF5B /* RingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A86CE732DC51F6BC6973C5F0 /* RingsView.swift */; };
 		69C6B1241F836204E5FB5EB4 /* AssetsWatch.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 9F6A38324B6E1FE85ABDB8B6 /* AssetsWatch.xcassets */; };
 		6F48E2C9C6071F502AB252A0 /* ReposView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AF1D1C7A5D148A4366347C65 /* ReposView.swift */; };
@@ -139,6 +140,7 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		011F77A80F4DF604831A2925 /* LiveListen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveListen.swift; sourceTree = "<group>"; };
 		01225D88DDA6CA36478FE1CA /* DayView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DayView.swift; sourceTree = "<group>"; };
 		04D43ADC9891823E1EFA0E4C /* Router.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Router.swift; sourceTree = "<group>"; };
 		0AD761F7ECC2DBF3FA1641B0 /* RingsWidget.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RingsWidget.swift; sourceTree = "<group>"; };
@@ -251,6 +253,7 @@
 				9C61C65954CA9A7056B2B127 /* HomeView.swift */,
 				FD06B420AFC554D37540118C /* Hub.swift */,
 				1395E04227DD7450E1CBC8AD /* Info.plist */,
+				011F77A80F4DF604831A2925 /* LiveListen.swift */,
 				D2181310AB9F5E005371B8B0 /* Location.swift */,
 				50C9941AC596855E4C447F11 /* Markdown.swift */,
 				38BD5AA187D80545B616356B /* Nutrition.swift */,
@@ -514,6 +517,7 @@
 				0F13CF9CFA7602FE6562864D /* HistoryView.swift in Sources */,
 				1962BCC150815491A3F92EB1 /* HomeView.swift in Sources */,
 				C4250430822C333D041CEEA1 /* Hub.swift in Sources */,
+				62377EFC112DA32097338F77 /* LiveListen.swift in Sources */,
 				2D7BBEABB20A4F0C080608E0 /* Location.swift in Sources */,
 				2DE5C68D7C666AA0FFB4B465 /* Markdown.swift in Sources */,
 				F9B3AEDE8FF26869DC2B821B /* Nutrition.swift in Sources */,

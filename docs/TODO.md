@@ -89,6 +89,14 @@ the route and the `trace()` calls.
 
 ## Not started
 
+### Live mic: two-way audio (on hold, Jared's call)
+
+Watch to phone as well, with a switch per direction on both devices. Both microphones are already on
+during a stream, so the hub would gate what it forwards rather than either device starting the other's
+mic. Open questions before building: echo when both directions play (needs voice processing on the
+phone, which also thins the room sound), and whether a streamed upload from the watch works or it has to
+post a chunk every quarter second.
+
 ### Live mic: hear what voice processing cuts
 
 Jared wants to hear exactly what Apple's voice processing removes before deciding whether the live mic

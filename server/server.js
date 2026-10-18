@@ -3744,8 +3744,9 @@ app.post('/api/session-activity', express.json({ limit: '8mb' }), async (req, re
 // every turn end to this endpoint. Keyed by the turn's reply time: the watcher can notice one turn end
 // more than once, and a restart must not buzz again for a reply already delivered (the text hash covers
 // a host that does not send `at` yet). The payload's session_id is what tapping it opens, on the phone
-// and on the watch; SESSION_REPLY is the watch's category with the Open action. Gated by the same
-// Settings → Push switch the voice worker obeys.
+// and on the watch; SESSION_REPLY is the watch's category with the Open action. Gated by the
+// Settings → Push switch. Orchestrator replies are never pushed (the voice worker sends none), so this
+// and reminders/reports are what reach the phone.
 const sentSessionReplies = new Set();
 async function notifySessionReply(sessionId, text, at, summary) {
   try {
@@ -3783,10 +3784,9 @@ app.post('/api/voice-activity', express.json(), (req, res) => {
   res.status(204).end();
 });
 
-// Native push to Jared's phone (APNs). The voice worker POSTs the past-tense result of a completed
-// voice command here so it lands as a phone notification — same proven sender + device tokens as the
-// weight reminder, just ad-hoc text. Gated on the kiosk token. Fans out to every registered iOS token
-// on its own push environment (sandbox vs production), and logs the result to `notifications`.
+// Native push to Jared's phone (APNs), ad-hoc text. The voice worker POSTs its failure alerts here; it
+// does not push orchestrator replies, which land on the screen he asked from. Gated on the kiosk
+// token. Fans out to every registered iOS token on its own push environment (sandbox vs production), and logs the result to `notifications`.
 // Push a notification to every registered iOS device; records one `notifications` row (with an optional
 // dedupe_key so a caller can guarantee once-only delivery). Shared by /api/notify and reminder firing.
 // Every notification from this app shows the SAME icon, so the sound is what tells them apart

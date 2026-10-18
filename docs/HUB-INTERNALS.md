@@ -1458,7 +1458,7 @@ callers; only the HTTP response is filtered.
 | `watch_quick_s` | The watch's Hub Quick complication: seconds from the microphone opening after which the command sends whatever it has (5 unset). Settings → Watch: quick command. |
 | `agent_mode` / `agent_cwd` | Full-agent (coding) mode toggle + working dir for the worker. |
 | `weight_reminder_enabled` / `_mode` / `_time` | The daily weigh-in push (On/Off, Manual/Dynamic, time). |
-| `push_enabled` | Master push toggle. |
+| `push_enabled` | Gates session-reply pushes. Orchestrator replies are never pushed, whatever it says. |
 | `jaredbot_enabled` | JaredBot, the group-chat auto-replier in messages-mcp (`jaredbot.py`), which reads it before every decision. Also voice `set_jaredbot`. |
 
 ---

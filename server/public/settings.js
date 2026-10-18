@@ -257,7 +257,7 @@ export async function open() {
   back.querySelector('#set-push').addEventListener('click', (e) => {
     const b = e.target.closest('[data-v]'); if (!b) return;
     back.querySelectorAll('#set-push button').forEach((x) => x.classList.toggle('on', x === b));
-    save('push_enabled', b.dataset.v);          // worker checks this before pushing a result to the phone
+    save('push_enabled', b.dataset.v);          // gates session-reply pushes (notifySessionReply)
   });
   back.querySelector('#set-jaredbot').addEventListener('click', (e) => {
     const b = e.target.closest('[data-v]'); if (!b) return;

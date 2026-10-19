@@ -109,7 +109,7 @@ final class Capture: ObservableObject {
         if let kept = UserDefaults.standard.dictionary(forKey: Self.storeKey) { Self.take(kept) }
         recorder.onLevel = { [weak self] level, seconds in self?.heard(level, seconds) }
         recorder.onVoice = { [weak self] speech in self?.voice = speech }
-        recorder.onInterruption = { [weak self] began in self?.interrupted(began) }
+        recorder.onInterruption = { [weak self] began, fields in self?.interrupted(began, fields) }
     }
 
     /// Starts recording for `owner`, which is set at once so a second tap while the microphone opens is
@@ -274,9 +274,23 @@ final class Capture: ObservableObject {
     /// that had begun goes up and the rest of the segment is dropped. When the microphone comes back,
     /// listening picks it up again — without this, always-on listening ended silently at the first Siri
     /// and the glyph went on claiming it was listening.
-    private func interrupted(_ began: Bool) {
-        guard began else { return resumeSoon() }
-        Hub.log("mic-interrupted", ["owner": owner.map { String(describing: $0) } ?? "", "heard": endpoint.heard])
+    ///
+    /// Both edges are logged with the system's reason and the endpoint's state at that instant: `quiet`
+    /// near 0 with `voice` high is a recording cut while he was mid-word, which is otherwise
+    /// indistinguishable from the silence ending it early.
+    private func interrupted(_ began: Bool, _ fields: [String: Any] = [:]) {
+        var line = fields
+        line["owner"] = owner.map { String(describing: $0) } ?? ""
+        guard began else {
+            Hub.log("mic-interruption-ended", line)
+            return resumeSoon()
+        }
+        line["heard"] = endpoint.heard
+        line["quiet"] = endpoint.quiet
+        line["voice"] = Double(voice)
+        line["seconds"] = segment
+        line["flow"] = flow.rawValue
+        Hub.log("mic-interrupted", line)
         switch owner {
         case .listener:
             unlisten()          // sends what was heard, if anything
@@ -441,7 +455,8 @@ struct Endpointer {
     private(set) var heard = false
     /// Seconds over the line in the run of speech being counted now.
     private(set) var spoken: TimeInterval = 0
-    private var quiet: TimeInterval = 0
+    /// Seconds below the line since the last speech.
+    private(set) var quiet: TimeInterval = 0
 
     let minimum: Float
     /// How many times the room's quietest level counts as speech. 2.5 under a fixed `minimum`, which in

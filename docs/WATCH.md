@@ -542,7 +542,7 @@ The log can show it as `mic-route-change` with empty `inputs`, then `mic-interru
 To him that reads exactly like the silence endpoint firing early, so tell the two apart by the end
 event: a silence end logs `mic-end`, an interruption logs `mic-interrupted` and no `mic-end`. Which
 events raise the interruption is not established; Siri (Raise to Speak) and another app's notification
-are the remaining candidates, and the log does not yet record the interruption's reason key.
+are the remaining candidates; `mic-interrupted` carries the system's reason and the endpoint's state.
 
 ### Sending it
 
@@ -779,6 +779,7 @@ wrist. Fly keeps only the recent lines, so read it soon.
 | `record` | a finger tap on the text |
 | `record-refused`, `mic-refused`, `mic-failed`, `mic-open` | why a recording did or did not start |
 | `mic-end` | what the endpoint saw when a recording ended, and why (`silence`, `unspoken`) |
+| `mic-interrupted`, `mic-interruption-ended` | the system took the microphone mid-recording, and gave it back: the system's `reason` (0 default — Siri, a call, an alarm; 1 app suspended; 2 built-in mic muted; 3 route disconnected), `options` on the end (1 = may resume), the route, `recording` (seconds since the microphone opened), and on the start the endpoint's state — `quiet` (seconds since the last speech), `voice` (the classifier's last score), `heard`, `seconds`, `flow`. `quiet` near 0 with `voice` high is a cut mid-word |
 | `mic-route`, `mic-route-change` | the audio session's category and mode, its input and output ports, and whether other audio is playing — at every recording's start, and whenever the route changes under one |
 | `mic-live` | the first buffer from the microphone, with how long after opening it came. A recording with no `mic-live` never heard anything |
 | `mic-engine-restart` | the audio engine was stopped by a configuration change mid-recording and started again (a stopped engine records nothing) |

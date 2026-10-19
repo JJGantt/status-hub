@@ -37,7 +37,7 @@ final class Recorder {
     var onLevel: ((Float, TimeInterval) -> Void)?
     /// The system took the microphone (Siri, a call, another app recording) — `true` — or gave it back,
     /// `false`. A recording cannot survive the first; the second is when a new one may start.
-    var onInterruption: ((Bool) -> Void)?
+    var onInterruption: ((Bool, [String: Any]) -> Void)?
     /// Run Apple's sound classifier over the recording (`watch_speech_mode` = `voice`). Read at `start`.
     var classifies = false
     /// How sure the classifier is that the last half second was speech (0…1), on the main actor, about
@@ -110,7 +110,19 @@ final class Recorder {
                                queue: .main) { [weak self] note in
                 let raw = note.userInfo?[AVAudioSessionInterruptionTypeKey] as? UInt ?? 0
                 let began = AVAudioSession.InterruptionType(rawValue: raw) == .began
-                MainActor.assumeIsolated { self?.onInterruption?(began) }
+                // What the system says about it, for the log: `reason` (0 default — Siri, a call, an
+                // alarm; 1 app suspended; 2 built-in mic muted; 3 route disconnected) and, on an end,
+                // `options` (1 = may resume). Raw numbers, so a value this build does not name still shows.
+                let reason = note.userInfo?[AVAudioSessionInterruptionReasonKey] as? UInt
+                let options = note.userInfo?[AVAudioSessionInterruptionOptionKey] as? UInt
+                MainActor.assumeIsolated {
+                    guard let self else { return }
+                    var fields = Self.describe(session)
+                    fields["reason"] = reason.map { $0 as Any } ?? NSNull()
+                    fields["options"] = options.map { $0 as Any } ?? NSNull()
+                    fields["recording"] = Date().timeIntervalSince(self.startedAt)
+                    self.onInterruption?(began, fields)
+                }
             },
             // The route changing under a recording (headphones, the system taking the speaker) is the
             // kind of thing that silently changes what the microphone hears.
@@ -177,7 +189,7 @@ final class Recorder {
 
     /// What the audio session is set to and where sound goes in and out: the first thing to read when a
     /// recording comes back empty or the chirp is not heard.
-    private static func describe(_ session: AVAudioSession) -> [String: Any] {
+    static func describe(_ session: AVAudioSession) -> [String: Any] {
         [
             "category": session.category.rawValue,
             "mode": session.mode.rawValue,

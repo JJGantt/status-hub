@@ -536,8 +536,13 @@ silence with the wrist down. Measured on the device: a locked recording ran 31s 
 
 **What happens when something else takes the microphone mid-recording is the interruption path below
 (§ The always-on listener)**: words already heard are sent, a recording with no speech yet is cancelled.
-The log shows it as `mic-route-change` with empty `inputs`, then `mic-interrupted`. Which events raise
-it is not established: a notification arriving is not known to, one way or the other.
+The log can show it as `mic-route-change` with empty `inputs`, then `mic-interrupted` — or as
+`mic-interrupted` alone: on 2026-10-19 a command ended mid-sentence with no route change before it, a
+`phase` → `inactive` 3s earlier, and nothing sent to the watch at that moment by the hub or Messages.
+To him that reads exactly like the silence endpoint firing early, so tell the two apart by the end
+event: a silence end logs `mic-end`, an interruption logs `mic-interrupted` and no `mic-end`. Which
+events raise the interruption is not established; Siri (Raise to Speak) and another app's notification
+are the remaining candidates, and the log does not yet record the interruption's reason key.
 
 ### Sending it
 

@@ -14,6 +14,7 @@ struct StatusHubWatchApp: App {
     init() {
         // Activate WatchConnectivity at launch so a token the phone already sent is picked up at once.
         PhoneLink.shared.start()
+        Net.shared.start()
     }
 
     var body: some Scene {

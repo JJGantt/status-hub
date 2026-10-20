@@ -595,6 +595,12 @@ The patience is the trade. Fly's proxy holds a request open while it looks for a
 have, so without a ceiling of its own a command waited the full minute before anything else was tried.
 A hub that is up but slower than 25s gets the command twice, its own copy and the fallback's.
 
+The 25s is a deadline on the whole send, raced against it in `sendCommand`, not the request's
+`timeoutInterval`: that is an idle timer, it does not run while the session waits for connectivity, and
+`resending` starts it over, so with it alone a send has taken 64s. The deadline starts only once the
+watch has a route (`Net.whenUp`). With no route the fallback is unreachable too, and the send waits for
+connectivity until the session's resource limit (`connectionWait` + 60, two minutes) runs out.
+
 The function checks the same `X-Hub-Token`, against a hash the hub writes to `fallback_config` at every
 boot, and a 401 from it does not throw the token away the way the hub's 401 does: it means the
 function lacks the hash, not that the token is wrong. The outcome is waited on at the function too
@@ -796,6 +802,8 @@ wrist. Fly keeps only the recent lines, so read it soon.
 | `session-shown` | what the session page actually has on screen and why it was logged (see The sessions page) |
 | `stream-open`, `stream-end`, `stream-error` | the event streams |
 | `resend` | a call's connection dropped mid-flight and it was sent again |
+| `net` | the watch's route changed (`Net`, NWPathMonitor): `status`, `via` (`other` is the phone, `wifi` / `cellular` the watch's own), `expensive`, `constrained`, `phone` (the phone link reachable), and `after`, the seconds the previous route lasted. Read it first when commands sat on the wrist and landed together |
+| `phone-link` | WatchConnectivity's reachability to the phone changed |
 | `frame` | each `ev` frame for the session on screen: its seq and kind |
 
 ## Hiding the system clock

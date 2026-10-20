@@ -1,4 +1,5 @@
 import Foundation
+import Network
 import Security
 import WatchConnectivity
 
@@ -95,6 +96,8 @@ final class PhoneLink: NSObject, WCSessionDelegate {
     }
 
     nonisolated func sessionReachabilityDidChange(_ session: WCSession) {
+        // The phone link, beside `net`: the route that drops when the phone does.
+        Hub.log("phone-link", ["reachable": session.isReachable])
         Task { @MainActor in if HubToken.get() == nil { self.request() } }
     }
 }
@@ -133,6 +136,66 @@ enum Awake {
         }
         defer { done.signal() }
         return try await work()
+    }
+}
+
+/// The watch's route to the internet, logged as `net` every time it changes, with how long the route
+/// before it lasted. A command that sits on the wrist for two minutes and then lands in a bunch says
+/// only that nothing got out; this says whether the route was gone, and which one it was on — the
+/// phone (`other`), the watch's own Wi-Fi, or cellular. The lines wait in `LogOutbox` while there is no
+/// route, so the gap itself reaches the hub once one returns.
+@MainActor
+final class Net {
+    static let shared = Net()
+    private let monitor = NWPathMonitor()
+    private var started = false
+    /// Until the first update says otherwise, assume a route, so nothing waits on a monitor not yet heard.
+    private(set) var up = true
+    private var since = Date()
+    private var waiters: [UUID: CheckedContinuation<Void, Never>] = [:]
+
+    func start() {
+        guard !started else { return }
+        started = true
+        monitor.pathUpdateHandler = { path in Task { @MainActor in Net.shared.update(path) } }
+        monitor.start(queue: DispatchQueue(label: "net-path", qos: .utility))
+    }
+
+    private func update(_ path: NWPath) {
+        let now = Date()
+        let kinds = path.availableInterfaces.map { i -> String in
+            switch i.type {
+            case .wifi: return "wifi"
+            case .cellular: return "cellular"
+            case .wiredEthernet: return "wired"
+            case .loopback: return "loopback"
+            default: return "other"
+            }
+        }
+        Hub.log("net", ["status": "\(path.status)", "via": kinds.joined(separator: ","),
+                        "expensive": path.isExpensive, "constrained": path.isConstrained,
+                        "phone": WCSession.default.activationState == .activated && WCSession.default.isReachable,
+                        "after": Int(now.timeIntervalSince(since))])
+        since = now
+        up = path.status == .satisfied
+        if up {
+            let ready = waiters.values
+            waiters = [:]
+            ready.forEach { $0.resume() }
+        }
+    }
+
+    /// Returns once there is a route, at once when there already is. Cancelling it returns too.
+    func whenUp() async {
+        if up { return }
+        let id = UUID()
+        await withTaskCancellationHandler {
+            await withCheckedContinuation { c in
+                if up || Task.isCancelled { c.resume() } else { waiters[id] = c }
+            }
+        } onCancel: {
+            Task { @MainActor in Net.shared.waiters.removeValue(forKey: id)?.resume() }
+        }
     }
 }
 
@@ -253,9 +316,25 @@ enum Hub {
 
     /// A command, to the hub or, when the hub cannot be reached, to the fallback. `fallback` says which
     /// took it, because its outcome is waited on in the same place.
+    ///
+    /// **The patience is a deadline on the whole call**, not the request's own `timeoutInterval`: that one
+    /// is an idle timer, it does not run while the session waits for connectivity, and `resending` starts
+    /// it again — a send has taken 64s with it set to 25. The clock starts once the watch HAS a route
+    /// (`Net.whenUp`): with no route at all the fallback cannot be reached either, and the command waits
+    /// for one as before.
     static func sendCommand(_ clip: Recorder.Clip, msgId: String) async throws -> (heard: Heard, fallback: Bool) {
         do {
-            return (try await sendAudio(clip, msgId: msgId, timeout: hubPatience), false)
+            let heard = try await withThrowingTaskGroup(of: Heard.self) { g in
+                g.addTask { try await sendAudio(clip, msgId: msgId, timeout: hubPatience) }
+                g.addTask {
+                    await Net.shared.whenUp()
+                    try await Task.sleep(for: .seconds(hubPatience))
+                    throw URLError(.timedOut)
+                }
+                defer { g.cancelAll() }
+                return try await g.next()!
+            }
+            return (heard, false)
         } catch let e where unreachable(e) {
             log("hub-unreachable", ["error": String(describing: e).prefix(120).description])
             return (try await sendFallback(clip, msgId: msgId), true)

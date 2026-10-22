@@ -26,6 +26,7 @@
 		4A85806E830267380041B940 /* Speaker.swift in Sources */ = {isa = PBXBuildFile; fileRef = 14DD24EA8F44511AAE8A666A /* Speaker.swift */; };
 		4D60B234E0ADF4D9465FE606 /* SessionsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AC7643D7992852F757EF0A7E /* SessionsView.swift */; };
 		4DB8BD1AC2A03D075B399CA4 /* WorkoutView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A3F70079ED5B30314C83B6BD /* WorkoutView.swift */; };
+		4DE2F21E70EC60A06611DF49 /* Rewind.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A7D22E52C6A0ABBCB9FF3BF /* Rewind.swift */; };
 		51D9EC4E888D09D03D22734A /* Recorder.swift in Sources */ = {isa = PBXBuildFile; fileRef = 14EB30894FADCF33B66D0455 /* Recorder.swift */; };
 		51DECA2330E0FBC3832EF2A4 /* Models.swift in Sources */ = {isa = PBXBuildFile; fileRef = B47214768CCEE8C99EEF5958 /* Models.swift */; };
 		58F20A294FB54B942342ABB3 /* StatusHubControls.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = AD44A10C47F3ACE73074E7B2 /* StatusHubControls.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
@@ -76,6 +77,7 @@
 		ED30317D3B77A590C83D95BC /* StatusHubApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = DBE4FD566029B00F912457DA /* StatusHubApp.swift */; };
 		EE1E28331D9AE8401BEE3601 /* Push.swift in Sources */ = {isa = PBXBuildFile; fileRef = 835C09DFE3C581C0FCD41116 /* Push.swift */; };
 		F10846CA6E8D579211CF7695 /* Theme.swift in Sources */ = {isa = PBXBuildFile; fileRef = A3ED88961E8E93D6EBE0EA46 /* Theme.swift */; };
+		F6AB2F65BC1CE1BE65F7EF8A /* RewindBuffer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2BA599375B5694F4C40BB517 /* RewindBuffer.swift */; };
 		F9B3AEDE8FF26869DC2B821B /* Nutrition.swift in Sources */ = {isa = PBXBuildFile; fileRef = 38BD5AA187D80545B616356B /* Nutrition.swift */; };
 		FB6B5DF33E6070D5348F0E27 /* RecordIntent.swift in Sources */ = {isa = PBXBuildFile; fileRef = F198CD20CEADF9EC7C93F50C /* RecordIntent.swift */; };
 /* End PBXBuildFile section */
@@ -151,12 +153,14 @@
 		14EB30894FADCF33B66D0455 /* Recorder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Recorder.swift; sourceTree = "<group>"; };
 		1E94C4C0D42288352ED7299B /* VolumeKnob.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VolumeKnob.swift; sourceTree = "<group>"; };
 		279F09507BAD56AB8AD69831 /* TodoWidget.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TodoWidget.swift; sourceTree = "<group>"; };
+		2BA599375B5694F4C40BB517 /* RewindBuffer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RewindBuffer.swift; sourceTree = "<group>"; };
 		38BD5AA187D80545B616356B /* Nutrition.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Nutrition.swift; sourceTree = "<group>"; };
 		3DA8801FE7845595DD403F04 /* Sessions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sessions.swift; sourceTree = "<group>"; };
 		3EE13DD050BF1BC4B943C3CC /* Capture.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Capture.swift; sourceTree = "<group>"; };
 		43113D1E0A8CEB8334CFC02E /* AssetsMac.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = AssetsMac.xcassets; sourceTree = "<group>"; };
 		50C9941AC596855E4C447F11 /* Markdown.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Markdown.swift; sourceTree = "<group>"; };
 		5757142AE4AD25B5E06EA231 /* Stretch.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Stretch.swift; sourceTree = "<group>"; };
+		5A7D22E52C6A0ABBCB9FF3BF /* Rewind.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Rewind.swift; sourceTree = "<group>"; };
 		61B4D21322132BFB2C145C0C /* ReposWidget.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReposWidget.swift; sourceTree = "<group>"; };
 		630A58399AEBE9A0EB63449B /* HubVoiceIntent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HubVoiceIntent.swift; sourceTree = "<group>"; };
 		65394C860C697D281720B76A /* Chat.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Chat.swift; sourceTree = "<group>"; };
@@ -261,6 +265,8 @@
 				38BD5AA187D80545B616356B /* Nutrition.swift */,
 				7300D161B8F2C8E565CA4FAB /* NutritionView.swift */,
 				14EB30894FADCF33B66D0455 /* Recorder.swift */,
+				5A7D22E52C6A0ABBCB9FF3BF /* Rewind.swift */,
+				2BA599375B5694F4C40BB517 /* RewindBuffer.swift */,
 				04D43ADC9891823E1EFA0E4C /* Router.swift */,
 				3DA8801FE7845595DD403F04 /* Sessions.swift */,
 				AC7643D7992852F757EF0A7E /* SessionsView.swift */,
@@ -527,6 +533,8 @@
 				B63E8DE2508FDBEB38EC60C7 /* NutritionView.swift in Sources */,
 				1C569FFA9D76D921D56B85D8 /* RecordIntent.swift in Sources */,
 				51D9EC4E888D09D03D22734A /* Recorder.swift in Sources */,
+				4DE2F21E70EC60A06611DF49 /* Rewind.swift in Sources */,
+				F6AB2F65BC1CE1BE65F7EF8A /* RewindBuffer.swift in Sources */,
 				0A405A9C2335E55FE66C39DB /* RingsView.swift in Sources */,
 				D3E5EB61797DC506EFFC29B3 /* Router.swift in Sources */,
 				EBD52912FF3B6259E305FBFA /* Sessions.swift in Sources */,

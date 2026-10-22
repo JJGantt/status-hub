@@ -3620,7 +3620,7 @@ function hostEvent(e) {
   const kind = e.state === 'said' || e.state === 'queued' ? 'prompt' : EVENT_KINDS.includes(e.state) ? e.state : null;
   if (!kind) return null;
   // A thought or a dictated prompt can run to a paragraph; a tool line never needs more than 400.
-  const text = cleanSaid(String(e.text || '')).slice(0, kind === 'tool' ? 400 : 2000);
+  const text = cleanSaid(String(e.text || '')).slice(0, kind === 'tool' ? 400 : 20000);
   if (!text) return null;
   const ev = { id: kind === 'prompt' && typeof e.id === 'string' && e.id ? e.id.slice(0, 64) : crypto.randomUUID(), kind, text };
   if (kind === 'prompt') { ev.seen = e.state === 'said'; if (e.cmd) ev.cmd = String(e.cmd).slice(0, 64); }
@@ -3684,12 +3684,12 @@ async function logFrame(rowId, b, state, text, at) {
     else {
       // The tick's report of a turn end the watcher missed carries no list. A turn whose prompt never
       // came as a frame still has it here, from the host's read of the transcript.
-      const prompt = typeof b.prompt === 'string' ? cleanSaid(b.prompt).slice(0, 4000) : '';
+      const prompt = typeof b.prompt === 'string' ? cleanSaid(b.prompt).slice(0, 20000) : '';
       if (prompt && !live.some((e) => e.kind === 'prompt' && flatText(e.text) === flatText(prompt))) {
         appendEvent(conv, rowId, log, { id: crypto.randomUUID(), kind: 'prompt', text: prompt, seen: true });
       }
     }
-    const reply = typeof b.reply === 'string' && b.reply ? cleanSaid(b.reply).slice(0, 4000) : text;
+    const reply = typeof b.reply === 'string' && b.reply ? cleanSaid(b.reply).slice(0, 20000) : text;
     if (!reply) return {};
     // The watcher and the tick can both report one turn end; `at` is the turn.
     const last = log.events[log.events.length - 1];
@@ -3715,7 +3715,7 @@ app.post('/api/session-activity', express.json({ limit: '8mb' }), async (req, re
   const done = state === 'done';
   // A thought or a dictated prompt can run to a paragraph; a tool line or a row's reply never needs
   // more than 400.
-  const text = cleanSaid(String(b.text || '')).slice(0, ['text', 'said', 'queued'].includes(state) ? 2000 : 400);
+  const text = cleanSaid(String(b.text || '')).slice(0, ['text', 'said', 'queued'].includes(state) ? 20000 : 400);
   const at = typeof b.at === 'string' ? b.at : null;
   // THE NOTIFICATION IS A SENTENCE, and the machine that produced the reply writes it — it already
   // runs Claude, so no key lives anywhere for this. That takes seconds, and `done` cannot wait: it is

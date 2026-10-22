@@ -702,6 +702,13 @@ Smart Stack set to Select and Record pinned, two double taps from the watch face
 (verified on watchOS 26.5). An app holding a workout session (Watchset while it captures)
 sits above even pinned items.
 
+### Rewind
+
+The **Buffer** and **Rewind** controls keep the last stretch of audio in memory and transcribe it on
+demand, riding the same microphone as everything above (owner `.rewind`, which gives way to any
+command and takes it back after). [REWIND.md](REWIND.md) is the whole of it, including its `rewind*`
+log lines.
+
 ### The always-on listener
 
 `Capture.toggleListening`, from home's toggle. It is the phone's always-on mode on the wrist: the recorder runs continuously and `Recorder.cut` swaps the file inside the tap, so
@@ -798,6 +805,7 @@ wrist. Fly keeps only the recent lines, so read it soon.
 | `listener-sent`, `listener-failed` | an always-on utterance going up |
 | `sent`, `send-failed` | a command's clip going up, with how long it took |
 | `listen-alive` | always-on listening still has the microphone, with minutes since it was engaged — one line per twenty silent segments, about five minutes. **This is how long watchOS lets it hold the microphone with the wrist down**, which is otherwise unknown: read the gap between the last line and when it was engaged |
+| `rewind`, `rewind-alive`, `rewind-check`, `rewind-grab` | rewind engaged and dropped, still fed, checked on wake, grabbed — each with minutes engaged and the battery ([REWIND.md](REWIND.md)) |
 | `speak`, `speak-end`, `speak-failed` | a spoken reply starting (its length and output port) and how it ended, with seconds played |
 | `speak-rendered` | the synthesizer finished rendering the reply: its total seconds, and how long rendering took |
 | `speak-interrupted`, `speak-config-change`, `speak-media-reset`, `speak-stalled`, `speak-resume` | what cut a reply off, and the resume from where it stopped (seconds played of seconds rendered) |

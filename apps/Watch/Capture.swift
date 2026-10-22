@@ -13,6 +13,9 @@ final class Capture: ObservableObject {
         case session(String)
         /// The always-on listener (`listen`). Nothing on screen engages it yet.
         case listener
+        /// Rewind holding the microphone (`hold`) so its ring keeps filling: no file, no upload, no
+        /// endpoint. Only when nothing else wants the microphone — every other owner feeds the ring too.
+        case rewind
     }
 
     /// How a recording ends, chosen by whatever started it. A press always sends. `standard` (the app's
@@ -33,12 +36,17 @@ final class Capture: ObservableObject {
     /// Always-on listening is engaged: the microphone is the listener's whenever nothing else wants it,
     /// and it takes it back when a command or a follow-up gives it up.
     @Published private(set) var listens = false
+    /// Rewind is engaged (`Rewind.swift`): the last stretch of audio is kept in memory, and the
+    /// microphone is held for it whenever nothing else has it.
+    @Published private(set) var rewinds = false
     /// The listener standing aside while the watch speaks a reply (`Speaker`): `listens` stays on and it
     /// takes the microphone back when the speaking ends. Paused, not switched off.
     private(set) var hushed = false
     /// A page may start a recording now: nothing owns the microphone, or only the listener does, and a
     /// deliberate command takes it from the listener and hands it back when it is done.
-    var free: Bool { owner == nil || owner == .listener }
+    var free: Bool { owner == nil || owner == .listener || owner == .rewind }
+    /// A command or a follow-up: the recordings that deafen the room mics while they run.
+    private var mutes: Bool { owner != nil && owner != .listener && owner != .rewind }
 
     /// Seconds of trailing silence that end an utterance: `watch_silence_s` in the hub's settings, read
     /// whenever the app comes to the front and at every start, and kept for the next, since a start does
@@ -156,6 +164,35 @@ final class Capture: ObservableObject {
         }
     }
 
+    /// Engages or drops rewind. Engaged, the recorder feeds its ring whoever owns the microphone, and
+    /// when nobody does it is held for rewind alone (`hold`), writing nothing. The listener, when it is
+    /// also on, holds the microphone instead and the ring rides on it.
+    func toggleRewind(onFailure: @escaping @MainActor (Error) -> Void) {
+        rewinds.toggle()
+        if rewinds {
+            rewindFailure = onFailure
+            recorder.tee = Rewind.shared.engage()
+            if owner == nil && !hushed && !opening { hold() }
+        } else {
+            rewindFailure = nil
+            recorder.tee = nil
+            Rewind.shared.disengage("off")
+            if owner == .rewind { cancel() }
+        }
+    }
+
+    private var rewindFailure: (@MainActor (Error) -> Void)?
+
+    private func hold() {
+        begin(.rewind, onSilence: nil, onTaken: nil, onFailure: { [weak self] error in
+            guard let self else { return }
+            self.rewinds = false
+            self.recorder.tee = nil
+            Rewind.shared.disengage("mic-failed")
+            self.rewindFailure?(error)
+        }) {}
+    }
+
     /// Takes the microphone for the listener. Only while nothing else owns it: a command and a
     /// follow-up come first, and the listener takes it back when they give it up.
     private func listen() {
@@ -175,7 +212,7 @@ final class Capture: ObservableObject {
     /// Ends the recording and hands back the clip; nil when the microphone never opened.
     func stop() -> Recorder.Clip? {
         guard owner != nil else { return nil }
-        let muted = owner != .listener
+        let muted = mutes
         reset()
         if arming { arming = false; resumeSoon(); return nil }
         let clip = recorder.stop()
@@ -189,7 +226,7 @@ final class Capture: ObservableObject {
     /// Ends the recording and throws it away.
     func cancel() {
         guard owner != nil else { return }
-        let muted = owner != .listener
+        let muted = mutes
         reset()
         if arming { arming = false; resumeSoon(); return }
         recorder.cancel()
@@ -203,6 +240,8 @@ final class Capture: ObservableObject {
         // A command or a follow-up takes the microphone off the listener, which picks it up again when
         // they give it back (`resume`). Whatever it had heard by then still goes up.
         if owner != .listener, self.owner == .listener { unlisten() }
+        // Rewind's hold gives way to anything; the ring keeps filling from whatever records next.
+        if owner != .rewind, self.owner == .rewind { cancel() }
         guard self.owner == nil, !opening else {
             Hub.log("mic-refused", ["owner": String(describing: self.owner), "opening": opening])
             return
@@ -229,7 +268,7 @@ final class Capture: ObservableObject {
         Task {
             defer { opening = false }
             do {
-                try await recorder.start()
+                try await recorder.start(keepsFile: owner != .rewind)
             } catch {
                 arming = false
                 reset()
@@ -258,14 +297,17 @@ final class Capture: ObservableObject {
     /// take it back before that command had started.
     func hush(_ on: Bool) {
         hushed = on
-        if on { unlisten() } else { resumeSoon() }
+        if on {
+            unlisten()
+            if owner == .rewind { cancel() }
+        } else { resumeSoon() }
     }
 
     private func resumeSoon() {
-        guard listens, !hushed else { return }
+        guard listens || rewinds, !hushed else { return }
         Task { @MainActor in
-            guard listens, !hushed, owner == nil, !opening else { return }
-            listen()
+            guard listens || rewinds, !hushed, owner == nil, !opening else { return }
+            if listens { listen() } else { hold() }
         }
     }
 
@@ -305,6 +347,9 @@ final class Capture: ObservableObject {
     /// can end, because the cap on a recording nobody speaks into protects all of them.
     private func heard(_ level: Float, _ seconds: TimeInterval) {
         guard let owner, !arming else { return }   // nothing counts until the mic is open
+        Rewind.shared.heard(seconds)
+        // Rewind's own hold only keeps the microphone open: no endpoint, no segments, no file.
+        if owner == .rewind { return }
         let wasHeard = endpoint.heard
         endpoint.hang = Self.hang
         // With the classifier running, ITS verdict is what counts as speech; if it failed to load, the
@@ -411,7 +456,7 @@ final class Capture: ObservableObject {
 
     private static let storeKey = "capture-settings"
     private static let storedKeys = ["watch_silence_s", "watch_speech_min", "watch_speech_mode", "watch_voice_min",
-                                     "watch_speech_ratio", "watch_quick_s"]
+                                     "watch_speech_ratio", "watch_quick_s", "watch_rewind_s"]
 
     private static func take(_ all: [String: Any]) {
         if let v = all["watch_silence_s"].flatMap({ Double("\($0)") }), v > 0 { hang = v }
@@ -422,6 +467,9 @@ final class Capture: ObservableObject {
         if let v = all["watch_voice_min"].flatMap({ Float("\($0)") }), v > 0, v < 1 { voiceMin = v }
         if let v = all["watch_speech_ratio"].flatMap({ Float("\($0)") }), v > 0 { roomRatio = v }
         if let v = all["watch_quick_s"].flatMap({ Double("\($0)") }), v > 0 { quickCap = v }
+        // Read when rewind is engaged; a change reaches the next engage. Capped at ten minutes, about
+        // 38 MB of ring.
+        if let v = all["watch_rewind_s"].flatMap({ Double("\($0)") }), v > 0 { Rewind.seconds = min(v, 600) }
     }
 
     private func setMuted(_ on: Bool) {

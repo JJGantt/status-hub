@@ -1458,6 +1458,7 @@ callers; only the HTTP response is filtered.
 | `phone_silence_s` / `watch_silence_s` / `mac_silence_s` / `esp_silence_s` | Trailing-silence cutoff, per capture source. All default to 3 when unset. |
 | `watch_speech_mode` / `watch_speech_min` / `watch_speech_ratio` / `watch_voice_min` | What the watch counts as speech. `fixed` (default): 2.5x the room's floor and at least `watch_speech_min` (0.02 unset), which in a quiet room is the whole line. `room`: `watch_speech_ratio` (8 unset) times the floor, no fixed number. `voice`: Apple's on-device sound classifier, a window scored `speech` at least `watch_voice_min` (0.5 unset); no level line. Settings → Watch: speech line. |
 | `watch_quick_s` | The watch's Hub Quick complication: seconds from the microphone opening after which the command sends whatever it has (5 unset). Settings → Watch: quick command. |
+| `watch_rewind_s` | Seconds the watch's rewind keeps (30 unset, 600 at most), read when it is engaged (`docs/REWIND.md`). No Settings control: write `app_settings` directly. |
 | `agent_mode` / `agent_cwd` | Full-agent (coding) mode toggle + working dir for the worker. |
 | `weight_reminder_enabled` / `_mode` / `_time` | The daily weigh-in push (On/Off, Manual/Dynamic, time). |
 | `push_enabled` | Gates session-reply pushes. Orchestrator replies are never pushed, whatever it says. |

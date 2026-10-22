@@ -48,6 +48,10 @@ final class Recorder {
     /// The classifier's working time as a fraction of the audio it has been fed: its cost on this watch.
     var classifierLoad: Double? { detector?.load }
     private var detector: VoiceDetector?
+    /// Rewind's ring (`Rewind.swift`): fed every buffer, whoever's recording this is, while it is set.
+    /// Set or cleared on a recording already running, which is how engaging rewind under the listener
+    /// starts filling it at once.
+    var tee: RewindTee? { didSet { sink?.tee = tee } }
 
     private let engine = AVAudioEngine()
     private var sink: Sink?
@@ -64,8 +68,9 @@ final class Recorder {
     private var chirped: Bool?
     private var observers: [NSObjectProtocol] = []
 
-    /// Asks for the microphone on first use, then starts recording.
-    func start() async throws {
+    /// Asks for the microphone on first use, then starts recording. With `keepsFile` false nothing is
+    /// written to disk — the microphone only feeds `tee` and the levels, which is all rewind wants.
+    func start(keepsFile: Bool = true) async throws {
         guard await AVAudioApplication.requestRecordPermission() else { throw Failure.denied }
         let session = AVAudioSession.sharedInstance()
         try session.setCategory(.playAndRecord, mode: .default)
@@ -79,7 +84,8 @@ final class Recorder {
         let input = engine.inputNode
         let format = input.outputFormat(forBus: 0)
         guard format.sampleRate > 0, format.channelCount > 0 else { throw Failure.notStarted }
-        let sink = try Sink(input: format)
+        let sink = try Sink(input: format, keepsFile: keepsFile)
+        sink.tee = tee
         let detector = classifies ? VoiceDetector(format: format, report: { [weak self] speech in
             DispatchQueue.main.async { MainActor.assumeIsolated { self?.onVoice?(speech) } }
         }) : nil
@@ -274,6 +280,12 @@ private final class Sink: @unchecked Sendable {
     private let format: AVAudioFormat
     private var file: AVAudioFile?
     private var url: URL
+    /// Rewind's ring, fed the converted audio before the file is. Read on the audio thread, under the lock.
+    private var teeing: RewindTee?
+    var tee: RewindTee? {
+        get { lock.withLock { teeing } }
+        set { lock.withLock { teeing = newValue } }
+    }
     private var written: TimeInterval = 0
     private var loudest: Float = 0
     /// Seconds of audio written into the current file.
@@ -281,10 +293,12 @@ private final class Sink: @unchecked Sendable {
     /// The loudest buffer written into the current file.
     var peak: Float { lock.withLock { loudest } }
 
-    init(input: AVAudioFormat) throws {
+    init(input: AVAudioFormat, keepsFile: Bool = true) throws {
         url = Self.newURL()
-        let file = try Self.open(url)
-        format = file.processingFormat
+        let file = keepsFile ? try Self.open(url) : nil
+        // The file's processing format, spelled out so a sink with no file converts to the same thing.
+        format = file?.processingFormat
+            ?? AVAudioFormat(commonFormat: .pcmFormatFloat32, sampleRate: 16_000, channels: 1, interleaved: false)!
         guard let converter = AVAudioConverter(from: input, to: format) else { throw Recorder.Failure.notStarted }
         self.converter = converter
         self.file = file
@@ -306,6 +320,7 @@ private final class Sink: @unchecked Sendable {
         }
         lock.lock()
         defer { lock.unlock() }
+        if out.frameLength > 0 { teeing?.write(out) }
         if out.frameLength > 0, let file {
             try? file.write(from: out)
             written += Double(out.frameLength) / format.sampleRate

@@ -166,6 +166,14 @@ final class Chat: ObservableObject {
         }
     }
 
+    /// Rewind, engaged or dropped (the Buffer control): the last stretch of audio kept in memory for a grab.
+    func toggleRewind() {
+        failure = nil
+        capture.toggleRewind { [weak self] error in
+            self?.failure = (error as? Recorder.Failure) == .denied ? .micDenied : .message(error.localizedDescription)
+        }
+    }
+
     /// Ends the recording and throws it away.
     func cancelRecording() {
         if capture.owner == .hub {

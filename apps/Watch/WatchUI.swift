@@ -119,7 +119,7 @@ struct CommandBorder: View {
     private var state: State {
         if recording { return capture.locked ? .locked : .recording }
         if working { return .working }
-        if capture.listens { return .listening }
+        if capture.listens || capture.rewinds { return .listening }
         return .idle
     }
 

@@ -13,6 +13,8 @@ struct StatusHubWatchWidgets: WidgetBundle {
         if #available(watchOS 26.0, *) {
             RecordControl()
             ListenControl()
+            BufferControl()
+            RewindControl()
             SessionsControl()
             NutritionControl()
             WorkoutControl()
@@ -45,6 +47,33 @@ struct ListenControl: ControlWidget {
             }
         }
         .displayName("Listen")
+    }
+}
+
+/// Rewind on and off (`Watch/Rewind.swift`). Its own control rather than a mode of Listen, because
+/// rewind uploads nothing until a grab and the listener uploads every utterance.
+@available(watchOS 26.0, *)
+struct BufferControl: ControlWidget {
+    var body: some ControlWidgetConfiguration {
+        StaticControlConfiguration(kind: "com.jaredgantt.statushub.watch.buffer") {
+            ControlWidgetButton(action: BufferIntent()) {
+                Label("Buffer", systemImage: "record.circle")
+            }
+        }
+        .displayName("Buffer")
+    }
+}
+
+/// Grab what rewind holds and show the words.
+@available(watchOS 26.0, *)
+struct RewindControl: ControlWidget {
+    var body: some ControlWidgetConfiguration {
+        StaticControlConfiguration(kind: "com.jaredgantt.statushub.watch.rewind") {
+            ControlWidgetButton(action: RewindIntent()) {
+                Label("Rewind", systemImage: "gobackward")
+            }
+        }
+        .displayName("Rewind")
     }
 }
 

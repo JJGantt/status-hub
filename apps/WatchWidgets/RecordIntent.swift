@@ -60,6 +60,53 @@ struct ListenIntent: OpenIntent {
     }
 }
 
+/// What the rewind controls open: the one target there is, as with Record.
+enum RewindTarget: String, AppEnum {
+    case rewind
+
+    static var typeDisplayRepresentation: TypeDisplayRepresentation = "Status Hub"
+    static var caseDisplayRepresentations: [RewindTarget: DisplayRepresentation] = [.rewind: "Rewind"]
+}
+
+/// Engages or drops rewind (`Watch/Rewind.swift`): the Buffer control's action. Like Listen, it has to
+/// open the app, because the microphone can only start there; it then carries on with the wrist down.
+struct BufferIntent: OpenIntent {
+    static var title: LocalizedStringResource = "Buffer"
+
+    @Parameter(title: "Target") var target: RewindTarget
+
+    init() {
+        target = .rewind
+    }
+
+    @MainActor
+    func perform() async throws -> some IntentResult {
+        #if WATCH_APP
+        Chat.shared.toggleRewind()
+        #endif
+        return .result()
+    }
+}
+
+/// Sends what rewind holds to be transcribed and shows the words: the Rewind control's action.
+struct RewindIntent: OpenIntent {
+    static var title: LocalizedStringResource = "Rewind"
+
+    @Parameter(title: "Target") var target: RewindTarget
+
+    init() {
+        target = .rewind
+    }
+
+    @MainActor
+    func perform() async throws -> some IntentResult {
+        #if WATCH_APP
+        Rewind.shared.grab()
+        #endif
+        return .result()
+    }
+}
+
 /// Which page of the app a control opens. `record` is the microphone's: it lands on home and starts
 /// recording. The rest are places — a control per page, so Control Center (and the Action button, and
 /// the Smart Stack) can put him where he was going rather than in the app to then swipe.

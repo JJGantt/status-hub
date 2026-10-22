@@ -100,6 +100,7 @@ struct RootView: View {
     @EnvironmentObject private var nutrition: Nutrition
     @EnvironmentObject private var workout: Workout
     @EnvironmentObject private var router: Router
+    @ObservedObject private var rewind = Rewind.shared
     @Environment(\.scenePhase) private var phase
     @State private var page = Page.home
     /// The other pages have been loaded behind the first since the app last came to the front.
@@ -124,6 +125,8 @@ struct RootView: View {
         // glass (`CommandBorder`), which also holds the double-tap binding. Inside a page it would be
         // part of that page's content and slide with it on a swipe; over the row it stays put.
         .overlay { CommandBorder() }
+        // A rewind's words, over whatever page is showing: the grab came from a control, not a page.
+        .sheet(item: $rewind.shown) { RewindSheet(shown: $0) }
         // Press and hold anywhere throws away what is under way. It is on the whole row rather than
         // a page for the same reason, and does nothing when there is nothing to throw away.
         .simultaneousGesture(LongPressGesture(minimumDuration: 0.6).onEnded { _ in
@@ -183,7 +186,7 @@ struct RootView: View {
         .onChange(of: page) { _, _ in follow() }
         .onChange(of: phase) { _, now in
             Hub.log("phase", ["to": "\(now)"])
-            if now == .active { Speaker.shared.checkOnWake() }
+            if now == .active { Speaker.shared.checkOnWake(); Rewind.shared.check() }
             follow()
             // Coming to the front, not every page swipe: the watch's settings live on the hub.
             if now == .active { Task { await WatchSettings.refresh() }; Hub.flushLog() }

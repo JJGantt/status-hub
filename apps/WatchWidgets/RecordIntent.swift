@@ -60,7 +60,16 @@ struct ListenIntent: OpenIntent {
     }
 }
 
-/// What the rewind controls open: the one target there is, as with Record.
+/// What the Buffer control opens. Its own type, not shared with Rewind: the App Intents export
+/// refuses two `OpenIntent`s with the same target type, and the archive fails on it.
+enum BufferTarget: String, AppEnum {
+    case buffer
+
+    static var typeDisplayRepresentation: TypeDisplayRepresentation = "Status Hub"
+    static var caseDisplayRepresentations: [BufferTarget: DisplayRepresentation] = [.buffer: "Buffer"]
+}
+
+/// What the Rewind control opens.
 enum RewindTarget: String, AppEnum {
     case rewind
 
@@ -73,10 +82,10 @@ enum RewindTarget: String, AppEnum {
 struct BufferIntent: OpenIntent {
     static var title: LocalizedStringResource = "Buffer"
 
-    @Parameter(title: "Target") var target: RewindTarget
+    @Parameter(title: "Target") var target: BufferTarget
 
     init() {
-        target = .rewind
+        target = .buffer
     }
 
     @MainActor

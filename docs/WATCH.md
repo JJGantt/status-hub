@@ -183,7 +183,11 @@ prompt at its LATEST occurrence, so it moves from where it was sent to where it 
 The follow-up carries that id to the hub (`client_msg_id`), the hub to the host (`msg`), and the host
 stamps it on the prompt those words become (sessionWatch.js `expectPrompt`) — the one place a text is
 compared, once, against the exact string that machine just typed. The event that comes back carries
-it as `cmd`, and the placeholder is replaced by id. A send the hub refused, or took nothing from (a
+it as `cmd`, and the placeholder is replaced by id. **Every path that delivers words registers them**,
+the resume of a PARKED session as much as a follow-up typed into a running one (pi-desk `startSession`,
+the Mac's `resume_session`), and the claim is made even when the watcher reads that prompt as the prefix
+of a turn it attached to late, which is how a resumed session's first prompt is always read. A path that
+skips either leaves its placeholder drawn under the whole turn, below the same words already in place. A send the hub refused, or took nothing from (a
 thank-you-shaped transcription), drops its placeholder.
 
 **It lands on his newest words**: a placeholder if any, else the last prompt since the last reply,

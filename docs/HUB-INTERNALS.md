@@ -1127,7 +1127,8 @@ moments with the id the host minted for it, the second marked `seen`; `done` bec
 with the whole text the host sends. A prompt this machine
 typed for a hub command carries that command's id (`cmd`) — the sender's own `client_msg_id`, passed
 to the host as `msg` in the follow-up payload — which is how the device that sent the words replaces
-its own placeholder by id.
+its own placeholder by id. A follow-up to a PARKED session is a `resume_session` carrying the same
+`msg`, and the host registers it for the resumed session's first prompt (docs/WATCH.md § placeholders).
 
 Kept in memory per conversation, 2000 events, dropped after a day untouched, and seeded on first
 touch from `desk_turns` (each finished turn's `events`, then its reply) so a cold open or a restart

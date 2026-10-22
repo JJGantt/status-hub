@@ -23,21 +23,28 @@ enum Auth {
         SecItemDelete(query as CFDictionary)
         var add = query
         add[kSecValueData as String] = Data(pw.utf8)
+        add[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlock
         SecItemAdd(add as CFDictionary, nil)
     }
 
+    // AfterFirstUnlock, not the default WhenUnlocked: a notification's Done runs in the background,
+    // usually with the phone locked in a pocket while the watch is what got tapped. Under the default
+    // the read fails there, token() is nil, and the action finishes having sent nothing at all.
     static func password() -> String? {
-        let query: [String: Any] = [
+        let base: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
             kSecAttrAccount as String: account,
             kSecAttrAccessGroup as String: accessGroup,
-            kSecReturnData as String: true,
-            kSecMatchLimit as String: kSecMatchLimitOne,
         ]
+        var query = base
+        query[kSecReturnData as String] = true
+        query[kSecMatchLimit as String] = kSecMatchLimitOne
         var item: CFTypeRef?
         guard SecItemCopyMatching(query as CFDictionary, &item) == errSecSuccess,
               let data = item as? Data, let s = String(data: data, encoding: .utf8) else { return nil }
+        // A password saved before this carries the default; move it over on the next unlocked read.
+        SecItemUpdate(base as CFDictionary, [kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlock] as CFDictionary)
         return s
     }
 

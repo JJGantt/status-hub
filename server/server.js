@@ -4560,6 +4560,7 @@ app.post('/api/todos/complete', express.json(), async (req, res) => {
     const now = new Date().toISOString();
     await sbWrite(`list_items?id=eq.${encodeURIComponent(id)}`, 'PATCH',
       { completed_at: completedAt, updated: now });
+    console.log(`[todos] ${b.undo ? 'uncomplete' : 'complete'} ${id}`);
     res.json({ ok: true, completed_at: completedAt });
     announceListWrite();
     syncBadge().catch(() => {});   // don't make the caller wait on APNs

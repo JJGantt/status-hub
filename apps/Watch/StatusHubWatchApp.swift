@@ -103,6 +103,11 @@ struct RootView: View {
     @ObservedObject private var rewind = Rewind.shared
     @Environment(\.scenePhase) private var phase
     @State private var page = Page.home
+    /// Black over everything from the moment the app leaves the screen until a launch has turned to its
+    /// page. watchOS opens a backgrounded app by zooming in from its LAST picture of it, and a
+    /// complication's URL only arrives once it is active: unveiled, a launcher shows the page he left
+    /// and then visibly moves to the one he asked for.
+    @State private var veiled = false
     /// The other pages have been loaded behind the first since the app last came to the front.
     @State private var warmed = false
     /// The on-screen page's own loads, which the others wait behind.
@@ -125,6 +130,7 @@ struct RootView: View {
         // glass (`CommandBorder`), which also holds the double-tap binding. Inside a page it would be
         // part of that page's content and slide with it on a swipe; over the row it stays put.
         .overlay { CommandBorder() }
+        .overlay { if veiled { Color.black.ignoresSafeArea() } }
         // A rewind's words, over whatever page is showing: the grab came from a control, not a page.
         .sheet(item: $rewind.shown) { RewindSheet(shown: $0) }
         // Press and hold anywhere throws away what is under way. It is on the whole row rather than
@@ -152,7 +158,7 @@ struct RootView: View {
         // showing. A session left open on the sessions page stays open: the command goes to the hub
         // because home is showing (`Sessions.target`).
         .onChange(of: chat.recordRequested) { _, asked in
-            if asked { page = .home }
+            if asked { jump(to: .home) }
         }
         // A control that names a page (Control Center, the Action button, the Smart Stack, the Day and
         // Sessions complications) turns to it. Sessions always lands on the LIST, closing any session
@@ -160,11 +166,11 @@ struct RootView: View {
         .onChange(of: router.asked, initial: true) { _, asked in
             guard let asked else { return }
             if asked == .sessions { sessions.path = [] }
-            page = Page(asked)
+            jump(to: Page(asked))
             router.asked = nil
         }
         // A session opened from its notification lands on the sessions page, even on a cold launch.
-        .onChange(of: sessions.path) { _, path in if !path.isEmpty { page = .sessions } }
+        .onChange(of: sessions.path) { _, path in if !path.isEmpty { jump(to: .sessions) } }
         .onAppear {
             if !sessions.path.isEmpty { page = .sessions }
             follow()
@@ -186,11 +192,23 @@ struct RootView: View {
         .onChange(of: page) { _, _ in follow() }
         .onChange(of: phase) { _, now in
             Hub.log("phase", ["to": "\(now)"])
+            if now == .background { veiled = true }
+            // Lifted a beat after becoming active, the same beat `follow()` waits: a launcher's URL
+            // turns the page in this pass, so the first thing shown is already its page.
+            if now == .active && veiled { Task { await Task.yield(); veiled = false } }
             if now == .active { Speaker.shared.checkOnWake(); Rewind.shared.check() }
             follow()
             // Coming to the front, not every page swipe: the watch's settings live on the hub.
             if now == .active { Task { await WatchSettings.refresh() }; Hub.flushLog() }
         }
+    }
+
+    /// A launcher, a control or a notification CUTS to its page rather than scrolling across the ones
+    /// between, so it reads as opening there.
+    private func jump(to p: Page) {
+        var t = Transaction()
+        t.disablesAnimations = true
+        withTransaction(t) { page = p }
     }
 
     /// **The page on screen loads first, then every other page loads behind it**, so a swipe lands on

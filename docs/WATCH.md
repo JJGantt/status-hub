@@ -697,6 +697,15 @@ the app switches to home and records as soon as it is active. The page that acts
 whichever is showing (`recordsWhenAsked`, which checks `onScreen`), so two pages cannot both start
 one.
 
+**A launcher opens ON its page, not on the last one.** watchOS brings a backgrounded app back by
+zooming in from its last picture of it, and the URL only arrives once the app is active, so the page he
+left would show first and then move. Two things stop that in `RootView`: the app goes black
+(`veiled`) when it reaches the background and lifts the black a beat after it is active again, once
+the URL has turned the page; and every page a launcher, control or notification picks is a cut
+(`jump(to:)`, animations disabled), never a scroll across the pages between. The cost is that opening
+the app any other way also starts from black for that beat. Not yet confirmed on the watch: the
+simulator cannot background the app or deliver a complication's URL without clicking its window.
+
 Without an Action button, the no-touch path is the Smart Stack: with Settings → Gestures → Double Tap →
 Smart Stack set to Select and Record pinned, two double taps from the watch face open it recording
 (verified on watchOS 26.5). An app holding a workout session (Watchset while it captures)

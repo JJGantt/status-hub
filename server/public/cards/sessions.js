@@ -80,7 +80,7 @@ function paint(p, d) {
       // panel is showing below. `unread` is a finished answer nobody has opened. Two different
       // questions, so two different marks: one row can carry both.
       `<div class="hw-row${on && s.id === on.id ? ' on' : ''}${s.unread ? ' unread' : ''}` +
-        `${s.status === 'resident' ? '' : ' parked'}"` +
+        '"' +
         `${p.tap ? ` data-open="${esc(String(s.id))}"` : ''}>` +
         '<div class="hw-row-top">' +
           `<span class="hw-sess-dot${s.working ? '' : ' idle'}"></span>` +

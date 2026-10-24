@@ -6,8 +6,7 @@ import SwiftUI
 /// A row carries the same three marks as the phone's list (`cards/sessions.js`, `phone-home.css`),
 /// because they answer different questions and are read together: the WHITE edge is the focused
 /// session — where a spoken follow-up goes — with a pin beside its name when he pinned it there; the
-/// AMBER edge is a finished reply nobody has opened, which also takes back the dimming a parked row
-/// gets, since a finished session is the one most worth reading; the DOT is a session working now.
+/// AMBER edge is a finished reply nobody has opened; the DOT is a session working now.
 /// Under each name is what its machine is doing, live off `/api/session-stream`.
 struct SessionsView: View {
     @EnvironmentObject private var sessions: Sessions
@@ -107,7 +106,7 @@ struct SessionsView: View {
                     }
                     Text(s.name)
                         .font(.system(size: 14))
-                        .foregroundColor(unread || focused ? .white : s.running ? Self.name : .gray)
+                        .foregroundColor(unread || focused ? .white : Self.name)
                         .lineLimit(2)
                 }
                 if let say = s.say, !say.isEmpty {
@@ -135,8 +134,6 @@ struct SessionsView: View {
         .padding(.vertical, 8)
         .frame(maxWidth: .infinity, alignment: .leading)
         .contentShape(Rectangle())
-        // A parked session is dimmed, unless it is holding a reply nobody has read.
-        .opacity(s.running || unread ? 1 : 0.5)
     }
 
     /// What this session's machine is doing, newest step only, in the colours of `Ink`. The line is

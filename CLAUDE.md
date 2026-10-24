@@ -641,9 +641,8 @@ selected, and its AppleScript dictionary has no property for it at all (a tab of
 than the bell, which fires at the same moment for the same reason — and the traffic runs one way:
 reading on the Mac clears the phone, reading on the phone cannot clear the Mac's bell.
 The `✳` and `◐` in a tab's `custom title` are Claude Code's idle/working glyphs, not an unread mark.
-An unread row takes an amber left edge and its full opacity back — it is very often parked and
-idle, which is exactly when a row is dimmed, and a finished session is the one most worth reading.
-**That rule is written TWICE**, in `phone-home.css` and `tv-home.css`: `.hw-row` is defined in both
+An unread row takes an amber left edge. Parked and running rows are drawn alike, because words sent
+to a parked one resume it wherever it lives. **That rule is written TWICE**, in `phone-home.css` and `tv-home.css`: `.hw-row` is defined in both
 and each surface loads only its own, so a rule written in one of them reaches half the surfaces that
 draw this row.
 

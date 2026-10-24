@@ -408,7 +408,7 @@ is the bus; the daemon on each machine owns everything local:
   flushes the mirror, then asks the destination to resume. One writer at a time, always — `--resume`
   on a live transcript forks the conversation into two copies with one id. When the source is
   unreachable there is nothing to close, so the destination resumes from the mirror as of the last
-  completed turn. `transfer_session` by voice, the `→ Pi` / `→ Mac` button in the pane.
+  completed turn. `transfer_session` by voice, or by asking the session itself to move.
 - **Sessions are numbered so they can be named out loud.** Active sessions, **most recently active
   first, running above parked, from 1** — the same rule in `data-layer/src/desk.ts` (`numberSessions`) and in `/api/sessions`,
   because "session three" has to mean one thing. The number is a position in the current list, never

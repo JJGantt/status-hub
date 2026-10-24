@@ -601,7 +601,6 @@ body.tv.phonewall .pane-reports .reportscard>div{flex:1 1 auto;min-height:0;disp
 .sessions .sess-repo{display:block;font-size:15px;color:#e6ebf2;font-weight:600}
 .sessions .sess-say{display:block;font-size:12px;color:#8b96a5;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .sessions .sess-at{color:#5d6672;font-variant-numeric:tabular-nums;margin-right:6px}
-.sessions li.sess:not(.live) .sess-repo{color:#8b96a5}
 .sessions .sess-act{flex:0 0 auto;display:flex;align-items:center;gap:6px}
 /* The number you say out loud, and the machine it is on. Both are identity, so they read before the
    name rather than after it. */
@@ -610,7 +609,6 @@ body.tv.phonewall .pane-reports .reportscard>div{flex:1 1 auto;min-height:0;disp
 .sessions .sess-where{margin-left:6px;font-size:10px;font-weight:700;letter-spacing:.3px;color:#5d6672;
   text-transform:uppercase}
 /* Steady, not pulsing: it means "open and reachable", not "actively working". */
-.sessions .sess-dot{width:8px;height:8px;border-radius:50%;background:#39d353;display:inline-block}
 /* A row opens its session (openSession in cards/repos.js); its buttons act without opening it. */
 .sessions li.sess[data-id]{cursor:pointer;-webkit-tap-highlight-color:transparent}
 .sessions li.sess[data-id]:active{background:#0e1318}
@@ -651,8 +649,6 @@ body.tv.phonewall .pane-repos.sv-open #repospane{flex:1 1 auto;min-height:0;disp
 .sv-bar{flex:0 0 auto;display:flex;align-items:center;gap:10px;padding:10px 12px;border-bottom:1px solid #222a33}
 .sv-back{flex:0 0 auto;background:none;border:0;padding:0;color:#5b8def;font-size:15px;cursor:pointer}
 .sv-title{flex:1 1 auto;min-width:0;font-size:13px;font-weight:600;color:#e6ebf2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.sv-bar .sess-dot{flex:0 0 auto;width:8px;height:8px;border-radius:50%;background:#39d353}
-.sv-bar .sess-dot[hidden]{display:none}
 .sv-speak{flex:0 0 auto;background:none;border:0;padding:4px;color:#7d8894;display:flex;cursor:pointer}
 .sv-speak.on{color:#e6ebf2}
 .sv-speak-stop{flex:0 0 auto;background:none;border:0;padding:4px;color:#7d8894;display:flex;cursor:pointer}

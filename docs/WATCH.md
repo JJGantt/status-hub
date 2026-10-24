@@ -138,8 +138,7 @@ is left for recording and unread.
 **A row carries the same three marks as the phone's list** (`cards/sessions.js`, `phone-home.css`),
 because they answer different questions and are read together: a **white** left edge is the focused
 session — where a spoken follow-up goes — with a pin beside its name when he pinned it there; an
-**amber** left edge is a finished reply nobody has opened, which also takes back the dimming a parked
-row gets, since a finished session is the one most worth reading; a green **dot** is a session working
+**amber** left edge is a finished reply nobody has opened; a green **dot** is a session working
 now. Under each name is what that machine is doing, live off `/api/session-stream` — a tool call in
 teal, what the model says between them in a plain light — and the line is always there, however empty,
 because a row that grows when a tool fires and shrinks when one stops makes the whole list jump every

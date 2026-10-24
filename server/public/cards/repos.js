@@ -48,10 +48,9 @@ const notable = (b) => !!b && b !== 'main' && b !== 'master';
 // Live and parked sessions, above the project list. This is the "is something being worked on"
 // question, and it belongs here because the answer is always about a repo.
 //
-// The two states are deliberately drawn differently, though they share one list in `n` order: a RESIDENT
-// session is open on the Pi and reachable in the Claude app right now, an EVICTED one was closed to
-// free the machine and has to be resumed first. Confusing them means tapping something expecting it
-// to be live and finding it isn't.
+// Running and parked rows are drawn alike: words sent to a parked session resume it wherever it
+// lives (`/api/sessions/followup`), and moving one is asked of the session itself, so neither state
+// needs a control of its own.
 function sessionsHtml(s) {
   if (!s) return '';
   const res = s.resident || [], ev = s.evicted || [], q = s.queued || [];
@@ -77,12 +76,7 @@ function sessionsHtml(s) {
         `<span class="sess-say">${x.at ? `<span class="sess-at">${esc(ago(x.at))}</span>` : ''}${esc((x.say || '').slice(0, 90))}</span>` +
       `</div>` +
       `<div class="sess-act">` +
-        (live ? '<span class="sess-dot" title="open and reachable"></span>'
-              : `<button class="sess-btn" data-act="resume">resume</button>`) +
         `<button class="sess-btn ghost" data-act="rename">name</button>` +
-        (x.claude_session_id
-          ? `<button class="sess-btn" data-act="transfer" title="close it here and resume it there with its whole conversation">\u2192 ${x.worker === 'desk' ? 'Pi' : 'Mac'}</button>`
-          : '') +
         `<button class="sess-btn ghost" data-act="${live ? 'end' : 'forget'}">${live ? 'close' : '\u00d7'}</button>` +
       `</div>` +
     '</li>';
@@ -248,10 +242,9 @@ async function sessionAction(li, act) {
       body: JSON.stringify(name ? { id, name: name.trim() } : { id }),
     });
   } catch (_) { /* the next load reconciles */ }
-  // Resume, close and transfer are enacted on a machine asynchronously, so give it a moment before
-  // re-reading rather than showing a state the machine has not reached yet. A transfer is the slowest
-  // of them: it closes a session, uploads the last of the transcript and resumes it elsewhere.
-  setTimeout(load, act === 'forget' ? 200 : act === 'transfer' ? 6000 : act === 'rename' ? 1200 : 2500);
+  // A close is enacted on a machine asynchronously, so give it a moment before re-reading rather than
+  // showing a state the machine has not reached yet.
+  setTimeout(load, act === 'forget' ? 200 : act === 'rename' ? 1200 : 2500);
 }
 
 function wire(el) {
@@ -404,10 +397,9 @@ function paintHead() {
   const el = document.getElementById('repospane');
   const d = cur && cur.head;
   if (!el || !d) return;
-  const t = el.querySelector('.sv-title'), w = el.querySelector('.sv-where'), dot = el.querySelector('.sv-bar .sess-dot');
+  const t = el.querySelector('.sv-title'), w = el.querySelector('.sv-where');
   if (t) t.textContent = nameOf(d);
   if (w) w.textContent = d.worker === 'desk' ? 'Mac' : 'Pi';
-  if (dot) dot.hidden = d.status !== 'resident';
 }
 
 // What is drawn: every event in order, a prompt at the position of its LATEST occurrence — it moves
@@ -589,7 +581,7 @@ async function openSession(id) {
   el.innerHTML =
     '<div class="sv">' +
       '<div class="sv-bar"><button class="sv-back" type="button">‹ Sessions</button>' +
-        '<span class="sv-title"></span><span class="sess-dot" title="open and reachable"></span>' +
+        '<span class="sv-title"></span>' +
         '<span class="sv-where"></span>' +
         '<button class="sv-speak-stop" type="button" aria-label="Stop reading" hidden>' + STOP_SVG + '</button>' +
         '<button class="sv-speak" type="button" aria-label="Read the reply aloud">' + SPEAK_SVG + '</button></div>' +

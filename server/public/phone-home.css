@@ -394,13 +394,11 @@ body.tv.phonehome .hw-row{flex:0 0 auto;min-height:0;display:flex;flex-direction
 body.tv.phonehome .hw-row:active{background:#161d25}
 body.tv.phonehome .hw-row-top{display:flex;align-items:center;gap:5px;min-width:0}
 body.tv.phonehome .hw-row.on{background:#161d25;box-shadow:inset 2px 0 0 #fff}
-body.tv.phonehome .hw-row.parked{opacity:.5}
 /* UNREAD: a finished answer nobody has opened. The row's other two marks mean other things — the
-   white inset edge is the FOCUSED session and the dot is one WORKING — so this is amber, and it takes
-   back the dimming a parked row gets, since a finished session is the one most worth reading.
+   white inset edge is the FOCUSED session and the dot is one WORKING — so this is amber.
    Stated here AND in tv-home.css because `.hw-row` is defined in both and each surface loads only its
    own; a rule written in one of them reaches half the surfaces that draw this row. */
-body.tv.phonehome .hw-row.unread{opacity:1;box-shadow:inset 2px 0 0 #e0a03a}
+body.tv.phonehome .hw-row.unread{box-shadow:inset 2px 0 0 #e0a03a}
 body.tv.phonehome .hw-row.unread.on{box-shadow:inset 2px 0 0 #e0a03a, inset 4px 0 0 #fff}
 body.tv.phonehome .hw-row.unread .hw-row-name{color:#fff}
 body.tv.phonehome .hw-row.unread .hw-row-act{color:#e6c88a}

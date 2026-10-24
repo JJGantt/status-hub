@@ -3006,8 +3006,9 @@ function markSeen(msgId, requestId = null) {
 // re-encodes and splits anything too big for Groq. The file is deleted as soon as the request ends.
 // Where Jared was when he spoke, if the device sent it: numbers from the watch's or the browser's
 // location fix, and a place name only when the device produced one itself. Nothing here looks a
-// position up, so a command never sends his location to a third party; the worker hands it to the
-// model as context and the model uses it only for a request that depends on where he is.
+// position up, so a command never sends his location to a third party. It is stored on the request
+// row, and a trigger there keeps `locations` current (data-layer 00129), which a model reads through
+// `get_location` only when a request depends on where he is.
 function parseLocation(src) {
   const lat = parseFloat(src && src.lat), lon = parseFloat(src && src.lon);
   if (!Number.isFinite(lat) || !Number.isFinite(lon) || Math.abs(lat) > 90 || Math.abs(lon) > 180) return null;
@@ -3475,9 +3476,8 @@ app.post('/api/voice-reset', async (req, res) => {
 // A prompt carries two things that were never meant for a human to read, and every surface that shows
 // "his words" verbatim (the watch, the phone thread, the TV) has to have them out before he sees them:
 //
-// - The bracketed line `desk.startSession` appends after a voice-dispatched prompt, so the session
-//   knows where he was ("[Where Jared was when he asked: lat, lon (within about N m)]") — for the
-//   agent, not for him; his own words end where it begins.
+// - The bracketed location line voice-dispatched prompts used to carry ("[Where Jared was when he
+//   asked: lat, lon (within about N m)]"). Nothing appends it now; it is in turns already stored.
 // - The format instruction older watch builds appended to a follow-up while replies were spoken:
 //   "[This reply is read aloud. …]". Nothing sends it now; it is in turns already stored.
 //   Either bracket can be the last one, so both are peeled off the end until neither matches.

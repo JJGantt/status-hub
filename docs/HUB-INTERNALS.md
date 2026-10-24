@@ -1190,9 +1190,9 @@ made this a 242KB response; it is 39KB.
 frame before any of them reach a client — the watch, the phone thread, the TV — strips three patterns,
 all confirmed live in `desk_turns`, not theoretical:
 
-- **The bracketed line `desk.startSession` appends to a voice-dispatched prompt** (`data-layer/src/
-  desk.ts`), `\n\n[Where Jared was when he asked: lat, lon (within about N m)]` — for the agent to read,
-  never for him; his own words end where it begins.
+- **The bracketed location line voice-dispatched prompts used to carry**, `\n\n[Where Jared was when he
+  asked: lat, lon (within about N m)]`. Nothing appends it now — a session that needs his position calls
+  the data MCP's `get_location` — but it is in turns already stored.
 - **A format instruction older watch builds appended while replies were spoken**, `\n\n[This reply is
   read aloud. …]`. Nothing sends it now, but it is in turns already stored. Either this or the location
   line can come last, so `cleanSaid` peels both off the end until neither matches.

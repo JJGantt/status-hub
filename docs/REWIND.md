@@ -75,7 +75,7 @@ holds audio from either side of that gap as if it were continuous.
 
 ## Measured
 
-**2026-10-24, first real use** (Series watch, TV on in the room, 30 s ring):
+**2026-10-24, first real use** (TV on in the room, 30 s ring):
 
 | UTC | what happened | ring |
 |---|---|---|

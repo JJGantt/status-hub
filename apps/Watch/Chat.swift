@@ -54,6 +54,9 @@ final class Chat: ObservableObject {
         /// It failed and is kept only so Retry can send it again: not waited on, and its words are not
         /// shown as pending (the hub has already put them in the thread, or never had them).
         var failed = false
+        /// Instructions for a rewind grab: the grab's id, once its upload has given one. The command
+        /// waits on it, since the one-step control starts recording before the grab has reached the hub.
+        var rewind: Task<String?, Never>?
     }
     private var commands: [Command] = [] {
         didSet {
@@ -64,6 +67,8 @@ final class Chat: ObservableObject {
         }
     }
     private var tasks: [String: Task<Void, Never>] = [:]
+    /// The grab the recording now running is instructions for (`startInstructions`).
+    private var instructing: Task<String?, Never>?
     private var stream: Task<Void, Never>?
     private var loading = false
     private var reloadAfter = false
@@ -145,6 +150,23 @@ final class Chat: ObservableObject {
         }
     }
 
+    /// Records his instructions for the rewind grab on screen: locked like a session follow-up (red, only
+    /// a press ends it), and sent as a command carrying the grab, which the hub hands the orchestrator
+    /// together with his words (docs/REWIND.md).
+    func startInstructions(for grab: Task<String?, Never>?) {
+        guard capture.free else {
+            Hub.log("record-refused", ["view": "rewind", "owner": String(describing: capture.owner)])
+            return
+        }
+        Hub.log("record-start", ["view": "rewind", "running": commands.count])
+        failure = nil
+        instructing = grab
+        capture.start(for: .hub, flow: .locked, onTaken: { [weak self] in self?.stopRecording() }) { [weak self] error in
+            self?.instructing = nil
+            self?.failure = (error as? Recorder.Failure) == .denied ? .micDenied : .message(error.localizedDescription)
+        }
+    }
+
     /// Ends the recording and sends it. The wrist is tapped at the moment the microphone closes —
     /// which the silence may have decided, so it is the one moment nothing else reports.
     func stopRecording() {
@@ -152,7 +174,9 @@ final class Chat: ObservableObject {
         WKInterfaceDevice.current().play(.stop)
         Hub.log("record-stop", ["view": "chat", "seconds": finished.duration, "heard": finished.heard, "peak": finished.peak,
                                    "chirped": finished.chirped.map { $0 as Any } ?? NSNull()])
-        let command = Command(clip: finished)
+        var command = Command(clip: finished)
+        command.rewind = instructing
+        instructing = nil
         commands.append(command)
         run(command.msgId)
     }
@@ -179,6 +203,7 @@ final class Chat: ObservableObject {
         if capture.owner == .hub {
             Hub.log("record-cancel", ["view": "chat"])
             capture.cancel()
+            instructing = nil
         }
     }
 
@@ -255,12 +280,15 @@ final class Chat: ObservableObject {
                 if requestId == nil {
                     guard let clip = command.clip else { finish(msgId); return }
                     let began = Date()
+                    let rewind = await command.rewind?.value
+                    if command.rewind != nil && rewind == nil { Hub.log("rewind-missing", ["msg": msgId]) }
                     let sent = try await Awake.hold("sending a voice command") {
-                        try await Hub.sendCommand(clip, msgId: msgId)
+                        try await Hub.sendCommand(clip, msgId: msgId, rewind: rewind)
                     }
                     let heard = sent.heard
                     fallback = sent.fallback
                     Hub.log("sent", ["ms": Int(Date().timeIntervalSince(began) * 1000), "fallback": fallback,
+                                     "rewind": rewind ?? "",
                                      "id": heard.id ?? "", "words": (heard.transcript ?? "").count])
                     guard let id = heard.id else {
                         // The hub heard no words, so there is no command.

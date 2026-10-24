@@ -15,6 +15,7 @@ struct StatusHubWatchWidgets: WidgetBundle {
             ListenControl()
             BufferControl()
             RewindControl()
+            RewindAskControl()
             SessionsControl()
             NutritionControl()
             WorkoutControl()
@@ -74,6 +75,19 @@ struct RewindControl: ControlWidget {
             }
         }
         .displayName("Rewind")
+    }
+}
+
+/// Grab, and record instructions for it straight away.
+@available(watchOS 26.0, *)
+struct RewindAskControl: ControlWidget {
+    var body: some ControlWidgetConfiguration {
+        StaticControlConfiguration(kind: "com.jaredgantt.statushub.watch.rewindask") {
+            ControlWidgetButton(action: RewindAskIntent()) {
+                Label("Rewind Ask", systemImage: "gobackward.minus")
+            }
+        }
+        .displayName("Rewind Ask")
     }
 }
 

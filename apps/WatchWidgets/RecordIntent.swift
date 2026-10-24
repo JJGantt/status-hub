@@ -77,6 +77,14 @@ enum RewindTarget: String, AppEnum {
     static var caseDisplayRepresentations: [RewindTarget: DisplayRepresentation] = [.rewind: "Rewind"]
 }
 
+/// What the Rewind Ask control opens.
+enum RewindAskTarget: String, AppEnum {
+    case rewindAsk
+
+    static var typeDisplayRepresentation: TypeDisplayRepresentation = "Status Hub"
+    static var caseDisplayRepresentations: [RewindAskTarget: DisplayRepresentation] = [.rewindAsk: "Rewind Ask"]
+}
+
 /// Engages or drops rewind (`Watch/Rewind.swift`): the Buffer control's action. Like Listen, it has to
 /// open the app, because the microphone can only start there; it then carries on with the wrist down.
 struct BufferIntent: OpenIntent {
@@ -111,6 +119,26 @@ struct RewindIntent: OpenIntent {
     func perform() async throws -> some IntentResult {
         #if WATCH_APP
         Rewind.shared.grab()
+        #endif
+        return .result()
+    }
+}
+
+/// The one-step rewind: grabs, and starts recording his instructions for the grab at once — the same as
+/// a Rewind followed by a tap on its words.
+struct RewindAskIntent: OpenIntent {
+    static var title: LocalizedStringResource = "Rewind Ask"
+
+    @Parameter(title: "Target") var target: RewindAskTarget
+
+    init() {
+        target = .rewindAsk
+    }
+
+    @MainActor
+    func perform() async throws -> some IntentResult {
+        #if WATCH_APP
+        Rewind.shared.grab(ask: true)
         #endif
         return .result()
     }

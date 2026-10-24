@@ -15,10 +15,22 @@ the wrist down, and what that costs in battery.
 - **Buffer** control (`BufferIntent`) engages or drops it. Like Listen it opens the app, because the
   microphone can only start with the app in front; it then carries on with the wrist down through the
   watch's `UIBackgroundModes: audio`. The edge of the glass shows the listening blue while it is on.
-- **Rewind** control (`RewindIntent`) grabs: `Rewind.grab` copies the ring, encodes it to .m4a at the
-  same settings as a command (`RewindAudio.writeM4A`), and posts it to `/api/voice-command?dry=1` —
-  transcribed, never enqueued, so nothing he overheard runs as a command. The words appear in a sheet
-  over whatever page is showing. The ring keeps its audio, so a second grab hears the same moments again.
+- **Rewind** control (`RewindIntent`) grabs: `Rewind.grab` copies the ring, encodes it to .m4a
+  (`RewindAudio.writeM4A`), and posts it to `/api/rewind`. The hub keeps the clip (`voice-clips` bucket,
+  `rewind/<id>.m4a`) and a `rewind_grabs` row (data-layer 00130) with the words, the speaker segments,
+  the model, any error and the time taken, and returns the words **speaker-labeled** (`A: …` / `B: …`,
+  OpenAI `gpt-4o-transcribe-diarize`; plain Whisper when that fails, with the failure in `error`).
+  Nothing is enqueued. The words appear in a sheet over whatever page is showing. The ring keeps its
+  audio, so a second grab hears the same moments again.
+- **A tap on the sheet records instructions** for the grab: locked like a session follow-up (red
+  edge, drawn by the sheet itself because the sheet covers `CommandBorder`), and the next tap sends them
+  and closes the sheet. They go up as an ordinary watch command with `rewind=<grab id>`; the hub
+  (`withRewind`) turns the command into the grab's transcript framed as overheard audio plus his words
+  as the instructions, and enqueues that to the orchestrator. `voice_requests.rewind_id` names the grab.
+  A command that falls back to the Supabase edge function (hub unreachable) goes without the grab.
+- **Rewind Ask** control (`RewindAskIntent`) is the one-step version: it grabs and starts recording
+  instructions at once, without waiting for the words. The command waits on the grab's id before it
+  uploads (`Chat.Command.rewind`).
 - **The ring rides every recording.** `Recorder.tee` is fed every converted buffer whoever owns the
   microphone — a command, a follow-up, the always-on listener. When nobody does, Capture holds it for
   rewind alone (owner `.rewind`): no file is written (`Sink` with `keepsFile: false`), no endpoint
@@ -40,7 +52,7 @@ the last audio arrived), `owner`, `battery` (0…1) and `charging`.
 | `rewind` | engaged (`on: true`, `seconds`) or dropped (`on: false`, `why`: `off`, `mic-failed`) |
 | `rewind-alive` | every five minutes of audio that actually arrived — audio, not a timer, so the lines stop when the microphone stops feeding |
 | `rewind-check` | the app came to the front while engaged. `quiet` of minutes means watchOS took the microphone while the wrist was down, which no callback reports; `minutes - quiet/60` is how long it lasted |
-| `rewind-grab` | a grab: `held`, `bytes`, `ms` to the words, `words`, or `ok: false` with `why` (`off`, `empty`, an error) |
+| `rewind-grab` | a grab: `id` (its `rewind_grabs` row), `model`, `held`, `bytes`, `ms` to the words, `words`, `ask` (Rewind Ask), or `ok: false` with `why` (`off`, `empty`, an error) |
 
 `mic-interrupted` / `mic-interruption-ended` with `owner: rewind` are the system taking and returning
 the microphone (WATCH.md § It logs what it does to the hub).
@@ -63,11 +75,11 @@ length, and — with `HUB_TOKEN` — that the hub's dry transcription returns th
 nothing. What it cannot check is the watch itself: holding the microphone, the controls, the sheet.
 Those are measured from the log above.
 
-## What a grab does NOT keep
+## Reviewing grabs
 
-Neither the transcript nor the audio of a grab is stored anywhere: the words exist only in the sheet on
-the watch, and `rewind-grab` logs their count, not their text. So a grab cannot be reviewed afterwards
-for quality. Fixing that is step 1 of the plan below.
+Every grab is in `rewind_grabs` (newest first by `at`), its clip at `voice-clips/<audio.path>`. Nothing
+sweeps either: they are the record for judging transcription quality. `rewind-grab` in `client_log`
+carries the same `id`. Grabs before 2026-10-24's build were never kept.
 
 The ring is not fed while nothing owns the microphone — during a reply read aloud, for instance — and it
 stitches what comes after onto what came before with no mark. A grab just after a long spoken reply
@@ -139,23 +151,12 @@ check before building on it.
 
 ## Plan
 
-Decided so far (2026-10-24):
+Built (2026-10-24): every grab kept (clip + words), speaker-labeled transcription on OpenAI shown on the
+sheet, tap-to-instruct on the sheet, and the Rewind Ask control.
 
-1. **Keep what a grab produced** — store the transcript (and optionally the clip, in the same bucket as
-   command clips) so a grab can be reviewed and acted on later, and so quality can be judged. Needed
-   by everything below.
-2. **Actions on the sheet** — under the words, a control to send them on:
-   - **Send** as a prompt through the normal voice route (a `voice_requests` row, so the worker and
-     its tools handle it).
-   - **Send with instructions** — record a command of his own; it goes with the rewind text attached
-     as context ("here is what was just said; do X with it").
-3. **One-step rewind** — a variant of the Rewind control that skips the sheet: grab, transcribe, and
-   start recording his instruction immediately, then send both together.
-4. **A better transcription when it matters** — a diarized (and named-speaker) transcription for grabs,
-   either always (rewind clips are rare, so cost is small) or as the path for "send" only. Pick a
-   provider by running the same saved clips through two or three of the table above.
+Next, as Jared decides:
 
-Open questions for Jared:
-
-- Should the plain sheet show the diarized version (Speaker A / Speaker B), or only what is sent on?
-- Is keeping the audio of grabs acceptable, or text only? It is overheard audio of other people.
+- Judge the diarization on real grabs (TV, a conversation) and compare a second provider on the same
+  saved clips if it disappoints.
+- Name his own turns: OpenAI accepts short reference clips of known speakers; his voice is already
+  enrolled for speaker ID (`voiceprint`).

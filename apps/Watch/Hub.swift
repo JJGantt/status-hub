@@ -261,14 +261,35 @@ enum Hub {
     /// with the utterance's own window, which is what lets the worker collapse it against the Mac or the
     /// ESP hearing the same sentence (docs/LISTENERS.md).
     static func sendAudio(_ clip: Recorder.Clip, msgId: String, dry: Bool = false,
-                          listener: (start: Date, end: Date)? = nil, timeout: TimeInterval = 60) async throws -> Heard {
+                          listener: (start: Date, end: Date)? = nil, rewind: String? = nil,
+                          timeout: TimeInterval = 60) async throws -> Heard {
         try blockInSimulator("voice-command")
-        let query = await commandQuery(clip, msgId: msgId, dry: dry, listener: listener)
+        var query = await commandQuery(clip, msgId: msgId, dry: dry, listener: listener)
+        // Instructions for a rewind grab: the hub sends the grab's words along with them (docs/REWIND.md).
+        if let rewind { query += "&rewind=\(rewind)" }
         var r = try request("/api/voice-command?" + query, method: "POST", timeout: timeout)
         r.setValue("audio/mp4", forHTTPHeaderField: "Content-Type")
         let (data, resp) = try await resending { try await session.upload(for: r, fromFile: clip.url) }
         try await check(resp)
         return try JSONDecoder().decode(Heard.self, from: data)
+    }
+
+    /// What the hub made of a rewind grab: the grab's id, its words (speaker-labeled when the diarizing
+    /// model took it), and which model that was.
+    struct Grabbed: Decodable {
+        let id: String?
+        let transcript: String?
+        let model: String?
+    }
+
+    /// Uploads a rewind grab (`/api/rewind`). The hub keeps the clip and the words; nothing is enqueued.
+    static func sendRewind(_ url: URL, held: TimeInterval) async throws -> Grabbed {
+        try blockInSimulator("rewind")
+        var r = try request("/api/rewind?held=\(String(format: "%.1f", held))", method: "POST", timeout: 120)
+        r.setValue("audio/mp4", forHTTPHeaderField: "Content-Type")
+        let (data, resp) = try await resending { try await session.upload(for: r, fromFile: url) }
+        try await check(resp)
+        return try JSONDecoder().decode(Grabbed.self, from: data)
     }
 
     /// What a clip's upload says about it, to the hub and to the fallback alike.
@@ -322,10 +343,10 @@ enum Hub {
     /// it again — a send has taken 64s with it set to 25. The clock starts once the watch HAS a route
     /// (`Net.whenUp`): with no route at all the fallback cannot be reached either, and the command waits
     /// for one as before.
-    static func sendCommand(_ clip: Recorder.Clip, msgId: String) async throws -> (heard: Heard, fallback: Bool) {
+    static func sendCommand(_ clip: Recorder.Clip, msgId: String, rewind: String? = nil) async throws -> (heard: Heard, fallback: Bool) {
         do {
             let heard = try await withThrowingTaskGroup(of: Heard.self) { g in
-                g.addTask { try await sendAudio(clip, msgId: msgId, timeout: hubPatience) }
+                g.addTask { try await sendAudio(clip, msgId: msgId, rewind: rewind, timeout: hubPatience) }
                 g.addTask {
                     await Net.shared.whenUp()
                     try await Task.sleep(for: .seconds(hubPatience))

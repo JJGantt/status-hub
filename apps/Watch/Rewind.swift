@@ -69,8 +69,14 @@ final class Rewind: ObservableObject {
         Hub.log("rewind-check", state)
     }
 
-    /// Takes what it holds, sends it to be transcribed, and shows the words.
-    func grab() {
+    /// The grab on screen: its id once the hub has kept it, nil when the upload failed. Instructions
+    /// recorded for it wait on this (`Chat.startInstructions`).
+    private(set) var pending: Task<String?, Never>?
+
+    /// Takes what it holds, sends it to the hub to be kept and transcribed with speaker labels, and shows
+    /// the words. With `ask` (the Rewind Ask control) it also starts recording his instructions for it at
+    /// once, without waiting for the words.
+    func grab(ask: Bool = false) {
         guard let tee else {
             Hub.log("rewind-grab", ["ok": false, "why": "off"])
             WKInterfaceDevice.current().play(.failure)
@@ -84,33 +90,36 @@ final class Rewind: ObservableObject {
             return
         }
         WKInterfaceDevice.current().play(.click)
-        shown = Shown()
+        let showing = Shown()
+        shown = showing
         let quiet = last.map { Date().timeIntervalSince($0) } ?? -1
-        Task {
+        let task = Task<String?, Never> {
             let url = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString + ".m4a")
             defer { try? FileManager.default.removeItem(at: url) }
             let began = Date()
             do {
                 try RewindAudio.writeM4A(samples, rate: Self.rate, to: url)
                 let bytes = (try? FileManager.default.attributesOfItem(atPath: url.path)[.size] as? Int) ?? -1
-                let end = last ?? Date()
-                let clip = Recorder.Clip(url: url, start: end.addingTimeInterval(-held), duration: held)
-                let heard = try await Awake.hold("transcribing a rewind") {
-                    try await Hub.sendAudio(clip, msgId: UUID().uuidString, dry: true)
+                let grabbed = try await Awake.hold("transcribing a rewind") {
+                    try await Hub.sendRewind(url, held: held)
                 }
-                let text = heard.transcript ?? ""
-                Hub.log("rewind-grab", ["ok": true, "held": held, "quiet": quiet, "bytes": bytes,
-                                        "ms": Int(Date().timeIntervalSince(began) * 1000),
-                                        "words": text.split(separator: " ").count])
-                shown = Shown(text: text)
+                let text = grabbed.transcript ?? ""
+                Hub.log("rewind-grab", ["ok": true, "held": held, "quiet": quiet, "bytes": bytes, "ask": ask,
+                                        "ms": Int(Date().timeIntervalSince(began) * 1000), "id": grabbed.id ?? "",
+                                        "model": grabbed.model ?? "", "words": text.split(separator: " ").count])
+                if shown?.id == showing.id { shown?.text = text }
                 WKInterfaceDevice.current().play(.notification)
+                return grabbed.id
             } catch {
                 Hub.log("rewind-grab", ["ok": false, "why": String(describing: error).prefix(120).description,
-                                        "held": held, "ms": Int(Date().timeIntervalSince(began) * 1000)])
-                shown = Shown(failed: true)
+                                        "held": held, "ask": ask, "ms": Int(Date().timeIntervalSince(began) * 1000)])
+                if shown?.id == showing.id { shown?.failed = true }
                 WKInterfaceDevice.current().play(.failure)
+                return nil
             }
         }
+        pending = task
+        if ask { Chat.shared.startInstructions(for: task) }
     }
 
     /// What every line carries: how long it has been engaged, how much audio has arrived, how long ago
@@ -163,9 +172,17 @@ final class RewindTee: @unchecked Sendable {
     var lastAudio: Date? { lock.withLock { last } }
 }
 
-/// What a grab shows: the words, a spinner while they come, a mark if it failed. No prose of its own.
+/// What a grab shows: the words, speaker-labeled, a spinner while they come, a mark if it failed. No
+/// prose of its own. **A tap anywhere records his instructions for the grab**, locked open with the red
+/// edge until the next tap sends them, as a session follow-up does; sending closes the sheet, and the
+/// command runs on the home thread like any other.
 struct RewindSheet: View {
     let shown: Rewind.Shown
+    @ObservedObject private var capture = Capture.shared
+    @ObservedObject private var style = BorderStyle.shared
+    @Environment(\.dismiss) private var dismiss
+
+    private var recording: Bool { capture.owner == .hub }
 
     var body: some View {
         ScrollView {
@@ -175,6 +192,27 @@ struct RewindSheet: View {
                 Image(systemName: "exclamationmark.triangle").font(.title2).foregroundStyle(.red)
             } else {
                 ProgressView()
+            }
+        }
+        .contentShape(Rectangle())
+        .onTapGesture(coordinateSpace: .global) { at in
+            CommandBorder.tapped(at)
+            Hub.log("control", ["view": "rewind", "recording": recording, "how": "tap"])
+            if recording {
+                Chat.shared.stopRecording()
+                dismiss()
+            } else {
+                Capture.trigger = "tap"
+                Chat.shared.startInstructions(for: Rewind.shared.pending)
+            }
+        }
+        // The sheet covers the app's own edge (`CommandBorder`), so it draws the locked line itself.
+        .overlay {
+            if recording {
+                BeyondEdge(inset: CGFloat(max(1, style.px)) / WKInterfaceDevice.current().screenScale)
+                    .fill(solid(style.locked), style: FillStyle(eoFill: true))
+                    .ignoresSafeArea()
+                    .allowsHitTesting(false)
             }
         }
     }

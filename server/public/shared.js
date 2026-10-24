@@ -58,6 +58,26 @@ export function scrollableX(el, host) {
 // (you can't reassign another module's exported binding, but you can mutate a shared object).
 export const state = { last: null };
 
+// ---------------------------------------------------------------- reloads wait for the microphone
+//
+// THE PAGE RELOADS ITSELF on its own initiative — a deploy made it stale (core.js, the build check
+// below), or its stream went deaf — and a reload kills a recording mid-sentence: the clip is still in
+// the MediaRecorder's memory and only reaches the voice outbox when he taps stop. A deploy landing
+// during a long spoken command threw the whole command away. So every self-initiated reload goes
+// through `safeReload`, and a recorder holds it off (`holdReload`) from the tap that arms it until its
+// clip has been handed on; the reload that was wanted then happens a few seconds later, which gives a
+// dictation's own follow-up post (the session composer's) time to leave.
+let reloadHolds = 0, reloadWanted = false;
+export function holdReload(on) {
+  reloadHolds = Math.max(0, reloadHolds + (on ? 1 : -1));
+  if (!reloadHolds && reloadWanted) setTimeout(safeReload, 3000);
+}
+export function safeReload() {
+  if (reloadHolds) { reloadWanted = true; return; }
+  reloadWanted = false;
+  location.reload();
+}
+
 // ---------------------------------------------------------------- live streams
 //
 // An EventSource that notices when it has gone deaf.
@@ -113,7 +133,7 @@ export function liveStream(url, listeners, { onOpen } = {}) {
     if (a && (a.tagName === 'INPUT' || a.tagName === 'TEXTAREA' || a.isContentEditable)) return;
     reloading = true;
     fetch('/healthz', { cache: 'no-store' })
-      .then((r) => { if (r.ok) location.reload(); else reloading = false; })
+      .then((r) => { if (r.ok) safeReload(); else reloading = false; })
       .catch(() => { reloading = false; });
   }, 5000);
   return self;
@@ -394,7 +414,7 @@ if (typeof window !== 'undefined' && typeof fetch === 'function') {
     if (document.hidden) return;                      // let a backgrounded tab stay asleep
     const a = document.activeElement;
     if (a && (a.tagName === 'INPUT' || a.tagName === 'TEXTAREA' || a.isContentEditable)) return;
-    location.reload();
+    safeReload();
   };
   setInterval(check, BUILD_POLL_MS);
   check();

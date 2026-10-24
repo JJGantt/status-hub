@@ -115,6 +115,12 @@ Supabase ──▶ server.js buildStatus() ──▶ /api/status payload ──�
   ARRIVE: rebuild the socket after 75s of silence, and if the rebuilt one is deaf too, reload the
   page — but only once `/healthz` answers, since reloading into an unreachable hub lands on the
   browser error page where no JS is left to recover (the trap `.xinitrc` gates the kiosk against).
+- **No self-initiated reload interrupts a recording.** The page reloads on its own after a deploy
+  (core.js `goStale`, the `/healthz` build check in shared.js) and when a stream stays deaf, and a
+  reload mid-command destroys the clip, which is only in the MediaRecorder's memory until stop. All of
+  them go through `safeReload()`; `makeRecorder` holds it off (`holdReload`) whenever its state is not
+  `idle` — arming, capturing, uploading — and the wanted reload happens 3s after the last hold lets go.
+  A new reload site has to use `safeReload`, not `location.reload()`, or it reopens this hole.
 - **The heartbeat is a `ping` EVENT, not a comment.** Every stream writes `event: ping` every 25s
   (`PING` in server.js). It used to be a `: keepalive` comment, which no client can observe — leaving
   no way to tell quiet from dead on `/api/voice-stream` and `/api/list-stream`, where hours can pass

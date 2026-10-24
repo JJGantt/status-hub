@@ -1,5 +1,5 @@
 // Bootstrapping: SSE → render orchestrator, then the layout init.
-import { TOUCH, KIOSK, state, liveStream } from './shared.js';
+import { TOUCH, KIOSK, state, liveStream, safeReload } from './shared.js';
 import * as litter from './cards/litter.js';
 import * as feeder from './cards/feeder.js';
 import * as surf from './cards/surf.js';
@@ -44,10 +44,10 @@ const STALE_IDLE_MS = 120000;
 function goStale() {
   if (stale) return;
   stale = true;
-  if (KIOSK || document.hidden) return location.reload();
-  document.addEventListener('visibilitychange', () => location.reload());
+  if (KIOSK || document.hidden) return safeReload();
+  document.addEventListener('visibilitychange', () => safeReload());
   let idleT = null;
-  const arm = () => { clearTimeout(idleT); idleT = setTimeout(() => location.reload(), STALE_IDLE_MS); };
+  const arm = () => { clearTimeout(idleT); idleT = setTimeout(safeReload, STALE_IDLE_MS); };
   ['pointerdown', 'keydown', 'touchstart'].forEach((e) => document.addEventListener(e, arm, { passive: true }));
   arm();
 }

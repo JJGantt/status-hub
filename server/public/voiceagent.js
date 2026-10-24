@@ -7,7 +7,7 @@
 //      Sonnet→Opus escalation when a turn leaves the fast path (its own row + a sticky OPUS chip).
 // Tool-call rows (role='tool') are surfaced ONLY in the activity bar, never in the conversation
 // thread. All skipped on the TV wall (no mic; it renders the conversation itself via tv.js).
-import { esc, md, localNowNaive, liveStream, KIOSK } from './shared.js';
+import { esc, md, localNowNaive, liveStream, KIOSK, holdReload } from './shared.js';
 
 let phoneHangMs = 3000;   // the always-on listener's trailing silence (ms); overridden by the phone_silence_s setting
 // How long a FINISHED row — the reply, or an error — holds on the kiosk's activity bar before it hides.
@@ -372,7 +372,15 @@ const VOICE_BPS = 96000;
 // word, and on his phone it judges whole spoken commands silent — the button records, throws the
 // words away and shows nothing. A pressed button has already said he is talking; the always-on
 // listener (makeListener) is where a machine decides.
-export function makeRecorder({ onStatus = () => {}, onState = () => {}, quick, dryWhen, onTranscript }) {
+export function makeRecorder({ onStatus = () => {}, onState: paint = () => {}, quick, dryWhen, onTranscript }) {
+  // Every path through a recording ends in 'idle', so the state is what holds a reload off: anything
+  // else — arming, capturing, the clip on its way up — is a recording a reload would destroy.
+  let holding = false;
+  const onState = (st) => {
+    const busy = st !== 'idle';
+    if (busy !== holding) { holding = busy; holdReload(busy); }
+    paint(st);
+  };
   let recording = false, rec = null, chunks = [], stream = null, startedAt = 0;
   let arming = false;                 // tapped, mic not open yet — see start()
   let claimed = false;                // holds one of the page's mic claims — see claimMic()

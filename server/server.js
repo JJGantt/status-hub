@@ -4857,6 +4857,8 @@ async function buildSessions({ brief: allBrief = false } = {}) {
     label: s.label, custom_title: s.custom_title, repo: s.repo,
     worker: s.worker, status: s.status, working: s.working,
     claude_session_id: s.claude_session_id,      // presence of a transcript = the transfer button
+    // The last prompt or reply — the same instant the list is ordered by, so the times read down in order.
+    at: new Date(sessionActivity(s)).toISOString(),
     // UNREAD: a final reply has landed and nobody has opened it since. Tool calls and thoughts do not
     // set `reply_at`, so this marks a finished answer and nothing else — which is the only thing on a
     // session that is actually owed attention. Decided here rather than in the cards because three

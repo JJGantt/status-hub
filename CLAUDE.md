@@ -26,6 +26,10 @@ a bundle cannot be stale against the source it shipped with. Locally, `npm run b
 
     curl -s https://jared-status-hub.fly.dev/healthz     # ok <sha>
 
+`deploy.sh` first **waits while any microphone is recording a command** (`voice_muted` = 1, read with
+the linked `supabase` CLI), up to ten minutes: a deploy makes every open page reload, and a page on a
+bundle older than `safeReload` loses a clip mid-sentence.
+
 ## The auth gate is positional
 
 One `app.use` in `server.js` gates everything **defined below it**. Public, because they are

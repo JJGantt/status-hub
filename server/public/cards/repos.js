@@ -23,6 +23,7 @@ let machines = { mac: false, pi: false };
 let recorder = null;      // one shared recorder; only ever one repo is being dictated to
 let armed = null;         // the <li> currently listening
 let rows = [];            // every row of the last /api/sessions payload, running and parked
+let last = null;          // the last list payload load() drew, so showList can paint before refetching
 let cur = null;           // the session open in place of the list (openSession), or null for the list
 // Pictures queued for the next message, as {url, name}: a local object URL to show, and the hub's
 // object name once it has landed. Cleared when they go, so a failed send keeps them.
@@ -73,7 +74,7 @@ function sessionsHtml(s) {
           `<span class="sess-where">${x.worker === 'desk' ? 'Mac' : 'Pi'}</span>` +
           (x.id === focus ? '<span class="sess-focus" title="a spoken follow-up goes here">' + (s.pinned ? PIN_SVG : '') + 'follow-ups</span>' : '') +
         `</span>` +
-        `<span class="sess-say">${esc((x.say || '').slice(0, 90))}</span>` +
+        `<span class="sess-say">${x.at ? `<span class="sess-at">${esc(ago(x.at))}</span>` : ''}${esc((x.say || '').slice(0, 90))}</span>` +
       `</div>` +
       `<div class="sess-act">` +
         (live ? '<span class="sess-dot" title="open and reachable"></span>'
@@ -144,6 +145,7 @@ async function load() {
   if (d.sessions) keep(d.sessions);
   desk = d.desk || { online: false };
   machines = d.machines || { mac: desk.online, pi: false };
+  last = d;
   if (cur) return;   // a session was opened while this was in flight; the list must not replace it
   // Nor while a row is being dictated to: redrawing detaches that row, and the recording then has no
   // row left to tap for sending or to show its status.
@@ -301,6 +303,7 @@ const newMsgId = () => ((self.crypto && crypto.randomUUID)
 // status changed — the header's facts. The conversation itself arrives as events and is never
 // re-read for anything the list says.
 function keep(payload) {
+  if (last) last.sessions = payload;   // so the list showList paints from cache is as fresh as the stream
   rows = [...(payload.resident || []), ...(payload.evicted || [])];
   if (!cur) return;
   const now = rows.find((r) => r.status === 'resident' && keyOfRow(r) === cur.key)
@@ -673,8 +676,8 @@ async function openSession(id) {
   return true;
 }
 
-// A SWIPE TO THE RIGHT, from anywhere on the view, closes it — the view follows the finger and either
-// slides off (past a third of its width, or a flick) or springs back. This pane is the leftmost, so
+// A SWIPE TO THE RIGHT, from anywhere on the view, closes it — the view follows the finger, and on
+// release either gives way to the list at once (past a third of its width, or a flick) or springs back. This pane is the leftmost, so
 // the panes scroller has nothing to do with a rightward drag here and the gesture is free to take.
 // It is claimed only once the drag is clearly horizontal, so a vertical scroll of the conversation
 // never turns into one, and it yields to anything inside that is itself scrolled sideways (a wide
@@ -715,11 +718,8 @@ function swipeBack(sv, close) {
     mode = null;
     const w = sv.getBoundingClientRect().width || 1;
     const fast = dx / Math.max(1, Date.now() - t0) > 0.5 && dx > 40;
-    if (dx > w / 3 || fast) {
-      sv.style.transition = 'transform .18s ease-out';
-      sv.style.transform = `translateX(${sv.offsetWidth}px)`;
-      setTimeout(close, 180);
-    } else reset(true);
+    if (dx > w / 3 || fast) close();   // the list replaces the view on release, nothing to wait out
+    else reset(true);
   };
   sv.addEventListener('touchend', end);
   sv.addEventListener('touchcancel', () => { if (mode === 'swipe') reset(true); mode = null; });
@@ -733,6 +733,9 @@ async function showList() {
   remember(null);
   const pane = el && el.closest('.pane');
   if (pane) pane.classList.remove('sv-open');
+  // The list as it was last drawn goes up in the same frame, and the fetch then brings it current:
+  // waiting on /api/repos and /api/sessions back to back left the pane black for most of a second.
+  if (el && last) { el.innerHTML = html(last); wire(el); }
   await load();
 }
 

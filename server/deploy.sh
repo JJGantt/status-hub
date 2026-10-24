@@ -15,6 +15,24 @@ cd "$(dirname "$0")" || exit 1
 [ -n "$(git status --porcelain .)" ] && echo "warning: uncommitted changes under server/ — deploying the working tree, not a commit"
 SHA=$(git rev-parse --short HEAD)
 
+# NEVER SHIP UNDER A COMMAND BEING SPOKEN. A deploy restarts the hub and makes every open page reload,
+# and a page that reloads mid-recording loses the clip. The page now holds its reloads off while it is
+# recording (safeReload in public/shared.js), but a phone still running the bundle from before that
+# does not, and the restart itself drops any upload in flight. `voice_muted` is 1 exactly while some
+# microphone — phone, watch, Mac — is capturing an explicit command (stale holders are already
+# discounted by the hub), so wait for it to clear. A bounded wait at deploy time, not a standing poll:
+# 5s steps, ten minutes at most, then ship anyway. Unreadable (no supabase CLI, no link) means ship.
+DL=$( [ -d "$HOME/repos/data-layer/supabase" ] && echo "$HOME/repos/data-layer" || echo "$HOME/data-layer" )
+recording() {
+  (cd "$DL" 2>/dev/null && timeout 30 supabase db query --linked \
+    "select value from app_settings where key = 'voice_muted'" 2>/dev/null) | grep -q '"value": "1"'
+}
+for i in $(seq 1 120); do
+  recording || break
+  [ "$i" = 1 ] && echo "a voice command is being recorded — waiting for it to finish before deploying"
+  sleep 5
+done
+
 # COMMIT is what /healthz reports, and the only way to tell a deploy that shipped from one that did
 # not. Verified below rather than assumed.
 fly deploy --remote-only --env COMMIT="$SHA" || { echo "deploy FAILED"; exit 1; }

@@ -108,6 +108,22 @@ tone, no sounds — and Groq offers no diarization. Everything not in the words 
 | Deepgram Nova-3 | `diarize=true` | fast; strongest for streaming |
 | pyannote / WhisperX | self-hosted diarization + Whisper | free, but Mac-only here; too heavy for the Pi |
 
+**Cost** (list prices found 2026-10-24; verify on each provider's page before relying on them). A
+grab is 30 s by default, 10 min at most:
+
+| service | rate | one 30 s grab | 100 grabs a month | a 10 min grab |
+|---|---|---|---|---|
+| Groq Whisper turbo (today, no speakers) | $0.04/hr | $0.0003 | $0.03 | $0.007 |
+| OpenAI `gpt-4o-transcribe-diarize` | token-billed ($2.50/M audio in, $10/M out), ≈ $0.006/min | $0.003 | $0.30 | $0.06 |
+| AssemblyAI Universal-3.5 Pro + diarization | $0.21 + $0.02/hr | $0.002 | $0.20 | $0.04 |
+| ElevenLabs Scribe v2 (diarization included) | $0.22/hr | $0.002 | $0.18 | $0.04 |
+| Deepgram Nova-3 (+ diarization if billed extra) | $0.0043/min (+$0.002) | $0.002–0.003 | $0.22–0.32 | $0.04–0.06 |
+
+The hub already holds an `OPENAI_API_KEY` (it is the fallback transcriber), so OpenAI needs no new
+account; the others each need a key added as a Fly secret. On-demand grabs cost cents a month on any of
+them. Transcribing *everything* the watch hears would not: 16 hours a day is about $170/month on OpenAI
+and $110 on AssemblyAI, against about $20 on Groq, which is a reason to keep transcription on grabs.
+
 What to expect: diarization separates by voice embedding, not by gender, so two men are separable when
 each speaks for more than a second or two; it degrades with short overlapping turns, a distant mic, and
 speech coming out of a TV speaker (which flattens voices). A 30-second clip gives it little to learn

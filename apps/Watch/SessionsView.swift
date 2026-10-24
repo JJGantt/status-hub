@@ -111,9 +111,10 @@ struct SessionsView: View {
                         .lineLimit(2)
                 }
                 if let say = s.say, !say.isEmpty {
-                    Text(snippet(say))
+                    // Led by how long ago it last spoke or was spoken to, as on the phone's list.
+                    ((s.ago.map { Text($0 + "  ").foregroundColor(Self.when) } ?? Text(""))
+                        + Text(snippet(say)).foregroundColor(.gray))
                         .font(.system(size: 11))
-                        .foregroundColor(.gray)
                         .lineLimit(2)
                 }
                 step(s, unread: unread)
@@ -159,6 +160,7 @@ struct SessionsView: View {
     }
 
     private static let amber = Color(hex: "#e0a03a")
+    private static let when = Color(hex: "#8b96a5")
     private static let name = Color(hex: "#c7cdd6")
     private static let unreadStep = Color(hex: "#e6c88a")
 }

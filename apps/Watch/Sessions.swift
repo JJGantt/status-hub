@@ -21,9 +21,22 @@ struct SessionRow: Decodable, Identifiable, Equatable {
     /// The number he says out loud, which is also the row's position: most recently active first,
     /// running and parked together.
     let n: Int?
+    /// When it last did something — its last prompt or reply, the instant the list is ordered by.
+    let at: String?
 
     var name: String { sessionName(custom_title, label, repo) ?? id }
     var running: Bool { status == "resident" }
+    /// `at` as the phone's sessions list writes it: now / 12m / 3h / 2d.
+    var ago: String? {
+        let iso = ISO8601DateFormatter()
+        iso.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        guard let at, let t = iso.date(from: at) else { return nil }
+        let s = Date().timeIntervalSince(t)
+        if s < 90 { return "now" }
+        if s < 3600 { return "\(Int((s / 60).rounded()))m" }
+        if s < 86400 { return "\(Int((s / 3600).rounded()))h" }
+        return "\(Int((s / 86400).rounded()))d"
+    }
     /// The conversation this row is a stretch of. A resume makes a new row for the same conversation
     /// (`claude --resume` keeps its id), so everything the page keeps about a session is keyed by this.
     var key: String { claude_session_id ?? id }

@@ -69,9 +69,8 @@ final class Rewind: ObservableObject {
         Hub.log("rewind-check", state)
     }
 
-    /// The grab on screen: its id once the hub has kept it, nil when the upload failed. Instructions
-    /// recorded for it wait on this (`Chat.startInstructions`).
-    private(set) var pending: Task<String?, Never>?
+    /// The grab on screen. Instructions recorded for it carry it (`Chat.startInstructions`).
+    private(set) var current: Grab?
 
     /// Takes what it holds, sends it to the hub to be kept and transcribed with speaker labels, and shows
     /// the words. With `ask` (the Rewind Ask control) it also starts recording his instructions for it at
@@ -93,33 +92,34 @@ final class Rewind: ObservableObject {
         let showing = Shown()
         shown = showing
         let quiet = last.map { Date().timeIntervalSince($0) } ?? -1
-        let task = Task<String?, Never> {
-            let url = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString + ".m4a")
-            defer { try? FileManager.default.removeItem(at: url) }
-            let began = Date()
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString + ".m4a")
+        let grab = Grab(url: url, held: held, quiet: quiet, ask: ask, shownId: showing.id)
+        current = grab
+        if ask { Chat.shared.startInstructions(for: grab) }
+        Task {
             do {
-                try RewindAudio.writeM4A(samples, rate: Self.rate, to: url)
-                let bytes = (try? FileManager.default.attributesOfItem(atPath: url.path)[.size] as? Int) ?? -1
-                let grabbed = try await Awake.hold("transcribing a rewind") {
-                    try await Hub.sendRewind(url, held: held)
+                // Written beside its name and moved into place, so an upload never reads half a file.
+                let part = url.appendingPathExtension("part")
+                do {
+                    try RewindAudio.writeM4A(samples, rate: Self.rate, to: part)
+                    try FileManager.default.moveItem(at: part, to: url)
+                } catch {
+                    grab.unwritten = true
+                    Hub.log("rewind-grab", ["ok": false, "why": "encode: " + String(describing: error).prefix(100), "held": held])
+                    throw error
                 }
-                let text = grabbed.transcript ?? ""
-                Hub.log("rewind-grab", ["ok": true, "held": held, "quiet": quiet, "bytes": bytes, "ask": ask,
-                                        "ms": Int(Date().timeIntervalSince(began) * 1000), "id": grabbed.id ?? "",
-                                        "model": grabbed.model ?? "", "words": text.split(separator: " ").count])
-                if shown?.id == showing.id { shown?.text = text }
+                _ = try await grab.upload()
                 WKInterfaceDevice.current().play(.notification)
-                return grabbed.id
             } catch {
-                Hub.log("rewind-grab", ["ok": false, "why": String(describing: error).prefix(120).description,
-                                        "held": held, "ask": ask, "ms": Int(Date().timeIntervalSince(began) * 1000)])
                 if shown?.id == showing.id { shown?.failed = true }
                 WKInterfaceDevice.current().play(.failure)
-                return nil
             }
         }
-        pending = task
-        if ask { Chat.shared.startInstructions(for: task) }
+    }
+
+    /// The words came back for the grab whose sheet this is.
+    fileprivate func landed(_ text: String, on shownId: UUID) {
+        if shown?.id == shownId { shown?.text = text; shown?.failed = false }
     }
 
     /// What every line carries: how long it has been engaged, how much audio has arrived, how long ago
@@ -138,6 +138,73 @@ final class Rewind: ObservableObject {
     private static var battery: [String: Any] {
         let device = WKInterfaceDevice.current()
         return ["battery": Double(device.batteryLevel), "charging": device.batteryState == .charging || device.batteryState == .full]
+    }
+}
+
+/// One grab's clip, kept on the watch until the hub has it. **A command carrying a grab never goes out
+/// without it**: the command asks `upload()` for the id first, so a grab whose upload failed is sent
+/// again before the instructions, and if it still cannot be, the command fails and waits for Retry
+/// rather than reaching the orchestrator as instructions about nothing. Uploads are shared: the grab's
+/// own and a command's waiting on it are one attempt, not two.
+@MainActor
+final class Grab {
+    let url: URL
+    let held: TimeInterval
+    private let quiet: TimeInterval
+    private let ask: Bool
+    private let shownId: UUID
+    private(set) var id: String?
+    /// The clip could not be encoded, so there is nothing to upload, ever.
+    var unwritten = false
+    private var attempt: Task<String, Error>?
+
+    init(url: URL, held: TimeInterval, quiet: TimeInterval, ask: Bool, shownId: UUID) {
+        self.url = url
+        self.held = held
+        self.quiet = quiet
+        self.ask = ask
+        self.shownId = shownId
+    }
+
+    /// The grab's id in `rewind_grabs`, uploading it first if the hub does not have it yet.
+    func upload() async throws -> String {
+        if let id { return id }
+        if unwritten { throw CocoaError(.fileWriteUnknown) }
+        if let attempt { return try await attempt.value }
+        let task = Task<String, Error> { [url, held, quiet, ask] in
+            let began = Date()
+            // The encode runs as the grab starts; a command recorded fast can get here first.
+            while !FileManager.default.fileExists(atPath: url.path) {
+                if self.unwritten { throw CocoaError(.fileWriteUnknown) }
+                try await Task.sleep(for: .milliseconds(100))
+            }
+            do {
+                let bytes = (try? FileManager.default.attributesOfItem(atPath: url.path)[.size] as? Int) ?? -1
+                let grabbed = try await Awake.hold("transcribing a rewind") { try await Hub.sendRewind(url, held: held) }
+                guard let id = grabbed.id else { throw URLError(.badServerResponse) }
+                let text = grabbed.transcript ?? ""
+                Hub.log("rewind-grab", ["ok": true, "held": held, "quiet": quiet, "bytes": bytes, "ask": ask,
+                                        "ms": Int(Date().timeIntervalSince(began) * 1000), "id": id,
+                                        "model": grabbed.model ?? "", "words": text.split(separator: " ").count])
+                Rewind.shared.landed(text, on: self.shownId)
+                return id
+            } catch {
+                Hub.log("rewind-grab", ["ok": false, "why": String(describing: error).prefix(120).description,
+                                        "held": held, "ask": ask, "ms": Int(Date().timeIntervalSince(began) * 1000)])
+                throw error
+            }
+        }
+        attempt = task
+        do {
+            let id = try await task.value
+            self.id = id
+            attempt = nil
+            try? FileManager.default.removeItem(at: url)
+            return id
+        } catch {
+            attempt = nil
+            throw error
+        }
     }
 }
 
@@ -203,7 +270,7 @@ struct RewindSheet: View {
                 dismiss()
             } else {
                 Capture.trigger = "tap"
-                Chat.shared.startInstructions(for: Rewind.shared.pending)
+                Chat.shared.startInstructions(for: Rewind.shared.current)
             }
         }
         // The sheet covers the app's own edge (`CommandBorder`), so it draws the locked line itself.

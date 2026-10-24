@@ -54,9 +54,9 @@ final class Chat: ObservableObject {
         /// It failed and is kept only so Retry can send it again: not waited on, and its words are not
         /// shown as pending (the hub has already put them in the thread, or never had them).
         var failed = false
-        /// Instructions for a rewind grab: the grab's id, once its upload has given one. The command
-        /// waits on it, since the one-step control starts recording before the grab has reached the hub.
-        var rewind: Task<String?, Never>?
+        /// Instructions for a rewind grab. The grab is uploaded (again, if it failed) before the
+        /// command, and a command whose grab cannot be uploaded fails rather than going without it.
+        var rewind: Grab?
     }
     private var commands: [Command] = [] {
         didSet {
@@ -68,7 +68,7 @@ final class Chat: ObservableObject {
     }
     private var tasks: [String: Task<Void, Never>] = [:]
     /// The grab the recording now running is instructions for (`startInstructions`).
-    private var instructing: Task<String?, Never>?
+    private var instructing: Grab?
     private var stream: Task<Void, Never>?
     private var loading = false
     private var reloadAfter = false
@@ -153,7 +153,12 @@ final class Chat: ObservableObject {
     /// Records his instructions for the rewind grab on screen: locked like a session follow-up (red, only
     /// a press ends it), and sent as a command carrying the grab, which the hub hands the orchestrator
     /// together with his words (docs/REWIND.md).
-    func startInstructions(for grab: Task<String?, Never>?) {
+    func startInstructions(for grab: Grab?) {
+        guard let grab else {
+            Hub.log("record-refused", ["view": "rewind", "why": "no-grab"])
+            WKInterfaceDevice.current().play(.failure)
+            return
+        }
         guard capture.free else {
             Hub.log("record-refused", ["view": "rewind", "owner": String(describing: capture.owner)])
             return
@@ -280,8 +285,9 @@ final class Chat: ObservableObject {
                 if requestId == nil {
                     guard let clip = command.clip else { finish(msgId); return }
                     let began = Date()
-                    let rewind = await command.rewind?.value
-                    if command.rewind != nil && rewind == nil { Hub.log("rewind-missing", ["msg": msgId]) }
+                    // A grab's instructions go nowhere without the grab: this throws when it cannot be
+                    // uploaded, and the command fails into Retry.
+                    let rewind = try await command.rewind?.upload()
                     let sent = try await Awake.hold("sending a voice command") {
                         try await Hub.sendCommand(clip, msgId: msgId, rewind: rewind)
                     }

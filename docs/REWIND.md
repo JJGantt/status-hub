@@ -27,10 +27,13 @@ the wrist down, and what that costs in battery.
   and closes the sheet. They go up as an ordinary watch command with `rewind=<grab id>`; the hub
   (`withRewind`) turns the command into the grab's transcript framed as overheard audio plus his words
   as the instructions, and enqueues that to the orchestrator. `voice_requests.rewind_id` names the grab.
-  A command that falls back to the Supabase edge function (hub unreachable) goes without the grab.
+  **Instructions never go out without their grab.** The grab's clip stays on the watch (`Grab`) until
+  the hub has it; the command uploads the grab first (again, if its own upload failed) and fails into
+  Retry when it cannot, and a grab's command never takes the Supabase fallback, which has no way to
+  attach it. On the hub, a `rewind` id with no `rewind_grabs` row is refused, not enqueued bare.
 - **Rewind Ask** control (`RewindAskIntent`) is the one-step version: it grabs and starts recording
-  instructions at once, without waiting for the words. The command waits on the grab's id before it
-  uploads (`Chat.Command.rewind`).
+  instructions at once, without waiting for the words. The command waits on the grab's upload before its
+  own (`Chat.Command.rewind`).
 - **The ring rides every recording.** `Recorder.tee` is fed every converted buffer whoever owns the
   microphone — a command, a follow-up, the always-on listener. When nobody does, Capture holds it for
   rewind alone (owner `.rewind`): no file is written (`Sink` with `keepsFile: false`), no endpoint

@@ -357,7 +357,10 @@ enum Hub {
             }
             return (heard, false)
         } catch let e where unreachable(e) {
-            log("hub-unreachable", ["error": String(describing: e).prefix(120).description])
+            log("hub-unreachable", ["error": String(describing: e).prefix(120).description, "rewind": rewind ?? ""])
+            // The fallback cannot attach a rewind grab, and instructions without their grab are worth
+            // nothing: a grab's command fails into Retry instead.
+            if rewind != nil { throw e }
             return (try await sendFallback(clip, msgId: msgId), true)
         }
     }

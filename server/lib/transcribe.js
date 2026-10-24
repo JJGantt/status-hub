@@ -120,4 +120,39 @@ async function transcribeAll(file, contentType, key, prompt) {
   }
 }
 
-module.exports = { transcribe, NOTHING_SAID, clipSeconds, extFor, GROQ_MAX_BYTES, SEGMENT_S };
+
+// Speech → text with WHO SAID IT, for a watch rewind grab (docs/REWIND.md). OpenAI's diarizing model:
+// it returns the words as segments, each tagged with an anonymous speaker (A, B, …). No Groq fallback,
+// because Groq has no diarization; the caller falls back to plain `transcribe` and says so.
+// `chunking_strategy: auto` is required by the API for clips over 30 s, which a ring of 30 s plus its
+// encoder padding can be.
+// → { transcript: "A: …\nB: …", segments: [{ speaker, start, end, text }], model }
+const DIARIZE_MODEL = 'gpt-4o-transcribe-diarize';
+async function diarize(file, contentType) {
+  const key = process.env.OPENAI_API_KEY;
+  if (!key) throw new Error('OPENAI_API_KEY not set');
+  const ct = String(contentType || 'audio/mp4');
+  const form = new FormData();
+  form.append('file', await fs.openAsBlob(file, { type: ct }), `clip.${extFor(ct)}`);
+  form.append('model', DIARIZE_MODEL);
+  form.append('response_format', 'diarized_json');
+  form.append('chunking_strategy', 'auto');
+  form.append('language', 'en');
+  const r = await fetch(OPENAI_URL, { method: 'POST', headers: { Authorization: `Bearer ${key}` }, body: form,
+                                      signal: AbortSignal.timeout(90000) });
+  if (!r.ok) throw new Error(`openai diarize ${r.status}: ${(await r.text()).slice(0, 300)}`);
+  const body = await r.json();
+  const segments = (body.segments || []).map((g) => ({ speaker: String(g.speaker ?? '?'), start: g.start, end: g.end,
+                                                       text: String(g.text || '').trim() })).filter((g) => g.text);
+  // Consecutive segments from the same speaker are one turn on screen.
+  const turns = [];
+  for (const g of segments) {
+    const last = turns[turns.length - 1];
+    if (last && last.speaker === g.speaker) last.text += ' ' + g.text;
+    else turns.push({ speaker: g.speaker, text: g.text });
+  }
+  const transcript = turns.length ? turns.map((t) => `${t.speaker}: ${t.text}`).join('\n') : heard(String(body.text || '').trim());
+  return { transcript, segments, model: DIARIZE_MODEL };
+}
+
+module.exports = { transcribe, diarize, NOTHING_SAID, clipSeconds, extFor, GROQ_MAX_BYTES, SEGMENT_S };

@@ -31,7 +31,7 @@ const { getTZ, setTZ, DAY_START_HOUR, localDate, nutritionWindow, lastNTrainingD
 const { buildWorkoutHeatmap } = require('./lib/heatmap');
 const { buildWeightPlot } = require('./lib/weightplot');
 const { getWeather } = require('./lib/weather');
-const { transcribe, NOTHING_SAID, clipSeconds, extFor } = require('./lib/transcribe');
+const { transcribe, diarize, NOTHING_SAID, clipSeconds, extFor } = require('./lib/transcribe');
 const speech = require('./lib/speech');
 const livemic = require('./lib/livemic');
 const { buildNutritionLog, buildGoalResolver, calorieColor } = require('./lib/nutritionlog');
@@ -3114,6 +3114,68 @@ async function keepClip(id, file, contentType, bytes, dur) {
   } catch (e) { console.log(`[voice-command] could not keep clip ${id}: ${e.message || e}`); }
 }
 
+// ---- REWIND: a grab from the watch's ring (docs/REWIND.md) -----------------------------------------
+// The watch posts the last N seconds it heard. Every grab is kept whole while the feature is built: the
+// clip in voice-clips under rewind/, and a rewind_grabs row with the words, the speaker segments and the
+// timing. Transcribed with speaker labels (OpenAI diarize); when that fails, plain Whisper, and the row
+// says which. Never enqueued — a grab only becomes a command when he records instructions for it, and
+// that command carries `rewind=<id>` to /api/voice-command.
+const REWIND_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+app.post('/api/rewind', async (req, res) => {
+  const tmp = path.join(os.tmpdir(), 'rewind-' + crypto.randomUUID());
+  const id = crypto.randomUUID();
+  const began = Date.now();
+  try {
+    await pipeline(req, fs.createWriteStream(tmp));
+    const { size } = await fs.promises.stat(tmp);
+    if (!size) return res.status(400).json({ error: 'no audio' });
+    const ct = String(req.headers['content-type'] || 'audio/mp4').split(';')[0].trim();
+    const held = parseFloat(req.query.held);
+    let result, error = null;
+    try { result = await diarize(tmp, ct); }
+    catch (e) {
+      error = String(e.message || e).slice(0, 500);
+      console.log(`[rewind] diarize failed, plain Whisper instead: ${error}`);
+      const { transcript } = await transcribe(tmp, ct, GROQ_API_KEY);
+      result = { transcript, segments: null, model: 'whisper' };
+    }
+    const ms = Date.now() - began;
+    const object = `rewind/${id}.${extFor(ct)}`;
+    let audio = null;
+    try {
+      const r = await fetch(`${SUPABASE_URL}/storage/v1/object/${CLIP_BUCKET}/${object}`, {
+        method: 'POST',
+        headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}`, 'Content-Type': ct },
+        body: await fs.openAsBlob(tmp, { type: ct }),
+      });
+      if (!r.ok) throw new Error(`upload -> ${r.status}`);
+      audio = { path: object, bytes: size, type: ct };
+    } catch (e) { console.log(`[rewind] could not keep clip ${id}: ${e.message || e}`); }
+    await sbWrite('rewind_grabs', 'POST', { id, held_s: Number.isFinite(held) ? held : null, audio, model: result.model,
+      transcript: result.transcript, segments: result.segments, error, ms });
+    console.log(`[rewind] ${id} ${size} bytes ${Number.isFinite(held) ? held.toFixed(1) + 's ' : ''}${result.model} ` +
+      `${(result.segments || []).length} segments ${ms}ms`);
+    res.json({ id, transcript: result.transcript, model: result.model });
+  } catch (e) {
+    res.status(e.status || 500).json({ error: String(e.message || e) });
+  } finally {
+    fs.promises.unlink(tmp).catch(() => {});
+  }
+});
+
+// What a command recorded for a grab is sent to the model as: the grab's words, framed so the model
+// knows they are overheard audio and that his own words are the instructions.
+async function withRewind(rewindId, instructions) {
+  const rows = await sb(`rewind_grabs?id=eq.${rewindId}&select=transcript,held_s,model`);
+  const g = rows && rows[0];
+  if (!g) throw Object.assign(new Error('no such rewind grab'), { status: 404 });
+  const secs = g.held_s ? `${Math.round(g.held_s)} seconds` : 'stretch';
+  const who = g.model === 'whisper' ? '' : ' Speakers are labeled A, B, … by the transcriber; they are not identified, and one of them may be me.';
+  return `[Rewind] Below is a transcription of the last ${secs} of audio my watch overheard.${who} ` +
+    `My instructions for what to do with it follow the transcription.\n\nTranscription:\n${g.transcript || '(nothing heard)'}\n\n` +
+    `My instructions: ${instructions}`;
+}
+
 app.post('/api/voice-command', async (req, res) => {
   const tmp = path.join(os.tmpdir(), 'voice-' + crypto.randomUUID());
   try {
@@ -3158,6 +3220,9 @@ app.post('/api/voice-command', async (req, res) => {
       (segments ? ` re-encoded into ${segments} segment(s)` : ''));
     if (!transcript && !untranscribed) return res.json({ transcript: '', enqueued: false });
     if (dry) return res.json({ transcript, enqueued: false });
+    // Instructions recorded for a rewind grab: the command the model sees is the grab plus his words.
+    const rewindId = REWIND_ID.test(String(req.query.rewind || '')) ? String(req.query.rewind) : null;
+    if (rewindId && !untranscribed) transcript = await withRewind(rewindId, transcript);
     // The navbar mic sends ?quick=1, which tags the request's source `web-quick`.
     const quick = String(req.query.quick || '') === '1';
     const client_now = CLIENT_NOW_RE.test(String(req.query.client_now || '')) ? String(req.query.client_now) : null;
@@ -3183,7 +3248,7 @@ app.post('/api/voice-command', async (req, res) => {
       (him.sim != null ? ` sim=${him.sim.toFixed(2)}${him.bar ? ` bar=${him.bar}` : ''}` : '') +
       (him.why ? ` (${him.why})` : ''));
     if (!him.ok) return res.json({ transcript, enqueued: false, notHim: true });
-    await sbWrite('voice_requests', 'POST', { id, transcript, source, focus: 'hub',
+    await sbWrite('voice_requests', 'POST', { id, transcript, source, focus: 'hub', ...(rewindId ? { rewind_id: rewindId } : {}),
       ...(untranscribed ? { status: 'untranscribed' } : {}),
       always_on: GATED_SOURCES.has(source),
       ...(capture_start ? { capture_start } : {}), ...(capture_end ? { capture_end } : {}),

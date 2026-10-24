@@ -16,6 +16,9 @@ import WatchKit
 /// **It pauses and carries on** (`pause`, `unpause`): the reply stays queued, the microphone stays held,
 /// and the voice picks up where it stopped.
 ///
+/// **AirPods connected to the watch play it** (`.allowBluetoothA2DP`, as `LiveListen` does): A2DP is
+/// output only, so the watch's own microphone is still the one held.
+///
 /// **The voice plays at full; the watch's own volume is the only knob**, and while a reply plays the
 /// crown turns it (`VolumeKnob`, shown by `SessionView`).
 ///
@@ -108,8 +111,10 @@ final class Speaker: NSObject, ObservableObject {
             // moment the wrist drops — the engine and player still report running, no notification
             // comes, and the voice stops mid-word. So while it speaks the microphone is held and
             // what it hears is discarded (`holdMic`). The always-on listener has stood aside
-            // (`Capture.hush`), so the microphone is free.
-            try session.setCategory(.playAndRecord, mode: .default)
+            // (`Capture.hush`), so the microphone is free. `.allowBluetoothA2DP` lets AirPods
+            // connected to the watch play it — without it they are not a route at all, so choosing
+            // them in the watch's output picker drops them back to the speaker.
+            try session.setCategory(.playAndRecord, mode: .default, options: [.allowBluetoothA2DP])
             try session.setActive(true)
             completion(true)
         } catch {

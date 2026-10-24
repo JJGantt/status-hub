@@ -65,7 +65,7 @@ final class StayAwake {
         if holding && engine.isRunning { return }
         let session = AVAudioSession.sharedInstance()
         do {
-            try session.setCategory(.playAndRecord, mode: .default, options: [.mixWithOthers])
+            try session.setCategory(.playAndRecord, mode: .default, options: [.mixWithOthers, .allowBluetoothA2DP])
             try session.setActive(true)
             let input = engine.inputNode
             let format = input.outputFormat(forBus: 0)

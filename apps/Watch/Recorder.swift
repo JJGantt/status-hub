@@ -73,7 +73,7 @@ final class Recorder {
     func start(keepsFile: Bool = true) async throws {
         guard await AVAudioApplication.requestRecordPermission() else { throw Failure.denied }
         let session = AVAudioSession.sharedInstance()
-        try session.setCategory(.playAndRecord, mode: .default)
+        try session.setCategory(.playAndRecord, mode: .default, options: [.allowBluetoothA2DP])
         try session.setActive(true)
         Hub.log("mic-route", Self.describe(session))
         if !playerWired {

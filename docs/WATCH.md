@@ -656,6 +656,11 @@ listener stands aside while it speaks** (`Capture.hush`), so it does not transcr
 voice, and takes the microphone back when it finishes — paused, not switched off. Starting a recording
 stops the speaking at once, and so does the press.
 
+**AirPods connected to the watch play it.** Every `.playAndRecord` claim in the watch app carries
+`.allowBluetoothA2DP` (the reply, a recording, the stay-awake tap, the live listener). Without it AirPods
+are not a route at all: picking them in the watch's output menu connects them, then they drop out of the
+list and the sound stays on the speaker. A2DP is output only, so the watch's own mic is always the input.
+
 **The app plays the voice itself and holds the microphone while it does, so it keeps talking with
 the wrist down.** watchOS keeps an app running wrist-down while it records, not while it only plays.
 The app's own engine under `.playback` freezes when the wrist drops, with the engine and player still

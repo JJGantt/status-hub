@@ -279,6 +279,14 @@ and it breaks every sound the page plays: an open capture holds the audio sessio
 `.playAndRecord`, and it cut the alarm's ring to a blip. So each tap pays the acquisition, and
 `arming` shows the tap at once so the wait reads as the mic opening.
 
+**The capture is the device's built-in mic, never AirPods** (`acquireBuiltIn`). Opening an AirPods mic
+drops the whole Bluetooth link into the hands-free profile — call-quality audio for the transcriber, a
+clipped first second, degraded playback while held — so the built-in device is asked for by id and the
+AirPods stay output only. Device labels are empty until permission is granted, so a first-ever capture
+can come back on the default and is swapped. Each acquisition beacons `ev: "mic-device"` with the label
+it got. The Mac's two capture paths (Hammerspoon dictation, voice-pipeline's mac-listener) pin the
+built-in mic the same way, and the watch never opens a Bluetooth input at all.
+
 It is dropped when the page is hidden, whoever holds it: iOS interrupts a backgrounded capture
 anyway, and the recording indicator should not stay lit over another app. A track can also end
 under us when something else takes the mic, so possession is decided by `readyState`, never by holding

@@ -216,6 +216,35 @@ function micLive() {
   if (micDirty) return false;
   return micStream && micStream.getTracks().some((t) => t.readyState === 'live');
 }
+// THE DEVICE'S OWN MICROPHONE, NEVER AIRPODS. Connected AirPods become the default input, and
+// opening their mic drops the whole link into the hands-free profile: call-quality audio for the
+// transcriber, a second of switching that clips the first words, and degraded playback while it is
+// held. So the built-in mic is asked for by id and the AirPods stay output only. Labels are empty
+// until permission is granted, which is why the first capture may come back on the default and be
+// swapped. The labels are the platforms' own names for the built-in device: "iPhone Microphone" in
+// WebKit on iOS, "MacBook Air Microphone (Built-in)" in Chrome.
+const BUILT_IN = /built-in|^(iphone|ipad) microphone$|^macbook.* microphone$/i;
+async function builtInMicId() {
+  try {
+    const all = await navigator.mediaDevices.enumerateDevices();
+    const d = all.find((d) => d.kind === 'audioinput' && d.deviceId && d.deviceId !== 'default'
+      && d.deviceId !== 'communications' && BUILT_IN.test(d.label));
+    return d ? d.deviceId : null;
+  } catch (_) { return null; }
+}
+async function acquireBuiltIn() {
+  const gum = (c) => navigator.mediaDevices.getUserMedia({ audio: c });
+  let id = await builtInMicId();
+  if (id) { try { return await gum({ deviceId: { exact: id } }); } catch (_) {} }
+  const s = await gum(true);
+  const label = s.getAudioTracks()[0]?.label || '';
+  if (id || BUILT_IN.test(label) || !(id = await builtInMicId())) return s;
+  try {
+    const pinned = await gum({ deviceId: { exact: id } });
+    s.getTracks().forEach((t) => t.stop());
+    return pinned;
+  } catch (_) { return s; }
+}
 function mic() {
   if (micLive()) return Promise.resolve(micStream);
   // Let go of the old tracks before asking for new ones: a silent-but-live track still holds the
@@ -223,9 +252,10 @@ function mic() {
   if (micStream) { try { micStream.getTracks().forEach((t) => t.stop()); } catch (_) {} }
   micStream = null; micDirty = false;
   if (!micPending) {
-    micPending = navigator.mediaDevices.getUserMedia({ audio: true })
+    micPending = acquireBuiltIn()
       .then((s) => {
         micStream = s;
+        clientLog({ ev: 'mic-device', label: s.getAudioTracks()[0]?.label || '' });
         // The loud way a capture dies: the track ends and says so. Marking it here means the next
         // caller re-acquires instead of building a MediaRecorder over a finished device. (The quiet
         // way — still 'live', producing zeros — is caught by the empty transcript in deliverVoice.)

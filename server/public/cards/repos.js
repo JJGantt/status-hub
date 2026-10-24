@@ -650,6 +650,7 @@ async function openSession(id) {
     }
   });
   el.querySelector('.sv-back').addEventListener('click', showList);
+  swipeBack(el.querySelector('.sv'), () => { if (cur === at) showList(); });
   el.querySelector('.sv-send').addEventListener('click', () => sendWords(box.value));
   box.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); sendWords(box.value); } });
   // Spoken words go straight in, as they do on the watch and as this pane's launcher sends a dictated
@@ -670,6 +671,58 @@ async function openSession(id) {
   });
   bindTap(mic, () => at.rec.toggle());
   return true;
+}
+
+// A SWIPE TO THE RIGHT, from anywhere on the view, closes it — the view follows the finger and either
+// slides off (past a third of its width, or a flick) or springs back. This pane is the leftmost, so
+// the panes scroller has nothing to do with a rightward drag here and the gesture is free to take.
+// It is claimed only once the drag is clearly horizontal, so a vertical scroll of the conversation
+// never turns into one, and it yields to anything inside that is itself scrolled sideways (a wide
+// code block or table), which a rightward drag has to scroll back first.
+function swipeBack(sv, close) {
+  let x0 = 0, y0 = 0, t0 = 0, dx = 0, mode = null, k = 1;
+  const reset = (animate) => {
+    sv.style.transition = animate ? 'transform .2s ease-out' : '';
+    sv.style.transform = '';
+  };
+  sv.addEventListener('touchstart', (e) => {
+    if (e.touches.length !== 1) { mode = 'no'; return; }
+    const t = e.touches[0];
+    x0 = t.clientX; y0 = t.clientY; t0 = Date.now(); dx = 0; mode = null;
+    for (let n = e.target; n && n !== sv; n = n.parentElement) {
+      if (n.scrollLeft > 0 && getComputedStyle(n).overflowX !== 'visible') { mode = 'no'; return; }
+    }
+    // On a wall opened at phone size the shell is scaled, so a screen pixel is not a layout pixel.
+    const w = sv.getBoundingClientRect().width;
+    k = w ? sv.offsetWidth / w : 1;
+  }, { passive: true });
+  sv.addEventListener('touchmove', (e) => {
+    if (mode === 'no') return;
+    const t = e.touches[0];
+    const mx = t.clientX - x0, my = t.clientY - y0;
+    if (!mode) {
+      if (Math.abs(mx) < 10 && Math.abs(my) < 10) return;
+      mode = mx > 0 && mx > Math.abs(my) * 1.5 ? 'swipe' : 'no';
+      if (mode === 'no') return;
+      sv.style.transition = '';
+    }
+    e.preventDefault();
+    dx = Math.max(0, mx);
+    sv.style.transform = `translateX(${dx * k}px)`;
+  }, { passive: false });
+  const end = () => {
+    if (mode !== 'swipe') { mode = null; return; }
+    mode = null;
+    const w = sv.getBoundingClientRect().width || 1;
+    const fast = dx / Math.max(1, Date.now() - t0) > 0.5 && dx > 40;
+    if (dx > w / 3 || fast) {
+      sv.style.transition = 'transform .18s ease-out';
+      sv.style.transform = `translateX(${sv.offsetWidth}px)`;
+      setTimeout(close, 180);
+    } else reset(true);
+  };
+  sv.addEventListener('touchend', end);
+  sv.addEventListener('touchcancel', () => { if (mode === 'swipe') reset(true); mode = null; });
 }
 
 // Back to the list, from the view's own button or from anything that needs the list on screen.

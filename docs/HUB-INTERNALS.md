@@ -1056,7 +1056,10 @@ projection, for a surface showing a single session rather than the list.
 ### One session, open on the phone
 
 Tapping a row of the repos pane's sessions list opens that session in place of the list
-(`openSession` in `cards/repos.js`), and `‹ Sessions` goes back. It is the watch's session page at
+(`openSession` in `cards/repos.js`), and `‹ Sessions` goes back — so does a rightward swipe
+anywhere on the view (`swipeBack`), which this pane can take because it is the leftmost and the panes
+scroller has nothing to do with a drag that way. It is claimed only once the drag is clearly
+horizontal, and yields to anything inside already scrolled sideways (a wide code block). It is the watch's session page at
 phone size, with more room, and a composer — typed, or spoken through the pane's dry-transcribing
 recorder — whose words go to `/api/sessions/followup`. A failed send shows the hub's own `error` and
 leaves the words in the box; resending the same words reuses the `client_msg_id`.

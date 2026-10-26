@@ -80,9 +80,14 @@ not move with the edge: text that shifted whenever a command lit the border woul
 command. **Items sit an ordinary 12pt apart (`Landing.itemGap`); only the newest has room above it**,
 enough that when it lands the item before it ends just above the top of the screen. That room is a
 spacer of its own (`room`), never padding on the item: SwiftUI measures a scroll target INCLUDING
-padding, so padding put the item's text a whole landing too low. And it appears only when the newest
-item is tall enough to reach the landing line (its height is measured): a short last item rests at the
-end of the scroll with the thread above it on screen anyway, where the room was a blank band. The tool calls of a running
+padding, so padding put the item's text a whole landing too low. For the same reason a row's scroll
+id is never the id its `ForEach` already uses (home scrolls to `msg<id>`): `scrollTo` lands the first
+view carrying an id, and the ForEach's identity covers the room and the row together, so the room's top
+lands on the line and the item before it shows above the blank. And the room appears only when the newest
+item is tall enough to reach the landing line: a short last item rests at the end of the scroll with the
+thread above it on screen anyway, where the room is a blank band. Every row's height is measured, not
+just the newest's: the newest changes in the same update that lands it, so a height taken only once a row
+is newest arrives after the landing, or never when the row's height does not change. The tool calls of a running
 turn land as one block (`activity`), not line by line. Within that block a session's echo of his words (`said`, or `queued` behind a running turn) is drawn as
 his words, in full; only tool calls are cut to two lines. Words the watch sent are already on screen, so
 their echo is dropped, and `summary` frames are ignored because the detail fetch brings the reply.
@@ -858,6 +863,9 @@ device builds:
 
 - the token comes from `SIMCTL_CHILD_HUB_TOKEN` (the kiosk's, sent as `?token=`);
 - `-opensession <row id>` opens a session as its notification would;
+- `-threaddemo` gives home a made-up thread and then walks one command through it as the hub delivers a
+  real one (his words pending, tool calls, the reply loaded, the pending words dropped), so each landing
+  can be screenshotted without a token;
 - `-page <sessions|home|day|health>` lands on a page; `-dayview <totals|muscles>` opens the day page's
   totals or its muscles page; `-health <weight|food|training>` opens a health page's full view;
 - `DAY_CLOCKS=<rest s>,<session s>` (as `SIMCTL_CHILD_DAY_CLOCKS`) sets the day page's rest and session

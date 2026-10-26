@@ -119,6 +119,9 @@ final class Chat: ObservableObject {
     }
 
     func load() async {
+        #if targetEnvironment(simulator)
+        if ProcessInfo.processInfo.arguments.contains("-threaddemo") { demo(); return }
+        #endif
         if loading { reloadAfter = true; return }
         loading = true
         defer { loading = false }
@@ -135,6 +138,34 @@ final class Chat: ObservableObject {
             }
         } while reloadAfter
     }
+
+    #if targetEnvironment(simulator)
+    private var demoStarted = false
+    /// `-threaddemo` at launch: a made-up thread, then one command walked through it the way the hub
+    /// delivers a real one (his words pending, tool calls, the reply loaded, the pending words dropped),
+    /// so where each step lands can be watched in a simulator with no hub token.
+    private func demo() {
+        guard !demoStarted else { return }
+        demoStarted = true
+        let long = String(repeating: "This is a long line of reply text that wraps across the watch. ", count: 10)
+        thread = (0..<4).flatMap { i in
+            [Message(id: "u\(i)", role: "user", text: "Question number \(i) about something", request_id: nil, session_id: nil),
+             Message(id: "a\(i)", role: "assistant", text: "Answer \(i). " + long, request_id: nil, session_id: nil)]
+        }
+        Task {
+            try? await Task.sleep(for: .seconds(4))
+            pending = ["What does the next answer look like when it lands"]
+            try? await Task.sleep(for: .seconds(2))
+            activity = [ActivityLine(text: "get_lists", kind: .tool), ActivityLine(text: "Looking it up.", kind: .thought)]
+            try? await Task.sleep(for: .seconds(3))
+            activity = []
+            thread += [Message(id: "u9", role: "user", text: pending[0], request_id: nil, session_id: nil),
+                       Message(id: "a9", role: "assistant", text: "NEW REPLY FIRST LINE. " + long, request_id: nil, session_id: nil)]
+            await Task.yield()
+            pending = []
+        }
+    }
+    #endif
 
     func startRecording(flow: Capture.Flow = .standard) {
         guard capture.free else {

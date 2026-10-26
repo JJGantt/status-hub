@@ -187,8 +187,10 @@ struct SessionView: View {
     /// The page has landed once. Before that, the scroll view moves itself as it lays out (it shifts by
     /// the space under the title as it opens), and none of that is his.
     @State private var landed = false
-    /// The newest item's height, which decides whether it needs room above it (`room`).
-    @State private var newestHeight: CGFloat = 0
+    /// Every item's height, which decides whether the newest needs room above it (`room`). Kept for all
+    /// of them: the newest changes in the same update that lands it, and a height taken only once an item
+    /// IS the newest arrives after the landing, or never when its height does not change.
+    @State private var heights: [String: CGFloat] = [:]
 
     @ObservedObject private var speaker = Speaker.shared
 
@@ -396,13 +398,13 @@ struct SessionView: View {
             // costs nothing to carry and is there when he scrolls up.
             ForEach(shown, id: \.seq) { e in
                 room("ev\(e.seq)")
-                row(e).id("ev\(e.seq)").modifier(Measure(id: "ev\(e.seq)", newest: newest, height: $newestHeight))
+                row(e).id("ev\(e.seq)").onGeometryChange(for: CGFloat.self) { $0.size.height } action: { heights["ev\(e.seq)"] = $0 }
             }
             // His words on their way from this watch, dimmed until the hub has them.
             ForEach(placeholders, id: \.msgId) { p in
                 room("ph\(p.msgId)")
                 words(p.text).opacity(0.5).id("ph\(p.msgId)")
-                    .modifier(Measure(id: "ph\(p.msgId)", newest: newest, height: $newestHeight))
+                    .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { heights["ph\(p.msgId)"] = $0 }
             }
         }
         // At least a screen tall, so a short conversation's blank space below the last line is still
@@ -418,11 +420,11 @@ struct SessionView: View {
     /// only when the item is tall enough to reach the landing line: a short last item rests at the end of
     /// the scroll with what came before it on screen anyway, where the room is only a blank band.
     @ViewBuilder private func room(_ id: String) -> some View {
-        if id == newest && tallEnough { Color.clear.frame(height: Landing.underTitle - 2 * Landing.itemGap) }
+        if id == newest && tallEnough(id) { Color.clear.frame(height: Landing.underTitle - 2 * Landing.itemGap) }
     }
 
-    private var tallEnough: Bool {
-        newestHeight > WKInterfaceDevice.current().screenBounds.height - Landing.underTitle - PageInset.bottom
+    private func tallEnough(_ id: String) -> Bool {
+        (heights[id] ?? 0) > WKInterfaceDevice.current().screenBounds.height - Landing.underTitle - PageInset.bottom
     }
 
     /// One event, in the colours of `Ink`: his words a soft blue (dimmed while queued, not yet read),
@@ -476,15 +478,3 @@ struct SessionView: View {
     }
 }
 
-/// Reports an item's height when it is the newest one, for the room above it.
-private struct Measure: ViewModifier {
-    let id: String
-    let newest: String?
-    @Binding var height: CGFloat
-
-    func body(content: Content) -> some View {
-        content.onGeometryChange(for: CGFloat.self) { $0.size.height } action: { h in
-            if id == newest { height = h }
-        }
-    }
-}

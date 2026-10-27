@@ -99,7 +99,9 @@ final class Rewind: ObservableObject {
         Task {
             do {
                 // Written beside its name and moved into place, so an upload never reads half a file.
-                let part = url.appendingPathExtension("part")
+                // The partial name still ENDS in .m4a: AVAudioFile picks the container from the extension,
+                // and under `.m4a.part` it writes a CAF, which the transcribers refuse as an m4a.
+                let part = url.deletingPathExtension().appendingPathExtension("part.m4a")
                 do {
                     try RewindAudio.writeM4A(samples, rate: Self.rate, to: part)
                     try FileManager.default.moveItem(at: part, to: url)

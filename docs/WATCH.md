@@ -714,6 +714,10 @@ the URL has turned the page; and every page a launcher, control or notification 
 (`jump(to:)`, animations disabled), never a scroll across the pages between. The cost is that opening
 the app any other way also starts from black for that beat. Not yet confirmed on the watch: the
 simulator cannot background the app or deliver a complication's URL without clicking its window.
+**A veil that stays up is a black watch**, so it is built to fail open: it takes no touches
+(`allowsHitTesting(false)`), so the page under it still works, and it comes down 400ms after the app
+is active whatever else happened, logging `veil-stuck` when that deadline is what lifted it. Every
+`phase` line carries `veiled`, the state at that change.
 
 Without an Action button, the no-touch path is the Smart Stack: with Settings → Gestures → Double Tap →
 Smart Stack set to Select and Record pinned, two double taps from the watch face open it recording
@@ -827,7 +831,8 @@ wrist. Fly keeps only the recent lines, so read it soon.
 | `speak`, `speak-end`, `speak-failed` | a spoken reply starting (its length and output port) and how it ended, with seconds played |
 | `speak-rendered` | the synthesizer finished rendering the reply: its total seconds, and how long rendering took |
 | `speak-interrupted`, `speak-config-change`, `speak-media-reset`, `speak-stalled`, `speak-resume` | what cut a reply off, and the resume from where it stopped (seconds played of seconds rendered) |
-| `phase` | the app becoming active, inactive or background: wrist up and down |
+| `phase` | the app becoming active, inactive or background: wrist up and down. `veiled` is whether the black launch veil was up at the change |
+| `veil-stuck` | the veil was still up 400ms after the app became active and the deadline lifted it (The launcher section) |
 | `speak-pause`, `speak-unpause` | the pause glyph holding a reply, and carrying it on |
 | `session-shown` | what the session page actually has on screen and why it was logged (see The sessions page) |
 | `stream-open`, `stream-end`, `stream-error` | the event streams |

@@ -130,7 +130,8 @@ struct RootView: View {
         // glass (`CommandBorder`), which also holds the double-tap binding. Inside a page it would be
         // part of that page's content and slide with it on a swipe; over the row it stays put.
         .overlay { CommandBorder() }
-        .overlay { if veiled { Color.black.ignoresSafeArea() } }
+        // Never takes a touch: if it ever outstays its beat, the page under it still works.
+        .overlay { if veiled { Color.black.ignoresSafeArea().allowsHitTesting(false) } }
         // A rewind's words, over whatever page is showing: the grab came from a control, not a page.
         .sheet(item: $rewind.shown) { RewindSheet(shown: $0) }
         // Press and hold anywhere throws away what is under way. It is on the whole row rather than
@@ -191,11 +192,19 @@ struct RootView: View {
         }
         .onChange(of: page) { _, _ in follow() }
         .onChange(of: phase) { _, now in
-            Hub.log("phase", ["to": "\(now)"])
+            Hub.log("phase", ["to": "\(now)", "veiled": veiled])
             if now == .background { veiled = true }
             // Lifted a beat after becoming active, the same beat `follow()` waits: a launcher's URL
-            // turns the page in this pass, so the first thing shown is already its page.
-            if now == .active && veiled { Task { await Task.yield(); veiled = false } }
+            // turns the page in this pass, so the first thing shown is already its page. The deadline
+            // behind it is because a veil that stays up is a black watch: it is the one way this
+            // mechanism fails, and `veil-stuck` in the log says it happened.
+            if now == .active && veiled {
+                Task { await Task.yield(); veiled = false }
+                Task {
+                    try? await Task.sleep(for: .milliseconds(400))
+                    if veiled && phase == .active { Hub.log("veil-stuck"); veiled = false }
+                }
+            }
             if now == .active { Speaker.shared.checkOnWake(); Rewind.shared.check() }
             follow()
             // Coming to the front, not every page swipe: the watch's settings live on the hub.

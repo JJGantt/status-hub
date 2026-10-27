@@ -5,7 +5,7 @@ the plan at the bottom current as decisions are made, so a session that picks th
 it stands.
 
 The watch's own version of Apple's Live Rewind: while it is engaged, the last `watch_rewind_s`
-seconds the microphone heard (30 when unset, ten minutes at most) are kept in memory, and a grab sends
+seconds the microphone heard (60 today; 30 when unset, ten minutes at most) are kept in memory, and a grab sends
 them to the hub to be transcribed and shows the words. It is the minimal build, and it exists to
 **measure** two things nobody knows for this app: how long watchOS lets it hold the microphone with
 the wrist down, and what that costs in battery.
@@ -18,8 +18,11 @@ the wrist down, and what that costs in battery.
 - **Rewind** control (`RewindIntent`) grabs: `Rewind.grab` copies the ring, encodes it to .m4a
   (`RewindAudio.writeM4A`), and posts it to `/api/rewind`. The hub keeps the clip (`voice-clips` bucket,
   `rewind/<id>.m4a`) and a `rewind_grabs` row (data-layer 00130) with the words, the speaker segments,
-  the model, any error and the time taken, and returns the words **speaker-labeled** (`A: …` / `B: …`,
-  OpenAI `gpt-4o-transcribe-diarize`; plain Whisper when that fails, with the failure in `error`).
+  the model, any error and the time taken, and returns the words: plain Groq Whisper, about a second for a minute of audio.
+  **Speaker labels are off.** `app_settings.rewind_diarize` = `1` turns them on (`A: …` / `B: …`,
+  OpenAI `gpt-4o-transcribe-diarize`, several seconds; plain Whisper when it fails, with the failure in
+  `error`). They are off because the words go to a model either way, and a model reads who is talking
+  from the conversation itself; turn them on only once a real grab shows the model needing them.
   Nothing is enqueued. The words appear in a sheet over whatever page is showing. The ring keeps its
   audio, so a second grab hears the same moments again.
 - **A tap on the sheet records instructions** for the grab: locked like a session follow-up (red
@@ -154,12 +157,14 @@ check before building on it.
 
 ## Plan
 
-Built (2026-10-24): every grab kept (clip + words), speaker-labeled transcription on OpenAI shown on the
-sheet, tap-to-instruct on the sheet, and the Rewind Ask control.
+Built (2026-10-24): every grab kept (clip + words), tap-to-instruct on the sheet, and the Rewind Ask
+control. Speaker-labeled transcription is built and switched off (`rewind_diarize`).
 
 Next, as Jared decides:
 
-- Judge the diarization on real grabs (TV, a conversation) and compare a second provider on the same
-  saved clips if it disappoints.
+- A short summary on the sheet in place of the full words, the words a tap away.
+- A variable look-back (a fixed minute today), possibly chosen by the voice command itself.
+- Judge the diarization on real grabs (TV, a conversation) if a model turns out to need it, and compare
+  a second provider on the same saved clips if it disappoints.
 - Name his own turns: OpenAI accepts short reference clips of known speakers; his voice is already
   enrolled for speaker ID (`voiceprint`).

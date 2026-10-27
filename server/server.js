@@ -3116,9 +3116,9 @@ async function keepClip(id, file, contentType, bytes, dur) {
 
 // ---- REWIND: a grab from the watch's ring (docs/REWIND.md) -----------------------------------------
 // The watch posts the last N seconds it heard. Every grab is kept whole while the feature is built: the
-// clip in voice-clips under rewind/, and a rewind_grabs row with the words, the speaker segments and the
-// timing. Transcribed with speaker labels (OpenAI diarize); when that fails, plain Whisper, and the row
-// says which. Never enqueued — a grab only becomes a command when he records instructions for it, and
+// clip in voice-clips under rewind/, and a rewind_grabs row with the words and the timing. Plain Groq
+// Whisper; speaker labels (OpenAI diarize) only with `rewind_diarize` = 1, falling back to Whisper with
+// the failure in the row. Never enqueued — a grab only becomes a command when he records instructions for it, and
 // that command carries `rewind=<id>` to /api/voice-command.
 const REWIND_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 app.post('/api/rewind', async (req, res) => {
@@ -3131,11 +3131,17 @@ app.post('/api/rewind', async (req, res) => {
     if (!size) return res.status(400).json({ error: 'no audio' });
     const ct = String(req.headers['content-type'] || 'audio/mp4').split(';')[0].trim();
     const held = parseFloat(req.query.held);
-    let result, error = null;
-    try { result = await diarize(tmp, ct); }
-    catch (e) {
-      error = String(e.message || e).slice(0, 500);
-      console.log(`[rewind] diarize failed, plain Whisper instead: ${error}`);
+    // Plain Whisper unless `rewind_diarize` is on: the words go to a model either way, which reads who
+    // is talking from the conversation itself, and the speaker-labeled pass costs seconds and money.
+    let result = null, error = null;
+    if (String((await settingsAll()).rewind_diarize || '') === '1') {
+      try { result = await diarize(tmp, ct); }
+      catch (e) {
+        error = String(e.message || e).slice(0, 500);
+        console.log(`[rewind] diarize failed, plain Whisper instead: ${error}`);
+      }
+    }
+    if (!result) {
       const { transcript } = await transcribe(tmp, ct, GROQ_API_KEY);
       result = { transcript, segments: null, model: 'whisper' };
     }

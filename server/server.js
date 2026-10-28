@@ -3211,9 +3211,11 @@ app.post('/api/voice-command', async (req, res) => {
     // THE LAST TRANSCRIBER IS THE MAC. When Groq and OpenAI both fail, a command is not lost while the Mac
     // worker is up: the clip is kept and the row is queued 'untranscribed', which the Mac's worker takes,
     // runs through its local Whisper and turns 'pending' (voice-pipeline worker.py `transcribe_local`).
+    // ?model=large sends the clip to whisper-large-v3 rather than turbo (lib/transcribe.js says why).
+    const whisperModel = String(req.query.model || '') === 'large' ? 'whisper-large-v3' : undefined;
     let transcript = '', segments = 0, untranscribed = false;
     try {
-      ({ transcript, segments } = await transcribe(tmp, ct, GROQ_API_KEY));
+      ({ transcript, segments } = await transcribe(tmp, ct, GROQ_API_KEY, { model: whisperModel }));
     } catch (e) {
       if (!e.allFailed || dry || !(await macWorkerUp())) throw e;
       untranscribed = true;

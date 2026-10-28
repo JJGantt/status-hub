@@ -43,9 +43,9 @@ function run(cmd, args) {
 // not lose a command. Both take the same form and cap a file at 25 MB. When both fail, the caller can
 // still hand the clip to the Mac's local Whisper (`/api/voice-command`, status 'untranscribed').
 const OPENAI_URL = 'https://api.openai.com/v1/audio/transcriptions';
-async function whisper(file, type, name, key, prompt) {
+async function whisper(file, type, name, key, prompt, model) {
   const providers = [
-    key && { url: GROQ_URL, key, model: 'whisper-large-v3-turbo', label: 'groq' },
+    key && { url: GROQ_URL, key, model: model || 'whisper-large-v3-turbo', label: 'groq' },
     process.env.OPENAI_API_KEY && { url: OPENAI_URL, key: process.env.OPENAI_API_KEY, model: 'whisper-1', label: 'openai' },
   ].filter(Boolean);
   let last;
@@ -96,16 +96,20 @@ function clipSeconds(file) {
 const NOTHING_SAID = /^\W*thank\s+you\W*$/i;
 const heard = (t) => (NOTHING_SAID.test(t) ? '' : t);
 
+// `model` picks the Groq model; omitted, it is turbo. Turbo can drop a whole stretch of a clip and
+// return the rest as if that were everything: a 27s watch command lost its first 10s (the cereal) on
+// every one of five tries, while that 10s sent alone came back word for word.
+//
 // → { transcript, segments } — segments is 0 when the clip went up as recorded.
-async function transcribe(file, contentType, key, { prompt } = {}) {
-  const { transcript, segments } = await transcribeAll(file, contentType, key, prompt);
+async function transcribe(file, contentType, key, { prompt, model } = {}) {
+  const { transcript, segments } = await transcribeAll(file, contentType, key, prompt, model);
   return { transcript: heard(transcript), segments };
 }
 
-async function transcribeAll(file, contentType, key, prompt) {
+async function transcribeAll(file, contentType, key, prompt, model) {
   const ct = String(contentType || 'audio/webm');
   const { size } = await fs.promises.stat(file);
-  if (size <= GROQ_MAX_BYTES) return { transcript: await whisper(file, ct, `clip.${extFor(ct)}`, key, prompt), segments: 0 };
+  if (size <= GROQ_MAX_BYTES) return { transcript: await whisper(file, ct, `clip.${extFor(ct)}`, key, prompt, model), segments: 0 };
   const dir = await fs.promises.mkdtemp(path.join(os.tmpdir(), 'clip-'));
   try {
     await run('ffmpeg', ['-hide_banner', '-loglevel', 'error', '-i', file, '-vn', '-ac', '1', '-ar', '16000',
@@ -113,7 +117,7 @@ async function transcribeAll(file, contentType, key, prompt) {
       path.join(dir, 'part%04d.ogg')]);
     const parts = (await fs.promises.readdir(dir)).filter((n) => n.endsWith('.ogg')).sort();
     const texts = [];
-    for (const p of parts) texts.push(await whisper(path.join(dir, p), 'audio/ogg', p, key, prompt));
+    for (const p of parts) texts.push(await whisper(path.join(dir, p), 'audio/ogg', p, key, prompt, model));
     return { transcript: texts.filter(Boolean).join(' '), segments: parts.length };
   } finally {
     await fs.promises.rm(dir, { recursive: true, force: true }).catch(() => {});

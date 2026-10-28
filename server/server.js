@@ -31,7 +31,7 @@ const { getTZ, setTZ, DAY_START_HOUR, localDate, nutritionWindow, lastNTrainingD
 const { buildWorkoutHeatmap } = require('./lib/heatmap');
 const { buildWeightPlot } = require('./lib/weightplot');
 const { getWeather } = require('./lib/weather');
-const { transcribe, diarize, NOTHING_SAID, clipSeconds, extFor } = require('./lib/transcribe');
+const { transcribe, shortenPauses, diarize, NOTHING_SAID, clipSeconds, extFor } = require('./lib/transcribe');
 const speech = require('./lib/speech');
 const livemic = require('./lib/livemic');
 const { buildNutritionLog, buildGoalResolver, calorieColor } = require('./lib/nutritionlog');
@@ -3184,6 +3184,7 @@ async function withRewind(rewindId, instructions) {
 
 app.post('/api/voice-command', async (req, res) => {
   const tmp = path.join(os.tmpdir(), 'voice-' + crypto.randomUUID());
+  let short = null;   // the pause-shortened copy of a locked clip, removed with tmp
   try {
     if (!GROQ_API_KEY && !process.env.OPENAI_API_KEY) { req.resume(); return res.status(503).json({ error: 'transcription not configured' }); }
     // ?dry=1 → transcribe only, no enqueue. The chat composer uses this while photos are pending: the
@@ -3211,11 +3212,20 @@ app.post('/api/voice-command', async (req, res) => {
     // THE LAST TRANSCRIBER IS THE MAC. When Groq and OpenAI both fail, a command is not lost while the Mac
     // worker is up: the clip is kept and the row is queued 'untranscribed', which the Mac's worker takes,
     // runs through its local Whisper and turns 'pending' (voice-pipeline worker.py `transcribe_local`).
-    // ?model=large sends the clip to whisper-large-v3 rather than turbo (lib/transcribe.js says why).
-    const whisperModel = String(req.query.model || '') === 'large' ? 'whisper-large-v3' : undefined;
+    // A LOCKED watch recording (?flow=locked) is long and full of pauses, so it goes to whisper-large-v3
+    // rather than turbo: turbo dropped the first 10s of a 27s locked command on every retry, while large
+    // got all of it. ?model=large asks for the same on any clip. Its long pauses are shortened first
+    // (shortenPauses), from the stretches the watch's speech classifier marked as `quiet=a-b,…`.
+    const locked = String(req.query.flow || '') === 'locked';
+    const whisperModel = locked || String(req.query.model || '') === 'large' ? 'whisper-large-v3' : undefined;
+    const quiet = String(req.query.quiet || '').split(',').map((r) => r.split('-').map(Number)).filter((r) => r.length === 2);
     let transcript = '', segments = 0, untranscribed = false;
     try {
-      ({ transcript, segments } = await transcribe(tmp, ct, GROQ_API_KEY, { model: whisperModel }));
+      short = locked ? await shortenPauses(tmp, quiet).catch((e) => { console.log(`[voice-command] pause shortening failed: ${e.message}`); return null; }) : null;
+      if (short) console.log(`[voice-command] locked clip: ${short.gaps} pause(s) shortened, ${short.cut.toFixed(1)}s cut`);
+      ({ transcript, segments } = short
+        ? await transcribe(short.file, 'audio/wav', GROQ_API_KEY, { model: whisperModel })
+        : await transcribe(tmp, ct, GROQ_API_KEY, { model: whisperModel }));
     } catch (e) {
       if (!e.allFailed || dry || !(await macWorkerUp())) throw e;
       untranscribed = true;
@@ -3274,6 +3284,7 @@ app.post('/api/voice-command', async (req, res) => {
     res.status(e.status || 500).json({ error: String(e.message || e) });
   } finally {
     fs.promises.unlink(tmp).catch(() => {});
+    if (short) fs.promises.unlink(short.file).catch(() => {});
   }
 });
 

@@ -561,7 +561,18 @@ carries the clip's recording window (`Recorder.Clip.start` plus its duration) as
 `capture_end`: the start is what a voice-logged set is stamped with (`LISTENERS.md`), and the window is
 what lets the worker drop it as a duplicate only when a room mic heard the same sentence. The hub
 answers with the transcript, shown until the turn lands, and the request id, and the watch waits on
-`/api/voice-reply/:id`. No id means the hub heard no words. **With the wrist down the app is kept running until
+`/api/voice-reply/:id`.
+
+**A locked recording is transcribed differently** (`flow=locked` on the upload, from `Recorder.Clip.locked`).
+It is long and he stops talking while he does things, so the hub sends it to `whisper-large-v3` rather
+than turbo — turbo dropped the first 10s of a 27s locked command on every retry — and first shortens its
+long pauses (`shortenPauses` in `server/lib/transcribe.js`). The pauses come from the watch: while a
+locked recording runs, `Capture.markQuiet` notes every stretch the speech classifier (or the level line,
+when the classifier is off) heard no speech for `Capture.quietMin` (4s) or more, and they ride the
+upload as `quiet=start-end,…` in seconds of the file. The hub cuts only pauses over 6s and keeps 2s at
+each edge, so a 9-minute recording of a sentence and a meal's worth of quiet goes up as the sentence; it
+never cuts close to speech, because Whisper reads pauses as sentence breaks and tight cuts merge
+sentences and lose the words beside them. The stored clip is the original. No id means the hub heard no words. **With the wrist down the app is kept running until
 a home command's answer is in** (`StayAwake`): recording keeps a watch app alive, but once the command
 is sent nothing did, so the app was suspended mid-wait, the answer's tap never came, and the screen
 still showed the command working when he looked. `StayAwake` holds the microphone and discards what it

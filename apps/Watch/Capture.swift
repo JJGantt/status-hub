@@ -112,6 +112,13 @@ final class Capture: ObservableObject {
     private var rolls = 0
     /// The classifier's latest verdict on whether he is talking, 0…1.
     private var voice: Float = 0
+    /// A locked recording's stretches of no speech so far (`Recorder.Clip.quiet`), and when the one under
+    /// way began; nil while he is talking.
+    private var quiet: [[TimeInterval]] = []
+    private var quietSince: TimeInterval? = 0
+    /// The shortest stretch of no speech worth sending. The hub shortens only those over 6s, so this
+    /// leaves it room to be tuned without a watch build.
+    static let quietMin: TimeInterval = 4
 
     private init() {
         if let kept = UserDefaults.standard.dictionary(forKey: Self.storeKey) { Self.take(kept) }
@@ -213,9 +220,15 @@ final class Capture: ObservableObject {
     func stop() -> Recorder.Clip? {
         guard owner != nil else { return nil }
         let muted = mutes
+        let wasLocked = flow == .locked
         reset()
         if arming { arming = false; resumeSoon(); return nil }
-        let clip = recorder.stop()
+        var clip = recorder.stop()
+        if wasLocked {
+            markQuiet(true, at: segment)   // a stretch still running when he pressed counts too
+            clip?.locked = true
+            clip?.quiet = quiet
+        }
         if muted { setMuted(false) }
         resumeSoon()
         // Ending the recording handed the audio session back; a command still waiting holds it again.
@@ -261,6 +274,8 @@ final class Capture: ObservableObject {
         spokeAt = nil
         segment = 0
         voice = 0
+        quiet = []
+        quietSince = 0
         recorder.classifies = Self.hearsVoice
         arming = true
         opening = true
@@ -354,7 +369,9 @@ final class Capture: ObservableObject {
         endpoint.hang = Self.hang
         // With the classifier running, ITS verdict is what counts as speech; if it failed to load, the
         // level line still ends the recording rather than nothing ending it.
-        let ended = endpoint.feed(level, seconds, voice: recorder.classifying ? voice >= Self.voiceMin : nil)
+        let speaking = recorder.classifying ? voice >= Self.voiceMin : nil
+        let ended = endpoint.feed(level, seconds, voice: speaking)
+        if flow == .locked { markQuiet(speaking ?? (level >= endpoint.threshold), at: segment) }
         segment += seconds
         if endpoint.heard && !wasHeard { spokeAt = Date() }
         // Accidentally recording: nobody spoke into it, or it has run on and on unlocked. Either way
@@ -391,6 +408,16 @@ final class Capture: ObservableObject {
         } else if !locked {
             logEnd("silence")
             onSilence?()
+        }
+    }
+
+    /// Keeps the locked recording's map of where he was not talking, one buffer at a time.
+    private func markQuiet(_ speaking: Bool, at second: TimeInterval) {
+        if speaking {
+            if let since = quietSince, second - since >= Self.quietMin { quiet.append([since, second]) }
+            quietSince = nil
+        } else if quietSince == nil {
+            quietSince = second
         }
     }
 

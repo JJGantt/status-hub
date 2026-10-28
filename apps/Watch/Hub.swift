@@ -313,6 +313,14 @@ enum Hub {
             // `watch`, which is the always-on listener and has its voice checked.
             query += "&source=watch-cmd"
         }
+        // A locked recording is long and full of pauses: the hub gives it the larger Whisper and shortens
+        // the pauses marked here before transcribing.
+        if clip.locked {
+            query += "&flow=locked"
+            if !clip.quiet.isEmpty {
+                query += "&quiet=" + clip.quiet.prefix(200).map { String(format: "%.1f-%.1f", $0[0], $0[1]) }.joined(separator: ",")
+            }
+        }
         // Where he is, for "near me" and a pickup point; a dictation (dry) goes nowhere yet.
         if !dry, let l = await Here.shared.fix() {
             query += String(format: "&lat=%.5f&lon=%.5f&acc=%.0f",

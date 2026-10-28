@@ -25,6 +25,12 @@ final class Recorder {
         var peak: Float = 0
         /// Whether the start chirp was heard to finish playing; false means the speaker never sounded it.
         var chirped: Bool?
+        /// Recorded in the `locked` flow: the hub sends it to the larger Whisper and shortens its long pauses.
+        var locked = false
+        /// A locked recording's stretches of no speech, `[start, end]` in seconds of the file, as the
+        /// speech classifier (or the level line, without it) heard them. Only those of `Capture.quietMin`
+        /// or more; the hub decides which of them are long enough to shorten.
+        var quiet: [[TimeInterval]] = []
     }
 
     enum Failure: Error {

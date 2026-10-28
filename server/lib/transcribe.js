@@ -125,6 +125,35 @@ async function transcribeAll(file, contentType, key, prompt, model) {
 }
 
 
+// SHORTENING THE LONG PAUSES IN A LOCKED WATCH RECORDING. A locked recording is held open while he does
+// something else — pours cereal, goes to the fridge — so it can hold minutes of no speech. Whisper fills a
+// long stretch like that with invented words ("Thank you." over and over, or a stranger's sentence), so
+// those stretches are cut down before transcription.
+//
+// Only LONG pauses, and never down to nothing: a pause over QUIET_LONGER_S keeps QUIET_KEEP_S at each edge.
+// Whisper reads pauses as sentence breaks, and cutting close to speech merges sentences and drops the words
+// either side of the cut. On his 27s cereal command, gaps over 1.5s shrunk to 1s turned "I'm adding no fat
+// milk to the bowl. The total is going to be 615 grams." into "No fat milk is going to be 615 grams.";
+// gaps over 6s shrunk to 4s came back word for word.
+//
+// `quiet` is the watch's own speech classifier's verdict: [[start, end], …] in seconds of the file.
+// → { file, cut, gaps } — a shortened 16 kHz WAV, the seconds removed and how many pauses — or null when nothing was long enough to cut.
+const QUIET_LONGER_S = 6;
+const QUIET_KEEP_S = 2;
+async function shortenPauses(file, quiet) {
+  const cuts = (quiet || [])
+    .filter(([a, b]) => Number.isFinite(a) && Number.isFinite(b) && b - a > QUIET_LONGER_S)
+    .map(([a, b]) => [a + QUIET_KEEP_S, b - QUIET_KEEP_S]);
+  if (!cuts.length) return null;
+  const out = path.join(os.tmpdir(), 'quiet-' + process.hrtime.bigint() + '.wav');
+  // The encoder's priming offsets an AAC file's first timestamp (0.13s on the watch), so the clock is
+  // zeroed before the watch's seconds are applied to it.
+  const drop = cuts.map(([a, b]) => `between(t,${a.toFixed(2)},${b.toFixed(2)})`).join('+');
+  await run('ffmpeg', ['-hide_banner', '-loglevel', 'error', '-y', '-i', file, '-vn',
+    '-af', `asetpts=PTS-STARTPTS,aselect='not(${drop})',asetpts=N/SR/TB`, '-ac', '1', '-ar', '16000', out]);
+  return { file: out, cut: cuts.reduce((n, [a, b]) => n + (b - a), 0), gaps: cuts.length };
+}
+
 // Speech → text with WHO SAID IT, for a watch rewind grab (docs/REWIND.md). OpenAI's diarizing model:
 // it returns the words as segments, each tagged with an anonymous speaker (A, B, …). No Groq fallback,
 // because Groq has no diarization; the caller falls back to plain `transcribe` and says so.
@@ -159,4 +188,4 @@ async function diarize(file, contentType) {
   return { transcript, segments, model: DIARIZE_MODEL };
 }
 
-module.exports = { transcribe, diarize, NOTHING_SAID, clipSeconds, extFor, GROQ_MAX_BYTES, SEGMENT_S };
+module.exports = { transcribe, shortenPauses, diarize, NOTHING_SAID, clipSeconds, extFor, GROQ_MAX_BYTES, SEGMENT_S };

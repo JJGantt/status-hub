@@ -1,8 +1,9 @@
 # Status Hub
 
-One product, three faces, one brain. A personal status dashboard (litter robot, nutrition +
-adaptive maintenance goal, workouts) served by a Node hub and rendered by a web UI and native
-iOS/macOS apps — all over the same `/api/status` contract.
+One product, many faces, one brain. A personal status dashboard (litter robot, nutrition +
+adaptive maintenance goal, workouts, lists, surf, Claude sessions, voice) served by a Node hub and
+rendered by a web UI (desktop, phone, TV wall), native iOS/macOS apps that wrap it, and a native
+watch app.
 
 **Architecture principle: server computes, clients render.** All logic and derived display
 values (maintenance math, dynamic macros, colors, labels, pace state) live in the hub payload;
@@ -13,8 +14,10 @@ the clients only paint. [CLAUDE.md](CLAUDE.md) is what to know before editing;
 
 ```
 server/   Node/Express hub — the brain. Computes everything, serves the web UI + JSON API
-          + SSE stream. Deployed to Fly (app: jared-status-hub).
-apps/     Native SwiftUI app, iOS + macOS targets sharing one source tree (XcodeGen).
+          + SSE stream. Deployed to Fly (app: jared-status-hub). The web client is server/public/.
+apps/     Native SwiftUI apps (XcodeGen): iOS + macOS sharing one source tree, the iOS widget
+          extension, and the watch app with its complication extension.
+docs/     Subsystem docs (internals, sessions, watch, alarms, live mic, ...) and TODO.md.
 IDEAS.md  Backlog / roadmap for the whole product.
 ```
 
@@ -23,7 +26,8 @@ IDEAS.md  Backlog / roadmap for the whole product.
 ```sh
 cd server
 npm install
-node server.js                 # local run on :8080
+npm run build                  # bundles the client into public/dist (generated, not committed)
+npm start                      # local run on :8080
 ./deploy.sh                    # deploy to Fly, then verify /healthz reports this commit
 ```
 
@@ -38,12 +42,8 @@ password → sha256 cookie (web) or `X-Hub-Token` header (apps). **Full internal
 cd apps
 xcodegen generate              # regenerate StatusHub.xcodeproj from project.yml
 
-# iOS — build + install to device over the network
-xcodebuild -project StatusHub.xcodeproj -scheme StatusHub -configuration Debug \
-  -destination 'generic/platform=iOS' -derivedDataPath build \
-  -allowProvisioningUpdates DEVELOPMENT_TEAM=XMH4AVFC78 build
-xcrun devicectl device install app --device <DEVICE_ID> \
-  build/Build/Products/Debug-iphoneos/StatusHub.app
+# iOS (+ the embedded watch app) — build on this Mac and upload to TestFlight
+tools/testflight.sh
 
 # macOS — build + run
 xcodebuild -project StatusHub.xcodeproj -scheme StatusHubMac -configuration Debug \
@@ -56,6 +56,8 @@ Bundle id `com.jaredgantt.statushub`, team `XMH4AVFC78`. `StatusHub` (iOS) + `St
 `apps/Controls/` + `apps/Shared/`. That one extension carries the Lock-Screen / Control-Center
 **Record** button and three Home Screen widgets: **Macro Rings** (`/api/rings`), **Due**
 (`/api/due-widget`) and **Projects** (`/api/repos-widget`), the last two interactive.
+The watch app (`StatusHubWatch`) and its complication extension (`StatusHubWatchWidgets`) live in
+`apps/Watch/` + `apps/WatchWidgets/`, embedded by the iOS app; see [docs/WATCH.md](docs/WATCH.md).
 
 Iterating on widget layout doesn't need a device — the drawing files are WidgetKit-free and render
 standalone to PNGs:

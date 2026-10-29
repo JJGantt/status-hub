@@ -164,15 +164,15 @@ The scoring itself is built and live (`lib/score.js`, data-layer `00085`-`00087`
   week and a catastrophically neglected one look the same once the band is drained. Whether that
   should carry a further consequence — bleeding into the other bands, or a separate marker — is
   deliberately open, not overlooked.
-- **The phone's todo pane has no health bar at all**, so there is no gold on it. Jared's call
-  whether that pane should grow one — it is a new surface there, not a colour change.
 - **`important` is score-only.** It does not change the push. Deliberate for now.
 - **There is no "important appointment".** `priority` is one axis carrying important / normal /
   exempt, because it is one choice made once at scheduling time. Wanting both would mean a second
   column, not a fourth value.
-- **The day timeline's spine is hardcoded 7a-10p**, so a day whose items span 1p-5p spends twelve
-  rows on nothing. Fitting the window to the content (plus padding around now) would give every hour
-  more room, but it changes what the column means and should be its own decision.
+- **The day timeline's spine always spans at least 7a-10p** on the calendar wall and the phone
+  (`server.js`, the `loT`/`hiT` bounds; it widens for earlier or later items, and the home wall's dial
+  uses a rolling window around now instead), so a day whose items span 1p-5p spends twelve rows on
+  nothing. Fitting the window to the content (plus padding around now) would give every hour more
+  room, but it changes what the column means and should be its own decision.
 - **Completed items are kept forever.** Only deleted ones are purged (30 days). If the calendar ever
   gets heavy, the fix is to bound what the calendar QUERIES, not to start deleting history.
 - **Series editing is all-or-nothing.** `remove_from_list` with `series` clears what is left; there

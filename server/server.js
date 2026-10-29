@@ -2981,7 +2981,30 @@ app.get('/api/voice-messages', async (req, res) => {
     if (Number.isFinite(resetAt) && rows.length && Date.parse(rows[rows.length - 1].created_at) < resetAt) {
       start = rows.length;   // reset since the last message: nothing belongs to the new context yet
     }
-    res.json(rows.slice(start));   // current context only, oldest→newest
+    // An answer still unread stays in however old it is, with the words that asked for it, so a gap,
+    // a reset or twenty newer exchanges cannot bury it (docs/WATCH.md, "Unread answers").
+    const shown = rows.slice(start);
+    const have = new Set(shown.map((r) => r.id));
+    const unread = (await sb(`voice_messages?focus=eq.${encodeURIComponent(focus)}${modeFilter}&role=eq.assistant&needs_read=is.true&read_at=is.null&order=created_at.desc&limit=20&select=*`) || [])
+      .filter((r) => !have.has(r.id));
+    const asks = unread.map((r) => r.request_id).filter(Boolean);
+    const words = asks.length
+      ? (await sb(`voice_messages?role=eq.user&request_id=in.(${asks.map(encodeURIComponent).join(',')})&select=*`) || [])
+      : [];
+    const older = [...unread, ...words.filter((r) => !have.has(r.id))]
+      .sort((a, b) => Date.parse(a.created_at) - Date.parse(b.created_at));
+    res.json([...older, ...shown]);   // oldest→newest
+  } catch (e) { res.status(500).json({ error: String(e.message || e) }); }
+});
+
+// An answer has been shown (the watch: on screen, wrist up, a couple of seconds). Stamped once; the
+// row's UPDATE reaches every surface through the voice stream, so the mark clears everywhere.
+app.post('/api/voice-messages/read', express.json(), async (req, res) => {
+  try {
+    const id = String((req.body && req.body.id) || '');
+    if (!id) return res.status(400).json({ error: 'id required' });
+    await sbWrite(`voice_messages?id=eq.${encodeURIComponent(id)}&read_at=is.null`, 'PATCH', { read_at: new Date().toISOString() });
+    res.json({ ok: true });
   } catch (e) { res.status(500).json({ error: String(e.message || e) }); }
 });
 

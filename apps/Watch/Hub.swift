@@ -110,6 +110,10 @@ struct Message: Decodable, Identifiable, Equatable {
     let request_id: String?
     /// Set on a session's reply relayed into the thread (voice-pipeline orchestrator/src/relay.js).
     let session_id: String?
+    /// A reply he asked to know something from, flagged by the model (voice-pipeline docs/ROUTING.md).
+    var needs_read: Bool? = nil
+    /// When some surface showed it; an answer flagged and not yet read is in the unread queue.
+    var read_at: String? = nil
 }
 
 enum HubError: LocalizedError {
@@ -483,6 +487,11 @@ enum Hub {
     /// A session has been read here, so its unread mark clears everywhere.
     static func seen(_ id: String) async throws {
         _ = try await call("/api/sessions/seen", method: "POST", body: ["id": id])
+    }
+
+    /// An answer has been on screen, so it leaves the unread queue everywhere.
+    static func read(_ id: String) async throws {
+        _ = try await call("/api/voice-messages/read", method: "POST", body: ["id": id])
     }
 
     /// Takes the mute for the watch, or gives it back. Every microphone in the house is deaf while any

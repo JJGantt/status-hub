@@ -117,6 +117,29 @@ simply coming back, not as a build failure. Nothing here ships to the App Store,
 risk to the look rather than to the app. The page draws no clock of its own either: it is for the
 conversation, and the watch face is one press of the crown away.
 
+### Unread answers
+
+Most replies only confirm that something was done and are never read. A reply that tells him
+something he asked to know is the one that gets buried when he speaks the next command before
+looking, so those are kept reachable until they have actually been on screen.
+
+- **The model flags them.** It ends such a reply with a marker, which the worker strips and stores
+  as `voice_messages.needs_read` (voice-pipeline `docs/ROUTING.md`). Confirmations carry no flag and
+  never enter the queue; a flag the model forgets falls back to the ordinary thread.
+- **Read means shown**: two seconds on screen with the app in front, home showing and the wrist up
+  (`HomeView.attend`). On screen is half the row, or for a row taller than the screen, enough of it to
+  fill a little under half the screen, so a long answer counts once its opening was in front of him.
+  The watch posts `/api/voice-messages/read`, which stamps `read_at` once; the row's UPDATE reaches
+  every surface through the voice stream.
+- **An amber dot at the top of home while any is unread**, in the sessions list's unread amber. A tap
+  on it lands on the OLDEST unread answer; once that is read the next tap goes to the next. It is a
+  button of its own, so the tap does not also record.
+- **None is lost to age.** `/api/voice-messages` returns every unread answer however old, with the
+  words that asked for it, ahead of the current context; the watch draws them above the last ten
+  exchanges (`Chat.held`) and keeps them there, read or not, until home leaves the screen, so an
+  answer never vanishes from under him the moment it counts as read. The wall and the phone get the
+  same rows from that endpoint.
+
 ### Replies are markdown
 
 Every reply and thought on the watch, home's thread and a session's alike, is drawn by `Markdown`
@@ -515,7 +538,8 @@ heard throws the clip away instead, and either logs `mic-end` with `reason: cap`
 
 Press and hold (0.6s) anywhere cancels the recording under way. With none, on home or in an open
 session, it starts a locked recording (red, the `Hub Locked` flow), so home offers both: a tap for the
-amber recording that sends at his silence, a hold for the one only a press sends. On the other pages,
+amber recording that sends at his silence, a hold for the one only a press sends. A hold while a reply
+is being spoken stops the speech instead (`CommandBorder.hold`). On the other pages,
 where a tap does something else, a hold with no recording does nothing. A command already sent is
 never cancelled; there is no gesture for it.
 
@@ -564,7 +588,7 @@ are the remaining candidates; `mic-interrupted` carries the system's reason and 
 
 A command is sent the way the phone's microphone sends one: `Hub.sendAudio` uploads the file to
 `/api/voice-command` (source `watch-cmd`), the hub transcribes it with the same Groq Whisper, and the
-worker treats it as push-to-talk — no addressing gate, no spoken reply on the TV, the reply pushed. It
+worker treats it as push-to-talk — no addressing gate, no spoken reply on the TV. It
 carries the clip's recording window (`Recorder.Clip.start` plus its duration) as `capture_start` /
 `capture_end`: the start is what a voice-logged set is stamped with (`LISTENERS.md`), and the window is
 what lets the worker drop it as a duplicate only when a room mic heard the same sentence. The hub
@@ -605,8 +629,7 @@ mute.
 
 **Retry.** The clip is kept until its command has run, and the `client_msg_id` across a Retry, so a
 resend after a dropped connection gets the first send's id back instead of running twice. Once the id
-is known, Retry only waits again; after a worker error it uploads the clip as a new attempt. **Cancel
-while waiting stops waiting — a command the hub already has still runs.**
+is known, Retry only waits again; after a worker error it uploads the clip as a new attempt.
 
 ### When the hub does not answer
 

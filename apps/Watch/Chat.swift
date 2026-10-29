@@ -15,9 +15,20 @@ final class Chat: ObservableObject {
     }
 
     @Published private(set) var thread: [Message] = []
-    /// What home draws: the last ten exchanges. The hub sends forty rows, which is more than a wrist
-    /// reads and slower to lay out than it is worth.
-    var recent: [Message] { Array(thread.suffix(20)) }
+    /// What home draws: the last ten exchanges, after any unread answer older than them (`held`). The
+    /// hub sends forty rows, which is more than a wrist reads and slower to lay out than it is worth.
+    var recent: [Message] { held + thread.suffix(20) }
+    /// Unread answers older than the last ten exchanges, each after the words that asked for it: the hub
+    /// sends every unread answer however old. Kept until the page leaves the screen even once read, so
+    /// an answer does not vanish from under him the moment it counts as read.
+    @Published private(set) var held: [Message] = []
+    /// Answers flagged worth reading that no surface has shown yet, oldest first (docs/WATCH.md, "Unread
+    /// answers").
+    var unread: [Message] {
+        thread.filter { $0.role == "assistant" && $0.needs_read == true && $0.read_at == nil && !readHere.contains($0.id) }
+    }
+    /// Read on this watch, kept so the mark goes the moment it is read rather than at the next reload.
+    @Published private var readHere: Set<String> = []
     /// What the hub heard of each command still running, oldest first, shown until it lands in the
     /// thread.
     @Published private(set) var pending: [String] = []
@@ -116,6 +127,7 @@ final class Chat: ObservableObject {
         stream?.cancel()
         stream = nil
         activity = []
+        held = []
     }
 
     func load() async {
@@ -129,6 +141,7 @@ final class Chat: ObservableObject {
             reloadAfter = false
             do {
                 thread = try await Hub.thread()
+                hold()
                 if failure == .noToken { failure = nil }
                 Hub.log("thread", ["rows": thread.count, "last": String((thread.last?.text ?? "").prefix(80))])
             } catch HubError.noToken {
@@ -150,7 +163,8 @@ final class Chat: ObservableObject {
         let long = String(repeating: "This is a long line of reply text that wraps across the watch. ", count: 10)
         thread = (0..<4).flatMap { i in
             [Message(id: "u\(i)", role: "user", text: "Question number \(i) about something", request_id: nil, session_id: nil),
-             Message(id: "a\(i)", role: "assistant", text: "Answer \(i). " + long, request_id: nil, session_id: nil)]
+             Message(id: "a\(i)", role: "assistant", text: "Answer \(i). " + long, request_id: nil, session_id: nil,
+                     needs_read: i == 1)]
         }
         Task {
             try? await Task.sleep(for: .seconds(4))
@@ -251,6 +265,26 @@ final class Chat: ObservableObject {
         for c in idle {
             update(c.msgId) { $0.failed = false }
             run(c.msgId)
+        }
+    }
+
+    private func hold() {
+        let tail = Set(thread.suffix(20).map(\.id))
+        let asks = Set(unread.compactMap(\.request_id))
+        for m in thread.dropLast(20) where !held.contains(where: { $0.id == m.id })
+            && (unread.contains(m) || m.request_id.map(asks.contains) == true) {
+            held.append(m)
+        }
+        held.removeAll { tail.contains($0.id) }
+    }
+
+    /// An answer has been on screen with the wrist up long enough to have been read.
+    func markRead(_ m: Message) {
+        guard !readHere.contains(m.id) else { return }
+        readHere.insert(m.id)
+        Hub.log("read", ["id": m.id])
+        Task {
+            do { try await Hub.read(m.id) } catch { Hub.log("read-failed", ["id": m.id, "error": "\(error)"]) }
         }
     }
 

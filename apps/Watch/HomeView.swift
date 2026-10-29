@@ -15,6 +15,12 @@ struct HomeView: View {
     @EnvironmentObject private var chat: Chat
     /// Wrist down with the app still showing.
     @Environment(\.isLuminanceReduced) private var dimmed
+    @Environment(\.scenePhase) private var phase
+    @Environment(\.onScreen) private var onScreen
+    /// Rows on screen now, by message id, for the read rule (`attend`).
+    @State private var visible: Set<String> = []
+    /// An unread answer on screen, counting down to read.
+    @State private var reading: [String: Task<Void, Never>] = [:]
     /// Whether the view is held at `target`. Kept until he scrolls himself: a thread still laying out
     /// moves the spot, so a single jump lands short of it.
     @State private var pinned = true
@@ -35,6 +41,10 @@ struct HomeView: View {
                         ThreadRow(text: m.text ?? "", user: m.role == "user", session: m.session_id != nil)
                             .id("msg\(m.id)")
                             .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { heights["msg\(m.id)"] = $0 }
+                            .onScrollVisibilityChange(threshold: shownAt(m)) { shown in
+                                if shown { visible.insert(m.id) } else { visible.remove(m.id) }
+                                attend()
+                            }
                     }
                     // What the hub heard, until the turn itself lands in the thread.
                     ForEach(Array(chat.pending.enumerated()), id: \.offset) { i, words in
@@ -74,7 +84,27 @@ struct HomeView: View {
                 if now == .interacting || now == .tracking { pinned = false }
             }
             .onAppear { jump(proxy) }
+            // **Unread answers** (docs/WATCH.md): an amber dot at the top while any is left, and a tap
+            // on it lands on the oldest. A button of its own, so the tap does not also record.
+            .overlay(alignment: .top) {
+                if let first = chat.unread.first {
+                    Button {
+                        Hub.log("unread-jump", ["id": first.id, "left": chat.unread.count])
+                        pinned = false
+                        withAnimation(.easeOut(duration: 0.2)) { proxy.scrollTo("msg\(first.id)", anchor: .top) }
+                    } label: {
+                        Circle().fill(Self.unreadDot).frame(width: 10, height: 10)
+                            .frame(width: 48, height: 30).contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .ignoresSafeArea()
+                }
+            }
         }
+        .onChange(of: dimmed) { _, _ in attend() }
+        .onChange(of: phase) { _, _ in attend() }
+        .onChange(of: onScreen) { _, _ in attend() }
+        .onChange(of: chat.unread) { _, _ in attend() }
         .recordsWhenAsked()
     }
 
@@ -95,6 +125,33 @@ struct HomeView: View {
     @ViewBuilder private func room(_ id: String) -> some View {
         if id == target && (heights[id] ?? 0) > WKInterfaceDevice.current().screenBounds.height - Landing.top - PageInset.bottom {
             Color.clear.frame(height: Landing.top - 2 * Landing.itemGap)
+        }
+    }
+
+    /// The amber the sessions list marks unread with.
+    private static let unreadDot = Color(hex: "#e0a03a")
+
+    /// How much of a row must be on screen to count as shown: half, or for a row taller than the
+    /// screen, enough to fill a little under half the screen. A long answer counts once its opening is
+    /// in front of him, not only once he has scrolled through it.
+    private func shownAt(_ m: Message) -> Double {
+        guard let h = heights["msg\(m.id)"], h > 0 else { return 0.5 }
+        return min(0.5, Double(WKInterfaceDevice.current().screenBounds.height * 0.4 / h))
+    }
+
+    /// **The read rule**: an unread answer counts as read after two seconds on screen, with the app in
+    /// front, home showing and the wrist up. Any of those ending first stops the count.
+    private func attend() {
+        let looking = !dimmed && phase == .active && onScreen
+        let due = looking ? Set(chat.unread.map(\.id)).intersection(visible) : []
+        for (id, t) in reading where !due.contains(id) { t.cancel(); reading[id] = nil }
+        for id in due where reading[id] == nil {
+            reading[id] = Task {
+                try? await Task.sleep(for: .seconds(2))
+                guard !Task.isCancelled else { return }
+                reading[id] = nil
+                if let m = chat.unread.first(where: { $0.id == id }) { chat.markRead(m) }
+            }
         }
     }
 

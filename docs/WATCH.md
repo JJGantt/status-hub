@@ -530,10 +530,10 @@ working on; it does nothing when there is nothing to throw away.
 - **The microphone closing taps the wrist** (`.stop`), on home and in a session, on a recording the
   silence ended and on one a press ended alike. That is the moment nothing else reports: the silence
   decides it, and by then the watch may be back at his side.
-- **A recording still open taps the wrist once a minute** (`.click`, `Capture.nudge`), a command or a
-  follow-up alike, counted in seconds of audio. A locked recording ends only at a press, so one left
-  running holds the microphone and every room mic's mute until he notices; the tap is how he does. Light
-  on purpose: it repeats for as long as the recording does. Never on the listener or rewind, which are
+- **A recording still open taps the wrist once a minute** (`.directionDown`, `Capture.nudge`), a
+  command or a follow-up alike, counted in seconds of audio, and logs `mic-nudge`. A locked recording ends only at a press, so one left
+  running holds the microphone and every room mic's mute until he notices; the tap is how he does. A
+  falling double tap, the start tap's mirror; a test with `.click` went unnoticed. Never on the listener or rewind, which are
   meant to run.
 - **Every command ends in a second tap, whichever way it ends**: a reply buzzes `.notification` (the one
   that makes a sound, so it is heard as well as felt); a failure buzzes `.failure`, whether the hub
@@ -833,6 +833,7 @@ wrist. Fly keeps only the recent lines, so read it soon.
 | `control` | a press of the bottom control, with its mode |
 | `record` | a finger tap on the text |
 | `record-refused`, `mic-refused`, `mic-failed`, `mic-open` | why a recording did or did not start |
+| `mic-nudge` | the once-a-minute tap on a recording still open: minutes so far, the flow, the build |
 | `mic-end` | what the endpoint saw when a recording ended, and why (`silence`, `unspoken`) |
 | `mic-interrupted`, `mic-interruption-ended` | the system took the microphone mid-recording, and gave it back: the system's `reason` (0 default — Siri, a call, an alarm; 1 app suspended; 2 built-in mic muted; 3 route disconnected), `options` on the end (1 = may resume), the route, `recording` (seconds since the microphone opened), and on the start the endpoint's state — `quiet` (seconds since the last speech), `voice` (the classifier's last score), `heard`, `seconds`, `flow`. `quiet` near 0 with `voice` high is a cut mid-word |
 | `mic-route`, `mic-route-change` | the audio session's category and mode, its input and output ports, and whether other audio is playing — at every recording's start, and whenever the route changes under one |

@@ -120,7 +120,7 @@ final class Capture: ObservableObject {
     /// leaves it room to be tuned without a watch build.
     static let quietMin: TimeInterval = 4
     /// A command or a follow-up still recording taps the wrist once every this many seconds of audio
-    /// (`.click`, the lightest there is), so one left running — locked, or held open by a noisy room — is
+    /// (`.directionDown`, a falling double tap — he did not notice `.click`), so one left running, locked or held open by a noisy room, is
     /// noticed. Counted in the microphone's own seconds, so it rides the buffers already arriving rather
     /// than a timer of its own.
     private static let nudge: TimeInterval = 60
@@ -379,7 +379,9 @@ final class Capture: ObservableObject {
         if flow == .locked { markQuiet(speaking ?? (level >= endpoint.threshold), at: segment) }
         segment += seconds
         if mutes, Int(segment / Self.nudge) > Int((segment - seconds) / Self.nudge) {
-            WKInterfaceDevice.current().play(.click)
+            WKInterfaceDevice.current().play(.directionDown)
+            Hub.log("mic-nudge", ["minutes": Int(segment / Self.nudge), "flow": flow.rawValue,
+                                  "build": Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? ""])
         }
         if endpoint.heard && !wasHeard { spokeAt = Date() }
         // Accidentally recording: nobody spoke into it, or it has run on and on unlocked. Either way

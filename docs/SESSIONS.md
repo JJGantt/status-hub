@@ -307,7 +307,10 @@ and only a RESIDENT session can hold it, because that is what `follow_up` can ac
 
 **Nothing spoken is ever dropped.** The queue has no way to fail — a command for a sleeping machine
 is claimed by nobody and expires unread — so every entry point checks the machine is beating BEFORE
-writing, and anything that still fails is kept whole in `desk_dead_letters`. It is deliberately not a
+writing, and anything that still fails is kept whole in `desk_dead_letters`. A new session also needs
+the machine's `/login` alive (its heartbeat publishes the expiry): when the chosen machine is down or
+expired it goes to the other one, the tool result says so and why, and an expired login starts one
+session in the `health` repo to renew it (`health/runbooks/claude-login.md`). It is deliberately not a
 retry queue: work that could not run when it was asked for has usually stopped being wanted.
 
 **A shell's command line takes 1024 bytes.** That is the tty's canonical-mode limit, and past it the

@@ -53,11 +53,12 @@ talks to the linked one:
 
 | Project | Ref | Used by | Edge functions |
 |---|---|---|---|
-| `life-data` | `felyggqjjhltwokdfhop` | everything in this doc | none |
+| `life-data` | `felyggqjjhltwokdfhop` | everything in this doc | `voice-fallback` |
 | `GolfTracker` | `oumnicnvayqrbfbljgyl` | `GolfTracker*` repos | `golfcourse-search`, `resolve-hole-heights` |
 
-Both edge functions' sources live in `GolfTracker-SwingDetection/supabase/functions/` and are
-committed + pushed; the deployed copies match (they only differ by Supabase's deploy-time TypeScript
+`voice-fallback` (the watch's way in when the hub does not answer, §6) lives in
+`data-layer/supabase/functions/`. The two GolfTracker functions' sources live in
+`GolfTracker-SwingDetection/supabase/functions/` and are committed + pushed; the deployed copies match (they only differ by Supabase's deploy-time TypeScript
 stripping). Nothing runs in Supabase that isn't in a repo. Checking one project and reporting it as
 "Supabase" is the easy mistake here — `supabase functions list` silently scopes to whichever project
 the working directory is linked to.
@@ -109,7 +110,7 @@ mail arriving, and nothing is mirrored off the Mac.
 
 ## 3. Data layer — Supabase (source of truth)
 
-- Project `felyggqjjhltwokdfhop` ("life-data"). Service-role key in `data-layer/src/client.ts`.
+- Project `felyggqjjhltwokdfhop` ("life-data"). Service-role key in `data-layer/.env` (gitignored), loaded by `src/client.ts`.
 - The **`data` MCP** (`data-layer/dist/mcp.js`) is how Claude reads/writes life data.
 - **RLS** is on for every table. `00042` covered the 38 that existed then and `00074` the three
   added since (`reports`, `workset_reports`, `set_watcher`); tables created by SQL migration
@@ -167,16 +168,16 @@ reported. A completed item is not deleted: it leaves every active surface but st
 - `notifications` — push send-log + per-day dedupe.
 
 Produce tracking rides on nutrition rather than its own table: `nutrition_entries.ingredients` carry
-`produce_type` (`leafy`/`vegetable`/`fruit`) + `produce_g`, and the server rolls them into `veg_g` /
-`leafy_g` / `fruit_g` (leafy ⊂ veg).
+`produce_type` (`dark_green_vegetable`/`other_vegetable`/`fruit`) + `produce_g`, and the data layer rolls
+them into `veg_g` / `dark_green_g` / `fruit_g` (dark green ⊂ veg).
 
 ---
 
 ## 4. Surfaces (all share the web hub codebase)
 
 - **Web hub** — `status-hub/server/public/` (`core.js`, `cards/*`, `app.css`). Desktop `/page` =
-  scrolling rows; phone = swipe panes on `/` (**sessions** · **home** · misc · **maint** · **lists** ·
-  **reports**), where the home pane is `phone-home.html` — everything the TV's home wall carries in
+  scrolling rows; phone = swipe panes on `/` (**sessions** · **home** · **reports**), where the home
+  pane is `phone-home.html` — everything the TV's home wall carries in
   ONE SCREEN, laid out in portrait at the phone's own scale rather than as a scaled-down wall. The
   hub conversation is on the home pane, so the phone has no chat pane; the walls still do. All off
   `/api/stream` (SSE). Served by the Node server.
@@ -209,14 +210,14 @@ Produce tracking rides on nutrition rather than its own table: `nutrition_entrie
     the session's first message — a widget extension has no microphone of its own.
   - See [docs/HUB-INTERNALS.md](docs/HUB-INTERNALS.md) §9b.
 - **Apple Watch** — `status-hub/apps/Watch/`, native (watchOS has no web view) and embedded in the
-  iOS app. Four pages: the sessions, each opening to its last reply and live tool calls (with what it
-  says between them) and taking a recorded follow-up; home, where it opens — the time and the newest
-  reply, recorded into like the thread; the shared hub thread, recorded into (clips go to
-  `/api/voice-command` like the phone's microphone), with the running command's tool calls and
-  in-between text live; the nutrition card's pace rings
-  over today's log; and the home wall's rest clocks over today's sets. A complication and the Record control (watchOS 26, which an Ultra's
-  Action button can run) open it straight into recording, and a command ends itself at the silence
-  after it. See [docs/WATCH.md](docs/WATCH.md).
+  iOS app. Five pages: the sessions, each opening to its last reply and live tool calls (with what it
+  says between them) and taking a recorded follow-up; home, where it opens, which is the shared hub
+  thread, recorded into (clips go to `/api/voice-command` like the phone's microphone), with the
+  running command's tool calls and in-between text live; `day` and `health`, two layouts of the
+  nutrition pace rings and the training clocks over today's log and sets; and the live mic. The
+  complications and the Record control (watchOS 26, which an Ultra's Action button can run) open it
+  straight into recording; a command ends itself at the silence after it unless it is locked. See
+  [docs/WATCH.md](docs/WATCH.md).
 - **ESP32** — the voice mic (see §5).
 - **iPhone push** — native APNs notifications (see §7).
 
@@ -252,16 +253,17 @@ End-to-end flow:
   publishing `~/repos` and opening terminals when the hub asks.
 - `pi-desk/` — the Pi's desk-command consumer (systemd, tmux sessions). The half of the repo picker
   that still works when the Mac is off; §9.
-- `mcp-voice/` — the voice-control MCP (`set_focus` / `list_sessions`) so voice can switch what
-  the wall shows.
+- `mcp-voice/` — the voice-control MCP (`get_routing`, `set_always_on`, `set_inject_mode`,
+  `set_jaredbot`).
 - `voice-id/` — on-device speaker verification (ECAPA-TDNN) and the wake-free capture it gates.
-- `mac-synth/` — a warm Kokoro TTS server on the Mac (launchd `com.jaredgantt.mac-synth`); the
-  worker POSTs reply text and gets PCM back far faster than the Pi's CPU ONNX Kokoro.
-- `pi-audio/` — the Pi service that plays the spoken reply out of the TV via PipeWire.
+- `pi-audio/` — the Pi service that played the spoken reply out of the TV. Disabled on the Pi, with
+  `audio_spoken_reply` off; enable the two together or not at all (pi-config `README.md`).
 - `firmware/` — ESP32 (PlatformIO). A dumb PCM pump: streams the I2S mic, no on-device logic.
 
 **Request sources** (the `source` field on `voice_requests`): `fly` (ESP), `mac` (Mac listener),
-`web-quick` (hub mic FAB), typed web text.
+`web` / `web-quick` (hub mic FAB), `watch-cmd` (a watch command through the hub), `watch-fallback`
+(a watch command through Supabase when the hub does not answer), typed web text. `/api/voice-command`
+takes any `?source=` label a client names.
 
 ---
 
@@ -341,12 +343,13 @@ handed the day's thread from state every worker holds, so it gains nothing from 
   `APNS_ENV`) — **not** in Supabase. Key file stashed at `~/.appstoreconnect/private_keys/`.
 - **Sandbox vs production:** dev (Xcode) builds → sandbox tokens; Ad Hoc / TestFlight / App Store
   builds → production tokens. The per-token `environment` lets both coexist.
-- **This is the trap when building the app anywhere other than CI.** The laptop's keychain holds
-  only an *Apple Development* identity, so a build made there must declare
+- **This is the trap when installing a development build.** The laptop's keychain holds
+  only an *Apple Development* identity, so a build signed there for development declares
   `aps-environment=development` and registers a **sandbox** token — which the hub, sending to the
-  production gateway, cannot deliver to (`BadDeviceToken`). The distribution certificate that keeps
-  `aps-environment=production` exists only in the `status-hub` repo's GitHub secrets, so any build
-  meant to receive real notifications has to be archived by `ios-adhoc.yml` or `ios-testflight.yml`.
+  production gateway, cannot deliver to (`BadDeviceToken`). A build meant to receive real
+  notifications is distribution-signed: `apps/tools/testflight.sh` gets that from Apple's cloud signing
+  through the App Store Connect API key, and `ios-adhoc.yml` / `ios-testflight.yml` from the
+  distribution certificate in the repo's GitHub secrets.
 
 ---
 
@@ -354,7 +357,8 @@ handed the day's thread from state every worker holds, so it gains nothing from 
 
 - **Fly.io** — hosting (the apps in §2). CLI `fly`, authed as jaredgantt@gmail.com.
 - **Supabase** — Postgres + realtime (source of truth).
-- **Groq** — `whisper-large-v3-turbo` STT (key is a Fly secret on `jared-voice`).
+- **Groq** — Whisper STT: `whisper-large-v3-turbo` on `jared-voice`, and both `whisper-large-v3` and
+  turbo on the hub's `/api/voice-command` (a Fly secret on each).
 - **Anthropic** — Claude subscription (warm Agent SDK + `claude -p`) for every worker, Fly included.
 - **Apple** — APNs (push) + App Store Connect (ASC key on disk; Issuer ID not yet recorded).
 
@@ -407,7 +411,7 @@ is the bus; the daemon on each machine owns everything local:
   unreachable there is nothing to close, so the destination resumes from the mirror as of the last
   completed turn. `transfer_session` by voice, or by asking the session itself to move.
 - **Sessions are numbered so they can be named out loud.** Active sessions, **most recently active
-  first, running above parked, from 1** — the same rule in `data-layer/src/desk.ts` (`numberSessions`) and in `/api/sessions`,
+  first, running and parked together, from 1** — the same rule in `data-layer/src/desk.ts` (`numberSessions`) and in `/api/sessions`,
   because "session three" has to mean one thing. The number is a position in the current list, never
   identity: closing one renumbers the rest, which is what keeps it 1..N over what is actually open.
   `end`, `resume` and `transfer` all take a number, a repo name, or an id; an ambiguous name is
@@ -436,12 +440,10 @@ is the bus; the daemon on each machine owns everything local:
 - **A prompt reaches the Mac through a file, never the typed command line.** `do script` writes into
   the tab's tty, and a tty accepts **1024 bytes** and silently discards the rest: a 2500-character
   dispatch arrived as exactly 1024 characters, cut mid-word, leaving the shell on an unterminated
-  quote and no session — with the command recorded as `done`. A **follow-up** cannot use the shell
-  (it goes to Claude Code's composer), so over ~900 characters — or with any newline, which an
-  AppleScript string literal cannot hold — it is stashed in `~/.claude-desk-prompts/` and the session
-  is told to read it, **echo it back verbatim first**, then act. The echo is what keeps the words in
-  the session rather than in a file nobody opens, which is why the file is disposable and swept after
-  a day. The Pi needs none of this: tmux carries 3000 characters into a pane intact.
+  quote and no session — with the command recorded as `done`. A **follow-up** does not go through
+  the shell: a running session holds its tty raw, so a follow-up of any length is typed straight into
+  its composer (voice-pipeline `orchestrator/src/handoff.js`). The Pi needs none of this: tmux carries
+  any length into a pane.
 - **Two guards on the launch path:** the target must be a repo the orchestrator itself published (so
   a crafted or stale row can't `cd` anywhere else on disk), and commands older than `COMMAND_TTL_S`
   (120s) expire unrun — a Mac waking from sleep must not open every terminal queued while it was out.
@@ -471,11 +473,13 @@ Nothing open.
 
 ## 11. Getting a build onto the phone
 
-**TestFlight is the route.** Dispatch `ios-testflight.yml` (or push an `ios-*` tag): a macOS runner
-archives and uploads, Apple processes it, and the internal group `internal_main` on the App Store
+**TestFlight is the route, built on the Mac.** `apps/tools/testflight.sh` archives there, exports
+distribution-signed through the App Store Connect API key, and uploads (CLAUDE.md has the details).
+Apple processes it, and the internal group `internal_main` on the App Store
 Connect app "JaredHub" (id `6805268657`) receives every build, so the phone installs it from the
 TestFlight app over the air — nothing has to be on the Mac's network. The watch app rides inside it.
-A TestFlight build expires 90 days after upload. The runner bills at 10x, so dispatch it deliberately.
+A TestFlight build expires 90 days after upload. `ios-testflight.yml` (or an `ios-*` tag) does the same
+on a macOS runner, for when the Mac is away; the runner bills at 10x, so dispatch it deliberately.
 
 **When TestFlight says he is not a tester, that is membership, not the build.** TestFlight keeps
 showing the app to an Apple ID that was ever a tester but refuses to install for one that is not in a
@@ -491,7 +495,7 @@ its members and public link, `builds` prints what TestFlight is offering and whe
   an external group's builds have to clear Beta App Review first, so "turn the link on" is not a
   setting away from an internal group. Of the four apps only CapGrille has one.
 
-**A local build is for iterating on UI, never for installing.** A build signed on this Mac carries
+**A development build is for iterating on UI, never for installing.** A build signed for development carries
 `aps-environment: development` and registers a **sandbox** APNs token, which the hub's production
 sends cannot reach, so installing one silences push until a production build replaces it. It also
 needs the iOS device platform from Xcode → Settings → Components (CLAUDE.md).

@@ -33,8 +33,11 @@ bundle older than `safeReload` loses a clip mid-sentence.
 ## The auth gate is positional
 
 One `app.use` in `server.js` gates everything **defined below it**. Public, because they are
-declared above it: `/healthz`, `/login`, `/privacy`, `/terms`, and the Search Console verification
-file named by `GSC_VERIFICATION`. A new route added near the top of the file is world-readable.
+declared above it: `/healthz`, `/login`, `/privacy`, `/terms`, the Search Console verification
+file named by `GSC_VERIFICATION`, and the restaurant watch's `/api/cg/*` routes (which check their
+own owner key). A new route added near the top of the file is world-readable. The gate itself lets
+through one named set, `PUBLIC_SURF` (the `/surf` page, its bundle and stylesheets, and
+`/api/surf/live|stream|history`), wherever those are declared.
 
 The legal pages and the verification file are deliberately public: Google fetches them as an
 anonymous crawler while verifying the domain and reviewing the OAuth app, and behind the gate it
@@ -123,7 +126,7 @@ SDKs instead, which are always installed:
     xcrun -sdk watchos swiftc -typecheck -parse-as-library -swift-version 5 -target arm64-apple-watchos11.0 -D WATCH_APP Watch/*.swift WatchWidgets/RecordIntent.swift Shared/Auth.swift Controls/RingsView.swift
     xcrun -sdk watchos swiftc -typecheck -parse-as-library -swift-version 5 -target arm64-apple-watchos11.0 WatchWidgets/*.swift
 
-The iOS app's assets, Info.plists and embedding are only proven by the CI archive.
+The iOS app's assets, Info.plists and embedding are only proven by an archive (`apps/tools/testflight.sh`, or CI).
 
 ## A new bundle id is registered first, then archived on CI
 
@@ -453,7 +456,7 @@ It also beats app.css's `body.tv.wallportrait` block on equal specificity, by lo
   every line. The text inside a right-hugged block stays left-aligned: a prompt is not always one
   line, and a ragged left edge is what right-aligning a paragraph costs.
   **THE LOWEST LINE SAYS WHETHER IT IS WORKING.** `onActivity` in voiceagent.js hands every surface
-  the frames the activity popup draws — a tool call, a thought, the Opus hop — and this box keeps the
+  the frames the activity popup draws — a tool call, a thought between tool calls — and this box keeps the
   NEWEST ONE ONLY, on one clipped line behind a pulsing caret, cleared by the reply or by the run's
   `done`. The session view is where a whole trajectory is listed and read; a stack of tool calls here
   is the whole box. The popup itself is hidden outright on this page (`.ai-act` in phone-home.css) —
@@ -634,7 +637,8 @@ than `seen_at`, so tool calls and thoughts never raise it and only a completed r
 the session stamps `seen_at` (`POST /api/sessions/seen`), on the row rather than per device, because
 the phone and the wall are looking at one list and reading an answer on either means it has been
 read. Two things stamp it: opening the session in the hub, and — on the Mac — its Terminal tab being
-frontmost, which the orchestrator's reconcile tick watches (`readFront`). The terminal's own BELL
+frontmost, which Hammerspoon reports the moment it changes (`~/.hammerspoon/session-read.lua` → the
+orchestrator's `POST /session-read` → `markTtyRead`). The terminal's own BELL
 cannot be read or cleared: Terminal.app sets it from a BEL character and clears it when the tab is
 selected, and its AppleScript dictionary has no property for it at all (a tab offers `busy`,
 `selected`, `tty` and `custom title`). So what is watched is the thing that CLEARS the bell rather

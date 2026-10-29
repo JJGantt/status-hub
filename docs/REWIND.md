@@ -112,8 +112,8 @@ holds audio from either side of that gap as if it were continuous.
 
 ## Transcription: what is possible
 
-The grab is transcribed by the same path as a command: Groq `whisper-large-v3-turbo`
-(`server/lib/transcribe.js`), OpenAI as the fallback. Whisper returns plain text only — no speakers, no
+The grab is transcribed by the same module as a command (`server/lib/transcribe.js`): Groq
+`whisper-large-v3-turbo`, OpenAI as the fallback, without the second Groq model a command also gets. Whisper returns plain text only — no speakers, no
 tone, no sounds — and Groq offers no diarization. Everything not in the words is lost at that step.
 
 **Speaker separation (diarization) is a solved, commercial feature.** Options as of October 2026:

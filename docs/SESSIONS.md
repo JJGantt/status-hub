@@ -74,7 +74,7 @@ records alone learns of a mid-turn prompt minutes late or never — which is the
 most needs it. `sessionWatch` sends its `said` frame off the `enqueue` record and remembers the text,
 so the user record that follows does not say it twice.
 
-| `seen_at` | when the last reply was READ. A row is unread while `reply_at` is newer (or `seen_at` is null), which is what every session list flags. On the row rather than per device: the phone, the wall and the Mac share one list, so reading an answer on any of them has read it. Two things stamp it — opening the session in the hub (`POST /api/sessions/seen`), and its Terminal tab being frontmost on the Mac (`readFront` in the orchestrator's reconcile tick) |
+| `seen_at` | when the last reply was READ. A row is unread while `reply_at` is newer (or `seen_at` is null), which is what every session list flags. On the row rather than per device: the phone, the wall and the Mac share one list, so reading an answer on any of them has read it. Two things stamp it — opening the session in the hub (`POST /api/sessions/seen`), and its Terminal tab coming frontmost on the Mac (Hammerspoon `session-read.lua` → the orchestrator's `markTtyRead`) |
 | `mirror_offset` / `mirror_at` | how much of the transcript is in the `transcripts` bucket |
 | `command_id` | the dispatch or resume that created it — how a follow-up resolves its target |
 
@@ -179,9 +179,6 @@ Pi's detail starts `queued`), and the tool says which — a queued session is no
 detail of `handed to the Mac as <id>` is not a verdict either: `followHandoff` waits on that Mac command
 and reports where the session really started.
 
-All of them are on the fast path (`SAFE_TOOLS`): they route prompts and manage what is running, and
-none of them invents a value.
-
 ### Focus — how a session gets spoken to
 
 The session a spoken follow-up lands in — and the one the pane, the strip and the home wall show as
@@ -207,9 +204,11 @@ A pinned session carries a pin on every surface that shows focus — the home wa
 the footer strip, the phone pane — and automatic focus carries none, because a pin stays put while
 other sessions take turns. `/api/sessions` returns `pinned` beside `focus` for exactly this.
 
-**Focusing is itself a handoff.** `follow_up` normally demands an explicit phrase ("send a follow-up",
-"tell it to"), because the mic hears the whole room and forwarding ambient speech into a session is
-the failure that rule prevents. Naming a session removes the ambiguity, so everything said after a
+**Focusing is itself a handoff.** On a room-mic turn `follow_up` demands an explicit phrase ("send a
+follow-up", "tell it to"), because the mic hears the whole room and forwarding ambient speech into a
+session is the failure that rule prevents. On a deliberate turn (watch, phone, typed, the ESP's wake
+word) a reply that plainly answers a session's message posted in the thread is a handoff too: the
+worker names those messages by session in the replayed thread, and the model sends the reply there. Naming a session removes the ambiguity, so everything said after a
 focus in the same turn goes to that session with no phrase required. That is the point: he talks to
 it as though it were the same assistant he always talks to, says "you" about things another session
 said, and never has to think about the handoff happening underneath.
@@ -296,7 +295,7 @@ reattach; it starts a second process replaying the same file, and the two diverg
 them. Measured: the Pi's resume appended 16 records the Mac's copy never saw. Every path that resumes
 closes the other side first, and the hub asks about the conversation before it resumes one
 (`conversationNow`, HUB-INTERNALS §6b): a resume makes a new row and leaves the parked one parked, so
-without that check a follow-up or a Resume tap on the old row would start a second process on a
+without that check a follow-up or a resume of the old row would start a second process on a
 conversation already running again under the new one.
 
 **`desk_focus` is written only by Jared's intent.** A dispatch, a resume and a dead-letter retry write
@@ -335,7 +334,6 @@ the complete capture was discarded as its duplicate.
 | `CLAIM_STALE_S` | 900s | a claim held this long is treated as abandoned |
 | `LAUNCH_GRACE_S` | 90s | a new session is not declared dead before this — and a row binds only a process that started within this of the row (Mac), which is what keeps a later `claude` in the same tab off an older row |
 | `MIC_QUIET_S` | 2.5s | every mic silent this long before a command is claimed |
-| `TTY_INPUT_MAX` | 900 | above this a follow-up goes by file |
 | `PI_DESK_SESSION_BUDGET_MB` / `_MAX_MB` | 800 / 1200 | Pi only: a session's `memory.high` (over it with anon memory = heavy work, moved to the Mac) and `memory.max` |
 | `PI_DESK_RESERVE_MB` / `MAX_SWAP_PCT` | 300 / 70 | Pi only: free memory kept beyond every session's budget, and the swap ceiling, for admission |
 | retention | 7 / 14 / 30 / 7 days | closed sessions / parked / command log / raw captures |

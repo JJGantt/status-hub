@@ -622,10 +622,11 @@ again with backoff (`Hub.outcome`), never shown as a failure: the command is wit
 lowered wrist suspends the app and kills the open request, which used to read "The request timed out"
 over a command that had finished.
 
-**Recording sets `voice_muted`**, as the phone's microphone does, so the Mac and the ESP do not
-enqueue the same sentence a second time. The flag has no expiry, so every way out of a recording
-(send, Cancel) writes the unmute, and the writes are chained so an unmute cannot land ahead of its
-mute.
+**Recording holds the mute**, as the phone's microphone does (`Hub.muteOthers`, holder `watch` on
+`/api/voice-mute`, which keeps `voice_muted` set while any holder has it), so the Mac and the ESP do
+not enqueue the same sentence a second time. Every way out of a recording (send, cancel) gives it
+back, and the writes are chained so a release cannot land ahead of its take; a holder left set is
+ignored after 15 minutes.
 
 **Retry.** The clip is kept until its command has run, and the `client_msg_id` across a Retry, so a
 resend after a dropped connection gets the first send's id back instead of running twice. Once the id

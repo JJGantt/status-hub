@@ -625,7 +625,7 @@ enqueue; the clip is kept in the private `voice-clips` bucket and named in `voic
 deleted by pi-desk after 7 days; optional `lat`/`lon`/`acc`/`place` query → `voice_requests.location`) ·
 `/api/voice-text` (text → enqueue, optional `location` object likewise; returns the request id, which
 `/api/voice-reply/:id` waits on) · `/api/voice-reset` (stamps `voice_reset_at`; the thread is kept) ·
-`/api/voice-activity` · `/api/attach`
+`/api/voice-activity` · `/api/voice-mute` (take or give back one holder's mute) · `/api/attach`
 (photo upload) · `/api/register-push` · `/api/notify` (APNs to all devices) · `/api/clientlog`.
 
 **Outside the gate:** `/api/cg/transcribe` — the restaurant watch app's voice input, raw audio → Groq
@@ -633,14 +633,23 @@ Whisper → `{transcript}`, nothing enqueued. That app ships to TestFlight teste
 token; it sends its Anthropic key as `X-Owner-Key` instead, and only the owner's (its SHA-256 matches
 `CG_OWNER_KEY_SHA256`, the same hash as `AppGate.ownerKeyHash` in CapitalGrilleApp) gets through. If that
 key is ever rotated, both hashes change together. Every request writes one `[cg-transcribe]` line: size, time
-and word count, or `REFUSED` / `FAILED` with the reason. The watch logs its own side of each question to
+and word count, or `REFUSED` / `FAILED` with the reason, and one `app_logs` row (`kind` `voice_hub`) under
+the watch's `X-Interaction-Id`. The watch logs its own side of each question to
 Supabase `app_logs` (`voice_*` rows, CapitalGrilleApp `VoiceLog`).
+
+The same app's **order list** is outside the gate on the same key: `GET /api/cg/orders` (open orders plus
+the two models), `POST /api/cg/orders` (items as heard), `POST /api/cg/orders/standardize` (each row
+matched to the menu and renamed in place) and `POST /api/cg/orders/done` (`{id}` or `{all: true}`), over
+Supabase `cg_orders`, which has no anon policy. The watch's own model runs both passes; which model each
+uses is `cg_orders_model_first` / `cg_orders_model_second` (§7).
 
 **Auth:** the hub password → `sha256("status-hub:"+password)`; sent as the `hub` cookie (web) or the
 `X-Hub-Token` header (native app). The kiosk authenticates via `?token=<TV_TOKEN>` (also seeds the
 cookie). The gate is one `app.use` and it protects **everything defined below it**, static assets
 included. Declared **above** it, and therefore public: `/healthz`, `/login`, `/privacy`,
-`/terms`, and the Search Console verification file named by `GSC_VERIFICATION`. The legal pages
+`/terms`, the Search Console verification file named by `GSC_VERIFICATION`, and `/api/cg/*` (gated by
+their own owner key, above). The gate also passes the `PUBLIC_SURF` set (the `/surf` page with its
+bundle and stylesheets, and `/api/surf/live`, `/stream`, `/history`) wherever it is declared. The legal pages
 and the verification file have to be anonymous — Google fetches them as an unauthenticated
 crawler, and behind the gate it would get the login page and fail every check.
 
@@ -943,7 +952,7 @@ am/pm was never ambiguous, and dropping the letter is what buys the digit enough
 across the room.
 
 Voice/MCP writes them (data-layer tools); the hub surfaces them:
-- **Card:** `public/cards/todo.js` — the phone's `lists` swipe pane. Self-fetches `/api/todos` (not part of
+- **Card:** `public/cards/todo.js` — the lists in the phone's calendar sheet (and a wall's `lists` pane at phone size). Self-fetches `/api/todos` (not part of
   the status stream), refreshes on mount / after edits / on focus.
 - **Endpoints:** `GET /api/todos` (lists + items + the derived due view) ·
   `POST /api/todos/add` (service-key writes; takes a `list_id` and **404s** on one that does not
@@ -1047,8 +1056,8 @@ hub, and a repeated `client_msg_id` returns the first command rather than sendin
 **It asks about the conversation, not the row** (`conversationNow`). A resume makes a new row and leaves
 the parked one parked, and `claude --resume` keeps the conversation's id — so words for a parked row
 whose conversation is running again go to the running row, and a resume still opening or queued
-answers 409. A second resume would put two processes on one transcript and fork it; the phone's Resume
-button goes through the same check. Every case is an exact lookup: both machines stamp a resumed row
+answers 409. A second resume would put two processes on one transcript and fork it; `POST /api/sessions/resume`
+goes through the same check. Every case is an exact lookup: both machines stamp a resumed row
 with the resume command's id, and the Pi publishes the conversation id at launch.
 
 `GET /api/sessions/:id` returns one session with its `last_prompt`, whole `last_reply`,
@@ -1178,8 +1187,7 @@ the watch, by `notifySessionReply`: both machines already report every turn end 
 reconcile tick for one `fs.watch` dropped), so it is sent from there, for every session on either
 machine, the one being typed in included. Kind `session`, `active` so it lights the watch; title the
 session's name, body the reply. It is keyed `session-reply:<id>:<reply_at>` — the watcher sends the
-turn's `at` — so one turn buzzes once even when its end is noticed twice, and `push_enabled` gates it
-as it gates the voice worker. `relay.js` posts a hub dispatch's first reply into the hub thread but
+turn's `at` — so one turn buzzes once even when its end is noticed twice, and `push_enabled` gates it. `relay.js` posts a hub dispatch's first reply into the hub thread but
 sends no push of its own: this one covers it.
 
 The payload's `session_id` is what a tap opens: `SessionLaunch` → `window.__showSession` opens that
@@ -1287,7 +1295,7 @@ writes a self-contained HTML page, it lands as a push notification, and tapping 
 | the instruction to publish | `REPORT_DIRECTIVE`, appended to the prompt by `pi-desk` and the Mac orchestrator |
 | the notification | `reportTick()` here — fired by realtime the moment a `reports` row is INSERTed, with a 10-minute backstop behind it |
 | the page | `GET /report/:id`; every report at `GET /reports` |
-| the way in | the **Reports pane** — the last swipe pane, right after the repo launcher |
+| the way in | the **Reports pane** — the phone's last swipe pane, right of home |
 | the pane's data | `GET /api/reports` (list only; `html` is never selected) → `cards/reports.js` |
 
 **Why the directive lives in the prompt and not in `CLAUDE.md`:** it should apply to dispatched work
@@ -1468,13 +1476,15 @@ callers; only the HTTP response is filtered.
 | `phone_activity_hold_s` | The same, off the kiosk (phone, Mac app panel). Default 8. |
 | `wakefree_enabled` | Always-on (wake-free) voice on/off. |
 | `voice_inject_mode` | Mac-mic speech injected into the focused window (ESP off). |
-| `voice_muted` | Global mute (PTT/FAB) — silences Mac mic + ESP. |
+| `voice_muted` | Global mute — silences Mac mic + ESP while any command is being captured. Derived: the hub recomputes it from the `voice_mute_<holder>` keys (each the instant that holder took it, empty when given back, ignored after 15 min), which every capture path sets through `POST /api/voice-mute` `{holder, on}` (the Mac's listener writes its own key directly). |
 | `voice_speak_replies` | Read the reply aloud. |
 | `voiceid_threshold` / `voiceprint` | Wake-free speaker-ID — the "it's Jared" bar and the exemplar bank. |
 | `wakefree_pause_s` | ESP only, and only until its voiceprint loads. Wake-free endpoints on Jared's verified presence, with a pause tolerance that scales with utterance length — neither mic consults this. |
 | `phone_silence_s` / `watch_silence_s` / `mac_silence_s` / `esp_silence_s` | Trailing-silence cutoff, per capture source. All default to 3 when unset. |
 | `watch_speech_mode` / `watch_speech_min` / `watch_speech_ratio` / `watch_voice_min` | What the watch counts as speech. `fixed` (default): 2.5x the room's floor and at least `watch_speech_min` (0.02 unset), which in a quiet room is the whole line. `room`: `watch_speech_ratio` (8 unset) times the floor, no fixed number. `voice`: Apple's on-device sound classifier, a window scored `speech` at least `watch_voice_min` (0.5 unset); no level line. Settings → Watch: speech line. |
 | `watch_quick_s` | The watch's Hub Quick complication: seconds from the microphone opening after which the command sends whatever it has (5 unset). Settings → Watch: quick command. |
+| `rewind_diarize` | `1` gives a rewind grab speaker labels (OpenAI `gpt-4o-transcribe-diarize`); anything else is plain Groq Whisper (`docs/REWIND.md`). No Settings control. |
+| `cg_orders_model_first` / `_second` | The model id each pass of the restaurant order list uses (`claude-sonnet-5` unset), returned by `GET /api/cg/orders` (§5). No Settings control. |
 | `watch_rewind_s` | Seconds the watch's rewind keeps (30 unset, 600 at most), read when it is engaged (`docs/REWIND.md`). No Settings control: write `app_settings` directly. |
 | `agent_mode` / `agent_cwd` | Full-agent (coding) mode toggle + working dir for the worker. |
 | `weight_reminder_enabled` / `_mode` / `_time` | The daily weigh-in push (On/Off, Manual/Dynamic, time). |
@@ -1518,12 +1528,14 @@ wrapper now:
   targets' entitlements) because the extension has a different bundle id and so a different *default*
   keychain group — it is deliberately equal to the app's own implicit group, so the password stored
   before the extension existed still resolves and nothing has to be re-entered.
-- **Build/install:** see the root `README.md` (xcodegen → xcodebuild → `devicectl device install`).
+- **Build/install:** TestFlight, archived on the Mac with `apps/tools/testflight.sh` (CLAUDE.md, "A build
+  signed for development cannot receive push").
 
 ---
 
-The remaining Swift in `apps/Sources/` is the pre-webview native UI, still compiled and still used by
-the widgets' data path:
+The remaining Swift in `apps/Sources/` is the pre-webview native UI. It is compiled into the iOS and
+Mac apps but unreachable — nothing instantiates its `RootView`, and the widget extension does not
+compile `Sources/` at all (a comment above `HubWebView` keeps it pending an OK to delete):
 
 | file | holds |
 |---|---|

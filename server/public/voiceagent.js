@@ -3,8 +3,7 @@
 //   1. A full-height conversation card at the end of the hub (#ai-log): type, talk, reset.
 //   2. A fixed quick-add mic FAB (bottom-right) for a one-off voice command without scrolling.
 //   3. A bottom activity bar (bottom-left, sized to never touch the FAB) that shows live progress —
-//      Listening / Transcribing / Thinking, then each tool call WITH its arguments as it runs, plus the
-//      Sonnet→Opus escalation when a turn leaves the fast path (its own row + a sticky OPUS chip).
+//      Listening / Transcribing / Thinking, then each tool call WITH its arguments as it runs.
 // Tool-call rows (role='tool') are surfaced ONLY in the activity bar, never in the conversation
 // thread. All skipped on the TV wall (no mic; it renders the conversation itself via tv.js).
 import { esc, md, localNowNaive, liveStream, KIOSK, holdReload } from './shared.js';
@@ -126,7 +125,6 @@ function boot() {
       pushActivity(a);               // any other view of the run — see onActivity below
       if (a.state === 'done') activity.done(a.text);
       else if (a.state === 'error') activity.err(a.text);           // a command it could not act on
-      else if (a.state === 'escalate') activity.escalate(a.text);   // Sonnet handed off to Opus mid-run
       else if (a.state === 'text') activity.thought(a.text);        // what it said between tool calls
       else activity.tool(a.text);
       return;
@@ -175,7 +173,7 @@ function pushPending(p) { for (const f of pendingSubs) { try { f(p); } catch (_)
 // ---- what the run is DOING, frame by frame -------------------------------
 //
 // The same frames the activity bar draws, handed to any other view that wants them: a tool call, a
-// thought between tool calls, the Sonnet->Opus hop, and the `done` / `error` that ends the run. The
+// thought between tool calls, and the `done` / `error` that ends the run. The
 // bar is a popup over the page and the phone's home page hides it outright, so a surface that wants
 // this inside its own conversation subscribes here rather than re-styling the bar. Hub focus only —
 // a session's frames run on /api/session-stream, which cards/repos.js holds.
@@ -948,8 +946,7 @@ export function initActivityBar() {
   // A quoted "what you said" line (filled after transcription) stacked above the live status row.
   bar.innerHTML =
     '<div class="ai-act-prompt"></div>' +
-    '<div class="ai-act-row"><span class="ai-act-dot"></span><span class="ai-act-txt"></span>' +
-      '<span class="ai-act-model"></span></div>';
+    '<div class="ai-act-row"><span class="ai-act-dot"></span><span class="ai-act-txt"></span></div>';
   // On the kiosk this lives in the footer's reserved lane rather than floating over a card. The phone
   // and the Mac app load the same markup, so #tv-act exists there too — but it sits inside .tv-shell,
   // which wall.js transform-scales to fit the screen, and a transformed ancestor both scales a
@@ -961,11 +958,10 @@ export function initActivityBar() {
   (lane || document.body).appendChild(bar);
   const txt = bar.querySelector('.ai-act-txt');
   const prm = bar.querySelector('.ai-act-prompt');
-  const mdl = bar.querySelector('.ai-act-model');
-  const STATES = ['ai-act-rec', 'ai-act-busy', 'ai-act-tool', 'ai-act-esc', 'ai-act-done', 'ai-act-err'];
+  const STATES = ['ai-act-rec', 'ai-act-busy', 'ai-act-tool', 'ai-act-done', 'ai-act-err'];
   let hideT = null;
   let hideAt = 0;             // when the pending hide is due (0 = none) — see the visibilitychange below
-  function hide() { clearTimeout(hideT); hideAt = 0; bar.classList.remove('show'); setPrompt(''); setModel(''); }
+  function hide() { clearTimeout(hideT); hideAt = 0; bar.classList.remove('show'); setPrompt(''); }
   // A backgrounded page's timers are suspended with it, so a hide that fell due while the phone was
   // locked would otherwise wait out its remaining delay again after the page comes back.
   if (!KIOSK) document.addEventListener('visibilitychange', () => {
@@ -975,13 +971,6 @@ export function initActivityBar() {
     const t = (text || '').trim();
     prm.textContent = t ? '“' + t + '”' : '';
     bar.classList.toggle('has-prompt', !!t);     // persists across status changes; cleared on hide/reset
-  }
-  // Which model is running this turn. Only set when a run LEAVES the default fast path (Sonnet→Opus),
-  // and — like the prompt line — it stays up for every later tool row, so the escalation is still
-  // visible when the hop itself has scrolled by. Cleared on hide/reset, i.e. per command.
-  function setModel(name) {
-    mdl.textContent = name || '';
-    bar.classList.toggle('has-model', !!name);
   }
   function show(text, kind, sticky) {
     txt.textContent = text || '';
@@ -994,12 +983,10 @@ export function initActivityBar() {
   }
   return {
     prompt(t) { setPrompt(t); },                  // the transcribed command; stays up for the whole run
-    rec(t) { setPrompt(''); setModel(''); show(t || 'Listening…', 'rec', true); },
+    rec(t) { setPrompt(''); show(t || 'Listening…', 'rec', true); },
     busy(t) { show(t, 'busy', true); },          // Transcribing… / Thinking…
     tool(t) { show('⚙ ' + (t || 'tool'), 'tool', true); },
     thought(t) { show(t, 'busy', true); },          // what the model said between tool calls
-    // The Sonnet→Opus hop: announced on its own row, then remembered as the OPUS chip.
-    escalate(t) { setModel('Opus'); show('⤴ ' + (t || 'Escalated to Opus'), 'esc', true); },
     done(t) { show(t ? '✓ ' + t : 'Done ✓', 'done', false); },
     err(t) { show(t, 'err', false); },
     clear: hide,

@@ -1,4 +1,4 @@
-// Routing/liveness panel — TV top status strip. Routing is fixed now (standard Sonnet→Opus), so this
+// Routing/liveness panel — TV top status strip. Routing is fixed (every turn is Opus), so this
 // shows inject state and the mic/worker liveness from the dashboard stream. Reuses the litter card's
 // devstrip + devchip markup so it matches. Paints #tv-routing; the chips no-op where absent (phone),
 // but the always-on border paint below runs on EVERY surface.

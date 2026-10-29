@@ -1156,20 +1156,12 @@ body.tv .hmonths{margin-left:0;font-size:11px}
 .ai-act-done .ai-act-dot{background:#39d353;animation:none}
 .ai-act-err .ai-act-dot{background:#f87171;animation:none}
 .ai-act-tool .ai-act-txt{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;color:#9fd0ff}
-/* Escalation (Sonnet → Opus): its own violet state so the hop is unmissable, plus a chip that stays lit
-   for the rest of the run — later tool rows overwrite the text, but "this turn went to Opus" persists. */
-.ai-act-esc .ai-act-dot{background:#c084fc;animation:ai-blink 1s steps(2,start) infinite}
-.ai-act-esc .ai-act-txt{color:#e9d5ff;font-weight:600}
-.ai-act-model{display:none;flex:0 0 auto;font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;
-  color:#d8b4fe;background:rgba(192,132,252,.14);border:1px solid rgba(192,132,252,.45);border-radius:999px;padding:2px 8px}
-.ai-act.has-model .ai-act-model{display:inline-block}
 /* TV KIOSK (big screen, no navbar): blow the activity popup WAY up so it reads from across the room. */
 body.tv:not(.phonewall) .ai-act{left:30px;bottom:30px;font-size:31px;padding:20px 32px;border-radius:18px;gap:12px;max-width:calc(100vw - 140px);border-width:2px}
 body.tv:not(.phonewall) .ai-act-prompt{font-size:27px}
 body.tv:not(.phonewall) .ai-act-row{gap:18px}
 body.tv:not(.phonewall) .ai-act-dot{width:20px;height:20px}
 body.tv:not(.phonewall) .ai-act-tool .ai-act-txt{font-size:29px}
-body.tv:not(.phonewall) .ai-act-model{font-size:22px;padding:4px 16px;border-width:2px}
 @keyframes ai-blink{50%{opacity:.35}}
 @media (max-width:640px){.ai-act{left:12px;bottom:66px;max-width:calc(100vw - 24px)}}
 .sess-focus{margin-left:7px;padding:1px 6px;border-radius:9px;background:rgba(91,141,239,.18);

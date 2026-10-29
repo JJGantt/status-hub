@@ -222,11 +222,7 @@ which `cards/repos.js` holds. Any surface wanting live progress inside its own m
 there instead of restyling the popup.
 The frames are: `working` (the prompt, once per command),
 `tool` (each tool call + args), `text` (what the model said between tool calls, up to 2000 characters),
-`escalate`, and `done`. **`escalate` is the Sonnet→Opus hop**: the worker
-sends one when a hub turn leaves the fast path (it needed a full-access tool, or Sonnet errored), and the
-bar shows it as its own violet row *and* lights an `OPUS` chip that persists for the rest of the run —
-later tool rows replace the text, but the fact that this turn changed models stays on screen until the
-command finishes. Only these five states survive the relay; anything else is coerced to `tool`.
+`error`, and `done`. Only these five states survive the relay; anything else is coerced to `tool`.
 A `text` frame is only ever text a tool call FOLLOWED: every runner holds what the model says until the
 next tool call and drops it if none comes, because the text after the last tool call is the reply and
 arrives as the thread message. The bar shows a thought in its `busy` style. Nothing keeps them, which is

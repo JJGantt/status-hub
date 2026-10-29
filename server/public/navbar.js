@@ -1,7 +1,6 @@
 // Shared bottom navigation. PHONE WALL: just settings + the one voice button (chat/misc are swipe
 // panes — no nav buttons needed). /page (desktop): adds chat + back-to-wall buttons. Right side is
-// the single voice button — one dynamic route (Sonnet handles the simple stuff, escalates to Opus
-// when it needs to) — tap-to-talk, driving the shared activity popup.
+// the single voice button — tap-to-talk, driving the shared activity popup.
 // Mounted once per page by core.js.
 import { makeRecorder, makeListener, activityBar, bindTap } from './voiceagent.js';
 import { open as openSettings } from './settings.js';

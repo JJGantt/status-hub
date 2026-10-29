@@ -1,7 +1,5 @@
 // Settings panel (the navbar gear). Reads/writes the shared app_settings via /api/settings.
-// Routing is now fixed: the brain button → Opus (max thinking), everything else → the standard Sonnet
-// agent that handles simple things itself and escalates to Opus for anything needing the gated tools —
-// so there are no model/route pickers here anymore. Each control saves on change; no explicit save button.
+// Routing is fixed — every voice turn runs on Opus — so there are no model/route pickers here. Each control saves on change; no explicit save button.
 
 async function save(key, value) {
   try {

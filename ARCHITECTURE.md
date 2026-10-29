@@ -230,7 +230,7 @@ End-to-end flow:
   ESP32 mic ──wss──▶ jared-voice (Fly)              Supabase              Fly/Pi/Mac worker
   (or Mac mic,        ├ openWakeWord ("Hey Rhasspy")  voice_requests  ◀──┐    claims request
    or web mic FAB)    ├ capture utterance             (the queue)        │    ├ warm Agent SDK (subscription)
-                      └ Groq whisper-large-v3-turbo ──▶ INSERT ──────────┘    │  or claude -p (escalation)
+                      └ Groq whisper-large-v3-turbo ──▶ INSERT ──────────┘    │  or claude -p (full-agent)
                                                                               ├ runs MCP tools (data/voice/govee)
    hub UI ◀── SSE ◀── status-hub ◀── voice_messages ◀───────────────────────┘  writes the reply
 ```
@@ -272,15 +272,15 @@ heartbeats into `worker_presence`; a worker only claims a request if **no higher
 has a fresh heartbeat** (`HEARTBEAT_FRESH_S`).
 
 `WORKER_PRIORITY` is `fly,pi,mac` everywhere (`worker/run.sh`'s default, the Pi's `.env`, the Fly
-image), so the order is **Fly → Pi → Mac**. Fly is first because it answers the common Sonnet turn
-faster (2.8s median against the Pi's 4.4s on identical commands; Opus turns cost about the same) and
+image), so the order is **Fly → Pi → Mac**. Fly is first because it answers the common turn
+faster (2.8s median against the Pi's 4.4s on identical commands) and
 does not depend on the house; it has no route to iMessage, Gmail or the feeder, which are rare enough
 not to count. The Mac is last so work started by voice outlives the laptop closing. Measurements:
 `voice-pipeline/docs/WORKER-PLACEMENT.md`.
 
 | Worker | `WORKER_ID` | Where | Runner |
 |---|---|---|---|
-| **Fly** | `fly` | own app `jared-voice-worker` (2GB, volume at `/data`) | warm Agent SDK for Sonnet and for Opus (`WARM_OPUS=1`) (subscription) |
+| **Fly** | `fly` | own app `jared-voice-worker` (2GB, volume at `/data`) | warm Agent SDK + `claude -p` (subscription) |
 | **Pi** | `pi` | systemd `voice-worker.service` | warm Agent SDK + `claude -p` (subscription) |
 | **Mac** | `mac` | launchd `com.jaredgantt.voice-worker` | warm Agent SDK + `claude -p` (subscription) |
 
@@ -294,13 +294,10 @@ handed the day's thread from state every worker holds, so it gains nothing from 
   backstop, and the claim socket is recycled every ~5 min to beat realtime half-open death. An idle
   cycle costs ONE read: whether anything is pending. Standby and the orphan-claim sweep answer
   nothing while there is nothing to claim, so they run on their own 60s clocks rather than per cycle.
-- **Model routing — one dynamic route.** Every hub command runs **Sonnet first**, given only the SAFE
-  read/actuator tools (`allowed_tools` on the warm SDK client); the gated data-WRITE tools are absent
-  from that list, so Sonnet can see them and is *denied* them. If the turn needs one — it emits
-  `__ESCALATE__`, or attempts a gated tool and is denied — it re-runs on **Opus** with the
-  full toolset (a fresh `claude -p`, or Fly's warm Opus client). Hub turns are fresh runs with the recent conversation replayed from `voice_messages`;
-  only full-agent (coding) mode keeps a `--resume` CLI session, because a shared one let two models
-  cross-contaminate each other's context. `voice_requests.tier` is still written by every capture
+- **Model routing — one route.** Every hub command, photos included, runs on **Opus at its default
+  effort with the full toolset** on the warm SDK client; there is no first responder and no escalation.
+  Hub turns are fresh runs with the recent conversation replayed from `voice_messages`; only full-agent
+  (coding) mode keeps a `--resume` CLI session. `voice_requests.tier` is still written by every capture
   path and read by nothing. Full detail: `voice-pipeline/docs/ROUTING.md`.
 - **Subscription vs API key:** the CLI and the Agent SDK silently prefer `ANTHROPIC_API_KEY` over
   the subscription login, so `worker.py` pops it from the environment at import and no subprocess can

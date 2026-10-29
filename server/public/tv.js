@@ -28,9 +28,8 @@ function initKiosk() {
     if (msg.kind === 'activity') {
       const a = msg.row || {};
       if (a.state === 'working') playPop();                                          // command's words just landed → pop
-      // identical mapping to the page view, escalation included (Sonnet → Opus shows as its own row + chip)
+      // the same mapping as the page view
       if (a.state === 'done') activity.done(a.text);
-      else if (a.state === 'escalate') activity.escalate(a.text);
       else activity.tool(a.text);
     }
     else if (msg.kind === 'reset') activity.clear();

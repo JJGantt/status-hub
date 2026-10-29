@@ -130,7 +130,7 @@ async function maintenancePhase() {
   } catch { return null; }
 }
 // Voice state for the TV strip + the mic-liveness check: whether always-on (wake-free) voice and inject
-// mode are on. Routing is fixed now (standard Sonnet→Opus), so there's no model/route to resolve here.
+// mode are on. Routing is fixed (every turn is Opus), so there's no model/route to resolve here.
 async function routingConfig() {
   let s = {};
   try { s = await settingsAll(); } catch { /* fall through to defaults */ }
@@ -3874,11 +3874,11 @@ app.post('/api/voice-activity', express.json(), (req, res) => {
   pushVoice('activity', {
     // A thought (state 'text') can run to a paragraph; everything else is a line.
     text: String(b.text || '').slice(0, b.state === 'text' ? 2000 : 400),
-    // Preserve 'working' (the command's transcript, once per command), 'done', 'escalate' (the
-    // Sonnet→Opus hop mid-run), 'text' (what the model said between tool calls) and 'error' (a command
+    // Preserve 'working' (the command's transcript, once per command), 'done', 'text' (what the model
+    // said between tool calls) and 'error' (a command
     // it could not act on, shown as a failure); everything else is a tool call. 'working' is what the TV
     // keys the heard-you pop off, so it must survive intact.
-    state: ['done', 'working', 'escalate', 'text', 'error'].includes(b.state) ? b.state : 'tool',
+    state: ['done', 'working', 'text', 'error'].includes(b.state) ? b.state : 'tool',
     focus: String(b.focus || 'hub'),
   });
   res.status(204).end();

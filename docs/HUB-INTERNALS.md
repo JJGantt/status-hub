@@ -993,8 +993,8 @@ orchestrator ──beat(30s)──▶ worker_presence(worker='desk') ──▶ t
   `POST /api/failures/:id/{retry,dismiss}` (commands that never ran).
 - **A launch is refused, not queued, when its machine is asleep** — 409 with a `saved` id. The
   payload lands in `desk_dead_letters` instead of a `desk_commands` row nobody will claim. Same for
-  the sessions panel's end/resume, which now also target the machine that OWNS the session (read from
-  its `worker`) rather than always the Pi.
+  `/api/sessions/end` and `/resume`, which target the machine that OWNS the session (read from
+  its `worker`).
 - **Guardrail:** the client's path selects a published ROW; the row's own path is what gets enqueued,
   so a crafted request can't `cd` anywhere else. The orchestrator re-validates independently, and
   commands older than 120s expire rather than opening terminals when the Mac wakes.
@@ -1029,8 +1029,9 @@ rest, which is the price of it being short enough to say.
 `POST /api/sessions/transfer` hands a session to the other machine. The row says which machine it is
 on now (`worker`), so the destination is implied. Two paths, matching the voice tool exactly: if the
 source machine is up it closes the session and flushes the mirror first; if it is not, the
-destination resumes from what was already mirrored and the old row is marked `transferred`. The
-button is absent for a session with no `claude_session_id`, since there is no transcript to carry.
+destination resumes from what was already mirrored and the old row is marked `transferred`. A
+session with no `claude_session_id` has no transcript to carry, so it cannot be moved. No surface has a
+move button: moving is asked of the voice tool (`transfer_session`) or of the session itself.
 
 ### Naming one
 

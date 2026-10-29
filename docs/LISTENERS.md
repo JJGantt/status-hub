@@ -28,12 +28,10 @@ That is all of it. `source` is free-form (`mac`, `fly`, `phone`, …) and a new 
 else, but a few labels are read: `watch` and `phone` have their voice checked (`GATED_SOURCES`) and are
 stamped `always_on`, which is the one thing the worker reads to decide whether a turn may be dropped as
 overheard or barred from sending — a listener inserting its own row (the Mac, the ESP) stamps it
-itself, and an unstamped row is treated as a press. The worker speaks the reply on the TV for `fly`
-and `mac` and pushes the reply to
-the phone for `fly`, `mac` and `watch-cmd`. The watch is a listener as `watch`, engaged from its home
-page (`Capture.toggleListening`); a command he presses for on it is `watch-cmd`, which is not a listener
-and not voice-checked, and is labelled only so its reply is pushed while the app is suspended. It
-still carries its window — from the microphone going live to the press that ends it — because
+itself, and an unstamped row is treated as a press. The worker itself reads one label,
+`watch-fallback`, the watch's route when the hub does not answer. The watch is a listener as `watch`,
+engaged from its home page (`Capture.toggleListening`); a command he presses for on it is `watch-cmd`,
+which is not a listener and not voice-checked. It still carries its window — from the microphone going live to the press that ends it — because
 `capture_start` is also the moment the worker hands the data layer as "now", which is what a set
 logged by voice is stamped with. A press without one is stamped when the model calls the tool.
 

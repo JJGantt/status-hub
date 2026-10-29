@@ -116,6 +116,7 @@ The reload waits for the outbox to drop the clip — resent on load it would be 
 
 **The trigger is not yet known.** Every damaged clip beacons `ev: "mic-damaged"` to the hub log with
 the track's settings (`sampleRate`, device label), the audio devices present, how long the page has
-been up and whether Guided Access is on; every device arriving or leaving beacons `mic-devicechange`.
-A route change under the held capture (AirPods, a car) is the first suspect. Read those two side by
+been up and whether Guided Access is on; every device arriving or leaving beacons `mic-devicechange`;
+every acquisition beacons `mic-device` with the label it got (the capture is pinned to the built-in mic,
+`acquireBuiltIn`, so AirPods are never the input — `HUB-INTERNALS.md`). A route change under the held capture (AirPods, a car) is the first suspect. Read those two side by
 side the next time it happens. Fly keeps only the last hundred or so log lines, so read them soon.

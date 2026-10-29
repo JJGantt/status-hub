@@ -64,7 +64,7 @@ once. Nothing acts on it; it is how the night-before setup is checked, from `ala
 (`app_settings.alarm_sound`) and previews it on change. Three read as alarms (`classic`, `radar`,
 `pulse`) and four as music (`sunrise`, `ripple`, `bells`, `tide`).
 
-The `.m4a` files are committed and served straight from `public/` — 180KB for the set, nothing is
+The `.m4a` files are committed and served straight from `public/` — about 160KB for the set, nothing is
 generated at request time. The script is how they are AUTHORED: each one has to loop seamlessly and
 sit where a phone speaker carries across a room, and both of those are numbers in that file rather
 than something to re-edit in an audio tool. A tone that clicks at its loop point is unbearable long
@@ -117,8 +117,9 @@ nothing but to be on; these are for the phone to ring as well:
 
 - The app is open on `/`, in Guided Access, **plugged in** — a lit screen all night will flatten it.
 - The item is marked `alarm` (`list_items.alarm`); the page rings nothing else.
-- The page is on a current bundle. A deploy after the page loaded leaves it holding old code, and
-  `goStale` used to wait for a `visibilitychange` that never comes on a parked screen.
+- The page is on a current bundle. A deploy after the page loaded leaves it holding old code until
+  `goStale` (`core.js`) reloads it: at once when hidden, otherwise after two minutes with no touch,
+  and never while a voice command is recording.
 
 **Read `alarm_log` to check any of it** — the section below. The page beacons every minute with
 `audio`, `media` (readyState), `lock`, `visible`, `next`, `armed`, `guided`. That beacon exists
@@ -133,7 +134,7 @@ The forecast the morning is decided on is old by the time it matters. Surfline r
 time. The wind is what moves in that gap.
 
 `surfVeto` in `server.js`: when the half-hour average of the MEASURED wind (`lib/livewind.js`, the
-Mayport Bar Pilots dock 2.2 miles away — NDBC's MYPF1, read from NOAA CO-OPS as 8720218 every ten
+Mayport Bar Pilots dock 2.2 miles away — NDBC's MYPF1, read from NOAA CO-OPS as 8720218 every five
 minutes) is ONSHORE at or over `surf_veto_kts` (Settings, default 12, 0 turns it off), every hour of
 TODAY from the current one on counts as not Fair. Only while the reading is fresh (30 minutes: CO-OPS
 serves a reading about six minutes after it is taken) and only for today's alarm. NDBC's own file is

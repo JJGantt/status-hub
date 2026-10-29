@@ -103,8 +103,8 @@ crown as the volume while it plays.
 - **Reconnecting with the wrist down needs the hub token readable while the watch is locked**
   (`HubToken`, `AfterFirstUnlock`, cached in memory). With the Keychain's default, every reconnect
   attempt failed `noToken` for over a minute until the wrist came up.
-- It takes the microphone from the always-on listener (`Capture.hush`) and gives it back when it
-  stops. Starting a recording or a spoken reply stops it.
+- It takes the microphone from the always-on listener and from the rewind buffer (`Capture.hush`) and
+  gives it back when it stops. Starting a recording or a spoken reply stops it.
 - **It is the Now Playing app while it listens**, taking every remote command (play, pause, skip) and
   doing nothing with it. Without that, AirPods' ear detection sent play to Music, which started
   playing on the watch, took the audio session, and the live mic could not get it back.

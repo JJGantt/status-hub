@@ -3219,13 +3219,28 @@ app.post('/api/voice-command', async (req, res) => {
     const locked = String(req.query.flow || '') === 'locked';
     const whisperModel = locked || String(req.query.model || '') === 'large' ? 'whisper-large-v3' : undefined;
     const quiet = String(req.query.quiet || '').split(',').map((r) => r.split('-').map(Number)).filter((r) => r.length === 2);
-    let transcript = '', segments = 0, untranscribed = false;
+    // A SECOND OPINION FROM THE OTHER WHISPER, run alongside the first. The two models mishear
+    // different words — large-v3 wrote "it's called pair putt" where turbo heard "haircut", and turbo
+    // wrote "schedule it to view" where large heard "a to-do" — so neither is the better transcriber,
+    // and a word one gets wrong the other usually gets right. When they disagree the worker hands the
+    // model both (voice_requests.alt_transcript). Parallel, and Groq answers a command in well under a
+    // second either way, so it adds no wait. A dry run's words are typed into a session, which gets
+    // only the primary reading.
+    const altModel = whisperModel ? 'whisper-large-v3-turbo' : 'whisper-large-v3';
+    let transcript = '', segments = 0, untranscribed = false, alt = null;
     try {
       short = locked ? await shortenPauses(tmp, quiet).catch((e) => { console.log(`[voice-command] pause shortening failed: ${e.message}`); return null; }) : null;
       if (short) console.log(`[voice-command] locked clip: ${short.gaps} pause(s) shortened, ${short.cut.toFixed(1)}s cut`);
-      ({ transcript, segments } = short
-        ? await transcribe(short.file, 'audio/wav', GROQ_API_KEY, { model: whisperModel })
-        : await transcribe(tmp, ct, GROQ_API_KEY, { model: whisperModel }));
+      const [file, type] = short ? [short.file, 'audio/wav'] : [tmp, ct];
+      const second = dry ? null : transcribe(file, type, GROQ_API_KEY, { model: altModel })
+        .catch((e) => { console.log(`[voice-command] second transcriber failed: ${e.message || e}`); return null; });
+      ({ transcript, segments } = await transcribe(file, type, GROQ_API_KEY, { model: whisperModel }));
+      const other = second && (await second);
+      const words = (s) => String(s || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+      if (other && other.transcript && words(other.transcript) !== words(transcript)) {
+        alt = other.transcript;
+        console.log(`[voice-command] transcribers disagree: ${JSON.stringify(transcript.slice(0, 120))} vs ${altModel} ${JSON.stringify(alt.slice(0, 120))}`);
+      }
     } catch (e) {
       if (!e.allFailed || dry || !(await macWorkerUp())) throw e;
       untranscribed = true;
@@ -3267,6 +3282,7 @@ app.post('/api/voice-command', async (req, res) => {
       (him.why ? ` (${him.why})` : ''));
     if (!him.ok) return res.json({ transcript, enqueued: false, notHim: true });
     await sbWrite('voice_requests', 'POST', { id, transcript, source, focus: 'hub', ...(rewindId ? { rewind_id: rewindId } : {}),
+      ...(alt ? { alt_transcript: alt } : {}),
       ...(untranscribed ? { status: 'untranscribed' } : {}),
       always_on: GATED_SOURCES.has(source),
       ...(capture_start ? { capture_start } : {}), ...(capture_end ? { capture_end } : {}),

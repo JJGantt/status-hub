@@ -577,7 +577,7 @@ when the classifier is off) heard no speech for `Capture.quietMin` (4s) or more,
 upload as `quiet=start-end,…` in seconds of the file. The hub cuts only pauses over 6s and keeps 2s at
 each edge, so a 9-minute recording of a sentence and a meal's worth of quiet goes up as the sentence; it
 never cuts close to speech, because Whisper reads pauses as sentence breaks and tight cuts merge
-sentences and lose the words beside them. The stored clip is the original. No id means the hub heard no words. **With the wrist down the app is kept running until
+sentences and lose the words beside them. The stored clip is the original. Turbo still runs on it, as the second opinion every command gets (`docs/HUB-INTERNALS.md`, `transcribe.js` row): the two models mishear different words, so the worker sees both whenever they disagree. No id means the hub heard no words. **With the wrist down the app is kept running until
 a home command's answer is in** (`StayAwake`): recording keeps a watch app alive, but once the command
 is sent nothing did, so the app was suspended mid-wait, the answer's tap never came, and the screen
 still showed the command working when he looked. `StayAwake` holds the microphone and discards what it

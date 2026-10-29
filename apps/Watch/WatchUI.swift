@@ -81,7 +81,7 @@ struct ActivityLines: View {
 }
 
 /// **The command's state is the edge of the glass.** There is no control on screen: double tap runs a
-/// command, press and hold throws one away, and a one-pixel line around the very edge of the display
+/// command, press and hold starts a locked one or throws a recording away, and a one-pixel line around the very edge of the display
 /// says what is happening — the whole screen stays content. It is ONE overlay over the whole
 /// navigation stack, so it is the same on every page and inside a session, where the command goes
 /// to the session instead of the hub.
@@ -214,14 +214,23 @@ struct CommandBorder: View {
         }
     }
 
-    /// Press and hold anywhere: throw away what is under way — the recording, or the command the hub
-    /// is still working on. Nothing happens when there is nothing to throw away.
-    static func cancel(chat: Chat, sessions: Sessions) {
+    /// Press and hold: throw away the recording under way, or with none, start a locked one (red,
+    /// `Capture.Flow.locked`), which only the next press sends. A command already sent is never thrown
+    /// away. `starts` is false on the pages where a tap does something else.
+    static func hold(chat: Chat, sessions: Sessions, starts: Bool) {
         let target = sessions.target
         let capture = Capture.shared
-        if let target, capture.owner == .session(target) { sessions.cancelRecording(target) }
-        else if capture.owner == .hub { chat.cancelRecording() }
-        else if target == nil && chat.waiting { chat.cancel() }
+        if let target, capture.owner == .session(target) { sessions.cancelRecording(target); return }
+        if capture.owner == .hub { chat.cancelRecording(); return }
+        guard starts else { return }
+        if Speaker.shared.isSpeaking {
+            Hub.log("control", ["speaking": true, "how": "hold"])
+            Speaker.shared.stop()
+            return
+        }
+        Hub.log("control", ["target": target ?? "hub", "recording": false, "how": "hold"])
+        Capture.trigger = "hold"
+        if let target { sessions.startRecording(target) } else { chat.startRecording(flow: .locked) }
     }
 }
 

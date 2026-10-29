@@ -254,17 +254,6 @@ final class Chat: ObservableObject {
         }
     }
 
-    /// Stops waiting on every command. One the hub already has still runs, and its turn appears in the
-    /// thread like any other; a clip that never reached the hub is dropped.
-    func cancel() {
-        Hub.log("cancel", ["view": "chat", "commands": commands.count])
-        tasks.values.forEach { $0.cancel() }
-        tasks = [:]
-        for c in commands { if let clip = c.clip { try? FileManager.default.removeItem(at: clip.url) } }
-        commands = []
-        failure = nil
-    }
-
     private func tokenArrived() {
         if failure == .noToken { retry() } else { Task { await load() } }
     }

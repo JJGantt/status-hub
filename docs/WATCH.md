@@ -275,8 +275,8 @@ reaches the top and its first line still starts below the strip.
 
 ### The command is on every page
 
-There is no control on screen. **Double tap runs a command, press and hold anywhere throws one away,
-and a line around the very edge of the glass says what is happening** (`CommandBorder`, one overlay on
+There is no control on screen. **Double tap runs a command, press and hold starts a locked one or throws
+a recording away, and a line around the very edge of the glass says what is happening** (`CommandBorder`, one overlay on
 `RootView`'s whole navigation stack, so it is the same on every page and inside a session, where a
 command goes to the session instead of the hub):
 
@@ -513,8 +513,11 @@ itself `watch_quick_s` seconds (Settings → Watch: quick command, 5 when unset)
 opens — counted from the chirp, in seconds of audio — however he is going; a cap reached with no speech
 heard throws the clip away instead, and either logs `mic-end` with `reason: cap`.
 
-Press and hold anywhere cancels the recording, or the command the hub is still
-working on; it does nothing when there is nothing to throw away.
+Press and hold (0.6s) anywhere cancels the recording under way. With none, on home or in an open
+session, it starts a locked recording (red, the `Hub Locked` flow), so home offers both: a tap for the
+amber recording that sends at his silence, a hold for the one only a press sends. On the other pages,
+where a tap does something else, a hold with no recording does nothing. A command already sent is
+never cancelled; there is no gesture for it.
 
 ### Haptics
 

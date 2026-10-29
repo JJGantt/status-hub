@@ -134,10 +134,12 @@ struct RootView: View {
         .overlay { if veiled { Color.black.ignoresSafeArea().allowsHitTesting(false) } }
         // A rewind's words, over whatever page is showing: the grab came from a control, not a page.
         .sheet(item: $rewind.shown) { RewindSheet(shown: $0) }
-        // Press and hold anywhere throws away what is under way. It is on the whole row rather than
-        // a page for the same reason, and does nothing when there is nothing to throw away.
+        // Press and hold throws away a recording, or with none starts a locked one. It is on the whole
+        // row rather than a page for the same reason, but only home and an open session start one: a
+        // hold anywhere else still throws a recording away.
         .simultaneousGesture(LongPressGesture(minimumDuration: 0.6).onEnded { _ in
-            CommandBorder.cancel(chat: chat, sessions: sessions)
+            CommandBorder.hold(chat: chat, sessions: sessions,
+                               starts: page == .home || (page == .sessions && !sessions.path.isEmpty))
         })
         .onOpenURL { url in
             guard url.scheme == "statushub" else { return }

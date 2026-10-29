@@ -594,9 +594,7 @@ the raw reply. Tapping it opens that session either way; the payload is untouche
 prompt's id and, when the host typed them for a command, that command's id; `tool`; `text` for what
 it says between calls; `done` with the whole reply and its prompt. **Each becomes one event of the
 conversation's list** — `logFrame` — and goes out as an `ev` frame with its seq; see the event log
-below. The older shape is still relayed alongside — `session` frames, and `turnSteps`/`steps` on
-`/api/sessions/:id` — for the watch build installed before the list existed, and goes when it is off
-the wrist, TODO.md) ·
+below) ·
 `/api/repos/cmd/:id` · `/api/sessions` (live desk sessions + the follow-up `focus`; `?brief=1`, the watch's, drops every row's `last_reply`; each row carries
 `unread`, a finished reply nobody has opened) · `/api/sessions/seen` (opening one stamps
 `desk_sessions.seen_at`, which is what clears it on every surface) ·

@@ -64,16 +64,6 @@ constant. Falls back to Eastern when unknown.
 
 ## Deployed on purpose, and meant to come out
 
-### The session view's old shape, kept for the watch build before the event list
-
-`server.js` still relays `session` frames on `/api/session-stream` and serves `turns` and `steps`
-(`turnSteps`, `keepStep`) on `/api/sessions/:id`, and `cleanSaid` still cleans `turns[].prompt` — all
-of it for the watch build installed before the conversation became one list of events (build 89 is
-the first that reads `events`/`ev`). Once 89 is on the wrist: remove `pushSession`, `keepStep`/
-`turnSteps`, the `session` frame, `turns`/`steps` from the detail response and `SESSION_TURNS`'s use
-there; `cards/sessions.js` and the watch already read `ev`. `desk_turns` stays — the event log seeds
-from it.
-
 ### `/api/tapdebug` — the voice button's tap tracer
 
 `server.js` has a route that logs whatever the client posts to it, and `voiceagent.js` posts every

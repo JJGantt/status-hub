@@ -1430,14 +1430,6 @@ function pushLists() {
   for (const res of listClients) { try { res.write(frame); } catch {} }
 }
 
-// What a session is doing RIGHT NOW, keyed by session id so each one draws on its own line.
-// Transient by design — nothing is stored. A tool call is only interesting while it is happening,
-// and the durable half of a turn (`last_reply`) goes to the database on its own path.
-function pushSession(row) {
-  const frame = 'event: session\ndata: ' + JSON.stringify(row) + '\n\n';
-  for (const res of sessionClients) { try { res.write(frame); } catch {} }
-}
-
 // Last time ANY realtime event arrived. The socket can sit reporting SUBSCRIBED while
 // delivering nothing — it has done exactly that on the voice server and the Mac
 // listener, and the only symptom is that things stop appearing. Nothing in the client
@@ -3626,18 +3618,6 @@ function cleanSaid(text) {
   return s;
 }
 
-const TURN_STEPS_MAX = 300;
-const turnSteps = new Map();
-function keepStep(session, state, text) {
-  if (state === 'done') { turnSteps.delete(session); return; }
-  if (state === 'gone') { turnSteps.delete(session); return; }
-  if (!text) return;
-  const steps = turnSteps.get(session) || [];
-  steps.push({ state, text });
-  if (steps.length > TURN_STEPS_MAX) steps.splice(0, steps.length - TURN_STEPS_MAX);
-  turnSteps.set(session, steps);
-}
-
 // ---- A CONVERSATION IS ONE ORDERED LIST OF EVENTS ---------------------------------------------
 //
 // Everything a surface shows of a session — the watch's session page, the phone's — is this list and
@@ -3685,6 +3665,9 @@ function sweepLogs() {
   for (const [conv, log] of sessionLog) if (log.touched < cutoff) sessionLog.delete(conv);
 }
 
+// How many finished turns a log is seeded with, from `desk_turns` (filled by a trigger on
+// `desk_sessions`, data-layer 00105), keyed by conversation so the history survives a resume or transfer.
+const SESSION_TURNS = 10;
 async function ensureLog(conv) {
   let log = sessionLog.get(conv);
   if (log) { log.touched = Date.now(); return log; }
@@ -3848,12 +3831,6 @@ app.post('/api/session-activity', express.json({ limit: '8mb' }), async (req, re
   if (state === 'summary') {
     if (text) notifySessionReply(session, text, at, typeof b.summary === 'string' ? b.summary : null);
     return res.status(204).end();          // not a step: nothing on a wall should draw it
-  }
-  // The old shape (`session` frames, `steps`) is still served for the watch build installed before
-  // the event list existed; both go once it is off the wrist (TODO.md).
-  if (state !== 'replay') {
-    keepStep(session, state, text);
-    pushSession({ session, state, text });
   }
   let answer = {};
   try { answer = await logFrame(session, b, state, text, at); }
@@ -5018,13 +4995,7 @@ async function conversationNow(row) {
 
 // One session in full, for a surface that shows a single session rather than the list — the watch's
 // session page and the phone's (openSession in cards/repos.js). `/api/sessions` sends most parked
-// sessions' replies only as the one-line `say`.
-//
-// `turns` is the conversation's last finished turns, oldest first, the newest being the row's own
-// `last_prompt`/`last_reply`. They come from `desk_turns`, which a trigger on `desk_sessions` fills in
-// the same transaction as the row (data-layer 00105) — so a client told the row changed can already
-// read the turn. Keyed by conversation, which is what carries the history across a resume or transfer.
-const SESSION_TURNS = 10;
+// sessions' replies only as the one-line `say`. The conversation itself is `events` (see above).
 app.get('/api/sessions/:id', async (req, res) => {
   try {
     const rows = await sb(`desk_sessions?id=eq.${encodeURIComponent(String(req.params.id))}` +
@@ -5032,20 +5003,10 @@ app.get('/api/sessions/:id', async (req, res) => {
     if (!rows || !rows.length) return res.status(404).json({ error: 'no such session' });
     const row = rows[0];
     if (row.last_prompt) row.last_prompt = cleanSaid(row.last_prompt);
-    // The history is context, not the answer: without it the session still opens on its last turn.
-    let turns = [];
-    try {
-      turns = ((await sb(`desk_turns?conversation=eq.${encodeURIComponent(row.claude_session_id || row.id)}` +
-        `&select=at,prompt,reply&order=at.desc&limit=${SESSION_TURNS}`)) || [])
-        .reverse().map((t) => (t.prompt ? { ...t, prompt: cleanSaid(t.prompt) } : t));
-    } catch (e) { console.log('[sessions] turns:', e.message); }
-    // The turn in flight so far, while there is one: the steps the stream carried before this view
-    // was open to hear them.
-    const steps = row.working ? (turnSteps.get(row.id) || []) : [];
     const conv = row.claude_session_id || row.id;
     rowConv.set(row.id, conv);
     const log = await ensureLog(conv);
-    res.json({ ...row, turns, steps, epoch: EPOCH, events: log.events });
+    res.json({ ...row, epoch: EPOCH, events: log.events });
   } catch (e) { res.status(500).json({ error: String(e.message || e) }); }
 });
 
@@ -5069,7 +5030,6 @@ app.post('/api/sessions/:action', express.json(), async (req, res) => {
     const id = String((req.body || {}).id || '');
     if (!id) return res.status(400).json({ error: 'id required' });
     if (action === 'forget') {
-      keepStep(id, 'gone', '');
       await sbWrite(`desk_sessions?id=eq.${encodeURIComponent(id)}`, 'DELETE');
       return res.json({ ok: true });
     }
@@ -5134,9 +5094,6 @@ app.post('/api/sessions/:action', express.json(), async (req, res) => {
         return res.status(409).json({ error: `the ${to === 'mac' ? 'Mac' : 'Pi'} is not responding`, saved });
       }
       const cmdId = crypto.randomUUID();
-      // The row keeps its id across a transfer, but the conversation now runs as a new session on the
-      // other machine and this id's own record of the turn in flight, if any, is not coming back.
-      keepStep(id, 'gone', '');
       if (await machineAwake(from)) {
         await sbWrite('desk_commands', 'POST',
           { id: cmdId, kind: 'transfer_session', payload: { session: id, target: from, to } });
@@ -5176,9 +5133,6 @@ app.post('/api/sessions/:action', express.json(), async (req, res) => {
     }
     const kind = action === 'resume' ? 'resume_session' : action === 'end' ? 'end_session' : null;
     if (!kind) return res.status(400).json({ error: 'unknown action' });
-    // Ended mid-turn, the tail of `keepStep`'s record of it (up to 300 steps, kept only in memory) is
-    // never going to get its `done` and would sit there until the next deploy otherwise.
-    if (action === 'end') keepStep(id, 'gone', '');
     // The machine that OWNS the session, read from its row. Hardcoding 'pi' sent every Mac session's
     // command to a consumer that rejects the id, while the Mac's never saw it at all.
     const machine = rowsFull[0].worker === 'desk' ? 'mac' : 'pi';

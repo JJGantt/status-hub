@@ -119,6 +119,11 @@ final class Capture: ObservableObject {
     /// The shortest stretch of no speech worth sending. The hub shortens only those over 6s, so this
     /// leaves it room to be tuned without a watch build.
     static let quietMin: TimeInterval = 4
+    /// A command or a follow-up still recording taps the wrist once every this many seconds of audio
+    /// (`.click`, the lightest there is), so one left running — locked, or held open by a noisy room — is
+    /// noticed. Counted in the microphone's own seconds, so it rides the buffers already arriving rather
+    /// than a timer of its own.
+    private static let nudge: TimeInterval = 60
 
     private init() {
         if let kept = UserDefaults.standard.dictionary(forKey: Self.storeKey) { Self.take(kept) }
@@ -373,6 +378,9 @@ final class Capture: ObservableObject {
         let ended = endpoint.feed(level, seconds, voice: speaking)
         if flow == .locked { markQuiet(speaking ?? (level >= endpoint.threshold), at: segment) }
         segment += seconds
+        if mutes, Int(segment / Self.nudge) > Int((segment - seconds) / Self.nudge) {
+            WKInterfaceDevice.current().play(.click)
+        }
         if endpoint.heard && !wasHeard { spokeAt = Date() }
         // Accidentally recording: nobody spoke into it, or it has run on and on unlocked. Either way
         // the microphone closes and the clip is thrown away rather than sent.

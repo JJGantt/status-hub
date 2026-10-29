@@ -530,6 +530,11 @@ working on; it does nothing when there is nothing to throw away.
 - **The microphone closing taps the wrist** (`.stop`), on home and in a session, on a recording the
   silence ended and on one a press ended alike. That is the moment nothing else reports: the silence
   decides it, and by then the watch may be back at his side.
+- **A recording still open taps the wrist once a minute** (`.click`, `Capture.nudge`), a command or a
+  follow-up alike, counted in seconds of audio. A locked recording ends only at a press, so one left
+  running holds the microphone and every room mic's mute until he notices; the tap is how he does. Light
+  on purpose: it repeats for as long as the recording does. Never on the listener or rewind, which are
+  meant to run.
 - **Every command ends in a second tap, whichever way it ends**: a reply buzzes `.notification` (the one
   that makes a sound, so it is heard as well as felt); a failure buzzes `.failure`, whether the hub
   heard no words, the worker failed the command, or the send itself failed.

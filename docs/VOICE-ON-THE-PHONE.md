@@ -44,8 +44,8 @@ starts in the same tick. Silence carried at the front of a clip costs nothing; a
 syllable costs the command.
 
 **Silence is never uploaded.** A segment that never crossed the threshold is discarded, because
-Whisper does not return an empty string for silence — it invents a plausible sentence, and the worker
-then acts on it.
+Whisper does not return an empty string for silence — it invents a sentence, usually "Thank you.", and
+the worker would then act on it.
 
 **It mutes nothing.** The Mac and the ESP already listen at the same time and the worker collapses
 whichever of them heard the same utterance by capture window (`LISTENERS.md`), so the phone joins as
@@ -87,7 +87,9 @@ An iOS capture track that loses the audio session produces zeros while still rep
 silence itself.
 
 So the signal is the one EVERY recorder produces: a clip with real bytes in it coming back with an
-empty transcript. Whisper returns empty for silence, so that is the microphone reporting zeros.
+empty transcript. Whisper writes "Thank you." for a clip with no speech in it, and the hub turns that
+phrase alone into an empty transcript (`heard()` in `lib/transcribe.js`), so empty means the microphone
+reported nothing.
 `deliverVoice` marks the stream dirty there and the next press re-acquires. Clips under 2KB are
 exempt — too short to contain anything is not evidence of a dead device.
 

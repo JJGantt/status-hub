@@ -1534,17 +1534,6 @@ wrapper now:
 
 ---
 
-The remaining Swift in `apps/Sources/` is the pre-webview native UI. It is compiled into the iOS and
-Mac apps but unreachable — nothing instantiates its `RootView`, and the widget extension does not
-compile `Sources/` at all (a comment above `HubWebView` keeps it pending an OK to delete):
-
-| file | holds |
-|---|---|
-| `HubModel.swift` | `HubModel` — fetches `/api/status`, publishes it to the SwiftUI views |
-| `Models.swift` | the payload decoded: `Status`, `Litter`, `Macros`, `Nutrition` |
-| `Views.swift` | the shared card vocabulary — `CardBox`, `StatRow`, `MacroTile`, `LitterCard` |
-| `Theme.swift` | a `Color` extension; the palette both the app and the widgets draw from |
-
 ## 9b. `StatusHubControls` — the Record control + the widgets
 
 One iOS-18 widgetkit-extension (`apps/Controls/`, bundle `com.jaredgantt.statushub.controls`,

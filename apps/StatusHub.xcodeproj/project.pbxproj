@@ -28,11 +28,9 @@
 		4DB8BD1AC2A03D075B399CA4 /* WorkoutView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A3F70079ED5B30314C83B6BD /* WorkoutView.swift */; };
 		4DE2F21E70EC60A06611DF49 /* Rewind.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A7D22E52C6A0ABBCB9FF3BF /* Rewind.swift */; };
 		51D9EC4E888D09D03D22734A /* Recorder.swift in Sources */ = {isa = PBXBuildFile; fileRef = 14EB30894FADCF33B66D0455 /* Recorder.swift */; };
-		51DECA2330E0FBC3832EF2A4 /* Models.swift in Sources */ = {isa = PBXBuildFile; fileRef = B47214768CCEE8C99EEF5958 /* Models.swift */; };
 		58F20A294FB54B942342ABB3 /* StatusHubControls.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = AD44A10C47F3ACE73074E7B2 /* StatusHubControls.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		5B95BB853AE0BB3D7E93EC0F /* OpenTodoItem.swift in Sources */ = {isa = PBXBuildFile; fileRef = 980C6D4E9785922A04236D2D /* OpenTodoItem.swift */; };
 		5D50E610532DA949FF006920 /* OpenTodoItem.swift in Sources */ = {isa = PBXBuildFile; fileRef = 980C6D4E9785922A04236D2D /* OpenTodoItem.swift */; };
-		60AE844C615F02EE05A50C80 /* Views.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7E727AC7945D69F9313E83AC /* Views.swift */; };
 		6188D9BD5163465CBE9D4FFB /* StatusHubWatch.app in Embed Watch Content */ = {isa = PBXBuildFile; fileRef = 94DD1B301CE525AF6B208DC7 /* StatusHubWatch.app */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		62377EFC112DA32097338F77 /* LiveListen.swift in Sources */ = {isa = PBXBuildFile; fileRef = 011F77A80F4DF604831A2925 /* LiveListen.swift */; };
 		68E90B2316D4D69B4288AF5B /* RingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A86CE732DC51F6BC6973C5F0 /* RingsView.swift */; };
@@ -51,24 +49,19 @@
 		99C55A70179E1025B9004EF9 /* RecordControl.swift in Sources */ = {isa = PBXBuildFile; fileRef = FAC9C25A7B946678D80BA77A /* RecordControl.swift */; };
 		9F6DFFB0796E9EE6B110235A /* RecordIntent.swift in Sources */ = {isa = PBXBuildFile; fileRef = F62C833499BAA9A4A1C9F660 /* RecordIntent.swift */; };
 		A4E6D950656AE1A3B80EECAA /* Push.swift in Sources */ = {isa = PBXBuildFile; fileRef = 835C09DFE3C581C0FCD41116 /* Push.swift */; };
-		A530752A59476C460CE68305 /* HubModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6DD537CFCDEFF1F747C3D8D2 /* HubModel.swift */; };
 		AE3C14A7061F839013EA169A /* WatchLink.swift in Sources */ = {isa = PBXBuildFile; fileRef = D87B899987639512DD905DCE /* WatchLink.swift */; };
 		B074269468DD14567FC7F3FF /* AssetsMac.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 43113D1E0A8CEB8334CFC02E /* AssetsMac.xcassets */; };
 		B0778EBC2C7F517F88E6662D /* HubVoiceIntent.swift in Sources */ = {isa = PBXBuildFile; fileRef = 630A58399AEBE9A0EB63449B /* HubVoiceIntent.swift */; };
 		B0A4730199CF2646C3BC2A37 /* Stretch.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5757142AE4AD25B5E06EA231 /* Stretch.swift */; };
-		B39D666BE8C69D4E75BB31F5 /* HubModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6DD537CFCDEFF1F747C3D8D2 /* HubModel.swift */; };
 		B63E8DE2508FDBEB38EC60C7 /* NutritionView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7300D161B8F2C8E565CA4FAB /* NutritionView.swift */; };
 		C4250430822C333D041CEEA1 /* Hub.swift in Sources */ = {isa = PBXBuildFile; fileRef = FD06B420AFC554D37540118C /* Hub.swift */; };
 		C692F0368E5A3BD1BA7E0679 /* WatchLink.swift in Sources */ = {isa = PBXBuildFile; fileRef = D87B899987639512DD905DCE /* WatchLink.swift */; };
 		C917F517205EDE3DA975EE4A /* HubVoiceIntent.swift in Sources */ = {isa = PBXBuildFile; fileRef = 630A58399AEBE9A0EB63449B /* HubVoiceIntent.swift */; };
-		C97CE9C67CFCE106140773BB /* Views.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7E727AC7945D69F9313E83AC /* Views.swift */; };
 		CD84EBB55F5F0A883DCBDE96 /* BodyFigure.swift in Sources */ = {isa = PBXBuildFile; fileRef = E8CB6EB26E2B1AFE0D9B2153 /* BodyFigure.swift */; };
 		CDDBE30861DC50F9003C9B3C /* StatusHubWatchWidgets.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 7A798171A56FC30D0250CDD7 /* StatusHubWatchWidgets.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
-		D19716A696E535763020C4F4 /* Theme.swift in Sources */ = {isa = PBXBuildFile; fileRef = A3ED88961E8E93D6EBE0EA46 /* Theme.swift */; };
 		D331FFF01B536787A0263385 /* BodyPaths.swift in Sources */ = {isa = PBXBuildFile; fileRef = CAEDD165B40FC7BE05380CE2 /* BodyPaths.swift */; };
 		D3E5EB61797DC506EFFC29B3 /* Router.swift in Sources */ = {isa = PBXBuildFile; fileRef = 04D43ADC9891823E1EFA0E4C /* Router.swift */; };
 		D8B3EEDED01AB105C95F173D /* Auth.swift in Sources */ = {isa = PBXBuildFile; fileRef = 88D699B5FDC0F7476374CF07 /* Auth.swift */; };
-		D998A2EA11DB625A5E768785 /* Models.swift in Sources */ = {isa = PBXBuildFile; fileRef = B47214768CCEE8C99EEF5958 /* Models.swift */; };
 		E5F01E32A844356CC4D3F449 /* WatchUI.swift in Sources */ = {isa = PBXBuildFile; fileRef = E15B459BE174F4274C78B54E /* WatchUI.swift */; };
 		E8ABA2047F042D0E11B6C604 /* Workout.swift in Sources */ = {isa = PBXBuildFile; fileRef = F4BAD78C211DC1432CDEB572 /* Workout.swift */; };
 		EBD52912FF3B6259E305FBFA /* Sessions.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3DA8801FE7845595DD403F04 /* Sessions.swift */; };
@@ -76,7 +69,6 @@
 		ECFE4E33BA03FA448EA542E7 /* StayAwake.swift in Sources */ = {isa = PBXBuildFile; fileRef = D6D77B6FDE8A4317F6D9AF76 /* StayAwake.swift */; };
 		ED30317D3B77A590C83D95BC /* StatusHubApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = DBE4FD566029B00F912457DA /* StatusHubApp.swift */; };
 		EE1E28331D9AE8401BEE3601 /* Push.swift in Sources */ = {isa = PBXBuildFile; fileRef = 835C09DFE3C581C0FCD41116 /* Push.swift */; };
-		F10846CA6E8D579211CF7695 /* Theme.swift in Sources */ = {isa = PBXBuildFile; fileRef = A3ED88961E8E93D6EBE0EA46 /* Theme.swift */; };
 		F6AB2F65BC1CE1BE65F7EF8A /* RewindBuffer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2BA599375B5694F4C40BB517 /* RewindBuffer.swift */; };
 		F9B3AEDE8FF26869DC2B821B /* Nutrition.swift in Sources */ = {isa = PBXBuildFile; fileRef = 38BD5AA187D80545B616356B /* Nutrition.swift */; };
 		FB6B5DF33E6070D5348F0E27 /* RecordIntent.swift in Sources */ = {isa = PBXBuildFile; fileRef = F198CD20CEADF9EC7C93F50C /* RecordIntent.swift */; };
@@ -164,13 +156,11 @@
 		61B4D21322132BFB2C145C0C /* ReposWidget.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReposWidget.swift; sourceTree = "<group>"; };
 		630A58399AEBE9A0EB63449B /* HubVoiceIntent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HubVoiceIntent.swift; sourceTree = "<group>"; };
 		65394C860C697D281720B76A /* Chat.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Chat.swift; sourceTree = "<group>"; };
-		6DD537CFCDEFF1F747C3D8D2 /* HubModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HubModel.swift; sourceTree = "<group>"; };
 		7300D161B8F2C8E565CA4FAB /* NutritionView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NutritionView.swift; sourceTree = "<group>"; };
 		73F9EE0177B282256E68470C /* StatusHubWatchWidgets.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StatusHubWatchWidgets.swift; sourceTree = "<group>"; };
 		79EC24B4E553A538E5D4CC9A /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		7A798171A56FC30D0250CDD7 /* StatusHubWatchWidgets.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = StatusHubWatchWidgets.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		7D90424F70095351BD348487 /* HistoryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HistoryView.swift; sourceTree = "<group>"; };
-		7E727AC7945D69F9313E83AC /* Views.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Views.swift; sourceTree = "<group>"; };
 		80B371A0F840BA7F14954FE5 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		824876CC8A2DF46BE8BF406A /* TodoView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TodoView.swift; sourceTree = "<group>"; };
 		835C09DFE3C581C0FCD41116 /* Push.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Push.swift; sourceTree = "<group>"; };
@@ -180,14 +170,12 @@
 		980C6D4E9785922A04236D2D /* OpenTodoItem.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenTodoItem.swift; sourceTree = "<group>"; };
 		9C61C65954CA9A7056B2B127 /* HomeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeView.swift; sourceTree = "<group>"; };
 		9F6A38324B6E1FE85ABDB8B6 /* AssetsWatch.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = AssetsWatch.xcassets; sourceTree = "<group>"; };
-		A3ED88961E8E93D6EBE0EA46 /* Theme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Theme.swift; sourceTree = "<group>"; };
 		A3F70079ED5B30314C83B6BD /* WorkoutView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkoutView.swift; sourceTree = "<group>"; };
 		A86CE732DC51F6BC6973C5F0 /* RingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RingsView.swift; sourceTree = "<group>"; };
 		AC135E9E04A98CDB11B57AB2 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		AC7643D7992852F757EF0A7E /* SessionsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionsView.swift; sourceTree = "<group>"; };
 		AD44A10C47F3ACE73074E7B2 /* StatusHubControls.appex */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = "wrapper.app-extension"; path = StatusHubControls.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		AF1D1C7A5D148A4366347C65 /* ReposView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReposView.swift; sourceTree = "<group>"; };
-		B47214768CCEE8C99EEF5958 /* Models.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Models.swift; sourceTree = "<group>"; };
 		C00E5B1C61B9780EE2BE1945 /* StatusHubWatchApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StatusHubWatchApp.swift; sourceTree = "<group>"; };
 		CAEDD165B40FC7BE05380CE2 /* BodyPaths.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BodyPaths.swift; sourceTree = "<group>"; };
 		D2181310AB9F5E005371B8B0 /* Location.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Location.swift; sourceTree = "<group>"; };
@@ -233,15 +221,11 @@
 		4F3C15E0045F52C4F298B679 /* Sources */ = {
 			isa = PBXGroup;
 			children = (
-				6DD537CFCDEFF1F747C3D8D2 /* HubModel.swift */,
 				12B2F6A89FA87D30EEC5ED56 /* Info-iOS.plist */,
 				FC9DA7D425E32C05CDE6A7EA /* LiveMic.swift */,
-				B47214768CCEE8C99EEF5958 /* Models.swift */,
 				835C09DFE3C581C0FCD41116 /* Push.swift */,
 				F198CD20CEADF9EC7C93F50C /* RecordIntent.swift */,
 				DBE4FD566029B00F912457DA /* StatusHubApp.swift */,
-				A3ED88961E8E93D6EBE0EA46 /* Theme.swift */,
-				7E727AC7945D69F9313E83AC /* Views.swift */,
 				D87B899987639512DD905DCE /* WatchLink.swift */,
 			);
 			path = Sources;
@@ -565,16 +549,12 @@
 			buildActionMask = 2147483647;
 			files = (
 				D8B3EEDED01AB105C95F173D /* Auth.swift in Sources */,
-				B39D666BE8C69D4E75BB31F5 /* HubModel.swift in Sources */,
 				C917F517205EDE3DA975EE4A /* HubVoiceIntent.swift in Sources */,
 				906DA291FF0B9503A9D28AF4 /* LiveMic.swift in Sources */,
-				D998A2EA11DB625A5E768785 /* Models.swift in Sources */,
 				5D50E610532DA949FF006920 /* OpenTodoItem.swift in Sources */,
 				A4E6D950656AE1A3B80EECAA /* Push.swift in Sources */,
 				FB6B5DF33E6070D5348F0E27 /* RecordIntent.swift in Sources */,
 				ED30317D3B77A590C83D95BC /* StatusHubApp.swift in Sources */,
-				F10846CA6E8D579211CF7695 /* Theme.swift in Sources */,
-				C97CE9C67CFCE106140773BB /* Views.swift in Sources */,
 				C692F0368E5A3BD1BA7E0679 /* WatchLink.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -584,14 +564,10 @@
 			buildActionMask = 2147483647;
 			files = (
 				2AE6971801629766230C380C /* Auth.swift in Sources */,
-				A530752A59476C460CE68305 /* HubModel.swift in Sources */,
 				70AEAF3F633ACDFC32C23FF6 /* LiveMic.swift in Sources */,
-				51DECA2330E0FBC3832EF2A4 /* Models.swift in Sources */,
 				EE1E28331D9AE8401BEE3601 /* Push.swift in Sources */,
 				0C6EDE683DFC99BC5DD60409 /* RecordIntent.swift in Sources */,
 				80C001EA5124225A4538240B /* StatusHubApp.swift in Sources */,
-				D19716A696E535763020C4F4 /* Theme.swift in Sources */,
-				60AE844C615F02EE05A50C80 /* Views.swift in Sources */,
 				AE3C14A7061F839013EA169A /* WatchLink.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;

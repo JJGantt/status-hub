@@ -23,6 +23,12 @@ only bites when an entitlement changes. A new bundle id does not need it: regist
   it starts working the moment the capability exists — no code change. The entitlement line sits in
   `apps/project.yml` as a TODO.
 
+### Health permission-sheet wording
+Both Health usage strings in `apps/project.yml` (`NSHealthShareUsageDescription`,
+`NSHealthUpdateUsageDescription`) say only `Sleep`, a bare label, because the sentence on Apple's
+permission sheet is his to write. Ask him for it; the update string is required by App Store Connect
+even though nothing is written to Health.
+
 ---
 
 ## Failed dispatches have no surface yet
@@ -78,6 +84,19 @@ touch, so it logs `start:arming` with **no `pointerdown` in front of it**. Once 
 the route and the `trace()` calls.
 
 ## Not started
+
+### Sleep: prove it on the phone, then use it (built 2026-10-30, builds 139/140)
+`docs/SLEEP.md`. Nothing has run on the device yet. After installing: allow Sleep on the Health sheet,
+then check `sleep_samples` fills (the first run backfills the whole history in 500-sample pages) and
+that a new night arrives the morning after via background delivery, with no app open. The endpoint
+has never taken a real post. Then the uses he named: history, trends, a morning summary. A live
+"fell asleep" signal is dropped (see Dropped).
+
+### Watch speak mode: first real test (built 2026-10-30, build 140)
+`docs/WATCH.md` § Speak mode. Untested on the wrist. Check: the hold toggles with the haptic and the
+white glyph; a reply is read wrist-down with the screen off; a reply to a session sent from the watch
+is read while another page is showing; the `<speak-mode>` note never shows on the phone, wall or
+watch; replies actually come back shorter; and how fast the battery goes with it on.
 
 ### Live mic: two-way audio (on hold, Jared's call)
 
@@ -199,6 +218,10 @@ build that is no longer installed keeps being sent to. Delete a token when APNs 
 
 ## Dropped (deliberately, not forgotten)
 
+- **Live "fell asleep" signal from the watch** (2026-10-30) — Jared's call. Apple writes a night's
+  sleep stages only after he wakes, and the only live route is the watch app in workout mode reading
+  heart rate all evening plus a Sleep Focus automation to start it. He wants it only if Apple hands it
+  over cleanly; it does not, so nothing auto-turns the TV off at sleep onset.
 - **Sub-minute look-ahead scheduler** — Jared's call. The alarm ringers hold their own timers to the
   second, and for plain push reminders a 60s scan is fine.
 - **Live Activities** — "not that important" for now. Worth knowing if it comes back: 8h hard cap

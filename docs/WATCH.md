@@ -703,7 +703,10 @@ queued and the microphone still held. Asking once for every reply is speak mode,
 ### Speak mode
 
 **Holding the speaker glyph** (0.6s) turns it on or off (`Sessions.toggleSpeakMode`), with the start or
-stop haptic; while it is on the glyph is white with a third wave. It is for lying in bed without looking
+stop haptic; while it is on the glyph is white with a third wave. The toggle is done by the app's ONE
+hold gesture, the one on the whole page row that otherwise starts a locked recording: the glyph only
+reports that a finger is on it (`Sessions.speakerPressed`). A second hold recogniser on the glyph fires
+at the same instant as the row's, so both acted and the toggle also started a recording. It is for lying in bed without looking
 at the watch, so everything about it works wrist-down:
 
 - **Every reply is read aloud as it lands** (`Sessions.speakIfNew`) — replies to the session open on the

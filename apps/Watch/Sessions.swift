@@ -183,6 +183,11 @@ final class Sessions: ObservableObject {
     private var spokenSeq: [String: Int] = [:]
     /// Re-runs the app's stream and stay-awake decisions when the mode changes (`RootView.follow`).
     var speakModeChanged: (() -> Void)?
+    /// **A finger is on a session's speaker glyph**, from touch-down to lift. The whole page row carries
+    /// the one 0.6s hold (it starts a locked recording), and it fires for a hold anywhere, the glyph
+    /// included; with this set it toggles speak mode instead. One gesture owns the hold, so two
+    /// recognisers firing at the same instant cannot both act.
+    var speakerPressed = false
 
     func toggleSpeakMode() {
         speakMode.toggle()

@@ -166,6 +166,8 @@ struct RootView: View {
         // row rather than a page for the same reason, but only home and an open session start one: a
         // hold anywhere else still throws a recording away.
         .simultaneousGesture(LongPressGesture(minimumDuration: 0.6).onEnded { _ in
+            // A hold on a session's speaker glyph is speak mode's toggle (`Sessions.speakerPressed`).
+            if sessions.speakerPressed { sessions.toggleSpeakMode(); return }
             CommandBorder.hold(chat: chat, sessions: sessions,
                                starts: page == .home || (page == .sessions && !sessions.path.isEmpty))
         })

@@ -313,7 +313,7 @@ struct SessionView: View {
     }
 
     /// **The speaker glyph**: a tap plays this session's last reply out loud; HOLDING it turns speak mode
-    /// on or off (`Sessions.toggleSpeakMode`), and while the mode is on the glyph is white with a third
+    /// on or off (`Sessions.toggleSpeakMode`, through the row's one hold gesture), and while the mode is on the glyph is white with a third
     /// wave instead of grey. While a reply plays the corner holds a stop and a pause, which becomes a play
     /// while paused: pausing keeps the place, so carrying on does not start the reply over. Bare glyphs
     /// over the page, so they cost no row. Their own gestures, so a tap on one is not the press the rest
@@ -334,7 +334,10 @@ struct SessionView: View {
                         .frame(width: 36, height: 36)
                         .contentShape(Rectangle())
                         .onTapGesture { if let reply { speaker.speak(reply.text) } }
-                        .onLongPressGesture(minimumDuration: 0.6) { sessions.toggleSpeakMode() }
+                        // Only says a finger is here; the row's hold does the toggle (`Sessions.speakerPressed`).
+                        .simultaneousGesture(DragGesture(minimumDistance: 0)
+                            .onChanged { _ in sessions.speakerPressed = true }
+                            .onEnded { _ in sessions.speakerPressed = false })
                 }
             }
             // Inset far enough to clear the display's corner curve.

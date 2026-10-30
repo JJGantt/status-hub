@@ -77,10 +77,10 @@ targets:
         NSPhotoLibraryUsageDescription: Status Hub attaches photos of food and nutrition labels.
         # The hub page's navigator.geolocation in the WKWebView (voiceagent.js hereNow) needs it.
         NSLocationWhenInUseUsageDescription: For nearby requests.
-        # Shown on Health's permission sheet. A bare label: the wording is Jared's to write.
-        NSHealthShareUsageDescription: Sleep
+        # Shown on Health's permission sheet.
+        NSHealthShareUsageDescription: Status Hub reads your sleep from Apple Health to keep a history of your nights alongside your other data.
         # Required by App Store Connect for the healthkit entitlement even though nothing is written.
-        NSHealthUpdateUsageDescription: Sleep
+        NSHealthUpdateUsageDescription: Status Hub does not write to Apple Health.
         # The live mic keeps streaming with the phone locked (Sources/LiveMic.swift, docs/LIVE-MIC.md).
         UIBackgroundModes:
           - audio

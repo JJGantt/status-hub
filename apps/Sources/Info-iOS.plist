@@ -38,9 +38,9 @@
 	<key>NSCameraUsageDescription</key>
 	<string>Status Hub uses the camera to capture food and nutrition labels.</string>
 	<key>NSHealthShareUsageDescription</key>
-	<string>Sleep</string>
+	<string>Status Hub reads your sleep from Apple Health to keep a history of your nights alongside your other data.</string>
 	<key>NSHealthUpdateUsageDescription</key>
-	<string>Sleep</string>
+	<string>Status Hub does not write to Apple Health.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>For nearby requests.</string>
 	<key>NSMicrophoneUsageDescription</key>

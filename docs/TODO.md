@@ -23,12 +23,6 @@ only bites when an entitlement changes. A new bundle id does not need it: regist
   it starts working the moment the capability exists — no code change. The entitlement line sits in
   `apps/project.yml` as a TODO.
 
-### Health permission-sheet wording
-Both Health usage strings in `apps/project.yml` (`NSHealthShareUsageDescription`,
-`NSHealthUpdateUsageDescription`) say only `Sleep`, a bare label, because the sentence on Apple's
-permission sheet is his to write. Ask him for it; the update string is required by App Store Connect
-even though nothing is written to Health.
-
 ---
 
 ## Failed dispatches have no surface yet

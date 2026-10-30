@@ -3753,6 +3753,12 @@ function takeEvents(conv, rowId, log, turn, events) {
   log.cur = { turn, n: have };
 }
 
+/** The turn's one-sentence summary onto its `desk_turns` row (data-layer 00133), where get_sessions reads it. */
+async function storeSummary(rowId, at, reply, summary) {
+  try { await sbWrite('rpc/desk_turn_summary', 'POST', { conv: await convOfRow(rowId), turn_at: at, turn_reply: reply, turn_summary: summary }); }
+  catch (e) { console.log('[sessions] store summary:', e.message); }
+}
+
 /** The finished turn, in order, onto its `desk_turns` row (data-layer 00118). One write a turn. */
 function storeTurn(conv, at, reply, events) {
   const stored = events.map(({ id, kind, text, seen, cmd }) => ({
@@ -3834,7 +3840,9 @@ app.post('/api/session-activity', express.json({ limit: '8mb' }), async (req, re
   // and this holds the push for the `summary` frame behind it. A host that sends no summary (or one
   // whose summariser failed) omits the flag and is notified from `done` exactly as before.
   if (state === 'summary') {
-    if (text) notifySessionReply(session, text, at, typeof b.summary === 'string' ? b.summary : null);
+    const summary = typeof b.summary === 'string' && b.summary.trim() ? b.summary.trim() : null;
+    if (text) notifySessionReply(session, text, at, summary);
+    if (text && summary && at) storeSummary(session, at, text, summary);
     return res.status(204).end();          // not a step: nothing on a wall should draw it
   }
   let answer = {};

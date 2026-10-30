@@ -589,6 +589,8 @@ by the hub. The orchestrator (voice-pipeline `sessionWatch.js`, `summarise`) run
 `summary` frame that `notifySessionReply` pushes as the body. The hub holds no Anthropic key and makes
 no model call. A host that sends no summary, or whose summariser failed, is notified from `done` with
 the raw reply. Tapping it opens that session either way; the payload is untouched.
+The same sentence is stored on the turn's `desk_turns.summary` (`storeSummary`, data-layer 00133),
+which is what voice `get_sessions` shows as each session's last answer.
 
 `/api/session-activity` (what a host's transcript watcher saw: `queued`/`said` for HIS words with the
 prompt's id and, when the host typed them for a command, that command's id; `tool`; `text` for what

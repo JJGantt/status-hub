@@ -465,7 +465,7 @@ A session any other agent dispatches has no `relay` flag and stays out of the th
 | **TV session focus** (`/tv-session-focus`) | the running sessions as tabs, and the focused one's reply | none — voice only |
 | the home wall (`/tv`, `tv-home.js`) | three, most recently active first, each with a live line of what it is doing; the focused one's full reply below | none — voice only |
 | the watch (`SessionsView`) | queued sessions on top, then every running and parked one, live off the `sessions` frames | open a session; a follow-up is always locked until the next press |
-| voice (`get_sessions`) | the numbered list, and what each last said | every verb |
+| voice (`get_sessions`) | the numbered list, and what each last said (the turn's one-sentence summary from `desk_turns.summary`, else the reply's first 200 characters) | every verb |
 | the hub conversation (web `.ai-msg-session`, watch tint) | a hub-dispatched session's first reply, tinted and named by its label | reply is a fresh command |
 
 The phone card is the complex one and stays that way — it is the surface with a keyboard and a

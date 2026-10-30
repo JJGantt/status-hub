@@ -5428,16 +5428,22 @@ app.get('/api/live-mic', livemic.listen);
 // returns it. The app authenticates with the hub's device token, like the kiosk.
 const tvClients = new Set();
 // A command older than this is not replayed to a TV that connects late: "volume up" an hour after it
-// was said is not what he asked for.
-const TV_REPLAY_MS = 30 * 1000;
+// was said is not what he asked for. Long enough to cover a wake: the Pi's Wake-on-LAN, the screen
+// coming on, and the app's link reconnecting (google-tv docs/POWER.md).
+const TV_REPLAY_MS = 60 * 1000;
+// Ops that make sense to wake the TV for. While it is off the app is not connected, so these are held
+// for the replay on connect rather than failed; the Pi, subscribed to the same inserts, wakes the TV.
+const TV_WAKE_OPS = new Set(['open', 'launch']);
+// Done by the Pi over adb and Wake-on-LAN, never by the app, so the hub leaves the row to it.
+const TV_PI_OPS = new Set(['power']);
 function tvPush(row) {
-  if (!row || row.done_at) return;
+  if (!row || row.done_at || TV_PI_OPS.has(row.op)) return;
   const frame = 'event: cmd\ndata: ' + JSON.stringify({ id: row.id, op: row.op, args: row.args || {} }) + '\n\n';
   for (const c of tvClients) { try { c.write(frame); } catch {} }
-  if (!tvClients.size) {
+  if (!tvClients.size && !TV_WAKE_OPS.has(row.op)) {
     // Nobody to do it: answer the row now so the caller is not left waiting for the timeout.
     sbWrite(`tv_commands?id=eq.${row.id}`, 'PATCH',
-      { done_at: new Date().toISOString(), result: { ok: false, error: 'the TV is not connected' } }).catch(() => {});
+      { done_at: new Date().toISOString(), result: { ok: false, error: 'the TV is off (its app is not connected)' } }).catch(() => {});
   }
 }
 app.get('/api/tv/stream', async (req, res) => {

@@ -3184,6 +3184,42 @@ app.post('/api/health/sleep', express.json({ limit: '1mb' }), async (req, res) =
   }
 });
 
+// ---- HEALTH: every other Apple Health type, the same way (docs/HEALTH.md) --------------------------
+// Same contract as sleep: `samples` added or changed since the app's last anchor, `deleted` UUIDs, a
+// UUID-keyed upsert so a resend is harmless. Generic rows — type, value, unit — so a type Health adds
+// later lands here with no change on this side.
+app.post('/api/health/samples', express.json({ limit: '4mb' }), async (req, res) => {
+  const samples = Array.isArray(req.body?.samples) ? req.body.samples : [];
+  const deleted = (Array.isArray(req.body?.deleted) ? req.body.deleted : []).filter((u) => SLEEP_UUID.test(u));
+  const now = new Date().toISOString();
+  const num = (v) => (typeof v === 'number' && Number.isFinite(v) ? v : null);
+  const rows = samples
+    .filter((s) => SLEEP_UUID.test(s.id) && typeof s.type === 'string' && s.type && s.start && s.end)
+    .map((s) => ({ id: s.id, type: s.type, value: num(s.value), unit: s.unit || null, label: s.label || null,
+      start_at: s.start, end_at: s.end, source: s.source || null,
+      metadata: s.metadata && typeof s.metadata === 'object' ? s.metadata : null, received_at: now }));
+  try {
+    if (rows.length) {
+      const r = await fetch(`${SUPABASE_URL}/rest/v1/health_samples?on_conflict=id`, {
+        method: 'POST',
+        headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}`, 'Content-Type': 'application/json',
+          Prefer: 'resolution=merge-duplicates,return=minimal' },
+        body: JSON.stringify(rows),
+      });
+      if (!r.ok) throw new Error(`supabase upsert health_samples -> ${r.status} ${await r.text()}`);
+    }
+    // In slices, because the ids ride in the URL and a full page of them is past what a URL can carry.
+    for (let i = 0; i < deleted.length; i += 200) {
+      await sbWrite(`health_samples?id=in.(${deleted.slice(i, i + 200).join(',')})`, 'DELETE');
+    }
+    console.log(`[health] +${rows.length} -${deleted.length} (sent ${samples.length})`);
+    res.json({ ok: true, stored: rows.length, deleted: deleted.length });
+  } catch (e) {
+    console.log('[health] write failed:', e.message);
+    res.status(502).json({ ok: false });
+  }
+});
+
 // ---- REWIND: a grab from the watch's ring (docs/REWIND.md) -----------------------------------------
 // The watch posts the last N seconds it heard. Every grab is kept whole while the feature is built: the
 // clip in voice-clips under rewind/, and a rewind_grabs row with the words and the timing. Plain Groq

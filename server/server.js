@@ -1780,6 +1780,15 @@ app.post('/api/cg/orders', express.json({ limit: '64kb' }), async (req, res) => 
   }).filter((r) => r.name);
   if (!rows.length) return res.status(400).json({ error: 'no items' });
   try {
+    // One write per recording: a retry of it (the watch's request timed out after this insert landed, or
+    // its fallback after a failed pass) answers with the rows already written under the id, never a copy.
+    if (id) {
+      const prior = await sb(`cg_orders?interaction_id=eq.${id}&select=id,created_at,kind,item_id,name,qty,note,heard_name,standardized_at`);
+      if (prior.length) {
+        console.log(`[cg-orders] ${id} already written (${prior.length} rows); not adding again`);
+        return res.json({ added: prior, orders: await cgOrdersOpen() });
+      }
+    }
     const r = await fetch(`${SUPABASE_URL}/rest/v1/cg_orders`, {
       method: 'POST',
       headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}`, 'Content-Type': 'application/json',

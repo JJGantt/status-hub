@@ -37,6 +37,8 @@
 	<true/>
 	<key>NSCameraUsageDescription</key>
 	<string>Status Hub uses the camera to capture food and nutrition labels.</string>
+	<key>NSHealthShareUsageDescription</key>
+	<string>Sleep</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>For nearby requests.</string>
 	<key>NSMicrophoneUsageDescription</key>

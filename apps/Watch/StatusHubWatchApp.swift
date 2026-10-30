@@ -48,21 +48,49 @@ final class WatchAppDelegate: NSObject, WKApplicationDelegate, UNUserNotificatio
         actions: [UNNotificationAction(identifier: "REMINDER_DONE", title: "Done", options: [])],
         intentIdentifiers: [], options: [])
 
+    /// An orchestrator answer worth reading (docs/WATCH.md, "Unread answers"). No buttons: tapping it
+    /// opens home on the answer, and `customDismissAction` is what tells the app it was swiped away.
+    /// Either one is reading it.
+    private static let answerCategory = UNNotificationCategory(
+        identifier: "VOICE_ANSWER", actions: [], intentIdentifiers: [], options: [.customDismissAction])
+
     func applicationDidFinishLaunching() {
         UNUserNotificationCenter.current().delegate = self
         UNUserNotificationCenter.current().setNotificationCategories([Self.sessionCategory,
-                                                                       Self.reminderCategory])
+                                                                       Self.reminderCategory,
+                                                                       Self.answerCategory])
     }
 
     // Shown even while the app is open, as on the phone.
     func userNotificationCenter(_ center: UNUserNotificationCenter, willPresent notification: UNNotification,
                                 withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void) {
+        // An answer landing while he is looking at home is already in front of him: no buzz. With the
+        // app open but the wrist down it is shown, as the nudge to look.
+        if notification.request.content.categoryIdentifier == "VOICE_ANSWER" {
+            Task { @MainActor in
+                let looking = Chat.shared.looking
+                Hub.log("answer-push", ["shown": !looking])
+                completionHandler(looking ? [] : [.banner, .sound, .list])
+            }
+            return
+        }
         completionHandler([.banner, .sound, .list])
     }
 
     func userNotificationCenter(_ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse,
                                 withCompletionHandler completionHandler: @escaping () -> Void) {
         let info = response.notification.request.content.userInfo
+        // An answer's notification. Swiped away, it has been read. Tapped, home lands on the answer and
+        // the read rule marks it there: marked now, an old answer would leave the thread before home
+        // could land on it.
+        if let id = info["voice_message_id"] as? String {
+            let opened = response.actionIdentifier == UNNotificationDefaultActionIdentifier
+            Task { @MainActor in
+                if opened { Chat.shared.land(on: id) } else { Chat.shared.markRead(id) }
+                completionHandler()
+            }
+            return
+        }
         if response.actionIdentifier == "REMINDER_DONE", let item = info["reminder_id"] as? String {
             Task { @MainActor in
                 await Hub.complete(item)
@@ -163,6 +191,8 @@ struct RootView: View {
         .onChange(of: chat.recordRequested) { _, asked in
             if asked { jump(to: .home) }
         }
+        // An answer's notification, opened: home, which lands on the answer (`Chat.landOn`).
+        .onChange(of: chat.landings) { _, _ in jump(to: .home) }
         // A control that names a page (Control Center, the Action button, the Smart Stack, the Day and
         // Sessions complications) turns to it. Sessions always lands on the LIST, closing any session
         // left open there; the other pages leave it open for when he swipes back.

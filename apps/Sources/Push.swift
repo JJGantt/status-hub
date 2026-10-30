@@ -90,10 +90,16 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
         actions: [UNNotificationAction(identifier: "REMINDER_DONE", title: "Done", options: [])],
         intentIdentifiers: [], options: [])
 
+    // An orchestrator answer worth reading (docs/WATCH.md, "Unread answers"). No buttons;
+    // `customDismissAction` is what reports a swipe-away, so tapping it and dismissing it both reach
+    // the delegate, and either one marks the answer read.
+    private static let answerCategory = UNNotificationCategory(
+        identifier: "VOICE_ANSWER", actions: [], intentIdentifiers: [], options: [.customDismissAction])
+
     func application(_ application: UIApplication,
                      didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil) -> Bool {
         UNUserNotificationCenter.current().delegate = self
-        UNUserNotificationCenter.current().setNotificationCategories([Self.reminderCategory])
+        UNUserNotificationCenter.current().setNotificationCategories([Self.reminderCategory, Self.answerCategory])
         WatchLink.shared.start()   // hands the hub token to the watch app
         UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound, .badge]) { granted, _ in
             guard granted else { return }
@@ -125,6 +131,11 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
     func userNotificationCenter(_ center: UNUserNotificationCenter,
                                 didReceive response: UNNotificationResponse,
                                 withCompletionHandler completionHandler: @escaping () -> Void) {
+        // An answer's notification, tapped or swiped away: read.
+        if let mid = response.notification.request.content.userInfo["voice_message_id"] as? String {
+            HubAPI.post("/api/voice-messages/read", ["id": mid], done: completionHandler)
+            return
+        }
         // A session's finished reply: tapping the banner opens that session on the repos pane.
         if let sid = response.notification.request.content.userInfo["session_id"] as? String {
             SessionLaunch.shared.request(sid)

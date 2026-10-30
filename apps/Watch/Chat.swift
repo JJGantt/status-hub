@@ -27,6 +27,14 @@ final class Chat: ObservableObject {
     var unread: [Message] {
         thread.filter { $0.role == "assistant" && $0.needs_read == true && $0.read_at == nil && !readHere.contains($0.id) }
     }
+    /// The answer home lands on (the dot, or an answer's notification opened); nil lands on the newest.
+    /// The next command's words take the landing back.
+    @Published private(set) var landOn: String?
+    /// Counts each request to land, so a second one on the same answer still moves the view.
+    @Published private(set) var landings = 0
+    /// Home is on screen, in front, with the wrist up (`HomeView.attend`): an answer's notification
+    /// arriving now is not shown.
+    var looking = false
     /// Read on this watch, kept so the mark goes the moment it is read rather than at the next reload.
     @Published private var readHere: Set<String> = []
     /// What the hub heard of each command still running, oldest first, shown until it lands in the
@@ -74,6 +82,7 @@ final class Chat: ObservableObject {
             let live = commands.filter { !$0.failed }
             waiting = !live.isEmpty
             pending = live.compactMap(\.words)
+            if !pending.isEmpty { landOn = nil }
             StayAwake.shared.refresh()
         }
     }
@@ -278,14 +287,21 @@ final class Chat: ObservableObject {
         held.removeAll { tail.contains($0.id) }
     }
 
-    /// An answer has been on screen with the wrist up long enough to have been read.
-    func markRead(_ m: Message) {
-        guard !readHere.contains(m.id) else { return }
-        readHere.insert(m.id)
-        Hub.log("read", ["id": m.id])
+    /// An answer has been read: on screen with the wrist up long enough, or its notification swiped
+    /// away.
+    func markRead(_ id: String) {
+        guard !readHere.contains(id) else { return }
+        readHere.insert(id)
+        Hub.log("read", ["id": id])
         Task {
-            do { try await Hub.read(m.id) } catch { Hub.log("read-failed", ["id": m.id, "error": "\(error)"]) }
+            do { try await Hub.read(id) } catch { Hub.log("read-failed", ["id": id, "error": "\(error)"]) }
         }
+    }
+
+    /// Home lands on this answer instead of the newest row, until the next command he speaks.
+    func land(on id: String) {
+        landOn = id
+        landings += 1
     }
 
     private func tokenArrived() {

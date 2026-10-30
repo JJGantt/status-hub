@@ -1512,7 +1512,12 @@ function startRealtime() {
     // Voice pipeline: stream inserts/updates straight to the /tv conversation panel. INSERT and
     // UPDATE both carry the new row in `payload.new` (UPDATE = a streamed row flipping done=true).
     .on('postgres_changes', { event: '*', schema: 'public', table: 'voice_messages' },
-      (p) => { seen(); if (p.new) pushVoice('message', p.eventType === 'INSERT' ? markLive(p.new) : p.new); })
+      (p) => {
+        seen();
+        if (!p.new) return;
+        pushVoice('message', p.eventType === 'INSERT' ? markLive(p.new) : p.new);
+        if (p.eventType === 'INSERT') notifyAnswer(p.new);
+      })
     // A client waiting on its own command (/api/voice-reply/:id) is answered the moment the worker
     // marks the request finished.
     .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'voice_requests' },
@@ -3845,14 +3850,11 @@ app.post('/api/session-activity', express.json({ limit: '8mb' }), async (req, re
 // more than once, and a restart must not buzz again for a reply already delivered (the text hash covers
 // a host that does not send `at` yet). The payload's session_id is what tapping it opens, on the phone
 // and on the watch; SESSION_REPLY is the watch's category with the Open action. Gated by the
-// Settings → Push switch. Orchestrator replies are never pushed (the voice worker sends none), so this
-// and reminders/reports are what reach the phone.
+// Settings → Push switch. Of orchestrator replies only a flagged answer is pushed (`notifyAnswer`).
 const sentSessionReplies = new Set();
 async function notifySessionReply(sessionId, text, at, summary) {
   try {
-    const s = await settingsAll();
-    if (s.push_enabled !== undefined
-        && ['0', 'false', 'off', 'no', ''].includes(String(s.push_enabled).trim().toLowerCase())) return;
+    if (pushOff(await settingsAll())) return;
     const turn = at || crypto.createHash('sha1').update(text).digest('hex').slice(0, 16);
     const key = `session-reply:${sessionId}:${turn}`;
     if (sentSessionReplies.has(key)) return;
@@ -3867,6 +3869,33 @@ async function notifySessionReply(sessionId, text, at, summary) {
     const body = (typeof summary === 'string' && summary.trim()) ? summary.trim() : text;
     await pushAll('session', title, body, key, { category: 'SESSION_REPLY', payload: { session_id: sessionId } });
   } catch (e) { console.log('[session-push]', e.message); }
+}
+
+// The Settings → Push switch, which every reply push obeys.
+function pushOff(s) {
+  return s.push_enabled !== undefined
+    && ['0', 'false', 'off', 'no', ''].includes(String(s.push_enabled).trim().toLowerCase());
+}
+
+// An orchestrator answer flagged worth reading (voice_messages.needs_read, docs/WATCH.md "Unread
+// answers") is pushed as it lands; no other orchestrator reply ever is. Titled with his own words, the
+// answer as the body. Once per row, by its dedupe key, however many times realtime delivers the insert.
+// VOICE_ANSWER is the category both apps register: tapping or dismissing it marks the answer read, and
+// the watch drops it unshown while home is in front with the wrist up.
+async function notifyAnswer(row) {
+  if (row.role !== 'assistant' || !row.needs_read || row.read_at) return;
+  try {
+    if (pushOff(await settingsAll())) return;
+    const key = `voice-answer:${row.id}`;
+    if ((await sb(`notifications?dedupe_key=eq.${encodeURIComponent(key)}&select=id&limit=1`)).length) return;
+    const [ask] = row.request_id
+      ? (await sb(`voice_messages?role=eq.user&request_id=eq.${encodeURIComponent(row.request_id)}&select=text&limit=1`)) || []
+      : [];
+    const words = String((ask && ask.text) || '').trim();
+    const title = words.length > 80 ? words.slice(0, 79) + '…' : words || 'Hub';
+    await pushAll('answer', title, String(row.text || '').slice(0, 1500), key,
+      { category: 'VOICE_ANSWER', payload: { voice_message_id: row.id } });
+  } catch (e) { console.log('[answer-push]', e.message); }
 }
 
 app.post('/api/voice-activity', express.json(), (req, res) => {
@@ -3884,8 +3913,8 @@ app.post('/api/voice-activity', express.json(), (req, res) => {
   res.status(204).end();
 });
 
-// Native push to Jared's phone (APNs), ad-hoc text. The voice worker POSTs its failure alerts here; it
-// does not push orchestrator replies, which land on the screen he asked from. Gated on the kiosk
+// Native push to Jared's phone (APNs), ad-hoc text. The voice worker POSTs its failure alerts here;
+// orchestrator answers are pushed by `notifyAnswer`, not through this. Gated on the kiosk
 // token. Fans out to every registered iOS token on its own push environment (sandbox vs production), and logs the result to `notifications`.
 // Push a notification to every registered iOS device; records one `notifications` row (with an optional
 // dedupe_key so a caller can guarantee once-only delivery). Shared by /api/notify and reminder firing.
@@ -3906,6 +3935,8 @@ const NOTIFY_STYLE = {
   // A session's finished reply (notifySessionReply). 'active', not 'passive' like a voice ack: it has
   // to reach the watch with its Open button, and a passive one never lights either screen.
   session:  { interruptionLevel: 'active' },
+  // An orchestrator answer worth reading (notifyAnswer): lights the wrist, as a session reply does.
+  answer:   { interruptionLevel: 'active' },
 };
 
 // The home-screen badge = every EXPIRED item: not cleared, dated, and past the moment it was FIRST

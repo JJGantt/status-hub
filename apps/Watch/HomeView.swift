@@ -77,6 +77,12 @@ struct HomeView: View {
                 pinned = true
                 jump(proxy, animated: true)
             }
+            // Asked to land again on the same answer, after scrolling away from it: the target has not
+            // changed, so nothing above moves the view.
+            .onChange(of: chat.landings) { _, _ in
+                pinned = true
+                jump(proxy, animated: true)
+            }
             .onScrollGeometryChange(for: CGFloat.self) { $0.contentSize.height } action: { _, _ in
                 if pinned { jump(proxy) }
             }
@@ -90,8 +96,7 @@ struct HomeView: View {
                 if let first = chat.unread.first {
                     Button {
                         Hub.log("unread-jump", ["id": first.id, "left": chat.unread.count])
-                        pinned = false
-                        withAnimation(.easeOut(duration: 0.2)) { proxy.scrollTo("msg\(first.id)", anchor: .top) }
+                        chat.land(on: first.id)
                     } label: {
                         Circle().fill(Self.unreadDot).frame(width: 10, height: 10)
                             .frame(width: 48, height: 30).contentShape(Rectangle())
@@ -115,6 +120,7 @@ struct HomeView: View {
     /// left the room on screen with the item before it showing above.
     private var target: String? {
         if let last = chat.pending.indices.last { return "pending\(last)" }
+        if let id = chat.landOn, chat.recent.contains(where: { $0.id == id }) { return "msg\(id)" }
         return chat.recent.last.map { "msg\($0.id)" }
     }
 
@@ -143,6 +149,7 @@ struct HomeView: View {
     /// front, home showing and the wrist up. Any of those ending first stops the count.
     private func attend() {
         let looking = !dimmed && phase == .active && onScreen
+        chat.looking = looking
         let due = looking ? Set(chat.unread.map(\.id)).intersection(visible) : []
         for (id, t) in reading where !due.contains(id) { t.cancel(); reading[id] = nil }
         for id in due where reading[id] == nil {
@@ -150,7 +157,7 @@ struct HomeView: View {
                 try? await Task.sleep(for: .seconds(2))
                 guard !Task.isCancelled else { return }
                 reading[id] = nil
-                if let m = chat.unread.first(where: { $0.id == id }) { chat.markRead(m) }
+                if chat.unread.contains(where: { $0.id == id }) { chat.markRead(id) }
             }
         }
     }

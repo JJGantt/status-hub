@@ -133,7 +133,16 @@ looking, so those are kept reachable until they have actually been on screen.
   every surface through the voice stream.
 - **An amber dot at the top of home while any is unread**, in the sessions list's unread amber. A tap
   on it lands on the OLDEST unread answer; once that is read the next tap goes to the next. It is a
-  button of its own, so the tap does not also record.
+  button of its own, so the tap does not also record. Home stays landed there (`Chat.landOn`) until
+  the next command's words appear.
+- **Each one is pushed as it lands** (`notifyAnswer` in the hub, category `VOICE_ANSWER`, titled with
+  his words, the answer as the body); no other orchestrator reply is. The watch drops it unshown while
+  home is in front with the wrist up (`Chat.looking`), and shows it with the app open but the wrist
+  down. Any interaction with it is reading it: swiped away, on the watch or the phone, it is marked
+  read at once (`customDismissAction` is what reports the swipe); tapped on the watch, home lands on
+  the answer and the read rule marks it, since marking it first would drop an old answer out of the
+  thread before home could land on it; tapped on the phone, it is marked read. Only seeing it, with no
+  touch, does not count: nothing reports that.
 - **None is lost to age.** `/api/voice-messages` returns every unread answer however old, with the
   words that asked for it, ahead of the current context; the watch draws them above the last ten
   exchanges (`Chat.held`) and keeps them there, read or not, until home leaves the screen, so an

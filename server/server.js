@@ -1476,6 +1476,9 @@ function startRealtime() {
       (p) => { dirtySurfHist(); changed(p); surfAlarms.tick('snapshot'); pushSurfLive(); })
     .on('postgres_changes', { event: '*', schema: 'public', table: 'surf_alarms' },
       () => { seen(); surfAlarms.tick('rule'); })
+    // A TV command, pushed to the TV's app the moment it is written (tvPush).
+    .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'tv_commands' },
+      (p) => { seen(); tvPush(p.new); })
     // The rep watcher, so setting it appears at once rather than on the next periodic
     // frame. Its whole value is confirming BEFORE a set that sets are being logged as
     // the right thing, and a delay there defeats the purpose. workset_reports is NOT
@@ -5373,6 +5376,47 @@ app.get('/api/day-stream', (req, res) => {
 app.get('/api/live-mic', livemic.listen);
 
 // Session SSE: one `event: session` frame per tool call or finished turn, from either machine.
+// ---- THE BEDROOM TV (google-tv repo, docs/VOICE.md) ----------------------------------------------
+// A command is a tv_commands row (the data MCP's `tv` tool writes it). The hub is subscribed to inserts
+// (startRealtime) and pushes each to the TV's companion app, which holds this stream open; the app does
+// it and posts the outcome to /api/tv/result, which fills the row, and the tool awaiting that update
+// returns it. The app authenticates with the hub's device token, like the kiosk.
+const tvClients = new Set();
+// A command older than this is not replayed to a TV that connects late: "volume up" an hour after it
+// was said is not what he asked for.
+const TV_REPLAY_MS = 30 * 1000;
+function tvPush(row) {
+  if (!row || row.done_at) return;
+  const frame = 'event: cmd\ndata: ' + JSON.stringify({ id: row.id, op: row.op, args: row.args || {} }) + '\n\n';
+  for (const c of tvClients) { try { c.write(frame); } catch {} }
+  if (!tvClients.size) {
+    // Nobody to do it: answer the row now so the caller is not left waiting for the timeout.
+    sbWrite(`tv_commands?id=eq.${row.id}`, 'PATCH',
+      { done_at: new Date().toISOString(), result: { ok: false, error: 'the TV is not connected' } }).catch(() => {});
+  }
+}
+app.get('/api/tv/stream', async (req, res) => {
+  res.set({ 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache',
+            Connection: 'keep-alive', 'X-Accel-Buffering': 'no' });
+  res.flushHeaders();
+  tvClients.add(res);
+  console.log(`[tv] connected (${tvClients.size})`);
+  const ka = setInterval(() => { try { res.write(PING); } catch {} }, 25000);
+  req.on('close', () => { clearInterval(ka); tvClients.delete(res); console.log(`[tv] disconnected (${tvClients.size})`); });
+  try {
+    const since = new Date(Date.now() - TV_REPLAY_MS).toISOString();
+    for (const row of await sb(`tv_commands?done_at=is.null&created_at=gte.${since}&order=created_at`)) tvPush(row);
+  } catch {}
+});
+app.post('/api/tv/result', express.json({ limit: '64kb' }), async (req, res) => {
+  const id = String((req.body || {}).id || '');
+  if (!/^[0-9a-f-]{36}$/i.test(id)) return res.status(400).json({ error: 'id required' });
+  try {
+    await sbWrite(`tv_commands?id=eq.${id}`, 'PATCH', { done_at: new Date().toISOString(), result: (req.body || {}).result ?? null });
+    res.json({ ok: true });
+  } catch (e) { res.status(502).json({ error: String(e.message || e) }); }
+});
+
 app.get('/api/session-stream', (req, res) => {
   res.set({ 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache',
             Connection: 'keep-alive', 'X-Accel-Buffering': 'no' });

@@ -81,9 +81,11 @@ targets:
         NSHealthShareUsageDescription: Status Hub reads your sleep from Apple Health to keep a history of your nights alongside your other data.
         # Required by App Store Connect for the healthkit entitlement even though nothing is written.
         NSHealthUpdateUsageDescription: Status Hub does not write to Apple Health.
-        # The live mic keeps streaming with the phone locked (Sources/LiveMic.swift, docs/LIVE-MIC.md).
+        # The live mic keeps streaming with the phone locked (Sources/LiveMic.swift, docs/LIVE-MIC.md);
+        # location keeps the location history recording in the background (docs/LOCATION.md).
         UIBackgroundModes:
           - audio
+          - location
         CFBundleURLTypes:
           - CFBundleURLName: com.jaredgantt.statushub
             CFBundleURLSchemes:
@@ -139,6 +141,7 @@ targets:
       - path: Watch
       - path: WatchWidgets/RecordIntent.swift   # the Record control's intent runs in the app (WATCH_APP)
       - path: Shared/Auth.swift   # Auth.host only — the watch's token comes from the phone, not a password
+      - path: Shared/LocationTrail.swift   # the watch's own location history (docs/LOCATION.md)
       - path: Controls/RingsView.swift   # the /api/rings types and the card palette; its widget views go unused
       - path: AssetsWatch.xcassets
     info:
@@ -157,6 +160,7 @@ targets:
         # WKBackgroundModes: the watch's key only takes session types, and audio is not one.
         UIBackgroundModes:
           - audio
+          - location   # the location history (Shared/LocationTrail.swift, docs/LOCATION.md)
         # statushub://record is what the complication opens — straight into recording.
         CFBundleURLTypes:
           - CFBundleURLName: com.jaredgantt.statushub.watch

@@ -36,6 +36,7 @@
 		62377EFC112DA32097338F77 /* LiveListen.swift in Sources */ = {isa = PBXBuildFile; fileRef = 011F77A80F4DF604831A2925 /* LiveListen.swift */; };
 		68E90B2316D4D69B4288AF5B /* RingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A86CE732DC51F6BC6973C5F0 /* RingsView.swift */; };
 		69C6B1241F836204E5FB5EB4 /* AssetsWatch.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 9F6A38324B6E1FE85ABDB8B6 /* AssetsWatch.xcassets */; };
+		6A70F2AD168EE3EAEF10A245 /* LocationTrail.swift in Sources */ = {isa = PBXBuildFile; fileRef = 45C78D4725DD9720852DFFD9 /* LocationTrail.swift */; };
 		6E741EA6022469DE675FB215 /* SleepSync.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8500D56F95DF5A6D21132960 /* SleepSync.swift */; };
 		6F48E2C9C6071F502AB252A0 /* ReposView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AF1D1C7A5D148A4366347C65 /* ReposView.swift */; };
 		70AEAF3F633ACDFC32C23FF6 /* LiveMic.swift in Sources */ = {isa = PBXBuildFile; fileRef = FC9DA7D425E32C05CDE6A7EA /* LiveMic.swift */; };
@@ -60,12 +61,14 @@
 		C4250430822C333D041CEEA1 /* Hub.swift in Sources */ = {isa = PBXBuildFile; fileRef = FD06B420AFC554D37540118C /* Hub.swift */; };
 		C692F0368E5A3BD1BA7E0679 /* WatchLink.swift in Sources */ = {isa = PBXBuildFile; fileRef = D87B899987639512DD905DCE /* WatchLink.swift */; };
 		C917F517205EDE3DA975EE4A /* HubVoiceIntent.swift in Sources */ = {isa = PBXBuildFile; fileRef = 630A58399AEBE9A0EB63449B /* HubVoiceIntent.swift */; };
+		CBAD81738815335B41DE4408 /* LocationTrail.swift in Sources */ = {isa = PBXBuildFile; fileRef = 45C78D4725DD9720852DFFD9 /* LocationTrail.swift */; };
 		CD84EBB55F5F0A883DCBDE96 /* BodyFigure.swift in Sources */ = {isa = PBXBuildFile; fileRef = E8CB6EB26E2B1AFE0D9B2153 /* BodyFigure.swift */; };
 		CDDBE30861DC50F9003C9B3C /* StatusHubWatchWidgets.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 7A798171A56FC30D0250CDD7 /* StatusHubWatchWidgets.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		D331FFF01B536787A0263385 /* BodyPaths.swift in Sources */ = {isa = PBXBuildFile; fileRef = CAEDD165B40FC7BE05380CE2 /* BodyPaths.swift */; };
 		D3E5EB61797DC506EFFC29B3 /* Router.swift in Sources */ = {isa = PBXBuildFile; fileRef = 04D43ADC9891823E1EFA0E4C /* Router.swift */; };
 		D75951639D8E19EF3004D9E2 /* SleepSync.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8500D56F95DF5A6D21132960 /* SleepSync.swift */; };
 		D8B3EEDED01AB105C95F173D /* Auth.swift in Sources */ = {isa = PBXBuildFile; fileRef = 88D699B5FDC0F7476374CF07 /* Auth.swift */; };
+		E34E8A8F7CA83D65E839396E /* LocationTrail.swift in Sources */ = {isa = PBXBuildFile; fileRef = 45C78D4725DD9720852DFFD9 /* LocationTrail.swift */; };
 		E5F01E32A844356CC4D3F449 /* WatchUI.swift in Sources */ = {isa = PBXBuildFile; fileRef = E15B459BE174F4274C78B54E /* WatchUI.swift */; };
 		E8ABA2047F042D0E11B6C604 /* Workout.swift in Sources */ = {isa = PBXBuildFile; fileRef = F4BAD78C211DC1432CDEB572 /* Workout.swift */; };
 		EBD52912FF3B6259E305FBFA /* Sessions.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3DA8801FE7845595DD403F04 /* Sessions.swift */; };
@@ -154,6 +157,7 @@
 		3DA8801FE7845595DD403F04 /* Sessions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sessions.swift; sourceTree = "<group>"; };
 		3EE13DD050BF1BC4B943C3CC /* Capture.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Capture.swift; sourceTree = "<group>"; };
 		43113D1E0A8CEB8334CFC02E /* AssetsMac.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = AssetsMac.xcassets; sourceTree = "<group>"; };
+		45C78D4725DD9720852DFFD9 /* LocationTrail.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocationTrail.swift; sourceTree = "<group>"; };
 		50C9941AC596855E4C447F11 /* Markdown.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Markdown.swift; sourceTree = "<group>"; };
 		5757142AE4AD25B5E06EA231 /* Stretch.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Stretch.swift; sourceTree = "<group>"; };
 		5A7D22E52C6A0ABBCB9FF3BF /* Rewind.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Rewind.swift; sourceTree = "<group>"; };
@@ -219,6 +223,7 @@
 			children = (
 				88D699B5FDC0F7476374CF07 /* Auth.swift */,
 				630A58399AEBE9A0EB63449B /* HubVoiceIntent.swift */,
+				45C78D4725DD9720852DFFD9 /* LocationTrail.swift */,
 				980C6D4E9785922A04236D2D /* OpenTodoItem.swift */,
 			);
 			path = Shared;
@@ -520,6 +525,7 @@
 				C4250430822C333D041CEEA1 /* Hub.swift in Sources */,
 				62377EFC112DA32097338F77 /* LiveListen.swift in Sources */,
 				2D7BBEABB20A4F0C080608E0 /* Location.swift in Sources */,
+				6A70F2AD168EE3EAEF10A245 /* LocationTrail.swift in Sources */,
 				2DE5C68D7C666AA0FFB4B465 /* Markdown.swift in Sources */,
 				F9B3AEDE8FF26869DC2B821B /* Nutrition.swift in Sources */,
 				B63E8DE2508FDBEB38EC60C7 /* NutritionView.swift in Sources */,
@@ -560,6 +566,7 @@
 				09ECD41B51EB9F304B7B6306 /* HealthSync.swift in Sources */,
 				C917F517205EDE3DA975EE4A /* HubVoiceIntent.swift in Sources */,
 				906DA291FF0B9503A9D28AF4 /* LiveMic.swift in Sources */,
+				E34E8A8F7CA83D65E839396E /* LocationTrail.swift in Sources */,
 				5D50E610532DA949FF006920 /* OpenTodoItem.swift in Sources */,
 				A4E6D950656AE1A3B80EECAA /* Push.swift in Sources */,
 				FB6B5DF33E6070D5348F0E27 /* RecordIntent.swift in Sources */,
@@ -590,6 +597,7 @@
 			files = (
 				7876C764C368F15A396CAEDC /* Auth.swift in Sources */,
 				B0778EBC2C7F517F88E6662D /* HubVoiceIntent.swift in Sources */,
+				CBAD81738815335B41DE4408 /* LocationTrail.swift in Sources */,
 				5B95BB853AE0BB3D7E93EC0F /* OpenTodoItem.swift in Sources */,
 				99C55A70179E1025B9004EF9 /* RecordControl.swift in Sources */,
 				6F48E2C9C6071F502AB252A0 /* ReposView.swift in Sources */,

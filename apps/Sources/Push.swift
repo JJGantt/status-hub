@@ -102,6 +102,7 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
         UNUserNotificationCenter.current().setNotificationCategories([Self.reminderCategory, Self.answerCategory])
         WatchLink.shared.start()   // hands the hub token to the watch app
         HealthSync.shared.start()  // Apple Health -> the hub, and SleepSync after it (docs/HEALTH.md, docs/SLEEP.md)
+        LocationTrail.shared.start()  // every position -> the hub's location history (docs/LOCATION.md)
         UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound, .badge]) { granted, _ in
             guard granted else { return }
             DispatchQueue.main.async { application.registerForRemoteNotifications() }

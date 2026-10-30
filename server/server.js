@@ -3220,6 +3220,42 @@ app.post('/api/health/samples', express.json({ limit: '4mb' }), async (req, res)
   }
 });
 
+// ---- LOCATION HISTORY (docs/LOCATION.md) ---------------------------------------------------------------
+// Batches of fixes from the phone, the watch and the Mac, stored as they came into location_points
+// (data-layer 00139). Upserted on (device, at), so a batch resent after a lost reply changes nothing.
+const LOCATION_DEVICES = new Set(['phone', 'watch', 'mac']);
+app.post('/api/location/points', express.json({ limit: '4mb' }), async (req, res) => {
+  const device = req.body?.device;
+  if (!LOCATION_DEVICES.has(device)) return res.status(400).json({ ok: false });
+  const points = Array.isArray(req.body?.points) ? req.body.points : [];
+  const now = new Date().toISOString();
+  const num = (v) => (typeof v === 'number' && Number.isFinite(v) ? v : null);
+  const seen = new Set();
+  const rows = points
+    .filter((p) => num(p.lat) != null && num(p.lon) != null && typeof p.at === 'string' && !Number.isNaN(Date.parse(p.at)))
+    .map((p) => ({ device, at: new Date(p.at).toISOString(), lat: p.lat, lon: p.lon, h_acc: num(p.h_acc), alt: num(p.alt),
+      v_acc: num(p.v_acc), speed: num(p.speed), course: num(p.course),
+      floor: Number.isInteger(p.floor) ? p.floor : null, received_at: now }))
+    // One upsert cannot touch a row twice, and two fixes stamped the same millisecond would.
+    .filter((r) => !seen.has(r.at) && seen.add(r.at));
+  try {
+    if (rows.length) {
+      const r = await fetch(`${SUPABASE_URL}/rest/v1/location_points?on_conflict=device,at`, {
+        method: 'POST',
+        headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}`, 'Content-Type': 'application/json',
+          Prefer: 'resolution=merge-duplicates,return=minimal' },
+        body: JSON.stringify(rows),
+      });
+      if (!r.ok) throw new Error(`supabase upsert location_points -> ${r.status} ${await r.text()}`);
+    }
+    console.log(`[location] ${device} +${rows.length} (sent ${points.length})`);
+    res.json({ ok: true, stored: rows.length });
+  } catch (e) {
+    console.log('[location] write failed:', e.message);
+    res.status(502).json({ ok: false });
+  }
+});
+
 // ---- REWIND: a grab from the watch's ring (docs/REWIND.md) -----------------------------------------
 // The watch posts the last N seconds it heard. Every grab is kept whole while the feature is built: the
 // clip in voice-clips under rewind/, and a rewind_grabs row with the words and the timing. Plain Groq

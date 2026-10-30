@@ -35,6 +35,7 @@
 		62377EFC112DA32097338F77 /* LiveListen.swift in Sources */ = {isa = PBXBuildFile; fileRef = 011F77A80F4DF604831A2925 /* LiveListen.swift */; };
 		68E90B2316D4D69B4288AF5B /* RingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A86CE732DC51F6BC6973C5F0 /* RingsView.swift */; };
 		69C6B1241F836204E5FB5EB4 /* AssetsWatch.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 9F6A38324B6E1FE85ABDB8B6 /* AssetsWatch.xcassets */; };
+		6E741EA6022469DE675FB215 /* SleepSync.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8500D56F95DF5A6D21132960 /* SleepSync.swift */; };
 		6F48E2C9C6071F502AB252A0 /* ReposView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AF1D1C7A5D148A4366347C65 /* ReposView.swift */; };
 		70AEAF3F633ACDFC32C23FF6 /* LiveMic.swift in Sources */ = {isa = PBXBuildFile; fileRef = FC9DA7D425E32C05CDE6A7EA /* LiveMic.swift */; };
 		734F54125D4F0BC0B31B51EF /* VolumeKnob.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1E94C4C0D42288352ED7299B /* VolumeKnob.swift */; };
@@ -61,6 +62,7 @@
 		CDDBE30861DC50F9003C9B3C /* StatusHubWatchWidgets.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 7A798171A56FC30D0250CDD7 /* StatusHubWatchWidgets.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		D331FFF01B536787A0263385 /* BodyPaths.swift in Sources */ = {isa = PBXBuildFile; fileRef = CAEDD165B40FC7BE05380CE2 /* BodyPaths.swift */; };
 		D3E5EB61797DC506EFFC29B3 /* Router.swift in Sources */ = {isa = PBXBuildFile; fileRef = 04D43ADC9891823E1EFA0E4C /* Router.swift */; };
+		D75951639D8E19EF3004D9E2 /* SleepSync.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8500D56F95DF5A6D21132960 /* SleepSync.swift */; };
 		D8B3EEDED01AB105C95F173D /* Auth.swift in Sources */ = {isa = PBXBuildFile; fileRef = 88D699B5FDC0F7476374CF07 /* Auth.swift */; };
 		E5F01E32A844356CC4D3F449 /* WatchUI.swift in Sources */ = {isa = PBXBuildFile; fileRef = E15B459BE174F4274C78B54E /* WatchUI.swift */; };
 		E8ABA2047F042D0E11B6C604 /* Workout.swift in Sources */ = {isa = PBXBuildFile; fileRef = F4BAD78C211DC1432CDEB572 /* Workout.swift */; };
@@ -164,6 +166,7 @@
 		80B371A0F840BA7F14954FE5 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		824876CC8A2DF46BE8BF406A /* TodoView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TodoView.swift; sourceTree = "<group>"; };
 		835C09DFE3C581C0FCD41116 /* Push.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Push.swift; sourceTree = "<group>"; };
+		8500D56F95DF5A6D21132960 /* SleepSync.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SleepSync.swift; sourceTree = "<group>"; };
 		88D699B5FDC0F7476374CF07 /* Auth.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Auth.swift; sourceTree = "<group>"; };
 		94DD1B301CE525AF6B208DC7 /* StatusHubWatch.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = StatusHubWatch.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		951A385F7EE64123592C4DA6 /* WatchSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchSettings.swift; sourceTree = "<group>"; };
@@ -225,6 +228,7 @@
 				FC9DA7D425E32C05CDE6A7EA /* LiveMic.swift */,
 				835C09DFE3C581C0FCD41116 /* Push.swift */,
 				F198CD20CEADF9EC7C93F50C /* RecordIntent.swift */,
+				8500D56F95DF5A6D21132960 /* SleepSync.swift */,
 				DBE4FD566029B00F912457DA /* StatusHubApp.swift */,
 				D87B899987639512DD905DCE /* WatchLink.swift */,
 			);
@@ -554,6 +558,7 @@
 				5D50E610532DA949FF006920 /* OpenTodoItem.swift in Sources */,
 				A4E6D950656AE1A3B80EECAA /* Push.swift in Sources */,
 				FB6B5DF33E6070D5348F0E27 /* RecordIntent.swift in Sources */,
+				6E741EA6022469DE675FB215 /* SleepSync.swift in Sources */,
 				ED30317D3B77A590C83D95BC /* StatusHubApp.swift in Sources */,
 				C692F0368E5A3BD1BA7E0679 /* WatchLink.swift in Sources */,
 			);
@@ -567,6 +572,7 @@
 				70AEAF3F633ACDFC32C23FF6 /* LiveMic.swift in Sources */,
 				EE1E28331D9AE8401BEE3601 /* Push.swift in Sources */,
 				0C6EDE683DFC99BC5DD60409 /* RecordIntent.swift in Sources */,
+				D75951639D8E19EF3004D9E2 /* SleepSync.swift in Sources */,
 				80C001EA5124225A4538240B /* StatusHubApp.swift in Sources */,
 				AE3C14A7061F839013EA169A /* WatchLink.swift in Sources */,
 			);

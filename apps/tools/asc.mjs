@@ -19,6 +19,7 @@
 //   node asc.mjs public-link <group> on|off  — the shareable join link, external groups only
 //   node asc.mjs builds                      — the builds TestFlight is offering, and when they expire
 //   node asc.mjs next-build                  — the build number to upload next (one past the highest)
+//   node asc.mjs capability <id> [TYPE]      — list an App ID's capabilities, or enable one (e.g. HEALTHKIT)
 //
 // TestFlight shows the app to anyone signed in with an Apple ID that has ever been a tester, but it
 // only lets them INSTALL while that Apple ID is currently in a group — the state a phone reports as
@@ -128,6 +129,32 @@ if (cmd === 'devices') {
     if (/already (exist|been used|registered)|not available/i.test(e.message)) console.log(`${identifier} is already registered — nothing to do.\n${e.message}`);
     else throw e;
   }
+} else if (cmd === 'capability') {
+  // An entitlement in project.yml is only signable once the App ID carries the matching capability;
+  // without it the archive fails at signing ("provisioning profile doesn't include the … entitlement").
+  const [identifier, capabilityType] = rest;
+  if (!identifier) { console.error('usage: asc.mjs capability <bundle-id> [CAPABILITY_TYPE]'); process.exit(2); }
+  const { data: ids } = await api('GET', `/v1/bundleIds?filter[identifier]=${encodeURIComponent(identifier)}&limit=20`);
+  // filter[identifier] is a prefix match, so the exact id has to be picked out.
+  const bid = ids.find((b) => b.attributes.identifier === identifier);
+  if (!bid) { console.error(`${identifier} is not registered`); process.exit(2); }
+  if (capabilityType) {
+    try {
+      await api('POST', '/v1/bundleIdCapabilities', {
+        data: {
+          type: 'bundleIdCapabilities',
+          attributes: { capabilityType },
+          relationships: { bundleId: { data: { type: 'bundleIds', id: bid.id } } },
+        },
+      });
+      console.log(`enabled ${capabilityType} on ${identifier}`);
+    } catch (e) {
+      if (/already|exists/i.test(e.message)) console.log(`${capabilityType} was already on ${identifier}`);
+      else throw e;
+    }
+  }
+  const { data: caps } = await api('GET', `/v1/bundleIds/${bid.id}/bundleIdCapabilities`);
+  console.log(`${identifier}: ${caps.map((c) => c.attributes.capabilityType).sort().join(', ')}`);
 } else if (cmd === 'next-build') {
   // The build number to upload next: one past the highest TestFlight has, whoever uploaded it. Both
   // paths ask Apple rather than counting locally, so a build made on the Mac and one made on a runner
@@ -245,6 +272,6 @@ if (cmd === 'devices') {
     if (!testers.length) console.log('      (empty)');
   }
 } else {
-  console.error('usage: asc.mjs devices | register <UDID> <name…> | bundle-id <identifier> <name…> | testers | add-tester <group> <email> [first] [last] | public-link <group> on|off | builds');
+  console.error('usage: asc.mjs devices | register <UDID> <name…> | bundle-id <identifier> <name…> | capability <bundle-id> [TYPE] | testers | add-tester <group> <email> [first] [last] | public-link <group> on|off | builds');
   process.exit(2);
 }

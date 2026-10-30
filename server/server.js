@@ -3134,6 +3134,37 @@ async function keepClip(id, file, contentType, bytes, dur) {
   } catch (e) { console.log(`[voice-command] could not keep clip ${id}: ${e.message || e}`); }
 }
 
+// ---- SLEEP: Apple Watch sleep, as the iPhone app reads it from Apple Health (docs/SLEEP.md) -------
+// The app posts what its anchored HealthKit query returned since the last post: `samples` added or
+// changed, `deleted` UUIDs removed in Health. Keyed by HealthKit UUID, so a resend after a failed post
+// is harmless. Every column is sent, because a merge-duplicates upsert nulls what it omits.
+const SLEEP_UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const SLEEP_STAGES = new Set(['in_bed', 'asleep_unspecified', 'awake', 'core', 'deep', 'rem']);
+app.post('/api/health/sleep', express.json({ limit: '1mb' }), async (req, res) => {
+  const samples = Array.isArray(req.body?.samples) ? req.body.samples : [];
+  const deleted = (Array.isArray(req.body?.deleted) ? req.body.deleted : []).filter((u) => SLEEP_UUID.test(u));
+  const rows = samples
+    .filter((s) => SLEEP_UUID.test(s.id) && SLEEP_STAGES.has(s.stage) && s.start && s.end)
+    .map((s) => ({ id: s.id, start_at: s.start, end_at: s.end, stage: s.stage, source: s.source || null, received_at: new Date().toISOString() }));
+  try {
+    if (rows.length) {
+      const r = await fetch(`${SUPABASE_URL}/rest/v1/sleep_samples?on_conflict=id`, {
+        method: 'POST',
+        headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}`, 'Content-Type': 'application/json',
+          Prefer: 'resolution=merge-duplicates,return=minimal' },
+        body: JSON.stringify(rows),
+      });
+      if (!r.ok) throw new Error(`supabase upsert sleep_samples -> ${r.status} ${await r.text()}`);
+    }
+    if (deleted.length) await sbWrite(`sleep_samples?id=in.(${deleted.join(',')})`, 'DELETE');
+    console.log(`[sleep] +${rows.length} -${deleted.length} (sent ${samples.length})`);
+    res.json({ ok: true, stored: rows.length, deleted: deleted.length });
+  } catch (e) {
+    console.log('[sleep] write failed:', e.message);
+    res.status(502).json({ ok: false });
+  }
+});
+
 // ---- REWIND: a grab from the watch's ring (docs/REWIND.md) -----------------------------------------
 // The watch posts the last N seconds it heard. Every grab is kept whole while the feature is built: the
 // clip in voice-clips under rewind/, and a rewind_grabs row with the words and the timing. Plain Groq

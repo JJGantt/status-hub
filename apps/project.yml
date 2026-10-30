@@ -43,6 +43,10 @@ targets:
         # resolving. Unlike Time Sensitive, this needs no portal capability.
         keychain-access-groups:
           - $(AppIdentifierPrefix)com.jaredgantt.statushub
+        # Read-only Apple Health access for Apple Watch sleep (Sources/SleepSync.swift, docs/SLEEP.md).
+        # The App ID's HEALTHKIT capability is what makes these signable (`asc.mjs capability`).
+        com.apple.developer.healthkit: true
+        com.apple.developer.healthkit.background-delivery: true
         # TODO: add `com.apple.developer.usernotifications.time-sensitive: true` here once the
         # Time Sensitive Notifications capability is enabled on the App ID. It is the only way a
         # normal push breaks through a Focus. It canNOT be enabled via the App Store Connect API
@@ -73,6 +77,8 @@ targets:
         NSPhotoLibraryUsageDescription: Status Hub attaches photos of food and nutrition labels.
         # The hub page's navigator.geolocation in the WKWebView (voiceagent.js hereNow) needs it.
         NSLocationWhenInUseUsageDescription: For nearby requests.
+        # Shown on Health's permission sheet. A bare label: the wording is Jared's to write.
+        NSHealthShareUsageDescription: Sleep
         # The live mic keeps streaming with the phone locked (Sources/LiveMic.swift, docs/LIVE-MIC.md).
         UIBackgroundModes:
           - audio

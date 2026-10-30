@@ -37,9 +37,9 @@ Moving, a device reports about once a second, so an hour on the move is a few th
 
 ## Prerequisites
 
-The always-permission prompt needs `NSLocationAlwaysAndWhenInUseUsageDescription` in both apps'
-Info.plists. Without it, `requestAlwaysAuthorization` does nothing and the device records only under
-While Using.
+His grant on each device's location prompt. The always-permission prompt needs
+`NSLocationAlwaysAndWhenInUseUsageDescription` in both apps' Info.plists (project.yml); without it,
+`requestAlwaysAuthorization` does nothing and the device records only under While Using.
 
 ## Checking it
 

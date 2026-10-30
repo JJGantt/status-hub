@@ -568,7 +568,8 @@ a list changes — the calendar surfaces' push path, separate from the status fr
 expanded sheet draws in front of it — the frame is re-pushed on every realtime event and history only
 grows, so it is fetched once by the one surface that can scroll through it) · `/api/voice-messages`
 (`?mode=active` resolves `agent_mode` on the server, for a client with no settings of its own — the
-watch; the current context only, unless `?history=1`, which returns older contexts too with
+watch; the current context, preceded by every answer still unread (`needs_read`, no `read_at`, any
+age) with the question it answered, unless `?history=1`, which returns older contexts too with
 `ctx_break` on the first row of each so the conversation card draws a divider there; live rows on
 `/api/voice-stream` carry the same flag, by the same `opensContext()` rule) · `/api/voice-reply/:id` (held open until that command is `done` or `error`, settled by the
 `voice_requests` realtime subscription; after 25s it answers `pending` and the client asks again) ·
@@ -1191,6 +1192,13 @@ session's name, body the reply. It is keyed `session-reply:<id>:<reply_at>` — 
 turn's `at` — so one turn buzzes once even when its end is noticed twice, and `push_enabled` gates it. `relay.js` posts a hub dispatch's first reply into the hub thread but
 sends no push of its own: this one covers it.
 
+An orchestrator reply is pushed only when the model flagged it as worth reading
+(`voice_messages.needs_read`, voice-pipeline `docs/ROUTING.md`): `notifyAnswer`, on the realtime
+INSERT of that assistant row, kind `answer`, category `VOICE_ANSWER`, titled with the question it
+answers and keyed `voice-answer:<id>`. The payload's `voice_message_id` is what a tap or a dismissal
+marks read through `POST /api/voice-messages/read`, which stamps `read_at` once; the row's realtime
+UPDATE carries it to every surface. What the watch does with it is `WATCH.md` § Unread answers.
+
 The payload's `session_id` is what a tap opens: `SessionLaunch` → `window.__showSession` opens that
 session on the repos pane (§ One session, open on the phone), or lands on the list when the row is
 gone. It is a web-side function, so what a tap does changes with a deploy, not an app build. The `SESSION_REPLY`
@@ -1503,7 +1511,7 @@ callers; only the HTTP response is filtered.
 | `watch_rewind_s` | Seconds the watch's rewind keeps (30 unset, 600 at most), read when it is engaged (`docs/REWIND.md`). No Settings control: write `app_settings` directly. |
 | `agent_mode` / `agent_cwd` | Full-agent (coding) mode toggle + working dir for the worker. |
 | `weight_reminder_enabled` / `_mode` / `_time` | The daily weigh-in push (On/Off, Manual/Dynamic, time). |
-| `push_enabled` | Gates session-reply pushes. Orchestrator replies are never pushed, whatever it says. |
+| `push_enabled` | Gates session-reply pushes and flagged-answer pushes (`notifyAnswer`). No other orchestrator reply is pushed, whatever it says. |
 | `jaredbot_enabled` | JaredBot, the group-chat auto-replier in messages-mcp (`jaredbot.py`), which reads it before every decision. Also voice `set_jaredbot`. |
 
 ---

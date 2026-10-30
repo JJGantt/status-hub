@@ -68,7 +68,7 @@ function chunks(text) {
 const cache = new Map();
 const CACHE_MAX = 400;
 
-// SPEED is applied here, not asked of Groq: Orpheus ignores the `speed` field and returns the same
+// SPEED is applied after rendering, not asked of Groq: Orpheus ignores the `speed` field and returns the same
 // clip. ffmpeg's atempo stretches time without raising the pitch. Through files, not pipes: a WAV
 // written to a pipe has no length in its header, which AVAudioFile on the watch will not read.
 // `tts_speed` on the Settings page; the free tier's 1200 characters a minute is about 1.3x of how fast
@@ -79,14 +79,29 @@ function speedOf(v) {
   return Number.isFinite(n) && n >= 0.8 && n <= 1.6 ? n : DEFAULT_SPEED;
 }
 
-async function tempo(wav, speed) {
-  if (speed === 1) return wav;
+// LOUDNESS is shaped here too, on every reply, because the watch's speaker is small and its volume is
+// already all the way up: the only headroom left is in the audio. Orpheus renders conversational speech
+// around -26 LUFS with peaks 8-9 dB under full scale. A compressor evens the words out, dynaudnorm lifts
+// the quiet stretches, and a limiter takes the result to just under clipping, which measures about 11 dB
+// louder at the same peak. `surface: 'watch'` also cuts what that speaker cannot reproduce (below
+// ~250 Hz, energy that only eats headroom) and lifts the 3 kHz band that carries consonants over road
+// noise; a phone or AirPods keep the full range.
+const LOUD = 'acompressor=threshold=-30dB:ratio=4:attack=3:release=60:makeup=8dB,' +
+  'dynaudnorm=f=150:g=7:p=0.95:m=40,alimiter=limit=0.95:attack=1:release=40:level=false';
+const VOICING = {
+  watch: 'highpass=f=250:p=2,equalizer=f=3000:t=q:w=1:g=5',
+  default: 'highpass=f=80',
+};
+
+async function shape(wav, speed, surface) {
+  const filters = [speed === 1 ? null : `atempo=${speed}`, VOICING[surface] || VOICING.default, LOUD];
   const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'tts-'));
   const a = path.join(dir, 'in.wav'), b = path.join(dir, 'out.wav');
   try {
     await fs.writeFile(a, wav);
     await new Promise((ok, no) => execFile('ffmpeg',
-      ['-hide_banner', '-loglevel', 'error', '-i', a, '-filter:a', `atempo=${speed}`, '-y', b],
+      ['-hide_banner', '-loglevel', 'error', '-i', a, '-filter:a', filters.filter(Boolean).join(','),
+        '-c:a', 'pcm_s16le', '-y', b],
       (err) => (err ? no(err) : ok())));
     return await fs.readFile(b);
   } finally {
@@ -94,10 +109,9 @@ async function tempo(wav, speed) {
   }
 }
 
-async function synth(input, key, { voice, speed } = {}) {
-  const sp = speedOf(speed);
+async function synth(input, key, { voice, speed, surface } = {}) {
   const raw = await render(input, key, voice);
-  return tempo(raw, sp);
+  return shape(raw, speedOf(speed), surface);
 }
 
 async function render(input, key, voice) {

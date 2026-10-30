@@ -730,7 +730,7 @@ Replies read aloud. The server strips the markdown, splits the text, and picks t
 (`tts_voice` and `tts_speed`, on the hub's Settings page), so none of that needs a build. The watch fetches the chunks
 in order, decodes each, and queues it on its player the moment it lands; `/api/tts/timing` logs how long
 the first sound took. While it plays, the session page shows the system volume control (`VolumeKnob`),
-which takes the Digital Crown and turns the watch's own volume; the voice itself plays at full. The glyph is its own button over
+which takes the Digital Crown and turns the watch's own volume; the voice itself plays at full, and the hub has already compressed and limited it to just under clipping and voiced it for the watch speaker (`surface: 'watch'` on `/api/tts`). The glyph is its own button over
 the page, so a tap on it is not the press the rest of the glass is. **The always-on
 listener stands aside while it speaks** (`Capture.hush`), so it does not transcribe the watch's own
 voice, and takes the microphone back when it finishes — paused, not switched off. Starting a recording

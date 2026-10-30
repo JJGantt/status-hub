@@ -20,7 +20,9 @@ import WatchKit
 /// output only, so the watch's own microphone is still the one held.
 ///
 /// **The voice plays at full; the watch's own volume is the only knob**, and while a reply plays the
-/// crown turns it (`VolumeKnob`, shown by `SessionView`).
+/// crown turns it (`VolumeKnob`, shown by `SessionView`). Loudness beyond that is in the audio itself:
+/// the hub compresses and limits it to just under clipping and voices it for this speaker
+/// (`shape` in `lib/speech.js`). Gain added here instead would only clip what is already at the ceiling.
 ///
 /// **The always-on listener stands aside while it speaks** (`Capture.hush`) — otherwise it transcribes
 /// the watch's own voice as a command — and picks the microphone back up when the speaking ends. It is

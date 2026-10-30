@@ -465,9 +465,10 @@ enum Hub {
     }
 
     /// One chunk of a reply read aloud (`/api/tts`), as WAV, and how many chunks the reply has. The hub
-    /// owns everything about the voice — model, voice, how the text is split — so none of it is here.
+    /// owns everything about the voice — model, voice, how the text is split, how it is shaped for this
+    /// speaker (`surface`) — so none of it is here.
     static func tts(_ text: String, chunk i: Int) async throws -> (audio: Data, of: Int) {
-        let r = try request("/api/tts", method: "POST", body: ["text": text, "i": i], timeout: 60)
+        let r = try request("/api/tts", method: "POST", body: ["text": text, "i": i, "surface": "watch"], timeout: 60)
         let (data, resp) = try await resending { try await session.data(for: r) }
         try await check(resp)
         let of = Int((resp as? HTTPURLResponse)?.value(forHTTPHeaderField: "X-Chunks") ?? "") ?? 1

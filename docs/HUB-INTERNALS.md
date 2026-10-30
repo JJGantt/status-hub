@@ -1696,7 +1696,10 @@ While it plays the button is a pause, with a stop beside
 it; pausing suspends the AudioContext, so everything scheduled waits in place and carries on from there.
 Rendered chunks are cached in memory, so a replay costs nothing. Speed (`tts_speed`, default 1.2x) is ffmpeg's `atempo` on
 the server, after the cache, because Orpheus ignores the API's `speed` field; changing it re-renders
-nothing. The account is on Groq's free tier,
+nothing. The same ffmpeg pass shapes loudness (`shape`): a compressor, dynaudnorm and a limiter take
+every chunk to about -14 LUFS at -0.3 dBFS peak, roughly 11 dB louder than Orpheus renders it, because
+the watch's speaker is already at full volume and the audio is the only headroom left. A request with
+`surface: 'watch'` (the watch sends it) also cuts below 250 Hz and lifts 3 kHz for that speaker. The account is on Groq's free tier,
 1200 characters a minute — more than this voice speaks below about 1.3x (it speaks ~900 a minute at
 1x), so a 429 is waited out on the server (it names the
 wait) rather than failed, and the client's lead absorbs it. The free tier ALSO caps a day at 3600 characters and 100

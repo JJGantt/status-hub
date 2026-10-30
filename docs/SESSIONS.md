@@ -366,6 +366,11 @@ command it runs are charged there.
   - **mid-turn**: restarted with the prompt `[Moved from the Pi]`, and the note says the cut-off step
     is redone. The prompt must never be a word like `Continue`: it lands as the answer to whatever the
     conversation last said, and a session that had just proposed something would take it as approval.
+    Closing it sends C-c, which Claude Code records as Jared rejecting the step in flight ("The user
+    doesn't want to proceed... STOP what you are doing and wait") plus "[Request interrupted by user for
+    tool use]". Those records outrank the note, so the session obeys them and stops. The Mac's
+    `mirrorDown` therefore rewrites them in the cut-off turn (`unmarkMoveInterrupt` in
+    `voice-pipeline/orchestrator/src/mirror.js`) to say the move cut the step off and to run it again.
   - **between turns** (a background job it left running grew after the turn ended, possibly on a
     question to Jared): resumed idle, no prompt at all, so it waits for him on the Mac.
 

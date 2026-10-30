@@ -232,6 +232,9 @@ const TV_HEALTH_HTML = fs.readFileSync(path.join(__dirname, 'public', 'tv-health
 // share their scripts until something has to diverge, and whatever diverges gets split at that point.
 const TV_FOCUS_HTML = fs.readFileSync(path.join(__dirname, 'public', 'tv-session-focus.html'), 'utf8')
   .replace('<!--BODY_SVG-->', BODY_SVG);
+// THE TV SIDEBAR, at /tv-sidebar — the focused session, narrow and see-through, which the bedroom TV's
+// companion app overlays on whatever is playing (google-tv repo). Not a wall: nothing navigates it.
+const TV_SIDEBAR_HTML = fs.readFileSync(path.join(__dirname, 'public', 'tv-sidebar.html'), 'utf8');
 // Minimal home-screen "Voice" launcher (Add to Home Screen → standalone fullscreen tap-to-talk button).
 const MIC_HTML = fs.readFileSync(path.join(__dirname, 'public', 'mic.html'), 'utf8');
 // THE CALENDAR, twice. /calendar is the phone/desktop page — standalone like mic.html, navbar,
@@ -1899,6 +1902,10 @@ app.get(['/', '/phone'], (req, res) => {
 app.get('/tv-session-focus', (req, res) => {
   res.setHeader('Cache-Control', 'no-cache');
   res.type('html').send(TV_FOCUS_HTML);
+});
+app.get('/tv-sidebar', (req, res) => {
+  res.setHeader('Cache-Control', 'no-cache');
+  res.type('html').send(TV_SIDEBAR_HTML);
 });
 app.get('/tv-health', (req, res) => {
   res.setHeader('Cache-Control', 'no-cache');
@@ -3640,6 +3647,8 @@ app.post('/api/voice-reset', async (req, res) => {
 const FOR_THE_AGENT = [
   /\s*\[Where Jared was when he asked: [^\]]*\]\s*$/,
   /\s*\[This reply is read aloud\.[^\]]*\]\s*$/,
+  // Speak mode's note (SPEAK_NOTE). resolvePrompt strips it upstream; this is the backstop.
+  /\s*<speak-mode>[\s\S]*?<\/speak-mode>\s*$/,
 ];
 // Both wordings the stub has had (orchestrator/src/handoff.js): stored turns keep the older one.
 const UNRESOLVED_STASH = /^\[(?:Jared's message is in \S+?\. |A message from Jared, too long to type into this terminal\. It is in \S+).*\]\s*$/s;

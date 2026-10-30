@@ -1222,6 +1222,9 @@ all confirmed live in `desk_turns`, not theoretical:
 - **A format instruction older watch builds appended while replies were spoken**, `\n\n[This reply is
   read aloud. …]`. Nothing sends it now, but it is in turns already stored. Either this or the location
   line can come last, so `cleanSaid` peels both off the end until neither matches.
+- **Speak mode's note**, ` <speak-mode>…</speak-mode>` (`SPEAK_NOTE`), which the hub appends to a watch
+  follow-up sent in speak mode (`docs/WATCH.md` § Speak mode). `resolvePrompt` strips it before the
+  prompt is stored or matched; `cleanSaid` carries the pattern as a backstop.
 - **The stub a long message was once typed as, instead of itself**, naming the file the real words
   were parked in. Nothing types one now (a long message is simply pasted), but turns
   already stored hold it. Meant
@@ -1283,6 +1286,17 @@ render.
 That depends on both machines reporting honestly, which is why each reconciles its own sessions every
 30s — by the process a row belongs to (`pid`), since a tab outlives the process inside it. Keyed by
 tab, a row closed the day before was kept running by the next session opened in its tab.
+
+### The TV sidebar (`/tv-sidebar`)
+
+The FOCUSED session (`pickFocus`), drawn narrow and see-through for the bedroom TV, whose companion
+app overlays it on whatever is playing (google-tv repo, `SidebarService`). Its own small module
+(`pages/tv-sidebar.js`) rather than `cards/repos.js`, which carries a composer, a recorder and a list
+the TV has no use for. It reads `/api/sessions` for the focus, `/api/sessions/:id` for the
+conversation, and `/api/session-stream` for every frame after: a `sessions` frame moves it to a new
+focus, an `ev` frame for its conversation is appended, and a seq gap or new epoch refetches. The box
+is anchored to its bottom with nothing scrolling, so the newest thing is always on screen. The page
+background is transparent and the panel is `rgba(0,0,0,.55)`: the video shows through.
 
 ## 6c. Reports — a session's HTML write-up
 

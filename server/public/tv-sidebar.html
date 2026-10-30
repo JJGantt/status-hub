@@ -1,0 +1,28 @@
+<!doctype html><html><head><meta charset=utf-8>
+<meta name=viewport content="width=device-width,initial-scale=1">
+<title>Status Hub · Sidebar</title>
+<!-- The session sidebar the bedroom TV's companion app overlays on whatever is playing
+     (google-tv repo, SidebarService). See docs/HUB-INTERNALS.md § The TV sidebar. -->
+<style>
+  html,body{margin:0;height:100%;background:transparent;overflow:hidden}
+  body{font:20px/1.35 -apple-system,system-ui,"Segoe UI",Roboto,sans-serif;color:#fff}
+  #sb{position:absolute;inset:0;display:flex;flex-direction:column;background:rgba(0,0,0,.55);
+      text-shadow:0 1px 2px rgba(0,0,0,.9)}
+  #sb-name{flex:none;padding:18px 22px 10px;font-weight:600;font-size:22px;white-space:nowrap;
+           overflow:hidden;text-overflow:ellipsis;border-bottom:1px solid rgba(255,255,255,.15)}
+  #sb-body{flex:1;overflow:hidden;padding:12px 22px 22px;display:flex;flex-direction:column;justify-content:flex-end}
+  .sb-words{color:#8ab4e8;margin:14px 0 6px;white-space:pre-wrap}
+  .sb-tool{color:#b39ddb;font-size:15px;margin:2px 0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .sb-thought{color:#c8c8c8;font-size:17px;margin:4px 0}
+  .sb-reply{margin:6px 0}
+  .sb-reply p,.sb-thought p{margin:0 0 8px}
+  .sb-reply pre,.sb-reply code{font-size:15px;white-space:pre-wrap}
+  .sb-reply table{border-collapse:collapse;font-size:16px}
+  .sb-reply td,.sb-reply th{border:1px solid rgba(255,255,255,.2);padding:2px 6px}
+  .sb-caret{color:#8ab4e8;animation:sbp 1.2s ease-in-out infinite}
+  @keyframes sbp{50%{opacity:.35}}
+</style>
+<script type="module" src="dist/tv-sidebar.js"></script>
+</head><body>
+<div id="sb"><div id="sb-name"></div><div id="sb-body"></div></div>
+</body></html>

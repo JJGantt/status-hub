@@ -86,7 +86,7 @@ function paint(p, d) {
           `<span class="hw-sess-dot${s.working ? '' : ' idle'}"></span>` +
           `<span class="hw-row-n">${s.n ?? ''}</span>` +
           `<span class="hw-row-name">${pinMark(d, s)}${esc(name(s))}</span>` +
-          `<span class="hw-row-where">${s.worker === 'desk' ? 'Mac' : 'Pi'}</span>` +
+          `<span class="hw-row-where">${s.worker === 'desk' ? 'Mac' : s.worker === 'fly-desk' ? 'Fly' : 'Pi'}</span>` +
         '</div>' +
         rowActivity(s) +
       '</div>').join('');
@@ -100,7 +100,7 @@ function paint(p, d) {
   }
   if (p.head) {
     p.head.innerHTML = `<span class="hw-sess-name">${pinMark(d, on)}${esc(name(on))}</span>` +
-      `<span class="hw-sess-where">${esc(on.repo)} · ${on.worker === 'desk' ? 'Mac' : 'Pi'}</span>`;
+      `<span class="hw-sess-where">${esc(on.repo)} · ${on.worker === 'desk' ? 'Mac' : on.worker === 'fly-desk' ? 'Fly' : 'Pi'}</span>`;
   }
   // textContent, not innerHTML: a reply is a model's prose and may hold anything that looks like
   // markup. The panel scrolls rather than truncating — however long the answer is, it is the answer.

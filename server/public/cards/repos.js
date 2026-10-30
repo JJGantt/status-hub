@@ -70,7 +70,7 @@ function sessionsHtml(s) {
         (x.n ? `<span class="sess-n">${x.n}</span>` : '') +
         `${esc(x.label || x.repo)}` +
         (x.label && x.repo && x.label !== x.repo ? `<span class="sess-in">${esc(x.repo)}</span>` : '') +
-          `<span class="sess-where">${x.worker === 'desk' ? 'Mac' : 'Pi'}</span>` +
+          `<span class="sess-where">${x.worker === 'desk' ? 'Mac' : x.worker === 'fly-desk' ? 'Fly' : 'Pi'}</span>` +
           (x.id === focus ? '<span class="sess-focus" title="a spoken follow-up goes here">' + (s.pinned ? PIN_SVG : '') + 'follow-ups</span>' : '') +
         `</span>` +
         `<span class="sess-say">${x.at ? `<span class="sess-at">${esc(ago(x.at))}</span>` : ''}${esc((x.say || '').slice(0, 90))}</span>` +
@@ -399,7 +399,7 @@ function paintHead() {
   if (!el || !d) return;
   const t = el.querySelector('.sv-title'), w = el.querySelector('.sv-where');
   if (t) t.textContent = nameOf(d);
-  if (w) w.textContent = d.worker === 'desk' ? 'Mac' : 'Pi';
+  if (w) w.textContent = d.worker === 'desk' ? 'Mac' : d.worker === 'fly-desk' ? 'Fly' : 'Pi';
 }
 
 // What is drawn: every event in order, a prompt at the position of its LATEST occurrence — it moves

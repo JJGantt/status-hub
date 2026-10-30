@@ -4786,10 +4786,19 @@ app.post('/api/todos/add', express.json(), async (req, res) => {
 // publishes and enqueues work for it: `repos` is scanned + written there, `desk_commands` is
 // drained there. See voice-pipeline/orchestrator.
 const DESK_STALE_S = 90;   // 3 missed 30s beats
-const DESK_WORKER = { pi: 'pi-desk', mac: 'desk' };
+// 'fly' is the last-resort session machine (voice-pipeline fly-desk/), which only data-layer's
+// startSession sends work to. It is stopped almost always, so "awake" means it answered a wake request:
+// Fly's proxy starts it and holds the request until its host is listening.
+const DESK_WORKER = { pi: 'pi-desk', mac: 'desk', fly: 'fly-desk' };
+const MACHINE_NAME = { pi: 'Pi', mac: 'Mac', fly: 'Fly machine' };
+const machineOf = (worker) => (worker === 'desk' ? 'mac' : worker === 'fly-desk' ? 'fly' : 'pi');
 
 /** Is the machine that would run this actually beating right now? */
 async function machineAwake(machine) {
+  if (machine === 'fly') {
+    try { return (await fetch('https://jared-desk-fly.fly.dev/wake', { signal: AbortSignal.timeout(45000) })).ok; }
+    catch { return false; }
+  }
   try {
     const rows = await sb(`worker_presence?worker=eq.${DESK_WORKER[machine]}&select=last_seen`);
     const t = rows?.[0]?.last_seen;
@@ -5093,7 +5102,7 @@ app.post('/api/sessions/:action', express.json(), async (req, res) => {
       if (!now.live && !target.claude_session_id) {
         return res.status(409).json({ error: 'that session has no conversation to resume' });
       }
-      const machine = target.worker === 'desk' ? 'mac' : 'pi';
+      const machine = machineOf(target.worker);
       const kind = now.live ? 'follow_up' : 'resume_session';
       const payload = { session: target.id, prompt: text, target: machine,
                         ...(attachments.length ? { attachments } : {}),
@@ -5102,8 +5111,8 @@ app.post('/api/sessions/:action', express.json(), async (req, res) => {
                         // placeholder for them by id when they come back as an event.
                         ...(msgId ? { msg: msgId } : {}) };
       if (!(await machineAwake(machine))) {
-        const saved = await deadLetter(kind, payload, machine, `the ${machine === 'mac' ? 'Mac' : 'Pi'} is not responding`);
-        return res.status(409).json({ error: `the ${machine === 'mac' ? 'Mac' : 'Pi'} is not responding`, saved });
+        const saved = await deadLetter(kind, payload, machine, `the ${MACHINE_NAME[machine]} is not responding`);
+        return res.status(409).json({ error: `the ${MACHINE_NAME[machine]} is not responding`, saved });
       }
       const cmdId = crypto.randomUUID();
       await sbWrite('desk_commands', 'POST', { id: cmdId, kind, payload });
@@ -5116,13 +5125,13 @@ app.post('/api/sessions/:action', express.json(), async (req, res) => {
     // the destination resumes from what was already mirrored. (data-layer's transferSession.)
     if (action === 'transfer') {
       const row = rowsFull[0];
-      const from = row.worker === 'desk' ? 'mac' : 'pi';
-      const to = from === 'mac' ? 'pi' : 'mac';
+      const from = machineOf(row.worker);
+      const to = from === 'pi' ? 'mac' : 'pi';
       if (!row.claude_session_id) return res.status(400).json({ error: 'no transcript recorded for that session' });
       if (!(await machineAwake(to))) {
         const saved = await deadLetter('transfer_session', { session: id, target: from, to }, to,
-                                       `the ${to === 'mac' ? 'Mac' : 'Pi'} is not responding`);
-        return res.status(409).json({ error: `the ${to === 'mac' ? 'Mac' : 'Pi'} is not responding`, saved });
+                                       `the ${MACHINE_NAME[to]} is not responding`);
+        return res.status(409).json({ error: `the ${MACHINE_NAME[to]} is not responding`, saved });
       }
       const cmdId = crypto.randomUUID();
       if (await machineAwake(from)) {
@@ -5146,7 +5155,7 @@ app.post('/api/sessions/:action', express.json(), async (req, res) => {
       const name = String((req.body || {}).name || '').replace(/[\r\n]+/g, ' ').trim().slice(0, 60);
       if (!name) return res.status(400).json({ error: 'name required' });
       await sbWrite(`desk_sessions?id=eq.${encodeURIComponent(id)}`, 'PATCH', { label: name });
-      const from = row.worker === 'desk' ? 'mac' : 'pi';
+      const from = machineOf(row.worker);
       if (row.status !== 'resident' || !(await machineAwake(from))) return res.json({ name, live: false });
       const cmdId = crypto.randomUUID();
       await sbWrite('desk_commands', 'POST',
@@ -5166,11 +5175,11 @@ app.post('/api/sessions/:action', express.json(), async (req, res) => {
     if (!kind) return res.status(400).json({ error: 'unknown action' });
     // The machine that OWNS the session, read from its row. Hardcoding 'pi' sent every Mac session's
     // command to a consumer that rejects the id, while the Mac's never saw it at all.
-    const machine = rowsFull[0].worker === 'desk' ? 'mac' : 'pi';
+    const machine = machineOf(rowsFull[0].worker);
     const payload = { session: id, target: machine };
     if (!(await machineAwake(machine))) {
-      const saved = await deadLetter(kind, payload, machine, `the ${machine === 'mac' ? 'Mac' : 'Pi'} is not responding`);
-      return res.status(409).json({ error: `the ${machine === 'mac' ? 'Mac' : 'Pi'} is not responding`, saved });
+      const saved = await deadLetter(kind, payload, machine, `the ${MACHINE_NAME[machine]} is not responding`);
+      return res.status(409).json({ error: `the ${MACHINE_NAME[machine]} is not responding`, saved });
     }
     // Routed through desk_commands like everything else, because this server is on Fly and cannot
     // reach either machine directly — Supabase carries both directions.
@@ -5200,8 +5209,8 @@ app.post('/api/repos/open', express.json(), async (req, res) => {
     // A command written for a machine that is asleep is claimed by nobody and expires unread. Say so
     // now, and keep the prompt, rather than reporting a launch that will never happen.
     if (!(await machineAwake(machine))) {
-      const saved = await deadLetter('open_session', payload, machine, `the ${machine === 'mac' ? 'Mac' : 'Pi'} is not responding`);
-      return res.status(409).json({ error: `the ${machine === 'mac' ? 'Mac' : 'Pi'} is not responding`, saved });
+      const saved = await deadLetter('open_session', payload, machine, `the ${MACHINE_NAME[machine]} is not responding`);
+      return res.status(409).json({ error: `the ${MACHINE_NAME[machine]} is not responding`, saved });
     }
     const id = crypto.randomUUID();
     await sbWrite('desk_commands', 'POST', { id, kind: 'open_session', payload });
@@ -5233,7 +5242,7 @@ app.post('/api/failures/:id/retry', express.json(), async (req, res) => {
     if (row.retried) return res.status(409).json({ error: 'already retried' });
     const machine = row.machine === 'mac' ? 'mac' : 'pi';
     if (!(await machineAwake(machine))) {
-      return res.status(409).json({ error: `the ${machine === 'mac' ? 'Mac' : 'Pi'} is still not responding` });
+      return res.status(409).json({ error: `the ${MACHINE_NAME[machine]} is still not responding` });
     }
     const cmdId = crypto.randomUUID();
     await sbWrite('desk_commands', 'POST',

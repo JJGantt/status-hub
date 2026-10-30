@@ -617,7 +617,8 @@ sentences and lose the words beside them. The stored clip is the original. Turbo
 a home command's answer is in** (`StayAwake`): recording keeps a watch app alive, but once the command
 is sent nothing did, so the app was suspended mid-wait, the answer's tap never came, and the screen
 still showed the command working when he looked. `StayAwake` holds the microphone and discards what it
-hears while `Chat.waiting`, and lets go the moment nothing is. Playing silence instead looks equivalent
+hears while `Chat.waiting`, and lets go the moment nothing is, or after a minute. Speak mode holds it
+for as long as the mode is on instead (see Speak mode). Playing silence instead looks equivalent
 and is not: a watch app that only plays is frozen the instant the wrist drops (see Spoken replies). It
 stands aside for anything else holding the microphone (a recording, the listener, a spoken reply), which
 keeps the app alive by itself, and each of those makes it let go when they start, since two taps on
@@ -697,8 +698,28 @@ process, this account cannot enable App Groups, and nothing a control draws depe
 corner (`SessionView.playButton`, shown once the session has a reply): a tap reads that session's LAST
 reply aloud (`Speaker`). While it plays the corner holds a stop and a pause; the pause becomes a play
 while paused, and carries on from the same place (`Speaker.pause` / `unpause`), with everything still
-queued and the microphone still held. There is no mode and no setting that
-turns speech on.
+queued and the microphone still held. Asking once for every reply is speak mode, below.
+
+### Speak mode
+
+**Holding the speaker glyph** (0.6s) turns it on or off (`Sessions.toggleSpeakMode`), with the start or
+stop haptic; while it is on the glyph is white with a third wave. It is for lying in bed without looking
+at the watch, so everything about it works wrist-down:
+
+- **Every reply is read aloud as it lands** (`Sessions.speakIfNew`) — replies to the session open on the
+  sessions page, and to any session this watch sent a follow-up to and is waiting on. Only replies that
+  land after the mode came on; a first load of a conversation is history and is never read out. A
+  recording in progress wins: a reply landing mid-recording is skipped, not queued.
+- **The microphone is held for as long as the mode is on** (`StayAwake`, with no cut-off), and the
+  session stream stays open on every page and with the wrist down (`RootView.follow`). Without both the
+  app is frozen the moment the wrist drops and never hears the reply. This is the battery the mode
+  costs, and why it is a mode he turns on rather than how sessions always behave.
+- **Follow-ups sent from the watch ask for a reply written for the ear.** The watch sends
+  `spoken: true`; the hub appends `SPEAK_NOTE` (server.js) to the words it types into the session —
+  complete, but as succinct as the content allows, no tables, code, paths or URLs unless they are the
+  answer. The note rides in a `<speak-mode>` tag that `resolvePrompt` (voice-pipeline transcripts.js)
+  strips, so every surface shows only his words and the sender's message id still matches its prompt.
+- **It lives in memory only.** An app relaunched later does not come back holding the microphone.
 
 **The voice is the hub's, not the watch's.** The reply goes to `/api/tts` and comes back as WAV a chunk
 at a time — the same endpoint the phone's session view plays, described in `docs/HUB-INTERNALS.md` §

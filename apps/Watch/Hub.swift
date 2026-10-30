@@ -439,10 +439,11 @@ enum Hub {
     /// Types his words into a running session. A resend with the same `msgId` returns the first send's
     /// command instead of typing the words twice.
     /// True when the hub took nothing: a thank-you-shaped transcription it never types into a session.
-    static func followUp(_ session: String, text: String, msgId: String) async throws -> Bool {
+    /// `spoken` asks the session to answer for the ear (speak mode); the hub adds the instruction.
+    static func followUp(_ session: String, text: String, msgId: String, spoken: Bool = false) async throws -> Bool {
         try blockInSimulator("followup")
         let data = try await call("/api/sessions/followup", method: "POST",
-                                  body: ["id": session, "text": text, "client_msg_id": msgId])
+                                  body: ["id": session, "text": text, "client_msg_id": msgId, "spoken": spoken])
         let j = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any]
         return (j?["ignored"] as? Bool) == true
     }

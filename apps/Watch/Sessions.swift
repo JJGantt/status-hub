@@ -173,6 +173,41 @@ final class Sessions: ObservableObject {
     private static let notInList: TimeInterval = 120
     @Published private(set) var failures: [String: Failure] = [:]
 
+    /// **Speak mode** (docs/WATCH.md § Speak mode): every reply to the open session, or to one this watch
+    /// is waiting on, is read aloud the moment it lands, and follow-ups sent from here ask the session to
+    /// answer for the ear. While it is on the app holds the microphone (`StayAwake`) and keeps the session
+    /// stream open on every page, so it works wrist-down. Held only in memory: an app relaunched later in
+    /// the day does not come back holding the microphone.
+    @Published private(set) var speakMode = false
+    /// The newest reply already spoken (or already there when the mode came on), per conversation.
+    private var spokenSeq: [String: Int] = [:]
+    /// Re-runs the app's stream and stay-awake decisions when the mode changes (`RootView.follow`).
+    var speakModeChanged: (() -> Void)?
+
+    func toggleSpeakMode() {
+        speakMode.toggle()
+        if speakMode {
+            // Only what lands from now on: the replies already there have been seen.
+            for (key, log) in logs { if let r = log.events.last(where: { $0.kind == "reply" }) { spokenSeq[key] = r.seq } }
+            for (key, e) in latest where e.kind == "reply" { spokenSeq[key] = max(spokenSeq[key] ?? 0, e.seq) }
+        }
+        WKInterfaceDevice.current().play(speakMode ? .start : .stop)
+        Hub.log("speak-mode", ["on": speakMode])
+        speakModeChanged?()
+        StayAwake.shared.refresh()
+    }
+
+    /// Reads a newly landed reply aloud, once, when the mode is on and the reply belongs to the session
+    /// open here or to one this watch sent a follow-up to. A recording in progress wins: he is talking.
+    private func speakIfNew(_ key: String, _ reply: SessionEvent) {
+        guard speakMode, reply.kind == "reply", reply.seq > (spokenSeq[key] ?? 0) else { return }
+        guard key == path.last || awaiting[key] != nil else { return }
+        spokenSeq[key] = reply.seq
+        if capture.owner != nil { Hub.log("speak-skipped", ["why": "recording"]); return }
+        Hub.log("speak-auto", ["row": row(for: key)?.id ?? key, "seq": reply.seq])
+        Speaker.shared.speak(reply.text)
+    }
+
     private let capture = Capture.shared
     /// Every row the hub sent, so a conversation's words go to the row running it.
     private var rows: [SessionRow] = []
@@ -291,6 +326,9 @@ final class Sessions: ObservableObject {
     /// message id this watch sent replaces that message's placeholder.
     private func take(_ key: String, _ events: [SessionEvent], epoch: String?) {
         var log = logs[key] ?? ConversationLog()
+        // A log already held means these are new or missed events (a live frame, a gap, a reconnect);
+        // a first load is history, which speak mode never reads out.
+        let held = log.events.last?.seq
         if let epoch, let mine = log.epoch, epoch != mine { log.events = [] }
         if let epoch { log.epoch = epoch }
         var by = [Int: SessionEvent]()
@@ -301,6 +339,10 @@ final class Sessions: ObservableObject {
         if let last = log.events.last { latest[key] = last }
         let cmds = Set(events.compactMap(\.cmd))
         if !cmds.isEmpty { placeholders[key] = placeholders[key]?.filter { !cmds.contains($0.msgId) } }
+        // Before `settle`, which lets go of the wait that makes this a reply worth speaking.
+        if let held, let reply = log.events.last(where: { $0.kind == "reply" }), reply.seq > held {
+            speakIfNew(key, reply)
+        }
         settle(key)
     }
 
@@ -405,7 +447,7 @@ final class Sessions: ObservableObject {
                 }
                 let words = item.words ?? ""
                 let rowId = row(for: key)?.id ?? key
-                let ignored = try await Hub.followUp(rowId, text: words, msgId: msgId)
+                let ignored = try await Hub.followUp(rowId, text: words, msgId: msgId, spoken: speakMode)
                 Hub.log("followup-sent", ["row": rowId, "words": item.words?.count ?? 0, "ignored": ignored])
                 drop(key, msgId)
                 // The hub taking nothing (a thank-you-shaped transcription) sends nothing to the
@@ -451,7 +493,11 @@ final class Sessions: ObservableObject {
         if key == path.last {
             Hub.log("frame", ["row": f.session ?? "", "seq": f.ev.seq, "kind": f.ev.kind, "text": String(f.ev.text.prefix(50))])
         }
-        guard let log = logs[key] else { return }
+        guard let log = logs[key] else {
+            // Not opened here, so `take` never sees it; a reply to it can still be one to speak.
+            speakIfNew(key, f.ev)
+            return
+        }
         if let epoch = f.epoch, let mine = log.epoch, epoch != mine { await loadLog(key); return }
         let seq = f.ev.seq
         if seq <= log.last { return }

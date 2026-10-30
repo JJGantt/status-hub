@@ -5100,6 +5100,10 @@ app.get('/api/sessions/:id/events', async (req, res) => {
   } catch (e) { res.status(500).json({ error: String(e.message || e) }); }
 });
 
+// Appended to a follow-up sent in speak mode. Written for the model, not shown to anyone: the tag is
+// stripped from the prompt everywhere it is displayed.
+const SPEAK_NOTE = '<speak-mode>This reply will be read aloud on his watch. Keep it complete, but as succinct as the content allows, and written for the ear: no tables, code blocks, file paths or URLs unless they are the answer. Do not summarise away anything he needs.</speak-mode>';
+
 // Act on one: 'end' closes it for good, 'resume' brings an evicted one back, 'forget' drops the row
 // without touching the machine (the transcript stays on disk; it just stops being offered), and
 // 'followup' types words into a running one (see below).
@@ -5143,7 +5147,11 @@ app.post('/api/sessions/:action', express.json(), async (req, res) => {
       }
       const machine = machineOf(target.worker);
       const kind = now.live ? 'follow_up' : 'resume_session';
-      const payload = { session: target.id, prompt: text, target: machine,
+      // Speak mode on the watch (docs/WATCH.md § Speak mode): the reply will be read aloud, so the
+      // session is asked to answer for the ear. One line, since it is typed into a terminal, and in a
+      // tag that resolvePrompt (voice-pipeline transcripts.js) strips, so every surface shows his words.
+      const prompt = (req.body || {}).spoken === true && text ? `${text} ${SPEAK_NOTE}` : text;
+      const payload = { session: target.id, prompt, target: machine,
                         ...(attachments.length ? { attachments } : {}),
                         // The sender's own message id, which the host stamps on the prompt these words
                         // become (sessionWatch.js `expectPrompt`), so the sender can replace its

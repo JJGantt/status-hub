@@ -206,6 +206,7 @@ struct RootView: View {
         .onChange(of: sessions.path) { _, path in if !path.isEmpty { jump(to: .sessions) } }
         .onAppear {
             if !sessions.path.isEmpty { page = .sessions }
+            sessions.speakModeChanged = { follow() }
             follow()
             Task { await WatchSettings.refresh() }
             Hub.flushLog()
@@ -260,7 +261,9 @@ struct RootView: View {
         let live = phase == .active
         sessions.onPage = page == .sessions
         var first: [Task<Void, Never>] = []
-        if live && page == .sessions { first.append(sessions.activate()) } else { sessions.deactivate() }
+        // Speak mode keeps the sessions stream on every page and with the wrist down (the app is held
+        // running by StayAwake), since a reply it does not hear is a reply it cannot speak.
+        if (live && page == .sessions) || sessions.speakMode { first.append(sessions.activate()) } else { sessions.deactivate() }
         if live && page == .home { first.append(chat.activate()) } else { chat.deactivate() }
         // The day page draws food and training live, so it follows both or neither. The health page
         // is weeks, loaded when it appears (`loadHistory`), and needs neither stream.

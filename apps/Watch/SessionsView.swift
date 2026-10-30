@@ -312,12 +312,15 @@ struct SessionView: View {
         }
     }
 
-    /// **The one way a reply is spoken**: plays this session's last reply out loud. While it plays the
-    /// corner holds a stop and a pause, which becomes a play while paused: pausing keeps the place, so
-    /// carrying on does not start the reply over. Bare glyphs over the page, so they cost no row. Their
-    /// own buttons, so a tap on one is not the press the rest of the glass is.
+    /// **The speaker glyph**: a tap plays this session's last reply out loud; HOLDING it turns speak mode
+    /// on or off (`Sessions.toggleSpeakMode`), and while the mode is on the glyph is white with a third
+    /// wave instead of grey. While a reply plays the corner holds a stop and a pause, which becomes a play
+    /// while paused: pausing keeps the place, so carrying on does not start the reply over. Bare glyphs
+    /// over the page, so they cost no row. Their own gestures, so a tap on one is not the press the rest
+    /// of the glass is.
     @ViewBuilder private var playButton: some View {
-        if let reply = events.last(where: { $0.kind == "reply" }) {
+        let reply = events.last(where: { $0.kind == "reply" })
+        if reply != nil || sessions.speakMode {
             HStack(spacing: 0) {
                 if speaker.isSpeaking {
                     glyph("stop.fill") { speaker.stop() }
@@ -325,7 +328,13 @@ struct SessionView: View {
                         speaker.paused ? speaker.unpause() : speaker.pause()
                     }
                 } else {
-                    glyph("speaker.wave.2.fill") { speaker.speak(reply.text) }
+                    Image(systemName: sessions.speakMode ? "speaker.wave.3.fill" : "speaker.wave.2.fill")
+                        .font(.system(size: 13))
+                        .foregroundColor(sessions.speakMode ? .white : Color(hex: "#7d8894"))
+                        .frame(width: 36, height: 36)
+                        .contentShape(Rectangle())
+                        .onTapGesture { if let reply { speaker.speak(reply.text) } }
+                        .onLongPressGesture(minimumDuration: 0.6) { sessions.toggleSpeakMode() }
                 }
             }
             // Inset far enough to clear the display's corner curve.

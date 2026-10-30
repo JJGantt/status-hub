@@ -20,8 +20,10 @@ import AVFoundation
 /// that the app is still working when the answer lands, so the ring stops, the screen is current and the
 /// wrist is tapped on time.
 ///
-/// **Home commands only, never session follow-ups**: a session can work for many minutes, and holding
-/// the microphone that long costs battery he does not want spent. The hub answers in seconds.
+/// **Home commands, not session follow-ups**: a session can work for many minutes, and holding the
+/// microphone that long costs battery he does not want spent. The hub answers in seconds. The one
+/// exception is **speak mode** (`Sessions.speakMode`), which he turns on precisely so replies are read
+/// out wrist-down: while it is on this holds for as long as it is on, with no cut-off.
 ///
 /// `refresh()` is called whenever what is waiting changes, and after anything that hands the audio
 /// session back (a recording ending, a spoken reply finishing), since that stops this too.
@@ -43,7 +45,9 @@ final class StayAwake {
 
     /// Holds or lets go to match what is waiting now.
     func refresh() {
-        if !Chat.shared.waiting { spent = false; stop() } else if !spent { start() }
+        if Sessions.shared.speakMode { start() }
+        else if !Chat.shared.waiting { spent = false; stop() }
+        else if !spent { start(); armCutOff() }
     }
 
     /// Something else just deactivated the audio session (a recording ending, a spoken reply
@@ -78,21 +82,26 @@ final class StayAwake {
             }
             if !holding { input.installTap(onBus: 0, bufferSize: 4096, format: format) { _, _ in } }
             if !engine.isRunning { try engine.start() }
-            if !holding {
-                hold += 1
-                let this = hold
-                Task { [weak self] in
-                    try? await Task.sleep(for: .seconds(Self.longest))
-                    guard let self, self.holding, self.hold == this else { return }
-                    self.spent = true
-                    self.stop()
-                }
-            }
-            if !holding { Hub.log("stay-awake", ["on": true]) }
+            if !holding { hold += 1; cutOffArmed = false; Hub.log("stay-awake", ["on": true]) }
             holding = true
         } catch {
             engine.inputNode.removeTap(onBus: 0)
             Hub.log("stay-awake-failed", ["error": String(describing: error).prefix(120).description])
+        }
+    }
+
+    /// The minute's cut-off for a home command's wait, armed once per hold. Not armed in speak mode,
+    /// and armed when the mode goes off under a hold that is still waiting on a command.
+    private var cutOffArmed = false
+    private func armCutOff() {
+        guard holding, !cutOffArmed else { return }
+        cutOffArmed = true
+        let this = hold
+        Task { [weak self] in
+            try? await Task.sleep(for: .seconds(Self.longest))
+            guard let self, self.holding, self.hold == this, !Sessions.shared.speakMode else { return }
+            self.spent = true
+            self.stop()
         }
     }
 

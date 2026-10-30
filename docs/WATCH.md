@@ -188,7 +188,12 @@ this page is a list of names — rules separate them, as they do on the food log
 **A tapped row opens its session INSIDE the sessions page** (a `NavigationStack` of the page's own, in
 `SessionsView`), so the row of pages still swipes with a session open — to home, to the day page — and
 the session is still open when he swipes back. The page row takes the sideways swipe, so the system's
-swipe back never fires; the session's name is the way out (below). The session has no title bar.
+swipe back never fires; the session's name is one way out (below), and swiping right is the other.
+While a session is open, `RootView` puts a page LEFT of sessions (`Page.back`) that draws the bare
+list (`SessionsView(behind: true)`); landing on it empties `Sessions.path` and turns back to the real
+sessions page with animations off, so the swipe reads as going back to the list. It exists only while
+a session is open, so with the list showing, sessions is still the leftmost page. The session has no
+title bar.
 
 **An open session is therefore not the same as one on screen**, and where a command goes is
 `Sessions.target`: the session a recording belongs to while it runs (so the press that ends it ends it,
@@ -263,7 +268,9 @@ in the list within seconds of being typed, so the limit never cuts a real wait s
 **Its name is on the clock's line, and the name is how it closes.** A leading `ToolbarItem` holds it
 (a trailing one moves the clock to the other end of the strip), and tapping it pops the session. The
 swipe back watchOS gives a pushed view does not survive a page row that also takes sideways swipes, so
-the way out is the thing at the top that says which session this is. The pop is guarded
+the way out is the thing at the top that says which session this is — or the `Page.back` swipe above.
+A high-priority drag on the session view (the `SideScroll` trick) is not the way to get a swipe back:
+it would claim every drag, the vertical scroll and the leftward page swipe included. The pop is guarded
 against an empty path (two taps close enough together that the first has not dismissed the button
 yet would otherwise call `removeLast()` on an already-empty array and crash).
 

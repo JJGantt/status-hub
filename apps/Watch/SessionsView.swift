@@ -11,8 +11,21 @@ import SwiftUI
 struct SessionsView: View {
     @EnvironmentObject private var sessions: Sessions
     @ObservedObject private var capture = Capture.shared
+    /// The copy of the list that sits one page LEFT of an open session (`RootView`, `Page.back`): what
+    /// a swipe to the right reveals, so closing a session by swiping looks like going back to the list.
+    var behind = false
 
     var body: some View {
+        if behind {
+            // Its own stack, so the rows draw as they do on the real page. Never tapped: the page turns
+            // back to the real list the moment it lands.
+            NavigationStack { list }
+        } else {
+            stacked
+        }
+    }
+
+    @ViewBuilder private var stacked: some View {
         // A ScrollView, not a List: a watchOS List puts every row in a grey rounded slab, and this page
         // is a list of names. Rows are ruled apart the way the food log and the exercises are — the rule
         // does the separating and costs two pixels.

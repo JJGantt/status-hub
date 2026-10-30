@@ -5,7 +5,8 @@ because Apple Health has no cloud API: the only reader is an app on the phone.
 
     watch ─(Apple's sync)─▶ Health on the iPhone ─▶ SleepSync.swift ─▶ POST /api/health/sleep ─▶ sleep_samples
 
-- `apps/Sources/SleepSync.swift` asks for read access to `sleepAnalysis`, registers an observer
+- `apps/Sources/SleepSync.swift` is started by `HealthSync` once the one Health sheet asking for every
+  type (sleep included) has been answered (`docs/HEALTH.md`). It registers an observer
   with background delivery, and posts what an anchored query returns: new samples and deleted
   UUIDs, 500 at a time. The anchor is committed only after the hub answers 200, so a failed post
   is retried from the same place on the next run.

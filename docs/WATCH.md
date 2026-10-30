@@ -307,8 +307,8 @@ reaches the top and its first line still starts below the strip.
 
 ### The command is on every page
 
-There is no control on screen. **Double tap runs a command, press and hold starts a locked one or throws
-a recording away, and a line around the very edge of the glass says what is happening** (`CommandBorder`, one overlay on
+There is no control on screen. **Double tap runs a command, press and hold (home only) starts a locked
+one or throws a recording away, and a line around the very edge of the glass says what is happening** (`CommandBorder`, one overlay on
 `RootView`'s whole navigation stack, so it is the same on every page and inside a session, where a
 command goes to the session instead of the hub):
 
@@ -545,12 +545,12 @@ itself `watch_quick_s` seconds (Settings → Watch: quick command, 5 when unset)
 opens — counted from the chirp, in seconds of audio — however he is going; a cap reached with no speech
 heard throws the clip away instead, and either logs `mic-end` with `reason: cap`.
 
-Press and hold (0.6s) anywhere cancels the recording under way. With none, on home or in an open
-session, it starts a locked recording (red, the `Hub Locked` flow), so home offers both: a tap for the
-amber recording that sends at his silence, a hold for the one only a press sends. A hold while a reply
-is being spoken stops the speech instead (`CommandBorder.hold`). On the other pages,
-where a tap does something else, a hold with no recording does nothing. A command already sent is
-never cancelled; there is no gesture for it.
+**Press and hold (0.6s) is home's alone.** On home it cancels the recording under way, and with none
+it starts a locked recording (red, the `Hub Locked` flow), so home offers both: a tap for the amber
+recording that sends at his silence, a hold for the one only a press sends. A hold while a reply is
+being spoken stops the speech instead (`CommandBorder.hold`). **In a session a follow-up is only ever a
+tap**, so a hold there does nothing except on the speaker glyph, where it toggles speak mode. On every
+other page a hold does nothing. A command already sent is never cancelled; there is no gesture for it.
 
 ### Haptics
 
@@ -704,9 +704,9 @@ queued and the microphone still held. Asking once for every reply is speak mode,
 
 **Holding the speaker glyph** (0.6s) turns it on or off (`Sessions.toggleSpeakMode`), with the start or
 stop haptic; while it is on the glyph is white with a third wave. The toggle is done by the app's ONE
-hold gesture, the one on the whole page row that otherwise starts a locked recording: the glyph only
-reports that a finger is on it (`Sessions.speakerPressed`). A second hold recogniser on the glyph fires
-at the same instant as the row's, so both acted and the toggle also started a recording. It is for lying in bed without looking
+hold gesture, on the whole page row (home's hold, which does nothing else in a session): the glyph only
+reports that a finger is on it (`Sessions.speakerPressed`). A second hold recogniser on the glyph would
+fire at the same instant as the row's, and both would act. It is for lying in bed without looking
 at the watch, so everything about it works wrist-down:
 
 - **Every reply is read aloud as it lands** (`Sessions.speakIfNew`) — replies to the session open on the

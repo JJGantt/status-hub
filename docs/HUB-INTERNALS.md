@@ -640,7 +640,7 @@ Supabase `app_logs` (`voice_*` rows, CapitalGrilleApp `VoiceLog`).
 The same app's **order list** is outside the gate on the same key: `GET /api/cg/orders` (open orders plus
 the two models), `POST /api/cg/orders` (items as heard), `POST /api/cg/orders/standardize` (each row
 matched to the menu and renamed in place) and `POST /api/cg/orders/done` (`{id}` or `{all: true}`), over
-Supabase `cg_orders`, which has no anon policy. The watch's own model runs both passes; which model each
+Supabase `cg_orders`, which has no anon policy. A `POST /api/cg/orders` whose `interaction_id` already has rows answers with those rows and writes nothing, so a retried or fallback write never lists a recording twice. The watch's own model runs both passes; which model each
 uses is `cg_orders_model_first` / `cg_orders_model_second` (§7).
 
 **Auth:** the hub password → `sha256("status-hub:"+password)`; sent as the `hub` cookie (web) or the

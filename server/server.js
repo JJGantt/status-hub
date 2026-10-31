@@ -1500,6 +1500,7 @@ function startRealtime() {
       // When the agent_mode toggle flips (from anywhere — voice, another device), tell the voice panel to
       // switch to that mode's conversation live, so the on-screen context always matches the active mode.
       if (p.new && p.new.key === 'agent_mode') pushVoice('mode', { agent: agentModeOn(p.new.value) });
+      if (p.new && p.new.key === 'tv_sidebar_view') pushSessions();
       // A holder written straight into the table (the Mac's listener) is a mute taken or given back.
       if (p.new && String(p.new.key || '').startsWith(MUTE_HOLD)) recomputeMute().catch((e) => console.error('[mute]', e.message || e));
     })
@@ -5135,6 +5136,9 @@ async function buildSessions({ brief: allBrief = false } = {}) {
     queued: queue || [],
     focus,
     pinned,
+    // What the bedroom TV's sidebar shows (§ The TV sidebar): the focused session, or the voice
+    // orchestrator's conversation. Here so the sidebar learns a change from the frame it already holds.
+    sidebar_view: (await settingsAll()).tv_sidebar_view === 'orchestrator' ? 'orchestrator' : 'session',
   };
 }
 
@@ -5514,6 +5518,12 @@ const TV_WAKE_OPS = new Set(['open', 'launch', 'input']);
 const TV_PI_OPS = new Set(['power', 'key']);
 function tvPush(row) {
   if (!row || row.done_at || TV_PI_OPS.has(row.op)) return;
+  // Which conversation the sidebar shows is the page's business, not the app's: kept as a setting the
+  // page follows through its sessions frame, so switching needs no new build of the TV app.
+  const view = row.op === 'sidebar' && row.args && row.args.view;
+  if (view === 'session' || view === 'orchestrator') {
+    putSetting('tv_sidebar_view', view).catch((e) => console.error('[tv] sidebar view', e.message || e));
+  }
   const frame = 'event: cmd\ndata: ' + JSON.stringify({ id: row.id, op: row.op, args: row.args || {} }) + '\n\n';
   for (const c of tvClients) { try { c.write(frame); } catch {} }
   if (!tvClients.size && !TV_WAKE_OPS.has(row.op)) {

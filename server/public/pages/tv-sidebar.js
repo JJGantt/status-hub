@@ -1,9 +1,9 @@
-// Entry for tv-sidebar.html: the voice orchestrator's conversation above the focused session, drawn
-// narrow and see-through for the bedroom TV's overlay (google-tv repo). Display only — the TV's remote
-// drives the app underneath, never this.
+// Entry for tv-sidebar.html: one conversation, drawn narrow and see-through for the bedroom TV's
+// overlay (google-tv repo). Display only — the TV's remote drives the app underneath, never this.
 //
-// The orchestrator panel is the CURRENT context of the voice thread (/api/voice-messages?mode=active,
-// the watch's view), so it empties after an idle gap or a reset and the session gets the whole strip.
+// Which one is `sidebar_view` on the sessions frame (the tv_sidebar_view setting, written when a
+// `sidebar` command names a view): the focused session, or the voice orchestrator's conversation,
+// which is the CURRENT context of the voice thread (/api/voice-messages?mode=active, the watch's view).
 //
 // It shows the FOCUSED session (pickFocus in server.js): where a spoken follow-up goes, so it follows
 // whatever he is working in. The `sessions` frame on the stream carries focus, so a change moves it.
@@ -66,15 +66,28 @@ function focusOn(id) {
   load(id);
 }
 
+const vo = document.getElementById('vo');
+const ss = document.getElementById('ss');
+let view = 'session';
+
+function frame(d) {
+  if (!d) return;
+  view = d.sidebar_view === 'orchestrator' ? 'orchestrator' : 'session';
+  vo.hidden = view !== 'orchestrator';
+  ss.hidden = view === 'orchestrator';
+  if (view === 'orchestrator') loadVoice();
+  focusOn(d.focus);
+}
+
 async function boot() {
   try {
     const r = await fetch('/api/sessions?brief=1');
-    if (r.ok) focusOn((await r.json()).focus);
+    if (r.ok) frame(await r.json());
   } catch (_) {}
 }
 
 liveStream('/api/session-stream', {
-  sessions: (e) => { try { focusOn(JSON.parse(e.data).focus); } catch (_) {} },
+  sessions: (e) => { try { frame(JSON.parse(e.data)); } catch (_) {} },
   ev: (e) => {
     let a; try { a = JSON.parse(e.data); } catch (_) { return; }
     if (!a || !a.ev || !conv || a.conversation !== conv) return;
@@ -87,7 +100,6 @@ liveStream('/api/session-stream', {
 }, { onOpen: () => { if (rowId) load(rowId); } });
 
 // ---- the orchestrator ----------------------------------------------------------------------------
-const vo = document.getElementById('vo');
 const voBody = document.getElementById('vo-body');
 
 // Refetched on each voice frame rather than patched: the server owns which rows are the current
@@ -95,6 +107,7 @@ const voBody = document.getElementById('vo-body');
 // was said, so this is one request per message.
 let voBusy = false, voAgain = false;
 async function loadVoice() {
+  if (view !== 'orchestrator') return;
   if (voBusy) { voAgain = true; return; }
   voBusy = true;
   try {
@@ -106,10 +119,9 @@ async function loadVoice() {
 }
 
 function paintVoice(rows) {
-  vo.hidden = rows.length === 0;
   const last = rows[rows.length - 1];
   const working = !!last && (last.role === 'user' || !String(last.text || '').trim());
-  voBody.innerHTML = rows.slice(-12).map((m) => m.role === 'user'
+  voBody.innerHTML = rows.slice(-40).map((m) => m.role === 'user'
     ? `<div class="sb-words">${esc(m.text || '')}</div>`
     : `<div class="sb-reply">${md(String(m.text || '').trim())}</div>`).join('') +
     (working ? '<div class="sb-caret">▍</div>' : '');

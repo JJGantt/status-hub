@@ -9,15 +9,26 @@
 //
 // Env: OPS_TOKEN (required to send), OPS_URLS (comma list, first that answers wins; default the Fly
 // responder), OPS_SPOOL (a file that holds what could not be sent, so a crash or an outage loses
-// nothing; default in the OS temp dir).
+// nothing; default in the OS temp dir). OPS_TOKEN and OPS_URLS fall back to ~/.config/ops/env, which the
+// Mac and the Pi both have.
 
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const util = require('node:util');
 
-const URLS = (process.env.OPS_URLS || 'https://ops-responder.fly.dev').split(',').map((s) => s.trim()).filter(Boolean);
-const TOKEN = process.env.OPS_TOKEN || '';
+// ~/.config/ops/env, written to the Mac and the Pi by bin/install-standby.sh, so a service there needs
+// nothing in its own environment. A value set in the environment wins.
+function machineEnv() {
+  try {
+    return Object.fromEntries(fs.readFileSync(path.join(os.homedir(), '.config/ops/env'), 'utf8').split('\n')
+      .map((l) => l.trim()).filter((l) => l && !l.startsWith('#') && l.includes('='))
+      .map((l) => [l.slice(0, l.indexOf('=')), l.slice(l.indexOf('=') + 1)]));
+  } catch { return {}; }
+}
+const ENV = { ...machineEnv(), ...process.env };
+const URLS = (ENV.OPS_URLS || 'https://ops-responder.fly.dev').split(',').map((s) => s.trim()).filter(Boolean);
+const TOKEN = ENV.OPS_TOKEN || '';
 let MACHINE = process.env.OPS_MACHINE || os.hostname();
 let SERVICE = process.env.OPS_SERVICE || path.basename(process.argv[1] || 'node');
 let SPOOL = process.env.OPS_SPOOL || '';

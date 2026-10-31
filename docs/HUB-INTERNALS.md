@@ -1319,7 +1319,8 @@ directly, so its window is that width and the panel fills it.
 The orchestrator view is the current context of the hub thread, fetched from
 `/api/voice-messages?focus=hub&mode=active` (the watch's view) and refetched whenever `/api/voice-stream`
 carries a `message` or `reset` frame, so which rows belong to the current context stays the server's
-rule. After an idle gap or a reset it is empty under its header until he speaks again.
+rule. After an idle gap or a reset it is empty under its header until he speaks again. A reply relayed
+from a session (a row with `session_id`) is drawn in the teal (`#9fe3d3`) the phone and watch give it.
 
 His words appear the moment the request exists, not when the conversation row does: the worker writes
 his `voice_messages` row only beside the answer, up to half a minute later. Every `voice_requests`

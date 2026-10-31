@@ -207,7 +207,8 @@ function paintVoice() {
   const working = pending.size > 0 || (!!last && (last.role === 'user' || !String(last.text || '').trim()));
   voBody.innerHTML = voRows.slice(-40).map((m) => m.role === 'user'
     ? `<div class="sb-words">${esc(m.text || '')}</div>`
-    : `<div class="sb-reply">${md(String(m.text || '').trim())}</div>`).join('') +
+    // A session's reply relayed into the thread wears the teal the phone and watch give it.
+    : `<div class="sb-reply${m.session_id ? ' sb-sess' : ''}">${md(String(m.text || '').trim())}</div>`).join('') +
     [...pending.values()].map((p) => `<div class="sb-words">${esc(p.text)}</div>`).join('') +
     (working ? toolLine(voTool) + '<div class="sb-caret">▍</div>' : '');
   fit();

@@ -161,7 +161,7 @@ attaches to tmux over SSH and starts one by hand, which is not tracked.
 | `unfocus_session` | — | releases the pin: follow-ups go to the most recently active session again |
 | `follow_up` | machine owning the target session | text typed into the live session, busy or not; the target is the session he NAMED (`session` param), else the focused one. A named parked session is resumed with the words instead. Naming leaves the pin alone |
 | `rename_session` | owning machine | `/rename <name>` typed in — the session renames itself |
-| `end_session` | owning machine | close the tab / tmux session, park the row |
+| `end_session` | owning machine | close the tab / tmux session, park the row. A session ending ITSELF is not closed by a command: see below |
 | `resume_session` | owning machine | `claude --resume <id>` in a new tab or tmux session, with an optional prompt; a Pi with no memory to spare hands it to the Mac with its conversation, like new work (§ Capacity). Aimed at a session that is still running, both machines type the prompt into it |
 | `transfer_session` | machine GIVING IT UP | close, flush the mirror, ask the other to resume |
 | `get_sessions` | — | the numbered list |
@@ -169,6 +169,15 @@ attaches to tmux over SSH and starts one by hand, which is not tracked.
 The hub's `POST /api/sessions/followup` (the watch's and the phone's session view) is `follow_up` addressed by session
 id instead of by focus, and for a parked session it writes `resume_session` with the words as the
 prompt instead — HUB-INTERNALS §6b.
+
+**A session that ends itself closes after its reply.** It calls `end_session` mid-turn, and closing
+it then kills the process before the reply is written, so the watch and phone get nothing. So when the
+named row is the caller's own (`HUB_SESSION_ID`, or on the Mac the data MCP's parent pid matching the
+row's `pid`), data-layer stamps `desk_sessions.close_after_turn` and sends no command. The host closes
+it once a turn that ended after that stamp has been reported to the hub and the transcript mirrored:
+the transcript watcher's turn end triggers it (`onReported` in `sessionWatch.js`), and the reconcile
+tick catches a turn end the watcher missed. `closeAfterTurn` in `deskSessions.js` (Mac) and
+`pi-desk/index.js` (Pi and Fly).
 
 `start_session`, `follow_up`, `resume_session` and `end_session` answer only once the machine has marked the command
 `done` or `error` (`dispatchConfirmed` in data-layer, a realtime subscription opened before the

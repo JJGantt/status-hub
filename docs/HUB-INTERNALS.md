@@ -646,7 +646,20 @@ uses is `cg_orders_model_first` / `cg_orders_model_second` (§7).
 
 **Auth:** the hub password → `sha256("status-hub:"+password)`; sent as the `hub` cookie (web) or the
 `X-Hub-Token` header (native app). The kiosk authenticates via `?token=<TV_TOKEN>` (also seeds the
-cookie). The gate is one `app.use` and it protects **everything defined below it**, static assets
+cookie).
+
+**From a shell, call it with `bin/hub <METHOD> <path> [json | @file]`** (`bin/hub GET /api/status`), on the
+Mac or the Pi. It reads the kiosk token from `$HUB_TOKEN` or this repo's gitignored `.env` and hands
+it to curl on a config descriptor, so the token is never in a command line, its output or `ps`. Do
+not dig the token out of a file to build a curl by hand: Claude Code's safety check refuses a command
+that would print a secret, and that refusal is what such a session runs into.
+
+The kiosk token is `TV_TOKEN` on Fly, and its copies are, on each machine: `status-hub/.env` and
+`voice-pipeline/worker/.env` (`HUB_TOKEN`, which pi-desk also reads), plus on the Mac the installed
+`~/Library/LaunchAgents/com.jaredgantt.voice-orchestrator.plist`, and the `HUB_TOKEN` secret on
+`jared-voice-worker`. A new token has to reach every one of them. None of them is in git.
+
+The gate is one `app.use` and it protects **everything defined below it**, static assets
 included. Declared **above** it, and therefore public: `/healthz`, `/login`, `/privacy`,
 `/terms`, the Search Console verification file named by `GSC_VERIFICATION`, and `/api/cg/*` (gated by
 their own owner key, above). The gate also passes the `PUBLIC_SURF` set (the `/surf` page with its

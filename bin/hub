@@ -1,0 +1,35 @@
+#!/usr/bin/env bash
+# Call the status hub's API from a shell, authenticated, without the token ever appearing in the
+# command line, its output, or `ps`. This is how any session on the Mac or the Pi talks to the hub.
+#
+#   bin/hub GET /api/todos
+#   bin/hub POST /api/notify '{"kind":"test","title":"t","body":"b"}'
+#   bin/hub POST /api/notify @payload.json
+#
+# The token is the hub's kiosk token (TV_TOKEN on Fly), read from $HUB_TOKEN or this repo's
+# gitignored .env. HUB_URL overrides the base. Prints the response body; exits non-zero on an
+# HTTP error (the body is still printed) or a network failure.
+set -euo pipefail
+
+[ $# -ge 2 ] || { echo "usage: hub <METHOD> <path> [json | @file]" >&2; exit 2; }
+method=$(printf '%s' "$1" | tr '[:lower:]' '[:upper:]'); path=$2; body=${3-}
+case $path in /*) ;; *) path=/$path ;; esac
+
+if [ -z "${HUB_TOKEN:-}" ]; then
+  env_file="$(cd "$(dirname "$0")/.." && pwd)/.env"
+  [ -f "$env_file" ] && HUB_TOKEN=$(sed -n 's/^HUB_TOKEN=//p' "$env_file" | tail -1)
+fi
+[ -n "${HUB_TOKEN:-}" ] || { echo "hub: no HUB_TOKEN (set it in $(cd "$(dirname "$0")/.." && pwd)/.env)" >&2; exit 2; }
+
+base=${HUB_URL:-https://jared-status-hub.fly.dev}
+sep='?'; case $path in *\?*) sep='&' ;; esac
+
+# The URL (and so the token) reaches curl through a config file descriptor, never argv.
+cfg() { printf 'url = "%s%s%stoken=%s"\n' "$base" "$path" "$sep" "$HUB_TOKEN"; }
+args=(-sS --fail-with-body -X "$method" -H 'Content-Type: application/json')
+case $body in
+  '') curl "${args[@]}" -K <(cfg) ;;
+  @*) curl "${args[@]}" --data-binary "$body" -K <(cfg) ;;
+  *)  printf '%s' "$body" | curl "${args[@]}" --data-binary @- -K <(cfg) ;;
+esac
+echo

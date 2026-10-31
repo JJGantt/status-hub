@@ -25,6 +25,7 @@ body.tv .sf-tabs .hw-row.on{border-color:#fff;border-width:2px;padding:9px 15px}
 /* a finished answer nobody has opened — the same amber every other surface marks it with */
 body.tv .sf-tabs .hw-row.unread{border-left:4px solid #e0a03a;padding-left:13px}
 body.tv .sf-tabs .hw-row.unread.on{padding-left:12px}
+body.tv .sf-tabs .hw-row.incident{outline:2px solid #d9443a;outline-offset:-2px;background:#1f0d0c}
 /* What it is doing, under the name. A wall has room for one line of it and it is the only thing on
    this page that moves between answers. */
 body.tv .sf-tabs .hw-row-act{display:block;font-size:14px;line-height:19px;color:#8b96a5;

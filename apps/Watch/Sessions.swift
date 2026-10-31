@@ -18,6 +18,9 @@ struct SessionRow: Decodable, Identifiable, Equatable {
     /// A finished reply nobody has opened. The hub decides it (`reply_at` against `seen_at`) so every
     /// surface agrees; tool calls and thoughts do not set it, so it marks an answer and nothing else.
     let unread: Bool?
+    /// An ops-responder incident run, drawn as an alert. The hub decides it from the label the
+    /// responder gives every session it dispatches.
+    let incident: Bool?
     /// The number he says out loud, which is also the row's position: most recently active first,
     /// running and parked together.
     let n: Int?

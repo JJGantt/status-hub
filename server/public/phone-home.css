@@ -399,6 +399,8 @@ body.tv.phonehome .hw-row.on{background:#161d25;box-shadow:inset 2px 0 0 #fff}
    Stated here AND in tv-home.css because `.hw-row` is defined in both and each surface loads only its
    own; a rule written in one of them reaches half the surfaces that draw this row. */
 body.tv.phonehome .hw-row.unread{box-shadow:inset 2px 0 0 #e0a03a}
+/* An ops-responder incident run (`incident` from buildSessions). Also in tv-home.css. */
+body.tv.phonehome .hw-row.incident{outline:1px solid #d9443a;outline-offset:-1px;background:#1f0d0c}
 body.tv.phonehome .hw-row.unread.on{box-shadow:inset 2px 0 0 #e0a03a, inset 4px 0 0 #fff}
 body.tv.phonehome .hw-row.unread .hw-row-name{color:#fff}
 body.tv.phonehome .hw-row.unread .hw-row-act{color:#e6c88a}

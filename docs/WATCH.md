@@ -199,11 +199,13 @@ this page is a list of names — rules separate them, as they do on the food log
 `SessionsView`), so the row of pages still swipes with a session open — to home, to the day page — and
 the session is still open when he swipes back. The page row takes the sideways swipe, so the system's
 swipe back never fires; the session's name is one way out (below), and swiping right is the other.
-While a session is open, `RootView` puts a page LEFT of sessions (`Page.back`) that draws the bare
-list (`SessionsView(behind: true)`); landing on it empties `Sessions.path` and turns back to the real
-sessions page with animations off, so the swipe reads as going back to the list. It exists only while
-a session is open, so with the list showing, sessions is still the leftmost page. The session has no
-title bar.
+`RootView` keeps a page LEFT of sessions (`Page.back`) that draws the bare list
+(`SessionsView(behind: true)`); landing on it empties `Sessions.path` and turns back to the real
+sessions page with animations off, so the swipe reads as going back to the list. With the list already
+showing, the same swipe lands on an identical list and turns straight back. **That page is permanent,
+never inserted when a session opens**: the page row tracks its position by index, so a page inserted
+left of the one showing leaves the row on index 0 — `back` — and the session closes in the same moment
+it opens. The session has no title bar.
 
 **An open session is therefore not the same as one on screen**, and where a command goes is
 `Sessions.target`: the session a recording belongs to while it runs (so the press that ends it ends it,

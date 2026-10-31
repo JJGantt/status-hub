@@ -5729,49 +5729,6 @@ async function closeExempt(nowET, rows) {
 // loop is wedged goes quiet to the responder the same way a dead one does.
 setInterval(() => { ops.beat(60); dueTick().catch((e) => console.error('[due] error', e.message)); }, 60000);
 
-// ---- health investigator ---------------------------------------------------------------------
-// A machine unhealthy past what is normal for it gets a Claude session in the `health` repo, started
-// on a DIFFERENT machine, listed with every other session. lib/investigator.js decides; this reads
-// and dispatches. A heartbeat read on a timer, deliberately: a machine whose link has died sends
-// nothing, so its silence can only be noticed by looking. One five-row read a minute.
-const investigator = require('./lib/investigator');
-const invState = investigator.newState();
-const INVESTIGATE_EVERY_MS = 12 * 3600e3;   // per machine: one investigation per problem, not per relapse
-const INVESTIGATE_DAY_CAP = 3;
-// Where the session runs: anywhere but the sick machine, the Mac first because it is the one with
-// the most room and the Pi is most often the patient. A sick Pi with the Mac asleep investigates itself,
-// as it did by hand on 2026-08-28.
-const INVESTIGATE_ON = { pi: ['mac', 'pi'], mac: ['pi'], fly: ['pi', 'mac'] };
-
-async function investigateTick() {
-  const rows = await sb('worker_presence?select=worker,last_seen,info');
-  const now = Date.now();
-  investigator.observe(invState, rows, now);
-  const due = investigator.due(invState, now);
-  if (!due.length) return;
-  // The ledger is desk_commands itself, so a deploy cannot forget an investigation and start another.
-  const since = new Date(now - 24 * 3600e3).toISOString();
-  const recent = await sb(`desk_commands?kind=eq.open_session&payload->>investigation=not.is.null&created=gte.${since}&select=created,payload->>investigation`);
-  if (recent.length >= INVESTIGATE_DAY_CAP) return;
-  const [repo] = await sb('repos?name=eq.health&select=path,name');
-  for (const { subject, reason } of due) {
-    if (recent.some((r) => r.investigation === subject && now - Date.parse(r.created) < INVESTIGATE_EVERY_MS)) continue;
-    let machine = null;
-    for (const m of INVESTIGATE_ON[subject]) if (await machineAwake(m)) { machine = m; break; }
-    if (!machine) { console.log(`[investigate] ${subject}: ${reason}, but no machine is awake to look`); continue; }
-    const payload = {
-      path: machine === 'mac' && repo ? repo.path : '~/repos/health', name: 'health', target: machine,
-      label: `Investigate ${investigator.NAMES[subject].replace(/^the /, '')} health`,
-      prompt: investigator.prompt(subject, reason, invState[subject], rows, now),
-      investigation: subject,
-    };
-    await sbWrite('desk_commands', 'POST', { id: crypto.randomUUID(), kind: 'open_session', payload });
-    console.log(`[investigate] ${subject}: ${reason} — session started on ${machine}`);
-    return;   // one per tick; anything else still due is looked at next minute, against the updated ledger
-  }
-}
-setInterval(() => investigateTick().catch((e) => console.error('[investigate] error', e.message)), 60000);
-
 // A published report announces itself on the phone.
 //
 // The ledger is the row's own `notified` column, not an in-memory set: the hub restarts on every

@@ -1463,31 +1463,12 @@ The third layer does NOT reload a page that is still loaded. That page rides out
 rebuilds its own stream when the hub answers; killing it anyway blanked the wall on every Wi-Fi blip,
 every few minutes on a bad day.
 
-## 6f. Health investigator
+## 6f. Incidents go to the ops responder
 
-When a machine is unhealthy beyond what is normal for it, the hub starts a Claude session in the
-`health` repo to find out why and fix it (`lib/investigator.js`, `investigateTick` in server.js). It
-is an ordinary dispatched session, labelled `Investigate <machine> health`, so it appears in the
-session list like any other and can be followed up or ended there.
-
-The hub decides rather than either machine, because the sick machine is the one least able to say
-so. It reads `worker_presence` once a minute — a heartbeat read, the one kind of timer that has no
-event under it, since a dead link sends nothing.
-
-| machine | unhealthy means | trigger |
-|---|---|---|
-| Pi | `pi` or `pi-desk` silent past 90s, or `pi` reporting `info.degraded` | 10 minutes without a break, or 3 separate bad stretches in an hour |
-| Mac | `mac` reporting `info.degraded` — never silence, since the Mac sleeps with its lid | same |
-| Fly | `fly` silent or degraded | same |
-
-`info.degraded` is set by the voice worker itself when its own Supabase calls hit network errors
-(voice-pipeline `worker/README.md`).
-
-The session runs anywhere but the patient — the Mac first for the Pi and Fly, the Pi for the Mac; a
-sick Pi with the Mac asleep investigates itself. At most one per machine per 12 hours and three a day,
-counted from `desk_commands` (`payload.investigation`) so a deploy cannot reset the count. The rules it
-works under — what it fixes alone, what it asks first — are in its prompt, `prompt()` in the lib.
-The bad-stretch history it is handed lives in memory, so a deploy clears it.
+The hub starts no investigations of its own. Its errors, the page errors it relays from
+`/api/clientlog`, and its heartbeat go to the ops responder (health/responder/README.md), which watches
+every machine and service and starts the agent. That covers the machines' silence the hub used to read
+from `worker_presence`, without depending on Supabase.
 
 ## 7. `app_settings` catalog (flat key/value)
 

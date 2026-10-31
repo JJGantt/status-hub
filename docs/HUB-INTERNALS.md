@@ -657,7 +657,8 @@ that would print a secret, and that refusal is what such a session runs into.
 The kiosk token is `TV_TOKEN` on Fly, and its copies are, on each machine: `status-hub/.env` and
 `voice-pipeline/worker/.env` (`HUB_TOKEN`, which pi-desk also reads), plus on the Mac the installed
 `~/Library/LaunchAgents/com.jaredgantt.voice-orchestrator.plist`, and the `HUB_TOKEN` secret on
-`jared-voice-worker`. A new token has to reach every one of them. None of them is in git.
+`jared-voice-worker` and on `jared-desk-fly` (the Fly session machine, where `bin/hub` reads it from
+the environment). A new token has to reach every one of them. None of them is in git.
 
 The gate is one `app.use` and it protects **everything defined below it**, static assets
 included. Declared **above** it, and therefore public: `/healthz`, `/login`, `/privacy`,

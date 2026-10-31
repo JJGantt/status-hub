@@ -209,6 +209,8 @@ struct SessionView: View {
     @ObservedObject private var speaker = Speaker.shared
 
     private var events: [SessionEvent] { sessions.logs[key]?.events ?? [] }
+    private var incident: Bool { sessions.row(for: key)?.incident == true }
+    static let incidentEdge = Color(hex: "#d9443a")
     private var placeholders: [Placeholder] { sessions.placeholders[key] ?? [] }
 
     /// Every event in order, a prompt at the position of its LATEST occurrence — it moves from where it
@@ -354,7 +356,7 @@ struct SessionView: View {
                             .foregroundColor(Color(hex: "#7d8894"))
                         Text(sessions.row(for: key)?.name ?? "")
                             .font(.system(size: 15, weight: .semibold))
-                            .foregroundColor(.white)
+                            .foregroundColor(incident ? SessionView.incidentEdge : .white)
                             .lineLimit(1)
                             .truncationMode(.tail)
                     }
@@ -363,6 +365,11 @@ struct SessionView: View {
                 .buttonStyle(.plain)
             }
         }
+        // An incident run is framed red while open, as its row is in the list.
+        .overlay(RoundedRectangle(cornerRadius: 12)
+            .stroke(incident ? SessionView.incidentEdge : Color.clear, lineWidth: 2)
+            .ignoresSafeArea()
+            .allowsHitTesting(false))
         .task {
             sessions.markSeen(key)   // opening it is reading it, here as on the phone
             await sessions.loadLog(key)

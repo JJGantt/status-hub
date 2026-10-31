@@ -64,7 +64,7 @@ function sessionsHtml(s) {
   // both from one rule. The machine chip is here for the same reason: "the other machine" only means
   // something if you can see which one it is on.
   const line = (x, live) =>
-    `<li class="sess${live ? ' live' : ''}${x.id === focus ? ' focus' : ''}" data-id="${esc(x.id)}">` +
+    `<li class="sess${live ? ' live' : ''}${x.id === focus ? ' focus' : ''}${x.incident ? ' incident' : ''}" data-id="${esc(x.id)}">` +
       `<div class="sess-main">` +
         `<span class="sess-repo">` +
         (x.n ? `<span class="sess-n">${x.n}</span>` : '') +
@@ -400,6 +400,9 @@ function paintHead() {
   const t = el.querySelector('.sv-title'), w = el.querySelector('.sv-where');
   if (t) t.textContent = nameOf(d);
   if (w) w.textContent = d.worker === 'desk' ? 'Mac' : d.worker === 'fly-desk' ? 'Fly' : 'Pi';
+  // An incident run is framed as an alert while it is open, as its row is in every list.
+  const sv = el.querySelector('.sv');
+  if (sv) sv.classList.toggle('incident', !!d.incident);
 }
 
 // What is drawn: every event in order, a prompt at the position of its LATEST occurrence — it moves

@@ -5158,6 +5158,12 @@ async function pickFocus(focusRow, sessions) {
 // THE SURFACES DO NOT POLL THIS. `desk_sessions`, `desk_queue` and `desk_focus` are in the realtime
 // publication (data-layer migration 00104), so a change to any of them pushes a fresh payload the
 // moment it happens; a client's own fetch is only the net under a dropped frame or a deaf socket.
+// An ops-responder incident run, drawn as an alert rather than as ordinary work on every surface that
+// shows a session — the lists AND the open session. The responder labels every session it dispatches
+// `Incident: <title>` (health/responder/server.js `dispatch`), and every launcher carries the label
+// across resumes and moves, so the label is the mark.
+const isIncident = (s) => /^Incident: /.test((s && s.label) || '');
+
 async function buildSessions({ brief: allBrief = false } = {}) {
   const [sessions, queue, focusRows] = await Promise.all([
     sb('desk_sessions?select=*&order=last_seen.desc'),
@@ -5201,10 +5207,7 @@ async function buildSessions({ brief: allBrief = false } = {}) {
     // session that is actually owed attention. Decided here rather than in the cards because three
     // surfaces draw these rows, and a rule they each re-derive is one they will disagree about.
     unread: !!s.reply_at && (!s.seen_at || Date.parse(s.reply_at) > Date.parse(s.seen_at)),
-    // An ops-responder incident run, drawn as an alert rather than as ordinary work. The responder
-    // labels every session it dispatches `Incident: <title>` (health/responder/server.js `dispatch`),
-    // and every launcher carries the label across resumes and moves, so the label is the mark.
-    incident: /^Incident: /.test(s.label || ''),
+    incident: isIncident(s),
   });
   // One line of what the session last said, for the rows that only ever show one line. The repos
   // pane cuts `last_reply` to 90 characters for every row it lists; sending the whole reply so it
@@ -5320,7 +5323,7 @@ app.get('/api/sessions/:id', async (req, res) => {
     const conv = row.claude_session_id || row.id;
     rowConv.set(row.id, conv);
     const log = await ensureLog(conv);
-    res.json({ ...row, epoch: EPOCH, events: log.events });
+    res.json({ ...row, incident: isIncident(row), epoch: EPOCH, events: log.events });
   } catch (e) { res.status(500).json({ error: String(e.message || e) }); }
 });
 

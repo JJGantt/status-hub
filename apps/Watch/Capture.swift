@@ -92,8 +92,15 @@ final class Capture: ObservableObject {
 
     /// Runs when the silence ends the recording: the owner sends it as if it had been pressed.
     private var onSilence: (() -> Void)?
-    /// Runs when the system takes the microphone mid-recording, for the same reason.
-    private var onTaken: (() -> Void)?
+    /// The system took the microphone mid-recording and it is waiting to carry on (`pause`): the words so
+    /// far are kept, unsent, and the next recording time goes onto the end of the same clip.
+    @Published private(set) var paused = false
+    /// Where in the clip the last resume picked up. The caps on a recording (`unspoken`, `quickCap`) count
+    /// from here, so a resumed command gets its full allowance again.
+    private var resumedAt: TimeInterval = 0
+    /// The endpoint had heard him before the pause. The endpoint itself starts over at a resume, so the
+    /// silence only ends the command once he has spoken again.
+    private var spokeBefore = false
     /// When the listener's current utterance first crossed the threshold, and how much audio its
     /// segment holds.
     private var spokeAt: Date?
@@ -137,14 +144,13 @@ final class Capture: ObservableObject {
     /// phone's microphone, so one sentence cannot arrive twice.
     ///
     /// With `onSilence`, the recording ends itself once he has spoken and then stopped for the trailing
-    /// silence, and calls it, unless the flow is `locked`. Without, only a press ends it. `onTaken` is
-    /// the same ending forced from outside — the system taking the microphone — and every caller wants
-    /// one, because words already recorded are worth sending however the recording ended.
-    func start(for owner: Owner, flow: Flow = .standard, onSilence: (() -> Void)? = nil, onTaken: (() -> Void)? = nil,
+    /// silence, and calls it, unless the flow is `locked`. Without, only a press ends it. The system
+    /// taking the microphone ends neither: it pauses the recording (`interrupted`).
+    func start(for owner: Owner, flow: Flow = .standard, onSilence: (() -> Void)? = nil,
                onFailure: @escaping @MainActor (Error) -> Void) {
         Speaker.shared.stop()   // his voice comes first: a recording ends any reply being read out
         LiveListen.shared.stop()   // …and the live mic, which holds the microphone too
-        begin(owner, flow: flow, onSilence: onSilence, onTaken: onTaken, onFailure: onFailure) { [weak self] in
+        begin(owner, flow: flow, onSilence: onSilence, onFailure: onFailure) { [weak self] in
             self?.setMuted(true)
             // The wrist is told the moment the microphone is actually live, not when it was asked
             // for: opening it takes a beat, and words spoken before this are not recorded. Commands
@@ -196,7 +202,7 @@ final class Capture: ObservableObject {
     private var rewindFailure: (@MainActor (Error) -> Void)?
 
     private func hold() {
-        begin(.rewind, onSilence: nil, onTaken: nil, onFailure: { [weak self] error in
+        begin(.rewind, onSilence: nil, onFailure: { [weak self] error in
             guard let self else { return }
             self.rewinds = false
             self.recorder.tee = nil
@@ -208,7 +214,7 @@ final class Capture: ObservableObject {
     /// Takes the microphone for the listener. Only while nothing else owns it: a command and a
     /// follow-up come first, and the listener takes it back when they give it up.
     private func listen() {
-        begin(.listener, onSilence: nil, onTaken: nil, onFailure: { [weak self] error in
+        begin(.listener, onSilence: nil, onFailure: { [weak self] error in
             self?.listens = false
             self?.listenFailure?(error)
         }) {}
@@ -253,7 +259,7 @@ final class Capture: ObservableObject {
         StayAwake.shared.sessionReleased()
     }
 
-    private func begin(_ owner: Owner, flow: Flow = .standard, onSilence: (() -> Void)?, onTaken: (() -> Void)?,
+    private func begin(_ owner: Owner, flow: Flow = .standard, onSilence: (() -> Void)?,
                        onFailure: @escaping @MainActor (Error) -> Void, opened: @escaping () -> Void) {
         // A command or a follow-up takes the microphone off the listener, which picks it up again when
         // they give it back (`resume`). Whatever it had heard by then still goes up.
@@ -269,7 +275,6 @@ final class Capture: ObservableObject {
         // holds it now, and one tap at a time.
         StayAwake.shared.sessionReleased()
         self.onSilence = onSilence
-        self.onTaken = onTaken
         endsOnSilence = onSilence != nil || owner == .listener
         self.flow = flow
         locked = flow == .locked && endsOnSilence
@@ -278,6 +283,8 @@ final class Capture: ObservableObject {
             : Endpointer(hang: Self.hang, minimum: Self.speechMin)
         spokeAt = nil
         segment = 0
+        resumedAt = 0
+        spokeBefore = false
         voice = 0
         quiet = []
         quietSince = 0
@@ -305,8 +312,8 @@ final class Capture: ObservableObject {
 
     private func reset() {
         owner = nil
+        paused = false
         onSilence = nil
-        onTaken = nil
         endsOnSilence = false
         locked = false
         flow = .standard
@@ -331,9 +338,11 @@ final class Capture: ObservableObject {
         }
     }
 
-    /// Siri, a call or another app recording takes the microphone away mid-recording, and nothing can
-    /// keep a recording through it. Words already recorded are sent (`onTaken`); a listener utterance
-    /// that had begun goes up and the rest of the segment is dropped. When the microphone comes back,
+    /// A timer or alarm going off, Siri, a call or another app recording takes the microphone away
+    /// mid-recording, and nothing can refuse it. A command or a follow-up is PAUSED rather than sent or
+    /// thrown away: the clip stays open and unsent, and when the microphone comes back (`resumeDraft`) he
+    /// carries on into the same clip, so what reaches the hub is one whole command. A listener utterance
+    /// that had begun goes up and the rest of the segment is dropped; when the microphone comes back,
     /// listening picks it up again — without this, always-on listening ended silently at the first Siri
     /// and the glyph went on claiming it was listening.
     ///
@@ -345,9 +354,10 @@ final class Capture: ObservableObject {
         line["owner"] = owner.map { String(describing: $0) } ?? ""
         guard began else {
             Hub.log("mic-interruption-ended", line)
+            if paused { return resumeDraft(how: "interruption-ended") }
             return resumeSoon()
         }
-        line["heard"] = endpoint.heard
+        line["heard"] = endpoint.heard || spokeBefore
         line["quiet"] = endpoint.quiet
         line["voice"] = Double(voice)
         line["seconds"] = segment
@@ -356,11 +366,48 @@ final class Capture: ObservableObject {
         switch owner {
         case .listener:
             unlisten()          // sends what was heard, if anything
+        case .rewind:
+            cancel()
         case .some:
-            if endpoint.heard, let taken = onTaken { taken() } else { cancel() }
+            pause()
         case .none:
             break
         }
+    }
+
+    /// Holds a command or follow-up through an interruption: the microphone is let go, the clip is kept,
+    /// and the room mics are unmuted, since nobody knows how long the alarm will ring.
+    private func pause() {
+        if paused { return }
+        if arming { return cancel() }   // the microphone never opened: there is nothing to keep
+        if flow == .locked { markQuiet(true, at: segment) }   // the pause is not a silence in the clip
+        recorder.pause()
+        paused = true
+        spokeBefore = spokeBefore || endpoint.heard
+        if mutes { setMuted(false) }
+        WKInterfaceDevice.current().play(.failure)
+        Hub.log("mic-paused", ["seconds": segment, "heard": spokeBefore, "flow": flow.rawValue])
+    }
+
+    /// Carries a paused recording on into the same clip, with the chirp that says to talk. `how` is what
+    /// asked: the interruption ending, the app coming back to the front, or his press. A refusal leaves
+    /// it paused, and the next of those tries again.
+    func resumeDraft(how: String) {
+        guard paused, owner != nil, !opening else { return }
+        do {
+            try recorder.resume()
+        } catch {
+            Hub.log("mic-resume", ["ok": false, "how": how, "error": String(describing: error).prefix(120).description])
+            if how == "press" { WKInterfaceDevice.current().play(.failure) }
+            return
+        }
+        paused = false
+        endpoint.restart()
+        resumedAt = segment
+        if mutes { setMuted(true) }
+        Hub.log("mic-resume", ["ok": true, "how": how, "seconds": segment])
+        WKInterfaceDevice.current().play(.directionUp)
+        recorder.cue()
     }
 
     /// One buffer of audio from the recorder. Every recording is measured, even one that only a press
@@ -387,7 +434,8 @@ final class Capture: ObservableObject {
         // Accidentally recording: nobody spoke into it, or it has run on and on unlocked. Either way
         // the microphone closes and the clip is thrown away rather than sent.
         let tooLong = owner == .listener && segment >= Self.longest
-        if !locked && (tooLong || (!endpoint.heard && segment >= Self.unspoken)) {
+        let thisStretch = segment - resumedAt
+        if !locked && (tooLong || (!endpoint.heard && thisStretch >= Self.unspoken)) {
             if owner == .listener {
                 recorder.drop()
                 endpoint.restart()
@@ -398,6 +446,11 @@ final class Capture: ObservableObject {
                 if rolls % 20 == 0, let since = listenSince {
                     Hub.log("listen-alive", ["minutes": Int(Date().timeIntervalSince(since) / 60)])
                 }
+            } else if spokeBefore {
+                // Resumed after an interruption and nothing said since: the words before the pause are
+                // still his to finish, so it pauses again rather than throwing them away.
+                logEnd("unspoken")
+                pause()
             } else {
                 logEnd("unspoken")
                 cancel()
@@ -406,9 +459,9 @@ final class Capture: ObservableObject {
         }
         // The quick flow's cap: the command goes at `quickCap` however it is going. Nothing heard by
         // then is nothing to send, and is thrown away rather than handed to Whisper to invent words for.
-        if flow == .quick && owner != .listener && segment >= Self.quickCap {
+        if flow == .quick && owner != .listener && thisStretch >= Self.quickCap {
             logEnd("cap")
-            if endpoint.heard { onSilence?() } else { cancel() }
+            if endpoint.heard || spokeBefore { onSilence?() } else { cancel() }
             return
         }
         guard endsOnSilence, ended else { return }

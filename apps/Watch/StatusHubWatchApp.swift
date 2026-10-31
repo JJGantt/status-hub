@@ -260,7 +260,7 @@ struct RootView: View {
                     if veiled && phase == .active { Hub.log("veil-stuck"); veiled = false }
                 }
             }
-            if now == .active { Speaker.shared.checkOnWake(); Rewind.shared.check() }
+            if now == .active { Speaker.shared.checkOnWake(); Rewind.shared.check(); Capture.shared.resumeDraft(how: "active") }
             follow()
             // Coming to the front, not every page swipe: the watch's settings live on the hub.
             if now == .active { Task { await WatchSettings.refresh() }; Hub.flushLog() }

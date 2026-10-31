@@ -629,14 +629,15 @@ silence with the wrist down. Measured on the device: a locked recording ran 31s 
 `inactive` and the 33s clip arrived whole.
 
 **What happens when something else takes the microphone mid-recording is the interruption path below
-(§ The always-on listener)**: words already heard are sent, a recording with no speech yet is cancelled.
+(§ The always-on listener)**: a command or follow-up is PAUSED, never sent half-said or thrown away.
 The log can show it as `mic-route-change` with empty `inputs`, then `mic-interrupted` — or as
 `mic-interrupted` alone: on 2026-10-19 a command ended mid-sentence with no route change before it, a
 `phase` → `inactive` 3s earlier, and nothing sent to the watch at that moment by the hub or Messages.
 To him that reads exactly like the silence endpoint firing early, so tell the two apart by the end
 event: a silence end logs `mic-end`, an interruption logs `mic-interrupted` and no `mic-end`. Which
-events raise the interruption is not established; Siri (Raise to Speak) and another app's notification
-are the remaining candidates; `mic-interrupted` carries the system's reason and the endpoint's state.
+events raise it: a Siri timer going off does (2026-10-31, `reason` 0, 1.1s into a recording opened from
+the complication). An ordinary notification has not been seen to; Siri (Raise to Speak) and a call are the
+other candidates. `mic-interrupted` carries the system's reason and the endpoint's state.
 
 ### Sending it
 
@@ -869,10 +870,19 @@ Every clip therefore goes up inside `Awake.hold` (an expiring activity), which i
 system can take it back, and the `sent` / `send-failed` log lines carry how long a send took, so a
 send being cut off is visible rather than a command that quietly never arrived.
 
-**Siri, a call or another app recording takes the microphone**, and no recording survives that. The
-interruption notification is what says so (`Recorder.onInterruption`): words already recorded are sent
-(`onTaken`, which every caller passes), a listener utterance that had begun goes up, and when the
-microphone comes back listening picks it up again. Without that handling always-on listening ended at
+**A timer or alarm, Siri, a call or another app recording takes the microphone**, and nothing can refuse
+it. The interruption notification is what says so (`Recorder.onInterruption`). A command or a follow-up
+is PAUSED (`Capture.pause`, logged `mic-paused`, buzzes `.failure`): the engine stops and the session is
+handed back, but the clip's file stays open and nothing is sent — sending the half said before the timer
+rang runs a command he had not finished. It carries on INTO THE SAME CLIP (`resumeDraft`, with the chirp)
+at the first of: the interruption's end, the app coming back to the front, or his press — a press on a
+paused recording resumes it and never sends it. A resume the system refuses (still ringing, app not in
+front) logs `mic-resume` `ok:false` and stays paused for the next. After a resume the endpoint starts
+over, so the silence only ends the command once he has spoken again, and the `unspoken` and `quick`
+caps count from the resume; a resumed recording he says nothing more into pauses again rather than
+discarding what came before. Press and hold still throws it away. The draft lives only in the app's
+process, so a watchOS kill while paused loses it. A listener utterance that had begun goes up, and when
+the microphone comes back listening picks it up again. Without that handling always-on listening ended at
 the first Siri and the glyph went on claiming it was listening.
 
 **A deliberate command comes first.** Starting a command or a follow-up takes the microphone off the
@@ -940,6 +950,7 @@ wrist. Fly keeps only the recent lines, so read it soon.
 | `record-refused`, `mic-refused`, `mic-failed`, `mic-open` | why a recording did or did not start |
 | `mic-nudge` | the once-a-minute tap on a recording still open: minutes so far, the flow, the build |
 | `mic-end` | what the endpoint saw when a recording ended, and why (`silence`, `unspoken`) |
+| `mic-paused`, `mic-resume` | a command or follow-up held through an interruption (`seconds` recorded, `heard`), and carried on: `how` (`interruption-ended`, `active`, `press`), `ok` |
 | `mic-interrupted`, `mic-interruption-ended` | the system took the microphone mid-recording, and gave it back: the system's `reason` (0 default — Siri, a call, an alarm; 1 app suspended; 2 built-in mic muted; 3 route disconnected), `options` on the end (1 = may resume), the route, `recording` (seconds since the microphone opened), and on the start the endpoint's state — `quiet` (seconds since the last speech), `voice` (the classifier's last score), `heard`, `seconds`, `flow`. `quiet` near 0 with `voice` high is a cut mid-word |
 | `mic-route`, `mic-route-change` | the audio session's category and mode, its input and output ports, and whether other audio is playing — at every recording's start, and whenever the route changes under one |
 | `mic-live` | the first buffer from the microphone, with how long after opening it came. A recording with no `mic-live` never heard anything |

@@ -207,6 +207,9 @@ struct CommandBorder: View {
         Hub.log("control", ["target": target ?? "hub", "recording": recording, "locked": capture.locked,
                                "flow": capture.flow.rawValue, "how": how])
         Capture.trigger = how
+        // Paused by an interruption: the press carries on into the same clip. It never sends the half
+        // he said before the timer went off; press again, or let the silence, once he has finished.
+        if recording && capture.paused { return capture.resumeDraft(how: "press") }
         if !recording {
             if let target { sessions.startRecording(target) } else { chat.startRecording() }
         } else {

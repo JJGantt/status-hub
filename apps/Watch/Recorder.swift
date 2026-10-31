@@ -41,8 +41,8 @@ final class Recorder {
     /// Each buffer's RMS level (0…1) and how many seconds of audio it held, delivered on the main actor in
     /// the order they were recorded.
     var onLevel: ((Float, TimeInterval) -> Void)?
-    /// The system took the microphone (Siri, a call, another app recording) — `true` — or gave it back,
-    /// `false`. A recording cannot survive the first; the second is when a new one may start.
+    /// The system took the microphone (a timer or alarm, Siri, a call, another app recording) — `true` — or
+    /// gave it back, `false`. A recording survives it only by `pause` and `resume`.
     var onInterruption: ((Bool, [String: Any]) -> Void)?
     /// Run Apple's sound classifier over the recording (`watch_speech_mode` = `voice`). Read at `start`.
     var classifies = false
@@ -73,6 +73,8 @@ final class Recorder {
     /// Whether the chirp played through: nil when none was asked for this recording.
     private var chirped: Bool?
     private var observers: [NSObjectProtocol] = []
+    /// Between `pause` and `resume`: the file is open and the microphone is not.
+    private(set) var paused = false
 
     /// Asks for the microphone on first use, then starts recording. With `keepsFile` false nothing is
     /// written to disk — the microphone only feeds `tee` and the levels, which is all rewind wants.
@@ -96,26 +98,8 @@ final class Recorder {
             DispatchQueue.main.async { MainActor.assumeIsolated { self?.onVoice?(speech) } }
         }) : nil
         if classifies && detector == nil { Hub.log("voice-classifier", ["ok": false]) }
-        let gate = self.gate
-        let firstBuffer = self.firstBuffer
-        firstBuffer.set(false)
-        let opened = Date()
         chirped = nil
-        input.installTap(onBus: 0, bufferSize: 4096, format: format) { [weak self] buffer, _ in
-            if !firstBuffer.getAndSet(true) {
-                let ms = Int(Date().timeIntervalSince(opened) * 1000)
-                DispatchQueue.main.async { Hub.log("mic-live", ["ms": ms, "rate": format.sampleRate]) }
-            }
-            // The chirp is not his voice: it is neither kept in the clip nor counted by the endpoint,
-            // where it would read as speech and let the silence after it send an empty command.
-            let seconds = Double(buffer.frameLength) / format.sampleRate
-            if gate.swallow(seconds) { return }
-            let level = sink.write(buffer)
-            detector?.analyze(buffer)
-            // Main queue, not a Task: a queue keeps the buffers in order, which the endpoint's running
-            // count of silent seconds depends on.
-            DispatchQueue.main.async { MainActor.assumeIsolated { self?.onLevel?(level, seconds) } }
-        }
+        tap(sink, detector, format)
         let center = NotificationCenter.default
         observers = [
             center.addObserver(forName: AVAudioSession.interruptionNotification, object: session,
@@ -152,7 +136,7 @@ final class Recorder {
             center.addObserver(forName: .AVAudioEngineConfigurationChange, object: engine,
                                queue: .main) { [weak self] _ in
                 MainActor.assumeIsolated {
-                    guard let self, self.sink != nil else { return }
+                    guard let self, self.sink != nil, !self.paused else { return }
                     do {
                         try self.engine.start()
                         Hub.log("mic-engine-restart", ["ok": true])
@@ -173,6 +157,65 @@ final class Recorder {
         self.sink = sink
         self.detector = detector
         startedAt = Date()
+    }
+
+    /// Feeds the microphone into `sink`: what `start` opens and `resume` reopens.
+    private func tap(_ sink: Sink, _ detector: VoiceDetector?, _ format: AVAudioFormat) {
+        let gate = self.gate
+        let firstBuffer = self.firstBuffer
+        firstBuffer.set(false)
+        let opened = Date()
+        engine.inputNode.installTap(onBus: 0, bufferSize: 4096, format: format) { [weak self] buffer, _ in
+            if !firstBuffer.getAndSet(true) {
+                let ms = Int(Date().timeIntervalSince(opened) * 1000)
+                DispatchQueue.main.async { Hub.log("mic-live", ["ms": ms, "rate": format.sampleRate]) }
+            }
+            // The chirp is not his voice: it is neither kept in the clip nor counted by the endpoint,
+            // where it would read as speech and let the silence after it send an empty command.
+            let seconds = Double(buffer.frameLength) / format.sampleRate
+            if gate.swallow(seconds) { return }
+            let level = sink.write(buffer)
+            detector?.analyze(buffer)
+            // Main queue, not a Task: a queue keeps the buffers in order, which the endpoint's running
+            // count of silent seconds depends on.
+            DispatchQueue.main.async { MainActor.assumeIsolated { self?.onLevel?(level, seconds) } }
+        }
+    }
+
+    /// The system took the microphone (a timer or an alarm going off, Siri, a call). The engine stops and
+    /// the audio session is handed back, but the FILE stays open and the observers stay on, so the
+    /// interruption's end is still heard and `resume` carries on writing into the same clip.
+    func pause() {
+        guard sink != nil else { return }
+        engine.inputNode.removeTap(onBus: 0)
+        player.stop()
+        gate.hold(0)
+        engine.stop()
+        paused = true
+        try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
+    }
+
+    /// Picks a paused recording back up, appending to the clip it was writing. Throws when the system
+    /// will not give the microphone back yet (the app is not in front, the alarm is still sounding),
+    /// which leaves it paused for the next try.
+    func resume() throws {
+        guard let sink else { throw Failure.notStarted }
+        let session = AVAudioSession.sharedInstance()
+        try session.setCategory(.playAndRecord, mode: .default, options: [.allowBluetoothA2DP])
+        try session.setActive(true)
+        let format = engine.inputNode.outputFormat(forBus: 0)
+        // The file's converter was built for the format the microphone had when it opened.
+        guard format == sink.input else { throw Failure.notStarted }
+        tap(sink, detector, format)
+        engine.prepare()
+        do {
+            try engine.start()
+        } catch {
+            engine.inputNode.removeTap(onBus: 0)
+            throw error
+        }
+        paused = false
+        Hub.log("mic-route", Self.describe(session))
     }
 
     /// **"Talk now."** A short rising chirp from the speaker, played the moment the microphone is live.
@@ -264,6 +307,7 @@ final class Recorder {
         observers = []
         guard let sink else { return nil }
         self.sink = nil
+        paused = false
         engine.inputNode.removeTap(onBus: 0)
         detector?.finish()
         detector = nil
@@ -284,6 +328,8 @@ private final class Sink: @unchecked Sendable {
     private let lock = NSLock()
     private let converter: AVAudioConverter
     private let format: AVAudioFormat
+    /// The microphone's format the converter was built for.
+    let input: AVAudioFormat
     private var file: AVAudioFile?
     private var url: URL
     /// Rewind's ring, fed the converted audio before the file is. Read on the audio thread, under the lock.
@@ -301,6 +347,7 @@ private final class Sink: @unchecked Sendable {
 
     init(input: AVAudioFormat, keepsFile: Bool = true) throws {
         url = Self.newURL()
+        self.input = input
         let file = keepsFile ? try Self.open(url) : nil
         // The file's processing format, spelled out so a sink with no file converts to the same thing.
         format = file?.processingFormat

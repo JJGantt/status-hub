@@ -387,8 +387,7 @@ final class Sessions: ObservableObject {
         failures[key] = nil
         Hub.log("record-start", ["view": "session", "row": row(for: key)?.id ?? ""])
         // Locked open: a follow-up is sent by his next press, never by a pause.
-        capture.start(for: .session(key), flow: .locked, onSilence: { [weak self] in self?.stopRecording(key) },
-                      onTaken: { [weak self] in self?.stopRecording(key) }) { [weak self] error in
+        capture.start(for: .session(key), flow: .locked, onSilence: { [weak self] in self?.stopRecording(key) }) { [weak self] error in
             Hub.log("record-failed", ["error": String(describing: error).prefix(120).description])
             self?.failures[key] = (error as? Recorder.Failure) == .denied ? .micDenied : .message(error.localizedDescription)
         }

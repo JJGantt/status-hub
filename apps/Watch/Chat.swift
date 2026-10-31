@@ -221,8 +221,7 @@ final class Chat: ObservableObject {
         Hub.log("record-start", ["view": "chat", "running": commands.count, "flow": flow.rawValue])
         failure = nil
         // A command ends itself at the silence after he speaks, or at the next press. A session's follow-up records the same way (Sessions.startRecording).
-        capture.start(for: .hub, flow: flow, onSilence: { [weak self] in self?.stopRecording() },
-                      onTaken: { [weak self] in self?.stopRecording() }) { [weak self] error in
+        capture.start(for: .hub, flow: flow, onSilence: { [weak self] in self?.stopRecording() }) { [weak self] error in
             self?.failure = (error as? Recorder.Failure) == .denied ? .micDenied : .message(error.localizedDescription)
         }
     }
@@ -243,7 +242,7 @@ final class Chat: ObservableObject {
         Hub.log("record-start", ["view": "rewind", "running": commands.count])
         failure = nil
         instructing = grab
-        capture.start(for: .hub, flow: .locked, onTaken: { [weak self] in self?.stopRecording() }) { [weak self] error in
+        capture.start(for: .hub, flow: .locked) { [weak self] error in
             self?.instructing = nil
             self?.failure = (error as? Recorder.Failure) == .denied ? .micDenied : .message(error.localizedDescription)
         }

@@ -146,9 +146,9 @@ function frame(d) {
   view = d.sidebar_view === 'orchestrator' ? 'orchestrator' : 'session';
   if (Number(d.sidebar_font) > 0) document.body.style.fontSize = d.sidebar_font + 'px';
   if (Number(d.sidebar_width) > 0) minWidth = Number(d.sidebar_width);
-  fit();
   vo.hidden = view !== 'orchestrator';
   ss.hidden = view === 'orchestrator';
+  fit();   // after the switch: a hidden box measures as nothing and would never fit
   if (view === 'orchestrator') loadVoice();
   focusOn(d.focus);
 }

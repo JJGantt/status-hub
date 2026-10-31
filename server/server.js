@@ -5469,9 +5469,10 @@ const tvClients = new Set();
 const TV_REPLAY_MS = 60 * 1000;
 // Ops that make sense to wake the TV for. While it is off the app is not connected, so these are held
 // for the replay on connect rather than failed; the Pi, subscribed to the same inserts, wakes the TV.
-const TV_WAKE_OPS = new Set(['open', 'launch']);
-// Done by the Pi over adb and Wake-on-LAN, never by the app, so the hub leaves the row to it.
-const TV_PI_OPS = new Set(['power']);
+const TV_WAKE_OPS = new Set(['open', 'launch', 'input']);
+// Done by the Pi over adb (power, and remote keys, which an app cannot inject), never by the app, so
+// the hub leaves the row to it.
+const TV_PI_OPS = new Set(['power', 'key']);
 function tvPush(row) {
   if (!row || row.done_at || TV_PI_OPS.has(row.op)) return;
   const frame = 'event: cmd\ndata: ' + JSON.stringify({ id: row.id, op: row.op, args: row.args || {} }) + '\n\n';

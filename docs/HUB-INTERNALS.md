@@ -1322,6 +1322,11 @@ insert or update for the hub conversation goes out on `/api/voice-stream` as a `
 (re)load. The page draws them after the conversation until a row with that `request_id` arrives, and
 drops one when its request is `done` or `error`, since a failed request may never get a row.
 
+Neither view lists tool calls. While a turn is running the page draws only the call in progress above
+the caret, each new one replacing the last (the session's latest `tool` event since its prompt; the
+orchestrator's latest `activity` frame in state `tool`, cleared by `working`, `done` or `error`). Every
+other surface lists them all; this is the TV's alone.
+
 The session view is the FOCUSED session (`pickFocus`), drawn narrow and see-through for the bedroom TV, whose companion
 app overlays it on whatever is playing (google-tv repo, `SidebarService`). Its own small module
 (`pages/tv-sidebar.js`) rather than `cards/repos.js`, which carries a composer, a recorder and a list

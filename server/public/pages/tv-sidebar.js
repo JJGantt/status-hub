@@ -34,15 +34,25 @@ function shown() {
 
 // The box is anchored to its bottom (justify-content:flex-end, overflow hidden): the newest thing is
 // always on screen and older turns fall off the top. Only the tail is drawn, since nothing scrolls.
+// Tool calls are not listed: while a turn runs, only the one in progress is drawn, above the caret, and
+// each new call replaces it. Every other surface lists them all; the TV wants a sign of life, not a log.
+const toolLine = (t) => (t ? `<div class="sb-tool">${esc(t)}</div>` : '');
+
 function paint() {
-  const list = shown().slice(-40);
-  const working = list.length > 0 && list[list.length - 1].kind !== 'reply';
+  const all = shown();
+  const working = all.length > 0 && all[all.length - 1].kind !== 'reply';
+  let tool = null;
+  if (working) {
+    for (let i = all.length - 1; i >= 0 && all[i].kind !== 'prompt'; i--) {
+      if (!['reply', 'text'].includes(all[i].kind)) { tool = all[i].text; break; }
+    }
+  }
+  const list = all.filter((e) => ['prompt', 'reply', 'text'].includes(e.kind)).slice(-40);
   body.innerHTML = list.map((e) =>
     e.kind === 'prompt' ? `<div class="sb-words">${esc(e.text || '')}</div>`
     : e.kind === 'reply' ? `<div class="sb-reply">${md(String(e.text || '').trim())}</div>`
-    : e.kind === 'text' ? `<div class="sb-thought">${md(e.text || '')}</div>`
-    : `<div class="sb-tool">${esc(e.text || '')}</div>`).join('') +
-    (working ? '<div class="sb-caret">▍</div>' : '');
+    : `<div class="sb-thought">${md(e.text || '')}</div>`).join('') +
+    (working ? toolLine(tool) + '<div class="sb-caret">▍</div>' : '');
 }
 
 async function load(id) {
@@ -127,6 +137,7 @@ async function loadVoice() {
 // His words are drawn from the request the moment it is created (`request` frames, /api/voice-pending)
 // and handed over to the conversation row once that exists, which is only when the answer lands.
 let voRows = [];
+let voTool = null;   // the orchestrator's tool call in progress, from `activity` frames
 const pending = new Map();   // request id -> { id, text, status }
 
 function paintVoice() {
@@ -138,7 +149,7 @@ function paintVoice() {
     ? `<div class="sb-words">${esc(m.text || '')}</div>`
     : `<div class="sb-reply">${md(String(m.text || '').trim())}</div>`).join('') +
     [...pending.values()].map((p) => `<div class="sb-words">${esc(p.text)}</div>`).join('') +
-    (working ? '<div class="sb-caret">▍</div>' : '');
+    (working ? toolLine(voTool) + '<div class="sb-caret">▍</div>' : '');
 }
 
 liveStream('/api/voice-stream', {
@@ -146,6 +157,12 @@ liveStream('/api/voice-stream', {
     let m; try { m = JSON.parse(e.data); } catch (_) { return; }
     if (!m) return;
     if (m.kind === 'message' || m.kind === 'reset') loadVoice();
+    else if (m.kind === 'activity' && m.row && (m.row.focus || 'hub') === 'hub') {
+      const st = m.row.state;
+      if (st === 'tool') voTool = m.row.text || null;
+      else if (st !== 'text') voTool = null;   // working (a new command), done, error
+      if (view === 'orchestrator') paintVoice();
+    }
     else if (m.kind === 'request' && m.row) {
       // A finished request is dropped: its row arrives as a message, and a failed one may never get one.
       if (m.row.status === 'done' || m.row.status === 'error') pending.delete(m.row.id);

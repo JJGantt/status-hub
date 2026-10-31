@@ -36,7 +36,17 @@ function shown() {
 // always on screen and older turns fall off the top. Only the tail is drawn, since nothing scrolls.
 // Tool calls are not listed: while a turn runs, only the one in progress is drawn, above the caret, and
 // each new call replaces it. Every other surface lists them all; the TV wants a sign of life, not a log.
-const toolLine = (t) => (t ? `<div class="sb-tool">${esc(t)}</div>` : '');
+// A tool event's text is the tool's name and then its arguments as JSON, cut at 400 characters; the TV
+// draws the name and the call's own description (or the file it touches), which is what tells him
+// something is happening without a line of JSON. A Bash command is not shown: it is noise on a TV.
+function toolLabel(t) {
+  const s = String(t || ''), sp = s.indexOf(' ');
+  const name = (sp < 0 ? s : s.slice(0, sp)).replace(/^mcp__[^_]+(?:_[^_]+)*?__/, '');
+  const arg = (k) => { const m = s.match(new RegExp('"' + k + '":"((?:[^"\\\\]|\\\\.)*)')); return m ? m[1].replace(/\\(.)/g, '$1') : ''; };
+  const what = arg('description') || arg('file_path').split('/').pop() || arg('pattern');
+  return what ? `${name} · ${what.slice(0, 80)}` : name;
+}
+const toolLine = (t) => (t ? `<div class="sb-tool">${esc(toolLabel(t))}</div>` : '');
 
 function paint() {
   const all = shown();

@@ -70,8 +70,11 @@ const vo = document.getElementById('vo');
 const ss = document.getElementById('ss');
 let view = 'session';
 
+let build = null;
 function frame(d) {
   if (!d) return;
+  // A deploy reaches the server, not an open page: reload when the build changes.
+  if (d.commit) { if (build && d.commit !== build) { location.reload(); return; } build = d.commit; }
   view = d.sidebar_view === 'orchestrator' ? 'orchestrator' : 'session';
   if (Number(d.sidebar_font) > 0) document.body.style.fontSize = d.sidebar_font + 'px';
   vo.hidden = view !== 'orchestrator';

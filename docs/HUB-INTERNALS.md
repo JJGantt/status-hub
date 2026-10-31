@@ -1300,7 +1300,8 @@ tab, a row closed the day before was kept running by the next session opened in 
 One conversation down the strip: the focused session, or the voice orchestrator's conversation.
 Which is the `tv_sidebar_view` setting (`session` | `orchestrator`, default session), written by
 `tvPush` when a `sidebar` command carries `view` and delivered as `sidebar_view` on the sessions frame
-the page already holds, so switching needs no new build of the TV app.
+the page already holds, so switching needs no new build of the TV app. That frame also carries `commit`,
+and the page reloads when it changes, since it holds no status frame to learn of a deploy from.
 
 Its size is two more settings a `sidebar` command can carry, each held until changed:
 `font_size` → `tv_sidebar_font` (the page's base size in px, default 17; every other size in it is in

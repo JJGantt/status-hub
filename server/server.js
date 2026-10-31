@@ -5163,6 +5163,9 @@ async function buildSessions({ brief: allBrief = false } = {}) {
     // orchestrator's conversation. Here so the sidebar learns a change from the frame it already holds.
     sidebar_view: (await settingsAll()).tv_sidebar_view === 'orchestrator' ? 'orchestrator' : 'session',
     sidebar_font: Number((await settingsAll()).tv_sidebar_font) || TV_SIDEBAR_FONT,
+    // The build, so a page that holds only this stream (the TV sidebar) reloads on a deploy, as every
+    // page holding the status frame already does.
+    commit: process.env.COMMIT || 'dev',
   };
 }
 

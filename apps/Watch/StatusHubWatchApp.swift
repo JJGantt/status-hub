@@ -170,14 +170,15 @@ struct RootView: View {
         .overlay { if veiled { Color.black.ignoresSafeArea().allowsHitTesting(false) } }
         // A rewind's words, over whatever page is showing: the grab came from a control, not a page.
         .sheet(item: $rewind.shown) { RewindSheet(shown: $0) }
-        // Press and hold is HOME's alone: it throws away a home recording, or with none starts a locked
-        // one. In a session a follow-up is only ever a tap, so a hold there does nothing but the speaker
-        // glyph's speak-mode toggle (`Sessions.speakerPressed`). It sits on the whole row rather than a
-        // page so it holds still across a swipe.
+        // Press and hold throws away the recording under way, on home and in a session alike. Only on
+        // home does a hold with nothing recording START one (locked): in a session a follow-up is only
+        // ever started by a tap, and the speaker glyph's hold is speak mode's toggle
+        // (`Sessions.speakerPressed`). It sits on the whole row rather than a page so it holds still
+        // across a swipe.
         .simultaneousGesture(LongPressGesture(minimumDuration: 0.6).onEnded { _ in
             if sessions.speakerPressed { sessions.toggleSpeakMode(); return }
-            guard page == .home else { return }
-            CommandBorder.hold(chat: chat, sessions: sessions, starts: true)
+            guard page == .home || page == .sessions else { return }
+            CommandBorder.hold(chat: chat, sessions: sessions, starts: page == .home)
         })
         .onOpenURL { url in
             guard url.scheme == "statushub" else { return }

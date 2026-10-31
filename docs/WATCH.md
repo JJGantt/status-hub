@@ -568,12 +568,12 @@ itself `watch_quick_s` seconds (Settings → Watch: quick command, 5 when unset)
 opens — counted from the chirp, in seconds of audio — however he is going; a cap reached with no speech
 heard throws the clip away instead, and either logs `mic-end` with `reason: cap`.
 
-**Press and hold (0.6s) is home's alone.** On home it cancels the recording under way, and with none
-it starts a locked recording (red, the `Hub Locked` flow), so home offers both: a tap for the amber
-recording that sends at his silence, a hold for the one only a press sends. A hold while a reply is
-being spoken stops the speech instead (`CommandBorder.hold`). **In a session a follow-up is only ever a
-tap**, so a hold there does nothing except on the speaker glyph, where it toggles speak mode. On every
-other page a hold does nothing. A command already sent is never cancelled; there is no gesture for it.
+**Press and hold (0.6s) cancels the recording under way**, on home and in a session. On home, with
+nothing recording, it starts a locked recording (red, the `Hub Locked` flow), so home offers both: a
+tap for the amber recording that sends at his silence, a hold for the one only a press sends. A hold
+while a reply is being spoken stops the speech instead (`CommandBorder.hold`). **In a session a
+follow-up is only ever started by a tap**, so a hold there with nothing recording does nothing, and on
+the speaker glyph it toggles speak mode instead. On every other page a hold does nothing. A command already sent is never cancelled; there is no gesture for it.
 
 ### Haptics
 

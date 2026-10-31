@@ -3450,6 +3450,16 @@ app.post('/api/voice-command', async (req, res) => {
     console.log(`[voice-command] ${size} bytes ${ct}` +
       (dur > 0 ? ` ${dur.toFixed(1)}s ${Math.round(size * 8 / dur / 1000)} kbps` : '') +
       (segments ? ` re-encoded into ${segments} segment(s)` : ''));
+    // THE WORDS SAID BEFORE AN INTERRUPTION. The phone pauses a command when a timer, Siri or a call
+    // takes the microphone, and the parts recorded before it cannot be joined to this one as audio, so
+    // they arrive already transcribed, as this clip's prefix (makeRecorder / deliverVoice in
+    // voiceagent.js). The command is one command: prefix, then whatever this clip holds.
+    let prefix = '';
+    try { prefix = decodeURIComponent(String(req.headers['x-voice-prefix'] || '')).trim().slice(0, 8000); } catch (_) {}
+    if (prefix && !untranscribed) {
+      transcript = transcript ? `${prefix} ${transcript}` : prefix;
+      if (alt) alt = `${prefix} ${alt}`;
+    }
     if (!transcript && !untranscribed) return res.json({ transcript: '', enqueued: false });
     if (dry) return res.json({ transcript, enqueued: false });
     // Instructions recorded for a rewind grab: the command the model sees is the grab plus his words.

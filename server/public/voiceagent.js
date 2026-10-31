@@ -365,6 +365,14 @@ const VOICE_BPS = 96000;
 // onState reports the button's one visual state: 'armed' (tapped — the mic is opening, or the clip is
 // on its way up), 'rec' (actually capturing) or 'idle'. Callers paint it; nothing else infers it.
 //
+// AN INTERRUPTION PAUSES A COMMAND; IT NEVER SENDS IT AND NEVER THROWS IT AWAY. A timer or alarm going
+// off, Siri, a call, the page being hidden, or the capture dying under it ends the MediaRecorder; the
+// audio so far is HELD (`held`) and the button reads 'armed'. He carries on with a tap, or it carries on
+// by itself when the interruption ends (the app's `hub:audiointerrupt`) or the page is shown again.
+// MediaRecorder files from two recordings cannot be joined, so each held part goes up on its own as a
+// dry transcription and its words are handed to the hub as the last part's prefix (deliverVoice), which
+// enqueues one command. Its `dur` is the last part's alone: the hub checks the clip against it.
+//
 // PRESS TO START, PRESS TO SEND, and nothing else ends a recording or decides whether it is sent. DO
 // NOT ADD A VAD HERE: one ends a recording at a pause and discards a clip it judges silent without a
 // word, and on his phone it judges whole spoken commands silent — the button records, throws the
@@ -384,6 +392,9 @@ export function makeRecorder({ onStatus = () => {}, onState: paint = () => {}, q
   let claimed = false;                // holds one of the page's mic claims — see claimMic()
   let sending = false;                // stopped, clip still on its way up — see stop()
   let discard = false;                // cancel(): this recording ends without being sent
+  let held = [];                      // parts recorded before an interruption, waiting for the rest
+  let paused = false;                 // interrupted: `held` is waiting for him to carry on
+  let pausing = false;                // pause(): the recorder is stopping to be held, not sent
   const pickMime = () => {
     for (const m of ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4', 'audio/ogg'])
       if (window.MediaRecorder && MediaRecorder.isTypeSupported(m)) return m;
@@ -397,11 +408,18 @@ export function makeRecorder({ onStatus = () => {}, onState: paint = () => {}, q
   // `arming` is set synchronously, before the await, so a second tap can only ever be a stop.
   async function start() {
     if (recording || arming || sending) return;
+    const resuming = paused;
+    paused = false;
     arming = true; onState('armed');          // the tap is acknowledged here, not when the mic opens
-    trace('start:arming');
+    trace(resuming ? 'resume:arming' : 'start:arming');
     let s;
     try { s = await claimMic(); }
-    catch (_) { arming = false; onState('idle'); onStatus('Mic permission denied', 'err'); return; }
+    catch (_) {
+      arming = false;
+      // A resume the system refuses (the alarm still has the session) stays paused for the next try.
+      if (resuming) { paused = true; trace('resume:refused'); return; }
+      onState('idle'); onStatus('Mic permission denied', 'err'); return;
+    }
     claimed = true;
     if (!arming) { release(); return; }   // tapped again while arming → cancelled, and the mic closes
     arming = false; stream = s;
@@ -410,12 +428,14 @@ export function makeRecorder({ onStatus = () => {}, onState: paint = () => {}, q
     rec = new MediaRecorder(stream, { ...(mime ? { mimeType: mime } : {}), audioBitsPerSecond: VOICE_BPS });
     rec.ondataavailable = (e) => { if (e.data && e.data.size) chunks.push(e.data); };
     // A recording can end WITHOUT stop(): hiding the page closes the mic under it, and so does a
-    // capture reset. The state has to follow, or `recording` stays true over a dead recorder and the
-    // next tap is spent stopping it — a press that does nothing, which reads as the button failing.
+    // capture reset or an interruption. That is a PAUSE (hold): the state has to follow, or `recording`
+    // stays true over a dead recorder and the next tap is spent stopping it.
     rec.onstop = () => {
-      if (recording) { recording = false; sending = true; onState('armed'); trace('stop:external'); }
+      if (pausing || recording) { pausing = false; recording = false; hold(mime); return; }
       upload(mime);
     };
+    // The capture going quiet under the recording is the other face of an interruption.
+    for (const t of stream.getAudioTracks()) t.onmute = () => pause('track-muted');
     rec.start(); recording = true; startedAt = performance.now(); onState('rec');   // capturing for real now — full fill
     trace('start:recording', { mime });
     muteOthers(true);   // mute every other listener (Mac + ESP) while this explicit command records
@@ -425,7 +445,11 @@ export function makeRecorder({ onStatus = () => {}, onState: paint = () => {}, q
   }
   function stop() {
     // Tapped again before the mic ever opened: cancel the arming rather than fall through as a no-op.
-    if (arming) { arming = false; onState('idle'); onStatus('', 'clear'); return; }
+    if (arming) {
+      arming = false;
+      if (held.length) { paused = true; onState('armed'); return; }   // still paused: what was held stays
+      onState('idle'); onStatus('', 'clear'); return;
+    }
     if (!recording) return;
     recording = false;
     const live = rec && rec.state !== 'inactive';
@@ -439,6 +463,31 @@ export function makeRecorder({ onStatus = () => {}, onState: paint = () => {}, q
     try { if (live) rec.stop(); } catch (_) {}
     if (!live) release();          // no onstop is coming, so let go of the mic here instead
   }
+  // Stops the recorder to HOLD what it has (see onstop). Only while capturing: an arming tap has
+  // nothing to keep.
+  function pause(why) {
+    if (!recording || !rec || rec.state === 'inactive') return;
+    pausing = true;
+    trace('pause', { why });
+    try { rec.stop(); } catch (_) { pausing = false; }
+  }
+  function hold(mime) {
+    const blob = new Blob(chunks, { type: mime || 'audio/webm' });
+    chunks = [];
+    if (blob.size) held.push(blob);
+    for (const t of (stream ? stream.getAudioTracks() : [])) t.onmute = null;
+    release();
+    dirtyMic();          // whatever capture survives the interruption is suspect: the next claim reopens
+    muteOthers(false);   // nobody knows how long the alarm rings: the room mics are not held deaf
+    paused = true; onState('armed');
+    trace('paused', { parts: held.length });
+  }
+  // Carries a paused command on, from anything that says the microphone is his again.
+  const carryOn = (why) => { if (paused && !sending) { trace('resume', { why }); start(); } };
+  document.addEventListener('hub:audiointerrupt', (e) => {
+    if (e.detail && e.detail.began) pause('interrupted'); else carryOn('interruption-ended');
+  });
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) carryOn('shown'); });
   // A finished recording lets go of the microphone, which closes it unless another recorder holds it.
   function release() {
     stream = null;
@@ -452,28 +501,38 @@ export function makeRecorder({ onStatus = () => {}, onState: paint = () => {}, q
     release();
     muteOthers(false);   // FAB done with the mic → the other listeners resume
     const dry = typeof dryWhen === 'function' && dryWhen();
-    const blob = new Blob(chunks, { type: mime || 'audio/webm' });
-    chunks = [];
+    let blob = new Blob(chunks, { type: mime || 'audio/webm' });
+    let dur = (performance.now() - startedAt) / 1000;
+    let prefixParts = held;
+    chunks = []; held = [];
     if (discard) { discard = false; onStatus('', 'clear'); return; }
     // No bytes at all: nothing to send. A dictation caller is told, so it can leave its own state.
     // A clip WITH bytes always goes up — the hub's transcript is the judge of whether it held words.
-    if (!blob.size) {
+    // A last part with nothing in it still sends the parts held before it.
+    if (!blob.size && !prefixParts.length) {
       if (dry && typeof onTranscript === 'function') onTranscript('');
       onStatus('', 'clear');
       return;
     }
+    if (!blob.size) { blob = prefixParts[prefixParts.length - 1]; prefixParts = prefixParts.slice(0, -1); dur = 0; }
     // Durable from here: the clip stays on the phone until the server confirms it (the voice outbox).
-    await sendVoice({ blob, dry, quick: !!quick, dur: (performance.now() - startedAt) / 1000 }, { onStatus, onTranscript });
+    await sendVoice({ blob, dry, quick: !!quick, dur,
+                      ...(prefixParts.length ? { prefixParts } : {}) }, { onStatus, onTranscript });
   }
   return {
     toggle() {
-      trace('toggle', { recording, arming, sending, recState: rec ? rec.state : null });
+      trace('toggle', { recording, arming, sending, paused, recState: rec ? rec.state : null });
       if (sending) return;
+      // A paused command is carried on, never sent half-said: the press after he finishes sends it.
       (recording || arming) ? stop() : start();
     },
     // Ends the recording WITHOUT sending it — for a caller whose recording has lost its purpose (he
     // navigated away from what it was for). stop() always sends; that is what a stop tap means.
-    cancel() { if (recording) discard = true; stop(); },
+    cancel() {
+      if (paused) { paused = false; held = []; onState('idle'); onStatus('', 'clear'); return; }
+      if (recording) discard = true;
+      stop();
+    },
     start, stop };
 }
 
@@ -820,13 +879,26 @@ async function deliverVoice(item, onStatus, owner) {
   if (item.capture_start) qp.set('capture_start', item.capture_start);
   if (item.capture_end) qp.set('capture_end', item.capture_end);
   if (item.source) qp.set('source', item.source);
+  // The parts recorded before an interruption (makeRecorder): each is transcribed on its own and the
+  // words ride the last part as its prefix, so the hub enqueues the whole command once. A part that
+  // fails throws, and the outbox retries the whole item.
+  const prefix = [];
+  for (const part of item.prefixParts || []) {
+    const pr = await fetch('/api/voice-command?dry=1', { method: 'POST', headers: { 'Content-Type': part.type || item.type }, body: part,
+      ...(AbortSignal.timeout ? { signal: AbortSignal.timeout(VOICE_SEND_MS) } : {}) });
+    const pj = await pr.json().catch(() => ({}));
+    if (!pr.ok || pj.error) throw Object.assign(new Error(pj.error || 'Send failed'), { refused: true });
+    if (pj.transcript) prefix.push(pj.transcript.trim());
+  }
   const where = item.dry ? null : await hereNow();      // a dictation into the text box goes nowhere yet
   if (where) for (const k of ['lat', 'lon', 'acc']) qp.set(k, String(where[k]));
   // BOUNDED. Every clip on the page goes through one serial outbox, so a request that never answers
   // (a phone between networks) would hold every mic button in its sending state indefinitely. On
   // timeout it is a network failure: the clip stays in the box and the button is free again.
+  const headers = { 'Content-Type': item.type };
+  if (prefix.length) headers['X-Voice-Prefix'] = encodeURIComponent(prefix.join(' '));
   const r = await fetch('/api/voice-command?' + qp, {
-    method: 'POST', headers: { 'Content-Type': item.type }, body: item.blob,
+    method: 'POST', headers, body: item.blob,
     ...(AbortSignal.timeout ? { signal: AbortSignal.timeout(VOICE_SEND_MS) } : {}) });
   const j = await r.json().catch(() => ({}));
   if (!r.ok || j.error) throw Object.assign(new Error(j.error || 'Send failed'), { refused: true });

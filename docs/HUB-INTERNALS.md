@@ -331,10 +331,19 @@ and losing a real command silently is the worse failure.
 
 Three more ways a press can be lost, each handled in the recorder rather than in a caller:
 
-- **A recording that ends underneath it** — the page hidden (which closes the mic), or a capture
-  reset — fires the MediaRecorder's `stop` without `stop()` having run. `onstop` brings the state
-  along and the clip is still sent (`stop:external` in the tap trace). Without it `recording` stays
-  true over a dead recorder and the next press is spent stopping it.
+- **A recording that ends underneath it is PAUSED, never sent half-said and never thrown away.** A
+  timer or alarm going off, Siri or a call (the iOS app relays the audio session's interruption as
+  `hub:audiointerrupt`, `AudioInterruption` in `StatusHubApp.swift`), the capture track going `mute`,
+  the page hidden (which closes the mic) or a capture reset all end the MediaRecorder without `stop()`.
+  `onstop` then HOLDS the clip so far (`held`, `paused` / `pause` in the tap trace), lets go of the
+  mic, unmutes the room and paints `armed`. It carries on by itself when the interruption ends or the
+  page is shown again, or at his next press — a press on a paused recording resumes it, it never sends
+  it — and the press after he finishes sends the whole command. `cancel()` throws a paused one away.
+  MediaRecorder files from two recordings cannot be joined, so each held part goes up as a dry
+  transcription first (`deliverVoice`) and its words ride the last part as the `X-Voice-Prefix` header,
+  which `/api/voice-command` puts in front of the transcript before enqueueing ONE command. The last
+  part carries its own `dur` only, because the hub's damaged-capture check compares the clip against
+  it. A held part lives in the page's memory until it is sent: a reload or a killed app loses it.
 - **An upload that never answers.** Every clip goes through one serial outbox, so a hung request
   holds every mic button on the page in its sending state. `deliverVoice` aborts after `VOICE_SEND_MS`
   (two minutes); the clip stays in the outbox and the button is free.

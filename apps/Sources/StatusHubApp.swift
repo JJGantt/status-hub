@@ -47,6 +47,29 @@ final class GuidedAccess {
     }
 }
 
+// THE SYSTEM TAKING THE AUDIO SESSION, told to the page. A timer or alarm going off, Siri or a call
+// interrupts the session under a recording the page is making, and the page cannot see that for
+// itself: the capture track can stay `live`, and the page may never be hidden (a timer's alert sits
+// over it). `hub:audiointerrupt` carries `{began, reason}`; the recorder pauses a command on `began`
+// and carries on into it when the interruption ends (makeRecorder in voiceagent.js).
+final class AudioInterruption {
+    static let shared = AudioInterruption()
+    private weak var web: WKWebView?
+    private init() {
+        NotificationCenter.default.addObserver(
+            self, selector: #selector(changed(_:)),
+            name: AVAudioSession.interruptionNotification, object: AVAudioSession.sharedInstance())
+    }
+    func attach(_ w: WKWebView) { web = w }
+    @objc private func changed(_ note: Notification) {
+        let raw = note.userInfo?[AVAudioSessionInterruptionTypeKey] as? UInt ?? 0
+        let began = AVAudioSession.InterruptionType(rawValue: raw) == .began
+        let reason = note.userInfo?[AVAudioSessionInterruptionReasonKey] as? UInt ?? 0
+        let js = "document.dispatchEvent(new CustomEvent('hub:audiointerrupt',{detail:{began:\(began),reason:\(reason)}}));"
+        DispatchQueue.main.async { self.web?.evaluateJavaScript(js, completionHandler: nil) }
+    }
+}
+
 // THE ALARM BORROWS THE AUDIO SESSION AND HANDS BACK WHAT IT FOUND (see "alarmAudio" below).
 //
 // Giving it back means restoring the category, and ONLY that. WebKit sets `.playAndRecord` itself when
@@ -435,6 +458,7 @@ struct HubWebView {
         func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
             PushManager.shared.attach(webView)
             GuidedAccess.shared.attach(webView)   // the page cannot see this for itself; its beacon reports it
+            AudioInterruption.shared.attach(webView)   // nor this: a recording pauses through it
             RecordLaunch.shared.fireIfPending()   // statushub://record cold launch → auto-start the voice FAB
             ItemLaunch.shared.fireIfPending()     // statushub://item/<id> cold launch → open that item
             PaneLaunch.shared.fireIfPending()     // statushub://pane/<name> cold launch → land there

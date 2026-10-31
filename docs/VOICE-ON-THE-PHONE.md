@@ -27,7 +27,8 @@ everything recorded is sent. **Do not give it one.** A VAD on this path ends a r
 mid-sentence pause and discards any clip it judges silent, with no message — and on his phone it
 judges whole spoken commands silent, so the button records, throws the words away and shows nothing.
 That is why there is no `autoStop` option to turn on for one button. `docs/HUB-INTERNALS.md` has the
-recorder's other guarantees (a recording ended underneath it still sends; an upload is bounded;
+recorder's other guarantees (a recording ended underneath it — a timer, Siri, a call, the page hidden —
+is paused and carried on, never sent half-said or dropped; an upload is bounded;
 `cancel()` is the only way to end one without sending).
 
 ## The always-on button

@@ -88,11 +88,15 @@ Xcode mint them again.
     apps/tools/testflight.sh        # archive, sign, upload, a few minutes
 
 This Mac has the device platforms, a development identity in the login keychain and the App Store
-Connect API key, which is all cloud distribution signing asks for, so it needs nothing from GitHub. The
-script reads `~/.appstoreconnect`, which a sandboxed shell cannot: run it as a background task.
+Connect API key, which is all cloud distribution signing asks for, so it needs nothing from GitHub.
+**A session ON the Mac runs it directly**: a background Bash task with the sandbox disabled (the script
+reads `~/.appstoreconnect`, which the sandbox blocks). A session's shell can use the login keychain, so
+nothing else is needed — never open a Terminal window for it from the Mac; every one is a window left
+on his screen.
 **From the Pi, do not run it over plain SSH**: an SSH login cannot use the login keychain, so the archive
 compiles and then fails at CodeSign with `errSecInternalComponent`. Run it inside his GUI session
-instead — `osascript -e 'tell application "Terminal" to do script "cd ~/repos/status-hub && apps/tools/testflight.sh > /tmp/tf-run.log 2>&1"'` — and read the log. **`ios-testflight.yml` is the fallback, for when this Mac
+instead, ending in `exit 0` so the window closes itself when the build is done (Terminal's profile closes
+a tab whose shell exits cleanly) — `osascript -e 'tell application "Terminal" to do script "cd ~/repos/status-hub && apps/tools/testflight.sh > /tmp/tf-run.log 2>&1; exit 0"'` — and read the log. **`ios-testflight.yml` is the fallback, for when this Mac
 is away** — macOS runners bill at a 10x multiplier and six builds in an afternoon exhausted the
 account's allowance, which stops the workflow dead with "recent account payments have failed or your
 spending limit needs to be increased".

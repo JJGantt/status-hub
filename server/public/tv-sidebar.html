@@ -5,22 +5,22 @@
      (google-tv repo, SidebarService). See docs/HUB-INTERNALS.md § The TV sidebar. -->
 <style>
   html,body{margin:0;height:100%;background:transparent;overflow:hidden}
-  body{font:20px/1.35 -apple-system,system-ui,"Segoe UI",Roboto,sans-serif;color:#fff}
+  body{font:17px/1.35 -apple-system,system-ui,"Segoe UI",Roboto,sans-serif;color:#fff}
   #sb{position:absolute;inset:0;display:flex;flex-direction:column;background:rgba(0,0,0,.55);
       text-shadow:0 1px 2px rgba(0,0,0,.9)}
   #vo,#ss{flex:1;min-height:0;display:flex;flex-direction:column}
   #vo[hidden],#ss[hidden]{display:none}
-  #sb-name,#vo-name{flex:none;padding:18px 22px 10px;font-weight:600;font-size:22px;white-space:nowrap;
+  #sb-name,#vo-name{flex:none;padding:18px 22px 10px;font-weight:600;font-size:1.1em;white-space:nowrap;
            overflow:hidden;text-overflow:ellipsis;border-bottom:1px solid rgba(255,255,255,.15)}
   #sb-body,#vo-body{flex:1;overflow:hidden;padding:12px 22px 22px;display:flex;flex-direction:column;justify-content:flex-end;
            -webkit-mask-image:linear-gradient(to bottom,transparent 0,#000 70px);mask-image:linear-gradient(to bottom,transparent 0,#000 70px)}
   .sb-words{color:#8ab4e8;margin:14px 0 6px;white-space:pre-wrap}
-  .sb-tool{color:#b39ddb;font-size:15px;margin:2px 0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-  .sb-thought{color:#c8c8c8;font-size:17px;margin:4px 0}
+  .sb-tool{color:#b39ddb;font-size:.75em;margin:2px 0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .sb-thought{color:#c8c8c8;font-size:.85em;margin:4px 0}
   .sb-reply{margin:6px 0}
   .sb-reply p,.sb-thought p{margin:0 0 8px}
-  .sb-reply pre,.sb-reply code{font-size:15px;white-space:pre-wrap}
-  .sb-reply table{border-collapse:collapse;font-size:16px}
+  .sb-reply pre,.sb-reply code{font-size:.75em;white-space:pre-wrap}
+  .sb-reply table{border-collapse:collapse;font-size:.8em}
   .sb-reply td,.sb-reply th{border:1px solid rgba(255,255,255,.2);padding:2px 6px}
   .sb-caret{color:#8ab4e8;animation:sbp 1.2s ease-in-out infinite}
   @keyframes sbp{50%{opacity:.35}}

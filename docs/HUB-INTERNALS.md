@@ -1302,6 +1302,13 @@ Which is the `tv_sidebar_view` setting (`session` | `orchestrator`, default sess
 `tvPush` when a `sidebar` command carries `view` and delivered as `sidebar_view` on the sessions frame
 the page already holds, so switching needs no new build of the TV app.
 
+Its size is two more settings a `sidebar` command can carry, each held until changed:
+`font_size` → `tv_sidebar_font` (the page's base size in px, default 17; every other size in it is in
+`em`, so this scales the whole strip), and `width` → `tv_sidebar_width` (fraction of the screen,
+default 0.35). The width is the app's window rather than the page's, so `tvPush` puts the stored value
+on every `sidebar` command that does not name one. `bin/tv sidebar on` talks to the app directly and
+skips that, so from adb the width is whatever it passes (the app's own default is 0.3).
+
 The orchestrator view is the current context of the hub thread, fetched from
 `/api/voice-messages?focus=hub&mode=active` (the watch's view) and refetched whenever `/api/voice-stream`
 carries a `message` or `reset` frame, so which rows belong to the current context stays the server's

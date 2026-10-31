@@ -73,6 +73,7 @@ let view = 'session';
 function frame(d) {
   if (!d) return;
   view = d.sidebar_view === 'orchestrator' ? 'orchestrator' : 'session';
+  if (Number(d.sidebar_font) > 0) document.body.style.fontSize = d.sidebar_font + 'px';
   vo.hidden = view !== 'orchestrator';
   ss.hidden = view === 'orchestrator';
   if (view === 'orchestrator') loadVoice();

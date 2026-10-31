@@ -245,6 +245,7 @@ struct RootView: View {
         .onChange(of: phase) { _, now in
             Hub.log("phase", ["to": "\(now)", "veiled": veiled])
             if now == .background { veiled = true }
+            if now == .active { LocationTrail.shared.fix() }  // one point per use (docs/LOCATION.md)
             // Lifted a beat after becoming active, the same beat `follow()` waits: a launcher's URL
             // turns the page in this pass, so the first thing shown is already its page. The deadline
             // behind it is because a veil that stays up is a black watch: it is the one way this

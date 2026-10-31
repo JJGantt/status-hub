@@ -142,7 +142,7 @@ targets:
       - path: Watch
       - path: WatchWidgets/RecordIntent.swift   # the Record control's intent runs in the app (WATCH_APP)
       - path: Shared/Auth.swift   # Auth.host only — the watch's token comes from the phone, not a password
-      - path: Shared/LocationTrail.swift   # the watch's own location history (docs/LOCATION.md)
+      - path: Shared/LocationTrail.swift   # a point per use into the location history (docs/LOCATION.md)
       - path: Controls/RingsView.swift   # the /api/rings types and the card palette; its widget views go unused
       - path: AssetsWatch.xcassets
     info:
@@ -156,13 +156,12 @@ targets:
         ITSAppUsesNonExemptEncryption: false
         NSMicrophoneUsageDescription: Status Hub uses the microphone for voice commands.
         NSLocationWhenInUseUsageDescription: For nearby requests.   # Watch/Location.swift
-        NSLocationAlwaysAndWhenInUseUsageDescription: Records your location history.   # docs/LOCATION.md
         # A recording started on screen keeps going with the wrist lowered, so a command still ends at
         # its silence and the listener keeps listening (Watch/Capture.swift). UIBackgroundModes, not
         # WKBackgroundModes: the watch's key only takes session types, and audio is not one.
         UIBackgroundModes:
           - audio
-          - location   # the location history (Shared/LocationTrail.swift, docs/LOCATION.md)
+          # No `location`: the watch takes a fix only while it is in front (docs/LOCATION.md).
         # statushub://record is what the complication opens — straight into recording.
         CFBundleURLTypes:
           - CFBundleURLName: com.jaredgantt.statushub.watch

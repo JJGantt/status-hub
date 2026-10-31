@@ -148,8 +148,17 @@ final class HealthSync {
                     self.saveAnchor(next)
                     return full ? self.page(from: next, then: done) : done()
                 }
-                self.post(rows, gone) { ok in
-                    guard ok else { return done() }
+                self.post(rows, gone) { result in
+                    switch result {
+                    case .failed: return done()
+                    case .wait(let seconds):
+                        // The hub paces the history read (docs/HEALTH.md). Release this run so HealthKit's
+                        // delivery is answered now, and pick the same anchor up once the gap has passed.
+                        done()
+                        self.queue.asyncAfter(deadline: .now() + seconds) { self.sync {} }
+                        return
+                    case .ok: break
+                    }
                     self.saveAnchor(next)
                     // A full page means there may be more behind it.
                     full ? self.page(from: next, then: done) : done()
@@ -270,10 +279,12 @@ final class HealthSync {
         }
     }
 
-    private func post(_ samples: [[String: Any]], _ deleted: [String], done: @escaping (Bool) -> Void) {
+    private enum PostResult { case ok, wait(TimeInterval), failed }
+
+    private func post(_ samples: [[String: Any]], _ deleted: [String], done: @escaping (PostResult) -> Void) {
         guard let url = URL(string: Auth.host + "/api/health/samples"), let token = Auth.token(),
               let body = try? JSONSerialization.data(withJSONObject: ["samples": samples, "deleted": deleted])
-        else { return done(false) }
+        else { return done(.failed) }
         var r = URLRequest(url: url)
         r.httpMethod = "POST"
         r.timeoutInterval = 60
@@ -281,7 +292,12 @@ final class HealthSync {
         r.setValue("application/json", forHTTPHeaderField: "Content-Type")
         r.httpBody = body
         URLSession.shared.dataTask(with: r) { _, resp, err in
-            done(err == nil && (resp as? HTTPURLResponse)?.statusCode == 200)
+            let http = resp as? HTTPURLResponse
+            if err == nil, http?.statusCode == 200 { return done(.ok) }
+            if http?.statusCode == 503, let s = http?.value(forHTTPHeaderField: "Retry-After").flatMap(TimeInterval.init) {
+                return done(.wait(s))
+            }
+            done(.failed)
         }.resume()
     }
 

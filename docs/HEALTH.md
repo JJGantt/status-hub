@@ -20,6 +20,14 @@ cloud API: the only reader is an app on the phone. Sleep has its own table and i
   is not finite, is skipped — one NaN in a page fails its JSON, and an unpostable page stalls the anchor.
 - `POST /api/health/samples` (server.js, behind the auth gate) upserts by HealthKit UUID and deletes
   the UUIDs Health removed. It accepts any `type`, so the server needs no change for a new one.
+- **The hub paces it.** A page of N rows earns the next page a gap of N / 100 seconds (`HEALTH_ROWS_PER_S`),
+  stretched to ten times the write's own duration when the database is slow and to a minute after a
+  failed write; a page inside the gap gets `503` + `Retry-After` before Supabase is touched, and the
+  phone waits exactly that long and resumes from the same anchor. Live deliveries are a few rows and
+  never wait. The full-history read is millions of rows: unpaced it wrote ~1.3M in twenty minutes and
+  starved the database's disk until Postgres stopped answering, because each random-UUID insert dirties
+  its own index page. Raising the rate, or changing `anchorKey` to re-read everything, is a load on the
+  database to size first.
 
 ## The table
 
@@ -53,4 +61,4 @@ and nothing errors; Health → Sharing → Apps → Status Hub is where it is ch
 
     curl -s "$SUPABASE_URL/rest/v1/rpc/health_types" -X POST -H "apikey: $KEY" -H "Authorization: Bearer $KEY"
 
-The hub logs `[health] +N -M (sent K)` per post (`fly logs -a jared-status-hub`).
+The hub logs `[health] +N -M (sent K) <ms>` per post (`fly logs -a jared-status-hub`).

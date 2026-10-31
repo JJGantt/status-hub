@@ -3188,11 +3188,22 @@ app.post('/api/health/sleep', express.json({ limit: '1mb' }), async (req, res) =
 // Same contract as sleep: `samples` added or changed since the app's last anchor, `deleted` UUIDs, a
 // UUID-keyed upsert so a resend is harmless. Generic rows — type, value, unit — so a type Health adds
 // later lands here with no change on this side.
-// HEALTH_INGEST_PAUSED (a Fly secret) refuses every page with 503 before Supabase is touched. The phone
-// commits its anchor only on a 200, so a refused page is resent later and nothing is lost. It exists
-// because the first full-history read wrote ~1.3M rows in 20 minutes and took the database down.
+// PACED. A page of N rows earns the next page a gap of N / HEALTH_ROWS_PER_S seconds, stretched to
+// HEALTH_SLOWDOWN x the write's own duration when the database is slow; a page that arrives inside the
+// gap gets 503 + Retry-After before Supabase is touched. The phone commits its anchor only on a 200 and
+// waits out Retry-After, so a refused page costs nothing. Live deliveries are a few rows and never wait;
+// the first full-history read is millions of rows, and unpaced it wrote ~1.3M in twenty minutes and
+// starved the database's disk until Postgres stopped answering (every random-UUID insert dirties its
+// own index page, so writes cost far more I/O than the bytes suggest).
+const HEALTH_ROWS_PER_S = 100;
+const HEALTH_SLOWDOWN = 10;
+let healthNextAt = 0;
 app.post('/api/health/samples', express.json({ limit: '4mb' }), async (req, res) => {
-  if (process.env.HEALTH_INGEST_PAUSED === '1') return res.status(503).json({ ok: false, paused: true });
+  const wait = healthNextAt - Date.now();
+  if (wait > 0) {
+    res.set('Retry-After', String(Math.ceil(wait / 1000)));
+    return res.status(503).json({ ok: false, retry_after: Math.ceil(wait / 1000) });
+  }
   const samples = Array.isArray(req.body?.samples) ? req.body.samples : [];
   const deleted = (Array.isArray(req.body?.deleted) ? req.body.deleted : []).filter((u) => SLEEP_UUID.test(u));
   const now = new Date().toISOString();
@@ -3202,6 +3213,9 @@ app.post('/api/health/samples', express.json({ limit: '4mb' }), async (req, res)
     .map((s) => ({ id: s.id, type: s.type, value: num(s.value), unit: s.unit || null, label: s.label || null,
       start_at: s.start, end_at: s.end, source: s.source || null,
       metadata: s.metadata && typeof s.metadata === 'object' ? s.metadata : null, received_at: now }));
+  const began = Date.now();
+  // Reserved before the write, so a second page arriving while this one is in flight is refused too.
+  healthNextAt = began + ((rows.length + deleted.length) / HEALTH_ROWS_PER_S) * 1000;
   try {
     if (rows.length) {
       const r = await fetch(`${SUPABASE_URL}/rest/v1/health_samples?on_conflict=id`, {
@@ -3216,9 +3230,13 @@ app.post('/api/health/samples', express.json({ limit: '4mb' }), async (req, res)
     for (let i = 0; i < deleted.length; i += 200) {
       await sbWrite(`health_samples?id=in.(${deleted.slice(i, i + 200).join(',')})`, 'DELETE');
     }
-    console.log(`[health] +${rows.length} -${deleted.length} (sent ${samples.length})`);
+    const took = Date.now() - began;
+    healthNextAt = Math.max(healthNextAt, Date.now() + took * HEALTH_SLOWDOWN);
+    console.log(`[health] +${rows.length} -${deleted.length} (sent ${samples.length}) ${took}ms`);
     res.json({ ok: true, stored: rows.length, deleted: deleted.length });
   } catch (e) {
+    // A failed write is the database saying it is in trouble: back off a minute, not a page's gap.
+    healthNextAt = Math.max(healthNextAt, Date.now() + 60_000);
     console.log('[health] write failed:', e.message);
     res.status(502).json({ ok: false });
   }

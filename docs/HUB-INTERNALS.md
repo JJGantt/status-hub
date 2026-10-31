@@ -1325,10 +1325,11 @@ drops one when its request is `done` or `error`, since a failed request may neve
 Neither view lists tool calls. While a turn is running the page draws only the call in progress above
 the caret, each new one replacing the last (the session's latest `tool` event since its prompt; the
 orchestrator's latest `activity` frame in state `tool`, cleared by `working`, `done` or `error`). Every
-other surface lists them all; this is the TV's alone. The line is `toolLabel`: the tool's name and the call's
-`description` (or the file it touches), never the raw `name {json}` text the event carries. That
-text is one unbroken run of up to 400 characters, and the TV's WebView lays it out without painting
-it, so a raw line shows as an empty gap.
+other surface lists them all; this is the TV's alone. The line is `toolParts`: the tool's name and the call's
+`description`, with its arguments under it (a lone argument as its bare value), wrapped and clamped to
+three lines. The arguments must be allowed to break anywhere (`.sb-args`, `word-break: break-all`):
+the event text is one unbroken run of up to 400 characters, and the TV's WebView lays such a run out
+without painting it, so unwrapped it shows as an empty gap.
 
 The session view is the FOCUSED session (`pickFocus`), drawn narrow and see-through for the bedroom TV, whose companion
 app overlays it on whatever is playing (google-tv repo, `SidebarService`). Its own small module

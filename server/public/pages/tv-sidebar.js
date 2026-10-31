@@ -36,17 +36,37 @@ function shown() {
 // always on screen and older turns fall off the top. Only the tail is drawn, since nothing scrolls.
 // Tool calls are not listed: while a turn runs, only the one in progress is drawn, above the caret, and
 // each new call replaces it. Every other surface lists them all; the TV wants a sign of life, not a log.
-// A tool event's text is the tool's name and then its arguments as JSON, cut at 400 characters; the TV
-// draws the name and the call's own description (or the file it touches), which is what tells him
-// something is happening without a line of JSON. A Bash command is not shown: it is noise on a TV.
-function toolLabel(t) {
+// A tool event's text is the tool's name and then its arguments as JSON, cut at 400 characters. The TV
+// draws the name and the call's description on one line and the arguments under it, wrapped and held
+// to three lines: an unbroken run of JSON is laid out but never painted by the TV's WebView, so the
+// argument line must be allowed to break anywhere (`.sb-args`).
+function toolParts(t) {
   const s = String(t || ''), sp = s.indexOf(' ');
   const name = (sp < 0 ? s : s.slice(0, sp)).replace(/^mcp__[^_]+(?:_[^_]+)*?__/, '');
-  const arg = (k) => { const m = s.match(new RegExp('"' + k + '":"((?:[^"\\\\]|\\\\.)*)')); return m ? m[1].replace(/\\(.)/g, '$1') : ''; };
-  const what = arg('description') || arg('file_path').split('/').pop() || arg('pattern');
-  return what ? `${name} · ${what.slice(0, 80)}` : name;
+  const raw = sp < 0 ? '' : s.slice(sp + 1);
+  const m = raw.match(/"description":"((?:[^"\\]|\\.)*)/);
+  const what = m ? m[1].replace(/\\(.)/g, '$1') : '';
+  // The arguments without the description already shown beside the name: a lone argument as its bare
+  // value, several as `key: value`. The JSON is whole when it fits in 400 characters; past that it is
+  // cut, and only tidied as text.
+  let args = '';
+  try {
+    const o = JSON.parse(raw); delete o.description;
+    const show = (v) => (typeof v === 'string' ? v : JSON.stringify(v));
+    const keys = Object.keys(o);
+    args = keys.length === 1 ? show(o[keys[0]]) : keys.map((k) => `${k}: ${show(o[k])}`).join(', ');
+  } catch (_) {
+    args = raw.replace(/,?"description":"(?:[^"\\]|\\.)*"?/, '').replace(/^\{"[a-z_]+":"?/i, '')
+      .replace(/\\n/g, ' ').replace(/\\(.)/g, '$1');
+  }
+  args = args.replace(/\s+/g, ' ').trim();
+  return { head: what ? `${name} · ${what}` : name, args };
 }
-const toolLine = (t) => (t ? `<div class="sb-tool">${esc(toolLabel(t))}</div>` : '');
+const toolLine = (t) => {
+  if (!t) return '';
+  const { head, args } = toolParts(t);
+  return `<div class="sb-tool">${esc(head)}${args ? `<div class="sb-args">${esc(args)}</div>` : ''}</div>`;
+};
 
 function paint() {
   const all = shown();

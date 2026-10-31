@@ -11,21 +11,8 @@ import SwiftUI
 struct SessionsView: View {
     @EnvironmentObject private var sessions: Sessions
     @ObservedObject private var capture = Capture.shared
-    /// The copy of the list that sits one page LEFT of an open session (`RootView`, `Page.back`): what
-    /// a swipe to the right reveals, so closing a session by swiping looks like going back to the list.
-    var behind = false
 
     var body: some View {
-        if behind {
-            // Its own stack, so the rows draw as they do on the real page. Never tapped: the page turns
-            // back to the real list the moment it lands.
-            NavigationStack { list }
-        } else {
-            stacked
-        }
-    }
-
-    @ViewBuilder private var stacked: some View {
         // A ScrollView, not a List: a watchOS List puts every row in a grey rounded slab, and this page
         // is a list of names. Rows are ruled apart the way the food log and the exercises are — the rule
         // does the separating and costs two pixels.
@@ -268,6 +255,15 @@ struct SessionView: View {
                 CommandBorder.tapped(at)
                 CommandBorder.press(chat: Chat.shared, sessions: sessions, how: "tap")
             }
+            // **Swiping right closes it.** Sessions is the leftmost page, so the page row has nothing to
+            // turn to on a rightward swipe and the drag is free to mean back. Mostly sideways, so a
+            // scroll that drifts is not one; simultaneous, so the scroll and the page row keep theirs.
+            .simultaneousGesture(DragGesture(minimumDistance: 20).onEnded { g in
+                let dx = g.translation.width, dy = g.translation.height
+                guard dx > 40, dx > 2 * abs(dy), !sessions.path.isEmpty else { return }
+                Hub.log("swipe-close", ["row": key])
+                sessions.path.removeLast()
+            })
             // **The top of the NEWEST ITEM at the top of the screen**: his words the moment they are
             // transcribed, then each tool call as it comes, then the reply — whichever is last, once he
             // is not looking (`holds`). Never
@@ -345,9 +341,8 @@ struct SessionView: View {
         .navigationBarBackButtonHidden(true)
         .toolbar {
             ToolbarItem(placement: .topBarLeading) {
-                // **The name closes it.** The swipe back watchOS gives a pushed view does not survive a
-                // page row that also takes sideways swipes, so the way out is the thing at the top that
-                // says which session this is.
+                // **The name closes it**, as does a swipe right (above). The swipe back watchOS gives a
+                // pushed view does not survive a page row that also takes sideways swipes.
                 // A small chevron before the name says it is a way back without having to know it; the
                 // name and the chevron are one button.
                 // Guarded: two taps close enough together that the first pop hasn't dismissed this

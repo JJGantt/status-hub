@@ -113,7 +113,7 @@ final class WatchAppDelegate: NSObject, WKApplicationDelegate, UNUserNotificatio
 /// where the app opens.
 struct RootView: View {
     enum Page: String {
-        case back, sessions, home, day, health, live, gesture
+        case sessions, home, day, health, live, gesture
 
         /// Nutrition and Workout land on the day page, which opens the list each names
         /// (`Router.dayList`): today's food log, or the exercise list. Day lands on the page itself.
@@ -146,15 +146,9 @@ struct RootView: View {
     var body: some View {
         // **A session opens INSIDE the sessions page** (its own NavigationStack, in SessionsView), so the
         // row of pages still swipes with one open, and it is still open when he swipes back. The page
-        // row takes the sideways swipe, so the system's swipe back never fires. The session's name closes
-        // it, and so does swiping right: there is a page LEFT of sessions (`Page.back`) drawing the bare
-        // list, and landing on it pops the session and turns back to the real page with no animation. The
-        // swipe reveals the list as a back swipe would; with nothing open it shows the same list and turns
-        // straight back. **That page is ALWAYS there**: the page row tracks its position by INDEX, so a
-        // page inserted left of the one showing leaves the row on index 0, which is then `back`, and the
-        // session closes in the same moment it opens.
+        // row takes the sideways swipe, so the system's swipe back never fires: the session's name closes
+        // it, and so does a rightward drag on the session itself (`SessionView`).
         TabView(selection: $page) {
-            SessionsView(behind: true).tag(Page.back)
             SessionsView().tag(Page.sessions).environment(\.onScreen, page == .sessions)
             HomeView().tag(Page.home).environment(\.onScreen, page == .home)
             DayView().tag(Page.day)
@@ -236,15 +230,7 @@ struct RootView: View {
             }
             #endif
         }
-        .onChange(of: page) { _, now in
-            if now == .back {
-                var t = Transaction()
-                t.disablesAnimations = true
-                withTransaction(t) { sessions.path = []; page = .sessions }
-                return
-            }
-            follow()
-        }
+        .onChange(of: page) { _, _ in follow() }
         .onChange(of: phase) { _, now in
             Hub.log("phase", ["to": "\(now)", "veiled": veiled])
             if now == .background { veiled = true }

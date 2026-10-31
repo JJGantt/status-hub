@@ -112,26 +112,43 @@ async function loadVoice() {
   if (voBusy) { voAgain = true; return; }
   voBusy = true;
   try {
-    const r = await fetch('/api/voice-messages?focus=hub&mode=active&limit=40');
-    if (r.ok) paintVoice((await r.json()).filter((m) => m.role === 'user' || m.role === 'assistant'));
+    const [r, q] = await Promise.all([fetch('/api/voice-messages?focus=hub&mode=active&limit=40'), fetch('/api/voice-pending')]);
+    if (r.ok) voRows = (await r.json()).filter((m) => m.role === 'user' || m.role === 'assistant');
+    if (q.ok) { pending.clear(); for (const p of await q.json()) pending.set(p.id, p); }
+    paintVoice();
   } catch (_) { /* the stream's reconnect reloads */ }
   voBusy = false;
   if (voAgain) { voAgain = false; loadVoice(); }
 }
 
-function paintVoice(rows) {
-  const last = rows[rows.length - 1];
-  const working = !!last && (last.role === 'user' || !String(last.text || '').trim());
-  voBody.innerHTML = rows.slice(-40).map((m) => m.role === 'user'
+// His words are drawn from the request the moment it is created (`request` frames, /api/voice-pending)
+// and handed over to the conversation row once that exists, which is only when the answer lands.
+let voRows = [];
+const pending = new Map();   // request id -> { id, text, status }
+
+function paintVoice() {
+  const answered = new Set(voRows.map((m) => m.request_id).filter(Boolean));
+  for (const id of [...pending.keys()]) if (answered.has(id)) pending.delete(id);
+  const last = voRows[voRows.length - 1];
+  const working = pending.size > 0 || (!!last && (last.role === 'user' || !String(last.text || '').trim()));
+  voBody.innerHTML = voRows.slice(-40).map((m) => m.role === 'user'
     ? `<div class="sb-words">${esc(m.text || '')}</div>`
     : `<div class="sb-reply">${md(String(m.text || '').trim())}</div>`).join('') +
+    [...pending.values()].map((p) => `<div class="sb-words">${esc(p.text)}</div>`).join('') +
     (working ? '<div class="sb-caret">▍</div>' : '');
 }
 
 liveStream('/api/voice-stream', {
   voice: (e) => {
     let m; try { m = JSON.parse(e.data); } catch (_) { return; }
-    if (m && (m.kind === 'message' || m.kind === 'reset')) loadVoice();
+    if (!m) return;
+    if (m.kind === 'message' || m.kind === 'reset') loadVoice();
+    else if (m.kind === 'request' && m.row) {
+      // A finished request is dropped: its row arrives as a message, and a failed one may never get one.
+      if (m.row.status === 'done' || m.row.status === 'error') pending.delete(m.row.id);
+      else pending.set(m.row.id, m.row);
+      if (view === 'orchestrator') paintVoice();
+    }
   },
 }, { onOpen: loadVoice });
 

@@ -562,7 +562,7 @@ the health wall) · `/tv-session-focus` (sessions wall) · `/tv-calendar` (calen
 launcher) · `/reports` + `/report/:id` (§6c) · `/login` · `/healthz` · `/privacy` · `/terms`.
 
 **Read:** `/api/status` (full payload) · `/api/stream` (SSE status) · `/api/voice-stream` (SSE voice
-frames for the kiosk) · `/api/list-stream` (SSE, one bodiless `lists` event whenever a dated item or
+frames for the kiosk, and `request` frames for the TV sidebar) · `/api/voice-pending` (unfinished hub requests, the sidebar's reload) · `/api/list-stream` (SSE, one bodiless `lists` event whenever a dated item or
 a list changes — the calendar surfaces' push path, separate from the status frame they don't render) · `/api/workout-day` · `/api/nutrition-day` ·
 `/api/heat-history` (the heat-grid weeks OLDER than the frame's `HEAT_WEEKS` window, as a prefix the
 expanded sheet draws in front of it — the frame is re-pushed on every realtime event and history only
@@ -1313,6 +1313,13 @@ The orchestrator view is the current context of the hub thread, fetched from
 `/api/voice-messages?focus=hub&mode=active` (the watch's view) and refetched whenever `/api/voice-stream`
 carries a `message` or `reset` frame, so which rows belong to the current context stays the server's
 rule. After an idle gap or a reset it is empty under its header until he speaks again.
+
+His words appear the moment the request exists, not when the conversation row does: the worker writes
+his `voice_messages` row only beside the answer, up to half a minute later. Every `voice_requests`
+insert or update for the hub conversation goes out on `/api/voice-stream` as a `request` frame
+(`requestView`: id, transcript, status), and `/api/voice-pending` lists the unfinished ones for a
+(re)load. The page draws them after the conversation until a row with that `request_id` arrives, and
+drops one when its request is `done` or `error`, since a failed request may never get a row.
 
 The session view is the FOCUSED session (`pickFocus`), drawn narrow and see-through for the bedroom TV, whose companion
 app overlays it on whatever is playing (google-tv repo, `SidebarService`). Its own small module

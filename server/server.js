@@ -1532,8 +1532,16 @@ function startRealtime() {
       })
     // A client waiting on its own command (/api/voice-reply/:id) is answered the moment the worker
     // marks the request finished.
-    .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'voice_requests' },
-      (p) => { seen(); if (p.new) settleReply(p.new); })
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'voice_requests' },
+      (p) => {
+        seen();
+        if (!p.new) return;
+        if (p.eventType === 'UPDATE') settleReply(p.new);
+        // His words the moment they exist: the worker writes his voice_messages row only beside the
+        // answer, which can be half a minute later. The TV sidebar shows them from this.
+        const r = requestView(p.new);
+        if (r) pushVoice('request', r);
+      })
     // The three tables a session view is assembled from. These are why the walls no longer poll
     // /api/sessions every 5s: a session starting, ending, being renamed, finishing a turn, being
     // focused or queueing behind another one all land here, and each pushes a fresh payload.
@@ -3016,6 +3024,21 @@ app.get('/api/voice-messages', async (req, res) => {
     const older = [...unread, ...words.filter((r) => !have.has(r.id))]
       .sort((a, b) => Date.parse(a.created_at) - Date.parse(b.created_at));
     res.json([...older, ...shown]);   // oldest→newest
+  } catch (e) { res.status(500).json({ error: String(e.message || e) }); }
+});
+
+// A request as the TV sidebar draws it before its voice_messages row exists; null for one that is not
+// his words to the hub conversation (another focus, the reset sentinel) or has no transcript yet.
+function requestView(r) {
+  if ((r.focus || 'hub') !== 'hub' || !r.transcript || r.transcript === VOICE_RESET_SENTINEL) return null;
+  return { id: r.id, text: r.transcript, status: r.status, created_at: r.created_at };
+}
+
+// Requests not yet finished: what the TV sidebar shows ahead of their rows on (re)load.
+app.get('/api/voice-pending', async (req, res) => {
+  try {
+    const rows = await sb('voice_requests?focus=eq.hub&status=not.in.(done,error)&order=created_at&select=id,transcript,status,focus,created_at') || [];
+    res.json(rows.map(requestView).filter(Boolean));
   } catch (e) { res.status(500).json({ error: String(e.message || e) }); }
 });
 

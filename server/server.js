@@ -3188,7 +3188,11 @@ app.post('/api/health/sleep', express.json({ limit: '1mb' }), async (req, res) =
 // Same contract as sleep: `samples` added or changed since the app's last anchor, `deleted` UUIDs, a
 // UUID-keyed upsert so a resend is harmless. Generic rows — type, value, unit — so a type Health adds
 // later lands here with no change on this side.
+// HEALTH_INGEST_PAUSED (a Fly secret) refuses every page with 503 before Supabase is touched. The phone
+// commits its anchor only on a 200, so a refused page is resent later and nothing is lost. It exists
+// because the first full-history read wrote ~1.3M rows in 20 minutes and took the database down.
 app.post('/api/health/samples', express.json({ limit: '4mb' }), async (req, res) => {
+  if (process.env.HEALTH_INGEST_PAUSED === '1') return res.status(503).json({ ok: false, paused: true });
   const samples = Array.isArray(req.body?.samples) ? req.body.samples : [];
   const deleted = (Array.isArray(req.body?.deleted) ? req.body.deleted : []).filter((u) => SLEEP_UUID.test(u));
   const now = new Date().toISOString();

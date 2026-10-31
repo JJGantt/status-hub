@@ -22,7 +22,8 @@ cloud API: the only reader is an app on the phone. Sleep has its own table and i
   the UUIDs Health removed. It accepts any `type`, so the server needs no change for a new one.
 - **The hub paces it.** A page of N rows earns the next page a gap of N / 100 seconds (`HEALTH_ROWS_PER_S`),
   stretched to ten times the write's own duration when the database is slow and to a minute after a
-  failed write; a page inside the gap gets `503` + `Retry-After` before Supabase is touched, and the
+  failed write (logged as a warning; three failures in a row are logged as an error and reach the ops
+  responder); a page inside the gap gets `503` + `Retry-After` before Supabase is touched, and the
   phone waits exactly that long and resumes from the same anchor. Live deliveries are a few rows and
   never wait. The full-history read is millions of rows: unpaced it wrote ~1.3M in twenty minutes and
   starved the database's disk until Postgres stopped answering, because each random-UUID insert dirties

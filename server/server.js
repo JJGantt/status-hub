@@ -3203,6 +3203,10 @@ app.post('/api/health/sleep', express.json({ limit: '1mb' }), async (req, res) =
 const HEALTH_ROWS_PER_S = 100;
 const HEALTH_SLOWDOWN = 10;
 let healthNextAt = 0;
+// A lone failed write during the full-history read is the database pushing back, and the minute's
+// backoff below is the answer to it; only failures that keep coming after that are reported as errors.
+const HEALTH_FAILS_TO_REPORT = 3;
+let healthFails = 0;
 app.post('/api/health/samples', express.json({ limit: '4mb' }), async (req, res) => {
   const wait = healthNextAt - Date.now();
   if (wait > 0) {
@@ -3236,13 +3240,15 @@ app.post('/api/health/samples', express.json({ limit: '4mb' }), async (req, res)
       await sbWrite(`health_samples?id=in.(${deleted.slice(i, i + 200).join(',')})`, 'DELETE');
     }
     const took = Date.now() - began;
+    healthFails = 0;
     healthNextAt = Math.max(healthNextAt, Date.now() + took * HEALTH_SLOWDOWN);
     console.log(`[health] +${rows.length} -${deleted.length} (sent ${samples.length}) ${took}ms`);
     res.json({ ok: true, stored: rows.length, deleted: deleted.length });
   } catch (e) {
     // A failed write is the database saying it is in trouble: back off a minute, not a page's gap.
     healthNextAt = Math.max(healthNextAt, Date.now() + 60_000);
-    console.error('[health] write failed:', e.message);
+    healthFails += 1;
+    (healthFails >= HEALTH_FAILS_TO_REPORT ? console.error : console.warn)(`[health] write failed (${healthFails} in a row):`, e.message);
     res.status(502).json({ ok: false });
   }
 });

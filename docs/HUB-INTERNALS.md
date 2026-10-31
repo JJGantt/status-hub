@@ -624,8 +624,8 @@ per-list feed `/api/due-widget` replaced; nothing reads it.
 `/api/sessions/:action` · `/api/voice-command` (raw audio of any size → Groq Whisper, English only →
 enqueue; the clip is kept in the private `voice-clips` bucket and named in `voice_requests.audio`, both
 deleted by pi-desk after 7 days; optional `lat`/`lon`/`acc`/`place` query → `voice_requests.location`) ·
-`/api/voice-text` (text → enqueue, optional `location` object likewise; returns the request id, which
-`/api/voice-reply/:id` waits on) · `/api/voice-reset` (stamps `voice_reset_at`; the thread is kept) ·
+`/api/voice-text` (text → enqueue, optional `location` object likewise; `shared: true` stamps source
+`share`, see §9d; returns the request id, which `/api/voice-reply/:id` waits on) · `/api/voice-reset` (stamps `voice_reset_at`; the thread is kept) ·
 `/api/voice-activity` · `/api/voice-mute` (take or give back one holder's mute) · `/api/attach`
 (photo upload) · `/api/gestures` (the watch's gesture captures: POST one, GET the last week, GET `/<day>/<file>` for one; bucket `gesture-captures`) · `/api/register-push` · `/api/notify` (APNs to all devices) · `/api/clientlog`.
 
@@ -1708,6 +1708,23 @@ dirty, and the whole list greyed when desk presence is stale. Home Screen famili
   scan and only moves when work happens.
 
 Harness: `tools/render-repos.swift`.
+
+## 9d. `StatusHubShare` — the share sheet
+
+`apps/Share/ShareViewController.swift`: "Status Hub" in the iPhone share sheet for images (up to 12 —
+in practice a screenshot). The stock compose sheet shows the picture and a text field; Post uploads each
+image to `/api/attach` (downscaled to 1568px JPEG through ImageIO) and sends one `/api/voice-text` with
+the object names and `shared: true`. It lands in the hub conversation like a typed message, and the reply
+comes back there.
+
+`shared: true` matters: the server stamps the request source `share`, and the worker gives share
+requests their own framing (`SHARE_DIRECTIVE` in voice-pipeline `worker.py`). Without it, a picture is
+framed as ONE MEAL TO LOG, which is what the chat composer's camera is for.
+
+The upload runs inside the extension before it completes, not in a background session — handing a
+transfer to the app needs a shared container, i.e. App Groups, which this account cannot enable yet. It
+authenticates with the app's stored password via the shared keychain group, as the widgets do, so the
+app has to have been signed into once.
 
 ## 9c. `StatusHubWatch` — the watch app
 

@@ -3750,6 +3750,8 @@ sweepAttachments();
 // Photo attachments (object names from /api/attach) ride along; a photo-only send (no text) is valid —
 // the worker's framing directive tells the model the intent is to log what the photos show.
 // A client_msg_id de-dupes a resent send (see seenMsgIds above /api/voice-command).
+// `shared: true` is the iOS share extension (apps/Share): the request is stamped source 'share', which
+// tells the worker the pictures are something he wants looked at, not a meal to log.
 app.post('/api/voice-text', express.json(), async (req, res) => {
   try {
     const text = String((req.body && req.body.text) || '').trim();
@@ -3761,7 +3763,8 @@ app.post('/api/voice-text', express.json(), async (req, res) => {
     const client_now = CLIENT_NOW_RE.test(String((req.body && req.body.client_now) || '')) ? String(req.body.client_now) : null;
     const location = parseLocation(req.body && req.body.location);
     const id = crypto.randomUUID();   // chosen here so the caller can wait on it (/api/voice-reply/:id)
-    await sbWrite('voice_requests', 'POST', { id, transcript: text, source: 'web', focus: 'hub',
+    const source = req.body && req.body.shared === true ? 'share' : 'web';
+    await sbWrite('voice_requests', 'POST', { id, transcript: text, source, focus: 'hub',
       ...(attachments.length ? { attachments } : {}), ...(client_now ? { client_now } : {}),
       ...(location ? { location } : {}) });
     markSeen(msgId, id);

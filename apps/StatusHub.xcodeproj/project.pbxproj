@@ -23,6 +23,7 @@
 		2D7BBEABB20A4F0C080608E0 /* Location.swift in Sources */ = {isa = PBXBuildFile; fileRef = D2181310AB9F5E005371B8B0 /* Location.swift */; };
 		2DE5C68D7C666AA0FFB4B465 /* Markdown.swift in Sources */ = {isa = PBXBuildFile; fileRef = 50C9941AC596855E4C447F11 /* Markdown.swift */; };
 		37CD0E58D2EE7273A012632B /* DayView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 01225D88DDA6CA36478FE1CA /* DayView.swift */; };
+		3995C08AAC931FCC8F627A14 /* StatusHubShare.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 1C987C27ED7B0DC15E346FD4 /* StatusHubShare.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		4047BFD86E0305E129C06B77 /* Info-iOS.plist in Resources */ = {isa = PBXBuildFile; fileRef = 12B2F6A89FA87D30EEC5ED56 /* Info-iOS.plist */; };
 		48D80B4A545868D78E2DC799 /* Auth.swift in Sources */ = {isa = PBXBuildFile; fileRef = 88D699B5FDC0F7476374CF07 /* Auth.swift */; };
 		4A85806E830267380041B940 /* Speaker.swift in Sources */ = {isa = PBXBuildFile; fileRef = 14DD24EA8F44511AAE8A666A /* Speaker.swift */; };
@@ -53,6 +54,7 @@
 		906DA291FF0B9503A9D28AF4 /* LiveMic.swift in Sources */ = {isa = PBXBuildFile; fileRef = FC9DA7D425E32C05CDE6A7EA /* LiveMic.swift */; };
 		99C55A70179E1025B9004EF9 /* RecordControl.swift in Sources */ = {isa = PBXBuildFile; fileRef = FAC9C25A7B946678D80BA77A /* RecordControl.swift */; };
 		9F6DFFB0796E9EE6B110235A /* RecordIntent.swift in Sources */ = {isa = PBXBuildFile; fileRef = F62C833499BAA9A4A1C9F660 /* RecordIntent.swift */; };
+		A30AD3DC0321A172ECEB9CC5 /* Auth.swift in Sources */ = {isa = PBXBuildFile; fileRef = 88D699B5FDC0F7476374CF07 /* Auth.swift */; };
 		A4E6D950656AE1A3B80EECAA /* Push.swift in Sources */ = {isa = PBXBuildFile; fileRef = 835C09DFE3C581C0FCD41116 /* Push.swift */; };
 		AE3C14A7061F839013EA169A /* WatchLink.swift in Sources */ = {isa = PBXBuildFile; fileRef = D87B899987639512DD905DCE /* WatchLink.swift */; };
 		B074269468DD14567FC7F3FF /* AssetsMac.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 43113D1E0A8CEB8334CFC02E /* AssetsMac.xcassets */; };
@@ -79,6 +81,7 @@
 		EE1E28331D9AE8401BEE3601 /* Push.swift in Sources */ = {isa = PBXBuildFile; fileRef = 835C09DFE3C581C0FCD41116 /* Push.swift */; };
 		F6AB2F65BC1CE1BE65F7EF8A /* RewindBuffer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2BA599375B5694F4C40BB517 /* RewindBuffer.swift */; };
 		F9B3AEDE8FF26869DC2B821B /* Nutrition.swift in Sources */ = {isa = PBXBuildFile; fileRef = 38BD5AA187D80545B616356B /* Nutrition.swift */; };
+		FA761FF62890172FD6F627CE /* ShareViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = BFB816327EEE71F799C893C8 /* ShareViewController.swift */; };
 		FB6B5DF33E6070D5348F0E27 /* RecordIntent.swift in Sources */ = {isa = PBXBuildFile; fileRef = F198CD20CEADF9EC7C93F50C /* RecordIntent.swift */; };
 /* End PBXBuildFile section */
 
@@ -104,6 +107,13 @@
 			remoteGlobalIDString = D131BA7C0F7D02ECCD23A369;
 			remoteInfo = StatusHubWatch;
 		};
+		9DDEE65C9D08F871CBE36B1D /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 9D244CDCFECA7707C38735B8 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = ED1569A25B40BCB3EA1E23BE;
+			remoteInfo = StatusHubShare;
+		};
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXCopyFilesBuildPhase section */
@@ -125,6 +135,7 @@
 			dstSubfolderSpec = 13;
 			files = (
 				58F20A294FB54B942342ABB3 /* StatusHubControls.appex in Embed Foundation Extensions */,
+				3995C08AAC931FCC8F627A14 /* StatusHubShare.appex in Embed Foundation Extensions */,
 			);
 			name = "Embed Foundation Extensions";
 			runOnlyForDeploymentPostprocessing = 0;
@@ -152,6 +163,7 @@
 		1395E04227DD7450E1CBC8AD /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		14DD24EA8F44511AAE8A666A /* Speaker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Speaker.swift; sourceTree = "<group>"; };
 		14EB30894FADCF33B66D0455 /* Recorder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Recorder.swift; sourceTree = "<group>"; };
+		1C987C27ED7B0DC15E346FD4 /* StatusHubShare.appex */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = "wrapper.app-extension"; path = StatusHubShare.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		1E94C4C0D42288352ED7299B /* VolumeKnob.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VolumeKnob.swift; sourceTree = "<group>"; };
 		279F09507BAD56AB8AD69831 /* TodoWidget.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TodoWidget.swift; sourceTree = "<group>"; };
 		2BA599375B5694F4C40BB517 /* RewindBuffer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RewindBuffer.swift; sourceTree = "<group>"; };
@@ -187,6 +199,7 @@
 		AC7643D7992852F757EF0A7E /* SessionsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionsView.swift; sourceTree = "<group>"; };
 		AD44A10C47F3ACE73074E7B2 /* StatusHubControls.appex */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = "wrapper.app-extension"; path = StatusHubControls.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		AF1D1C7A5D148A4366347C65 /* ReposView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReposView.swift; sourceTree = "<group>"; };
+		BFB816327EEE71F799C893C8 /* ShareViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShareViewController.swift; sourceTree = "<group>"; };
 		C00E5B1C61B9780EE2BE1945 /* StatusHubWatchApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StatusHubWatchApp.swift; sourceTree = "<group>"; };
 		CAEDD165B40FC7BE05380CE2 /* BodyPaths.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BodyPaths.swift; sourceTree = "<group>"; };
 		D2181310AB9F5E005371B8B0 /* Location.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Location.swift; sourceTree = "<group>"; };
@@ -205,6 +218,7 @@
 		FAC9C25A7B946678D80BA77A /* RecordControl.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecordControl.swift; sourceTree = "<group>"; };
 		FC9DA7D425E32C05CDE6A7EA /* LiveMic.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveMic.swift; sourceTree = "<group>"; };
 		FD06B420AFC554D37540118C /* Hub.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Hub.swift; sourceTree = "<group>"; };
+		FDACDF8F4E8551D7430E12F2 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXGroup section */
@@ -214,6 +228,7 @@
 				EF4C42BEDA65C5384974460A /* StatusHub.app */,
 				AD44A10C47F3ACE73074E7B2 /* StatusHubControls.appex */,
 				DE7144970264B4FD475213E8 /* StatusHubMac.app */,
+				1C987C27ED7B0DC15E346FD4 /* StatusHubShare.appex */,
 				94DD1B301CE525AF6B208DC7 /* StatusHubWatch.app */,
 				7A798171A56FC30D0250CDD7 /* StatusHubWatchWidgets.appex */,
 			);
@@ -283,6 +298,15 @@
 			path = Watch;
 			sourceTree = "<group>";
 		};
+		74BB75C2E95DDFE3BD63FDF9 /* Share */ = {
+			isa = PBXGroup;
+			children = (
+				FDACDF8F4E8551D7430E12F2 /* Info.plist */,
+				BFB816327EEE71F799C893C8 /* ShareViewController.swift */,
+			);
+			path = Share;
+			sourceTree = "<group>";
+		};
 		8B3D9C515137832BB1FDEE95 = {
 			isa = PBXGroup;
 			children = (
@@ -290,6 +314,7 @@
 				43113D1E0A8CEB8334CFC02E /* AssetsMac.xcassets */,
 				9F6A38324B6E1FE85ABDB8B6 /* AssetsWatch.xcassets */,
 				949CE30CB2642F8013288295 /* Controls */,
+				74BB75C2E95DDFE3BD63FDF9 /* Share */,
 				46F4A2164300BF712B758B03 /* Shared */,
 				F1C581DB520978DD991D147C /* Sounds */,
 				4F3C15E0045F52C4F298B679 /* Sources */,
@@ -383,6 +408,7 @@
 			);
 			dependencies = (
 				022207670EC5806DF02247AE /* PBXTargetDependency */,
+				E90CE45ADE11E86AE8182238 /* PBXTargetDependency */,
 				B47A0EDE4A0A1725A76C9AAA /* PBXTargetDependency */,
 			);
 			name = StatusHub;
@@ -411,6 +437,23 @@
 			productName = StatusHubWatch;
 			productReference = 94DD1B301CE525AF6B208DC7 /* StatusHubWatch.app */;
 			productType = "com.apple.product-type.application";
+		};
+		ED1569A25B40BCB3EA1E23BE /* StatusHubShare */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = CAD3D9237EADC7FDFCE04FCB /* Build configuration list for PBXNativeTarget "StatusHubShare" */;
+			buildPhases = (
+				793F7465FE057BD3FE5D7700 /* Sources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = StatusHubShare;
+			packageProductDependencies = (
+			);
+			productName = StatusHubShare;
+			productReference = 1C987C27ED7B0DC15E346FD4 /* StatusHubShare.appex */;
+			productType = "com.apple.product-type.app-extension";
 		};
 		F9829B346C7074D4BCBDB7EF /* StatusHubWatchWidgets */ = {
 			isa = PBXNativeTarget;
@@ -454,6 +497,10 @@
 						DevelopmentTeam = XMH4AVFC78;
 						ProvisioningStyle = Automatic;
 					};
+					ED1569A25B40BCB3EA1E23BE = {
+						DevelopmentTeam = XMH4AVFC78;
+						ProvisioningStyle = Automatic;
+					};
 					F9829B346C7074D4BCBDB7EF = {
 						DevelopmentTeam = XMH4AVFC78;
 						ProvisioningStyle = Automatic;
@@ -477,6 +524,7 @@
 				7BD5097CA6F9F605814DF4B8 /* StatusHub */,
 				55B60953417C207CA9946AD3 /* StatusHubControls */,
 				6EFEB0886840AF68C8D8D7BF /* StatusHubMac */,
+				ED1569A25B40BCB3EA1E23BE /* StatusHubShare */,
 				D131BA7C0F7D02ECCD23A369 /* StatusHubWatch */,
 				F9829B346C7074D4BCBDB7EF /* StatusHubWatchWidgets */,
 			);
@@ -550,6 +598,15 @@
 				E5F01E32A844356CC4D3F449 /* WatchUI.swift in Sources */,
 				E8ABA2047F042D0E11B6C604 /* Workout.swift in Sources */,
 				4DB8BD1AC2A03D075B399CA4 /* WorkoutView.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		793F7465FE057BD3FE5D7700 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				A30AD3DC0321A172ECEB9CC5 /* Auth.swift in Sources */,
+				FA761FF62890172FD6F627CE /* ShareViewController.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -631,9 +688,34 @@
 			target = D131BA7C0F7D02ECCD23A369 /* StatusHubWatch */;
 			targetProxy = 8485B5A025A0FF218F720BD9 /* PBXContainerItemProxy */;
 		};
+		E90CE45ADE11E86AE8182238 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = ED1569A25B40BCB3EA1E23BE /* StatusHubShare */;
+			targetProxy = 9DDEE65C9D08F871CBE36B1D /* PBXContainerItemProxy */;
+		};
 /* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
+		05913466E2E010B8CB68F1B3 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = StatusHubShare.entitlements;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = Share/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.jaredgantt.statushub.share;
+				PRODUCT_NAME = StatusHubShare;
+				SDKROOT = iphoneos;
+				SKIP_INSTALL = YES;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Debug;
+		};
 		15D69CF5F6C5C70642733FA8 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -802,6 +884,26 @@
 				SWIFT_VERSION = 5.0;
 			};
 			name = Debug;
+		};
+		7B8B70EE743FB7865E091D99 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = StatusHubShare.entitlements;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = Share/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.jaredgantt.statushub.share;
+				PRODUCT_NAME = StatusHubShare;
+				SDKROOT = iphoneos;
+				SKIP_INSTALL = YES;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Release;
 		};
 		9047005A5B2EBBF5697396AB /* Release */ = {
 			isa = XCBuildConfiguration;
@@ -1003,6 +1105,15 @@
 			buildConfigurations = (
 				BD45C1230D0C6CC17095A1C0 /* Debug */,
 				9047005A5B2EBBF5697396AB /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		CAD3D9237EADC7FDFCE04FCB /* Build configuration list for PBXNativeTarget "StatusHubShare" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				05913466E2E010B8CB68F1B3 /* Debug */,
+				7B8B70EE743FB7865E091D99 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Debug;

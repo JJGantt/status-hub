@@ -37,6 +37,8 @@
 	<string>For nearby requests.</string>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>Status Hub uses the microphone for voice commands.</string>
+	<key>NSMotionUsageDescription</key>
+	<string>Records motion for gesture testing.</string>
 	<key>UIBackgroundModes</key>
 	<array>
 		<string>audio</string>

@@ -15,12 +15,35 @@ final class Chat: ObservableObject {
     }
 
     @Published private(set) var thread: [Message] = []
-    /// What home draws: the last ten exchanges, after any unread answer older than them (`held`). The
-    /// hub sends forty rows, which is more than a wrist reads and slower to lay out than it is worth.
-    var recent: [Message] { held + thread.suffix(20) }
-    /// Unread answers older than the last ten exchanges, each after the words that asked for it: the hub
-    /// sends every unread answer however old. Kept until the page leaves the screen even once read, so
-    /// an answer does not vanish from under him the moment it counts as read.
+    /// What home draws: the last `window` rows, after any unread answer older than them (`held`). The
+    /// hub sends forty rows; laying all of them out is what made swiping onto the page lag, and a wrist
+    /// rarely reads past the last few exchanges.
+    var recent: [Message] { held + thread.suffix(window) }
+    /// **How many rows home lays out**: `windowStep` (five exchanges) at rest, a step more each time he
+    /// scrolls to the top (`showMore`), back to one step whenever the page lands on the newest again or
+    /// leaves the screen. Never past what the hub sent.
+    @Published private(set) var window = Chat.windowStep
+    static let windowStep = 10
+    /// There are rows above the window to lay out.
+    var hasMore: Bool { thread.count > window }
+    func showMore() {
+        guard hasMore else { return }
+        window += Self.windowStep
+        Hub.log("thread-more", ["window": window, "rows": thread.count])
+        hold()
+    }
+    /// Back to one step — or as far back as the answer home is asked to land on, so a notification
+    /// opened on an older answer still finds it laid out.
+    func resetWindow() {
+        let reach = landOn.flatMap { id in thread.lastIndex { $0.id == id } }.map { thread.count - $0 } ?? 0
+        let next = max(Self.windowStep, reach)
+        guard window != next else { return }
+        window = next
+        hold()
+    }
+    /// Unread answers older than the window, each after the words that asked for it: the hub sends every
+    /// unread answer however old. Kept until the page leaves the screen even once read, so an answer
+    /// does not vanish from under him the moment it counts as read.
     @Published private(set) var held: [Message] = []
     /// Answers flagged worth reading that no surface has shown yet, oldest first (docs/WATCH.md, "Unread
     /// answers").
@@ -278,9 +301,9 @@ final class Chat: ObservableObject {
     }
 
     private func hold() {
-        let tail = Set(thread.suffix(20).map(\.id))
+        let tail = Set(thread.suffix(window).map(\.id))
         let asks = Set(unread.compactMap(\.request_id))
-        for m in thread.dropLast(20) where !held.contains(where: { $0.id == m.id })
+        for m in thread.dropLast(window) where !held.contains(where: { $0.id == m.id })
             && (unread.contains(m) || m.request_id.map(asks.contains) == true) {
             held.append(m)
         }

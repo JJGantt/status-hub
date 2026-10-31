@@ -217,9 +217,9 @@ struct SessionView: View {
     private var events: [SessionEvent] { sessions.logs[key]?.events ?? [] }
     private var placeholders: [Placeholder] { sessions.placeholders[key] ?? [] }
 
-    /// What is drawn: every event in order, a prompt at the position of its LATEST occurrence — it
-    /// moves from where it was queued to where the model read it — so one message is one line.
-    private var shown: [SessionEvent] {
+    /// Every event in order, a prompt at the position of its LATEST occurrence — it moves from where it
+    /// was queued to where the model read it — so one message is one line.
+    private var all: [SessionEvent] {
         var seen = Set<String>()
         var out: [SessionEvent] = []
         for e in events.reversed() {
@@ -227,6 +227,24 @@ struct SessionView: View {
             out.append(e)
         }
         return out.reversed()
+    }
+
+    /// **How many turns are laid out**, counted back by his prompts: `turnStep` on opening, a step more
+    /// each time he scrolls to the very top. The hub keeps up to ten turns and every tool call in them,
+    /// which can be hundreds of rows, and laying all of those out is what made swiping onto the page lag.
+    @State private var turns = SessionView.turnStep
+    private static let turnStep = 3
+    /// The row that was at the top when he scrolled there for more: the scroll goes back onto it once
+    /// the earlier turns have laid out above it.
+    @State private var keepAtTop: String?
+
+    /// What is drawn: the last `turns` turns of `all`.
+    private var shown: [SessionEvent] { window.events }
+    private var window: (events: [SessionEvent], more: Bool) {
+        let list = all
+        let prompts = list.indices.filter { list[$0].kind == "prompt" }
+        guard prompts.count > turns else { return (list, false) }
+        return (Array(list[prompts[prompts.count - turns]...]), true)
     }
 
     var body: some View {
@@ -256,6 +274,11 @@ struct SessionView: View {
             .onChange(of: looking) { _, now in
                 if !now && following && spot != newest { toNewest(proxy) }
             }
+            // Off screen while following the newest: the earlier turns he asked for go again, so the
+            // next swipe back lays out only the default.
+            .onChange(of: onScreen) { _, now in
+                if !now && following && turns != Self.turnStep { turns = Self.turnStep }
+            }
             // **Any movement the page did not make is his.** A drag reports a scroll phase; the crown is
             // not relied on to, so a move with no jump of ours behind it and no change in the content's
             // height (which is the page re-laying out, and can clamp the offset) counts as his scroll
@@ -263,6 +286,9 @@ struct SessionView: View {
             .onScrollGeometryChange(for: Scroll.self) { Scroll(y: $0.contentOffset.y, h: $0.contentSize.height) } action: { old, new in
                 if new.h != old.h {
                     if following { toSpot(proxy) }
+                    // Earlier turns were added above: back onto the row that was at the top, so they
+                    // arrive above him rather than under his finger.
+                    else if let a = keepAtTop { keepAtTop = nil; jumping = true; proxy.scrollTo(a, anchor: .top) }
                 } else if jumping {
                     jumping = false
                     landed = true
@@ -447,9 +473,20 @@ struct SessionView: View {
     private var content: some View {
         // An ordinary gap between items, and the landing's height above the newest one only (`room`),
         // so the item before it is off the top of the screen when it lands.
-        VStack(alignment: .leading, spacing: Landing.itemGap) {
-            // The whole list, oldest first: the page opens on the newest thing, so the history above it
-            // costs nothing to carry and is there when he scrolls up.
+        let (shown, more) = window
+        return VStack(alignment: .leading, spacing: Landing.itemGap) {
+            // **Scrolled to the very top lays out more** (`turns`). Asked of a marker's visibility, not
+            // of offsets, which this scroll view reports unreliably (docs/WATCH.md); only after his own
+            // scroll, so the page laying out never asks.
+            if more {
+                Color.clear.frame(height: 1)
+                    .onScrollVisibilityChange(threshold: 1) { seen in
+                        guard seen, !following, keepAtTop == nil else { return }
+                        keepAtTop = shown.first.map { "ev\($0.seq)" }
+                        turns += Self.turnStep
+                        Hub.log("session-more", ["row": key, "turns": turns])
+                    }
+            }
             ForEach(shown, id: \.seq) { e in
                 room("ev\(e.seq)")
                 row(e).id("ev\(e.seq)").onGeometryChange(for: CGFloat.self) { $0.size.height } action: { heights["ev\(e.seq)"] = $0 }

@@ -48,7 +48,7 @@ request asks `onScreen` (an environment value `RootView` sets per page) first.
 
 ### Home — the conversation
 
-`HomeView`: the last ten exchanges of the shared hub thread, each in full — his words as the hub
+`HomeView`: the last five exchanges of the shared hub thread, each in full — his words as the hub
 transcribed them, the reply as it was written — over `/api/voice-messages?focus=hub&mode=active`,
 the same current-context thread the phone and the TV show, in whichever mode `agent_mode` selects. It
 follows `/api/voice-stream`: a `message` frame reloads the thread, and the worker's `activity` frames
@@ -218,6 +218,15 @@ frames of `/api/session-stream`; server.js, the event log): his words (`prompt`)
 session says between them (`text`) and its replies, each with its position in the conversation (`seq`,
 given by the hub) and an identity (`id`). The page draws that list and nothing else, oldest first. The
 phone draws the same list by the same rule (`cards/repos.js`), which is what makes the two agree.
+
+**Only the tail is laid out.** The session page draws the last three turns of that list (counted back
+by his prompts) and home the last ten rows of the thread (`Chat.window`); scrolled to the very top,
+each lays out one step more, and the row that was at the top is put back at the top once it has.
+Laying out everything held (up to ten turns with every tool call in them on a session, forty rows on
+home) is what made swiping between the two pages lag. The top is noticed by a 1pt marker's visibility,
+like the end (§ Double tap, and scrolling), and only once he has scrolled himself, so the page laying
+out never asks for more. Each falls back to one step when it lands on the newest again or leaves the
+screen (a session only while it is following the newest, so a place he scrolled to is kept).
 
 **The whole rule** (`Sessions.frame`): the next seq is appended; a gap means the hub has what went by
 while this was not listening, and it is fetched from the last seq held (`/api/sessions/:id/events

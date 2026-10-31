@@ -1,7 +1,7 @@
 import SwiftUI
 import WatchKit
 
-/// The page the app opens on, and the only one the conversation lives on: the last ten exchanges of
+/// The page the app opens on, and the only one the conversation lives on: the last five exchanges of
 /// the shared hub thread in full — his words as they were transcribed, the reply as it was written —
 /// with the control at the bottom edge carrying the command and the x beside it throwing one away.
 ///
@@ -32,7 +32,9 @@ struct HomeView: View {
     /// take the view from an answer he is looking at** (`holds`). It lands as soon as he stops looking.
     @State private var landed: String?
     @State private var looking = false
-
+    /// The row that was at the top when he scrolled there and more rows were asked for: the scroll goes
+    /// back onto it once they have laid out above it.
+    @State private var keepAtTop: String?
 
     var body: some View {
         ScrollViewReader { proxy in
@@ -40,6 +42,17 @@ struct HomeView: View {
                 // Items sit an ordinary gap apart; only the newest has the landing's height above it, so
                 // the one before it is off the top when it lands (`lift`).
                 VStack(alignment: .leading, spacing: Landing.itemGap) {
+                    // **Scrolled to the very top lays out more** (`Chat.window`). Asked of a marker's
+                    // visibility, not of offsets, which this scroll view reports unreliably
+                    // (docs/WATCH.md); only after his own scroll, so the page laying out never asks.
+                    if chat.hasMore {
+                        Color.clear.frame(height: 1)
+                            .onScrollVisibilityChange(threshold: 1) { seen in
+                                guard seen, !pinned, keepAtTop == nil else { return }
+                                keepAtTop = chat.recent.first.map { "msg\($0.id)" }
+                                chat.showMore()
+                            }
+                    }
                     ForEach(chat.recent) { m in
                         room("msg\(m.id)")
                         ThreadRow(text: m.text ?? "", user: m.role == "user", session: m.session_id != nil)
@@ -90,6 +103,9 @@ struct HomeView: View {
             }
             .onScrollGeometryChange(for: CGFloat.self) { $0.contentSize.height } action: { _, _ in
                 if pinned { jump(proxy) }
+                // Rows were added above: put back the one that was at the top, so they arrive above
+                // him rather than under his finger.
+                else if let a = keepAtTop { keepAtTop = nil; proxy.scrollTo(a, anchor: .top) }
             }
             .onScrollPhaseChange { _, now in
                 if now == .interacting || now == .tracking { pinned = false }
@@ -113,7 +129,10 @@ struct HomeView: View {
         }
         .onChange(of: dimmed) { _, _ in attend() }
         .onChange(of: phase) { _, _ in attend() }
-        .onChange(of: onScreen) { _, _ in attend() }
+        .onChange(of: onScreen) { _, now in
+            if !now { chat.resetWindow() }
+            attend()
+        }
         .onChange(of: chat.unread) { _, _ in attend() }
         .recordsWhenAsked()
     }
@@ -178,6 +197,8 @@ struct HomeView: View {
     }
 
     private func land(_ proxy: ScrollViewProxy) {
+        chat.resetWindow()
+        keepAtTop = nil
         landed = target
         pinned = true
         jump(proxy, animated: true)

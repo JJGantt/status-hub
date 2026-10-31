@@ -5734,6 +5734,7 @@ async function closeExempt(nowET, rows) {
 // The hub's heartbeat comes from this loop: it runs every minute doing real work, so a hub whose event
 // loop is wedged goes quiet to the responder the same way a dead one does.
 setInterval(() => { ops.beat(60); dueTick().catch((e) => console.error('[due] error', e.message)); }, 60000);
+ops.beat(60);   // at boot too, so a restart does not leave a minute's gap on top of the deploy's own
 
 // A published report announces itself on the phone.
 //

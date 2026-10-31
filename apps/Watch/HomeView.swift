@@ -28,6 +28,10 @@ struct HomeView: View {
     /// same update that lands it, and a height measured only once an item IS the newest arrives a layout
     /// pass after the jump, so the room above it (`room`) came too late or not at all.
     @State private var heights: [String: CGFloat] = [:]
+    /// What the view is held at — `target`, except while something newer is HELD: **an arrival does not
+    /// take the view from an answer he is looking at** (`holds`). It lands as soon as he stops looking.
+    @State private var landed: String?
+    @State private var looking = false
 
 
     var body: some View {
@@ -73,15 +77,16 @@ struct HomeView: View {
             .scrollIndicators(.never)
             .topOfTheScreen(scrollTop: Landing.top)
             .background(Color.black.ignoresSafeArea())
-            .onChange(of: target) { _, _ in
-                pinned = true
-                jump(proxy, animated: true)
+            .onChange(of: target) { _, now in
+                if holds(now) { Hub.log("land-held", ["at": landed ?? "", "next": now ?? ""]); return }
+                land(proxy)
             }
             // Asked to land again on the same answer, after scrolling away from it: the target has not
             // changed, so nothing above moves the view.
-            .onChange(of: chat.landings) { _, _ in
-                pinned = true
-                jump(proxy, animated: true)
+            .onChange(of: chat.landings) { _, _ in land(proxy) }
+            // He stopped looking with something held: it lands now, so it is waiting for the next raise.
+            .onChange(of: looking) { _, now in
+                if !now && landed != target { land(proxy) }
             }
             .onScrollGeometryChange(for: CGFloat.self) { $0.contentSize.height } action: { _, _ in
                 if pinned { jump(proxy) }
@@ -89,7 +94,7 @@ struct HomeView: View {
             .onScrollPhaseChange { _, now in
                 if now == .interacting || now == .tracking { pinned = false }
             }
-            .onAppear { jump(proxy) }
+            .onAppear { landed = target; jump(proxy) }
             // **Unread answers** (docs/WATCH.md): an amber dot at the top while any is left, and a tap
             // on it lands on the oldest. A button of its own, so the tap does not also record.
             .overlay(alignment: .top) {
@@ -129,7 +134,7 @@ struct HomeView: View {
     /// only when the item is tall enough to reach the landing line: a short last message rests at the
     /// end of the scroll with the thread above it on screen anyway, where the room is only a blank band.
     @ViewBuilder private func room(_ id: String) -> some View {
-        if id == target && (heights[id] ?? 0) > WKInterfaceDevice.current().screenBounds.height - Landing.top - PageInset.bottom {
+        if id == landed && (heights[id] ?? 0) > WKInterfaceDevice.current().screenBounds.height - Landing.top - PageInset.bottom {
             Color.clear.frame(height: Landing.top - 2 * Landing.itemGap)
         }
     }
@@ -148,7 +153,7 @@ struct HomeView: View {
     /// **The read rule**: an unread answer counts as read after two seconds on screen, with the app in
     /// front, home showing and the wrist up. Any of those ending first stops the count.
     private func attend() {
-        let looking = !dimmed && phase == .active && onScreen
+        looking = !dimmed && phase == .active && onScreen
         chat.looking = looking
         let due = looking ? Set(chat.unread.map(\.id)).intersection(visible) : []
         for (id, t) in reading where !due.contains(id) { t.cancel(); reading[id] = nil }
@@ -162,12 +167,28 @@ struct HomeView: View {
         }
     }
 
+    /// **Whether an arrival waits.** It does while he is looking AND reading: the view is on an answer,
+    /// or he has scrolled it himself. His own words always land — a transcript means he just spoke, and
+    /// while the view is on his words he is waiting for the answer, not reading. A tap on the unread dot
+    /// or an answer's notification (`chat.landings`) is asked for, so it never waits.
+    private func holds(_ next: String?) -> Bool {
+        guard looking, let landed, next != landed, !(next ?? "").hasPrefix("pending") else { return false }
+        if !pinned { return true }
+        return chat.recent.contains { "msg\($0.id)" == landed && $0.role != "user" }
+    }
+
+    private func land(_ proxy: ScrollViewProxy) {
+        landed = target
+        pinned = true
+        jump(proxy, animated: true)
+    }
+
     private func jump(_ proxy: ScrollViewProxy, animated: Bool = false) {
-        guard let target else { return }
+        guard let at = landed ?? target else { return }
         if animated {
-            withAnimation(.easeOut(duration: 0.2)) { proxy.scrollTo(target, anchor: .top) }
+            withAnimation(.easeOut(duration: 0.2)) { proxy.scrollTo(at, anchor: .top) }
         } else {
-            proxy.scrollTo(target, anchor: .top)
+            proxy.scrollTo(at, anchor: .top)
         }
     }
 

@@ -204,6 +204,13 @@ struct SessionView: View {
     /// of them: the newest changes in the same update that lands it, and a height taken only once an item
     /// IS the newest arrives after the landing, or never when its height does not change.
     @State private var heights: [String: CGFloat] = [:]
+    /// The item the page is on — `newest`, except while something newer is held: **an arrival does not
+    /// take the page from a reply he is looking at.** It lands once he stops looking (home's rule too).
+    @State private var spot: String?
+    @Environment(\.isLuminanceReduced) private var dimmed
+    @Environment(\.scenePhase) private var phase
+    @Environment(\.onScreen) private var onScreen
+    private var looking: Bool { !dimmed && phase == .active && onScreen }
 
     @ObservedObject private var speaker = Speaker.shared
 
@@ -240,14 +247,22 @@ struct SessionView: View {
             // transcribed, then each tool call as it comes, then the reply — whichever is last. Never
             // an older one: the tool calls and his words stay until the reply that replaces them is
             // in hand (`Sessions.sessionFrame`).
-            .onChange(of: newest) { _, _ in if following { toNewest(proxy) } }
+            .onChange(of: newest) { _, now in
+                guard following else { return }
+                if holds(now) { Hub.log("land-held", ["row": key, "at": spot ?? "", "next": now ?? ""]); return }
+                toNewest(proxy)
+            }
+            // He stopped looking with something held: it lands now, so it is waiting for the next raise.
+            .onChange(of: looking) { _, now in
+                if !now && following && spot != newest { toNewest(proxy) }
+            }
             // **Any movement the page did not make is his.** A drag reports a scroll phase; the crown is
             // not relied on to, so a move with no jump of ours behind it and no change in the content's
             // height (which is the page re-laying out, and can clamp the offset) counts as his scroll
             // too. The page's own jumps are never animated, so each is exactly one move to account for.
             .onScrollGeometryChange(for: Scroll.self) { Scroll(y: $0.contentOffset.y, h: $0.contentSize.height) } action: { old, new in
                 if new.h != old.h {
-                    if following { toNewest(proxy) }
+                    if following { toSpot(proxy) }
                 } else if jumping {
                     jumping = false
                     landed = true
@@ -386,9 +401,23 @@ struct SessionView: View {
     /// The top of the newest item at the top of the screen, or as near it as the end of the content
     /// allows: a short last item sits at the bottom with what came before it filling the screen.
     private func toNewest(_ proxy: ScrollViewProxy) {
-        guard let id = newest else { return }
+        spot = newest
+        toSpot(proxy)
+    }
+
+    /// Back onto the item the page is on, as the content re-lays out under it.
+    private func toSpot(_ proxy: ScrollViewProxy) {
+        guard let id = spot ?? newest else { return }
         jumping = true
         proxy.scrollTo(id, anchor: .top)
+    }
+
+    /// **Whether an arrival waits**: while he is looking and the page is on a reply. His own words from
+    /// this watch (a placeholder) always land, and so does the reply to words the page is on, since then
+    /// he is waiting rather than reading.
+    private func holds(_ next: String?) -> Bool {
+        guard looking, let spot, next != spot, !(next ?? "").hasPrefix("ph") else { return false }
+        return shown.contains { "ev\($0.seq)" == spot && $0.kind == "reply" }
     }
 
     /// **What the screen actually holds**, logged whenever the reason it might be wrong changes: the
@@ -445,7 +474,7 @@ struct SessionView: View {
     /// only when the item is tall enough to reach the landing line: a short last item rests at the end of
     /// the scroll with what came before it on screen anyway, where the room is only a blank band.
     @ViewBuilder private func room(_ id: String) -> some View {
-        if id == newest && tallEnough(id) { Color.clear.frame(height: Landing.underTitle - 2 * Landing.itemGap) }
+        if id == (spot ?? newest) && tallEnough(id) { Color.clear.frame(height: Landing.underTitle - 2 * Landing.itemGap) }
     }
 
     private func tallEnough(_ id: String) -> Bool {

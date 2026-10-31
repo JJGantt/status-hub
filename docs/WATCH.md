@@ -73,6 +73,16 @@ with what came before it above, as any list does. Blank space added so everythin
 is exactly what he does not want. The view holds that spot through the laying out that follows
 (`pinned`) until he scrolls himself. The session page lands the same way.
 
+**An arrival does not take the view from an answer he is looking at.** While home is in front with the
+wrist up, a new item — a session's relayed reply, an answer to an earlier command — is HELD if the view
+is on an answer or he has scrolled it himself; it lands the moment he stops looking (wrist down, app
+behind, another page), so it is waiting at the next raise, with the unread dot meanwhile if it is
+flagged. His own words always land, and so does the reply while the view is on his words: then he is
+waiting, not reading. A tap on the unread dot or an answer's notification is asked for and never waits.
+`landed` is the spot the view is held at, and the room above the newest item follows IT, not `target`
+— keyed on the target, the room vanished from above the answer being read and shifted it. Each hold is
+logged as `land-held`.
+
 **The landing spot is fixed, per page** (`Landing` in `WatchUI.swift`): 32pt from the top of the glass
 on home, where a full-width first line clears the corner curve and the thickest default edge; 58pt in
 a session, under its title and clear of the fade the title draws over what scrolls beneath it. It does
@@ -234,6 +244,10 @@ thank-you-shaped transcription), drops its placeholder.
 **It lands on his newest words**: a placeholder if any, else the last prompt since the last reply,
 with what the session does about them underneath; with none, the last event — the reply when it lands
 (`newest`). The top of that sits at the top of the screen.
+
+**A reply he is looking at is not taken from him** by home's rule: while the page is on a reply with
+the wrist up, a newer item (a prompt typed from elsewhere) is held in `spot` and lands when he stops
+looking. His placeholders, and the reply to words the page is on, land as before.
 
 **His scrolling ends the following**, finger or crown, and nothing moves the page after that until the
 session is opened again or HE scrolls it to the very end (letting go with the end on screen after a

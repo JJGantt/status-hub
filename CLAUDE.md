@@ -123,7 +123,7 @@ Without a runtime, a watchOS build fails in `actool` on the asset catalog; type-
 SDKs instead, which are always installed:
 
     xcrun -sdk iphoneos swiftc -typecheck -target arm64-apple-ios18.0 -D HUB_APP Sources/*.swift Shared/*.swift
-    xcrun -sdk watchos swiftc -typecheck -parse-as-library -swift-version 5 -target arm64-apple-watchos11.0 -D WATCH_APP Watch/*.swift WatchWidgets/RecordIntent.swift Shared/Auth.swift Controls/RingsView.swift
+    xcrun -sdk watchos swiftc -typecheck -parse-as-library -swift-version 5 -target arm64-apple-watchos11.0 -D WATCH_APP Watch/*.swift WatchWidgets/RecordIntent.swift Shared/Auth.swift Shared/LocationTrail.swift Controls/RingsView.swift
     xcrun -sdk watchos swiftc -typecheck -parse-as-library -swift-version 5 -target arm64-apple-watchos11.0 WatchWidgets/*.swift
 
 The iOS app's assets, Info.plists and embedding are only proven by an archive (`apps/tools/testflight.sh`, or CI).

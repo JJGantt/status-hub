@@ -7,6 +7,15 @@ computed in `server/server.js` / `server/lib/` and shipped in the payload. The c
 (`server/public/`) and the Swift widgets only paint. Deriving a value in a client is how two
 surfaces start disagreeing about the same number.
 
+## Errors are logged as errors
+
+`lib/report.js` (a copy of health/responder's reporter, installed on the first lines of server.js) sends
+every uncaught exception, unhandled rejection and `console.error` to the ops responder, and each new
+incident there starts an agent. `console.log` is invisible to it, and so is `.catch(() => {})`. A caught
+failure is logged with `console.error`; only a failure with a working fallback, or genuine noise (a temp
+file already gone), stays quiet. Page errors arrive through `/api/clientlog` as `ev: 'error'` lines
+(`public/shared.js`) and are reported as the client's. The hub's heartbeat rides `dueTick`.
+
 ## Pushing does not deploy
 
 Run `server/deploy.sh` from whichever machine changed the code. It ships and then polls `/healthz`,

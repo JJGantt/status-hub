@@ -1,4 +1,9 @@
 'use strict';
+// First, so an error anywhere below reaches the ops responder (health/responder): uncaught exceptions,
+// unhandled rejections and everything logged with console.error. An error logged with console.log is
+// invisible to it, so log errors as errors.
+const ops = require('./lib/report');
+ops.install({ machine: 'fly', service: 'status-hub' });
 const express = require('express');
 const crypto = require('crypto');
 const fs = require('fs');
@@ -288,7 +293,7 @@ async function sbWrite(path, method, body) {
 // throws into the caller.
 function alarmLog(source, ev, detail = {}, itemId = null) {
   sbWrite('alarm_log', 'POST', { source, ev, item_id: itemId, detail })
-    .catch((e) => console.log('[alarm-log] write failed:', e.message));
+    .catch((e) => console.error('[alarm-log] write failed:', e.message));
 }
 
 // THE RINGERS' LAST WORD. Every alarm clock — the TV's tv-ring and each page running alarmclock.js —
@@ -615,11 +620,11 @@ liveBuoy.start();
     const rows = await sb(`water_readings?station=eq.MYPF1&wind_kts=not.is.null&ts=gte.${encodeURIComponent(since)}`
       + '&select=ts,wind_kts,wind_dir_deg,gust_kts&order=ts.desc&limit=40');
     liveWind.seed(rows);
-  } catch (e) { console.log('[live-wind] seed failed:', e.message); }
+  } catch (e) { console.error('[live-wind] seed failed:', e.message); }
   try {
     const rows = await sb(`wave_readings?ts=gte.${encodeURIComponent(since)}&select=*&order=ts.desc&limit=40`);
     liveBuoy.seed(rows);
-  } catch (e) { console.log('[live-buoy] seed failed:', e.message); }
+  } catch (e) { console.error('[live-buoy] seed failed:', e.message); }
 })();
 
 // ---- the surf feed: what the surf app (surf-app repo, Gnarcast) reads ------------------------------
@@ -1420,7 +1425,7 @@ async function publishFallbackConfig() {
       body: JSON.stringify(row),
     });
     if (!r.ok) throw new Error(`-> ${r.status}`);
-  } catch (e) { console.log('[fallback-config] could not publish:', e.message); }
+  } catch (e) { console.error('[fallback-config] could not publish:', e.message); }
 }
 publishFallbackConfig();
 
@@ -1496,7 +1501,7 @@ function startRealtime() {
       // switch to that mode's conversation live, so the on-screen context always matches the active mode.
       if (p.new && p.new.key === 'agent_mode') pushVoice('mode', { agent: agentModeOn(p.new.value) });
       // A holder written straight into the table (the Mac's listener) is a mute taken or given back.
-      if (p.new && String(p.new.key || '').startsWith(MUTE_HOLD)) recomputeMute().catch(() => {});
+      if (p.new && String(p.new.key || '').startsWith(MUTE_HOLD)) recomputeMute().catch((e) => console.error('[mute]', e.message || e));
     })
     // Dated items and the lists that colour them. `list_items` DOES feed the status frame now — the
     // health bar's gold band is earned by clearing dated items and drained by leaving them — so a
@@ -1511,7 +1516,7 @@ function startRealtime() {
         // and what the icon should read. Pushing the badge here is what lets its own poll be a
         // backstop instead of the mechanism that keeps a cleared task from lingering on his phone.
         dirtyDue();
-        syncBadge().catch((e) => console.log('[badge] error', e.message));
+        syncBadge().catch((e) => console.error('[badge] error', e.message));
       })
     .on('postgres_changes', { event: '*', schema: 'public', table: 'lists' },
       () => { seen(); pushLists(); })
@@ -1543,7 +1548,7 @@ function startRealtime() {
     // A written report announces itself rather than being discovered: reportTick's timer is now only
     // the net under this, instead of the fastest database timer on the server.
     .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'reports' },
-      () => { seen(); reportTick().catch((e) => console.log('[report] error', e.message)); })
+      () => { seen(); reportTick().catch((e) => console.error('[report] error', e.message)); })
     .subscribe((status) => {
       console.log('realtime channel:', status);
       // SUBSCRIBED means the handshake completed, not that events will flow. Treat it
@@ -1567,7 +1572,7 @@ setInterval(() => {
   console.log(`realtime silent for ${Math.round(quiet / 1000)}s — recycling the socket`);
   try { if (hubChannel) supa.removeChannel(hubChannel); } catch (e) { console.log('removeChannel:', e.message); }
   lastRealtimeEvent = Date.now();   // give the new channel a full window before retrying
-  try { startRealtime(); } catch (e) { console.log('resubscribe failed:', e.message); }
+  try { startRealtime(); } catch (e) { console.error('resubscribe failed:', e.message); }
 }, 60000);
 
 // The watchdog above judges the socket by whether ANY event arrives, and that is a proxy it cannot
@@ -1615,7 +1620,7 @@ let lastFingerprint = null;
 let rtMark = 0;
 setInterval(async () => {
   let fp;
-  try { fp = await freshnessFingerprint(); } catch (e) { console.log('freshness probe:', e.message); return; }
+  try { fp = await freshnessFingerprint(); } catch (e) { console.error('freshness probe:', e.message); return; }
   // Sampled AFTER the read, so an event arriving during it still counts, and consumed on every run —
   // including the quiet ones — so credit cannot accumulate across intervals.
   const announced = rtEvents !== rtMark;
@@ -1638,7 +1643,7 @@ setInterval(async () => {
     dirtyRows(); dirtyNutDay(); dirtyWorkoutDay(); dirtyHeatHistory();
     try { if (hubChannel) supa.removeChannel(hubChannel); } catch (e) { console.log('removeChannel:', e.message); }
     lastRealtimeEvent = Date.now();
-    try { startRealtime(); } catch (e) { console.log('resubscribe failed:', e.message); }
+    try { startRealtime(); } catch (e) { console.error('resubscribe failed:', e.message); }
     broadcast();
     // Then everything the `list_items` subscription does, because the write this probe just caught
     // may well have been one of its — the fingerprint counts list_items rows and carries the newest
@@ -1653,7 +1658,7 @@ setInterval(async () => {
     // clients fixes only the half nobody is looking at.
     pushLists();
     dirtyDue();
-    syncBadge().catch((e) => console.log('[badge] error', e.message));
+    syncBadge().catch((e) => console.error('[badge] error', e.message));
   }
 }, FRESH_PROBE_MS);
 
@@ -1690,7 +1695,7 @@ function cgLog(req, started, fields) {
   sbWrite('app_logs', 'POST', {
     timestamp: new Date(started).toISOString(), interaction_id: id.toLowerCase(), backend: 'hub:transcribe',
     kind: 'voice_hub', latency_ms: Date.now() - started, ...fields,
-  }).catch((e) => console.log(`[cg-transcribe] log write failed: ${e.message}`));
+  }).catch((e) => console.error(`[cg-transcribe] log write failed: ${e.message}`));
 }
 // The owner's device, by its Anthropic key. Every /api/cg route but the transcriber's is behind this alone.
 function cgOwner(req) {
@@ -1728,7 +1733,7 @@ app.post('/api/cg/transcribe', async (req, res) => {
     cgLog(req, arrived, { output: `${size} bytes, upload ${uploaded - arrived}ms, groq ${groq}ms` });
     res.json({ transcript });
   } catch (e) {
-    console.log(`[cg-transcribe] FAILED: ${e.status || 500} ${String(e.message || e).slice(0, 200)}`);
+    console.error(`[cg-transcribe] FAILED: ${e.status || 500} ${String(e.message || e).slice(0, 200)}`);
     cgLog(req, arrived, { error: String(e.message || e).slice(0, 200),
       output: uploaded ? `upload ${uploaded - arrived}ms, failed in groq` : 'failed during upload' });
     res.status(e.status || 500).json({ error: String(e.message || e) });
@@ -2561,7 +2566,7 @@ app.post('/api/tts', express.json({ limit: '256kb' }), async (req, res) => {
     res.set({ 'Content-Type': 'audio/wav', 'X-Chunks': String(list.length), 'Access-Control-Expose-Headers': 'X-Chunks' });
     res.send(wav);
   } catch (e) {
-    console.log('[tts] FAILED', String(e.message || e));
+    console.error('[tts] FAILED', String(e.message || e));
     res.status(502).json({ error: String(e.message || e).slice(0, 300) });
   }
 });
@@ -2645,7 +2650,7 @@ app.post('/api/register-push', express.json(), async (req, res) => {
     if (setTZ(tz)) {                       // false when unchanged or not a real IANA zone
       console.log(`[tz] phone reports ${tz} — persisting`);
       try { await putSetting('display_tz', tz); dirtySettings(); }
-      catch (e) { console.log('[tz] persist failed:', e.message); }   // in-memory zone still moved
+      catch (e) { console.error('[tz] persist failed:', e.message); }   // in-memory zone still moved
     }
     res.json({ ok: true });
   } catch (e) { res.status(500).json({ error: String(e.message || e) }); }
@@ -3121,7 +3126,7 @@ async function soundsLikeHim(id, file, source) {
     fs.promises.unlink(wav).catch(() => {});
     fetch(`${SUPABASE_URL}/storage/v1/object/${object}`, {
       method: 'DELETE', headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` },
-    }).catch(() => {});
+    }).catch((e) => console.error('[voice-verify] clip delete', e.message || e));
   }
 }
 
@@ -3150,7 +3155,7 @@ async function keepClip(id, file, contentType, bytes, dur) {
     if (!r.ok) throw new Error(`upload -> ${r.status}`);
     await sbWrite(`voice_requests?id=eq.${id}`, 'PATCH',
       { audio: { path, bytes, type, ...(dur > 0 ? { dur: +dur.toFixed(1) } : {}) } });
-  } catch (e) { console.log(`[voice-command] could not keep clip ${id}: ${e.message || e}`); }
+  } catch (e) { console.error(`[voice-command] could not keep clip ${id}: ${e.message || e}`); }
 }
 
 // ---- SLEEP: Apple Watch sleep, as the iPhone app reads it from Apple Health (docs/SLEEP.md) -------
@@ -3179,7 +3184,7 @@ app.post('/api/health/sleep', express.json({ limit: '1mb' }), async (req, res) =
     console.log(`[sleep] +${rows.length} -${deleted.length} (sent ${samples.length})`);
     res.json({ ok: true, stored: rows.length, deleted: deleted.length });
   } catch (e) {
-    console.log('[sleep] write failed:', e.message);
+    console.error('[sleep] write failed:', e.message);
     res.status(502).json({ ok: false });
   }
 });
@@ -3237,7 +3242,7 @@ app.post('/api/health/samples', express.json({ limit: '4mb' }), async (req, res)
   } catch (e) {
     // A failed write is the database saying it is in trouble: back off a minute, not a page's gap.
     healthNextAt = Math.max(healthNextAt, Date.now() + 60_000);
-    console.log('[health] write failed:', e.message);
+    console.error('[health] write failed:', e.message);
     res.status(502).json({ ok: false });
   }
 });
@@ -3273,7 +3278,7 @@ app.post('/api/location/points', express.json({ limit: '4mb' }), async (req, res
     console.log(`[location] ${device} +${rows.length} (sent ${points.length})`);
     res.json({ ok: true, stored: rows.length });
   } catch (e) {
-    console.log('[location] write failed:', e.message);
+    console.error('[location] write failed:', e.message);
     res.status(502).json({ ok: false });
   }
 });
@@ -3320,7 +3325,7 @@ app.post('/api/rewind', async (req, res) => {
       });
       if (!r.ok) throw new Error(`upload -> ${r.status}`);
       audio = { path: object, bytes: size, type: ct };
-    } catch (e) { console.log(`[rewind] could not keep clip ${id}: ${e.message || e}`); }
+    } catch (e) { console.error(`[rewind] could not keep clip ${id}: ${e.message || e}`); }
     await sbWrite('rewind_grabs', 'POST', { id, held_s: Number.isFinite(held) ? held : null, audio, model: result.model,
       transcript: result.transcript, segments: result.segments, error, ms });
     console.log(`[rewind] ${id} ${size} bytes ${Number.isFinite(held) ? held.toFixed(1) + 's ' : ''}${result.model} ` +
@@ -3408,7 +3413,7 @@ app.post('/api/voice-command', async (req, res) => {
     } catch (e) {
       if (!e.allFailed || dry || !(await macWorkerUp())) throw e;
       untranscribed = true;
-      console.log('[voice-command] every transcription provider failed; queued for the Mac\'s local Whisper');
+      console.error('[voice-command] every transcription provider failed; queued for the Mac\'s local Whisper');
     }
     // Bytes per second of speech is what decides whether a clip fits Groq's cap, and it is set by the
     // recording device, not by us — so every clip reports it.
@@ -3581,6 +3586,12 @@ app.post('/api/clientlog', express.json({ limit: '256kb' }), async (req, res) =>
   for (const l of lines) {
     try { console.log('[clientlog]', JSON.stringify(l).slice(0, 900)); } catch (_) {}
     if (l.ev === 'alarmclock' || l.ev === 'tvring') noteRinger(l, req);
+    // A client's own error, sent by the page's global handler (public/shared.js) or by an app, is
+    // reported as that client's, not the hub's.
+    if (l.ev === 'error') {
+      ops.report(String(l.msg || 'client error'), { machine: 'client', service: `${l.src || 'unknown'}${l.page ? `:${l.page}` : ''}`,
+        stack: l.stack ? String(l.stack) : undefined, context: { ua: req.headers['user-agent'] } });
+    }
     if (CLIENT_LOG_SOURCES.has(l.src) && l.ev && !CLIENT_LOG_SKIP.has(l.ev)) {
       const { src, ev, t, ...data } = l;
       const at = Date.parse(t);
@@ -3591,7 +3602,7 @@ app.post('/api/clientlog', express.json({ limit: '256kb' }), async (req, res) =>
   }
   if (keep.length) {
     try { await sbWrite('client_log', 'POST', keep); }
-    catch (e) { console.log('[clientlog] not kept:', e.message || e); return res.status(502).end(); }
+    catch (e) { console.error('[clientlog] not kept:', e.message || e); return res.status(502).end(); }
   }
   res.status(204).end();
 });
@@ -3599,7 +3610,7 @@ app.post('/api/clientlog', express.json({ limit: '256kb' }), async (req, res) =>
 async function sweepClientLog() {
   const cutoff = new Date(Date.now() - 14 * 24 * 3600 * 1000).toISOString();
   try { await sbWrite(`client_log?at=lt.${cutoff}`, 'DELETE'); }
-  catch (e) { console.log('client_log sweep failed:', e.message || e); }
+  catch (e) { console.error('client_log sweep failed:', e.message || e); }
 }
 setInterval(sweepClientLog, 24 * 3600 * 1000);
 sweepClientLog();
@@ -3636,7 +3647,7 @@ async function sweepAttachments() {
       body: JSON.stringify({ prefixes: old }),
     });
     console.log(`attachment sweep: deleted ${old.length} object(s) older than 7 days`);
-  } catch (e) { console.log('attachment sweep failed:', e.message || e); }
+  } catch (e) { console.error('attachment sweep failed:', e.message || e); }
 }
 setInterval(sweepAttachments, 24 * 3600 * 1000);
 sweepAttachments();
@@ -3838,7 +3849,7 @@ async function ensureLog(conv) {
       if (!stored.length && t.prompt) log.events.push({ seq: ++log.seq, id: crypto.randomUUID(), kind: 'prompt', text: cleanSaid(t.prompt), seen: true, at: t.at });
       if (t.reply) log.events.push({ seq: ++log.seq, id: crypto.randomUUID(), kind: 'reply', text: cleanSaid(t.reply), at: t.at });
     }
-  } catch (e) { console.log('[sessions] seed:', e.message); }
+  } catch (e) { console.error('[sessions] seed:', e.message); }
   sweepLogs();
   return log;
 }
@@ -3902,7 +3913,7 @@ function takeEvents(conv, rowId, log, turn, events) {
 /** The turn's one-sentence summary onto its `desk_turns` row (data-layer 00133), where get_sessions reads it. */
 async function storeSummary(rowId, at, reply, summary) {
   try { await sbWrite('rpc/desk_turn_summary', 'POST', { conv: await convOfRow(rowId), turn_at: at, turn_reply: reply, turn_summary: summary }); }
-  catch (e) { console.log('[sessions] store summary:', e.message); }
+  catch (e) { console.error('[sessions] store summary:', e.message); }
 }
 
 /** The finished turn, in order, onto its `desk_turns` row (data-layer 00118). One write a turn. */
@@ -3911,7 +3922,7 @@ function storeTurn(conv, at, reply, events) {
     id, kind, text, ...(kind === 'prompt' ? { seen: seen !== false, ...(cmd ? { cmd } : {}) } : {}) }));
   if (!stored.length) return;
   sbWrite('rpc/desk_turn_events', 'POST', { conv, turn_at: at, turn_reply: reply, turn_events: stored })
-    .catch((e) => console.log('[sessions] store turn:', e.message));
+    .catch((e) => console.error('[sessions] store turn:', e.message));
 }
 
 /**
@@ -3993,7 +4004,7 @@ app.post('/api/session-activity', express.json({ limit: '8mb' }), async (req, re
   }
   let answer = {};
   try { answer = await logFrame(session, b, state, text, at); }
-  catch (e) { console.log('[sessions] log:', e.message); }
+  catch (e) { console.error('[sessions] log:', e.message); }
   if (done && text && b.summary_coming !== true) notifySessionReply(session, text, at);
   res.json(answer);
 });
@@ -4022,7 +4033,7 @@ async function notifySessionReply(sessionId, text, at, summary) {
     // way — the payload is what the app reads and it is unchanged.
     const body = (typeof summary === 'string' && summary.trim()) ? summary.trim() : text;
     await pushAll('session', title, body, key, { category: 'SESSION_REPLY', payload: { session_id: sessionId } });
-  } catch (e) { console.log('[session-push]', e.message); }
+  } catch (e) { console.error('[session-push]', e.message); }
 }
 
 // The Settings → Push switch, which every reply push obeys.
@@ -4049,7 +4060,7 @@ async function notifyAnswer(row) {
     const title = words.length > 80 ? words.slice(0, 79) + '…' : words || 'Hub';
     await pushAll('answer', title, String(row.text || '').slice(0, 1500), key,
       { category: 'VOICE_ANSWER', payload: { voice_message_id: row.id } });
-  } catch (e) { console.log('[answer-push]', e.message); }
+  } catch (e) { console.error('[answer-push]', e.message); }
 }
 
 app.post('/api/voice-activity', express.json(), (req, res) => {
@@ -4848,7 +4859,7 @@ app.post('/api/todos/complete', express.json(), async (req, res) => {
     console.log(`[todos] ${b.undo ? 'uncomplete' : 'complete'} ${id}`);
     res.json({ ok: true, completed_at: completedAt });
     announceListWrite();
-    syncBadge().catch(() => {});   // don't make the caller wait on APNs
+    syncBadge().catch((e) => console.error('[badge]', e.message || e));   // don't make the caller wait on APNs
   } catch (e) { res.status(500).json({ error: String(e.message || e) }); }
 });
 app.post('/api/todos/clear', express.json(), async (req, res) => {
@@ -4864,7 +4875,7 @@ app.post('/api/todos/clear', express.json(), async (req, res) => {
     // authoritative count to the devices a moment later.
     res.json({ ok: true });
     announceListWrite();
-    syncBadge().catch(() => {});   // don't make the caller wait on APNs
+    syncBadge().catch((e) => console.error('[badge]', e.message || e));   // don't make the caller wait on APNs
   } catch (e) { res.status(500).json({ error: String(e.message || e) }); }
 });
 // Snooze: push an item's due time out by N hours from NOW (not from its old due, which may be long
@@ -4883,7 +4894,7 @@ app.post('/api/todos/snooze', express.json(), async (req, res) => {
     await sbWrite(`list_items?id=eq.${encodeURIComponent(id)}`, 'PATCH', { due, updated: new Date().toISOString() });
     announceListWrite();
     res.json({ ok: true, due, badge: await overdueCount() });
-    syncBadge().catch(() => {});
+    syncBadge().catch((e) => console.error('[badge]', e.message || e));
   } catch (e) { res.status(500).json({ error: String(e.message || e) }); }
 });
 
@@ -5152,7 +5163,7 @@ function pushSessions() {
     if (!sessionClients.size) return;
     let payload;
     try { payload = await buildSessions(); }
-    catch (e) { console.log('[sessions] push build failed:', e.message); return; }
+    catch (e) { console.error('[sessions] push build failed:', e.message); return; }
     const frame = 'event: sessions\ndata: ' + JSON.stringify(payload) + '\n\n';
     for (const res of sessionClients) { try { res.write(frame); } catch {} }
   }, 150);
@@ -5502,7 +5513,7 @@ function tvPush(row) {
   if (!tvClients.size && !TV_WAKE_OPS.has(row.op)) {
     // Nobody to do it: answer the row now so the caller is not left waiting for the timeout.
     sbWrite(`tv_commands?id=eq.${row.id}`, 'PATCH',
-      { done_at: new Date().toISOString(), result: { ok: false, error: 'the TV is off (its app is not connected)' } }).catch(() => {});
+      { done_at: new Date().toISOString(), result: { ok: false, error: 'the TV is off (its app is not connected)' } }).catch((e) => console.error('[tv] answer', e.message || e));
   }
 }
 app.get('/api/tv/stream', async (req, res) => {
@@ -5560,8 +5571,8 @@ async function sbInsert(table, row) {
   } catch (_) { return false; }
 }
 const reminderCtx = { sb, supaInsert: sbInsert, apns, settingsAll, log: (m) => console.log('[weight-reminder]', m) };
-setInterval(() => weightReminder.tick(reminderCtx).catch((e) => console.log('[weight-reminder] error', e.message)), 60000);
-weightReminder.tick(reminderCtx).catch(() => {});  // also evaluate once on boot
+setInterval(() => weightReminder.tick(reminderCtx).catch((e) => console.error('[weight-reminder] error', e.message)), 60000);
+weightReminder.tick(reminderCtx).catch((e) => console.error('[weight-reminder]', e.message || e));  // also evaluate once on boot
 console.log(`[weight-reminder] armed (apns: ${apns.configured() ? 'configured, ' + apns.ENV : 'NOT configured'})`);
 
 // ---- reminder firing: app-push a reminder once its due time (local) has passed. Dedupe via a
@@ -5682,7 +5693,7 @@ async function dueTick() {
   dueNextAt = earlierOf(dueNextAt, await closeExempt(nowET, rows));
   // The badge follows what just fired or closed. It is pushed from the `list_items` subscription too,
   // so its own timer can be a backstop rather than the thing that keeps the icon honest.
-  syncBadge().catch((e) => console.log('[badge] error', e.message));
+  syncBadge().catch((e) => console.error('[badge] error', e.message));
 }
 
 // Exempt items close themselves once their moment has gone. A shift is not something he finishes;
@@ -5710,11 +5721,13 @@ async function closeExempt(nowET, rows) {
       await sbWrite(`list_items?id=eq.${encodeURIComponent(r.id)}`, 'PATCH',
         { completed_at: etNowString(), updated: new Date().toISOString() });
       console.log(`[due] closed exempt ${r.id} "${String(r.title || r.text).slice(0, 40)}"`);
-    } catch (e) { console.log('[due] closeExempt:', e.message); }
+    } catch (e) { console.error('[due] closeExempt:', e.message); }
   }
   return next;
 }
-setInterval(() => dueTick().catch((e) => console.log('[due] error', e.message)), 60000);
+// The hub's heartbeat comes from this loop: it runs every minute doing real work, so a hub whose event
+// loop is wedged goes quiet to the responder the same way a dead one does.
+setInterval(() => { ops.beat(60); dueTick().catch((e) => console.error('[due] error', e.message)); }, 60000);
 
 // ---- health investigator ---------------------------------------------------------------------
 // A machine unhealthy past what is normal for it gets a Claude session in the `health` repo, started
@@ -5757,7 +5770,7 @@ async function investigateTick() {
     return;   // one per tick; anything else still due is looked at next minute, against the updated ledger
   }
 }
-setInterval(() => investigateTick().catch((e) => console.log('[investigate] error', e.message)), 60000);
+setInterval(() => investigateTick().catch((e) => console.error('[investigate] error', e.message)), 60000);
 
 // A published report announces itself on the phone.
 //
@@ -5792,9 +5805,9 @@ async function reportTick() {
 // This only covers an event the subscription missed while deaf, so it is minutes rather than the 20s
 // that made it the fastest database timer here.
 const REPORT_BACKSTOP_MS = 10 * 60 * 1000;
-setInterval(() => reportTick().catch((e) => console.log('[report] error', e.message)), REPORT_BACKSTOP_MS);
-reportTick().catch(() => {});
-dueTick().catch(() => {});
+setInterval(() => reportTick().catch((e) => console.error('[report] error', e.message)), REPORT_BACKSTOP_MS);
+reportTick().catch((e) => console.error('[report]', e.message || e));
+dueTick().catch((e) => console.error('[due]', e.message || e));
 console.log('[due] firing armed');
 
 // ---- badge sync. A reminder can be completed from anywhere — the hub UI, a voice command, the
@@ -5817,8 +5830,8 @@ async function syncBadge() {
 // fires, so this only catches a change that arrived while the socket was deaf. It was a 60s count of
 // every open dated item, and the count changes a handful of times a day.
 const BADGE_BACKSTOP_MS = 10 * 60 * 1000;
-setInterval(() => syncBadge().catch((e) => console.log('[badge] error', e.message)), BADGE_BACKSTOP_MS);
-syncBadge().catch(() => {});
+setInterval(() => syncBadge().catch((e) => console.error('[badge] error', e.message)), BADGE_BACKSTOP_MS);
+syncBadge().catch((e) => console.error('[badge]', e.message || e));
 
 // ---- retention. Clearing is a SOFT delete so it can be undone, but that's only tenable if the rows
 // don't pile up forever. Anything cleared longer ago than the window is hard-deleted. Hourly is
@@ -5828,10 +5841,10 @@ async function purgeCleared() {
   const cutoff = new Date(Date.now() - PURGE_AFTER_DAYS * 86400000).toISOString();
   try {
     await sbWrite(`list_items?deleted=eq.true&updated=lt.${encodeURIComponent(cutoff)}`, 'DELETE');
-  } catch (e) { console.log('[purge] list_items:', e.message); }
+  } catch (e) { console.error('[purge] list_items:', e.message); }
 }
-setInterval(() => purgeCleared().catch(() => {}), 3600000);
-purgeCleared().catch(() => {});
+setInterval(() => purgeCleared().catch((e) => console.error('[purge]', e.message || e)), 3600000);
+purgeCleared().catch((e) => console.error('[purge]', e.message || e));
 
 // ---- login page (server-rendered; public, no client modules) ----
 function loginHtml(err) {

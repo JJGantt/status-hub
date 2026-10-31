@@ -2,6 +2,19 @@
 // Kept dependency-free so it fully initializes before any card module evaluates (avoids the
 // circular-import temporal-dead-zone that bites a shared `const` imported from core.js).
 
+// Every page's uncaught error reaches the hub as a client-log line with `ev: 'error'`, and the hub hands
+// it to the ops responder (health/responder). Here, in the first module every page evaluates, so it is
+// listening before anything else can throw; a beacon, so a page on its way out still gets it sent.
+function reportPageError(message, stack) {
+  try {
+    const body = JSON.stringify({ src: 'web', ev: 'error', page: location.pathname, msg: String(message).slice(0, 500),
+      stack: String(stack || '').slice(0, 2000), t: new Date().toISOString() });
+    navigator.sendBeacon('/api/clientlog', new Blob([body], { type: 'application/json' }));
+  } catch (_) { /* nothing left to report it with */ }
+}
+addEventListener('error', (e) => reportPageError(e.message || 'error', e.error && e.error.stack));
+addEventListener('unhandledrejection', (e) => reportPageError((e.reason && e.reason.message) || String(e.reason), e.reason && e.reason.stack));
+
 export const TOUCH = matchMedia('(pointer: coarse)').matches; // phone/tablet: tap-only, no hover previews
 
 // Mac app view (?mode=mac): the landscape TV wall rendered INTERACTIVELY — chat as a docked VS-Code-style

@@ -83,6 +83,7 @@ function paint() {
     : e.kind === 'reply' ? `<div class="sb-reply">${md(String(e.text || '').trim())}</div>`
     : `<div class="sb-thought">${md(e.text || '')}</div>`).join('') +
     (working ? toolLine(tool) + '<div class="sb-caret">▍</div>' : '');
+  fit();
 }
 
 async function load(id) {
@@ -110,6 +111,33 @@ const vo = document.getElementById('vo');
 const ss = document.getElementById('ss');
 let view = 'session';
 
+// ---- width -----------------------------------------------------------------------------------------
+// The app's window spans the screen and is see-through (the hub sends it width 1); the panel is drawn
+// here. `sidebar_width` is its MINIMUM, as a fraction of the screen. Nothing on the TV scrolls, so a
+// response that would run off the top widens the panel until the whole of it is below the fade, and the
+// next shorter one brings it back to the minimum. The latest reply (or, mid-turn, the latest thing it
+// said) is what must fit; a narrower window (bin/tv's own width) is filled from edge to edge.
+const panel = document.getElementById('sb');
+const FADE = 70;   // the top mask on the conversation box, px: text under it is not fully visible
+let minWidth = 0.35;
+
+function fit() {
+  const W = window.innerWidth;
+  const box = view === 'orchestrator' ? voBody : body;
+  const fits = (w) => {
+    panel.style.width = w + 'px';
+    const els = box.querySelectorAll('.sb-reply, .sb-thought');
+    const el = els[els.length - 1];
+    return !el || el.getBoundingClientRect().top >= box.getBoundingClientRect().top + FADE;
+  };
+  const min = Math.min(W, Math.round(minWidth * W));
+  if (fits(min) || !fits(W)) return;   // fits at the minimum, or nothing fits it and it stays full
+  let lo = min, hi = W;
+  while (hi - lo > 8) { const mid = (lo + hi) >> 1; if (fits(mid)) hi = mid; else lo = mid; }
+  fits(hi);
+}
+window.addEventListener('resize', () => fit());
+
 let build = null;
 function frame(d) {
   if (!d) return;
@@ -117,6 +145,8 @@ function frame(d) {
   if (d.commit) { if (build && d.commit !== build) { location.reload(); return; } build = d.commit; }
   view = d.sidebar_view === 'orchestrator' ? 'orchestrator' : 'session';
   if (Number(d.sidebar_font) > 0) document.body.style.fontSize = d.sidebar_font + 'px';
+  if (Number(d.sidebar_width) > 0) minWidth = Number(d.sidebar_width);
+  fit();
   vo.hidden = view !== 'orchestrator';
   ss.hidden = view === 'orchestrator';
   if (view === 'orchestrator') loadVoice();
@@ -180,6 +210,7 @@ function paintVoice() {
     : `<div class="sb-reply">${md(String(m.text || '').trim())}</div>`).join('') +
     [...pending.values()].map((p) => `<div class="sb-words">${esc(p.text)}</div>`).join('') +
     (working ? toolLine(voTool) + '<div class="sb-caret">▍</div>' : '');
+  fit();
 }
 
 liveStream('/api/voice-stream', {

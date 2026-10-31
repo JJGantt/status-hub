@@ -1500,7 +1500,7 @@ function startRealtime() {
       // When the agent_mode toggle flips (from anywhere — voice, another device), tell the voice panel to
       // switch to that mode's conversation live, so the on-screen context always matches the active mode.
       if (p.new && p.new.key === 'agent_mode') pushVoice('mode', { agent: agentModeOn(p.new.value) });
-      if (p.new && (p.new.key === 'tv_sidebar_view' || p.new.key === 'tv_sidebar_font')) pushSessions();
+      if (p.new && ['tv_sidebar_view', 'tv_sidebar_font', 'tv_sidebar_width'].includes(p.new.key)) pushSessions();
       // A holder written straight into the table (the Mac's listener) is a mute taken or given back.
       if (p.new && String(p.new.key || '').startsWith(MUTE_HOLD)) recomputeMute().catch((e) => console.error('[mute]', e.message || e));
     })
@@ -5163,6 +5163,7 @@ async function buildSessions({ brief: allBrief = false } = {}) {
     // orchestrator's conversation. Here so the sidebar learns a change from the frame it already holds.
     sidebar_view: (await settingsAll()).tv_sidebar_view === 'orchestrator' ? 'orchestrator' : 'session',
     sidebar_font: Number((await settingsAll()).tv_sidebar_font) || TV_SIDEBAR_FONT,
+    sidebar_width: Number((await settingsAll()).tv_sidebar_width) || TV_SIDEBAR_WIDTH,
     // The build, so a page that holds only this stream (the TV sidebar) reloads on a deploy, as every
     // page holding the status frame already does.
     commit: process.env.COMMIT || 'dev',
@@ -5544,10 +5545,9 @@ const TV_WAKE_OPS = new Set(['open', 'launch', 'input']);
 // the hub leaves the row to it.
 const TV_PI_OPS = new Set(['power', 'key']);
 // The sidebar's look, kept as settings so a size chosen once holds until changed (§ The TV sidebar).
-// Which conversation it shows and its text size are the page's business, delivered on the sessions
-// frame it already holds; the width is the app's window, so it rides on the command to the app.
+// All three are the page's business, delivered on the sessions frame it already holds.
 const TV_SIDEBAR_FONT = 17;     // px, the page's base size
-const TV_SIDEBAR_WIDTH = 0.35;  // fraction of the screen
+const TV_SIDEBAR_WIDTH = 0.35;  // the panel's minimum, fraction of the screen
 async function tvPush(row) {
   if (!row || row.done_at || TV_PI_OPS.has(row.op)) return;
   if (row.op === 'sidebar') {
@@ -5556,7 +5556,9 @@ async function tvPush(row) {
     if (a.view === 'session' || a.view === 'orchestrator') put('tv_sidebar_view', a.view);
     if (Number(a.font_size) > 0) put('tv_sidebar_font', Number(a.font_size));
     if (Number(a.width) > 0) put('tv_sidebar_width', Number(a.width));
-    else a.width = Number((await settingsAll()).tv_sidebar_width) || TV_SIDEBAR_WIDTH;
+    // The app's window spans the screen, see-through; the page draws the panel at the stored width as
+    // a minimum and widens it to fit a long response.
+    a.width = 1;
   }
   const frame = 'event: cmd\ndata: ' + JSON.stringify({ id: row.id, op: row.op, args: row.args || {} }) + '\n\n';
   for (const c of tvClients) { try { c.write(frame); } catch {} }

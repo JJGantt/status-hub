@@ -1303,12 +1303,18 @@ Which is the `tv_sidebar_view` setting (`session` | `orchestrator`, default sess
 the page already holds, so switching needs no new build of the TV app. That frame also carries `commit`,
 and the page reloads when it changes, since it holds no status frame to learn of a deploy from.
 
-Its size is two more settings a `sidebar` command can carry, each held until changed:
-`font_size` → `tv_sidebar_font` (the page's base size in px, default 17; every other size in it is in
-`em`, so this scales the whole strip), and `width` → `tv_sidebar_width` (fraction of the screen,
-default 0.35). The width is the app's window rather than the page's, so `tvPush` puts the stored value
-on every `sidebar` command that does not name one. `bin/tv sidebar on` talks to the app directly and
-skips that, so from adb the width is whatever it passes (the app's own default is 0.3).
+Its size is two more settings a `sidebar` command can carry, each held until changed and delivered
+on the same frame: `font_size` → `tv_sidebar_font` (the page's base size in px, default 17; every
+other size in it is in `em`, so this scales the whole strip), and `width` → `tv_sidebar_width` (the
+panel's MINIMUM, a fraction of the screen, default 0.35).
+
+The width is never allowed to cut a response off, because nothing on the TV scrolls. `tvPush` sends
+the app width 1 on every `sidebar` command, so its window spans the screen and is see-through
+outside the panel, and the page draws the panel itself (`fit`): at the minimum when the latest reply
+(or, mid-turn, the latest thing said) sits wholly below the top fade, otherwise just wide enough that
+it does, found by bisection after every paint; the next shorter one brings it back. A reply that does
+not fit even at full width leaves the panel full width. `bin/tv sidebar on <w>` talks to the app
+directly, so its window is that width and the panel fills it.
 
 The orchestrator view is the current context of the hub thread, fetched from
 `/api/voice-messages?focus=hub&mode=active` (the watch's view) and refetched whenever `/api/voice-stream`

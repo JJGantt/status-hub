@@ -1,5 +1,9 @@
-// Entry for tv-sidebar.html: the focused session, drawn narrow and see-through for the bedroom TV's
-// overlay (google-tv repo). Display only — the TV's remote drives the app underneath, never this.
+// Entry for tv-sidebar.html: the voice orchestrator's conversation above the focused session, drawn
+// narrow and see-through for the bedroom TV's overlay (google-tv repo). Display only — the TV's remote
+// drives the app underneath, never this.
+//
+// The orchestrator panel is the CURRENT context of the voice thread (/api/voice-messages?mode=active,
+// the watch's view), so it empties after an idle gap or a reset and the session gets the whole strip.
 //
 // It shows the FOCUSED session (pickFocus in server.js): where a spoken follow-up goes, so it follows
 // whatever he is working in. The `sessions` frame on the stream carries focus, so a change moves it.
@@ -81,5 +85,41 @@ liveStream('/api/session-stream', {
     paint();
   },
 }, { onOpen: () => { if (rowId) load(rowId); } });
+
+// ---- the orchestrator ----------------------------------------------------------------------------
+const vo = document.getElementById('vo');
+const voBody = document.getElementById('vo-body');
+
+// Refetched on each voice frame rather than patched: the server owns which rows are the current
+// context (opensContext, reset, unread answers, agent_mode), and a frame arrives only when something
+// was said, so this is one request per message.
+let voBusy = false, voAgain = false;
+async function loadVoice() {
+  if (voBusy) { voAgain = true; return; }
+  voBusy = true;
+  try {
+    const r = await fetch('/api/voice-messages?focus=hub&mode=active&limit=40');
+    if (r.ok) paintVoice((await r.json()).filter((m) => m.role === 'user' || m.role === 'assistant'));
+  } catch (_) { /* the stream's reconnect reloads */ }
+  voBusy = false;
+  if (voAgain) { voAgain = false; loadVoice(); }
+}
+
+function paintVoice(rows) {
+  vo.hidden = rows.length === 0;
+  const last = rows[rows.length - 1];
+  const working = !!last && (last.role === 'user' || !String(last.text || '').trim());
+  voBody.innerHTML = rows.slice(-12).map((m) => m.role === 'user'
+    ? `<div class="sb-words">${esc(m.text || '')}</div>`
+    : `<div class="sb-reply">${md(String(m.text || '').trim())}</div>`).join('') +
+    (working ? '<div class="sb-caret">▍</div>' : '');
+}
+
+liveStream('/api/voice-stream', {
+  voice: (e) => {
+    let m; try { m = JSON.parse(e.data); } catch (_) { return; }
+    if (m && (m.kind === 'message' || m.kind === 'reset')) loadVoice();
+  },
+}, { onOpen: loadVoice });
 
 boot();

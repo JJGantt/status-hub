@@ -1297,7 +1297,15 @@ tab, a row closed the day before was kept running by the next session opened in 
 
 ### The TV sidebar (`/tv-sidebar`)
 
-The FOCUSED session (`pickFocus`), drawn narrow and see-through for the bedroom TV, whose companion
+Two panels down the strip: the voice orchestrator's conversation on top, the focused session under it.
+
+The orchestrator panel is the current context of the hub thread, fetched from
+`/api/voice-messages?focus=hub&mode=active` (the watch's view) and refetched whenever `/api/voice-stream`
+carries a `message` or `reset` frame. It refetches rather than patching rows so that which rows belong
+to the current context stays the server's rule. It is hidden when the context is empty, so after an idle
+gap or a reset the session has the whole height; otherwise it is capped at 45%.
+
+The session panel is the FOCUSED session (`pickFocus`), drawn narrow and see-through for the bedroom TV, whose companion
 app overlays it on whatever is playing (google-tv repo, `SidebarService`). Its own small module
 (`pages/tv-sidebar.js`) rather than `cards/repos.js`, which carries a composer, a recorder and a list
 the TV has no use for. It reads `/api/sessions` for the focus, `/api/sessions/:id` for the

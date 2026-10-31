@@ -1,14 +1,19 @@
 <!doctype html><html><head><meta charset=utf-8>
 <meta name=viewport content="width=device-width,initial-scale=1">
 <title>Status Hub · Sidebar</title>
-<!-- The session sidebar the bedroom TV's companion app overlays on whatever is playing
+<!-- The orchestrator conversation over the focused session: the sidebar the bedroom TV's companion app overlays on whatever is playing
      (google-tv repo, SidebarService). See docs/HUB-INTERNALS.md § The TV sidebar. -->
 <style>
   html,body{margin:0;height:100%;background:transparent;overflow:hidden}
   body{font:20px/1.35 -apple-system,system-ui,"Segoe UI",Roboto,sans-serif;color:#fff}
   #sb{position:absolute;inset:0;display:flex;flex-direction:column;background:rgba(0,0,0,.55);
       text-shadow:0 1px 2px rgba(0,0,0,.9)}
-  #sb-name{flex:none;padding:18px 22px 10px;font-weight:600;font-size:22px;white-space:nowrap;
+  #vo{flex:none;max-height:45%;display:flex;flex-direction:column;border-bottom:1px solid rgba(255,255,255,.25)}
+  #vo[hidden]{display:none}
+  #vo-body{flex:1;min-height:0;overflow:hidden;padding:4px 22px 14px;display:flex;flex-direction:column;justify-content:flex-end;
+           -webkit-mask-image:linear-gradient(to bottom,transparent 0,#000 50px);mask-image:linear-gradient(to bottom,transparent 0,#000 50px)}
+  #ss{flex:1;min-height:0;display:flex;flex-direction:column}
+  #sb-name,#vo-name{flex:none;padding:18px 22px 10px;font-weight:600;font-size:22px;white-space:nowrap;
            overflow:hidden;text-overflow:ellipsis;border-bottom:1px solid rgba(255,255,255,.15)}
   #sb-body{flex:1;overflow:hidden;padding:12px 22px 22px;display:flex;flex-direction:column;justify-content:flex-end;
            -webkit-mask-image:linear-gradient(to bottom,transparent 0,#000 70px);mask-image:linear-gradient(to bottom,transparent 0,#000 70px)}
@@ -25,5 +30,8 @@
 </style>
 <script type="module" src="dist/tv-sidebar.js"></script>
 </head><body>
-<div id="sb"><div id="sb-name"></div><div id="sb-body"></div></div>
+<div id="sb">
+<div id="vo" hidden><div id="vo-name">Orchestrator</div><div id="vo-body"></div></div>
+<div id="ss"><div id="sb-name"></div><div id="sb-body"></div></div>
+</div>
 </body></html>

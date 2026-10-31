@@ -10,7 +10,8 @@ import WatchKit
 /// it, with the spinner bigger now that the hub is running the command rather than hearing it; the
 /// reply lands, the view settles on the top of THAT, the control is a microphone again and the x goes.
 /// A reply is read from its first line, which is why each of those lands the view on a top rather than
-/// scrolling to the end.
+/// scrolling to the end. **None of it moves the view while he is looking** (`holds`): each landing waits
+/// for the wrist to drop, so it is in place at the next raise.
 struct HomeView: View {
     @EnvironmentObject private var chat: Chat
     /// Wrist down with the app still showing.
@@ -186,14 +187,13 @@ struct HomeView: View {
         }
     }
 
-    /// **Whether an arrival waits.** It does while he is looking AND reading: the view is on an answer,
-    /// or he has scrolled it himself. His own words always land — a transcript means he just spoke, and
-    /// while the view is on his words he is waiting for the answer, not reading. A tap on the unread dot
-    /// or an answer's notification (`chat.landings`) is asked for, so it never waits.
+    /// **Whether an arrival waits: always, while he is looking.** Nothing that arrives — his transcribed
+    /// words, a tool call, a reply — moves the view while home is in front with the wrist up; it lands
+    /// the moment he stops looking. A tap on the unread dot or an answer's notification (`chat.landings`)
+    /// is asked for, so it never waits.
     private func holds(_ next: String?) -> Bool {
-        guard looking, let landed, next != landed, !(next ?? "").hasPrefix("pending") else { return false }
-        if !pinned { return true }
-        return chat.recent.contains { "msg\($0.id)" == landed && $0.role != "user" }
+        guard looking, let landed, next != landed else { return false }
+        return true
     }
 
     private func land(_ proxy: ScrollViewProxy) {

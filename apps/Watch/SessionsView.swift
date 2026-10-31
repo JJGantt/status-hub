@@ -204,8 +204,8 @@ struct SessionView: View {
     /// of them: the newest changes in the same update that lands it, and a height taken only once an item
     /// IS the newest arrives after the landing, or never when its height does not change.
     @State private var heights: [String: CGFloat] = [:]
-    /// The item the page is on — `newest`, except while something newer is held: **an arrival does not
-    /// take the page from a reply he is looking at.** It lands once he stops looking (home's rule too).
+    /// The item the page is on — `newest`, except while something newer is held: **nothing that arrives
+    /// moves the page while he is looking.** It lands once he stops looking (home's rule too).
     @State private var spot: String?
     @Environment(\.isLuminanceReduced) private var dimmed
     @Environment(\.scenePhase) private var phase
@@ -262,7 +262,8 @@ struct SessionView: View {
                 CommandBorder.press(chat: Chat.shared, sessions: sessions, how: "tap")
             }
             // **The top of the NEWEST ITEM at the top of the screen**: his words the moment they are
-            // transcribed, then each tool call as it comes, then the reply — whichever is last. Never
+            // transcribed, then each tool call as it comes, then the reply — whichever is last, once he
+            // is not looking (`holds`). Never
             // an older one: the tool calls and his words stay until the reply that replaces them is
             // in hand (`Sessions.sessionFrame`).
             .onChange(of: newest) { _, now in
@@ -438,12 +439,11 @@ struct SessionView: View {
         proxy.scrollTo(id, anchor: .top)
     }
 
-    /// **Whether an arrival waits**: while he is looking and the page is on a reply. His own words from
-    /// this watch (a placeholder) always land, and so does the reply to words the page is on, since then
-    /// he is waiting rather than reading.
+    /// **Whether an arrival waits: always, while he is looking.** His words from this watch, a tool call,
+    /// the reply — none of them moves the page with the wrist up; it lands when he stops looking.
     private func holds(_ next: String?) -> Bool {
-        guard looking, let spot, next != spot, !(next ?? "").hasPrefix("ph") else { return false }
-        return shown.contains { "ev\($0.seq)" == spot && $0.kind == "reply" }
+        guard looking, let spot, next != spot else { return false }
+        return true
     }
 
     /// **What the screen actually holds**, logged whenever the reason it might be wrong changes: the

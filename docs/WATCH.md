@@ -20,7 +20,7 @@ build), so a fix that has not been installed is not mistaken for one that failed
 
 ## Pages
 
-Five, swiped left to right: **sessions · home · day · health · live**. The app opens on home,
+Six, swiped left to right: **sessions · home · day · health · live · gesture**. The app opens on home,
 which IS the conversation — there is no separate prompt page. New layouts are added as NEW pages beside the old
 ones rather than by reshaping a page in place, and the ones that lose are deleted; `day` and `health`
 are two layouts of the same food-and-training data, and one of them is expected to go.
@@ -45,6 +45,18 @@ request asks `onScreen` (an environment value `RootView` sets per page) first.
 
 `live` is the live mic: one control that plays what the phone's microphone hears
 (`LiveListen.swift`, [LIVE-MIC.md](LIVE-MIC.md)). It holds no stream until it is pressed.
+
+`gesture` is the gesture recorder (`GestureLab.swift`), a test bench rather than a feature: the
+button records a fixed eight-second window of 100 Hz device motion (attitude, rotation rate, user
+acceleration, gravity), and the word under it is the label, which a tap moves through
+`flick · lower · raise · other`. The window ends by itself because the gestures worth recording take the
+app off the screen. Each capture also carries the app's state changes (`active`, `resign`, `background`,
+`foreground`, `dim`, `undim`) on the same clock as the samples, which is how a wrist flick can be compared with a
+lowered wrist: there is no API for the flick, so what it does to the app is the only signal there is.
+It holds the microphone through the window and the upload, the way `StayAwake` does, because otherwise
+the motion stream stops seconds after the wrist drops. No workout session: 100 Hz is CMMotionManager's
+own rate, and only the 800 Hz batched sensors need a workout. Captures land in the `gesture-captures` bucket
+through `POST /api/gestures`; `GET /api/gestures` lists the last week and `GET /api/gestures/<day>/<file>` returns one.
 
 ### Home — the conversation
 

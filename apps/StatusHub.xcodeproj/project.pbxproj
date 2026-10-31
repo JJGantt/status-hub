@@ -17,6 +17,7 @@
 		14F93E7C978F91E1C8547E29 /* TodoWidget.swift in Sources */ = {isa = PBXBuildFile; fileRef = 279F09507BAD56AB8AD69831 /* TodoWidget.swift */; };
 		1962BCC150815491A3F92EB1 /* HomeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9C61C65954CA9A7056B2B127 /* HomeView.swift */; };
 		1C569FFA9D76D921D56B85D8 /* RecordIntent.swift in Sources */ = {isa = PBXBuildFile; fileRef = F62C833499BAA9A4A1C9F660 /* RecordIntent.swift */; };
+		1E649E0468AC44DE55183537 /* GestureLab.swift in Sources */ = {isa = PBXBuildFile; fileRef = 00882FF56FFCD793EF960A19 /* GestureLab.swift */; };
 		2865661A326AF6F9FE5F6E61 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = AC135E9E04A98CDB11B57AB2 /* Assets.xcassets */; };
 		2AE6971801629766230C380C /* Auth.swift in Sources */ = {isa = PBXBuildFile; fileRef = 88D699B5FDC0F7476374CF07 /* Auth.swift */; };
 		2D7BBEABB20A4F0C080608E0 /* Location.swift in Sources */ = {isa = PBXBuildFile; fileRef = D2181310AB9F5E005371B8B0 /* Location.swift */; };
@@ -142,6 +143,7 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		00882FF56FFCD793EF960A19 /* GestureLab.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GestureLab.swift; sourceTree = "<group>"; };
 		011F77A80F4DF604831A2925 /* LiveListen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveListen.swift; sourceTree = "<group>"; };
 		01225D88DDA6CA36478FE1CA /* DayView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DayView.swift; sourceTree = "<group>"; };
 		04D43ADC9891823E1EFA0E4C /* Router.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Router.swift; sourceTree = "<group>"; };
@@ -252,6 +254,7 @@
 				3EE13DD050BF1BC4B943C3CC /* Capture.swift */,
 				65394C860C697D281720B76A /* Chat.swift */,
 				01225D88DDA6CA36478FE1CA /* DayView.swift */,
+				00882FF56FFCD793EF960A19 /* GestureLab.swift */,
 				7D90424F70095351BD348487 /* HistoryView.swift */,
 				9C61C65954CA9A7056B2B127 /* HomeView.swift */,
 				FD06B420AFC554D37540118C /* Hub.swift */,
@@ -520,6 +523,7 @@
 				12D0DCB4808D439F40DEDCC4 /* Capture.swift in Sources */,
 				86F3FAF2206C002FF5A79054 /* Chat.swift in Sources */,
 				37CD0E58D2EE7273A012632B /* DayView.swift in Sources */,
+				1E649E0468AC44DE55183537 /* GestureLab.swift in Sources */,
 				0F13CF9CFA7602FE6562864D /* HistoryView.swift in Sources */,
 				1962BCC150815491A3F92EB1 /* HomeView.swift in Sources */,
 				C4250430822C333D041CEEA1 /* Hub.swift in Sources */,

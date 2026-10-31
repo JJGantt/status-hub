@@ -108,11 +108,12 @@ final class WatchAppDelegate: NSObject, WKApplicationDelegate, UNUserNotificatio
     }
 }
 
-/// Five pages, left to right: the sessions, home — the conversation — the rings and today's log, the
-/// workout block, and the live mic (`LiveListenView`). Home is where the app opens.
+/// Six pages, left to right: the sessions, home — the conversation — the rings and today's log, the
+/// workout block, the live mic (`LiveListenView`), and the gesture recorder (`GestureLabView`). Home is
+/// where the app opens.
 struct RootView: View {
     enum Page: String {
-        case back, sessions, home, day, health, live
+        case back, sessions, home, day, health, live, gesture
 
         /// Nutrition and Workout land on the day page, which opens the list each names
         /// (`Router.dayList`): today's food log, or the exercise list. Day lands on the page itself.
@@ -159,6 +160,7 @@ struct RootView: View {
             DayView().tag(Page.day)
             HealthView().tag(Page.health)
             LiveListenView().tag(Page.live)
+            GestureLabView().tag(Page.gesture)
         }
         // No page dots: they are a strip of screen spent saying what a swipe already says.
         .tabViewStyle(.page(indexDisplayMode: .never))
@@ -228,7 +230,7 @@ struct RootView: View {
             if let i = args.firstIndex(of: "-opensession"), i + 1 < args.count {
                 Task { await sessions.open(rowId: args[i + 1]) }
             }
-            // `-page <sessions|home|day|health|live>`: land on a page, so each can be screenshotted.
+            // `-page <sessions|home|day|health|live|gesture>`: land on a page, so each can be screenshotted.
             if let i = args.firstIndex(of: "-page"), i + 1 < args.count, let p = Page(rawValue: args[i + 1]) {
                 page = p
             }

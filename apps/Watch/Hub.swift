@@ -615,6 +615,13 @@ enum Hub {
         return (try? await call("/api/clientlog", method: "POST", body: ["lines": objects], timeout: 20)) != nil
     }
 
+    /// A gesture capture (`GestureLab`), stored by the hub in the gesture-captures bucket. Answers with
+    /// where it landed.
+    static func sendGesture(_ body: [String: Any]) async throws -> String {
+        struct Saved: Decodable { let path: String }
+        return try JSONDecoder().decode(Saved.self, from: try await call("/api/gestures", method: "POST", body: body, timeout: 60)).path
+    }
+
     static func json<T: Decodable>(_ path: String, timeout: TimeInterval = 20) async throws -> T {
         try JSONDecoder().decode(T.self, from: try await call(path, timeout: timeout))
     }

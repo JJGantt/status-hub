@@ -627,7 +627,7 @@ deleted by pi-desk after 7 days; optional `lat`/`lon`/`acc`/`place` query → `v
 `/api/voice-text` (text → enqueue, optional `location` object likewise; returns the request id, which
 `/api/voice-reply/:id` waits on) · `/api/voice-reset` (stamps `voice_reset_at`; the thread is kept) ·
 `/api/voice-activity` · `/api/voice-mute` (take or give back one holder's mute) · `/api/attach`
-(photo upload) · `/api/register-push` · `/api/notify` (APNs to all devices) · `/api/clientlog`.
+(photo upload) · `/api/gestures` (the watch's gesture captures: POST one, GET the last week, GET `/<day>/<file>` for one; bucket `gesture-captures`) · `/api/register-push` · `/api/notify` (APNs to all devices) · `/api/clientlog`.
 
 **Outside the gate:** `/api/cg/transcribe` — the restaurant watch app's voice input, raw audio → Groq
 Whisper → `{transcript}`, nothing enqueued. That app ships to TestFlight testers, so it cannot hold the hub

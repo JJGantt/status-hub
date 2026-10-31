@@ -3553,6 +3553,70 @@ app.post('/api/attach', express.raw({ type: () => true, limit: '30mb' }), async 
   } catch (e) { res.status(500).json({ error: String(e.message || e) }); }
 });
 
+// Gesture captures from the watch's gesture page (apps/Watch/GestureLab.swift): raw motion around one
+// gesture, labelled, for designing gestures of our own. One JSON object per capture in the private
+// gesture-captures bucket, under its day. Kept indefinitely: the recordings are the training set.
+const GESTURE_BUCKET = 'gesture-captures';
+const gestureName = (p) => /^\d{4}-\d{2}-\d{2}\/[\w.\-]+\.json$/.test(p);
+app.post('/api/gestures', express.json({ limit: '8mb' }), async (req, res) => {
+  try {
+    const b = req.body || {};
+    if (!Array.isArray(b.samples) || !b.samples.length) return res.status(400).json({ error: 'no samples' });
+    const label = String(b.label || 'none').replace(/[^\w\-]/g, '').slice(0, 24) || 'none';
+    const at = new Date(b.started_at || Date.now());
+    const name = `${localDate(at)}/${at.toISOString().replace(/[:.]/g, '-')}-${label}.json`;
+    const r = await fetch(`${SUPABASE_URL}/storage/v1/object/${GESTURE_BUCKET}/${name}`, {
+      method: 'POST',
+      headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ...b, label, received_at: new Date().toISOString() }),
+    });
+    if (!r.ok) {
+      console.error('[gestures] storage upload failed', r.status, await r.text().catch(() => ''));
+      return res.status(502).json({ error: `storage upload failed (${r.status})` });
+    }
+    res.json({ path: name });
+  } catch (e) {
+    console.error('[gestures] upload', e);
+    res.status(500).json({ error: String(e.message || e) });
+  }
+});
+// Newest first. `?day=YYYY-MM-DD` lists that day; without it, today and the six days before.
+app.get('/api/gestures', async (req, res) => {
+  try {
+    const days = req.query.day ? [String(req.query.day)]
+      : Array.from({ length: 7 }, (_, i) => localDate(new Date(Date.now() - i * 86400000)));
+    const out = [];
+    for (const day of days) {
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(day)) return res.status(400).json({ error: 'bad day' });
+      const r = await fetch(`${SUPABASE_URL}/storage/v1/object/list/${GESTURE_BUCKET}`, {
+        method: 'POST',
+        headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prefix: day, limit: 1000, sortBy: { column: 'name', order: 'desc' } }),
+      });
+      if (!r.ok) throw new Error(`storage list failed (${r.status})`);
+      for (const o of await r.json()) if (o.id) out.push({ path: `${day}/${o.name}`, bytes: o.metadata?.size ?? null });
+    }
+    res.json({ captures: out });
+  } catch (e) {
+    console.error('[gestures] list', e);
+    res.status(500).json({ error: String(e.message || e) });
+  }
+});
+app.get(/^\/api\/gestures\/(.+)$/, async (req, res) => {
+  const name = req.params[0];
+  if (!gestureName(name)) return res.status(400).json({ error: 'bad path' });
+  try {
+    const r = await fetch(`${SUPABASE_URL}/storage/v1/object/${GESTURE_BUCKET}/${name}`, {
+      headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` },
+    });
+    if (!r.ok) return res.status(r.status === 400 || r.status === 404 ? 404 : 502).json({ error: `storage read failed (${r.status})` });
+    res.type('application/json').send(Buffer.from(await r.arrayBuffer()));
+  } catch (e) {
+    console.error('[gestures] read', e);
+    res.status(500).json({ error: String(e.message || e) });
+  }
+});
+
 // Client error sink: the phone POSTs a failed quick-photo's real reason here (step, file type/size,
 // server error) so a failure that's otherwise invisible in the phone's console lands in the app log.
 app.get('/api/surf/live', async (req, res) => {

@@ -1,10 +1,11 @@
 'use strict';
 // RAIN CHANCE at home, as a 7-day x 24-hour grid the wall paints beside the surf plots.
 //
-// Source is the National Weather Service gridpoint covering home. Deliberately NOT the surf spot's
-// cell: summer rain on this
-// coast is sea-breeze convection that fires along the convergence line inland while the beach stays
-// dry, and the two cells disagree by twenty points on a September afternoon.
+// Source is the National Weather Service gridpoint covering home, set by NWS_GRIDPOINT (office/x,y,
+// e.g. "TOP/31,80"; look it up with https://api.weather.gov/points/<lat>,<lon>). Deliberately NOT the
+// surf spot's cell: summer rain on this coast is sea-breeze convection that fires along the
+// convergence line inland while the beach stays dry, and the two cells disagree by twenty points on
+// a September afternoon.
 //
 // NWS RATHER THAN A MODEL API, because it publishes the number and the forecast it belongs to from
 // one grid. Open-Meteo's daily weather_code comes from a single deterministic run while its
@@ -21,7 +22,9 @@
 // inventing detail the source does not have.
 const { getTZ } = require('./dates');
 
-const GRIDPOINT = 'https://api.weather.gov/gridpoints/TOP/31,80';
+const GRIDPOINT = process.env.NWS_GRIDPOINT
+  ? `https://api.weather.gov/gridpoints/${process.env.NWS_GRIDPOINT}` : null;
+if (!GRIDPOINT) console.error('[weather] NWS_GRIDPOINT is not set: the rain grid stays empty.');
 // NWS asks for a contactable agent and answers 403 to the default fetch one.
 const UA = 'jared-status-hub (jared.gantt@gmail.com)';
 
@@ -127,6 +130,7 @@ async function refresh() {
 }
 
 function getWeather() {
+  if (!GRIDPOINT) return null;
   if (Date.now() - at > TTL_MS) refresh();
   return cache;
 }

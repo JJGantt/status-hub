@@ -1138,8 +1138,11 @@ A reply renders through `md()` in shared.js, the one markdown renderer every sur
 nested lists, code, quotes, rules, tables, bare URLs), escaped first. **Every link in it is
 `target=_blank`, and that is load-bearing**: followed in place, a link replaces the hub in the app's
 one web view with nothing on screen to come back by. A new-window request reaches the app's
-`createWebViewWith` (`StatusHubApp.swift`), which hands the address to Safari; an app build older
-than that handler drops the tap, which is the safe failure. Only `http(s)` addresses become links.
+`createWebViewWith` (`StatusHubApp.swift`), which hands the address to Safari. Inside the iOS app a
+tap does not depend on that path: a document click listener in shared.js catches the link and posts
+its address to the native `openURL` message handler, which opens Safari directly — taps on these links
+in the app opened nothing through `target=_blank` alone. An app build without that handler falls back
+to `createWebViewWith`. Only `http(s)` addresses become links.
 
 While a session is open the pane carries `sv-open`, which stops the pane scrolling and gives the card
 its whole height so the composer stays put — the chat pane's layout. Re-focusing the app re-reads the

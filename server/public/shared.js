@@ -207,6 +207,18 @@ export function paintScrolled(host, html, { sel = null, stick = false } = {}) {
 // from the hub, with nothing on screen to come back by; `target=_blank` reaches the app's
 // `createWebViewWith`, which hands the address to Safari. Only http(s) becomes a link, which keeps
 // `javascript:` out of an href; anything else keeps its words and loses its target.
+//
+// IN THE iOS APP A TAP DOES NOT RELY ON THAT. A tap on one of these links in the app opened nothing,
+// with nothing in the page stopping the click, so inside the app the click is caught here and the
+// address handed to the native `openURL` handler, which opens it in Safari directly. A browser has no
+// such handler and follows `target=_blank` as usual.
+document.addEventListener('click', (e) => {
+  const h = window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.openURL;
+  const a = h && e.target.closest && e.target.closest('a[target="_blank"][href^="http"]');
+  if (!a) return;
+  e.preventDefault();
+  h.postMessage(a.href);
+});
 const MD_MARK = '';                                // a private-use character: where a lifted span goes back
 const MD_HELD = new RegExp(MD_MARK + '(\\d+)' + MD_MARK, 'g');
 export function mdInline(text) {

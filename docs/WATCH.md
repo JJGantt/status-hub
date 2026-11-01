@@ -184,10 +184,12 @@ looking, so those are kept reachable until they have actually been on screen.
 
 Every reply and thought on the watch, home's thread and a session's alike, is drawn by `Markdown`
 (`Markdown.swift`): headings at their own sizes, nested lists, fenced code, quotes, rules and tables,
-with `inlineMarkdown` doing the inside of each block (bold, italics, code, links, bare http(s) URLs).
+with `inlineMarkdown` doing the inside of each block (bold, italics, code).
 `Text` alone renders only the inline part and runs every block into one paragraph, which is why the
 blocks are split out first. A table wider than the screen scrolls sideways (`ViewThatFits`) instead of
-wrapping each cell to a word a line. A tapped link opens in the watch's own web view.
+wrapping each cell to a word a line. **Links are not links on the watch**: `inlineMarkdown` drops every
+link target and keeps its words as plain text, because a tapped link opened only an error and, as a hit
+target inside a reply, swallowed taps meant for the screen.
 
 ### The sessions page
 

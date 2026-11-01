@@ -496,6 +496,12 @@ struct HubWebView {
                 // alarm for the microphone.
                 let on = (message.body as? NSNumber)?.boolValue ?? false
                 DispatchQueue.main.async { AlarmAudio.hold(on) }
+            case "openURL":
+                // A link in a reply, handed over by the page (`shared.js`) rather than left to
+                // `target=_blank` and `createWebViewWith` below, which his taps never reached.
+                guard let str = message.body as? String, let url = URL(string: str),
+                      ["http", "https"].contains(url.scheme?.lowercased() ?? "") else { return }
+                DispatchQueue.main.async { UIApplication.shared.open(url) }
             case "liveMic":
                 // The Stream button in Utilities: the capture is native (LiveMic.swift), the page only asks.
                 let body = message.body
@@ -515,6 +521,7 @@ struct HubWebView {
         cfg.userContentController.add(coordinator, name: "alarmAudio")     // page -> claim a .playback session while ringing
         #if os(iOS)
         cfg.userContentController.add(coordinator, name: "liveMic")        // page -> stream the microphone to the watch
+        cfg.userContentController.add(coordinator, name: "openURL")        // page -> open a reply's link in Safari
         #endif
         cfg.mediaTypesRequiringUserActionForPlayback = []
         cfg.websiteDataStore = .default()          // persistent cookies → stays signed in across launches

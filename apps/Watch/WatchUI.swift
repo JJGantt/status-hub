@@ -1,29 +1,21 @@
 import SwiftUI
 import WatchKit
 
-/// Inline markdown (bold, italics, code, links) renders; blocks are `Markdown`'s job. A bare http(s) URL
-/// is made a link too, since that is how a model usually writes one.
+/// Inline markdown (bold, italics, code) renders; blocks are `Markdown`'s job. LINKS DO NOT: a link's
+/// words stay as plain text with no target. On the watch a tapped link only ever opened an error, and
+/// as a hit target inside a reply it took the tap meant for the screen around it.
 func inlineMarkdown(_ s: String) -> AttributedString {
     var a = (try? AttributedString(markdown: s, options: .init(interpretedSyntax: .inlineOnlyPreservingWhitespace)))
         ?? AttributedString(s)
-    guard let detector = linkDetector else { return a }
-    let plain = String(a.characters)
-    for m in detector.matches(in: plain, range: NSRange(plain.startIndex..., in: plain)) {
-        guard let url = m.url, let sr = Range(m.range, in: plain), plain[sr].hasPrefix("http"),
-              let r = Range(m.range, in: a), a[r].link == nil else { continue }
-        a[r].link = url
-    }
+    a.link = nil
     return a
 }
-
-private let linkDetector = try? NSDataDetector(types: NSTextCheckingResult.CheckingType.link.rawValue)
 
 /// A reply's opening for the line under a title: its markdown syntax gone and none of the bold, code
 /// or link styling kept, so it reads as one quiet run of text.
 func snippet(_ s: String) -> AttributedString {
     var a = inlineMarkdown(s)
     a.inlinePresentationIntent = nil
-    a.link = nil
     return a
 }
 

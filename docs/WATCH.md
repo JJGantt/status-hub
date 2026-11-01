@@ -20,7 +20,7 @@ build), so a fix that has not been installed is not mistaken for one that failed
 
 ## Pages
 
-Six, swiped left to right: **sessions · home · day · health · live · gesture**. The app opens on home,
+Seven, swiped left to right: **sessions · home · day · health · live · gesture · usage**. The app opens on home,
 which IS the conversation — there is no separate prompt page. New layouts are added as NEW pages beside the old
 ones rather than by reshaping a page in place, and the ones that lose are deleted; `day` and `health`
 are two layouts of the same food-and-training data, and one of them is expected to go.
@@ -45,6 +45,11 @@ request asks `onScreen` (an environment value `RootView` sets per page) first.
 
 `live` is the live mic: one control that plays what the phone's microphone hears
 (`LiveListen.swift`, [LIVE-MIC.md](LIVE-MIC.md)). It holds no stream until it is pressed.
+
+`usage` is the Claude subscription's two usage windows (`Usage.swift`): the 5-hour and the weekly, each a
+bar with its percentage and the time to its reset, amber from 75% and red from 90% like the walls'
+hairline bars (HUB-INTERNALS.md § Claude usage bars). `/api/usage` serves it; a new reading is a `usage`
+frame on `/api/day-stream`, which the page follows while it is showing.
 
 `gesture` is the gesture recorder (`GestureLab.swift`), a test bench rather than a feature: the
 button records a fixed eight-second window of 100 Hz device motion (attitude, rotation rate, user

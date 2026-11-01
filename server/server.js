@@ -1520,7 +1520,7 @@ function startRealtime() {
     .on('postgres_changes', { event: '*', schema: 'public', table: 'set_watcher' }, changed)
     // A new usage reading (the table only gains a row when a number moves).
     .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'claude_usage' },
-      (p) => { seen(); if (p.new) { usageCache.row = p.new; usageCache.at = Date.now(); } broadcast(); })
+      (p) => { seen(); if (p.new) { usageCache.row = p.new; usageCache.at = Date.now(); } broadcast(); pushDay('usage'); })
     // Settings (routing model/thinking/runner, wake toggle, nutrition goal): rebuild so the TV routing
     // panel reflects an MCP/voice/settings change near-instantly instead of waiting for the 30s tick.
     .on('postgres_changes', { event: '*', schema: 'public', table: 'app_settings' }, (p) => {
@@ -5632,6 +5632,16 @@ app.get('/api/list-stream', (req, res) => {
 // Day SSE: a bodiless `event: nutrition` or `event: workout` frame whenever that day may have changed.
 // For a client that cannot take the full status frame on every push — the watch, which reloads the
 // page on screen when its kind arrives.
+// The watch's usage page: the same two windows as the walls' hairline bars. A new reading is announced
+// as a `usage` frame on /api/day-stream.
+app.get('/api/usage', async (req, res) => {
+  try {
+    const u = buildUsage(await claudeUsageRow());
+    if (!u) return res.status(404).json({ error: 'no usage reading yet' });
+    res.json(u);
+  } catch (e) { console.error('[usage] /api/usage:', e.message); res.status(500).json({ error: e.message }); }
+});
+
 app.get('/api/day-stream', (req, res) => {
   res.set({ 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache',
             Connection: 'keep-alive', 'X-Accel-Buffering': 'no' });

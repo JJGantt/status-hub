@@ -115,7 +115,7 @@ final class WatchAppDelegate: NSObject, WKApplicationDelegate, UNUserNotificatio
 /// where the app opens.
 struct RootView: View {
     enum Page: String {
-        case sessions, home, day, health, live, gesture
+        case sessions, home, day, health, live, gesture, usage
 
         /// Nutrition and Workout land on the day page, which opens the list each names
         /// (`Router.dayList`): today's food log, or the exercise list. Day lands on the page itself.
@@ -157,6 +157,7 @@ struct RootView: View {
             HealthView().tag(Page.health)
             LiveListenView().tag(Page.live)
             GestureLabView().tag(Page.gesture)
+            UsageView().tag(Page.usage)
         }
         // No page dots: they are a strip of screen spent saying what a swipe already says.
         .tabViewStyle(.page(indexDisplayMode: .never))
@@ -279,6 +280,7 @@ struct RootView: View {
         // is weeks, loaded when it appears (`loadHistory`), and needs neither stream.
         if live && page == .day { first.append(nutrition.activate()); first.append(workout.activate()) }
         else { nutrition.deactivate(); workout.deactivate() }
+        if live && page == .usage { first.append(ClaudeUsage.shared.activate()) } else { ClaudeUsage.shared.deactivate() }
         if !live { warmed = false; return }
         loadingFirst = first
         guard !warmed else { return }
@@ -298,7 +300,8 @@ struct RootView: View {
             async let n: Void = on == .day ? () : nutrition.load()
             async let w: Void = on == .day ? () : workout.load()
             async let h: Void = on == .health ? () : nutrition.loadHistory()
-            _ = await (s, c, n, w, h)
+            async let u: Void = on == .usage ? () : ClaudeUsage.shared.load()
+            _ = await (s, c, n, w, h, u)
         }
     }
 }

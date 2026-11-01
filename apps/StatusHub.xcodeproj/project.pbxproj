@@ -22,6 +22,7 @@
 		2AE6971801629766230C380C /* Auth.swift in Sources */ = {isa = PBXBuildFile; fileRef = 88D699B5FDC0F7476374CF07 /* Auth.swift */; };
 		2D7BBEABB20A4F0C080608E0 /* Location.swift in Sources */ = {isa = PBXBuildFile; fileRef = D2181310AB9F5E005371B8B0 /* Location.swift */; };
 		2DE5C68D7C666AA0FFB4B465 /* Markdown.swift in Sources */ = {isa = PBXBuildFile; fileRef = 50C9941AC596855E4C447F11 /* Markdown.swift */; };
+		2E99FBE2382B78CBEBE467EE /* Usage.swift in Sources */ = {isa = PBXBuildFile; fileRef = 50AE228EE180062CB3C46C98 /* Usage.swift */; };
 		37CD0E58D2EE7273A012632B /* DayView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 01225D88DDA6CA36478FE1CA /* DayView.swift */; };
 		3995C08AAC931FCC8F627A14 /* StatusHubShare.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 1C987C27ED7B0DC15E346FD4 /* StatusHubShare.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		4047BFD86E0305E129C06B77 /* Info-iOS.plist in Resources */ = {isa = PBXBuildFile; fileRef = 12B2F6A89FA87D30EEC5ED56 /* Info-iOS.plist */; };
@@ -172,6 +173,7 @@
 		3EE13DD050BF1BC4B943C3CC /* Capture.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Capture.swift; sourceTree = "<group>"; };
 		43113D1E0A8CEB8334CFC02E /* AssetsMac.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = AssetsMac.xcassets; sourceTree = "<group>"; };
 		45C78D4725DD9720852DFFD9 /* LocationTrail.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocationTrail.swift; sourceTree = "<group>"; };
+		50AE228EE180062CB3C46C98 /* Usage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Usage.swift; sourceTree = "<group>"; };
 		50C9941AC596855E4C447F11 /* Markdown.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Markdown.swift; sourceTree = "<group>"; };
 		5757142AE4AD25B5E06EA231 /* Stretch.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Stretch.swift; sourceTree = "<group>"; };
 		5A7D22E52C6A0ABBCB9FF3BF /* Rewind.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Rewind.swift; sourceTree = "<group>"; };
@@ -289,6 +291,7 @@
 				C00E5B1C61B9780EE2BE1945 /* StatusHubWatchApp.swift */,
 				D6D77B6FDE8A4317F6D9AF76 /* StayAwake.swift */,
 				5757142AE4AD25B5E06EA231 /* Stretch.swift */,
+				50AE228EE180062CB3C46C98 /* Usage.swift */,
 				1E94C4C0D42288352ED7299B /* VolumeKnob.swift */,
 				951A385F7EE64123592C4DA6 /* WatchSettings.swift */,
 				E15B459BE174F4274C78B54E /* WatchUI.swift */,
@@ -593,6 +596,7 @@
 				77A3FC66BCC0B5FAA82C04C6 /* StatusHubWatchApp.swift in Sources */,
 				ECFE4E33BA03FA448EA542E7 /* StayAwake.swift in Sources */,
 				B0A4730199CF2646C3BC2A37 /* Stretch.swift in Sources */,
+				2E99FBE2382B78CBEBE467EE /* Usage.swift in Sources */,
 				734F54125D4F0BC0B31B51EF /* VolumeKnob.swift in Sources */,
 				ECC6D21A1ECB983A558C2DC5 /* WatchSettings.swift in Sources */,
 				E5F01E32A844356CC4D3F449 /* WatchUI.swift in Sources */,

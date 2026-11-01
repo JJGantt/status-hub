@@ -540,6 +540,8 @@ body.tv .hw-row.on{border-color:#fff;background:#0e1318}
    a row mean other things — the white border is the FOCUSED session and the green dot is one
    WORKING. */
 body.tv .hw-row.unread{border-left:3px solid #e0a03a;padding-left:7px}
+/* A session on Codex: blue, the incident's treatment. Also in phone-home.css. */
+body.tv .hw-row.codex{outline:2px solid #3b82f6;outline-offset:-2px;background:#0b1730}
 /* An ops-responder incident run: an outline, so it never competes with the unread edge. Also in
    phone-home.css, since each surface loads only its own copy of these rows' rules. */
 body.tv .hw-row.incident{outline:2px solid #d9443a;outline-offset:-2px;background:#1f0d0c}

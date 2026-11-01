@@ -79,7 +79,7 @@ function paint(p, d) {
       // `on` is the FOCUSED session — where a spoken follow-up goes, and what a surface with a reply
       // panel is showing below. `unread` is a finished answer nobody has opened. Two different
       // questions, so two different marks: one row can carry both.
-      `<div class="hw-row${on && s.id === on.id ? ' on' : ''}${s.unread ? ' unread' : ''}${s.incident ? ' incident' : ''}` +
+      `<div class="hw-row${on && s.id === on.id ? ' on' : ''}${s.unread ? ' unread' : ''}${s.incident ? ' incident' : ''}${s.codex ? ' codex' : ''}` +
         '"' +
         `${p.tap ? ` data-open="${esc(String(s.id))}"` : ''}>` +
         '<div class="hw-row-top">' +

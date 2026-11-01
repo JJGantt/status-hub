@@ -5207,6 +5207,10 @@ async function pickFocus(focusRow, sessions) {
 // `Incident: <title>` (health/responder/server.js `dispatch`), and every launcher carries the label
 // across resumes and moves, so the label is the mark.
 const isIncident = (s) => /^Incident: /.test((s && s.label) || '');
+// A session running on Codex rather than Claude (desk_sessions.agent, data-layer 00148), drawn blue on
+// every surface that marks an incident red, so it is plain at a glance that Claude is not doing the work.
+// An incident outranks it: one row carries one alert, and the red one is the louder fact.
+const isCodex = (s) => !!s && s.agent === 'codex' && !isIncident(s);
 
 async function buildSessions({ brief: allBrief = false } = {}) {
   const [sessions, queue, focusRows] = await Promise.all([
@@ -5252,6 +5256,7 @@ async function buildSessions({ brief: allBrief = false } = {}) {
     // surfaces draw these rows, and a rule they each re-derive is one they will disagree about.
     unread: !!s.reply_at && (!s.seen_at || Date.parse(s.reply_at) > Date.parse(s.seen_at)),
     incident: isIncident(s),
+    codex: isCodex(s),
   });
   // One line of what the session last said, for the rows that only ever show one line. The repos
   // pane cuts `last_reply` to 90 characters for every row it lists; sending the whole reply so it
@@ -5360,14 +5365,14 @@ async function conversationNow(row) {
 app.get('/api/sessions/:id', async (req, res) => {
   try {
     const rows = await sb(`desk_sessions?id=eq.${encodeURIComponent(String(req.params.id))}` +
-      '&select=id,label,custom_title,repo,worker,status,working,claude_session_id,last_prompt,last_reply,reply_at');
+      '&select=id,label,custom_title,repo,worker,status,working,claude_session_id,last_prompt,last_reply,reply_at,agent');
     if (!rows || !rows.length) return res.status(404).json({ error: 'no such session' });
     const row = rows[0];
     if (row.last_prompt) row.last_prompt = cleanSaid(row.last_prompt);
     const conv = row.claude_session_id || row.id;
     rowConv.set(row.id, conv);
     const log = await ensureLog(conv);
-    res.json({ ...row, incident: isIncident(row), epoch: EPOCH, events: log.events });
+    res.json({ ...row, incident: isIncident(row), codex: isCodex(row), epoch: EPOCH, events: log.events });
   } catch (e) { res.status(500).json({ error: String(e.message || e) }); }
 });
 

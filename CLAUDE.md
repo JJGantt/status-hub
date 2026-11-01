@@ -492,7 +492,7 @@ It also beats app.css's `body.tv.wallportrait` block on equal specificity, by lo
   dots while a clip is being transcribed, then the transcript in its place, then the real row
   replacing it. Two sources, and both are needed — the upload's own answer is LOCAL (only the
   recording device knows a clip is in the air), while the worker's `working` activity carries the
-  transcript to EVERY device, which is what makes a command spoken at the puck appear here. The
+  transcript to EVERY device, which is what makes a command spoken at the ESP appear here. The
   placeholder comes down on the matching user row or on the reply. A resync takes it down only on its
   user row, found ANYWHERE in the thread rather than as the newest message: with the phone asleep a
   watch command's rows arrive by resync, often behind a later command. Never on an assistant row

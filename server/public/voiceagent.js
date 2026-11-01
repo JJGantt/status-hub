@@ -120,7 +120,7 @@ function boot() {
       const a = msg.row || {};
       if ((a.focus || 'hub') !== 'hub') return;
       // His words just landed on screen — and this is the one event that carries them to a device that
-      // did not do the recording, so it is what puts a command spoken at the puck into every thread view.
+      // did not do the recording, so it is what puts a command spoken at the ESP into every thread view.
       if (a.state === 'working') { playPop(); pushPending({ state: 'prompt', text: a.text }); }
       pushActivity(a);               // any other view of the run — see onActivity below
       if (a.state === 'done') activity.done(a.text);
@@ -164,7 +164,7 @@ export function onThread(fn) { threadSubs.push(fn); fn(null); }
 //
 // Two sources, and both are needed. `transcribing` and the transcript that comes back from the upload
 // are LOCAL — only the device that recorded knows a clip is in the air. The worker's `working` activity
-// carries the transcript to every device, which is what makes a command spoken at the puck or the Mac
+// carries the transcript to every device, which is what makes a command spoken at the ESP or the Mac
 // appear here too; it arrives second on the recording device and says the same thing.
 const pendingSubs = [];
 export function onPending(fn) { pendingSubs.push(fn); }

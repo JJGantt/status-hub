@@ -59,7 +59,7 @@ segment's own start would overlap the previous one and collapse two real command
 the clip goes to the voice server as 16k mono WAV, `/verify` answers the top-3 cosine against the
 voiceprint, and anything under `voice_upload_accept` (0.22 when unset, 0 to accept anything) is never enqueued. That
 setting is its own: `voiceid_accept_threshold` is the ESP's whole-clip gate, it reads 0 today, and a
-number tuned for a puck streaming raw audio should not silently decide what a watch may say. That is
+number tuned for an ESP streaming raw audio should not silently decide what a watch may say. That is
 the phone and the watch, which hand over a finished file rather than streaming — until 2026-09-23 they
 were the only mics in the house with no gate at all, and eleven minutes of watch listening sent a
 podcast, a television and a room to the worker.

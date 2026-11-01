@@ -55,9 +55,14 @@ final class Chat: ObservableObject {
     @Published private(set) var landOn: String?
     /// Counts each request to land, so a second one on the same answer still moves the view.
     @Published private(set) var landings = 0
-    /// Home is on screen, in front, with the wrist up (`HomeView.attend`): an answer's notification
-    /// arriving now is not shown.
+    /// Home is on screen, in front, with the wrist up (`HomeView.attend`). The read rule's test.
     var looking = false
+    /// Home is the page showing and the app is not in the background, wrist up or down
+    /// (`HomeView.attend`). An answer's notification arriving now is not shown: the answer is in front
+    /// of him, or is what the next raise shows. Not `looking`: the scene drops to `inactive` in the
+    /// same second an answer lands while he is still reading, so a wrist-up test, even with a grace
+    /// window, misses exactly the case it exists for.
+    var homeOpen = false
     /// Read on this watch, kept so the mark goes the moment it is read rather than at the next reload.
     @Published private var readHere: Set<String> = []
     /// What the hub heard of each command still running, oldest first, shown until it lands in the

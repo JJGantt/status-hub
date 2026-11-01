@@ -175,6 +175,7 @@ struct HomeView: View {
     private func attend() {
         looking = !dimmed && phase == .active && onScreen
         chat.looking = looking
+        chat.homeOpen = onScreen && phase != .background
         let due = looking ? Set(chat.unread.map(\.id)).intersection(visible) : []
         for (id, t) in reading where !due.contains(id) { t.cancel(); reading[id] = nil }
         for id in due where reading[id] == nil {

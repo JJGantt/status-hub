@@ -159,9 +159,12 @@ looking, so those are kept reachable until they have actually been on screen.
   button of its own, so the tap does not also record. Home stays landed there (`Chat.landOn`) until
   the next command's words appear.
 - **Each one is pushed as it lands** (`notifyAnswer` in the hub, category `VOICE_ANSWER`, titled with
-  his words, the answer as the body); no other orchestrator reply is. The watch drops it unshown while
-  home is in front with the wrist up (`Chat.looking`), and shows it with the app open but the wrist
-  down. Any interaction with it is reading it: swiped away, on the watch or the phone, it is marked
+  his words, the answer as the body); no other orchestrator reply is. The watch drops it unshown whenever
+  home is the page showing and the app is not in the background, wrist up or down (`Chat.homeOpen`):
+  the answer is in front of him or is what the next raise shows. It is not gated on `looking`, because
+  the scene drops to `inactive` in the same second an answer lands while he is still reading it. On any
+  other page it is shown, and once the watch is back on the clock the app is in the background and the
+  system shows it. Any interaction with it is reading it: swiped away, on the watch or the phone, it is marked
   read at once (`customDismissAction` is what reports the swipe); tapped on the watch, home lands on
   the answer and the read rule marks it, since marking it first would drop an old answer out of the
   thread before home could land on it; tapped on the phone, it is marked read. Only seeing it, with no

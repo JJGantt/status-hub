@@ -65,13 +65,15 @@ final class WatchAppDelegate: NSObject, WKApplicationDelegate, UNUserNotificatio
     // Shown even while the app is open, as on the phone.
     func userNotificationCenter(_ center: UNUserNotificationCenter, willPresent notification: UNNotification,
                                 withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void) {
-        // An answer landing while he is looking at home is already in front of him: no buzz. With the
-        // app open but the wrist down it is shown, as the nudge to look.
+        // An answer landing while home is the page open is already in front of him, or is what the next
+        // raise shows: no buzz, wrist up or down (`Chat.homeOpen`). On any other page it is shown, and
+        // once the watch is back on the clock the app is in the background, this is not asked, and the
+        // system shows it.
         if notification.request.content.categoryIdentifier == "VOICE_ANSWER" {
             Task { @MainActor in
-                let looking = Chat.shared.looking
-                Hub.log("answer-push", ["shown": !looking])
-                completionHandler(looking ? [] : [.banner, .sound, .list])
+                let open = Chat.shared.homeOpen
+                Hub.log("answer-push", ["shown": !open, "looking": Chat.shared.looking])
+                completionHandler(open ? [] : [.banner, .sound, .list])
             }
             return
         }

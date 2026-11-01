@@ -43,7 +43,7 @@ bundle older than `safeReload` loses a clip mid-sentence.
 
 One `app.use` in `server.js` gates everything **defined below it**. Public, because they are
 declared above it: `/healthz`, `/login`, `/privacy`, `/terms`, the Search Console verification
-file named by `GSC_VERIFICATION`, and the restaurant watch's `/api/cg/*` routes (which check their
+file named by `GSC_VERIFICATION`, and the restaurant watch app's `/api/cg/*` routes (which check their
 own owner key). A new route added near the top of the file is world-readable. The gate itself lets
 through one named set, `PUBLIC_SURF` (the `/surf` page, its bundle and stylesheets, and
 `/api/surf/live|stream|history`), wherever those are declared.

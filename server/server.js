@@ -189,7 +189,12 @@ const weightReminder = require('./lib/weightReminder');
 const PORT = process.env.PORT || 8080;
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_KEY = process.env.SUPABASE_KEY;
-const HUB_PASSWORD = process.env.HUB_PASSWORD || 'changeme';
+const HUB_PASSWORD = process.env.HUB_PASSWORD;
+// No default: a fallback password would be a public one.
+if (!HUB_PASSWORD) {
+  console.error('HUB_PASSWORD is not set; refusing to start');
+  process.exit(1);
+}
 // Cookie token derived from the password — set once per device, never expires (no logout).
 const TOKEN = crypto.createHash('sha256').update('status-hub:' + HUB_PASSWORD).digest('hex');
 // Device token for the Pi/TV kiosk: visiting any page with ?token=<TV_TOKEN> sets the hub
@@ -1708,7 +1713,39 @@ function getCookie(req, name) {
   return m ? decodeURIComponent(m[1]) : null;
 }
 // Web uses the 'hub' cookie; the native app sends the same derived token as a header.
-const authed = (req) => getCookie(req, 'hub') === TOKEN || req.headers['x-hub-token'] === TOKEN;
+// Constant-time string equality: both sides are hashed to the same length first, so neither the
+// length nor the position of the first differing byte shows up in the response time.
+const sha256 = (s) => crypto.createHash('sha256').update(String(s)).digest();
+const safeEqual = (a, b) => crypto.timingSafeEqual(sha256(a), sha256(b));
+const authed = (req) => safeEqual(getCookie(req, 'hub') || '', TOKEN)
+  || safeEqual(req.headers['x-hub-token'] || '', TOKEN);
+
+// LOGIN LOCKOUT. Wrong passwords are counted per client IP (Fly-Client-IP, which Fly's edge sets;
+// req.ip is the proxy) and across all clients, in memory: a restart clears them, which is fine for a
+// limit whose job is to make guessing slow. LOGIN_MAX_PER_IP failures inside LOGIN_WINDOW_MS lock that
+// IP out; LOGIN_MAX_TOTAL from anyone locks every login, so spreading guesses over many addresses
+// does not get around it. Each lock lasts until the window's oldest counted failure ages out.
+// Signed-in devices are unaffected: they hold the cookie and never post to /login.
+const LOGIN_WINDOW_MS = 15 * 60 * 1000;
+const LOGIN_MAX_PER_IP = 5;
+const LOGIN_MAX_TOTAL = 50;
+const loginFailures = new Map();   // ip -> [timestamps]
+let loginFailuresAll = [];
+const clientIp = (req) => String(req.headers['fly-client-ip'] || req.ip || '');
+function recentFailures(list, now) { return list.filter((t) => now - t < LOGIN_WINDOW_MS); }
+function loginLocked(ip, now) {
+  loginFailuresAll = recentFailures(loginFailuresAll, now);
+  const mine = recentFailures(loginFailures.get(ip) || [], now);
+  if (mine.length) loginFailures.set(ip, mine); else loginFailures.delete(ip);
+  return mine.length >= LOGIN_MAX_PER_IP || loginFailuresAll.length >= LOGIN_MAX_TOTAL;
+}
+function recordLoginFailure(ip, now) {
+  loginFailures.set(ip, [...(loginFailures.get(ip) || []), now]);
+  loginFailuresAll.push(now);
+  if (loginFailures.size > 10000) {
+    for (const [k, v] of loginFailures) if (!recentFailures(v, now).length) loginFailures.delete(k);
+  }
+}
 
 // Public (before the auth gate). Reports the commit this instance is RUNNING, which is the only way
 // to tell a deploy that shipped from one that silently never ran — a push whose workflow never fired
@@ -1784,7 +1821,7 @@ app.post('/api/cg/transcribe', async (req, res) => {
     fs.promises.unlink(tmp).catch(() => {});
   }
 });
-// THE ORDER LIST (data-layer 00125, 00126): what the restaurant watch heard guests order, one row per
+// THE ORDER LIST (data-layer 00125, 00126): what the restaurant watch app heard guests order, one row per
 // item, written in two passes by the watch's own model (CapitalGrilleApp/Orders.swift): POST as heard,
 // then /standardize matches each row to the menu and renames it in place. The table has no anon policy,
 // so these owner-gated routes are the only way in. Open orders are the ones not marked done.
@@ -1883,12 +1920,17 @@ app.post('/api/cg/orders/done', express.json(), async (req, res) => {
 });
 app.get('/login', (req, res) => res.type('html').send(loginHtml()));
 app.post('/login', (req, res) => {
-  if ((req.body.password || '') === HUB_PASSWORD) {
+  const ip = clientIp(req), now = Date.now();
+  if (loginLocked(ip, now)) return res.status(429).type('html').send(loginHtml('Too many attempts'));
+  if (safeEqual(req.body.password || '', HUB_PASSWORD)) {
+    loginFailures.delete(ip);
     res.setHeader('Set-Cookie',
       `hub=${TOKEN}; Max-Age=${60 * 60 * 24 * 3650}; Path=/; HttpOnly; SameSite=Lax`);
     return res.redirect('/');
   }
-  res.type('html').send(loginHtml('Wrong password'));
+  recordLoginFailure(ip, now);
+  console.warn(`[login] wrong password from ${ip}`);
+  res.status(401).type('html').send(loginHtml('Wrong password'));
 });
 
 // Public, unauthenticated, and deliberately ABOVE the auth gate: Google has to fetch these
@@ -1931,7 +1973,7 @@ app.use((req, res, next) => {
   if (authed(req) || PUBLIC_SURF.has(req.path)) return next();
   // Kiosk device-token: ?token=<TV_TOKEN> on any request authenticates and seeds the cookie
   // so the Pi's subsequent same-origin fetches (SSE, /api/*) are authorized too.
-  if (TV_TOKEN && req.query.token === TV_TOKEN) {
+  if (TV_TOKEN && req.query.token && safeEqual(req.query.token, TV_TOKEN)) {
     res.setHeader('Set-Cookie',
       `hub=${TOKEN}; Max-Age=${60 * 60 * 24 * 3650}; Path=/; HttpOnly; SameSite=Lax`);
     return next();
@@ -4288,7 +4330,7 @@ async function pushAll(kind, title, body, dedupe_key, extra = {}) {
 }
 
 app.post('/api/notify', express.json(), async (req, res) => {
-  if (TV_TOKEN && req.query.token !== TV_TOKEN) return res.status(403).json({ error: 'forbidden' });
+  if (TV_TOKEN && !safeEqual(req.query.token || '', TV_TOKEN)) return res.status(403).json({ error: 'forbidden' });
   const b = req.body || {};
   const title = String(b.title || 'Hub').slice(0, 100);
   const body = String(b.body || '').trim().slice(0, 300);

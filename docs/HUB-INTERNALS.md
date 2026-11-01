@@ -656,7 +656,9 @@ uses is `cg_orders_model_first` / `cg_orders_model_second` (§7).
 
 **Auth:** the hub password → `sha256("status-hub:"+password)`; sent as the `hub` cookie (web) or the
 `X-Hub-Token` header (native app). The kiosk authenticates via `?token=<TV_TOKEN>` (also seeds the
-cookie).
+cookie). Every comparison is constant-time (`safeEqual`). The server refuses to start without
+`HUB_PASSWORD`. `POST /login` locks out an IP after 5 wrong passwords in 15 minutes, and every login
+after 50 from anyone (in memory, so a restart clears it; `LOGIN_*` in server.js).
 
 **From a shell, call it with `bin/hub <METHOD> <path> [json | @file]`** (`bin/hub GET /api/status`), on the
 Mac or the Pi. It reads the kiosk token from `$HUB_TOKEN` or this repo's gitignored `.env` and hands
@@ -1563,7 +1565,7 @@ callers; only the HTTP response is filtered.
 | `watch_speech_mode` / `watch_speech_min` / `watch_speech_ratio` / `watch_voice_min` | What the watch counts as speech. `fixed` (default): 2.5x the room's floor and at least `watch_speech_min` (0.02 unset), which in a quiet room is the whole line. `room`: `watch_speech_ratio` (8 unset) times the floor, no fixed number. `voice`: Apple's on-device sound classifier, a window scored `speech` at least `watch_voice_min` (0.5 unset); no level line. Settings → Watch: speech line. |
 | `watch_quick_s` | The watch's Hub Quick complication: seconds from the microphone opening after which the command sends whatever it has (5 unset). Settings → Watch: quick command. |
 | `rewind_diarize` | `1` gives a rewind grab speaker labels (OpenAI `gpt-4o-transcribe-diarize`); anything else is plain Groq Whisper (`docs/REWIND.md`). No Settings control. |
-| `cg_orders_model_first` / `_second` | The model id each pass of the restaurant order list uses (`claude-sonnet-5` unset), returned by `GET /api/cg/orders` (§5). No Settings control. |
+| `cg_orders_model_first` / `_second` | The model id each pass of the restaurant app's order list uses (`claude-sonnet-5` unset), returned by `GET /api/cg/orders` (§5). No Settings control. |
 | `watch_rewind_s` | Seconds the watch's rewind keeps (30 unset, 600 at most), read when it is engaged (`docs/REWIND.md`). No Settings control: write `app_settings` directly. |
 | `agent_mode` / `agent_cwd` | Full-agent (coding) mode toggle + working dir for the worker. |
 | `weight_reminder_enabled` / `_mode` / `_time` | The daily weigh-in push (On/Off, Manual/Dynamic, time). |

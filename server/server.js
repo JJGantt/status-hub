@@ -49,6 +49,32 @@ const settingsCache = { map: null, at: 0 };
 const SETTINGS_BACKSTOP_MS = 15 * 60 * 1000;
 const dirtySettings = () => { settingsCache.map = null; statusEpoch++; };
 
+// The Claude subscription's usage windows (data-layer 00144: one row per change, newest = current),
+// for the two thin bars along the top of every wall. A new row arrives over realtime (→ usageCache.row),
+// so the read here is a boot fill and the 15-min backstop behind a dropped event.
+const usageCache = { row: null, at: 0 };
+const USAGE_BACKSTOP_MS = 15 * 60 * 1000;
+async function claudeUsageRow() {
+  if (usageCache.row && Date.now() - usageCache.at < USAGE_BACKSTOP_MS) return usageCache.row;
+  const rows = await sb('claude_usage?select=five_hour_pct,five_hour_resets_at,seven_day_pct,seven_day_resets_at,observed_at&order=observed_at.desc&limit=1');
+  usageCache.row = (rows || [])[0] || null;
+  usageCache.at = Date.now();
+  return usageCache.row;
+}
+// Fills 0-100 for the bars, and the minutes to each reset for whatever later shows them. A window whose
+// reset has passed is empty until the next turn reports the new one.
+function buildUsage(r) {
+  if (!r) return null;
+  const win = (pct, resets) => {
+    const ms = resets ? Date.parse(resets) - Date.now() : null;
+    const over = ms !== null && ms <= 0;
+    return { pct: over ? 0 : Math.max(0, Math.min(100, Number(pct) || 0)),
+             resets_at: over ? null : resets, resets_in_min: over || ms === null ? null : Math.round(ms / 60000) };
+  };
+  return { five_hour: win(r.five_hour_pct, r.five_hour_resets_at), seven_day: win(r.seven_day_pct, r.seven_day_resets_at),
+           observed_at: r.observed_at };
+}
+
 // Upsert one app_settings row. app_settings is keyed, so this needs the merge-duplicates Prefer
 // header — a plain POST on an existing key 409s (which is why sbWrite, having no Prefer, can't
 // be used here). Throws on failure.
@@ -1247,7 +1273,7 @@ function buildStatus() {
 }
 
 async function composeStatus() {
-  const [core, train, { surfRows }, deviceRows, presenceRows, workerRows, watcherRows] = await Promise.all([
+  const [core, train, { surfRows }, deviceRows, presenceRows, workerRows, watcherRows, usageRow] = await Promise.all([
     nutritionCore(), trainingCore(), rowsOf.surf(),
     sb('device_status?select=*'),
     sb('voice_presence?select=source,alive_at'),
@@ -1255,6 +1281,7 @@ async function composeStatus() {
     // Alongside the other live reads rather than after the build: it is one more round trip, and
     // serially it was the frame's second.
     sb('set_watcher?id=eq.1&select=exercise,weight_lbs,armed_at,last_set_at').catch(() => []),
+    claudeUsageRow().catch((e) => { console.error('[usage] read failed:', e.message); return null; }),
   ]);
   const { today } = core;
 
@@ -1356,6 +1383,7 @@ async function composeStatus() {
   return { today, litter, feeder, surf, wind: liveWind.view((surfRows || [])[0]), buoys: liveBuoy.view(), weather: getWeather(), nutrition, maintenance, pace: paceData, volume, heatmap, nutrition_log,
     heatmap_home, nutrition_log_home, weight_plot, weight_plot_phone,
     last_set_at, session_start_at, sets_today, rep_watcher, routing, mics, score, desk_focus: deskFocus,
+    claude_usage: buildUsage(usageRow),
     // THE BUILD THIS FRAME CAME FROM. A page that has been open for hours never re-requests its own
     // bundle, so a deploy reaches the server and not the screen — which is how a phone spends an
     // afternoon running code that was replaced. Every client remembers the first commit it sees and
@@ -1490,6 +1518,9 @@ function startRealtime() {
     // subscribed: every report writes a row to `sets`, which is, so the push already
     // happens and adding reports would only duplicate it.
     .on('postgres_changes', { event: '*', schema: 'public', table: 'set_watcher' }, changed)
+    // A new usage reading (the table only gains a row when a number moves).
+    .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'claude_usage' },
+      (p) => { seen(); if (p.new) { usageCache.row = p.new; usageCache.at = Date.now(); } broadcast(); })
     // Settings (routing model/thinking/runner, wake toggle, nutrition goal): rebuild so the TV routing
     // panel reflects an MCP/voice/settings change near-instantly instead of waiting for the 30s tick.
     .on('postgres_changes', { event: '*', schema: 'public', table: 'app_settings' }, (p) => {

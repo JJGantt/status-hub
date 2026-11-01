@@ -1786,3 +1786,13 @@ Kokoro on the Pi does not work for this, because it renders SLOWER than real tim
 hides the wait while the generator stays ahead of playback. Measured with `kokoro-onnx` 0.5 in
 `~/voice/pi/.venv-kokoro`: the full model renders at 0.8-0.9x real time after an 11 s load, the int8
 model at 0.3-0.4x, and the process peaks at 740 MB.
+
+## Claude usage bars
+
+Two 2px bars pinned across the top of every `body.tv` page (the TV walls and the phone home): the
+5-hour window on top, the weekly one below, filling left to right, amber from 75% and red from 90%
+(the levels at which a dispatched session is reported, then held back; data-layer `desk.ts`). They are
+fixed and overlaid, so nothing else on the page moves. The frame carries `claude_usage`
+(`buildUsage`: each window's fill, reset time and minutes to reset) from the newest row of Supabase
+`claude_usage`, which arrives over realtime; the 15-minute backstop re-reads it. A window whose reset
+has passed paints empty until the next turn reports the new one.

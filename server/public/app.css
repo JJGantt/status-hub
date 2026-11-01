@@ -1386,3 +1386,12 @@ body.tv.phonewall .pane-todo .daycardwrap{padding:12px 14px 14px;flex:0 0 auto}
 @keyframes listenspin { to { transform: rotate(360deg); } }
 .ph-conv.tappable { cursor: pointer; }
 .ph-conv.tappable:active { opacity: .6; }
+
+/* Claude usage hairlines (cards/usage.js): 5-hour on top, weekly under it, across the top edge of every
+   wall. Overlaid, so they take no layout space. */
+#usagebars{position:fixed;top:0;left:0;right:0;z-index:9999;pointer-events:none;display:flex;flex-direction:column;gap:1px}
+#usagebars .ub-row{height:2px;background:rgba(255,255,255,.06)}
+#usagebars .ub-fill{height:100%;width:0;background:#8b949e;transition:width .6s ease}
+#usagebars .ub-fill.ub-warm{background:#e6b93d}
+#usagebars .ub-fill.ub-hot{background:#e5484d}
+body.phonehome #usagebars{top:env(safe-area-inset-top,0px)}

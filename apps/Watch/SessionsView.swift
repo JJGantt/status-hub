@@ -133,15 +133,18 @@ struct SessionsView: View {
         }
         .padding(.vertical, 8)
         .frame(maxWidth: .infinity, alignment: .leading)
-        // An incident run: a red outline and a dark red ground, as on the phone.
-        .background(s.incident == true ? Self.incidentGround : Color.clear)
+        // An incident run: a red outline and a dark red ground, as on the phone. A Codex session: the
+        // same in blue.
+        .background(s.incident == true ? Self.incidentGround : s.codex == true ? Self.codexGround : Color.clear)
         .overlay(RoundedRectangle(cornerRadius: 4)
-            .stroke(s.incident == true ? Self.incidentEdge : Color.clear, lineWidth: 1.5))
+            .stroke(s.incident == true ? Self.incidentEdge : s.codex == true ? SessionView.codexEdge : Color.clear,
+                    lineWidth: 1.5))
         .contentShape(Rectangle())
     }
 
     private static let incidentEdge = Color(hex: "#d9443a")
     private static let incidentGround = Color(hex: "#1f0d0c")
+    private static let codexGround = Color(hex: "#0b1730")
 
     /// What this session's machine is doing, newest step only, in the colours of `Ink`. The line is
     /// always there, however empty — a row
@@ -210,7 +213,11 @@ struct SessionView: View {
 
     private var events: [SessionEvent] { sessions.logs[key]?.events ?? [] }
     private var incident: Bool { sessions.row(for: key)?.incident == true }
+    private var codex: Bool { sessions.row(for: key)?.codex == true }
     static let incidentEdge = Color(hex: "#d9443a")
+    static let codexEdge = Color(hex: "#3b82f6")
+    /// The frame an open session wears: red for an incident run, blue for a Codex session.
+    private var alertEdge: Color? { incident ? SessionView.incidentEdge : codex ? SessionView.codexEdge : nil }
     private var placeholders: [Placeholder] { sessions.placeholders[key] ?? [] }
 
     /// Every event in order, a prompt at the position of its LATEST occurrence — it moves from where it
@@ -356,7 +363,7 @@ struct SessionView: View {
                             .foregroundColor(Color(hex: "#7d8894"))
                         Text(sessions.row(for: key)?.name ?? "")
                             .font(.system(size: 15, weight: .semibold))
-                            .foregroundColor(incident ? SessionView.incidentEdge : .white)
+                            .foregroundColor(alertEdge ?? .white)
                             .lineLimit(1)
                             .truncationMode(.tail)
                     }
@@ -365,9 +372,9 @@ struct SessionView: View {
                 .buttonStyle(.plain)
             }
         }
-        // An incident run is framed red while open, as its row is in the list.
+        // An incident run is framed red while open, as its row is in the list; a Codex session blue.
         .overlay(RoundedRectangle(cornerRadius: 12)
-            .stroke(incident ? SessionView.incidentEdge : Color.clear, lineWidth: 2)
+            .stroke(alertEdge ?? Color.clear, lineWidth: 2)
             .ignoresSafeArea()
             .allowsHitTesting(false))
         .task {

@@ -21,6 +21,9 @@ struct SessionRow: Decodable, Identifiable, Equatable {
     /// An ops-responder incident run, drawn as an alert. The hub decides it from the label the
     /// responder gives every session it dispatches.
     let incident: Bool?
+    /// A session running on Codex rather than Claude, drawn blue the way an incident is drawn red. The
+    /// hub decides it (`agent`), and never sets both.
+    let codex: Bool?
     /// The number he says out loud, which is also the row's position: most recently active first,
     /// running and parked together.
     let n: Int?

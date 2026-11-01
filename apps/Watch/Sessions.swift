@@ -128,6 +128,12 @@ final class Sessions: ObservableObject {
 
     /// A session's reply notification, opened: shows that conversation on the sessions page. The row
     /// named may be one the list has not loaded yet — a resumed session's new row.
+    /// The conversation a push names is the one open on the sessions page, with that page showing.
+    func showing(rowId: String) -> Bool {
+        guard onPage, let open = path.last else { return false }
+        return (rows.first { $0.id == rowId }?.key ?? rowId) == open
+    }
+
     func open(rowId: String) async {
         await load()
         let key = rows.first { $0.id == rowId }?.key ?? rowId

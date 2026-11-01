@@ -59,6 +59,7 @@ config change ON the Pi by dispatching a session to it.
 |---|---|
 | `id` | the tmux name (`hub-<repo>-<ts>`) on the Pi, `mac-<cmd8>` on the Mac |
 | `worker` | `pi-desk` or `desk` — which machine owns it |
+| `agent` | `claude` (Claude Code) or `codex` (OpenAI's Codex CLI) — what runs in it; § Codex sessions |
 | `origin` | `dispatched` (we started it) or `adopted` (Jared did) |
 | `repo` / `label` | where it runs, and what it is called |
 | `status` | see below |
@@ -149,6 +150,43 @@ one project directory, so each new session looked like a `/clear` in every older
 
 The Pi adopts nothing: sessions there are launched by `pi-desk` or they do not exist, unless Jared
 attaches to tmux over SSH and starts one by hand, which is not tracked.
+
+### Codex sessions
+
+A session can run OpenAI's Codex CLI instead of Claude Code (`agent = 'codex'`), so dispatched work
+still runs when Claude cannot take it — an outage, or the usage limit. Codex runs on Jared's ChatGPT plan
+with the same MCP servers, approvals off and full access, as he runs it himself.
+
+- **Who asks for one.** `start_session` takes `agent`. Omitted, it is Claude, except where the data MCP
+  carries `DATA_AGENT=codex`: the voice worker's Codex fallback and its API-credits runner (a Claude
+  session would hit the limit that put the worker there), and every Codex session (so work a Codex
+  session hands on stays on Codex). A Codex dispatch skips the Claude usage gate and the login check.
+- **Where it can run.** A machine whose heartbeat says `info.codex: true` (the CLI installed and signed
+  in, `codexReady` in `orchestrator/src/codex.js`); the same Pi → Mac → Fly order as Claude otherwise.
+  Each machine signs in to Codex on its own (`codex login --device-auth`).
+- **Launch.** `pi-desk/launch-codex.sh`, in tmux on the Pi and Fly and in a Terminal tab on the Mac
+  (`openCodexTab`). The prompt comes through a file as for Claude; the dispatched-session and machine
+  notes go in as Codex `developer_instructions`. `HUB_SESSION_ID` and `DATA_AGENT` are forwarded to the
+  data MCP by name (`mcp_servers.data.env_vars`), because Codex starts MCP servers with a scrubbed
+  environment. Each machine's `~/.codex/config.toml` must give every MCP server
+  `default_tools_approval_mode = "approve"`, or approvals-off refuses every tool call.
+- **Which conversation.** Codex keeps no per-process record. Its native process holds its rollout
+  (`$CODEX_HOME/sessions/…/rollout-<ts>-<thread id>.jsonl`) open for the whole session, so the thread is
+  READ from the process's open files (`/proc/<pid>/fd` on Linux, `lsof` on the Mac), searching the
+  launched pid and its children because `codex` is a node wrapper around the binary. The thread id is
+  stored in `claude_session_id`.
+- **Replies and live activity** come from the rollout: `task_started` / `task_complete` (with
+  `last_agent_message`, the reply) bound a turn, and his words are the UserMessage item. `readTail` and
+  `sessionWatch`'s `step` hand a rollout to codex.js, so the tick, the watcher, the relay and the hub
+  treat both agents alike. A message typed mid-turn steers the running turn in Codex, so it arrives as
+  `said` with no `queued` before it.
+- **Follow-ups and closing** are typed exactly as for Claude (bracketed paste, then Enter; `/exit`).
+- **Rename** writes `label` and `custom_title` on the row: Codex has no rename the rollout records.
+- **Resume** is `codex resume <thread id>` on the machine that ran it, under the same row name on the Pi.
+- **They do not move.** A Codex rollout is never mirrored, and `transfer_session` refuses one; the Pi
+  neither hands a Codex session to the Mac when short of memory nor moves it for heavy work.
+- **Not adopted.** A `codex` Jared opens by hand on the Mac is not listed.
+- **Shown blue** on every surface that shows an incident red (`isCodex` in server.js; § 11).
 
 ---
 
@@ -481,6 +519,10 @@ A session any other agent dispatches has no `relay` flag and stays out of the th
 | the watch (`SessionsView`) | queued sessions on top, then every running and parked one, live off the `sessions` frames | open a session; a follow-up is always locked until the next press |
 | voice (`get_sessions`) | the numbered list, and what each last said (the turn's one-sentence summary from `desk_turns.summary`, else the reply's first 200 characters) | every verb |
 | the hub conversation (web `.ai-msg-session`, watch tint) | a hub-dispatched session's first reply, tinted and named by its label | reply is a fresh command |
+
+A Codex session is outlined blue on a dark blue ground in every list above that draws rows (phone, both
+walls, the watch) and framed blue while open, the treatment an incident run gets in red. The hub
+decides it (`codex` on each row and on `/api/sessions/:id`), and an incident outranks it.
 
 The phone card is the complex one and stays that way — it is the surface with a keyboard and a
 pointer. Everything else is glanceable and driven by voice, which is why sessions need numbers and

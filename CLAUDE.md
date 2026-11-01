@@ -659,7 +659,7 @@ selected, and its AppleScript dictionary has no property for it at all (a tab of
 than the bell, which fires at the same moment for the same reason — and the traffic runs one way:
 reading on the Mac clears the phone, reading on the phone cannot clear the Mac's bell.
 The `✳` and `◐` in a tab's `custom title` are Claude Code's idle/working glyphs, not an unread mark.
-An unread row takes an amber left edge. An ops-responder incident run takes a red OUTLINE and a dark red ground (`incident`, decided by `isIncident` in server.js from the responder's `Incident: ` label and sent with both the list and `/api/sessions/:id`), an outline so it never competes with the unread edge. The open session is framed red too, on the phone (`.sv.incident`) and on the watch. Parked and running rows are drawn alike, because words sent
+An unread row takes an amber left edge. An ops-responder incident run takes a red OUTLINE and a dark red ground (`incident`, decided by `isIncident` in server.js from the responder's `Incident: ` label and sent with both the list and `/api/sessions/:id`), an outline so it never competes with the unread edge. The open session is framed red too, on the phone (`.sv.incident`) and on the watch. A session running on Codex rather than Claude gets the same treatment in BLUE (`codex`, `isCodex` in server.js, from `desk_sessions.agent`), so it is plain that Claude is not the one working; an incident outranks it. Parked and running rows are drawn alike, because words sent
 to a parked one resume it wherever it lives. **That rule is written TWICE**, in `phone-home.css` and `tv-home.css`: `.hw-row` is defined in both
 and each surface loads only its own, so a rule written in one of them reaches half the surfaces that
 draw this row.

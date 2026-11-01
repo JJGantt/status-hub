@@ -65,25 +65,13 @@ final class WatchAppDelegate: NSObject, WKApplicationDelegate, UNUserNotificatio
     // Shown even while the app is open, as on the phone.
     func userNotificationCenter(_ center: UNUserNotificationCenter, willPresent notification: UNNotification,
                                 withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void) {
-        // **No notification while the app is open on what it is about.** An answer landing while home
-        // is the page showing is already in front of him, or is what the next raise shows: no buzz,
-        // wrist up or down. A session's reply landing on the conversation open on the sessions page is
-        // the same case. Once the watch returns to the clock the app is in the background, this is not
-        // asked, and the system shows it.
-        let category = notification.request.content.categoryIdentifier
-        if category == "VOICE_ANSWER" {
+        // An answer landing while he is looking at home is already in front of him: no buzz. With the
+        // app open but the wrist down it is shown, as the nudge to look.
+        if notification.request.content.categoryIdentifier == "VOICE_ANSWER" {
             Task { @MainActor in
-                let open = Chat.shared.open
-                Hub.log("answer-push", ["shown": !open, "looking": Chat.shared.looking])
-                completionHandler(open ? [] : [.banner, .sound, .list])
-            }
-            return
-        }
-        if category == "SESSION_REPLY", let id = notification.request.content.userInfo["session_id"] as? String {
-            Task { @MainActor in
-                let open = Sessions.shared.showing(rowId: id)
-                if open { Hub.log("session-push", ["shown": false]) }
-                completionHandler(open ? [] : [.banner, .sound, .list])
+                let looking = Chat.shared.looking
+                Hub.log("answer-push", ["shown": !looking])
+                completionHandler(looking ? [] : [.banner, .sound, .list])
             }
             return
         }

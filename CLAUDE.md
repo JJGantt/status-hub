@@ -93,10 +93,11 @@ Connect API key, which is all cloud distribution signing asks for, so it needs n
 reads `~/.appstoreconnect`, which the sandbox blocks). A session's shell can use the login keychain, so
 nothing else is needed — never open a Terminal window for it from the Mac; every one is a window left
 on his screen.
-**From the Pi, do not run it over plain SSH**: an SSH login cannot use the login keychain, so the archive
-compiles and then fails at CodeSign with `errSecInternalComponent`. Run it inside his GUI session
-instead, ending in `exit 0` so the window closes itself when the build is done (Terminal's profile closes
-a tab whose shell exits cleanly) — `osascript -e 'tell application "Terminal" to do script "cd ~/repos/status-hub && apps/tools/testflight.sh > /tmp/tf-run.log 2>&1; exit 0"'` — and read the log. **`ios-testflight.yml` is the fallback, for when this Mac
+**A session on the Pi moves itself to the Mac** with the data MCP's `transfer_session` (its own id is `$HUB_SESSION_ID`,
+machine `mac`) and runs the script there as above; the move restarts its turn on the Mac with the whole
+conversation. Over plain SSH the archive compiles and then fails at CodeSign with
+`errSecInternalComponent`, because an SSH login cannot use the login keychain, and driving Terminal
+over SSH to get round that leaves a window on his screen for every build. **`ios-testflight.yml` is the fallback, for when this Mac
 is away** — macOS runners bill at a 10x multiplier and six builds in an afternoon exhausted the
 account's allowance, which stops the workflow dead with "recent account payments have failed or your
 spending limit needs to be increased".

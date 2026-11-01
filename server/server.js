@@ -1742,7 +1742,10 @@ app.post('/api/cg/transcribe', async (req, res) => {
     cgLog(req, arrived, { output: `${size} bytes, upload ${uploaded - arrived}ms, groq ${groq}ms` });
     res.json({ transcript });
   } catch (e) {
-    console.error(`[cg-transcribe] FAILED: ${e.status || 500} ${String(e.message || e).slice(0, 200)}`);
+    // The watch hanging up mid-upload (its own timeout, a dropped link) is the client's failure, not the
+    // hub's: the watch logs it as voice_transcribe_retry / orders_failed, so here it is a plain line.
+    const clientGone = !uploaded && (e.code === 'ECONNRESET' || e.code === 'ERR_STREAM_PREMATURE_CLOSE' || e.message === 'aborted');
+    (clientGone ? console.log : console.error)(`[cg-transcribe] ${clientGone ? 'CLIENT GONE' : 'FAILED'}: ${e.status || 500} ${String(e.message || e).slice(0, 200)}`);
     cgLog(req, arrived, { error: String(e.message || e).slice(0, 200),
       output: uploaded ? `upload ${uploaded - arrived}ms, failed in groq` : 'failed during upload' });
     res.status(e.status || 500).json({ error: String(e.message || e) });

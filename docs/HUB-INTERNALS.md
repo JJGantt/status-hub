@@ -643,7 +643,8 @@ Whisper → `{transcript}`, nothing enqueued. That app ships to TestFlight teste
 token; it sends its Anthropic key as `X-Owner-Key` instead, and only the owner's (its SHA-256 matches
 `CG_OWNER_KEY_SHA256`, the same hash as `AppGate.ownerKeyHash` in CapitalGrilleApp) gets through. If that
 key is ever rotated, both hashes change together. Every request writes one `[cg-transcribe]` line: size, time
-and word count, or `REFUSED` / `FAILED` with the reason, and one `app_logs` row (`kind` `voice_hub`) under
+and word count, or `REFUSED` / `FAILED` with the reason (`CLIENT GONE`, a plain line rather than an error,
+when the watch hangs up mid-upload — its own `voice_*` rows record that side), and one `app_logs` row (`kind` `voice_hub`) under
 the watch's `X-Interaction-Id`. The watch logs its own side of each question to
 Supabase `app_logs` (`voice_*` rows, CapitalGrilleApp `VoiceLog`).
 

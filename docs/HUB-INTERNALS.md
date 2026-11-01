@@ -664,11 +664,21 @@ it to curl on a config descriptor, so the token is never in a command line, its 
 not dig the token out of a file to build a curl by hand: Claude Code's safety check refuses a command
 that would print a secret, and that refusal is what such a session runs into.
 
-The kiosk token is `TV_TOKEN` on Fly, and its copies are, on each machine: `status-hub/.env` and
-`voice-pipeline/worker/.env` (`HUB_TOKEN`, which pi-desk also reads), plus on the Mac the installed
-`~/Library/LaunchAgents/com.jaredgantt.voice-orchestrator.plist`, and the `HUB_TOKEN` secret on
-`jared-voice-worker` and on `jared-desk-fly` (the Fly session machine, where `bin/hub` reads it from
-the environment). A new token has to reach every one of them. None of them is in git.
+The kiosk token is `TV_TOKEN` on Fly, and its copies are:
+
+- on each machine: `status-hub/.env`, `voice-pipeline/worker/.env` (`HUB_TOKEN`, which pi-desk also
+  reads), `gmail-watcher/.env`, `~/.config/ops/env` (the responder), and `~/.config/google-tv/hub-token`
+  (which `bin/tv sidebar token` pushes into the bedroom TV's companion app, where TvLink signs in with
+  it; the app keeps the old one until that is run);
+- on the Mac: the installed `com.jaredgantt.voice-orchestrator.plist` (`HUB_TOKEN`) and
+  `com.jaredgantt.claude-login-check.plist` (inside `HUB_NOTIFY_URL`), and `~/.config/ops/hub_token`;
+- on the Pi: the kiosk URL in `~/.xinitrc` (read once when X starts, so the X session has to restart:
+  the relaunch loop reuses the old URL) and the `HUB_NOTIFY_URL` of the 9am line in the crontab;
+- on Fly: `HUB_TOKEN` on `jared-voice-worker`, `ops-responder` and `jared-desk-fly` (the Fly session
+  machine, where `bin/hub` reads it from the environment; it is stopped, so set it with `--stage` and
+  then `fly secrets deploy`), and `HUB_NOTIFY_TOKEN` on `litter-robot-watcher`.
+
+A new token has to reach every one of them. None of them is in git.
 
 The gate is one `app.use` and it protects **everything defined below it**, static assets
 included. Declared **above** it, and therefore public: `/healthz`, `/login`, `/privacy`,

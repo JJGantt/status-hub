@@ -1721,27 +1721,24 @@ const authed = (req) => safeEqual(getCookie(req, 'hub') || '', TOKEN)
   || safeEqual(req.headers['x-hub-token'] || '', TOKEN);
 
 // LOGIN LOCKOUT. Wrong passwords are counted per client IP (Fly-Client-IP, which Fly's edge sets;
-// req.ip is the proxy) and across all clients, in memory: a restart clears them, which is fine for a
-// limit whose job is to make guessing slow. LOGIN_MAX_PER_IP failures inside LOGIN_WINDOW_MS lock that
-// IP out; LOGIN_MAX_TOTAL from anyone locks every login, so spreading guesses over many addresses
-// does not get around it. Each lock lasts until the window's oldest counted failure ages out.
+// req.ip is the proxy), in memory: a restart clears them, which is fine for a limit whose job is to
+// make guessing slow. LOGIN_MAX_PER_IP failures inside LOGIN_WINDOW_MS lock that IP out until the
+// window's oldest counted failure ages out. There is deliberately no all-clients cap: anyone could trip
+// one on purpose and lock Jared out of new logins, and against a strong password the per-IP limit is
+// enough.
 // Signed-in devices are unaffected: they hold the cookie and never post to /login.
 const LOGIN_WINDOW_MS = 15 * 60 * 1000;
 const LOGIN_MAX_PER_IP = 5;
-const LOGIN_MAX_TOTAL = 50;
 const loginFailures = new Map();   // ip -> [timestamps]
-let loginFailuresAll = [];
 const clientIp = (req) => String(req.headers['fly-client-ip'] || req.ip || '');
 function recentFailures(list, now) { return list.filter((t) => now - t < LOGIN_WINDOW_MS); }
 function loginLocked(ip, now) {
-  loginFailuresAll = recentFailures(loginFailuresAll, now);
   const mine = recentFailures(loginFailures.get(ip) || [], now);
   if (mine.length) loginFailures.set(ip, mine); else loginFailures.delete(ip);
-  return mine.length >= LOGIN_MAX_PER_IP || loginFailuresAll.length >= LOGIN_MAX_TOTAL;
+  return mine.length >= LOGIN_MAX_PER_IP;
 }
 function recordLoginFailure(ip, now) {
   loginFailures.set(ip, [...(loginFailures.get(ip) || []), now]);
-  loginFailuresAll.push(now);
   if (loginFailures.size > 10000) {
     for (const [k, v] of loginFailures) if (!recentFailures(v, now).length) loginFailures.delete(k);
   }

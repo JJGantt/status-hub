@@ -657,8 +657,8 @@ uses is `cg_orders_model_first` / `cg_orders_model_second` (§7).
 **Auth:** the hub password → `sha256("status-hub:"+password)`; sent as the `hub` cookie (web) or the
 `X-Hub-Token` header (native app). The kiosk authenticates via `?token=<TV_TOKEN>` (also seeds the
 cookie). Every comparison is constant-time (`safeEqual`). The server refuses to start without
-`HUB_PASSWORD`. `POST /login` locks out an IP after 5 wrong passwords in 15 minutes, and every login
-after 50 from anyone (in memory, so a restart clears it; `LOGIN_*` in server.js).
+`HUB_PASSWORD`. `POST /login` locks out an IP after 5 wrong passwords in 15 minutes (in memory, so a
+restart clears it; `LOGIN_*` in server.js). There is no all-clients cap: anyone could trip it on purpose.
 
 **From a shell, call it with `bin/hub <METHOD> <path> [json | @file]`** (`bin/hub GET /api/status`), on the
 Mac or the Pi. It reads the kiosk token from `$HUB_TOKEN` or this repo's gitignored `.env` and hands

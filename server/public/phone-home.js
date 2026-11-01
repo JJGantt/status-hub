@@ -263,7 +263,9 @@ function paintConv(pin) {
     // A reply RELAYED FROM A SESSION keeps its name, because that is the one thing the colour cannot
     // carry: it is a machine reporting back, not the hub answering.
     const from = said && r.session ? r.session : null;
-    return `<div class="ph-convline ${said ? 'said' : 'ask'}${from ? ' sess' : ''}">` +
+    // A reply a fallback engine wrote (credits, Codex) is coloured by it.
+    const eng = said && /^(credits|codex)$/.test(r.engine || '') ? ' eng-' + r.engine : '';
+    return `<div class="ph-convline ${said ? 'said' : 'ask'}${from ? ' sess' : ''}${eng}">` +
       (from ? `<span class="ph-convk">${esc(from)}</span>` : '') +
       `<div class="ph-convt">${md(r.text)}</div></div>`;
   }).join('') + (pending
@@ -290,7 +292,7 @@ function takeRow(r) {
   const text = String(r.text == null ? '' : r.text).trim();
   if (!text) return;                       // a photo-only message has nothing to show
   if (r.role !== 'user' && r.role !== 'assistant') return;
-  thread.push({ role: r.role, text, session: r.session_id ? (r.session_label || '') : '' });
+  thread.push({ role: r.role, text, session: r.session_id ? (r.session_label || '') : '', engine: r.engine || '' });
   if (thread.length > TAIL) thread = thread.slice(-TAIL);
 }
 

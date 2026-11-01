@@ -1105,7 +1105,9 @@ function initCard() {
     // A session's reply relayed into the thread: tinted, and named by the session it came from.
     const session = side === 'assistant' && row.session_id;
     if (session && row.session_label) inner += '<span class=ai-session>' + esc(String(row.session_label)) + '</span>';
-    return '<div class="ai-msg ai-msg-' + side + (session ? ' ai-msg-session' : '') + (row.pending ? ' ai-msg-pending' : '') + '">' + inner + '</div>';
+    // A reply a fallback engine wrote (voice_messages.engine: 'credits' or 'codex') is coloured by it.
+    const engine = side === 'assistant' && /^(credits|codex)$/.test(row.engine || '') ? ' ai-engine-' + row.engine : '';
+    return '<div class="ai-msg ai-msg-' + side + (session ? ' ai-msg-session' : '') + engine + (row.pending ? ' ai-msg-pending' : '') + '">' + inner + '</div>';
   }
   // A divider where one conversation context ends and the next begins; never two in a row.
   function rule() {

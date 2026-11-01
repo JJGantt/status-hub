@@ -56,7 +56,8 @@ struct HomeView: View {
                     }
                     ForEach(chat.recent) { m in
                         room("msg\(m.id)")
-                        ThreadRow(text: m.text ?? "", user: m.role == "user", session: m.session_id != nil)
+                        ThreadRow(text: m.text ?? "", user: m.role == "user", session: m.session_id != nil,
+                                  engine: m.role == "assistant" ? m.engine : nil)
                             .id("msg\(m.id)")
                             .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { heights["msg\(m.id)"] = $0 }
                             .onScrollVisibilityChange(threshold: shownAt(m)) { shown in

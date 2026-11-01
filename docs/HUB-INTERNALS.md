@@ -1806,3 +1806,11 @@ fixed and overlaid, so nothing else on the page moves. The frame carries `claude
 (`buildUsage`: each window's fill, reset time and minutes to reset) from the newest row of Supabase
 `claude_usage`, which arrives over realtime; the 15-minute backstop re-reads it. A window whose reset
 has passed paints empty until the next turn reports the new one.
+
+## Fallback replies are coloured
+
+A voice reply that a fallback engine wrote carries `voice_messages.engine` (`credits` at the
+subscription's usage limit, `codex` when Claude cannot answer; null is the subscription), and every
+surface colours the reply text by it: amber for credits, blue for Codex, the colours the usage bars and
+the session list already use. Web: `ai-engine-*` in voiceagent.js, `eng-*` in phone-home.js; watch:
+`ThreadRow.engine`.

@@ -602,3 +602,6 @@ body.tv.phonehome .devcards #tv-routing .rt-flag{font-size:14px}
 body.tv.phonehome .devcards #tv-routing .rt-chip{padding:4px 8px;gap:5px}
 body.tv.phonehome .devcards #tv-routing .rt-chip .rt-k{font-size:12px}
 body.tv.phonehome .devcards #tv-routing .rt-chip .rt-v{font-size:15px}
+/* A reply a fallback engine wrote: amber on the API credits, blue on Codex (app.css, the same rule). */
+body.tv.phonehome .ph-convline.said.eng-credits .ph-convt{color:#e6b93d}
+body.tv.phonehome .ph-convline.said.eng-codex .ph-convt{color:#6aa5ff}

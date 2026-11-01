@@ -114,6 +114,8 @@ struct Message: Decodable, Identifiable, Equatable {
     var needs_read: Bool? = nil
     /// When some surface showed it; an answer flagged and not yet read is in the unread queue.
     var read_at: String? = nil
+    /// The engine that wrote a reply when it was not the Claude subscription: "credits" or "codex".
+    var engine: String? = nil
 }
 
 enum HubError: LocalizedError {

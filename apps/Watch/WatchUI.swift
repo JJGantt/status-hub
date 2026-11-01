@@ -451,12 +451,17 @@ struct ThreadRow: View {
     let text: String
     let user: Bool
     var session = false
+    /// A reply a fallback engine wrote: amber on the API credits, blue on Codex, as on the web hub.
+    var engine: String? = nil
 
     /// The tint a session's relayed reply wears on every surface (the web hub's .ai-msg-session text).
     private static let sessionTint = Color(red: 0.62, green: 0.89, blue: 0.83)
+    private static let creditsTint = Color(red: 0.902, green: 0.725, blue: 0.239)
+    private static let codexTint = Color(red: 0.416, green: 0.647, blue: 1.0)
 
     var body: some View {
         Markdown(text: text, size: user ? 12 : 13, weight: user ? .medium : .regular)
-            .foregroundColor(user ? Ink.mine : session ? Self.sessionTint : .white)
+            .foregroundColor(user ? Ink.mine : session ? Self.sessionTint
+                             : engine == "codex" ? Self.codexTint : engine == "credits" ? Self.creditsTint : .white)
     }
 }

@@ -150,9 +150,17 @@ mountSessions({ list: document.getElementById('ph-sess-list'), max: 40, tap: tru
 // Rows arrive through voiceagent's own stream (onThread), never a second EventSource — and `null`
 // means resync, which is when the current context is re-read. `mode=active` resolves hub vs agent on
 // the server, which is the same rule the conversation card follows.
+//
+// THE WHOLE CURRENT CONTEXT is held — the day since 4 AM, which is exactly what the model is replayed —
+// and scrolling to the top of it loads the stretch before, a page at a time (`?history=1&before=`), with
+// a rule wherever one context ends and the next begins. A box that showed only the last thirty lines
+// of the last hour hid a conversation the model could still see.
 const conv = document.getElementById('ph-conv');
-const TAIL = 30;        // messages held; past that the top of the context is off the end of the scroll
-let thread = [];        // [{role, text, session}] oldest first
+const CTX_MAX = 500;    // the server's ceiling; a day is well under it
+const PAGE = 60;        // rows per page further back
+let thread = [];        // [{id, at, role, text, session, ctx}] oldest first — the current context
+let older = [];         // the same, loaded by scrolling up past its start
+let olderDone = false, olderBusy = false;
 
 // Whether he has scrolled UP to read something. Held as a flag rather than measured at paint time:
 // measuring the old content's scroll position just before replacing it wholesale is measuring the
@@ -244,6 +252,7 @@ function toLast() {
 if (conv) {
   conv.addEventListener('scroll', () => {
     held = conv.scrollHeight - conv.scrollTop - conv.clientHeight > 24;
+    if (conv.scrollTop < 80) loadOlder();
   }, { passive: true });
   // This block's height is whatever the rest of the screen did not need, so it is not settled when
   // the thread first paints into it — and a position taken against the wrong height is a thread
@@ -256,7 +265,8 @@ if (conv) {
 function paintConv(pin) {
   if (!conv) return;
   const stick = pin || !held;
-  conv.innerHTML = thread.map((r) => {
+  const rows = older.concat(thread);
+  conv.innerHTML = rows.map((r, i) => {
     const said = r.role === 'assistant';
     // NO `You` / `Hub` label. His own words are dim and the hub's are not, which already says which
     // is which — a word in a gutter said it twice and took the gutter's width off every line.
@@ -265,7 +275,9 @@ function paintConv(pin) {
     const from = said && r.session ? r.session : null;
     // A reply a fallback engine wrote (credits, Codex) is coloured by it.
     const eng = said && /^(credits|codex)$/.test(r.engine || '') ? ' eng-' + r.engine : '';
-    return `<div class="ph-convline ${said ? 'said' : 'ask'}${from ? ' sess' : ''}${eng}">` +
+    // Where one context ends and the next begins — only between rows, never above the first.
+    return (r.ctx && i > 0 ? '<div class="ph-convrule"></div>' : '') +
+      `<div class="ph-convline ${said ? 'said' : 'ask'}${from ? ' sess' : ''}${eng}">` +
       (from ? `<span class="ph-convk">${esc(from)}</span>` : '') +
       `<div class="ph-convt">${md(r.text)}</div></div>`;
   }).join('') + (pending
@@ -288,19 +300,80 @@ function paintConv(pin) {
 // The text is kept WHOLE — paragraphs, lists and all. It arrives as markdown and is rendered as
 // markdown (`md` in shared.js); collapsing it to one line was reading the SOURCE of a reply rather
 // than the reply, with `**bold**` and `- ` left standing in the middle of the prose.
-function takeRow(r) {
-  const text = String(r.text == null ? '' : r.text).trim();
-  if (!text) return;                       // a photo-only message has nothing to show
-  if (r.role !== 'user' && r.role !== 'assistant') return;
-  thread.push({ role: r.role, text, session: r.session_id ? (r.session_label || '') : '', engine: r.engine || '' });
-  if (thread.length > TAIL) thread = thread.slice(-TAIL);
+// A row is kept with its context flag even when it has no text, so a photo-only message that opens a
+// context still draws the rule — on the next row that does have words.
+function rowOf(r) {
+  if (r.role !== 'user' && r.role !== 'assistant') return null;
+  return { id: r.id, at: r.created_at, role: r.role, text: String(r.text == null ? '' : r.text).trim(),
+    session: r.session_id ? (r.session_label || '') : '', engine: r.engine || '', ctx: !!r.ctx_break };
 }
+function shown(list) {
+  const out = [];
+  let ctx = false;
+  for (const r of list) {
+    if (!r) continue;
+    ctx = ctx || r.ctx;
+    if (!r.text) continue;                 // a photo-only message has nothing to show
+    out.push(ctx === r.ctx ? r : { ...r, ctx }); ctx = false;
+  }
+  return out;
+}
+function takeRow(r) {
+  const row = rowOf(r);
+  if (!row) return;
+  // A live row that opens a new context (the 4 AM rollover, a reset) moves what was the current
+  // context up into the scrolled-back part rather than dropping it.
+  if (row.ctx && thread.length) { older = older.concat(thread); thread = []; }
+  if (row.text) thread.push(row);
+}
+
+// The stretch before the oldest row held, one page further back. Keeps the reader's place: whatever
+// was at the top of the box stays where it was, with the older rows landing above it.
+async function loadOlder() {
+  if (!conv || olderBusy || olderDone) return;
+  olderBusy = true;
+  try {
+    // The first page back starts at the current context's own first row. Unread answers from an
+    // earlier context are held ABOVE it (the server keeps them in), and they are about to arrive
+    // again in their own place, so they leave the thread here rather than sit out of order.
+    if (!older.length) {
+      const k = thread.findIndex((x) => x.ctx);
+      if (k > 0) thread = thread.slice(k);
+    }
+    const first = older[0] || thread[0];
+    const before = first ? first.at : new Date().toISOString();
+    const r = await fetch('/api/voice-messages?focus=hub&mode=active&history=1&limit=' + PAGE +
+      '&before=' + encodeURIComponent(before));
+    if (!r.ok) throw new Error('voice-messages ' + r.status);
+    const rows = await r.json();
+    if (!rows.length) { olderDone = true; return; }
+    const have = new Set(older.concat(thread).map((x) => x.id));
+    const page = shown(rows.map(rowOf).filter((x) => x && !have.has(x.id)));
+    // The page's last row was followed by what is now the first one held; that row opens a context
+    // exactly when it already says so, so nothing more is needed at the seam.
+    const fromBottom = conv.scrollHeight - conv.scrollTop;
+    older = page.concat(older);
+    if (rows.length < PAGE) olderDone = true;
+    paintConv(false);
+    conv.scrollTop = conv.scrollHeight - fromBottom;
+  } catch (e) {
+    console.error('phone conversation: loading earlier messages failed', e);
+  } finally { olderBusy = false; }
+  // A box that does not overflow has nothing to scroll, so it cannot be scrolled to the top to ask for more.
+  if (!olderDone && conv.scrollHeight <= conv.clientHeight) loadOlder();
+}
+
+// A fresh load holds only the current context, so the reset gives the scrolled-back part up too.
+window.addEventListener('hubreset', () => { older = []; olderDone = false; paintConv(true); });
 
 async function resync() {
   try {
-    const rows = await (await fetch('/api/voice-messages?focus=hub&mode=active&limit=' + TAIL)).json();
-    thread = [];
-    for (const r of rows || []) takeRow(r);
+    const rows = await (await fetch('/api/voice-messages?focus=hub&mode=active&limit=' + CTX_MAX)).json();
+    thread = shown((rows || []).map(rowOf));
+    // What was scrolled back to stays, minus anything the current context now holds itself.
+    const have = new Set(thread.map((x) => x.id));
+    const start = thread.length ? Date.parse(thread[0].at) : Infinity;
+    older = older.filter((x) => !have.has(x.id) && Date.parse(x.at) < start);
     // The placeholder survives a resync unless the row it was standing in for is now in the thread —
     // ANYWHERE in it, not only as the newest message. A command from the watch reaches this page only
     // as its `working` frame, so with the phone asleep its rows arrive here, and by then a later

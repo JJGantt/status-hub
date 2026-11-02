@@ -105,18 +105,17 @@ async function surplusCal() {
     return Math.max(-SURPLUS_LIMIT, Math.min(SURPLUS_LIMIT, v));
   } catch { return 150; }
 }
-// Idle gap (seconds) after which the hub agent resets its context — the worker's `session_reset_s`
-// setting (default 30min).
-function resetGapS(s) {
-  const v = parseFloat((s || {}).session_reset_s);
-  return Number.isFinite(v) && v > 0 ? v : 1800;
-}
-// Whether a message at `at` opens a new conversation context after one at `prev` (both epoch ms): an idle
-// gap longer than session_reset_s (hub only; full-agent never gap-resets), or a manual reset
-// (voice_reset_at) in between. The one rule behind both the history endpoint and the live stream.
+// Whether a message at `at` opens a new conversation context after one at `prev` (both epoch ms). The
+// SAME boundary the worker replays to the model (voice-pipeline `recent_context`): the hub agent is
+// handed the whole day since 4 AM in the display zone, so a new 4am-day starts a context (hub only;
+// full-agent never resets on its own), and so does a manual reset (voice_reset_at) in between. An idle
+// gap does NOT: drawing a break at an hour of quiet hid a thread the model could still see.
+// The one rule behind both the history endpoint and the live stream.
+const DAY_MS = DAY_START_HOUR * 3600 * 1000;
+const dayOf = (t) => localDate(new Date(t - DAY_MS));
 function opensContext(prev, at, mode, s) {
   const resetAt = Date.parse((s || {}).voice_reset_at || '');
-  return (mode === 'hub' && at - prev > resetGapS(s) * 1000)
+  return (mode === 'hub' && dayOf(prev) !== dayOf(at))
     || (Number.isFinite(resetAt) && prev < resetAt && resetAt <= at);
 }
 // Min length (days) of the aligned intake-tracking window before adaptive maintenance goes live.
@@ -1314,11 +1313,20 @@ gated.get('/api/voice-messages', async (req, res) => {
     limit = Math.min(limit, 500);
     // Mode filter — legacy rows (mode NULL) predate the split and count as 'hub'.
     const modeFilter = mode === 'agent' ? '&mode=eq.agent' : '&or=(mode.is.null,mode.eq.hub)';
-    const rows = (await sb(`voice_messages?focus=eq.${encodeURIComponent(focus)}${modeFilter}&order=created_at.desc&limit=${limit}&select=*`) || []).reverse();
+    // ?before=<iso> pages further back: the rows older than that moment (the conversation box loads
+    // the previous stretch this way as he scrolls up past the start of the current one).
+    const beforeMs = Date.parse(String(req.query.before || ''));
+    const before = Number.isFinite(beforeMs) ? `&created_at=lt.${encodeURIComponent(new Date(beforeMs).toISOString())}` : '';
+    // One row past the limit, so the first row returned can be judged against the one before it.
+    const got = (await sb(`voice_messages?focus=eq.${encodeURIComponent(focus)}${modeFilter}${before}&order=created_at.desc&limit=${limit + 1}&select=*`) || []).reverse();
+    const extra = got.length > limit ? got[0] : null;
+    const rows = extra ? got.slice(1) : got;
     // Where each context begins, by opensContext() — the same rule the live stream marks rows with.
     const s = await settingsAll();
-    const breaks = rows.map((r, i) => i > 0 &&
-      opensContext(Date.parse(rows[i - 1].created_at), Date.parse(r.created_at), mode, s));
+    const breaks = rows.map((r, i) => {
+      const prev = i > 0 ? rows[i - 1] : extra;
+      return !!prev && opensContext(Date.parse(prev.created_at), Date.parse(r.created_at), mode, s);
+    });
     // ?history=1 (the conversation card) → every row, the first of each context flagged so the card can
     // draw a divider there. Older contexts are the record of what he said and what came of it; hiding
     // them made a failed command look like it had never been sent.
@@ -1334,7 +1342,8 @@ gated.get('/api/voice-messages', async (req, res) => {
     }
     // An answer still unread stays in however old it is, with the words that asked for it, so a gap,
     // a reset or twenty newer exchanges cannot bury it (docs/WATCH.md, "Unread answers").
-    const shown = rows.slice(start);
+    // The first row of the context keeps its flag, so a surface that pages back can draw the divider.
+    const shown = rows.slice(start).map((r, i) => (i === 0 && breaks[start] ? { ...r, ctx_break: true } : r));
     const have = new Set(shown.map((r) => r.id));
     const unread = (await sb(`voice_messages?focus=eq.${encodeURIComponent(focus)}${modeFilter}&role=eq.assistant&needs_read=is.true&read_at=is.null&order=created_at.desc&limit=20&select=*`) || [])
       .filter((r) => !have.has(r.id));

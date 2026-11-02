@@ -491,6 +491,7 @@ body.tv.phonehome .ph-conv::-webkit-scrollbar{display:none}
    The text inside a right-hugged block stays left-aligned: his prompts are not always one line, and
    the ragged left edge of a right-aligned paragraph is what that would cost. */
 body.tv.phonehome .ph-convline{display:block;min-width:0;padding:1px 0}
+body.tv.phonehome .ph-convrule{align-self:stretch;flex:none;border-top:1px solid #2a3340;margin:4px 0}   /* where one context (a day, or a reset) ends and the next begins */
 body.tv.phonehome .ph-convline.ask{align-self:flex-end;max-width:85%}
 body.tv.phonehome .ph-convt{min-width:0;font-size:10px;line-height:1.35;color:#8b96a5;
   word-break:break-word}

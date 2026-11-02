@@ -577,9 +577,12 @@ a list changes — the calendar surfaces' push path, separate from the status fr
 expanded sheet draws in front of it — the frame is re-pushed on every realtime event and history only
 grows, so it is fetched once by the one surface that can scroll through it) · `/api/voice-messages`
 (`?mode=active` resolves `agent_mode` on the server, for a client with no settings of its own — the
-watch; the current context, preceded by every answer still unread (`needs_read`, no `read_at`, any
+watch; the current context — the 4am-day it is in, cut short only by a manual reset, which is the
+same stretch the worker replays to the model (`recent_context`) — preceded by every answer still unread (`needs_read`, no `read_at`, any
 age) with the question it answered, unless `?history=1`, which returns older contexts too with
-`ctx_break` on the first row of each so the conversation card draws a divider there; live rows on
+`ctx_break` on the first row of each so the conversation card draws a divider there, and `?before=<iso>`
+pages further back — the phone home page's conversation box loads earlier days that way as it is
+scrolled to the top; live rows on
 `/api/voice-stream` carry the same flag, by the same `opensContext()` rule) · `/api/voice-reply/:id` (held open until that command is `done` or `error`, settled by the
 `voice_requests` realtime subscription; after 25s it answers `pending` and the client asks again) ·
 `/api/day-stream` (SSE, a bodiless `nutrition` or `workout` frame whenever that day may have changed —
@@ -1391,7 +1394,7 @@ directly, so its window is that width and the panel fills it.
 The orchestrator view is the current context of the hub thread, fetched from
 `/api/voice-messages?focus=hub&mode=active` (the watch's view) and refetched whenever `/api/voice-stream`
 carries a `message` or `reset` frame, so which rows belong to the current context stays the server's
-rule. After an idle gap or a reset it is empty under its header until he speaks again. A reply relayed
+rule. After 4 AM or a reset it is empty under its header until he speaks again. A reply relayed
 from a session (a row with `session_id`) is drawn in the teal (`#9fe3d3`) the phone and watch give it.
 
 His words appear the moment the request exists, not when the conversation row does: the worker writes
@@ -1587,8 +1590,8 @@ callers; only the HTTP response is filtered.
 | `surplus_cal` | Signed kcal over maintenance (+bulk / −cut / 0 maintenance). |
 | `maintenance_min_days` | Aligned-window length before adaptive maintenance goes live (Settings "calibration window"). |
 | `maintenance_phase` | JSON `{start, seed, sign, hold}` — the current goal phase (§4). Written on a `surplus_cal` sign flip. |
-| `session_reset_s` | Idle gap that starts a new stretch of the hub thread as the surfaces show it, and bounds which worker owns the conversation. The agent itself is not bounded by it: it is replayed the whole day since 4 AM (voice-pipeline `recent_context`). |
-| `voice_reset_at` | When the hub conversation was last reset by hand — a context boundary, like an idle gap. Written by `/api/voice-reset`. |
+| `session_reset_s` | Idle gap that bounds which worker owns the conversation. It does NOT divide the thread on any surface: a context is the 4am-day (or since a manual reset), because that is what the agent is replayed (voice-pipeline `recent_context`), and a surface that broke at an idle gap hid conversation the model could still see. |
+| `voice_reset_at` | When the hub conversation was last reset by hand — a context boundary, like the 4 AM day rollover. Written by `/api/voice-reset`. |
 | `activity_hold_s` | Seconds a finished activity row (the reply, or an error) holds on the bar. Default 60. |
 | `phone_activity_hold_s` | The same, off the kiosk (phone, Mac app panel). Default 8. |
 | `wakefree_enabled` | Always-on (wake-free) voice on/off. |

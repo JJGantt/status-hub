@@ -65,7 +65,7 @@ through `POST /api/gestures`; `GET /api/gestures` lists the last week and `GET /
 
 ### Home — the conversation
 
-`HomeView`: the last five exchanges of the shared hub thread, each in full — his words as the hub
+`HomeView`: the last five exchanges of the shared hub thread, each in full — the user's words as the hub
 transcribed them, the reply as it was written — over `/api/voice-messages?focus=hub&mode=active`,
 the same current-context thread the phone and the TV show, in whichever mode `agent_mode` selects. It
 follows `/api/voice-stream`: a `message` frame reloads the thread, and the worker's `activity` frames
@@ -76,29 +76,28 @@ seconds after a command is sent and the `done` frame then goes by while the stre
 leaves the tool calls drawn under a reply that came after them.
 
 **A command walks the page**, and each step lands the view on a TOP, because a reply is read from its
-first line rather than scrolled to the end — but only once he is not looking (next paragraph but one);
+first line rather than scrolled to the end — but only once the user is not looking (next paragraph but one);
 with the wrist up the view stays where it is:
 
 | | screen | control | x | wrist |
 |---|---|---|---|---|
 | the command goes (silence, or a press) | — | the spinner | appears | tapped |
-| the hub has transcribed it | his words appended in full, the view on their top | the spinner, larger and brighter: the worker is running it now, not hearing it | stays | — |
+| the hub has transcribed it | the user's words appended in full, the view on their top | the spinner, larger and brighter: the worker is running it now, not hearing it | stays | — |
 | the reply lands | the reply appended in full, the view on ITS top | back to the microphone | goes | tapped, with the sound |
 
 **Nothing is padded under the thread.** A landing puts the top of the newest thing at the top of the
 screen only when there is enough below it to fill the screen; a short one stops where the content ends,
-with what came before it above, as any list does. Blank space added so everything could reach the top
-is exactly what he does not want. The view holds that spot through the laying out that follows
-(`pinned`) until he scrolls himself. The session page lands the same way.
+with what came before it above, as any list does. No blank space is added so that everything could reach the top. The view holds that spot through the laying out that follows
+(`pinned`) until the user scrolls. The session page lands the same way.
 
-**Nothing moves the view while he is looking.** While home is in front with the wrist up, every new
-item — his own transcribed words, a tool call, the reply, a session's relayed answer — is HELD; it lands
-the moment he stops looking (wrist down, app behind, another page), so it is waiting at the next raise,
-with the unread dot meanwhile if it is flagged. Holding only while the view was on an answer is not
-enough: he reads an earlier answer while a command runs, and his transcript and then its reply each
-pulled the view off it. A tap on the unread dot or an answer's notification is asked for and never waits.
+**Nothing moves the view while the user is looking.** While home is in front with the wrist up, every new
+item — the user's own transcribed words, a tool call, the reply, a session's relayed answer — is HELD; it lands
+the moment the user stops looking (wrist down, app behind, another page), so it is waiting at the next raise,
+with the unread dot meanwhile if it is flagged. Holding only while the view is on an answer is not
+enough: an earlier answer is often read while a command runs, and the new transcript and then its reply would each
+pull the view off it. A tap on the unread dot or an answer's notification is asked for and never waits.
 `landed` is the spot the view is held at, and the room above the newest item follows IT, not `target`
-— keyed on the target, the room vanished from above the answer being read and shifted it. Each hold is
+— keyed on the target, the room would vanish from above the answer being read and shift it. Each hold is
 logged as `land-held`.
 
 **The landing spot is fixed, per page** (`Landing` in `WatchUI.swift`): 32pt from the top of the glass
@@ -116,13 +115,13 @@ item is tall enough to reach the landing line: a short last item rests at the en
 thread above it on screen anyway, where the room is a blank band. Every row's height is measured, not
 just the newest's: the newest changes in the same update that lands it, so a height taken only once a row
 is newest arrives after the landing, or never when the row's height does not change. The tool calls of a running
-turn land as one block (`activity`), not line by line. Within that block a session's echo of his words (`said`, or `queued` behind a running turn) is drawn as
-his words, in full; only tool calls are cut to two lines. Words the watch sent are already on screen, so
+turn land as one block (`activity`), not line by line. Within that block a session's echo of the user's words (`said`, or `queued` behind a running turn) is drawn as
+the user's words, in full; only tool calls are cut to two lines. Words the watch sent are already on screen, so
 their echo is dropped, and `summary` frames are ignored because the detail fetch brings the reply.
 
 **A tap ANYWHERE on home or in a session is the same press as double tap** (`CommandBorder.press`),
-bound on the scroll view rather than its content so the glass under a short thread presses too. That is
-his call, made knowing a finger resting on the text can start a recording: scrolling, the crown and
+bound on the scroll view rather than its content so the glass under a short thread presses too. This is
+deliberate, accepting that a finger resting on the text can start a recording: scrolling, the crown and
 swiping to another page are drags, not taps, and still only move. A session's name and its speaker
 glyphs are buttons, which take their own taps. The page carries nothing else: no
 second indicator of a state the control already holds, and a failure is the one thing it adds — an
@@ -141,22 +140,23 @@ on watchOS 26.5, each alone:
 | a `ToolbarItem` | only moves the time to the left of the strip |
 
 Underscored means unsupported, so a watchOS release can take it away — which would show as the clock
-simply coming back, not as a build failure. Nothing here ships to the App Store, so private API is a
+simply coming back, not as a build failure. The simulator renders the clock faithfully, so removing the
+modifier and screenshotting is the check to re-run. Nothing here ships to the App Store, so private API is a
 risk to the look rather than to the app. The page draws no clock of its own either: it is for the
 conversation, and the watch face is one press of the crown away.
 
 ### Unread answers
 
-Most replies only confirm that something was done and are never read. A reply that tells him
-something he asked to know is the one that gets buried when he speaks the next command before
-looking, so those are kept reachable until they have actually been on screen.
+Most replies only confirm that something was done and are never read. A reply that answers
+a question is the one that gets buried when the next command is spoken before it is
+read, so those are kept reachable until they have actually been on screen.
 
 - **The model flags them.** It ends such a reply with a marker, which the worker strips and stores
   as `voice_messages.needs_read` (voice-pipeline `docs/ROUTING.md`). Confirmations carry no flag and
   never enter the queue; a flag the model forgets falls back to the ordinary thread.
 - **Read means shown**: two seconds on screen with the app in front, home showing and the wrist up
   (`HomeView.attend`). On screen is half the row, or for a row taller than the screen, enough of it to
-  fill a little under half the screen, so a long answer counts once its opening was in front of him.
+  fill a little under half the screen, so a long answer counts once its opening has been on screen.
   The watch posts `/api/voice-messages/read`, which stamps `read_at` once; the row's UPDATE reaches
   every surface through the voice stream.
 - **An amber dot at the top of home while any is unread**, in the sessions list's unread amber. A tap
@@ -164,10 +164,10 @@ looking, so those are kept reachable until they have actually been on screen.
   button of its own, so the tap does not also record. Home stays landed there (`Chat.landOn`) until
   the next command's words appear.
 - **Each one is pushed as it lands** (`notifyAnswer` in the hub, category `VOICE_ANSWER`, titled with
-  his words, the answer as the body); no other orchestrator reply is. The watch drops it unshown whenever
+  the command's words, the answer as the body); no other orchestrator reply is. The watch drops it unshown whenever
   home is the page showing and the app is not in the background, wrist up or down (`Chat.homeOpen`):
-  the answer is in front of him or is what the next raise shows. It is not gated on `looking`, because
-  the scene drops to `inactive` in the same second an answer lands while he is still reading it. On any
+  the answer is on screen or is what the next raise shows. It is not gated on `looking`, because
+  the scene drops to `inactive` in the same second an answer lands while it is still being read. On any
   other page it is shown, and once the watch is back on the clock the app is in the background and the
   system shows it. Any interaction with it is reading it: swiped away, on the watch or the phone, it is marked
   read at once (`customDismissAction` is what reports the swipe); tapped on the watch, home lands on
@@ -177,7 +177,7 @@ looking, so those are kept reachable until they have actually been on screen.
 - **None is lost to age.** `/api/voice-messages` returns every unread answer however old, with the
   words that asked for it, ahead of the current context; the watch draws them above the last ten
   exchanges (`Chat.held`) and keeps them there, read or not, until home leaves the screen, so an
-  answer never vanishes from under him the moment it counts as read. The wall and the phone get the
+  answer never vanishes from under the reader the moment it counts as read. The wall and the phone get the
   same rows from that endpoint.
 
 ### Replies are markdown
@@ -198,16 +198,16 @@ parked interleaved — and follows `/api/session-stream`. Each row is its name
 over up to three lines of what it last said: the list's `say`, which the hub already cuts to 120
 characters, drawn smaller and grey with its markdown's bold and code dropped. Opening a session marks it read on the hub
 whatever the watch's own copy of the row says, then reloads the list: the hub announces the change on
-the walls' stream, not this one, so without the reload the amber stayed until something else did. A
-reply landing on the session he is looking at is marked read as it lands.
+the walls' stream, not this one, so without the reload the amber would stay until something else reloaded it. A
+reply landing on the session on screen is marked read as it lands.
 
-**Who said what is a colour** (`Ink`): his words soft blue, tool calls soft violet, the model's
+**Who said what is a colour** (`Ink`): the user's words soft blue, tool calls soft violet, the model's
 in-between text grey, its final reply white; relayed session replies keep their mint on home, and amber
 is left for recording and unread.
 
 **A row carries the same three marks as the phone's list** (`cards/sessions.js`, `phone-home.css`),
 because they answer different questions and are read together: a **white** left edge is the focused
-session — where a spoken follow-up goes — with a pin beside its name when he pinned it there; an
+session — where a spoken follow-up goes — with a pin beside its name when it was pinned there; an
 **amber** left edge is a finished reply nobody has opened; a green **dot** is a session working
 now. Under each name is what that machine is doing, live off `/api/session-stream` — a tool call in
 teal, what the model says between them in a plain light — and the line is always there, however empty,
@@ -220,7 +220,7 @@ this page is a list of names — rules separate them, as they do on the food log
 
 **A tapped row opens its session INSIDE the sessions page** (a `NavigationStack` of the page's own, in
 `SessionsView`), so the row of pages still swipes with a session open — to home, to the day page — and
-the session is still open when he swipes back. The page row takes the sideways swipe, so the system's
+the session is still open on swiping back. The page row takes the sideways swipe, so the system's
 swipe back never fires; the session's name is one way out (below), and swiping right is the other.
 A swipe right is a `DragGesture` on `SessionView` itself, simultaneous with the scroll and the page
 row: mostly sideways and more than 40pt to the right pops `Sessions.path`. It is free to mean back
@@ -228,24 +228,24 @@ because sessions is the leftmost page, so the page row has nothing to turn to in
 
 **An open session is therefore not the same as one on screen**, and where a command goes is
 `Sessions.target`: the session a recording belongs to while it runs (so the press that ends it ends it,
-whichever page he has swiped to), otherwise the open session only while the sessions page is showing.
+whichever page is showing), otherwise the open session only while the sessions page is showing.
 A session left open behind home does not take home's commands. A session's tap in the BOTTOM HALF of the
 glass is the press; its top half is for reading.
 
 **A session is ONE LIST, the hub's** (`Sessions.logs`, from `GET /api/sessions/:id` and the `ev`
-frames of `/api/session-stream`; routes/conversation.js, the event log): his words (`prompt`), tool calls, what the
+frames of `/api/session-stream`; routes/conversation.js, the event log): the user's words (`prompt`), tool calls, what the
 session says between them (`text`) and its replies, each with its position in the conversation (`seq`,
 given by the hub) and an identity (`id`). The page draws that list and nothing else, oldest first. The
 phone draws the same list by the same rule (`cards/repos.js`), which is what makes the two agree.
 
 **Only the tail is laid out.** The session page draws the last three turns of that list (counted back
-by his prompts) and home the last ten rows of the thread (`Chat.window`); scrolled to the very top,
+by prompts) and home the last ten rows of the thread (`Chat.window`); scrolled to the very top,
 each lays out one step more, and the row that was at the top is put back at the top once it has.
 Laying out everything held (up to ten turns with every tool call in them on a session, forty rows on
-home) is what made swiping between the two pages lag. The top is noticed by a 1pt marker's visibility,
-like the end (§ Double tap, and scrolling), and only once he has scrolled himself, so the page laying
+home) makes swiping between the two pages lag. The top is noticed by a 1pt marker's visibility,
+like the end (§ Double tap, and scrolling), and only once the user has scrolled, so the page laying
 out never asks for more. Each falls back to one step when it lands on the newest again or leaves the
-screen (a session only while it is following the newest, so a place he scrolled to is kept).
+screen (a session only while it is following the newest, so a place scrolled to is kept).
 
 **The whole rule** (`Sessions.frame`): the next seq is appended; a gap means the hub has what went by
 while this was not listening, and it is fetched from the last seq held (`/api/sessions/:id/events
@@ -259,7 +259,7 @@ lands, and nothing is matched by its text.
 takes it (`seen` false, drawn dimmed) and when the model reads it (`seen` true). The page draws a
 prompt at its LATEST occurrence, so it moves from where it was sent to where it was read (`shown`).
 
-**His words show the instant they are transcribed**, before the hub has them: a placeholder
+**The user's words show the instant they are transcribed**, before the hub has them: a placeholder
 (`Sessions.placeholders`) carrying the message's own id, dimmed, after everything the session has done.
 The follow-up carries that id to the hub (`client_msg_id`), the hub to the host (`msg`), and the host
 stamps it on the prompt those words become (sessionWatch.js `expectPrompt`) — the one place a text is
@@ -271,19 +271,19 @@ of a turn it attached to late, which is how a resumed session's first prompt is 
 skips either leaves its placeholder drawn under the whole turn, below the same words already in place. A send the hub refused, or took nothing from (a
 thank-you-shaped transcription), drops its placeholder.
 
-**It lands on his newest words**: a placeholder if any, else the last prompt since the last reply,
+**It lands on the newest words sent**: a placeholder if any, else the last prompt since the last reply,
 with what the session does about them underneath; with none, the last event — the reply when it lands
 (`newest`). The top of that sits at the top of the screen.
 
-**Nothing moves the page while he is looking**, by home's rule: with the wrist up, a newer item — his
-placeholder, a tool call, the reply, a prompt typed from elsewhere — is held in `spot` and lands when he
+**Nothing moves the page while the user is looking**, by home's rule: with the wrist up, a newer item — a
+placeholder, a tool call, the reply, a prompt typed from elsewhere — is held in `spot` and lands when the user
 stops looking.
 
-**His scrolling ends the following**, finger or crown, and nothing moves the page after that until the
-session is opened again or HE scrolls it to the very end (letting go with the end on screen after a
-scroll of his; the page merely sitting at the end does not count). A drag reports a scroll phase; the
+**A user scroll ends the following**, finger or crown, and nothing moves the page after that until the
+session is opened again or the user scrolls it to the very end (letting go with the end on screen after a
+user scroll; the page merely sitting at the end does not count). A drag reports a scroll phase; the
 crown is not trusted to, so any move of the offset that is neither one of the page's own jumps nor a
-change in content height counts as his scroll too, once the page has landed: before its first landing
+change in content height counts as a user scroll too, once the page has landed: before its first landing
 the scroll view moves itself (it shifts by the space under the title as it opens). The page's jumps are never animated, which makes each
 one exactly one move to discount. Every change of following is logged to the hub as `follow`, with
 `why` (`drag`, `move`, `end`), so a fight on the wrist can be read back afterwards. The end is a one-point marker at the bottom of `PagedScroll`, asked whether
@@ -303,10 +303,10 @@ moment it is transcribed, and each is replaced by its own event.
 **The edge sweeps until every follow-up sent from here is answered**: `awaiting` holds their message
 ids, and the wait ends when a reply lands AFTER every one of them has been read — a prompt event
 carrying that id, `seen`, with a seq below the reply's (`settle`). A reply to an earlier command, or
-one that came before the words went in, is not the answer he is waiting on. **An id the list does not
+one that came before the words went in, is not the answer being waited on. **An id the list does not
 hold two minutes after it was sent is let go**: the hub keeps a conversation's last ten turns
 (`SESSION_TURNS`), so after a hub restart a follow-up from further back is not in the list, and waiting
-for it swept the edge over an idle session until the app was killed. A follow-up being worked on shows
+for it would sweep the edge over an idle session until the app was killed. A follow-up being worked on shows
 in the list within seconds of being typed, so the limit never cuts a real wait short.
 
 **Its name is on the clock's line, and the name is how it closes.** A leading `ToolbarItem` holds it
@@ -426,8 +426,8 @@ session clock is m:ss, then h:mm:ss, and only while a set landed within 20 minut
 
 ### The day page
 
-`DayView`: **food on the left, training on the right**, on one screen. It was drawn as a mockup at this
-screen's own pixels and signed off element by element; `Geo` holds its numbers, the mockup's halved.
+`DayView`: **food on the left, training on the right**, on one screen. It follows a mockup drawn at this
+screen's own pixels; `Geo` holds its numbers, the mockup's halved.
 The conversation is not on it: that is home's alone.
 
 - **Two equal columns with a gutter line between them from the top to the bottom of the glass.**
@@ -514,7 +514,7 @@ order.
 
 ### It ends itself at the silence
 
-A command, on home or in a session, ends itself once he has spoken and then stopped: both pass
+A command, on home or in a session, ends itself once speech has been heard and then stopped: both pass
 `onSilence`.
 
 `Endpointer` (in `Capture.swift`) is the phone's always-on rule (`makeListener` in `voiceagent.js`):
@@ -527,14 +527,14 @@ altogether: Apple's built-in sound classifier (`VoiceDetector` in `Recorder.swif
 `.version1`, on the device) scores every half second, a new window each quarter second, and only a window
 scored `speech` at least `watch_voice_min` (0.5 unset) counts. Any level line is crossed by a snap, a
 tap, a door or a running tap, and each of those restarts the trailing silence; the classifier calls
-them what they are. Measured on 25 of his kept watch commands (run on the Mac, which has the same model):
-kitchen noise in the long weigh-the-ingredients commands — zippers, door slams, glass clinks, the tap
-running for seconds — scored under 0.3, his ordinary commands never went more than about 2s without a
-window over 0.5, and his quiet speech that sat under the 0.02 line still scored as speech. On all 158 kept watch commands
-(2026-10-15, classifier pauses bounded by whisper's word span, so trailing chatter and music are not counted),
-the longest pause inside his own words was 0.25s at the median, 1.5s at p90 and 3.25s at p95. Even
-five-minute rambles never paused over 3s. The longer pauses, 6-13s, were all read-the-scale dictations
-(cereal, eggs) where he stops on purpose while pouring. Under Voice those pauses end the recording at any
+them what they are. Measured on 25 kept watch commands (run on the Mac, which has the same model):
+background noise — zippers, door slams, glass clinks, a tap
+running for seconds — scored under 0.3, ordinary commands never went more than about 2s without a
+window over 0.5, and quiet speech that sat under the 0.02 line still scored as speech. On 158 kept watch commands
+(classifier pauses bounded by whisper's word span, so trailing chatter and music are not counted),
+the longest pause inside the speech was 0.25s at the median, 1.5s at p90 and 3.25s at p95; even
+five-minute commands never paused over 3s. The longer pauses, 6-13s, were all dictations
+with deliberate pauses (reading a kitchen scale). Under Voice those pauses end the recording at any
 trailing silence below them, because the clinks no longer hold it open. At 0.3 the
 trailing silence itself scores as speech often enough to keep a recording open, which is why the
 default is 0.5. A duration rule (a sound must last N ms to count) is the obvious cheaper fix and does not
@@ -547,8 +547,8 @@ start, and kept for the next, since a start does not wait on the hub. They are a
 starts recording before any read answers; without them that recording runs on the built-in defaults. So a change made in Settings
 reaches the first recording after the wrist comes up; one made while the app stays in front lands a
 recording late, because the read at a start applies to the one after it;
-`watch_silence_s` is Trailing silence in Settings (5 set on 2026-09-25, 3 when unset). **In `fixed` mode in a quiet room `watch_speech_min` is the whole line**, since
-2.5x a floor of 0.0003-0.0015 is under it, and his ordinary voice dips below 0.02 mid-sentence: a kept
+`watch_silence_s` is Trailing silence in Settings (currently 5; 3 when unset). **In `fixed` mode in a quiet room `watch_speech_min` is the whole line**, since
+2.5x a floor of 0.0003-0.0015 is under it, and ordinary speech dips below 0.02 mid-sentence: a kept
 20s command measured 8s over 0.02 and 16s over 0.005, with dips of 0.010-0.018 inside speech. The
 `mic-end` log (`speech` against `len`) and the kept clips in `voice-clips` are what to tune it from.
 
@@ -559,13 +559,11 @@ judged silent.
 
 **One buffer over the line is not speech.** Speech has to last `Endpointer.minSpeech` (0.4s), unbroken
 by a hang of quiet, before the utterance counts as begun. Without that a single blip of room noise
-arms the endpoint, which is how a recording nobody spoke into ran 88 seconds on his watch, ended on a
-peak of 0.021 against a 0.02 line, and went up as "Thank you. Thank you." — what Whisper writes for
-silence, which the worker then ran as a command.
+arms the endpoint, and a recording nobody spoke into runs on, ends on a peak just over the line, and
+goes up as "Thank you." — what Whisper writes for silence, which the worker then runs as a command.
 
-**A command or a follow-up has no length limit.** It ends at his silence or his press, however long he
-talks; he did not ask for a cap, and one (60s unlocked, discarding the clip) threw away 40 seconds of
-his words. The one close left is `Capture.unspoken`: 15s of audio with no speech in it at all, skipped
+**A command or a follow-up has no length limit.** It ends at the speaker's silence or a press, however long it
+runs; a cap that discards the clip throws away real speech. The one close left is `Capture.unspoken`: 15s of audio with no speech in it at all, skipped
 while locked. `Capture.longest` (60s) applies only to the always-on listener, which starts a fresh file
 after that much unbroken sound.
 
@@ -573,7 +571,7 @@ A **launcher's** request expires too (`Chat.requestWindow`, 20s): the complicati
 control set a flag home acts on when it is next on screen, and without the window a request nothing
 consumed starts a recording on whatever raise of the wrist brings the app back. Every `mic-open` line
 carries `how` — press, tap or launcher — because a recording nobody meant to start is otherwise
-indistinguishable from one he asked for.
+indistinguishable from a deliberate one.
 
 After `Capture.unspoken` of audio with no speech in it, a command or a follow-up is cancelled and its clip thrown away, and the listener
 starts a fresh segment. The microphone and the mute it puts on every room mic are not left open
@@ -590,19 +588,19 @@ speech from those, not by feel.
 ### A press starts, the next sends; a session is always locked
 
 Double tap, or a tap on the conversation, starts a command, and the next press sends it. Home and a
-session follow the same two steps, both through `CommandBorder.press`. On home the silence after he
-speaks also sends it by itself. **In a session it does not**: a follow-up is always locked
+session follow the same two steps, both through `CommandBorder.press`. On home the silence after
+speech also sends it by itself. **In a session it does not**: a follow-up is always locked
 (`Capture.Flow`, chosen per recording and reset when it ends) — the red edge, no silence ends it — and
 so is the recording the `Hub Locked` complication opens; the first press sends either. `Hub Silence` now starts exactly what the
 standard launcher does; it stays so a face that holds it keeps working. `Hub Quick` is the standard
 recording with a hard cap, for one-sentence commands: it also sends
 itself `watch_quick_s` seconds (Settings → Watch: quick command, 5 when unset) after the microphone
-opens — counted from the chirp, in seconds of audio — however he is going; a cap reached with no speech
+opens — counted from the chirp, in seconds of audio — whatever is being said; a cap reached with no speech
 heard throws the clip away instead, and either logs `mic-end` with `reason: cap`.
 
 **Press and hold (0.6s) cancels the recording under way**, on home and in a session. On home, with
 nothing recording, it starts a locked recording (red, the `Hub Locked` flow), so home offers both: a
-tap for the amber recording that sends at his silence, a hold for the one only a press sends. A hold
+tap for the amber recording that sends at the silence, a hold for the one only a press sends. A hold
 while a reply is being spoken stops the speech instead (`CommandBorder.hold`). **In a session a
 follow-up is only ever started by a tap**, so a hold there with nothing recording does nothing, and on
 the speaker glyph it toggles speak mode instead. On every other page a hold does nothing. A command already sent is never cancelled; there is no gesture for it.
@@ -612,7 +610,7 @@ the speaker glyph it toggles speak mode instead. On every other page a hold does
 - **The microphone opening is a rising double tap and a chirp from the speaker** (`.directionUp` and
   `Recorder.cue`, two notes a fifth apart), at the moment it is actually live rather than when it was
   asked for — opening takes a beat, and words spoken before it are lost. The gentle `.start` tap alone
-  was easy to miss. The chirp needs the audio session to play AND record (`.playAndRecord`; set to
+  is easy to miss. The chirp needs the audio session to play AND record (`.playAndRecord`; set to
   record only, nothing plays), and the tap drops the chirp's length of input plus the route latency,
   counted in the microphone's own samples, so the clip never contains it and the endpoint never counts
   it as speech. It must not wait on the chirp's playback-finished callback: that callback does not
@@ -620,11 +618,11 @@ the speaker glyph it toggles speak mode instead. On every other page a hold does
   for the whole recording, which the hub then refuses as an empty clip. Commands and follow-ups only; the always-on listener opens silently.
 - **The microphone closing taps the wrist** (`.stop`), on home and in a session, on a recording the
   silence ended and on one a press ended alike. That is the moment nothing else reports: the silence
-  decides it, and by then the watch may be back at his side.
+  decides it, and by then the wrist may be down.
 - **A recording still open taps the wrist once a minute** (`.directionDown`, `Capture.nudge`), a
   command or a follow-up alike, counted in seconds of audio, and logs `mic-nudge`. A locked recording ends only at a press, so one left
-  running holds the microphone and every room mic's mute until he notices; the tap is how he does. A
-  falling double tap, the start tap's mirror; a test with `.click` went unnoticed. Never on the listener or rewind, which are
+  running holds the microphone and every room mic's mute until someone notices; the tap is the reminder. A
+  falling double tap, the start tap's mirror; `.click` is too faint to notice. Never on the listener or rewind, which are
   meant to run.
 - **Every command ends in a second tap, whichever way it ends**: a reply buzzes `.notification` (the one
   that makes a sound, so it is heard as well as felt); a failure buzzes `.failure`, whether the hub
@@ -641,22 +639,19 @@ silence with the wrist down. Measured on the device: a locked recording ran 31s 
 **What happens when something else takes the microphone mid-recording is the interruption path below
 (§ The always-on listener)**: a command or follow-up is PAUSED, never sent half-said or thrown away.
 The log can show it as `mic-route-change` with empty `inputs`, then `mic-interrupted` — or as
-`mic-interrupted` alone: on 2026-10-19 a command ended mid-sentence with no route change before it, a
-`phase` → `inactive` 3s earlier, and nothing sent to the watch at that moment by the hub or Messages.
-To him that reads exactly like the silence endpoint firing early, so tell the two apart by the end
+`mic-interrupted` alone, with no route change before it.
+On the wrist that reads exactly like the silence endpoint firing early, so tell the two apart by the end
 event: a silence end logs `mic-end`, an interruption logs `mic-interrupted` and no `mic-end`. Which
-events raise it: a Siri timer going off does (2026-10-31, `reason` 0, 1.1s into a recording opened from
-the complication). An ordinary notification has not been seen to; Siri (Raise to Speak) and a call are the
+events raise it: a Siri timer going off does (`reason` 0). An ordinary notification has not been seen to; Siri (Raise to Speak) and a call are the
 other candidates. `mic-interrupted` carries the system's reason and the endpoint's state.
 
-**A third way a recording ends leaves no end event at all: the app process goes.** On 2026-11-02 at
-06:21:53Z a locked command logged `record-start` and `mic-open`, the phase went `inactive` at 06:22:04,
-and then the log went silent. There was no `record-stop`, `record-cancel`, `mic-end` or
-`mic-interrupted`, the hub's mute stayed held, and nothing was uploaded. The next press, 14s later,
-logged `record-start` with the microphone free. A process that was only suspended would still own the
-microphone, so the app had been relaunched. The clip in memory is lost with the process. Searching
-`client_log` for a `record-start` with no end after it finds these: 8 out of 806 starts in the 14 days
-to that date. Nothing yet says whether it is a crash or watchOS ending the app.
+**A third way a recording ends leaves no end event at all: the app process goes.** The log shows
+`record-start` and `mic-open`, perhaps a `phase` → `inactive`, and then nothing: no `record-stop`,
+`record-cancel`, `mic-end` or `mic-interrupted`, the hub's mute stays held, and nothing is uploaded.
+The next press logs `record-start` with the microphone free; a process that was only suspended would
+still own the microphone, so the app has been relaunched. The clip in memory is lost with the process.
+Searching `client_log` for a `record-start` with no end after it finds these (about 1% of starts).
+Whether it is a crash or watchOS ending the app is not yet known.
 
 ### Sending it
 
@@ -670,18 +665,18 @@ answers with the transcript, shown until the turn lands, and the request id, and
 `/api/voice-reply/:id`.
 
 **A locked recording is transcribed differently** (`flow=locked` on the upload, from `Recorder.Clip.locked`).
-It is long and he stops talking while he does things, so the hub sends it to `whisper-large-v3` rather
-than turbo — turbo dropped the first 10s of a 27s locked command on every retry — and first shortens its
+It is long, with pauses while the speaker does other things, so the hub sends it to `whisper-large-v3` rather
+than turbo — turbo can drop the opening of a long locked command (the first 10s of a 27s one, on every retry) — and first shortens its
 long pauses (`shortenPauses` in `server/lib/transcribe.js`). The pauses come from the watch: while a
 locked recording runs, `Capture.markQuiet` notes every stretch the speech classifier (or the level line,
 when the classifier is off) heard no speech for `Capture.quietMin` (4s) or more, and they ride the
 upload as `quiet=start-end,…` in seconds of the file. The hub cuts only pauses over 6s and keeps 2s at
-each edge, so a 9-minute recording of a sentence and a meal's worth of quiet goes up as the sentence; it
+each edge, so a 9-minute recording of a sentence and minutes of quiet goes up as the sentence; it
 never cuts close to speech, because Whisper reads pauses as sentence breaks and tight cuts merge
 sentences and lose the words beside them. The stored clip is the original. Turbo still runs on it, as the second opinion every command gets (`docs/HUB-INTERNALS.md`, `transcribe.js` row): the two models mishear different words, so the worker sees both whenever they disagree. No id means the hub heard no words. **With the wrist down the app is kept running until
 a home command's answer is in** (`StayAwake`): recording keeps a watch app alive, but once the command
-is sent nothing did, so the app was suspended mid-wait, the answer's tap never came, and the screen
-still showed the command working when he looked. `StayAwake` holds the microphone and discards what it
+is sent nothing does, so without this the app is suspended mid-wait, the answer's tap never comes, and the screen
+still shows the command working at the next raise. `StayAwake` holds the microphone and discards what it
 hears while `Chat.waiting`, and lets go the moment nothing is, or after a minute. Speak mode holds it
 for as long as the mode is on instead (see Speak mode). Playing silence instead looks equivalent
 and is not: a watch app that only plays is frozen the instant the wrist drops (see Spoken replies). It
@@ -689,12 +684,12 @@ stands aside for anything else holding the microphone (a recording, the listener
 keeps the app alive by itself, and each of those makes it let go when they start, since two taps on
 the microphone fight. Anything that turns the audio session off (a recording ending, a spoken reply
 finishing) calls `sessionReleased()` so it takes the microphone back if a command is still waiting.
-Home commands only: a session can work for minutes, and he does not want the battery spent on that. And **one minute at most per wait** (his number): if the answer has not come by then it lets go,
+Home commands only: a session can work for minutes, and that is not worth the battery. And **one minute at most per wait**: if the answer has not come by then it lets go,
 and nothing restarts it until nothing is waiting. It
 does not make the dimmed screen redraw faster (watchOS caps that at about once a second, which is why
 the edge is a steady ring wrist-down); it keeps the app working so the answer lands on time. A connection lost during that wait is asked
 again with backoff (`Hub.outcome`), never shown as a failure: the command is with the hub already, and a
-lowered wrist suspends the app and kills the open request, which used to read "The request timed out"
+lowered wrist suspends the app and kills the open request, which would otherwise read "The request timed out"
 over a command that had finished.
 
 **Recording holds the mute**, as the phone's microphone does (`Hub.muteOthers`, holder `watch` on
@@ -718,12 +713,12 @@ tool, opens the reply by saying it came the fallback way, and the first fallback
 minutes also starts a session to find out why the hub did not answer.
 
 The patience is the trade. Fly's proxy holds a request open while it looks for a machine it does not
-have, so without a ceiling of its own a command waited the full minute before anything else was tried.
+have, so without a ceiling of its own a command would wait the full minute before anything else was tried.
 A hub that is up but slower than 25s gets the command twice, its own copy and the fallback's.
 
 The 25s is a deadline on the whole send, raced against it in `sendCommand`, not the request's
 `timeoutInterval`: that is an idle timer, it does not run while the session waits for connectivity, and
-`resending` starts it over, so with it alone a send has taken 64s. The deadline starts only once the
+`resending` starts it over, so with it alone a send can take over a minute. The deadline starts only once the
 watch has a route (`Net.whenUp`). With no route the fallback is unreachable too, and the send waits for
 connectivity until the session's resource limit (`connectionWait` + 60, two minutes) runs out.
 
@@ -741,7 +736,7 @@ Control Center, the Smart Stack and an Ultra's Action button each hold **Hub · 
 Workout**, which open the app on that page (`OpenPageIntent` → `Router` → `RootView`); Nutrition and Workout
 land on the day page opened straight into a full list (`Router.dayList`): today's food log, or the
 exercise list. Sessions always lands on the LIST, closing a session left open there; the others leave it
-open for when he swipes back. Hub (the mic control; `RecordControl` in the code) is the odd one out: it opens home AND starts a command. It is labelled Hub because it sends a command to the hub — a recording is only how.
+open for swiping back. Hub (the mic control; `RecordControl` in the code) is the odd one out: it opens home AND starts a command. It is labelled Hub because it sends a command to the hub — a recording is only how.
 Each control is its own type, spelled out in full — the `kind`, title and symbol are literals, because
 Control Center reads them before the extension runs and a computed one is not there to read.
 
@@ -759,7 +754,7 @@ process, this account cannot enable App Groups, and nothing a control draws depe
 
 ### Spoken replies
 
-**Nothing is spoken unless he asks.** A session's page carries a bare speaker glyph in its bottom right
+**Nothing is spoken unless asked.** A session's page carries a bare speaker glyph in its bottom right
 corner (`SessionView.playButton`, shown once the session has a reply): a tap reads that session's LAST
 reply aloud (`Speaker`). While it plays the corner holds a stop and a pause; the pause becomes a play
 while paused, and carries on from the same place (`Speaker.pause` / `unpause`), with everything still
@@ -771,7 +766,7 @@ queued and the microphone still held. Asking once for every reply is speak mode,
 stop haptic; while it is on the glyph is white with a third wave. The toggle is done by the app's ONE
 hold gesture, on the whole page row (home's hold, which does nothing else in a session): the glyph only
 reports that a finger is on it (`Sessions.speakerPressed`). A second hold recogniser on the glyph would
-fire at the same instant as the row's, and both would act. It is for lying in bed without looking
+fire at the same instant as the row's, and both would act. It is for use without looking
 at the watch, so everything about it works wrist-down:
 
 - **Every reply is read aloud as it lands** (`Sessions.speakIfNew`) — replies to the session open on the
@@ -781,12 +776,12 @@ at the watch, so everything about it works wrist-down:
 - **The microphone is held for as long as the mode is on** (`StayAwake`, with no cut-off), and the
   session stream stays open on every page and with the wrist down (`RootView.follow`). Without both the
   app is frozen the moment the wrist drops and never hears the reply. This is the battery the mode
-  costs, and why it is a mode he turns on rather than how sessions always behave.
+  costs, and why it is a mode turned on rather than how sessions always behave.
 - **Follow-ups sent from the watch ask for a reply written for the ear.** The watch sends
   `spoken: true`; the hub appends `SPEAK_NOTE` (routes/sessions.js) to the words it types into the session —
   complete, but as succinct as the content allows, no tables, code, paths or URLs unless they are the
   answer. The note rides in a `<speak-mode>` tag that `resolvePrompt` (voice-pipeline transcripts.js)
-  strips, so every surface shows only his words and the sender's message id still matches its prompt.
+  strips, so every surface shows only the user's words and the sender's message id still matches its prompt.
 - **It lives in memory only.** An app relaunched later does not come back holding the microphone.
 
 **The voice is the hub's, not the watch's.** The reply goes to `/api/tts` and comes back as WAV a chunk
@@ -828,8 +823,8 @@ records as usual.
 
 **Treating the reply as long-form audio does not keep it running.** `.playback` with
 `routeSharingPolicy: .longFormAudio` and a Now Playing entry is the documented way an audio app plays
-wrist-down, and it is what a reader will reach for to stop the microphone showing as in use. Tried on
-the watch, it did not play wrist-down at all, so holding the microphone is the only route.
+wrist-down, and it is what a reader will reach for to stop the microphone showing as in use. On
+the watch it does not play wrist-down at all, so holding the microphone is the only route.
 
 ### Launchers, one request
 
@@ -848,7 +843,7 @@ whichever is showing (`recordsWhenAsked`, which checks `onScreen`), so two pages
 one.
 
 **A launcher opens ON its page, not on the last one.** watchOS brings a backgrounded app back by
-zooming in from its last picture of it, and the URL only arrives once the app is active, so the page he
+zooming in from its last picture of it, and the URL only arrives once the app is active, so the page last
 left would show first and then move. Two things stop that in `RootView`: the app goes black
 (`veiled`) when it reaches the background and lifts the black a beat after it is active again, once
 the URL has turned the page; and every page a launcher, control or notification picks is a cut
@@ -893,16 +888,16 @@ send being cut off is visible rather than a command that quietly never arrived.
 it. The interruption notification is what says so (`Recorder.onInterruption`). A command or a follow-up
 is PAUSED (`Capture.pause`, logged `mic-paused`, buzzes `.failure`): the engine stops and the session is
 handed back, but the clip's file stays open and nothing is sent — sending the half said before the timer
-rang runs a command he had not finished. It carries on INTO THE SAME CLIP (`resumeDraft`, with the chirp)
-at the first of: the interruption's end, the app coming back to the front, or his press — a press on a
+rang runs an unfinished command. It carries on INTO THE SAME CLIP (`resumeDraft`, with the chirp)
+at the first of: the interruption's end, the app coming back to the front, or a press — a press on a
 paused recording resumes it and never sends it. A resume the system refuses (still ringing, app not in
 front) logs `mic-resume` `ok:false` and stays paused for the next. After a resume the endpoint starts
-over, so the silence only ends the command once he has spoken again, and the `unspoken` and `quick`
-caps count from the resume; a resumed recording he says nothing more into pauses again rather than
+over, so the silence only ends the command once speech is heard again, and the `unspoken` and `quick`
+caps count from the resume; a resumed recording with nothing more said into it pauses again rather than
 discarding what came before. Press and hold still throws it away. The draft lives only in the app's
 process, so a watchOS kill while paused loses it. A listener utterance that had begun goes up, and when
-the microphone comes back listening picks it up again. Without that handling always-on listening ended at
-the first Siri and the glyph went on claiming it was listening.
+the microphone comes back listening picks it up again. Without that handling always-on listening ends at
+the first Siri while the glyph goes on claiming it is listening.
 
 **A deliberate command comes first.** Starting a command or a follow-up takes the microphone off the
 listener — whatever it had heard by then still goes up — and the listener takes it back when that
@@ -916,21 +911,19 @@ recording, not `owner == nil`.
 point-sized, invisible button inside `CommandBorder` (`handGestureShortcut(.primaryAction)`). The
 simulator cannot perform the gesture, so the binding is proven only on the watch.
 
-**Scrolling is a finger or the crown, never the gesture.** The control used to page the view down
-while anything was below, and hand the gesture to recording only at the bottom; that is gone, along
-with the scroll-geometry machinery it needed. What it cost is worth knowing, because it is why nothing
-here should measure a scroll view again: the same scroll view reports its geometry in two frames
-depending on how it was last moved, so the maths was right in one and wrong in the other, and on his
-watch the geometry went on reporting content below after the view had stopped at its end — so every
-double tap asked for a scroll that could not happen and recording never got the gesture at all.
+**Scrolling is a finger or the crown, never the gesture**, and nothing here measures a scroll view's
+geometry: the same scroll view reports it in two frames depending on how it was last moved, and on the
+watch it can go on reporting content below after the view has stopped at its end. A gesture that
+pages the view while anything is below therefore asks for scrolls that cannot happen and never reaches
+recording.
 
 A session's page scrolls through `PagedScroll` (`Watch/WatchUI.swift`), which is the control over a
 scroll view and nothing more; home has its own scrolling, because it is the one page that lands the
 view on the top of each new thing. A tap records anywhere on home and anywhere in a session.
 
 **The tap is bound to the conversation's own frame, which is only as tall as its text** — a short
-conversation left the blank space below it unresponsive: no press, no way to stop a reply mid-speech by
-tapping there, because nothing was there to receive the tap. The session view's content is given a
+conversation would leave the blank space below it unresponsive (no press, no way to stop a reply mid-speech by
+tapping there), because nothing is there to receive the tap. The session view's content is given a
 minimum height of a full screen so the tappable area always reaches the bottom of the glass, whatever
 the conversation's own length. Home binds its tap on the scroll view itself, so it has no gap to fill.
 
@@ -993,26 +986,6 @@ wrist. Fly keeps only the recent lines, so read it soon.
 | `phone-link` | WatchConnectivity's reachability to the phone changed |
 | `frame` | each `ev` frame for the session on screen: its seq and kind |
 
-## Hiding the system clock
-
-watchOS draws the time over the top right corner of every app, composited above the app's own content
-— there is no way to draw around it and no public modifier for it. One underscored SwiftUI modifier
-turns it off, on the scene's root view:
-
-    WindowGroup {
-        RootView()
-            ._statusBarHidden(true)
-    }
-
-It works. **Verified by removing it and looking**, which is the only way to know: with the modifier the
-clock is absent, without it `11:02` sits over the top-right of the screen. The SIMULATOR renders the
-clock faithfully, so this is testable without a device — a screenshot that shows no clock is evidence,
-not a capture artefact.
-
-It is underscored, which is a promise of instability rather than a private-API rejection risk: the
-symbol is visible to the compiler in SwiftUI, not looked up at runtime. So it can stop working in any
-watchOS release without warning, and the check above is what to re-run when it does.
-
 ## Running it in the simulator
 
 The real app runs in a watchOS simulator against the live hub. Simulator-only code, compiled out of
@@ -1021,26 +994,26 @@ device builds:
 - the token comes from `SIMCTL_CHILD_HUB_TOKEN` (the kiosk's, sent as `X-Hub-Token` like the phone's);
 - `-opensession <row id>` opens a session as its notification would;
 - `-threaddemo` gives home a made-up thread and then walks one command through it as the hub delivers a
-  real one (his words pending, tool calls, the reply loaded, the pending words dropped), so each landing
+  real one (the words pending, tool calls, the reply loaded, the pending words dropped), so each landing
   can be screenshotted without a token;
 - `-page <sessions|home|day|health>` lands on a page; `-dayview <totals|muscles>` opens the day page's
   totals or its muscles page; `-health <weight|food|training>` opens a health page's full view;
 - `DAY_CLOCKS=<rest s>,<session s>` (as `SIMCTL_CHILD_DAY_CLOCKS`) sets the day page's rest and session
   clocks to any length, to check what fits beside the feet;
-- recording and stopping never reach the hub (`blockInSimulator` in `Hub.swift` — a test tap once sent
-  a stray "you" into his conversation) and never mute the room mics.
+- recording and stopping never reach the hub (`blockInSimulator` in `Hub.swift` — otherwise a test tap sends
+  stray words into the live conversation) and never mute the room mics.
 
 The built app needs `WKWatchOnly` and no `WKCompanionAppBundleIdentifier` (then an ad-hoc `codesign`)
-to install on an unpaired watch simulator. **His watch is a Series 12, 46mm**, and the one watch
+to install on an unpaired watch simulator. **The target watch is a Series 12, 46mm**, and the one watch
 simulator kept on this Mac is a Series 11 46mm — the same 416x496 screen and the same corner mask — so
-a screenshot here is his geometry, and the device's framebuffer mask (named by `framebufferMask` in the
-simulator's `profile.plist`) is the true outline of his glass. Only one is kept because each device
+a screenshot here is the target's geometry, and the device's framebuffer mask (named by `framebufferMask` in the
+simulator's `profile.plist`) is the true outline of the glass. Only one is kept because each device
 costs over a gigabyte of disk.
 
-- **The simulator is watchOS 26.5 and his watch is 27**, so what a simulator proves about layout is
-  not proof about his watch, and a system behaviour measured here (what hides the clock, how a gesture
+- **The simulator is watchOS 26.5 and the target watch runs 27**, so what a simulator proves about layout is
+  not proof about the device, and a system behaviour measured here (what hides the clock, how a gesture
   resolves) can differ there. Installing the 27 runtime is a multi-GB download this disk cannot take.
-- **Do not click the Simulator window with System Events**: that moves his pointer. Reach a state
+- **Do not click the Simulator window with System Events**: that moves the Mac's pointer. Reach a state
   with a launch argument instead; the simulator cannot make a double tap either way.
 - **A recording in the simulator records from the Mac's microphone.** Test the silence endpoint by
   feeding `Endpointer` levels, never by playing sound into the room — the Mac's own always-on mic hears

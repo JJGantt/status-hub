@@ -704,9 +704,9 @@ The kiosk token is `TV_TOKEN` on Fly, and its copies are:
   (which `bin/tv sidebar token` pushes into the bedroom TV's companion app, where TvLink signs in with
   it; the app keeps the old one until that is run);
 - on the Mac: the installed `com.jaredgantt.voice-orchestrator.plist` (`HUB_TOKEN`) and
-  `com.jaredgantt.claude-login-check.plist` (inside `HUB_NOTIFY_URL`), and `~/.config/ops/hub_token`;
+  `~/.config/ops/hub_token`;
 - on the Pi: the kiosk URL in `~/.xinitrc` (read once when X starts, so the X session has to restart:
-  the relaunch loop reuses the old URL) and the `HUB_NOTIFY_URL` of the 9am line in the crontab;
+  the relaunch loop reuses the old URL; `tv-ring` reads its token from the same line);
 - on Fly: `HUB_TOKEN` on `jared-voice-worker`, `ops-responder` and `jared-desk-fly` (the Fly session
   machine, where `bin/hub` reads it from the environment; it is stopped, so set it with `--stage` and
   then `fly secrets deploy`), and `HUB_NOTIFY_TOKEN` on `litter-robot-watcher`.

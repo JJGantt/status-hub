@@ -653,6 +653,13 @@ still own the microphone, so the app has been relaunched. The clip in memory is 
 Searching `client_log` for a `record-start` with no end after it finds these (about 1% of starts).
 Whether it is a crash or watchOS ending the app is not yet known.
 
+**Each one is reported to the ops responder**, which starts an agent on it. `/api/clientlog` runs
+`checkRecordings` (`server/routes/voice.js`, rule in `server/lib/outcomes.js`) on every batch holding
+a `record-start`: an earlier start whose microphone opened and that has no `record-stop`,
+`record-cancel` or `mic-failed` before the next start is reported as an error, once, when that next
+start arrives. A start stopped before its microphone opened ends without a `record-stop` by design and
+is not reported. Neither is the newest start, which may still be running.
+
 ### Sending it
 
 A command is sent the way the phone's microphone sends one: `Hub.sendAudio` uploads the file to

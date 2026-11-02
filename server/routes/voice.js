@@ -7,6 +7,7 @@ const fs = require('fs');
 const heicConvert = require('heic-convert');
 const { localDate } = require('../lib/dates');
 const ops = require('../lib/report');
+const { vanishedRecordings, RECORD_EVENTS } = require('../lib/outcomes');
 const os = require('os');
 const path = require('path');
 const { pipeline } = require('stream/promises');
@@ -458,9 +459,30 @@ module.exports = function (ctx) {
     if (keep.length) {
       try { await sbWrite('client_log', 'POST', keep); }
       catch (e) { console.error('[clientlog] not kept:', e.message || e); return res.status(502).end(); }
+      checkRecordings(keep).catch((e) => console.error('[clientlog] recording check failed:', e.message || e));
     }
     res.status(204).end();
   });
+
+  // A watch recording that never ended (lib/outcomes.js) is found at the NEXT record-start, the first
+  // moment the device says anything after it, and reported as an error so the ops responder investigates.
+  // Only a vanished start whose successor is in this batch is reported, so each is reported once.
+  async function checkRecordings(rows) {
+    const starts = rows.filter((r) => r.src === 'watch' && r.ev === 'record-start').map((r) => r.at).sort();
+    if (!starts.length) return;
+    const from = new Date(Date.parse(starts[0]) - 6 * 3600e3).toISOString();
+    const to = rows.reduce((m, r) => (r.at > m ? r.at : m), starts[0]);
+    const events = await sb(`client_log?src=eq.watch&ev=in.(${RECORD_EVENTS.join(',')})`
+      + `&at=gte.${encodeURIComponent(from)}&at=lte.${encodeURIComponent(to)}&select=ev,at,data&order=at.asc,id.asc`);
+    const mine = new Set(starts.map((t) => Date.parse(t)));
+    for (const v of vanishedRecordings(events)) {
+      if (!mine.has(Date.parse(v.next))) continue;
+      const start = events.find((e) => e.ev === 'record-start' && e.at === v.at);
+      ops.report(`watch recording started at ${v.at} never ended: no record-stop, record-cancel or mic-failed before the next record-start at ${v.next}; the clip was not sent`,
+        { machine: 'client', service: 'watch', context: { started: v.at, next: v.next, start: start && start.data,
+          look: 'client_log where src=watch between those two times (docs/WATCH.md § The wrist can drop mid-recording)' } });
+    }
+  }
 
   async function sweepClientLog() {
     const cutoff = new Date(Date.now() - 14 * 24 * 3600 * 1000).toISOString();

@@ -79,13 +79,15 @@ function boot() {
   // ONLY WHILE THE PAGE IS ON SCREEN. A media element takes a non-mixing playback session, so a pop
   // from a page running behind another app pauses that app's video — and the iOS app keeps this page
   // running for minutes after it leaves the screen, while every command from any device (the watch, a
-  // false wake on a video's own speech) arrives here as `working`. In the app each pop is kept in
-  // client_log (`pop`, with `played`), so a reported pause can be checked against it.
+  // false wake on a video's own speech) arrives here as `working`. WebKit still reports the page
+  // `visible` while the app is backgrounded, so the app's own word (`__appActive`, StatusHubApp.swift)
+  // decides there. In the app each pop is kept in client_log (`pop`, with `played`), so a reported
+  // pause can be checked against it.
   const popSound = new Audio('/pop.m4a');
   popSound.preload = 'auto';
   const inApp = !!(window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.alarmAudio);
   const playPop = () => {
-    const shown = document.visibilityState === 'visible';
+    const shown = document.visibilityState === 'visible' && window.__appActive !== false;
     if (inApp) clientLog({ src: 'phone', ev: 'pop', played: shown });
     if (!shown) return;
     try { popSound.currentTime = 0; popSound.play().catch(() => {}); } catch (_) {}

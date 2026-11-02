@@ -101,6 +101,22 @@ enum AlarmAudio {
     }
 }
 
+// WHETHER THE APP IS IN FRONT, pushed into the page. WebKit keeps reporting the page `visible` for
+// as long as iOS lets the backgrounded app run, so `document.visibilityState` cannot tell a page on
+// screen from one behind YouTube. The heard-you pop asks this before it plays (voiceagent.js), because
+// a media element's playback session pauses whatever other app is playing.
+final class AppActive {
+    static let shared = AppActive()
+    private weak var web: WKWebView?
+    private var active = true
+    func attach(_ w: WKWebView) { web = w; push() }
+    func set(_ on: Bool) { active = on; push() }
+    private func push() {
+        let js = "window.__appActive=\(active);"
+        DispatchQueue.main.async { self.web?.evaluateJavaScript(js, completionHandler: nil) }
+    }
+}
+
 enum StayAwake {
     static func apply(_ on: Bool) {
         UIApplication.shared.isIdleTimerDisabled = on
@@ -159,7 +175,7 @@ struct StatusHubApp: App {
                 // From the scene rather than from the app delegate: this app is a SwiftUI `WindowGroup`,
                 // so it is scene-based, and UIKit does not promise to call `applicationDidBecomeActive`
                 // in a scene-based app. `scenePhase` is the supported signal here.
-                .onChange(of: scenePhase) { _, phase in StayAwake.apply(phase == .active) }
+                .onChange(of: scenePhase) { _, phase in StayAwake.apply(phase == .active); AppActive.shared.set(phase == .active) }
                 .task { StayAwake.apply(true) }
             #endif
             #if os(macOS)
@@ -459,6 +475,7 @@ struct HubWebView {
             PushManager.shared.attach(webView)
             GuidedAccess.shared.attach(webView)   // the page cannot see this for itself; its beacon reports it
             AudioInterruption.shared.attach(webView)   // nor this: a recording pauses through it
+            AppActive.shared.attach(webView)           // nor this: WebKit reports `visible` while backgrounded
             RecordLaunch.shared.fireIfPending()   // statushub://record cold launch → auto-start the voice FAB
             ItemLaunch.shared.fireIfPending()     // statushub://item/<id> cold launch → open that item
             PaneLaunch.shared.fireIfPending()     // statushub://pane/<name> cold launch → land there

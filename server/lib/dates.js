@@ -61,4 +61,16 @@ function dayBucketOf(ts) {
   return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
 }
 
-module.exports = { getTZ, setTZ, DAY_START_HOUR, MON, localDate, nutritionWindow, lastNTrainingDays, dayBucketOf };
+// "now" as a naive-local wall-clock timestamp in the display TZ → "YYYY-MM-DDTHH:MM:SS"
+// (the format nutrition_entries.occurred_at and sets.occurred_at are stored in).
+function nowNaiveLocal() {
+  const f = new Intl.DateTimeFormat('en-CA', {
+    timeZone: getTZ(), hour12: false,
+    year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit',
+  });
+  const p = {}; for (const part of f.formatToParts(new Date())) p[part.type] = part.value;
+  const hh = p.hour === '24' ? '00' : p.hour; // Intl can emit 24 for midnight
+  return `${p.year}-${p.month}-${p.day}T${hh}:${p.minute}:${p.second}`;
+}
+
+module.exports = { getTZ, setTZ, DAY_START_HOUR, MON, localDate, nutritionWindow, lastNTrainingDays, dayBucketOf, nowNaiveLocal };

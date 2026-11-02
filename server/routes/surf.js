@@ -3,13 +3,13 @@ const { createLiveBuoy } = require('../lib/livebuoy');
 const { createLiveWind, windType } = require('../lib/livewind');
 const { createSurfAlarms } = require('../lib/surfalarm');
 const crypto = require('crypto');
-const { getTZ, localDate } = require('../lib/dates');
+const { getTZ, localDate, nowNaiveLocal } = require('../lib/dates');
 const { getWeather } = require('../lib/weather');
 
 module.exports = function (ctx) {
   const {
     PING, SUPABASE_KEY, SUPABASE_URL, SURF_HTML, alarmLog, buildSurf, etNowString, etStringAt, gated,
-    nowNaiveLocal, pub, ratingLabel, sb, sbRange, sbWrite, settingsAll,
+    pub, ratingLabel, sb, sbRange, sbWrite, settingsAll,
   } = ctx;
 
   // ---- surf history: rating, size and water for the card's grids ----

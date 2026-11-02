@@ -48,20 +48,9 @@ documents **everything**, not just the hub. Keep it current as pieces change.
 Every Fly-deployed app is built from a repo in `~/repos` on the Mac, so all five are reachable from
 the hub's picker.
 
-**There are TWO Supabase projects, not one** — a distinction the CLI hides, because it only ever
-talks to the linked one:
-
-| Project | Ref | Used by | Edge functions |
-|---|---|---|---|
-| `life-data` | `felyggqjjhltwokdfhop` | everything in this doc | `voice-fallback` |
-| `GolfTracker` | `oumnicnvayqrbfbljgyl` | `GolfTracker*` repos | `golfcourse-search`, `resolve-hole-heights` |
-
-`voice-fallback` (the watch's way in when the hub does not answer, §6) lives in
-`data-layer/supabase/functions/`. The two GolfTracker functions' sources live in
-`GolfTracker-SwingDetection/supabase/functions/` and are committed + pushed; the deployed copies match (they only differ by Supabase's deploy-time TypeScript
-stripping). Nothing runs in Supabase that isn't in a repo. Checking one project and reporting it as
-"Supabase" is the easy mistake here — `supabase functions list` silently scopes to whichever project
-the working directory is linked to.
+**Supabase is the `life-data` project (`felyggqjjhltwokdfhop`).** Its one edge function,
+`voice-fallback` (the watch's way in when the hub does not answer, §6), lives in
+`data-layer/supabase/functions/`. Nothing runs in Supabase that isn't in a repo.
 
 ---
 
@@ -485,12 +474,12 @@ group now — which is what a new phone signed in to a different Apple ID looks 
 its members and public link, `builds` prints what TestFlight is offering and when it expires, and
 `add` puts an address in a group. Two traps behind it:
 
-- **The App Store Connect account carries four apps** — JaredHub, StrokeSaver, CapGrille and Watchset
-  — and a group name is only unique within one, so groups are named `App/Group` here. `asc.mjs`
-  walks all four for exactly that reason; the device and bundle-id commands are account-wide anyway.
+- **The App Store Connect account carries several apps**, and a group name is only unique within one,
+  so groups are named `App/Group` here. `asc.mjs` walks every app for exactly that reason; the device
+  and bundle-id commands are account-wide anyway.
 - **An internal group can never have a public link.** Apple offers those on external groups only, and
   an external group's builds have to clear Beta App Review first, so "turn the link on" is not a
-  setting away from an internal group. Of the four apps only CapGrille has one.
+  setting away from an internal group. Of the account's apps only CapGrille has one.
 
 **A development build is for iterating on UI, never for installing.** A build signed for development carries
 `aps-environment: development` and registers a **sandbox** APNs token, which the hub's production

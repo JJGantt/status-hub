@@ -14,7 +14,7 @@ let json = """
  {"path":"/Users/jaredgantt/repos/data-layer","name":"data-layer","branch":null,"dirty":false,"age":"2h"},
  {"path":"/Users/jaredgantt/repos/voice-pipeline","name":"voice-pipeline","branch":"widget-work","dirty":true,"age":"19h"},
  {"path":"/Users/jaredgantt/repos/petlibro-mcp","name":"petlibro-mcp","branch":null,"dirty":false,"age":"19h"},
- {"path":"/Users/jaredgantt/repos/GolfTracker-SwingDetection","name":"GolfTracker-SwingDetection","branch":null,"dirty":false,"age":"2d"},
+ {"path":"/Users/jaredgantt/repos/surf-app","name":"surf-app","branch":null,"dirty":false,"age":"2d"},
  {"path":"/Users/jaredgantt/repos/nutrition-track","name":"nutrition-track","branch":null,"dirty":false,"age":"3d"}]}
 """
 

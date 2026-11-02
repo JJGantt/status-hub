@@ -46,9 +46,7 @@ keeps delivering under the microphone mode alone has not been measured.
 
 ## Prior work worth reusing
 
-- **In these repos.** `GolfTracker-SwingDetection` already streams 800 Hz accelerometer under a
-  workout session and uploads it to Supabase (`SwingDetectionManager+RawAccel.swift`,
-  `WorkoutManager.swift`). `Workset` records device motion through `CaptureManager.swift` and keeps
+- **In these repos.** `Workset` records device motion through `CaptureManager.swift` and keeps
   the app alive with `WorkoutKeepAlive.swift`. Data capture is a solved problem here.
 - **Doublepoint** (Finnish startup) is the commercial state of the art: WowMouse on Apple Watch and
   Wear OS detects thumb-to-index pinch from the IMU. The detection engine is proprietary and

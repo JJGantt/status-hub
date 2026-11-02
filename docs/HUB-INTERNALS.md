@@ -313,11 +313,12 @@ mouse press and more for a finger. The click still arrives afterwards — `preve
 `pointerdown` does not reliably suppress it — so `bindTap` swallows it, and lets through only a click
 with no `pointerdown` in front of it and `detail === 0`, which is a keyboard Enter or Space.
 
-### Every press-to-talk button is press to start, press to send — nothing else ends or drops a clip
+### Every press-to-talk button is press to start, press to send — only a press and hold drops a clip
 
 `makeRecorder` has no voice-activity detection and no timer. Every caller — the navbar button, the
 chat sheet (`cardRec`), the session view (`at.rec`), the new-session dictation (`beginDictation`) and
-the `/mic` page — records until the second press and then sends whatever it recorded. A clip with any
+the `/mic` page — records until the second press and then sends whatever it recorded, unless that
+press is held for 0.6s, which throws the recording away (`bindMic`; docs/VOICE-ON-THE-PHONE.md). A clip with any
 bytes in it always goes up; the hub's transcript is the only judge of whether it held words, and an
 empty one comes back as the "Didn't catch that" status rather than as silence. **Do not add a VAD to
 this path.** A VAD here ends a recording at a pause and discards any clip it judges silent without a

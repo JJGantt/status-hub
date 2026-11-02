@@ -2,7 +2,7 @@
 // panes — no nav buttons needed). /page (desktop): adds chat + back-to-wall buttons. Right side is
 // the single voice button — tap-to-talk, driving the shared activity popup.
 // Mounted once per page by core.js.
-import { makeRecorder, makeListener, activityBar, bindTap } from './voiceagent.js';
+import { makeRecorder, makeListener, activityBar, bindTap, bindMic } from './voiceagent.js';
 import { open as openSettings } from './settings.js';
 
 const CHAT = '<svg viewBox="0 0 24 24" width="21" height="21" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
@@ -57,7 +57,7 @@ export function mountNavbar() {
     // is not the end of a sentence — the always-on button beside it is where a machine gets to decide.
     const rec = makeRecorder({ onStatus, quick: true,
       onState: (s) => { b.classList.toggle('rec', s === 'rec'); b.classList.toggle('armed', s === 'armed'); } });
-    bindTap(b, () => rec.toggle());
+    bindMic(b, rec);
     // The native app (opened via statushub://record from a home-screen shortcut) calls this to start the
     // exact same recorder without an on-screen tap — so it lands straight in "listening", like pressing it.
     if (cls === 'wfab-fast') window.__startVoiceCommand = () => rec.start();

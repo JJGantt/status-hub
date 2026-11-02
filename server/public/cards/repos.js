@@ -14,7 +14,7 @@
 // Self-fetching (NOT part of the status stream), like the todo pane. No-ops where #repospane is
 // absent (/page). Every wall's markup carries it, hidden on the kiosk, so it mounts there too.
 import { esc, md, mdInline, PIN_SVG, liveStream} from '../shared.js';
-import { makeRecorder, bindTap } from '../voiceagent.js';
+import { makeRecorder, bindMic } from '../voiceagent.js';
 import { speak, stopSpeaking, speaking, paused, pauseSpeaking, resumeSpeaking } from '../speak.js';
 
 let mounted = false;
@@ -667,7 +667,7 @@ async function openSession(id) {
       else sendWords(words, at);
     },
   });
-  bindTap(mic, () => at.rec.toggle());
+  bindMic(mic, at.rec);
   return true;
 }
 

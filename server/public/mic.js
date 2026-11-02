@@ -2,7 +2,7 @@
 // bottom-right voice FAB. Tap → listen → tap → transcribe → enqueue. Shows the transcribed
 // command + a "Sent" confirmation, then resets. The reply itself runs on the hub (and is spoken if
 // speak-replies is on); this page is purely a fast launcher.
-import { makeRecorder, bindTap, watchMic } from './voiceagent.js';
+import { makeRecorder, bindMic, watchMic } from './voiceagent.js';
 
 watchMic();         // the mic opens on a tap, like everywhere else
 const btn = document.getElementById('micbtn');
@@ -31,6 +31,6 @@ const rec = makeRecorder({
   },
 });
 
-bindTap(btn, () => rec.toggle());
+bindMic(btn, rec);
 // tapping anywhere on the empty page also toggles, so you don't have to hit the circle exactly.
 document.body.addEventListener('pointerdown', (e) => { if (e.target === document.body) rec.toggle(); });

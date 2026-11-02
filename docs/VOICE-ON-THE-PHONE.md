@@ -4,7 +4,7 @@ Two microphones, deliberately different. Neither is a fallback for the other.
 
 | | **Every microphone button** | **The always-on button** |
 |---|---|---|
-| Shape | press to start, press to send | tap to engage, tap to disengage |
+| Shape | press to start, press to send, hold to throw away | tap to engage, tap to disengage |
 | Ends a clip | he does, and only he | the silence after each utterance |
 | Sends | once, whatever it recorded | every utterance, until disengaged |
 | Mirrors | nothing — it is the deliberate one | what the Mac and the ESP already do |
@@ -26,7 +26,13 @@ The recorder has no voice-activity detection and no timer: a recording ends on t
 everything recorded is sent. **Do not give it one.** A VAD on this path ends a recording at a
 mid-sentence pause and discards any clip it judges silent, with no message — and on his phone it
 judges whole spoken commands silent, so the button records, throws the words away and shows nothing.
-That is why there is no `autoStop` option to turn on for one button. `docs/HUB-INTERNALS.md` has the
+That is why there is no `autoStop` option to turn on for one button.
+
+**Press and hold (0.6s) on a button that is recording throws the recording away** (`bindMic`), the
+same hold as the watch. Because a press on a recording button might become a hold, its send fires
+when the finger lifts rather than on pointerdown; a press that starts a recording still fires on
+pointerdown. A clip already on its way up cannot be thrown away. The new-session dictation is sent by a
+tap on its row, not by a mic button, and has no hold. `docs/HUB-INTERNALS.md` has the
 recorder's other guarantees (a recording ended underneath it — a timer, Siri, a call, the page hidden —
 is paused and carried on, never sent half-said or dropped; an upload is bounded;
 `cancel()` is the only way to end one without sending).

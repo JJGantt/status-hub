@@ -331,6 +331,38 @@ export function bindTap(el, fn) {
   el.addEventListener('pointercancel', () => trace('pointercancel'));
 }
 
+// **A mic button: tap to start, tap to send, press and hold to throw the recording away** — the same
+// press and hold (0.6s) as the watch (docs/WATCH.md). A press on a button that is NOT recording starts
+// on pointerdown, as every tap here does (bindTap). A press on one that IS recording cannot be judged
+// until the finger lifts or the hold runs out, so the send waits for pointerup: sending on pointerdown
+// would send every hold before it could become a cancel. A clip already on its way up is never thrown
+// away. A pointercancel (the touch became a scroll) does neither, and the recording carries on.
+// touch-action and the callout are switched off on the button, or iOS takes a held finger for a scroll
+// or a long-press menu and cancels the pointer before the hold completes.
+const HOLD_MS = 600;
+export function bindMic(el, rec) {
+  let timer = null, fromPointer = false;
+  const disarm = () => { if (timer) { clearTimeout(timer); timer = null; } };
+  el.style.touchAction = 'none';
+  el.style.webkitTouchCallout = 'none';
+  el.style.webkitUserSelect = 'none';
+  el.addEventListener('contextmenu', (e) => e.preventDefault());
+  el.addEventListener('pointerdown', (e) => {
+    trace('pointerdown', { type: e.pointerType, id: e.pointerId, primary: e.isPrimary, live: rec.live });
+    e.preventDefault(); fromPointer = true;
+    disarm();
+    if (!rec.live) { rec.toggle(); return; }
+    timer = setTimeout(() => { timer = null; trace('hold:cancel'); rec.cancel(); }, HOLD_MS);
+  });
+  el.addEventListener('pointerup', () => { if (timer) { disarm(); rec.toggle(); } });
+  el.addEventListener('pointercancel', () => { trace('pointercancel'); disarm(); });
+  el.addEventListener('click', (e) => {
+    trace('click', { detail: e.detail, fromPointer });
+    if (fromPointer || e.detail !== 0) { fromPointer = false; return; }
+    rec.toggle();
+  });
+}
+
 // Speech needs a few tens of kbps. Left to itself iOS Safari's recorder has produced ~1.5 Mbps, which
 // put a two-minute command over the transcription service's upload cap. The server now takes a clip of
 // any size (lib/transcribe.js), but every byte still has to go up over the phone's connection first.
@@ -533,6 +565,8 @@ export function makeRecorder({ onStatus = () => {}, onState: paint = () => {}, q
       if (recording) discard = true;
       stop();
     },
+    // Recording, or tapped and waiting for the mic: what a press and hold can still throw away.
+    get live() { return recording || arming; },
     start, stop };
 }
 
@@ -1279,7 +1313,7 @@ function initCard() {
     dryWhen: () => attItems.length > 0,
     onTranscript: (t) => { textEl.value = (textEl.value.trim() ? textEl.value.trim() + ' ' : '') + t; },
   });
-  bindTap(micBtn, () => cardRec.toggle());
+  bindMic(micBtn, cardRec);
 
   return { upsert, clear, rule, backfill, optimistic, setPendingPath, dropPending };
 }

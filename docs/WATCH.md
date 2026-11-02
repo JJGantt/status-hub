@@ -1005,7 +1005,7 @@ watchOS release without warning, and the check above is what to re-run when it d
 The real app runs in a watchOS simulator against the live hub. Simulator-only code, compiled out of
 device builds:
 
-- the token comes from `SIMCTL_CHILD_HUB_TOKEN` (the kiosk's, sent as `?token=`);
+- the token comes from `SIMCTL_CHILD_HUB_TOKEN` (the kiosk's, sent as `X-Hub-Token` like the phone's);
 - `-opensession <row id>` opens a session as its notification would;
 - `-threaddemo` gives home a made-up thread and then walks one command through it as the hub delivers a
   real one (his words pending, tool calls, the reply loaded, the pending words dropped), so each landing

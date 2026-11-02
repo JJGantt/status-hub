@@ -668,8 +668,8 @@ draw this row.
 image and uploads it to `/api/attach` — the same bucket the chat composer fills — and the follow-up
 carries the object names. The machine that OWNS the session pulls the bytes down beside its stashed
 prompts (`fetchAttachment`) and prepends a line naming the local files, which the session reads
-itself. A picture with no words is a whole message. It reaches the hub with `?token=`, the way
-everything on that machine does; `X-Hub-Token` is the derived token the iOS app carries and not this.
+itself. A picture with no words is a whole message. It reaches the hub with the machine's device token
+(TV_TOKEN) in `X-Hub-Token`.
 
 **A long message is pasted as it is, and the paste tags are hidden here.** Past Claude Code's paste
 threshold the transcript holds `<pasted_content>…</pasted_content>`; `resolvePrompt` (voice-pipeline

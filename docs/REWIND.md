@@ -73,7 +73,7 @@ The battery cost is the slope of `battery` against `minutes` across `rewind-aliv
 ## Testing
 
     cd apps && swiftc -parse-as-library -o /tmp/test-rewind Watch/RewindBuffer.swift tools/test-rewind.swift \
-      && HUB_TOKEN=<a machine's ?token= hub token> /tmp/test-rewind
+      && HUB_TOKEN=<a machine's hub token (TV_TOKEN)> /tmp/test-rewind
 
 On the Mac. It checks the ring's wrap-around against a model over thousands of random appends, that a
 sentence spoken after a minute of noise is what the ring hands back, that the encode is the right

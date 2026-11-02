@@ -654,14 +654,7 @@ enum Hub {
     private static func request(_ path: String, method: String = "GET", body: [String: Any]? = nil,
                                 timeout: TimeInterval) throws -> URLRequest {
         guard let token = HubToken.get() else { throw HubError.noToken }
-        var url = URL(string: Auth.host + path)!
-        #if targetEnvironment(simulator)
-        // The simulator's token is the kiosk's, which the hub takes as `?token=`, not as the header.
-        var c = URLComponents(url: url, resolvingAgainstBaseURL: false)!
-        c.queryItems = (c.queryItems ?? []) + [URLQueryItem(name: "token", value: token)]
-        url = c.url!
-        #endif
-        var r = URLRequest(url: url)
+        var r = URLRequest(url: URL(string: Auth.host + path)!)
         r.httpMethod = method
         r.timeoutInterval = timeout
         r.setValue(token, forHTTPHeaderField: "X-Hub-Token")

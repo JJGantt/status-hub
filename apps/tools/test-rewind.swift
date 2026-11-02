@@ -2,7 +2,7 @@
 //
 //   cd apps && swiftc -parse-as-library -o /tmp/test-rewind Watch/RewindBuffer.swift tools/test-rewind.swift && /tmp/test-rewind
 //
-// With HUB_TOKEN set (a machine's hub token, the `?token=` one) it also sends a spoken sentence through the ring to the hub's dry transcription,
+// With HUB_TOKEN set (a machine's hub token, TV_TOKEN) it also sends a spoken sentence through the ring to the hub's dry transcription,
 // the same request a grab makes, and checks the words come back.
 import AVFoundation
 import Foundation
@@ -95,8 +95,9 @@ struct TestRewind {
             return
         }
         let host = ProcessInfo.processInfo.environment["HUB_URL"] ?? "https://jared-status-hub.fly.dev"
-        var req = URLRequest(url: URL(string: "\(host)/api/voice-command?dry=1&client_msg_id=\(UUID().uuidString)&dur=\(String(format: "%.1f", seconds))&source=watch-cmd&token=\(token)")!)
+        var req = URLRequest(url: URL(string: "\(host)/api/voice-command?dry=1&client_msg_id=\(UUID().uuidString)&dur=\(String(format: "%.1f", seconds))&source=watch-cmd")!)
         req.httpMethod = "POST"
+        req.setValue(token, forHTTPHeaderField: "X-Hub-Token")
         req.setValue("audio/mp4", forHTTPHeaderField: "Content-Type")
         do {
             let (data, resp) = try await URLSession.shared.upload(for: req, fromFile: m4a)

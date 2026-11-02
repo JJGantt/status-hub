@@ -20,8 +20,8 @@ if (Object.values(PAGES).includes(HERE)) {
     try { want = JSON.parse(e.data)?.routing?.wall; } catch { return; }
     const to = PAGES[want];
     // A reload of the page already showing is not a switch; it would restart the wall every frame.
-    // The query string comes along: the kiosk authenticates with ?token=, which seeds a cookie, and
-    // carrying it means the switch still works on a browser whose cookie was cleared.
+    // The query string comes along (any mode flags). The kiosk's ?token= is already gone: the hub
+    // trades it for a cookie and redirects to the URL without it.
     if (to && to !== HERE) location.replace(to + location.search);
   } });
 }

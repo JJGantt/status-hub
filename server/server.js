@@ -75,18 +75,6 @@ function buildUsage(r) {
            observed_at: r.observed_at };
 }
 
-// Upsert one app_settings row. app_settings is keyed, so this needs the merge-duplicates Prefer
-// header — a plain POST on an existing key 409s (which is why sbWrite, having no Prefer, can't
-// be used here). Throws on failure.
-async function putSetting(key, value) {
-  const r = await fetch(`${SUPABASE_URL}/rest/v1/app_settings?on_conflict=key`, {
-    method: 'POST',
-    headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}`,
-               'Content-Type': 'application/json', Prefer: 'resolution=merge-duplicates' },
-    body: JSON.stringify({ key, value, updated_at: new Date().toISOString() }),
-  });
-  if (!r.ok) throw new Error(`settings upsert ${key} -> ${r.status}`);
-}
 async function settingsAll() {
   if (settingsCache.map && Date.now() - settingsCache.at < SETTINGS_BACKSTOP_MS) return settingsCache.map;
   const rows = await sb('app_settings?select=key,value');
@@ -294,37 +282,7 @@ app.use(pub);
 app.use(hubGate);
 app.use(gated);
 
-// ---- Supabase REST helper (service key, server-side only) ----
-async function sb(path) {
-  const r = await fetch(`${SUPABASE_URL}/rest/v1/${path}`, {
-    headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` },
-  });
-  if (!r.ok) throw new Error(`supabase ${path} -> ${r.status}`);
-  return r.json();
-}
-// Paginated read — Supabase caps responses at 1000 rows (db-max-rows), so page via Range.
-async function sbRange(path) {
-  const out = [];
-  for (let from = 0; ; from += 1000) {
-    const r = await fetch(`${SUPABASE_URL}/rest/v1/${path}`, {
-      headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}`, 'Range-Unit': 'items', Range: `${from}-${from + 999}` },
-    });
-    if (!r.ok && r.status !== 206) throw new Error(`supabase ${path} -> ${r.status}`);
-    const chunk = await r.json();
-    out.push(...chunk);
-    if (chunk.length < 1000) break;
-  }
-  return out;
-}
-async function sbWrite(path, method, body) {
-  const init = {
-    method,
-    headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}`, 'Content-Type': 'application/json' },
-  };
-  if (body !== undefined) init.body = JSON.stringify(body);
-  const r = await fetch(`${SUPABASE_URL}/rest/v1/${path}`, init);
-  if (!r.ok) throw new Error(`supabase ${method} ${path} -> ${r.status}`);
-}
+const { sb, sbRange, sbWrite, sbInsert, putSetting } = require('./lib/supa')({ SUPABASE_KEY, SUPABASE_URL });
 
 // ---- the alarm log (data-layer 00113) ---------------------------------------------------------
 // What happened to every alarm, durably. Stdout here is a buffer of about a hundred lines, and an
@@ -5817,17 +5775,6 @@ livemic.attach(server, authed);
 
 // ---- daily weight-logging push reminder (APNs). Checks each minute; fires once/day at the
 // configured time unless weight or food is already logged (see lib/weightReminder.js). ----
-async function sbInsert(table, row) {
-  try {
-    const r = await fetch(`${SUPABASE_URL}/rest/v1/${table}`, {
-      method: 'POST',
-      headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}`,
-                 'Content-Type': 'application/json', Prefer: 'return=minimal' },
-      body: JSON.stringify(row),
-    });
-    return r.ok;
-  } catch (_) { return false; }
-}
 const reminderCtx = { sb, supaInsert: sbInsert, apns, settingsAll, log: (m) => console.log('[weight-reminder]', m) };
 setInterval(() => weightReminder.tick(reminderCtx).catch((e) => console.error('[weight-reminder] error', e.message)), 60000);
 weightReminder.tick(reminderCtx).catch((e) => console.error('[weight-reminder]', e.message || e));  // also evaluate once on boot

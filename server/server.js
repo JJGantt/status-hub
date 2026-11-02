@@ -1521,6 +1521,9 @@ const server = app.listen(PORT, '0.0.0.0', () => {
   setInterval(() => { if (sseClients.size) broadcast(); }, 30000);
 });
 livemic.attach(server, authed);
+// A watch recording streams to /api/voice-live for as long as it runs, and a locked one can run for
+// many minutes. Node's default is to drop any request whose body takes more than five minutes.
+server.requestTimeout = 30 * 60 * 1000;
 
 // ---- daily weight-logging push reminder (APNs). Checks each minute; fires once/day at the
 // configured time unless weight or food is already logged (see lib/weightReminder.js). ----

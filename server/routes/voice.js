@@ -8,6 +8,7 @@ const heicConvert = require('heic-convert');
 const { localDate } = require('../lib/dates');
 const ops = require('../lib/report');
 const { vanishedRecordings, RECORD_EVENTS } = require('../lib/outcomes');
+const { FrameReader, endOf } = require('../lib/livestream');
 const os = require('os');
 const path = require('path');
 const { pipeline } = require('stream/promises');
@@ -482,6 +483,82 @@ module.exports = function (ctx) {
         { machine: 'client', service: 'watch', context: { started: v.at, next: v.next, start: start && start.data,
           look: 'client_log where src=watch between those two times (docs/WATCH.md § The wrist can drop mid-recording)' } });
     }
+  }
+
+  // ---- A RECORDING STREAMED WHILE IT RECORDS (lib/livestream.js) ------------------------------------------
+  // The watch opens this for every command and follow-up the moment its microphone opens, and keeps it
+  // open until the recording ends, saying how it ended (E or C) before closing it. A connection that
+  // drops mid-audio without that is a recording that died with the app, found the moment it happens: it
+  // is reported, and the audio up to that second is kept and transcribed, so what was said is not lost
+  // with it. The finished clip still arrives the ordinary way (/api/voice-command); this stream is only
+  // the part that survives the app.
+  const LIVE_ID = /^[0-9A-Fa-f-]{36}$/;
+  const LIVE_MAX_BYTES = 16 << 20;
+  gated.post('/api/voice-live', (req, res) => {
+    const id = String(req.query.id || '');
+    if (!LIVE_ID.test(id)) { req.resume(); return res.status(400).json({ error: 'id required' }); }
+    const meta = { id, view: String(req.query.view || '').slice(0, 16), flow: String(req.query.flow || '').slice(0, 16) };
+    const reader = new FrameReader();
+    const audio = [];
+    let bytes = 0, last = null, paused = false, lastByteAt = Date.now(), complete = false, settled = false;
+    const startedAt = Date.now();
+    req.on('data', (chunk) => {
+      lastByteAt = Date.now();
+      for (const f of reader.push(chunk)) {
+        if (f.type === 'A') { if (bytes + f.data.length <= LIVE_MAX_BYTES) { audio.push(Buffer.from(f.data)); bytes += f.data.length; } }
+        else { last = f.type; paused = f.type === 'P' ? true : f.type === 'R' ? false : paused; }
+      }
+    });
+    req.on('end', () => { complete = true; if (!res.headersSent) res.status(204).end(); });
+    const settle = () => {
+      if (settled) return;
+      settled = true;
+      const verdict = endOf({ complete, last, paused, gapMs: Date.now() - lastByteAt });
+      const seconds = (Date.now() - startedAt) / 1000;
+      console.log(`[voice-live] ${id} ${verdict}: ${seconds.toFixed(1)}s open, ${bytes} audio bytes, last ${last || '-'}, `
+        + `${Date.now() - lastByteAt}ms from the last byte to the close${reader.bad ? `, ${reader.bad}` : ''}`);
+      if (verdict === 'lost' || verdict === 'unmarked') {
+        lostRecording(meta, verdict, Buffer.concat(audio), seconds)
+          .catch((e) => console.error(`[voice-live] ${id} could not handle a ${verdict} recording: ${e.message || e}`));
+      }
+    };
+    // 'close' fires for a finished body and for a dropped connection alike; `complete` tells them apart.
+    req.on('close', settle);
+  });
+
+  async function lostRecording(meta, verdict, audio, seconds) {
+    // Marks the recording ended in the watch's own log, so the next-start check (lib/outcomes.js) does
+    // not report the same loss a second time when the user next records.
+    await sbWrite('client_log', 'POST', [{ src: 'watch', ev: 'record-lost', at: new Date().toISOString(),
+      data: { live: meta.id, verdict, seconds: +seconds.toFixed(1), bytes: audio.length } }]);
+    let words = '', kept = null;
+    if (audio.length) {
+      const raw = path.join(os.tmpdir(), `live-${meta.id}.aac`);
+      const m4a = path.join(os.tmpdir(), `live-${meta.id}.m4a`);
+      try {
+        await fs.promises.writeFile(raw, audio);
+        await new Promise((resolve, reject) => execFile('ffmpeg', ['-v', 'error', '-y', '-f', 'aac', '-i', raw, '-c', 'copy', m4a],
+          (e) => (e ? reject(e) : resolve())));
+        const object = `lost/${meta.id}.m4a`;
+        const put = await fetch(`${SUPABASE_URL}/storage/v1/object/${CLIP_BUCKET}/${object}`, {
+          method: 'POST', headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}`, 'Content-Type': 'audio/mp4' },
+          body: await fs.openAsBlob(m4a, { type: 'audio/mp4' }) });
+        if (put.ok) kept = `${CLIP_BUCKET}/${object}`;
+        else console.error(`[voice-live] ${meta.id} clip not kept: upload -> ${put.status}`);
+        words = (await transcribe(m4a, 'audio/mp4', GROQ_API_KEY, { model: meta.flow === 'locked' ? 'whisper-large-v3' : undefined })).transcript || '';
+      } catch (e) {
+        console.error(`[voice-live] ${meta.id} audio not recovered: ${e.message || e}`);
+      } finally {
+        fs.promises.unlink(raw).catch(() => {});
+        fs.promises.unlink(m4a).catch(() => {});
+      }
+    }
+    const how = verdict === 'lost' ? 'the connection dropped while audio was still arriving, so the app most likely died'
+      : 'the watch closed the stream without saying the recording had ended or been cancelled';
+    ops.report(`watch recording lost after ${seconds.toFixed(1)}s (${meta.view || 'chat'}${meta.flow ? `, ${meta.flow}` : ''}): ${how}; `
+      + (words ? `it had heard: "${words.slice(0, 300)}"` : 'no words recovered'),
+      { machine: 'client', service: 'watch', context: { live: meta.id, verdict, seconds, audio_bytes: audio.length, kept, words,
+        look: 'hub log [voice-live], and client_log where src=watch around now (docs/WATCH.md § The wrist can drop mid-recording)' } });
   }
 
   async function sweepClientLog() {

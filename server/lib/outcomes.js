@@ -7,7 +7,7 @@
 
 // A watch recording ends in exactly one of these. `mic-failed` counts: the microphone never opened, and
 // that failure is already a line of its own.
-const RECORD_ENDS = new Set(['record-stop', 'record-cancel', 'mic-failed']);
+const RECORD_ENDS = new Set(['record-stop', 'record-cancel', 'mic-failed', 'record-lost']);
 const RECORD_EVENTS = ['record-start', 'mic-open', ...RECORD_ENDS];
 
 // `events`: one device's recording events oldest first, each { ev, at }. Answers every record-start

@@ -23,10 +23,8 @@ which returns `ok <7-char sha>` from the `COMMIT` stamped in at deploy time — 
 thing separating "shipped" from "silently didn't". `.github/workflows/` is iOS-only; nothing there
 touches the server. `fly.toml` lives in `server/`, which is also the build context.
 
-`Dockerfile` **enumerates what it copies** — `server.js`, `build.js`, `lib`, `public`, `legal`. A new
-top-level directory under `server/` is not in the image until it is added there, and nothing
-catches that: the build succeeds, `/healthz` reports the right sha, and the files are simply
-absent at request time. Curl the new path after deploying, not just `/healthz`.
+`Dockerfile` copies all of `server/` except what `.dockerignore` lists (dependencies, the generated
+bundle, tests, dev tools, deploy files). Anything that must not ship goes there.
 
 It also **builds the client** (`npm run build`, esbuild) before pruning dev dependencies, because
 `public/dist` is generated and not committed. Nothing has to be rebuilt by hand before deploying, and

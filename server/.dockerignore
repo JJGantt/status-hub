@@ -1,4 +1,12 @@
+# Not shipped: dependencies are installed in the image, the client bundle is built there, and the rest
+# is development-only.
 node_modules
 .env
 .git
 public/dist
+test
+tools
+Dockerfile
+.dockerignore
+deploy.sh
+fly.toml

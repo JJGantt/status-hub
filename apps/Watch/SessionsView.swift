@@ -5,7 +5,7 @@ import SwiftUI
 ///
 /// A row carries the same three marks as the phone's list (`cards/sessions.js`, `phone-home.css`),
 /// because they answer different questions and are read together: the WHITE edge is the focused
-/// session — where a spoken follow-up goes — with a pin beside its name when he pinned it there; the
+/// session — where a spoken follow-up goes — with a pin beside its name when the user pinned it there; the
 /// AMBER edge is a finished reply nobody has opened; the DOT is a session working now.
 /// Under each name is what its machine is doing, live off `/api/session-stream`.
 struct SessionsView: View {
@@ -18,7 +18,7 @@ struct SessionsView: View {
         // does the separating and costs two pixels.
         //
         // A row pushes onto this PAGE's own stack, so the row of pages still swipes with a session open
-        // and the session is still there when he swipes back (`Sessions.path`).
+        // and the session is still there when the user swipes back (`Sessions.path`).
         NavigationStack(path: $sessions.path) {
             list
                 .navigationDestination(for: String.self) { key in SessionView(key: key) }
@@ -124,8 +124,8 @@ struct SessionsView: View {
                     Circle().fill(Color.green).frame(width: 7, height: 7).padding(.top, 4)
                 }
                 Spacer(minLength: 0)
-                // A recording running in THIS session, while he is somewhere else in the app: the one
-                // thing about a session he needs to find again in a hurry.
+                // A recording running in THIS session, while the user is somewhere else in the app: the one
+                // thing about a session the user needs to find again in a hurry.
                 if capture.owner == .session(s.key) {
                     RoundedRectangle(cornerRadius: 2).fill(Color.red).frame(width: 9, height: 9)
                 }
@@ -172,37 +172,37 @@ struct SessionsView: View {
     private static let unreadStep = Color(hex: "#e6c88a")
 }
 
-/// One conversation: the hub's list of its events — his words, the tool calls, what the session says
-/// between them, its replies — drawn in order, plus his words on their way from this watch. Double tap
+/// One conversation: the hub's list of its events — the user's words, the tool calls, what the session says
+/// between them, its replies — drawn in order, plus the user's words on their way from this watch. Double tap
 /// or a tap anywhere on the glass is the one press
 /// (`CommandBorder.press`): it records a follow-up, locked open until the next press sends it; a
-/// parked session is resumed with the words. Scrolling is his finger or
+/// parked session is resumed with the words. Scrolling is the user's finger or
 /// the crown.
 struct SessionView: View {
     let key: String
     @EnvironmentObject private var sessions: Sessions
 
-    /// **Following the newest item.** The page stays on whatever is newest — his words, a tool call, the
-    /// reply — until HE scrolls, by finger or crown, at all; then it is his, and nothing moves it until
-    /// the session is opened again or he scrolls it to the very end himself. Also what holds the landing
+    /// **Following the newest item.** The page stays on whatever is newest — the user's words, a tool call, the
+    /// reply — until THE USER scrolls, by finger or crown, at all; then it is the user's, and nothing moves it until
+    /// the session is opened again or the user scrolls it to the very end themselves. Also what holds the landing
     /// while the turns lay out after a jump, since a single jump lands short of the spot it aimed at.
     @State private var following = true
     /// The very end of the page is on screen.
     @State private var atEnd = false
-    /// He has scrolled since following stopped: only HIS scroll reaching the end hands it back, not the
+    /// The user has scrolled since following stopped: only THE USER'S scroll reaching the end hands it back, not the
     /// page merely being at the end when it stopped.
     @State private var hisScroll = false
-    /// A jump of the page's own is on its way; the move it makes is not his.
+    /// A jump of the page's own is on its way; the move it makes is not the user's.
     @State private var jumping = false
     /// The page has landed once. Before that, the scroll view moves itself as it lays out (it shifts by
-    /// the space under the title as it opens), and none of that is his.
+    /// the space under the title as it opens), and none of that is the user's.
     @State private var landed = false
     /// Every item's height, which decides whether the newest needs room above it (`room`). Kept for all
     /// of them: the newest changes in the same update that lands it, and a height taken only once an item
     /// IS the newest arrives after the landing, or never when its height does not change.
     @State private var heights: [String: CGFloat] = [:]
     /// The item the page is on — `newest`, except while something newer is held: **nothing that arrives
-    /// moves the page while he is looking.** It lands once he stops looking (home's rule too).
+    /// moves the page while the user is looking.** It lands once the user stops looking (home's rule too).
     @State private var spot: String?
     @Environment(\.isLuminanceReduced) private var dimmed
     @Environment(\.scenePhase) private var phase
@@ -232,12 +232,12 @@ struct SessionView: View {
         return out.reversed()
     }
 
-    /// **How many turns are laid out**, counted back by his prompts: `turnStep` on opening, a step more
-    /// each time he scrolls to the very top. The hub keeps up to ten turns and every tool call in them,
+    /// **How many turns are laid out**, counted back by the user's prompts: `turnStep` on opening, a step more
+    /// each time the user scrolls to the very top. The hub keeps up to ten turns and every tool call in them,
     /// which can be hundreds of rows, and laying all of those out is what made swiping onto the page lag.
     @State private var turns = SessionView.turnStep
     private static let turnStep = 3
-    /// The row that was at the top when he scrolled there for more: the scroll goes back onto it once
+    /// The row that was at the top when the user scrolled there for more: the scroll goes back onto it once
     /// the earlier turns have laid out above it.
     @State private var keepAtTop: String?
 
@@ -273,34 +273,34 @@ struct SessionView: View {
                 Hub.log("swipe-close", ["row": key])
                 sessions.path.removeLast()
             })
-            // **The top of the NEWEST ITEM at the top of the screen**: his words the moment they are
-            // transcribed, then each tool call as it comes, then the reply — whichever is last, once he
+            // **The top of the NEWEST ITEM at the top of the screen**: the user's words the moment they are
+            // transcribed, then each tool call as it comes, then the reply — whichever is last, once the user
             // is not looking (`holds`). Never
-            // an older one: the tool calls and his words stay until the reply that replaces them is
+            // an older one: the tool calls and the user's words stay until the reply that replaces them is
             // in hand (`Sessions.sessionFrame`).
             .onChange(of: newest) { _, now in
                 guard following else { return }
                 if holds(now) { Hub.log("land-held", ["row": key, "at": spot ?? "", "next": now ?? ""]); return }
                 toNewest(proxy)
             }
-            // He stopped looking with something held: it lands now, so it is waiting for the next raise.
+            // The user stopped looking with something held: it lands now, so it is waiting for the next raise.
             .onChange(of: looking) { _, now in
                 if !now && following && spot != newest { toNewest(proxy) }
             }
-            // Off screen while following the newest: the earlier turns he asked for go again, so the
+            // Off screen while following the newest: the earlier turns the user asked for go again, so the
             // next swipe back lays out only the default.
             .onChange(of: onScreen) { _, now in
                 if !now && following && turns != Self.turnStep { turns = Self.turnStep }
             }
-            // **Any movement the page did not make is his.** A drag reports a scroll phase; the crown is
+            // **Any movement the page did not make is the user's.** A drag reports a scroll phase; the crown is
             // not relied on to, so a move with no jump of ours behind it and no change in the content's
-            // height (which is the page re-laying out, and can clamp the offset) counts as his scroll
+            // height (which is the page re-laying out, and can clamp the offset) counts as the user's scroll
             // too. The page's own jumps are never animated, so each is exactly one move to account for.
             .onScrollGeometryChange(for: Scroll.self) { Scroll(y: $0.contentOffset.y, h: $0.contentSize.height) } action: { old, new in
                 if new.h != old.h {
                     if following { toSpot(proxy) }
                     // Earlier turns were added above: back onto the row that was at the top, so they
-                    // arrive above him rather than under his finger.
+                    // arrive above the user rather than under the user's finger.
                     else if let a = keepAtTop { keepAtTop = nil; jumping = true; proxy.scrollTo(a, anchor: .top) }
                 } else if jumping {
                     jumping = false
@@ -313,7 +313,7 @@ struct SessionView: View {
                 switch now {
                 case .interacting, .tracking, .decelerating: scrolled("drag")
                 // Let go with the very end on screen after scrolling there: following again, from the
-                // next new item on. Not a jump now: he is already looking at the end.
+                // next new item on. Not a jump now: the user is already looking at the end.
                 case .idle:
                     if hisScroll && atEnd {
                         hisScroll = false
@@ -428,8 +428,8 @@ struct SessionView: View {
         .buttonStyle(.plain)
     }
 
-    /// The scroll id of the newest thing on the page. His newest words take the top, with what the
-    /// session does about them underneath: words of his still on their way, else the last prompt since
+    /// The scroll id of the newest thing on the page. The user's newest words take the top, with what the
+    /// session does about them underneath: words of the user's still on their way, else the last prompt since
     /// the last reply; with none, the last event — the reply when it lands.
     private var newest: String? {
         if let p = placeholders.last { return "ph\(p.msgId)" }
@@ -455,8 +455,8 @@ struct SessionView: View {
         proxy.scrollTo(id, anchor: .top)
     }
 
-    /// **Whether an arrival waits: always, while he is looking.** His words from this watch, a tool call,
-    /// the reply — none of them moves the page with the wrist up; it lands when he stops looking.
+    /// **Whether an arrival waits: always, while the user is looking.** The user's words from this watch, a tool call,
+    /// the reply — none of them moves the page with the wrist up; it lands when the user stops looking.
     private func holds(_ next: String?) -> Bool {
         guard looking, let spot, next != spot else { return false }
         return true
@@ -476,7 +476,7 @@ struct SessionView: View {
         ])
     }
 
-    /// He moved the page: it is his until the session is opened again or he scrolls to the end.
+    /// The user moved the page: it is the user's until the session is opened again or the user scrolls to the end.
     private func scrolled(_ how: String) {
         hisScroll = true
         guard following else { return }
@@ -492,7 +492,7 @@ struct SessionView: View {
         let (shown, more) = window
         return VStack(alignment: .leading, spacing: Landing.itemGap) {
             // **Scrolled to the very top lays out more** (`turns`). Asked of a marker's visibility, not
-            // of offsets, which this scroll view reports unreliably (docs/WATCH.md); only after his own
+            // of offsets, which this scroll view reports unreliably (docs/WATCH.md); only after the user's own
             // scroll, so the page laying out never asks.
             if more {
                 Color.clear.frame(height: 1)
@@ -507,7 +507,7 @@ struct SessionView: View {
                 room("ev\(e.seq)")
                 row(e).id("ev\(e.seq)").onGeometryChange(for: CGFloat.self) { $0.size.height } action: { heights["ev\(e.seq)"] = $0 }
             }
-            // His words on their way from this watch, dimmed until the hub has them.
+            // The user's words on their way from this watch, dimmed until the hub has them.
             ForEach(placeholders, id: \.msgId) { p in
                 room("ph\(p.msgId)")
                 words(p.text).opacity(0.5).id("ph\(p.msgId)")
@@ -534,7 +534,7 @@ struct SessionView: View {
         (heights[id] ?? 0) > WKInterfaceDevice.current().screenBounds.height - Landing.underTitle - PageInset.bottom
     }
 
-    /// One event, in the colours of `Ink`: his words a soft blue (dimmed while queued, not yet read),
+    /// One event, in the colours of `Ink`: the user's words a soft blue (dimmed while queued, not yet read),
     /// a tool call violet and cut to two lines, what the session says between calls grey, its reply
     /// white — the same as home's `ActivityLines` and `ThreadRow`, so who said what reads the same on
     /// every page.
@@ -557,7 +557,7 @@ struct SessionView: View {
         }
     }
 
-    /// His side of the conversation, drawn as the prompt page draws his words.
+    /// The user's side of the conversation, drawn as the prompt page draws the user's words.
     private func words(_ text: String) -> some View {
         Text(inlineMarkdown(text))
             .foregroundColor(Ink.mine)

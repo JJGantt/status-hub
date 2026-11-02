@@ -2,8 +2,8 @@ import AVFoundation
 
 /// **Keeps the app running, wrist down, until the answers are in.** watchOS keeps a watch app running
 /// with the wrist down only while it RECORDS. Recording covers a command until it is sent; after that
-/// nothing did, so with the wrist down the app was frozen while it waited, the answer's tap never came,
-/// and the screen still said it was working when he looked. So while a HOME command is waiting on its
+/// nothing does, so without this the app is frozen wrist-down while it waits, the answer's tap never
+/// comes, and the screen still says it is working. So while a HOME command is waiting on its
 /// answer this holds the microphone and throws away everything it hears, and lets go the moment nothing
 /// is waiting.
 ///
@@ -21,8 +21,8 @@ import AVFoundation
 /// wrist is tapped on time.
 ///
 /// **Home commands, not session follow-ups**: a session can work for many minutes, and holding the
-/// microphone that long costs battery he does not want spent. The hub answers in seconds. The one
-/// exception is **speak mode** (`Sessions.speakMode`), which he turns on precisely so replies are read
+/// microphone that long costs battery for no benefit. The hub answers in seconds. The one
+/// exception is **speak mode** (`Sessions.speakMode`), which exists precisely so replies are read
 /// out wrist-down: while it is on this holds for as long as it is on, with no cut-off.
 ///
 /// `refresh()` is called whenever what is waiting changes, and after anything that hands the audio
@@ -33,7 +33,7 @@ final class StayAwake {
 
     private let engine = AVAudioEngine()
     private var holding = false
-    /// The most it holds for in one go, his number: past this an answer that has not come is not worth
+    /// The most it holds for in one go: past this an answer that has not come is not worth
     /// the battery to wait on awake, and the app goes back to being suspended as usual.
     private static let longest: TimeInterval = 60
     /// Counts each hold, so the cut-off for an earlier one cannot end a later one.

@@ -170,7 +170,7 @@ final class Recorder {
                 let ms = Int(Date().timeIntervalSince(opened) * 1000)
                 DispatchQueue.main.async { Hub.log("mic-live", ["ms": ms, "rate": format.sampleRate]) }
             }
-            // The chirp is not his voice: it is neither kept in the clip nor counted by the endpoint,
+            // The chirp is not the user's voice: it is neither kept in the clip nor counted by the endpoint,
             // where it would read as speech and let the silence after it send an empty command.
             let seconds = Double(buffer.frameLength) / format.sampleRate
             if gate.swallow(seconds) { return }
@@ -463,8 +463,8 @@ private final class CueGate: @unchecked Sendable {
 /// Apple's built-in sound classifier (SoundAnalysis, `.version1`, 303 labels, on the device), asked one
 /// thing: how likely the last half second was to be SPEECH. It is what lets the silence endpoint ignore
 /// a snap, a tap, a door, a zipper or a running tap — loud enough to cross any level line, and none of
-/// them speech. Measured on 25 of his kept watch commands (`docs/WATCH.md` § It ends itself at the
-/// silence): those noises score under 0.3, his talking over 0.5, and his quiet speech that falls under
+/// them speech. Measured on 25 kept watch commands (`docs/WATCH.md` § It ends itself at the
+/// silence): those noises score under 0.3, the user's talking over 0.5, and the user's quiet speech that falls under
 /// the level line still scores as speech.
 ///
 /// Half-second windows, a new one every quarter second. The analysis runs on its own queue, never the

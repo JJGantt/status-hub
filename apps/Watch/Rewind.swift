@@ -73,7 +73,7 @@ final class Rewind: ObservableObject {
     private(set) var current: Grab?
 
     /// Takes what it holds, sends it to the hub to be kept and transcribed with speaker labels, and shows
-    /// the words. With `ask` (the Rewind Ask control) it also starts recording his instructions for it at
+    /// the words. With `ask` (the Rewind Ask control) it also starts recording the user's instructions for it at
     /// once, without waiting for the words.
     func grab(ask: Bool = false) {
         guard let tee else {
@@ -242,7 +242,7 @@ final class RewindTee: @unchecked Sendable {
 }
 
 /// What a grab shows: the words, speaker-labeled, a spinner while they come, a mark if it failed. No
-/// prose of its own. **A tap anywhere records his instructions for the grab**, locked open with the red
+/// prose of its own. **A tap anywhere records the user's instructions for the grab**, locked open with the red
 /// edge until the next tap sends them, as a session follow-up does; sending closes the sheet, and the
 /// command runs on the home thread like any other.
 struct RewindSheet: View {

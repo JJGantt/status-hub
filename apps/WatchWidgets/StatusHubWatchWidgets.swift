@@ -92,7 +92,7 @@ struct RewindAskControl: ControlWidget {
 }
 
 /// A control per page: Control Center, the Smart Stack and an Ultra's Action button can each open the
-/// app where he was going. The Record control is the odd one out — it opens home AND starts recording;
+/// app where the user was going. The Record control is the odd one out — it opens home AND starts recording;
 /// these only travel. One type each, because a `ControlWidget` is built by the system and so cannot
 /// carry stored properties of its own.
 ///
@@ -154,7 +154,7 @@ struct RecordComplication: Widget {
     }
 }
 
-/// Straight into a recording that ends at his silence, where a press SENDS rather than locking it
+/// Straight into a recording that ends at the user's silence, where a press SENDS rather than locking it
 /// (`Capture.Flow.silence`). Invisible, like the standard one.
 struct RecordSilenceComplication: Widget {
     var body: some WidgetConfiguration {
@@ -184,7 +184,7 @@ struct RecordLockedComplication: Widget {
     }
 }
 
-/// The fast path, for a one-sentence command: straight into a recording that sends at his silence or
+/// The fast path, for a one-sentence command: straight into a recording that sends at the user's silence or
 /// at a press, AND sends itself a fixed number of seconds after the microphone opens however it is
 /// going (`Capture.Flow.quick`; the seconds are `watch_quick_s` in the hub's Settings). No lock step.
 struct RecordQuickComplication: Widget {

@@ -26,7 +26,7 @@ import WatchKit
 ///
 /// **The always-on listener stands aside while it speaks** (`Capture.hush`) — otherwise it transcribes
 /// the watch's own voice as a command — and picks the microphone back up when the speaking ends. It is
-/// paused, not switched off. Starting a recording stops the speaking at once: his voice wins.
+/// paused, not switched off. Starting a recording stops the speaking at once: the user's voice wins.
 @MainActor
 final class Speaker: NSObject, ObservableObject {
     static let shared = Speaker()
@@ -270,7 +270,7 @@ final class Speaker: NSObject, ObservableObject {
         if played == buffers.count { finished("done") }
     }
 
-    /// Stops mid-sentence: a recording is starting, and his voice comes first.
+    /// Stops mid-sentence: a recording is starting, and the user's voice comes first.
     func stop() {
         guard speaking else { return }
         halt()

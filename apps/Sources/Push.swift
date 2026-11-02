@@ -25,8 +25,8 @@ final class PushManager {
         #else
         let env = "production"
         #endif
-        // The phone's IANA zone travels with Jared, so the hub uses it as "where he is" — a reminder
-        // set for 4pm should fire at 4pm wherever he actually is, not 4pm Eastern. Re-sent on every
+        // The phone's IANA zone travels with the user, so the hub uses it as "where the user is" — a reminder
+        // set for 4pm should fire at 4pm wherever the user actually is, not 4pm Eastern. Re-sent on every
         // launch, so crossing a timezone corrects itself the next time the app opens.
         let tz = TimeZone.current.identifier
         let js = """

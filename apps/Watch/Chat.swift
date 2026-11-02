@@ -19,7 +19,7 @@ final class Chat: ObservableObject {
     /// hub sends forty rows; laying all of them out is what made swiping onto the page lag, and a wrist
     /// rarely reads past the last few exchanges.
     var recent: [Message] { held + thread.suffix(window) }
-    /// **How many rows home lays out**: `windowStep` (five exchanges) at rest, a step more each time he
+    /// **How many rows home lays out**: `windowStep` (five exchanges) at rest, a step more each time the user
     /// scrolls to the top (`showMore`), back to one step whenever the page lands on the newest again or
     /// leaves the screen. Never past what the hub sent.
     @Published private(set) var window = Chat.windowStep
@@ -43,7 +43,7 @@ final class Chat: ObservableObject {
     }
     /// Unread answers older than the window, each after the words that asked for it: the hub sends every
     /// unread answer however old. Kept until the page leaves the screen even once read, so an answer
-    /// does not vanish from under him the moment it counts as read.
+    /// does not vanish from under the user the moment it counts as read.
     @Published private(set) var held: [Message] = []
     /// Answers flagged worth reading that no surface has shown yet, oldest first (docs/WATCH.md, "Unread
     /// answers").
@@ -59,8 +59,8 @@ final class Chat: ObservableObject {
     var looking = false
     /// Home is the page showing and the app is not in the background, wrist up or down
     /// (`HomeView.attend`). An answer's notification arriving now is not shown: the answer is in front
-    /// of him, or is what the next raise shows. Not `looking`: the scene drops to `inactive` in the
-    /// same second an answer lands while he is still reading, so a wrist-up test, even with a grace
+    /// of the user, or is what the next raise shows. Not `looking`: the scene drops to `inactive` in the
+    /// same second an answer lands while the user is still reading, so a wrist-up test, even with a grace
     /// window, misses exactly the case it exists for.
     var homeOpen = false
     /// Read on this watch, kept so the mark goes the moment it is read rather than at the next reload.
@@ -192,7 +192,7 @@ final class Chat: ObservableObject {
     #if targetEnvironment(simulator)
     private var demoStarted = false
     /// `-threaddemo` at launch: a made-up thread, then one command walked through it the way the hub
-    /// delivers a real one (his words pending, tool calls, the reply loaded, the pending words dropped),
+    /// delivers a real one (the user's words pending, tool calls, the reply loaded, the pending words dropped),
     /// so where each step lands can be watched in a simulator with no hub token.
     private func demo() {
         guard !demoStarted else { return }
@@ -225,15 +225,15 @@ final class Chat: ObservableObject {
         }
         Hub.log("record-start", ["view": "chat", "running": commands.count, "flow": flow.rawValue])
         failure = nil
-        // A command ends itself at the silence after he speaks, or at the next press. A session's follow-up records the same way (Sessions.startRecording).
+        // A command ends itself at the silence after the user speaks, or at the next press. A session's follow-up records the same way (Sessions.startRecording).
         capture.start(for: .hub, flow: flow, onSilence: { [weak self] in self?.stopRecording() }) { [weak self] error in
             self?.failure = (error as? Recorder.Failure) == .denied ? .micDenied : .message(error.localizedDescription)
         }
     }
 
-    /// Records his instructions for the rewind grab on screen: locked like a session follow-up (red, only
+    /// Records the user's instructions for the rewind grab on screen: locked like a session follow-up (red, only
     /// a press ends it), and sent as a command carrying the grab, which the hub hands the orchestrator
-    /// together with his words (docs/REWIND.md).
+    /// together with the user's words (docs/REWIND.md).
     func startInstructions(for grab: Grab?) {
         guard let grab else {
             Hub.log("record-refused", ["view": "rewind", "why": "no-grab"])
@@ -325,7 +325,7 @@ final class Chat: ObservableObject {
         }
     }
 
-    /// Home lands on this answer instead of the newest row, until the next command he speaks.
+    /// Home lands on this answer instead of the newest row, until the next command the user speaks.
     func land(on id: String) {
         landOn = id
         landings += 1

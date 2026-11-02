@@ -19,10 +19,10 @@ final class Capture: ObservableObject {
     }
 
     /// How a recording ends, chosen by whatever started it. A press always sends. `standard` (the app's
-    /// own) also sends itself at his silence; `silence` is the same, kept so the `Hub Silence`
+    /// own) also sends itself at the user's silence; `silence` is the same, kept so the `Hub Silence`
     /// complication's URL still opens. `locked` — every session follow-up, and the `Hub Locked`
     /// complication — ignores the silence, so only a press ends it. `quick` is `standard` with a hard cap: it also sends
-    /// itself `quickCap` seconds after the microphone opens, whatever he is doing — for one-sentence
+    /// itself `quickCap` seconds after the microphone opens, whatever the user is doing — for one-sentence
     /// commands.
     enum Flow: String { case standard, silence, locked, quick }
 
@@ -53,7 +53,7 @@ final class Capture: ObservableObject {
     /// not wait on the hub. Unset, 3 — the
     /// same as every other capture source; at 2 an ordinary pause mid-sentence ended the command.
     private static var hang: TimeInterval = 3
-    /// The lowest level that counts as his voice whatever the room's floor: `watch_speech_min` in the
+    /// The lowest level that counts as the user's voice whatever the room's floor: `watch_speech_min` in the
     /// hub's settings, read with `hang`. Unset, 0.02. Tuned from the `mic-end` log and kept clips, not a
     /// guess: in a quiet room the 2.5x-floor line falls below this, so this IS the line, and a voice that
     /// dips under it mid-sentence counts as silence.
@@ -77,8 +77,8 @@ final class Capture: ObservableObject {
     private static let unspoken: TimeInterval = 15
 
     /// How long the always-on listener lets one stretch of unbroken sound run before it starts a fresh
-    /// file. The listener only: **a command or a follow-up has no length limit**, and ends at his
-    /// silence or his press however long he talks.
+    /// file. The listener only: **a command or a follow-up has no length limit**, and ends at the user's
+    /// silence or the user's press however long the user talks.
     private static let longest: TimeInterval = 60
 
     private let recorder = Recorder()
@@ -98,8 +98,8 @@ final class Capture: ObservableObject {
     /// Where in the clip the last resume picked up. The caps on a recording (`unspoken`, `quickCap`) count
     /// from here, so a resumed command gets its full allowance again.
     private var resumedAt: TimeInterval = 0
-    /// The endpoint had heard him before the pause. The endpoint itself starts over at a resume, so the
-    /// silence only ends the command once he has spoken again.
+    /// The endpoint had heard the user before the pause. The endpoint itself starts over at a resume, so the
+    /// silence only ends the command once the user has spoken again.
     private var spokeBefore = false
     /// When the listener's current utterance first crossed the threshold, and how much audio its
     /// segment holds.
@@ -107,7 +107,7 @@ final class Capture: ObservableObject {
     private var segment: TimeInterval = 0
     /// What started the recording being opened — a press, a tap on the page, or a launcher (the
     /// complication, the Record control, the Smart Stack). In the hub log beside `mic-open`, because a
-    /// recording nobody meant to start is otherwise indistinguishable from one he asked for.
+    /// recording nobody meant to start is otherwise indistinguishable from one the user asked for.
     static var trigger = "press"
 
     /// Held while listening is engaged, for a microphone failure on a later re-engage.
@@ -117,17 +117,17 @@ final class Capture: ObservableObject {
     /// arriving, not a timer, so a line only appears while the microphone is genuinely still feeding.
     private var listenSince: Date?
     private var rolls = 0
-    /// The classifier's latest verdict on whether he is talking, 0…1.
+    /// The classifier's latest verdict on whether the user is talking, 0…1.
     private var voice: Float = 0
     /// A locked recording's stretches of no speech so far (`Recorder.Clip.quiet`), and when the one under
-    /// way began; nil while he is talking.
+    /// way began; nil while the user is talking.
     private var quiet: [[TimeInterval]] = []
     private var quietSince: TimeInterval? = 0
     /// The shortest stretch of no speech worth sending. The hub shortens only those over 6s, so this
     /// leaves it room to be tuned without a watch build.
     static let quietMin: TimeInterval = 4
     /// A command or a follow-up still recording taps the wrist once every this many seconds of audio
-    /// (`.directionDown`, a falling double tap — he did not notice `.click`), so one left running, locked or held open by a noisy room, is
+    /// (`.directionDown`, a falling double tap — `.click` is too subtle to notice), so one left running, locked or held open by a noisy room, is
     /// noticed. Counted in the microphone's own seconds, so it rides the buffers already arriving rather
     /// than a timer of its own.
     private static let nudge: TimeInterval = 60
@@ -143,12 +143,12 @@ final class Capture: ObservableObject {
     /// always a stop. Every other listener (Mac, ESP) goes deaf while it records, as it does for the
     /// phone's microphone, so one sentence cannot arrive twice.
     ///
-    /// With `onSilence`, the recording ends itself once he has spoken and then stopped for the trailing
+    /// With `onSilence`, the recording ends itself once the user has spoken and then stopped for the trailing
     /// silence, and calls it, unless the flow is `locked`. Without, only a press ends it. The system
     /// taking the microphone ends neither: it pauses the recording (`interrupted`).
     func start(for owner: Owner, flow: Flow = .standard, onSilence: (() -> Void)? = nil,
                onFailure: @escaping @MainActor (Error) -> Void) {
-        Speaker.shared.stop()   // his voice comes first: a recording ends any reply being read out
+        Speaker.shared.stop()   // the user's voice comes first: a recording ends any reply being read out
         LiveListen.shared.stop()   // …and the live mic, which holds the microphone too
         begin(owner, flow: flow, onSilence: onSilence, onFailure: onFailure) { [weak self] in
             self?.setMuted(true)
@@ -236,7 +236,7 @@ final class Capture: ObservableObject {
         if arming { arming = false; resumeSoon(); return nil }
         var clip = recorder.stop()
         if wasLocked {
-            markQuiet(true, at: segment)   // a stretch still running when he pressed counts too
+            markQuiet(true, at: segment)   // a stretch still running when the user pressed counts too
             clip?.locked = true
             clip?.quiet = quiet
         }
@@ -340,14 +340,14 @@ final class Capture: ObservableObject {
 
     /// A timer or alarm going off, Siri, a call or another app recording takes the microphone away
     /// mid-recording, and nothing can refuse it. A command or a follow-up is PAUSED rather than sent or
-    /// thrown away: the clip stays open and unsent, and when the microphone comes back (`resumeDraft`) he
+    /// thrown away: the clip stays open and unsent, and when the microphone comes back (`resumeDraft`) the user
     /// carries on into the same clip, so what reaches the hub is one whole command. A listener utterance
     /// that had begun goes up and the rest of the segment is dropped; when the microphone comes back,
     /// listening picks it up again — without this, always-on listening ended silently at the first Siri
     /// and the glyph went on claiming it was listening.
     ///
     /// Both edges are logged with the system's reason and the endpoint's state at that instant: `quiet`
-    /// near 0 with `voice` high is a recording cut while he was mid-word, which is otherwise
+    /// near 0 with `voice` high is a recording cut while the user was mid-word, which is otherwise
     /// indistinguishable from the silence ending it early.
     private func interrupted(_ began: Bool, _ fields: [String: Any] = [:]) {
         var line = fields
@@ -390,7 +390,7 @@ final class Capture: ObservableObject {
     }
 
     /// Carries a paused recording on into the same clip, with the chirp that says to talk. `how` is what
-    /// asked: the interruption ending, the app coming back to the front, or his press. A refusal leaves
+    /// asked: the interruption ending, the app coming back to the front, or the user's press. A refusal leaves
     /// it paused, and the next of those tries again.
     func resumeDraft(how: String) {
         guard paused, owner != nil, !opening else { return }
@@ -448,7 +448,7 @@ final class Capture: ObservableObject {
                 }
             } else if spokeBefore {
                 // Resumed after an interruption and nothing said since: the words before the pause are
-                // still his to finish, so it pauses again rather than throwing them away.
+                // still the user's to finish, so it pauses again rather than throwing them away.
                 logEnd("unspoken")
                 pause()
             } else {
@@ -474,7 +474,7 @@ final class Capture: ObservableObject {
         }
     }
 
-    /// Keeps the locked recording's map of where he was not talking, one buffer at a time.
+    /// Keeps the locked recording's map of where the user was not talking, one buffer at a time.
     private func markQuiet(_ speaking: Bool, at second: TimeInterval) {
         if speaking {
             if let since = quietSince, second - since >= Self.quietMin { quiet.append([since, second]) }
@@ -582,9 +582,9 @@ final class Capture: ObservableObject {
 /// on a recording nobody speaks into.
 struct Endpointer {
     /// Speech has to last this long, unbroken by `hang` of quiet, before an utterance has begun. **One
-    /// buffer over the line is not speech**: a recording nobody spoke into ran 88 seconds on his watch,
-    /// ended on a peak of 0.021 against a 0.02 line, and went up as "Thank you. Thank you." — which is
-    /// what Whisper writes for silence, and the worker then ran it.
+    /// buffer over the line is not speech**: otherwise a recording nobody spoke into can end on a peak
+    /// of 0.021 against a 0.02 line and go up as "Thank you. Thank you." — which is what Whisper
+    /// writes for silence, and the worker then runs it.
     static let minSpeech: TimeInterval = 0.4
 
     var hang: TimeInterval

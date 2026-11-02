@@ -1,4 +1,4 @@
-# Build an Ad Hoc .ipa — a build that installs on Jared's own registered devices, with no TestFlight.
+# Build an Ad Hoc .ipa — a build that installs on the account's registered devices, with no TestFlight.
 #
 # Same rented Mac and same signing as ios-testflight.yml; the only real differences are the export
 # method and that nothing is uploaded to Apple. The .ipa comes back as an artifact, and something

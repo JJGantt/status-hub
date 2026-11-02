@@ -24,7 +24,7 @@ struct SessionRow: Decodable, Identifiable, Equatable {
     /// A session running on Codex rather than Claude, drawn blue the way an incident is drawn red. The
     /// hub decides it (`agent`), and never sets both.
     let codex: Bool?
-    /// The number he says out loud, which is also the row's position: most recently active first,
+    /// The number the user says out loud, which is also the row's position: most recently active first,
     /// running and parked together.
     let n: Int?
     /// When it last did something — its last prompt or reply, the instant the list is ordered by.
@@ -49,7 +49,7 @@ struct SessionRow: Decodable, Identifiable, Equatable {
 }
 
 /// Work sent to a machine with no room for it yet (`desk_queue`): the Pi holds a new session until a
-/// slot and enough memory are free. Nothing to open until it launches, but it is the work he just
+/// slot and enough memory are free. Nothing to open until it launches, but it is the work the user just
 /// asked for, so the list shows it.
 struct QueuedRow: Decodable, Identifiable, Equatable {
     let id: String
@@ -60,7 +60,7 @@ struct QueuedRow: Decodable, Identifiable, Equatable {
     var name: String { sessionName(label, repo) ?? "Session" }
 }
 
-/// **One event of a conversation's list**, as the hub keeps it (server.js, the event log): his words
+/// **One event of a conversation's list**, as the hub keeps it (server.js, the event log): the user's words
 /// (`prompt`), a tool call, what the session says between tool calls (`text`), or its reply. `seq` is
 /// its position in the conversation, given by the hub; `id` its identity. A prompt queued behind a
 /// running turn and later read by the model is one event at two moments, same id, the second marked
@@ -83,14 +83,14 @@ struct ConversationLog: Equatable {
     var last: Int { events.last?.seq ?? 0 }
 }
 
-/// His words sent from this watch that the hub does not have yet: shown the instant they are
+/// The user's words sent from this watch that the hub does not have yet: shown the instant they are
 /// transcribed, and replaced by the event that carries the same id back (`cmd`).
 struct Placeholder: Equatable {
     let msgId: String
     let text: String
 }
 
-/// The name a session goes by everywhere: the one Jared gave it, else the router's label, else its repo.
+/// The name a session goes by everywhere: the one the user gave it, else the router's label, else its repo.
 private func sessionName(_ names: String?...) -> String? {
     names.compactMap { $0 }.first { !$0.isEmpty }
 }
@@ -112,13 +112,13 @@ final class Sessions: ObservableObject {
     }
 
     /// The sessions page's navigation: empty is the list, one key is that conversation open. It is the
-    /// sessions PAGE's, not the app's: an open session stays open while he swipes to another page and
+    /// sessions PAGE's, not the app's: an open session stays open while the user swipes to another page and
     /// back.
     @Published var path: [String] = []
     /// The sessions page is the one on screen (`RootView.follow`).
     @Published var onPage = false
 
-    /// **Where a command goes**: the session a recording belongs to while it runs, wherever he has
+    /// **Where a command goes**: the session a recording belongs to while it runs, wherever the user has
     /// swiped since, so the press that ends it ends it; otherwise the session open on the sessions page
     /// while that page is showing. Nil is the hub. A session left open on the sessions page does not
     /// take the commands made on home.
@@ -145,7 +145,7 @@ final class Sessions: ObservableObject {
     @Published private(set) var list: [SessionRow] = []
     /// Sessions waiting for a machine to have room, oldest first.
     @Published private(set) var queued: [QueuedRow] = []
-    /// The focused session — where a spoken follow-up goes — and whether he pinned it there.
+    /// The focused session — where a spoken follow-up goes — and whether the user pinned it there.
     @Published private(set) var focus: String?
     @Published private(set) var pinned = false
     /// Each OPENED conversation's list. A conversation nobody has opened is not fetched: its frames
@@ -153,7 +153,7 @@ final class Sessions: ObservableObject {
     @Published private(set) var logs: [String: ConversationLog] = [:]
     /// The newest event of every conversation the stream has mentioned, for the list's live line.
     @Published private(set) var latest: [String: SessionEvent] = [:]
-    /// His words on their way from this watch, per conversation.
+    /// The user's words on their way from this watch, per conversation.
     @Published private(set) var placeholders: [String: [Placeholder]] = [:]
     /// Conversations with a clip being transcribed or words being handed over right now.
     @Published private(set) var busy: Set<String> = []
@@ -168,7 +168,7 @@ final class Sessions: ObservableObject {
     /// Follow-ups this watch sent, by conversation, whose reply has not come — their message ids. The
     /// edge sweeps while any is here. Answered when a reply lands after every one of them has been
     /// read (`settle`): a reply to an EARLIER command, or one that came before the words went in, is
-    /// not the answer he is waiting on.
+    /// not the answer the user is waiting on.
     @Published private(set) var awaiting: [String: Set<String>] = [:]
     /// When each awaited follow-up was handed over, so one the list no longer reaches can be let go.
     private var sentAt: [String: Date] = [:]
@@ -209,7 +209,7 @@ final class Sessions: ObservableObject {
     }
 
     /// Reads a newly landed reply aloud, once, when the mode is on and the reply belongs to the session
-    /// open here or to one this watch sent a follow-up to. A recording in progress wins: he is talking.
+    /// open here or to one this watch sent a follow-up to. A recording in progress wins: the user is talking.
     private func speakIfNew(_ key: String, _ reply: SessionEvent) {
         guard speakMode, reply.kind == "reply", reply.seq > (spokenSeq[key] ?? 0) else { return }
         guard key == path.last || awaiting[key] != nil else { return }
@@ -357,7 +357,7 @@ final class Sessions: ObservableObject {
         settle(key)
     }
 
-    /// The wait ends when a reply lands after every follow-up he is waiting on has been read.
+    /// The wait ends when a reply lands after every follow-up the user is waiting on has been read.
     private func settle(_ key: String) {
         guard var waiting = awaiting[key], !waiting.isEmpty, let events = logs[key]?.events else { return }
         let gone = waiting.filter { id in
@@ -379,7 +379,7 @@ final class Sessions: ObservableObject {
         awaiting[key] = nil
         Hub.log("answered", ["row": row(for: key)?.id ?? key])
         // The wrist is told when a follow-up the WATCH sent is answered. Only these: a session answering
-        // something typed on the Mac is not something he asked the watch about.
+        // something typed on the Mac is not something the user asked the watch about.
         WKInterfaceDevice.current().play(.notification)
     }
 
@@ -392,7 +392,7 @@ final class Sessions: ObservableObject {
         }
         failures[key] = nil
         Hub.log("record-start", ["view": "session", "row": row(for: key)?.id ?? ""])
-        // Locked open: a follow-up is sent by his next press, never by a pause.
+        // Locked open: a follow-up is sent by the user's next press, never by a pause.
         capture.start(for: .session(key), flow: .locked, onSilence: { [weak self] in self?.stopRecording(key) }) { [weak self] error in
             Hub.log("record-failed", ["error": String(describing: error).prefix(120).description])
             self?.failures[key] = (error as? Recorder.Failure) == .denied ? .micDenied : .message(error.localizedDescription)
@@ -452,7 +452,7 @@ final class Sessions: ObservableObject {
                     item.clip = nil
                     update(key, item)
                     Hub.log("heard", ["view": "session", "words": text.count])
-                    // His words on screen the instant they are transcribed, before the hub has them.
+                    // The user's words on screen the instant they are transcribed, before the hub has them.
                     placeholders[key, default: []].append(Placeholder(msgId: msgId, text: text))
                 }
                 let words = item.words ?? ""
@@ -516,7 +516,7 @@ final class Sessions: ObservableObject {
         if f.ev.kind == "reply" {
             // The list's `say` and `unread` follow the row, which the host writes on its own path.
             await load()
-            // A reply landing on the session he is looking at is read as it lands.
+            // A reply landing on the session the user is looking at is read as it lands.
             if onPage && path.last == key { markSeen(key) }
         }
     }

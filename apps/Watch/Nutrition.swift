@@ -69,7 +69,7 @@ struct RingNow {
 final class Nutrition: ObservableObject {
     @Published private(set) var feed: RingsFeed?
     @Published private(set) var day: NutritionDay?
-    /// The calendar and the plot behind the rings, loaded when he first turns to them.
+    /// The calendar and the plot behind the rings, loaded when the user first turns to them.
     @Published private(set) var history: NutHistory?
     /// Every week back to the first meal or set logged, for the history view.
     @Published private(set) var fullHistory: NutHistory?

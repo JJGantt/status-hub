@@ -74,7 +74,7 @@ final class WatchAppDelegate: NSObject, WKApplicationDelegate, UNUserNotificatio
     // Shown even while the app is open, as on the phone.
     func userNotificationCenter(_ center: UNUserNotificationCenter, willPresent notification: UNNotification,
                                 withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void) {
-        // An answer landing while home is the page open is already in front of him, or is what the next
+        // An answer landing while home is the page open is already in front of the user, or is what the next
         // raise shows: no buzz, wrist up or down (`Chat.homeOpen`). On any other page it is shown, and
         // once the watch is back on the clock the app is in the background, this is not asked, and the
         // system shows it.
@@ -154,8 +154,8 @@ struct RootView: View {
     @State private var page = Page.home
     /// Black over everything from the moment the app leaves the screen until a launch has turned to its
     /// page. watchOS opens a backgrounded app by zooming in from its LAST picture of it, and a
-    /// complication's URL only arrives once it is active: unveiled, a launcher shows the page he left
-    /// and then visibly moves to the one he asked for.
+    /// complication's URL only arrives once it is active: unveiled, a launcher shows the page the user left
+    /// and then visibly moves to the one the user asked for.
     @State private var veiled = false
     /// The other pages have been loaded behind the first since the app last came to the front.
     @State private var warmed = false
@@ -164,7 +164,7 @@ struct RootView: View {
 
     var body: some View {
         // **A session opens INSIDE the sessions page** (its own NavigationStack, in SessionsView), so the
-        // row of pages still swipes with one open, and it is still open when he swipes back. The page
+        // row of pages still swipes with one open, and it is still open when the user swipes back. The page
         // row takes the sideways swipe, so the system's swipe back never fires: the session's name closes
         // it, and so does a rightward drag on the session itself (`SessionView`).
         TabView(selection: $page) {
@@ -222,7 +222,7 @@ struct RootView: View {
         .onChange(of: chat.landings) { _, _ in jump(to: .home) }
         // A control that names a page (Control Center, the Action button, the Smart Stack, the Day and
         // Sessions complications) turns to it. Sessions always lands on the LIST, closing any session
-        // left open there; the other pages leave it open for when he swipes back.
+        // left open there; the other pages leave it open for when the user swipes back.
         .onChange(of: router.asked, initial: true) { _, asked in
             guard let asked else { return }
             if asked == .sessions { sessions.path = [] }
@@ -284,7 +284,7 @@ struct RootView: View {
     /// **The page on screen loads first, then every other page loads behind it**, so a swipe lands on
     /// data already there. Only the page on screen holds its stream open; the others are a one-shot
     /// fetch each time the app comes to the front, and the stream's own reload catches them up when
-    /// he swipes to them.
+    /// the user swipes to them.
     private func follow() {
         let live = phase == .active
         sessions.onPage = page == .sessions

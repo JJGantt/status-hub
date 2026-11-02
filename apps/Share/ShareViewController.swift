@@ -3,7 +3,7 @@ import Social
 import ImageIO
 import UniformTypeIdentifiers
 
-// "Status Hub" in the iPhone share sheet: images (a screenshot, usually) plus whatever he types go into
+// "Status Hub" in the iPhone share sheet: images (a screenshot, usually) plus whatever the user types go into
 // the hub conversation, the same request the chat composer makes — each image to /api/attach, then one
 // /api/voice-text carrying their object names. `shared: true` stamps the request source 'share', which
 // is what gives the worker a look-at-this framing instead of the meal-logging one.

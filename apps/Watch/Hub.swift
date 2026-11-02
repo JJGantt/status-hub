@@ -110,7 +110,7 @@ struct Message: Decodable, Identifiable, Equatable {
     let request_id: String?
     /// Set on a session's reply relayed into the thread (voice-pipeline orchestrator/src/relay.js).
     let session_id: String?
-    /// A reply he asked to know something from, flagged by the model (voice-pipeline docs/ROUTING.md).
+    /// A reply the user asked to know something from, flagged by the model (voice-pipeline docs/ROUTING.md).
     var needs_read: Bool? = nil
     /// When some surface showed it; an answer flagged and not yet read is in the unread queue.
     var read_at: String? = nil
@@ -306,7 +306,7 @@ enum Hub {
         let iso = ISO8601DateFormatter()
         iso.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
         // The recording window rides every clip. `capture_start` is what the worker hands the data
-        // layer as "now", so a set he logs by voice lands when he started talking rather than when
+        // layer as "now", so a set the user logs by voice lands when the user started talking rather than when
         // the model got round to calling the tool; and it is what the worker collapses two mics
         // hearing the same sentence on.
         let window = listener ?? (start: clip.start, end: clip.start.addingTimeInterval(clip.duration))
@@ -314,8 +314,8 @@ enum Hub {
         if listener != nil {
             query += "&source=watch&quick=1"
         } else {
-            // A command he pressed for. Named so the worker pushes its reply: the app is suspended the
-            // moment the wrist drops, and the push is the only thing that reaches him then. Not
+            // A command the user pressed for. Named so the worker pushes its reply: the app is suspended the
+            // moment the wrist drops, and the push is the only thing that reaches the user then. Not
             // `watch`, which is the always-on listener and has its voice checked.
             query += "&source=watch-cmd"
         }
@@ -327,7 +327,7 @@ enum Hub {
                 query += "&quiet=" + clip.quiet.prefix(200).map { String(format: "%.1f-%.1f", $0[0], $0[1]) }.joined(separator: ",")
             }
         }
-        // Where he is, for "near me" and a pickup point; a dictation (dry) goes nowhere yet.
+        // Where the user is, for "near me" and a pickup point; a dictation (dry) goes nowhere yet.
         if !dry, let l = await Here.shared.fix() {
             query += String(format: "&lat=%.5f&lon=%.5f&acc=%.0f",
                             l.coordinate.latitude, l.coordinate.longitude, l.horizontalAccuracy)
@@ -438,7 +438,7 @@ enum Hub {
         }
     }
 
-    /// Types his words into a running session. A resend with the same `msgId` returns the first send's
+    /// Types the user's words into a running session. A resend with the same `msgId` returns the first send's
     /// command instead of typing the words twice.
     /// True when the hub took nothing: a thank-you-shaped transcription it never types into a session.
     /// `spoken` asks the session to answer for the ear (speak mode); the hub adds the instruction.
@@ -587,7 +587,7 @@ enum Hub {
     }
 
     /// The simulator runs the real app against the live hub, so a test tap that records and stops would
-    /// otherwise land in his conversation as a command, or be typed into a session. Compiled out of
+    /// otherwise land in the user's conversation as a command, or be typed into a session. Compiled out of
     /// device builds.
     private static func blockInSimulator(_ what: String) throws {
         #if targetEnvironment(simulator)

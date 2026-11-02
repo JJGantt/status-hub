@@ -21,9 +21,9 @@ func snippet(_ s: String) -> AttributedString {
 
 /// One step of a running turn, as the machine running it reports it: a tool call, or what the model
 /// said between two of them (`thought`).
-/// **Who said it, by colour**, the same on every page: his words a soft blue, the model's tool calls a
+/// **Who said it, by colour**, the same on every page: the user's words a soft blue, the model's tool calls a
 /// soft violet, what it says between them grey, and its final reply white (the brightest, since it is
-/// what he reads). Relayed session replies keep their mint on home; amber stays the colour of
+/// what the user reads). Relayed session replies keep their mint on home; amber stays the colour of
 /// recording and of unread, so neither of those is used here.
 enum Ink {
     static let mine = Color(hex: "#8ab4e8")
@@ -38,7 +38,7 @@ struct ActivityLine: Equatable {
 }
 
 /// A running turn's steps, oldest first. A tool call is one grey line; a thought is read in full; words
-/// said INTO the session — his prompt, as the session took it in — are drawn as his words, in full.
+/// said INTO the session — the user's prompt, as the session took it in — are drawn as the user's words, in full.
 struct ActivityLines: View {
     let lines: [ActivityLine]
     /// A line to open extra room above (the newest item, when it is one of these lines), and how much.
@@ -183,7 +183,7 @@ struct CommandBorder: View {
     }
 
     /// **The one press.** Double tap and a tap on the conversation both come here: a press starts a
-    /// recording and the next press sends it. On home it is amber and also sends itself at his silence;
+    /// recording and the next press sends it. On home it is amber and also sends itself at the user's silence;
     /// in a session it is locked (red, `Capture.Flow.locked`) and only the press sends it, as is a
     /// recording from the `Hub Locked` complication. There is no lock step.
     static func press(chat: Chat, sessions: Sessions, how: String) {
@@ -200,7 +200,7 @@ struct CommandBorder: View {
                                "flow": capture.flow.rawValue, "how": how])
         Capture.trigger = how
         // Paused by an interruption: the press carries on into the same clip. It never sends the half
-        // he said before the timer went off; press again, or let the silence, once he has finished.
+        // the user said before the timer went off; press again, or let the silence, once the user has finished.
         if recording && capture.paused { return capture.resumeDraft(how: "press") }
         if !recording {
             if let target { sessions.startRecording(target) } else { chat.startRecording() }
@@ -350,7 +350,7 @@ extension EnvironmentValues {
     @Entry var onScreen: Bool = true
 }
 
-/// The session page's scroller. Scrolling is his finger or the crown; nothing moves the page on its
+/// The session page's scroller. Scrolling is the user's finger or the crown; nothing moves the page on its
 /// own. It holds the content and nothing under it: a block near the end that cannot reach the top of
 /// the screen stops where the content ends, as any list does.
 struct PagedScroll<Content: View>: View {

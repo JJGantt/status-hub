@@ -1,7 +1,7 @@
 # Build the iOS app and upload it to TestFlight, from a borrowed Mac.
 #
 # This is the only part of the stack that genuinely cannot run on the Pi — Xcode is macOS-only — so
-# GitHub rents a real Mac for it. Nothing about it needs Jared's laptop.
+# GitHub rents a real Mac for it. Nothing about it needs the Mac.
 #
 # TRIGGERED DELIBERATELY, never on push. macOS runners bill at a 10x multiplier, which puts a free
 # allowance at roughly 16-25 builds a month; auto-building every merge would spend that in days on

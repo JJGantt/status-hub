@@ -124,7 +124,7 @@ struct RewindIntent: OpenIntent {
     }
 }
 
-/// The one-step rewind: grabs, and starts recording his instructions for the grab at once — the same as
+/// The one-step rewind: grabs, and starts recording the user's instructions for the grab at once — the same as
 /// a Rewind followed by a tap on its words.
 struct RewindAskIntent: OpenIntent {
     static var title: LocalizedStringResource = "Rewind Ask"
@@ -146,7 +146,7 @@ struct RewindAskIntent: OpenIntent {
 
 /// Which page of the app a control opens. `record` is the microphone's: it lands on home and starts
 /// recording. The rest are places — a control per page, so Control Center (and the Action button, and
-/// the Smart Stack) can put him where he was going rather than in the app to then swipe.
+/// the Smart Stack) can put the user where the user was going rather than in the app to then swipe.
 enum WatchPage: String, AppEnum {
     case sessions, nutrition, workout, day
 

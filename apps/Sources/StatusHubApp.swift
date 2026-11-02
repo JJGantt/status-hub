@@ -498,7 +498,7 @@ struct HubWebView {
                 DispatchQueue.main.async { AlarmAudio.hold(on) }
             case "openURL":
                 // A link in a reply, handed over by the page (`shared.js`) rather than left to
-                // `target=_blank` and `createWebViewWith` below, which his taps never reached.
+                // `target=_blank` and `createWebViewWith` below, which the user's taps never reached.
                 guard let str = message.body as? String, let url = URL(string: str),
                       ["http", "https"].contains(url.scheme?.lowercased() ?? "") else { return }
                 DispatchQueue.main.async { UIApplication.shared.open(url) }

@@ -4,7 +4,7 @@
 //
 // Why this exists: an Ad Hoc build only installs on iPhones whose UDID was registered with Apple
 // BEFORE the build was signed, because the UDID list is baked into the provisioning profile inside
-// the .ipa. So "is his phone registered?" has to be answerable before spending a macOS runner on an
+// the .ipa. So "is this phone registered?" has to be answerable before spending a macOS runner on an
 // archive, and registering has to be doable without a Mac or a browser login. Both are plain REST
 // calls; the only fiddly part is the auth, which is a short-lived ES256 JWT rather than a token.
 //

@@ -13,7 +13,7 @@ import WatchKit
 /// app that only plays is frozen the instant the wrist drops, one that records is kept running. What
 /// the microphone hears is thrown away.
 ///
-/// **The buffer adapts** (`levels`). It starts at a quarter second, Jared's number, as close to live as a
+/// **The buffer adapts** (`levels`). It starts at a quarter second, chosen to be as close to live as a
 /// cellular link allows. Each time it runs dry it rebuilds to the next level (half a second, then one),
 /// so one bad patch costs one gap and the cushion covers the next. After a minute with no gap it steps
 /// back down a level. Whenever more is queued than the level calls for (stepping down, or a backlog

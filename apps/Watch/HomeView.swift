@@ -2,7 +2,7 @@ import SwiftUI
 import WatchKit
 
 /// The page the app opens on, and the only one the conversation lives on: the last five exchanges of
-/// the shared hub thread in full — his words as they were transcribed, the reply as it was written —
+/// the shared hub thread in full — the user's words as they were transcribed, the reply as it was written —
 /// with the control at the bottom edge carrying the command and the x beside it throwing one away.
 ///
 /// **A command walks the page.** The press sends it and the wrist is tapped; the control turns to the
@@ -10,7 +10,7 @@ import WatchKit
 /// it, with the spinner bigger now that the hub is running the command rather than hearing it; the
 /// reply lands, the view settles on the top of THAT, the control is a microphone again and the x goes.
 /// A reply is read from its first line, which is why each of those lands the view on a top rather than
-/// scrolling to the end. **None of it moves the view while he is looking** (`holds`): each landing waits
+/// scrolling to the end. **None of it moves the view while the user is looking** (`holds`): each landing waits
 /// for the wrist to drop, so it is in place at the next raise.
 struct HomeView: View {
     @EnvironmentObject private var chat: Chat
@@ -22,7 +22,7 @@ struct HomeView: View {
     @State private var visible: Set<String> = []
     /// An unread answer on screen, counting down to read.
     @State private var reading: [String: Task<Void, Never>] = [:]
-    /// Whether the view is held at `target`. Kept until he scrolls himself: a thread still laying out
+    /// Whether the view is held at `target`. Kept until the user scrolls themselves: a thread still laying out
     /// moves the spot, so a single jump lands short of it.
     @State private var pinned = true
     /// Every item's height, kept for all of them rather than only the newest: the newest changes in the
@@ -30,10 +30,10 @@ struct HomeView: View {
     /// pass after the jump, so the room above it (`room`) came too late or not at all.
     @State private var heights: [String: CGFloat] = [:]
     /// What the view is held at — `target`, except while something newer is HELD: **an arrival does not
-    /// take the view from an answer he is looking at** (`holds`). It lands as soon as he stops looking.
+    /// take the view from an answer the user is looking at** (`holds`). It lands as soon as the user stops looking.
     @State private var landed: String?
     @State private var looking = false
-    /// The row that was at the top when he scrolled there and more rows were asked for: the scroll goes
+    /// The row that was at the top when the user scrolled there and more rows were asked for: the scroll goes
     /// back onto it once they have laid out above it.
     @State private var keepAtTop: String?
 
@@ -45,7 +45,7 @@ struct HomeView: View {
                 VStack(alignment: .leading, spacing: Landing.itemGap) {
                     // **Scrolled to the very top lays out more** (`Chat.window`). Asked of a marker's
                     // visibility, not of offsets, which this scroll view reports unreliably
-                    // (docs/WATCH.md); only after his own scroll, so the page laying out never asks.
+                    // (docs/WATCH.md); only after the user's own scroll, so the page laying out never asks.
                     if chat.hasMore {
                         Color.clear.frame(height: 1)
                             .onScrollVisibilityChange(threshold: 1) { seen in
@@ -99,14 +99,14 @@ struct HomeView: View {
             // Asked to land again on the same answer, after scrolling away from it: the target has not
             // changed, so nothing above moves the view.
             .onChange(of: chat.landings) { _, _ in land(proxy) }
-            // He stopped looking with something held: it lands now, so it is waiting for the next raise.
+            // The user stopped looking with something held: it lands now, so it is waiting for the next raise.
             .onChange(of: looking) { _, now in
                 if !now && landed != target { land(proxy) }
             }
             .onScrollGeometryChange(for: CGFloat.self) { $0.contentSize.height } action: { _, _ in
                 if pinned { jump(proxy) }
                 // Rows were added above: put back the one that was at the top, so they arrive above
-                // him rather than under his finger.
+                // the user rather than under the user's finger.
                 else if let a = keepAtTop { keepAtTop = nil; proxy.scrollTo(a, anchor: .top) }
             }
             .onScrollPhaseChange { _, now in
@@ -139,7 +139,7 @@ struct HomeView: View {
         .recordsWhenAsked()
     }
 
-    /// Where the view settles: the top of his words while they are being worked on, otherwise the top
+    /// Where the view settles: the top of the user's words while they are being worked on, otherwise the top
     /// of the newest thing in the thread. **A row's scroll id is NOT the message id**: the ForEach
     /// already uses that as the identity of the row together with its `room`, and `scrollTo` resolves
     /// an id to the first view carrying it, so it landed the top of the ROOM on the landing line and
@@ -165,7 +165,7 @@ struct HomeView: View {
 
     /// How much of a row must be on screen to count as shown: half, or for a row taller than the
     /// screen, enough to fill a little under half the screen. A long answer counts once its opening is
-    /// in front of him, not only once he has scrolled through it.
+    /// in front of the user, not only once the user has scrolled through it.
     private func shownAt(_ m: Message) -> Double {
         guard let h = heights["msg\(m.id)"], h > 0 else { return 0.5 }
         return min(0.5, Double(WKInterfaceDevice.current().screenBounds.height * 0.4 / h))
@@ -189,9 +189,9 @@ struct HomeView: View {
         }
     }
 
-    /// **Whether an arrival waits: always, while he is looking.** Nothing that arrives — his transcribed
+    /// **Whether an arrival waits: always, while the user is looking.** Nothing that arrives — the user's transcribed
     /// words, a tool call, a reply — moves the view while home is in front with the wrist up; it lands
-    /// the moment he stops looking. A tap on the unread dot or an answer's notification (`chat.landings`)
+    /// the moment the user stops looking. A tap on the unread dot or an answer's notification (`chat.landings`)
     /// is asked for, so it never waits.
     private func holds(_ next: String?) -> Bool {
         guard looking, let landed, next != landed else { return false }

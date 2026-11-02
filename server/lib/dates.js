@@ -73,4 +73,17 @@ function nowNaiveLocal() {
   return `${p.year}-${p.month}-${p.day}T${hh}:${p.minute}:${p.second}`;
 }
 
-module.exports = { getTZ, setTZ, DAY_START_HOUR, MON, localDate, nutritionWindow, lastNTrainingDays, dayBucketOf, nowNaiveLocal };
+// A moment as local wall-clock in the display timezone, 'YYYY-MM-DDTHH:MM:SS'. Reminder due times
+// are stored as local-naive ISO strings, so rendering into the same shape lets them be compared (and
+// written) as plain strings with no UTC offset math anywhere.
+function etStringAt(d) {
+  const p = new Intl.DateTimeFormat('en-CA', { timeZone: getTZ(), hour12: false, year: 'numeric', month: '2-digit',
+    day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' }).formatToParts(d);
+  const g = (t) => p.find((x) => x.type === t).value;
+  const hh = g('hour') === '24' ? '00' : g('hour');
+  return `${g('year')}-${g('month')}-${g('day')}T${hh}:${g('minute')}:${g('second')}`;
+}
+const etNowString = () => etStringAt(new Date());
+
+module.exports = { getTZ, setTZ, DAY_START_HOUR, MON, localDate, nutritionWindow, lastNTrainingDays, dayBucketOf, nowNaiveLocal,
+                   etStringAt, etNowString };

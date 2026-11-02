@@ -26,85 +26,21 @@ const HOME_HEAT_WEEKS = 15;
 // its prefix at exactly this boundary.
 const HEAT_WEEKS = 20;
 const MON_ABBR = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-const { getTZ, setTZ, DAY_START_HOUR, localDate, nutritionWindow, lastNTrainingDays, dayBucketOf } = require('./lib/dates');
+const { getTZ, DAY_START_HOUR, localDate, nutritionWindow, lastNTrainingDays, dayBucketOf, etNowString, etStringAt } = require('./lib/dates');
 const { buildWorkoutHeatmap } = require('./lib/heatmap');
 const { buildWeightPlot } = require('./lib/weightplot');
 const { getWeather } = require('./lib/weather');
 const livemic = require('./lib/livemic');
 const { buildNutritionLog, buildGoalResolver } = require('./lib/nutritionlog');
-const { computeScore, taskDeadline } = require('./lib/score');
+const { computeScore, taskDeadline, lateMoment } = require('./lib/score');
+const { createSettings, agentModeOn } = require('./lib/settings');
+const { createUsage } = require('./lib/usage');
+const { createAlarmLog } = require('./lib/alarmlog');
+const { buildLitter } = require('./lib/litter');
+const { timed } = require('./lib/timed');
 
-// Settings cache: app_settings is read several times per status build but only changes on explicit
-// writes, which the realtime subscription announces (→ dirtySettings). One whole-table fetch serves
-// every reader; the 15-min backstop covers a silently dropped realtime event.
-const settingsCache = { map: null, at: 0 };
-const SETTINGS_BACKSTOP_MS = 15 * 60 * 1000;
-const dirtySettings = () => { settingsCache.map = null; statusEpoch++; };
 
-// The Claude subscription's usage windows (data-layer 00144: one row per change, newest = current),
-// for the two thin bars along the top of every wall. A new row arrives over realtime (→ usageCache.row),
-// so the read here is a boot fill and the 15-min backstop behind a dropped event.
-const usageCache = { row: null, at: 0 };
-const USAGE_BACKSTOP_MS = 15 * 60 * 1000;
-async function claudeUsageRow() {
-  if (usageCache.row && Date.now() - usageCache.at < USAGE_BACKSTOP_MS) return usageCache.row;
-  const rows = await sb('claude_usage?select=five_hour_pct,five_hour_resets_at,seven_day_pct,seven_day_resets_at,observed_at&order=observed_at.desc&limit=1');
-  usageCache.row = (rows || [])[0] || null;
-  usageCache.at = Date.now();
-  return usageCache.row;
-}
-// Fills 0-100 for the bars, and the minutes to each reset for whatever later shows them. A window whose
-// reset has passed is empty until the next turn reports the new one.
-function buildUsage(r) {
-  if (!r) return null;
-  const win = (pct, resets) => {
-    const ms = resets ? Date.parse(resets) - Date.now() : null;
-    const over = ms !== null && ms <= 0;
-    return { pct: over ? 0 : Math.max(0, Math.min(100, Number(pct) || 0)),
-             resets_at: over ? null : resets, resets_in_min: over || ms === null ? null : Math.round(ms / 60000) };
-  };
-  return { five_hour: win(r.five_hour_pct, r.five_hour_resets_at), seven_day: win(r.seven_day_pct, r.seven_day_resets_at),
-           observed_at: r.observed_at };
-}
 
-async function settingsAll() {
-  if (settingsCache.map && Date.now() - settingsCache.at < SETTINGS_BACKSTOP_MS) return settingsCache.map;
-  const rows = await sb('app_settings?select=key,value');
-  settingsCache.map = Object.fromEntries((rows || []).map((r) => [r.key, r.value]));
-  settingsCache.at = Date.now();
-  if (setTZ(settingsCache.map.display_tz)) console.log(`[tz] display timezone -> ${getTZ()}`);
-  return settingsCache.map;
-}
-
-// Current surplus/deficit setting (signed kcal over maintenance; default +150 lean-bulk). Drives the
-// live daily goal and the active run's goal on the plot/heatmap. Editable in the settings panel.
-const SURPLUS_LIMIT = 1000; // clamp: nobody runs a surplus/deficit beyond ~1000 kcal; guards typos
-// Daily produce goals (vegetables / dark green vegetables / fruit). FIXED constants in app_settings — nothing
-// recalculates them, unlike the macro targets which the maintenance engine re-derives every build.
-// veg INCLUDES dark_green (dark green is a floor within the vegetable goal), so the two are never added.
-const PRODUCE_TARGET_DEFAULTS = { veg_g: 300, dark_green_g: 150, fruit_g: 250 };
-async function produceTargets() {
-  try {
-    const s = await settingsAll();
-    const pick = (key, dflt) => {
-      const v = parseFloat(s[key]);
-      return Number.isFinite(v) && v > 0 ? v : dflt;
-    };
-    return {
-      veg_g: pick('produce_target_veg_g', PRODUCE_TARGET_DEFAULTS.veg_g),
-      dark_green_g: pick('produce_target_dark_green_g', PRODUCE_TARGET_DEFAULTS.dark_green_g),
-      fruit_g: pick('produce_target_fruit_g', PRODUCE_TARGET_DEFAULTS.fruit_g),
-    };
-  } catch { return { ...PRODUCE_TARGET_DEFAULTS }; }
-}
-
-async function surplusCal() {
-  try {
-    const v = parseInt((await settingsAll()).surplus_cal, 10);
-    if (!Number.isFinite(v)) return 150;
-    return Math.max(-SURPLUS_LIMIT, Math.min(SURPLUS_LIMIT, v));
-  } catch { return 150; }
-}
 // Whether a message at `at` opens a new conversation context after one at `prev` (both epoch ms). The
 // SAME boundary the worker replays to the model (voice-pipeline `recent_context`): the hub agent is
 // handed the whole day since 4 AM in the display zone, so a new 4am-day starts a context (hub only;
@@ -117,46 +53,6 @@ function opensContext(prev, at, mode, s) {
   const resetAt = Date.parse((s || {}).voice_reset_at || '');
   return (mode === 'hub' && dayOf(prev) !== dayOf(at))
     || (Number.isFinite(resetAt) && prev < resetAt && resetAt <= at);
-}
-// Min length (days) of the aligned intake-tracking window before adaptive maintenance goes live.
-// Editable in settings; default 14, clamped to a sane 7–60.
-async function maintenanceMinDays() {
-  try {
-    const v = parseInt((await settingsAll()).maintenance_min_days, 10);
-    return Number.isFinite(v) && v >= 7 && v <= 60 ? v : 14;
-  } catch { return 14; }
-}
-// Current goal phase: { start, seed, sign, hold }. A phase begins when surplus_cal flips sign
-// (bulk↔cut); its start caps the maintenance window and `seed` holds the pre-flip maintenance until the
-// new phase has enough of its own data. Stored as JSON in app_settings.maintenance_phase.
-async function maintenancePhase() {
-  try {
-    const raw = (await settingsAll()).maintenance_phase;
-    if (!raw) return null;
-    const p = typeof raw === 'string' ? JSON.parse(raw) : raw;
-    if (!p || !p.start) return null;
-    return { start: String(p.start).slice(0, 10), seed: p.seed != null ? Number(p.seed) : null,
-             sign: Number(p.sign) || 0, hold: !!p.hold };
-  } catch { return null; }
-}
-// Voice state for the TV strip + the mic-liveness check: whether always-on (wake-free) voice and inject
-// mode are on. Routing is fixed (every turn is Opus), so there's no model/route to resolve here.
-async function routingConfig() {
-  let s = {};
-  try { s = await settingsAll(); } catch { /* fall through to defaults */ }
-  return {
-    wake: ['1', 'true', 'on', 'yes'].includes(String(s.wakefree_enabled ?? '0').toLowerCase()),
-    inject: ['1', 'true', 'on', 'yes'].includes(String(s.voice_inject_mode ?? '0').toLowerCase()),
-    // Which wall the TV should be showing. The kiosk cannot be told to navigate from outside — it is
-    // a browser on a machine nothing can reach — so the page watches this and goes there itself.
-    wall: (() => {
-      const w = String(s.wall_mode ?? 'standard').toLowerCase();
-      // 'home' is a second word for the default wall, not a fourth wall — voice reaches it either
-      // way and one value is stored, so nothing has to decide which of two names is current.
-      if (w === 'home') return 'standard';
-      return ['sessions', 'calendar', 'health'].includes(w) ? w : 'standard';
-    })(),
-  };
 }
 const { buildVariants } = require('./lib/variants');
 const apns = require('./lib/apns');
@@ -225,58 +121,11 @@ const { SURF_HTML } = require('./routes/pages')({ gated });
 
 
 const { sb, sbRange, sbWrite, sbInsert, putSetting } = require('./lib/supa')({ SUPABASE_KEY, SUPABASE_URL });
+const settings = createSettings({ sb, onDirty: () => { statusEpoch++; } });
+const { settingsAll, dirtySettings, produceTargets, surplusCal, maintenanceMinDays, maintenancePhase, routingConfig } = settings;
+const { claudeUsageRow, buildUsage, take: takeUsage } = createUsage({ sb });
+const { alarmLog, noteRinger, ringerReport } = createAlarmLog({ sbWrite });
 
-// ---- the alarm log (data-layer 00113) ---------------------------------------------------------
-// What happened to every alarm, durably. Stdout here is a buffer of about a hundred lines, and an
-// alarm is audited the morning after — so without this the phone's half of any alarm was gone
-// within the hour. EVENTS only: a beacon that says nothing new writes nothing (noteRinger). Never
-// throws into the caller.
-function alarmLog(source, ev, detail = {}, itemId = null) {
-  sbWrite('alarm_log', 'POST', { source, ev, item_id: itemId, detail })
-    .catch((e) => console.error('[alarm-log] write failed:', e.message));
-}
-
-// THE RINGERS' LAST WORD. Every alarm clock — the TV's tv-ring and each page running alarmclock.js —
-// beacons its state once a minute. Held here per source so the log records a CHANGE, or a ringer
-// coming back after a silence, rather than every beat; and so an alarm's due moment can say what
-// each ringer last reported, which is the question every audit starts with.
-const RINGER_SILENCE_MS = 5 * 60 * 1000;
-const ringers = new Map();   // source -> { at, state }
-function ringerSource(b, req) {
-  if (b.ev === 'tvring') return 'tv';
-  const ua = String(req.get('user-agent') || '');
-  // The Pi's kiosk Chromium reports itself as `X11; CrOS x86_64`, not as Linux.
-  const device = /iPhone|iPad/.test(ua) ? 'iphone' : /Macintosh/.test(ua) ? 'mac' : /X11|Linux/.test(ua) ? 'pi' : 'other';
-  return `${b.surface || 'page'}@${device}`;
-}
-function ringerState(b) {
-  if (b.ev === 'tvring') return { next: b.next, ringing: b.ringing, player: b.player, tone: b.tone };
-  return { next: b.next, armed: b.armed, ringing: b.ringing, guided: b.guided, visible: b.visible,
-           lock: b.lock, audio: b.audio, loaded: b.media >= 2, tone: b.tone };
-}
-function noteRinger(b, req) {
-  const source = ringerSource(b, req);
-  // Something the ringer reports AS an event — a ring, a stop, the sound failing — is logged as itself.
-  const beat = b.ev === 'tvring' ? b.at === 'beat' : !b.at;
-  if (!beat) {
-    const { ev, at, ...detail } = b;
-    return alarmLog(source, at, detail, b.id || null);
-  }
-  const state = ringerState(b);
-  const now = Date.now();
-  const prev = ringers.get(source);
-  ringers.set(source, { at: now, state });
-  // First heard since the hub started: the user agent rides along once, so a source named from it
-  // can be traced to the actual device.
-  if (!prev) return alarmLog(source, 'state', { ...state, ua: String(req.get('user-agent') || '').slice(0, 160) });
-  if (now - prev.at > RINGER_SILENCE_MS) return alarmLog(source, 'resumed', { silent_s: Math.round((now - prev.at) / 1000), ...state });
-  const changed = Object.keys(state).filter((k) => state[k] !== prev.state[k]);
-  if (changed.length) alarmLog(source, 'state', { changed, ...state });
-}
-function ringerReport() {
-  const now = Date.now();
-  return Object.fromEntries([...ringers].map(([s, r]) => [s, { heard_s_ago: Math.round((now - r.at) / 1000), ...r.state }]));
-}
 
 // Best-effort audit trail for every hub nutrition write (add/edit/delete). before/after are
 // full row snapshots (or null) — enough to fully reverse any action. NEVER throws into the
@@ -323,17 +172,6 @@ function nowOffsetTZ() {
   return pace.offsetFromHM(hh, mm);
 }
 
-// A moment as local wall-clock in the display timezone, 'YYYY-MM-DDTHH:MM:SS'. Reminder due times
-// are stored as local-naive ISO strings, so rendering into the same shape lets them be compared (and
-// written) as plain strings with no UTC offset math anywhere.
-function etStringAt(d) {
-  const p = new Intl.DateTimeFormat('en-CA', { timeZone: getTZ(), hour12: false, year: 'numeric', month: '2-digit',
-    day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' }).formatToParts(d);
-  const g = (t) => p.find((x) => x.type === t).value;
-  const hh = g('hour') === '24' ? '00' : g('hour');
-  return `${g('year')}-${g('month')}-${g('day')}T${hh}:${g('minute')}:${g('second')}`;
-}
-const etNowString = () => etStringAt(new Date());
 
 // ---- assemble dashboard data ----
 // ---- surf: latest Surfline snapshot -> current + 7-day per-day rollup ----
@@ -344,55 +182,6 @@ const SURF_RATING_LABEL = {
 };
 const ratingLabel = (k) => SURF_RATING_LABEL[k] || k || '—';
 
-// ---- Litter-Robot display state -------------------------------------------------------------
-// The robot is held in Sleep Mode and the Fly watcher fires every clean itself, so the robot's own
-// `status` is not the state of the box: it reads READY through a queued clean, a phantom weight, a
-// 30-minute lockout, and a watcher that died an hour ago. The watcher publishes what it is doing in
-// device_status.data; fold the two into one verdict here so every surface paints the same thing.
-const LITTER_STATUS_LABEL = { READY:'Ready', CLEAN_CYCLE_COMPLETE:'Ready', DRAWER_FULL:'Ready',
-  CLEAN_CYCLE:'Cleaning', CAT_DETECTED:'Cat detected', CAT_SENSOR_TIMING:'Waiting (post-cat)',
-  CAT_SENSOR_INTERRUPTED:'Stuck (auto-resuming)', PAUSED:'Stuck (auto-resuming)', OFF:'Off',
-  OFFLINE:'Offline' };
-const LITTER_STALE_MS = 25 * 60 * 1000;   // the watcher refreshes every 10 min; miss two and it is gone
-const LITTER_DRAWER_FULL_PCT = 90;        // the robot's own flag trips at ~53% depth; trust the depth
-
-function agoShort(ms) {
-  if (ms == null) return null;
-  const m = Math.round(ms / 60000);
-  if (m < 1) return 'now';
-  if (m < 60) return m + 'm';
-  const h = Math.floor(m / 60);
-  return h < 48 ? h + 'h' : Math.floor(h / 24) + 'd';
-}
-
-function buildLitter(row) {
-  if (!row) return null;
-  const d = row.data || {};
-  const now = Date.now();
-  const age = row.updated_at ? now - Date.parse(row.updated_at) : null;
-  const cleanIn = d.clean_due_at ? Math.max(0, Date.parse(d.clean_due_at) - now) : null;
-  const usedAgo = d.last_visit_at ? now - Date.parse(d.last_visit_at) : null;
-  const cleanedAgo = d.last_clean_at ? now - Date.parse(d.last_clean_at) : null;
-  const st = row.status || 'OFFLINE';
-  let state, label;
-  // Ordered worst-first: a fault outranks the cycle it interrupted, and both outrank a queued clean.
-  if (age == null || age > LITTER_STALE_MS) { state = 'STALE'; label = 'Stale'; }
-  else if (!row.online) { state = 'OFFLINE'; label = 'Offline'; }
-  else if (st === 'CAT_SENSOR_INTERRUPTED' || st === 'PAUSED') { state = 'STUCK'; label = LITTER_STATUS_LABEL[st]; }
-  else if (d.locked_out) { state = 'LOCKED_OUT'; label = 'Locked out'; }
-  else if (d.scale_stuck) { state = 'SCALE_STUCK'; label = 'Scale stuck'; }
-  else if (row.waste_drawer_pct >= LITTER_DRAWER_FULL_PCT) { state = 'DRAWER_FULL'; label = 'Drawer full!'; }
-  else if (st === 'CLEAN_CYCLE') { state = 'CLEANING'; label = 'Cleaning'; }
-  // Sleep mode is the whole model — out of it the robot auto-cycles and the watcher is a bystander.
-  else if (d.sleeping === false) { state = 'SELF_CYCLING'; label = 'Self-cycling'; }
-  else if (d.clean_pending) { state = 'CLEAN_QUEUED'; label = cleanIn ? 'Clean in ' + Math.ceil(cleanIn / 60000) + 'm' : 'Clean queued'; }
-  else { state = 'READY'; label = LITTER_STATUS_LABEL[st] || st; }
-  const color = { STALE:'#ef4444', OFFLINE:'#ef4444', STUCK:'#f97316', LOCKED_OUT:'#f97316',
-    SCALE_STUCK:'#f97316', DRAWER_FULL:'#ef4444', CLEANING:'#eab308', SELF_CYCLING:'#f97316',
-    CLEAN_QUEUED:'#a855f7', READY:'#3b82f6' }[state];
-  return { ...row, state, label, color, clean_in_s: cleanIn == null ? null : Math.round(cleanIn / 1000),
-    used_ago: agoShort(usedAgo), cleaned_ago: agoShort(cleanedAgo) };
-}
 
 // The header strip carries the rating and the current size, nothing else. Water and air both had
 // chips here and no longer do; the water panel below the grids answers the first in far more detail
@@ -916,7 +705,7 @@ function markLive(row) {
   const mode = row.mode === 'agent' ? 'agent' : 'hub';
   const at = Date.parse(row.created_at), prev = lastVoiceAt[mode];
   if (prev === null || at > prev) lastVoiceAt[mode] = at;
-  return prev !== null && opensContext(prev, at, mode, settingsCache.map) ? { ...row, ctx_break: true } : row;
+  return prev !== null && opensContext(prev, at, mode, settings.cached()) ? { ...row, ctx_break: true } : row;
 }
 async function seedLastVoiceAt() {
   for (const [mode, filter] of [['hub', 'or=(mode.is.null,mode.eq.hub)'], ['agent', 'mode=eq.agent']]) {
@@ -1011,7 +800,7 @@ function startRealtime() {
     .on('postgres_changes', { event: '*', schema: 'public', table: 'set_watcher' }, changed)
     // A new usage reading (the table only gains a row when a number moves).
     .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'claude_usage' },
-      (p) => { seen(); if (p.new) { usageCache.row = p.new; usageCache.at = Date.now(); } broadcast(); pushDay('usage'); })
+      (p) => { seen(); if (p.new) { takeUsage(p.new); } broadcast(); pushDay('usage'); })
     // Settings (routing model/thinking/runner, wake toggle, nutrition goal): rebuild so the TV routing
     // panel reflects an MCP/voice/settings change near-instantly instead of waiting for the 30s tick.
     .on('postgres_changes', { event: '*', schema: 'public', table: 'app_settings' }, (p) => {
@@ -1272,14 +1061,6 @@ function pushDay(kind) {
   for (const c of dayClients) { try { c.write(`event: ${kind}\ndata: {}\n\n`); } catch {} }
 }
 const dirtyWorkoutDay = () => { workoutDayCache.clear(); pushDay('workout'); };
-// How long a heavy read took, in the hub's log: `fly logs -a jared-status-hub | grep timing`.
-function timed(handler) {
-  return (req, res) => {
-    const t0 = Date.now();
-    res.on('finish', () => console.log(`[timing] ${req.path} ${Date.now() - t0}ms`));
-    return handler(req, res);
-  };
-}
 
 require('./routes/widgets')({
   WORKOUTDAY_BACKSTOP_MS, gated, nutritionCore, paceOf, sbRange, scoreOf, timed, trainingCore,
@@ -1294,8 +1075,6 @@ const { MUTE_HOLD, recomputeMute } = require('./routes/settings')({
   GROQ_API_KEY, SUPABASE_KEY, SUPABASE_URL, dirtySettings, gated, putSetting, sb, settingsAll,
 });
 
-// app_settings.agent_mode is stored as text; these are the values that mean "on".
-const agentModeOn = (v) => ['1', 'true', 'on', 'yes'].includes(String(v ?? '0').toLowerCase());
 
 const { CLIENT_NOW_RE, dirtyNutDay } = require('./routes/logging')({
   audit, dirtyWorkoutDay, gated, produceTargets, pushDay, sb, sbRange, sbWrite, surplusCal, timed,
@@ -1553,15 +1332,6 @@ function dueMoment(due) {
   return /T\d/.test(d) ? d : d.slice(0, 10) + 'T09:00:00';
 }
 
-// When a dated item stops being on time: the SCORING deadline, as a local-naive stamp. A timed item is
-// late at its own moment; a date-only one is on time for its whole day and late at the next day's 4am
-// origin. Everything that calls an item overdue reads this — chip colour and dimming, the badge, the
-// pane's red, both widgets — so red means exactly what the score means by it. Reading `dueMoment`
-// instead turned an all-day chip red at 9:30am while it was still worth its full +7.
-function lateMoment(due) {
-  const at = taskDeadline(due);
-  return at == null ? null : new Date(at).toISOString().slice(0, 19);
-}
 
 // ---- what happens when a dated item comes due ----
 //

@@ -467,7 +467,17 @@ function computeScore({ volume, days = [], surplus = 0, taskEvents = [], openTas
   };
 }
 
+// When a dated item stops being on time: the SCORING deadline, as a local-naive stamp. A timed item is
+// late at its own moment; a date-only one is on time for its whole day and late at the next day's 4am
+// origin. Everything that calls an item overdue reads this — chip colour and dimming, the badge, the
+// pane's red, both widgets — so red means exactly what the score means by it. Reading `dueMoment`
+// instead turned an all-day chip red at 9:30am while it was still worth its full +7.
+function lateMoment(due) {
+  const at = taskDeadline(due);
+  return at == null ? null : new Date(at).toISOString().slice(0, 19);
+}
+
 // Exported so the calendar can label a chip with the same numbers the band is actually scored on.
 // One definition, so a chip cannot claim a value the band would not give it.
-module.exports = { computeScore, tasksScore, taskDeadline, completionValue, completionStamp, bandPoints, toPoints,
+module.exports = { computeScore, tasksScore, taskDeadline, lateMoment, completionValue, completionStamp, bandPoints, toPoints,
                    TASK_GRACE_MIN, TASK_LATE_ZERO_H, TASK_DRAIN_FULL_H };

@@ -8,9 +8,17 @@ const { getWeather } = require('../lib/weather');
 
 module.exports = function (ctx) {
   const {
-    PING, SUPABASE_KEY, SUPABASE_URL, SURF_HTML, alarmLog, buildSurf, etNowString, etStringAt, gated,
-    pub, ratingLabel, sb, sbRange, sbWrite, settingsAll,
+    PING, SUPABASE_KEY, SUPABASE_URL, SURF_HTML, alarmLog, etNowString, etStringAt, gated,
+    pub, sb, sbRange, sbWrite, settingsAll,
   } = ctx;
+
+  // ---- surf: latest Surfline snapshot -> current + 7-day per-day rollup ----
+  // Data is collected by the Pi (repo JJGantt/surf-report) into surf_snapshots.
+  const SURF_RATING_LABEL = {
+    FLAT:'Flat', NONE:'Flat', VERY_POOR:'Very Poor', POOR:'Poor', POOR_TO_FAIR:'Poor–Fair',
+    FAIR:'Fair', FAIR_TO_GOOD:'Fair–Good', GOOD:'Good', EPIC:'Epic',
+  };
+  const ratingLabel = (k) => SURF_RATING_LABEL[k] || k || '—';
 
   // ---- surf history: rating, size and water for the card's grids ----
   // surf_hours grows by 24 rows a day. This is deliberately NOT in the 30s broadcast payload: that
@@ -604,7 +612,31 @@ module.exports = function (ctx) {
     res.json({ now: liveWind.view(snap), readings: liveWind.readings() });
   });
 
+  // The header strip carries the rating and the current size, nothing else. Water and air both had
+  // chips here and no longer do; the water panel below the grids answers the first in far more detail
+  // than a single number could, which is what made the chip redundant rather than merely crowded.
+  function buildSurf(row) {
+    if (!row || !Array.isArray(row.rows) || !row.rows.length) return null;
+    const rows = row.rows;
+    // Nearest hour to now, for the card's header strip. The per-day breakdown that used to live here
+    // is gone: the two grids show every hour of every day, so a seven-row summary of the same data
+    // was a second, coarser answer to a question already answered above it.
+    const now = Date.now() / 1000;
+    const cur = rows.reduce((a, b) => (Math.abs(b.ts - now) < Math.abs(a.ts - now) ? b : a), rows[0]);
+    return {
+      spot: row.slug || 'mayport-poles',
+      capturedAt: row.captured_at,
+      current: cur ? {
+        // The dot wears the same band colour the grid and the key below it paint this rating, NOT
+        // Surfline's own scale — those disagree (Surfline paints POOR blue, the band palette red),
+        // and two colours for one rating in one card reads as two different readings.
+        ratingLabel: ratingLabel(cur.rk), ratingColor: SURF_BAND_COLORS[surfBand(cur.rk)] || '#8b96a5',
+        hMin: cur.sMin, hMax: cur.sMax,
+      } : null,
+    };
+  }
+
   return {
-    SURF_BAND_COLORS, dirtySurfHist, liveBuoy, liveWind, pushSurfLive, surfAlarms, surfBand,
+    buildSurf, dirtySurfHist, liveBuoy, liveWind, pushSurfLive, surfAlarms,
   };
 };

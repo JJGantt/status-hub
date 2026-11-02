@@ -148,7 +148,7 @@ speech coming out of a TV speaker (which flattens voices). A 30-second clip give
 each voice from. Labels are anonymous (Speaker A, B) unless a reference clip says who someone is.
 
 **The owner's voice is already enrolled**: the hub keeps a `voiceprint` (ECAPA exemplar bank) for speaker
-ID on uploaded clips (`server.js`, "IS IT HIM?"). Either that, or a reference clip passed to the
+ID on uploaded clips (`routes/voice.js`, "IS IT THE USER?"). Either that, or a reference clip passed to the
 diarizing model, can turn "Speaker A" into the owner's name and leave the rest anonymous.
 
 **Beyond text**: sending the audio itself to a model that takes audio input keeps tone, emphasis and

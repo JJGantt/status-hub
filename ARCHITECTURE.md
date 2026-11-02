@@ -114,12 +114,11 @@ mail arriving, and nothing is mirrored off the Mac.
 - The **`data` MCP** (`data-layer/dist/mcp.js`) is how Claude reads/writes life data.
 - **RLS** is on for every table. Supabase creates a table with RLS **off**, so data-layer's
   `enable_rls_on_new_table` event trigger (00154) turns it on as each table is created; without it
-  a table is reachable with the anon key, which is public, since it ships inside the Workset watch
-  app. `workset_reports`
-  carries policies and column grants for exactly what that app does; `set_watcher` is closed to
-  anon, which reads the armed exercise through the security-definer `workset_watcher()` (00151);
-  everything else has no policy at all, which denies anon outright while service_role bypasses
-  RLS as usual.
+  a table is reachable with the anon key, which is public, since a publishable key ships inside the
+  restaurant menu app. The Workset watch app holds no key: it writes through data-layer's
+  `workset` edge function with a device token, and anon has no access to `workset_reports`,
+  `set_watcher` or `workset_watcher()` (00160). A table with no anon policy denies anon outright,
+  while service_role bypasses RLS as usual.
 - **Realtime** is on. The `supabase_realtime` publication includes (at least): `voice_requests`,
   `voice_messages`, `voice_focus`, `voice_sessions`, `device_status`, `nutrition_entries`, `sets`,
   `desk_commands`. The hub server, the voice worker and the Mac orchestrator subscribe.

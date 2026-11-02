@@ -112,10 +112,10 @@ mail arriving, and nothing is mirrored off the Mac.
 
 - Project `felyggqjjhltwokdfhop` ("life-data"). Service-role key in `data-layer/.env` (gitignored), loaded by `src/client.ts`.
 - The **`data` MCP** (`data-layer/dist/mcp.js`) is how Claude reads/writes life data.
-- **RLS** is on for every table. `00042` covered the 38 that existed then and `00074` the three
-  added since (`reports`, `workset_reports`, `set_watcher`); tables created by SQL migration
-  default to RLS **off**, so a new migration has to enable it or the table is reachable with the
-  anon key — which is public, since it ships inside the Workset watch app. `workset_reports`
+- **RLS** is on for every table. Supabase creates a table with RLS **off**, so data-layer's
+  `enable_rls_on_new_table` event trigger (00154) turns it on as each table is created; without it
+  a table is reachable with the anon key, which is public, since it ships inside the Workset watch
+  app. `workset_reports`
   carries policies and column grants for exactly what that app does; `set_watcher` is closed to
   anon, which reads the armed exercise through the security-definer `workset_watcher()` (00151);
   everything else has no policy at all, which denies anon outright while service_role bypasses

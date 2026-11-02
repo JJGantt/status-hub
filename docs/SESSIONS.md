@@ -354,6 +354,14 @@ its `/wake` starts it, no browser and no Remote Control, and the hub wakes it th
 follow-up, resume or close aimed at one of its sessions (voice-pipeline `fly-desk/README.md`). It is deliberately not a
 retry queue: work that could not run when it was asked for has usually stopped being wanted.
 
+**An incident session never runs as an ordinary one.** A session whose label starts `Incident: ` was
+dispatched by the ops responder and reads text anyone can write, so every launch of it (open, resume,
+hand-over, the queue, the wall's focus pty) goes through `health/responder/bin/incident-claude`, which
+gives it that agent's narrow permissions (health `responder/README.md` § The incident agent's
+permissions): pi-desk `launch()` and the orchestrator's `incident.js`. The label is the marker because
+every relaunch carries it; a launch that cannot find the launcher is refused rather than started plain,
+and an incident session is never run as Codex.
+
 **A shell's command line takes 1024 bytes.** That is the tty's canonical-mode limit, and past it the
 rest is dropped silently, so a launch prompt goes through a file the shell reads. A RUNNING session
 holds its tty raw and has no such limit — 20,000 characters arrived intact — so follow-ups are typed

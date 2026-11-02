@@ -74,49 +74,6 @@ module.exports = function (ctx) {
   const sessionActivity = (s) => new Date(s.active_at || s.reply_at || s.started).getTime();
   const byActivity = (a, b) => sessionActivity(b) - sessionActivity(a);
 
-  // The session a spoken follow-up lands in, and the one every surface shows as focused. THE RULE IS
-  // SHARED WITH `focusedSession` IN data-layer's desk.ts and the two must agree, or the wall shows one
-  // session as focused while a follow-up lands in another:
-  //   1. a session Jared focused BY NAME, while it is still running;
-  //   2. a dispatch whose session has not opened yet — null here, so nothing claims focus in that gap;
-  //   3. otherwise the most recently active running session, on either machine.
-  // → { session, pinned }. `pinned` says the focus is 1 — his explicit pin — rather than automatic, and
-  // every surface marks a pinned session differently, because a pin stays put while other sessions take
-  // turns and automatic focus does not.
-  // Commands seen in a terminal state. A command only ever moves pending → running → done/error, so a
-  // terminal answer is true for ever and re-reading it is pure waste. One entry per focus Jared sets.
-  const settledCommands = new Set();
-
-  async function pickFocus(focusRow, sessions) {
-    const f = focusRow || {};
-    const running = (sessions || []).filter((s) => s.status === 'resident');
-    if (f.session_id) {
-      // A pin holds the CONVERSATION, not the row, and it outlives being parked. Eviction is not him
-      // closing a session, and a resume makes a NEW row for the same transcript — so the pin re-attaches
-      // to whichever row carries it now. Released only by pinning another, unfocusing, or closing it by
-      // hand (data-layer's setFocus / releaseFocusFor); a dispatch leaves it alone.
-      const pinnedRow = (sessions || []).find((s) => s.id === f.session_id);
-      const conv = pinnedRow && pinnedRow.claude_session_id;
-      const hit = running.find((s) => s.id === f.session_id)
-        || (conv ? running.find((s) => s.claude_session_id === conv) : null);
-      if (hit) return { session: hit, pinned: true };
-      if (pinnedRow) return { session: pinnedRow, pinned: true };   // parked, and still his
-    }
-    if (f.command_id && !(sessions || []).some((s) => s.command_id === f.command_id)
-        && !settledCommands.has(f.command_id)) {
-      // Only while it can still become a session: a command that failed or expired never will.
-      const cmd = await sb(`desk_commands?id=eq.${encodeURIComponent(f.command_id)}&select=status`);
-      const st = cmd && cmd[0] && cmd[0].status;
-      if (st === 'pending' || st === 'running') return { session: null, pinned: false };
-      // Anything else is FINAL — done, error, expired, or a row retention has already swept. `desk_focus`
-      // keeps its `command_id` until an explicit unfocus, and the session it made is swept at 7 days, so
-      // without this the lookup below fires on every build for the rest of that focus's life and throws
-      // the answer away each time: ~14.6k reads/day of a row whose status can no longer change.
-      settledCommands.add(f.command_id);
-    }
-    return { session: running.sort(byActivity)[0] || null, pinned: false };
-  }
-
   // The session payload every surface renders — built in one place so the endpoint and the push cannot
   // drift into disagreeing about what a session list is.
   //
@@ -134,33 +91,23 @@ module.exports = function (ctx) {
   const isCodex = (s) => !!s && s.agent === 'codex' && !isIncident(s);
 
   async function buildSessions({ brief: allBrief = false } = {}) {
-    const [sessions, queue, focusRows] = await Promise.all([
+    // The NUMBER Jared says out loud and the FOCUS (where a spoken follow-up lands, and what every
+    // surface marks) are desk_sessions_state() in Postgres (data-layer 00157), the one definition the
+    // voice tools read too, so "session three" and the focused session mean the same thing everywhere.
+    // `pinned` says the focus is his explicit pin rather than automatic; a pinned session is marked
+    // differently, because it stays put while other sessions take turns.
+    const [sessions, queue, state] = await Promise.all([
       sb('desk_sessions?select=*&order=last_seen.desc'),
       sb('desk_queue?claimed=is.null&select=*&order=created.asc'),
-      sb('desk_focus?id=eq.current&select=command_id,session_id'),
+      sb('rpc/desk_sessions_state'),
     ]);
     for (const s of sessions || []) rowConv.set(s.id, s.claude_session_id || s.id);
-    const { session: focusHit, pinned } = await pickFocus((focusRows || [])[0], sessions);
-    const focus = focusHit ? focusHit.id : null;
-    // The number Jared says out loud. THE RULE IS SHARED WITH `numberSessions` IN data-layer's
-    // desk.ts and both have to agree, or "session three" means one thing to the pane and another to
-    // the voice tools: active sessions only, MOST RECENTLY ACTIVE FIRST, numbered from 1, running and
-    // parked TOGETHER. Parking is not activity — a session evicted to free the Pi, or replaced by a
-    // dispatch, keeps the place its last turn earned, so a list read twice says the same thing.
-    // Running-first grouping is the attractive alternative and it is wrong: every eviction would
-    // shove a session below everything still open, however recently it was used.
-    // ONE ROW PER CONVERSATION, also shared with `numberSessions`: a resume makes a new row for the same
-    // transcript, and the earlier stretches stay parked until retention drops them. Listing them too
-    // showed one conversation several times under several numbers. The row kept is the running one if
-    // it runs, else the most recently active.
-    const rank = (s) => (s.status === 'resident' ? 0 : 1);
-    const seenConv = new Set();
-    const listed = (sessions || [])
-      .filter((s) => s.status === 'resident' || s.status === 'evicted')
-      .sort((a, b) => rank(a) - rank(b) || byActivity(a, b))
-      .filter((s) => { const c = s.claude_session_id || s.id; if (seenConv.has(c)) return false; seenConv.add(c); return true; })
-      .sort(byActivity);
-    const numbered = new Map(listed.map((s, i) => [s.id, i + 1]));
+    const focus = (state && state.focus && state.focus.session_id) || null;
+    const pinned = !!(state && state.focus && state.focus.pinned);
+    const numbers = (state && state.numbers) || {};
+    const numbered = new Map(Object.entries(numbers));
+    // One row per conversation, in number order: the rows that have a number.
+    const listed = (sessions || []).filter((s) => numbered.has(s.id)).sort((a, b) => numbered.get(a.id) - numbered.get(b.id));
     // Only the fields something renders. A desk_sessions row carries transcript paths, command ids and
     // five timestamps that no surface here reads — 97 rows of them was most of what was left of this
     // response after the replies came out of it. Adding a field to a session view means adding it here.
@@ -473,5 +420,5 @@ module.exports = function (ctx) {
     } catch (e) { res.status(500).json({ error: String(e.message || e) }); }
   });
 
-  return { MACHINE_NAME, machineAwake, pickFocus, pushSessions };
+  return { MACHINE_NAME, machineAwake, pushSessions };
 };

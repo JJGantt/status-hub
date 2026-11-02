@@ -58,6 +58,7 @@ function fakeSupabase() {
   // Postgres functions, by name: each answers like the real one would on empty tables.
   const rpc = {
     muscle_volume: () => ({ window: [], bouts: [], days: [], targets: { _default: 14 } }),
+    desk_sessions_state: () => ({ numbers: {}, focus: { session_id: null, pinned: false, pending: false } }),
   };
   api = { tables, rpc, failWrites: false, close: () => server.close() };
   return new Promise((resolve) => server.listen(0, '127.0.0.1', () => {

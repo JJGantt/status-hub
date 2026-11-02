@@ -488,16 +488,22 @@ const deskCache = { rows: null, at: 0, dirty: true };
 const DESKCACHE_BACKSTOP_MS = 15 * 60 * 1000;
 const dirtyDesk = () => { deskCache.dirty = true; statusEpoch++; };
 
-async function fetchDeskRows() {
-  if (!deskCache.dirty && deskCache.rows && Date.now() - deskCache.at < DESKCACHE_BACKSTOP_MS) {
+// → the focused session as the strip draws it ({id, repo, label, pinned}), or null. Which session that
+// is comes from desk_sessions_state() (data-layer 00157), the rule /api/sessions and the voice tools
+// read too.
+async function fetchDeskFocus() {
+  if (!deskCache.dirty && deskCache.at && Date.now() - deskCache.at < DESKCACHE_BACKSTOP_MS) {
     return deskCache.rows;
   }
-  const rows = await Promise.all([
-    sb('desk_focus?id=eq.current&select=command_id,session_id'),
-    sb('desk_sessions?status=eq.resident&select=id,repo,label,command_id,status,active_at,reply_at,started'),
-  ]);
-  deskCache.rows = rows; deskCache.at = Date.now(); deskCache.dirty = false;
-  return rows;
+  const state = await sb('rpc/desk_sessions_state');
+  const f = (state && state.focus) || {};
+  let focus = null;
+  if (f.session_id) {
+    const [row] = await sb(`desk_sessions?id=eq.${encodeURIComponent(f.session_id)}&select=id,repo,label`);
+    if (row) focus = { id: row.id, repo: row.repo, label: row.label || null, pinned: !!f.pinned };
+  }
+  deskCache.rows = focus; deskCache.at = Date.now(); deskCache.dirty = false;
+  return focus;
 }
 
 
@@ -769,14 +775,9 @@ async function composeStatus() {
   const routing = await routingConfig();   // agent model / thinking / runner / wake (TV routing panel)
 
   // The session a spoken follow-up would land in — shown on the TV strip so the answer is ambient
-  // rather than something you have to open a pane to learn. The same rule as /api/sessions
-  // (pickFocus), so the strip, the wall and the behaviour cannot disagree.
+  // rather than something you have to open a pane to learn.
   let deskFocus = null;
-  try {
-    const [fRows, sRows] = await fetchDeskRows();
-    const { session: hit, pinned } = await pickFocus((fRows || [])[0], sRows);
-    if (hit) deskFocus = { id: hit.id, repo: hit.repo, label: hit.label || null, pinned };
-  } catch (_) { /* the strip simply shows nothing rather than failing the whole payload */ }
+  try { deskFocus = await fetchDeskFocus(); } catch (_) { /* the strip simply shows nothing rather than failing the whole payload */ }
 
   // ---- mic / worker liveness ----
   // Mics beacon voice_presence.alive_at every 30s WHILE audio frames are flowing (not merely while the
@@ -1452,7 +1453,7 @@ const { itemTitle } = require('./routes/lists')({
 
 const { TV_SIDEBAR_FONT, TV_SIDEBAR_WIDTH, tvPush } = require('./routes/tv')({ PING, gated, putSetting, sb, sbWrite, sessionClients });
 
-const { MACHINE_NAME, machineAwake, pickFocus, pushSessions } = require('./routes/sessions')({
+const { MACHINE_NAME, machineAwake, pushSessions } = require('./routes/sessions')({
   DESK_STALE_S, EPOCH, TV_SIDEBAR_FONT, TV_SIDEBAR_WIDTH, cleanSaid, convOfRow, ensureLog, gated,
   markSeen, numbered, rowConv, sb, sbInsert, sbWrite, seenMsgIds, sessionClients, settingsAll,
 });

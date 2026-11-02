@@ -37,11 +37,14 @@ class FrameReader {
 // last byte received to the connection closing.
 //
 //   ended / cancelled  the recording said how it ended. Nothing to do.
-//   unmarked           the body closed cleanly with no E or C: the watch's own code closed it without
-//                      saying why, which none of its paths should do. Reported.
-//   lost               the connection dropped while audio was flowing. Bytes stop and the close follows
-//                      at once when the process holding the other end goes away, because its operating
-//                      system closes the socket. Reported, and the audio so far is kept.
+//   unmarked           the body closed cleanly with no E or C. This is what an app killed mid-recording
+//                      looks like: the system's networking finishes the upload for a process that is no
+//                      longer there (measured in the simulator with SIGKILL: a clean end 50ms after the
+//                      last audio, no E). The watch's own code never closes without E or C, and a lost
+//                      network never produces a clean end, so this is unambiguous. Reported, audio kept.
+//   lost               the connection dropped mid-body while audio was flowing, the close following the
+//                      last byte at once: something between the app and the hub went away rather than
+//                      the network going quiet. Reported, and the audio so far is kept.
 //   stalled            the connection dropped after bytes had already stopped arriving, or while the
 //                      recording was paused, when none are expected. That is what a lost network looks
 //                      like, and the watch may still be recording and will upload the clip itself. Not

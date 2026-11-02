@@ -27,6 +27,7 @@
 		3995C08AAC931FCC8F627A14 /* StatusHubShare.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 1C987C27ED7B0DC15E346FD4 /* StatusHubShare.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		4047BFD86E0305E129C06B77 /* Info-iOS.plist in Resources */ = {isa = PBXBuildFile; fileRef = 12B2F6A89FA87D30EEC5ED56 /* Info-iOS.plist */; };
 		48D80B4A545868D78E2DC799 /* Auth.swift in Sources */ = {isa = PBXBuildFile; fileRef = 88D699B5FDC0F7476374CF07 /* Auth.swift */; };
+		49EFB53930636E1DA9D5EA54 /* LiveStream.swift in Sources */ = {isa = PBXBuildFile; fileRef = B47D0D32A221BCBB3473BE45 /* LiveStream.swift */; };
 		4A85806E830267380041B940 /* Speaker.swift in Sources */ = {isa = PBXBuildFile; fileRef = 14DD24EA8F44511AAE8A666A /* Speaker.swift */; };
 		4D60B234E0ADF4D9465FE606 /* SessionsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AC7643D7992852F757EF0A7E /* SessionsView.swift */; };
 		4DB8BD1AC2A03D075B399CA4 /* WorkoutView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A3F70079ED5B30314C83B6BD /* WorkoutView.swift */; };
@@ -201,6 +202,7 @@
 		AC7643D7992852F757EF0A7E /* SessionsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionsView.swift; sourceTree = "<group>"; };
 		AD44A10C47F3ACE73074E7B2 /* StatusHubControls.appex */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = "wrapper.app-extension"; path = StatusHubControls.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		AF1D1C7A5D148A4366347C65 /* ReposView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReposView.swift; sourceTree = "<group>"; };
+		B47D0D32A221BCBB3473BE45 /* LiveStream.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveStream.swift; sourceTree = "<group>"; };
 		BFB816327EEE71F799C893C8 /* ShareViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShareViewController.swift; sourceTree = "<group>"; };
 		C00E5B1C61B9780EE2BE1945 /* StatusHubWatchApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StatusHubWatchApp.swift; sourceTree = "<group>"; };
 		CAEDD165B40FC7BE05380CE2 /* BodyPaths.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BodyPaths.swift; sourceTree = "<group>"; };
@@ -277,6 +279,7 @@
 				FD06B420AFC554D37540118C /* Hub.swift */,
 				1395E04227DD7450E1CBC8AD /* Info.plist */,
 				011F77A80F4DF604831A2925 /* LiveListen.swift */,
+				B47D0D32A221BCBB3473BE45 /* LiveStream.swift */,
 				D2181310AB9F5E005371B8B0 /* Location.swift */,
 				50C9941AC596855E4C447F11 /* Markdown.swift */,
 				38BD5AA187D80545B616356B /* Nutrition.swift */,
@@ -579,6 +582,7 @@
 				1962BCC150815491A3F92EB1 /* HomeView.swift in Sources */,
 				C4250430822C333D041CEEA1 /* Hub.swift in Sources */,
 				62377EFC112DA32097338F77 /* LiveListen.swift in Sources */,
+				49EFB53930636E1DA9D5EA54 /* LiveStream.swift in Sources */,
 				2D7BBEABB20A4F0C080608E0 /* Location.swift in Sources */,
 				6A70F2AD168EE3EAEF10A245 /* LocationTrail.swift in Sources */,
 				2DE5C68D7C666AA0FFB4B465 /* Markdown.swift in Sources */,

@@ -31,6 +31,8 @@ final class Recorder {
         /// speech classifier (or the level line, without it) heard them. Only those of `Capture.quietMin`
         /// or more; the hub decides which of them are long enough to shorten.
         var quiet: [[TimeInterval]] = []
+        /// The `LiveStream` this recording was mirrored into, sent with the clip so the hub can tie the two.
+        var live: String?
     }
 
     enum Failure: Error {
@@ -58,6 +60,11 @@ final class Recorder {
     /// Set or cleared on a recording already running, which is how engaging rewind under the listener
     /// starts filling it at once.
     var tee: RewindTee? { didSet { sink?.tee = tee } }
+    /// The stream to the hub this recording is mirrored into while it runs (`LiveStream`), fed the same
+    /// converted audio as the file. Set by `Capture` once the microphone is live.
+    var live: LiveStream? { didSet { sink?.live = live } }
+    /// The format `live` is fed: 16 kHz mono float, the file's processing format.
+    var liveFormat: AVAudioFormat? { sink?.format }
 
     private let engine = AVAudioEngine()
     private var sink: Sink?
@@ -94,6 +101,7 @@ final class Recorder {
         guard format.sampleRate > 0, format.channelCount > 0 else { throw Failure.notStarted }
         let sink = try Sink(input: format, keepsFile: keepsFile)
         sink.tee = tee
+        sink.live = live
         let detector = classifies ? VoiceDetector(format: format, report: { [weak self] speech in
             DispatchQueue.main.async { MainActor.assumeIsolated { self?.onVoice?(speech) } }
         }) : nil
@@ -327,7 +335,7 @@ final class Recorder {
 private final class Sink: @unchecked Sendable {
     private let lock = NSLock()
     private let converter: AVAudioConverter
-    private let format: AVAudioFormat
+    let format: AVAudioFormat
     /// The microphone's format the converter was built for.
     let input: AVAudioFormat
     private var file: AVAudioFile?
@@ -337,6 +345,11 @@ private final class Sink: @unchecked Sendable {
     var tee: RewindTee? {
         get { lock.withLock { teeing } }
         set { lock.withLock { teeing = newValue } }
+    }
+    private var living: LiveStream?
+    var live: LiveStream? {
+        get { lock.withLock { living } }
+        set { lock.withLock { living = newValue } }
     }
     private var written: TimeInterval = 0
     private var loudest: Float = 0
@@ -374,6 +387,7 @@ private final class Sink: @unchecked Sendable {
         lock.lock()
         defer { lock.unlock() }
         if out.frameLength > 0 { teeing?.write(out) }
+        if out.frameLength > 0 { living?.write(out) }
         if out.frameLength > 0, let file {
             try? file.write(from: out)
             written += Double(out.frameLength) / format.sampleRate

@@ -653,12 +653,41 @@ still own the microphone, so the app has been relaunched. The clip in memory is 
 Searching `client_log` for a `record-start` with no end after it finds these (about 1% of starts).
 Whether it is a crash or watchOS ending the app is not yet known.
 
-**Each one is reported to the ops responder**, which starts an agent on it. `/api/clientlog` runs
-`checkRecordings` (`server/routes/voice.js`, rule in `server/lib/outcomes.js`) on every batch holding
-a `record-start`: an earlier start whose microphone opened and that has no `record-stop`,
-`record-cancel` or `mic-failed` before the next start is reported as an error, once, when that next
-start arrives. A start stopped before its microphone opened ends without a `record-stop` by design and
-is not reported. Neither is the newest start, which may still be running.
+**Every command and follow-up is streamed to the hub while it records** (`Watch/LiveStream.swift` →
+`/api/voice-live`, `server/lib/livestream.js`), so a recording lost this way is reported THE MOMENT IT
+IS LOST, with the audio received so far kept and transcribed. The stream opens when the microphone goes
+live and carries AAC in ADTS framing (about 30 kbps), each frame typed: `A` audio, `P` / `R` the
+microphone paused and resumed, and `E` / `C` the recording ended (being sent) or was cancelled. Every way
+out of `Capture` sends `E` or `C` before closing (`closeLive`), so the hub reads the end like this:
+
+| the hub saw | verdict | done |
+|---|---|---|
+| `E` or `C` | ended / cancelled | nothing |
+| the body closed cleanly with neither | `unmarked`: the app was killed | reported, audio kept in `voice-clips/lost/`, transcribed into the report |
+| the connection dropped mid-audio | `lost` | the same |
+| the connection dropped after the bytes had already stopped, or while paused | `stalled`: a network gone quiet, the watch may still be recording | logged only |
+
+A killed app does NOT drop the connection: the system's networking ends the body cleanly for a process
+that is no longer there. Measured in the simulator with SIGKILL mid-recording: a clean end 50ms after
+the last audio and no `E`, which is why `unmarked` is the death signal and not a broken connection. Not
+yet measured on a watch, where traffic may go through the iPhone. Every stream logs its verdict as
+`[voice-live] <id> <verdict>: …` in the hub log, with the gap from the last byte to the close.
+
+The finished clip still goes up through `/api/voice-command` (carrying `live=<id>`); the stream is only
+the copy that survives the app. On the watch, `live-open`, `live-done` and `live-dropped` (the stream
+failed while the recording carried on) are in `client_log`.
+
+**The next-start check is the backstop** for the one case the stream cannot see: an app that dies while
+its network is down, or a stream that never opened. `/api/clientlog` runs `checkRecordings`
+(`server/routes/voice.js`, rule in `server/lib/outcomes.js`) on every batch holding a `record-start`: an
+earlier start whose microphone opened and that has no `record-stop`, `record-cancel`, `mic-failed` or
+`record-lost` (written by the hub when the stream reported it) before the next start is reported, once.
+A start stopped before its microphone opened ends without a `record-stop` by design and is not reported.
+
+**Testing it without starting an incident**: a simulator build reads `HUB_HOST` (`Shared/Auth.swift`),
+so `SIMCTL_CHILD_HUB_HOST=http://127.0.0.1:<port> SIMCTL_CHILD_HUB_TOKEN=x xcrun simctl launch … -record
+<seconds>` records a locked command against a stand-in on the Mac (`-record 0` records until the app
+is killed). Pointed at the real hub, killing it mid-recording is a real incident.
 
 ### Sending it
 

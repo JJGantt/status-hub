@@ -321,6 +321,7 @@ enum Hub {
         }
         // A locked recording is long and full of pauses: the hub gives it the larger Whisper and shortens
         // the pauses marked here before transcribing.
+        if let live = clip.live { query += "&live=\(live)" }
         if clip.locked {
             query += "&flow=locked"
             if !clip.quiet.isEmpty {
@@ -668,6 +669,11 @@ enum Hub {
             r.httpBody = try JSONSerialization.data(withJSONObject: body)
         }
         return r
+    }
+
+    /// An authenticated POST for `LiveStream`, which needs its own delegate session for a streamed body.
+    static func liveRequest(_ path: String) throws -> URLRequest {
+        try request(path, method: "POST", timeout: 900)
     }
 
     private static func check(_ resp: URLResponse) async throws {

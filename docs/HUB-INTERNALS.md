@@ -367,6 +367,8 @@ screen: one should never pile up, and when one does it is investigated from the 
 attempt is in the hub log with its size, type, duration and the server's answer —
 `fly logs -a jared-status-hub | grep voice-send-fail`.
 
+A watch command is ALSO streamed while it records to `/api/voice-live`, which reports a recording cut off by the app dying and keeps its audio (`docs/WATCH.md` § The wrist can drop mid-recording); `server.requestTimeout` is raised to 30 minutes for it.
+
 There is no size or length limit on a command anywhere. `/api/voice-command` streams the body to a temp
 file, and `lib/transcribe.js` sends it to Groq as recorded when it is under Groq's 25 MB direct-upload
 cap, and otherwise re-encodes it (ffmpeg, installed by the Dockerfile) to 16 kHz mono Opus in half-hour

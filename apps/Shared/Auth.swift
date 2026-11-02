@@ -5,7 +5,13 @@ import Security
 // Stores the hub password in the Keychain and derives the same token the web cookie uses:
 // sha256("status-hub:" + password), sent as the X-Hub-Token header.
 enum Auth {
+    #if targetEnvironment(simulator)
+    /// `SIMCTL_CHILD_HUB_HOST=http://127.0.0.1:<port>` points a simulator at a hub on this Mac, so a test
+    /// that kills the app mid-recording reports nothing to the live ops responder.
+    static let host = ProcessInfo.processInfo.environment["HUB_HOST"] ?? "https://jared-status-hub.fly.dev"
+    #else
     static let host = "https://jared-status-hub.fly.dev"
+    #endif
     private static let service = "com.jaredgantt.statushub"
     private static let account = "hubPassword"
     // Explicit so the widget extension — a different bundle id, hence a different DEFAULT keychain

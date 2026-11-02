@@ -160,7 +160,33 @@ final class Capture: ObservableObject {
             // to start talking, where the gentle `.start` tap was easy to miss.
             WKInterfaceDevice.current().play(.directionUp)
             self?.recorder.cue()
+            self?.openLive(owner, flow)
         }
+    }
+
+    /// The command or follow-up being recorded, streamed to the hub as it records, so a recording that
+    /// dies with the app is reported the moment it dies and the hub keeps what was said (`LiveStream`).
+    private var live: LiveStream?
+
+    private func openLive(_ owner: Owner, _ flow: Flow) {
+        guard let format = recorder.liveFormat else { return }
+        let view: String
+        switch owner {
+        case .hub: view = "chat"
+        case .session: view = "session"
+        default: return
+        }
+        live = LiveStream.open(view: view, flow: flow.rawValue, format: format)
+        recorder.live = live
+    }
+
+    /// Every way out of a recording tells the stream which one it was before it closes.
+    private func closeLive(cancelled: Bool) -> String? {
+        guard let live else { return nil }
+        recorder.live = nil
+        self.live = nil
+        live.finish(cancelled: cancelled)
+        return live.id
     }
 
     /// Engages or drops always-on listening: the microphone is held, each utterance is cut at the
@@ -235,6 +261,7 @@ final class Capture: ObservableObject {
         reset()
         if arming { arming = false; resumeSoon(); return nil }
         var clip = recorder.stop()
+        clip?.live = closeLive(cancelled: false)
         if wasLocked {
             markQuiet(true, at: segment)   // a stretch still running when the user pressed counts too
             clip?.locked = true
@@ -254,6 +281,7 @@ final class Capture: ObservableObject {
         reset()
         if arming { arming = false; resumeSoon(); return }
         recorder.cancel()
+        _ = closeLive(cancelled: true)
         if muted { setMuted(false) }
         resumeSoon()
         StayAwake.shared.sessionReleased()
@@ -382,6 +410,7 @@ final class Capture: ObservableObject {
         if arming { return cancel() }   // the microphone never opened: there is nothing to keep
         if flow == .locked { markQuiet(true, at: segment) }   // the pause is not a silence in the clip
         recorder.pause()
+        live?.mark(paused: true)
         paused = true
         spokeBefore = spokeBefore || endpoint.heard
         if mutes { setMuted(false) }
@@ -402,6 +431,7 @@ final class Capture: ObservableObject {
             return
         }
         paused = false
+        live?.mark(paused: false)
         endpoint.restart()
         resumedAt = segment
         if mutes { setMuted(true) }

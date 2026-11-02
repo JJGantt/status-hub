@@ -248,6 +248,17 @@ struct RootView: View {
             if let i = args.firstIndex(of: "-page"), i + 1 < args.count, let p = Page(rawValue: args[i + 1]) {
                 page = p
             }
+            // `-record <seconds>`: a locked command recorded for that long, then stopped, so the stream to
+            // the hub (LiveStream) can be watched end to end. 0 records until the app is killed.
+            if let i = args.firstIndex(of: "-record"), i + 1 < args.count, let secs = Double(args[i + 1]) {
+                Task {
+                    try? await Task.sleep(for: .seconds(2))
+                    chat.startRecording(flow: .locked)
+                    guard secs > 0 else { return }
+                    try? await Task.sleep(for: .seconds(secs))
+                    chat.stopRecording()
+                }
+            }
             #endif
         }
         .onChange(of: page) { _, _ in follow() }

@@ -553,8 +553,8 @@ module.exports = function (ctx) {
         fs.promises.unlink(m4a).catch(() => {});
       }
     }
-    const how = verdict === 'lost' ? 'the connection dropped while audio was still arriving, so the app most likely died'
-      : 'the watch closed the stream without saying the recording had ended or been cancelled';
+    const how = verdict === 'lost' ? 'the connection dropped while audio was still arriving'
+      : 'the stream closed without the recording saying it had ended or been cancelled, which is what the app being killed looks like';
     ops.report(`watch recording lost after ${seconds.toFixed(1)}s (${meta.view || 'chat'}${meta.flow ? `, ${meta.flow}` : ''}): ${how}; `
       + (words ? `it had heard: "${words.slice(0, 300)}"` : 'no words recovered'),
       { machine: 'client', service: 'watch', context: { live: meta.id, verdict, seconds, audio_bytes: audio.length, kept, words,

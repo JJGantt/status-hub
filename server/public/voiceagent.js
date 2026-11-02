@@ -76,9 +76,20 @@ function boot() {
   watchMic();                      // the microphone opens only while something is recording
   const activity = activityBar();
   // Heard-you pop. The UI plays it ITSELF the instant the words land on screen — synced to the paint.
+  // ONLY WHILE THE PAGE IS ON SCREEN. A media element takes a non-mixing playback session, so a pop
+  // from a page running behind another app pauses that app's video — and the iOS app keeps this page
+  // running for minutes after it leaves the screen, while every command from any device (the watch, a
+  // false wake on a video's own speech) arrives here as `working`. In the app each pop is kept in
+  // client_log (`pop`, with `played`), so a reported pause can be checked against it.
   const popSound = new Audio('/pop.m4a');
   popSound.preload = 'auto';
-  const playPop = () => { try { popSound.currentTime = 0; popSound.play().catch(() => {}); } catch (_) {} };
+  const inApp = !!(window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.alarmAudio);
+  const playPop = () => {
+    const shown = document.visibilityState === 'visible';
+    if (inApp) clientLog({ src: 'phone', ev: 'pop', played: shown });
+    if (!shown) return;
+    try { popSound.currentTime = 0; popSound.play().catch(() => {}); } catch (_) {}
+  };
   _card = initCard();                // null if the conversation card isn't on this page
   setMode('hub');                    // default indicator until settings load
 

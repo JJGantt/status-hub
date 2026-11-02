@@ -207,3 +207,51 @@ describe('sessions across a restart', () => {
     } finally { supa.failWrites = false; await broken.stop(); }
   });
 });
+
+// Who may call a route is decided by which router it is on (`pub` or `gated` in server.js and
+// routes/), never by where it is defined. This reads every registration from the source, so a new
+// route is covered the moment it is written.
+describe('which routes are public', () => {
+  const fs = require('fs');
+  const path = require('path');
+  const root = path.join(__dirname, '..');
+  const files = ['server.js', ...(fs.existsSync(path.join(root, 'routes'))
+    ? fs.readdirSync(path.join(root, 'routes')).filter((f) => f.endsWith('.js')).map((f) => `routes/${f}`) : [])];
+  const routes = [];
+  for (const f of files) {
+    const src = fs.readFileSync(path.join(root, f), 'utf8');
+    for (const m of src.matchAll(/\b(pub|gated)\.(get|post|put|patch|delete)\(\s*(\[[^\]]*\]|'[^']*'|`[^`]*`)/g)) {
+      const paths = m[3].startsWith('[') ? [...m[3].matchAll(/'([^']*)'/g)].map((x) => x[1]) : [m[3].slice(1, -1)];
+      for (const p of paths) routes.push({ router: m[1], method: m[2].toUpperCase(), path: p, file: f });
+    }
+  }
+  // Every path anyone may call signed out, and why: the hub's own health and sign-in; the legal pages
+  // and Search Console file Google fetches anonymously; the Menu app's routes, which check the owner
+  // themselves; the surf app's page and feeds (public data, shown with no sign-in).
+  const PUBLIC = new Set([
+    'GET /healthz', 'GET /login', 'POST /login', 'GET /${doc}', 'GET /${process.env.GSC_VERIFICATION}',
+    'POST /api/cg/transcribe', 'GET /api/cg/orders', 'POST /api/cg/orders', 'POST /api/cg/orders/standardize',
+    'POST /api/cg/orders/done',
+    'GET /surf', 'GET /api/surf/live', 'GET /api/surf/stream', 'GET /api/surf/history',
+    'GET /app.css', 'GET /surf.css', 'GET /dist/surf.js',
+  ]);
+
+  test('the source was read', () => assert.ok(routes.filter((r) => r.router === 'gated').length > 50));
+  test('the public routes are exactly the intended set', () => {
+    const pub = new Set(routes.filter((r) => r.router === 'pub').map((r) => `${r.method} ${r.path}`));
+    assert.deepEqual([...pub].sort(), [...PUBLIC].sort());
+  });
+  test('every gated route refuses a signed-out request', async () => {
+    for (const r of routes.filter((x) => x.router === 'gated')) {
+      const p = r.path.replace(/:(\w+)/g, 'x');
+      const res = await hub.req(p, { method: r.method, headers: { 'Content-Type': 'application/json' },
+        body: r.method === 'GET' ? undefined : '{}' });
+      assert.ok(res.status === 401 || (res.status === 302 && res.headers.get('location') === '/login'),
+        `${r.method} ${r.path} (${r.file}) answered ${res.status} signed out`);
+    }
+  });
+  test('the static client files are gated too, all but the surf page\'s three', async () => {
+    assert.equal((await hub.req('/core.js')).status, 302);
+    assert.equal((await hub.req('/surf.css')).status, 200);
+  });
+});

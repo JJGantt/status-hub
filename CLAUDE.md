@@ -39,14 +39,14 @@ a bundle cannot be stale against the source it shipped with. Locally, `npm run b
 the linked `supabase` CLI), up to ten minutes: a deploy makes every open page reload, and a page on a
 bundle older than `safeReload` loses a clip mid-sentence.
 
-## The auth gate is positional
+## A route's router is its auth
 
-One `app.use` in `server.js` gates everything **defined below it**. Public, because they are
-declared above it: `/healthz`, `/login`, `/privacy`, `/terms`, the Search Console verification
-file named by `GSC_VERIFICATION`, and the restaurant watch app's `/api/cg/*` routes (which check their
-own owner key). A new route added near the top of the file is world-readable. The gate itself lets
-through one named set, `PUBLIC_SURF` (the `/surf` page, its bundle and stylesheets, and
-`/api/surf/live|stream|history`), wherever those are declared.
+Every route is on `gated` (behind the auth gate) or `pub` (anyone), and nothing else decides it.
+Public: `/healthz`, `/login`, `/privacy`, `/terms`, the Search Console verification file named by
+`GSC_VERIFICATION`, the restaurant watch app's `/api/cg/*` routes (which check their own owner
+token), and the surf app's page, assets and `/api/surf/live|stream|history`. Putting a route on `pub`
+fails `npm test` until its path is added to the public list in `test/auth.test.js`, which is the
+point: it has to be a decision.
 
 The legal pages and the verification file are deliberately public: Google fetches them as an
 anonymous crawler while verifying the domain and reviewing the OAuth app, and behind the gate it

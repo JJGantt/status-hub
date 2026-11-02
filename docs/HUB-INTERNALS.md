@@ -713,11 +713,13 @@ The kiosk token is `TV_TOKEN` on Fly, and its copies are:
 
 A new token has to reach every one of them. None of them is in git.
 
-The gate is one `app.use` and it protects **everything defined below it**, static assets
-included. Declared **above** it, and therefore public: `/healthz`, `/login`, `/privacy`,
-`/terms`, the Search Console verification file named by `GSC_VERIFICATION`, and `/api/cg/*` (gated by
-their own owner key, above). The gate also passes the `PUBLIC_SURF` set (the `/surf` page with its
-bundle and stylesheets, and `/api/surf/live`, `/stream`, `/history`) wherever it is declared. The legal pages
+Every route is registered on one of two routers, and that is its auth: **`gated`** (behind `hubGate`,
+static assets included) or **`pub`**. Both are mounted once at the top of server.js, so where a route
+is defined does not matter. Public: `/healthz`, `/login`, `/privacy`, `/terms`, the Search Console
+verification file named by `GSC_VERIFICATION`, `/api/cg/*` (gated by their own owner check, above),
+and the surf app's page with its bundle and stylesheets and `/api/surf/live`, `/stream`, `/history`.
+`test/auth.test.js` reads every registration from the source: the public set must equal its list, and
+every gated route must refuse a signed-out request. The legal pages
 and the verification file have to be anonymous — Google fetches them as an unauthenticated
 crawler, and behind the gate it would get the login page and fail every check.
 

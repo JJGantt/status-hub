@@ -284,6 +284,15 @@ const TV_CAL_HTML = fs.readFileSync(path.join(__dirname, 'public', 'tv-calendar.
 
 const app = express();
 app.use(express.urlencoded({ extended: false }));
+// EVERY ROUTE IS ON ONE OF TWO ROUTERS, and that choice is its auth: `pub` answers anyone, `gated`
+// only a signed-in request (`hubGate`, lib/auth.js). They are mounted here, once, so where in a file a
+// route is defined has no bearing on who may call it. A route belongs on `pub` only when it has to be
+// reachable signed out, and test/auth.test.js holds the list of every public path.
+const pub = express.Router();
+const gated = express.Router();
+app.use(pub);
+app.use(hubGate);
+app.use(gated);
 
 // ---- Supabase REST helper (service key, server-side only) ----
 async function sb(path) {
@@ -1735,14 +1744,14 @@ function recordLoginFailure(ip, now) {
   }
 }
 
-// Public (before the auth gate). Reports the commit this instance is RUNNING, which is the only way
+// Public. Reports the commit this instance is RUNNING, which is the only way
 // to tell a deploy that shipped from one that silently never ran — a push whose workflow never fired
 // looks identical to a successful one from the outside, and did exactly that twice on 2026-08-26.
 // COMMIT is stamped at deploy time; 'dev' locally.
-app.get('/healthz', (req, res) => res.type('text').send('ok ' + (process.env.COMMIT || 'dev')));
+pub.get('/healthz', (req, res) => res.type('text').send('ok ' + (process.env.COMMIT || 'dev')));
 
 // The restaurant watch app's voice input: the same Groq Whisper as /api/voice-command, transcription
-// only. It sits before the auth gate because that app (the Menu app, repo CapitalGrilleApp) cannot carry
+// only. It is on `pub` because that app (the Menu app, repo CapitalGrilleApp) cannot carry
 // the hub token — it ships to TestFlight testers, so anything built into it is public. Only the OWNER's
 // device gets through, and all it can do here is turn a clip into words.
 //
@@ -1777,7 +1786,7 @@ function cgOwner(req) {
   const key = String(req.headers['x-owner-key'] || '');
   return !!key && safeEqual(sha256hex(key), CG_OWNER_KEY_SHA256);
 }
-app.post('/api/cg/transcribe', async (req, res) => {
+pub.post('/api/cg/transcribe', async (req, res) => {
   const arrived = Date.now();
   if (!cgOwner(req)) {
     const sent = req.headers['x-owner-token'] || req.headers['x-owner-key'];
@@ -1835,12 +1844,12 @@ async function cgOrderModels() {
   const s = await settingsAll().catch(() => ({}));
   return { first: s.cg_orders_model_first || 'claude-sonnet-5', second: s.cg_orders_model_second || 'claude-sonnet-5' };
 }
-app.get('/api/cg/orders', async (req, res) => {
+pub.get('/api/cg/orders', async (req, res) => {
   if (!cgOwner(req)) return res.status(401).json({ error: 'unauthorized' });
   try { res.json({ orders: await cgOrdersOpen(), models: await cgOrderModels() }); }
   catch (e) { res.status(502).json({ error: String(e.message || e) }); }
 });
-app.post('/api/cg/orders', express.json({ limit: '64kb' }), async (req, res) => {
+pub.post('/api/cg/orders', express.json({ limit: '64kb' }), async (req, res) => {
   if (!cgOwner(req)) return res.status(401).json({ error: 'unauthorized' });
   const b = req.body || {};
   const id = /^[0-9a-f-]{36}$/i.test(String(b.interaction_id || '')) ? String(b.interaction_id).toLowerCase() : null;
@@ -1886,7 +1895,7 @@ app.post('/api/cg/orders', express.json({ limit: '64kb' }), async (req, res) => 
 });
 // The second pass: each row the first pass wrote, matched to the menu ({id, kind, item_id, name, note}) or
 // left as heard ({id} alone). Either way the row is marked standardized.
-app.post('/api/cg/orders/standardize', express.json({ limit: '64kb' }), async (req, res) => {
+pub.post('/api/cg/orders/standardize', express.json({ limit: '64kb' }), async (req, res) => {
   if (!cgOwner(req)) return res.status(401).json({ error: 'unauthorized' });
   const ups = Array.isArray(req.body && req.body.updates) ? req.body.updates : [];
   const now = new Date().toISOString();
@@ -1906,7 +1915,7 @@ app.post('/api/cg/orders/standardize', express.json({ limit: '64kb' }), async (r
   } catch (e) { res.status(502).json({ error: String(e.message || e) }); }
 });
 // Marks one order done ({id}) or every open one ({all: true}).
-app.post('/api/cg/orders/done', express.json(), async (req, res) => {
+pub.post('/api/cg/orders/done', express.json(), async (req, res) => {
   if (!cgOwner(req)) return res.status(401).json({ error: 'unauthorized' });
   const b = req.body || {};
   const which = b.all ? 'done_at=is.null' : /^[0-9a-f-]{36}$/i.test(String(b.id || '')) ? `id=eq.${b.id}` : null;
@@ -1916,8 +1925,8 @@ app.post('/api/cg/orders/done', express.json(), async (req, res) => {
     res.json({ orders: await cgOrdersOpen() });
   } catch (e) { res.status(502).json({ error: String(e.message || e) }); }
 });
-app.get('/login', (req, res) => res.type('html').send(loginHtml()));
-app.post('/login', (req, res) => {
+pub.get('/login', (req, res) => res.type('html').send(loginHtml()));
+pub.post('/login', (req, res) => {
   const ip = clientIp(req), now = Date.now();
   if (loginLocked(ip, now)) return res.status(429).type('html').send(loginHtml('Too many attempts'));
   if (safeEqual(req.body.password || '', HUB_PASSWORD)) {
@@ -1932,7 +1941,7 @@ app.post('/login', (req, res) => {
   res.status(401).type('html').send(loginHtml('Wrong password'));
 });
 
-// Public, unauthenticated, and deliberately ABOVE the auth gate: Google has to fetch these
+// Public, unauthenticated, and deliberately on `pub`: Google has to fetch these
 // as an anonymous crawler. Behind the gate it gets the login page and every check fails.
 //
 // Why the hub hosts them at all: publishing an OAuth app to production (which the Gmail
@@ -1945,12 +1954,12 @@ app.post('/login', (req, res) => {
 // on it rather than answering any /google*.html means this cannot be used by anyone else to
 // claim the domain in their own Search Console.
 if (process.env.GSC_VERIFICATION) {
-  app.get(`/${process.env.GSC_VERIFICATION}`, (req, res) =>
+  pub.get(`/${process.env.GSC_VERIFICATION}`, (req, res) =>
     res.type('text').send(`google-site-verification: ${process.env.GSC_VERIFICATION}`));
 }
 
 for (const doc of ['privacy', 'terms']) {
-  app.get(`/${doc}`, (req, res) => {
+  pub.get(`/${doc}`, (req, res) => {
     const file = path.join(__dirname, 'legal', `${doc}.html`);
     if (!fs.existsSync(file)) return res.status(404).type('text').send('not found');
     res.setHeader('Cache-Control', 'no-cache');
@@ -1961,18 +1970,18 @@ for (const doc of ['privacy', 'terms']) {
 // THE SURF APP'S PAGE AND FEEDS ARE PUBLIC, and deliberately: Gnarcast (the surf-app repo) shows them
 // with nothing to sign in to, and nothing in them is personal — a surf forecast, the wind and the
 // buoys, all of it public NOAA and Surfline data. The page's bundle and stylesheets ride along,
-// because it cannot render without them. Everything else stays behind the gate.
-const PUBLIC_SURF = new Set(['/surf', '/api/surf/live', '/api/surf/stream', '/api/surf/history',
-                             '/app.css', '/surf.css', '/dist/surf.js']);
+// because it cannot render without them. The routes themselves are on `pub` where they are defined.
+const serveStatic = express.static(path.join(__dirname, 'public'), { setHeaders: (res) => res.setHeader('Cache-Control', 'no-cache') });
+pub.get(['/app.css', '/surf.css', '/dist/surf.js'], serveStatic);
 
-// Auth gate — everything below requires the cookie (or x-hub-token header). The browser
-// sends the cookie on same-origin module/css fetches automatically, so static assets are
-// served behind this gate too.
+// The auth gate (mounted between `pub` and `gated`, at the top). A credential is any of lib/auth.js's
+// three, in the `hub` cookie or a header. The browser sends the cookie on same-origin module/css
+// fetches automatically, so the static assets on `gated` need nothing more.
 // The token never stays in a URL: a page load carrying `?token=` (the Pi's kiosk, which can only be
 // given a URL) is signed in with the device cookie and redirected to the same URL without it, and the
 // token is never logged.
 const queryTokenSeen = new Set();
-app.use(async (req, res, next) => {
+async function hubGate(req, res, next) {
   const q = typeof req.query.token === 'string' ? req.query.token : '';
   const nav = isNavigation(req);
   const who = auth.identify(req);
@@ -1986,7 +1995,6 @@ app.use(async (req, res, next) => {
     else if (nav && who.from === 'cookie' && who.kind === 'password' && isBrowser(req)) await auth.upgrade(req, res);
     return next();
   }
-  if (PUBLIC_SURF.has(req.path)) return next();
   // A machine client still sending `?token=`. Accepted until each has moved to the header; the path
   // (never the token) is logged once per boot so the stragglers can be found.
   if (q && auth.isDeviceToken(q)) {
@@ -1995,11 +2003,11 @@ app.use(async (req, res, next) => {
   }
   if (req.path.startsWith('/api')) return res.status(401).json({ error: 'unauthorized' });
   res.redirect('/login');
-});
+}
 
 // The login sessions: list them, revoke one (`{id}`) or every one (`{all: true}`). lib/auth.js.
-app.get('/api/auth/sessions', (req, res) => res.json({ sessions: auth.list(req) }));
-app.post('/api/auth/revoke', express.json(), async (req, res) => {
+gated.get('/api/auth/sessions', (req, res) => res.json({ sessions: auth.list(req) }));
+gated.post('/api/auth/revoke', express.json(), async (req, res) => {
   const b = req.body || {};
   if (!b.all && !b.id) return res.status(400).json({ error: 'id or all' });
   try { res.json({ revoked: await auth.revoke({ id: String(b.id || ''), all: !!b.all }) }); }
@@ -2017,47 +2025,47 @@ app.post('/api/auth/revoke', express.json(), async (req, res) => {
 //
 // `/phone` is the same page under its own name, for looking at it on something that is not a phone.
 // The full detail page is '/page'. no-cache so a deploy is never masked by a stale cached page.
-app.get('/tv', (req, res) => {
+gated.get('/tv', (req, res) => {
   res.setHeader('Cache-Control', 'no-cache');
   res.type('html').send(TV_HTML);
 });
-app.get(['/', '/phone'], (req, res) => {
+gated.get(['/', '/phone'], (req, res) => {
   res.setHeader('Cache-Control', 'no-cache');
   res.type('html').send(PHONE_HTML);
 });
-app.get('/tv-session-focus', (req, res) => {
+gated.get('/tv-session-focus', (req, res) => {
   res.setHeader('Cache-Control', 'no-cache');
   res.type('html').send(TV_FOCUS_HTML);
 });
-app.get('/tv-sidebar', (req, res) => {
+gated.get('/tv-sidebar', (req, res) => {
   res.setHeader('Cache-Control', 'no-cache');
   res.type('html').send(TV_SIDEBAR_HTML);
 });
-app.get('/tv-health', (req, res) => {
+gated.get('/tv-health', (req, res) => {
   res.setHeader('Cache-Control', 'no-cache');
   res.type('html').send(TV_HEALTH_HTML);
 });
-app.get('/page', (req, res) => {
+gated.get('/page', (req, res) => {
   res.setHeader('Cache-Control', 'no-cache');
   res.type('html').send(DASHBOARD_HTML);
 });
-app.get('/mic', (req, res) => {
+gated.get('/mic', (req, res) => {
   res.setHeader('Cache-Control', 'no-cache');
   res.type('html').send(MIC_HTML);
 });
 // A spare device left on this page IS an alarm clock: the same clock as the hub page, standalone. It
 // rings from its own timer and its own speaker, so nothing has to be delivered at the moment itself.
-app.get('/alarm', (req, res) => {
+gated.get('/alarm', (req, res) => {
   res.setHeader('Cache-Control', 'no-cache');
   res.type('html').send(ALARM_HTML);
 });
 // Two pages on purpose: wallmode.js switches only kiosk paths, so a spoken "put the calendar on
 // the TV" moves /tv-calendar and never yanks a phone sitting on /calendar.
-app.get('/calendar', (req, res) => {
+gated.get('/calendar', (req, res) => {
   res.setHeader('Cache-Control', 'no-cache');
   res.type('html').send(CAL_HTML);
 });
-app.get('/tv-calendar', (req, res) => {
+gated.get('/tv-calendar', (req, res) => {
   res.setHeader('Cache-Control', 'no-cache');
   res.type('html').send(TV_CAL_HTML);
 });
@@ -2122,7 +2130,7 @@ const when = (iso) => {
   } catch (_) { return ''; }
 };
 
-app.get('/report/:id', async (req, res) => {
+gated.get('/report/:id', async (req, res) => {
   let rows;
   try { rows = await sb(`reports?id=eq.${encodeURIComponent(req.params.id)}&select=*`); }
   catch (e) { return res.status(502).type('text').send('could not read report'); }
@@ -2139,9 +2147,8 @@ ${r.html || ''}
 </body></html>`);
 });
 
-// Sits below the auth gate on purpose: it was briefly above it, which left the whole surf
-// archive readable by anyone with the URL.
-app.get('/api/surf/history', async (req, res) => {
+// Public, with the rest of the surf app's feeds (THE SURF APP'S PAGE AND FEEDS ARE PUBLIC, above).
+pub.get('/api/surf/history', async (req, res) => {
   try {
     if (surfHistCache.body && Date.now() - surfHistCache.at < SURFHIST_BACKSTOP_MS)
       return res.json(surfHistCache.body);
@@ -2244,7 +2251,7 @@ app.get('/api/surf/history', async (req, res) => {
 
 // The index as JSON, for the phone's reports pane. `html` is deliberately not selected: a list of a
 // hundred reports would otherwise carry every page's full markup to a screen that renders none of it.
-app.get('/api/reports', async (req, res) => {
+gated.get('/api/reports', async (req, res) => {
   try {
     res.json({ reports: await sb('reports?select=id,title,summary,repo,created&order=created.desc&limit=100') || [] });
   } catch (_) {
@@ -2253,7 +2260,7 @@ app.get('/api/reports', async (req, res) => {
 });
 
 // Every report, newest first — the way back to something you read last week.
-app.get('/reports', async (req, res) => {
+gated.get('/reports', async (req, res) => {
   let rows = [];
   try { rows = await sb('reports?select=id,title,summary,repo,created&order=created.desc&limit=100'); }
   catch (_) {}
@@ -2273,11 +2280,11 @@ li a{font-size:17px;font-weight:600;text-decoration:none}
 ${items ? `<ul>${items}</ul>` : '<p class=meta>Nothing published yet.</p>'}
 </body></html>`);
 });
-// Static client assets (core.js, app.css, cards/*.js) — behind the auth gate above.
+// Static client assets (core.js, app.css, cards/*.js), behind the gate.
 // no-cache (revalidate via ETag each load) so a deploy is never masked by a stale cached asset.
-app.use(express.static(path.join(__dirname, 'public'), { setHeaders: (res) => res.setHeader('Cache-Control', 'no-cache') }));
+gated.use(serveStatic);
 
-app.get('/api/status', async (req, res) => {
+gated.get('/api/status', async (req, res) => {
   try { res.json(await buildStatus()); }
   catch (e) { res.status(500).json({ error: String(e.message || e) }); }
 });
@@ -2308,7 +2315,7 @@ function timed(handler) {
 // health bar under them, built from those pieces alone — not the dashboard.
 // Per-minute frames put it around 37KB, once an hour — the frames dominate, and the alternative
 // (coarser steps) is what made the centre number look stuck.
-app.get('/api/rings', timed(async (req, res) => {
+gated.get('/api/rings', timed(async (req, res) => {
   try {
     const [core, train] = await Promise.all([nutritionCore(), trainingCore()]);
     const P = paceOf(core).paceData;
@@ -2394,7 +2401,7 @@ async function workoutDay(date) {
     workoutDayCache.set(date, { body, at: Date.now() });
     return body;
 }
-app.get('/api/workout-day', async (req, res) => {
+gated.get('/api/workout-day', async (req, res) => {
   try {
     const date = String(req.query.date || '').slice(0, 10);
     if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return res.status(400).json({ error: 'bad date' });
@@ -2421,7 +2428,7 @@ function bodyColours(muscleColours) {
   return out;
 }
 
-app.get('/api/workout-now', timed(async (req, res) => {
+gated.get('/api/workout-now', timed(async (req, res) => {
   try {
     const st = await trainingCore();
     const day = await workoutDay(st.today);
@@ -2483,7 +2490,7 @@ function heatPrefix(full) {
 const NUT_HISTORY_MS = 10 * 60 * 1000;
 const daysBefore = (date, n) => new Date(Date.parse(date + 'T12:00:00Z') - n * 86400000).toISOString().slice(0, 10);
 const nutHistoryCache = new Map();
-app.get('/api/nut-history', timed(async (req, res) => {
+gated.get('/api/nut-history', timed(async (req, res) => {
   try {
     // `all=1` is the whole history, back to the first meal or set logged (the watch's history view,
     // which scrolls); otherwise the last `weeks`, at most 30 (the health page at rest).
@@ -2533,7 +2540,7 @@ app.get('/api/nut-history', timed(async (req, res) => {
 // The weight view (the phone's cards/maintviz.js), for the watch: the weigh-ins, each day's intake, the
 // maintenance and target curves replayed per day, and the fitted trend over the window. All computed
 // for the phone's card already; this builds only that piece, not the whole dashboard.
-app.get('/api/weight-view', timed(async (req, res) => {
+gated.get('/api/weight-view', timed(async (req, res) => {
   try {
     const core = await nutritionCore();
     const m = maintenanceWithHistory(core), v = m.viz || {};
@@ -2547,7 +2554,7 @@ app.get('/api/weight-view', timed(async (req, res) => {
   } catch (e) { res.status(500).json({ error: String(e.message || e) }); }
 }));
 
-app.get('/api/heat-history', timed(async (req, res) => {
+gated.get('/api/heat-history', timed(async (req, res) => {
   try {
     if (heatHistCache.body && Date.now() - heatHistCache.at < HEATHIST_BACKSTOP_MS) return res.json(heatHistCache.body);
     const today = nutritionWindow().day;
@@ -2641,7 +2648,7 @@ async function recomputeMute() {
 }
 
 // Take or give back one holder's mute. Every capture path uses this rather than writing `voice_muted`.
-app.post('/api/voice-mute', express.json(), async (req, res) => {
+gated.post('/api/voice-mute', express.json(), async (req, res) => {
   try {
     const holder = String((req.body && req.body.holder) || '').trim().toLowerCase();
     if (!/^[a-z0-9][a-z0-9-]{0,23}$/.test(holder)) return res.status(400).json({ error: 'holder required' });
@@ -2653,7 +2660,7 @@ app.post('/api/voice-mute', express.json(), async (req, res) => {
   } catch (e) { res.status(500).json({ error: String(e.message || e) }); }
 });
 
-app.get('/api/settings', async (req, res) => {
+gated.get('/api/settings', async (req, res) => {
   try {
     const all = await settingsAll();   // realtime-invalidated cache — see settingsAll()
     res.json(Object.fromEntries(Object.entries(all).filter(([k]) => !SETTINGS_SERVER_ONLY.has(k))));
@@ -2662,7 +2669,7 @@ app.get('/api/settings', async (req, res) => {
 // **A reply in a real voice** (`lib/speech.js`). The client posts the reply's text and which chunk it
 // wants; the answer is that chunk's audio, with the total count in a header so the first request is
 // also the plan. The client asks for chunk 0, plays it, and fetches the rest while it plays.
-app.post('/api/tts', express.json({ limit: '256kb' }), async (req, res) => {
+gated.post('/api/tts', express.json({ limit: '256kb' }), async (req, res) => {
   if (!GROQ_API_KEY) return res.status(503).json({ error: 'tts not configured' });
   const list = speech.chunks((req.body && req.body.text) || '');
   const i = Number((req.body && req.body.i) || 0);
@@ -2681,7 +2688,7 @@ app.post('/api/tts', express.json({ limit: '256kb' }), async (req, res) => {
 });
 
 // How long a play waited for its first sound, and any stall between chunks, as the client measured it.
-app.post('/api/tts/timing', express.json({ limit: '8kb' }), (req, res) => {
+gated.post('/api/tts/timing', express.json({ limit: '8kb' }), (req, res) => {
   console.log('[tts-timing]', JSON.stringify(req.body));
   res.json({ ok: true });
 });
@@ -2689,14 +2696,14 @@ app.post('/api/tts/timing', express.json({ limit: '8kb' }), (req, res) => {
 // TEMPORARY. The voice button's stop tap misbehaves only on his phone, so the phone reports what it
 // actually saw — every pointer event and every state change — into this log. Read it with
 // `fly logs -a jared-status-hub | grep tap`. Delete this route and its caller once that is understood.
-app.post('/api/tapdebug', express.json({ limit: '8kb' }), (req, res) => {
+gated.post('/api/tapdebug', express.json({ limit: '8kb' }), (req, res) => {
   const ua = String(req.headers['user-agent'] || '');
   const surface = ua.includes('StatusHub') ? 'app' : /iPhone|iPad/.test(ua) ? 'ios-safari' : 'other';
   console.log('[tap]', surface, JSON.stringify(req.body));
   res.json({ ok: true });
 });
 
-app.post('/api/settings', express.json(), async (req, res) => {
+gated.post('/api/settings', express.json(), async (req, res) => {
   try {
     const b = req.body || {};
     const key = typeof b.key === 'string' ? b.key.trim() : '';
@@ -2733,7 +2740,7 @@ app.post('/api/settings', express.json(), async (req, res) => {
 // The phone also reports its IANA timezone here, which is how the hub knows where Jared is. It is
 // the best available proxy: the phone travels with him, and it re-registers on every launch. Stored
 // in app_settings.display_tz and picked up by the next settings read (see settingsAll).
-app.post('/api/register-push', express.json(), async (req, res) => {
+gated.post('/api/register-push', express.json(), async (req, res) => {
   try {
     const token = String((req.body && req.body.token) || '').trim();
     if (!/^[0-9a-fA-F]{16,}$/.test(token)) return res.status(400).json({ error: 'bad token' });
@@ -2774,7 +2781,7 @@ app.post('/api/register-push', express.json(), async (req, res) => {
 const nutDayCache = new Map();   // `${date}|${window day}` -> { body, at }
 const NUTDAY_BACKSTOP_MS = 15 * 60 * 1000;
 const dirtyNutDay = () => { nutDayCache.clear(); pushDay('nutrition'); };
-app.get('/api/nutrition-day', timed(async (req, res) => {
+gated.get('/api/nutrition-day', timed(async (req, res) => {
   try {
     // date=today lets a client that has no 4am-origin day of its own (the watch) ask for the current one.
     const asked = String(req.query.date || '').slice(0, 10);
@@ -2873,7 +2880,7 @@ function resolveNow(body) {
 // Repeat-a-set: log a new set for an exercise at the current time, reusing its weight and taking a
 // fresh rep count. Body: {exercise, weight_lbs, reps}. Realtime on `sets` re-pushes the dashboard,
 // so the heatmap, day detail, and rest timer all update live.
-app.post('/api/log-set', express.json(), async (req, res) => {
+gated.post('/api/log-set', express.json(), async (req, res) => {
   try {
     const b = req.body || {};
     const exercise = typeof b.exercise === 'string' ? b.exercise.trim() : '';
@@ -2891,7 +2898,7 @@ app.post('/api/log-set', express.json(), async (req, res) => {
 
 // Edit a single logged set's weight/reps by id. Body: {id, weight_lbs, reps}. Realtime on `sets`
 // re-pushes the dashboard (heatmap, day detail). Exercise/time are left untouched.
-app.patch('/api/log-set', express.json(), async (req, res) => {
+gated.patch('/api/log-set', express.json(), async (req, res) => {
   try {
     const b = req.body || {};
     const id = Number(b.id);
@@ -2960,7 +2967,7 @@ function produceRoll(ings) {
 // scaled by the portion multiplier client-side. Stores occurred_at/logged as naive-local
 // "now" in the display TZ and date = the 4am-bucket day for now (so a 1–4am add lands on
 // the prior day, matching the rest of the hub).
-app.post('/api/log-entry', express.json(), async (req, res) => {
+gated.post('/api/log-entry', express.json(), async (req, res) => {
   try {
     const b = req.body || {};
     const name = typeof b.name === 'string' ? b.name.trim() : '';
@@ -2995,7 +3002,7 @@ app.post('/api/log-entry', express.json(), async (req, res) => {
 // Edit an entry in place: PATCH {id, name?, calories, protein_g, carbs_g, fat_g, ingredients?}.
 // Absolute values, computed client-side (the popup recovers the original 1× and re-scales), so the
 // stored row and its name's "(N×)" suffix always reflect the real multiplier — never compounded.
-app.patch('/api/log-entry', express.json(), async (req, res) => {
+gated.patch('/api/log-entry', express.json(), async (req, res) => {
   try {
     const b = req.body || {};
     const id = typeof b.id === 'string' ? b.id : '';
@@ -3022,7 +3029,7 @@ app.patch('/api/log-entry', express.json(), async (req, res) => {
 
 // Delete an entry: DELETE ?id=<uuid>. Snapshots the full row first so the audit `before`
 // can fully re-insert it.
-app.delete('/api/log-entry', async (req, res) => {
+gated.delete('/api/log-entry', async (req, res) => {
   try {
     const id = String(req.query.id || '');
     if (!id) return res.status(400).json({ error: 'id required' });
@@ -3038,7 +3045,7 @@ app.delete('/api/log-entry', async (req, res) => {
 
 // Commit a staged meal from the UI: flip staged→false and stamp it "now" so it logs as eaten and
 // starts counting. Realtime on nutrition_entries re-pushes the dashboard.
-app.post('/api/commit-staged', express.json(), async (req, res) => {
+gated.post('/api/commit-staged', express.json(), async (req, res) => {
   try {
     const id = typeof (req.body && req.body.id) === 'string' ? req.body.id : '';
     if (!id) return res.status(400).json({ error: 'id required' });
@@ -3056,7 +3063,7 @@ app.post('/api/commit-staged', express.json(), async (req, res) => {
 
 // Feed the cat feeder. The feeder is LAN-only and this server runs on Fly, so we can't dispense
 // directly — enqueue a command the Pi collector (on the LAN) claims and executes within seconds.
-app.post('/api/feed', express.json(), async (req, res) => {
+gated.post('/api/feed', express.json(), async (req, res) => {
   try {
     let portions = parseInt(req.body && req.body.portions, 10);
     if (!Number.isFinite(portions) || portions < 1) portions = 1;
@@ -3067,7 +3074,7 @@ app.post('/api/feed', express.json(), async (req, res) => {
 });
 
 // Server-Sent Events: push assembled status to the browser, instantly on any DB change.
-app.get('/api/stream', async (req, res) => {
+gated.get('/api/stream', async (req, res) => {
   res.set({ 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache',
             Connection: 'keep-alive', 'X-Accel-Buffering': 'no' });
   res.flushHeaders();
@@ -3080,7 +3087,7 @@ app.get('/api/stream', async (req, res) => {
 // Backfill recent voice_messages for a focus so the panel populates on load before live updates
 // arrive. We want the MOST RECENT `limit` turns — so fetch newest-first then reverse to oldest→newest
 // (the render order). The old asc+limit returned the OLDEST 50, hiding the recent thread. focus='hub'.
-app.get('/api/voice-messages', async (req, res) => {
+gated.get('/api/voice-messages', async (req, res) => {
   try {
     const focus = String(req.query.focus || 'hub');
     // mode=active resolves to whichever mode agent_mode selects — the watch has no settings frame to
@@ -3135,7 +3142,7 @@ function requestView(r) {
 }
 
 // Requests not yet finished: what the TV sidebar shows ahead of their rows on (re)load.
-app.get('/api/voice-pending', async (req, res) => {
+gated.get('/api/voice-pending', async (req, res) => {
   try {
     const rows = await sb('voice_requests?focus=eq.hub&status=not.in.(done,error)&order=created_at&select=id,transcript,status,focus,created_at') || [];
     res.json(rows.map(requestView).filter(Boolean));
@@ -3144,7 +3151,7 @@ app.get('/api/voice-pending', async (req, res) => {
 
 // An answer has been shown (the watch: on screen, wrist up, a couple of seconds). Stamped once; the
 // row's UPDATE reaches every surface through the voice stream, so the mark clears everywhere.
-app.post('/api/voice-messages/read', express.json(), async (req, res) => {
+gated.post('/api/voice-messages/read', express.json(), async (req, res) => {
   try {
     const id = String((req.body && req.body.id) || '');
     if (!id) return res.status(400).json({ error: 'id required' });
@@ -3288,7 +3295,7 @@ async function keepClip(id, file, contentType, bytes, dur) {
 // is harmless. Every column is sent, because a merge-duplicates upsert nulls what it omits.
 const SLEEP_UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const SLEEP_STAGES = new Set(['in_bed', 'asleep_unspecified', 'awake', 'core', 'deep', 'rem']);
-app.post('/api/health/sleep', express.json({ limit: '1mb' }), async (req, res) => {
+gated.post('/api/health/sleep', express.json({ limit: '1mb' }), async (req, res) => {
   const samples = Array.isArray(req.body?.samples) ? req.body.samples : [];
   const deleted = (Array.isArray(req.body?.deleted) ? req.body.deleted : []).filter((u) => SLEEP_UUID.test(u));
   const rows = samples
@@ -3331,7 +3338,7 @@ let healthNextAt = 0;
 // backoff below is the answer to it; only failures that keep coming after that are reported as errors.
 const HEALTH_FAILS_TO_REPORT = 3;
 let healthFails = 0;
-app.post('/api/health/samples', express.json({ limit: '4mb' }), async (req, res) => {
+gated.post('/api/health/samples', express.json({ limit: '4mb' }), async (req, res) => {
   const wait = healthNextAt - Date.now();
   if (wait > 0) {
     res.set('Retry-After', String(Math.ceil(wait / 1000)));
@@ -3381,7 +3388,7 @@ app.post('/api/health/samples', express.json({ limit: '4mb' }), async (req, res)
 // Batches of fixes from the phone, the watch and the Mac, stored as they came into location_points
 // (data-layer 00139). Upserted on (device, at), so a batch resent after a lost reply changes nothing.
 const LOCATION_DEVICES = new Set(['phone', 'watch', 'mac']);
-app.post('/api/location/points', express.json({ limit: '4mb' }), async (req, res) => {
+gated.post('/api/location/points', express.json({ limit: '4mb' }), async (req, res) => {
   const device = req.body?.device;
   if (!LOCATION_DEVICES.has(device)) return res.status(400).json({ ok: false });
   const points = Array.isArray(req.body?.points) ? req.body.points : [];
@@ -3420,7 +3427,7 @@ app.post('/api/location/points', express.json({ limit: '4mb' }), async (req, res
 // the failure in the row. Never enqueued — a grab only becomes a command when he records instructions for it, and
 // that command carries `rewind=<id>` to /api/voice-command.
 const REWIND_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-app.post('/api/rewind', async (req, res) => {
+gated.post('/api/rewind', async (req, res) => {
   const tmp = path.join(os.tmpdir(), 'rewind-' + crypto.randomUUID());
   const id = crypto.randomUUID();
   const began = Date.now();
@@ -3481,7 +3488,7 @@ async function withRewind(rewindId, instructions) {
     `My instructions: ${instructions}`;
 }
 
-app.post('/api/voice-command', async (req, res) => {
+gated.post('/api/voice-command', async (req, res) => {
   const tmp = path.join(os.tmpdir(), 'voice-' + crypto.randomUUID());
   let short = null;   // the pause-shortened copy of a locked clip, removed with tmp
   try {
@@ -3639,7 +3646,7 @@ function sniffImageType(b) {
   }
   return null;
 }
-app.post('/api/attach', express.raw({ type: () => true, limit: '30mb' }), async (req, res) => {
+gated.post('/api/attach', express.raw({ type: () => true, limit: '30mb' }), async (req, res) => {
   try {
     if (!req.body || !req.body.length) return res.status(400).json({ error: 'empty upload' });
     let body = req.body;
@@ -3668,7 +3675,7 @@ app.post('/api/attach', express.raw({ type: () => true, limit: '30mb' }), async 
 // gesture-captures bucket, under its day. Kept indefinitely: the recordings are the training set.
 const GESTURE_BUCKET = 'gesture-captures';
 const gestureName = (p) => /^\d{4}-\d{2}-\d{2}\/[\w.\-]+\.json$/.test(p);
-app.post('/api/gestures', express.json({ limit: '8mb' }), async (req, res) => {
+gated.post('/api/gestures', express.json({ limit: '8mb' }), async (req, res) => {
   try {
     const b = req.body || {};
     if (!Array.isArray(b.samples) || !b.samples.length) return res.status(400).json({ error: 'no samples' });
@@ -3691,7 +3698,7 @@ app.post('/api/gestures', express.json({ limit: '8mb' }), async (req, res) => {
   }
 });
 // Newest first. `?day=YYYY-MM-DD` lists that day; without it, today and the six days before.
-app.get('/api/gestures', async (req, res) => {
+gated.get('/api/gestures', async (req, res) => {
   try {
     const days = req.query.day ? [String(req.query.day)]
       : Array.from({ length: 7 }, (_, i) => localDate(new Date(Date.now() - i * 86400000)));
@@ -3712,7 +3719,7 @@ app.get('/api/gestures', async (req, res) => {
     res.status(500).json({ error: String(e.message || e) });
   }
 });
-app.get(/^\/api\/gestures\/(.+)$/, async (req, res) => {
+gated.get(/^\/api\/gestures\/(.+)$/, async (req, res) => {
   const name = req.params[0];
   if (!gestureName(name)) return res.status(400).json({ error: 'bad path' });
   try {
@@ -3729,7 +3736,7 @@ app.get(/^\/api\/gestures\/(.+)$/, async (req, res) => {
 
 // Client error sink: the phone POSTs a failed quick-photo's real reason here (step, file type/size,
 // server error) so a failure that's otherwise invisible in the phone's console lands in the app log.
-app.get('/api/surf/live', async (req, res) => {
+pub.get('/api/surf/live', async (req, res) => {
   try {
     const out = await surfLive();
     // DEV ONLY: force a divergence, to see what the correction looks like when the wind happens to
@@ -3751,7 +3758,7 @@ app.get('/api/surf/live', async (req, res) => {
     res.json(out);
   } catch (e) { res.status(500).json({ error: String(e.message || e) }); }
 });
-app.get('/api/surf/stream', async (req, res) => {
+pub.get('/api/surf/stream', async (req, res) => {
   res.set({ 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache',
             Connection: 'keep-alive', 'X-Accel-Buffering': 'no' });
   res.flushHeaders();
@@ -3761,14 +3768,14 @@ app.get('/api/surf/stream', async (req, res) => {
   req.on('close', () => { clearInterval(ka); surfClients.delete(res); });
 });
 // The surf app's page (surf-app repo): the live readings and the surf heat map, full screen.
-app.get('/surf', (req, res) => {
+pub.get('/surf', (req, res) => {
   res.setHeader('Cache-Control', 'no-cache');
   res.type('html').send(SURF_HTML);
 });
 
 // The live wind and the readings behind it (lib/livewind.js) — the same `wind` the status frame
 // carries, plus the last few hours of six-minute readings for a surface that wants to draw them.
-app.get('/api/wind', async (req, res) => {
+gated.get('/api/wind', async (req, res) => {
   let snap = null;
   try { [snap] = await sb('surf_snapshots?slug=eq.mayport-poles&select=captured_at,rows&order=captured_at.desc&limit=1'); } catch (_) {}
   res.json({ now: liveWind.view(snap), readings: liveWind.readings() });
@@ -3783,7 +3790,7 @@ const CLIENT_LOG_SKIP = new Set(['frame', 'geo', 'alarmclock', 'tvring']);
 // A client may send one line, or a batch as `{ lines: [...] }`: the watch keeps its lines until they
 // are acknowledged and sends what piled up while it was offline all at once. A kept batch is answered
 // only once it is stored, so a failed write leaves the lines on the watch to be sent again.
-app.post('/api/clientlog', express.json({ limit: '256kb' }), async (req, res) => {
+gated.post('/api/clientlog', express.json({ limit: '256kb' }), async (req, res) => {
   const b = req.body || {};
   const lines = Array.isArray(b.lines) ? b.lines.filter((l) => l && typeof l === 'object') : [b];
   const keep = [];
@@ -3820,7 +3827,7 @@ setInterval(sweepClientLog, 24 * 3600 * 1000);
 sweepClientLog();
 
 // Thumbnails for the chat thread — proxies the private bucket behind the hub auth gate.
-app.get('/api/attachment', async (req, res) => {
+gated.get('/api/attachment', async (req, res) => {
   try {
     const name = String(req.query.path || '');
     if (!attName(name)) return res.status(400).json({ error: 'bad path' });
@@ -3862,7 +3869,7 @@ sweepAttachments();
 // A client_msg_id de-dupes a resent send (see seenMsgIds above /api/voice-command).
 // `shared: true` is the iOS share extension (apps/Share): the request is stamped source 'share', which
 // tells the worker the pictures are something he wants looked at, not a meal to log.
-app.post('/api/voice-text', express.json(), async (req, res) => {
+gated.post('/api/voice-text', express.json(), async (req, res) => {
   try {
     const text = String((req.body && req.body.text) || '').trim();
     const attachments = Array.isArray(req.body && req.body.attachments)
@@ -3896,7 +3903,7 @@ function settleReply(row) {
   const waiting = replyWaiters.get(row.id);
   if (waiting) for (const settle of [...waiting]) settle(row);
 }
-app.get('/api/voice-reply/:id', async (req, res) => {
+gated.get('/api/voice-reply/:id', async (req, res) => {
   const id = String(req.params.id);
   if (!UUID_RE.test(id)) return res.status(400).json({ error: 'bad id' });
   let waiting = replyWaiters.get(id);
@@ -3927,7 +3934,7 @@ app.get('/api/voice-reply/:id', async (req, res) => {
 // surface, and enqueue a sentinel so the worker drops its resumed Claude session — the next command
 // starts with fresh context. The thread itself is kept: the conversation card shows older contexts behind
 // a divider, and every other surface starts its view at the reset.
-app.post('/api/voice-reset', async (req, res) => {
+gated.post('/api/voice-reset', async (req, res) => {
   try {
     await putSetting('voice_reset_at', new Date().toISOString());
     dirtySettings();
@@ -4182,7 +4189,7 @@ async function logFrame(rowId, b, state, text, at) {
   return {};
 }
 
-app.post('/api/session-activity', express.json({ limit: '8mb' }), async (req, res) => {   // `done` and `replay` carry a whole turn
+gated.post('/api/session-activity', express.json({ limit: '8mb' }), async (req, res) => {   // `done` and `replay` carry a whole turn
   const b = req.body || {};
   const session = String(b.session || '');
   if (!session) return res.status(400).json({ error: 'session required' });
@@ -4270,7 +4277,7 @@ async function notifyAnswer(row) {
   } catch (e) { console.error('[answer-push]', e.message); }
 }
 
-app.post('/api/voice-activity', express.json(), (req, res) => {
+gated.post('/api/voice-activity', express.json(), (req, res) => {
   const b = req.body || {};
   pushVoice('activity', {
     // A thought (state 'text') can run to a paragraph; everything else is a line.
@@ -4353,7 +4360,7 @@ async function pushAll(kind, title, body, dedupe_key, extra = {}) {
   return { ok: anyOk, detail: details.join(' ') };
 }
 
-app.post('/api/notify', express.json(), async (req, res) => {
+gated.post('/api/notify', express.json(), async (req, res) => {
   if (TV_TOKEN && !auth.deviceRequest(req)) return res.status(403).json({ error: 'forbidden' });
   const b = req.body || {};
   const title = String(b.title || 'Hub').slice(0, 100);
@@ -4384,7 +4391,7 @@ function overdueHeat(item, nowLocal) {
   return hrs >= 72 ? 4 : hrs >= 24 ? 3 : 2;
 }
 
-app.get('/api/todos', async (req, res) => {
+gated.get('/api/todos', async (req, res) => {
   try {
     const [listNames, items] = await Promise.all([
       sb('lists?select=id,name,emoji&order=name'),
@@ -4421,7 +4428,7 @@ function itemTitle(row) {
 // The widget's feed: every dated item, across every list, anchor-ordered. This replaces the
 // per-list widget feed — one surface showing everything that has a time on it, rather than one list
 // at a time, because "what needs dealing with" is never confined to a single list.
-app.get('/api/due-widget', async (req, res) => {
+gated.get('/api/due-widget', async (req, res) => {
   try {
     const [rows, listRows] = await Promise.all([
       sb('list_items?deleted=eq.false&completed_at=is.null&due=not.is.null&select=id,list_name,text,title,due,scheduled_at,priority,series_id,alarm&order=scheduled_at.asc'),
@@ -4459,7 +4466,7 @@ function repoAgo(iso) {
 }
 // Nearly everything sits on main, so that chip would be a column of identical noise.
 const notableBranch = (b) => !!b && b !== 'main' && b !== 'master';
-app.get('/api/repos-widget', async (req, res) => {
+gated.get('/api/repos-widget', async (req, res) => {
   try {
     const [repos, presence] = await Promise.all([
       sb(`repos?select=path,name,branch,dirty,last_active&order=last_active.desc.nullslast&limit=${REPOS_WIDGET_MAX}`),
@@ -4478,7 +4485,7 @@ app.get('/api/repos-widget', async (req, res) => {
   } catch (e) { res.status(500).json({ error: String(e.message || e) }); }
 });
 
-app.get('/api/list-widget', async (req, res) => {
+gated.get('/api/list-widget', async (req, res) => {
   try {
     const name = String(req.query.list || 'todo');
     const rows = await sb(`list_items?deleted=eq.false&completed_at=is.null&list_name=eq.${encodeURIComponent(name)}` +
@@ -4752,7 +4759,7 @@ function calOccurrences(item, startKey, endKey) {
 // (?wall=1) instead gets `calendar_months` months from the current one — the count is an
 // app_settings key so voice can resize the view ("show the full year") the same way it switches
 // walls — plus `dayline`, the server-laid-out timeline of today for the wall's day column.
-app.get('/api/calendar', async (req, res) => {
+gated.get('/api/calendar', async (req, res) => {
   try {
     const nowET = etNowString();
     const todayKey = nowET.slice(0, 10);
@@ -5046,7 +5053,7 @@ app.get('/api/calendar', async (req, res) => {
 // changes, so a STOP that waits for the echo leaves the TV ringing long enough to read as not having
 // worked. The echo still arrives and repeats the announcement; that is one redundant reload per tap.
 function announceListWrite() { dirtyRows('list_items'); pushLists(); broadcast(); }
-app.post('/api/todos/complete', express.json(), async (req, res) => {
+gated.post('/api/todos/complete', express.json(), async (req, res) => {
   try {
     const b = req.body || {};
     const id = String(b.id || '');
@@ -5069,7 +5076,7 @@ app.post('/api/todos/complete', express.json(), async (req, res) => {
     syncBadge().catch((e) => console.error('[badge]', e.message || e));   // don't make the caller wait on APNs
   } catch (e) { res.status(500).json({ error: String(e.message || e) }); }
 });
-app.post('/api/todos/clear', express.json(), async (req, res) => {
+gated.post('/api/todos/clear', express.json(), async (req, res) => {
   try {
     const b = req.body || {};
     const id = String(b.id || '');
@@ -5090,7 +5097,7 @@ app.post('/api/todos/clear', express.json(), async (req, res) => {
 // it correctly drops off the badge until it comes round again. Works on any list. No dedupe-row
 // surgery needed: the ledger key includes the due (see dueTick), so moving the date is already a new
 // occupancy and the item can fire again on its own.
-app.post('/api/todos/snooze', express.json(), async (req, res) => {
+gated.post('/api/todos/snooze', express.json(), async (req, res) => {
   try {
     const b = req.body || {};
     const id = String(b.id || '');
@@ -5107,7 +5114,7 @@ app.post('/api/todos/snooze', express.json(), async (req, res) => {
 
 // Mark a dated item ALARM-GRADE, or take the mark off. An alarm breaks silent mode and a Focus, so
 // nothing sets this on its own — not priority, not wording. It is set because someone said so.
-app.post('/api/todos/alarm', express.json(), async (req, res) => {
+gated.post('/api/todos/alarm', express.json(), async (req, res) => {
   try {
     const b = req.body || {};
     const id = String(b.id || '');
@@ -5121,12 +5128,12 @@ app.post('/api/todos/alarm', express.json(), async (req, res) => {
 
 // The app reads this when it comes to the foreground, so the badge is right even if a silent
 // background push never landed.
-app.get('/api/badge', async (req, res) => {
+gated.get('/api/badge', async (req, res) => {
   const n = await overdueCount();
   res.json({ badge: Number.isInteger(n) ? n : 0 });
 });
 
-app.post('/api/todos/add', express.json(), async (req, res) => {
+gated.post('/api/todos/add', express.json(), async (req, res) => {
   try {
     const b = req.body || {};
     const text = String(b.text || '').trim();
@@ -5192,7 +5199,7 @@ async function deadLetter(kind, payload, machine, reason) {
   return ok ? id : null;
 }
 
-app.get('/api/repos', async (req, res) => {
+gated.get('/api/repos', async (req, res) => {
   try {
     const [repos, presence] = await Promise.all([
       sb('repos?select=path,name,branch,dirty,last_active&order=last_active.desc.nullslast'),
@@ -5362,7 +5369,7 @@ async function buildSessions({ brief: allBrief = false } = {}) {
 // Opening a session's conversation is what reads its reply. Stamped from whichever surface opened it,
 // because the list is one list — reading an answer on the phone means it has been read, and the wall
 // should stop flagging it.
-app.post('/api/sessions/seen', express.json(), async (req, res) => {
+gated.post('/api/sessions/seen', express.json(), async (req, res) => {
   try {
     const id = String((req.body && req.body.id) || '');
     if (!id) return res.status(400).json({ error: 'id required' });
@@ -5372,7 +5379,7 @@ app.post('/api/sessions/seen', express.json(), async (req, res) => {
   } catch (e) { res.status(500).json({ error: String(e.message || e) }); }
 });
 
-app.get('/api/sessions', async (req, res) => {
+gated.get('/api/sessions', async (req, res) => {
   try { res.json(await buildSessions({ brief: req.query.brief === '1' })); }
   catch (e) { res.status(500).json({ error: String(e.message || e) }); }
 });
@@ -5428,7 +5435,7 @@ async function conversationNow(row) {
 // One session in full, for a surface that shows a single session rather than the list — the watch's
 // session page and the phone's (openSession in cards/repos.js). `/api/sessions` sends most parked
 // sessions' replies only as the one-line `say`. The conversation itself is `events` (see above).
-app.get('/api/sessions/:id', async (req, res) => {
+gated.get('/api/sessions/:id', async (req, res) => {
   try {
     const rows = await sb(`desk_sessions?id=eq.${encodeURIComponent(String(req.params.id))}` +
       '&select=id,label,custom_title,repo,worker,status,working,claude_session_id,last_prompt,last_reply,reply_at,agent');
@@ -5443,7 +5450,7 @@ app.get('/api/sessions/:id', async (req, res) => {
 });
 
 // The list, or the part of it after `since` — what a client fetches when a frame's seq shows a gap.
-app.get('/api/sessions/:id/events', async (req, res) => {
+gated.get('/api/sessions/:id/events', async (req, res) => {
   try {
     const conv = await convOfRow(String(req.params.id));
     const log = await ensureLog(conv);
@@ -5460,7 +5467,7 @@ const SPEAK_NOTE = '<speak-mode>This reply will be read aloud on his watch. Keep
 // Act on one: 'end' closes it for good, 'resume' brings an evicted one back, 'forget' drops the row
 // without touching the machine (the transcript stays on disk; it just stops being offered), and
 // 'followup' types words into a running one (see below).
-app.post('/api/sessions/:action', express.json(), async (req, res) => {
+gated.post('/api/sessions/:action', express.json(), async (req, res) => {
   try {
     const action = String(req.params.action || '');
     const id = String((req.body || {}).id || '');
@@ -5589,7 +5596,7 @@ app.post('/api/sessions/:action', express.json(), async (req, res) => {
   } catch (e) { res.status(500).json({ error: String(e.message || e) }); }
 });
 
-app.post('/api/repos/open', express.json(), async (req, res) => {
+gated.post('/api/repos/open', express.json(), async (req, res) => {
   try {
     const wantPath = String((req.body || {}).path || '');
     // Launch only a path the machine itself published: the client's string picks a ROW, it never
@@ -5623,7 +5630,7 @@ app.post('/api/repos/open', express.json(), async (req, res) => {
 // by a machine that then died — lands in desk_dead_letters with its whole payload. This is the
 // plumbing a retry button reads; nothing here decides anything on its own, because a prompt that
 // fires hours late is worse than one that never fired.
-app.get('/api/failures', async (req, res) => {
+gated.get('/api/failures', async (req, res) => {
   try {
     const all = String(req.query.all || '') === '1';
     const filter = all ? '' : '&retried=is.null&dismissed=is.null';
@@ -5633,7 +5640,7 @@ app.get('/api/failures', async (req, res) => {
 
 // Re-dispatch one, unchanged, if its machine is up now. The saved row is stamped rather than
 // deleted, so what was retried and when stays visible.
-app.post('/api/failures/:id/retry', express.json(), async (req, res) => {
+gated.post('/api/failures/:id/retry', express.json(), async (req, res) => {
   try {
     const id = String(req.params.id || '');
     const rows = await sb(`desk_dead_letters?id=eq.${encodeURIComponent(id)}&select=*`);
@@ -5660,7 +5667,7 @@ app.post('/api/failures/:id/retry', express.json(), async (req, res) => {
   } catch (e) { res.status(500).json({ error: String(e.message || e) }); }
 });
 
-app.post('/api/failures/:id/dismiss', express.json(), async (req, res) => {
+gated.post('/api/failures/:id/dismiss', express.json(), async (req, res) => {
   try {
     await sbWrite(`desk_dead_letters?id=eq.${encodeURIComponent(String(req.params.id || ''))}`, 'PATCH',
       { dismissed: new Date().toISOString() });
@@ -5669,7 +5676,7 @@ app.post('/api/failures/:id/dismiss', express.json(), async (req, res) => {
 });
 
 // Poll target for the launch button: pending -> running -> done | error | expired.
-app.get('/api/repos/cmd/:id', async (req, res) => {
+gated.get('/api/repos/cmd/:id', async (req, res) => {
   try {
     const rows = await sb(`desk_commands?id=eq.${encodeURIComponent(req.params.id)}&select=status,detail`);
     if (!rows.length) return res.status(404).json({ error: 'not found' });
@@ -5679,7 +5686,7 @@ app.get('/api/repos/cmd/:id', async (req, res) => {
 
 // Voice SSE: streams `event: voice` frames ({kind:'message'|'focus', row}) to the /tv panel.
 // Dedicated stream (not /api/stream) so the kiosk gets voice rows without the heavy status frame.
-app.get('/api/voice-stream', (req, res) => {
+gated.get('/api/voice-stream', (req, res) => {
   res.set({ 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache',
             Connection: 'keep-alive', 'X-Accel-Buffering': 'no' });
   res.flushHeaders();
@@ -5691,7 +5698,7 @@ app.get('/api/voice-stream', (req, res) => {
 // Calendar SSE: one `event: lists` frame whenever a dated item or a list changes. Dedicated stream
 // (not /api/stream) so the standalone /calendar page does not have to take a full status frame on
 // connect just to learn about a reminder.
-app.get('/api/list-stream', (req, res) => {
+gated.get('/api/list-stream', (req, res) => {
   res.set({ 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache',
             Connection: 'keep-alive', 'X-Accel-Buffering': 'no' });
   res.flushHeaders();
@@ -5705,7 +5712,7 @@ app.get('/api/list-stream', (req, res) => {
 // page on screen when its kind arrives.
 // The watch's usage page: the same two windows as the walls' hairline bars. A new reading is announced
 // as a `usage` frame on /api/day-stream.
-app.get('/api/usage', async (req, res) => {
+gated.get('/api/usage', async (req, res) => {
   try {
     const u = buildUsage(await claudeUsageRow());
     if (!u) return res.status(404).json({ error: 'no usage reading yet' });
@@ -5713,7 +5720,7 @@ app.get('/api/usage', async (req, res) => {
   } catch (e) { console.error('[usage] /api/usage:', e.message); res.status(500).json({ error: e.message }); }
 });
 
-app.get('/api/day-stream', (req, res) => {
+gated.get('/api/day-stream', (req, res) => {
   res.set({ 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache',
             Connection: 'keep-alive', 'X-Accel-Buffering': 'no' });
   res.flushHeaders();
@@ -5724,7 +5731,7 @@ app.get('/api/day-stream', (req, res) => {
 
 // The live microphone: a watch listening to what the phone hears (lib/livemic.js, docs/LIVE-MIC.md).
 // The phone's half is a WebSocket, attached to the server below.
-app.get('/api/live-mic', livemic.listen);
+gated.get('/api/live-mic', livemic.listen);
 
 // Session SSE: one `event: session` frame per tool call or finished turn, from either machine.
 // ---- THE BEDROOM TV (google-tv repo, docs/VOICE.md) ----------------------------------------------
@@ -5767,7 +5774,7 @@ async function tvPush(row) {
       { done_at: new Date().toISOString(), result: { ok: false, error: 'the TV is off (its app is not connected)' } }).catch((e) => console.error('[tv] answer', e.message || e));
   }
 }
-app.get('/api/tv/stream', async (req, res) => {
+gated.get('/api/tv/stream', async (req, res) => {
   res.set({ 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache',
             Connection: 'keep-alive', 'X-Accel-Buffering': 'no' });
   res.flushHeaders();
@@ -5780,7 +5787,7 @@ app.get('/api/tv/stream', async (req, res) => {
     for (const row of await sb(`tv_commands?done_at=is.null&created_at=gte.${since}&order=created_at`)) await tvPush(row);
   } catch {}
 });
-app.post('/api/tv/result', express.json({ limit: '64kb' }), async (req, res) => {
+gated.post('/api/tv/result', express.json({ limit: '64kb' }), async (req, res) => {
   const id = String((req.body || {}).id || '');
   if (!/^[0-9a-f-]{36}$/i.test(id)) return res.status(400).json({ error: 'id required' });
   try {
@@ -5789,7 +5796,7 @@ app.post('/api/tv/result', express.json({ limit: '64kb' }), async (req, res) => 
   } catch (e) { res.status(502).json({ error: String(e.message || e) }); }
 });
 
-app.get('/api/session-stream', (req, res) => {
+gated.get('/api/session-stream', (req, res) => {
   res.set({ 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache',
             Connection: 'keep-alive', 'X-Accel-Buffering': 'no' });
   res.flushHeaders();

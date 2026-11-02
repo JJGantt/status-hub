@@ -83,7 +83,7 @@ its key; ten of those filled the account and every archive then failed with "max
 certificates". It lasts a year: when it expires, make a new one and replace both secrets — never let
 Xcode mint them again.
 
-**Ship to his phone through TestFlight, and build it HERE.**
+**Ship to the phone through TestFlight, and build it on the Mac.**
 
     apps/tools/testflight.sh        # archive, sign, upload, a few minutes
 
@@ -91,33 +91,30 @@ This Mac has the device platforms, a development identity in the login keychain 
 Connect API key, which is all cloud distribution signing asks for, so it needs nothing from GitHub.
 **A session ON the Mac runs it directly**: a background Bash task with the sandbox disabled (the script
 reads `~/.appstoreconnect`, which the sandbox blocks). A session's shell can use the login keychain, so
-nothing else is needed — never open a Terminal window for it from the Mac; every one is a window left
-on his screen.
+nothing else is needed — never open a Terminal window for it.
 **A session on the Pi moves itself to the Mac** with the data MCP's `transfer_session` (its own id is `$HUB_SESSION_ID`,
 machine `mac`) and runs the script there as above; the move restarts its turn on the Mac with the whole
 conversation. Over plain SSH the archive compiles and then fails at CodeSign with
-`errSecInternalComponent`, because an SSH login cannot use the login keychain, and driving Terminal
-over SSH to get round that leaves a window on his screen for every build. **`ios-testflight.yml` is the fallback, for when this Mac
-is away** — macOS runners bill at a 10x multiplier and six builds in an afternoon exhausted the
-account's allowance, which stops the workflow dead with "recent account payments have failed or your
-spending limit needs to be increased".
+`errSecInternalComponent`, because an SSH login cannot use the login keychain; do not drive Terminal
+over SSH to get round it. **`ios-testflight.yml` is the fallback, for when the Mac is unavailable** —
+macOS runners bill at a 10x multiplier, and an exhausted allowance stops the workflow with "recent
+account payments have failed or your spending limit needs to be increased".
 
 The build number comes from TestFlight itself (`asc.mjs next-build`, one past the highest), floored by
 a local mark file, because Apple does not list a build for some minutes after it is uploaded and the
 API's answer alone can hand back a number that is already taken.
 
-**Apple caps uploads per app at about 20 a day.** Measured on 2026-09-23: 21 builds were accepted in a
-rolling 24 hours and the next was refused with `Upload limit reached. The upload limit for your
-application has been reached. Please wait 1 day and try again.` (iris-code 90382). It is a ROLLING
+**Apple caps uploads per app at about 20 a day** (21 were accepted in a rolling 24 hours, and the
+next was refused with `Upload limit reached. The upload limit for your
+application has been reached. Please wait 1 day and try again.` (iris-code 90382)). It is a ROLLING
 window, so slots come back one at a time, 24 hours after each upload — the times are in
 `/v1/builds?filter[app]=…&fields[builds]=uploadedDate`. While it is closed, an Ad Hoc build installs
 straight to the phone with `xcrun devicectl device install app` (that build is distribution-signed, so
 push still works), which the cap does not touch.
 
 TestFlight installs over the air; an Ad Hoc `.ipa` has to be pushed from the Mac with `devicectl`, so
-it needs the phone on the Mac's network — a build made while he was out never got installed. The App
-Store Connect app is "JaredHub" (id `6805268657`) and its internal group `internal_main` receives
-every build. Without a group an upload reaches no one, which is how builds 1 and 2 sat unused.
+it needs the phone on the Mac's network. The App Store Connect app is "JaredHub" (id `6805268657`)
+and its internal group `internal_main` receives every build; without a group an upload reaches no one.
 
 ## Checking the Swift compiles, on this Mac
 
@@ -147,11 +144,10 @@ The iOS app's assets, Info.plists and embedding are only proven by an archive (`
 Register a new target's bundle id with `node apps/tools/asc.mjs bundle-id <identifier> <name>`
 before its first archive; the CI archive's automatic signing then makes its Ad Hoc and App Store
 profiles. It does NOT register a missing id itself — it picks a profile it cannot find and the
-archive fails with "Build input file cannot be found: …mobileprovision". That is how `StatusHubWatch`
-and `StatusHubWatchWidgets` were added.
+archive fails with "Build input file cannot be found: …mobileprovision".
 
 Still blocked by the rejected Xcode login: capabilities the ASC API cannot enable (Time Sensitive
-Notifications — `docs/TODO.md` § Blocked on Jared) and App Groups. A new iOS widget still goes into
+Notifications — `docs/TODO.md` § Blocked on the account owner) and App Groups. A new iOS widget still goes into
 the existing `StatusHubControls` bundle (the `WidgetBundle` at the bottom of
 `apps/Controls/RecordControl.swift`); a widget and its button intents share `UserDefaults.standard`,
 since they are one process already.
@@ -166,7 +162,7 @@ the item and silences both.
 **Nothing registers an alarm on the phone.** AlarmKit is the obvious tool and it does not fit: its
 Stop completes nothing, so the TV rings on after it, and a change decided at 4am cannot reach a
 sleeping phone to move it, because the push that would carry it is rationed and refused. So the phone
-rings only while the app is open, and overnight it is open in Guided Access — Jared's lock, not an
+rings only while the app is open, and overnight it is open in Guided Access — a requirement, not an
 optional extra. Anything Guided Access suppresses is unusable here, which is why the alarm is an audio
 FILE: Web Audio is silenced inside a session.
 
@@ -185,7 +181,7 @@ wrong one: the iOS app loads `/`, so a separate URL is a thing to remember to op
 night it matters. `public/alarm.html` still serves at `/alarm` as the same clock standalone, for a
 spare device.
 
-Four things are load-bearing rather than decoration, and each is a way it quietly stops being an
+These are load-bearing rather than decoration, and each is a way it quietly stops being an
 alarm:
 
 - **The first touch arms the sound.** iOS will not let a page make noise until a gesture has
@@ -195,10 +191,9 @@ alarm:
 - **GUIDED ACCESS SILENCES WEB AUDIO AND ALLOWS A MEDIA ELEMENT.** Measured on the device with the
   ringer on: inside a session `<audio>` plays and an oscillator makes no sound at all. That is why
   the alarm is a FILE (`alarm.m4a`, a 2s two-tone loop) and not synthesised — an alarm built on
-  oscillators flashed on screen, reported `running`, scheduled its beeps and was silent through the
-  whole morning. Web Audio stays only as the fallback when the element refuses to play.
-- **A RUNNING AUDIOCONTEXT IS NOT AUDIBLE SOUND**, which is what made that failure invisible: every
-  signal the page could see said it was working. `media.readyState` now rides in the beacon next to
+  oscillators flashes on screen, reports `running`, schedules its beeps and is silent. Web Audio stays only as the fallback when the element refuses to play.
+- **A RUNNING AUDIOCONTEXT IS NOT AUDIBLE SOUND**, so every signal the page can see says it is
+  working while nothing is heard. `media.readyState` rides in the beacon next to
   the context state, because the element having its bytes is the half that actually predicts noise.
 - **`nativeAudio()`** asks the native side for a `.playback` session for the duration of the ring
   (`alarmAudio` in `StatusHubApp.swift`) and gives it back on stop — restoring the category it found,
@@ -212,7 +207,7 @@ alarm:
   short hop under a minute is the real one.
 - **It rides `hub:stream`, not its own EventSource.** `core.js` dispatches that after every render,
   which is how a change made at 4am reaches an already-open page with no push involved. A second
-  EventSource on one phone is a mistake already made here. The two-minute reload behind it is the
+  EventSource on one phone is a mistake. The two-minute reload behind it is the
   backstop for a socket gone deaf while still looking open.
 - **Ringing is a state of the feed.** Past its moment and still in the feed means ringing, here and
   on the TV alike, whenever either one looks — so opening the app mid-ring joins the TV's ring, and
@@ -236,13 +231,11 @@ alone — a notification that re-fires every minute is a second alarm nobody ask
 `apps/tools/render-*.swift` compiles them standalone and writes PNGs at real device point sizes.
 Importing WidgetKit there costs the whole iterate-without-a-device loop.
 
-## A dated item with a past `due` pushes to his phone within 60 seconds
+## A dated item with a past `due` pushes to the phone within 60 seconds
 
 `dueTick` scans every 60s and app-pushes anything overdue. So inserting a test item with a due time
-in the past does not simulate an overdue item — it **sends Jared a real notification** with fake
-content, and there is no way to unsend it. It happened: three test items named "Costing me",
-"Important slip" and "Still worth it" arrived on his phone while the per-item scoring was being
-checked.
+in the past does not simulate an overdue item — it **sends a real notification** to the owner's
+phone with fake content, and there is no way to unsend it.
 
 Test the scoring instead of the database. `lib/score.js` is pure — `tasksScore`, `completionValue`
 and `taskDeadline` take plain objects and a `nowLocal` string, so every state (overdue, in grace,
@@ -261,7 +254,7 @@ every item that was already delivered.
 ## `/report/:id` serves model-written HTML
 
 Its CSP (`default-src 'none'` plus sandbox) is the only thing between that markup and an origin
-already authenticated as Jared. Charts must be inline `<svg>` — no `<script>`, no CDN link.
+already authenticated as the owner. Charts must be inline `<svg>` — no `<script>`, no CDN link.
 
 ## There are four walls, and the default is the one being molded
 
@@ -304,11 +297,11 @@ That is the HORIZONTAL axis. Vertically the drawing is inset by `--wpi`, half a 
 and that inset is what lets each axis value be centred on the line it names: centred on a line at the
 very edge of the 68px slot, the top number would hang over the card's rule and the bottom one over the
 first cells of the nutrition map. The label and its line are both placed from the server's `a.y`, so
-they cannot drift apart — anchoring an EDGE of the text to the line is what made 179 sit under the 179
-line and read as the label for the point above it.
+they cannot drift apart — anchoring an EDGE of the text to the line makes a value sit under its line
+and read as the label for the point above it.
 
-It also has no height of its own to spend — the column was already exactly full — so the plot's 68px
-came off the heat maps. A cell takes its height from its WIDTH, so squaring them again meant
+It also has no height of its own to spend — the column is exactly full — so the plot's 68px comes
+off the heat maps. A cell takes its height from its WIDTH, so squaring them again meant
 narrowing the grid by the same proportion: `.hw-heatstack` is a fixed 359px, and the sum behind that
 number is in `tv-home.css`. The 65px it frees goes to the muscle column, which is why those figures
 are drawn `preserveAspectRatio="none"` — at that width a 36:93 figure no longer fills its box, and
@@ -329,8 +322,8 @@ its labels too.
 
 **The heat column's bottom card is surf AND weather**, side by side: the surf plots narrowed to the
 heat-map width (403px) so their day columns line up with the week columns above, and `cards/weather.js`
-in the width that frees, under the muscle figures. Narrowing did not squeeze the surf columns — the
-default window in `/api/surf/history` came down to three weeks with it, so a day is still ~18px. On
+in the width that frees, under the muscle figures. The surf columns are not squeezed — the default
+window in `/api/surf/history` is three weeks, so a day is still ~18px. On
 the phone `wall.js` adopts the whole `.card`, so weather goes with it and the two stack instead
 (`app.css` sizes that; `tv-home.css` re-lays them as a row).
 
@@ -340,16 +333,13 @@ above), which is what makes a day countable now that the letters are gone. **Whi
 and now**, graded so the eye always knows which line it is on: the now-line and its crossbar solid,
 noon at 70%, 6a and 6p at 35%. There is no rule between the two grids at all — ratings run red
 through green and size runs white (0-1 ft) then blues, so the boundary draws itself. The white
-guides are invisible over a white 0-1 ft cell; that band is the one place the hour axis drops out. A dashed line seven days out used
-to count the columns off against today; the week rules do that better, per column edge instead of
-once, and it is gone. The rain grid beside it follows every one of these rules, because they are one
+guides are invisible over a white 0-1 ft cell; that band is the one place the hour axis drops out. The rain grid beside it follows every one of these rules, because they are one
 card describing one week.
 
 **A wall is a FILE, not a mode flag**, so work on one cannot disturb another. They share `core.js` /
 `tv.js` / `wall.js` / `wallmode.js` / `cards/*`, so a change to those hits ALL of them; split
 whatever needs to differ at the moment it needs to differ. If you are reshaping the default into
-something you cannot verify in one pass, copy it to a new file and swap `/` when it is good — that
-is how the home wall was built, and how the phone's home page was.
+something you cannot verify in one pass, copy it to a new file and swap `/` when it is good.
 
 The phone's home page is a file on the same terms: it is NOT a wall and `wallmode.js` never touches
 it, but it draws the same cards from the same frame, so a change to `core.js` or `cards/*` reaches
@@ -381,8 +371,8 @@ themselves come out at the sizes their own modules chose for a phone.
 
 **Nothing scrolls vertically** — except the conversation, which is the point of it. `.rows` is the
 pane's height LESS the navbar and the home indicator, and it holds that in `height`, not in
-`padding-bottom`: `overflow:hidden` clips at the PADDING box, so the moment the blocks added up to
-more than the space the last of them rendered down into that padding and out under the bar. Every
+`padding-bottom`: `overflow:hidden` clips at the PADDING box, so once the blocks add up to more than
+the space, the last of them renders down into that padding and out under the bar. Every
 block on it is either a declared height or sized by its own content.
 Exactly one takes the leftover: the conversation at the bottom, `flex:1 1 auto`, because it is the
 only block here that can spend an arbitrary amount of height — more room is simply more of the
@@ -452,7 +442,7 @@ It also beats app.css's `body.tv.wallportrait` block on equal specificity, by lo
   moves it into the panel while it is open, so the cards keep rendering on every frame. The routing
   strip's phone sizes in app.css are for a wall scaled to a third, so phone-home.css resizes it there.
 - **There is no camera button.** A picture goes through the chat composer's attach button. The photo
-  outbox the navbar camera filled (`hub-photo-outbox`) is only drained now, for anything it left queued.
+  outbox (`hub-photo-outbox`) is only drained, for anything still queued in it.
 - **The session panel is the list and nothing else.** No head, no reply: a phone has nowhere to put
   a model's answer, and the wall spends a column on one because it is read word by word from a chair.
 - **The voice column is the tail of the thread** (`#ph-conv`), rendered as MARKDOWN. A reply is
@@ -460,11 +450,11 @@ It also beats app.css's `body.tv.wallportrait` block on equal specificity, by lo
   `- ` standing in the prose. `md()` in shared.js covers the part a model actually writes: headings,
   lists, emphasis, code, links, tables, bare URLs — the one renderer the chat sheet and the session
   view use too. EVERY path escapes first — the text is a model's, rendered into an
-  origin already authenticated as Jared, so no tag comes from the input; the input is escaped and our
+  origin already authenticated as the owner, so no tag comes from the input; the input is escaped and our
   own patterns put tags around it, and a link is rewritten only when its target is http(s).
   A reply RELAYED FROM A SESSION carries that session's name and the tint the conversation card gives
-  it: it is a machine reporting back, not the hub answering. There is no `You` / `Hub` label — HIS
-  WORDS ARE DIM AND ON THE RIGHT, hugging their own width, and the hub's are bright and take the
+  it: it is a machine reporting back, not the hub answering. There is no `You` / `Hub` label — THE
+  USER'S WORDS ARE DIM AND ON THE RIGHT, hugging their own width, and the hub's are bright and take the
   whole of it, so a thread of short commands and long replies reads as two columns before any of it
   is read. A word in a gutter says the same thing a third time at the cost of that gutter's width on
   every line. The text inside a right-hugged block stays left-aligned: a prompt is not always one
@@ -477,7 +467,7 @@ It also beats app.css's `body.tv.wallportrait` block on equal specificity, by lo
   it is a float over a surface that fits exactly, and this line is what replaces it. It PINS the box
   on the run's FIRST frame and never again: the box lands on the TOP of the last message, so under a
   long reply a new line at the end is below the fold, and a line that changes every few seconds would
-  otherwise drag him down every time he scrolled up. The caret pulses through dimnesses rather than
+  otherwise drag the reader down after every scroll up. The caret pulses through dimnesses rather than
   blinking off, because at 9px a hard on/off reads as something failing.
   **IT LANDS ON THE TOP OF THE LAST MESSAGE**, not at the bottom of the thread: a reply is read from
   its first line, and a box scrolled to the very end shows its last line with the rest above. Clamped,
@@ -485,7 +475,7 @@ It also beats app.css's `body.tv.wallportrait` block on equal specificity, by lo
   in cards/repos.js puts the last turn's prompt at the top), and the reset button uses it too.
   Measured off the rects rather than `offsetTop`: the box is not an offset parent, so offsetTop is
   against some ancestor and the difference is a shift, not the number wanted.
-  **A COMMAND HE HAS SPOKEN APPEARS BEFORE THE REPLY DOES.** The worker writes the user bubble only
+  **A SPOKEN COMMAND APPEARS BEFORE THE REPLY DOES.** The worker writes the user bubble only
   once a run is over — deliberately, so a wake-word false positive never lands in the thread — so
   nothing in the thread itself marks the gap between speaking and answering. `onPending` in
   voiceagent.js is the conversation card's optimistic bubble for every OTHER view of the thread: three
@@ -519,8 +509,8 @@ It also beats app.css's `body.tv.wallportrait` block on equal specificity, by lo
   shows at rest, because the plot does not scroll with the map under it.
 - **The maps land on the newest week and stay there**, held by an observer rather than pinned once:
   the cards rebuild the grids on every frame and `paintScrolled` carries the position across, so a
-  single pin at the wrong moment is a wrong position that persists all day. It stops the moment he
-  drags one, which is what `paintScrolled` is for.
+  single pin at the wrong moment is a wrong position that persists all day. It stops the moment the
+  user drags one, which is what `paintScrolled` is for.
 - **Both maps are the same width**, and the ground beside each is the same shape: the figures fill it
   on the training side and it stays empty on the food side.
 - **A DRAG ON A HEAT MAP HAS TO REACH THE BROWSER.** Scrubbing a map and scrolling one want the same
@@ -547,7 +537,7 @@ It also beats app.css's `body.tv.wallportrait` block on equal specificity, by lo
   that scroller rather than a child — a child slides off the left end the moment it is dragged. It is
   REPLACED outright on every render where the maps repaint through `paintScrolled`, so the rebuild
   handler puts it back on the week the maps are on; left alone it returns to `now` once a minute while
-  they stay where he left them.
+  they stay where the user left them.
   Only the plot's two END values are labelled: three numbers stacked in a 22px box are crunched, and
   the middle one is the one a reader infers from the two either side. Its LINE stays — the line does
   the work.
@@ -672,16 +662,14 @@ itself. A picture with no words is a whole message. It reaches the hub with the 
 
 **A long message is pasted as it is, and the paste tags are hidden here.** Past Claude Code's paste
 threshold the transcript holds `<pasted_content>…</pasted_content>`; `resolvePrompt` (voice-pipeline
-`transcripts.js`) strips the tags, which is why every surface shows only his words. Turns recorded before
-this were a stub naming a file in `~/.claude-desk-prompts`, which the same function still resolves —
+`transcripts.js`) strips the tags, so every surface shows only the typed words. Older turns are a stub naming a file in `~/.claude-desk-prompts`, which the same function still resolves —
 and `sessionWatch` still drops those sessions' verbatim echo — until the files are swept at thirty days.
 
 **WORDS SENT FROM THIS VIEW ARE ON SCREEN TWICE UNLESS THE FRAME CONFIRMS THEM.** The composer shows
 them the instant they are sent, before the Mac has typed them into the session — and the session then
 records them, so the watcher sends them straight back as a `said` frame. The optimistic entry carries
 `mine`, and a matching frame CONSUMES exactly one of them rather than appending: saying the same thing
-twice still shows twice. This is invisible to anything that tests the frame path on its own, which is
-why it survived several fixes aimed at the transport.
+twice still shows twice. This is invisible to anything that tests the frame path on its own.
 
 **The session view lands on the top of the NEWEST THING** (`paintBody` in `cards/repos.js`). The last
 block in the body is that thing; inside a turn it resolves one level further in, to the reply rather
@@ -690,11 +678,12 @@ a turn still running ends in the caret, and the caret goes as far up as the scro
 with history above it, is simply the bottom. The browser's own clamp is what turns "as far up as it
 can" into "at the end" when the tail is shorter than the box, so there is one rule and no cases.
 
-**It lands only on ARRIVAL, and never moves while he is looking at it.** Arrival is opening a session,
-or coming back to one — the app returning to the foreground, or the sessions pane swiped back into
-view — with something new in it since he left (`awayAt`). A reply, tool call or thought landing while
-the view is on screen repaints it with the scroll left exactly where it was, even when he was already
-at the bottom: following the tail drags him off whatever he was reading the moment a step arrives.
+**It lands only on ARRIVAL, and never moves while it is being looked at.** Arrival is opening a
+session, or coming back to one — the app returning to the foreground, or the sessions pane swiped back
+into view — with something new in it since the user left (`awayAt`). A reply, tool call or thought
+landing while the view is on screen repaints it with the scroll left exactly where it was, even when
+already at the bottom: following the tail drags the reader off whatever they were reading the moment a
+step arrives.
 
 ### Wall-sized numbers a surface can override
 
@@ -773,7 +762,7 @@ squeezed yet, claims six lanes of it and keeps them.
 (`/tv-session-focus`). `mountSessions` takes the elements a surface has: a list always, and a `head` +
 `reply` only where there is room for an answer.
 Everything else — the numbering, the ordering, the highlight, the activity line under each row — is
-shared, and it has to be: `n` is the number he says out loud, so two copies of that ordering is two
+shared, and it has to be: `n` is the number the user says out loud, so two copies of that ordering is two
 surfaces that can disagree about which session is "the second one".
 
 **A surface styles those rows; it does not build them.** The sessions wall lays the same `.hw-row`
@@ -790,8 +779,8 @@ column, which is the phone home page: it wants the look-ahead and no hour rows, 
 be the same mount, because the look-ahead and the day are one answer to one question and a second
 fetch on its own clock is a second chance to be showing a different day. Surfaces differ in CSS size
 and in which endpoint feeds them (`?day=1` alone, `?wall=1` when the same payload also carries the
-months, handed back through `onload`), never in markup. There were two copies of this and they had
-already drifted to different class names for the same chip and two separate clocks.
+months, handed back through `onload`), never in markup. A second copy drifts: different class names
+for the same chip, and two separate clocks.
 
 The home wall's **look-ahead** — the six days after today — is drawn by the same module, from the
 same response (`&ahead=7`) and by the same reload, into a second element handed to `mount` as
@@ -802,8 +791,8 @@ and the look-ahead column draws the six after it.
 it can (`paintEdges` in `cards/dayline.js`) — and today's all-day items, under a rule beneath the
 timed ones, since no row will ever carry them and their deadline is the end of the day. The dial is a rolling window centred on now and it
 foreshortens hard, so being inside the +-12h window is not the same as being readable — just past
-midnight a noon item sat on a ONE-PIXEL row while its 4pm and 10pm siblings were outside the window
-altogether, and the whole of that day was invisible the moment it began. Membership is therefore
+midnight a noon item sits on a ONE-PIXEL row while its 4pm and 10pm siblings are outside the window
+altogether. Membership is therefore
 decided in the client, after `project()` measures: an item is docked when it is still ahead and not
 on a row with room for words (`.thin`) that no cover reaches. A dock row is built to BECOME a dial row
 without moving — same 46px hour gutter, same 10px gap, and the height of the dial's last readable
@@ -813,7 +802,7 @@ dial's tail rather than shortening it, and it is only as tall as it needs to be:
 dock at all. One fetch and one clock for both: they are one answer to one question, and a look-ahead
 re-reading on its own is two surfaces that can be showing different days at the same moment.
 
-It is a LIST, not a timeline, and that is the whole design: today is a dial because he is inside it
+It is a LIST, not a timeline, and that is the whole design: today is a dial because the reader is inside it
 and the question is how much of it is left, while a day at a remove only has to say what is on it.
 The chips are the day column's own — same colours, same states — but they carry their time, because
 no hour row underneath is saying it.
@@ -831,7 +820,7 @@ newest four shown and the rest as `+N`. They sit ABOVE the date, because below i
 be today's. The date and these rows are one opaque block (`.cw-top`) covering the head of the dial,
 so the axis stays the middle of the column. The dial gets no all-day strip (`allday` is empty for
 `full=1`): an all-day item waits in the dock until its day ends, and only then, if still open, goes
-red and joins these rows. Under the date it looked like one of the overdue items, which it is not.
+red and joins these rows; under the date it would read as one of the overdue items.
 
 **A cover counts against legibility.** A row either cover reaches, even partly, is `.covered`: blanked,
 and its items not counted as shown, so an overdue item under the top cover joins it instead of

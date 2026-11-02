@@ -33,9 +33,8 @@ Everything below serves one of those five.
 
 The hub runs on Fly and can reach neither machine. **Supabase is the only bus**, in both directions:
 work goes out as rows in `desk_commands`, state comes back as rows in `desk_sessions`. Nothing
-depends on SSH or on being on the same network — demonstrated the hard way on 2026-08-28, when mDNS
-stopped resolving the Pi from the Mac and the whole system kept working, including doing a
-config change ON the Pi by dispatching a session to it.
+depends on SSH or on being on the same network: with the Mac unable to reach the Pi at all, sessions
+still dispatch to it and report back.
 
 | Piece | Where | Does |
 |---|---|---|
@@ -60,14 +59,14 @@ config change ON the Pi by dispatching a session to it.
 | `id` | the tmux name (`hub-<repo>-<ts>`) on the Pi, `mac-<cmd8>` on the Mac |
 | `worker` | `pi-desk` or `desk` — which machine owns it |
 | `agent` | `claude` (Claude Code) or `codex` (OpenAI's Codex CLI) — what runs in it; § Codex sessions |
-| `origin` | `dispatched` (we started it) or `adopted` (Jared did) |
+| `origin` | `dispatched` (we started it) or `adopted` (opened by hand) |
 | `repo` / `label` | where it runs, and what it is called |
 | `status` | see below |
 | `claude_session_id` / `transcript_path` | the conversation, and where to read it. **This is the session's identity**: a resume makes a new row for the same conversation and `claude --resume` keeps this id, so the tools' permanent handle is `s-` plus its first eight characters (`sessionHandle` in data-layer), never the row `id` |
 | `pid` | the Claude Code process the row belongs to — what liveness and the conversation are read from |
 | `tty` | Mac only: the Terminal tab, and the handle a follow-up is typed into |
 | `working` / `last_reply` / `reply_at` | is a turn in flight; the last COMPLETED answer, and when |
-| `last_prompt` | the prompt that answer was to. A long message is recorded as `<pasted_content>…</pasted_content>` (how it was pasted in, voice-pipeline `handoff.js`), and `resolvePrompt` in the orchestrator's transcripts.js strips that back to his words. Turns recorded earlier hold a stub naming a file in `~/.claude-desk-prompts`, which the same function resolves until the file is swept at thirty days. Earlier turns are kept in `desk_turns`, by trigger (HUB-INTERNALS § The turns before the last one) |
+| `last_prompt` | the prompt that answer was to. A long message is recorded as `<pasted_content>…</pasted_content>` (how it was pasted in, voice-pipeline `handoff.js`), and `resolvePrompt` in the orchestrator's transcripts.js strips that back to the typed words. Older turns hold a stub naming a file in `~/.claude-desk-prompts`, which the same function resolves until the file is swept at thirty days. Earlier turns are kept in `desk_turns`, by trigger (HUB-INTERNALS § The turns before the last one) |
 | `active_at` | the last turn boundary (a prompt sent, a turn finished) — what orders, numbers and focuses sessions |
 **A prompt typed while a turn is running is a `queue-operation`, not a `user` record.** Claude Code
 queues it and writes the user record only when the turn consumes it, so a watcher looking at user
@@ -112,11 +111,11 @@ so the user record that follows does not say it twice.
 machine claims it, pulls the repo, launches with `--remote-control`, and publishes the row as the most
 recently active session. The Pi clones from GitHub if it has no checkout; the Mac uses the one it has.
 
-**A dispatched session is told it IS the dispatch.** Its prompt is his words, and those can still begin
+**A dispatched session is told it IS the dispatch.** Its prompt is the user's words verbatim, and those can still begin
 "start a session in X and have it…" when the router leaves the addressing in — which the new session
 reads as an order and dispatches the same request again. So a fresh launch with a prompt carries
 `voice-pipeline/orchestrator/dispatched-session.txt` as `--append-system-prompt` (both launchers read
-that one file; a system prompt so every surface still shows only his words), and `start_session`
+that one file; a system prompt so every surface still shows only the user's words), and `start_session`
 refuses a prompt the calling session was itself started with (`desk.redispatch`, keyed on
 `HUB_SESSION_ID`, which only the launchers set).
 
@@ -125,7 +124,7 @@ refuses a prompt the calling session was itself started with (`desk.redispatch`,
 `/model` last wrote to `~/.claude/settings.json`, and a wrong value there is invisible from an
 interactive session in the home directory: `~/.claude/settings.local.json` is also the PROJECT
 settings file for the project rooted at `~`, so it outranks the machine default for exactly the
-sessions Jared opens himself, and for none of the ones dispatched into a repo.
+sessions opened by hand there, and for none of the ones dispatched into a repo.
 
 **Adopted.** Every 30s the Mac lists `claude` processes that have a controlling tty — which excludes
 the voice worker's SDK client and the MCP children — and any process no row owns becomes a row.
@@ -143,19 +142,18 @@ claude's) — so a row follows a `/clear` exactly, on both.
 A row belongs to a PROCESS (`pid`), not a Terminal tab. A tab outlives the process inside it, and a
 later `claude` typed into the same tab is a different session with a row of its own.
 
-Inferring the transcript from outside — birth times, the newest file in a project directory — is
-what this used to do, and it cannot be made safe: every session opened in the home directory shares
-one project directory, so each new session looked like a `/clear` in every older one. The Mac logged
-336 rebinds against 42 adoptions that way, and rows were shown saying each other's words.
+Inferring the transcript from outside — birth times, the newest file in a project directory — cannot
+be made safe: every session opened in the home directory shares one project directory, so each new
+session looks like a `/clear` in every older one, and rows end up showing each other's words.
 
-The Pi adopts nothing: sessions there are launched by `pi-desk` or they do not exist, unless Jared
+The Pi adopts nothing: sessions there are launched by `pi-desk` or they do not exist, unless someone
 attaches to tmux over SSH and starts one by hand, which is not tracked.
 
 ### Codex sessions
 
 A session can run OpenAI's Codex CLI instead of Claude Code (`agent = 'codex'`), so dispatched work
-still runs when Claude cannot take it — an outage, or the usage limit. Codex runs on Jared's ChatGPT plan
-with the same MCP servers, approvals off and full access, as he runs it himself.
+still runs when Claude cannot take it — an outage, or the usage limit. Codex runs on the owner's ChatGPT plan
+with the same MCP servers, approvals off and full access.
 
 - **Who asks for one.** `start_session` takes `agent`. Omitted, it is Claude, except where the data MCP
   carries `DATA_AGENT=codex`: the voice worker's Codex fallback and its API-credits runner (a Claude
@@ -176,7 +174,7 @@ with the same MCP servers, approvals off and full access, as he runs it himself.
   launched pid and its children because `codex` is a node wrapper around the binary. The thread id is
   stored in `claude_session_id`.
 - **Replies and live activity** come from the rollout: `task_started` / `task_complete` (with
-  `last_agent_message`, the reply) bound a turn, and his words are the UserMessage item. `readTail` and
+  `last_agent_message`, the reply) bound a turn, and the user's words are the UserMessage item. `readTail` and
   `sessionWatch`'s `step` hand a rollout to codex.js, so the tick, the watcher, the relay and the hub
   treat both agents alike. A message typed mid-turn steers the running turn in Codex, so it arrives as
   `said` with no `queued` before it.
@@ -185,7 +183,7 @@ with the same MCP servers, approvals off and full access, as he runs it himself.
 - **Resume** is `codex resume <thread id>` on the machine that ran it, under the same row name on the Pi.
 - **They do not move.** A Codex rollout is never mirrored, and `transfer_session` refuses one; the Pi
   neither hands a Codex session to the Mac when short of memory nor moves it for heavy work.
-- **Not adopted.** A `codex` Jared opens by hand on the Mac is not listed.
+- **Not adopted.** A `codex` opened by hand on the Mac is not listed.
 - **Shown blue** on every surface that shows an incident red (`isCodex` in status-hub `routes/sessions.js`; § 11).
 
 ---
@@ -197,7 +195,7 @@ with the same MCP servers, approvals off and full access, as he runs it himself.
 | `start_session` | target machine | pull, launch, publish the row |
 | `focus_session` | — | pins the follow-up pointer to a session that already exists |
 | `unfocus_session` | — | releases the pin: follow-ups go to the most recently active session again |
-| `follow_up` | machine owning the target session | text typed into the live session, busy or not; the target is the session he NAMED (`session` param), else the focused one. A named parked session is resumed with the words instead. Naming leaves the pin alone |
+| `follow_up` | machine owning the target session | text typed into the live session, busy or not; the target is the session NAMED (`session` param), else the focused one. A named parked session is resumed with the words instead. Naming leaves the pin alone |
 | `rename_session` | owning machine | `/rename <name>` typed in — the session renames itself |
 | `end_session` | owning machine | close the tab / tmux session, park the row. A session ending ITSELF is not closed by a command: see below |
 | `resume_session` | owning machine | `claude --resume <id>` in a new tab or tmux session, with an optional prompt; a Pi with no memory to spare hands it to the Mac with its conversation, like new work (§ Capacity). Aimed at a session that is still running, both machines type the prompt into it |
@@ -233,19 +231,17 @@ focused — is decided in this order, by `desk_sessions_state()` (data-layer mig
 tools and the hub both read:
 
 1. **A session focused by name** (`focus_session`: "focus the status-hub session" — "pin" is the same
-   verb), while it runs. It holds until he focuses another, releases it (`unfocus_session`: "unfocus",
-   "unpin", "take the pin off", "go back to automatic"), dispatches
-   new work, or it closes. "Focus the latest session" is a pin like any other — of whichever session
-   is newest at that moment — which is why going back to automatic is a separate verb: when one tool
-   did both, "latest" could be read either way.
+   verb), while it runs. It holds until another is focused, it is released (`unfocus_session`: "unfocus",
+   "unpin", "take the pin off", "go back to automatic"), new work is dispatched, or it closes. "Focus
+   the latest session" is a pin like any other — of whichever session is newest at that moment — which
+   is why going back to automatic is a separate verb: one tool doing both makes "latest" ambiguous.
 2. **A dispatch whose session has not opened yet** (`desk_focus.command_id`, while that command is
    pending or running). Words said in those seconds are meant for it, so a follow-up is saved rather
    than sent to whatever was active a moment before.
 3. **Otherwise the most recently active running session** (`active_at`), on either machine.
 
-3 includes the session he is typing in at his keyboard. It used to be excluded, to keep dictation out
-of the session he was typing in; that trade was reversed deliberately — the session he last used is the
-one he means — and ambient speech is guarded where it always was, by `follow_up` demanding a handoff.
+3 includes the session being typed in at the keyboard, deliberately: the session last used is the one
+meant. Ambient speech is guarded by `follow_up` demanding a handoff, not by excluding it.
 
 A pinned session carries a pin on every surface that shows focus — the home wall, the sessions wall,
 the footer strip, the phone pane — and automatic focus carries none, because a pin stays put while
@@ -256,32 +252,31 @@ follow-up", "tell it to"), because the mic hears the whole room and forwarding a
 session is the failure that rule prevents. On a deliberate turn (watch, phone, typed, the ESP's wake
 word) a reply that plainly answers a session's message posted in the thread is a handoff too: the
 worker names those messages by session in the replayed thread, and the model sends the reply there. Naming a session removes the ambiguity, so everything said after a
-focus in the same turn goes to that session with no phrase required. That is the point: he talks to
-it as though it were the same assistant he always talks to, says "you" about things another session
-said, and never has to think about the handoff happening underneath.
+focus in the same turn goes to that session with no phrase required. The user can talk to it as
+the same assistant, say "you" about things another session said, and never think about the handoff
+underneath.
 
 The addressing directive in `worker.py` carries the same rule, and it has to: it tells the model that
-development talk naming no destination belongs to a session that has already heard him. After a
+development talk naming no destination belongs to a session that has already heard the user. After a
 focus, the destination IS named.
 
 ### Naming, in order of authority
 
-1. **A name Jared chose** — `/rename <name>`, or ctrl-R in the session picker. Both make Claude Code
+1. **A name the user chose** — `/rename <name>`, or ctrl-R in the session picker. Both make Claude Code
    write a `custom-title` record into the transcript, which the reconcile tick reads back.
 2. **The router's label** — the few words `start_session` wrote at dispatch, naming the job.
 3. **Claude Code's generated title** — for a session nobody dispatched and nobody named.
 
-Generated titles describe content, so **two sessions doing similar work get the same name**: `'Pull
-day workout log'` titles nineteen transcripts here. Naming one is the only way to tell them apart.
+Generated titles describe content, so **two sessions doing similar work get the same name**. Naming one is the only way to tell them apart.
 
-Renaming from the hub sends `/rename` into the live session rather than writing the record directly.
-Both were tested: writing the record works for everything that READS the transcript, but the running
-session never re-reads its own file, so its terminal tab keeps the old title.
+Renaming from the hub sends `/rename` into the live session rather than writing the record directly:
+writing the record works for everything that READS the transcript, but the running session never
+re-reads its own file, so its terminal tab keeps the old title.
 
 ### Numbering
 
 Active sessions, **most recently active first, running and parked interleaved, numbered from 1** — which
-is to say: the position in the list on screen. That is where "the second session" comes from; he reads
+is to say: the position in the list on screen. That is where "the second session" comes from; the user reads
 it off a surface and says it, and `get_sessions` hands the agent the same list in the same order.
 **Parking is not activity**: a session evicted to free the Pi or replaced by a dispatch keeps the place
 its last turn earned. Grouping running above parked is the attractive alternative and it breaks the list
@@ -295,18 +290,15 @@ session, so only the first after sorting is listed or numbered — the running r
 recently active.
 
 **It is ordered by `active_at`, the last turn boundary** — a prompt sent or a turn finished. `last_seen`
-was the obvious reading of "most recent" and it made the numbers unusable: every row was touched by its
-reconcile tick every 30s, so the order reshuffled between two reads seconds apart — measured, and caught
-when "focus the first session" landed on a session that had become first while the sentence was being
-processed. `started` cured that and left a session in active use below newer idle ones. `active_at`
-moves only when a session starts or finishes a turn, never on a tick, so a number said out loud can
+is the obvious reading of "most recent" and it makes the numbers unusable: every row is touched by its
+reconcile tick every 30s, so the order reshuffles between two reads seconds apart. `started` leaves a
+session in active use below newer idle ones. `active_at` moves only when a session starts or finishes a turn, never on a tick, so a number said out loud can
 still change before it is resolved — but only if a session does something in those few seconds.
 
 A session can be named three ways, and `resolveSession` takes any of them: **the number** (digits or
 spoken — "3", "fifth", "the third session"), **the repo** ("status-hub"), or **words from its name**
 ("golf", "session management"). Running sessions are matched first and the full list is only the
-fallback, because parked ones linger for a fortnight and otherwise crowd every name — "golf" matched
-a live session and a closed one from days ago; "status-hub" matched twelve. An ambiguous name is
+fallback, because parked ones linger for a fortnight and otherwise crowd every name. An ambiguous name is
 still answered with the numbered choices rather than a guess.
 
 Nothing about this is known to the SESSION itself. A session has no idea it is number three; the
@@ -320,8 +312,8 @@ The number is a POSITION, not identity: closing one renumbers the rest. That is 
 ## 6. Moving a session between machines
 
 A session is an append-only transcript plus a working directory, so moving one is copying the file
-and resuming it. Proven before it was built: a Mac transcript resumed on the Pi with every absolute
-path rewritten to the Pi's home, same session id, full recall of the conversation.
+and resuming it: a Mac transcript resumes on the Pi with every absolute path rewritten to the Pi's
+home, the same session id, and full recall of the conversation.
 
 - **Mirroring** runs at the end of every turn, on both machines — the only moment a transcript is a
   complete thought. Only the tail is uploaded; one transcript here is 16MB and a turn adds tens of KB.
@@ -339,13 +331,13 @@ path rewritten to the Pi's home, same session id, full recall of the conversatio
 
 **One writer per transcript.** `claude --resume` on a transcript that is live elsewhere does not
 reattach; it starts a second process replaying the same file, and the two diverge with one id between
-them. Measured: the Pi's resume appended 16 records the Mac's copy never saw. Every path that resumes
+them. Every path that resumes
 closes the other side first, and the hub asks about the conversation before it resumes one
 (`conversationNow`, HUB-INTERNALS §6b): a resume makes a new row and leaves the parked one parked, so
 without that check a follow-up or a resume of the old row would start a second process on a
 conversation already running again under the new one.
 
-**`desk_focus` is written only by Jared's intent.** A dispatch, a resume and a dead-letter retry write
+**`desk_focus` is written only by explicit user intent.** A dispatch, a resume and a dead-letter retry write
 its `command_id`; `focus_session` writes its `session_id`; `unfocus_session` clears both. Adoption and
 the reconcile ticks never touch
 it — unpinned, focus is COMPUTED from activity, not stored. Every surface resolves it by the same rule,
@@ -368,9 +360,9 @@ holds its tty raw and has no such limit — 20,000 characters arrived intact —
 straight in. The Pi has neither limit; tmux carries any length.
 
 **One utterance, one command.** Two mics endpoint at different pauses, so one spoken thing arrives as
-several rows. Nothing is claimed while any mic still reports hearing him, and among the captures of
-one utterance the longest transcript wins. Without this, a mid-sentence fragment ran as a command and
-the complete capture was discarded as its duplicate.
+several rows. Nothing is claimed while any mic still reports hearing speech, and among the captures of
+one utterance the longest transcript wins. Without this, a mid-sentence fragment runs as a command and
+the complete capture is discarded as its duplicate.
 
 ---
 
@@ -378,7 +370,7 @@ the complete capture was discarded as its duplicate.
 
 | | value | why |
 |---|---|---|
-| reconcile tick | 30s | both machines: liveness, mirror, and the BACKSTOP for last reply. **It writes only what changed** — an unconditional rewrite per resident row per tick was ~19k writes/day against ~6 sessions a day that did anything, and now that `desk_sessions` is published to realtime each such write is also a broadcast to every open screen. `last_seen` rides along with a real change or refreshes every 10 min; its only consumer is the 14-day sweep over parked rows, whose stamp freezes at eviction |
+| reconcile tick | 30s | both machines: liveness, mirror, and the BACKSTOP for last reply. **It writes only what changed** — `desk_sessions` is published to realtime, so an unconditional rewrite per resident row per tick is a broadcast to every open screen. `last_seen` rides along with a real change or refreshes every 10 min; its only consumer is the 14-day sweep over parked rows, whose stamp freezes at eviction |
 | session watch | on file events | `sessionWatch.js`: tool calls and finished turns, pushed as they land |
 | `COMMAND_TTL_S` | 120s | a command older than this expires unrun (and is kept) |
 | `CLAIM_STALE_S` | 900s | a claim held this long is treated as abandoned |
@@ -413,13 +405,13 @@ command it runs are charged there.
   - **mid-turn**: restarted with the prompt `[Moved from the Pi]`, and the note says the cut-off step
     is redone. The prompt must never be a word like `Continue`: it lands as the answer to whatever the
     conversation last said, and a session that had just proposed something would take it as approval.
-    Closing it sends C-c, which Claude Code records as Jared rejecting the step in flight ("The user
+    Closing it sends C-c, which Claude Code records as the user rejecting the step in flight ("The user
     doesn't want to proceed... STOP what you are doing and wait") plus "[Request interrupted by user for
     tool use]". Those records outrank the note, so the session obeys them and stops. The Mac's
     `mirrorDown` therefore rewrites them in the cut-off turn (`unmarkMoveInterrupt` in
     `voice-pipeline/orchestrator/src/mirror.js`) to say the move cut the step off and to run it again.
   - **between turns** (a background job it left running grew after the turn ended, possibly on a
-    question to Jared): resumed idle, no prompt at all, so it waits for him on the Mac.
+    question to the user): resumed idle, no prompt at all, so it waits for input on the Mac.
 
   With the Mac asleep it stays, with `memory.high` lifted so it is not throttled.
 - **A kill takes the command, not the session.** `tool.sh` is `CLAUDE_CODE_SHELL_PREFIX`: every Bash
@@ -448,10 +440,8 @@ memory over budget. A process moved into a cgroup leaves its existing memory cha
 
 ## 10. Live activity
 
-A turn's reply is written to the transcript the instant Claude Code finishes it, and for a long time
-nothing noticed until the next reconcile tick — up to 30s of an answer sitting on disk while a wall
-showed the previous one. The file changing is an event, so `sessionWatch.js` watches it on both
-machines and pushes what it sees straight to the hub:
+A turn's reply is written to the transcript the instant Claude Code finishes it. The file changing is
+an event, so `sessionWatch.js` watches it on both machines and pushes what it sees straight to the hub:
 
     transcript append ─ fs.watch ─▶ sessionWatch ─┬─ a prompt ─┬─ patch desk_sessions.active_at, working
                                                   │            └─ POST /api/session-activity (`said`, or `queued` then
@@ -472,15 +462,15 @@ machines and pushes what it sees straight to the hub:
 
     Every surface draws that list and nothing else (HUB-INTERNALS.md § The conversation as one list).
 
-Note that the database write is no longer in the delivery path. It still happens, because the reply
-has to outlive the moment, but the wall hears from the machine that has the answer rather than
+The database write is not in the delivery path. It still happens, because the reply has to outlive
+the moment, but the wall hears from the machine that has the answer rather than
 waiting for a round trip through Postgres.
 
 Only what is NEW is read — these transcripts reach tens of megabytes, so the watcher keeps a byte
 offset and a trailing partial line. A watcher starts at the file's current end, never at zero, or
 attaching to a running session would replay its whole history as though it were happening now.
 
-**The tick still does both of these jobs**, and that is deliberate rather than leftover. Liveness
+**The tick still does both of these jobs**, deliberately. Liveness
 cannot be event-driven — nothing fires when a process stops existing — and `fs.watch` genuinely drops
 events, since FSEvents coalesces on macOS and inotify misses under load. So the tick is the net, not
 the mechanism. That includes the reply's phone notification: a tick that reads a finished turn newer
@@ -488,7 +478,7 @@ than the one the row records (and newer than the row itself, so a resume's inher
 count) reports it with `reportTurnEnd`, the watcher's own call, and the hub pushes each turn once. The same is true one layer up: the wall keeps a 5-MINUTE poll of `/api/sessions` behind the
 push, and only as a net. `desk_sessions`, `desk_queue` and `desk_focus` are in the realtime
 publication (data-layer migration `00104`), so a session dying, the focus moving and the numbering
-changing now do announce themselves — each pushes a fresh payload (`pushSessions` in the hub), built
+changing do announce themselves — each pushes a fresh payload (`pushSessions` in the hub), built
 by the same function that answers the endpoint so the two cannot disagree.
 
 ### A hub dispatch answers back once
@@ -503,7 +493,7 @@ does it on both machines, called from the watcher's `end_turn` and from the tick
 The push for that reply is the hub's, not the relay's: every session's finished reply is a notification
 (HUB-INTERNALS §6b, `notifySessionReply`), and a second one from here would buzz twice.
 
-Only that first reply. After it the session is an ordinary one: Jared reads it where it runs and
+Only that first reply. After it the session is an ordinary one: the user reads it where it runs and
 answers it with a follow-up, and a reply to the relayed message in the thread is a fresh hub command.
 `voice_messages.session_id` is unique, so the watcher and the tick can both fire without a duplicate.
 A session any other agent dispatches has no `relay` flag and stays out of the thread.
@@ -544,7 +534,3 @@ Function, not liveness — ask it to do something and see whether it did:
 
     # end to end, without SSH: dispatch a session and read its reply back
     #   "start a session in status-hub and reply with just: ready"
-
-The full lifecycle was exercised this way on 2026-08-28 — launch, close, resume, rename, close on the
-Mac; launch, rename, read the name back, close on the Pi — plus a Pi→Mac transfer that carried a
-phrase only the Pi had been told.

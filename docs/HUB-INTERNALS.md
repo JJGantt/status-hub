@@ -663,8 +663,7 @@ deleted by pi-desk after 7 days; optional `lat`/`lon`/`acc`/`place` query → `v
 **Outside the gate:** `/api/cg/transcribe` — the restaurant watch app's voice input, raw audio → Groq
 Whisper → `{transcript}`, nothing enqueued. That app ships to TestFlight testers, so it cannot hold the hub
 token. Only the owner's device gets through, recognised by either `X-Owner-Token` (a dedicated random
-token; Fly secret `CG_OWNER_TOKEN_SHA256` is its hash, and the token itself is in the Mac's
-`~/.config/menu-app/owner-token`) or, from builds up to 44, `X-Owner-Key`: the owner's Anthropic key,
+token; Fly secret `CG_OWNER_TOKEN_SHA256` is its hash) or, from builds up to 44, `X-Owner-Key`: the owner's Anthropic key,
 whose SHA-256 is `CG_OWNER_KEY_SHA256`, the same hash as `AppGate.ownerKeyHash` in CapitalGrilleApp. When
 `X-Owner-Token` is sent it alone decides. `X-Owner-Key` goes once no build in use sends it. Every request writes one `[cg-transcribe]` line: size, time
 and word count, or `REFUSED` / `FAILED` with the reason (`CLIENT GONE`, a plain line rather than an error,
@@ -719,21 +718,10 @@ it to curl on a config descriptor, so the token is never in a command line, its 
 not dig the token out of a file to build a curl by hand: Claude Code's safety check refuses a command
 that would print a secret, and that refusal is what such a session runs into.
 
-The kiosk token is `TV_TOKEN` on Fly, and its copies are:
-
-- on each machine: `status-hub/.env`, `voice-pipeline/worker/.env` (`HUB_TOKEN`, which pi-desk also
-  reads), `gmail-watcher/.env`, `~/.config/ops/env` (the responder), and `~/.config/google-tv/hub-token`
-  (which `bin/tv sidebar token` pushes into the bedroom TV's companion app, where TvLink signs in with
-  it; the app keeps the old one until that is run);
-- on the Mac: the installed `com.jaredgantt.voice-orchestrator.plist` (`HUB_TOKEN`) and
-  `~/.config/ops/hub_token`;
-- on the Pi: the kiosk URL in `~/.xinitrc` (read once when X starts, so the X session has to restart:
-  the relaunch loop reuses the old URL; `tv-ring` reads its token from the same line);
-- on Fly: `HUB_TOKEN` on `jared-voice-worker`, `ops-responder` and `jared-desk-fly` (the Fly session
-  machine, where `bin/hub` reads it from the environment; it is stopped, so set it with `--stage` and
-  then `fly secrets deploy`), and `HUB_NOTIFY_TOKEN` on `litter-robot-watcher`.
-
-A new token has to reach every one of them. None of them is in git.
+The kiosk token is `TV_TOKEN` on Fly. Every client holds its own copy (gitignored env files on each
+machine, the Pi kiosk's URL, a secret on each Fly app that calls the hub), none of them in git, and a
+new token has to reach every one: the list to work through on a rotation is in each machine's
+`~/.claude/CLAUDE.md`.
 
 Every route is registered on one of two routers, and that is its auth: **`gated`** (behind `hubGate`,
 static assets included) or **`pub`**. Both are mounted once at the top of server.js, so where a route

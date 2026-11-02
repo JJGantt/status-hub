@@ -8,7 +8,7 @@ Companion to [ARCHITECTURE.md](../ARCHITECTURE.md) and [HUB-INTERNALS.md](HUB-IN
 ## Blocked on the account owner
 
 ### Xcode developer-account login is rejected
-`Unable to log in with account 'jaredgantt@gmail.com'` on any build that needs a **new or updated
+`Unable to log in with account '<the developer account>'` on any build that needs a **new or updated
 provisioning profile**. Existing profiles still work from cache, so ordinary builds succeed — this
 only bites when an entitlement changes. A new bundle id does not need it: register it with
 `apps/tools/asc.mjs bundle-id` and the CI archive makes its profiles.

@@ -76,7 +76,7 @@ login keychain's development identity, and the export is distribution-signed in 
 by the App Store Connect API key.
 
 **The build machines sign with one permanent development certificate** (secrets `IOS_DEV_P12` /
-`IOS_DEV_P12_PASSWORD`, local copy `~/.appstoreconnect/private_keys/statushub-ci-development.p12`),
+`IOS_DEV_P12_PASSWORD`),
 imported beside the distribution one in both iOS workflows. Without a development identity in the
 runner's keychain, automatic signing creates a new certificate on every run and the runner discards
 its key; ten of those filled the account and every archive then failed with "maximum number of
@@ -90,7 +90,7 @@ Xcode mint them again.
 This Mac has the device platforms, a development identity in the login keychain and the App Store
 Connect API key, which is all cloud distribution signing asks for, so it needs nothing from GitHub.
 **A session ON the Mac runs it directly**: a background Bash task with the sandbox disabled (the script
-reads `~/.appstoreconnect`, which the sandbox blocks). A session's shell can use the login keychain, so
+reads the App Store Connect key from outside the repo, which the sandbox blocks). A session's shell can use the login keychain, so
 nothing else is needed — never open a Terminal window for it.
 **A session on the Pi moves itself to the Mac** with the data MCP's `transfer_session` (its own id is `$HUB_SESSION_ID`,
 machine `mac`) and runs the script there as above; the move restarts its turn on the Mac with the whole

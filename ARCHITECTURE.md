@@ -342,7 +342,7 @@ handed the day's thread from state every worker holds, so it gains nothing from 
   passed (deduped via a `notifications` row keyed `reminder:<id>`; date-only dues fire 9am). Shares the
   `pushAll()` fan-out with `/api/notify`.
 - **APNs key** lives in Fly secrets on `jared-status-hub` (`APNS_KEY_ID`, `APNS_KEY_P8`,
-  `APNS_ENV`) — **not** in Supabase. Key file stashed at `~/.appstoreconnect/private_keys/`.
+  `APNS_ENV`) — **not** in Supabase.
 - **Sandbox vs production:** dev (Xcode) builds → sandbox tokens; Ad Hoc / TestFlight / App Store
   builds → production tokens. The per-token `environment` lets both coexist.
 - **This is the trap when installing a development build.** The laptop's keychain holds
@@ -357,12 +357,12 @@ handed the day's thread from state every worker holds, so it gains nothing from 
 
 ## 8. External services
 
-- **Fly.io** — hosting (the apps in §2). CLI `fly`, authed as jaredgantt@gmail.com.
+- **Fly.io** — hosting (the apps in §2). CLI `fly`.
 - **Supabase** — Postgres + realtime (source of truth).
 - **Groq** — Whisper STT: `whisper-large-v3-turbo` on `jared-voice`, and both `whisper-large-v3` and
   turbo on the hub's `/api/voice-command` (a Fly secret on each).
 - **Anthropic** — Claude subscription (warm Agent SDK + `claude -p`) for every worker, Fly included.
-- **Apple** — APNs (push) + App Store Connect (ASC key on disk; Issuer ID not yet recorded).
+- **Apple** — APNs (push) + App Store Connect (an API key, for signing and uploads).
 
 ---
 

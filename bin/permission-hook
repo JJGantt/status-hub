@@ -1,0 +1,122 @@
+#!/usr/bin/env node
+// Claude Code `PermissionRequest` hook: a session blocked on a permission dialog is answered from the
+// phone or the watch. Wired in claude-config's settings.json on the Mac and the Pi.
+//
+// Claude Code keeps the dialog on screen while this runs, and whichever comes first answers it: a key
+// in the terminal, or what this prints. So it never blocks anyone sitting at the session. What it does:
+//
+//   1. waits PUSH_DELAY_MS — a dialog answered at the keyboard in that time never reaches the phone
+//   2. reports the dialog to the hub (POST /api/session-prompts), which pushes Approve / Deny
+//   3. holds a long request open on the hub (GET /api/session-prompts/:id?wait=…) until a button is
+//      pressed, and prints that decision
+//
+// Claude Code does NOT stop this when the dialog is answered at the keyboard (it lets it run and
+// ignores what it prints), so the hook watches the session's own record (~/.claude/sessions/<pid>.json)
+// and exits as soon as it stops saying `waiting`, telling the hub the prompt is gone so a late tap is
+// a no-op. Printing nothing leaves the dialog exactly as it would be without this hook; every failure
+// path does that. status-hub/docs/PROMPTS.md is the whole picture.
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const PUSH_DELAY_MS = Number(process.env.PROMPT_PUSH_DELAY_MS ?? 10000);
+const GIVE_UP_MS = 25 * 60 * 1000;   // inside the hook timeout set in settings.json (30 min)
+const SESSIONS_DIR = path.join(os.homedir(), '.claude', 'sessions');
+const BASE = process.env.HUB_URL || 'https://jared-status-hub.fly.dev';
+
+function hubToken() {
+  if (process.env.HUB_TOKEN) return process.env.HUB_TOKEN;
+  const env = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', '.env');
+  try {
+    const m = fs.readFileSync(env, 'utf8').match(/^HUB_TOKEN=(.*)$/m);
+    return m ? m[1].trim() : '';
+  } catch { return ''; }
+}
+
+async function hub(method, p, body, timeoutMs = 15000) {
+  const r = await fetch(BASE + p, {
+    method,
+    headers: { 'Content-Type': 'application/json', 'X-Hub-Token': TOKEN },
+    body: body ? JSON.stringify(body) : undefined,
+    signal: AbortSignal.timeout(timeoutMs),
+  });
+  return { status: r.status, json: await r.json().catch(() => ({})) };
+}
+
+// The session record of the process that owns this conversation, found by its conversation id.
+function recordFile(claudeId) {
+  let files = [];
+  try { files = fs.readdirSync(SESSIONS_DIR).filter((f) => f.endsWith('.json')); } catch { return null; }
+  for (const f of files) {
+    try {
+      const d = JSON.parse(fs.readFileSync(path.join(SESSIONS_DIR, f), 'utf8'));
+      if (d.sessionId === claudeId) return path.join(SESSIONS_DIR, f);
+    } catch { /* being rewritten; the next change reads it */ }
+  }
+  return null;
+}
+function status(file) {
+  try { return JSON.parse(fs.readFileSync(file, 'utf8')).status || null; } catch { return 'gone'; }
+}
+
+const decide = (behavior) => {
+  const decision = behavior === 'allow' ? { behavior: 'allow' } : { behavior: 'deny', message: 'Denied remotely.' };
+  process.stdout.write(JSON.stringify({ hookSpecificOutput: { hookEventName: 'PermissionRequest', decision } }));
+  process.exit(0);
+};
+const leave = () => process.exit(0);   // print nothing: the dialog stays for the terminal
+
+const TOKEN = hubToken();
+let input;
+try { input = JSON.parse(fs.readFileSync(0, 'utf8')); } catch { leave(); }
+if (!TOKEN || !input?.session_id || !input?.tool_name) leave();
+
+const started = Date.now();
+const file = recordFile(input.session_id);
+let seenWaiting = false;
+let promptId = null;
+
+// Answered elsewhere (the keyboard, or the session ended): tell the hub, then go.
+function cleared() {
+  if (!file) return false;
+  const s = status(file);
+  if (s === 'waiting') { seenWaiting = true; return false; }
+  // The record can lag the dialog by a moment, so "not waiting" only counts once it has been seen
+  // waiting, or after a grace period long enough for Claude Code to have written it.
+  return s === 'gone' || seenWaiting || Date.now() - started > 5000;
+}
+async function finishGone() {
+  if (promptId) await hub('POST', `/api/session-prompts/${promptId}/decide`, { decision: 'gone' }).catch(() => {});
+  leave();
+}
+if (file) {
+  try {
+    fs.watch(SESSIONS_DIR, () => { if (cleared()) finishGone(); });
+  } catch { /* no watch: the checks between long requests are all there is */ }
+}
+
+await new Promise((r) => setTimeout(r, PUSH_DELAY_MS));
+if (cleared()) await finishGone();
+
+try {
+  const r = await hub('POST', '/api/session-prompts',
+                      { claude_session_id: input.session_id, tool_name: input.tool_name, tool_input: input.tool_input });
+  if (r.status !== 200 || !r.json.id) leave();   // 404: not a session the hub knows
+  promptId = r.json.id;
+} catch (e) {
+  console.error(`permission-hook: could not reach the hub: ${e.message}`);
+  leave();
+}
+
+while (Date.now() - started < GIVE_UP_MS) {
+  if (cleared()) await finishGone();
+  let r;
+  try { r = await hub('GET', `/api/session-prompts/${promptId}?wait=45`, null, 60000); }
+  catch { await new Promise((res) => setTimeout(res, 5000)); continue; }
+  if (r.status === 404) leave();   // the hub restarted and forgot it
+  const d = r.json.decision;
+  if (d === 'allow' || d === 'deny') decide(d);
+  if (d === 'gone') leave();
+}
+leave();

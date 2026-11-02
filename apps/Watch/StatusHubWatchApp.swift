@@ -55,11 +55,20 @@ final class WatchAppDelegate: NSObject, WKApplicationDelegate, UNUserNotificatio
     private static let answerCategory = UNNotificationCategory(
         identifier: "VOICE_ANSWER", actions: [], intentIdentifiers: [], options: [.customDismissAction])
 
+    /// A session blocked on a permission dialog (docs/PROMPTS.md). Registered here as on the phone, so
+    /// the button is answered from the wrist without waking the phone.
+    private static let promptCategory = UNNotificationCategory(
+        identifier: "SESSION_PROMPT",
+        actions: [UNNotificationAction(identifier: "PROMPT_ALLOW", title: "Approve", options: []),
+                  UNNotificationAction(identifier: "PROMPT_DENY", title: "Deny", options: [.destructive])],
+        intentIdentifiers: [], options: [])
+
     func applicationDidFinishLaunching() {
         UNUserNotificationCenter.current().delegate = self
         UNUserNotificationCenter.current().setNotificationCategories([Self.sessionCategory,
                                                                        Self.reminderCategory,
-                                                                       Self.answerCategory])
+                                                                       Self.answerCategory,
+                                                                       Self.promptCategory])
     }
 
     // Shown even while the app is open, as on the phone.
@@ -90,6 +99,14 @@ final class WatchAppDelegate: NSObject, WKApplicationDelegate, UNUserNotificatio
             let opened = response.actionIdentifier == UNNotificationDefaultActionIdentifier
             Task { @MainActor in
                 if opened { Chat.shared.land(on: id) } else { Chat.shared.markRead(id) }
+                completionHandler()
+            }
+            return
+        }
+        if let pid = info["prompt_id"] as? String,
+           let decision = ["PROMPT_ALLOW": "allow", "PROMPT_DENY": "deny"][response.actionIdentifier] {
+            Task { @MainActor in
+                await Hub.decidePrompt(pid, decision)
                 completionHandler()
             }
             return

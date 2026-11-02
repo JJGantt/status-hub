@@ -54,3 +54,54 @@ describe('/api/notify', () => {
     assert.equal((await notify({})).status, 401);
   });
 });
+
+describe('permission prompts (/api/session-prompts)', () => {
+  const json = async (token, method, p, body) => {
+    const r = await hub.req(p, { method, headers: { 'Content-Type': 'application/json', 'X-Hub-Token': token },
+                                 ...(body ? { body: JSON.stringify(body) } : {}) });
+    return { status: r.status, json: await r.json().catch(() => ({})) };
+  };
+  const open = (token = h.DEVICE_TOKEN, claude = 'c0ffee00-1111-2222-3333-444455556666') =>
+    json(token, 'POST', '/api/session-prompts', { claude_session_id: claude, tool_name: 'Bash', tool_input: { command: 'rm -rf build' } });
+  before(() => {
+    supa.tables.desk_sessions = [{ id: 's-prompt01', claude_session_id: 'c0ffee00-1111-2222-3333-444455556666',
+                                   status: 'resident', label: 'Build cleanup', repo: 'status-hub' }];
+  });
+
+  test('only a machine may report a dialog, and only for a running session the hub knows', async () => {
+    assert.equal((await open(h.PASSWORD_TOKEN)).status, 403);
+    assert.equal((await open(h.DEVICE_TOKEN, 'deadbeef-0000-0000-0000-000000000000')).status, 404);
+    const r = await open();
+    assert.equal(r.status, 200);
+    assert.equal(r.json.session, 's-prompt01');
+  });
+
+  test('a waiting hook is answered the moment a button is pressed, and the first answer stands', async () => {
+    const { json: { id } } = await open();
+    const waiting = json(h.DEVICE_TOKEN, 'GET', `/api/session-prompts/${id}?wait=20`);
+    await new Promise((r) => setTimeout(r, 200));
+    const t0 = Date.now();
+    assert.equal((await json(h.PASSWORD_TOKEN, 'POST', `/api/session-prompts/${id}/decide`, { decision: 'deny' })).status, 200);
+    const got = await waiting;
+    assert.equal(got.json.decision, 'deny');
+    assert.ok(Date.now() - t0 < 5000);
+    const late = await json(h.PASSWORD_TOKEN, 'POST', `/api/session-prompts/${id}/decide`, { decision: 'allow' });
+    assert.equal(late.json.decision, 'deny');
+    assert.equal(late.json.already, true);
+  });
+
+  test('a dialog the terminal answered is gone: a later tap changes nothing, and only a machine can say so', async () => {
+    const { json: { id } } = await open();
+    assert.equal((await json(h.PASSWORD_TOKEN, 'POST', `/api/session-prompts/${id}/decide`, { decision: 'gone' })).status, 403);
+    await json(h.DEVICE_TOKEN, 'POST', `/api/session-prompts/${id}/decide`, { decision: 'gone' });
+    const tap = await json(h.PASSWORD_TOKEN, 'POST', `/api/session-prompts/${id}/decide`, { decision: 'allow' });
+    assert.equal(tap.json.decision, 'gone');
+  });
+
+  test('reading a prompt is for machines; anything else is refused', async () => {
+    const { json: { id } } = await open();
+    assert.equal((await json(h.PASSWORD_TOKEN, 'GET', `/api/session-prompts/${id}`)).status, 403);
+    assert.equal((await json(h.DEVICE_TOKEN, 'GET', '/api/session-prompts/nope')).status, 404);
+    assert.equal((await json(h.PASSWORD_TOKEN, 'POST', `/api/session-prompts/${id}/decide`, { decision: 'maybe' })).status, 400);
+  });
+});

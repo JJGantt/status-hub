@@ -488,6 +488,11 @@ enum Hub {
         _ = try? await call("/api/todos/complete", method: "POST", body: ["id": id])
     }
 
+    /// Answers a session's permission dialog: "allow" or "deny" (docs/PROMPTS.md).
+    static func decidePrompt(_ id: String, _ decision: String) async {
+        _ = try? await call("/api/session-prompts/\(id)/decide", method: "POST", body: ["decision": decision])
+    }
+
     /// A session has been read here, so its unread mark clears everywhere.
     static func seen(_ id: String) async throws {
         _ = try await call("/api/sessions/seen", method: "POST", body: ["id": id])

@@ -340,6 +340,10 @@ parked session with them (`HUB-INTERNALS.md` §6b). **A follow-up is always lock
 next press sends it (`Capture.Flow.locked`, from `Sessions.startRecording`). A session gets talked to
 in long, paused thoughts, and a pause there must not send half of one.
 
+**A permission prompt is answered on the wrist.** `WatchAppDelegate` registers `SESSION_PROMPT`
+with Approve and Deny, background actions that post the decision itself (`Hub.decidePrompt`) rather
+than waking the phone. `docs/PROMPTS.md` is the whole path.
+
 **A session's reply notification opens it.** `WatchAppDelegate` registers the `SESSION_REPLY`
 category with one foreground action, Open — the button double tap presses on a watch notification —
 and answers it, or a tap on the notification itself, with `Sessions.open(rowId:)`: the app lands on

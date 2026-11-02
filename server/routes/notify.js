@@ -31,6 +31,9 @@ module.exports = function (ctx) {
     session:  { interruptionLevel: 'active' },
     // An orchestrator answer worth reading (notifyAnswer): lights the wrist, as a session reply does.
     answer:   { interruptionLevel: 'active' },
+    // A session blocked on a permission dialog (routes/prompts.js), with Approve / Deny on it.
+    // 'active': it has to light the wrist, and a session is stalled until somebody answers.
+    prompt:   { interruptionLevel: 'active' },
   };
 
   // The home-screen badge = every EXPIRED item: not cleared, dated, and past the moment it was FIRST

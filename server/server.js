@@ -1459,6 +1459,8 @@ const { MACHINE_NAME, machineAwake, pickFocus, pushSessions } = require('./route
 
 require('./routes/failures')({ MACHINE_NAME, gated, machineAwake, sb, sbWrite });
 
+require('./routes/prompts')({ auth, gated, pushAll, sb });
+
 // Voice SSE: streams `event: voice` frames ({kind:'message'|'focus', row}) to the /tv panel.
 // Dedicated stream (not /api/stream) so the kiosk gets voice rows without the heavy status frame.
 gated.get('/api/voice-stream', (req, res) => {

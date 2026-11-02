@@ -581,6 +581,7 @@ by `server.js`) returning what the rest of the server calls:
 | `conversation.js` | the session event log, `/api/session-activity`, `/api/voice-activity`, answer pushes |
 | `notify.js` | phone pushes (`pushAll`), the badge count, `/api/notify` |
 | `sessions.js` | desk control: sessions, focus, follow-ups |
+| `prompts.js` | permission prompts: a session's dialog pushed with Approve / Deny, and the decision handed back to its hook (`docs/PROMPTS.md`) |
 | `lists.js` | the lists pane and the calendar (they share their item helpers) |
 | `tv.js` | the bedroom TV link and sidebar settings |
 | `widgets.js` | the watch and widget feeds (`/api/rings`, `/api/workout-day`, `/api/workout-now`) |

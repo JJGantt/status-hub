@@ -96,10 +96,21 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
     private static let answerCategory = UNNotificationCategory(
         identifier: "VOICE_ANSWER", actions: [], intentIdentifiers: [], options: [.customDismissAction])
 
+    // A session blocked on a permission dialog (docs/PROMPTS.md): Approve or Deny answers the dialog
+    // itself, through the hook waiting on the hub. Background actions, so the phone is not opened;
+    // tapping the banner opens the session like a reply does. The same category is registered on the
+    // watch, which answers there rather than waking the phone.
+    private static let promptCategory = UNNotificationCategory(
+        identifier: "SESSION_PROMPT",
+        actions: [UNNotificationAction(identifier: "PROMPT_ALLOW", title: "Approve", options: []),
+                  UNNotificationAction(identifier: "PROMPT_DENY", title: "Deny", options: [.destructive])],
+        intentIdentifiers: [], options: [])
+
     func application(_ application: UIApplication,
                      didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil) -> Bool {
         UNUserNotificationCenter.current().delegate = self
-        UNUserNotificationCenter.current().setNotificationCategories([Self.reminderCategory, Self.answerCategory])
+        UNUserNotificationCenter.current().setNotificationCategories([Self.reminderCategory, Self.answerCategory,
+                                                                       Self.promptCategory])
         WatchLink.shared.start()   // hands the hub token to the watch app
         HealthSync.shared.start()  // Apple Health -> the hub, and SleepSync after it (docs/HEALTH.md, docs/SLEEP.md)
         LocationTrail.shared.start()  // every position -> the hub's location history (docs/LOCATION.md)
@@ -136,6 +147,13 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
         // An answer's notification, tapped or swiped away: read.
         if let mid = response.notification.request.content.userInfo["voice_message_id"] as? String {
             HubAPI.post("/api/voice-messages/read", ["id": mid], done: completionHandler)
+            return
+        }
+        // A permission prompt's button. Checked before the session branch: the prompt carries the
+        // session's id too, which is what tapping the banner itself opens.
+        if let pid = response.notification.request.content.userInfo["prompt_id"] as? String,
+           let decision = ["PROMPT_ALLOW": "allow", "PROMPT_DENY": "deny"][response.actionIdentifier] {
+            HubAPI.post("/api/session-prompts/\(pid)/decide", ["decision": decision], done: completionHandler)
             return
         }
         // A session's finished reply: tapping the banner opens that session on the repos pane.

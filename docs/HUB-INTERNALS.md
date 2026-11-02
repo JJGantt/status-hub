@@ -666,12 +666,12 @@ deleted by pi-desk after 7 days; optional `lat`/`lon`/`acc`/`place` query → `v
 Whisper → `{transcript}`, nothing enqueued. That app ships to TestFlight testers, so it cannot hold the hub
 token. Only the owner's device gets through, recognised by either `X-Owner-Token` (a dedicated random
 token; Fly secret `CG_OWNER_TOKEN_SHA256` is its hash) or, from builds up to 44, `X-Owner-Key`: the owner's Anthropic key,
-whose SHA-256 is `CG_OWNER_KEY_SHA256`, the same hash as `AppGate.ownerKeyHash` in CapitalGrilleApp. When
+whose SHA-256 is `CG_OWNER_KEY_SHA256`, the same hash as `AppGate.ownerKeyHash` in the Menu repo. When
 `X-Owner-Token` is sent it alone decides. `X-Owner-Key` goes once no build in use sends it. Every request writes one `[cg-transcribe]` line: size, time
 and word count, or `REFUSED` / `FAILED` with the reason (`CLIENT GONE`, a plain line rather than an error,
 when the watch hangs up mid-upload — its own `voice_*` rows record that side), and one `app_logs` row (`kind` `voice_hub`) under
 the watch's `X-Interaction-Id`. The watch logs its own side of each question to
-Supabase `app_logs` (`voice_*` rows, CapitalGrilleApp `VoiceLog`).
+Supabase `app_logs` (`voice_*` rows, the Menu app's `VoiceLog`).
 
 The same app's **order list** is outside the gate on the same key: `GET /api/cg/orders` (open orders plus
 the two models), `POST /api/cg/orders` (items as heard), `POST /api/cg/orders/standardize` (each row

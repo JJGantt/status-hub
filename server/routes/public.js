@@ -45,7 +45,7 @@ module.exports = function (ctx) {
   pub.get('/healthz', (req, res) => res.type('text').send('ok ' + (process.env.COMMIT || 'dev')));
 
   // The restaurant watch app's voice input: the same Groq Whisper as /api/voice-command, transcription
-  // only. It is on `pub` because that app (the Menu app, repo CapitalGrilleApp) cannot carry
+  // only. It is on `pub` because that app (the Menu app, repo Menu) cannot carry
   // the hub token — it ships to TestFlight testers, so anything built into it is public. Only the OWNER's
   // device gets through, and all it can do here is turn a clip into words.
   //
@@ -53,7 +53,7 @@ module.exports = function (ctx) {
   //   - `X-Owner-Token`: a dedicated random token (Fly secret CG_OWNER_TOKEN_SHA256 holds its hash). What
   //     the app should send.
   //   - `X-Owner-Key`: the owner's Anthropic API key (the same hash as `AppGate.ownerKeyHash` in
-  //     CapitalGrilleApp). What every build up to 44 sends. Retire it once no build in use sends it.
+  //     the Menu repo). What every build up to 44 sends. Retire it once no build in use sends it.
   const CG_OWNER_KEY_SHA256 = process.env.CG_OWNER_KEY_SHA256
     || '0c4eb3445e20e7d8b5164aca839f65fad2d05683f7556addbf4ca774d9a9c990';
   const CG_OWNER_TOKEN_SHA256 = process.env.CG_OWNER_TOKEN_SHA256 || '';
@@ -123,7 +123,7 @@ module.exports = function (ctx) {
     }
   });
   // THE ORDER LIST (data-layer 00125, 00126): what the restaurant watch app heard guests order, one row per
-  // item, written in two passes by the watch's own model (CapitalGrilleApp/Orders.swift): POST as heard,
+  // item, written in two passes by the watch's own model (Menu repo, MenuApp/Orders.swift): POST as heard,
   // then /standardize matches each row to the menu and renames it in place. The table has no anon policy,
   // so these owner-gated routes are the only way in. Open orders are the ones not marked done.
   //

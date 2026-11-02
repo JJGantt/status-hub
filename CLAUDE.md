@@ -293,8 +293,8 @@ are `standard` (the home wall — `home` is accepted as a second word for it and
 
 The weigh-in plot above the heat maps is aligned to their week columns, and that alignment is the
 whole chart: `cards/weightweeks.js` insets its box by half a column at each end so x runs from the
-first column's centre to the last's, all in CSS calc from `--cols` and the grid's gap. Change the
-gap in `.heat` and `--hgap` in `tv-home.css` has to move with it. Its first column is deliberately
+first column's centre to the last's, all in CSS calc from `--cols` and `--hgap`, which is
+also the gap `.heat` draws with (declared once in app.css, overridden on the phone). Its first column is deliberately
 blank: the three axis values are written over the left end of the plot, because a gutter for them
 would inset the data and being uninset is the entire point.
 
@@ -575,8 +575,7 @@ It also beats app.css's `body.tv.wallportrait` block on equal specificity, by lo
   tallest child makes the row as tall as the list, which pushes everything under it off the screen.
 - **The cell gap is 1px, not the wall's 2.5.** A cell is about eighteen pixels here where the wall's
   is twenty-five, so the wall's gap is a seventh of the mark instead of a tenth and the grid reads as
-  black ruled by colour. `--hgap` on the weigh-in plot moves with it — half of it is what the plot's
-  box is inset by at each end.
+  black ruled by colour. It is `--hgap` on the phone's body, so the weigh-in plot's inset follows it.
 - **Surf and the session list share a row**, and a session row is TAPPABLE: it opens in the session
   view one swipe LEFT (`cards/repos.js`, `window.__showSession`), with the whole conversation and a
   composer. So a title truncated in that column costs nothing — it is a way in, not the answer.

@@ -323,9 +323,9 @@ body.tv .hw-heatcard .hcell{border-radius:2px}
 body.tv .hw-heatcard .hmonths{display:none}
 
 /* THE WEEKLY WEIGH-IN PLOT, above both maps — geometry in cards/weightweeks.js. --cols is written
-   onto this element by the card; --hgap must stay equal to the gap in `.heat`, since half of it is
-   what the plot box is inset by at each end to land on the first and last column centres. */
-body.tv .hw-heatcard .hw-wplot{flex:0 0 68px;min-height:0;position:relative;--hgap:2.5px;--wpi:6px;
+   onto this element by the card; half of --hgap (app.css, the maps' own gap) is what the plot box is
+   inset by at each end to land on the first and last column centres. */
+body.tv .hw-heatcard .hw-wplot{flex:0 0 68px;min-height:0;position:relative;--wpi:6px;
   --half:calc((100% - (var(--cols) - 1) * var(--hgap)) / (2 * var(--cols)))}
 /* --wpi insets the DRAWING from the 68px slot by half a label at each end, top and bottom, and that
    inset is the only reason the axis values can be centred on their own lines: a label centred on a

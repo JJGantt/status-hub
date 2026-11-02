@@ -131,7 +131,7 @@ body.tv.phonehome .ds-late.on{display:block}
 
    THE CELL GAP IS 1px, not the wall's 2.5: a cell is twelve pixels here against twenty-five there,
    so the same gap was a fifth of the mark instead of a tenth and the grid read as black ruled by
-   colour. --hgap on the plot moves with it — half of it is what the plot's box is inset by. */
+   colour. It is --hgap, which the weigh-in plot's inset reads too. */
 body.tv.phonehome .ph-heatrow{flex:0 0 auto}
 body.tv.phonehome .ph-heatcard{flex:1 1 auto;min-width:0}
 body.tv.phonehome .ph-heattop{display:flex;flex-direction:column;gap:4px;min-width:0}
@@ -187,7 +187,8 @@ body.tv.phonehome .hmonths{display:none}   /* 9px month labels over a 15-column 
 body.tv.phonehome .nutheat,body.tv.phonehome #heatwrap{display:flex;flex-direction:column;min-width:0;
   overflow-x:auto;overflow-y:hidden;scrollbar-width:none}
 body.tv.phonehome .nutheat::-webkit-scrollbar,body.tv.phonehome #heatwrap::-webkit-scrollbar{display:none}
-body.tv.phonehome .heat,body.tv.phonehome .hcol{gap:1px}
+body.tv.phonehome{--hgap:1px}
+body.tv.phonehome .hcol{gap:var(--hgap)}
 /* `flex:1 1 auto` from app.css divides whatever columns there are across the box, which is exactly
    what a scroller must not do — the archive has to lay itself out at its own width and be scrolled
    past. Both the row and the grid inside it opt out. */
@@ -199,7 +200,7 @@ body.tv.phonehome .hcell{width:100%!important;border-radius:1px}
    calc from --cols and the grid's gap. The map SCROLLS and the plot does not, so the plot draws the
    window the frame ships and the scroll carries the map past it — the two agree wherever the map is
    sitting at rest, which is where it lands and where it is read. */
-body.tv.phonehome .hw-wplot{flex:0 0 44px;min-height:0;position:relative;--hgap:1px;--wpi:6px;
+body.tv.phonehome .hw-wplot{flex:0 0 44px;min-height:0;position:relative;--wpi:6px;
   --half:calc((100% - (var(--cols) - 1) * var(--hgap)) / (2 * var(--cols)))}
 body.tv.phonehome .wp-scroll{position:absolute;inset:0;overflow-x:auto;overflow-y:hidden;
   scrollbar-width:none}

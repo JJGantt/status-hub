@@ -3,9 +3,16 @@ const pace = require('../lib/pace');
 
 module.exports = function (ctx) {
   const {
-    WORKOUTDAY_BACKSTOP_MS, gated, nutritionCore, paceOf, sbRange, scoreOf, timed, trainingCore,
-    workoutDayCache,
+    gated, nutritionCore, paceOf, pushDay, sbRange, scoreOf, timed, trainingCore,
   } = ctx;
+
+  // A single day's sets, grouped by exercise — for the heatmap day click-through.
+  // Cached like /api/nutrition-day: the client re-fetches the open day on every SSE frame, which
+  // re-queried the day's sets ~every 30s all day. Sets only change on writes — realtime (`sets` is in
+  // changed()) covers external writers, and the hub's own set writes dirty it synchronously.
+  const workoutDayCache = new Map();   // date -> { body, at }
+  const WORKOUTDAY_BACKSTOP_MS = 15 * 60 * 1000;
+  const dirtyWorkoutDay = () => { workoutDayCache.clear(); pushDay('workout'); };
 
   // Compact feed for the iOS home/lock-screen widget and the watch's rings: the pace rings and the
   // health bar under them, built from those pieces alone — not the dashboard.
@@ -147,4 +154,6 @@ module.exports = function (ctx) {
       });
     } catch (e) { res.status(500).json({ error: String(e.message || e) }); }
   }));
+
+  return { dirtyWorkoutDay };
 };

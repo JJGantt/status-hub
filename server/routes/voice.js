@@ -15,10 +15,41 @@ const { pipeline } = require('stream/promises');
 
 module.exports = function (ctx) {
   const {
-    CLIENT_NOW_RE, CLIP_BUCKET, GROQ_API_KEY, SUPABASE_KEY, SUPABASE_URL, VOICE_RESET_SENTINEL,
-    dirtySettings, gated, markSeen, noteRinger, parseLocation, pushVoice, putSetting, sb, sbWrite,
-    seenMsgIds, settingsAll,
+    CLIENT_NOW_RE, GROQ_API_KEY, SUPABASE_KEY, SUPABASE_URL, VOICE_RESET_SENTINEL,
+    dirtySettings, gated, noteRinger, pushVoice, putSetting, sb, sbWrite, settingsAll,
   } = ctx;
+
+  // De-dupe resent sends: the durable outboxes (photos, and every voice clip) re-POST when a screen-lock
+  // or a dropped connection killed the ack after the server had already enqueued. A client_msg_id turns
+  // that retry into a no-op instead of a duplicate command. In-memory suffices — the hub runs a single
+  // instance and the retry window is seconds to minutes; the map is bounded so it can't grow without limit.
+  const seenMsgIds = new Map();   // client_msg_id -> the voice_requests id it enqueued (null if none returned)
+  function markSeen(msgId, requestId = null) {
+    if (!msgId) return;
+    seenMsgIds.set(msgId, requestId);
+    if (seenMsgIds.size > 1000) seenMsgIds.delete(seenMsgIds.keys().next().value);
+  }
+
+  // Where the user was when speaking, if the device sent it: numbers from the watch's or the browser's
+  // location fix, and a place name only when the device produced one itself. Nothing here looks a
+  // position up, so a command never sends the user's location to a third party. It is stored on the request
+  // row, and a trigger there keeps `locations` current (data-layer 00129), which a model reads through
+  // `get_location` only when a request depends on where the user is.
+  function parseLocation(src) {
+    const lat = parseFloat(src && src.lat), lon = parseFloat(src && src.lon);
+    if (!Number.isFinite(lat) || !Number.isFinite(lon) || Math.abs(lat) > 90 || Math.abs(lon) > 180) return null;
+    const acc = parseFloat(src.acc);
+    const place = typeof src.place === 'string' ? src.place.trim().slice(0, 160) : '';
+    return { lat: +lat.toFixed(5), lon: +lon.toFixed(5),
+             ...(Number.isFinite(acc) ? { acc: Math.round(acc) } : {}), ...(place ? { place } : {}) };
+  }
+
+  // The recording behind a phone command, kept in the voice-clips bucket for as long as its voice_requests
+  // row (pi-desk's sweepRetention deletes both after KEEP_REQUEST_DAYS). Without it a bad transcription
+  // leaves nothing to go on: a clip heard as Icelandic can only be understood by listening to it, and the
+  // temp file is gone when this handler ends. Runs after the reply and swallows its own failure, so it can
+  // neither slow a command down nor fail one.
+  const CLIP_BUCKET = 'voice-clips';
 
   // ---- IS IT THE USER? speaker ID for the devices that UPLOAD a clip -------------------------------------
   // The Mac and the ESP score every utterance against the user's voiceprint before it becomes a command, and
@@ -178,6 +209,14 @@ module.exports = function (ctx) {
       `My instructions: ${instructions}`;
   }
 
+  // In-app voice button: the browser/app uploads a recorded clip; we transcribe it with the SAME
+  // Groq Whisper the ESP uses, then enqueue into voice_requests exactly like the Jarvis path. The
+  // Mac worker claims it and writes the user+assistant turns into voice_messages (focus 'hub') —
+  // the one shared conversation shown on the TV wall and in the app.
+  //
+  // There is NO size or length limit on a command. The body streams to a temp file rather than into
+  // memory (a long uncompressed phone clip would not fit in this 256 MB machine), and lib/transcribe.js
+  // re-encodes and splits anything too big for Groq. The file is deleted as soon as the request ends.
   gated.post('/api/voice-command', async (req, res) => {
     const tmp = path.join(os.tmpdir(), 'voice-' + crypto.randomUUID());
     let short = null;   // the pause-shortened copy of a locked clip, removed with tmp
@@ -737,5 +776,5 @@ module.exports = function (ctx) {
     return s;
   }
 
-  return { cleanSaid, settleReply };
+  return { cleanSaid, markSeen, seenMsgIds, settleReply };
 };

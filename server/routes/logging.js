@@ -8,8 +8,24 @@ const pace = require('../lib/pace');
 
 module.exports = function (ctx) {
   const {
-    audit, dirtyWorkoutDay, gated, produceTargets, pushDay, sb, sbRange, sbWrite, surplusCal, timed,
+    dirtyWorkoutDay, gated, produceTargets, pushDay, sb, sbRange, sbWrite, surplusCal, timed,
   } = ctx;
+
+  // Best-effort audit trail for every hub nutrition write (add/edit/delete). before/after are
+  // full row snapshots (or null) — enough to fully reverse any action. NEVER throws into the
+  // caller: a failed audit insert must not fail the user's action, so it logs and swallows.
+  async function audit(action, entryId, before, after) {
+    try {
+      await sbWrite('nutrition_audit', 'POST', {
+        id: crypto.randomUUID(),
+        at: new Date().toISOString(),
+        action,
+        entry_id: entryId,
+        before: before || null,
+        after: after || null,
+      });
+    } catch (e) { console.error('audit insert failed:', e.message); }
+  }
 
   // A single 4am→4am nutrition day's food entries — for the nutrition-log day click-through.
   // Cached: the client re-fetches the open day on EVERY SSE status frame (its "live-refresh"), which

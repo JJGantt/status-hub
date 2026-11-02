@@ -185,6 +185,7 @@ const { createLiveWind, windType } = require('./lib/livewind');
 const { createLiveBuoy } = require('./lib/livebuoy');
 const apns = require('./lib/apns');
 const weightReminder = require('./lib/weightReminder');
+const { createAuth, isNavigation, isBrowser, stripToken, safeEqual } = require('./lib/auth');
 
 const PORT = process.env.PORT || 8080;
 const SUPABASE_URL = process.env.SUPABASE_URL;
@@ -195,11 +196,10 @@ if (!HUB_PASSWORD) {
   console.error('HUB_PASSWORD is not set; refusing to start');
   process.exit(1);
 }
-// Cookie token derived from the password — set once per device, never expires (no logout).
-const TOKEN = crypto.createHash('sha256').update('status-hub:' + HUB_PASSWORD).digest('hex');
-// Device token for the Pi/TV kiosk: visiting any page with ?token=<TV_TOKEN> sets the hub
-// cookie, so the wall display authenticates by URL without ever needing the password.
+// Device token: the kiosk, the bedroom TV and every machine client (lib/auth.js says how each sends it).
 const TV_TOKEN = process.env.TV_TOKEN || '';
+const auth = createAuth({ password: HUB_PASSWORD, deviceToken: TV_TOKEN, supabaseUrl: SUPABASE_URL, supabaseKey: SUPABASE_KEY });
+auth.start();
 // Groq Whisper for the in-app voice button (same model the ESP/Jarvis path uses).
 const GROQ_API_KEY = process.env.GROQ_API_KEY || '';
 // Sentinel transcript the worker recognizes as "drop the resumed hub session" (manual reset).
@@ -1448,7 +1448,7 @@ seedLastVoiceAt();
 // X-Hub-Token when THIS server cannot be reached. Written at every boot rather than copied by hand, so a
 // changed password reaches it at the next deploy. Service-role only (data-layer 00124).
 async function publishFallbackConfig() {
-  const row = { key: 'hub_token_sha256', value: crypto.createHash('sha256').update(TOKEN).digest('hex'),
+  const row = { key: 'hub_token_sha256', value: crypto.createHash('sha256').update(auth.PASSWORD_TOKEN).digest('hex'),
                 updated_at: new Date().toISOString() };
   try {
     const r = await fetch(`${SUPABASE_URL}/rest/v1/fallback_config?on_conflict=key`, {
@@ -1592,6 +1592,7 @@ function startRealtime() {
       () => { seen(); dirtyDesk(); pushSessions(); })
     // A written report announces itself rather than being discovered: reportTick's timer is now only
     // the net under this, instead of the fastest database timer on the server.
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'hub_sessions' }, (p) => { seen(); auth.onChange(p); })
     .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'reports' },
       () => { seen(); reportTick().catch((e) => console.error('[report] error', e.message)); })
     .subscribe((status) => {
@@ -1707,27 +1708,8 @@ setInterval(async () => {
   }
 }, FRESH_PROBE_MS);
 
-// ---- auth ----
-function getCookie(req, name) {
-  const m = (req.headers.cookie || '').match(new RegExp('(?:^|; )' + name + '=([^;]+)'));
-  return m ? decodeURIComponent(m[1]) : null;
-}
-// Web uses the 'hub' cookie; the native app sends the same derived token as a header.
-// Constant-time string equality: both sides are hashed to the same length first, so neither the
-// length nor the position of the first differing byte shows up in the response time.
-const sha256 = (s) => crypto.createHash('sha256').update(String(s)).digest();
-const safeEqual = (a, b) => crypto.timingSafeEqual(sha256(a), sha256(b));
-// A token in a header: `X-Hub-Token: <token>` or `Authorization: Bearer <token>`.
-function headerToken(req) {
-  const x = req.headers['x-hub-token'];
-  if (x) return String(x);
-  const m = /^Bearer\s+(.+)$/i.exec(String(req.headers.authorization || ''));
-  return m ? m[1].trim() : '';
-}
-// The kiosk/device token (TV_TOKEN), from a header. Every machine client sends it this way.
-const deviceHeader = (req) => !!TV_TOKEN && safeEqual(headerToken(req), TV_TOKEN);
-const authed = (req) => safeEqual(getCookie(req, 'hub') || '', TOKEN)
-  || safeEqual(headerToken(req), TOKEN) || deviceHeader(req);
+// ---- auth (lib/auth.js) ----
+const authed = auth.authed;
 
 // LOGIN LOCKOUT. Wrong passwords are counted per client IP (Fly-Client-IP, which Fly's edge sets;
 // req.ip is the proxy), in memory: a restart clears them, which is fine for a limit whose job is to
@@ -1739,7 +1721,7 @@ const authed = (req) => safeEqual(getCookie(req, 'hub') || '', TOKEN)
 const LOGIN_WINDOW_MS = 15 * 60 * 1000;
 const LOGIN_MAX_PER_IP = 5;
 const loginFailures = new Map();   // ip -> [timestamps]
-const clientIp = (req) => String(req.headers['fly-client-ip'] || req.ip || '');
+const clientIp = auth.clientIp;
 function recentFailures(list, now) { return list.filter((t) => now - t < LOGIN_WINDOW_MS); }
 function loginLocked(ip, now) {
   const mine = recentFailures(loginFailures.get(ip) || [], now);
@@ -1760,11 +1742,18 @@ function recordLoginFailure(ip, now) {
 app.get('/healthz', (req, res) => res.type('text').send('ok ' + (process.env.COMMIT || 'dev')));
 
 // The restaurant watch app's voice input: the same Groq Whisper as /api/voice-command, transcription
-// only. It sits before the auth gate because that app cannot carry the hub token — it ships to TestFlight
-// testers, so anything built into it is public. Instead it sends its Anthropic key, and only the owner's
-// key (matched by SHA-256, the same hash as `AppGate.ownerKeyHash` in CapitalGrilleApp) is let through,
-// and all it can do here is turn a clip into words.
-const CG_OWNER_KEY_SHA256 = '0c4eb3445e20e7d8b5164aca839f65fad2d05683f7556addbf4ca774d9a9c990';
+// only. It sits before the auth gate because that app (the Menu app, repo CapitalGrilleApp) cannot carry
+// the hub token — it ships to TestFlight testers, so anything built into it is public. Only the OWNER's
+// device gets through, and all it can do here is turn a clip into words.
+//
+// The owner is recognised by either of two credentials, both matched by SHA-256:
+//   - `X-Owner-Token`: a dedicated random token (Fly secret CG_OWNER_TOKEN_SHA256 holds its hash). What
+//     the app should send.
+//   - `X-Owner-Key`: the owner's Anthropic API key (the same hash as `AppGate.ownerKeyHash` in
+//     CapitalGrilleApp). What every build up to 44 sends. Retire it once no build in use sends it.
+const CG_OWNER_KEY_SHA256 = process.env.CG_OWNER_KEY_SHA256
+  || '0c4eb3445e20e7d8b5164aca839f65fad2d05683f7556addbf4ca774d9a9c990';
+const CG_OWNER_TOKEN_SHA256 = process.env.CG_OWNER_TOKEN_SHA256 || '';
 // What the clips are about, as Whisper's vocabulary hint: brand names otherwise come back as ordinary
 // English that sounds alike.
 const CG_WHISPER_PROMPT = 'Someone behind a restaurant bar asking about the menu and restocking: '
@@ -1780,16 +1769,19 @@ function cgLog(req, started, fields) {
     kind: 'voice_hub', latency_ms: Date.now() - started, ...fields,
   }).catch((e) => console.error(`[cg-transcribe] log write failed: ${e.message}`));
 }
-// The owner's device, by its Anthropic key. Every /api/cg route but the transcriber's is behind this alone.
+// The owner's device. Every /api/cg route is behind this alone.
+const sha256hex = (s) => crypto.createHash('sha256').update(String(s)).digest('hex');
 function cgOwner(req) {
+  const token = String(req.headers['x-owner-token'] || '');
+  if (token) return !!CG_OWNER_TOKEN_SHA256 && safeEqual(sha256hex(token), CG_OWNER_TOKEN_SHA256);
   const key = String(req.headers['x-owner-key'] || '');
-  return !!key && crypto.createHash('sha256').update(key).digest('hex') === CG_OWNER_KEY_SHA256;
+  return !!key && safeEqual(sha256hex(key), CG_OWNER_KEY_SHA256);
 }
 app.post('/api/cg/transcribe', async (req, res) => {
   const arrived = Date.now();
-  const key = String(req.headers['x-owner-key'] || '');
   if (!cgOwner(req)) {
-    console.log(`[cg-transcribe] REFUSED: ${key ? 'not the owner key' : 'no key'}`);
+    const sent = req.headers['x-owner-token'] || req.headers['x-owner-key'];
+    console.log(`[cg-transcribe] REFUSED: ${sent ? 'not the owner' : 'no key'}`);
     req.resume();
     return res.status(401).json({ error: 'unauthorized' });
   }
@@ -1930,9 +1922,10 @@ app.post('/login', (req, res) => {
   if (loginLocked(ip, now)) return res.status(429).type('html').send(loginHtml('Too many attempts'));
   if (safeEqual(req.body.password || '', HUB_PASSWORD)) {
     loginFailures.delete(ip);
-    res.setHeader('Set-Cookie',
-      `hub=${TOKEN}; Max-Age=${60 * 60 * 24 * 3650}; Path=/; HttpOnly; SameSite=Lax`);
-    return res.redirect('/');
+    return auth.login(req, res).then(() => res.redirect('/'), (e) => {
+      console.error('[login] could not store the session:', e.message);
+      res.status(503).type('text').send('unavailable');
+    });
   }
   recordLoginFailure(ip, now);
   console.warn(`[login] wrong password from ${ip}`);
@@ -1975,17 +1968,42 @@ const PUBLIC_SURF = new Set(['/surf', '/api/surf/live', '/api/surf/stream', '/ap
 // Auth gate — everything below requires the cookie (or x-hub-token header). The browser
 // sends the cookie on same-origin module/css fetches automatically, so static assets are
 // served behind this gate too.
-app.use((req, res, next) => {
-  if (authed(req) || PUBLIC_SURF.has(req.path)) return next();
-  // Kiosk device-token: ?token=<TV_TOKEN> on any request authenticates and seeds the cookie
-  // so the Pi's subsequent same-origin fetches (SSE, /api/*) are authorized too.
-  if (TV_TOKEN && req.query.token && safeEqual(req.query.token, TV_TOKEN)) {
-    res.setHeader('Set-Cookie',
-      `hub=${TOKEN}; Max-Age=${60 * 60 * 24 * 3650}; Path=/; HttpOnly; SameSite=Lax`);
+// The token never stays in a URL: a page load carrying `?token=` (the Pi's kiosk, which can only be
+// given a URL) is signed in with the device cookie and redirected to the same URL without it, and the
+// token is never logged.
+const queryTokenSeen = new Set();
+app.use(async (req, res, next) => {
+  const q = typeof req.query.token === 'string' ? req.query.token : '';
+  const nav = isNavigation(req);
+  const who = auth.identify(req);
+  if (who && who.kind === 'pending') return res.status(503).type('text').send('starting');
+  if (nav && q && (who || auth.isDeviceToken(q))) {
+    if (auth.isDeviceToken(q)) auth.setDeviceCookie(res);
+    return res.redirect(302, stripToken(req.originalUrl));
+  }
+  if (who) {
+    if (nav && who.from === 'header' && who.kind === 'device') auth.setDeviceCookie(res);
+    else if (nav && who.from === 'cookie' && who.kind === 'password' && isBrowser(req)) await auth.upgrade(req, res);
+    return next();
+  }
+  if (PUBLIC_SURF.has(req.path)) return next();
+  // A machine client still sending `?token=`. Accepted until each has moved to the header; the path
+  // (never the token) is logged once per boot so the stragglers can be found.
+  if (q && auth.isDeviceToken(q)) {
+    if (!queryTokenSeen.has(req.path)) { queryTokenSeen.add(req.path); console.log(`[auth] ?token= on ${req.method} ${req.path}`); }
     return next();
   }
   if (req.path.startsWith('/api')) return res.status(401).json({ error: 'unauthorized' });
   res.redirect('/login');
+});
+
+// The login sessions: list them, revoke one (`{id}`) or every one (`{all: true}`). lib/auth.js.
+app.get('/api/auth/sessions', (req, res) => res.json({ sessions: auth.list(req) }));
+app.post('/api/auth/revoke', express.json(), async (req, res) => {
+  const b = req.body || {};
+  if (!b.all && !b.id) return res.status(400).json({ error: 'id or all' });
+  try { res.json({ revoked: await auth.revoke({ id: String(b.id || ''), all: !!b.all }) }); }
+  catch (e) { console.error('[auth] revoke failed:', e.message); res.status(502).json({ error: String(e.message || e) }); }
 });
 
 // `/` AND `/tv` ARE NOT THE SAME PAGE, and this is the one thing to know before changing either.
@@ -3214,9 +3232,9 @@ async function soundsLikeHim(id, file, source) {
       body: await fs.openAsBlob(wav, { type: 'audio/wav' }),
     });
     if (!put.ok) throw new Error(`upload -> ${put.status}`);
-    const url = `${VOICE_VERIFY_URL}?p=${encodeURIComponent(object)}` +
-      (VERIFY_TOKEN ? `&token=${encodeURIComponent(VERIFY_TOKEN)}` : '');
-    const r = await fetch(url, { signal: AbortSignal.timeout(20000) });
+    // The token rides a header, never the URL, where it would land in the voice server's proxy logs.
+    const r = await fetch(`${VOICE_VERIFY_URL}?p=${encodeURIComponent(object)}`, {
+      headers: VERIFY_TOKEN ? { 'X-Token': VERIFY_TOKEN } : {}, signal: AbortSignal.timeout(20000) });
     const sim = parseFloat(await r.text());
     // ITS OWN SETTING, not the room mics'. `voiceid_accept_threshold` is the ESP's whole-clip gate and
     // reads 0 (off) today; sharing it would mean a number tuned for an ESP streaming raw audio silently
@@ -4336,7 +4354,7 @@ async function pushAll(kind, title, body, dedupe_key, extra = {}) {
 }
 
 app.post('/api/notify', express.json(), async (req, res) => {
-  if (TV_TOKEN && !deviceHeader(req) && !safeEqual(req.query.token || '', TV_TOKEN)) return res.status(403).json({ error: 'forbidden' });
+  if (TV_TOKEN && !auth.deviceRequest(req)) return res.status(403).json({ error: 'forbidden' });
   const b = req.body || {};
   const title = String(b.title || 'Hub').slice(0, 100);
   const body = String(b.body || '').trim().slice(0, 300);

@@ -12,8 +12,13 @@
 set -uo pipefail
 cd "$(dirname "$0")" || exit 1
 
-[ -n "$(git status --porcelain .)" ] && echo "warning: uncommitted changes under server/ — deploying the working tree, not a commit"
+# WHAT SHIPS IS HEAD, never the working tree. Several sessions share this checkout, and a tree with
+# someone's half-finished edit in it would otherwise go live under a commit that does not contain it.
 SHA=$(git rev-parse --short HEAD)
+[ -n "$(git status --porcelain .)" ] && echo "note: uncommitted changes under server/ are NOT deployed; shipping $SHA"
+BUILD=$(mktemp -d)
+trap 'rm -rf "$BUILD"' EXIT
+git -C .. archive HEAD server | tar -x -C "$BUILD" || { echo "could not export $SHA"; exit 1; }
 
 # NEVER SHIP UNDER A COMMAND BEING SPOKEN. A deploy restarts the hub and makes every open page reload,
 # and a page that reloads mid-recording loses the clip. The page now holds its reloads off while it is
@@ -35,7 +40,7 @@ done
 
 # COMMIT is what /healthz reports, and the only way to tell a deploy that shipped from one that did
 # not. Verified below rather than assumed.
-fly deploy --remote-only --env COMMIT="$SHA" || { echo "deploy FAILED"; exit 1; }
+(cd "$BUILD/server" && fly deploy --remote-only --env COMMIT="$SHA") || { echo "deploy FAILED"; exit 1; }
 
 for _ in $(seq 1 20); do
   got=$(curl -s --max-time 10 https://jared-status-hub.fly.dev/healthz | awk '{print $2}')

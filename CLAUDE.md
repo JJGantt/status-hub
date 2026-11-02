@@ -18,7 +18,9 @@ file already gone), stays quiet. Page errors arrive through `/api/clientlog` as 
 
 ## Pushing does not deploy
 
-Run `server/deploy.sh` from whichever machine changed the code. It ships and then polls `/healthz`,
+Run `server/deploy.sh` from whichever machine changed the code. It ships HEAD, exported from git, never
+the working tree, so commit first: uncommitted edits (yours or another session's) do not go live. It
+then polls `/healthz`,
 which returns `ok <7-char sha>` from the `COMMIT` stamped in at deploy time — that check is the only
 thing separating "shipped" from "silently didn't". `.github/workflows/` is iOS-only; nothing there
 touches the server. `fly.toml` lives in `server/`, which is also the build context.

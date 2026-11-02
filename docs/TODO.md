@@ -25,6 +25,19 @@ only bites when an entitlement changes. A new bundle id does not need it: regist
 
 ---
 
+## Retire the transitional credentials
+
+- **`?token=` on API calls.** Every client this repo and its neighbours control sends `X-Hub-Token`
+  now; the hub still accepts the device token in the query string and logs `[auth] ?token= on <path>`
+  once per boot per path (`fly logs -a jared-status-hub | grep '\[auth\] ?token'`). When a day passes
+  with none, delete that branch of `hubGate` and the query half of `auth.deviceRequest`. The kiosk's
+  page-load exchange (`/tv?token=` → cookie → redirect) stays: a browser can only be given a URL.
+- **`X-Owner-Key` on `/api/cg/*`.** The Menu app should send `X-Owner-Token` instead (the change is
+  described in HUB-INTERNALS § Auth, the cg paragraph). Once no build in use sends the Anthropic key,
+  delete `CG_OWNER_KEY_SHA256` and the `x-owner-key` half of `cgOwner` in `routes/public.js`.
+
+---
+
 ## Failed dispatches have no surface yet
 
 The plumbing is done: anything that could not run is kept whole in `desk_dead_letters`, and

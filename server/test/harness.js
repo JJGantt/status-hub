@@ -13,8 +13,8 @@ const { spawn } = require('child_process');
 const SERVER = path.join(__dirname, '..', 'server.js');
 const sha256hex = (s) => crypto.createHash('sha256').update(String(s)).digest('hex');
 
-// PostgREST, as far as the hub uses it: GET with eq./in./is.null filters, POST (insert), PATCH, DELETE.
-// Every table starts empty. `tables` is exposed so a test can seed or inspect rows.
+// PostgREST, as far as the hub uses it: GET with eq./in./is.null filters, POST (insert), PATCH, DELETE,
+// and GET rpc/<function> (`rpc` below). Every table starts empty. `tables` is exposed so a test can seed or inspect rows.
 function fakeSupabase() {
   const tables = {};
   const matches = (row, params) => {
@@ -32,9 +32,11 @@ function fakeSupabase() {
     req.on('data', (c) => { body += c; });
     req.on('end', () => {
       const u = new URL(req.url, 'http://x');
-      const m = /^\/rest\/v1\/([^/]+)$/.exec(u.pathname);
       res.setHeader('Content-Type', 'application/json');
       res.setHeader('Content-Range', '0-0/0');
+      const fn = /^\/rest\/v1\/rpc\/([^/]+)$/.exec(u.pathname);
+      if (fn) return res.end(JSON.stringify(api.rpc[fn[1]] ? api.rpc[fn[1]](u.searchParams) : null));
+      const m = /^\/rest\/v1\/([^/]+)$/.exec(u.pathname);
       if (!m) { res.statusCode = 404; return res.end('{}'); }
       const rows = (tables[m[1]] = tables[m[1]] || []);
       const hit = rows.filter((r) => matches(r, u.searchParams));
@@ -53,7 +55,11 @@ function fakeSupabase() {
       res.end('[]');
     });
   });
-  api = { tables, failWrites: false, close: () => server.close() };
+  // Postgres functions, by name: each answers like the real one would on empty tables.
+  const rpc = {
+    muscle_volume: () => ({ window: [], bouts: [], days: [], targets: { _default: 14 } }),
+  };
+  api = { tables, rpc, failWrites: false, close: () => server.close() };
   return new Promise((resolve) => server.listen(0, '127.0.0.1', () => {
     api.url = `http://127.0.0.1:${server.address().port}`;
     resolve(api);

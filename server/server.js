@@ -442,7 +442,7 @@ const {
 // so an endpoint that needs only the rings never touches the surf, task or catalog rows.
 const ROW_GROUPS = {
   nut: ['nutrition_entries'], weight: ['weight_log'], targets: ['nutrition_targets'],
-  train: ['sets'], catalog: ['exercise_catalog', 'exercise_muscles'], surf: ['surf_snapshots'],
+  train: ['sets', 'exercise_muscles', 'exercise_catalog', 'muscle_volume_targets'], catalog: ['exercise_catalog', 'exercise_muscles'], surf: ['surf_snapshots'],
   tasks: ['list_items'],
 };
 const ROWCACHE_BACKSTOP_MS = 15 * 60 * 1000;
@@ -536,11 +536,12 @@ const rowsOf = {
   weight: () => groupRows('weight', '', async () => ({ weightRows: await sb('weight_log?select=date,weight_lbs&order=date.asc') })),
   targets: () => groupRows('targets', '', async () => ({ targetRows: await sb('nutrition_targets?select=date,calories&order=date.asc') })),
   train: (w) => groupRows('train', [w.week[0], w.heatStart].join('|'), async () => {
-    const [setRows, heatRows] = await Promise.all([
-      sb(`sets?occurred_at=gte.${w.week[0]}T${String(DAY_START_HOUR).padStart(2, '0')}:00:00&select=occurred_at,exercise,muscles_override`),
+    // The week's muscle volume comes computed: muscle_volume() is its one definition (lib/volume.js).
+    const [volRows, heatRows] = await Promise.all([
+      sb('rpc/muscle_volume?p_days=7'),
       sbRange(`sets?occurred_at=gte.${w.heatStart}T00:00:00&select=occurred_at&order=occurred_at`),
     ]);
-    return { setRows, heatRows };
+    return { volRows, heatRows };
   }),
   catalog: () => groupRows('catalog', '', async () => {
     const [muscleRows, catalogRows] = await Promise.all([
@@ -668,9 +669,9 @@ function maintenanceWithHistory(core) {
   return { ...m, viz: { ...m.viz, series } };
 }
 
-const volumeOf = memo((setRows, muscleRows, catalogRows, weekKey) => {
+const volumeOf = memo((volRows, muscleRows, catalogRows) => {
   // ---- weekly per-muscle volume gauges ----
-  const volume = computeVolume(setRows || [], muscleRows || [], weekKey.split(','));
+  const volume = computeVolume(volRows, muscleRows || []);
   volume.exercise_variants = buildVariants(catalogRows || []); // exercise → equipment variants + YouTube how-to links
   return volume;
 });
@@ -698,9 +699,9 @@ const setClocksOf = memo((heatRows, today) => {
 // The week's training: the muscle gauges and the set clocks.
 async function trainingCore() {
   const w = statusWindows();
-  const [{ setRows, heatRows }, { muscleRows, catalogRows }] = await Promise.all([rowsOf.train(w), rowsOf.catalog()]);
+  const [{ volRows, heatRows }, { muscleRows, catalogRows }] = await Promise.all([rowsOf.train(w), rowsOf.catalog()]);
   return { w, today: w.today, heatRows,
-    volume: volumeOf(setRows, muscleRows, catalogRows, w.week.join(',')),
+    volume: volumeOf(volRows, muscleRows, catalogRows),
     ...setClocksOf(heatRows, w.today) };
 }
 
@@ -980,6 +981,7 @@ function startRealtime() {
     .on('postgres_changes', { event: '*', schema: 'public', table: 'nutrition_targets' }, changed)
     .on('postgres_changes', { event: '*', schema: 'public', table: 'exercise_catalog' }, changed)
     .on('postgres_changes', { event: '*', schema: 'public', table: 'exercise_muscles' }, changed)
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'muscle_volume_targets' }, changed)
     // A new snapshot changes both the card's current reading and the heatmap behind it.
     .on('postgres_changes', { event: '*', schema: 'public', table: 'surf_snapshots' },
       (p) => { dirtySurfHist(); changed(p); surfAlarms.tick('snapshot'); pushSurfLive(); })

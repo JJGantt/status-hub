@@ -17,8 +17,8 @@ live in the hub payload; the clients only paint.
   payload, not instructions. Nutrition: press → say "banana" → prompt knows it's a food to log
   (estimate macros, log it). Workout: press → say "dumbbell press 10 times 8" → prompt knows it's a
   set + the shorthand convention. Rides the existing `voice_requests` queue and workers.
-  OPEN: **define the workout shorthand** ("10 times 8" = ? reps × ? lbs — need Jared's exact
-  convention).
+  OPEN: **define the workout shorthand** ("10 times 8" = ? reps × ? lbs — needs the exact
+  convention defined).
 
 - **One-tap undo** (built on the `nutrition_audit` before/after log): a
   "Undo last action" affordance that reverses the most recent hub write — re-insert a deleted row from
@@ -52,8 +52,8 @@ call, low frequency. (Surfaces the suggestion; no auto-logging.)
 
 ## Nutrition: predictive quick-log (one-press repeat logging)  *(idea)*
 
-Take the LLM **out of the loop** for routine/repeat entries. If I'm logging the same thing as
-yesterday (e.g. overnight oats every morning), I shouldn't have to speak or describe it — just tap.
+Take the LLM **out of the loop** for routine/repeat entries. An entry identical to
+yesterday's (e.g. the same breakfast every morning) should need no speech or description — just a tap.
 
 - **Predict from time-of-day + history:** cluster past entries by (time-of-day window, item/macro
   signature). When the current time matches a frequent pattern, surface that entry as a **one-press
@@ -65,7 +65,7 @@ yesterday (e.g. overnight oats every morning), I shouldn't have to speak or desc
   "you're about to log the thing you always log — here's the button").
 - **Powered by the add-at-now repeat counts (BUILT add feature feeds this).** Now that re-adding an
   item logs the exact same food, we accumulate per-item frequency + the median time-of-day it's
-  logged. That history is the prediction signal: "you log overnight oats ~9am almost every day."
+  logged. That history is the prediction signal: "this item is logged ~9am almost every day."
 - **Proactive forgot-to-log prompt:** at the predicted time, surface "Want to add Overnight oats?"
   — in-app, and as a **push notification** so a forgotten morning log gets
   caught even if the app isn't open. One tap logs it. This is the catch-net for forgetting, distinct
@@ -81,7 +81,7 @@ maintenance → weight rises). Each point = trailing-7-day avg ending that day. 
 today excluded (finalized days only, by date); averages only LOGGED days (skips no-log days, doesn't
 zero them); **NO outlier rejection** in the display (the weekly avg must include real highs/lows —
 outlier rejection lives only in the TDEE/maintenance estimate). Weight line: RAW daily weigh-ins
-(Jared wants to see the bumps/variance), plotted against the smoothed 7-day calorie average.
+(the bumps/variance are wanted), plotted against the smoothed 7-day calorie average.
 
 ## Per-exercise progression view  *(idea)*
 
@@ -105,10 +105,10 @@ Push kinds not built yet (APNs push from the hub and the litter watcher's alerts
 
 - **Litter level ≤ 75%** → push.
 - **Nutrition pace nudge — "bars too low."** When the pace rings drain too far behind (e.g. nothing
-  logged by noon, or significantly behind pace), push a nudge. The signal is dual-purpose: it tells me
-  I either **forgot to log** something or genuinely **need to eat** — either way, act.
-- **Predictive "want to add X?" push** (see Predictive quick-log) — at the median time I usually log a
-  recurring item, push "Add Overnight oats?" so a forgotten routine log is caught even with the app
+  logged by noon, or significantly behind pace), push a nudge. The signal is dual-purpose: it means
+  either something was **forgotten in the log** something or a meal is genuinely **due** — either way, act.
+- **Predictive "want to add X?" push** (see Predictive quick-log) — at the median time a recurring item
+  is usually logged, push "Add Overnight oats?" so a forgotten routine log is caught even with the app
   closed; one tap logs it. Catch-net for forgetting, distinct from the behind-pace nudge.
 - Quiet hours so it never nudges overnight.
 
@@ -120,4 +120,4 @@ Open decisions:
 ## Infrastructure / Architecture
 
 - **Old workout tables** — `workout_sessions`, `exercises`, `exercise_sets` are still in Supabase
-  alongside `sets`, which everything reads and writes. Drop them only on Jared's explicit OK.
+  alongside `sets`, which everything reads and writes. Drop them only with the owner's explicit OK.

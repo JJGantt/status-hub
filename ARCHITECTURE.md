@@ -1,4 +1,4 @@
-# Jared's Life-Hub — Architecture
+# Life-Hub — Architecture
 
 Central reference for the whole ecosystem (hub UI, voice pipeline, data layer, devices,
 hosting). Lives in the `status-hub` repo because that's the most active/central repo, but it
@@ -322,7 +322,7 @@ handed the day's thread from state every worker holds, so it gains nothing from 
 
 ---
 
-## 7. Push notifications (native iOS, APNs) — added 2026-06-22
+## 7. Push notifications (native iOS, APNs)
 
 - **iOS app** (`apps/Sources/Push.swift`): requests permission, registers for remote
   notifications, and uploads the APNs device token via a **same-origin fetch inside the
@@ -338,7 +338,7 @@ handed the day's thread from state every worker holds, so it gains nothing from 
 - **Alarms** are the other channel and are NOT push: an item marked `alarm` rings on the TV and any
   open hub page from its moment until stopped. `dueTick` notifies for it as well, once. See §3's
   `list_items` note and status-hub's `docs/ALARMS.md`.
-- **Reminder firing** (2026-08): a 60s tick also app-pushes any user reminder whose local `due` has
+- **Reminder firing:** a 60s tick also app-pushes any user reminder whose local `due` has
   passed (deduped via a `notifications` row keyed `reminder:<id>`; date-only dues fire 9am). Shares the
   `pushAll()` fan-out with `/api/notify`.
 - **APNs key** lives in Fly secrets on `jared-status-hub` (`APNS_KEY_ID`, `APNS_KEY_P8`,
@@ -381,15 +381,13 @@ the same job in tmux, so a session survives the laptop closing. Both publish the
 30s tick — whether the session is still up, and the FINAL message of its last turn — so the follow-up
 pointer and the sessions panel describe a Mac session as accurately as a Pi one. Only the Pi bounds
 what it holds (a residency cap, and eviction to make room): that exists because a headless 4GB
-machine has to decide what to close, and on the Mac the tabs are visible and Jared closes them
-himself. Closing and resuming work identically on both. A command goes to the Pi when the hub
+machine has to decide what to close, and on the Mac the tabs are visible and are closed by hand. Closing and resuming work identically on both. A command goes to the Pi when the hub
 targets it explicitly, or when it has no target and the Mac's presence is stale — the staleness check
 is what makes the Pi a fallback rather than a race for untargeted work. The Pi clones from GitHub and
 pulls before every session, because it has no local checkout to be authoritative.
 
-**Every directory under `~/repos` is listed, not just git checkouts.** Filtering on `.git` hid the
-most active work on the Mac, which can be a working directory that is deliberately not a
-repo. Git is decoration: branch + dirty when present, and `last_active` is the
+**Every directory under `~/repos` is listed, not just git checkouts**, because active work on the
+Mac can be a working directory that is deliberately not a repo. Git is decoration: branch + dirty when present, and `last_active` is the
 HEAD commit date for a repo, the directory's mtime otherwise.
 
 The hub server is on Fly, so it can neither see the Mac's disk nor reach it over the LAN. Supabase
@@ -440,9 +438,8 @@ is the bus; the daemon on each machine owns everything local:
   stopped being wanted by the time the machine returns. `GET /api/failures` lists them,
   `POST /api/failures/:id/{retry,dismiss}` acts on one.
 - **A prompt reaches the Mac through a file, never the typed command line.** `do script` writes into
-  the tab's tty, and a tty accepts **1024 bytes** and silently discards the rest: a 2500-character
-  dispatch arrived as exactly 1024 characters, cut mid-word, leaving the shell on an unterminated
-  quote and no session — with the command recorded as `done`. A **follow-up** does not go through
+  the tab's tty, and a tty accepts **1024 bytes** and silently discards the rest, leaving the shell on
+  an unterminated quote and no session while the command is recorded as `done`. A **follow-up** does not go through
   the shell: a running session holds its tty raw, so a follow-up of any length is typed straight into
   its composer (voice-pipeline `orchestrator/src/handoff.js`). The Pi needs none of this: tmux carries
   any length into a pane.
@@ -461,9 +458,8 @@ is the bus; the daemon on each machine owns everything local:
   writes that file too, hence the mtime re-check + atomic rename.
 - **Scope:** `REPO_ROOTS` defaults to `~/repos` only. What lives loose in `~` (`.hammerspoon`,
   `voice`, `whisper.cpp`) is deliberately out — runtime assets and vendor checkouts, not things you
-  open a session in. Projects that were loose in `~` (`health`, `mcp-session`)
-  and `CapitalGrilleApp` (a repo nested inside the `~/workspace` scratch drawer) were consolidated
-  into `~/repos` so the picker can see them — a project outside a repo root is invisible to it.
+  open a session in. A project outside a repo root is invisible to the picker, so projects belong
+  under `~/repos`.
 
 ---
 
@@ -483,7 +479,7 @@ TestFlight app over the air — nothing has to be on the Mac's network. The watc
 A TestFlight build expires 90 days after upload. `ios-testflight.yml` (or an `ios-*` tag) does the same
 on a macOS runner, for when the Mac is away; the runner bills at 10x, so dispatch it deliberately.
 
-**When TestFlight says he is not a tester, that is membership, not the build.** TestFlight keeps
+**When TestFlight says the user is not a tester, that is membership, not the build.** TestFlight keeps
 showing the app to an Apple ID that was ever a tester but refuses to install for one that is not in a
 group now — which is what a new phone signed in to a different Apple ID looks like. `ios-testers.yml`
 (Linux, 1x) answers it without a Mac or an interactive Apple ID login: `list` prints every group with

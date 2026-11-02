@@ -5,7 +5,7 @@ Companion to [ARCHITECTURE.md](../ARCHITECTURE.md) and [HUB-INTERNALS.md](HUB-IN
 
 ---
 
-## Blocked on Jared
+## Blocked on the account owner
 
 ### Xcode developer-account login is rejected
 `Unable to log in with account 'jaredgantt@gmail.com'` on any build that needs a **new or updated
@@ -49,7 +49,7 @@ words of each), a retry button per entry, and a dismiss. Retry re-dispatches the
 and points follow-ups at the new session; it refuses while the machine is still down.
 
 Worth adding at the same time: a push when one is recorded. Failing "loudly" currently means the
-spoken reply says so at that moment — which is enough when Jared is listening and nothing at all
+spoken reply says so at that moment — which is enough when someone is listening and nothing at all
 when the failure comes from a machine dying later.
 
 ## Timezone — reminders still assume Eastern
@@ -66,8 +66,8 @@ and `TZ_DISPLAY` is unset on Fly, so it is hardcoded Eastern. That single consta
 
 Consequence: travel and a 4pm reminder fires at 4pm **Eastern**, not 4pm where you are.
 
-**Wanted semantics** (Jared, explicit): wall-clock. A reminder set for 4pm should fire at 4pm
-*wherever he is*, not at the original absolute instant.
+**Wanted semantics:** wall-clock. A reminder set for 4pm fires at 4pm *wherever the phone is*,
+not at the original absolute instant.
 
 **Approach:** same shape as `client_now` — have the phone report its IANA timezone, persist it
 (`app_settings`, or alongside `device_tokens`), and have the hub compare against that instead of the
@@ -81,12 +81,11 @@ constant. Falls back to Eastern when unknown.
 
 `server.js` has a route that logs whatever the client posts to it, and `voiceagent.js` posts every
 pointer event and recorder state change to it. It exists because the button's behaviour was only
-reproducible on Jared's phone, and reading `fly logs -a jared-status-hub | grep tap` is the only way
+reproducible on one physical phone, and reading `fly logs -a jared-status-hub | grep tap` is the only way
 to see what that device actually did.
 
-It has already earned its keep — it is what showed the freeze was in the page, not the recorder. The
-one use left is confirming the Lock Screen / Control Center Record control reaches the web recorder in
-the build installed on his phone: that control fires `window.__startVoiceCommand()` rather than a
+The one use left is confirming the Lock Screen / Control Center Record control reaches the web
+recorder in the installed build: that control fires `window.__startVoiceCommand()` rather than a
 touch, so it logs `start:arming` with **no `pointerdown` in front of it**. Once that is seen, delete
 the route and the `trace()` calls.
 
@@ -96,7 +95,7 @@ the route and the `trace()` calls.
 `docs/SLEEP.md`. Nothing has run on the device yet. After installing: allow Sleep on the Health sheet,
 then check `sleep_samples` fills (the first run backfills the whole history in 500-sample pages) and
 that a new night arrives the morning after via background delivery, with no app open. The endpoint
-has never taken a real post. Then the uses he named: history, trends, a morning summary. A live
+has never taken a real post. Then the intended uses: history, trends, a morning summary. A live
 "fell asleep" signal is dropped (see Dropped).
 
 ### Watch speak mode: first real test (built 2026-10-30, build 140)
@@ -107,13 +106,13 @@ watch; replies actually come back shorter; and how fast the battery goes with it
 
 ### Unread answers and their push: first real test (built 2026-10-29, build 138)
 `docs/WATCH.md` § Unread answers. Nothing has run on the devices yet; the first flagged answer is the
-test. Check: the push arrives titled with his question; it is dropped unshown on the watch with home in
+test. Check: the push arrives titled with the question; it is dropped unshown on the watch with home in
 front and the wrist up (`answer-push` in the watch log), which is unproven for a notification the phone
 forwards; a swipe on the watch reaches the app through `customDismissAction` and clears the amber dot;
 a tap lands home on the answer. Reading an answer on the watch leaves its notification in Notification
 Center; nothing removes it yet.
 
-### Live mic: two-way audio (on hold, Jared's call)
+### Live mic: two-way audio (on hold)
 
 Watch to phone as well, with a switch per direction on both devices. Both microphones are already on
 during a stream, so the hub would gate what it forwards rather than either device starting the other's
@@ -123,8 +122,8 @@ post a chunk every quarter second.
 
 ### Live mic: hear what voice processing cuts
 
-Jared wants to hear exactly what Apple's voice processing removes before deciding whether the live mic
-gets a Voice mode beside Room (docs/LIVE-MIC.md § Room, not voice). Record the same scene both ways
+Before deciding whether the live mic gets a Voice mode, hear exactly what Apple's voice processing
+removes. Voice mode would sit beside Room (docs/LIVE-MIC.md § Room, not voice). Record the same scene both ways
 (`.default` vs `.voiceChat` / `setVoiceProcessingEnabled(true)` on the input node) on the phone and on
 the watch, and play them side by side. Check first whether the input node's voice processing is
 available on watchOS at all.
@@ -160,13 +159,13 @@ keeping long commands working — then the cause on the phone is still open.
 
 The footer's red border (`cards/routing.js`, from `wake` in `routingConfig()`) means only "always-on
 is off". It cannot tell the auto-brake from a manual off, and it says nothing about when the brake
-releases. Jared wants the time remaining shown on it.
+releases. Wanted: the time remaining shown on it.
 
 Once the worker persists its release time (voice-pipeline `docs/TODO.md`, "Countdown on the red
 blocked state"), `routingConfig()` ships `braked` plus that time. The settings refresh already
 delivers it, and `routing.js` paints the countdown. Do not compute it here from `voice_presence`:
 the thresholds would drift from the worker's, and realtime on that table fires on every voice match.
-Any wording beyond the bare time is Jared's.
+Any wording beyond the bare time is the owner's to write.
 
 ### Surf grid guides vanish over the white 0-1 ft band
 
@@ -179,10 +178,9 @@ ink over the light end has not been decided.
 The scoring itself is built and live (`lib/score.js`, data-layer `00085`-`00087`; how it works is in
 [HUB-INTERNALS.md](HUB-INTERNALS.md) §4 and §6). What is left:
 
-- **The constants have had their week of real use, once.** `TASK_RATE` went 8 → 2.5 → 4: 8 was
-  unreachable (the band sat under 15% on days that had gone fine), and 2.5 turned out to be *under*
-  the real rate of 2.1-2.7 units/day, so the band parked itself near full. 4 is set from that
-  measurement and wants the same check after a week. The late-completion curve and the drain rate
+- **The constants have been checked against real use once.** `TASK_RATE` is 4, set from a measured
+  real rate of 2.1-2.7 units/day: 8 leaves the band under 15% on ordinary days and 2.5 parks it near
+  full. It wants the same check after another week. The late-completion curve and the drain rate
   are in the same block and have not been re-measured against real days at all.
 - **What happens below empty is undecided.** The level floors at zero today, so a badly neglected
   week and a catastrophically neglected one look the same once the band is drained. Whether that
@@ -212,11 +210,11 @@ open from the original request: *undated* lists and general text on a wall, and 
 mode entry — switching when a turn used only read tools and no write tools ("this was a question,
 not an action"). Today switching is explicit voice only (`set_wall`).
 
-Undated items now include his NOTES (data-layer 00092): list items whose `text` is a paragraph
+Undated items include notes (data-layer 00092): list items whose `text` is a paragraph
 rather than a line. So this is not a wall of one-liners, and whatever draws it has to decide what a
 long body does at TV distance.
 
-Also queued from the same conversation (2026-09-01): condense the standard wall into a denser
+Also queued: condense the standard wall into a denser
 default that includes calendar components, and slim the rings/health bar on the non-standard walls —
 they stay on every wall, but smaller.
 
@@ -233,13 +231,12 @@ build that is no longer installed keeps being sent to. Delete a token when APNs 
 
 ## Dropped (deliberately, not forgotten)
 
-- **Live "fell asleep" signal from the watch** (2026-10-30) — Jared's call. Apple writes a night's
-  sleep stages only after he wakes, and the only live route is the watch app in workout mode reading
-  heart rate all evening plus a Sleep Focus automation to start it. He wants it only if Apple hands it
-  over cleanly; it does not, so nothing auto-turns the TV off at sleep onset.
-- **Sub-minute look-ahead scheduler** — Jared's call. The alarm ringers hold their own timers to the
+- **Live "fell asleep" signal from the watch.** Apple writes a night's sleep stages only after
+  waking, and the only live route is the watch app in workout mode reading heart rate all evening
+  plus a Sleep Focus automation to start it. Not built unless Apple exposes it cleanly.
+- **Sub-minute look-ahead scheduler.** The alarm ringers hold their own timers to the
   second, and for plain push reminders a 60s scan is fine.
-- **Live Activities** — "not that important" for now. Worth knowing if it comes back: 8h hard cap
-  (~12h with the stale period), so it can never be a permanent display; and the **iPhone 12 Pro Max
-  has no Dynamic Island**, so it would be Lock Screen only. Best fit is a countdown *timer*; second
+- **Live Activities** — deprioritised. Worth knowing if it comes back: 8h hard cap
+  (~12h with the stale period), so it can never be a permanent display; and the target phone (**iPhone 12 Pro Max**)
+  **has no Dynamic Island**, so it would be Lock Screen only. Best fit is a countdown *timer*; second
   best is a single "N overdue" card. Needs push-to-start since reminders fire with the app closed.

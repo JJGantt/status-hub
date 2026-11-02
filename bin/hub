@@ -22,10 +22,10 @@ fi
 [ -n "${HUB_TOKEN:-}" ] || { echo "hub: no HUB_TOKEN (set it in $(cd "$(dirname "$0")/.." && pwd)/.env)" >&2; exit 2; }
 
 base=${HUB_URL:-https://jared-status-hub.fly.dev}
-sep='?'; case $path in *\?*) sep='&' ;; esac
 
-# The URL (and so the token) reaches curl through a config file descriptor, never argv.
-cfg() { printf 'url = "%s%s%stoken=%s"\n' "$base" "$path" "$sep" "$HUB_TOKEN"; }
+# The token rides the X-Hub-Token header, handed to curl through a config file descriptor, so it is
+# never in argv or in a URL.
+cfg() { printf 'url = "%s%s"\nheader = "X-Hub-Token: %s"\n' "$base" "$path" "$HUB_TOKEN"; }
 args=(-sS --fail-with-body -X "$method" -H 'Content-Type: application/json')
 case $body in
   '') curl "${args[@]}" -K <(cfg) ;;

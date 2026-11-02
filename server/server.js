@@ -873,12 +873,24 @@ async function composeStatus() {
 
 // ---- realtime push: recompute + push to all connected browsers on any DB change ----
 let frameSeq = 0, frameSent = 0;
+// A build re-runs every 30s and on every write, so one Supabase blip (`fetch failed`, a gateway 502)
+// heals itself by the next frame. It warns; only a streak of failures lasting 5 minutes is an error,
+// raised once per streak, so the responder hears about an outage and not about a hiccup.
+let buildFailingSince = 0, buildFailReported = false;
 async function broadcast() {
   const seq = ++frameSeq;
   let frame;
   const t0 = Date.now();
   try { frame = 'data: ' + JSON.stringify(await composeStatus()) + '\n\n'; }
-  catch (e) { console.error('broadcast build failed:', e.message); return; }
+  catch (e) {
+    if (!buildFailingSince) buildFailingSince = Date.now();
+    if (!buildFailReported && Date.now() - buildFailingSince >= 5 * 60 * 1000) {
+      buildFailReported = true;
+      console.error(`broadcast build failing since ${new Date(buildFailingSince).toISOString()}:`, e.message);
+    } else console.warn('broadcast build failed (will retry):', e.message);
+    return;
+  }
+  buildFailingSince = 0; buildFailReported = false;
   // Only a slow one: this runs every 30s and on every write, and a line per build is noise.
   if (Date.now() - t0 > 500) console.log(`[timing] broadcast build ${Date.now() - t0}ms`);
   if (seq < frameSent) { console.log('[broadcast] dropped a frame a later build already sent'); return; }

@@ -59,7 +59,7 @@ export async function open() {
   const toneCur = TONES.some(([v]) => v === cur.alarm_sound) ? cur.alarm_sound : 'classic';
   const toneOptsHtml = TONES.map(([v, label]) =>
     '<option value="' + v + '"' + (v === toneCur ? ' selected' : '') + '>' + label + '</option>').join('');
-  // The surf alarm's wind veto (server.js surfVeto): 0 turns it off, so it is read and saved on its
+  // The surf alarm's wind veto (routes/surf.js surfVeto): 0 turns it off, so it is read and saved on its
   // own rather than through the positive-only numbers below.
   const vetoKts = (() => { const n = parseFloat(cur.surf_veto_kts); return Number.isFinite(n) && n >= 0 ? n : 8; })();
   const wfThresh = sil('voiceid_threshold', 0.30);

@@ -1,6 +1,6 @@
 // The heat-grid columns older than the status frame carries.
 //
-// The frame's window is fixed (HEAT_WEEKS in server.js) because it is re-pushed on every realtime
+// The frame's window is fixed (HEAT_WEEKS in lib/dashboard.js) because it is re-pushed on every realtime
 // event and history only grows. /api/heat-history serves everything older as a PREFIX — the live
 // window stays authoritative, so today's cell and any edit still arrive on the frame with nothing to
 // merge cell by cell. Only the expanded sheet is wide enough to scroll through it, so it is fetched

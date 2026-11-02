@@ -1,5 +1,5 @@
 'use strict';
-// Date helpers in the display timezone, shared by server.js and the builder modules.
+// Date helpers in the display timezone, shared by the server's modules.
 //
 // The zone is MUTABLE and follows the user, because "4pm" means 4pm wherever the user actually is — a
 // reminder set for 4pm should not fire at 1pm after a flight west. The phone reports its IANA zone

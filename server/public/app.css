@@ -649,11 +649,11 @@ body.tv.phonewall .pane-repos.sv-open{overflow:hidden;display:flex;flex-directio
 body.tv.phonewall .pane-repos.sv-open .card{flex:1 1 auto;min-height:0;display:flex;flex-direction:column;overflow:hidden}
 body.tv.phonewall .pane-repos.sv-open #repospane{flex:1 1 auto;min-height:0;display:flex;flex-direction:column}
 .sv{flex:1 1 auto;min-height:0;display:flex;flex-direction:column;margin:-14px}
-/* A session on Codex (`codex`, server.js isCodex): framed blue, as an incident is framed red. */
+/* A session on Codex (`codex`, routes/sessions.js isCodex): framed blue, as an incident is framed red. */
 .sv.codex{box-shadow:inset 0 0 0 2px #3b82f6}
 .sv.codex .sv-bar{background:#0b1730}
 .sessions li.sess.codex{outline:1px solid #3b82f6;outline-offset:-1px;background:#0b1730}
-/* An ops-responder incident run (`incident`, server.js isIncident): framed red while open, as its row
+/* An ops-responder incident run (`incident`, routes/sessions.js isIncident): framed red while open, as its row
    is in every list. Inset, so the frame never changes the view's size. */
 .sv.incident{box-shadow:inset 0 0 0 2px #d9443a}
 .sv.incident .sv-bar{background:#1f0d0c}

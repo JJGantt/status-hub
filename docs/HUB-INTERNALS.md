@@ -15,12 +15,12 @@ this is the map for working *inside* `status-hub` itself.
 Every derived value — maintenance math, dynamic macros, pace fill %, colors, labels, volume gauges,
 heatmap cells, scores — is computed on the **server** and shipped in one payload. The clients
 (`public/*`, the native WKWebView) only paint what they're handed. If you're tempted to compute a
-display value in a card, it belongs in `server.js`/`lib/` instead.
+display value in a card, it belongs in `lib/` instead.
 
 Flow:
 
 ```
-Supabase ──▶ server.js buildStatus() ──▶ /api/status payload ──▶ /api/stream (SSE)
+Supabase ──▶ lib/dashboard.js buildStatus() ──▶ /api/status payload ──▶ /api/stream (SSE)
    ▲              (calls lib/* to derive everything)                    │
    │                                                                    ▼
  writes ◀── /api/log-set, /api/log-entry, /api/todos, /api/settings … ◀ core.js → cards render(s)
@@ -116,7 +116,7 @@ Supabase ──▶ server.js buildStatus() ──▶ /api/status payload ──�
   `idle` — arming, capturing, uploading — and the wanted reload happens 3s after the last hold lets go.
   A new reload site has to use `safeReload`, not `location.reload()`, or it reopens this hole.
 - **The heartbeat is a `ping` EVENT, not a comment.** Every stream writes `event: ping` every 25s
-  (`PING` in server.js). A `: keepalive` comment cannot be observed by any client, which leaves no
+  (`PING` in lib/streams.js). A `: keepalive` comment cannot be observed by any client, which leaves no
   way to tell quiet from dead on `/api/voice-stream` and `/api/list-stream`, where hours can pass
   with no data. Named events never reach `onmessage`, so nothing else sees it.
 - **Staleness is visible:** a 3px hairline along the top edge (`.stalebar`), invisible while frames
@@ -129,7 +129,7 @@ Supabase ──▶ server.js buildStatus() ──▶ /api/status payload ──�
 
 ## 2. The `/api/status` payload contract
 
-`buildStatus()` (server.js) returns exactly these top-level keys. Each card reads its slice:
+`buildStatus()` (lib/dashboard.js) returns exactly these top-level keys. Each card reads its slice:
 
 | Key | Feeds | Built by |
 |---|---|---|
@@ -245,7 +245,7 @@ gauges) · `workouts` (heatmap + day detail) · `weightweeks` (home-wall weekly 
 · `deskfoot` (which session holds follow-ups, TV footer — §6b) · `score` (TV right column) · `mics`
 (page voice-liveness strip).
 
-**The litter card's state is the server's** (`buildLitter` in `server.js`). The robot is held in
+**The litter card's state is the server's** (`buildLitter` in `lib/litter.js`). The robot is held in
 Sleep Mode and the Fly watcher fires every clean itself, so the robot's own `status` is not the
 state of the box — it reads `READY` through a queued clean, a phantom weight, a 30-minute lockout,
 and a watcher that stopped reporting an hour ago. `buildLitter` folds that `status` together with
@@ -561,8 +561,24 @@ frame) so a surface can pick it up without re-deriving it.
 
 ## 5. API surface (`server.js` and `routes/`)
 
-`server.js` holds the shared state and the core: config, the caches, the dashboard build
-(`buildStatus`), realtime and the SSE channels, the auth gate, and the due/badge/retention timers.
+`server.js` is the composition root and nothing else: configuration, the two routers and the gate
+between them (§ Auth), every module made once with the pieces it uses, then `listen` and the timers.
+The order of the `require`s in it is the order routes are registered in, which matters only for the
+static middleware on `gated`: a route registered before it wins over a file of the same path.
+
+The shared state lives in `lib/`, each made once by `server.js` (`streams.js` is plain module state):
+
+| module | what |
+|---|---|
+| `dashboard.js` | the status payload (`buildStatus`), built from pieces (`nutritionCore`, `paceOf`, `trainingCore`, `scoreOf`, `maintenanceWithHistory`), and `broadcast` to every `/api/stream` client |
+| `rowcache.js` | the source rows the dashboard reads, cached by group; the focused-session cache; the epoch every invalidation moves |
+| `settings.js` | `app_settings` through one cache, and the typed readers (surplus, produce goals, maintenance phase, routing) |
+| `realtime.js` | the table subscriptions and what each change sets off, the silence watchdog, the freshness probe |
+| `jobs.js` | dated items firing (`dueTick`), exempt items closing, reports announced, retention, the weigh-in reminder |
+| `streams.js` | the SSE client pools, `PING`, and the pushes into them (`pushVoice`, `pushLists`, `pushDay`) |
+| `auth.js` | every credential, the gate (`createGate`), and the fallback-config publish |
+| `usage.js`, `alarmlog.js`, `badge.js`, `litter.js` | the Claude usage windows, the alarm log and ringers, the icon badge, the litter verdict |
+
 Routes live by responsibility in `routes/`, each a function of the shared pieces it uses (passed in
 by `server.js`) returning what the rest of the server calls:
 
@@ -570,10 +586,14 @@ by `server.js`) returning what the rest of the server calls:
 |---|---|
 | `public.js` | everything public but surf: `/healthz`, the Menu app's `/api/cg/*`, login and its lockout, the legal pages |
 | `pages.js` | the HTML pages behind the gate |
-| `surf.js` | surf history, the live feed, the surf alarms' inputs, the surf app's page |
+| `auth.js` | the login sessions: list, revoke one or all |
+| `status.js` | `/api/status`, `/api/stream`, `/api/usage` |
+| `streams.js` | the voice, list and day streams, and the live mic |
+| `surf.js` | surf history, the live feed, the surf alarms' inputs, the surf app's page, the card's header strip (`buildSurf`) |
 | `voice.js` | speaker check, rewind, `/api/voice-command`, attachments, gestures, the client log, voice text and reset |
+| `voicemessages.js` | the conversation history (`/api/voice-messages`), pending requests, the read mark, where a context begins |
 | `settings.js` | settings, the mute holders, TTS, push registration |
-| `logging.js` | the nutrition day, food and set logging |
+| `logging.js` | the nutrition day, food and set logging, the nutrition audit |
 | `conversation.js` | the session event log, `/api/session-activity`, `/api/voice-activity`, answer pushes |
 | `notify.js` | phone pushes (`pushAll`), the badge count, `/api/notify` |
 | `sessions.js` | desk control: sessions, focus, follow-ups |
@@ -583,7 +603,10 @@ by `server.js`) returning what the rest of the server calls:
 | `widgets.js` | the watch and widget feeds (`/api/rings`, `/api/workout-day`, `/api/workout-now`) |
 | `heathistory.js`, `reports.js`, `healthdata.js`, `failures.js` | heat-map archive, published reports, Apple Health uploads, failed commands |
 
-A module that needs something `server.js` declares later gets it moved up rather than passed lazily;
+No route is registered in `lib/`: `test/auth.test.js` finds routes by reading `server.js` and
+`routes/*.js`, so one registered in `lib/` escapes its public-route check.
+
+A module that needs something made later in `server.js` gets it moved up rather than passed lazily;
 `node --check` cannot see that mistake, but the server throws at boot and `npm test` fails.
 
 **Pages:** `/` + `/phone` (the phone's home page — the home wall's content, in portrait and at the
@@ -725,8 +748,8 @@ machine, the Pi kiosk's URL, a secret on each Fly app that calls the hub), none 
 new token has to reach every one: the list to work through on a rotation is in each machine's
 `~/.claude/CLAUDE.md`.
 
-Every route is registered on one of two routers, and that is its auth: **`gated`** (behind `hubGate`,
-static assets included) or **`pub`**. Both are mounted once at the top of server.js, so where a route
+Every route is registered on one of two routers, and that is its auth: **`gated`** (behind `hubGate`, made by
+`createGate` in lib/auth.js, static assets included) or **`pub`**. Both are mounted once, in server.js, so where a route
 is defined does not matter. Public: `/healthz`, `/login`, `/privacy`, `/terms`, the Search Console
 verification file named by `GSC_VERIFICATION`, `/api/cg/*` (gated by their own owner check, above),
 and the surf app's page with its bundle and stylesheets and `/api/surf/live`, `/stream`, `/history`.

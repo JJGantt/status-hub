@@ -60,7 +60,7 @@ struct QueuedRow: Decodable, Identifiable, Equatable {
     var name: String { sessionName(label, repo) ?? "Session" }
 }
 
-/// **One event of a conversation's list**, as the hub keeps it (server.js, the event log): the user's words
+/// **One event of a conversation's list**, as the hub keeps it (routes/conversation.js, the event log): the user's words
 /// (`prompt`), a tool call, what the session says between tool calls (`text`), or its reply. `seq` is
 /// its position in the conversation, given by the hub; `id` its identity. A prompt queued behind a
 /// running turn and later read by the model is one event at two moments, same id, the second marked

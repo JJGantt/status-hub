@@ -235,7 +235,7 @@ function paintGrids(cv, ax, viewW) {
   // where one week ends — the weekday letters are the phone's, and the wall drops them. A black
   // line at each Saturday -> Sunday boundary cuts the window into weeks, which is what makes a
   // column countable: the eye lands on a week and counts days inside it rather than counting cells
-  // from the now-line. Weeks break on Sunday, the same alignment server.js builds the nutrition and
+  // from the now-line. Weeks break on Sunday, the same alignment the server builds the nutrition and
   // workout week columns on, so a separator lines up with a column edge in the maps above it.
   // BLACK and 1px. Black is the one ink that reads on every colour either grid uses — white was
   // tried and vanishes against the pale blue size grid on the lower half. 1px is enough at that

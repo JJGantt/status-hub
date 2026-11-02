@@ -7,7 +7,7 @@ function drawerColor(v){return v==null?'#8b96a5':hueColor((v-75)/20);}  // 75% g
 export function render(s){
  const L=s.litter||{};
  // The state, its label and its colour are the server's: the robot's own status says nothing about
- // a queued clean, a lockout, or a watcher that stopped reporting. See buildLitter in server.js.
+ // a queued clean, a lockout, or a watcher that stopped reporting. See buildLitter in lib/litter.js.
  // Thin horizontal home-status strip: one device = a row of inline chips. Leaves room for more
  // device chip-groups later (e.g. a pet feeder) — just append another .devchips block.
  const chip=(label,val,col)=>'<span class=devchip><span class=dc-l>'+label+'</span>'+

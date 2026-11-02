@@ -92,7 +92,7 @@ function clipSeconds(file) {
 // that is that phrase and nothing else is treated as nothing heard, so it is never run as a command or
 // typed into a session. The cost is that saying only "thank you" is dropped too. The same rule is in
 // voice-pipeline's server.py and mac-listener/listener.py, the other two places speech becomes text, and
-// again where a model is started from words: the voice worker, and a session follow-up (server.js).
+// again where a model is started from words: the voice worker, and a session follow-up (routes/sessions.js).
 const NOTHING_SAID = /^\W*thank\s+you\W*$/i;
 const heard = (t) => (NOTHING_SAID.test(t) ? '' : t);
 

@@ -32,10 +32,11 @@ npm start                      # local run on :8080
 ./deploy.sh                    # deploy to Fly, then verify /healthz reports this commit
 ```
 
-Key files: `server.js` (shared state, the dashboard build, realtime, SSE, the auth gate), `routes/*`
-(the routes by responsibility; HUB-INTERNALS § 5), `lib/*` (the domain engine — `maintenance.js`
+Key files: `server.js` (the composition root: config, the two routers and the gate, wiring, startup),
+`routes/*` (the routes by responsibility; HUB-INTERNALS § 5), `lib/*` (the dashboard build, realtime, the
+scheduled jobs, and the domain engine — `maintenance.js`
 adaptive TDEE + goal phases, `pace.js`, `nutritionlog.js`, `volume.js`, `score.js`, …). Auth: `lib/auth.js`
-(sessions, the device token, the password-derived token; HUB-INTERNALS § Auth). **Full internals map:
+(the gate, sessions, the device token, the password-derived token; HUB-INTERNALS § Auth). **Full internals map:
 [docs/HUB-INTERNALS.md](docs/HUB-INTERNALS.md).**
 
 `npm start` with real `SUPABASE_*` runs every timer against live data: `dueTick` pushes overdue items,

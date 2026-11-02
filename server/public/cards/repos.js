@@ -57,7 +57,7 @@ function sessionsHtml(s) {
   if (!res.length && !ev.length && !q.length) return '';
 
   // Which session a SPOKEN follow-up lands in: the most recently active one unless the user pinned another
-  // by name (pickFocus in server.js). Worth marking because it moves as sessions take turns.
+  // by name (desk_sessions_state(), data-layer 00157). Worth marking because it moves as sessions take turns.
   const focus = s.focus || null;
   // The NUMBER is the point of showing it: it is how a session gets named out loud ("move session
   // three to the Mac"), and it has to be the same number the voice tools resolve — the server derives
@@ -309,7 +309,7 @@ function keep(payload) {
 
 // ---- THE CONVERSATION IS ONE LIST OF EVENTS ---------------------------------------------------
 // Prompt, tool, text and reply, each with a position (`seq`) and an identity (`id`), from the hub
-// (server.js, the event log). What this view holds is that list and nothing else, and the whole rule
+// (routes/conversation.js, the event log). What this view holds is that list and nothing else, and the whole rule
 // for keeping it right is below in `frame`: the next seq is appended, a gap is fetched, an old seq is
 // ignored. A prompt queued behind a running turn and later read is one event at two moments, same id,
 // drawn where the model took it. The watch keeps the same list by the same rule (Sessions.swift).

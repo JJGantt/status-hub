@@ -214,7 +214,7 @@ fixing whatever happens to the rule:**
 
 The hub's stdout is not a record: Fly keeps about the last hundred lines, so a morning's beacons are
 gone within the hour. What happened is in the `alarm_log` table (data-layer `00113`), written by
-`alarmLog` in `server.js`, one row per EVENT:
+`alarmLog` in `lib/alarmlog.js`, one row per EVENT:
 
 | source | ev | when |
 |---|---|---|

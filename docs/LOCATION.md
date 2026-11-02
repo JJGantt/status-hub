@@ -20,7 +20,7 @@ moved when a command is spoken; this is the history.
   on purpose; they cover the times it is out without the phone.
 - Fixes queue in `location-trail.json` in Application Support and come off it only once the hub
   answers 200, so a dead network or a killed app loses nothing.
-- `POST /api/location/points` (server.js, behind the auth gate) upserts on `(device, at)`, so a batch
+- `POST /api/location/points` (routes/healthdata.js, behind the auth gate) upserts on `(device, at)`, so a batch
   resent after a lost reply changes nothing.
 
 ## The table

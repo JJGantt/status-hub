@@ -5,7 +5,7 @@
 // `sidebar` command names a view): the focused session, or the voice orchestrator's conversation,
 // which is the CURRENT context of the voice thread (/api/voice-messages?mode=active, the watch's view).
 //
-// It shows the FOCUSED session (pickFocus in server.js): where a spoken follow-up goes, so it follows
+// It shows the FOCUSED session (desk_sessions_state(), data-layer 00157): where a spoken follow-up goes, so it follows
 // whatever the user is working in. The `sessions` frame on the stream carries focus, so a change moves it.
 // Its own small renderer rather than cards/repos.js, which carries a composer, a recorder and a list.
 import { esc, md, liveStream } from '../shared.js';
@@ -94,7 +94,7 @@ async function load(id) {
     if (id !== rowId) return;
     if (d.epoch !== epoch) events = [];
     epoch = d.epoch;
-    conv = d.claude_session_id || d.id;   // the conversation key the stream frames carry (server.js rowConv)
+    conv = d.claude_session_id || d.id;   // the conversation key the stream frames carry (routes/conversation.js rowConv)
     nameEl.textContent = d.custom_title || d.label || d.repo || '';
     absorb(d.events);
     paint();

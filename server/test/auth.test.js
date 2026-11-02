@@ -1,5 +1,5 @@
 'use strict';
-// The auth gate and every way a request can be signed in (lib/auth.js, the gate in server.js), the
+// The auth gate and every way a request can be signed in (lib/auth.js, the gate included), the
 // login lockout, and the session lifecycle: issue at /login, upgrade from the old cookie, revoke one or
 // all, survive a restart.
 const { test, describe, before, after } = require('node:test');

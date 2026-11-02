@@ -1,7 +1,7 @@
 // Claude usage: two hairline bars pinned across the very top of every wall (the TV walls and the phone
 // home, all `body.tv`), filling left to right — the 5-hour window on top, the weekly one under it. Fixed
 // and overlaid, so nothing on the page moves to make room. The server computes the fills
-// (`claude_usage`, server.js buildUsage); this only paints them.
+// (`claude_usage`, lib/usage.js buildUsage); this only paints them.
 export function render(s) {
   if (!document.body.classList.contains('tv')) return;
   const u = s && s.claude_usage;

@@ -102,7 +102,7 @@ export function safeReload() {
 // rest clock is a local interval. Nothing in the page could tell.
 //
 // So liveness is judged the only way it can be — by whether frames actually ARRIVE. Every stream is
-// kept audible by a server-side `ping` event every 25s (see PING in server.js), so silence past three
+// kept audible by a server-side `ping` event every 25s (see PING in lib/streams.js), so silence past three
 // of those is a fault rather than a quiet house. That is what makes this work on the voice and list
 // streams too, where hours can legitimately pass with no data of their own.
 //
@@ -328,7 +328,7 @@ export const PIN_SVG = '<svg class="pin-mark" viewBox="0 0 16 16" width="0.85em"
 // how sets/nutrition_entries.occurred_at is stored. Sent with every write so the logged time is
 // whatever the clock reads on the device doing the logging, wherever that is — never converted to a
 // fixed home zone. A stationary kiosk/TV has no user device to ask, so writes from there fall back
-// to the server's own naive-local (see server.js nowNaiveLocal); this is only for phone/browser writes.
+// to the server's own naive-local (see lib/dates.js nowNaiveLocal); this is only for phone/browser writes.
 export function localNowNaive(){const d=new Date(),p=n=>String(n).padStart(2,'0');
  return d.getFullYear()+'-'+p(d.getMonth()+1)+'-'+p(d.getDate())+'T'+p(d.getHours())+':'+p(d.getMinutes())+':'+p(d.getSeconds());}
 export function ago(iso){if(!iso)return'—';const s=(Date.now()-new Date(iso))/1000;

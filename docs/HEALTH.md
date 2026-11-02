@@ -18,7 +18,7 @@ cloud API: the only reader is an app on the phone. Sleep has its own table and i
 - Values are in the unit Health itself displays for the type (`preferredUnits`): count/min for heart
   rate, ms for HRV, kcal, count, %, degC. A quantity whose unit Health will not name, or whose value
   is not finite, is skipped — one NaN in a page fails its JSON, and an unpostable page stalls the anchor.
-- `POST /api/health/samples` (server.js, behind the auth gate) upserts by HealthKit UUID and deletes
+- `POST /api/health/samples` (routes/healthdata.js, behind the auth gate) upserts by HealthKit UUID and deletes
   the UUIDs Health removed. It accepts any `type`, so the server needs no change for a new one.
 - **The hub paces it.** A page of N rows earns the next page a gap of N / 100 seconds (`HEALTH_ROWS_PER_S`),
   stretched to ten times the write's own duration when the database is slow and to a minute after a

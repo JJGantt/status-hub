@@ -81,7 +81,7 @@ function makeOutputs({ sb, sbWrite, uuid }) {
         if (!at) return {};
         // An alarm is not a task: it goes on the alarms list, and it is EXEMPT, because waking up is
         // not something to earn points for. Exempt items close themselves once their moment passes;
-        // closeExempt in server.js waits out the ring for an alarm before doing so.
+        // closeExempt in lib/jobs.js waits out the ring for an alarm before doing so.
         const fresh = uuid();
         await sbWrite('list_items', 'POST', {
           id: fresh, list_id: 'l_alarms', text: 'Surf, Mayport Poles', title: 'Surf',

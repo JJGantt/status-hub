@@ -79,7 +79,7 @@ constant. Falls back to Eastern when unknown.
 
 ### `/api/tapdebug` — the voice button's tap tracer
 
-`server.js` has a route that logs whatever the client posts to it, and `voiceagent.js` posts every
+`routes/settings.js` has a route that logs whatever the client posts to it, and `voiceagent.js` posts every
 pointer event and recorder state change to it. It exists because the button's behaviour was only
 reproducible on one physical phone, and reading `fly logs -a jared-status-hub | grep tap` is the only way
 to see what that device actually did.

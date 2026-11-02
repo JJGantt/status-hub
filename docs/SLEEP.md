@@ -10,7 +10,7 @@ because Apple Health has no cloud API: the only reader is an app on the phone.
   with background delivery, and posts what an anchored query returns: new samples and deleted
   UUIDs, 500 at a time. The anchor is committed only after the hub answers 200, so a failed post
   is retried from the same place on the next run.
-- `POST /api/health/sleep` (server.js, behind the auth gate) upserts by HealthKit UUID and deletes
+- `POST /api/health/sleep` (routes/healthdata.js, behind the auth gate) upserts by HealthKit UUID and deletes
   the UUIDs Health removed.
 - One row per sample: `stage` is `in_bed`, `asleep_unspecified`, `awake`, `core`, `deep` or `rem`.
   `source` tells the watch's stages apart from anything else that writes sleep to Health.

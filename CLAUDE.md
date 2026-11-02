@@ -3,7 +3,7 @@
 ## Server computes, clients render
 
 Every derived display value — pace fills, colours, labels, maintenance math, gauge geometry — is
-computed in `server/server.js` / `server/lib/` and shipped in the payload. The cards
+computed in `server/lib/` (the dashboard build is `lib/dashboard.js`) and shipped in the payload. The cards
 (`server/public/`) and the Swift widgets only paint. Deriving a value in a client is how two
 surfaces start disagreeing about the same number.
 

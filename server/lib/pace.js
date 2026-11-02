@@ -9,7 +9,7 @@
 //
 // Server computes everything (values, fill, color); clients only render.
 
-const DAY_START_HOUR = 4; // must match server.js day window
+const DAY_START_HOUR = 4; // must match lib/dates.js day window
 
 // Minutes into the 4am-origin day: 0 = 4:00am, 1439 = 3:59am next day. This makes a 1am
 // snack read as "late" (near the end of the day) rather than "early morning".

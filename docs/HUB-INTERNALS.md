@@ -393,7 +393,7 @@ The math lives here; each file has a thorough header. Summary map:
 | `maintenance.js` | Adaptive TDEE via energy balance (avg intake − trend·kcal/lb), the dynamic calorie+macro goal, and the **goal-phase** logic (window bounded by a bulk↔cut sign flip, with a seed held until the new phase has data). Also `estimateHistory` (per-day replay for the viz). |
 | `pace.js` | Within-day intake pacing — the eating window (median first/last meal over the last **two weeks** of logs, IQR-trimmed), each macro's drain/refill fill + green→red/amber color vs the expected-by-now line, and the staged-meal arcs (below). |
 | `nutritionlog.js` | The calorie/weight dual-axis plot, the diverging-color adherence calendar, and `buildGoalResolver` (per-day calorie goal, respecting stored targets + phases). |
-| `volume.js` | Weekly per-muscle fractional-set volume (primary=1.0, secondary=0.5) vs that muscle's weekly set target — `TARGET_DEFAULT` 14, with the `TARGETS` overrides below it. |
+| `volume.js` | The muscle gauges, from `muscle_volume()` in Postgres (data-layer 00156), which defines the window, the credit per set (primary=1.0, secondary=0.5), the per-bout cap and the targets (`muscle_volume_targets`) for this and `get_weekly_volume` alike. |
 | `bodymap.js` | The front/back body SVG (viewBox 0 0 72 93); volume colors paint onto it. |
 | `heatmap.js` | Per-day set-count heatmap laid out as week columns. Shade is an **absolute** count — one level per 6 sets, topping out at 37+ — so a colour means the same thing in every window and on every surface. |
 | `weightplot.js` | The mean of each week's weigh-ins, on the same Sunday-anchored columns as the two heat maps, plus the three axis values. Points carry x/y as fractions of the plot box. A week with no reading is **interpolated** between the nearest measured week either side (anchors may sit outside the window) and flagged `imputed` so the card draws the line through it but no dot; a gap with no measured week *after* it stays `null`, because that is extrapolation. The band is whole pounds, widened to an even span so the middle line has an integer to label, and the FIRST column is always blank — the axis values are written over it. Built at `HOME_HEAT_WEEKS`, since the plot means nothing away from the columns it is aligned to. |
@@ -1119,8 +1119,8 @@ ones at 14, whoever made them.
 
 `/api/sessions` stamps each active session with `n`: **most recently active first**, running and parked
 interleaved — parking is not activity, so an evicted session keeps its place (`active_at`, the last turn boundary — SESSIONS.md § Numbering says why not
-`last_seen` or `started`), from 1, one row per conversation (`claude_session_id`). **That rule is duplicated in `data-layer/src/desk.ts`
-(`numberSessions`) and the two must agree** — it is how "move session three to the Mac" resolves to
+`last_seen` or `started`), from 1, one row per conversation (`claude_session_id`). **The rule is `desk_sessions_state()` in Postgres
+(data-layer 00157)**, which the voice tools read too — it is how "move session three to the Mac" resolves to
 the same row the pane is showing. The number is a position, not identity: closing one renumbers the
 rest, which is the price of it being short enough to say.
 
@@ -1377,8 +1377,8 @@ that height. It renders only when a session is actually holding follow-ups; an e
 "none" is noise on a wall you glance at. The phone panel is where the fuller form lives.
 
 `/api/sessions` returns `focus` — the session a SPOKEN follow-up would land in — and the panel marks
-that row; the TV strip and the home wall show the same session. `pickFocus` in `routes/sessions.js` decides it
-by the same rule as `focusedSession` in data-layer, and the two must agree: a session Jared focused by
+that row; the TV strip and the home wall show the same session. `desk_sessions_state()` (data-layer 00157) decides it,
+for this and for data-layer's `focusedSession` alike: a session Jared focused by
 name while it runs, else nobody while a dispatch is still opening, else the most recently active running
 session. The rule, and why it includes the session he is typing in, is SESSIONS.md § Focus.
 
@@ -1438,7 +1438,7 @@ three lines. The arguments must be allowed to break anywhere (`.sb-args`, `word-
 the event text is one unbroken run of up to 400 characters, and the TV's WebView lays such a run out
 without painting it, so unwrapped it shows as an empty gap.
 
-The session view is the FOCUSED session (`pickFocus`), drawn narrow and see-through for the bedroom TV, whose companion
+The session view is the FOCUSED session (`/api/sessions` `focus`), drawn narrow and see-through for the bedroom TV, whose companion
 app overlays it on whatever is playing (google-tv repo, `SidebarService`). Its own small module
 (`pages/tv-sidebar.js`) rather than `cards/repos.js`, which carries a composer, a recorder and a list
 the TV has no use for. It reads `/api/sessions` for the focus, `/api/sessions/:id` for the

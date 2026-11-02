@@ -229,8 +229,8 @@ and reports where the session really started.
 ### Focus — how a session gets spoken to
 
 The session a spoken follow-up lands in — and the one the pane, the strip and the home wall show as
-focused — is decided in this order, by `focusedSession` in `data-layer/src/desk.ts` and `pickFocus` in
-the hub, which must agree:
+focused — is decided in this order, by `desk_sessions_state()` (data-layer migration 00157), which the voice
+tools and the hub both read:
 
 1. **A session focused by name** (`focus_session`: "focus the status-hub session" — "pin" is the same
    verb), while it runs. It holds until he focuses another, releases it (`unfocus_session`: "unfocus",
@@ -288,11 +288,11 @@ its last turn earned. Grouping running above parked is the attractive alternativ
 — every eviction shoves a session below everything still open, however recently it was used. Every
 surface therefore draws the rows in `n` order rather than the payload's `resident` then `evicted`, since
 drawing those one after the other would print the numbers out of sequence. The rule is
-implemented twice — `numberSessions` in `data-layer/src/desk.ts` and in `/api/sessions` — and **the
-two must agree**, or "session three" means one thing to the pane and another to the voice tools.
+`desk_sessions_state()` (data-layer 00157), read by the voice tools and `/api/sessions` alike, so
+"session three" means one thing everywhere.
 **One entry per conversation**: rows sharing a `claude_session_id` are earlier stretches of one
 session, so only the first after sorting is listed or numbered — the running row, else the most
-recently active. Both copies apply that too.
+recently active.
 
 **It is ordered by `active_at`, the last turn boundary** — a prompt sent or a turn finished. `last_seen`
 was the obvious reading of "most recent" and it made the numbers unusable: every row was touched by its

@@ -413,8 +413,8 @@ is the bus; the daemon on each machine owns everything local:
   unreachable there is nothing to close, so the destination resumes from the mirror as of the last
   completed turn. `transfer_session` by voice, or by asking the session itself to move.
 - **Sessions are numbered so they can be named out loud.** Active sessions, **most recently active
-  first, running and parked together, from 1** — the same rule in `data-layer/src/desk.ts` (`numberSessions`) and in `/api/sessions`,
-  because "session three" has to mean one thing. The number is a position in the current list, never
+  first, running and parked together, from 1** — one rule, `desk_sessions_state()` in Postgres, read by the voice
+  tools and `/api/sessions`, because "session three" has to mean one thing. The number is a position in the current list, never
   identity: closing one renumbers the rest, which is what keeps it 1..N over what is actually open.
   `end`, `resume` and `transfer` all take a number, a repo name, or an id; an ambiguous name is
   answered with the choices rather than a guess.

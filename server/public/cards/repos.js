@@ -341,7 +341,7 @@ async function fetchEvents(at, since) {
     const j = await r.json();
     if (cur !== at) return;
     take(at, j.events, j.epoch);
-    paintBody({ follow: true });
+    paintBody();
   } catch (_) { /* the next frame's seq will ask again */ }
 }
 
@@ -355,7 +355,7 @@ function frame(a) {
   if (!Number.isFinite(seq) || seq <= at.last) return;
   if (seq > at.last + 1) fetchEvents(at, at.last);            // a gap: what went by while this was not listening
   take(at, [a.ev]);
-  paintBody(a.ev.kind === 'reply' ? { top: true } : { follow: true });
+  paintBody();
 }
 
 let following = false, connected = false;
@@ -374,6 +374,20 @@ function follow() {
   });
 }
 
+// THE VIEW NEVER MOVES WHILE HE IS LOOKING AT IT. Nothing arriving — a reply, a tool call, a thought —
+// scrolls it: he may be halfway up the thread reading, and a jump there is lost place. It lands on the
+// newest thing only when he COMES BACK to it (the app returning to the foreground, or the sessions pane
+// swiped back into view) and something arrived while he was gone. `awayAt` is how far the
+// conversation had got when he stopped looking; null while he is looking.
+let awayAt = null, paneSeen = true;
+function looking() { return document.visibilityState === 'visible' && paneSeen; }
+function lookChanged() {
+  if (!cur) { awayAt = null; return; }
+  if (!looking()) { if (awayAt === null) awayAt = cur.last; return; }
+  if (awayAt !== null) reload();
+}
+document.addEventListener('visibilitychange', lookChanged);
+
 // The header's facts and the whole list, from the hub. A merge, not a replacement: a frame that
 // arrived while this was in flight is kept, and a gap either way is filled.
 async function reload() {
@@ -387,10 +401,12 @@ async function reload() {
   } catch (_) { return; }
   if (cur !== at) return;
   at.head = d;
-  const before = at.last;
   take(at, d.events, d.epoch);
   paintHead();
-  paintBody({ top: at.last !== before });
+  // Back from away with something new: land on it. Otherwise leave the view exactly where it is.
+  const back = awayAt !== null && looking();
+  paintBody({ top: back && at.last !== awayAt });
+  if (back) awayAt = null;
 }
 
 function paintHead() {
@@ -425,14 +441,12 @@ function shown(at) {
 // the browser's own clamp is what turns "as far up as it can" into "at the end" when the tail is
 // shorter than the box.
 //
-// `open` and `top` are the same placement (arriving at a session, and a reply landing in one already
-// open); `follow` keeps a view that was already at the bottom there as the turn's steps arrive, and
-// leaves one he has scrolled up in where it is.
-function paintBody({ open = false, top = false, follow = false } = {}) {
+// `open` and `top` are the same placement (arriving at a session, and coming back to one with something
+// new in it). Every other paint leaves the scroll where it is: see `awayAt`.
+function paintBody({ open = false, top = false } = {}) {
   const el = document.getElementById('repospane');
   const body = el && el.querySelector('.sv-body');
   if (!body || !cur) return;
-  const atEnd = body.scrollHeight - body.scrollTop - body.clientHeight < 60;
   const list = shown(cur);
   const working = list.length > 0 && list[list.length - 1].kind !== 'reply';
   body.innerHTML =
@@ -456,7 +470,7 @@ function paintBody({ open = false, top = false, follow = false } = {}) {
       : last;
     // Less the body's own padding, so the first turn of a conversation rests at zero.
     body.scrollTop = at ? Math.max(0, at.offsetTop - body.offsetTop - 12) : 0;
-  } else if (follow && atEnd) body.scrollTop = body.scrollHeight;
+  }
 }
 
 // His words into the open conversation. The text stays in the box until the hub has taken it, and a
@@ -577,6 +591,7 @@ async function openSession(id) {
   if (cur && cur.rec) cur.rec.cancel();   // leaving mid-recording abandons it; a clip already stopped still sends
   cur = { id: d.id, key: keyOfRow(d), head: d, epoch: null, events: [], last: 0, placeholders: [], msg: null, sending: false, rec: null };
   remember(d.id);
+  awayAt = null;                          // opening lands on the newest thing by itself
   const at = cur;
   take(at, d.events, d.epoch);
   const pane = el.closest('.pane');
@@ -781,4 +796,12 @@ export function render() {
   // Coming back to the app re-reads whichever is showing. Re-reading the list over an open session
   // would put him back on the list every time he switched apps mid-read.
   window.addEventListener('focus', () => (cur ? reload() : load()));
+  // The sessions pane swiped out of view is as good as the app going away: coming back lands on news.
+  const pane = document.getElementById('repospane');
+  if (pane && 'IntersectionObserver' in window) {
+    new IntersectionObserver((es) => {
+      const seen = es[es.length - 1].intersectionRatio > 0.5;
+      if (seen !== paneSeen) { paneSeen = seen; lookChanged(); }
+    }, { threshold: [0, 0.5, 1] }).observe(pane);
+  }
 }

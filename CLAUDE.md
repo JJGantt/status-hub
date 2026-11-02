@@ -690,6 +690,12 @@ a turn still running ends in the caret, and the caret goes as far up as the scro
 with history above it, is simply the bottom. The browser's own clamp is what turns "as far up as it
 can" into "at the end" when the tail is shorter than the box, so there is one rule and no cases.
 
+**It lands only on ARRIVAL, and never moves while he is looking at it.** Arrival is opening a session,
+or coming back to one — the app returning to the foreground, or the sessions pane swiped back into
+view — with something new in it since he left (`awayAt`). A reply, tool call or thought landing while
+the view is on screen repaints it with the scroll left exactly where it was, even when he was already
+at the bottom: following the tail drags him off whatever he was reading the moment a step arrives.
+
 ### Wall-sized numbers a surface can override
 
 Each of these is a card's DEFAULT, sized for a wall, which any surface can replace with a CSS custom

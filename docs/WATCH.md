@@ -649,6 +649,15 @@ events raise it: a Siri timer going off does (2026-10-31, `reason` 0, 1.1s into 
 the complication). An ordinary notification has not been seen to; Siri (Raise to Speak) and a call are the
 other candidates. `mic-interrupted` carries the system's reason and the endpoint's state.
 
+**A third way a recording ends leaves no end event at all: the app process goes.** On 2026-11-02 at
+06:21:53Z a locked command logged `record-start` and `mic-open`, the phase went `inactive` at 06:22:04,
+and then the log went silent. There was no `record-stop`, `record-cancel`, `mic-end` or
+`mic-interrupted`, the hub's mute stayed held, and nothing was uploaded. The next press, 14s later,
+logged `record-start` with the microphone free. A process that was only suspended would still own the
+microphone, so the app had been relaunched. The clip in memory is lost with the process. Searching
+`client_log` for a `record-start` with no end after it finds these: 8 out of 806 starts in the 14 days
+to that date. Nothing yet says whether it is a crash or watchOS ending the app.
+
 ### Sending it
 
 A command is sent the way the phone's microphone sends one: `Hub.sendAudio` uploads the file to

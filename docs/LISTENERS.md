@@ -31,7 +31,7 @@ overheard or barred from sending — a listener inserting its own row (the Mac, 
 itself (the ESP only for a wake-free capture; a wake-word command is a press), and an unstamped row is
 treated as a press. The worker itself reads one label,
 `watch-fallback`, the watch's route when the hub does not answer. The watch is a listener as `watch`,
-engaged from its home page (`Capture.toggleListening`); a command he presses for on it is `watch-cmd`,
+engaged from its home page (`Capture.toggleListening`); a command pressed for on it is `watch-cmd`,
 which is not a listener and not voice-checked. It still carries its window — from the microphone going live to the press that ends it — because
 `capture_start` is also the moment the worker hands the data layer as "now", which is what a set
 logged by voice is stamped with. A press without one is stamped when the model calls the tool.
@@ -50,7 +50,7 @@ twice or collapses something it never overlapped. Web clips had no window at all
 became a listener, which is exactly the bug this contract exists to prevent.
 
 The window is the utterance, not the buffer. The phone's recorder runs continuously and cuts
-utterances out of it (so no onset is lost), so its segments start before he speaks; stamping the
+utterances out of it (so no onset is lost), so its segments start before speech does; stamping the
 segment's own start would overlap the previous one and collapse two real commands into one.
 
 ## Speaker ID
@@ -60,36 +60,35 @@ the clip goes to the voice server as 16k mono WAV, `/verify` answers the top-3 c
 voiceprint, and anything under `voice_upload_accept` (0.22 when unset, 0 to accept anything) is never enqueued. That
 setting is its own: `voiceid_accept_threshold` is the ESP's whole-clip gate, it reads 0 today, and a
 number tuned for an ESP streaming raw audio should not silently decide what a watch may say. That is
-the phone and the watch, which hand over a finished file rather than streaming — until 2026-09-23 they
-were the only mics in the house with no gate at all, and eleven minutes of watch listening sent a
-podcast, a television and a room to the worker.
+the phone and the watch, which hand over a finished file rather than streaming; without this gate,
+always-on watch listening sends podcasts, television and room noise to the worker.
 
-**0.30 is measured, not chosen.** Every stored watch-listener clip was scored against the voiceprint
-on 2026-09-23 — eleven minutes of always-on listening that had caught a podcast, a television and the
-room, plus three real commands:
+**0.30 is measured, not chosen.** Every stored watch-listener clip was scored against the voiceprint:
+eleven minutes of always-on listening that had caught a podcast, a television and the room, plus
+three real commands:
 
 | | |
 |---|---|
-| him, through the watch | 0.33, 0.37, 0.37 |
-| him, pressed on a phone | 0.39, 0.45, 0.52 |
+| enrolled speaker, through the watch | 0.33, 0.37, 0.37 |
+| enrolled speaker, pressed on a phone | 0.39, 0.45, 0.52 |
 | the room (podcast, television, a passing sentence) | 0.26 and below — twenty-one clips |
 | near-silence, whoever it was | under 0.13 |
 
-So his speech and the room separate at about 0.3, and the bar sits in that gap. The old default of 0.22
-would have passed the two loudest podcast clips. Three positive samples is thin, so read the
+So the enrolled speaker and the room separate at about 0.3, and the bar sits in that gap. A bar of 0.22
+passes the two loudest podcast clips. Three positive samples is thin, so read the
 `[voice-command] … voice accepted/REFUSED sim=` lines as more arrive and move it if they crowd the bar.
 
 Scoring is not free: the voice server is one small machine running ECAPA, and a batch of back-to-back
 verifies answered 502. One clip at a time, which is what a listener does anyway.
 
 **A gate that cannot run lets the command through.** A voice server that is down, a missing voiceprint
-and a clip that will not decode all answer 0, which the hub reads as "cannot tell" — eating his
+and a clip that will not decode all answer 0, which the hub reads as "cannot tell" — dropping real
 commands because a service is unreachable is the worse failure.
 
 **A press is its own proof.** Only always-on sources are scored; the deliberate button on a phone or a
 watch identifies whoever is holding it.
 
 The ESP and the Mac gate on it in the stream itself, scoring 2s slices as they arrive (and, at
-`app_settings.voiceid_accept_threshold`, the whole clip — 0 today, so off), so audio that is not him
+`app_settings.voiceid_accept_threshold`, the whole clip — 0 today, so off), so audio that is not the enrolled speaker
 never reaches Whisper. An uploaded clip is scored only AFTER the hub has transcribed it: a refused
 clip has already been sent to Groq, and the gate saves the worker run, not the transcription.

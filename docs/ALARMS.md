@@ -33,8 +33,8 @@ looks like it does:
 
 - **Web Audio is silenced. A media element is not.** Measured on the device with the ringer on: in a
   Guided Access session `<audio>` plays and an oscillator makes no sound at all. This is why the
-  alarm is a FILE. An alarm built on oscillators flashed its overlay, reported `state: "running"`,
-  scheduled its beeps and was silent through the entire morning of 2026-09-19.
+  alarm is a FILE: an alarm built on oscillators flashes its overlay, reports `state: "running"`,
+  schedules its beeps and makes no sound.
 
 ## The TV and the page are a mirror
 
@@ -81,7 +81,7 @@ The most-used case, end to end. No session and no model is involved after the co
 1. `surf-report/capture.mjs` mirrors Surfline into `surf_snapshots` on the Pi's cron, about four
    snapshots a day. See that repo for the publish windows.
 2. The conditions for one morning are a `surf_alarms` row (data-layer `00111`), written by the
-   `set_surf_alarm` tool. They are Jared's for that morning — ask, never reuse a previous night's.
+   `set_surf_alarm` tool. They are the user's for that morning — ask, never reuse a previous night's.
    `rules` is an ORDERED list, first match wins:
 
        [{"hours":[8,9], "not_fair":[10,11], "wake":"07:00"}, {"hours":[8,9], "wake":"08:30"}]
@@ -101,16 +101,16 @@ The most-used case, end to end. No session and no model is involved after the co
    an alarm is not a task, and waking up earns nothing. Exempt items close themselves when their
    moment passes, but never an alarm: that would pull it from the feed and end the ring in the minute
    it starts. STOP is what completes it. A moment that has arrived is never moved, a wake
-   time already past is recorded as `late` and changes nothing, and an item he deleted or completed
-   himself is not put back (re-engaging with the tool forgets it). Moving the item's `due` goes out
+   time already past is recorded as `late` and changes nothing, and an item the user deleted or completed
+   by hand is not put back (re-engaging with the tool forgets it). Moving the item's `due` goes out
    over realtime → `/api/stream` → `hub:stream` → `alarmclock.js` reloads and re-arms, and over
    `/api/list-stream` to `tv-ring`. **No push is involved in either chain**, which is the entire point.
 5. At the moment, the TV and any open page play the alarm tone on loop and `dueTick` sends a
    notification underneath.
 
-Measured 2026-09-21: the 05:00 capture landed at 05:00:10, the hub decided at 05:00:11 and the alarm
-item existed by 05:00:17 — the TV's beacon named 07:00 within a minute, nobody awake. At 07:00 the
-TV started on the second.
+Measured end to end: a 05:00 capture lands about 10 s later, the hub decides within a second and
+the alarm item exists within 7 s more; the TV's beacon shows the new time within a minute, and the
+TV starts ringing on the second.
 
 **What has to be true the night before**, and each of these has failed at least once. The TV needs
 nothing but to be on; these are for the phone to ring as well:
@@ -250,8 +250,7 @@ here (the PipeWire sink, and why it is left unforced).
 Anything on the hub page that plays audio can take the iOS audio session, and a capture track that
 loses it **goes silent while still reporting `readyState: 'live'`**. `voiceagent.js` caches the mic
 stream and reuses it on that flag, so once it happens every later recording is silence and comes
-back as an empty transcript. Left alone it does not recover until the page reloads. Measured 2026-09-19, hours of voice commands lost to it after the tone
-previews went in.
+back as an empty transcript. Left alone it does not recover until the page reloads, so every voice command until then is lost.
 
 So every player here — the alarm, the Settings preview, the bench — dispatches `hub:audioplaying`
 as its sound starts and `hub:audioplayed` once it is over, and `voiceagent` marks the stream dirty

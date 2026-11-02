@@ -2,7 +2,7 @@
 
 Every position the phone reports, kept at the grain Core Location delivers it, plus one point from the
 watch each time its app is used, so "where was I yesterday at 3" has an answer. `locations` (data-layer 00128) is only the latest fix per device,
-moved when he speaks a command; this is the history.
+moved when a command is spoken; this is the history.
 
     phone / watch ─ LocationTrail.swift ─▶ POST /api/location/points ─▶ location_points
 
@@ -43,7 +43,7 @@ watch adds one row per use.
 
 ## Prerequisites
 
-His grant on each device's location prompt. The phone's always-permission prompt needs
+The user's grant on each device's location prompt. The phone's always-permission prompt needs
 `NSLocationAlwaysAndWhenInUseUsageDescription` in its Info.plist (project.yml); without it,
 `requestAlwaysAuthorization` does nothing and the phone records only under While Using.
 

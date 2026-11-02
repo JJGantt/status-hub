@@ -1,6 +1,6 @@
 # Apple Health
 
-Everything Apple Health holds for him reaches Supabase through the iPhone app, because Health has no
+Everything Apple Health holds reaches Supabase through the iPhone app, because Health has no
 cloud API: the only reader is an app on the phone. Sleep has its own table and its own doc
 (`docs/SLEEP.md`); this is everything else.
 
@@ -50,11 +50,11 @@ from, to)` and `sleep_nights(from, to)`. Days are New York calendar days, not th
 ## What it is not
 
 **Not live.** iOS decides when to wake the app for a background delivery — roughly hourly for most
-types, and sleep only after he wakes — so nothing here can react to his heart rate as it happens.
+types, and sleep only after waking — so nothing here can react to heart rate as it happens.
 
 ## Prerequisites
 
-The same as sleep: the App ID's `HEALTHKIT` capability, and his grant on the Health sheet the app
+The same as sleep: the App ID's `HEALTHKIT` capability, and the user's grant on the Health sheet the app
 shows at the first launch after an update that asks for new types. Denied, queries return nothing
 and nothing errors; Health → Sharing → Apps → Status Hub is where it is changed.
 

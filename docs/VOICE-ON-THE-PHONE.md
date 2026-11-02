@@ -5,7 +5,7 @@ Two microphones, deliberately different. Neither is a fallback for the other.
 | | **Every microphone button** | **The always-on button** |
 |---|---|---|
 | Shape | press to start, press to send, hold to throw away | tap to engage, tap to disengage |
-| Ends a clip | he does, and only he | the silence after each utterance |
+| Ends a clip | the user, and only the user | the silence after each utterance |
 | Sends | once, whatever it recorded | every utterance, until disengaged |
 | Mirrors | nothing — it is the deliberate one | what the Mac and the ESP already do |
 
@@ -24,7 +24,7 @@ destinations:
 
 The recorder has no voice-activity detection and no timer: a recording ends on the second press and
 everything recorded is sent. **Do not give it one.** A VAD on this path ends a recording at a
-mid-sentence pause and discards any clip it judges silent, with no message — and on his phone it
+mid-sentence pause and discards any clip it judges silent, with no message — and on the phone it
 judges whole spoken commands silent, so the button records, throws the words away and shows nothing.
 That is why there is no `autoStop` option to turn on for one button.
 
@@ -71,7 +71,7 @@ and `on` holds through every one of them — the distinction that matters most i
 | state | the button |
 |---|---|
 | engaged, waiting | red outline, bars sat low, ring pulsing slowly |
-| hearing him | filled red, bars moving as a level meter |
+| hearing speech | filled red, bars moving as a level meter |
 | sending | amber, bars still, ring turning |
 
 Waiting and hearing differ in SHAPE, not just speed, so a glance is enough. The sending state follows

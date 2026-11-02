@@ -67,7 +67,7 @@ crown as the volume while it plays.
 - **It holds the microphone and discards what it hears**, which is what keeps a watch app running
   with the wrist down. A watch app that only plays is frozen when the wrist drops (`Speaker` has the
   measurement).
-- **The buffer adapts.** It starts at a quarter second (Jared's number, for the shortest delay). Each
+- **The buffer adapts.** It starts at a quarter second (chosen for the shortest delay). Each
   time it runs dry it rebuilds to the next level, half a second then one, so one bad patch costs one
   gap and the larger cushion covers the next. A minute with no gap steps it back down a level.
 - **Behind the level, it plays fast at the same pitch** (`pace`, `Stretch.swift`): 20% fast while two

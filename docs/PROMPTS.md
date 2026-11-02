@@ -47,4 +47,4 @@ category; each posts the decision itself as a background action. Tapping the ban
   behaves exactly as it would with no hook.
 
 The notification carries no sentence of its own — the title is the session's name and the body is the
-call itself. Any wording beyond that is Jared's to write.
+call itself. Any wording beyond that is the owner's to write.

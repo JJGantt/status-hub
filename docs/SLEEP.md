@@ -17,16 +17,15 @@ because Apple Health has no cloud API: the only reader is an app on the phone.
 
 ## What it is not
 
-**Not a live "asleep now" signal.** The watch writes a night's stages after he wakes, so the first
-rows for a night arrive in the morning. Anything that has to act while he is falling asleep (the
-bedroom TV) needs a signal from the watch during the night, which this is not.
+**Not a live "asleep now" signal.** The watch writes a night's stages after waking, so the first
+rows for a night arrive in the morning. Anything that has to act at sleep onset needs a signal from the watch during the night, which this is not.
 
 ## Prerequisites
 
 - `HEALTHKIT` capability on the App ID `com.jaredgantt.statushub`
   (`node apps/tools/asc.mjs capability com.jaredgantt.statushub HEALTHKIT`). Without it the
   archive fails at signing on the healthkit entitlement.
-- He grants read access on the Health sheet the app shows at first launch after the update.
+- The user grants read access on the Health sheet the app shows at first launch after the update.
   Denied, the query returns nothing and nothing errors; Health → Sharing → Apps → Status Hub is
   where it is changed.
 

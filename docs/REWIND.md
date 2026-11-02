@@ -28,8 +28,8 @@ the wrist down, and what that costs in battery.
 - **A tap on the sheet records instructions** for the grab: locked like a session follow-up (red
   edge, drawn by the sheet itself because the sheet covers `CommandBorder`), and the next tap sends them
   and closes the sheet. They go up as an ordinary watch command with `rewind=<grab id>`; the hub
-  (`withRewind`) turns the command into the grab's transcript framed as overheard audio plus his words
-  as the instructions, and enqueues that to the orchestrator. `voice_requests.rewind_id` names the grab.
+  (`withRewind`) turns the command into the grab's transcript framed as overheard audio plus the user's
+  words as the instructions, and enqueues that to the orchestrator. `voice_requests.rewind_id` names the grab.
   **Instructions never go out without their grab.** The grab's clip stays on the watch (`Grab`) until
   the hub has it; the command uploads the grab first (again, if its own upload failed) and fails into
   Retry when it cannot, and a grab's command never takes the Supabase fallback, which has no way to
@@ -93,7 +93,7 @@ holds audio from either side of that gap as if it were continuous.
 
 ## Measured
 
-**2026-10-24, first real use** (TV on in the room, 30 s ring):
+**First real use** (TV on in the room, 30 s ring):
 
 | UTC | what happened | ring |
 |---|---|---|
@@ -120,7 +120,7 @@ tone, no sounds — and Groq offers no diarization. Everything not in the words 
 
 | service | what it gives | notes |
 |---|---|---|
-| OpenAI `gpt-4o-transcribe-diarize` | text segmented by speaker A/B/C | can be given short reference clips of known voices, so his turns can come back named |
+| OpenAI `gpt-4o-transcribe-diarize` | text segmented by speaker A/B/C | can be given short reference clips of known voices, so the owner's turns can come back named |
 | AssemblyAI Universal | speaker labels, also speaker naming | ~$0.21/hr base, add-ons metered separately |
 | ElevenLabs Scribe v2 | speaker labels, plus tagged non-speech events (laughter, music, applause) | the one that keeps some of the "nuance" beyond words |
 | Deepgram Nova-3 | `diarize=true` | fast; strongest for streaming |
@@ -147,9 +147,9 @@ each speaks for more than a second or two; it degrades with short overlapping tu
 speech coming out of a TV speaker (which flattens voices). A 30-second clip gives it little to learn
 each voice from. Labels are anonymous (Speaker A, B) unless a reference clip says who someone is.
 
-**His own voice is already enrolled**: the hub keeps a `voiceprint` (ECAPA exemplar bank) for speaker
+**The owner's voice is already enrolled**: the hub keeps a `voiceprint` (ECAPA exemplar bank) for speaker
 ID on uploaded clips (`server.js`, "IS IT HIM?"). Either that, or a reference clip passed to the
-diarizing model, can turn "Speaker A" into "Jared" and leave the rest anonymous.
+diarizing model, can turn "Speaker A" into the owner's name and leave the rest anonymous.
 
 **Beyond text**: sending the audio itself to a model that takes audio input keeps tone, emphasis and
 who-is-who without a transcription step losing them. Which models accept audio directly changes often;
@@ -157,14 +157,14 @@ check before building on it.
 
 ## Plan
 
-Built (2026-10-24): every grab kept (clip + words), tap-to-instruct on the sheet, and the Rewind Ask
+Built: every grab kept (clip + words), tap-to-instruct on the sheet, and the Rewind Ask
 control. Speaker-labeled transcription is built and switched off (`rewind_diarize`).
 
-Next, as Jared decides:
+Next, in an order still to be decided:
 
 - A short summary on the sheet in place of the full words, the words a tap away.
 - A variable look-back (a fixed minute today), possibly chosen by the voice command itself.
 - Judge the diarization on real grabs (TV, a conversation) if a model turns out to need it, and compare
   a second provider on the same saved clips if it disappoints.
-- Name his own turns: OpenAI accepts short reference clips of known speakers; his voice is already
-  enrolled for speaker ID (`voiceprint`).
+- Name the owner's turns: OpenAI accepts short reference clips of known speakers; the owner's voice
+  is already enrolled for speaker ID (`voiceprint`).

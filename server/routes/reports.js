@@ -8,7 +8,7 @@ module.exports = function (ctx) {
   // SECURITY, and it is the whole reason this route looks the way it does. The HTML in `reports.html`
   // was written by a model, and it is opened inside the app's WKWebView, which is already authenticated
   // to this hub. Served plainly, script in that document would be same-origin with the dashboard and
-  // could call /api/* — clearing todos, opening sessions — using Jared's own cookie.
+  // could call /api/* — clearing todos, opening sessions — using the user's own cookie.
   //
   // So the response is sandboxed by CSP into an opaque origin AND scripts are blocked outright by
   // `default-src 'none'`. Two independent mechanisms, because this is the one place where untrusted

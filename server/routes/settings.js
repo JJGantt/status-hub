@@ -17,7 +17,7 @@ module.exports = function (ctx) {
   // ---- the mute has HOLDERS ----------------------------------------------------------------------
   // Every microphone in the house goes deaf while an explicit command is being captured, and that was
   // one flag — `voice_muted` — written 1 and 0 by whoever was capturing. Two sources capturing at once
-  // is the ordinary case (a watch recording while he dictates on the Mac), and the one that finished
+  // is the ordinary case (a watch recording while the user dictates on the Mac), and the one that finished
   // FIRST wrote 0 and woke every mic mid-dictation: on 2026-09-23 the Mac's listener heard the rest of
   // a dictation 0.7s after push-to-talk had muted it, and ran it as a command.
   //
@@ -95,7 +95,7 @@ module.exports = function (ctx) {
     res.json({ ok: true });
   });
 
-  // TEMPORARY. The voice button's stop tap misbehaves only on his phone, so the phone reports what it
+  // TEMPORARY. The voice button's stop tap misbehaves only on the user's phone, so the phone reports what it
   // actually saw — every pointer event and every state change — into this log. Read it with
   // `fly logs -a jared-status-hub | grep tap`. Delete this route and its caller once that is understood.
   gated.post('/api/tapdebug', express.json({ limit: '8kb' }), (req, res) => {
@@ -139,8 +139,8 @@ module.exports = function (ctx) {
   // Register a device's APNs token (sent by the native app, authed by x-hub-token). Upsert so a
   // re-launch just refreshes last_seen rather than piling up rows.
   //
-  // The phone also reports its IANA timezone here, which is how the hub knows where Jared is. It is
-  // the best available proxy: the phone travels with him, and it re-registers on every launch. Stored
+  // The phone also reports its IANA timezone here, which is how the hub knows where the user is. It is
+  // the best available proxy: the phone travels with the user, and it re-registers on every launch. Stored
   // in app_settings.display_tz and picked up by the next settings read (see settingsAll).
   gated.post('/api/register-push', express.json(), async (req, res) => {
     try {

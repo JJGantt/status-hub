@@ -91,10 +91,10 @@ module.exports = function (ctx) {
   const isCodex = (s) => !!s && s.agent === 'codex' && !isIncident(s);
 
   async function buildSessions({ brief: allBrief = false } = {}) {
-    // The NUMBER Jared says out loud and the FOCUS (where a spoken follow-up lands, and what every
+    // The NUMBER the user says out loud and the FOCUS (where a spoken follow-up lands, and what every
     // surface marks) are desk_sessions_state() in Postgres (data-layer 00157), the one definition the
     // voice tools read too, so "session three" and the focused session mean the same thing everywhere.
-    // `pinned` says the focus is his explicit pin rather than automatic; a pinned session is marked
+    // `pinned` says the focus is the user's explicit pin rather than automatic; a pinned session is marked
     // differently, because it stays put while other sessions take turns.
     const [sessions, queue, state] = await Promise.all([
       sb('desk_sessions?select=*&order=last_seen.desc'),
@@ -304,7 +304,7 @@ module.exports = function (ctx) {
         const kind = now.live ? 'follow_up' : 'resume_session';
         // Speak mode on the watch (docs/WATCH.md § Speak mode): the reply will be read aloud, so the
         // session is asked to answer for the ear. One line, since it is typed into a terminal, and in a
-        // tag that resolvePrompt (voice-pipeline transcripts.js) strips, so every surface shows his words.
+        // tag that resolvePrompt (voice-pipeline transcripts.js) strips, so every surface shows the user's words.
         const prompt = (req.body || {}).spoken === true && text ? `${text} ${SPEAK_NOTE}` : text;
         const payload = { session: target.id, prompt, target: machine,
                           ...(attachments.length ? { attachments } : {}),
@@ -349,7 +349,7 @@ module.exports = function (ctx) {
         return res.json({ id: cmdId, to });
       }
 
-      // Name the session itself when it is running — `/rename` typed into it, the same command Jared
+      // Name the session itself when it is running — `/rename` typed into it, the same command the user
       // would — and always set the row, so the pane changes now rather than a tick later. A parked
       // session has no process to type into and takes the name in the row alone.
       if (action === 'rename') {

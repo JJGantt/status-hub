@@ -30,7 +30,7 @@ const UA = 'jared-status-hub (jared.gantt@gmail.com)';
 
 const DAYS = 7;
 // The hours the grid draws. The night is always empty here and was taking a third of the box; 5a-10p
-// covers anything he would be outside for and makes the remaining rows almost half again as tall.
+// covers anything the user would be outside for and makes the remaining rows almost half again as tall.
 const WINDOW = [5, 22];
 
 // 5-point buckets, so one base36 char carries an hour and the client indexes the ramp with it —

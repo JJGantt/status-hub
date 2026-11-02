@@ -75,7 +75,7 @@ export const state = { last: null };
 //
 // THE PAGE RELOADS ITSELF on its own initiative — a deploy made it stale (core.js, the build check
 // below), or its stream went deaf — and a reload kills a recording mid-sentence: the clip is still in
-// the MediaRecorder's memory and only reaches the voice outbox when he taps stop. A deploy landing
+// the MediaRecorder's memory and only reaches the voice outbox when the user taps stop. A deploy landing
 // during a long spoken command threw the whole command away. So every self-initiated reload goes
 // through `safeReload`, and a recorder holds it off (`holdReload`) from the tap that arms it until its
 // clip has been handed on; the reload that was wanted then happens a few seconds later, which gives a
@@ -176,8 +176,8 @@ export function liveStream(url, listeners, { onOpen } = {}) {
 })();
 
 // Repaint a host whose content scrolls sideways, without throwing away where it is scrolled to.
-// Cards rebuild their innerHTML on every SSE frame; without this, a frame arriving while he is
-// reading back through June would snap him to whatever end the fresh markup starts at.
+// Cards rebuild their innerHTML on every SSE frame; without this, a frame arriving while the user is
+// reading back through June would snap the user to whatever end the fresh markup starts at.
 // `sel` finds the scroller inside the host when it isn't the host itself; `stick` keeps a view that
 // was already at the newest edge pinned there as new days arrive.
 export function paintScrolled(host, html, { sel = null, stick = false } = {}) {
@@ -199,7 +199,7 @@ export function paintScrolled(host, html, { sel = null, stick = false } = {}) {
 // code, quotes, rules, tables; inside them code, links, bare URLs, bold and italics.
 //
 // EVERY PATH ESCAPES FIRST. The text is a model's, rendered into an origin already authenticated as
-// Jared, so no tag here ever comes from the input: the input is escaped and then OUR OWN patterns
+// the user, so no tag here ever comes from the input: the input is escaped and then OUR OWN patterns
 // introduce tags around it. Code and links are lifted out before the emphasis rules run, or a `*`
 // inside one would be read as emphasis.
 //
@@ -317,7 +317,7 @@ export function md(src) {
 
 export function esc(s){return String(s).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;');}
 
-// The mark on a PINNED session — focus he set by name, which stays put while other sessions take
+// The mark on a PINNED session — focus the user set by name, which stays put while other sessions take
 // turns — so it never reads as automatic focus, which follows whichever session is most recent. One
 // glyph, drawn in the surrounding text colour, on every surface that shows focus.
 export const PIN_SVG = '<svg class="pin-mark" viewBox="0 0 16 16" width="0.85em" height="0.85em" fill="currentColor"'
@@ -327,7 +327,7 @@ export const PIN_SVG = '<svg class="pin-mark" viewBox="0 0 16 16" width="0.85em"
 // This device's own current wall clock, naive (no offset) — "YYYY-MM-DDTHH:MM:SS", matching exactly
 // how sets/nutrition_entries.occurred_at is stored. Sent with every write so the logged time is
 // whatever the clock reads on the device doing the logging, wherever that is — never converted to a
-// fixed home zone. A stationary kiosk/TV has no "Jared" device to ask, so writes from there fall back
+// fixed home zone. A stationary kiosk/TV has no user device to ask, so writes from there fall back
 // to the server's own naive-local (see server.js nowNaiveLocal); this is only for phone/browser writes.
 export function localNowNaive(){const d=new Date(),p=n=>String(n).padStart(2,'0');
  return d.getFullYear()+'-'+p(d.getMonth()+1)+'-'+p(d.getDate())+'T'+p(d.getHours())+':'+p(d.getMinutes())+':'+p(d.getSeconds());}

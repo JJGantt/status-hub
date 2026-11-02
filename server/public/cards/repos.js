@@ -56,7 +56,7 @@ function sessionsHtml(s) {
   const res = s.resident || [], ev = s.evicted || [], q = s.queued || [];
   if (!res.length && !ev.length && !q.length) return '';
 
-  // Which session a SPOKEN follow-up lands in: the most recently active one unless he pinned another
+  // Which session a SPOKEN follow-up lands in: the most recently active one unless the user pinned another
   // by name (pickFocus in server.js). Worth marking because it moves as sessions take turns.
   const focus = s.focus || null;
   // The NUMBER is the point of showing it: it is how a session gets named out loud ("move session
@@ -314,7 +314,7 @@ function keep(payload) {
 // ignored. A prompt queued behind a running turn and later read is one event at two moments, same id,
 // drawn where the model took it. The watch keeps the same list by the same rule (Sessions.swift).
 //
-// The one thing on screen that is not from the hub is a PLACEHOLDER: his words the instant they are
+// The one thing on screen that is not from the hub is a PLACEHOLDER: the user's words the instant they are
 // sent, before the machine has typed them into the session. It carries the message's own id, and the
 // event that comes back for it does too (`cmd`), so it is replaced by id, never by matching text.
 
@@ -374,11 +374,11 @@ function follow() {
   });
 }
 
-// THE VIEW NEVER MOVES WHILE HE IS LOOKING AT IT. Nothing arriving — a reply, a tool call, a thought —
-// scrolls it: he may be halfway up the thread reading, and a jump there is lost place. It lands on the
-// newest thing only when he COMES BACK to it (the app returning to the foreground, or the sessions pane
-// swiped back into view) and something arrived while he was gone. `awayAt` is how far the
-// conversation had got when he stopped looking; null while he is looking.
+// THE VIEW NEVER MOVES WHILE THE USER IS LOOKING AT IT. Nothing arriving — a reply, a tool call, a thought —
+// scrolls it: the user may be halfway up the thread reading, and a jump there is lost place. It lands on the
+// newest thing only when the user COMES BACK to it (the app returning to the foreground, or the sessions pane
+// swiped back into view) and something arrived while the user was gone. `awayAt` is how far the
+// conversation had got when the user stopped looking; null while the user is looking.
 let awayAt = null, paneSeen = true;
 function looking() { return document.visibilityState === 'visible' && paneSeen; }
 function lookChanged() {
@@ -422,7 +422,7 @@ function paintHead() {
 }
 
 // What is drawn: every event in order, a prompt at the position of its LATEST occurrence — it moves
-// from where it was queued to where the model read it — and his own words the hub does not have yet
+// from where it was queued to where the model read it — and the user's own words the hub does not have yet
 // after everything it does. The session is working when the last event is not a reply.
 function shown(at) {
   const seen = new Set(), out = [];
@@ -459,7 +459,7 @@ function paintBody({ open = false, top = false } = {}) {
           ? `<div class="sv-thought">${md(e.text)}</div>`
           : `<div class="sv-tool">${esc(e.text)}</div>`).join('') +
     (working ? '<div class="sv-working"><span class="ai-caret">▍</span></div>' : '') +
-    // His words the hub does not have yet: sent from here, on their way to being typed in.
+    // The user's words the hub does not have yet: sent from here, on their way to being typed in.
     cur.placeholders.map((p) => `<div class="sv-words sv-queued">${saidHtml(p.text)}</div>`).join('');
   if (open || top) {
     // The last block in the body IS the newest thing. Inside a turn the newest part is the reply, not
@@ -473,10 +473,10 @@ function paintBody({ open = false, top = false } = {}) {
   }
 }
 
-// His words into the open conversation. The text stays in the box until the hub has taken it, and a
+// The user's words into the open conversation. The text stays in the box until the hub has taken it, and a
 // resend of the same words carries the same id, so a lost answer cannot type them twice.
-// `at` is the session the words are FOR — a spoken follow-up still transcribing when he leaves the
-// view goes to the session he spoke it into, not to nothing.
+// `at` is the session the words are FOR — a spoken follow-up still transcribing when the user leaves the
+// view goes to the session the user spoke it into, not to nothing.
 async function sendWords(text, at = cur) {
   const el = document.getElementById('repospane');
   text = String(text || '').trim();
@@ -501,7 +501,7 @@ async function sendWords(text, at = cur) {
     if (cur === at) {
       const box = el.querySelector('.sv-text');
       if (box && box.value.trim() === text) box.value = '';
-      // His words on screen the instant they are sent, before the machine has typed them in. Keyed by
+      // The user's words on screen the instant they are sent, before the machine has typed them in. Keyed by
       // the message's own id, which the event for them carries back (`cmd`), so it is replaced by id.
       // The hub taking nothing (`ignored`: a thank-you-shaped transcription) shows nothing.
       if (!j.ignored) at.placeholders.push({ cmd: msgId, text: text || '(picture)' });
@@ -542,10 +542,10 @@ async function uploadShot(file) {
   return j.path;
 }
 
-// HIS WORDS, with any pictures drawn as pictures.
+// THE USER'S WORDS, with any pictures drawn as pictures.
 //
 // A session is typed into, so an attachment reaches it as a line naming local files — which is the
-// right thing for the session and the wrong thing to show him, since he is the one who attached them.
+// right thing for the session and the wrong thing to show the user, since the user is the one who attached them.
 // The basename IS the hub's object name (the host saves each file under it, see fetchAttachment), so
 // the same bytes come back from /api/attachment and the line becomes the thumbnails it stands for.
 const ATTACH_RE = /^\[Jared attached [^:\]]*: ([^\]]+?) — read (?:it|them) now\.\]\s*/;
@@ -751,7 +751,7 @@ async function showList() {
 
 // AN OPEN SESSION SURVIVES A RELOAD. The page reloads itself whenever a deploy has made it stale, and
 // it does that on the way back to visible — which is exactly when a notification tap has just opened
-// a session. Without this the session opens and the reload lands him on home a beat later. Session
+// a session. Without this the session opens and the reload lands the user on home a beat later. Session
 // storage, so it belongs to this one web view and a fresh launch starts on home as it should.
 const SV_KEY = 'hub:open-session';
 function remember(id) {
@@ -794,7 +794,7 @@ export function render() {
   const back = remembered();
   if (back) openSession(back).then((ok) => { if (!ok) { remember(null); load(); } }); else load();
   // Coming back to the app re-reads whichever is showing. Re-reading the list over an open session
-  // would put him back on the list every time he switched apps mid-read.
+  // would put the user back on the list every time the user switched apps mid-read.
   window.addEventListener('focus', () => (cur ? reload() : load()));
   // The sessions pane swiped out of view is as good as the app going away: coming back lands on news.
   const pane = document.getElementById('repospane');

@@ -18,8 +18,8 @@ module.exports = function (ctx) {
     seenMsgIds, settingsAll,
   } = ctx;
 
-  // ---- IS IT HIM? speaker ID for the devices that UPLOAD a clip -------------------------------------
-  // The Mac and the ESP score every utterance against his voiceprint before it becomes a command, and
+  // ---- IS IT THE USER? speaker ID for the devices that UPLOAD a clip -------------------------------------
+  // The Mac and the ESP score every utterance against the user's voiceprint before it becomes a command, and
   // the phone and the watch never could: the model (ECAPA) lives in the voice server, and those two hand
   // this a finished file instead of streaming. So an always-on watch sent whatever it heard — on
   // 2026-09-23, eleven minutes of it sent a podcast, a television and a room to the worker, and only the
@@ -30,7 +30,7 @@ module.exports = function (ctx) {
   // (see the bar below) it is not enqueued.
   //
   // **A gate that cannot run lets the command through.** A voice server that is down, a missing
-  // voiceprint and a clip that will not decode all answer 0, and 0 means "cannot tell": eating his
+  // voiceprint and a clip that will not decode all answer 0, and 0 means "cannot tell": eating the user's
   // commands because a service is unreachable is a worse failure than running a stray one.
   const VOICE_VERIFY_URL = process.env.VOICE_VERIFY_URL || 'https://jared-voice.fly.dev/verify';
   const VERIFY_TOKEN = process.env.VERIFY_TOKEN || '';
@@ -112,7 +112,7 @@ module.exports = function (ctx) {
   // The watch posts the last N seconds it heard. Every grab is kept whole while the feature is built: the
   // clip in voice-clips under rewind/, and a rewind_grabs row with the words and the timing. Plain Groq
   // Whisper; speaker labels (OpenAI diarize) only with `rewind_diarize` = 1, falling back to Whisper with
-  // the failure in the row. Never enqueued — a grab only becomes a command when he records instructions for it, and
+  // the failure in the row. Never enqueued — a grab only becomes a command when the user records instructions for it, and
   // that command carries `rewind=<id>` to /api/voice-command.
   const REWIND_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
   gated.post('/api/rewind', async (req, res) => {
@@ -164,7 +164,7 @@ module.exports = function (ctx) {
   });
 
   // What a command recorded for a grab is sent to the model as: the grab's words, framed so the model
-  // knows they are overheard audio and that his own words are the instructions.
+  // knows they are overheard audio and that the user's own words are the instructions.
   async function withRewind(rewindId, instructions) {
     const rows = await sb(`rewind_grabs?id=eq.${rewindId}&select=transcript,held_s,model`);
     const g = rows && rows[0];
@@ -194,7 +194,7 @@ module.exports = function (ctx) {
       // A CLIP THAT HOLDS A FRACTION OF WHAT WAS RECORDED IS REFUSED, NOT TRANSCRIBED. The phone's
       // capture can drop most of its frames while still producing a valid file: 36.7s of talking came
       // up as 4.2s of chopped fragments, one frame kept in about nine. Whisper hears that as noise and
-      // writes "Thank you." — which would then be enqueued and acted on as his command. Only the
+      // writes "Thank you." — which would then be enqueued and acted on as the user's command. Only the
       // device knows how long it recorded, so the check needs its `dur`; a clip that keeps well under
       // half of it is damaged (a sound one keeps over 99%). The page resets its microphone on
       // `capture: 'damaged'` — see captureDamaged() in voiceagent.js.
@@ -257,7 +257,7 @@ module.exports = function (ctx) {
       }
       if (!transcript && !untranscribed) return res.json({ transcript: '', enqueued: false });
       if (dry) return res.json({ transcript, enqueued: false });
-      // Instructions recorded for a rewind grab: the command the model sees is the grab plus his words.
+      // Instructions recorded for a rewind grab: the command the model sees is the grab plus the user's words.
       const rewindId = REWIND_ID.test(String(req.query.rewind || '')) ? String(req.query.rewind) : null;
       if (rewindId && !untranscribed) transcript = await withRewind(rewindId, transcript);
       // The navbar mic sends ?quick=1, which tags the request's source `web-quick`.
@@ -279,7 +279,7 @@ module.exports = function (ctx) {
       const srcRaw = String(req.query.source || '').trim().toLowerCase();
       const source = /^[a-z0-9][a-z0-9-]{0,23}$/.test(srcRaw) ? srcRaw : (quick ? 'web-quick' : 'web');
       const id = crypto.randomUUID();   // chosen here so the caller can wait on it (/api/voice-reply/:id)
-      // An always-on device's clip has to sound like him before it becomes a command.
+      // An always-on device's clip has to sound like the user before it becomes a command.
       const him = await soundsLikeHim(id, tmp, source);
       console.log(`[voice-command] ${source} voice ${him.ok ? 'accepted' : 'REFUSED'}` +
         (him.sim != null ? ` sim=${him.sim.toFixed(2)}${him.bar ? ` bar=${him.bar}` : ''}` : '') +
@@ -426,7 +426,7 @@ module.exports = function (ctx) {
   // server error) so a failure that's otherwise invisible in the phone's console lands in the app log.
 
   // THE WATCH'S AND THE PHONE'S LINES ARE KEPT (client_log, 14 days). The console alone holds about an
-  // hour, which is not long enough to trace a command lost on the wrist once he mentions it. The TV's
+  // hour, which is not long enough to trace a command lost on the wrist once the user mentions it. The TV's
   // alarm heartbeats and the watch's per-frame lines stay console-only: they are once a minute, or once
   // per tool call, and say nothing a step of a command does not.
   const CLIENT_LOG_SOURCES = new Set(['watch', 'phone']);
@@ -512,7 +512,7 @@ module.exports = function (ctx) {
   // the worker's framing directive tells the model the intent is to log what the photos show.
   // A client_msg_id de-dupes a resent send (see seenMsgIds above /api/voice-command).
   // `shared: true` is the iOS share extension (apps/Share): the request is stamped source 'share', which
-  // tells the worker the pictures are something he wants looked at, not a meal to log.
+  // tells the worker the pictures are something the user wants looked at, not a meal to log.
   gated.post('/api/voice-text', express.json(), async (req, res) => {
     try {
       const text = String((req.body && req.body.text) || '').trim();
@@ -607,7 +607,7 @@ module.exports = function (ctx) {
   // of what it had done since, until the next tool call. In memory, per session row, cleared by the turn's
   // `done` and capped; a hub restart loses them, which costs only the steps before it.
   // A prompt carries two things that were never meant for a human to read, and every surface that shows
-  // "his words" verbatim (the watch, the phone thread, the TV) has to have them out before he sees them:
+  // "the user's words" verbatim (the watch, the phone thread, the TV) has to have them out before the user sees them:
   //
   // - The bracketed location line voice-dispatched prompts used to carry ("[Where Jared was when he
   //   asked: lat, lon (within about N m)]"). Nothing appends it now; it is in turns already stored.
@@ -618,7 +618,7 @@ module.exports = function (ctx) {
   //   applescript.js` `handoff`), naming the file the real words are parked in. It is meant to be
   //   resolved back to those words before anything is stored (`transcripts.js` `resolvePrompt`) — this
   //   is a backstop for the rare case that resolution did not happen (the file was swept, or the read
-  //   raced it), since the alternative is showing him an internal instruction to go read a file.
+  //   raced it), since the alternative is showing the user an internal instruction to go read a file.
   const FOR_THE_AGENT = [
     /\s*\[Where Jared was when he asked: [^\]]*\]\s*$/,
     /\s*\[This reply is read aloud\.[^\]]*\]\s*$/,

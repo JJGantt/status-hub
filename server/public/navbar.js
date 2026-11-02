@@ -52,8 +52,8 @@ export function mountNavbar() {
     const b = document.createElement('button');
     b.className = 'wfab ' + cls; b.type = 'button'; b.setAttribute('aria-label', label);
     b.innerHTML = svg;
-    // NO SILENCE DETECTION HERE. This button records exactly what he chose to record: one tap opens
-    // the mic, the next sends it. Nothing ends a recording on his behalf, because a pause mid-sentence
+    // NO SILENCE DETECTION HERE. This button records exactly what the user chose to record: one tap opens
+    // the mic, the next sends it. Nothing ends a recording on the user's behalf, because a pause mid-sentence
     // is not the end of a sentence — the always-on button beside it is where a machine gets to decide.
     const rec = makeRecorder({ onStatus, quick: true,
       onState: (s) => { b.classList.toggle('rec', s === 'rec'); b.classList.toggle('armed', s === 'armed'); } });
@@ -161,7 +161,7 @@ export function mountNavbar() {
     ear.className = 'wfab wfab-listen'; ear.type = 'button'; ear.setAttribute('aria-label', 'Always-on listening');
     ear.innerHTML = EAR;
     // Three states in one button, because nothing else on screen says any of it: engaged and waiting,
-    // hearing him right now, and sending what it heard. `on` stays set through all of them — it is
+    // hearing the user right now, and sending what it heard. `on` stays set through all of them — it is
     // what says the microphone is still open at all.
     const lis = makeListener({ onStatus,
       onState: (st) => {

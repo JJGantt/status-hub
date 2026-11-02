@@ -206,11 +206,11 @@ module.exports = function (ctx) {
     const b = req.body || {};
     const session = String(b.session || '');
     if (!session) return res.status(400).json({ error: 'session required' });
-    // `said` is HIS WORDS arriving mid-turn — a prompt typed or dictated into a session while it is
+    // `said` is THE USER'S WORDS arriving mid-turn — a prompt typed or dictated into a session while it is
     // still working. It has to survive as its own state: collapsed into 'tool' it would be drawn as a
     // tool call, and dropped it would reach the view only when the turn ended, where it renders above
-    // steps that had already happened before he said it.
-    // `said` is his words at the moment the model SAW them; `queued` is his words sent but not yet seen,
+    // steps that had already happened before the user said it.
+    // `said` is the user's words at the moment the model SAW them; `queued` is the user's words sent but not yet seen,
     // which a view holds apart rather than placing among steps it was never read between.
     const state = ['done', 'text', 'said', 'queued', 'summary', 'replay'].includes(b.state) ? b.state : 'tool';
     const done = state === 'done';
@@ -270,7 +270,7 @@ module.exports = function (ctx) {
   }
 
   // An orchestrator answer flagged worth reading (voice_messages.needs_read, docs/WATCH.md "Unread
-  // answers") is pushed as it lands; no other orchestrator reply ever is. Titled with his own words, the
+  // answers") is pushed as it lands; no other orchestrator reply ever is. Titled with the user's own words, the
   // answer as the body. Once per row, by its dedupe key, however many times realtime delivers the insert.
   // VOICE_ANSWER is the category both apps register: tapping or dismissing it marks the answer read, and
   // the watch drops it unshown while home is in front with the wrist up.

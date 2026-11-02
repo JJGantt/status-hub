@@ -7,7 +7,7 @@ module.exports = function (ctx) {
     TV_TOKEN, auth, etNowString, gated, lateMoment, sb, sbInsert,
   } = ctx;
 
-  // Native push to Jared's phone (APNs), ad-hoc text. The voice worker POSTs its failure alerts here;
+  // Native push to the user's phone (APNs), ad-hoc text. The voice worker POSTs its failure alerts here;
   // orchestrator answers are pushed by `notifyAnswer`, not through this. Gated on the kiosk
   // token. Fans out to every registered iOS token on its own push environment (sandbox vs production), and logs the result to `notifications`.
   // Push a notification to every registered iOS device; records one `notifications` row (with an optional
@@ -53,7 +53,7 @@ module.exports = function (ctx) {
       const rows = await sb('list_items?deleted=eq.false&completed_at=is.null&due=not.is.null&select=due,scheduled_at,priority');
       const nowET = etNowString();
       // Exempt items (a shift, an appointment) owe nothing, so they can never be overdue and must
-      // never badge — a red count he cannot clear by doing anything is just noise.
+      // never badge — a red count the user cannot clear by doing anything is just noise.
       return rows.filter((r) => (r.priority || 0) >= 0 && lateMoment(r.scheduled_at || r.due) <= nowET).length;
     } catch (_) { return null; }
   }

@@ -38,7 +38,7 @@ function spoken(md) {
 }
 
 // Sentences, packed up to MAX characters. The FIRST chunk is kept to one sentence on purpose: it is the
-// one he waits for, and a shorter input comes back sooner.
+// one the user waits for, and a shorter input comes back sooner.
 function chunks(text) {
   const lines = spoken(text).split(/\n+/).map((l) => l.trim()).filter(Boolean);
   const sentences = [];

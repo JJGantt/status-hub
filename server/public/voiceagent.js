@@ -119,7 +119,7 @@ function boot() {
     if (msg.kind === 'activity') {                 // live progress, pushed direct from the worker (low-latency)
       const a = msg.row || {};
       if ((a.focus || 'hub') !== 'hub') return;
-      // His words just landed on screen — and this is the one event that carries them to a device that
+      // The user's words just landed on screen — and this is the one event that carries them to a device that
       // did not do the recording, so it is what puts a command spoken at the ESP into every thread view.
       if (a.state === 'working') { playPop(); pushPending({ state: 'prompt', text: a.text }); }
       pushActivity(a);               // any other view of the run — see onActivity below
@@ -302,7 +302,7 @@ export function watchMic() {
 }
 
 // TEMPORARY. Every pointer event and every recorder state change, reported to the hub's log, because
-// the stop tap misbehaves only on his phone and nothing here can see that. `fly logs | grep tap`.
+// the stop tap misbehaves only on the user's phone and nothing here can see that. `fly logs | grep tap`.
 // Delete this and /api/tapdebug once the stop path is understood.
 function trace(ev, extra) {
   try {
@@ -399,7 +399,7 @@ const VOICE_BPS = 96000;
 //
 // AN INTERRUPTION PAUSES A COMMAND; IT NEVER SENDS IT AND NEVER THROWS IT AWAY. A timer or alarm going
 // off, Siri, a call, the page being hidden, or the capture dying under it ends the MediaRecorder; the
-// audio so far is HELD (`held`) and the button reads 'armed'. He carries on with a tap, or it carries on
+// audio so far is HELD (`held`) and the button reads 'armed'. The user carries on with a tap, or it carries on
 // by itself when the interruption ends (the app's `hub:audiointerrupt`) or the page is shown again.
 // MediaRecorder files from two recordings cannot be joined, so each held part goes up on its own as a
 // dry transcription and its words are handed to the hub as the last part's prefix (deliverVoice), which
@@ -407,8 +407,8 @@ const VOICE_BPS = 96000;
 //
 // PRESS TO START, PRESS TO SEND, and nothing else ends a recording or decides whether it is sent. DO
 // NOT ADD A VAD HERE: one ends a recording at a pause and discards a clip it judges silent without a
-// word, and on his phone it judges whole spoken commands silent — the button records, throws the
-// words away and shows nothing. A pressed button has already said he is talking; the always-on
+// word, and on the user's phone it judges whole spoken commands silent — the button records, throws the
+// words away and shows nothing. A pressed button has already said the user is talking; the always-on
 // listener (makeListener) is where a machine decides.
 export function makeRecorder({ onStatus = () => {}, onState: paint = () => {}, quick, dryWhen, onTranscript }) {
   // Every path through a recording ends in 'idle', so the state is what holds a reload off: anything
@@ -425,7 +425,7 @@ export function makeRecorder({ onStatus = () => {}, onState: paint = () => {}, q
   let sending = false;                // stopped, clip still on its way up — see stop()
   let discard = false;                // cancel(): this recording ends without being sent
   let held = [];                      // parts recorded before an interruption, waiting for the rest
-  let paused = false;                 // interrupted: `held` is waiting for him to carry on
+  let paused = false;                 // interrupted: `held` is waiting for the user to carry on
   let pausing = false;                // pause(): the recorder is stopping to be held, not sent
   const pickMime = () => {
     for (const m of ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4', 'audio/ogg'])
@@ -472,7 +472,7 @@ export function makeRecorder({ onStatus = () => {}, onState: paint = () => {}, q
     trace('start:recording', { mime });
     muteOthers(true);   // mute every other listener (Mac + ESP) while this explicit command records
     onStatus('Listening… tap to send', 'rec');
-    // No duration cap: a recording ends when he taps again, never on a clock. A wall-clock cap cut
+    // No duration cap: a recording ends when the user taps again, never on a clock. A wall-clock cap cut
     // long instructions off mid-sentence.
   }
   function stop() {
@@ -514,7 +514,7 @@ export function makeRecorder({ onStatus = () => {}, onState: paint = () => {}, q
     paused = true; onState('armed');
     trace('paused', { parts: held.length });
   }
-  // Carries a paused command on, from anything that says the microphone is his again.
+  // Carries a paused command on, from anything that says the microphone is the user's again.
   const carryOn = (why) => { if (paused && !sending) { trace('resume', { why }); start(); } };
   document.addEventListener('hub:audiointerrupt', (e) => {
     if (e.detail && e.detail.began) pause('interrupted'); else carryOn('interruption-ended');
@@ -555,10 +555,10 @@ export function makeRecorder({ onStatus = () => {}, onState: paint = () => {}, q
     toggle() {
       trace('toggle', { recording, arming, sending, paused, recState: rec ? rec.state : null });
       if (sending) return;
-      // A paused command is carried on, never sent half-said: the press after he finishes sends it.
+      // A paused command is carried on, never sent half-said: the press after the user finishes sends it.
       (recording || arming) ? stop() : start();
     },
-    // Ends the recording WITHOUT sending it — for a caller whose recording has lost its purpose (he
+    // Ends the recording WITHOUT sending it — for a caller whose recording has lost its purpose (the user
     // navigated away from what it was for). stop() always sends; that is what a stop tap means.
     cancel() {
       if (paused) { paused = false; held = []; onState('idle'); onStatus('', 'clear'); return; }
@@ -571,15 +571,15 @@ export function makeRecorder({ onStatus = () => {}, onState: paint = () => {}, q
 }
 
 // ---- always-on listening, on the phone -----------------------------------
-// THE OTHER SHAPE OF MICROPHONE. The FAB above is press/press: it records exactly what he chose to
-// record and ends when he says so, with nothing deciding on his behalf. This is what the Mac and the
+// THE OTHER SHAPE OF MICROPHONE. The FAB above is press/press: it records exactly what the user chose to
+// record and ends when the user says so, with nothing deciding on the user's behalf. This is what the Mac and the
 // ESP already do — the mic stays open, each utterance is cut at the silence after it and sent on its
-// own, and it keeps going until he turns it off.
+// own, and it keeps going until the user turns it off.
 //
 // THE RECORDER RUNS THE WHOLE TIME, and utterances are cut out of it rather than started by speech.
 // Starting a MediaRecorder when the VAD first hears something loses the onset of the word that
 // triggered it — the failure the Mac spent a long time on — so instead a segment is already running
-// before he speaks, ends at the silence, and the next one starts in the same tick. The silence
+// before the user speaks, ends at the silence, and the next one starts in the same tick. The silence
 // carried at the front of a clip costs nothing; a missing first syllable costs the command.
 //
 // Silence alone is never uploaded: a segment that never crossed the threshold is dropped, because
@@ -666,7 +666,7 @@ export function makeListener({ onStatus = () => {}, onState = () => {} } = {}) {
         const rms = Math.sqrt(acc / buf.length), now = performance.now();
         if (rms < floor) floor = rms;     // quietest frame so far — the gaps between words sit near it
         const thr = Math.max(floor * 2.5, 0.02);
-        // The window is the UTTERANCE, not the segment. A segment starts before he speaks (that is how
+        // The window is the UTTERANCE, not the segment. A segment starts before the user speaks (that is how
         // the onset is kept), so its own start would overlap the previous one and collapse two real
         // commands into one.
         if (rms >= thr) { if (!heard) { spokeAt = Date.now(); onState('hearing'); } heard = true; silence = 0; onStatus('Hearing you…', 'rec'); return; }
@@ -694,7 +694,7 @@ export function makeListener({ onStatus = () => {}, onState = () => {} } = {}) {
     try {
       if (vadT) { clearInterval(vadT); vadT = null; }
       if (actx) { try { actx.close(); } catch (_) {} actx = null; }
-      cut(send);                          // whatever he was mid-way through still counts
+      cut(send);                          // whatever the user was mid-way through still counts
       stream = null;
       if (claimed) { claimed = false; unclaimMic(); }   // this mode was holding it; let it close
     } finally {
@@ -1128,7 +1128,7 @@ function initCard() {
       ? local.map((u) => '<img src="' + u + '" alt="" loading=lazy>').join('')
       : atts.map((p) => '<img src="/api/attachment?path=' + encodeURIComponent(p) + '" alt="" loading=lazy>').join('');
     let inner = (local.length || atts.length) ? '<div class=ai-msg-imgs>' + imgs + '</div>' : '';
-    // A reply is markdown (`md`); his own words are shown as typed.
+    // A reply is markdown (`md`); the user's own words are shown as typed.
     if (t) inner += '<div class=ai-msg-text>' + (side === 'assistant' ? md(t) : esc(t).replace(/\n/g, '<br>')) + '</div>';
     else if (!local.length && !atts.length) inner += '<div class=ai-msg-text><span class=ai-caret>▍</span></div>';
     // Which worker answered (mac/pi/fly) — dimmed for the expected mac, so a fallback visually pops.

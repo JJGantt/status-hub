@@ -60,7 +60,7 @@ onHistoryLoaded(() => {
 // empty cells — which is exactly how it looked. Watched rather than pinned once: the cards rebuild
 // these grids on every frame and `paintScrolled` carries the position across, so a single pin at the
 // wrong moment (before the archive lands, before the columns have their width) is a wrong position
-// that then persists all day. It stops as soon as he has dragged one, at which point holding his
+// that then persists all day. It stops as soon as the user has dragged one, at which point holding the user's
 // place is what paintScrolled is for.
 const COLW = 13;   // one week: the 12px cell plus the 1px gap (phone-home.css --cell)
 const rails = () => [document.getElementById('nutheat'), document.getElementById('heatwrap'),
@@ -97,8 +97,8 @@ function watch(el) {
 
 // After a rebuild, back to the week they were on. The two maps keep their own element and
 // `paintScrolled` carries their position across, but the plot is replaced outright and would come
-// back at `now` while the maps stayed where he left them — which is the two of them showing
-// different months again, once a minute, without him touching anything.
+// back at `now` while the maps stayed where the user left them — which is the two of them showing
+// different months again, once a minute, without the user touching anything.
 function restore() {
   for (const el of rails()) el.scrollLeft = Math.max(0, maxOf(el) - (dragged ? weeksBack * COLW : 0));
 }
@@ -162,14 +162,14 @@ let thread = [];        // [{id, at, role, text, session, ctx}] oldest first —
 let older = [];         // the same, loaded by scrolling up past its start
 let olderDone = false, olderBusy = false;
 
-// Whether he has scrolled UP to read something. Held as a flag rather than measured at paint time:
+// Whether the user has scrolled UP to read something. Held as a flag rather than measured at paint time:
 // measuring the old content's scroll position just before replacing it wholesale is measuring the
 // wrong thing, and one early paint against an empty box left the thread parked mid-way and never
 // recovering. Our own scrollTop write fires this too, which is right — it lands at the bottom.
 let held = false;
 
 // WHAT HAS BEEN HEARD BUT IS NOT IN THE THREAD YET. The worker writes the user bubble only when the run
-// is over, so without this the box sat unchanged from the moment he spoke until the whole reply landed,
+// is over, so without this the box sat unchanged from the moment the user spoke until the whole reply landed,
 // and then both lines appeared together. `null` is nothing in flight; `{text:''}` is a clip being
 // transcribed, where the words are not known yet and the line is three dots; anything else is the
 // transcript, standing in for the row that will replace it.
@@ -203,9 +203,9 @@ onActivity((a) => {
   if (act) actT = setTimeout(() => { act = null; paintConv(); }, 5 * 60 * 1000);
   // PINNED ON THE FIRST FRAME ONLY. The box lands on the TOP of the last message, so with a long
   // reply above it the new line is below the fold and the one thing it exists to say is invisible —
-  // the run's first frame is therefore worth the jump, exactly as his own prompt landing is. Every
-  // frame after it repaints where he left it, so a line changing every few seconds cannot drag him
-  // back down while he is reading.
+  // the run's first frame is therefore worth the jump, exactly as the user's own prompt landing is. Every
+  // frame after it repaints where the user left it, so a line changing every few seconds cannot drag the user
+  // back down while the user is reading.
   paintConv(first && !!act);
 });
 function clearAct() { clearTimeout(actT); act = null; }
@@ -268,7 +268,7 @@ function paintConv(pin) {
   const rows = older.concat(thread);
   conv.innerHTML = rows.map((r, i) => {
     const said = r.role === 'assistant';
-    // NO `You` / `Hub` label. His own words are dim and the hub's are not, which already says which
+    // NO `You` / `Hub` label. The user's own words are dim and the hub's are not, which already says which
     // is which — a word in a gutter said it twice and took the gutter's width off every line.
     // A reply RELAYED FROM A SESSION keeps its name, because that is the one thing the colour cannot
     // carry: it is a machine reporting back, not the hub answering.
@@ -285,7 +285,7 @@ function paintConv(pin) {
       (pending.text ? md(pending.text) : '<span class=ph-dots><i></i><i></i><i></i></span>') +
       '</div></div>'
     : '') + (act
-    // The lowest line, under his words and above nothing: the caret says it is working and the step
+    // The lowest line, under the user's words and above nothing: the caret says it is working and the step
     // says what it is doing. Plain text, collapsed and clipped to the one line — a thought arrives as
     // markdown and this is not the surface that reads one.
     ? '<div class="ph-convline work"><div class="ph-convt"><span class="ph-caret">\u258d</span>' +
@@ -393,7 +393,7 @@ onThread((row) => { if (!row) { resync(); return; } takeRow(row); settle(row); p
 // phone's own size — so only the paging is left.
 const panes = document.getElementById('wallpanes');
 if (panes) {
-  // Land on home — or, after a reload, on the pane he was on: the page reloads itself when a deploy
+  // Land on home — or, after a reload, on the pane the user was on: the page reloads itself when a deploy
   // makes it stale, on the way back to visible, and a notification tap that has just opened a session
   // is exactly that moment (cards/repos.js keeps the session; this keeps the pane it is on). Unless
   // something has already asked for a pane: a tap on a cold launch can get there before this frame.

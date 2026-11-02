@@ -1,6 +1,6 @@
 'use strict';
 // The routes that decide who may act, beyond the gate: the Menu app's owner check on /api/cg/*, which
-// sits OUTSIDE the gate, and /api/notify, which pushes to Jared's phone and so wants the device token
+// sits OUTSIDE the gate, and /api/notify, which pushes to the user's phone and so wants the device token
 // itself rather than any signed-in caller.
 const { test, describe, before, after } = require('node:test');
 const assert = require('node:assert/strict');

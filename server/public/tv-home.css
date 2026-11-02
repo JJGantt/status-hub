@@ -71,7 +71,7 @@ body.tv .hw-daycard .cw-day.dial .cw-top{position:absolute;top:0;left:0;right:0;
 body.tv .hw-daycard .cw-day.dial .cw-dayhead{margin:0;display:flex;align-items:baseline}
 /* The task band at the far end of the date line: today's gain in green, the rate it is falling at in
    red beside it. It is one of the health bar's three bands, not the whole bar, so it sits with the
-   dated items it comes from. The gain is the larger of the two because it is the one he moves. */
+   dated items it comes from. The gain is the larger of the two because it is the one the user moves. */
 body.tv .hw-daycard .cw-day.dial .cw-band{margin-left:auto;padding-right:4px;display:flex;align-items:baseline;
   gap:7px;font-weight:800;font-variant-numeric:tabular-nums}
 body.tv .hw-daycard .cw-day.dial .cw-gain{color:#39d353;font-size:22px}
@@ -168,7 +168,7 @@ body.tv .hw-daycard .cw-day.dial .cw-dock .cw-dchip{opacity:.78}
 body.tv .hw-daycard .cw-day.dial .cw-dock .cw-dkrow.allday .cw-dchip{opacity:1}
 /* OVERDUE ROWS are dock rows, above the date. The same shape for the same reason — an item leaving
    the dial keeps its gutter and its half-width chip — and no dimming, because nothing about these is
-   not live yet: they are costing him now. The rule under them is the dock's, turned over, and says
+   not live yet: they are costing the user now. The rule under them is the dock's, turned over, and says
    the same thing: this is not the dial. */
 body.tv .hw-daycard .cw-day.dial .cw-overdue{display:flex;flex-direction:column;gap:2px;
   border-bottom:1px solid #313d4a;padding-bottom:4px;margin-bottom:4px}
@@ -202,7 +202,7 @@ body.tv .hw-daycard .cw-day.dial{position:relative}
 body.tv .hw-daycard .cw-day.dial .cw-hours{position:relative}
 
 /* ===== COL 3 — THE LOOK-AHEAD: the six days after today, a box each =====================
-   The dial's grammar does not extend here. Today is a timeline because he is inside it and the
+   The dial's grammar does not extend here. Today is a timeline because the user is inside it and the
    question is how much of it is left; a day at a remove is a LIST, because the question is only
    what is on it. Hour rows for Thursday would spend the whole box drawing empty hours.
 

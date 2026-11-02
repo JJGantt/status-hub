@@ -22,7 +22,7 @@ const hostFor = (env) => (String(env).toLowerCase() === 'production'
   ? 'https://api.push.apple.com' : 'https://api.sandbox.push.apple.com');
 const HOST = hostFor(ENV);
 
-// Jared's APNs auth keys are ENVIRONMENT-SCOPED (a sandbox key can't authenticate a production push and
+// The APNs auth keys are ENVIRONMENT-SCOPED (a sandbox key can't authenticate a production push and
 // vice-versa — sending the sandbox key to api.push.apple.com yields 403 BadEnvironmentKeyInToken). So we
 // hold BOTH keys and pick the one matching each token's environment. The *_PRODUCTION vars are optional;
 // without them, production tokens fall back to the default key (and will 403 if it's the sandbox key).

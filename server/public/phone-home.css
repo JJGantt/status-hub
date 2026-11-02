@@ -29,7 +29,7 @@ body.tv.phonehome .tv-shell{position:static;transform:none;width:auto;height:100
    under it. `overflow:hidden` clips at the PADDING box, not the content box — so the moment the
    blocks inside added up to more than the space, the last of them rendered down into that padding
    and out under the bar. Taking the height instead means there is nowhere for it to go.
-   The safe-area inset is the home indicator on his phone, which the navbar sits over. */
+   The safe-area inset is the home indicator on the user's phone, which the navbar sits over. */
 body.tv.phonehome .rows{display:flex;flex-direction:column;gap:6px;min-height:0;overflow:hidden;
   height:calc(100% - 62px - env(safe-area-inset-bottom, 0px));padding:6px 10px 0}
 body.tv.phonehome .row-card{display:flex;gap:8px;flex:0 0 auto;min-height:0}
@@ -267,7 +267,7 @@ body.tv.phonehome .ph-list .dex-macros{gap:6px}
    has room for about two; the order never changes, so `396/19/77/1` is the same reading in a third
    of the width. cards/nutritionlog.js puts each unit in its own element so this can drop them.
    The caret and the time go with them: every row expands, so the caret says nothing a tap does not,
-   and the time is the one thing on the row he says he never reads. */
+   and the time is the one thing on the row that is not read. */
 body.tv.phonehome .ph-list .du,body.tv.phonehome .ph-list .dex-caret,
 body.tv.phonehome .ph-list .dex-time{display:none}
 body.tv.phonehome .ph-list .dex-macros .dset + .dset::before{content:'/';color:#4a545f;margin:0 2px}
@@ -485,11 +485,11 @@ body.tv.phonehome .ph-convcard{flex:1 1 auto;min-width:0;display:flex;min-height
 body.tv.phonehome .ph-conv{flex:1 1 auto;min-width:0;min-height:0;overflow-y:auto;
   -webkit-overflow-scrolling:touch;display:flex;flex-direction:column;gap:3px}
 body.tv.phonehome .ph-conv::-webkit-scrollbar{display:none}
-/* A message is a BLOCK, not a labelled row. His own words are dim, right and hugging their content;
+/* A message is a BLOCK, not a labelled row. The user's own words are dim, right and hugging their content;
    the hub's are bright and take the width — so the SIDE says who is speaking before the colour does,
    and a thread of short commands and long replies reads as two columns. A `You` / `Hub` in a gutter
    said the same thing a third time and took the gutter's width off every line of every message.
-   The text inside a right-hugged block stays left-aligned: his prompts are not always one line, and
+   The text inside a right-hugged block stays left-aligned: the user's prompts are not always one line, and
    the ragged left edge of a right-aligned paragraph is what that would cost. */
 body.tv.phonehome .ph-convline{display:block;min-width:0;padding:1px 0}
 body.tv.phonehome .ph-convrule{align-self:stretch;flex:none;border-top:1px solid #2a3340;margin:4px 0}   /* where one context (a day, or a reset) ends and the next begins */
@@ -554,7 +554,7 @@ body.tv.phonehome .ph-chat .ai-status{position:absolute;left:0;right:0;bottom:10
 body.tv.phonehome .ph-chat .ai-status:empty{display:none}
 /* 16px on the input is not a style choice: iOS Safari zooms the page on focus below it. */
 
-/* A command that has been heard but is not in the thread yet — dimmer than his own lines, because it
+/* A command that has been heard but is not in the thread yet — dimmer than the user's own lines, because it
    is not a row yet, and the only thing on the page that moves. */
 body.tv.phonehome .ph-convline.pend .ph-convt{color:#6b7684}
 body.tv.phonehome .ph-dots{display:inline-flex;gap:3px;align-items:center;height:11px}

@@ -33,7 +33,7 @@ let builtAt = null, stale = false;
 // Two moments, because the first is not reliable on a phone. Going HIDDEN is the invisible one, and
 // it is tried first — but JS is suspended shortly after backgrounding and the navigation may never
 // finish. Coming back VISIBLE is the one that always runs, and it is the least-bad time to
-// interrupt: he has just arrived and has typed nothing.
+// interrupt: the user has just arrived and has typed nothing.
 //
 // A wall is never hidden, so it reloads at once, which is what a wall wants.
 // A PHONE THAT NEVER GOES HIDDEN is the third case, and it holds the old bundle forever: a screen
@@ -78,7 +78,7 @@ function render(s){
  // an afternoon on replaced code, and how a bug fixed twice looks unfixed. The first commit seen is
  // this page's build; a different one means the server has moved.
  //
- // Reloaded when the page is next HIDDEN, never under his hands: a surface that reloads mid-sentence
+ // Reloaded when the page is next HIDDEN, never under the user's hands: a surface that reloads mid-sentence
  // is worse than one a few minutes old. A wall is never hidden, so it takes the reload at once —
  // which is what a wall wants, since nobody is typing into it.
  if(s.commit){

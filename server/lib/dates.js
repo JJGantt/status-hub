@@ -1,8 +1,8 @@
 'use strict';
 // Date helpers in the display timezone, shared by server.js and the builder modules.
 //
-// The zone is MUTABLE and follows Jared, because "4pm" means 4pm wherever he actually is — a
-// reminder set for 4pm should not fire at 1pm because he flew west. The phone reports its IANA zone
+// The zone is MUTABLE and follows the user, because "4pm" means 4pm wherever the user actually is — a
+// reminder set for 4pm should not fire at 1pm after a flight west. The phone reports its IANA zone
 // when it registers for push; the hub persists it in app_settings.display_tz and calls setTZ().
 // Everything time-shaped reads through here, so one value moves reminder firing, the overdue badge,
 // the weight-reminder time and the 4am day boundary together.

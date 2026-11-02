@@ -26,7 +26,7 @@ esbuild.build({
   outdir: OUT,
   bundle: true,
   format: 'esm',
-  target: 'safari16',        // the floor is his phone and the Pi's kiosk browser
+  target: 'safari16',        // the floor is the user's phone and the Pi's kiosk browser
   minify: true,
   sourcemap: true,           // the minified frame in a console error still names the real file and line
   logLevel: 'info',

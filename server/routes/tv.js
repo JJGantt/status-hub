@@ -12,7 +12,7 @@ module.exports = function (ctx) {
   // returns it. The app authenticates with the hub's device token, like the kiosk.
   const tvClients = new Set();
   // A command older than this is not replayed to a TV that connects late: "volume up" an hour after it
-  // was said is not what he asked for. Long enough to cover a wake: the Pi's Wake-on-LAN, the screen
+  // was said is not what the user asked for. Long enough to cover a wake: the Pi's Wake-on-LAN, the screen
   // coming on, and the app's link reconnecting (google-tv docs/POWER.md).
   const TV_REPLAY_MS = 60 * 1000;
   // Ops that make sense to wake the TV for. While it is off the app is not connected, so these are held

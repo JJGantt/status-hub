@@ -35,7 +35,7 @@ const STAGED = '#22d3ee';
 const SCALE = 0.4; // devNorm magnitude that saturates the color (matches lib/pace.js)
 const underColor = (dn) => hslToHex(120 * (1 - Math.max(0, Math.min(1, -dn / SCALE))), 0.75, 0.5); // green→red as you fall behind
 const overColor = (dn) => hslToHex(45 - 20 * Math.max(0, Math.min(1, dn / SCALE)), 0.9, 0.5);       // amber→orange when ahead
-// minutes since 4am in the browser's clock (the eating window is in NY; Jared's devices are NY)
+// minutes since 4am in the browser's clock (the eating window is in NY; the user's devices are NY)
 function nowOffsetMin() { const d = new Date(); return (((d.getHours() - 4) * 60 + d.getMinutes() + d.getSeconds() / 60) + 1440) % 1440; }
 
 export function render() { paint(); }

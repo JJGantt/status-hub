@@ -125,7 +125,7 @@ function tickRest(){
 // Stepped rather than solved for: the padding either side of a set does not scale with the glyphs
 // exactly, so the ratio of widths is not the ratio of sizes.
 // The wall's short forms, for names long enough to crowd the muscle counts off the row beside them.
-// Jared's words — an entry here is one he asked for, not one this file invented. Everything else
+// the user's words — an entry here is one the user asked for, not one this file invented. Everything else
 // draws its full name, and a long one that is not listed is handled by the name fit instead.
 const EX_SHORT={ 'Romanian Deadlifts':'RDL' };
 

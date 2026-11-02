@@ -313,7 +313,7 @@ function paintEdges(col) {
   }
   dkRow = dkRow || chipFull;
   // An overdue row is a full chip. It has no row it is about to become, and it is something costing
-  // him right now, so it is drawn at the size a chip wants rather than the smallest that still reads.
+  // the user right now, so it is drawn at the size a chip wants rather than the smallest that still reads.
   const ovRow = chipFull;
   const top = col.el.querySelector('.cw-top');
 

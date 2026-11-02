@@ -6,7 +6,7 @@
 // which is the CURRENT context of the voice thread (/api/voice-messages?mode=active, the watch's view).
 //
 // It shows the FOCUSED session (pickFocus in server.js): where a spoken follow-up goes, so it follows
-// whatever he is working in. The `sessions` frame on the stream carries focus, so a change moves it.
+// whatever the user is working in. The `sessions` frame on the stream carries focus, so a change moves it.
 // Its own small renderer rather than cards/repos.js, which carries a composer, a recorder and a list.
 import { esc, md, liveStream } from '../shared.js';
 
@@ -194,7 +194,7 @@ async function loadVoice() {
   if (voAgain) { voAgain = false; loadVoice(); }
 }
 
-// His words are drawn from the request the moment it is created (`request` frames, /api/voice-pending)
+// The user's words are drawn from the request the moment it is created (`request` frames, /api/voice-pending)
 // and handed over to the conversation row once that exists, which is only when the answer lands.
 let voRows = [];
 let voTool = null;   // the orchestrator's tool call in progress, from `activity` frames

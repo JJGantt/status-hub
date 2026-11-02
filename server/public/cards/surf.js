@@ -192,7 +192,7 @@ function paintGrids(cv, ax, viewW) {
   // by which side of noon it falls on inside a week box, and the second guide was only bracketing a
   // band the eye already had. Bright enough to be found at couch distance without hunting: it is the
   // only horizontal reference left on the grids, so it carries the whole hour axis on its own.
-  // An alpha rather than a half-pixel width, which would be a thin bright line on his phone at
+  // An alpha rather than a half-pixel width, which would be a thin bright line on the user's phone at
   // devicePixelRatio 3 and a dim one on the 1080p kiosk, i.e. a different mark per surface.
   // Three levels, and the hierarchy is the point: noon is the axis, the two sixes bracket the
   // daylight either side of it, and each is dimmer than the mark above it in importance — now (solid

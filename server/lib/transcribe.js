@@ -125,16 +125,15 @@ async function transcribeAll(file, contentType, key, prompt, model) {
 }
 
 
-// SHORTENING THE LONG PAUSES IN A LOCKED WATCH RECORDING. A locked recording is held open while he does
-// something else — pours cereal, goes to the fridge — so it can hold minutes of no speech. Whisper fills a
+// SHORTENING THE LONG PAUSES IN A LOCKED WATCH RECORDING. A locked recording is held open while the user does
+// something else, so it can hold minutes of no speech. Whisper fills a
 // long stretch like that with invented words ("Thank you." over and over, or a stranger's sentence), so
 // those stretches are cut down before transcription.
 //
 // Only LONG pauses, and never down to nothing: a pause over QUIET_LONGER_S keeps QUIET_KEEP_S at each edge.
 // Whisper reads pauses as sentence breaks, and cutting close to speech merges sentences and drops the words
-// either side of the cut. On his 27s cereal command, gaps over 1.5s shrunk to 1s turned "I'm adding no fat
-// milk to the bowl. The total is going to be 615 grams." into "No fat milk is going to be 615 grams.";
-// gaps over 6s shrunk to 4s came back word for word.
+// either side of the cut. On a measured 27s command, gaps over 1.5s shrunk
+// to 1s merged two sentences into one wrong one; gaps over 6s shrunk to 4s came back word for word.
 //
 // `quiet` is the watch's own speech classifier's verdict: [[start, end], …] in seconds of the file.
 // → { file, cut, gaps } — a shortened 16 kHz WAV, the seconds removed and how many pauses — or null when nothing was long enough to cut.

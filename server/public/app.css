@@ -170,11 +170,11 @@ body.tv .sectsheet .hcell{width:17px!important;height:17px!important;max-width:n
 body.ss-open #bodyinfo,body.touch.ss-open #bodyinfo,body.tv.phonewall.ss-open #bodyinfo{z-index:2100}
 /* Pictures queued for the next message in a session. Thumbnails while they upload (dimmed until the
    hub has the bytes), each removable, and the row collapses to nothing when empty. */
-/* Sent, and the model has not read it yet. His words, dimmed and held below the caret — the same
+/* Sent, and the model has not read it yet. The user's words, dimmed and held below the caret — the same
    block it will become once it is taken, so nothing jumps when it moves into the stream. */
 .sv-queued{opacity:.5;border-left:2px solid #3a4452;padding-left:8px}
-/* Pictures he attached, in his own words' block. The line naming local files is what the SESSION
-   needs; what he needs is the picture he sent. */
+/* Pictures the user attached, in the user's own words' block. The line naming local files is what the SESSION
+   needs; what the user needs is the picture that was sent. */
 .sv-said-shots{display:flex;flex-wrap:wrap;gap:6px;margin:2px 0 6px}
 .sv-said-shots img{max-width:120px;max-height:120px;border-radius:8px;border:1px solid #222a33;display:block}
 .sv-tray{display:flex;flex-wrap:wrap;gap:6px;padding:0 2px}
@@ -673,7 +673,7 @@ body.tv.phonewall .pane-repos.sv-open #repospane{flex:1 1 auto;min-height:0;disp
 .sv-body>.sv-turn{display:flex;flex-direction:column;gap:12px;white-space:normal}
 .sv-turn+.sv-turn{border-top:1px solid #222a33;padding-top:12px}
 .sv-body a{color:#5b8def;text-decoration:underline;text-underline-offset:2px}
-/* His words in the chat's colour for them; the reply is the thing being read, so it is the brightest. */
+/* The user's words in the chat's colour for them; the reply is the thing being read, so it is the brightest. */
 .sv-words{font-size:14px;line-height:1.45;color:#6ea8ff}
 .sv-reply{font-size:15px;line-height:1.5;color:#d5dbe3}
 .sv-thought{font-size:13.5px;line-height:1.45;color:#9aa5b3}
@@ -1358,7 +1358,7 @@ body.tv.phonewall .pane-todo .daycardwrap{padding:12px 14px 14px;flex:0 0 auto}
 .navbar .wfab-listen { width: 46px; height: 46px; position: relative; }
 /* THREE STATES, ALL IN THE BUTTON. Nothing else on screen says any of this, and the difference that
    matters most is "still open" vs "off" — so `on` holds through all three and only the manner
-   changes. Bars at rest, bars moving while he talks, a turning ring while the clip goes up. */
+   changes. Bars at rest, bars moving while the user talks, a turning ring while the clip goes up. */
 .navbar .wfab-listen.on { color: #ff453a; border-color: #ff453a; }
 .navbar .wfab-listen.on::after {
   content: ''; position: absolute; inset: -3px;
@@ -1372,7 +1372,7 @@ body.tv.phonewall .pane-todo .daycardwrap{padding:12px 14px 14px;flex:0 0 auto}
 .navbar .wfab-listen svg line { transform-origin: center; transition: transform .15s ease; }
 .navbar .wfab-listen.on svg line { transform: scaleY(.4); }
 
-/* Hearing him: a level meter. Staggered so it reads as sound rather than a blink. */
+/* Hearing the user: a level meter. Staggered so it reads as sound rather than a blink. */
 .navbar .wfab-listen.hearing { background: #ff453a; color: #fff; border-color: #ff453a; }
 .navbar .wfab-listen.hearing svg line { animation: eqbar .55s ease-in-out infinite; }
 .navbar .wfab-listen.hearing svg line:nth-of-type(1) { animation-delay: -.40s; }

@@ -18,7 +18,7 @@ module.exports = function (ctx) {
   // req.ip is the proxy), in memory: a restart clears them, which is fine for a limit whose job is to
   // make guessing slow. LOGIN_MAX_PER_IP failures inside LOGIN_WINDOW_MS lock that IP out until the
   // window's oldest counted failure ages out. There is deliberately no all-clients cap: anyone could trip
-  // one on purpose and lock Jared out of new logins, and against a strong password the per-IP limit is
+  // one on purpose and lock the user out of new logins, and against a strong password the per-IP limit is
   // enough.
   // Signed-in devices are unaffected: they hold the cookie and never post to /login.
   const LOGIN_WINDOW_MS = 15 * 60 * 1000;

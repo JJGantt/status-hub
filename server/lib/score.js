@@ -35,15 +35,15 @@
 //   linearly to nothing over the same seven days the other two bands look back over, so a hit's SIZE
 //   decides how long it is felt — no separate recovery rule.
 //
-//   Only COMPLETING scores. Deleting an item is worth nothing in either direction — it is a thing he
-//   decided not to do, not a thing he failed at — so calling off a whole series costs nothing and
+//   Only COMPLETING scores. Deleting an item is worth nothing in either direction — it is a thing the user
+//   decided not to do, not a thing the user failed at — so calling off a whole series costs nothing and
 //   needs no special case. The two are different verbs precisely so that neither has to be guessed
 //   at from the clock. DELETING IS THEREFORE THE HONEST WAY OUT of something overdue: it stops the
 //   charge without pretending the thing was done, where completing it stops the charge and keeps
 //   every hour already billed.
 //
 //   EXEMPT items (priority < 0) are invisible to all of this. A work shift or an appointment happens
-//   at a time but owes nothing, so there is nothing to earn for "completing" one and penalising him
+//   at a time but owes nothing, so there is nothing to earn for "completing" one and penalising the user
 //   for not ticking one off is worse than useless. They are skipped on both sides — no credit, no
 //   drain — which is why this is a branch rather than a zero multiplier: a multiplier of zero would
 //   still let them count as overdue.
@@ -96,7 +96,7 @@ const POINT = TASK_FULL_UNITS / 100;                               // one displa
 // scored, so the integer on the chip is the credit itself rather than a rendering of a number next
 // to it. A chip reading "+7" while 7.14 lands is a small lie that compounds — seven of them and the
 // bar is a point away from where the chips said it would be — and it makes the POTENTIAL chip
-// unactionable, since "do it now for +5" would move while he was reading it. Quantised, the 5 is a
+// unactionable, since "do it now for +5" would move while the user was reading it. Quantised, the 5 is a
 // plateau: completing anywhere inside the stretch of lateness that rounds to 5 pays exactly 5.
 const toPoints = (units) => Math.round(units / POINT) * POINT;
 
@@ -157,7 +157,7 @@ function nutritionScore(days) {
 //
 // Naive local wall-clock strings throughout ('YYYY-MM-DD' or 'YYYY-MM-DDTHH:MM[:SS]'), parsed as if
 // UTC so differences are exact wall-clock arithmetic with no DST step. What matters here is how late
-// the CLOCK said something was, which is what he experienced.
+// the CLOCK said something was, which is what the user experienced.
 const MIN = 60000, HOUR = 3600000, DAY = 86400000;
 function naive(s) {
   const m = /^(\d{4})-(\d{2})-(\d{2})(?:[T ](\d{2}):(\d{2})(?::(\d{2}))?)?/.exec(String(s || ''));
@@ -204,7 +204,7 @@ const STAMP_SKEW_MS = 2 * MIN;
  * has to be able to say so, and what it says has to be checked before it reaches the column.
  *
  * TIMEZONE. `completed_at` is compared against `due` as naive wall-clock arithmetic — that is what
- * makes a lateness one he actually experienced rather than one an offset invented — so a stamp
+ * makes a lateness one the user actually experienced rather than one an offset invented — so a stamp
  * carrying a `Z` or a `+HH:MM` is rejected rather than converted. This module never learns a
  * timezone, so converting here would be guessing at an offset, and guessing is precisely how a
  * completion lands an hour from the deadline it is scored against.

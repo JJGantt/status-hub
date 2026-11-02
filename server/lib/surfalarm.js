@@ -66,7 +66,7 @@ function makeOutputs({ sb, sbWrite, uuid }) {
         const id = state && state.id;
         if (id) {
           const [cur] = await sb(`list_items?id=eq.${id}&select=id,due,deleted,completed_at`);
-          // Deleted or completed by anyone but this output means he dealt with it, and it is not put
+          // Deleted or completed by anyone but this output means the user dealt with it, and it is not put
           // back. This output forgets an item only when it deletes one itself.
           if (!cur || cur.deleted || cur.completed_at) return state;
           // A moment that has arrived has rung, or is ringing: a later forecast does not move it.

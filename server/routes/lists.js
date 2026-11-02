@@ -264,7 +264,7 @@ module.exports = function (ctx) {
   // The overdue figure is the item's OWN accrued cost at its rate, which is what the bar moves by too
   // unless the band has bottomed out — an hour that would take the level below zero is never charged,
   // so at zero the figure keeps climbing while the bar cannot fall. An item pinning the band at zero
-  // is still costing him everything he earns, so its own rate stays the truer statement of what it is
+  // is still costing the user everything earned, so its own rate stays the truer statement of what it is
   // doing.
   function chipScore(item, nowLocal, state) {
     const mult = 1 + Math.max(0, Number(item.priority) || 0);
@@ -464,9 +464,9 @@ module.exports = function (ctx) {
         time: calTimeLabel(occ),
         // `past`: this occurrence's moment has gone by (dims the chip) — for an all-day item that is the
         // end of its day, not the 9am it notified at. `expired`: it is overdue and uncleared, which is
-        // also what is draining his score for as long as it stays that way.
+        // also what is draining the user's score for as long as it stays that way.
         past: lateMoment(occ) <= nowET,
-        // `done` means he finished a task. An exempt item closes itself when its moment passes,
+        // `done` means the user finished a task. An exempt item closes itself when its moment passes,
         // which is not the same thing and must not read as an achievement — it just becomes past.
         done: !!r.completed_at && (r.priority || 0) >= 0,
         exempt: (r.priority || 0) < 0,

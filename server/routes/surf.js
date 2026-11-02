@@ -200,7 +200,7 @@ module.exports = function (ctx) {
   // RUNS: 51F in February to 88F in July, measured (station MYPF1 in `water_readings`). A generic
   // wetsuit chart is the wrong scale here even though its thresholds are real — it spends most of its
   // range below 70F, which is January and February on this coast, and saturates by the mid 80s, so
-  // May through September, the whole season he is in the water, comes out one flat colour. Anchored
+  // May through September, the whole surf season, comes out one flat colour. Anchored
   // on the local span instead, half the ramp falls in the 70s and 80s and a few degrees there show.
   //
   // Interpolated between the stops rather than stepped. NO GREEN anywhere in it and nothing that
@@ -418,7 +418,7 @@ module.exports = function (ctx) {
       });
     // WHERE NOW IS, from the BREAK's clock and not the watch's: the watch can be in another timezone
     // and its `Calendar.current` is the phone's, so a spoke placed there lands on the wrong hour the
-    // moment he travels. The watch always opens on days[0], which is today.
+    // moment the user travels. The watch always opens on days[0], which is today.
     const nowH = +nowLocal.slice(11, 13) + +nowLocal.slice(14, 16) / 60;
     applyCorrection(days, wind, Math.floor(nowH));
     return { surf: buildSurf(snap), wind, sea, buoys: liveBuoy.view(), hours, water, days,

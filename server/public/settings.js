@@ -104,7 +104,7 @@ export async function open() {
         '<input class="settings-num" type="number" min="1" max="30" step="0.5" inputmode="decimal" ' +
         'data-key="watch_quick_s" value="' + sil('watch_quick_s', 5) + '"></label>' +
 
-      // What counts as his voice on the watch (Capture.swift `Endpointer`): a FIXED lowest level, a
+      // What counts as the user's voice on the watch (Capture.swift `Endpointer`): a FIXED lowest level, a
       // line that follows the ROOM, so many times its quietest level, or VOICE — Apple's on-device sound
       // classifier (`VoiceDetector`), where only speech counts and a snap or a door does not.
       '<div class="settings-sec">Watch: speech line</div>' +

@@ -21,7 +21,7 @@
 // credential answers 503 rather than 401, so a deploy never bounces a signed-in page to /login.
 const crypto = require('crypto');
 
-const COOKIE_MAX_AGE = 60 * 60 * 24 * 3650;   // ten years: he does not want to sign in again
+const COOKIE_MAX_AGE = 60 * 60 * 24 * 3650;   // ten years: signing in is meant to be one-time
 
 const sha256 = (s) => crypto.createHash('sha256').update(String(s)).digest();
 const sha256hex = (s) => crypto.createHash('sha256').update(String(s)).digest('hex');

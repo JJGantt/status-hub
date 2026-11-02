@@ -17,7 +17,7 @@ const REFRESH_MS = 5 * 60 * 1000;
 
 /**
  * Which session the panel opens: the FOCUSED one — the session a spoken follow-up lands in, which is
- * the most recently active unless he pinned one — so what the surface is showing and what he is about
+ * the most recently active unless the user pinned one — so what the surface is showing and what the user is about
  * to talk to are the same session.
  *
  * `focus` is null only while a dispatch is still opening or when nothing is running; then it falls
@@ -28,7 +28,7 @@ const REFRESH_MS = 5 * 60 * 1000;
 const shown = (d) => (d.resident || []).find((s) => s.id === d.focus) || (d.resident || [])[0]
   || (d.evicted || [])[0] || null;
 
-// Running first, then parked, most recently active first within each — `n` is the number he says out
+// Running first, then parked, most recently active first within each — `n` is the number the user says out
 // loud, worked out by the server so every surface counts the same way. Ordering the list by it means
 // "the second session" points at the second line.
 const listed = (d, max) => [...(d.resident || []), ...(d.evicted || [])]

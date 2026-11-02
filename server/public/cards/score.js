@@ -7,7 +7,7 @@
 //
 // The gold band is earned by clearing dated list items and drained by leaving them overdue, and it
 // starts EMPTY — nothing scheduled means no gold, which is the incentive it exists to create. It is
-// also the only band that can fall on its own, with no input from him, as something sits unactioned.
+// also the only band that can fall on its own, with no input from the user, as something sits unactioned.
 //
 // Gamified floating delta: when the overall moves (you log food / a set / check something off), a
 // transient "+1.3" / "−0.8" floats up off the bar at the fill line, so a change is felt, not just

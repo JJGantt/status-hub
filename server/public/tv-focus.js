@@ -1,7 +1,7 @@
 // The session wall: which sessions are running, and what the focused one last said.
 //
 // It draws NOTHING of its own. `cards/sessions.js` is the one module every surface that shows sessions
-// uses — the home wall, the phone's home page and this — because the numbering is what Jared says out
+// uses — the home wall, the phone's home page and this — because the numbering is what the user says out
 // loud ("focus the second session"), and two copies of that ordering are two surfaces that can
 // disagree about which session "the second one" is. The same module is also why the pin, the unread
 // mark and the live activity line arrive here without this file knowing they exist.

@@ -1025,7 +1025,7 @@ function startRealtime() {
         seen(); dirtyRows('list_items'); pushLists(); broadcast();
         // A dated item added, snoozed, completed or cleared changes both when the next thing is due
         // and what the icon should read. Pushing the badge here is what lets its own poll be a
-        // backstop instead of the mechanism that keeps a cleared task from lingering on his phone.
+        // backstop instead of the mechanism that keeps a cleared task from lingering on the user's phone.
         dirtyDue();
         syncBadge().catch((e) => console.error('[badge] error', e.message));
       })
@@ -1047,7 +1047,7 @@ function startRealtime() {
         seen();
         if (!p.new) return;
         if (p.eventType === 'UPDATE') settleReply(p.new);
-        // His words the moment they exist: the worker writes his voice_messages row only beside the
+        // The user's words the moment they exist: the worker writes the user's voice_messages row only beside the
         // answer, which can be half a minute later. The TV sidebar shows them from this.
         const r = requestView(p.new);
         if (r) pushVoice('request', r);
@@ -1317,7 +1317,7 @@ gated.get('/api/voice-messages', async (req, res) => {
     // Mode filter — legacy rows (mode NULL) predate the split and count as 'hub'.
     const modeFilter = mode === 'agent' ? '&mode=eq.agent' : '&or=(mode.is.null,mode.eq.hub)';
     // ?before=<iso> pages further back: the rows older than that moment (the conversation box loads
-    // the previous stretch this way as he scrolls up past the start of the current one).
+    // the previous stretch this way as the user scrolls up past the start of the current one).
     const beforeMs = Date.parse(String(req.query.before || ''));
     const before = Number.isFinite(beforeMs) ? `&created_at=lt.${encodeURIComponent(new Date(beforeMs).toISOString())}` : '';
     // One row past the limit, so the first row returned can be judged against the one before it.
@@ -1331,7 +1331,7 @@ gated.get('/api/voice-messages', async (req, res) => {
       return !!prev && opensContext(Date.parse(prev.created_at), Date.parse(r.created_at), mode, s);
     });
     // ?history=1 (the conversation card) → every row, the first of each context flagged so the card can
-    // draw a divider there. Older contexts are the record of what he said and what came of it; hiding
+    // draw a divider there. Older contexts are the record of what the user said and what came of it; hiding
     // them made a failed command look like it had never been sent.
     if (String(req.query.history || '') === '1') {
       res.json(rows.map((r, i) => (breaks[i] ? { ...r, ctx_break: true } : r)));
@@ -1361,7 +1361,7 @@ gated.get('/api/voice-messages', async (req, res) => {
 });
 
 // A request as the TV sidebar draws it before its voice_messages row exists; null for one that is not
-// his words to the hub conversation (another focus, the reset sentinel) or has no transcript yet.
+// the user's words to the hub conversation (another focus, the reset sentinel) or has no transcript yet.
 function requestView(r) {
   if ((r.focus || 'hub') !== 'hub' || !r.transcript || r.transcript === VOICE_RESET_SENTINEL) return null;
   return { id: r.id, text: r.transcript, status: r.status, created_at: r.created_at };
@@ -1405,11 +1405,11 @@ function markSeen(msgId, requestId = null) {
 // There is NO size or length limit on a command. The body streams to a temp file rather than into
 // memory (a long uncompressed phone clip would not fit in this 256 MB machine), and lib/transcribe.js
 // re-encodes and splits anything too big for Groq. The file is deleted as soon as the request ends.
-// Where Jared was when he spoke, if the device sent it: numbers from the watch's or the browser's
+// Where the user was when speaking, if the device sent it: numbers from the watch's or the browser's
 // location fix, and a place name only when the device produced one itself. Nothing here looks a
-// position up, so a command never sends his location to a third party. It is stored on the request
+// position up, so a command never sends the user's location to a third party. It is stored on the request
 // row, and a trigger there keeps `locations` current (data-layer 00129), which a model reads through
-// `get_location` only when a request depends on where he is.
+// `get_location` only when a request depends on where the user is.
 function parseLocation(src) {
   const lat = parseFloat(src && src.lat), lon = parseFloat(src && src.lon);
   if (!Number.isFinite(lat) || !Number.isFinite(lon) || Math.abs(lat) > 90 || Math.abs(lon) > 180) return null;
@@ -1650,9 +1650,9 @@ async function dueTick() {
   syncBadge().catch((e) => console.error('[badge] error', e.message));
 }
 
-// Exempt items close themselves once their moment has gone. A shift is not something he finishes;
-// it is something that happens and is then over, and leaving it on the list would make him tidy up
-// after his own calendar. Uses the SCORING deadline rather than the firing time, so an all-day
+// Exempt items close themselves once their moment has gone. A shift is not something the user finishes;
+// it is something that happens and is then over, and leaving it on the list would make the user tidy up
+// after the user's own calendar. Uses the SCORING deadline rather than the firing time, so an all-day
 // exempt item closes at the end of its day instead of at 9am when it notified.
 // Takes the rows `dueTick` has already read rather than reading them again: that query was this same
 // open-dated-item set filtered to `priority=lt.0`, and the caller's rows carry `priority` already.

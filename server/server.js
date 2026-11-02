@@ -1717,8 +1717,17 @@ function getCookie(req, name) {
 // length nor the position of the first differing byte shows up in the response time.
 const sha256 = (s) => crypto.createHash('sha256').update(String(s)).digest();
 const safeEqual = (a, b) => crypto.timingSafeEqual(sha256(a), sha256(b));
+// A token in a header: `X-Hub-Token: <token>` or `Authorization: Bearer <token>`.
+function headerToken(req) {
+  const x = req.headers['x-hub-token'];
+  if (x) return String(x);
+  const m = /^Bearer\s+(.+)$/i.exec(String(req.headers.authorization || ''));
+  return m ? m[1].trim() : '';
+}
+// The kiosk/device token (TV_TOKEN), from a header. Every machine client sends it this way.
+const deviceHeader = (req) => !!TV_TOKEN && safeEqual(headerToken(req), TV_TOKEN);
 const authed = (req) => safeEqual(getCookie(req, 'hub') || '', TOKEN)
-  || safeEqual(req.headers['x-hub-token'] || '', TOKEN);
+  || safeEqual(headerToken(req), TOKEN) || deviceHeader(req);
 
 // LOGIN LOCKOUT. Wrong passwords are counted per client IP (Fly-Client-IP, which Fly's edge sets;
 // req.ip is the proxy), in memory: a restart clears them, which is fine for a limit whose job is to
@@ -4327,7 +4336,7 @@ async function pushAll(kind, title, body, dedupe_key, extra = {}) {
 }
 
 app.post('/api/notify', express.json(), async (req, res) => {
-  if (TV_TOKEN && !safeEqual(req.query.token || '', TV_TOKEN)) return res.status(403).json({ error: 'forbidden' });
+  if (TV_TOKEN && !deviceHeader(req) && !safeEqual(req.query.token || '', TV_TOKEN)) return res.status(403).json({ error: 'forbidden' });
   const b = req.body || {};
   const title = String(b.title || 'Hub').slice(0, 100);
   const body = String(b.body || '').trim().slice(0, 300);

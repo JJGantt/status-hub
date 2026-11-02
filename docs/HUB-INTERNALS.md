@@ -655,8 +655,9 @@ Supabase `cg_orders`, which has no anon policy. A `POST /api/cg/orders` whose `i
 uses is `cg_orders_model_first` / `cg_orders_model_second` (§7).
 
 **Auth:** the hub password → `sha256("status-hub:"+password)`; sent as the `hub` cookie (web) or the
-`X-Hub-Token` header (native app). The kiosk authenticates via `?token=<TV_TOKEN>` (also seeds the
-cookie). Every comparison is constant-time (`safeEqual`). The server refuses to start without
+`X-Hub-Token` header (native app). The kiosk/device token `TV_TOKEN` is accepted in the same header
+(or `Authorization: Bearer`), which is how machine clients send it; `?token=<TV_TOKEN>` still works
+(and seeds the cookie) for clients not yet moved off it. Every comparison is constant-time (`safeEqual`). The server refuses to start without
 `HUB_PASSWORD`. `POST /login` locks out an IP after 5 wrong passwords in 15 minutes (in memory, so a
 restart clears it; `LOGIN_*` in server.js). There is no all-clients cap: anyone could trip it on purpose.
 

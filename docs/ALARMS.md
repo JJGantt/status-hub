@@ -49,7 +49,7 @@ rule whenever they look: `dueNow()` in `alarmclock.js`, `due_now()` in `tv-ring.
 - STOP anywhere completes the item, the item leaves the feed, and every ringer goes quiet.
 
 STOP reaches the TV in under a second because the hub announces its own completion at once
-(`announceListWrite` in `server.js`) instead of waiting for the realtime echo, which takes seconds —
+(`announceListWrite` in `routes/lists.js`) instead of waiting for the realtime echo, which takes seconds —
 long enough for STOP to look as if it had not reached the TV.
 
 **The page cannot detect a Guided Access session** — there is no web API, and the giveaway (Web Audio
@@ -133,7 +133,7 @@ The forecast the morning is decided on is old by the time it matters. Surfline r
 **8pm** run from the night before, and the 2am run lands around 10am to noon — too late for a wake
 time. The wind is what moves in that gap.
 
-`surfVeto` in `server.js`: when the half-hour average of the MEASURED wind (`lib/livewind.js`, the
+`surfVeto` in `routes/surf.js`: when the half-hour average of the MEASURED wind (`lib/livewind.js`, the
 Mayport Bar Pilots dock 2.2 miles away — NDBC's MYPF1, read from NOAA CO-OPS as 8720218 every five
 minutes) is ONSHORE at or over `surf_veto_kts` (Settings, default 12, 0 turns it off), every hour of
 TODAY from the current one on counts as not Fair. Only while the reading is fresh (30 minutes: CO-OPS

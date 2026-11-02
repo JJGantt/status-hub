@@ -55,7 +55,7 @@ segment's own start would overlap the previous one and collapse two real command
 
 ## Speaker ID
 
-**A listener that UPLOADS a clip is scored by the hub** (`soundsLikeHim` in `status-hub/server.js`):
+**A listener that UPLOADS a clip is scored by the hub** (`soundsLikeHim` in status-hub `server/routes/voice.js`):
 the clip goes to the voice server as 16k mono WAV, `/verify` answers the top-3 cosine against the
 voiceprint, and anything under `voice_upload_accept` (0.22 when unset, 0 to accept anything) is never enqueued. That
 setting is its own: `voiceid_accept_threshold` is the ESP's whole-clip gate, it reads 0 today, and a

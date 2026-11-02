@@ -478,7 +478,7 @@ it is admitted, so a chip's integer is not a rounding of the credit, it IS the c
 against the replay: a chip reading `+7` moves the bar by 7.000 from any starting level, `+5` by
 5.000. Chips carry no suffix, because the number is already on the scale the bar is drawn against,
 and anything under half a point is not rendered, since a `+0` chip says less than no chip.
-`server.js` formats them once in `scoreFields`, for all three surfaces that draw them.
+`routes/lists.js` formats them once in `scoreFields`, for all three surfaces that draw them.
 
 Quantising at the source is also what makes the POTENTIAL chip actionable. "Do it now for +5" holds
 across the whole stretch of lateness that rounds to 5, so completing anywhere inside it pays exactly
@@ -563,7 +563,31 @@ frame) so a surface can pick it up without re-deriving it.
 
 ---
 
-## 5. API surface (`server.js`)
+## 5. API surface (`server.js` and `routes/`)
+
+`server.js` holds the shared state and the core: config, the caches, the dashboard build
+(`buildStatus`), realtime and the SSE channels, the auth gate, and the due/badge/retention timers.
+Routes live by responsibility in `routes/`, each a function of the shared pieces it uses (passed in
+by `server.js`) returning what the rest of the server calls:
+
+| module | what |
+|---|---|
+| `public.js` | everything public but surf: `/healthz`, the Menu app's `/api/cg/*`, login and its lockout, the legal pages |
+| `pages.js` | the HTML pages behind the gate |
+| `surf.js` | surf history, the live feed, the surf alarms' inputs, the surf app's page |
+| `voice.js` | speaker check, rewind, `/api/voice-command`, attachments, gestures, the client log, voice text and reset |
+| `settings.js` | settings, the mute holders, TTS, push registration |
+| `logging.js` | the nutrition day, food and set logging |
+| `conversation.js` | the session event log, `/api/session-activity`, `/api/voice-activity`, answer pushes |
+| `notify.js` | phone pushes (`pushAll`), the badge count, `/api/notify` |
+| `sessions.js` | desk control: sessions, focus, follow-ups |
+| `lists.js` | the lists pane and the calendar (they share their item helpers) |
+| `tv.js` | the bedroom TV link and sidebar settings |
+| `widgets.js` | the watch and widget feeds (`/api/rings`, `/api/workout-day`, `/api/workout-now`) |
+| `heathistory.js`, `reports.js`, `healthdata.js`, `failures.js` | heat-map archive, published reports, Apple Health uploads, failed commands |
+
+A module that needs something `server.js` declares later gets it moved up rather than passed lazily;
+`node --check` cannot see that mistake, but the server throws at boot and `npm test` fails.
 
 **Pages:** `/` + `/phone` (the phone's home page — the home wall's content, in portrait and at the
 phone's own scale) · `/tv` (the home wall, the TV default) · `/tv-health` (health wall — what
@@ -692,7 +716,7 @@ for it again).
 
 Every comparison is constant-time (`safeEqual`). The server refuses to start without
 `HUB_PASSWORD`. `POST /login` locks out an IP after 5 wrong passwords in 15 minutes (in memory, so a
-restart clears it; `LOGIN_*` in server.js). There is no all-clients cap: anyone could trip it on purpose.
+restart clears it; `LOGIN_*` in routes/public.js). There is no all-clients cap: anyone could trip it on purpose.
 
 **From a shell, call it with `bin/hub <METHOD> <path> [json | @file]`** (`bin/hub GET /api/status`), on the
 Mac or the Pi. It reads the kiosk token from `$HUB_TOKEN` or this repo's gitignored `.env` and hands
@@ -1223,7 +1247,7 @@ before `00118`, which seeds as its prompt then its reply.
 
 ### The conversation as one list — the event log
 
-**Everything a surface shows of a session is one ordered list of events** (`sessionLog` in server.js):
+**Everything a surface shows of a session is one ordered list of events** (`sessionLog` in routes/conversation.js):
 `prompt`, `tool`, `text` and `reply`, each with `seq` (its position, given here on arrival) and `id`.
 A host's activity frame becomes one event (`logFrame`): `queued` and `said` are one prompt at two
 moments with the id the host minted for it, the second marked `seen`; `done` becomes the `reply`,
@@ -1295,7 +1319,7 @@ made this a 242KB response; it is 39KB.
 
 ### A prompt can carry three things that were never meant for him to read
 
-`server.js`'s `cleanSaid`, applied to `last_prompt`, `say`, every turn's `prompt` and every activity
+`routes/voice.js`'s `cleanSaid`, applied to `last_prompt`, `say`, every turn's `prompt` and every activity
 frame before any of them reach a client — the watch, the phone thread, the TV — strips three patterns,
 all confirmed live in `desk_turns`, not theoretical:
 
@@ -1352,7 +1376,7 @@ that height. It renders only when a session is actually holding follow-ups; an e
 "none" is noise on a wall you glance at. The phone panel is where the fuller form lives.
 
 `/api/sessions` returns `focus` — the session a SPOKEN follow-up would land in — and the panel marks
-that row; the TV strip and the home wall show the same session. `pickFocus` in `server.js` decides it
+that row; the TV strip and the home wall show the same session. `pickFocus` in `routes/sessions.js` decides it
 by the same rule as `focusedSession` in data-layer, and the two must agree: a session Jared focused by
 name while it runs, else nobody while a dispatch is still opening, else the most recently active running
 session. The rule, and why it includes the session he is typing in, is SESSIONS.md § Focus.

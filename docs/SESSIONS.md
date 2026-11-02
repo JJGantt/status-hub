@@ -186,7 +186,7 @@ with the same MCP servers, approvals off and full access, as he runs it himself.
 - **They do not move.** A Codex rollout is never mirrored, and `transfer_session` refuses one; the Pi
   neither hands a Codex session to the Mac when short of memory nor moves it for heavy work.
 - **Not adopted.** A `codex` Jared opens by hand on the Mac is not listed.
-- **Shown blue** on every surface that shows an incident red (`isCodex` in server.js; § 11).
+- **Shown blue** on every surface that shows an incident red (`isCodex` in status-hub `routes/sessions.js`; § 11).
 
 ---
 
@@ -464,7 +464,7 @@ machines and pushes what it sees straight to the hub:
                                                                 │    and the turn's ordered events, which the hub stores)
                                                                 └─ patch desk_sessions.last_reply, active_at  (durable)
 
-    /api/session-activity ─▶ ONE EVENT of the conversation's list (server.js `logFrame`: prompt, tool,
+    /api/session-activity ─▶ ONE EVENT of the conversation's list (routes/conversation.js `logFrame`: prompt, tool,
                              text, reply, each with a seq and an id) ─▶ SSE `ev` ─▶ watch, phone, wall
 
     Each event carries its turn and its position in it. A hub missing part of the turn (it restarted)

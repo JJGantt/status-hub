@@ -233,7 +233,7 @@ A session left open behind home does not take home's commands. A session's tap i
 glass is the press; its top half is for reading.
 
 **A session is ONE LIST, the hub's** (`Sessions.logs`, from `GET /api/sessions/:id` and the `ev`
-frames of `/api/session-stream`; server.js, the event log): his words (`prompt`), tool calls, what the
+frames of `/api/session-stream`; routes/conversation.js, the event log): his words (`prompt`), tool calls, what the
 session says between them (`text`) and its replies, each with its position in the conversation (`seq`,
 given by the hub) and an identity (`id`). The page draws that list and nothing else, oldest first. The
 phone draws the same list by the same rule (`cards/repos.js`), which is what makes the two agree.
@@ -770,7 +770,7 @@ at the watch, so everything about it works wrist-down:
   app is frozen the moment the wrist drops and never hears the reply. This is the battery the mode
   costs, and why it is a mode he turns on rather than how sessions always behave.
 - **Follow-ups sent from the watch ask for a reply written for the ear.** The watch sends
-  `spoken: true`; the hub appends `SPEAK_NOTE` (server.js) to the words it types into the session —
+  `spoken: true`; the hub appends `SPEAK_NOTE` (routes/sessions.js) to the words it types into the session —
   complete, but as succinct as the content allows, no tables, code, paths or URLs unless they are the
   answer. The note rides in a `<speak-mode>` tag that `resolvePrompt` (voice-pipeline transcripts.js)
   strips, so every surface shows only his words and the sender's message id still matches its prompt.

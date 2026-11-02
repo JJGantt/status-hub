@@ -180,7 +180,7 @@ The scoring itself is built and live (`lib/score.js`, data-layer `00085`-`00087`
   exempt, because it is one choice made once at scheduling time. Wanting both would mean a second
   column, not a fourth value.
 - **The day timeline's spine always spans at least 7a-10p** on the calendar wall and the phone
-  (`server.js`, the `loT`/`hiT` bounds; it widens for earlier or later items, and the home wall's dial
+  (`routes/lists.js`, the `loT`/`hiT` bounds; it widens for earlier or later items, and the home wall's dial
   uses a rolling window around now instead), so a day whose items span 1p-5p spends twelve rows on
   nothing. Fitting the window to the content (plus padding around now) would give every hour more
   room, but it changes what the column means and should be its own decision.
@@ -209,7 +209,7 @@ they stay on every wall, but smaller.
 
 ### Sounds for the other notification kinds
 Only the reminder bell (`apps/Sounds/reminder.caf`) was auditioned and chosen. Weight reminders and
-voice acks still use the system default. `NOTIFY_STYLE` in `server/server.js` is where a kind's sound
+voice acks still use the system default. `NOTIFY_STYLE` in `server/routes/notify.js` is where a kind's sound
 is declared; the file must be bundled in the app or iOS silently falls back.
 
 ### Prune dead APNs tokens

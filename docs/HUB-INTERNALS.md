@@ -35,8 +35,8 @@ Supabase ──▶ server.js buildStatus() ──▶ /api/status payload ──�
   (the muscle gauges and set clocks), `scoreOf()` and `maintenanceWithHistory()` (the per-day replay,
   most of the build's CPU, drawn only by the weight views). `/api/rings`, `/api/workout-now`,
   `/api/weight-view`, `/api/nut-history` and `/api/heat-history` each call the pieces they draw;
-  calling `buildStatus()` from a feed is the mistake that made the watch's rings cost the whole
-  dashboard — the devices, the mics, the session focus, both heat maps — on every page open. Each
+  calling `buildStatus()` from a feed makes it cost the whole dashboard — the devices, the mics, the
+  session focus, both heat maps — on every request. Each
   derived value is `memo()`ised on the row arrays it came from, so it lives exactly as long as they do.
   Requests arriving during a build share it unless something was invalidated after it began
   (`statusEpoch`); `broadcast()` always builds its own (`composeStatus`), because a `device_status`
@@ -52,30 +52,25 @@ Supabase ──▶ server.js buildStatus() ──▶ /api/status payload ──�
   needs an age check too. Events get dropped — CHANNEL_ERROR and half-open silence are both routine,
   which is what `REALTIME_SILENCE_LIMIT_MS` and the socket recycle exist for — and a cache that only
   clears on an event serves whatever it built on boot, forever, with a redeploy the only way out.
-  `/api/surf/history` shipped that way and froze the surf card for 16 hours. Every cache here now
-  pairs `dirty*()` with a `*_BACKSTOP_MS` age check; add both when you add a cache.
+  Every cache here pairs `dirty*()` with a `*_BACKSTOP_MS` age check; add both when you add a cache.
 - **The silence watchdog cannot see a per-table delivery failure, which is why the freshness probe
   exists.** `REALTIME_SILENCE_LIMIT_MS` judges the socket by whether *any* event arrives, and
   `seen()` is fed by every subscription including `device_status` — written every couple of minutes
   by the litter and feeder watchers. So the one table with a permanent heartbeat vouches for all the
-  others. On 2026-09-10 a meal logged at 09:26 reached no surface until the 15-minute backstop
-  lapsed: the channel had been SUBSCRIBED since 08:17, device_status was flowing the whole time, and
-  the watchdog logged nothing. It surfaced as "the hub is stuck on Wednesday", because a nutrition
-  cell with no rows gets no `data-ndate` and so cannot be selected — a stale cache reads as a broken
-  date.
+  others: one table's subscription can stop delivering while the channel reports SUBSCRIBED and the
+  watchdog stays quiet, and the write then waits for the 15-minute backstop. A stale nutrition cache
+  reads as a broken date, because a cell with no rows gets no `data-ndate` and cannot be selected.
   `FRESH_PROBE_MS` checks **function instead of liveness**: every two minutes it asks the database
   for a fingerprint — a row count per write-active table plus the newest `completed_at` — and if that
   moved while realtime announced nothing about those same tables, realtime dropped something. It
-  refetches, recycles the socket (a miss is evidence the channel is lying), and **logs**, which the
-  original failure never did. The probe costs ~147 bytes and ~340ms per run, about one extra heavy
+  refetches, recycles the socket (a miss is evidence the channel is lying), and **logs**. The probe costs ~147 bytes and ~340ms per run, about one extra heavy
   fetch a day, so it closes the window without undoing the caching it protects.
 - **What "realtime announced nothing" is measured against is `rtEvents`, not the row cache's state.**
   Whether the cache is dirty looks like the right question and is not: `broadcast()` refetches, which
   makes it clean again, and `broadcast()` runs on every realtime event, so by the time the probe reads it, it has almost always been cleared by the
-  very event the probe is asking about. Testing it made the probe fire after ORDINARY writes — a
-  completion realtime delivered in under 20 seconds was declared missing 105 seconds later — and each
-  firing recycled a healthy socket. That is not a harmless false positive: a recycle is a real
-  `CLOSED` → `SUBSCRIBED` gap, so the watchdog for dropped events was manufacturing the windows in
+  very event the probe is asking about, so testing it fires the probe after ORDINARY writes, and each
+  firing recycles a healthy socket. That is not a harmless false positive: a recycle is a real
+  `CLOSED` → `SUBSCRIBED` gap, so the watchdog for dropped events would manufacture the windows in
   which events drop. `rtEvents` counts events on exactly the three tables the fingerprint can see
   (`nutrition_entries`, `sets`, `list_items`), lives outside `startRealtime` so a recycle does not
   reset it, and is sampled after the fingerprint read so an event landing during that read still
@@ -85,9 +80,8 @@ Supabase ──▶ server.js buildStatus() ──▶ /api/status payload ──�
   the next request answers; it repaints nothing already on a screen. The calendar surfaces re-read on
   the `lists` frame and on nothing else but a transition minute they computed in advance, which can
   be hours out — so whenever the probe is the path that reconciles a `list_items` write rather than
-  the subscription, every chip stays drawn from before it until that minute arrives. On 2026-09-17 a
-  task completed at 18:42 held its next transition at 21:00 and sat red on the wall, the phone and
-  the browser while `/api/calendar` answered `done`. The recovery branch therefore repeats the whole
+  the subscription, every chip stays drawn from before it until that minute arrives — a completed
+  task stays red on every screen while `/api/calendar` answers `done`. The recovery branch therefore repeats the whole
   `list_items` handler — `pushLists()`, `dirtyDue()`, `syncBadge()` — on top of the refetch and the
   socket recycle. A subscription that PUSHES rather than invalidating a cache needs its push added
   here as well, or that surface goes stale in exactly the case the probe exists to catch.
@@ -122,8 +116,8 @@ Supabase ──▶ server.js buildStatus() ──▶ /api/status payload ──�
   `idle` — arming, capturing, uploading — and the wanted reload happens 3s after the last hold lets go.
   A new reload site has to use `safeReload`, not `location.reload()`, or it reopens this hole.
 - **The heartbeat is a `ping` EVENT, not a comment.** Every stream writes `event: ping` every 25s
-  (`PING` in server.js). It used to be a `: keepalive` comment, which no client can observe — leaving
-  no way to tell quiet from dead on `/api/voice-stream` and `/api/list-stream`, where hours can pass
+  (`PING` in server.js). A `: keepalive` comment cannot be observed by any client, which leaves no
+  way to tell quiet from dead on `/api/voice-stream` and `/api/list-stream`, where hours can pass
   with no data. Named events never reach `onmessage`, so nothing else sees it.
 - **Staleness is visible:** a 3px hairline along the top edge (`.stalebar`), invisible while frames
   arrive, amber while the watchdog is rebuilding, red once the rebuild has failed too. It is painted
@@ -199,7 +193,7 @@ were never the problem.
 | `cards/daystrip.js` | TODAY LYING DOWN, and the days after it — the phone home page's day. Hours left to right, each item at its own time, packed into lanes so two titles never overlap (the one in the lane that frees soonest is truncated instead). It keeps going past midnight, which is why that page needs no separate look-ahead. Painted from the same `/api/calendar` response `cards/dayline.js` fetches, so there is one clock for both. |
 | `expand.js` | Full-screen section sheets, each opened by tapping the thing that summarises it: the two heat maps, the surf plots, the body figures, the weigh-in plot (`bindTap`, which tells a tap from a drag on a scroller). On open it moves the elements into the sheet and re-runs that section's cards, because each one draws itself to the size and window its surface gives it — the grids pick up the sheet's fixed cell size and their history, and surf picks up the sheet's `--surf-*`. The heat sections then pin to the newest column; surf holds its own place, as a distance from the right-hand end. |
 | `heathistory.js` | The heat-grid columns older than the status frame carries — fetched once from `/api/heat-history` and drawn only inside the sheet. |
-| `tv.js` | KIOSK ONLY, and the guard matters: the activity popup and the heard-you pop, off `/api/voice-stream`. Every other surface boots `voiceagent.js`, which drives the same popup from the same stream — running both left the phone holding a second EventSource open for the life of the page. |
+| `tv.js` | KIOSK ONLY, and the guard matters: the activity popup and the heard-you pop, off `/api/voice-stream`. Every other surface boots `voiceagent.js`, which drives the same popup from the same stream — running both leaves the phone holding a second EventSource open for the life of the page. |
 | `wallmode.js` | Follows `app_settings.wall_mode` so voice can switch the TV between the walls. Acts only on kiosk paths (`/tv`, `/tv-session-focus`, `/tv-calendar`, `/tv-home`), never on the phone's `/`. |
 | `cards/month.js` | The month calendar: paints the server-computed month grid + day agenda from `/api/calendar`; tap a day, page months. Read-only — writes stay with voice and the lists. Mounted in the phone home page's calendar sheet and by `calendar.js` for the standalone `/calendar` page; each surface decides what makes it re-read (a push, never a timer). |
 | `cards/weather.js` | The rain-chance grid, in the surf card on the home wall and in the phone's misc pane with it. Paints only: the grid, the drawn window, the peak and the colours are all decided in `lib/weather`. Carries no day letters and no sky icons — the leftmost column is today by definition, and in this climate NWS says "chance of showers and thunderstorms" six days in seven, so the icon discriminated nothing the colour did not. |
@@ -276,7 +270,7 @@ NOT a scaled wall — see CLAUDE.md, "The phone's home page is not a wall".
 A recorder claims the one `getUserMedia` stream when a recording starts — a tap, or the always-on
 listener being engaged — and lets go when it ends; the device closes when nothing holds it
 (`claimMic`/`unclaimMic`). Keeping it warm while the page is up is the obvious way to make a tap
-instant (iOS takes up to two seconds to hand over a capture device, 2,017ms measured on his phone),
+instant (iOS takes up to two seconds to hand over a capture device, about 2s measured on an iPhone),
 and it breaks every sound the page plays: an open capture holds the audio session in
 `.playAndRecord`, and it cut the alarm's ring to a blip. So each tap pays the acquisition, and
 `arming` shows the tap at once so the wait reads as the mic opening.
@@ -304,8 +298,8 @@ no fill. `rec` is the full fill, and it means audio is genuinely being captured,
 
 Both of those exist because a tap that shows nothing gets repeated, and this control is a toggle, so
 a repeated tap is a state change nobody asked for. `getUserMedia` takes a beat (longer once the page
-has been backgrounded) and the upload takes a second or two, and each of those windows used to look
-identical to a dead button. `arming` and `sending` are set synchronously so the second tap can only
+has been backgrounded) and the upload takes a second or two, and without a state of its own each of
+those windows looks identical to a dead button. `arming` and `sending` are set synchronously so the second tap can only
 ever be a stop, or nothing.
 
 The handler is on `pointerdown`, not `click`: click fires when the finger LIFTS, ~90ms later for a
@@ -322,7 +316,7 @@ press is held for 0.6s, which throws the recording away (`bindMic`; docs/VOICE-O
 bytes in it always goes up; the hub's transcript is the only judge of whether it held words, and an
 empty one comes back as the "Didn't catch that" status rather than as silence. **Do not add a VAD to
 this path.** A VAD here ends a recording at a pause and discards any clip it judges silent without a
-word, and on his phone it judges whole spoken commands silent — so the press records, throws the words
+word, and on iOS it judges whole spoken commands silent — so the press records, throws the words
 away and shows nothing. The one place a machine decides where speech ends is the always-on listener
 (`makeListener`).
 
@@ -338,8 +332,8 @@ Three more ways a press can be lost, each handled in the recorder rather than in
   the page hidden (which closes the mic) or a capture reset all end the MediaRecorder without `stop()`.
   `onstop` then HOLDS the clip so far (`held`, `paused` / `pause` in the tap trace), lets go of the
   mic, unmutes the room and paints `armed`. It carries on by itself when the interruption ends or the
-  page is shown again, or at his next press — a press on a paused recording resumes it, it never sends
-  it — and the press after he finishes sends the whole command. `cancel()` throws a paused one away.
+  page is shown again, or at the next press — a press on a paused recording resumes it, it never sends
+  it — and the press after that sends the whole command. `cancel()` throws a paused one away.
   MediaRecorder files from two recordings cannot be joined, so each held part goes up as a dry
   transcription first (`deliverVoice`) and its words ride the last part as the `X-Voice-Prefix` header,
   which `/api/voice-command` puts in front of the transcript before enqueueing ONE command. The last
@@ -369,7 +363,7 @@ took it is alive; one stranded by a reload stays in the store unsent, since noth
 was for.
 
 A clip that cannot go is kept, never dropped, and there is deliberately no count of waiting clips on
-screen: one should never pile up, and when one does, Jared looks at it with Claude. Every failed
+screen: one should never pile up, and when one does it is investigated from the log. Every failed
 attempt is in the hub log with its size, type, duration and the server's answer —
 `fly logs -a jared-status-hub | grep voice-send-fail`.
 
@@ -409,26 +403,25 @@ costs, and anything left sitting overdue drains for as long as it sits. Effects 
 nothing over the same seven days the other two bands look back over, so a hit's *size* is what
 decides how long it is felt.
 
-**The band is a bounded queue, not a running total.** It was a window sum with the cap applied only
-to the *display*, and the number underneath ran uncapped — so a heavy week banked surplus that
-silently held the bar full afterwards, and one neglected item dug a hole several completions had to
-fill before anything moved at all. The bar was describing a number that was not the number.
+**The band is a bounded queue, not a running total.** A window sum capped only in the *display*
+runs uncapped underneath, so a heavy week banks surplus that silently holds the bar full afterwards,
+and one neglected item digs a hole several completions have to fill before anything moves.
 
-Now completions are admitted to a fixed-capacity queue, each still aging out linearly on its own
+Completions are admitted to a fixed-capacity queue, each still aging out linearly on its own
 clock. When admitting one would pass FULL, the **oldest** credits are pushed out to make room.
 Draining works from the same end and stops at empty. So:
 
 - The level can never exceed FULL or fall below zero, as *state* and not just as a rendering.
-- **Work done while the bar is full still counts** — the newest always lands. An earlier attempt
-  capped by refusing the surplus instead, which meant effort at full was worth literally nothing.
+- **Work done while the bar is full still counts** — the newest always lands. Capping by refusing
+  the surplus instead would make effort at full worth nothing.
 - Digging out of neglect shows on the first completion, because there is no debt below zero.
 
 A burst does persist longer than steady work, since the queue holds the most *recent* effort and a
 burst's contents are all fresh. That is not a buffer — both hit zero the same number of days after
 the last activity — it is just more work being worth more.
 
-Only **completing** scores. Deleting is worth nothing either way — it is a thing he decided not to
-do, not a thing he failed at — so calling off a whole series is free and needs no special case.
+Only **completing** scores. Deleting is worth nothing either way — it is a decision not to do
+something, not a failure to do it — so calling off a whole series is free and needs no special case.
 
 `priority` carries three values, and the third is a kind rather than a weight:
 
@@ -439,8 +432,8 @@ do, not a thing he failed at — so calling off a whole series is free and needs
 | `-1` | **exempt** | scores nothing, never badges, closes itself when its moment passes |
 
 Exempt is for things that are on the schedule but are not tasks — a shift, an appointment, a
-reservation. Nothing is owed, so there is nothing to earn for "completing" one and penalising him
-for not ticking one off is worse than useless. `tasksScore` **branches** on it rather than relying on
+reservation. Nothing is owed, so there is nothing to earn for "completing" one and penalising a
+missing tick is worse than useless. `tasksScore` **branches** on it rather than relying on
 `1 + priority` arriving at zero: a zero multiplier would still let the item count as overdue and
 badge. `dueTick`'s `closeExempt()` marks them done once their moment has gone, using the SCORING
 deadline, so an all-day one closes at the end of its day rather than at 9am when it notified. Their
@@ -451,7 +444,7 @@ costs more than ignoring it for a day. What bounds it is the floor at zero, not 
 that distinction is the whole reason the queue exists.
 
 Its inputs are ordinary `list_items` rows, not a ledger: a completed item persists, so it is its own
-record. (`task_events` existed for one afternoon and was dropped in `00089` for exactly that reason.)
+record.
 
 Every constant is in one block at the top of `score.js`. **`TASK_RATE` is the amplitude knob** —
 completions/day that holds the band full — and `TASK_FULL_UNITS` derives from it, so one ordinary
@@ -461,7 +454,7 @@ on-time completion is worth `1 / (RATE · DECAY_DAYS / 2)` of the band. At 4 tha
 Set it from the rate there is actually something to *earn* against, and that is what the late curve
 leaves rather than the raw count — five completions run an hour or two past their deadlines land
 about four units. A rate far above the real one leaves the gold unreachable no matter how well the
-day goes, and a band that cannot be filled measures nothing, which is what 8 did. At 4, a steady two
+day goes, and a band that cannot be filled measures nothing (8 is too high). At 4, a steady two
 a day settles the band at 50%, three at 77%, and four or more on time fills it. Stopping dead from
 full runs 92 → 71 → 51 → 33 → 18 → 8 → 0 over the seven days of the decay window, so the first idle
 day is the expensive one.
@@ -511,8 +504,8 @@ value.
 Destroying credit is neither. It also settles which end to take from: **the newest**. Points stay
 coupled to events because the decay has to know when each point landed, so a debit has to name
 credits — and the newest is the credit actually holding the level up. Taking from the oldest lets the
-penalty eat credit that was hours from expiring anyway, which is how a day of neglect once cost the
-bar 5 points instead of 7 and stopped biting after two days. Overfill still takes from the oldest,
+penalty eat credit that was hours from expiring anyway, so a day of neglect costs the bar 5 points
+instead of 7 and stops biting after two days. Overfill still takes from the oldest,
 and that asymmetry is deliberate: displacing the credit closest to ageing out is right when the queue
 is merely full, and wrong when something is being taken away.
 
@@ -523,7 +516,7 @@ a completion earns, not the penalty leaking away.
 **A completed row still carries a drain span**, from its deadline to its `completed_at`, so finishing
 something late does not un-bill the hours it sat: an item three days overdue reads 42.9 whether it is
 still open or was just completed, against 59.1 had it never existed. **Deleting is the honest way
-out** — it stops the charge without claiming the thing was done. And `completionValue` no longer goes
+out** — it stops the charge without claiming the thing was done. And `completionValue` does not go
 negative: it slides +1 → 0 over `TASK_LATE_ZERO_H` and stops, because lateness is billed by the hour
 and a negative charged the same lateness a second time in a lump.
 
@@ -631,7 +624,7 @@ the raw reply. Tapping it opens that session either way; the payload is untouche
 The same sentence is stored on the turn's `desk_turns.summary` (`storeSummary`, data-layer 00133),
 which is what voice `get_sessions` shows as each session's last answer.
 
-`/api/session-activity` (what a host's transcript watcher saw: `queued`/`said` for HIS words with the
+`/api/session-activity` (what a host's transcript watcher saw: `queued`/`said` for the user's words with the
 prompt's id and, when the host typed them for a command, that command's id; `tool`; `text` for what
 it says between calls; `done` with the whole reply and its prompt. **Each becomes one event of the
 conversation's list** — `logFrame` — and goes out as an `ev` frame with its seq; see the event log
@@ -641,7 +634,7 @@ below) ·
 `desk_sessions.seen_at`, which is what clears it on every surface) ·
 `/api/session-stream` (SSE: `ev` — one event of a conversation's list, with its seq and the hub's
 epoch; `sessions`, the whole `/api/sessions` payload, pushed whenever `desk_sessions`/`desk_queue`/
-`desk_focus` change, which is what replaced the walls' 5s poll — see SESSIONS.md §10; and, until the
+`desk_focus` change — see SESSIONS.md §10; and, until the
 older watch build is gone, `session`) · `/api/sessions/:id/events?since=N` (the list after seq N,
 what a client fetches when a frame's seq shows a gap) · `/api/reports`
 (list only — `html` is never selected) · `/api/surf/history` (the whole hourly archive as one
@@ -754,32 +747,25 @@ crawler, and behind the gate it would get the login page and fail every check.
 
 ---
 
-## 6. Lists (and what used to be reminders, and notes)
+## 6. Lists (reminders and notes are list items)
 
 **There is no reminders table.** A reminder is an item with a `due` date — nothing else distinguishes
-one (data-layer migration `00056`). The two tables were already the same row shape and differed only
-in that `reminders` had `due` and `list_items` had `list_name`; every behavioural difference followed
-from `due` alone, and an undated reminder already behaved exactly like a to-do. Meanwhile `todo` was
-never special either — it is one row in `lists` beside `grocery` and `Amazon`.
+one (data-layer migration `00056`). `todo` is not special either — it is one row in `lists` beside
+`grocery` and `Amazon`.
 
-So `due` now lives on `list_items` and **any item on any list can carry one**. A dated Amazon item
+`due` lives on `list_items` and **any item on any list can carry one**. A dated Amazon item
 fires and badges identically to a dated to-do; there are no classes of item. "Due" in the pane is a
 derived cross-list *view*, not a stored list, so a dated item shows both there and on its own list
 while being one row.
 
 **A list is addressed by its id** (data-layer `00094`). `lists.id` is the key ('l_grocery'),
 `list_items.list_id` the reference, and `list_name` on an item is a DERIVED copy kept by trigger —
-draw it, never match or write on it. Grouping items by name would break the moment a list is renamed,
-which is now a rename rather than a re-parenting of every row.
+draw it, never match or write on it. Grouping items by name would break the moment a list is renamed.
 
-That also removed a fork this surface owned: `/api/todos/add` used to create a list on any
-unrecognised name, matching case-sensitively, so `Grocery` made a second list where the data-layer
-tools resolved it to `grocery`. Composers post the id they were drawn with, and the endpoint 404s on
-anything else.
+`/api/todos/add` never creates a list: composers post the id they were drawn with, and the endpoint
+404s on anything else, so a differently-cased name cannot fork a second list.
 
-**There is no notes table either** (data-layer `00092`/`00093`). A note was the same row shape with
-capability removed — `(name, content, updated)` against an item's `(title, text, updated)`, minus a
-due date, a priority, completion, soft delete, and a seat in the realtime publication. It is now an
+**There is no notes table either** (data-layer `00092`/`00093`). A note is an
 undated item on the `notes` list, name in `title` and body in `text`, and the pane needed no new code
 to draw it: `bodyFor()` already expands an item whose `text` is longer than its label, which is what
 a note is. Reading and writing one goes through `get_lists` / `add_to_list` / `remove_from_list`;
@@ -821,8 +807,8 @@ An item has two ways off a list and they are not variants of each other:
 
 | | what it means | where it goes | score |
 |---|---|---|---|
-| `completed_at` set | he did it | off the active lists, **stays on the calendar** | earns the gold band |
-| `deleted = true` | he is not going to do it | gone; purged after 30 days | nothing |
+| `completed_at` set | it was done | off the active lists, **stays on the calendar** | earns the gold band |
+| `deleted = true` | it will not be done | gone; purged after 30 days | nothing |
 
 Everything active — the pane, the widgets, the badge, `dueTick`, the drain — asks for
 `deleted = false AND completed_at IS NULL`. The **calendar** is the one surface that also draws
@@ -835,16 +821,15 @@ The endpoints mirror that: `POST /api/todos/complete` (also takes `undo` and `at
 ### `at` — a completion that did not happen just now
 
 `completed_at` is not a bookkeeping stamp, it is the entire input to what the completion is worth:
-full value inside the 30-minute grace, sliding to nothing by four hours, negative by a day. So a
-thing finished at 10:15 and reported at two in the afternoon scored as four hours late, and the only
-truthful option was not to report it at all. `at` says when it actually happened; omitting it stamps
+full value inside the 30-minute grace, sliding to nothing by four hours. A completion reported after
+the fact would otherwise score as late as the report. `at` says when it actually happened; omitting it stamps
 the clock, which is what the pane's ✓ swipe, the widget's Done and every ordinary completion do.
 
 `lib/score.js` `completionStamp` decides what is acceptable, and it lives there rather than beside
 the route because the rule is the band's:
 
 - **A zone on it is refused, not converted.** The band measures `completed_at` against `due` as naive
-  wall-clock arithmetic — that is what makes a lateness one he experienced rather than one an offset
+  wall-clock arithmetic — that is what makes a lateness the real one rather than one an offset
   invented. `score.js` has no timezone to convert with, so accepting a `Z` would mean guessing an
   offset, and a guessed offset puts a completion an hour from the deadline it is scored against.
 - **The future is refused.** The replay walks up to now and skips anything past it, so a future stamp
@@ -861,12 +846,10 @@ Voice is the surface that uses this — the model works out the absolute time fr
 none should be added: `at` takes an exact stamp precisely so that no layer has to guess at what
 "fifteen minutes after it started" meant.
 
-**This was tried the other way round first and failed.** One verb, with the clock deciding whether a
-removal counted as a completion, on the reasoning that "remove", "delete" and "check off" are not
-separable in speech. The failure was immediate and was not the one predicted: with no completion
-verb to land on, *"take the shirt off the list and put it back up at 1 for the dryer"* routed to
-`set_due` and simply moved the item — two instructions collapsed into one reschedule. Distinct
-outcomes need distinct verbs. Do not re-merge them.
+**Do not merge them into one verb** with the clock deciding whether a removal counts as a
+completion. With no completion verb to land on, an instruction like *"take the shirt off the list and
+put it back up at 1"* routes to `set_due` and simply moves the item — two instructions collapsed into
+one reschedule. Distinct outcomes need distinct verbs.
 
 Two more things that are easy to undo by accident:
 
@@ -963,11 +946,10 @@ what makes it read as turning rather than as a list with small ends. Past the po
 be read it goes `.thin` and drops its words — **and nothing else**: same fill, same 4px coloured
 left edge, a chip with no room for a title. `.sliver` takes the hour number too.
 
-`.thin` used to invert the chip instead — border off, the list's colour flooding the whole width —
-to keep a few-pixel item visible. It is an attractive idea and it is wrong: the colour that marks a
-chip's left edge everywhere else became its entire body, so the rim of the dial read as coloured
-bars belonging to no family on the wall, directly above the chips they were the small version of.
-It also put the loudest mark in the column on the hours furthest from now, which is the dial's
+Inverting the chip instead — border off, the list's colour flooding the whole width — to keep a
+few-pixel item visible is attractive and wrong: the colour that marks a chip's left edge everywhere
+else becomes its entire body, so the rim of the dial reads as coloured bars belonging to no family on
+the wall, directly above the chips they are the small version of. It also puts the loudest mark in the column on the hours furthest from now, which is the dial's
 emphasis backwards. Legibility at the rim is not worth a second visual language.
 
 **`.thin` is decided from the half-line's measured height, not the row's.** An hour is two half-lines
@@ -1015,8 +997,8 @@ and `&redcase=1` turns the items under
 test red so `?hour=` shows the point where an overdue item leaves the dial for the cover. It is deliberately outside `public/`, so it is not in the image. Use it rather
 than real rows — a dated item with a past `due` pushes a real notification.
 
-**A calendar day cannot feed this** — that is what `full=1` exists for. Tried with one day, by 21:30
-the dial had 21½ hours crushed above the line and 2½ below it, the column half empty. The window is
+**A calendar day cannot feed this** — that is what `full=1` exists for. With one day, at 21:30
+the dial has 21½ hours crushed above the line and 2½ below it, the column half empty. The window is
 symmetric by construction whatever time it is.
 
 Rows must be `box-sizing:border-box` with no padding: the projection writes an exact pixel height per
@@ -1034,8 +1016,8 @@ That re-fetch is required, not an optimisation: the window is centred on the hou
 so without it the dial drifts an hour off its own data every hour.
 
 Nothing may sit above the hours box in the flow, for the same reason. The axis is the middle of that
-box, so a 44px date heading above it put the line 25px below the middle of the column — measurably
-lopsided, and read as a fault in the projection rather than in the layout. The date is absolutely
+box, so a 44px date heading above it puts the line 25px below the middle of the column, which reads
+as a fault in the projection. The date is absolutely
 positioned over the top instead, where the rows are 1-9px slivers twelve hours out.
 
 Chips on a line sit **side by side** and split it equally (`flex:1 1 0`), so one spans the line and
@@ -1068,8 +1050,8 @@ Start a Claude session on the Mac from the phone: tap a project, a Terminal open
 `claude --remote-control <name>`, and the session is waiting in the Claude app. The hub only starts
 it; the work happens over Remote Control.
 
-**Every directory in `~/repos` is listed, git checkout or not** — filtering on `.git` hid the most
-active work, which can be a directory that is deliberately not a repo. Git is decoration: the
+**Every directory in `~/repos` is listed, git checkout or not** — filtering on `.git` would hide
+active work in a directory that is deliberately not a repo. Git is decoration: the
 branch chip and dirty dot render only when the directory happens to be a checkout, and `last_active`
 falls back to the directory's mtime.
 
@@ -1105,12 +1087,12 @@ orchestrator ──beat(30s)──▶ worker_presence(worker='desk') ──▶ t
 
 ### Sessions nobody dispatched
 
-`desk_sessions` also carries the sessions Jared opened himself on the Mac — a `claude` process in a
+`desk_sessions` also carries the sessions opened by hand on the Mac — a `claude` process in a
 Terminal tab, found by the orchestrator rather than announced by anything. `origin` separates them
 (`adopted` vs `dispatched`), and they get the same liveness and last-reply treatment, so the panel
 describes everything running rather than only what was sent.
 
-**Adoption never touches `desk_focus`.** A session appearing is not Jared choosing it; unpinned, focus
+**Adoption never touches `desk_focus`.** A session appearing is not the user choosing it; unpinned, focus
 is computed from activity (below), so nothing about adopting a session has to move a pointer.
 
 Retention is not per-origin: `sweepRetention` in `pi-desk` drops closed sessions at 7 days and parked
@@ -1136,7 +1118,7 @@ move button: moving is asked of the voice tool (`transfer_session`) or of the se
 
 `POST /api/sessions/rename` sets `desk_sessions.label` at once, and — when the session is running —
 enqueues `rename_session`, which the owning machine delivers as `/rename <name>` typed into the
-session. That is the same command Jared would type, so Claude Code renames itself, its terminal tab
+session. That is the same command a user would type, so Claude Code renames itself, its terminal tab
 changes, and it writes the `custom-title` record the reconcile tick reads back. A parked session takes
 the label alone; the name reaches the session only if it is resumed.
 
@@ -1172,7 +1154,7 @@ anywhere on the view (`swipeBack`), which this pane can take because it is the l
 scroller has nothing to do with a drag that way. It is claimed only once the drag is clearly
 horizontal, and yields to anything inside already scrolled sideways (a wide code block). Either way
 out, the list is painted at once from the last payload `load()` drew (kept current by the session
-stream) and refetched behind it; waiting on the fetch left the pane black for most of a second. Each
+stream) and refetched behind it; waiting on the fetch leaves the pane black for most of a second. Each
 row of that list leads its last line with how long ago its last prompt or reply was (`at`, the instant
 the list is ordered by). It is the watch's session page at
 phone size, with more room, and a composer — typed, or spoken through the pane's dry-transcribing
@@ -1185,8 +1167,8 @@ list with the hub's `epoch`; `ev` frames on `/api/session-stream` bring each new
 The rule (`frame`): the next seq is appended, a gap is fetched (`/events?since=`), an old seq is
 ignored, a different epoch is a restarted hub and the list is fetched afresh; a fetch and a frame are
 merged by seq (`take`), so they cannot disagree. A prompt queued behind a running turn is one event at
-two moments, same id — dimmed until the model reads it, and drawn where it read it (`shown`). His own
-words show the instant they are sent as a PLACEHOLDER keyed by the message's own id, which the event
+two moments, same id — dimmed until the model reads it, and drawn where it read it (`shown`). The user's
+own words show the instant they are sent as a PLACEHOLDER keyed by the message's own id, which the event
 for them carries back as `cmd`; it is replaced by id. The caret shows while the last event is not a
 reply. The header's facts (name, machine, status) come from the row, re-read only when the `sessions`
 frame says the conversation moved to a new row (a resume) or its status changed.
@@ -1202,8 +1184,8 @@ nested lists, code, quotes, rules, tables, bare URLs), escaped first. **Every li
 one web view with nothing on screen to come back by. A new-window request reaches the app's
 `createWebViewWith` (`StatusHubApp.swift`), which hands the address to Safari. Inside the iOS app a
 tap does not depend on that path: a document click listener in shared.js catches the link and posts
-its address to the native `openURL` message handler, which opens Safari directly — taps on these links
-in the app opened nothing through `target=_blank` alone. An app build without that handler falls back
+its address to the native `openURL` message handler, which opens Safari directly, because in the app a
+tap on such a link opens nothing through `target=_blank` alone. An app build without that handler falls back
 to `createWebViewWith`. Only `http(s)` addresses become links.
 
 While a session is open the pane carries `sv-open`, which stops the pane scrolling and gives the card
@@ -1222,7 +1204,7 @@ not the same thing — mid-turn that is a half-written thought.
 wherever they write the reply, so they are replaced together. A turn of tool calls is routinely several
 megabytes against the 512KB `readTail` reads, so when the reply is in that window and the turn's
 opening is not, it reads backwards for it — once per turn, cached, a miss included. It is blank, never
-an older prompt, when the turn was not started by something he said: a background task finishing, or
+an older prompt, when the turn was not started by a user prompt: a background task finishing, or
 Claude Code's own injected context and compaction summaries, which are passed over.
 
 ### The turns before the last one
@@ -1270,17 +1252,15 @@ tracks how far into that turn its list is (`log.cur`): an event that is not the 
 appended, the answer to it is `{ replay, have }`, and the host sends everything after `have` (state
 `replay`) before its next frame; an event already held is ignored. `done` carries the whole turn, which
 fills a list that heard none of it. A host that restarts mid-turn reads the turn's beginning back from
-the transcript (`loadPrefix` in sessionWatch.js), so its numbering carries on. The trap this closes: a
-prompt lost to a restart was re-added from `done` at the END of its turn, under the tool calls it had
+the transcript (`loadPrefix` in sessionWatch.js), so its numbering carries on. Without it, a
+prompt lost to a restart is re-added from `done` at the END of its turn, under the tool calls it
 started. `EPOCH` names this process and
 rides in every frame and list: seq starts over on a restart, and a client holding an older epoch
 fetches the list afresh rather than merging two numberings.
 
-This replaces what the same facts used to travel as: the live frames on one road and the row plus
-`desk_turns` on another, unordered against each other and with no identity linking a queued prompt
-to its read, a `done` to the turn it ended, or a device's own words to their echo — which every
-client then reconstructed from text and timing, each by its own rules. What remains of that is the
-two seeds above and the `cmd` stamp, and nothing on a client compares text.
+Ordering and identity come from this list alone: apart from the two seeds above and the `cmd`
+stamp, nothing on a client reconstructs them from text or timing, and nothing on a client compares
+text.
 
 ### Every finished reply is a notification
 
@@ -1316,17 +1296,16 @@ response is an explicit projection — `id`, `n`, `label`, `custom_title`, `repo
 renders per row. The whole `last_reply` goes only to rows something can show in full: everything
 resident, and the newest parked one, which is what the home wall falls back to when nothing is
 running. **Adding a field to a session view means adding it to that projection**, or it arrives
-`undefined`. Ninety-odd parked sessions carrying their full replies and five unread timestamps each
-made this a 242KB response; it is 39KB.
+`undefined`. Full rows for every parked session make the response roughly six times larger.
 
-### A prompt can carry three things that were never meant for him to read
+### A prompt can carry text that is never meant to be shown
 
 `routes/voice.js`'s `cleanSaid`, applied to `last_prompt`, `say`, every turn's `prompt` and every activity
-frame before any of them reach a client — the watch, the phone thread, the TV — strips three patterns,
-all confirmed live in `desk_turns`, not theoretical:
+frame before any of them reach a client — the watch, the phone thread, the TV — strips these patterns,
+all present in stored `desk_turns`:
 
 - **The bracketed location line voice-dispatched prompts used to carry**, `\n\n[Where Jared was when he
-  asked: lat, lon (within about N m)]`. Nothing appends it now — a session that needs his position calls
+  asked: lat, lon (within about N m)]`. Nothing appends it now — a session that needs the user's position calls
   the data MCP's `get_location` — but it is in turns already stored.
 - **A format instruction older watch builds appended while replies were spoken**, `\n\n[This reply is
   read aloud. …]`. Nothing sends it now, but it is in turns already stored. Either this or the location
@@ -1339,20 +1318,17 @@ all confirmed live in `desk_turns`, not theoretical:
   already stored hold it. Meant
   to be resolved back to those words before anything is stored (`transcripts.js`'s `resolvePrompt`,
   called from `turnStart` and from `sessionWatch`'s `queue-operation` handling) — `cleanSaid` is a
-  backstop for the rare case that resolution did not happen (the stash file was swept, or the read
-  raced it): found, at the time this was written, sitting unresolved in `desk_turns` from more than
-  one session, shown as if he had typed an instruction to go read a file.
+  backstop for the case that resolution did not happen (the stash file was swept, or the read
+  raced it); unresolved, it shows as if the user had typed an instruction to go read a file.
 
 `cleanSaid` runs at FOUR points: every `/api/session-activity` frame (so a live `said`/`queued` line is
 clean before it is kept or pushed), the list's `say`, a session's `last_prompt` and each of its
 `turns[].prompt` (`/api/sessions/:id`), and `full()`'s `last_reply` (cleaned for consistency with `say`, though neither pattern is expected to
-ever match a reply rather than a prompt). **A fourth source of exactly this failure mode — text that
-looks like his words but is not — is `fromHim` in `transcripts.js`**: a message queued mid-turn is
-checked against ONE wrapper tag, `<task-notification>`; a second one, `<agent-message` (a subagent's own
-hand-back report to the turn that spawned it), was not excluded, and its own opening line — stating
-plainly it is not from him — displayed on the wrist as if it were his prompt. Both tags are excluded
-now (`NOT_HIM`); if a THIRD synthetic wrapper is ever added to the harness, it needs listing there too,
-not discovered by watching it appear on his screen.
+ever match a reply rather than a prompt). **Another source of exactly this failure mode — text that
+looks like the user's words but is not — is `fromHim` in `transcripts.js`**: a message queued mid-turn is
+checked against the synthetic wrapper tags `<task-notification>` and `<agent-message` (a subagent's
+hand-back report to the turn that spawned it), listed in `NOT_HIM`; an unlisted one shows on the wrist
+as if it were the user's prompt, so a new synthetic wrapper in the harness needs adding there.
 
 ### Naming a session
 
@@ -1379,9 +1355,9 @@ that height. It renders only when a session is actually holding follow-ups; an e
 
 `/api/sessions` returns `focus` — the session a SPOKEN follow-up would land in — and the panel marks
 that row; the TV strip and the home wall show the same session. `desk_sessions_state()` (data-layer 00157) decides it,
-for this and for data-layer's `focusedSession` alike: a session Jared focused by
+for this and for data-layer's `focusedSession` alike: a session focused by
 name while it runs, else nobody while a dispatch is still opening, else the most recently active running
-session. The rule, and why it includes the session he is typing in, is SESSIONS.md § Focus.
+session. The rule, and why it includes the session being typed in, is SESSIONS.md § Focus.
 
 It is worth showing because it moves: the session you last used holds follow-ups unless you pinned
 one, so glancing at the strip answers where "tell it to…" will go. `pinned` (in `/api/sessions`, and
@@ -1394,7 +1370,7 @@ render.
 
 That depends on both machines reporting honestly, which is why each reconciles its own sessions every
 30s — by the process a row belongs to (`pid`), since a tab outlives the process inside it. Keyed by
-tab, a row closed the day before was kept running by the next session opened in its tab.
+tab, a closed row would be kept running by the next session opened in its tab.
 
 ### The TV sidebar (`/tv-sidebar`)
 
@@ -1420,11 +1396,11 @@ directly, so its window is that width and the panel fills it.
 The orchestrator view is the current context of the hub thread, fetched from
 `/api/voice-messages?focus=hub&mode=active` (the watch's view) and refetched whenever `/api/voice-stream`
 carries a `message` or `reset` frame, so which rows belong to the current context stays the server's
-rule. After 4 AM or a reset it is empty under its header until he speaks again. A reply relayed
+rule. After 4 AM or a reset it is empty under its header until the next command. A reply relayed
 from a session (a row with `session_id`) is drawn in the teal (`#9fe3d3`) the phone and watch give it.
 
-His words appear the moment the request exists, not when the conversation row does: the worker writes
-his `voice_messages` row only beside the answer, up to half a minute later. Every `voice_requests`
+The user's words appear the moment the request exists, not when the conversation row does: the worker
+writes the user's `voice_messages` row only beside the answer, up to half a minute later. Every `voice_requests`
 insert or update for the hub conversation goes out on `/api/voice-stream` as a `request` frame
 (`requestView`: id, transcript, status), and `/api/voice-pending` lists the unfinished ones for a
 (re)load. The page draws them after the conversation until a row with that `request_id` arrives, and
@@ -1464,7 +1440,7 @@ writes a self-contained HTML page, it lands as a push notification, and tapping 
 | the pane's data | `GET /api/reports` (list only; `html` is never selected) → `cards/reports.js` |
 
 **Why the directive lives in the prompt and not in `CLAUDE.md`:** it should apply to dispatched work
-only. A session opened by hand at the keyboard has no business filing reports at you. Making it
+only. A session opened by hand at the keyboard has no business filing reports. Making it
 optional later is a flag on the command rather than an edit to a file both machines share.
 
 **Why `reports.notified` is a column and not an in-memory set:** the hub restarts on every deploy. An
@@ -1499,7 +1475,7 @@ capped at 2-3 short columns, SVG must carry a `viewBox` and `width="100%"`, and 
 pixel width.
 
 The stylesheet has to cooperate: a `display:block` table with `width:100%` squeezes its columns to
-fit rather than overflowing, which is what produced the unreadable first one. `width:auto` with
+fit rather than overflowing. `width:auto` with
 `min-width:100%` lets it fill a narrow screen *and* grow past it, and a `min-width` on cells makes it
 scroll rather than shrink to a word per line.
 
@@ -1507,7 +1483,7 @@ scroll rather than shrink to a word per line.
 
 The HTML was written by a model and is opened inside the app's WKWebView, which is already
 authenticated to this hub. Served plainly, script in that document would be same-origin with the
-dashboard and could call `/api/*` — clearing todos, opening sessions — with Jared's own cookie.
+dashboard and could call `/api/*` — clearing todos, opening sessions — with the owner's own cookie.
 
 So `/report/:id` sends a CSP that both sandboxes the response into an opaque origin **and** blocks
 scripts outright via `default-src 'none'`. Two independent mechanisms, because this is the only place
@@ -1543,8 +1519,7 @@ if the running commit never becomes the one it built.
 ## 6e. The wall's footer row, and why the machine never sleeps
 
 the wall's third grid row — a real row in `body.tv .rows`, not an overlay, so the cards above shrink
-to fit it. Adding it meant pinning the health bar's `grid-row` from `1/-1` to `1/3`, or it would have
-swallowed the new row.
+to fit it. The health bar's `grid-row` is pinned to `1/3`; at `1/-1` it would swallow this row.
 
 Left is the activity lane (`#tv-act`, §3). Right is `cards/deskfoot.js`: the repo name of whichever
 session a spoken follow-up would land in, rendered only when there is one. The frame is permanent so
@@ -1554,7 +1529,7 @@ an empty lane reads as reserved space rather than as a gap.
 exists there too, but the lane is
 inside `.tv-shell`, which `wall.js` transform-scales to fit the screen, and a transformed ancestor
 scales its descendants' text *and* becomes the containing block for their `position:fixed`. Mounting
-the activity element into the lane wherever `#tv-act` existed rendered the phone's popup at about a
+the activity element into the lane wherever `#tv-act` exists would render the phone's popup at about a
 third of its size, pinned inside the shell. So `voiceagent.js` mounts into the lane only on the kiosk
 (`body.tv`, not `body.mac`, ≥1400px — the predicate `wall.js` uses, since `body.phonewall` is not set
 yet when the bar is created) and onto `<body>` everywhere else, and the row is simply `display:none`
@@ -1565,14 +1540,13 @@ off the kiosk.
 `server/fly.toml` sets `auto_stop_machines = false` and `min_machines_running = 1`. Leave it that way.
 
 `fly launch`'s defaults suspend an app when traffic goes quiet, and this one has a wall display
-depending on it around the clock. Suspending put a cold start in front of every phone visit and made
+depending on it around the clock. Suspending puts a cold start in front of every phone visit and makes
 the hub briefly unreachable on each wake, which the Pi's reachability watchdog is built to react to.
 
 That watchdog (`~/scripts/hub-reach-watch.sh`, started by `.xinitrc`) kills Chromium once the hub has
 been unreachable and comes back, because Chromium otherwise sits on its own error page and the
 relaunch loop never fires. It requires **three consecutive failed checks**, not one: a single failed
-5s curl on a Wi-Fi machine is a blip, and reloading for it blinked the wall every few minutes with
-nothing in any log to explain it. Both edges are logged under `kiosk-xinit`, so an unexplained reload
+5s curl on a Wi-Fi machine is a blip, and reloading for it blinks the wall every few minutes. Both edges are logged under `kiosk-xinit`, so an unexplained reload
 is traceable rather than guessed at.
 
 ### Three layers recover a frozen wall, and they are deliberately ordered
@@ -1594,20 +1568,19 @@ loop onto its reachability gate and leaves a black screen instead of a stale one
 to the third layer, which is why the second one declines it.
 
 The third layer does NOT reload a page that is still loaded. That page rides out the outage and
-rebuilds its own stream when the hub answers; killing it anyway blanked the wall on every Wi-Fi blip,
-every few minutes on a bad day.
+rebuilds its own stream when the hub answers; killing it anyway blanks the wall on every Wi-Fi blip.
 
 ## 6f. Incidents go to the ops responder
 
 The hub starts no investigations of its own. Its errors, the page errors it relays from
 `/api/clientlog`, and its heartbeat go to the ops responder (health/responder/README.md), which watches
-every machine and service and starts the agent. That covers the machines' silence the hub used to read
-from `worker_presence`, without depending on Supabase.
+every machine and service and starts the agent; it also detects a machine going silent, without
+depending on Supabase.
 
 ## 7. `app_settings` catalog (flat key/value)
 
 `GET /api/settings` returns this map **minus `voiceprint`** — 24KB of base64 exemplar bank that no
-client here reads, and 92% of the response before it came out. The voice pipeline reads that key from
+client here reads. The voice pipeline reads that key from
 `app_settings` directly with the service key. `settingsAll()` still hands everything to server-side
 callers; only the HTTP response is filtered.
 
@@ -1616,7 +1589,7 @@ callers; only the HTTP response is filtered.
 | `surplus_cal` | Signed kcal over maintenance (+bulk / −cut / 0 maintenance). |
 | `maintenance_min_days` | Aligned-window length before adaptive maintenance goes live (Settings "calibration window"). |
 | `maintenance_phase` | JSON `{start, seed, sign, hold}` — the current goal phase (§4). Written on a `surplus_cal` sign flip. |
-| `session_reset_s` | Idle gap that bounds which worker owns the conversation. It does NOT divide the thread on any surface: a context is the 4am-day (or since a manual reset), because that is what the agent is replayed (voice-pipeline `recent_context`), and a surface that broke at an idle gap hid conversation the model could still see. |
+| `session_reset_s` | Idle gap that bounds which worker owns the conversation. It does NOT divide the thread on any surface: a context is the 4am-day (or since a manual reset), because that is what the agent is replayed (voice-pipeline `recent_context`), and a surface breaking at an idle gap would hide conversation the model can still see. |
 | `voice_reset_at` | When the hub conversation was last reset by hand — a context boundary, like the 4 AM day rollover. Written by `/api/voice-reset`. |
 | `activity_hold_s` | Seconds a finished activity row (the reply, or an error) holds on the bar. Default 60. |
 | `phone_activity_hold_s` | The same, off the kiosk (phone, Mac app panel). Default 8. |
@@ -1624,8 +1597,8 @@ callers; only the HTTP response is filtered.
 | `voice_inject_mode` | Mac-mic speech injected into the focused window (ESP off). |
 | `voice_muted` | Global mute — silences Mac mic + ESP while any command is being captured. Derived: the hub recomputes it from the `voice_mute_<holder>` keys (each the instant that holder took it, empty when given back, ignored after 15 min), which every capture path sets through `POST /api/voice-mute` `{holder, on}` (the Mac's listener writes its own key directly). |
 | `voice_speak_replies` | Read the reply aloud. |
-| `voiceid_threshold` / `voiceprint` | Wake-free speaker-ID — the "it's Jared" bar and the exemplar bank. |
-| `wakefree_pause_s` | ESP only, and only until its voiceprint loads. Wake-free endpoints on Jared's verified presence, with a pause tolerance that scales with utterance length — neither mic consults this. |
+| `voiceid_threshold` / `voiceprint` | Wake-free speaker-ID — the owner-match bar and the exemplar bank. |
+| `wakefree_pause_s` | ESP only, and only until its voiceprint loads. Wake-free endpoints on the owner's verified presence, with a pause tolerance that scales with utterance length — neither mic consults this. |
 | `phone_silence_s` / `watch_silence_s` / `mac_silence_s` / `esp_silence_s` | Trailing-silence cutoff, per capture source. All default to 3 when unset. |
 | `watch_speech_mode` / `watch_speech_min` / `watch_speech_ratio` / `watch_voice_min` | What the watch counts as speech. `fixed` (default): 2.5x the room's floor and at least `watch_speech_min` (0.02 unset), which in a quiet room is the whole line. `room`: `watch_speech_ratio` (8 unset) times the floor, no fixed number. `voice`: Apple's on-device sound classifier, a window scored `speech` at least `watch_voice_min` (0.5 unset); no level line. Settings → Watch: speech line. |
 | `watch_quick_s` | The watch's Hub Quick complication: seconds from the microphone opening after which the command sends whatever it has (5 unset). Settings → Watch: quick command. |
@@ -1718,7 +1691,7 @@ Tapping opens `statushub://open` — any host but `record` just opens the app.
   one refresh, not 61. Per-minute is deliberate: the pace line moves ~3 cal/min, so a 10-minute step
   left the centre number up to ~31 cal behind and read as stuck (`b39c498`). Span is the other half of
   the trade — longer means less network, but `consumed` stays frozen at fetch time for that whole
-  window, so an hour bounds how stale it can get on its own (`79a6941`, down from 4h).
+  window, so an hour bounds how stale it can get on its own (`79a6941`).
 - **Freshness.** A placed widget holds a *cached* timeline, so two things force a rebuild early:
   `applicationDidBecomeActive` (Push.swift — also covers "new widget code after a reinstall doesn't
   render until the old policy date rolls round") and the page itself — `core.js` `nudgeWidgets()`
@@ -1766,7 +1739,7 @@ families are too small for a list).
   property the web pane's left-swipe was chosen for. `TapTodoItem` is one *toggling* intent because
   `Button(intent:)` takes a single concrete type and a ternary over two intent types doesn't compile.
 - **The clear must be awaited.** A widget extension can be suspended the moment `perform()` returns,
-  and without an App Group there is no background `URLSession` to outlive it. Awaiting silently made
+  and without an App Group there is no background `URLSession` to outlive it. A silent await makes
   the tap feel dead, so `ClearTodoItem` paints a "clearing…" state first, then awaits, then removes
   the row from the cache so the rebuild redraws it gone with no second round-trip.
 - **Arm state needs no App Group.** A widget's button intent runs in the *extension's own process* —
@@ -1805,7 +1778,7 @@ dirty, and the whole list greyed when desk presence is stale. Home Screen famili
   options. Same extension-local `UserDefaults` arm store, same 20s expiry with a second timeline
   entry so the confirm retracts itself.
 - **A rebuild is not always a fetch.** Selecting a row is local state; making it wait on an HTTPS
-  round-trip is what made the first interactive widget feel broken. A cached payload under 60s old
+  round-trip makes the widget feel broken. A cached payload under 60s old
   (or any armed state) backs the redraw. The refresh policy is 30 minutes — the list is the Mac's own
   scan and only moves when work happens.
 

@@ -266,7 +266,7 @@ cycling on its own and nothing here is driving it.
 `/`, in the markup order of `phone-home.html` — sessions · home · reports, landing on home (index 1).
 Everything else is a sheet (`expand.js`): the weight page opens from the weigh-in plot, the calendar
 and lists from the day strip, utilities from the navbar, the voice system at the bottom of Settings. No chat pane: the hub conversation is on the home pane, and the sessions
-view takes the slot left of it; TV `/tv` = the home wall + a voice panel (auth `?token=`); the `/mic` page = a
+view takes the slot left of it; TV `/tv` = the home wall + a voice panel (auth: a one-time `?token=`, § Auth); the `/mic` page = a
 minimal fullscreen voice launcher; `/calendar` = the standalone calendar page (the navbar's calendar
 button gets there everywhere but the phone's home page, where the day strip opens the same month); `/tv-calendar` = the calendar wall (§ CLAUDE.md's walls note). The phone's page is
 NOT a scaled wall — see CLAUDE.md, "The phone's home page is not a wall".
@@ -640,9 +640,11 @@ deleted by pi-desk after 7 days; optional `lat`/`lon`/`acc`/`place` query → `v
 
 **Outside the gate:** `/api/cg/transcribe` — the restaurant watch app's voice input, raw audio → Groq
 Whisper → `{transcript}`, nothing enqueued. That app ships to TestFlight testers, so it cannot hold the hub
-token; it sends its Anthropic key as `X-Owner-Key` instead, and only the owner's (its SHA-256 matches
-`CG_OWNER_KEY_SHA256`, the same hash as `AppGate.ownerKeyHash` in CapitalGrilleApp) gets through. If that
-key is ever rotated, both hashes change together. Every request writes one `[cg-transcribe]` line: size, time
+token. Only the owner's device gets through, recognised by either `X-Owner-Token` (a dedicated random
+token; Fly secret `CG_OWNER_TOKEN_SHA256` is its hash, and the token itself is in the Mac's
+`~/.config/menu-app/owner-token`) or, from builds up to 44, `X-Owner-Key`: the owner's Anthropic key,
+whose SHA-256 is `CG_OWNER_KEY_SHA256`, the same hash as `AppGate.ownerKeyHash` in CapitalGrilleApp. When
+`X-Owner-Token` is sent it alone decides. `X-Owner-Key` goes once no build in use sends it. Every request writes one `[cg-transcribe]` line: size, time
 and word count, or `REFUSED` / `FAILED` with the reason (`CLIENT GONE`, a plain line rather than an error,
 when the watch hangs up mid-upload — its own `voice_*` rows record that side), and one `app_logs` row (`kind` `voice_hub`) under
 the watch's `X-Interaction-Id`. The watch logs its own side of each question to
@@ -654,10 +656,38 @@ matched to the menu and renamed in place) and `POST /api/cg/orders/done` (`{id}`
 Supabase `cg_orders`, which has no anon policy. A `POST /api/cg/orders` whose `interaction_id` already has rows answers with those rows and writes nothing, so a retried or fallback write never lists a recording twice. The watch's own model runs both passes; which model each
 uses is `cg_orders_model_first` / `cg_orders_model_second` (§7).
 
-**Auth:** the hub password → `sha256("status-hub:"+password)`; sent as the `hub` cookie (web) or the
-`X-Hub-Token` header (native app). The kiosk/device token `TV_TOKEN` is accepted in the same header
-(or `Authorization: Bearer`), which is how machine clients send it; `?token=<TV_TOKEN>` still works
-(and seeds the cookie) for clients not yet moved off it. Every comparison is constant-time (`safeEqual`). The server refuses to start without
+**Auth** (`lib/auth.js`). Three credentials, each accepted as the `hub` cookie or in a header
+(`X-Hub-Token`, or `Authorization: Bearer`):
+
+- **A session**, `s.<id>.<secret>`: what `POST /login` sets, one `hub_sessions` row per browser
+  (data-layer `00153`, only the secret's SHA-256 stored). Ten years, like every hub cookie. Held in
+  memory, loaded at boot (a session cookie answers 503 until the load lands, never a bounce to
+  /login) and kept current by realtime, so a revocation made in SQL applies at once.
+- **The device token** `TV_TOKEN`: the kiosk, the bedroom TV, and every machine client, in the header.
+  A browser that can only be given a URL (the Pi's kiosk) loads `?token=` once: the gate sets the
+  DEVICE COOKIE (`d.` + an HMAC of `TV_TOKEN`) and 302s to the same URL without the token. A page
+  load signed in by the header (the bedroom TV's sidebar web view) gets the same cookie for its own
+  requests. On an API call `?token=` is still accepted for clients not yet moved to the header, and
+  the gate logs `[auth] ?token= on <path>` once per boot per path (never the token) — when those lines
+  stop appearing, that acceptance can be removed.
+- **The password-derived token** `sha256("status-hub:"+password)`: what the native app derives from
+  its Keychain password, sends as `X-Hub-Token`, seeds as its web view's cookie at every launch and
+  hands the watch (whose `voice-fallback` path checks its hash). Browsers signed in before sessions
+  existed hold it too; a BROWSER page load carrying it (a user agent with a browser's token in it,
+  which WKWebView's lacks) is moved onto a session (`via = 'upgrade'`). It is a password equivalent
+  and ends only when `HUB_PASSWORD` changes.
+
+**Signing devices out**, without changing the password:
+
+    bin/hub GET /api/auth/sessions                          # every session: id, created, user agent, ip
+    bin/hub POST /api/auth/revoke '{"id":"<session id>"}'   # one device
+    bin/hub POST /api/auth/revoke '{"all":true}'            # every browser session
+
+Revoking ends sessions only. The device cookie ends when `TV_TOKEN` is rotated (every copy listed
+below), and the password-derived token when `HUB_PASSWORD` is changed (the native app then asks
+for it again).
+
+Every comparison is constant-time (`safeEqual`). The server refuses to start without
 `HUB_PASSWORD`. `POST /login` locks out an IP after 5 wrong passwords in 15 minutes (in memory, so a
 restart clears it; `LOGIN_*` in server.js). There is no all-clients cap: anyone could trip it on purpose.
 

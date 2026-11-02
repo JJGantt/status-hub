@@ -1,0 +1,26 @@
+# The server's test suite (server/test, `npm test`) on every push to main that touches the server.
+# Linux and free; it ships nothing. Deploying is still server/deploy.sh from the machine that made the
+# change (CLAUDE.md, "Pushing does not deploy").
+name: server tests
+on:
+  push:
+    branches: [main]
+    paths: ['server/**', '.github/workflows/server-test.yml']
+  pull_request:
+    paths: ['server/**', '.github/workflows/server-test.yml']
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: server
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: server/package-lock.json
+      - run: npm ci
+      - run: npm test

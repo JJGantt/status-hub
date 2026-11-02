@@ -187,7 +187,7 @@ them into `veg_g` / `dark_green_g` / `fruit_g` (dark green ⊂ veg).
 - **`/mic`** — a minimal fullscreen tap-to-talk launcher page (Add-to-Home-Screen web-clip); reuses
   the same recorder + pipeline as the in-app voice FAB.
 - **TV / kiosk wall** — `/tv` (same dashboard + a live voice-conversation panel). Auth by
-  `?token=<TV_TOKEN>`. Near-black always-on display.
+  `?token=<TV_TOKEN>` once, traded for a cookie and stripped from the URL. Near-black always-on display.
 - **Native iOS / macOS app** — `status-hub/apps/` (`StatusHub` iOS + `StatusHubMac` +
   `StatusHubControls`), xcodegen-generated (`project.yml`). A WKWebView shell over the web hub that
   seeds the auth cookie from the Keychain password (`Auth.swift`) and adds **push** (`Push.swift`) —

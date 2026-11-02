@@ -27,14 +27,29 @@ IDEAS.md  Backlog / roadmap for the whole product.
 cd server
 npm install
 npm run build                  # bundles the client into public/dist (generated, not committed)
+npm test                       # the suite (below); run it before pushing
 npm start                      # local run on :8080
 ./deploy.sh                    # deploy to Fly, then verify /healthz reports this commit
 ```
 
 Key files: `server.js` (Express, SSE, auth, page HTML), `lib/*` (the domain engine — `maintenance.js`
-adaptive TDEE + goal phases, `pace.js`, `nutritionlog.js`, `volume.js`, `score.js`, …). Auth:
-password → sha256 cookie (web) or `X-Hub-Token` header (apps). **Full internals map:
+adaptive TDEE + goal phases, `pace.js`, `nutritionlog.js`, `volume.js`, `score.js`, …). Auth: `lib/auth.js`
+(sessions, the device token, the password-derived token; HUB-INTERNALS § Auth). **Full internals map:
 [docs/HUB-INTERNALS.md](docs/HUB-INTERNALS.md).**
+
+`npm start` with real `SUPABASE_*` runs every timer against live data: `dueTick` pushes overdue items,
+the sweeps delete, and boot rewrites `fallback_config` from whatever `HUB_PASSWORD` it was given. Prove
+a change with `npm test` instead.
+
+### Tests
+
+`server/test/` (`node:test`, no dependencies). `harness.js` starts the real `server.js` as a child
+process against an in-memory fake of Supabase's REST API, so a test goes through the same middleware
+and routes as Fly; Groq, APNs and the ops responder are left unconfigured. They cover only what is
+costly to break: every way a request authenticates and every way it is refused, the login lockout,
+session issue, upgrade, revocation and survival across a restart, the Menu app's owner check, and
+`/api/notify`'s device-token rule. `.github/workflows/server-test.yml` runs them on every push to main
+that touches `server/`.
 
 ## Apps (`apps/`)
 

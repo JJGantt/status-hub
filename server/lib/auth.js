@@ -192,4 +192,56 @@ function createAuth({ password, deviceToken, supabaseUrl, supabaseKey }) {
            login, upgrade, list, revoke, clientIp };
 }
 
-module.exports = { createAuth, isNavigation, isBrowser, stripToken, safeEqual, getCookie };
+// The auth gate, mounted by server.js between `pub` and `gated`. A credential is any of the three above,
+// in the `hub` cookie or a header. The browser sends the cookie on same-origin module/css
+// fetches automatically, so the static assets on `gated` need nothing more.
+// The token never stays in a URL: a page load carrying `?token=` (the Pi's kiosk, which can only be
+// given a URL) is signed in with the device cookie and redirected to the same URL without it, and the
+// token is never logged.
+const queryTokenSeen = new Set();
+function createGate(auth) {
+  async function hubGate(req, res, next) {
+    const q = typeof req.query.token === 'string' ? req.query.token : '';
+    const nav = isNavigation(req);
+    const who = auth.identify(req);
+    if (who && who.kind === 'pending') return res.status(503).type('text').send('starting');
+    if (nav && q && (who || auth.isDeviceToken(q))) {
+      if (auth.isDeviceToken(q)) auth.setDeviceCookie(res);
+      return res.redirect(302, stripToken(req.originalUrl));
+    }
+    if (who) {
+      if (nav && who.from === 'header' && who.kind === 'device') auth.setDeviceCookie(res);
+      else if (nav && who.from === 'cookie' && who.kind === 'password' && isBrowser(req)) await auth.upgrade(req, res);
+      return next();
+    }
+    // A machine client still sending `?token=`. Accepted until each has moved to the header; the path
+    // (never the token) is logged once per boot so the stragglers can be found.
+    if (q && auth.isDeviceToken(q)) {
+      if (!queryTokenSeen.has(req.path)) { queryTokenSeen.add(req.path); console.log(`[auth] ?token= on ${req.method} ${req.path}`); }
+      return next();
+    }
+    if (req.path.startsWith('/api')) return res.status(401).json({ error: 'unauthorized' });
+    res.redirect('/login');
+  }
+  return hubGate;
+}
+
+// What the watch's fallback needs from this server, handed over while it is up: the HASH of the device
+// token, so the `voice-fallback` edge function (data-layer supabase/functions) can check the watch's
+// X-Hub-Token when THIS server cannot be reached. Written at every boot rather than copied by hand, so a
+// changed password reaches it at the next deploy. Service-role only (data-layer 00124).
+async function publishFallbackConfig({ auth, supabaseUrl: SUPABASE_URL, supabaseKey: SUPABASE_KEY }) {
+  const row = { key: 'hub_token_sha256', value: crypto.createHash('sha256').update(auth.PASSWORD_TOKEN).digest('hex'),
+                updated_at: new Date().toISOString() };
+  try {
+    const r = await fetch(`${SUPABASE_URL}/rest/v1/fallback_config?on_conflict=key`, {
+      method: 'POST',
+      headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}`, 'Content-Type': 'application/json',
+                 Prefer: 'resolution=merge-duplicates' },
+      body: JSON.stringify(row),
+    });
+    if (!r.ok) throw new Error(`-> ${r.status}`);
+  } catch (e) { console.error('[fallback-config] could not publish:', e.message); }
+}
+
+module.exports = { createAuth, createGate, publishFallbackConfig, isNavigation, isBrowser, stripToken, safeEqual, getCookie };

@@ -195,7 +195,7 @@ with the same MCP servers, approvals off and full access.
 | `start_session` | target machine | pull, launch, publish the row |
 | `focus_session` | — | pins the follow-up pointer to a session that already exists |
 | `unfocus_session` | — | releases the pin: follow-ups go to the most recently active session again |
-| `follow_up` | machine owning the target session | text typed into the live session, busy or not; the target is the session NAMED (`session` param), else the focused one. A named parked session is resumed with the words instead. Naming leaves the pin alone |
+| `follow_up` | machine owning the target session | text typed into the live session, busy or not; the target is the session NAMED (`session` param), else the focused one. A named parked session is resumed with the words instead. Naming leaves the pin alone. **With the owning machine asleep, the session moves**: a `resume_mirrored` to the other machine carrying the words as its prompt, as a transfer from a dead source does (only a Codex session, one with no transcript, or both machines down dead-letters the words instead) |
 | `rename_session` | owning machine | `/rename <name>` typed in — the session renames itself |
 | `end_session` | owning machine | close the tab / tmux session, park the row. A session ending ITSELF is not closed by a command: see below |
 | `resume_session` | owning machine | `claude --resume <id>` in a new tab or tmux session, with an optional prompt; a Pi with no memory to spare hands it to the Mac with its conversation, like new work (§ Capacity). Aimed at a session that is still running, both machines type the prompt into it |
@@ -204,7 +204,8 @@ with the same MCP servers, approvals off and full access.
 
 The hub's `POST /api/sessions/followup` (the watch's and the phone's session view) is `follow_up` addressed by session
 id instead of by focus, and for a parked session it writes `resume_session` with the words as the
-prompt instead — HUB-INTERNALS §6b.
+prompt instead — HUB-INTERNALS §6b. It moves a session off an asleep machine exactly as `follow_up` does, carrying
+attachments and `msg` in the `resume_mirrored` payload; the two have to agree.
 
 **A session that ends itself closes after its reply.** It calls `end_session` mid-turn, and closing
 it then kills the process before the reply is written, so the watch and phone get nothing. So when the

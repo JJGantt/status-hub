@@ -760,7 +760,9 @@ connectivity until the session's resource limit (`connectionWait` + 60, two minu
 
 The function checks the same `X-Hub-Token`, against a hash the hub writes to `fallback_config` at every
 boot, and a 401 from it does not throw the token away the way the hub's 401 does: it means the
-function lacks the hash, not that the token is wrong. The outcome is waited on at the function too
+function lacks the hash, not that the token is wrong. Both the hub and the function answer 429 to an
+address locked out for guessing (HUB-INTERNALS § Auth), which the watch treats as any other failure and
+keeps its token. The outcome is waited on at the function too
 (`Hub.fallbackOutcome`, held open on the row, `pending` after 50s), and it carries the reply's text,
 which the watch puts into the thread itself when `load()` did not bring it — the thread is served by
 the hub that did not answer. Only home commands fall back; a session's follow-up and the always-on

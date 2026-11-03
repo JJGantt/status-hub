@@ -713,9 +713,8 @@ uses is `cg_orders_model_first` / `cg_orders_model_second` (§7).
   A browser that can only be given a URL (the Pi's kiosk) loads `?token=` once: the gate sets the
   DEVICE COOKIE (`d.` + an HMAC of `TV_TOKEN`) and 302s to the same URL without the token. A page
   load signed in by the header (the bedroom TV's sidebar web view) gets the same cookie for its own
-  requests. On an API call `?token=` is still accepted for clients not yet moved to the header, and
-  the gate logs `[auth] ?token= on <path>` once per boot per path (never the token) — when those lines
-  stop appearing, that acceptance can be removed.
+  requests. That page-load exchange is the only place `?token=` is read: on any other request it is
+  ignored, so a token in a URL never signs anything in (URLs end up in proxy and history logs).
 - **The password-derived token** `sha256("status-hub:"+password)`: what the native app derives from
   its Keychain password, sends as `X-Hub-Token`, seeds as its web view's cookie at every launch and
   hands the watch (whose `voice-fallback` path checks its hash). Browsers signed in before sessions
@@ -734,8 +733,21 @@ below), and the password-derived token when `HUB_PASSWORD` is changed (the nativ
 for it again).
 
 Every comparison is constant-time (`safeEqual`). The server refuses to start without
-`HUB_PASSWORD`. `POST /login` locks out an IP after 5 wrong passwords in 15 minutes (in memory, so a
-restart clears it; `LOGIN_*` in routes/public.js). There is no all-clients cap: anyone could trip it on purpose.
+`HUB_PASSWORD`.
+
+**Guessing is limited per client address** (`guessLimit` in lib/auth.js). The password and the
+password-derived token are only as strong as the password, so every way to try one draws on one
+budget: a wrong password at `POST /login`, and a password-shaped value (anything not `s.…` or `d.…`)
+in `X-Hub-Token`, `Authorization: Bearer` or the cookie that matches nothing. 5 DISTINCT wrong values
+in 15 minutes and that address gets 429 for any password or password-derived credential until the
+oldest ages out; a correct one does not reset the count, since the app on the same address would
+otherwise reset an attacker's. The address is `Fly-Client-IP` (set by Fly's edge, not the client),
+IPv6 by its /64. Repeats of one value count once, so a client resending a stale token after a
+password change never locks its own address out. Sessions, the device token and the device cookie
+are random and are checked even while an address is locked, so an attacker can lock out at most the
+native app on its own address, never the kiosk, the machine clients or a signed-in browser. In
+memory, so a restart clears it. There is no all-addresses cap: anyone could trip it on purpose. The
+watch's fallback (`voice-fallback`) keeps its own count of the same kind (data-layer `00163`).
 
 **From a shell, call it with `bin/hub <METHOD> <path> [json | @file]`** (`bin/hub GET /api/status`), on the
 Mac or the Pi. It reads the kiosk token from `$HUB_TOKEN` or this repo's gitignored `.env` and hands

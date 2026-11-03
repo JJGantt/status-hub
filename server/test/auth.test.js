@@ -1,6 +1,6 @@
 'use strict';
 // The auth gate and every way a request can be signed in (lib/auth.js, the gate included), the
-// login lockout, and the session lifecycle: issue at /login, upgrade from the old cookie, revoke one or
+// guess limit shared by /login and the password-derived token, and the session lifecycle: issue at /login, upgrade from the old cookie, revoke one or
 // all, survive a restart.
 const { test, describe, before, after } = require('node:test');
 const assert = require('node:assert/strict');
@@ -12,7 +12,7 @@ after(async () => { await hub.stop(); supa.close(); });
 
 const status = async (p, init) => (await hub.req(p, init)).status;
 let ipSeq = 0;
-const freshIp = () => `10.0.0.${++ipSeq}`;   // the lockout is per client IP (Fly-Client-IP)
+const freshIp = () => `10.0.0.${++ipSeq}`;   // the guess limit is per client address (Fly-Client-IP)
 async function login(password = h.PASSWORD, ip = freshIp(), headers = {}) {
   return hub.req('/login', { method: 'POST', body: new URLSearchParams({ password }),
     headers: { 'Fly-Client-IP': ip, 'User-Agent': h.SAFARI, ...headers } });
@@ -35,9 +35,10 @@ describe('the gate, unauthenticated', () => {
     assert.equal(await status('/api/surf/forecast'), 401);
   });
   test('garbage credentials are refused everywhere they can be sent', async () => {
+    const ip = { 'Fly-Client-IP': freshIp() };
     for (const headers of [{ 'X-Hub-Token': 'nope' }, { Authorization: 'Bearer nope' }, { Cookie: 'hub=nope' },
                            { Cookie: 'hub=s.00000000-0000-0000-0000-000000000000.x' }, { Cookie: 'hub=d.00' }]) {
-      assert.equal(await status('/api/todos', { headers }), 401, JSON.stringify(headers));
+      assert.equal(await status('/api/todos', { headers: { ...ip, ...headers } }), 401, JSON.stringify(headers));
     }
     assert.equal(await status('/api/todos?token=nope'), 401);
   });
@@ -48,9 +49,9 @@ describe('the device token (TV_TOKEN)', () => {
     assert.equal(await status('/api/todos', { headers: { 'X-Hub-Token': h.DEVICE_TOKEN } }), 200));
   test('is accepted as Authorization: Bearer', async () =>
     assert.equal(await status('/api/todos', { headers: { Authorization: `Bearer ${h.DEVICE_TOKEN}` } }), 200));
-  test('is still accepted as ?token= on an API call, and logs the path but never the token', async () => {
-    assert.equal(await status(`/api/todos?token=${h.DEVICE_TOKEN}`), 200);
-    assert.match(hub.output(), /\[auth\] \?token= on GET \/api\/todos/);
+  test('is never accepted as ?token= on anything but a page load', async () => {
+    assert.equal(await status(`/api/todos?token=${h.DEVICE_TOKEN}`), 401);
+    assert.equal(await status(`/api/todos?token=${h.DEVICE_TOKEN}`, { headers: { 'Sec-Fetch-Mode': 'cors' } }), 401);
     assert.ok(!hub.output().includes(h.DEVICE_TOKEN));
   });
   test('as ?token= on a page load, is traded for the device cookie and stripped from the URL', async () => {
@@ -137,17 +138,95 @@ describe('login', () => {
   });
   test('five wrong passwords lock that IP out, even from the right one; other IPs are unaffected', async () => {
     const ip = freshIp();
-    for (let i = 0; i < 5; i++) assert.equal((await login('wrong', ip)).status, 401);
-    assert.equal((await login('wrong', ip)).status, 429);
+    for (let i = 0; i < 5; i++) assert.equal((await login(`wrong${i}`, ip)).status, 401);
+    assert.equal((await login('wrong5', ip)).status, 429);
     assert.equal((await login(h.PASSWORD, ip)).status, 429);
     assert.equal((await login(h.PASSWORD, freshIp())).status, 302);
   });
-  test('a success clears the IP\'s count', async () => {
+  test('a success does not reset the count (a user on the same address would otherwise reset an attacker\'s)', async () => {
     const ip = freshIp();
-    for (let i = 0; i < 4; i++) await login('wrong', ip);
+    for (let i = 0; i < 4; i++) await login(`wrong${i}`, ip);
     assert.equal((await login(h.PASSWORD, ip)).status, 302);
-    for (let i = 0; i < 4; i++) assert.equal((await login('wrong', ip)).status, 401);
+    assert.equal((await login('wrong4', ip)).status, 401);
+    assert.equal((await login(h.PASSWORD, ip)).status, 429);
+  });
+  test('the same wrong password repeated counts once', async () => {
+    const ip = freshIp();
+    for (let i = 0; i < 10; i++) assert.equal((await login('same-typo', ip)).status, 401);
     assert.equal((await login(h.PASSWORD, ip)).status, 302);
+  });
+});
+
+// The password-derived token is only as strong as the password, so a guess at it in a header or the
+// cookie spends the same per-address budget as a wrong password at /login.
+describe('the guess limit on tokens', () => {
+  const at = (ip, headers = {}) => status('/api/todos', { headers: { 'Fly-Client-IP': ip, ...headers } });
+  const guess = (i) => h.PASSWORD_TOKEN.slice(0, -4) + String(1000 + i);
+
+  test('five wrong header tokens lock the address out, even for the right token; other addresses are unaffected', async () => {
+    const ip = freshIp();
+    for (let i = 0; i < 5; i++) assert.equal(await at(ip, { 'X-Hub-Token': guess(i) }), 401);
+    assert.equal(await at(ip, { 'X-Hub-Token': guess(5) }), 429);
+    assert.equal(await at(ip, { 'X-Hub-Token': h.PASSWORD_TOKEN }), 429);
+    assert.equal(await at(ip, { Cookie: `hub=${h.PASSWORD_TOKEN}` }), 429);
+    assert.equal(await at(freshIp(), { 'X-Hub-Token': h.PASSWORD_TOKEN }), 200);
+  });
+  test('Bearer, the cookie and /login all draw on the same budget', async () => {
+    const ip = freshIp();
+    await at(ip, { Authorization: `Bearer ${guess(0)}` });
+    await at(ip, { Cookie: `hub=${guess(1)}` });
+    await login('wrong-a', ip);
+    await login('wrong-b', ip);
+    await at(ip, { 'X-Hub-Token': guess(2) });
+    assert.equal((await login(h.PASSWORD, ip)).status, 429);
+    assert.equal(await at(ip, { 'X-Hub-Token': h.PASSWORD_TOKEN }), 429);
+  });
+  test('a locked address still gets in with the device token, the device cookie or a session', async () => {
+    const session = h.setCookie(await login());
+    const deviceCookie = h.setCookie(await hub.req(`/tv?token=${h.DEVICE_TOKEN}`, { headers: h.NAV }));
+    const ip = freshIp();
+    for (let i = 0; i < 5; i++) await at(ip, { 'X-Hub-Token': guess(i) });
+    assert.equal(await at(ip, { 'X-Hub-Token': h.DEVICE_TOKEN }), 200);
+    assert.equal(await at(ip, { Cookie: `hub=${deviceCookie}` }), 200);
+    assert.equal(await at(ip, { Cookie: `hub=${session}` }), 200);
+    assert.equal(await at(ip), 401);   // no credential at all is an ordinary refusal, not a lockout
+  });
+  test('a stale token resent forever (after a password change) counts once and locks nothing', async () => {
+    const ip = freshIp();
+    for (let i = 0; i < 20; i++) assert.equal(await at(ip, { 'X-Hub-Token': guess(0) }), 401);
+    assert.equal(await at(ip, { 'X-Hub-Token': h.PASSWORD_TOKEN }), 200);
+  });
+  test('the right token does not reset the count', async () => {
+    const ip = freshIp();
+    for (let i = 0; i < 4; i++) await at(ip, { 'X-Hub-Token': guess(i) });
+    assert.equal(await at(ip, { 'X-Hub-Token': h.PASSWORD_TOKEN }), 200);
+    await at(ip, { 'X-Hub-Token': guess(4) });
+    assert.equal(await at(ip, { 'X-Hub-Token': h.PASSWORD_TOKEN }), 429);
+  });
+  test('wrong sessions and device cookies are not counted: they are never checked against the password', async () => {
+    const ip = freshIp();
+    for (let i = 0; i < 10; i++) {
+      await at(ip, { Cookie: `hub=s.00000000-0000-0000-0000-00000000000${i}.x` });
+      await at(ip, { Cookie: `hub=d.${i}` });
+    }
+    assert.equal(await at(ip, { 'X-Hub-Token': h.PASSWORD_TOKEN }), 200);
+  });
+  test('an IPv6 client is counted by its /64, so rotating addresses inside it gains nothing', async () => {
+    for (let i = 0; i < 5; i++) await at(`2001:db8:1:2::${i + 1}`, { 'X-Hub-Token': guess(i) });
+    assert.equal(await at('2001:db8:1:2:ffff::9', { 'X-Hub-Token': h.PASSWORD_TOKEN }), 429);
+    assert.equal(await at('2001:db8:1:3::1', { 'X-Hub-Token': h.PASSWORD_TOKEN }), 200);
+  });
+});
+
+describe('addressKey', () => {
+  const { addressKey } = require('../lib/auth');
+  test('keeps IPv4 as is, unwraps v4-mapped IPv6, and cuts IPv6 to its /64', () => {
+    assert.equal(addressKey('203.0.113.7'), '203.0.113.7');
+    assert.equal(addressKey('::ffff:203.0.113.7'), '203.0.113.7');
+    assert.equal(addressKey('2001:db8:1:2::1'), '2001:db8:1:2::/64');
+    assert.equal(addressKey('2001:0db8:0001:0002:aaaa:bbbb:cccc:dddd'), '2001:db8:1:2::/64');
+    assert.equal(addressKey('2001:db8::5'), '2001:db8:0:0::/64');
+    assert.equal(addressKey('::1'), '0:0:0:0::/64');
   });
 });
 

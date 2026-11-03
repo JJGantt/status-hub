@@ -7,15 +7,24 @@
 //     touching the password (`revoke`).
 //   - the DEVICE token, TV_TOKEN: the kiosk, the bedroom TV, and every machine client (bin/hub, the
 //     voice worker, the responder). Sent in a header. A browser that can only be given a URL (the
-//     Pi's kiosk) loads it once as `?token=`, and the gate trades that for the DEVICE COOKIE
-//     (`d.<hmac>`, derived from TV_TOKEN, so rotating TV_TOKEN ends it) and redirects to the same
-//     URL without the token. Revoked by rotating TV_TOKEN.
+//     Pi's kiosk) loads a PAGE once with it as `?token=`, and the gate trades that for the DEVICE
+//     COOKIE (`d.<hmac>`, derived from TV_TOKEN, so rotating TV_TOKEN ends it) and redirects to the
+//     same URL without the token. Anywhere else `?token=` is ignored. Revoked by rotating TV_TOKEN.
 //   - the PASSWORD-DERIVED token, sha256("status-hub:" + password): what the native app derives from
 //     the password in its Keychain and sends as X-Hub-Token, seeds as its web view's cookie, and hands
 //     the watch; and what every browser signed in before sessions existed holds. It is a password
 //     equivalent and ends only when HUB_PASSWORD changes. A browser (not the app's web view) that
 //     loads a page with it is moved onto a session (`upgrade`), so its stored cookie becomes
 //     revocable.
+//
+// GUESSING. Sessions, the device token and the device cookie are random, so guessing them is hopeless;
+// the password and the password-derived token are not, since each is only as strong as the password.
+// Every way to try one (POST /login, a header, the cookie) draws on ONE budget per client address
+// (`guessLimit`): GUESS_MAX distinct wrong values inside GUESS_WINDOW_MS and that address gets no more
+// password checks until the oldest ages out. Random credentials are still checked while it is locked,
+// so an attacker can never lock out the kiosk, the machine clients or a signed-in browser; at most the
+// native app sharing the attacker's address. Distinct values, because a client holding a stale token
+// (after a password change) resends the same one forever and must not lock its own address out.
 //
 // Sessions live in memory and are loaded from Supabase at boot. Until that load lands a session
 // credential answers 503 rather than 401, so a deploy never bounces a signed-in page to /login.
@@ -64,6 +73,45 @@ function stripToken(originalUrl) {
   return u.pathname + (u.searchParams.toString() ? '?' + u.searchParams.toString() : '');
 }
 
+// The address a guess is counted against: an IPv4 address as is, an IPv6 address by its /64, since one
+// host is routinely handed a whole /64 and could otherwise take a fresh address for every guess.
+function addressKey(ip) {
+  const a = String(ip || '').replace(/^::ffff:(?=\d+\.)/i, '');
+  if (!a.includes(':')) return a;
+  const [head, tail = ''] = a.split('::');
+  const h = head ? head.split(':') : [];
+  const t = a.includes('::') && tail ? tail.split(':') : [];
+  const groups = a.includes('::') ? [...h, ...Array(Math.max(0, 8 - h.length - t.length)).fill('0'), ...t] : h;
+  return groups.slice(0, 4).map((g) => (parseInt(g, 16) || 0).toString(16)).join(':') + '::/64';
+}
+
+const GUESS_WINDOW_MS = 15 * 60 * 1000;
+const GUESS_MAX = 5;
+// In memory, so a restart clears it, which is fine for a limit whose job is to make guessing slow. There
+// is deliberately no all-addresses cap: anyone could trip it on purpose and lock out every new sign-in.
+function guessLimit({ windowMs = GUESS_WINDOW_MS, max = GUESS_MAX } = {}) {
+  const seen = new Map();   // address key -> Map(sha256 of the wrong value -> when last tried)
+  const fresh = (key, now) => {
+    const m = seen.get(key);
+    if (!m) return null;
+    for (const [g, t] of m) if (now - t >= windowMs) m.delete(g);
+    if (!m.size) { seen.delete(key); return null; }
+    return m;
+  };
+  const locked = (key, now = Date.now()) => { const m = fresh(key, now); return !!m && m.size >= max; };
+  function fail(key, guess, now = Date.now()) {
+    const m = fresh(key, now) || new Map();
+    m.set(sha256hex(guess), now);
+    seen.set(key, m);
+    if (seen.size > 10000) for (const k of [...seen.keys()]) fresh(k, now);
+  }
+  return { locked, fail };
+}
+
+// A value that could be a guess at the password-derived token: anything not shaped like a session or
+// the device cookie, which are checked against random secrets and never against the password.
+const passwordShaped = (v) => !!v && !/^[sd]\./.test(v);
+
 function createAuth({ password, deviceToken, supabaseUrl, supabaseKey }) {
   const PASSWORD_TOKEN = sha256hex('status-hub:' + password);
   const DEVICE_COOKIE = deviceToken
@@ -110,8 +158,17 @@ function createAuth({ password, deviceToken, supabaseUrl, supabaseKey }) {
     if (p.new && p.new.id && p.new.secret_sha256) remember(p.new);
   }
 
+  const clientIp = (req) => String(req.headers['fly-client-ip'] || req.ip || '');
+  const guesses = guessLimit();
+  const addressOf = (req) => addressKey(clientIp(req));
+  // Whether this request's address may have a password, or a password-derived token, checked now.
+  const mayGuess = (req) => !guesses.locked(addressOf(req));
+  // A wrong password, or a wrong password-shaped token, from this request's address.
+  const failGuess = (req, value) => guesses.fail(addressOf(req), value);
+
   // What a credential string is: { kind, id? } or null. `pending` = a session before the boot load.
-  function classify(value) {
+  // `open` false skips the password-derived comparison (the address is locked out).
+  function classify(value, open = true) {
     if (!value) return null;
     if (value.startsWith('s.')) {
       const [, id, secret] = value.split('.');
@@ -122,29 +179,35 @@ function createAuth({ password, deviceToken, supabaseUrl, supabaseKey }) {
     }
     if (DEVICE_COOKIE && value.startsWith('d.')) return safeEqual(value, DEVICE_COOKIE) ? { kind: 'device' } : null;
     if (deviceToken && safeEqual(value, deviceToken)) return { kind: 'device' };
-    if (safeEqual(value, PASSWORD_TOKEN)) return { kind: 'password' };
+    if (open && safeEqual(value, PASSWORD_TOKEN)) return { kind: 'password' };
     return null;
   }
 
   // { kind, id?, from: 'cookie' | 'header' } or null. The header wins when both are present.
   function identify(req) {
+    const open = mayGuess(req);
     const h = headerToken(req);
-    const fromHeader = h && classify(h);
+    const fromHeader = h && classify(h, open);
     if (fromHeader) return { ...fromHeader, from: 'header' };
     const c = getCookie(req, 'hub');
-    const fromCookie = c && classify(c);
+    const fromCookie = c && classify(c, open);
     return fromCookie ? { ...fromCookie, from: 'cookie' } : null;
+  }
+  // A request that `identify` turned away: count each password-shaped value it carried as a wrong guess.
+  // Returns whether its address is locked out, so the gate can answer 429 rather than 401.
+  function refused(req) {
+    if (!mayGuess(req)) return passwordShaped(headerToken(req)) || passwordShaped(getCookie(req, 'hub'));
+    for (const v of new Set([headerToken(req), getCookie(req, 'hub')])) if (passwordShaped(v)) failGuess(req, v);
+    return false;
   }
   const authed = (req) => { const w = identify(req); return !!w && w.kind !== 'pending'; };
   const isDeviceToken = (value) => !!deviceToken && !!value && safeEqual(value, deviceToken);
-  // The device token in a header, or (from a client not yet moved to the header) in `?token=`.
-  const deviceRequest = (req) => isDeviceToken(headerToken(req))
-    || isDeviceToken(typeof req.query?.token === 'string' ? req.query.token : '');
+  // The device token in a header. Never read from the URL: a token there ends up in proxy and history logs.
+  const deviceRequest = (req) => isDeviceToken(headerToken(req));
 
   const cookie = (value) => `hub=${value}; Max-Age=${COOKIE_MAX_AGE}; Path=/; HttpOnly; Secure; SameSite=Lax`;
   const setDeviceCookie = (res) => res.setHeader('Set-Cookie', cookie(DEVICE_COOKIE));
 
-  const clientIp = (req) => String(req.headers['fly-client-ip'] || req.ip || '');
   // A new session for this browser; resolves to the cookie value. Throws if it cannot be stored, since
   // a session held only in memory would sign the browser out at the next deploy.
   async function mint(req, via) {
@@ -188,8 +251,8 @@ function createAuth({ password, deviceToken, supabaseUrl, supabaseKey }) {
     return ids;
   }
 
-  return { PASSWORD_TOKEN, start, onChange, identify, authed, isDeviceToken, deviceRequest, setDeviceCookie,
-           login, upgrade, list, revoke, clientIp };
+  return { PASSWORD_TOKEN, start, onChange, identify, refused, mayGuess, failGuess, authed, isDeviceToken,
+           deviceRequest, setDeviceCookie, login, upgrade, list, revoke, clientIp };
 }
 
 // The auth gate, mounted by server.js between `pub` and `gated`. A credential is any of the three above,
@@ -197,8 +260,7 @@ function createAuth({ password, deviceToken, supabaseUrl, supabaseKey }) {
 // fetches automatically, so the static assets on `gated` need nothing more.
 // The token never stays in a URL: a page load carrying `?token=` (the Pi's kiosk, which can only be
 // given a URL) is signed in with the device cookie and redirected to the same URL without it, and the
-// token is never logged.
-const queryTokenSeen = new Set();
+// token is never logged. Nothing else is ever signed in by `?token=`.
 function createGate(auth) {
   async function hubGate(req, res, next) {
     const q = typeof req.query.token === 'string' ? req.query.token : '';
@@ -214,11 +276,10 @@ function createGate(auth) {
       else if (nav && who.from === 'cookie' && who.kind === 'password' && isBrowser(req)) await auth.upgrade(req, res);
       return next();
     }
-    // A machine client still sending `?token=`. Accepted until each has moved to the header; the path
-    // (never the token) is logged once per boot so the stragglers can be found.
-    if (q && auth.isDeviceToken(q)) {
-      if (!queryTokenSeen.has(req.path)) { queryTokenSeen.add(req.path); console.log(`[auth] ?token= on ${req.method} ${req.path}`); }
-      return next();
+    if (auth.refused(req)) {
+      console.warn(`[auth] password-shaped token refused, address locked out: ${auth.clientIp(req)}`);
+      return req.path.startsWith('/api') ? res.status(429).json({ error: 'too many attempts' })
+        : res.status(429).type('text').send('too many attempts');
     }
     if (req.path.startsWith('/api')) return res.status(401).json({ error: 'unauthorized' });
     res.redirect('/login');
@@ -226,10 +287,12 @@ function createGate(auth) {
   return hubGate;
 }
 
-// What the watch's fallback needs from this server, handed over while it is up: the HASH of the device
-// token, so the `voice-fallback` edge function (data-layer supabase/functions) can check the watch's
-// X-Hub-Token when THIS server cannot be reached. Written at every boot rather than copied by hand, so a
-// changed password reaches it at the next deploy. Service-role only (data-layer 00124).
+// What the watch's fallback needs from this server, handed over while it is up: the HASH of the
+// password-derived token (the watch's X-Hub-Token, handed to it by the phone app), so the
+// `voice-fallback` edge function (data-layer supabase/functions) can check it when THIS server cannot
+// be reached. The function limits wrong guesses itself (data-layer 00163), as the gate does here.
+// Written at every boot rather than copied by hand, so a changed password reaches it at the next deploy.
+// Service-role only (data-layer 00124).
 async function publishFallbackConfig({ auth, supabaseUrl: SUPABASE_URL, supabaseKey: SUPABASE_KEY }) {
   const row = { key: 'hub_token_sha256', value: crypto.createHash('sha256').update(auth.PASSWORD_TOKEN).digest('hex'),
                 updated_at: new Date().toISOString() };
@@ -244,4 +307,5 @@ async function publishFallbackConfig({ auth, supabaseUrl: SUPABASE_URL, supabase
   } catch (e) { console.error('[fallback-config] could not publish:', e.message); }
 }
 
-module.exports = { createAuth, createGate, publishFallbackConfig, isNavigation, isBrowser, stripToken, safeEqual, getCookie };
+module.exports = { createAuth, createGate, publishFallbackConfig, addressKey, isNavigation, isBrowser, stripToken,
+                   safeEqual, getCookie };

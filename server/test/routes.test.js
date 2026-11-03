@@ -44,10 +44,10 @@ describe('/api/notify', () => {
   const notify = (headers, path = '/api/notify') => hub.req(path, { method: 'POST',
     headers: { 'Content-Type': 'application/json', ...headers }, body: JSON.stringify({ title: 't', body: 'b' }) });
   // APNs is not configured here, so a request that gets past the checks answers 503.
-  test('takes the device token in a header or, until every client has moved, in ?token=', async () => {
+  test('takes the device token in a header, never in ?token=', async () => {
     assert.equal((await notify({ 'X-Hub-Token': h.DEVICE_TOKEN })).status, 503);
     assert.equal((await notify({ Authorization: `Bearer ${h.DEVICE_TOKEN}` })).status, 503);
-    assert.equal((await notify({}, `/api/notify?token=${h.DEVICE_TOKEN}`)).status, 503);
+    assert.equal((await notify({}, `/api/notify?token=${h.DEVICE_TOKEN}`)).status, 401);
   });
   test('refuses a caller signed in any other way', async () => {
     assert.equal((await notify({ 'X-Hub-Token': h.PASSWORD_TOKEN })).status, 403);

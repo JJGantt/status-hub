@@ -313,6 +313,23 @@ module.exports = function (ctx) {
                           // placeholder for them by id when they come back as an event.
                           ...(msgId ? { msg: msgId } : {}) };
         if (!(await machineAwake(machine))) {
+          // The words are for the SESSION, not the machine: with its machine asleep (a closed laptop),
+          // the conversation moves to the other machine from what was mirrored and is resumed there with
+          // them as its next prompt — data-layer's followUpElsewhere, and the two have to agree.
+          const dest = machine === 'pi' ? 'mac' : 'pi';
+          // `now.live` carries only id/worker/status; the conversation's own fields are on the full row.
+          const conv = { ...rowsFull[0], ...target };
+          if (conv.claude_session_id && conv.agent !== 'codex' && machine !== 'fly' && await machineAwake(dest)) {
+            const cmdId = crypto.randomUUID();
+            await sbWrite('desk_commands', 'POST', { id: cmdId, kind: 'resume_mirrored',
+              payload: { target: dest, claude_session_id: conv.claude_session_id, repo: conv.repo,
+                         label: conv.label || null, origin: conv.origin || 'dispatched', from: machine,
+                         prompt, ...(attachments.length ? { attachments } : {}), ...(msgId ? { msg: msgId } : {}) } });
+            await sbWrite(`desk_sessions?id=eq.${encodeURIComponent(target.id)}`, 'PATCH',
+              { status: 'transferred', ended: new Date().toISOString(), working: false });
+            markSeen(seenKey, cmdId);
+            return res.json({ id: cmdId, session: target.id, resumed: true, moved: dest });
+          }
           const saved = await deadLetter(kind, payload, machine, `the ${MACHINE_NAME[machine]} is not responding`);
           return res.status(409).json({ error: `the ${MACHINE_NAME[machine]} is not responding`, saved });
         }

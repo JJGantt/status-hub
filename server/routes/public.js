@@ -14,30 +14,6 @@ module.exports = function (ctx) {
     settingsAll,
   } = ctx;
 
-  // LOGIN LOCKOUT. Wrong passwords are counted per client IP (Fly-Client-IP, which Fly's edge sets;
-  // req.ip is the proxy), in memory: a restart clears them, which is fine for a limit whose job is to
-  // make guessing slow. LOGIN_MAX_PER_IP failures inside LOGIN_WINDOW_MS lock that IP out until the
-  // window's oldest counted failure ages out. There is deliberately no all-clients cap: anyone could trip
-  // one on purpose and lock the user out of new logins, and against a strong password the per-IP limit is
-  // enough.
-  // Signed-in devices are unaffected: they hold the cookie and never post to /login.
-  const LOGIN_WINDOW_MS = 15 * 60 * 1000;
-  const LOGIN_MAX_PER_IP = 5;
-  const loginFailures = new Map();   // ip -> [timestamps]
-  const clientIp = auth.clientIp;
-  function recentFailures(list, now) { return list.filter((t) => now - t < LOGIN_WINDOW_MS); }
-  function loginLocked(ip, now) {
-    const mine = recentFailures(loginFailures.get(ip) || [], now);
-    if (mine.length) loginFailures.set(ip, mine); else loginFailures.delete(ip);
-    return mine.length >= LOGIN_MAX_PER_IP;
-  }
-  function recordLoginFailure(ip, now) {
-    loginFailures.set(ip, [...(loginFailures.get(ip) || []), now]);
-    if (loginFailures.size > 10000) {
-      for (const [k, v] of loginFailures) if (!recentFailures(v, now).length) loginFailures.delete(k);
-    }
-  }
-
   // Public. Reports the commit this instance is RUNNING, which is the only way
   // to tell a deploy that shipped from one that silently never ran — a push whose workflow never fired
   // looks identical to a successful one from the outside, and did exactly that twice on 2026-08-26.
@@ -220,18 +196,19 @@ module.exports = function (ctx) {
     } catch (e) { res.status(502).json({ error: String(e.message || e) }); }
   });
   pub.get('/login', (req, res) => res.type('html').send(loginHtml()));
+  // LOGIN LOCKOUT: a wrong password is a guess against the same per-address budget as a wrong
+  // password-derived token at the gate (`guessLimit`, lib/auth.js), so neither way in can be used to
+  // guess past the other's limit. Signed-in devices are unaffected: they never post to /login.
   pub.post('/login', (req, res) => {
-    const ip = clientIp(req), now = Date.now();
-    if (loginLocked(ip, now)) return res.status(429).type('html').send(loginHtml('Too many attempts'));
+    if (!auth.mayGuess(req)) return res.status(429).type('html').send(loginHtml('Too many attempts'));
     if (safeEqual(req.body.password || '', HUB_PASSWORD)) {
-      loginFailures.delete(ip);
       return auth.login(req, res).then(() => res.redirect('/'), (e) => {
         console.error('[login] could not store the session:', e.message);
         res.status(503).type('text').send('unavailable');
       });
     }
-    recordLoginFailure(ip, now);
-    console.warn(`[login] wrong password from ${ip}`);
+    auth.failGuess(req, String(req.body.password || ''));
+    console.warn(`[login] wrong password from ${auth.clientIp(req)}`);
     res.status(401).type('html').send(loginHtml('Wrong password'));
   });
 

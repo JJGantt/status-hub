@@ -1353,7 +1353,10 @@ ever match a reply rather than a prompt). **Another source of exactly this failu
 looks like the user's words but is not — is `fromHim` in `transcripts.js`**: a message queued mid-turn is
 checked against the synthetic wrapper tags `<task-notification>` and `<agent-message` (a subagent's
 hand-back report to the turn that spawned it), listed in `NOT_HIM`; an unlisted one shows on the wrist
-as if it were the user's prompt, so a new synthetic wrapper in the harness needs adding there.
+as if it were the user's prompt, so a new synthetic wrapper in the harness needs adding there. A bare
+`/exit` or `/quit` is excluded the same way, and `turnStart` returns no turn for it: it is how a session is
+parked (pi-desk and the Mac's `applescript.js` type it into an idle session), so it is the machine closing
+the session, never the user's last words.
 
 ### Naming a session
 

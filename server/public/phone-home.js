@@ -272,7 +272,7 @@ function paintConv(land) {
     const eng = said && /^(credits|codex)$/.test(r.engine || '') ? ' eng-' + r.engine : '';
     // Where one context ends and the next begins — only between rows, never above the first.
     return (r.ctx && i > 0 ? '<div class="ph-convrule"></div>' : '') +
-      `<div class="ph-convline ${said ? 'said' : 'ask'}${from ? ' sess' : ''}${eng}">` +
+      `<div class="ph-convline ${said ? 'said' : 'ask'}${from ? ' sess' : ''}${eng}"${said && r.sid ? ` data-sess="${esc(r.sid)}"` : ''}>` +
       (from ? `<span class="ph-convk">${esc(from)}</span>` : '') +
       `<div class="ph-convt">${md(r.text)}</div></div>`;
   }).join('') + (pending
@@ -301,7 +301,7 @@ function paintConv(land) {
 function rowOf(r) {
   if (r.role !== 'user' && r.role !== 'assistant') return null;
   return { id: r.id, at: r.created_at, role: r.role, text: String(r.text == null ? '' : r.text).trim(),
-    session: r.session_id ? (r.session_label || '') : '', engine: r.engine || '', ctx: !!r.ctx_break };
+    session: r.session_id ? (r.session_label || '') : '', sid: r.session_id || '', engine: r.engine || '', ctx: !!r.ctx_break };
 }
 function shown(list) {
   const out = [];

@@ -821,6 +821,24 @@ window.__showSession = async (id) => {
   if (!(await openSession(String(id)))) showList();
 };
 
+// A session's reply relayed into the hub conversation (`data-sess` on it, in voiceagent.js and
+// phone-home.js) opens that session when tapped. Capture phase, so it wins over the phone's
+// conversation strip, whose own tap opens the chat sheet. A link inside the reply stays a link, and a
+// tap that ends a text selection stays a selection.
+document.addEventListener('click', (e) => {
+  const m = e.target.closest && e.target.closest('[data-sess]');
+  if (!m || e.target.closest('a') || !document.getElementById('repospane')) return;
+  const sel = window.getSelection && window.getSelection();
+  if (sel && !sel.isCollapsed && m.contains(sel.anchorNode)) return;
+  e.stopPropagation(); e.preventDefault();
+  const chat = document.getElementById('ph-chat');
+  if (chat && chat.classList.contains('open')) {
+    chat.classList.remove('open');
+    const t = document.getElementById('ai-text'); if (t) t.blur();
+  }
+  window.__showSession(m.dataset.sess);
+}, true);
+
 export function render() {
   if (mounted) return;                                // self-refreshing; not driven by the status stream
   if (!document.getElementById('repospane')) return;  // absent on kiosk/mac/page → no-op

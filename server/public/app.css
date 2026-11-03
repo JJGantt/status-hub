@@ -1420,3 +1420,5 @@ body.phonehome #usagebars{top:env(safe-area-inset-top,0px)}
 .sv-ask-btn{flex:0 0 auto;font:inherit;font-size:14px;font-weight:600;padding:8px 14px;border-radius:8px;border:1px solid #ff5fa8;background:transparent;color:#ff5fa8}
 .sv-ask-btn.allow{background:#ff5fa8;color:#1a0711}
 .sv-ask.sending .sv-ask-btn{opacity:.4;pointer-events:none}
+/* A relayed session reply is a way into that session (cards/repos.js). */
+[data-sess]{cursor:pointer}

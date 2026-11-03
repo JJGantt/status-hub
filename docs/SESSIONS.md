@@ -276,7 +276,7 @@ re-reads its own file, so its terminal tab keeps the old title.
 
 ### Numbering
 
-Active sessions, **most recently active first, running and parked interleaved, numbered from 1** — which
+Active sessions, **the pinned one first, then most recently active, running and parked interleaved, numbered from 1** — which
 is to say: the position in the list on screen. That is where "the second session" comes from; the user reads
 it off a surface and says it, and `get_sessions` hands the agent the same list in the same order.
 **Parking is not activity**: a session evicted to free the Pi or replaced by a dispatch keeps the place
@@ -514,7 +514,7 @@ A session any other agent dispatches has no `relay` flag and stays out of the th
 | phone pane (`cards/repos.js`) | everything: running, parked, queued, numbers, machine, last reply | full — start, name, transfer, resume, close |
 | the wall's footer (`cards/deskfoot.js`) | only the session holding follow-ups | none |
 | **TV session focus** (`/tv-session-focus`) | the running sessions as tabs, and the focused one's reply | none — voice only |
-| the home wall (`/tv`, `tv-home.js`) | three, most recently active first, each with a live line of what it is doing; the focused one's full reply below | none — voice only |
+| the home wall (`/tv`, `tv-home.js`) | three, the pinned one first and then most recently active, each with a live line of what it is doing; the focused one's full reply below | none — voice only |
 | the watch (`SessionsView`) | queued sessions on top, then every running and parked one, live off the `sessions` frames | open a session; a follow-up is always locked until the next press |
 | voice (`get_sessions`) | the numbered list, and what each last said (the turn's one-sentence summary from `desk_turns.summary`, else the reply's first 200 characters) | every verb |
 | the hub conversation (web `.ai-msg-session`, watch tint) | a hub-dispatched session's first reply, tinted and named by its label | reply is a fresh command |

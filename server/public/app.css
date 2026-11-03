@@ -1409,3 +1409,14 @@ body.phonehome #usagebars{top:env(safe-area-inset-top,0px)}
 .sessions .sess{position:relative}
 .sessions .sess::after{content:'';position:absolute;right:0;top:3px;bottom:3px;width:2px;border-radius:1px;
   background:var(--mc,transparent);opacity:.85;pointer-events:none}
+
+/* A session stopped on a permission dialog (routes/prompts.js). PINK, because amber (unread), red
+   (incident), blue (Codex), white (focus) and the machine bar's gray, green and violet already mean
+   something on a session. The bar sits over the composer until the dialog is answered anywhere. */
+.sessions li.sess.asking .sess-say{color:#ff5fa8}
+.sv-ask{flex:0 0 auto;display:flex;align-items:center;gap:8px;padding:8px 12px;background:#2a0f1e;border-top:1px solid #ff5fa8}
+.sv-ask[hidden]{display:none}
+.sv-ask-line{flex:1 1 auto;min-width:0;font-size:13px;color:#ffc2de;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-family:ui-monospace,Menlo,monospace}
+.sv-ask-btn{flex:0 0 auto;font:inherit;font-size:14px;font-weight:600;padding:8px 14px;border-radius:8px;border:1px solid #ff5fa8;background:transparent;color:#ff5fa8}
+.sv-ask-btn.allow{background:#ff5fa8;color:#1a0711}
+.sv-ask.sending .sv-ask-btn{opacity:.4;pointer-events:none}

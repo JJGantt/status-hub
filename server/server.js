@@ -152,11 +152,13 @@ const { TV_SIDEBAR_FONT, TV_SIDEBAR_WIDTH, tvPush } = require('./routes/tv')({ P
 const { MACHINE_NAME, machineAwake, pushSessions } = require('./routes/sessions')({
   DESK_STALE_S, EPOCH, TV_SIDEBAR_FONT, TV_SIDEBAR_WIDTH, cleanSaid, convOfRow, ensureLog, gated,
   markSeen, numbered, rowConv, sb, sbInsert, sbWrite, seenMsgIds, sessionClients, settingsAll,
+  // Read on every build of the payload, by which time `prompts` below exists.
+  pendingPrompt: (rowId) => prompts.pendingFor(rowId),
 });
 
 require('./routes/failures')({ MACHINE_NAME, gated, machineAwake, sb, sbWrite });
 
-require('./routes/prompts')({ auth, gated, pushAll, sb });
+const prompts = require('./routes/prompts')({ auth, gated, pushAll, pushSessions, sb });
 
 require('./routes/streams')({ gated });
 

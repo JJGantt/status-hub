@@ -48,6 +48,9 @@ const activity = new Map();   // session id -> { state, text }
 const oneLine = (t) => String(t || '').replace(/\s+/g, ' ').trim();
 
 function rowActivity(s) {
+  // Stopped on a permission dialog: that IS what it is doing, and the one thing on the row owed an
+  // answer. The line is the call it wants to make; the session view has the buttons.
+  if (s.prompt) return `<span class="hw-row-act asking">${esc(oneLine(s.prompt.line))}</span>`;
   // Live first — a tool call in flight, or what the session said between two of them, is the most
   // current thing it has to say. Falling back to `last_reply` is what makes a quiet session say
   // anything at all: nothing is streaming to it, but it still answered something, and a blank line
@@ -79,7 +82,7 @@ function paint(p, d) {
       // `on` is the FOCUSED session — where a spoken follow-up goes, and what a surface with a reply
       // panel is showing below. `unread` is a finished answer nobody has opened. Two different
       // questions, so two different marks: one row can carry both.
-      `<div class="hw-row${on && s.id === on.id ? ' on' : ''}${s.unread ? ' unread' : ''}${s.incident ? ' incident' : ''}${s.codex ? ' codex' : ''}` +
+      `<div class="hw-row${on && s.id === on.id ? ' on' : ''}${s.unread ? ' unread' : ''}${s.incident ? ' incident' : ''}${s.codex ? ' codex' : ''}${s.prompt ? ' asking' : ''}` +
         '"' +
         (s.machine_color ? ` style="--mc:${esc(s.machine_color)}"` : '') +
         `${p.tap ? ` data-open="${esc(String(s.id))}"` : ''}>` +

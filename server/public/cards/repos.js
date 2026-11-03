@@ -61,7 +61,7 @@ function sessionsHtml(s) {
   // both from one rule. The machine chip is here for the same reason: "the other machine" only means
   // something if you can see which one it is on.
   const line = (x, live) =>
-    `<li class="sess${live ? ' live' : ''}${x.incident ? ' incident' : ''}${x.codex ? ' codex' : ''}" data-id="${esc(x.id)}"${x.machine_color ? ` style="--mc:${esc(x.machine_color)}"` : ''}>` +
+    `<li class="sess${live ? ' live' : ''}${x.incident ? ' incident' : ''}${x.codex ? ' codex' : ''}${x.prompt ? ' asking' : ''}" data-id="${esc(x.id)}"${x.machine_color ? ` style="--mc:${esc(x.machine_color)}"` : ''}>` +
       `<div class="sess-main">` +
         `<span class="sess-repo">` +
         (x.n ? `<span class="sess-n">${x.n}</span>` : '') +
@@ -69,7 +69,7 @@ function sessionsHtml(s) {
         (x.label && x.repo && x.label !== x.repo ? `<span class="sess-in">${esc(x.repo)}</span>` : '') +
           `<span class="sess-where">${x.worker === 'desk' ? 'Mac' : x.worker === 'fly-desk' ? 'Fly' : 'Pi'}</span>` +
         `</span>` +
-        `<span class="sess-say">${x.at ? `<span class="sess-at">${esc(ago(x.at))}</span>` : ''}${esc((x.say || '').slice(0, 90))}</span>` +
+        `<span class="sess-say">${x.at ? `<span class="sess-at">${esc(ago(x.at))}</span>` : ''}${esc((x.prompt ? x.prompt.line : (x.say || '')).slice(0, 90))}</span>` +
       `</div>` +
       `<div class="sess-act">` +
         `<button class="sess-btn ghost" data-act="rename">name</button>` +
@@ -295,7 +295,43 @@ function keep(payload) {
   if (!now) return;
   const moved = now.id !== cur.id;
   cur.id = now.id;
+  cur.head.prompt = now.prompt || null;
+  paintAsk();
   if (moved || now.status !== cur.head.status) reload();
+}
+
+// THE DIALOG A SESSION IS STOPPED ON, in the session itself (routes/prompts.js). The notification
+// carries the same buttons, but it is swiped away by habit; this stays until the dialog is answered —
+// here, on the watch, in the notification or at the keyboard — and the `sessions` frame that follows
+// takes it down. The line is the tool call itself, as the notification shows it.
+function paintAsk() {
+  const el = document.getElementById('repospane');
+  const ask = el && el.querySelector('.sv-ask');
+  if (!ask || !cur) return;
+  const p = cur.head && cur.head.prompt;
+  ask.hidden = !p;
+  if (!p) { ask.dataset.id = ''; return; }
+  if (ask.dataset.id === p.id) return;
+  ask.dataset.id = p.id;
+  ask.classList.remove('sending');
+  ask.querySelector('.sv-ask-line').textContent = p.line;
+}
+
+async function answerAsk(decision) {
+  const el = document.getElementById('repospane');
+  const ask = el && el.querySelector('.sv-ask');
+  const id = ask && ask.dataset.id;
+  if (!id || ask.classList.contains('sending')) return;
+  ask.classList.add('sending');
+  try {
+    const r = await fetch(`/api/session-prompts/${encodeURIComponent(id)}/decide`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ decision }),
+    });
+    // Decided (by this tap or an earlier one anywhere) or already gone: either way it is over.
+    if (r.ok || r.status === 404) { if (cur && cur.head && cur.head.prompt && cur.head.prompt.id === id) cur.head.prompt = null; paintAsk(); return; }
+    console.error('[sessions] prompt decide failed:', r.status);
+  } catch (e) { console.error('[sessions] prompt decide failed:', e.message); }
+  ask.classList.remove('sending');
 }
 
 // ---- THE CONVERSATION IS ONE LIST OF EVENTS ---------------------------------------------------
@@ -410,6 +446,7 @@ function paintHead() {
   // An incident run is framed as an alert while it is open, as its row is in every list.
   const sv = el.querySelector('.sv');
   if (sv) { sv.classList.toggle('incident', !!d.incident); sv.classList.toggle('codex', !!d.codex); }
+  paintAsk();
 }
 
 // What is drawn: every event in order, a prompt at the position of its LATEST occurrence — it moves
@@ -595,6 +632,9 @@ async function openSession(id) {
         '<button class="sv-speak-stop" type="button" aria-label="Stop reading" hidden>' + STOP_SVG + '</button>' +
         '<button class="sv-speak" type="button" aria-label="Read the reply aloud">' + SPEAK_SVG + '</button></div>' +
       '<div class="sv-body"></div>' +
+      '<div class="sv-ask" hidden><span class="sv-ask-line"></span>' +
+        '<button class="sv-ask-btn deny" type="button" data-decide="deny">Deny</button>' +
+        '<button class="sv-ask-btn allow" type="button" data-decide="allow">Approve</button></div>' +
       '<div class="sv-input">' +
         '<button class="ai-mic sv-mic" type="button" aria-label="Tap to talk"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="2" width="6" height="12" rx="3"></rect><path d="M5 11a7 7 0 0 0 14 0"></path><line x1="12" y1="18" x2="12" y2="22"></line></svg></button>' +
         '<button class="ai-mic sv-clip" type="button" aria-label="Attach a picture"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><path d="M21 15l-5-5L5 21"></path></svg></button>' +
@@ -652,6 +692,10 @@ async function openSession(id) {
       catch (_) { shots.splice(shots.indexOf(a), 1); status.textContent = 'Upload failed'; }
       paintTray();
     }
+  });
+  el.querySelector('.sv-ask').addEventListener('click', (e) => {
+    const b = e.target.closest('[data-decide]');
+    if (b) answerAsk(b.dataset.decide);
   });
   el.querySelector('.sv-back').addEventListener('click', showList);
   swipeBack(el.querySelector('.sv'), () => { if (cur === at) showList(); });

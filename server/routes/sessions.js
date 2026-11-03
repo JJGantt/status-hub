@@ -6,7 +6,7 @@ const express = require('express');
 module.exports = function (ctx) {
   const {
     DESK_STALE_S, EPOCH, TV_SIDEBAR_FONT, TV_SIDEBAR_WIDTH, cleanSaid, convOfRow, ensureLog, gated,
-    markSeen, numbered, rowConv, sb, sbInsert, sbWrite, seenMsgIds, sessionClients, settingsAll,
+    markSeen, numbered, rowConv, sb, sbInsert, sbWrite, seenMsgIds, sessionClients, settingsAll, pendingPrompt,
   } = ctx;
 
   // ---- desk control: repo picker -> a fresh Claude session on the Mac ----
@@ -132,6 +132,9 @@ module.exports = function (ctx) {
       // reads as the default), green for the Pi, violet for Fly — none of them amber, red, blue or white,
       // which the unread edge, incidents, Codex and the focus already mean.
       pinned: pins.has(s.id),
+      // A permission dialog it is stopped on, `{ id, line }` (routes/prompts.js): every session view
+      // offers Approve / Deny while it is here, and every row marks it.
+      prompt: pendingPrompt(s.id),
       machine: machineOf(s.worker),
       machine_color: MACHINE_COLOR[machineOf(s.worker)],
     });
@@ -249,7 +252,7 @@ module.exports = function (ctx) {
       const conv = row.claude_session_id || row.id;
       rowConv.set(row.id, conv);
       const log = await ensureLog(conv);
-      res.json({ ...row, incident: isIncident(row), codex: isCodex(row), epoch: EPOCH, events: log.events });
+      res.json({ ...row, incident: isIncident(row), codex: isCodex(row), prompt: pendingPrompt(row.id), epoch: EPOCH, events: log.events });
     } catch (e) { res.status(500).json({ error: String(e.message || e) }); }
   });
 

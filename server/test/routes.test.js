@@ -98,6 +98,15 @@ describe('permission prompts (/api/session-prompts)', () => {
     assert.equal(tap.json.decision, 'gone');
   });
 
+  test('a waiting prompt is on its session until it is answered', async () => {
+    const { json: { id } } = await open();
+    const on = await json(h.PASSWORD_TOKEN, 'GET', '/api/sessions/s-prompt01');
+    assert.deepEqual(on.json.prompt, { id, line: 'Bash: rm -rf build' });
+    await json(h.PASSWORD_TOKEN, 'POST', `/api/session-prompts/${id}/decide`, { decision: 'allow' });
+    const off = await json(h.PASSWORD_TOKEN, 'GET', '/api/sessions/s-prompt01');
+    assert.notEqual(off.json.prompt && off.json.prompt.id, id);
+  });
+
   test('reading a prompt is for machines; anything else is refused', async () => {
     const { json: { id } } = await open();
     assert.equal((await json(h.PASSWORD_TOKEN, 'GET', `/api/session-prompts/${id}`)).status, 403);

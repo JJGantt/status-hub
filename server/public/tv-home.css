@@ -600,3 +600,6 @@ body.tv.wallportrait .hw-sessrow{grid-column:2;grid-row:5}
 body.tv .hw-row{position:relative}
 body.tv .hw-row::after{content:'';position:absolute;right:0;top:3px;bottom:3px;width:2px;border-radius:1px;
   background:var(--mc,transparent);opacity:.85;pointer-events:none}
+
+/* Stopped on a permission dialog: the row's line is the call it wants to make, in the asking pink. */
+body.tv .hw-row-act.asking{color:#ff5fa8}

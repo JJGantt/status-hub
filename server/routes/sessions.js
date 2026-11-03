@@ -18,6 +18,7 @@ module.exports = function (ctx) {
   // Fly's proxy starts it and holds the request until its host is listening.
   const DESK_WORKER = { pi: 'pi-desk', mac: 'desk', fly: 'fly-desk' };
   const MACHINE_NAME = { pi: 'Pi', mac: 'Mac', fly: 'Fly machine' };
+  const MACHINE_COLOR = { mac: '#7d848f', pi: '#4fae72', fly: '#9a7fe0' };
   const machineOf = (worker) => (worker === 'desk' ? 'mac' : worker === 'fly-desk' ? 'fly' : 'pi');
 
   /** Is the machine that would run this actually beating right now? */
@@ -125,6 +126,12 @@ module.exports = function (ctx) {
       unread: !!s.reply_at && (!s.seen_at || Date.parse(s.reply_at) > Date.parse(s.seen_at)),
       incident: isIncident(s),
       codex: isCodex(s),
+      // Which machine holds it, as the colour of the thin bar on the right of every row. Decided here so
+      // the phone, the walls and the watch paint one colour: gray for the Mac (the common case, so it
+      // reads as the default), green for the Pi, violet for Fly — none of them amber, red, blue or white,
+      // which the unread edge, incidents, Codex and the focus already mean.
+      machine: machineOf(s.worker),
+      machine_color: MACHINE_COLOR[machineOf(s.worker)],
     });
     // One line of what the session last said, for the rows that only ever show one line. The repos
     // pane cuts `last_reply` to 90 characters for every row it lists; sending the whole reply so it

@@ -81,6 +81,7 @@ function paint(p, d) {
       // questions, so two different marks: one row can carry both.
       `<div class="hw-row${on && s.id === on.id ? ' on' : ''}${s.unread ? ' unread' : ''}${s.incident ? ' incident' : ''}${s.codex ? ' codex' : ''}` +
         '"' +
+        (s.machine_color ? ` style="--mc:${esc(s.machine_color)}"` : '') +
         `${p.tap ? ` data-open="${esc(String(s.id))}"` : ''}>` +
         '<div class="hw-row-top">' +
           `<span class="hw-sess-dot${s.working ? '' : ' idle'}"></span>` +

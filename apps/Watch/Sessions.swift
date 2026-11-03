@@ -24,6 +24,9 @@ struct SessionRow: Decodable, Identifiable, Equatable {
     /// A session running on Codex rather than Claude, drawn blue the way an incident is drawn red. The
     /// hub decides it (`agent`), and never sets both.
     let codex: Bool?
+    /// The colour of the machine holding it (gray Mac, green Pi, violet Fly), drawn as a thin bar on the
+    /// row's right edge. The hub decides it so every surface paints the same one.
+    let machine_color: String?
     /// The number the user says out loud, which is also the row's position: most recently active first,
     /// running and parked together.
     let n: Int?

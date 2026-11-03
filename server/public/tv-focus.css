@@ -44,3 +44,9 @@ body.tv .sf-head .hw-sess-name{font-size:24px;font-weight:700;color:#fff;white-s
   overflow:hidden;text-overflow:ellipsis;min-width:0}
 body.tv .sf-head .hw-sess-where{font-size:16px;color:#888;white-space:nowrap;flex:0 0 auto}
 .sf-reply{flex:1 1 auto;min-height:0;overflow:hidden;font-size:27px;line-height:1.45;color:#fff;white-space:pre-wrap}
+/* The machine holding the session: a thin bar on the RIGHT edge, the mirror of the unread/focus edge on
+   the left. Its colour is the server's (`machine_color`, routes/sessions.js). Written in phone-home.css,
+   tv-home.css and tv-focus.css, since each surface loads only its own. */
+body.tv .sf-tabs .hw-row{position:relative}
+body.tv .sf-tabs .hw-row::after{content:'';position:absolute;right:0;top:3px;bottom:3px;width:2px;border-radius:1px;
+  background:var(--mc,transparent);opacity:.85;pointer-events:none}

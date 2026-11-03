@@ -130,6 +130,10 @@ struct SessionsView: View {
                     RoundedRectangle(cornerRadius: 2).fill(Color.red).frame(width: 9, height: 9)
                 }
             }
+            // The machine holding it: the mirror of the unread/focus edge, on the right.
+            Rectangle()
+                .fill(s.machine_color.map { Color(hex: $0).opacity(0.85) } ?? Color.clear)
+                .frame(width: 2)
         }
         .padding(.vertical, 8)
         .frame(maxWidth: .infinity, alignment: .leading)

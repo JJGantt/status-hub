@@ -64,7 +64,7 @@ function sessionsHtml(s) {
   // both from one rule. The machine chip is here for the same reason: "the other machine" only means
   // something if you can see which one it is on.
   const line = (x, live) =>
-    `<li class="sess${live ? ' live' : ''}${x.id === focus ? ' focus' : ''}${x.incident ? ' incident' : ''}${x.codex ? ' codex' : ''}" data-id="${esc(x.id)}">` +
+    `<li class="sess${live ? ' live' : ''}${x.id === focus ? ' focus' : ''}${x.incident ? ' incident' : ''}${x.codex ? ' codex' : ''}" data-id="${esc(x.id)}"${x.machine_color ? ` style="--mc:${esc(x.machine_color)}"` : ''}>` +
       `<div class="sess-main">` +
         `<span class="sess-repo">` +
         (x.n ? `<span class="sess-n">${x.n}</span>` : '') +

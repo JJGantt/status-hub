@@ -168,6 +168,14 @@ function boot() {
 // back to the foreground, where a suspended stream has already missed whatever arrived.
 export function onThread(fn) { threadSubs.push(fn); fn(null); }
 
+// THE ANSWER BEING LOOKED AT. While an answer from the inbox is open on its own (inbox.js), every
+// command sent from this page — the mic or typed — is about it: it rides as `about`, and the worker
+// hands the model that question and answer with the words (docs/WATCH.md § The answers inbox).
+// Taken when the clip is QUEUED, not when it uploads, so a clip that waits in the outbox stays about
+// what was on screen when it was said.
+let aboutAnswer = null;
+export function setAbout(id) { aboutAnswer = id || null; }
+
 // ---- the command that has been HEARD but is not in the thread yet ---------
 //
 // The worker writes the user bubble only once the run is over — deliberately, so a wake-word false
@@ -881,7 +889,8 @@ export async function runPhotoOutbox(onStatus) {
 // something to the recorder that took it, so it is sent only while that recorder is alive. One stranded
 // by a reload is kept, not sent.
 async function sendVoice(clip, owner) {
-  const item = { id: uid(), createdAt: Date.now(), client_now: localNowNaive(), type: clip.blob.type || 'audio/webm', ...clip };
+  const item = { id: uid(), createdAt: Date.now(), client_now: localNowNaive(), type: clip.blob.type || 'audio/webm',
+    ...(aboutAnswer && !clip.dry ? { about: aboutAnswer } : {}), ...clip };
   try { await voiceBox.put(item); }
   catch (_) {                                          // no IndexedDB (a private window) — memory is the only copy there is
     try { await deliverVoice(item, owner.onStatus, owner); } catch (e) { voiceFailed(e, item, owner.onStatus); }
@@ -926,6 +935,7 @@ async function deliverVoice(item, onStatus, owner) {
   if (item.capture_start) qp.set('capture_start', item.capture_start);
   if (item.capture_end) qp.set('capture_end', item.capture_end);
   if (item.source) qp.set('source', item.source);
+  if (item.about) qp.set('about', item.about);
   // The parts recorded before an interruption (makeRecorder): each is transcribed on its own and the
   // words ride the last part as its prefix, so the hub enqueues the whole command once. A part that
   // fails throws, and the outbox retries the whole item.
@@ -1302,6 +1312,7 @@ function initCard() {
       const r = await fetch('/api/voice-text', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ text, client_now: localNowNaive(), ...(attachments.length ? { attachments } : {}),
+                               ...(aboutAnswer ? { about: aboutAnswer } : {}),
                                ...(where ? { location: where } : {}) }) });
       if (r.ok) clearTray(); else dropPending(cid);
       setStatus(r.ok ? '' : 'Send failed');

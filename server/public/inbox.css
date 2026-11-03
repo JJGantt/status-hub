@@ -1,0 +1,42 @@
+/* The answers inbox on the phone (inbox.js). The sheet stops ABOVE the navbar, because the navbar's
+   microphone is how a follow-up to an open answer is spoken. */
+.ph-convcard{position:relative}
+.ib-dot{position:absolute;top:2px;right:2px;z-index:5;width:22px;height:22px;padding:0;border:0;
+  background:transparent;display:flex;align-items:center;justify-content:center}
+.ib-dot::after{content:'';width:9px;height:9px;border-radius:50%;background:#4a525c}
+.ib-dot.unread::after{background:#e0a03a;box-shadow:0 0 6px rgba(224,160,58,.6)}
+
+.ib-sheet{position:fixed;left:0;right:0;top:0;bottom:calc(58px + env(safe-area-inset-bottom, 0px));
+  z-index:990;display:none;flex-direction:column;background:#000;
+  padding:calc(env(safe-area-inset-top, 0px) + 6px) 10px 6px}
+.ib-sheet.open{display:flex}
+.ib-head{flex:none;display:flex;align-items:center;gap:8px;height:34px}
+.ib-title{flex:1 1 auto;font-size:13px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:#8b96a5}
+.ib-back,.ib-x{flex:none;width:34px;height:34px;border:0;background:transparent;color:#d5dde6;font-size:20px;padding:0}
+.ib-list,.ib-view{flex:1 1 auto;min-height:0;overflow-y:auto;-webkit-overflow-scrolling:touch}
+.ib-list::-webkit-scrollbar,.ib-view::-webkit-scrollbar{display:none}
+
+.ib-row{display:flex;align-items:flex-start;gap:8px;width:100%;text-align:left;border:0;
+  border-bottom:1px solid #161b21;background:transparent;padding:8px 4px 8px 8px;
+  box-shadow:inset 2px 0 0 #e0a03a}
+.ib-row.read{box-shadow:none}
+.ib-label{flex:1 1 auto;min-width:0;font-size:14px;line-height:1.3;color:#fff;
+  display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.ib-row.read .ib-label{color:#7d8794}
+.ib-row.sess .ib-label{color:#9fe3d3}
+.ib-row.sess.read .ib-label{color:#5d8a80}
+.ib-when{flex:none;font-size:11px;color:#6b7480;padding-top:2px}
+
+.ib-view{display:flex;flex-direction:column;gap:8px;padding-bottom:40vh}
+.ib-q{align-self:flex-end;max-width:85%;font-size:12px;line-height:1.4;color:#8b96a5;word-break:break-word}
+.ib-a{font-size:13px;line-height:1.45;color:#d5dde6;word-break:break-word}
+.ib-a.sess{background:rgba(63,184,157,.09);border-left:2px solid #3fb89d;border-radius:5px;padding:4px 8px}
+.ib-k{display:block;margin-bottom:2px;font-size:9px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:#3fb89d}
+.ib-q p,.ib-a p{margin:0 0 5px}
+.ib-q p:last-child,.ib-a p:last-child{margin-bottom:0}
+.ib-a ul,.ib-a ol{margin:0 0 5px;padding-left:16px}
+.ib-a b{color:#fff}
+.ib-a code{font:11px/1.3 ui-monospace,Menlo,monospace;background:#0e1318;border-radius:3px;padding:0 3px}
+.ib-a pre{margin:3px 0;padding:4px 6px;background:#0e1318;border-radius:4px;
+  font:11px/1.35 ui-monospace,Menlo,monospace;white-space:pre-wrap;word-break:break-word}
+.ib-a a{color:#6ea8ff}

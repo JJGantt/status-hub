@@ -27,8 +27,10 @@ struct SessionRow: Decodable, Identifiable, Equatable {
     /// The colour of the machine holding it (gray Mac, green Pi, violet Fly), drawn as a thin bar on the
     /// row's right edge. The hub decides it so every surface paints the same one.
     let machine_color: String?
-    /// The number the user says out loud, which is also the row's position: most recently active first,
-    /// running and parked together.
+    /// Pinned by the user: pins are a set, held at the top of the list, most recently pinned first.
+    let pinned: Bool?
+    /// The number the user says out loud, which is also the row's position: pinned sessions first (most
+    /// recently pinned on top), then most recently active, running and parked together.
     let n: Int?
     /// When it last did something — its last prompt or reply, the instant the list is ordered by.
     let at: String?
@@ -148,9 +150,6 @@ final class Sessions: ObservableObject {
     @Published private(set) var list: [SessionRow] = []
     /// Sessions waiting for a machine to have room, oldest first.
     @Published private(set) var queued: [QueuedRow] = []
-    /// The focused session — where a spoken follow-up goes — and whether the user pinned it there.
-    @Published private(set) var focus: String?
-    @Published private(set) var pinned = false
     /// Each OPENED conversation's list. A conversation nobody has opened is not fetched: its frames
     /// only keep `latest` for the list's row.
     @Published private(set) var logs: [String: ConversationLog] = [:]
@@ -275,8 +274,6 @@ final class Sessions: ObservableObject {
         let resident: [SessionRow]
         let evicted: [SessionRow]
         let queued: [QueuedRow]?
-        let focus: String?
-        let pinned: Bool?
     }
 
     private func fetchSessions() async {
@@ -292,8 +289,6 @@ final class Sessions: ObservableObject {
         list = rows.filter { seen.insert($0.key).inserted }
             .sorted { ($0.n ?? .max) < ($1.n ?? .max) }
         queued = l.queued ?? []
-        focus = l.focus
-        pinned = l.pinned ?? false
     }
 
     /// The row a conversation's words go to: its running row, else its newest parked one.

@@ -56,22 +56,18 @@ function sessionsHtml(s) {
   const res = s.resident || [], ev = s.evicted || [], q = s.queued || [];
   if (!res.length && !ev.length && !q.length) return '';
 
-  // Which session a SPOKEN follow-up lands in: the most recently active one unless the user pinned another
-  // by name (desk_sessions_state(), data-layer 00157). Worth marking because it moves as sessions take turns.
-  const focus = s.focus || null;
   // The NUMBER is the point of showing it: it is how a session gets named out loud ("move session
   // three to the Mac"), and it has to be the same number the voice tools resolve — the server derives
   // both from one rule. The machine chip is here for the same reason: "the other machine" only means
   // something if you can see which one it is on.
   const line = (x, live) =>
-    `<li class="sess${live ? ' live' : ''}${x.id === focus ? ' focus' : ''}${x.incident ? ' incident' : ''}${x.codex ? ' codex' : ''}" data-id="${esc(x.id)}"${x.machine_color ? ` style="--mc:${esc(x.machine_color)}"` : ''}>` +
+    `<li class="sess${live ? ' live' : ''}${x.incident ? ' incident' : ''}${x.codex ? ' codex' : ''}" data-id="${esc(x.id)}"${x.machine_color ? ` style="--mc:${esc(x.machine_color)}"` : ''}>` +
       `<div class="sess-main">` +
         `<span class="sess-repo">` +
         (x.n ? `<span class="sess-n">${x.n}</span>` : '') +
-        `${esc(x.label || x.repo)}` +
+        (x.pinned ? PIN_SVG : '') + `${esc(x.label || x.repo)}` +
         (x.label && x.repo && x.label !== x.repo ? `<span class="sess-in">${esc(x.repo)}</span>` : '') +
           `<span class="sess-where">${x.worker === 'desk' ? 'Mac' : x.worker === 'fly-desk' ? 'Fly' : 'Pi'}</span>` +
-          (x.id === focus ? '<span class="sess-focus" title="a spoken follow-up goes here">' + (s.pinned ? PIN_SVG : '') + 'follow-ups</span>' : '') +
         `</span>` +
         `<span class="sess-say">${x.at ? `<span class="sess-at">${esc(ago(x.at))}</span>` : ''}${esc((x.say || '').slice(0, 90))}</span>` +
       `</div>` +
@@ -84,11 +80,6 @@ function sessionsHtml(s) {
   let out = '<div class="sessions"><h3>Sessions';
   if (q.length) out += `<span class="sess-q">${q.length} queued</span>`;
   out += '</h3>';
-  // The pointer outlives the session it named, so it can resolve to nothing at all. Say that plainly
-  // rather than leaving no row marked, which looks the same as not having rendered the marker.
-  if (!focus && (res.length || ev.length)) {
-    out += '<div class="sess-nofocus">No session is holding follow-ups \u2014 say which one, or start something.</div>';
-  }
   out += '<ul>';
   // In `n` order, running and parked interleaved: the number IS the position, and it counts by
   // activity alone (buildSessions), so drawing the two groups one after the other would break it.

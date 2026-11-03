@@ -149,9 +149,9 @@ reported. A completed item is not deleted: it leaves every active surface but st
   mute, weight-reminder, agent mode…). Full catalog: [docs/HUB-INTERNALS.md](docs/HUB-INTERNALS.md) §7.
 - `litter_events` — the litter-watcher's persisted event stream (cycles, resets, alerts, presence).
 - `repos` / `desk_commands` — the Mac's published projects, and the launch queue behind them (§9).
-- `desk_sessions` / `desk_queue` / `desk_focus` — every Claude session on either machine (dispatched
-  or adopted), work waiting for a Pi slot, and the pin: a session focused by name, or a dispatch still
-  opening. Unpinned, a spoken follow-up goes to the most recently active session (docs/SESSIONS.md).
+- `desk_sessions` / `desk_queue` / `desk_pins` — every Claude session on either machine (dispatched
+  or adopted), work waiting for a Pi slot, and the pinned conversations, which head every list; a
+  follow-up always names its session (docs/SESSIONS.md).
 - `reports` — the HTML write-ups a dispatched session publishes (`/report/:id`).
 - `govee_devices` — auto-discovered Govee lights (synced from the cloud API).
 - `device_tokens` — APNs tokens for push (with per-token `environment`).

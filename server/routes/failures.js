@@ -36,13 +36,6 @@ module.exports = function (ctx) {
         { id: cmdId, kind: row.kind, payload: { ...row.payload, target: machine } });
       await sbWrite(`desk_dead_letters?id=eq.${encodeURIComponent(id)}`, 'PATCH',
         { retried: new Date().toISOString(), retry_command_id: cmdId });
-      // A re-sent dispatch is the session being talked to again, exactly as a fresh one would be.
-      if (row.kind === 'open_session' || row.kind === 'resume_session') {
-        // PATCH, not an upsert: the single 'current' row is created by the migration and always there,
-        // and a plain POST onto an existing primary key is a 409.
-        await sbWrite('desk_focus?id=eq.current', 'PATCH',
-          { command_id: cmdId, session_id: null, machine, updated: new Date().toISOString() });
-      }
       res.json({ id: cmdId });
     } catch (e) { res.status(500).json({ error: String(e.message || e) }); }
   });

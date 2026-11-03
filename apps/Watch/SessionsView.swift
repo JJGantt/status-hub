@@ -3,10 +3,10 @@ import SwiftUI
 /// The page left of home: sessions still queued for a machine on top, then one row per conversation
 /// the hub knows, running first, then parked, most recently active first within each. A tap opens one.
 ///
-/// A row carries the same three marks as the phone's list (`cards/sessions.js`, `phone-home.css`),
-/// because they answer different questions and are read together: the WHITE edge is the focused
-/// session — where a spoken follow-up goes — with a pin beside its name when the user pinned it there; the
-/// AMBER edge is a finished reply nobody has opened; the DOT is a session working now.
+/// A row carries the same marks as the phone's list (`cards/sessions.js`, `phone-home.css`), because they
+/// answer different questions and are read together: a PIN beside the name of every session the user
+/// pinned (pins head the list); the AMBER edge on the left, a finished reply nobody has opened; the DOT, a
+/// session working now; the thin bar on the right, the machine holding it.
 /// Under each name is what its machine is doing, live off `/api/session-stream`.
 struct SessionsView: View {
     @EnvironmentObject private var sessions: Sessions
@@ -88,11 +88,10 @@ struct SessionsView: View {
 
     private func row(_ s: SessionRow) -> some View {
         let unread = s.unread == true
-        let focused = s.id == sessions.focus
         return HStack(alignment: .top, spacing: 6) {
-            // The edge: amber over white, as on the phone, where a focused unread row shows both.
+            // The edge: amber for an answer nobody has opened, as on the phone.
             Rectangle()
-                .fill(unread ? Self.amber : focused ? Color.white : Color.clear)
+                .fill(unread ? Self.amber : Color.clear)
                 .frame(width: 2)
             if let n = s.n {
                 Text("\(n)")
@@ -101,12 +100,12 @@ struct SessionsView: View {
             }
             VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: 4) {
-                    if focused && sessions.pinned {
+                    if s.pinned == true {
                         Image(systemName: "pin.fill").font(.system(size: 9)).foregroundColor(.gray)
                     }
                     Text(s.name)
                         .font(.system(size: 14))
-                        .foregroundColor(unread || focused ? .white : Self.name)
+                        .foregroundColor(unread ? .white : Self.name)
                         .lineLimit(2)
                 }
                 if let say = s.say, !say.isEmpty {
@@ -130,7 +129,7 @@ struct SessionsView: View {
                     RoundedRectangle(cornerRadius: 2).fill(Color.red).frame(width: 9, height: 9)
                 }
             }
-            // The machine holding it: the mirror of the unread/focus edge, on the right.
+            // The machine holding it: the mirror of the unread edge, on the right.
             Rectangle()
                 .fill(s.machine_color.map { Color(hex: $0).opacity(0.85) } ?? Color.clear)
                 .frame(width: 2)

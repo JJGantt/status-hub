@@ -44,7 +44,7 @@ Supabase ──▶ lib/dashboard.js buildStatus() ──▶ /api/status payload 
   `fly logs -a jared-status-hub | grep timing` (the broadcast logs only a build over 500ms).
 - **Realtime:** the server subscribes to Supabase realtime on the tables that must invalidate the
   cached payload (nutrition, sets, app_settings, voice_*), so a voice/MCP write reflects in seconds
-  rather than waiting for the tick. It also subscribes to `desk_sessions` / `desk_queue` / `desk_focus`
+  rather than waiting for the tick. It also subscribes to `desk_sessions` / `desk_queue` / `desk_pins`
   and to `reports`, which do not invalidate a cache so much as PUSH: the first three build a `sessions`
   frame (see `pushSessions`, and §3 — it is why the walls no longer poll `/api/sessions`), and a new
   `reports` row fires `reportTick` directly.
@@ -659,7 +659,7 @@ below) ·
 `desk_sessions.seen_at`, which is what clears it on every surface) ·
 `/api/session-stream` (SSE: `ev` — one event of a conversation's list, with its seq and the hub's
 epoch; `sessions`, the whole `/api/sessions` payload, pushed whenever `desk_sessions`/`desk_queue`/
-`desk_focus` change — see SESSIONS.md §10; and, until the
+`desk_pins` change — see SESSIONS.md §10; and, until the
 older watch build is gone, `session`) · `/api/sessions/:id/events?since=N` (the list after seq N,
 what a client fetches when a frame's seq shows a gap) · `/api/reports`
 (list only — `html` is never selected) · `/api/surf/history` (the whole hourly archive as one
@@ -1117,18 +1117,18 @@ Terminal tab, found by the orchestrator rather than announced by anything. `orig
 (`adopted` vs `dispatched`), and they get the same liveness and last-reply treatment, so the panel
 describes everything running rather than only what was sent.
 
-**Adoption never touches `desk_focus`.** A session appearing is not the user choosing it; unpinned, focus
-is computed from activity (below), so nothing about adopting a session has to move a pointer.
+**Adoption never pins.** A session appearing is not the user choosing it; unpinned, the shown session is
+computed from activity, so nothing about adopting a session has to move a pointer.
 
 Retention is not per-origin: `sweepRetention` in `pi-desk` drops closed sessions at 7 days and parked
 ones at 14, whoever made them.
 
 ### Numbering, and moving a session
 
-`/api/sessions` stamps each active session with `n`: **most recently active first**, running and parked
+`/api/sessions` stamps each active session with `n`: **pinned sessions first (most recently pinned on top), then most recently active**, running and parked
 interleaved — parking is not activity, so an evicted session keeps its place (`active_at`, the last turn boundary — SESSIONS.md § Numbering says why not
 `last_seen` or `started`), from 1, one row per conversation (`claude_session_id`). **The rule is `desk_sessions_state()` in Postgres
-(data-layer 00157)**, which the voice tools read too — it is how "move session three to the Mac" resolves to
+(data-layer 00164)**, which the voice tools read too — it is how "move session three to the Mac" resolves to
 the same row the pane is showing. The number is a position, not identity: closing one renumbers the
 rest, which is the price of it being short enough to say.
 
@@ -1155,7 +1155,7 @@ through the command instead.
 
 `POST /api/sessions/followup` (`{id, text, client_msg_id}`) hands words to one session's conversation,
 which is how the watch and the phone answer the session they are showing. Running, the words are typed in — the same
-`desk_commands` `follow_up` the voice tool writes for the focused session. Parked, the session is
+`desk_commands` `follow_up` the voice tool writes. Parked, the session is
 resumed with the words as its prompt: `resume_session` takes one on both machines, and a Pi with no
 memory to spare hands it to the Mac (or queues it while the Mac is asleep). An asleep machine gets the words dead-lettered, like every desk command from the
 hub, and a repeated `client_msg_id` returns the first command rather than sending them twice.
@@ -1371,27 +1371,19 @@ One trap: `pi-desk`'s reconcile tick upserts with `resolution=merge-duplicates`,
 sends overwrites — omitting `label` there would blank it on the next tick, which is why it is carried
 through explicitly rather than left out.
 
-### Which session holds follow-ups
+### The shown session, and pins
 
-The TV strip shows it as a small outlined box carrying the **repo name**, inline with the liveness
-chips so it uses the strip's empty middle without changing the row height — the cards either side fix
-that height. It renders only when a session is actually holding follow-ups; an empty box or the word
-"none" is noise on a wall you glance at. The phone panel is where the fuller form lives.
+The TV strip shows the SHOWN session as a small outlined box carrying the **repo name**, inline with
+the liveness chips so it uses the strip's empty middle without changing the row height — the cards either
+side fix that height. It renders only when there is one; an empty box or the word "none" is noise on a
+wall you glance at.
 
-`/api/sessions` returns `focus` — the session a SPOKEN follow-up would land in — and the panel marks
-that row; the TV strip and the home wall show the same session. `desk_sessions_state()` (data-layer 00157) decides it,
-for this and for data-layer's `focusedSession` alike: a session focused by
-name while it runs, else nobody while a dispatch is still opening, else the most recently active running
-session. The rule, and why it includes the session being typed in, is SESSIONS.md § Focus.
-
-It is worth showing because it moves: the session you last used holds follow-ups unless you pinned
-one, so glancing at the strip answers where "tell it to…" will go. `pinned` (in `/api/sessions`, and
-on the status payload's `desk_focus`) says which of the two it is, and every surface that shows focus
-puts `PIN_SVG` from `shared.js` on a pinned session — a pin stays put, so it must not look automatic.
-
-`focus` is null only while a dispatch is opening or when nothing is running. The panel says so
-outright rather than leaving no row marked, which is indistinguishable from the marker failing to
-render.
+`/api/sessions` returns `focus` — the shown session: the most recently pinned, else the most recently
+active running one — and `pinned` beside it when it is a pin; each row also carries its own `pinned`.
+`desk_sessions_state()` (data-layer 00164) decides all of it, for the voice tools too, and pins head the
+numbering. The walls show `focus`'s answer and frame its row; every list puts `PIN_SVG` from `shared.js`
+beside every pinned session. Follow-ups never go to `focus` by default — the caller names the session
+(SESSIONS.md § Pins and the shown session).
 
 That depends on both machines reporting honestly, which is why each reconciles its own sessions every
 30s — by the process a row belongs to (`pid`), since a tab outlives the process inside it. Keyed by

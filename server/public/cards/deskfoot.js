@@ -1,7 +1,6 @@
-// The session a spoken follow-up would land in — pinned to the right of the wall's footer row.
-//
-// It earns a permanent slot because it moves: the most recently active session holds follow-ups
-// unless the user pinned one by name, so this answers where "tell it to…" will go without working it out.
+// The SHOWN session — the most recently pinned, else the most recently active running one
+// (desk_sessions_state(), data-layer 00164) — named at the right of the wall's footer row, with the pin
+// when it is one. It earns a permanent slot because it moves as sessions take turns.
 //
 // The repo name and nothing else — no caption. The box IS the statement: something is holding
 // follow-ups, and it is this. A word explaining that is text on a wall nobody reads from a chair.

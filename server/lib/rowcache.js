@@ -60,7 +60,7 @@ function createRowCache({ sb }) {
 
   // The status strip's session fields, on the same terms as the row cache above. These two reads ran on
   // EVERY frame — and a frame is rebuilt on every realtime event as well as every 30s — to answer a
-  // question whose answer changes a handful of times a day. `desk_sessions` and `desk_focus` are in the
+  // question whose answer changes a handful of times a day. `desk_sessions` and `desk_pins` are in the
   // publication now (data-layer 00104), so a change dirties this directly instead of being discovered.
   const deskCache = { rows: null, at: 0, dirty: true };
   const DESKCACHE_BACKSTOP_MS = 15 * 60 * 1000;

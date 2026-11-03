@@ -262,7 +262,7 @@ already authenticated as the owner. Charts must be inline `<svg>` — no `<scrip
 The shared frame (status strip · rings · health bar · footer · voice column) around four columns:
 today's day column, the six days after it, the weekly weigh-in plot over the three heat maps stacked
 with the strip that belongs to each (nutrition totals vs target, the rest/session clocks, surf), and
-the focused session's last answer. `tv-home.js` + `tv-home.css` are its own; everything else on it is a shared card `core.js`
+the shown session's last answer. `tv-home.js` + `tv-home.css` are its own; everything else on it is a shared card `core.js`
 already paints, which is why the page is mostly markup. This is the one to shape.
 
 Its grid is SIX columns, declared in `tv-home.css` — which means the spans app.css writes for its
@@ -633,8 +633,10 @@ reached by swiping rather than by tapping something, and it is the answer to the
 block, which is deliberately only a list. Tapping a row there lands here with that session's whole
 conversation and a composer.
 
-**A session row carries two marks, and they answer different questions.** `on` is the FOCUSED
-session — where a spoken follow-up goes, and what a surface with a reply panel is showing below.
+**A session row carries marks that answer different questions.** A PIN beside the name is a session the
+user pinned — pins are a set, and they head every list, most recently pinned first. `on` is the SHOWN
+session (the most recently pinned, else the most recently active running one), framed white only on the
+walls, because they show its answer below the list; the phone and the watch do not mark it.
 `unread` is a finished answer nobody has opened: `buildSessions` sets it from `reply_at` being newer
 than `seen_at`, so tool calls and thoughts never raise it and only a completed reply does. Opening
 the session stamps `seen_at` (`POST /api/sessions/seen`), on the row rather than per device, because

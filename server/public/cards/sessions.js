@@ -36,7 +36,7 @@ const listed = (d, max) => [...(d.resident || []), ...(d.evicted || [])]
 
 const name = (s) => s.custom_title || s.label || s.repo;
 // A pinned session carries the pin wherever it is named; automatic focus carries nothing extra.
-const pinMark = (d, s) => (d.pinned && s.id === d.focus ? PIN_SVG : '');
+const pinMark = (d, s) => (s && s.pinned ? PIN_SVG : '');
 
 // What each session is doing right now, keyed by id and held between polls: `/api/sessions` knows
 // nothing about tool calls, so a re-render would wipe the line the moment the list refreshed.

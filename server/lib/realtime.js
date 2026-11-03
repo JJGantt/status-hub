@@ -137,7 +137,7 @@ function createRealtime(ctx) {
         () => { seen(); dirtyDesk(); pushSessions(); })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'desk_queue' },
         () => { seen(); pushSessions(); })
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'desk_focus' },
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'desk_pins' },
         () => { seen(); dirtyDesk(); pushSessions(); })
       // A written report announces itself rather than being discovered: reportTick's timer is now only
       // the net under this, instead of the fastest database timer on the server.

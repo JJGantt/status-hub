@@ -78,7 +78,7 @@ module.exports = function (ctx) {
   // The session payload every surface renders — built in one place so the endpoint and the push cannot
   // drift into disagreeing about what a session list is.
   //
-  // THE SURFACES DO NOT POLL THIS. `desk_sessions`, `desk_queue` and `desk_focus` are in the realtime
+  // THE SURFACES DO NOT POLL THIS. `desk_sessions`, `desk_queue` and `desk_pins` are in the realtime
   // publication (data-layer migration 00104), so a change to any of them pushes a fresh payload the
   // moment it happens; a client's own fetch is only the net under a dropped frame or a deaf socket.
   // An ops-responder incident run, drawn as an alert rather than as ordinary work on every surface that
@@ -92,11 +92,11 @@ module.exports = function (ctx) {
   const isCodex = (s) => !!s && s.agent === 'codex' && !isIncident(s);
 
   async function buildSessions({ brief: allBrief = false } = {}) {
-    // The NUMBER the user says out loud and the FOCUS (where a spoken follow-up lands, and what every
-    // surface marks) are desk_sessions_state() in Postgres (data-layer 00157), the one definition the
-    // voice tools read too, so "session three" and the focused session mean the same thing everywhere.
-    // `pinned` says the focus is the user's explicit pin rather than automatic; a pinned session is marked
-    // differently, because it stays put while other sessions take turns.
+    // The NUMBER the user says out loud, the PINS and the SHOWN session (`focus`: the most recently pinned,
+    // else the most recently active running one — what a wall's reply column shows) are
+    // desk_sessions_state() in Postgres (data-layer 00164), the one definition the voice tools read too.
+    // Pins are a set and head the list; each row says whether it is one. `pinned` says the shown session
+    // is a pin rather than automatic.
     const [sessions, queue, state] = await Promise.all([
       sb('desk_sessions?select=*&order=last_seen.desc'),
       sb('desk_queue?claimed=is.null&select=*&order=created.asc'),
@@ -105,6 +105,7 @@ module.exports = function (ctx) {
     for (const s of sessions || []) rowConv.set(s.id, s.claude_session_id || s.id);
     const focus = (state && state.focus && state.focus.session_id) || null;
     const pinned = !!(state && state.focus && state.focus.pinned);
+    const pins = new Set((state && state.pins) || []);
     const numbers = (state && state.numbers) || {};
     const numbered = new Map(Object.entries(numbers));
     // One row per conversation, in number order: the rows that have a number.
@@ -130,6 +131,7 @@ module.exports = function (ctx) {
       // the phone, the walls and the watch paint one colour: gray for the Mac (the common case, so it
       // reads as the default), green for the Pi, violet for Fly — none of them amber, red, blue or white,
       // which the unread edge, incidents, Codex and the focus already mean.
+      pinned: pins.has(s.id),
       machine: machineOf(s.worker),
       machine_color: MACHINE_COLOR[machineOf(s.worker)],
     });
@@ -188,7 +190,7 @@ module.exports = function (ctx) {
 
   // One `event: sessions` frame carrying the whole payload, to the wall pool.
   //
-  // COALESCED on purpose: opening a session writes `desk_sessions`, `desk_queue` and `desk_focus`
+  // COALESCED on purpose: opening a session writes `desk_sessions` and `desk_queue`
   // within a few milliseconds of each other, and a frame per change would build and ship the same
   // payload three times. Skipped entirely when nobody is watching, so a dark TV costs nothing.
   let sessionsPushTimer = null;

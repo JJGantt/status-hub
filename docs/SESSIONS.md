@@ -91,8 +91,8 @@ so the user record that follows does not say it twice.
 
 - **`desk_commands`** — the queue. `pending → running → done | error | expired`, with `claimed_by`
   so a machine can sweep only its own abandoned claims.
-- **`desk_focus`** — a single row holding the pin (`session_id`, set by `focus_session`) and the
-  dispatch still opening (`command_id`). Unpinned, focus is computed from `active_at`, not stored here.
+- **`desk_pins`** — one row per pinned conversation, with when it was pinned (`pin_session` /
+  `unpin_session`). The shown session is computed from these and `active_at`, not stored.
 - **`desk_queue`** — Pi only: work neither machine can take yet — the Pi has no memory to spare and the
   Mac is asleep — new sessions and resumes alike (`resume_id` names the conversation a resume
   continues). Never expires (unlike a command). When the Mac wakes, the next pass hands it there.
@@ -193,9 +193,9 @@ with the same MCP servers, approvals off and full access.
 | tool / action | who claims it | what happens |
 |---|---|---|
 | `start_session` | target machine | pull, launch, publish the row |
-| `focus_session` | — | pins the follow-up pointer to a session that already exists |
-| `unfocus_session` | — | releases the pin: follow-ups go to the most recently active session again |
-| `follow_up` | machine owning the target session | text typed into the live session, busy or not; the target is the session NAMED (`session` param), else the focused one. A named parked session is resumed with the words instead. Naming leaves the pin alone. **With the owning machine asleep, the session moves**: a `resume_mirrored` to the other home machine, else to Fly (the last resort, as for new work), carrying the words as its prompt, as a transfer from a dead source does (only a Codex session, one with no transcript, or no machine taking it dead-letters the words instead) |
+| `pin_session` | — | pins a session (pins are a set): it heads every list and, most recently pinned, is the shown session |
+| `unpin_session` | — | takes the pin off one session; the others stay |
+| `follow_up` | machine owning the target session | text typed into the live session, busy or not; the target is ALWAYS the session named (`session`, required — there is no default target). A parked session is resumed with the words instead. **With the owning machine asleep, the session moves**: a `resume_mirrored` to the other home machine, else to Fly (the last resort, as for new work), carrying the words as its prompt, as a transfer from a dead source does (only a Codex session, one with no transcript, or no machine taking it dead-letters the words instead) |
 | `rename_session` | owning machine | `/rename <name>` typed in — the session renames itself |
 | `end_session` | owning machine | close the tab / tmux session, park the row. A session ending ITSELF is not closed by a command: see below |
 | `resume_session` | owning machine | `claude --resume <id>` in a new tab or tmux session, with an optional prompt; a Pi with no memory to spare hands it to the Mac with its conversation, like new work (§ Capacity). Aimed at a session that is still running, both machines type the prompt into it |
@@ -225,124 +225,27 @@ Pi's detail starts `queued`), and the tool says which — a queued session is no
 detail of `handed to the Mac as <id>` is not a verdict either: `followHandoff` waits on that Mac command
 and reports where the session really started.
 
-### Focus — how a session gets spoken to
+### Pins and the shown session
 
-The session a spoken follow-up lands in — and the one the pane, the strip and the home wall show as
-focused — is decided in this order, by `desk_sessions_state()` (data-layer migration 00157), which the voice
-tools and the hub both read:
+**Pins are a set** (`desk_pins`, one row per conversation with when it was pinned, data-layer migration
+00164). `pin_session` adds one and `unpin_session` removes one; closing a session by hand removes its pin
+too, and nothing automatic does — dispatching work, eviction, a resume or a move between machines all
+leave it, since the pin is on the conversation, not a row. Pinned sessions head every list, most recently
+pinned first: `desk_sessions_state()` numbers them that way, and every surface orders by the number. Each
+row in `/api/sessions` carries `pinned`, and every list draws a pin beside its name.
 
-1. **A session focused by name** (`focus_session`: "focus the status-hub session" — "pin" is the same
-   verb), while it runs. It holds until another is focused, it is released (`unfocus_session`: "unfocus",
-   "unpin", "take the pin off", "go back to automatic"), new work is dispatched, or it closes. "Focus
-   the latest session" is a pin like any other — of whichever session is newest at that moment — which
-   is why going back to automatic is a separate verb: one tool doing both makes "latest" ambiguous.
-2. **A dispatch whose session has not opened yet** (`desk_focus.command_id`, while that command is
-   pending or running). Words said in those seconds are meant for it, so a follow-up is saved rather
-   than sent to whatever was active a moment before.
-3. **Otherwise the most recently active running session** (`active_at`), on either machine.
+**The SHOWN session** (`focus` in `/api/sessions`, `pinned` beside it when it is a pin) is the most
+recently pinned one, else the most recently active running session. It is what a surface with room for
+one session's answer shows: the home wall's reply column, the sessions wall's open tab, the footer strip.
+The walls frame its row white, because the answer below belongs to it. The phone and the watch, which
+show no answer beside the list, do not mark it.
 
-3 includes the session being typed in at the keyboard, deliberately: the session last used is the one
-meant. Ambient speech is guarded by `follow_up` demanding a handoff, not by excluding it.
-
-A pinned session carries a pin on every surface that shows focus — the home wall, the sessions wall,
-the footer strip, the phone pane — and automatic focus carries none, because a pin stays put while
-other sessions take turns. `/api/sessions` returns `pinned` beside `focus` for exactly this.
-
-**Focusing is itself a handoff.** On a room-mic turn `follow_up` demands an explicit phrase ("send a
-follow-up", "tell it to"), because the mic hears the whole room and forwarding ambient speech into a
-session is the failure that rule prevents. On a deliberate turn (watch, phone, typed, the ESP's wake
-word) a reply that plainly answers a session's message posted in the thread is a handoff too: the
-worker names those messages by session in the replayed thread, and the model sends the reply there. Naming a session removes the ambiguity, so everything said after a
-focus in the same turn goes to that session with no phrase required. The user can talk to it as
-the same assistant, say "you" about things another session said, and never think about the handoff
-underneath.
-
-The addressing directive in `worker.py` carries the same rule, and it has to: it tells the model that
-development talk naming no destination belongs to a session that has already heard the user. After a
-focus, the destination IS named.
-
-### Naming, in order of authority
-
-1. **A name the user chose** — `/rename <name>`, or ctrl-R in the session picker. Both make Claude Code
-   write a `custom-title` record into the transcript, which the reconcile tick reads back.
-2. **The router's label** — the few words `start_session` wrote at dispatch, naming the job.
-3. **Claude Code's generated title** — for a session nobody dispatched and nobody named.
-
-Generated titles describe content, so **two sessions doing similar work get the same name**. Naming one is the only way to tell them apart.
-
-Renaming from the hub sends `/rename` into the live session rather than writing the record directly:
-writing the record works for everything that READS the transcript, but the running session never
-re-reads its own file, so its terminal tab keeps the old title.
-
-### Numbering
-
-Active sessions, **the pinned one first, then most recently active, running and parked interleaved, numbered from 1** — which
-is to say: the position in the list on screen. That is where "the second session" comes from; the user reads
-it off a surface and says it, and `get_sessions` hands the agent the same list in the same order.
-**Parking is not activity**: a session evicted to free the Pi or replaced by a dispatch keeps the place
-its last turn earned. Grouping running above parked is the attractive alternative and it breaks the list
-— every eviction shoves a session below everything still open, however recently it was used. Every
-surface therefore draws the rows in `n` order rather than the payload's `resident` then `evicted`, since
-drawing those one after the other would print the numbers out of sequence. The rule is
-`desk_sessions_state()` (data-layer 00157), read by the voice tools and `/api/sessions` alike, so
-"session three" means one thing everywhere.
-**One entry per conversation**: rows sharing a `claude_session_id` are earlier stretches of one
-session, so only the first after sorting is listed or numbered — the running row, else the most
-recently active.
-
-**It is ordered by `active_at`, the last turn boundary** — a prompt sent or a turn finished. `last_seen`
-is the obvious reading of "most recent" and it makes the numbers unusable: every row is touched by its
-reconcile tick every 30s, so the order reshuffles between two reads seconds apart. `started` leaves a
-session in active use below newer idle ones. `active_at` moves only when a session starts or finishes a turn, never on a tick, so a number said out loud can
-still change before it is resolved — but only if a session does something in those few seconds.
-
-A session can be named three ways, and `resolveSession` takes any of them: **the number** (digits or
-spoken — "3", "fifth", "the third session"), **the repo** ("status-hub"), or **words from its name**
-("golf", "session management"). Running sessions are matched first and the full list is only the
-fallback, because parked ones linger for a fortnight and otherwise crowd every name. An ambiguous name is
-still answered with the numbered choices rather than a guess.
-
-Nothing about this is known to the SESSION itself. A session has no idea it is number three; the
-number is computed when the list is read, from the rows, by whoever is reading.
-
-The number is a POSITION, not identity: closing one renumbers the rest. That is what keeps the list
-1..N over what is actually open, instead of counting upward for ever.
-
----
-
-## 6. Moving a session between machines
-
-A session is an append-only transcript plus a working directory, so moving one is copying the file
-and resuming it: a Mac transcript resumes on the Pi with every absolute path rewritten to the Pi's
-home, the same session id, and full recall of the conversation.
-
-- **Mirroring** runs at the end of every turn, on both machines — the only moment a transcript is a
-  complete thought. Only the tail is uploaded; one transcript here is 16MB and a turn adds tens of KB.
-- **The rewrite** is the home directory: `/Users/jaredgantt` ↔ `/home/jaredgantt`. Without it the
-  resumed session points at a directory that does not exist.
-- **A transfer is claimed by the machine giving the session up.** It closes the session, flushes the
-  last of the mirror, and only then asks the destination to resume.
-- **When the source is unreachable** there is nothing to close and nothing left to flush, so the
-  destination resumes from the mirror as of the last completed turn. That is the case the whole
-  mechanism exists for: the laptop is shut and the work should carry on.
-
----
-
-## 7. Invariants — the things that must not be broken
-
-**One writer per transcript.** `claude --resume` on a transcript that is live elsewhere does not
-reattach; it starts a second process replaying the same file, and the two diverge with one id between
-them. Every path that resumes
-closes the other side first, and the hub asks about the conversation before it resumes one
-(`conversationNow`, HUB-INTERNALS §6b): a resume makes a new row and leaves the parked one parked, so
-without that check a follow-up or a resume of the old row would start a second process on a
-conversation already running again under the new one.
-
-**`desk_focus` is written only by explicit user intent.** A dispatch, a resume and a dead-letter retry write
-its `command_id`; `focus_session` writes its `session_id`; `unfocus_session` clears both. Adoption and
-the reconcile ticks never touch
-it — unpinned, focus is COMPUTED from activity, not stored. Every surface resolves it by the same rule,
-and only a RESIDENT session can hold it, because that is what `follow_up` can actually reach.
+**Follow-ups do not go to the shown session.** `follow_up` always names its target: the orchestrator holds
+the conversation and knows which session the words are for, and a default target is how words land in
+the wrong one. On a room-mic turn `follow_up` still demands an explicit handoff ("send a follow-up",
+"tell it to"), because the mic hears the whole room; on a deliberate turn (watch, phone, typed, the ESP's
+wake word) a reply that plainly answers a session's message posted in the thread is a handoff too — the
+worker names those messages by session in the replayed thread, and the model sends the reply there.
 
 **Nothing spoken is ever dropped.** The queue has no way to fail — a command for a sleeping machine
 is claimed by nobody and expires unread — so every entry point checks the machine is beating BEFORE
@@ -485,7 +388,7 @@ events, since FSEvents coalesces on macOS and inotify misses under load. So the 
 the mechanism. That includes the reply's phone notification: a tick that reads a finished turn newer
 than the one the row records (and newer than the row itself, so a resume's inherited history does not
 count) reports it with `reportTurnEnd`, the watcher's own call, and the hub pushes each turn once. The same is true one layer up: the wall keeps a 5-MINUTE poll of `/api/sessions` behind the
-push, and only as a net. `desk_sessions`, `desk_queue` and `desk_focus` are in the realtime
+push, and only as a net. `desk_sessions`, `desk_queue` and `desk_pins` are in the realtime
 publication (data-layer migration `00104`), so a session dying, the focus moving and the numbering
 changing do announce themselves — each pushes a fresh payload (`pushSessions` in the hub), built
 by the same function that answers the endpoint so the two cannot disagree.
@@ -512,9 +415,9 @@ A session any other agent dispatches has no `relay` flag and stays out of the th
 | surface | what it shows | interaction |
 |---|---|---|
 | phone pane (`cards/repos.js`) | everything: running, parked, queued, numbers, machine, last reply | full — start, name, transfer, resume, close |
-| the wall's footer (`cards/deskfoot.js`) | only the session holding follow-ups | none |
-| **TV session focus** (`/tv-session-focus`) | the running sessions as tabs, and the focused one's reply | none — voice only |
-| the home wall (`/tv`, `tv-home.js`) | three, the pinned one first and then most recently active, each with a live line of what it is doing; the focused one's full reply below | none — voice only |
+| the wall's footer (`cards/deskfoot.js`) | only the shown session | none |
+| **TV session focus** (`/tv-session-focus`) | the running sessions as tabs, and the shown one's reply | none — voice only |
+| the home wall (`/tv`, `tv-home.js`) | three, the pinned one first and then most recently active, each with a live line of what it is doing; the shown one's full reply below | none — voice only |
 | the watch (`SessionsView`) | queued sessions on top, then every running and parked one, live off the `sessions` frames | open a session; a follow-up is always locked until the next press |
 | voice (`get_sessions`) | the numbered list, and what each last said (the turn's one-sentence summary from `desk_turns.summary`, else the reply's first 200 characters) | every verb |
 | the hub conversation (web `.ai-msg-session`, watch tint) | a hub-dispatched session's first reply, tinted and named by its label | reply is a fresh command |

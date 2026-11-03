@@ -318,6 +318,8 @@ enum Hub {
             // moment the wrist drops, and the push is the only thing that reaches the user then. Not
             // `watch`, which is the always-on listener and has its voice checked.
             query += "&source=watch-cmd"
+            // Spoken with an answer open in the inbox: about that answer (Inbox.swift).
+            if !dry, let about = clip.about { query += "&about=\(about)" }
         }
         // A locked recording is long and full of pauses: the hub gives it the larger Whisper and shortens
         // the pauses marked here before transcribing.

@@ -33,6 +33,8 @@ final class Recorder {
         var quiet: [[TimeInterval]] = []
         /// The `LiveStream` this recording was mirrored into, sent with the clip so the hub can tie the two.
         var live: String?
+        /// The inbox answer open when it was recorded (`Hub.about`): a pressed command is about it.
+        var about: String? = Hub.about
     }
 
     enum Failure: Error {

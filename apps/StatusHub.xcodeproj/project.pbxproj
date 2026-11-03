@@ -23,6 +23,7 @@
 		2D7BBEABB20A4F0C080608E0 /* Location.swift in Sources */ = {isa = PBXBuildFile; fileRef = D2181310AB9F5E005371B8B0 /* Location.swift */; };
 		2DE5C68D7C666AA0FFB4B465 /* Markdown.swift in Sources */ = {isa = PBXBuildFile; fileRef = 50C9941AC596855E4C447F11 /* Markdown.swift */; };
 		2E99FBE2382B78CBEBE467EE /* Usage.swift in Sources */ = {isa = PBXBuildFile; fileRef = 50AE228EE180062CB3C46C98 /* Usage.swift */; };
+		2F21E62C9C469627AE83C165 /* Inbox.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1AFDE309B6B2A7FC8858ABF7 /* Inbox.swift */; };
 		37CD0E58D2EE7273A012632B /* DayView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 01225D88DDA6CA36478FE1CA /* DayView.swift */; };
 		3995C08AAC931FCC8F627A14 /* StatusHubShare.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 1C987C27ED7B0DC15E346FD4 /* StatusHubShare.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		4047BFD86E0305E129C06B77 /* Info-iOS.plist in Resources */ = {isa = PBXBuildFile; fileRef = 12B2F6A89FA87D30EEC5ED56 /* Info-iOS.plist */; };
@@ -165,6 +166,7 @@
 		1395E04227DD7450E1CBC8AD /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		14DD24EA8F44511AAE8A666A /* Speaker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Speaker.swift; sourceTree = "<group>"; };
 		14EB30894FADCF33B66D0455 /* Recorder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Recorder.swift; sourceTree = "<group>"; };
+		1AFDE309B6B2A7FC8858ABF7 /* Inbox.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Inbox.swift; sourceTree = "<group>"; };
 		1C987C27ED7B0DC15E346FD4 /* StatusHubShare.appex */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = "wrapper.app-extension"; path = StatusHubShare.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		1E94C4C0D42288352ED7299B /* VolumeKnob.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VolumeKnob.swift; sourceTree = "<group>"; };
 		279F09507BAD56AB8AD69831 /* TodoWidget.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TodoWidget.swift; sourceTree = "<group>"; };
@@ -277,6 +279,7 @@
 				7D90424F70095351BD348487 /* HistoryView.swift */,
 				9C61C65954CA9A7056B2B127 /* HomeView.swift */,
 				FD06B420AFC554D37540118C /* Hub.swift */,
+				1AFDE309B6B2A7FC8858ABF7 /* Inbox.swift */,
 				1395E04227DD7450E1CBC8AD /* Info.plist */,
 				011F77A80F4DF604831A2925 /* LiveListen.swift */,
 				B47D0D32A221BCBB3473BE45 /* LiveStream.swift */,
@@ -581,6 +584,7 @@
 				0F13CF9CFA7602FE6562864D /* HistoryView.swift in Sources */,
 				1962BCC150815491A3F92EB1 /* HomeView.swift in Sources */,
 				C4250430822C333D041CEEA1 /* Hub.swift in Sources */,
+				2F21E62C9C469627AE83C165 /* Inbox.swift in Sources */,
 				62377EFC112DA32097338F77 /* LiveListen.swift in Sources */,
 				49EFB53930636E1DA9D5EA54 /* LiveStream.swift in Sources */,
 				2D7BBEABB20A4F0C080608E0 /* Location.swift in Sources */,

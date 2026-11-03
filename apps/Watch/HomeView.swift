@@ -40,6 +40,9 @@ struct HomeView: View {
     /// jump, and each one re-lands on `landed`. Only until the next arrival or the user's scroll — after
     /// that, while the user is looking, **nothing re-lands** (`settle`).
     @State private var settling = true
+    /// The answers inbox is open over the thread (`InboxView`). The thread underneath is not being
+    /// looked at then, so nothing in it counts as read.
+    @State private var inbox = false
 
     var body: some View {
         ScrollViewReader { proxy in
@@ -126,15 +129,16 @@ struct HomeView: View {
             .onChange(of: chat.pending.count) { _, _ in settle() }
             .onChange(of: chat.activity.count) { _, _ in settle() }
             .onAppear { landed = target; settling = true; jump(proxy) }
-            // **Unread answers** (docs/WATCH.md): an amber dot at the top while any is left, and a tap
-            // on it lands on the oldest. A button of its own, so the tap does not also record.
+            // **The answers inbox** (docs/WATCH.md): a dot at the top, always — amber while any answer
+            // is unread, gray otherwise — and a tap on it opens the inbox. A button of its own, so the
+            // tap does not also record.
             .overlay(alignment: .top) {
-                if let first = chat.unread.first {
+                if !inbox {
                     Button {
-                        Hub.log("unread-jump", ["id": first.id, "left": chat.unread.count])
-                        chat.land(on: first.id)
+                        Hub.log("inbox-open", ["unread": chat.unread.count])
+                        inbox = true
                     } label: {
-                        Circle().fill(Self.unreadDot).frame(width: 10, height: 10)
+                        Circle().fill(chat.unread.isEmpty ? Self.readDot : Self.unreadDot).frame(width: 10, height: 10)
                             .frame(width: 48, height: 30).contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
@@ -142,6 +146,11 @@ struct HomeView: View {
                 }
             }
         }
+        // Over the thread, inside the page, so the double tap above the page row still records.
+        .overlay { if inbox { InboxView(close: { inbox = false }) } }
+        // An answer's notification lands on the answer in the thread, so the inbox gets out of the way.
+        .onChange(of: chat.landings) { _, _ in inbox = false }
+        .onChange(of: inbox) { _, _ in attend() }
         .onChange(of: dimmed) { _, _ in attend() }
         .onChange(of: phase) { _, _ in attend() }
         .onChange(of: onScreen) { _, now in
@@ -175,6 +184,7 @@ struct HomeView: View {
 
     /// The amber the sessions list marks unread with.
     private static let unreadDot = Color(hex: "#e0a03a")
+    private static let readDot = Color(hex: "#4a525c")
 
     /// How much of a row must be on screen to count as shown: half, or for a row taller than the
     /// screen, enough to fill a little under half the screen. A long answer counts once its opening is
@@ -187,7 +197,7 @@ struct HomeView: View {
     /// **The read rule**: an unread answer counts as read after two seconds on screen, with the app in
     /// front, home showing and the wrist up. Any of those ending first stops the count.
     private func attend() {
-        looking = !dimmed && phase == .active && onScreen
+        looking = !dimmed && phase == .active && onScreen && !inbox
         chat.looking = looking
         chat.homeOpen = onScreen && phase != .background
         let due = looking ? Set(chat.unread.map(\.id)).intersection(visible) : []

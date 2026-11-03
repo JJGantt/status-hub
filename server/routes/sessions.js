@@ -316,10 +316,15 @@ module.exports = function (ctx) {
           // The words are for the SESSION, not the machine: with its machine asleep (a closed laptop),
           // the conversation moves to the other machine from what was mirrored and is resumed there with
           // them as its next prompt — data-layer's followUpElsewhere, and the two have to agree.
-          const dest = machine === 'pi' ? 'mac' : 'pi';
           // `now.live` carries only id/worker/status; the conversation's own fields are on the full row.
           const conv = { ...rowsFull[0], ...target };
-          if (conv.claude_session_id && conv.agent !== 'codex' && machine !== 'fly' && await machineAwake(dest)) {
+          // The other home machine first, then Fly, the last resort; waking Fly is the slow check.
+          let dest = null;
+          if (conv.claude_session_id && conv.agent !== 'codex') {
+            const order = machine === 'mac' ? ['pi', 'fly'] : machine === 'pi' ? ['mac', 'fly'] : ['pi', 'mac'];
+            for (const m of order) if (await machineAwake(m)) { dest = m; break; }
+          }
+          if (dest) {
             const cmdId = crypto.randomUUID();
             await sbWrite('desk_commands', 'POST', { id: cmdId, kind: 'resume_mirrored',
               payload: { target: dest, claude_session_id: conv.claude_session_id, repo: conv.repo,

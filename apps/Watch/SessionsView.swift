@@ -259,6 +259,14 @@ struct SessionView: View {
     /// The row that was at the top when the user scrolled there for more: the scroll goes back onto it once
     /// the earlier turns have laid out above it.
     @State private var keepAtTop: String?
+    /// **The first event laid out when the user started looking**, by seq. Nothing drops off the top of the
+    /// window while the wrist is up: a new prompt would otherwise push the oldest turn out above the
+    /// screen and everything on it would shift up by that turn's height. Let go when the user stops looking.
+    @State private var keepFrom: Int?
+    /// A landing of the page's own is still settling (the turns lay out over several passes after a
+    /// jump, and each re-lands on `spot`). Only until the next arrival or the user's scroll: after that,
+    /// while the user is looking, nothing re-lands.
+    @State private var settling = true
 
     /// What is drawn: the last `turns` turns of `all`.
     private var shown: [SessionEvent] { window.events }
@@ -266,7 +274,9 @@ struct SessionView: View {
         let list = all
         let prompts = list.indices.filter { list[$0].kind == "prompt" }
         guard prompts.count > turns else { return (list, false) }
-        return (Array(list[prompts[prompts.count - turns]...]), true)
+        var start = prompts[prompts.count - turns]
+        if let keepFrom, let i = list.firstIndex(where: { $0.seq >= keepFrom }) { start = min(start, i) }
+        return (Array(list[start...]), start > 0)
     }
 
     var body: some View {
@@ -299,11 +309,12 @@ struct SessionView: View {
             // in hand (`Sessions.sessionFrame`).
             .onChange(of: newest) { _, now in
                 guard following else { return }
-                if holds(now) { Hub.log("land-held", ["row": key, "at": spot ?? "", "next": now ?? ""]); return }
+                if holds(now) { settle(); Hub.log("land-held", ["row": key, "at": spot ?? "", "next": now ?? ""]); return }
                 toNewest(proxy)
             }
             // The user stopped looking with something held: it lands now, so it is waiting for the next raise.
             .onChange(of: looking) { _, now in
+                keepFrom = now ? shown.first?.seq : nil
                 if !now && following && spot != newest { toNewest(proxy) }
             }
             // Off screen while following the newest: the earlier turns the user asked for go again, so the
@@ -317,7 +328,10 @@ struct SessionView: View {
             // too. The page's own jumps are never animated, so each is exactly one move to account for.
             .onScrollGeometryChange(for: Scroll.self) { Scroll(y: $0.contentOffset.y, h: $0.contentSize.height) } action: { old, new in
                 if new.h != old.h {
-                    if following { toSpot(proxy) }
+                    // **Nothing moves the page while the user is looking**, a re-landing as much as a
+                    // landing: held, `spot` is an older item, and a short one resting at the end is pulled
+                    // up to the top the moment more arrives under it. Content added below moves nothing.
+                    if following { if settling || !looking { toSpot(proxy) } }
                     // Earlier turns were added above: back onto the row that was at the top, so they
                     // arrive above the user rather than under the user's finger.
                     else if let a = keepAtTop { keepAtTop = nil; jumping = true; proxy.scrollTo(a, anchor: .top) }
@@ -342,10 +356,16 @@ struct SessionView: View {
                 default: break
                 }
             }
-            .onAppear { toNewest(proxy); logShown("appear") }
+            .onAppear { keepFrom = looking ? shown.first?.seq : nil; toNewest(proxy); logShown("appear") }
             .onChange(of: newest) { _, n in logShown("newest") }
-            .onChange(of: events.count) { _, _ in logShown("events") }
-            .onChange(of: placeholders.count) { _, _ in logShown("placeholders") }
+            .onChange(of: events.count) { old, _ in
+                // The page opened before the log came: the floor is what the first load laid out.
+                if looking && keepFrom == nil { keepFrom = shown.first?.seq }
+                // A first load is the landing itself, not an arrival.
+                if old > 0 { settle() }
+                logShown("events")
+            }
+            .onChange(of: placeholders.count) { _, _ in settle(); logShown("placeholders") }
         }
         // In the corner of the GLASS, not of the safe area, which stops well short of the bottom while
         // the page scrolls on under it: a clear layer that reaches the screen's edge carries the button.
@@ -514,6 +534,7 @@ struct SessionView: View {
     /// The top of the newest item at the top of the screen, or as near it as the end of the content
     /// allows: a short last item sits at the bottom with what came before it filling the screen.
     private func toNewest(_ proxy: ScrollViewProxy) {
+        settling = true
         spot = newest
         toSpot(proxy)
     }
@@ -546,8 +567,14 @@ struct SessionView: View {
         ])
     }
 
+    private func settle() {
+        guard looking, settling else { return }
+        settling = false
+    }
+
     /// The user moved the page: it is the user's until the session is opened again or the user scrolls to the end.
     private func scrolled(_ how: String) {
+        settling = false
         hisScroll = true
         guard following else { return }
         following = false

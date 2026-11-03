@@ -100,6 +100,17 @@ pull the view off it. A tap on the unread dot or an answer's notification is ask
 — keyed on the target, the room would vanish from above the answer being read and shift it. Each hold is
 logged as `land-held`.
 
+**A hold freezes the view, not a spot.** While the user is looking, nothing re-lands either: the landing
+is not re-applied as the thread grows, because the spot held is an older answer, and jumping back onto it
+on every arrival drags the view up the thread — and a short item resting at the end of the scroll is
+pulled to the top the moment anything arrives under it. Content added below moves nothing by itself, so
+doing nothing IS staying put. Re-landing as the page lays out happens only while a landing of the page's
+own is settling (`settling`: from a landing until the next arrival or the user's scroll), and whenever the
+user is not looking. **Nor does anything drop off the top**: the laid-out window keeps the row (home,
+`Chat.keepFrom`) or event (session, `keepFrom`) it started at when the user began looking, and grows
+downward instead, since a row trimmed from above the screen shifts everything on it by that row's height.
+Both let go when the user stops looking.
+
 **The landing spot is fixed, per page** (`Landing` in `WatchUI.swift`): 32pt from the top of the glass
 on home, where a full-width first line clears the corner curve and the thickest default edge; 58pt in
 a session, under its title and clear of the fade the title draws over what scrolls beneath it. It does
@@ -245,7 +256,9 @@ Laying out everything held (up to ten turns with every tool call in them on a se
 home) makes swiping between the two pages lag. The top is noticed by a 1pt marker's visibility,
 like the end (§ Double tap, and scrolling), and only once the user has scrolled, so the page laying
 out never asks for more. Each falls back to one step when it lands on the newest again or leaves the
-screen (a session only while it is following the newest, so a place scrolled to is kept).
+screen (a session only while it is following the newest, so a place scrolled to is kept). While the user is
+looking the window never loses its top (`keepFrom`), so it grows past its step rather than trim above the
+screen.
 
 **The whole rule** (`Sessions.frame`): the next seq is appended; a gap means the hub has what went by
 while this was not listening, and it is fetched from the last seq held (`/api/sessions/:id/events

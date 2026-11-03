@@ -36,6 +36,10 @@ struct HomeView: View {
     /// The row that was at the top when the user scrolled there and more rows were asked for: the scroll goes
     /// back onto it once they have laid out above it.
     @State private var keepAtTop: String?
+    /// A landing of the page's own is still settling: the thread lays out over several passes after a
+    /// jump, and each one re-lands on `landed`. Only until the next arrival or the user's scroll — after
+    /// that, while the user is looking, **nothing re-lands** (`settle`).
+    @State private var settling = true
 
     var body: some View {
         ScrollViewReader { proxy in
@@ -103,16 +107,25 @@ struct HomeView: View {
             .onChange(of: looking) { _, now in
                 if !now && landed != target { land(proxy) }
             }
+            // **Nothing moves the view while the user is looking**, a re-landing as much as a landing. Held,
+            // `landed` is an older answer, and jumping back onto it each time the thread grows pulled the
+            // view up the thread on every arrival — onto an answer that had itself moved. Content added
+            // below moves nothing by itself, and `Chat.keepFrom` keeps rows from dropping off the top.
             .onScrollGeometryChange(for: CGFloat.self) { $0.contentSize.height } action: { _, _ in
-                if pinned { jump(proxy) }
+                if pinned { if settling || !looking { jump(proxy) } }
                 // Rows were added above: put back the one that was at the top, so they arrive above
                 // the user rather than under the user's finger.
                 else if let a = keepAtTop { keepAtTop = nil; proxy.scrollTo(a, anchor: .top) }
             }
             .onScrollPhaseChange { _, now in
-                if now == .interacting || now == .tracking { pinned = false }
+                if now == .interacting || now == .tracking { pinned = false; settling = false }
             }
-            .onAppear { landed = target; jump(proxy) }
+            // Anything arriving ends a landing's settling: from then on it is the user's page until the user
+            // stops looking.
+            .onChange(of: chat.thread.last?.id) { _, _ in settle() }
+            .onChange(of: chat.pending.count) { _, _ in settle() }
+            .onChange(of: chat.activity.count) { _, _ in settle() }
+            .onAppear { landed = target; settling = true; jump(proxy) }
             // **Unread answers** (docs/WATCH.md): an amber dot at the top while any is left, and a tap
             // on it lands on the oldest. A button of its own, so the tap does not also record.
             .overlay(alignment: .top) {
@@ -203,7 +216,13 @@ struct HomeView: View {
         keepAtTop = nil
         landed = target
         pinned = true
+        settling = true
         jump(proxy, animated: true)
+    }
+
+    private func settle() {
+        guard looking, settling else { return }
+        settling = false
     }
 
     private func jump(_ proxy: ScrollViewProxy, animated: Bool = false) {

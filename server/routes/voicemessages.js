@@ -87,7 +87,7 @@ module.exports = function (ctx) {
         start = rows.length;   // reset since the last message: nothing belongs to the new context yet
       }
       // An answer still unread stays in however old it is, with the words that asked for it, so a gap,
-      // a reset or twenty newer exchanges cannot bury it (docs/WATCH.md, "Unread answers").
+      // a reset or twenty newer exchanges cannot bury it (docs/WATCH.md, "The answers inbox").
       // The first row of the context keeps its flag, so a surface that pages back can draw the divider.
       const shown = rows.slice(start).map((r, i) => (i === 0 && breaks[start] ? { ...r, ctx_break: true } : r));
       const have = new Set(shown.map((r) => r.id));

@@ -49,7 +49,7 @@ final class WatchAppDelegate: NSObject, WKApplicationDelegate, UNUserNotificatio
         actions: [UNNotificationAction(identifier: "REMINDER_DONE", title: "Done", options: [])],
         intentIdentifiers: [], options: [])
 
-    /// An orchestrator answer worth reading (docs/WATCH.md, "Unread answers"). No buttons: tapping it
+    /// An orchestrator answer worth reading (docs/WATCH.md, "The answers inbox"). No buttons: tapping it
     /// opens home on the answer, and `customDismissAction` is what tells the app it was swiped away.
     /// Either one is reading it.
     private static let answerCategory = UNNotificationCategory(

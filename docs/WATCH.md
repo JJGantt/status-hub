@@ -156,24 +156,33 @@ modifier and screenshotting is the check to re-run. Nothing here ships to the Ap
 risk to the look rather than to the app. The page draws no clock of its own either: it is for the
 conversation, and the watch face is one press of the crown away.
 
-### Unread answers
+### The answers inbox
 
 Most replies only confirm that something was done and are never read. A reply that answers
 a question is the one that gets buried when the next command is spoken before it is
-read, so those are kept reachable until they have actually been on screen.
+read, so every such reply goes into an inbox: kept for good, newest first, read or not.
 
-- **The model flags them.** It ends such a reply with a marker, which the worker strips and stores
-  as `voice_messages.needs_read` (voice-pipeline `docs/ROUTING.md`). Confirmations carry no flag and
-  never enter the queue; a flag the model forgets falls back to the ordinary thread.
+- **The model flags them.** It ends such a reply with `[[read: <label>]]`, which the worker strips and
+  stores as `voice_messages.needs_read` and `label` (voice-pipeline `docs/ROUTING.md`). The label is the
+  question in a few words, and it is what an inbox row shows; a row with none shows the question's own
+  words. Confirmations carry no flag and never enter the inbox. A session's relayed first reply is
+  flagged when the orchestrator dispatched it with `start_session`'s `needs_read`, under the job's label.
 - **Read means shown**: two seconds on screen with the app in front, home showing and the wrist up
   (`HomeView.attend`). On screen is half the row, or for a row taller than the screen, enough of it to
   fill a little under half the screen, so a long answer counts once its opening has been on screen.
   The watch posts `/api/voice-messages/read`, which stamps `read_at` once; the row's UPDATE reaches
   every surface through the voice stream.
-- **An amber dot at the top of home while any is unread**, in the sessions list's unread amber. A tap
-  on it lands on the OLDEST unread answer; once that is read the next tap goes to the next. It is a
-  button of its own, so the tap does not also record. Home stays landed there (`Chat.landOn`) until
-  the next command's words appear.
+- **A dot at the top of home, always**: amber while any answer is unread, gray otherwise. A tap opens
+  the inbox (`InboxView`), a layer drawn over home inside the page rather than a sheet, because the
+  command is the double tap `CommandBorder` binds above the page row and a sheet would cover it. Read
+  rows are dimmed and stay, so an answer marked read by a glance is still one tap away. While the inbox
+  is open the thread under it is not being looked at, so nothing there counts as read.
+- **A row opens its answer on its own**, not in the thread: the question, then the answer, landed on
+  the answer, then the follow-ups. Opening it marks it read. A command pressed while it is open carries
+  it as `about` (`Hub.about`, read into the clip when it is made), so the worker hands the model that
+  question and answer, which may be days out of the replayed context; the follow-ups and their replies
+  list under the answer, from `GET /api/voice-inbox/:id`. Nothing moves it after it opens. The phone has
+  the same inbox (`public/inbox.js`), opened from a dot in the conversation's corner.
 - **Each one is pushed as it lands** (`notifyAnswer` in the hub, category `VOICE_ANSWER`, titled with
   the command's words, the answer as the body); no other orchestrator reply is. The watch drops it unshown whenever
   home is the page showing and the app is not in the background, wrist up or down (`Chat.homeOpen`):
@@ -182,7 +191,7 @@ read, so those are kept reachable until they have actually been on screen.
   other page it is shown, and once the watch is back on the clock the app is in the background and the
   system shows it. Any interaction with it is reading it: swiped away, on the watch or the phone, it is marked
   read at once (`customDismissAction` is what reports the swipe); tapped on the watch, home lands on
-  the answer and the read rule marks it, since marking it first would drop an old answer out of the
+  the answer and the read rule marks it (closing the inbox if it was open), since marking it first would drop an old answer out of the
   thread before home could land on it; tapped on the phone, it is marked read. Only seeing it, with no
   touch, does not count: nothing reports that.
 - **None is lost to age.** `/api/voice-messages` returns every unread answer however old, with the

@@ -429,6 +429,11 @@ It also beats app.css's `body.tv.wallportrait` block on equal specificity, by lo
   sheet with its `ph-list` class, so the small view's `.heath{display:none}` reaches it there and
   the sheet has to say `display:block` again — the small view has the strip to carry the number, the
   sheet does not.
+- **THE ANSWERS INBOX is a dot in the conversation's corner** (`public/inbox.js`, `inbox.css`): amber
+  while any flagged answer is unread, gray otherwise, always there. It opens a sheet that stops above
+  the navbar, because the navbar's microphone is how a follow-up to an open answer is spoken; while one
+  is open every command from the page carries it as `about` (`setAbout` in voiceagent.js).
+  `docs/WATCH.md` § The answers inbox is the whole design.
 - **Which day it is, is pinned to the left of the strip** and does not scroll with it (`.ds-here`).
   The day names inside the strip sit at their own midnights, so today's is off the left end whenever
   the strip is on now — leaving the page with no date on it anywhere but tomorrow's.

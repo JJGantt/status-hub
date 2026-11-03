@@ -100,7 +100,7 @@ is read while another page is showing; the `<speak-mode>` note never shows on th
 watch; replies actually come back shorter; and how fast the battery goes with it on.
 
 ### Unread answers and their push: first real test (built 2026-10-29, build 138)
-`docs/WATCH.md` § Unread answers. Nothing has run on the devices yet; the first flagged answer is the
+`docs/WATCH.md` § The answers inbox. Nothing has run on the devices yet; the first flagged answer is the
 test. Check: the push arrives titled with the question; it is dropped unshown on the watch with home in
 front and the wrist up (`answer-push` in the watch log), which is unproven for a notification the phone
 forwards; a swipe on the watch reaches the app through `customDismissAction` and clears the amber dot;

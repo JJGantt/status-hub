@@ -162,11 +162,15 @@ let thread = [];        // [{id, at, role, text, session, ctx}] oldest first —
 let older = [];         // the same, loaded by scrolling up past its start
 let olderDone = false, olderBusy = false;
 
-// Whether the user has scrolled UP to read something. Held as a flag rather than measured at paint time:
-// measuring the old content's scroll position just before replacing it wholesale is measuring the
-// wrong thing, and one early paint against an empty box left the thread parked mid-way and never
-// recovering. Our own scrollTop write fires this too, which is right — it lands at the bottom.
-let held = false;
+// NOTHING MOVES THE BOX WHILE IT IS BEING LOOKED AT. Not the user's transcript appearing, not the reply,
+// not the activity line, not with the box already at the bottom: what arrives lands below and waits.
+// The box LANDS (`toLast`) only on ARRIVAL — the first load, coming back to the page after it was hidden
+// (`owed`, spent by the resync the stream does on the way back), and the reset button.
+// `settling` is the stretch after a landing while the box's own height is still being decided by the
+// flex pass; the ResizeObserver re-lands only then, and the user's first touch ends it.
+let owed = true;
+let settling = false;
+document.addEventListener('visibilitychange', () => { if (document.hidden) owed = true; });
 
 // WHAT HAS BEEN HEARD BUT IS NOT IN THE THREAD YET. The worker writes the user bubble only when the run
 // is over, so without this the box sat unchanged from the moment the user spoke until the whole reply landed,
@@ -183,7 +187,7 @@ onPending((p) => {
   else if (p.state === 'prompt') pending = { text: String(p.text || '') };
   else return;
   if (pending) pendingT = setTimeout(() => { pending = null; paintConv(); }, 5 * 60 * 1000);
-  paintConv(true);
+  paintConv();
 });
 // WHAT THE MODEL IS DOING RIGHT NOW, on ONE line, at the bottom of the box. The run pushes a frame
 // per tool call and per thought; this keeps only the NEWEST, and keeps nothing at all once the reply
@@ -195,18 +199,12 @@ let act = null;
 let actT = 0;           // a run that never reports an end must not leave the line up for ever
 onActivity((a) => {
   const state = a.state || 'tool';
-  const first = !act;              // the run's FIRST frame — see the pin below
   clearTimeout(actT);
   if (state === 'done' || state === 'error') act = null;
   else if (state === 'working') act = { text: '' };
   else act = { text: String(a.text || '').replace(/\s+/g, ' ').trim() };
   if (act) actT = setTimeout(() => { act = null; paintConv(); }, 5 * 60 * 1000);
-  // PINNED ON THE FIRST FRAME ONLY. The box lands on the TOP of the last message, so with a long
-  // reply above it the new line is below the fold and the one thing it exists to say is invisible —
-  // the run's first frame is therefore worth the jump, exactly as the user's own prompt landing is. Every
-  // frame after it repaints where the user left it, so a line changing every few seconds cannot drag the user
-  // back down while the user is reading.
-  paintConv(first && !!act);
+  paintConv();
 });
 function clearAct() { clearTimeout(actT); act = null; }
 
@@ -243,28 +241,25 @@ function toLast() {
   if (!conv) return;
   const el = conv.lastElementChild;
   const max = Math.max(0, conv.scrollHeight - conv.clientHeight);
-  if (!el) { conv.scrollTop = max; held = false; return; }
+  if (!el) { conv.scrollTop = max; return; }
   const delta = el.getBoundingClientRect().top - conv.getBoundingClientRect().top;
   conv.scrollTop = Math.max(0, Math.min(max, conv.scrollTop + delta));
-  held = false;
 }
 
 if (conv) {
-  conv.addEventListener('scroll', () => {
-    held = conv.scrollHeight - conv.scrollTop - conv.clientHeight > 24;
-    if (conv.scrollTop < 80) loadOlder();
-  }, { passive: true });
+  conv.addEventListener('scroll', () => { if (conv.scrollTop < 80) loadOlder(); }, { passive: true });
+  for (const ev of ['touchstart', 'wheel']) conv.addEventListener(ev, () => { settling = false; }, { passive: true });
   // This block's height is whatever the rest of the screen did not need, so it is not settled when
   // the thread first paints into it — and a position taken against the wrong height is a thread
   // parked somewhere nothing afterwards corrects. Re-place it whenever the box itself resizes.
   try {
-    new ResizeObserver(() => { if (!held) toLast(); }).observe(conv);
+    new ResizeObserver(() => { if (settling) toLast(); }).observe(conv);
   } catch (_) { /* no ResizeObserver: the paint-time placement is what there is */ }
 }
 
-function paintConv(pin) {
+function paintConv(land) {
   if (!conv) return;
-  const stick = pin || !held;
+  const keep = conv.scrollTop;
   const rows = older.concat(thread);
   conv.innerHTML = rows.map((r, i) => {
     const said = r.role === 'assistant';
@@ -294,7 +289,8 @@ function paintConv(pin) {
   // Twice: once now, because the layout is already final after the assignment above, and once on the
   // next frame, because this block's own height is whatever the rest of the screen did not need and
   // is not settled until the flex pass has run.
-  if (stick) { toLast(); requestAnimationFrame(() => { if (!held) toLast(); }); }
+  if (land) { settling = true; toLast(); requestAnimationFrame(() => { if (settling) toLast(); }); }
+  else conv.scrollTop = keep;
 }
 
 // The text is kept WHOLE — paragraphs, lists and all. It arrives as markdown and is rendered as
@@ -379,7 +375,9 @@ async function resync() {
     // as its `working` frame, so with the phone asleep its rows arrive here, and by then a later
     // command can be the newest: matched against that alone, the placeholder never came down.
     if (pending && pending.text && thread.some(isPending)) { clearTimeout(pendingT); pending = null; }
-    paintConv(true);
+    const land = owed && !document.hidden;
+    if (land) owed = false;
+    paintConv(land);
   } catch (_) { /* the next push or resync reconciles */ }
 }
 

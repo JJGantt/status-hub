@@ -196,6 +196,10 @@ module.exports = function (ctx) {
     }
   });
 
+  // `about`: the inbox answer a command was spoken from (docs/WATCH.md § The answers inbox). The worker
+  // puts that answer and its question on the prompt (voice-pipeline process.py `about_directive`).
+  const aboutId = (v) => (/^[0-9a-f-]{36}$/i.test(String(v || '')) ? String(v) : null);
+
   // What a command recorded for a grab is sent to the model as: the grab's words, framed so the model
   // knows they are overheard audio and that the user's own words are the instructions.
   async function withRewind(rewindId, instructions) {
@@ -326,7 +330,9 @@ module.exports = function (ctx) {
         (him.sim != null ? ` sim=${him.sim.toFixed(2)}${him.bar ? ` bar=${him.bar}` : ''}` : '') +
         (him.why ? ` (${him.why})` : ''));
       if (!him.ok) return res.json({ transcript, enqueued: false, notHim: true });
+      const about = aboutId(req.query.about);
       await sbWrite('voice_requests', 'POST', { id, transcript, source, focus: 'hub', ...(rewindId ? { rewind_id: rewindId } : {}),
+        ...(about ? { about_id: about } : {}),
         ...(alt ? { alt_transcript: alt } : {}),
         ...(untranscribed ? { status: 'untranscribed' } : {}),
         always_on: GATED_SOURCES.has(source),
@@ -663,7 +669,8 @@ module.exports = function (ctx) {
       const location = parseLocation(req.body && req.body.location);
       const id = crypto.randomUUID();   // chosen here so the caller can wait on it (/api/voice-reply/:id)
       const source = req.body && req.body.shared === true ? 'share' : 'web';
-      await sbWrite('voice_requests', 'POST', { id, transcript: text, source, focus: 'hub',
+      const about = aboutId(req.body && req.body.about);
+      await sbWrite('voice_requests', 'POST', { id, transcript: text, source, focus: 'hub', ...(about ? { about_id: about } : {}),
         ...(attachments.length ? { attachments } : {}), ...(client_now ? { client_now } : {}),
         ...(location ? { location } : {}) });
       markSeen(msgId, id);

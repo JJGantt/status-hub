@@ -103,6 +103,47 @@ module.exports = function (ctx) {
     } catch (e) { res.status(500).json({ error: String(e.message || e) }); }
   });
 
+  // THE ANSWERS INBOX (docs/WATCH.md § The answers inbox): every reply flagged worth reading, newest
+  // first, read or not, kept for good. A row is named by its `label` (the orchestrator's few words for
+  // the question, or a relayed session's job label), else by the question's own words cut short.
+  // ?before=<iso> pages further back.
+  async function questionsFor(rows) {
+    const asks = rows.map((r) => r.request_id).filter(Boolean);
+    const words = asks.length
+      ? (await sb(`voice_messages?role=eq.user&request_id=in.(${asks.map(encodeURIComponent).join(',')})&select=request_id,text`) || [])
+      : [];
+    return new Map(words.map((w) => [w.request_id, String(w.text || '').trim()]));
+  }
+  const clip = (t, n) => { const s = String(t || '').replace(/\s+/g, ' ').trim(); return s.length > n ? s.slice(0, n - 1) + '…' : s; };
+  function inboxRow(r, q) {
+    return { id: r.id, at: r.created_at, read: !!r.read_at,
+      label: r.label || clip(q || r.session_label || r.text, 80),
+      session_id: r.session_id || null, session_label: r.session_label || null };
+  }
+  gated.get('/api/voice-inbox', async (req, res) => {
+    try {
+      let limit = parseInt(req.query.limit, 10);
+      if (!Number.isFinite(limit) || limit <= 0 || limit > 200) limit = 60;
+      const beforeMs = Date.parse(String(req.query.before || ''));
+      const before = Number.isFinite(beforeMs) ? `&created_at=lt.${encodeURIComponent(new Date(beforeMs).toISOString())}` : '';
+      const rows = await sb(`voice_messages?focus=eq.hub&role=eq.assistant&needs_read=is.true${before}&order=created_at.desc&limit=${limit}&select=id,created_at,read_at,label,request_id,session_id,session_label,text`) || [];
+      const qs = await questionsFor(rows);
+      res.json({ unread: rows.some((r) => !r.read_at), rows: rows.map((r) => inboxRow(r, qs.get(r.request_id))) });
+    } catch (e) { res.status(500).json({ error: String(e.message || e) }); }
+  });
+  // One inbox entry opened on its own: the whole question and the whole answer. A follow-up spoken from
+  // it names it (`about` on /api/voice-text and /api/voice-command), and the worker hands the model both.
+  gated.get('/api/voice-inbox/:id', async (req, res) => {
+    try {
+      const id = String(req.params.id || '');
+      if (!/^[0-9a-f-]{36}$/i.test(id)) return res.status(400).json({ error: 'bad id' });
+      const [r] = await sb(`voice_messages?id=eq.${id}&select=*`) || [];
+      if (!r) return res.status(404).json({ error: 'not found' });
+      const qs = await questionsFor([r]);
+      res.json({ ...inboxRow(r, qs.get(r.request_id)), question: qs.get(r.request_id) || '', answer: r.text || '', engine: r.engine || null });
+    } catch (e) { res.status(500).json({ error: String(e.message || e) }); }
+  });
+
   // A request as the TV sidebar draws it before its voice_messages row exists; null for one that is not
   // the user's words to the hub conversation (another focus, the reset sentinel) or has no transcript yet.
   function requestView(r) {

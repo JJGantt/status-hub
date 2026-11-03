@@ -376,8 +376,8 @@ the space, the last of them renders down into that padding and out under the bar
 block on it is either a declared height or sized by its own content.
 Exactly one takes the leftover: the conversation at the bottom, `flex:1 1 auto`, because it is the
 only block here that can spend an arbitrary amount of height — more room is simply more of the
-thread. It scrolls and is pinned to the newest line, re-pinned by a ResizeObserver because its own
-height is not settled when the thread first paints into it. There are no card borders and almost no padding for the same
+thread. It scrolls, and lands on the newest line only on arrival (below); a ResizeObserver re-lands it
+only in the moments after a landing, because its own height is not settled when the thread first paints into it. There are no card borders and almost no padding for the same
 reason: a rule costs two pixels of height for something the black ground between blocks already says,
 and where two things genuinely need separating they get a background instead, which costs nothing.
 
@@ -464,11 +464,16 @@ It also beats app.css's `body.tv.wallportrait` block on equal specificity, by lo
   NEWEST ONE ONLY, on one clipped line behind a pulsing caret, cleared by the reply or by the run's
   `done`. The session view is where a whole trajectory is listed and read; a stack of tool calls here
   is the whole box. The popup itself is hidden outright on this page (`.ai-act` in phone-home.css) —
-  it is a float over a surface that fits exactly, and this line is what replaces it. It PINS the box
-  on the run's FIRST frame and never again: the box lands on the TOP of the last message, so under a
-  long reply a new line at the end is below the fold, and a line that changes every few seconds would
-  otherwise drag the reader down after every scroll up. The caret pulses through dimnesses rather than
+  it is a float over a surface that fits exactly, and this line is what replaces it. It never moves
+  the box. The caret pulses through dimnesses rather than
   blinking off, because at 9px a hard on/off reads as something failing.
+  **NOTHING MOVES A THREAD WHILE IT IS BEING LOOKED AT** — this box, the chat sheet, the session view,
+  and the watch's home and session pages alike. Not the user's own words or transcript, not a reply, not
+  the activity line, not even with the view already at the bottom: what arrives lands below and waits
+  to be scrolled to. A thread lands only on ARRIVAL — the first load, the app coming back after it was
+  hidden with something new, opening the chat sheet or a session, the reset button. Jared has asked for
+  this repeatedly; "follow the tail when already at the bottom" is the attractive rule and it is the
+  one he keeps reporting as a bug.
   **IT LANDS ON THE TOP OF THE LAST MESSAGE**, not at the bottom of the thread: a reply is read from
   its first line, and a box scrolled to the very end shows its last line with the rest above. Clamped,
   so a short last message rests at the end of the scroll. The session view lands the same way (`open`

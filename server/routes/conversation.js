@@ -275,7 +275,9 @@ module.exports = function (ctx) {
   // VOICE_ANSWER is the category both apps register: tapping or dismissing it marks the answer read, and
   // the watch drops it unshown while home is in front with the wrist up.
   async function notifyAnswer(row) {
-    if (row.role !== 'assistant' || !row.needs_read || row.read_at) return;
+    // A relayed session reply is flagged too (it is in the inbox), but notifySessionReply already
+    // pushed it; a second push would buzz twice for one reply.
+    if (row.role !== 'assistant' || !row.needs_read || row.read_at || row.session_id) return;
     try {
       if (pushOff(await settingsAll())) return;
       const key = `voice-answer:${row.id}`;

@@ -1127,8 +1127,13 @@ function initCard() {
   const pending = new Map();   // optimistic (locally-sent, not-yet-processed) bubbles: clientId -> {el, paths, text, kind, localImages, at}
   const PENDING_TTL = 120000;  // an optimistic bubble no server row matched is dropped after this on the next backfill (self-heals a missed reconcile)
   const MAX_MSGS = 240;   // cap retained bubbles so a long-open hub tab never grows #ai-log + `seen` unbounded
-  const nearBottom = () => log.scrollHeight - log.scrollTop - log.clientHeight < 80;
   const scrollEnd = () => { log.scrollTop = log.scrollHeight; };
+  // NOTHING MOVES THE THREAD WHILE IT IS BEING LOOKED AT — not the user's own words, not a transcript, not
+  // a reply, not even with the view already at the bottom. A new line lands below and waits to be scrolled
+  // to. The thread lands on its newest line only on ARRIVAL: the first load, coming back to the page after
+  // it was hidden (`owed`), and opening the chat sheet (navbar.js).
+  let owed = true;
+  document.addEventListener('visibilitychange', () => { if (document.hidden) owed = true; });
   function bubbleHtml(row) {
     const side = (row.role || 'assistant') === 'user' ? 'user' : 'assistant';
     const t = row.text == null ? '' : String(row.text);
@@ -1172,7 +1177,6 @@ function initCard() {
     // context stays in the thread behind a divider rather than being wiped.
     const fresh = !seen.has(row.id);
     if (fresh && row.ctx_break) rule();
-    const stick = nearBottom();
     const tmp = document.createElement('div'); tmp.innerHTML = bubbleHtml(row);
     const el = tmp.firstElementChild, existing = seen.get(row.id);
     if (existing) existing.replaceWith(el); else log.appendChild(el);
@@ -1182,7 +1186,6 @@ function initCard() {
       for (const [id, e] of seen) { if (e === o) { seen.delete(id); break; } }
       o.remove();
     }
-    if (stick) scrollEnd();
   }
   function dropPending(cid) {
     const p = pending.get(cid); if (!p) return;
@@ -1198,12 +1201,10 @@ function initCard() {
     const holder = document.createElement('div');
     holder.innerHTML = bubbleHtml({ role: 'user', text: o.text || '', localImages: o.localImages || [], pending: true });
     const el = holder.firstElementChild;
-    const stick = nearBottom();
     log.appendChild(el);
     pending.set(cid, { el, paths: (o.paths || []).filter(Boolean), text: (o.text || '').trim(),
       kind: o.kind || (o.localImages && o.localImages.length ? 'photo' : (o.text ? 'text' : 'voice')),
       localImages: o.localImages || [], at: Date.now() });
-    if (stick) scrollEnd();
     return cid;
   }
   function setPendingPath(cid, paths) { const p = pending.get(cid); if (p) p.paths = [].concat(paths || []).filter(Boolean); }
@@ -1229,6 +1230,7 @@ function initCard() {
       if (!r.ok) return;
       const rows = await r.json();
       const now = Date.now();
+      const keep = log.scrollTop;            // a rebuild while being read puts the reader back where they were
       log.innerHTML = ''; seen.clear();      // detaches server + optimistic els; the pending map still holds the optimistic ones
       for (const row of rows) upsert(row);               // reconcile() drops any pending the server thread now contains
       for (const cid of [...pending.keys()]) {           // re-append still-unmatched optimistic bubbles at the bottom
@@ -1236,7 +1238,7 @@ function initCard() {
         if (now - p.at > PENDING_TTL) dropPending(cid);  // never matched in time → it landed under a different key; stop showing it
         else log.appendChild(p.el);
       }
-      scrollEnd();
+      if (owed && !document.hidden) { scrollEnd(); owed = false; } else log.scrollTop = keep;
     } catch (_) {}
   }
 

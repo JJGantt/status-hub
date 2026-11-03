@@ -477,6 +477,7 @@ function paintBody({ open = false, top = false } = {}) {
   if (!body || !cur) return;
   const list = shown(cur);
   const working = list.length > 0 && list[list.length - 1].kind !== 'reply';
+  const keep = body.scrollTop;   // held explicitly: a wholesale rebuild must not be what moves the reader
   body.innerHTML =
     list.map((e) => e.kind === 'prompt'
       // Queued (sent, not yet read) is dimmed; it takes its full colour and its real place when read.
@@ -498,7 +499,7 @@ function paintBody({ open = false, top = false } = {}) {
       : last;
     // Less the body's own padding, so the first turn of a conversation rests at zero.
     body.scrollTop = at ? Math.max(0, at.offsetTop - body.offsetTop - 12) : 0;
-  }
+  } else body.scrollTop = keep;
 }
 
 // The user's words into the open conversation. The text stays in the box until the hub has taken it, and a
@@ -536,9 +537,7 @@ async function sendWords(text, at = cur) {
       for (const a of shots) URL.revokeObjectURL(a.url);
       shots = [];
       const tray = el.querySelector('.sv-tray'); if (tray) tray.innerHTML = '';
-      paintBody();
-      const body = el.querySelector('.sv-body');
-      if (body) body.scrollTop = body.scrollHeight;
+      paintBody();   // and nothing more: the words land at the end, and the view stays where the user has it
     }
   } catch (e) {
     // Words that were spoken exist nowhere else, so a failed send leaves them in the box to resend.

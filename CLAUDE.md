@@ -453,7 +453,9 @@ It also beats app.css's `body.tv.wallportrait` block on equal specificity, by lo
   origin already authenticated as the owner, so no tag comes from the input; the input is escaped and our
   own patterns put tags around it, and a link is rewritten only when its target is http(s).
   A reply RELAYED FROM A SESSION carries that session's name and the tint the conversation card gives
-  it: it is a machine reporting back, not the hub answering. There is no `You` / `Hub` label — THE
+  it: it is a machine reporting back, not the hub answering. TAPPING IT OPENS THAT SESSION, from this box and from
+  the chat sheet (which closes on the way): `data-sess` on the line, and a capture-phase handler beside
+  `__showSession` in cards/repos.js, so it wins over this box's own tap into the chat sheet. There is no `You` / `Hub` label — THE
   USER'S WORDS ARE DIM AND ON THE RIGHT, hugging their own width, and the hub's are bright and take the
   whole of it, so a thread of short commands and long replies reads as two columns before any of it
   is read. A word in a gutter says the same thing a third time at the cost of that gutter's width on

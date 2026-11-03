@@ -23,6 +23,26 @@ and **Deny**, and the button answers the dialog. Every session on the Mac and th
 The phone (`apps/Sources/Push.swift`) and the watch (`StatusHubWatchApp.swift`) register the same
 category; each posts the decision itself as a background action. Tapping the banner opens the session.
 
+## On the session, not only in the notification
+
+A notification is swiped away by habit, so the waiting dialog is also part of the session. The hub's
+`pendingFor` puts `prompt: { id, line }` on the session's row in `/api/sessions` (and the `sessions`
+frame) and on `/api/sessions/:id`, and re-pushes the session payload whenever a prompt opens, is
+decided, or is dropped. Every surface draws it from there:
+
+- **The phone's session view** (`cards/repos.js`, `paintAsk`) holds a bar above the composer with the
+  call and Approve / Deny, posting to the same `/decide` the notification does.
+- **The watch's session page** holds the same as a card over the bottom of the glass (`askCard` in
+  `SessionsView.swift`).
+- **Every session row**, on the phone, the walls and the watch, shows the call as its line in pink —
+  the one colour no other mark on a row uses.
+
+Answered anywhere — either button, the notification, the keyboard — the next frame takes it off.
+
+**A hook that dies silently would leave buttons that answer nothing**, so the hub drops a prompt whose
+hook has had no request open for 70 seconds (`watchForHook`, armed when the hook's held request closes)
+and re-pushes. The hook always re-sends within seconds, so only a dead one is ever that quiet.
+
 ## Things that are not obvious
 
 - **Claude Code does not stop the hook when the dialog is answered at the keyboard.** It lets it run and

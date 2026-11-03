@@ -115,7 +115,17 @@ struct SessionsView: View {
                         .font(.system(size: 11))
                         .lineLimit(2)
                 }
-                step(s, unread: unread)
+                if let ask = s.prompt {
+                    // Stopped on a permission dialog: the call it wants, in the asking pink. The page
+                    // has the buttons.
+                    Text(ask.line)
+                        .font(.system(size: 9, design: .monospaced))
+                        .foregroundColor(SessionView.askInk)
+                        .lineLimit(1)
+                        .frame(height: 11, alignment: .leading)
+                } else {
+                    step(s, unread: unread)
+                }
             }
             Spacer(minLength: 0)
             VStack(alignment: .trailing, spacing: 4) {
@@ -217,6 +227,12 @@ struct SessionView: View {
     private var events: [SessionEvent] { sessions.logs[key]?.events ?? [] }
     private var incident: Bool { sessions.row(for: key)?.incident == true }
     private var codex: Bool { sessions.row(for: key)?.codex == true }
+    /// The permission dialog the session is stopped on, if any (routes/prompts.js).
+    private var ask: SessionRow.Ask? { sessions.row(for: key)?.prompt }
+    /// The prompt id a button was pressed for, so a second press does not send twice.
+    @State private var answering: String?
+    /// PINK, as on the phone: amber, red, blue, white and the machine colours already mean something.
+    static let askInk = Color(hex: "#ff5fa8")
     static let incidentEdge = Color(hex: "#d9443a")
     static let codexEdge = Color(hex: "#3b82f6")
     /// The frame an open session wears: red for an incident run, blue for a Codex session.
@@ -335,15 +351,19 @@ struct SessionView: View {
         // the page scrolls on under it: a clear layer that reaches the screen's edge carries the button.
         .overlay {
             Color.clear
+                .overlay(alignment: .bottom) {
+                    if let ask { askCard(ask) }
+                }
                 .overlay(alignment: .bottomTrailing) {
                     // While the voice plays the crown is the watch's volume, not the scroll. Beside the
                     // stop glyph rather than in the other corner, where the display's curve cuts it off.
-                    HStack(spacing: 0) {
+                    // Not while a dialog is waiting: the ask card holds the bottom of the glass then.
+                    if ask == nil { HStack(spacing: 0) {
                         if speaker.isSpeaking {
                             VolumeKnob().frame(width: 44, height: 36).padding(.bottom, 4)
                         }
                         playButton
-                    }
+                    } }
                 }
                 .ignoresSafeArea(.container, edges: .bottom)
         }
@@ -392,6 +412,53 @@ struct SessionView: View {
     /// while paused: pausing keeps the place, so carrying on does not start the reply over. Bare glyphs
     /// over the page, so they cost no row. Their own gestures, so a tap on one is not the press the rest
     /// of the glass is.
+    /// **The dialog the session is stopped on, answered here.** The notification carries the same two
+    /// buttons and is swiped away by habit; this stays over the page until the dialog is answered
+    /// anywhere, when the next `sessions` frame takes the prompt off the row. Buttons, so a press on one
+    /// is not the press the rest of the glass is.
+    private func askCard(_ ask: SessionRow.Ask) -> some View {
+        let busy = answering == ask.id
+        return VStack(alignment: .leading, spacing: 4) {
+            Text(ask.line)
+                .font(.system(size: 10, design: .monospaced))
+                .foregroundColor(Color(hex: "#ffc2de"))
+                .lineLimit(2)
+            HStack(spacing: 6) {
+                Button { answer(ask, "deny") } label: {
+                    Text("Deny").font(.system(size: 13, weight: .semibold))
+                        .frame(maxWidth: .infinity).padding(.vertical, 6)
+                        .foregroundColor(Self.askInk)
+                        .overlay(RoundedRectangle(cornerRadius: 8).stroke(Self.askInk, lineWidth: 1))
+                }
+                .buttonStyle(.plain)
+                Button { answer(ask, "allow") } label: {
+                    Text("Approve").font(.system(size: 13, weight: .semibold))
+                        .frame(maxWidth: .infinity).padding(.vertical, 6)
+                        .foregroundColor(Color(hex: "#1a0711"))
+                        .background(RoundedRectangle(cornerRadius: 8).fill(Self.askInk))
+                }
+                .buttonStyle(.plain)
+            }
+            .opacity(busy ? 0.4 : 1)
+            .disabled(busy)
+        }
+        .padding(8)
+        .background(RoundedRectangle(cornerRadius: 10).fill(Color(hex: "#2a0f1e")))
+        .overlay(RoundedRectangle(cornerRadius: 10).stroke(Self.askInk, lineWidth: 1))
+        .padding(.horizontal, 6)
+        .padding(.bottom, 4)
+    }
+
+    private func answer(_ ask: SessionRow.Ask, _ decision: String) {
+        answering = ask.id
+        Hub.log("prompt-answer", ["row": key, "decision": decision])
+        Task { @MainActor in
+            await Hub.decidePrompt(ask.id, decision)
+            await sessions.load()   // the row without its prompt, sooner than the frame if that is slow
+            if answering == ask.id { answering = nil }
+        }
+    }
+
     @ViewBuilder private var playButton: some View {
         let reply = events.last(where: { $0.kind == "reply" })
         if reply != nil || sessions.speakMode {

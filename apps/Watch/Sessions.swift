@@ -34,6 +34,10 @@ struct SessionRow: Decodable, Identifiable, Equatable {
     let n: Int?
     /// When it last did something — its last prompt or reply, the instant the list is ordered by.
     let at: String?
+    /// The permission dialog it is stopped on (routes/prompts.js): the call it wants to make, and the id
+    /// Approve / Deny answer. On the row until the dialog is answered anywhere.
+    let prompt: Ask?
+    struct Ask: Decodable, Equatable { let id: String; let line: String }
 
     var name: String { sessionName(custom_title, label, repo) ?? id }
     var running: Bool { status == "resident" }

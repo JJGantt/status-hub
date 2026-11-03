@@ -103,6 +103,8 @@ module.exports = function (ctx) {
   // Batches of fixes from the phone, the watch and the Mac, stored as they came into location_points
   // (data-layer 00139). Upserted on (device, at), so a batch resent after a lost reply changes nothing.
   const LOCATION_DEVICES = new Set(['phone', 'watch', 'mac']);
+  // Which event produced a point (data-layer 00165); anything else is stored as null.
+  const LOCATION_SOURCES = new Set(['arrive', 'depart', 'move', 'fix']);
   gated.post('/api/location/points', express.json({ limit: '4mb' }), async (req, res) => {
     const device = req.body?.device;
     if (!LOCATION_DEVICES.has(device)) return res.status(400).json({ ok: false });
@@ -114,7 +116,8 @@ module.exports = function (ctx) {
       .filter((p) => num(p.lat) != null && num(p.lon) != null && typeof p.at === 'string' && !Number.isNaN(Date.parse(p.at)))
       .map((p) => ({ device, at: new Date(p.at).toISOString(), lat: p.lat, lon: p.lon, h_acc: num(p.h_acc), alt: num(p.alt),
         v_acc: num(p.v_acc), speed: num(p.speed), course: num(p.course),
-        floor: Number.isInteger(p.floor) ? p.floor : null, received_at: now }))
+        floor: Number.isInteger(p.floor) ? p.floor : null,
+        source: LOCATION_SOURCES.has(p.source) ? p.source : null, received_at: now }))
       // One upsert cannot touch a row twice, and two fixes stamped the same millisecond would.
       .filter((r) => !seen.has(r.at) && seen.add(r.at));
     try {

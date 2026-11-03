@@ -175,7 +175,11 @@ struct StatusHubApp: App {
                 // From the scene rather than from the app delegate: this app is a SwiftUI `WindowGroup`,
                 // so it is scene-based, and UIKit does not promise to call `applicationDidBecomeActive`
                 // in a scene-based app. `scenePhase` is the supported signal here.
-                .onChange(of: scenePhase) { _, phase in StayAwake.apply(phase == .active); AppActive.shared.set(phase == .active) }
+                .onChange(of: scenePhase) { _, phase in
+                    StayAwake.apply(phase == .active)
+                    AppActive.shared.set(phase == .active)
+                    if phase == .active { LocationTrail.shared.fix() }  // a point per use (docs/LOCATION.md)
+                }
                 .task { StayAwake.apply(true) }
             #endif
             #if os(macOS)

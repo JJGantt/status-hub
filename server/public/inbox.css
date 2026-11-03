@@ -40,3 +40,4 @@
 .ib-a pre{margin:3px 0;padding:4px 6px;background:#0e1318;border-radius:4px;
   font:11px/1.35 ui-monospace,Menlo,monospace;white-space:pre-wrap;word-break:break-word}
 .ib-a a{color:#6ea8ff}
+.ib-sheet [hidden]{display:none!important}

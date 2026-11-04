@@ -1,0 +1,29 @@
+#!/usr/bin/env bash
+# Point every JJGantt repo that has GitHub Actions workflows at the hub's CI webhook (docs/CI.md), with
+# the shared secret, for the workflow_run event only. Idempotent: an existing hook to the same URL is
+# updated in place. Run it again after adding workflows to a repo; a repo without the hook still runs
+# its CI, but nothing hears the result.
+#
+#   bin/ci-webhooks            # every repo with workflows
+#   bin/ci-webhooks data-layer # just these
+set -euo pipefail
+URL=https://jared-status-hub.fly.dev/api/ci/github
+SECRET_FILE=$HOME/.config/ci/github-webhook-secret
+[ -s "$SECRET_FILE" ] || { echo "no secret at $SECRET_FILE (the same value as GITHUB_WEBHOOK_SECRET on jared-status-hub)" >&2; exit 1; }
+OWNER=JJGantt
+
+if [ $# -gt 0 ]; then repos=("$@")
+else repos=($(gh repo list "$OWNER" --limit 300 --no-archived --json name -q '.[].name'))
+fi
+
+for r in "${repos[@]}"; do
+  gh api "repos/$OWNER/$r/contents/.github/workflows" --silent 2>/dev/null || continue
+  id=$(gh api "repos/$OWNER/$r/hooks" -q ".[] | select(.config.url == \"$URL\") | .id" 2>/dev/null | head -1)
+  body=$(jq -n --arg url "$URL" --arg secret "$(cat "$SECRET_FILE")" \
+    '{active: true, events: ["workflow_run"], config: {url: $url, content_type: "json", secret: $secret, insecure_ssl: "0"}}')
+  if [ -n "$id" ]; then
+    printf '%s' "$body" | gh api -X PATCH "repos/$OWNER/$r/hooks/$id" --input - --silent && echo "updated $r"
+  else
+    printf '%s' "$body" | gh api -X POST "repos/$OWNER/$r/hooks" --input - --silent && echo "added   $r"
+  fi
+done

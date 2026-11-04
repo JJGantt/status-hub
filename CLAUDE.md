@@ -44,7 +44,8 @@ bundle older than `safeReload` loses a clip mid-sentence.
 Every route is on `gated` (behind the auth gate) or `pub` (anyone), and nothing else decides it.
 Public: `/healthz`, `/login`, `/privacy`, `/terms`, the Search Console verification file named by
 `GSC_VERIFICATION`, the restaurant watch app's `/api/cg/*` routes (which check their own owner
-token), and the surf app's page, assets and `/api/surf/live|stream|history`. Putting a route on `pub`
+token), the surf app's page, assets and `/api/surf/live|stream|history`, and GitHub's CI webhook
+`/api/ci/github` (authenticated by its HMAC signature, `docs/CI.md`). Putting a route on `pub`
 fails `npm test` until its path is added to the public list in `test/auth.test.js`, which is the
 point: it has to be a decision.
 
@@ -846,4 +847,5 @@ it settles, and on the same answer for the same geometry whatever was drawn the 
 
 `ARCHITECTURE.md` is the ecosystem view — it covers voice-pipeline, data-layer, devices and hosting
 too, and lives here because this is the most active repo. `docs/HUB-INTERNALS.md` is the map of this
-server and app. `docs/WATCH.md` is the watch app. `docs/TODO.md` is the open-work list.
+server and app. `docs/WATCH.md` is the watch app. `docs/CI.md` is how a failed CI run reaches
+the session that pushed it. `docs/TODO.md` is the open-work list.

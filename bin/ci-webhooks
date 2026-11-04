@@ -4,7 +4,7 @@
 # updated in place. Run it again after adding workflows to a repo; a repo without the hook still runs
 # its CI, but nothing hears the result.
 #
-#   bin/ci-webhooks            # every repo with workflows
+#   bin/ci-webhooks            # every repo with workflows, except the -archive copies and tftest
 #   bin/ci-webhooks data-layer # just these
 set -euo pipefail
 URL=https://jared-status-hub.fly.dev/api/ci/github
@@ -13,7 +13,7 @@ SECRET_FILE=$HOME/.config/ci/github-webhook-secret
 OWNER=JJGantt
 
 if [ $# -gt 0 ]; then repos=("$@")
-else repos=($(gh repo list "$OWNER" --limit 300 --no-archived --json name -q '.[].name'))
+else repos=($(gh repo list "$OWNER" --limit 300 --no-archived --json name -q '.[].name' | grep -vE -- '-archive(-[0-9]+)?$|^tftest$'))
 fi
 
 for r in "${repos[@]}"; do

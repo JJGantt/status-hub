@@ -14,7 +14,8 @@ cloud API: the only reader is an app on the phone. Sleep has its own table and i
   once that is answered, so there is one sheet rather than two.
 - **Adding a type to the lists is not enough on its own.** The single anchor is a position in
   Health's whole history, so a type added later is read only from that position forward. Change
-  `anchorKey` in the same commit to re-read everything; the UUID upsert absorbs the resend.
+  `anchorKey` in the same commit to re-read everything; the UUID upsert absorbs the resend, except for
+  merged energy (below), whose merged rows must be deleted first or they are counted twice.
 - Values are in the unit Health itself displays for the type (`preferredUnits`): count/min for heart
   rate, ms for HRV, kcal, count, %, degC. A quantity whose unit Health will not name, or whose value
   is not finite, is skipped — one NaN in a page fails its JSON, and an unpostable page stalls the anchor.
@@ -29,6 +30,14 @@ cloud API: the only reader is an app on the phone. Sleep has its own table and i
   starved the database's disk until Postgres stopped answering, because each random-UUID insert dirties
   its own index page. Raising the rate, or changing `anchorKey` to re-read everything, is a load on the
   database to size first.
+- **Active and basal energy are merged to the minute.** While a workout session runs the watch writes
+  both every ~3 seconds, all day if the session is left running, and held raw they were 2.1M of 2.3M
+  rows and outgrew the database's memory. After each page that carries them, the hub calls
+  `merge_recent_energy_samples()` (data-layer 00169), which sums samples shorter than a minute and two
+  to thirty days old into one row per type, source and minute (`metadata.merged` = how many). Every
+  minute, hour and day total is unchanged; the individual sample UUIDs are gone, so a deletion in
+  Health of one of them changes nothing here. The two-day wait is past the phone's resend of a failed
+  page, which would otherwise be counted again.
 
 ## The table
 

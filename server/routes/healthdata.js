@@ -53,6 +53,24 @@ module.exports = function (ctx) {
   // backoff below is the answer to it; only failures that keep coming after that are reported as errors.
   const HEALTH_FAILS_TO_REPORT = 3;
   let healthFails = 0;
+  // Active and basal energy arrive every ~3 seconds while a workout session runs, which held raw
+  // outgrew the database's memory. After a page carrying them, samples two to thirty days old are
+  // summed to one row per type, source and minute (data-layer 00169, docs/HEALTH.md); totals are kept.
+  const ENERGY_TYPES = new Set(['activeEnergyBurned', 'basalEnergyBurned']);
+  async function mergeEnergy() {
+    try {
+      const r = await fetch(`${SUPABASE_URL}/rest/v1/rpc/merge_recent_energy_samples`, {
+        method: 'POST',
+        headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}`, 'Content-Type': 'application/json' },
+        body: '{}', signal: AbortSignal.timeout(60_000),
+      });
+      if (!r.ok) throw new Error(`${r.status} ${await r.text()}`);
+      const n = await r.json();
+      if (n) console.log(`[health] merged ${n} energy samples to the minute`);
+    } catch (e) {
+      console.error('[health] energy merge failed:', e.message);
+    }
+  }
   gated.post('/api/health/samples', express.json({ limit: '4mb' }), async (req, res) => {
     const wait = healthNextAt - Date.now();
     if (wait > 0) {
@@ -90,6 +108,7 @@ module.exports = function (ctx) {
       healthNextAt = Math.max(healthNextAt, Date.now() + took * HEALTH_SLOWDOWN);
       console.log(`[health] +${rows.length} -${deleted.length} (sent ${samples.length}) ${took}ms`);
       res.json({ ok: true, stored: rows.length, deleted: deleted.length });
+      if (rows.some((r) => ENERGY_TYPES.has(r.type))) mergeEnergy();
     } catch (e) {
       // A failed write is the database saying it is in trouble: back off a minute, not a page's gap.
       healthNextAt = Math.max(healthNextAt, Date.now() + 60_000);

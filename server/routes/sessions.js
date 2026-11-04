@@ -120,7 +120,9 @@ module.exports = function (ctx) {
     const withN = (s) => ({
       id: s.id, n: numbered.get(s.id) || null,
       label: s.label, custom_title: s.custom_title, repo: s.repo,
-      worker: s.worker, status: s.status, working: s.working,
+      // Only a running session can be mid-turn. A parked row can still say `working` if whatever parked
+      // it forgot to clear it, and then the sweep runs on a session that has nothing to show.
+      worker: s.worker, status: s.status, working: s.status === 'resident' && !!s.working,
       claude_session_id: s.claude_session_id,      // presence of a transcript = the transfer button
       // The last prompt or reply — the same instant the list is ordered by, so the times read down in order.
       at: new Date(sessionActivity(s)).toISOString(),

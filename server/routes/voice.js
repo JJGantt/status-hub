@@ -196,7 +196,7 @@ module.exports = function (ctx) {
     }
   });
 
-  // `about`: the inbox answer a command was spoken from (docs/WATCH.md § The answers inbox). The worker
+  // `about`: the inbox answer a command was spoken from (docs/WATCH.md § The inbox). The worker
   // puts that answer and its question on the prompt (voice-pipeline process.py `about_directive`).
   const aboutId = (v) => (/^[0-9a-f-]{36}$/i.test(String(v || '')) ? String(v) : null);
 

@@ -90,7 +90,7 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
         actions: [UNNotificationAction(identifier: "REMINDER_DONE", title: "Done", options: [])],
         intentIdentifiers: [], options: [])
 
-    // An orchestrator answer worth reading (docs/WATCH.md, "The answers inbox"). No buttons;
+    // An orchestrator answer worth reading (docs/WATCH.md, "The inbox"). No buttons;
     // `customDismissAction` is what reports a swipe-away, so tapping it and dismissing it both reach
     // the delegate, and either one marks the answer read.
     private static let answerCategory = UNNotificationCategory(

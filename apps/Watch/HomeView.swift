@@ -40,7 +40,7 @@ struct HomeView: View {
     /// jump, and each one re-lands on `landed`. Only until the next arrival or the user's scroll — after
     /// that, while the user is looking, **nothing re-lands** (`settle`).
     @State private var settling = true
-    /// The answers inbox is open over the thread (`InboxView`). The thread underneath is not being
+    /// The inbox is open over the thread (`InboxView`). The thread underneath is not being
     /// looked at then, so nothing in it counts as read.
     @State private var inbox = false
     /// The answer open in the inbox, already loaded: a row opens only once its answer is in hand, so the
@@ -135,7 +135,7 @@ struct HomeView: View {
         }
         // Over the thread, inside the page, so the double tap above the page row still records.
         .overlay { if inbox { InboxView(open: $inboxAnswer) } }
-        // **The answers inbox** (docs/WATCH.md): a dot at the top, always — amber while any answer is
+        // **The inbox** (docs/WATCH.md): a dot at the top, always — amber while any answer is
         // unread, gray otherwise — drawn over the inbox as well as home, because it is the inbox's only
         // way in and out: home -> the list, an open answer -> the list, the list -> home. A button of its
         // own, so the tap does not also record.

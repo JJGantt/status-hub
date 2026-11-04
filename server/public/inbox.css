@@ -1,4 +1,4 @@
-/* The answers inbox on the phone (inbox.js). The sheet stops ABOVE the navbar, because the navbar's
+/* The inbox on the phone (inbox.js). The sheet stops ABOVE the navbar, because the navbar's
    microphone is how a follow-up to an open answer is spoken. */
 .ph-convcard{position:relative}
 .ib-dot{position:absolute;top:2px;right:2px;z-index:5;width:22px;height:22px;padding:0;border:0;

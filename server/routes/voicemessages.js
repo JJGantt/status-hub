@@ -87,7 +87,7 @@ module.exports = function (ctx) {
         start = rows.length;   // reset since the last message: nothing belongs to the new context yet
       }
       // An answer still unread stays in however old it is, with the words that asked for it, so a gap,
-      // a reset or twenty newer exchanges cannot bury it (docs/WATCH.md, "The answers inbox").
+      // a reset or twenty newer exchanges cannot bury it (docs/WATCH.md, "The inbox").
       // The first row of the context keeps its flag, so a surface that pages back can draw the divider.
       const shown = rows.slice(start).map((r, i) => (i === 0 && breaks[start] ? { ...r, ctx_break: true } : r));
       const have = new Set(shown.map((r) => r.id));
@@ -103,7 +103,7 @@ module.exports = function (ctx) {
     } catch (e) { res.status(500).json({ error: String(e.message || e) }); }
   });
 
-  // THE ANSWERS INBOX (docs/WATCH.md § The answers inbox): every reply flagged worth reading, newest
+  // THE INBOX (docs/WATCH.md § The inbox): every reply flagged worth reading, newest
   // first, read or not, kept for good. A row is named by its `label` (the orchestrator's few words for
   // the question, or a relayed session's job label), else by the question's own words cut short.
   // ?before=<iso> pages further back.

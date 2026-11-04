@@ -9,7 +9,7 @@
 import '../core.js';   // renders the REAL hub cards from /api/stream into the .rows
 import '../expand.js';   // tap what summarises a section -> its full-screen sheet
 import '../phone-home.js';   // this page's own middle -- the week, the sessions list, the conversation tail
-import '../inbox.js';   // the answers inbox: the dot on the conversation, its list, one answer on its own
+import '../inbox.js';   // the inbox: the dot on the conversation, its list, one answer on its own
 import '../alarmclock.js';   // rings on this page, since the iOS app is what has it open
 import '../audiotest.js';   // sound bench on the reports pane — which audio path survives Guided Access
 import '../cards/livemic.js';   // the live mic's Stream button in Utilities (the app does the capture)

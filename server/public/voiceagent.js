@@ -170,7 +170,7 @@ export function onThread(fn) { threadSubs.push(fn); fn(null); }
 
 // THE ANSWER BEING LOOKED AT. While an answer from the inbox is open on its own (inbox.js), every
 // command sent from this page — the mic or typed — is about it: it rides as `about`, and the worker
-// hands the model that question and answer with the words (docs/WATCH.md § The answers inbox).
+// hands the model that question and answer with the words (docs/WATCH.md § The inbox).
 // Taken when the clip is QUEUED, not when it uploads, so a clip that waits in the outbox stays about
 // what was on screen when it was said.
 let aboutAnswer = null;

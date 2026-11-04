@@ -156,7 +156,7 @@ modifier and screenshotting is the check to re-run. Nothing here ships to the Ap
 risk to the look rather than to the app. The page draws no clock of its own either: it is for the
 conversation, and the watch face is one press of the crown away.
 
-### The answers inbox
+### The inbox
 
 Most replies only confirm that something was done and are never read. A reply that answers
 a question is the one that gets buried when the next command is spoken before it is
@@ -167,6 +167,9 @@ read, so every such reply goes into an inbox: kept for good, newest first, read 
   question in a few words, and it is what an inbox row shows; a row with none shows the question's own
   words. Confirmations carry no flag and never enter the inbox. A session's relayed first reply is
   flagged when the orchestrator dispatched it with `start_session`'s `needs_read`, under the job's label.
+- **One question, one row.** A clarification of the question just answered ("I mean the new one")
+  replaces its row rather than adding one, and a follow-up spoken from an open answer lists under that
+  answer rather than as a row (voice-pipeline `docs/ROUTING.md`).
 - **Read means shown**: two seconds on screen with the app in front, home showing and the wrist up
   (`HomeView.attend`). On screen is half the row, or for a row taller than the screen, enough of it to
   fill a little under half the screen, so a long answer counts once its opening has been on screen.

@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// **The answers inbox** (docs/WATCH.md § The answers inbox): every reply flagged worth reading, newest
+/// **The inbox** (docs/WATCH.md § The inbox): every reply flagged worth reading, newest
 /// first, read or not, kept for good. The dot at the top of home, which is always there — amber while
 /// anything is unread, gray otherwise — opens it, steps back out of an answer, and closes it. A row
 /// opens its answer ON ITS OWN, question above it, opened at the top; a tap on that page records a

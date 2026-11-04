@@ -1,4 +1,4 @@
-// THE ANSWERS INBOX, on the phone — the mirror of the watch's (docs/WATCH.md § The answers inbox).
+// THE INBOX, on the phone — the mirror of the watch's (docs/WATCH.md § The inbox).
 //
 // Every reply flagged worth reading, newest first, kept for good: unread rows bright, read rows dimmed,
 // nothing ever leaving the list, so an answer marked read by accident is still one tap away. A dot in

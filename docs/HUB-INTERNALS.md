@@ -1305,7 +1305,7 @@ An orchestrator reply is pushed only when the model flagged it as worth reading
 INSERT of that assistant row, kind `answer`, category `VOICE_ANSWER`, titled with the question it
 answers and keyed `voice-answer:<id>`. The payload's `voice_message_id` is what a tap or a dismissal
 marks read through `POST /api/voice-messages/read`, which stamps `read_at` once; the row's realtime
-UPDATE carries it to every surface. What the watch does with it is `WATCH.md` § The answers inbox. A relayed session reply in the inbox is not pushed by `notifyAnswer`: `notifySessionReply` already pushed it.
+UPDATE carries it to every surface. What the watch does with it is `WATCH.md` § The inbox. A relayed session reply in the inbox is not pushed by `notifyAnswer`: `notifySessionReply` already pushed it.
 
 `GET /api/voice-inbox` lists every flagged answer, newest first (`?before=` pages back), with its label
 and whether it is read; `GET /api/voice-inbox/:id` returns one with its whole question and the follow-ups

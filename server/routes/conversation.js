@@ -307,5 +307,17 @@ module.exports = function (ctx) {
     res.status(204).end();
   });
 
-  return { EPOCH, convOfRow, ensureLog, notifyAnswer, numbered, rowConv };
+  /**
+   * The newest thing in a conversation's turn in flight — the tool call, the text between two of them, or
+   * the prompt it is working on — for the line under a running session's row. Only from a log already in
+   * memory: the list is built often, and seeding a log here would be a query per session per build. After
+   * a restart the host's next frame replays the turn, so the line comes back with it.
+   */
+  function liveLine(conv) {
+    const log = sessionLog.get(conv);
+    const ev = log && sinceLastReply(log).filter((e) => EVENT_KINDS.includes(e.kind)).pop();
+    return ev ? { kind: ev.kind, text: flatText(ev.text).slice(0, 400) } : null;
+  }
+
+  return { EPOCH, convOfRow, ensureLog, liveLine, notifyAnswer, numbered, rowConv };
 };

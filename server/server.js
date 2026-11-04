@@ -138,7 +138,7 @@ const { overdueCount, pushAll } = require('./routes/notify')({
 
 const { syncBadge } = createBadge({ apns, overdueCount, sb });
 
-const { EPOCH, convOfRow, ensureLog, notifyAnswer, numbered, rowConv } = require('./routes/conversation')({
+const { EPOCH, convOfRow, ensureLog, liveLine, notifyAnswer, numbered, rowConv } = require('./routes/conversation')({
   cleanSaid, gated, pushAll, pushVoice, sb, sbWrite, sessionClients, settingsAll,
 });
 
@@ -150,7 +150,7 @@ const { itemTitle } = require('./routes/lists')({
 const { TV_SIDEBAR_FONT, TV_SIDEBAR_WIDTH, tvPush } = require('./routes/tv')({ PING, gated, putSetting, sb, sbWrite, sessionClients });
 
 const { MACHINE_NAME, deadLetter, followUpSession, machineAwake, pushSessions } = require('./routes/sessions')({
-  DESK_STALE_S, EPOCH, TV_SIDEBAR_FONT, TV_SIDEBAR_WIDTH, cleanSaid, convOfRow, ensureLog, gated,
+  DESK_STALE_S, EPOCH, TV_SIDEBAR_FONT, TV_SIDEBAR_WIDTH, cleanSaid, convOfRow, ensureLog, gated, liveLine,
   markSeen, numbered, rowConv, sb, sbInsert, sbWrite, seenMsgIds, sessionClients, settingsAll,
   // Read on every build of the payload, by which time `prompts` below exists.
   pendingPrompt: (rowId) => prompts.pendingFor(rowId),

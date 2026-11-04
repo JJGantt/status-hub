@@ -5,7 +5,7 @@ const express = require('express');
 
 module.exports = function (ctx) {
   const {
-    DESK_STALE_S, EPOCH, TV_SIDEBAR_FONT, TV_SIDEBAR_WIDTH, cleanSaid, convOfRow, ensureLog, gated,
+    DESK_STALE_S, EPOCH, TV_SIDEBAR_FONT, TV_SIDEBAR_WIDTH, cleanSaid, convOfRow, ensureLog, gated, liveLine,
     markSeen, numbered, rowConv, sb, sbInsert, sbWrite, seenMsgIds, sessionClients, settingsAll, pendingPrompt,
   } = ctx;
 
@@ -123,6 +123,9 @@ module.exports = function (ctx) {
       // Only a running session can be mid-turn. A parked row can still say `working` if whatever parked
       // it forgot to clear it, and then the sweep runs on a session that has nothing to show.
       worker: s.worker, status: s.status, working: s.status === 'resident' && !!s.working,
+      // What a turn in flight is on right now — its newest tool call, the text between two, or the prompt
+      // it started from — so a list opened mid-turn says that rather than the reply to the turn before.
+      live: s.status === 'resident' && s.working ? liveLine(s.claude_session_id || s.id) : null,
       claude_session_id: s.claude_session_id,      // presence of a transcript = the transfer button
       // The last prompt or reply — the same instant the list is ordered by, so the times read down in order.
       at: new Date(sessionActivity(s)).toISOString(),
@@ -150,7 +153,8 @@ module.exports = function (ctx) {
     // what a phone downloads on a cold load.
     const SAY = 120;
     const say = (s) => cleanSaid(s.last_reply || s.last_prompt || '').replace(/\s+/g, ' ').slice(0, SAY);
-    const brief = (s) => ({ ...withN(s), say: say(s) });
+    // A turn in flight says what it is on now (`live`), the same line the phone's rows draw.
+    const brief = (s) => { const w = withN(s); return { ...w, say: w.live ? w.live.text.slice(0, SAY) : say(s) }; };
     // The whole reply goes only to rows something can render in full: everything resident, plus the
     // most recently active parked one, which is what the home wall falls back to when nothing runs.
     // Cleaned the same way `say` is: the two are the same field, and a reply is not where the two

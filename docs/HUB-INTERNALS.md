@@ -1325,7 +1325,11 @@ only regular files: a row written before the tty had its own column carries a de
 **`/api/sessions` does not ship every column, and `last_reply` mostly is not one of them.** The
 response is an explicit projection — `id`, `n`, `label`, `custom_title`, `repo`, `worker`, `status`,
 `working`, `claude_session_id` — plus `say`, a 120-character one-liner, which is all the repos pane
-renders per row. The whole `last_reply` goes only to rows something can show in full: everything
+renders per row. `working` is true only on a `resident` row. A running row also carries `live`: the newest
+event of its turn in flight (tool call, text between tool calls, or the prompt it began from), which is
+what the line under a running row shows, and what `say` carries for it, instead of the reply to the
+previous turn. It is read from the in-memory event log only, so it stays empty until the host's next
+frame after a restart. The whole `last_reply` goes only to rows something can show in full: everything
 resident, and the newest parked one, which is what the home wall falls back to when nothing is
 running. **Adding a field to a session view means adding it to that projection**, or it arrives
 `undefined`. Full rows for every parked session make the response roughly six times larger.

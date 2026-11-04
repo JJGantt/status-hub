@@ -54,7 +54,12 @@ function rowActivity(s) {
   // anything at all: nothing is streaming to it, but it still answered something, and a blank line
   // reads as a session that has done nothing. The surface is also blank on arrival otherwise, since
   // live frames only start once it is watching.
-  const a = activity.get(s.id);
+  // While a turn runs, the line is what it is on NOW and never the reply to the turn before: a live frame
+  // heard since the page opened, else the server's `live`, which is the same thing for a page that opened
+  // mid-turn and has heard no frame yet.
+  let a = activity.get(s.id);
+  const heard = a && (a.state === 'tool' || a.state === 'text');
+  if (s.working && !heard && s.live) a = { state: s.live.kind === 'prompt' ? 'done' : s.live.kind, text: s.live.text };
   const live = a && (a.state === 'tool' || a.state === 'text');
   const text = oneLine(live ? a.text : ((a && a.text) || s.last_reply));
   // The line is ALWAYS rendered, empty or not. Growing a row when a tool fires and collapsing it when

@@ -56,33 +56,27 @@ function sessionsHtml(s) {
   const res = s.resident || [], ev = s.evicted || [], q = s.queued || [];
   if (!res.length && !ev.length && !q.length) return '';
 
-  // The NUMBER is the point of showing it: it is how a session gets named out loud ("move session
-  // three to the Mac"), and it has to be the same number the voice tools resolve — the server derives
-  // both from one rule. The machine chip is here for the same reason: "the other machine" only means
-  // something if you can see which one it is on.
+  // The machine is the bar on the row's right edge (`--mc`), so the name carries only the repo.
+  // The × HIDES the row from every surface's list (`/api/sessions/hide`); the session itself is
+  // untouched and the orchestrator still sees it, and anything new in it brings the row back.
   const line = (x, live) =>
-    `<li class="sess${live ? ' live' : ''}${x.incident ? ' incident' : ''}${x.codex ? ' codex' : ''}${x.prompt ? ' asking' : ''}" data-id="${esc(x.id)}"${x.machine_color ? ` style="--mc:${esc(x.machine_color)}"` : ''}>` +
+    `<li class="sess${live ? ' live' : ''}${x.unread ? ' unread' : ''}${x.working ? ' working' : ''}${x.incident ? ' incident' : ''}${x.codex ? ' codex' : ''}${x.prompt ? ' asking' : ''}" data-id="${esc(x.id)}"${x.machine_color ? ` style="--mc:${esc(x.machine_color)}"` : ''}>` +
       `<div class="sess-main">` +
         `<span class="sess-repo">` +
-        (x.n ? `<span class="sess-n">${x.n}</span>` : '') +
         (x.pinned ? PIN_SVG : '') + `${esc(x.label || x.repo)}` +
         (x.label && x.repo && x.label !== x.repo ? `<span class="sess-in">${esc(x.repo)}</span>` : '') +
-          `<span class="sess-where">${x.worker === 'desk' ? 'Mac' : x.worker === 'fly-desk' ? 'Fly' : 'Pi'}</span>` +
         `</span>` +
         `<span class="sess-say">${x.at ? `<span class="sess-at">${esc(ago(x.at))}</span>` : ''}${esc((x.prompt ? x.prompt.line : (x.say || '')).slice(0, 90))}</span>` +
       `</div>` +
-      `<div class="sess-act">` +
-        `<button class="sess-btn ghost" data-act="rename">name</button>` +
-        `<button class="sess-btn ghost" data-act="${live ? 'end' : 'forget'}">${live ? 'close' : '\u00d7'}</button>` +
-      `</div>` +
+      `<button class="sess-x" data-act="hide" aria-label="Hide">\u00d7</button>` +
     '</li>';
 
   let out = '<div class="sessions"><h3>Sessions';
   if (q.length) out += `<span class="sess-q">${q.length} queued</span>`;
   out += '</h3>';
   out += '<ul>';
-  // In `n` order, running and parked interleaved: the number IS the position, and it counts by
-  // activity alone (buildSessions), so drawing the two groups one after the other would break it.
+  // In the server's `n` order, running and parked interleaved: pins first, then by activity alone
+  // (buildSessions), the same order every other surface lists them in.
   out += [...res, ...ev].sort((a, b) => (a.n || 1e9) - (b.n || 1e9))
     .map((x) => line(x, x.status === 'resident')).join('');
   out += q.map((x) =>
@@ -220,26 +214,18 @@ function cancelDictation() {
 
 async function sessionAction(li, act) {
   const id = li.dataset.id;
-  // The name is asked for before anything is sent, so a cancelled prompt does nothing at all.
-  let name;
-  if (act === 'rename') {
-    name = prompt('Name');
-    if (!name || !name.trim()) return;
-  }
-  li.classList.add('busy');
+  // Gone at once: the hide is a single write and the pushed `sessions` frame confirms it.
+  if (act === 'hide') li.remove();
   try {
     await fetch('/api/sessions/' + act, {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(name ? { id, name: name.trim() } : { id }),
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id }),
     });
-  } catch (_) { /* the next load reconciles */ }
-  // A close is enacted on a machine asynchronously, so give it a moment before re-reading rather than
-  // showing a state the machine has not reached yet.
-  setTimeout(load, act === 'forget' ? 200 : act === 'rename' ? 1200 : 2500);
+  } catch (e) { console.error('[sessions] ' + act + ' failed:', e && e.message); }
+  setTimeout(load, 200);
 }
 
 function wire(el) {
-  el.querySelectorAll('li.sess .sess-btn').forEach((b) =>
+  el.querySelectorAll('li.sess .sess-x').forEach((b) =>
     b.addEventListener('click', (e) => {
       e.stopPropagation();
       sessionAction(b.closest('li.sess'), b.dataset.act);

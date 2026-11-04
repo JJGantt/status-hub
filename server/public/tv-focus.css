@@ -15,11 +15,8 @@ body.tv .sesscard{flex:1 1 auto;min-height:0}
 body.tv .sf-tabs .hw-row{display:flex;flex-direction:column;gap:2px;padding:10px 16px;
   border:1px solid #444;background:none;min-width:0;max-width:30ch;border-radius:0}
 body.tv .sf-tabs .hw-row-top{display:flex;align-items:center;gap:12px;min-width:0}
-body.tv .sf-tabs .hw-row-n{font-size:22px;font-weight:700;color:#fff;line-height:1;flex:0 0 auto}
 body.tv .sf-tabs .hw-row-name{font-size:22px;font-weight:600;color:#fff;white-space:nowrap;
   overflow:hidden;text-overflow:ellipsis;min-width:0}
-body.tv .sf-tabs .hw-row-where{font-size:14px;font-weight:600;letter-spacing:.4px;color:#fff;
-  text-transform:uppercase;flex:0 0 auto}
 /* the one holding follow-ups: a brighter border, nothing else */
 body.tv .sf-tabs .hw-row.on{border-color:#fff;border-width:2px;padding:9px 15px}
 /* a finished answer nobody has opened — the same amber every other surface marks it with */

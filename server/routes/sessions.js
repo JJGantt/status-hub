@@ -109,7 +109,11 @@ module.exports = function (ctx) {
     const numbers = (state && state.numbers) || {};
     const numbered = new Map(Object.entries(numbers));
     // One row per conversation, in number order: the rows that have a number.
-    const listed = (sessions || []).filter((s) => numbered.has(s.id)).sort((a, b) => numbered.get(a.id) - numbered.get(b.id));
+    // Less the ones the user dismissed (`hide`, below) — but only while nothing newer has happened in
+    // them, so a new prompt or reply brings one back without anyone un-hiding it. The voice tools read
+    // desk_sessions themselves and never see this filter: hiding is for the surfaces, not the orchestrator.
+    const hidden = (s) => !!s.hidden_at && Date.parse(s.hidden_at) >= sessionActivity(s);
+    const listed = (sessions || []).filter((s) => numbered.has(s.id) && !hidden(s)).sort((a, b) => numbered.get(a.id) - numbered.get(b.id));
     // Only the fields something renders. A desk_sessions row carries transcript paths, command ids and
     // five timestamps that no surface here reads — 97 rows of them was most of what was left of this
     // response after the replies came out of it. Adding a field to a session view means adding it here.
@@ -326,7 +330,7 @@ module.exports = function (ctx) {
     return reply(200, { id: cmdId, session: target.id, resumed: !now.live });
   }
 
-  // Act on one: 'end' closes it for good, 'resume' brings an evicted one back, 'forget' drops the row
+  // Act on one: 'hide' takes it off the surfaces' lists, 'end' closes it for good, 'resume' brings an evicted one back, 'forget' drops the row
   // without touching the machine (the transcript stays on disk; it just stops being offered), and
   // 'followup' types words into a running one (see below).
   gated.post('/api/sessions/:action', express.json(), async (req, res) => {
@@ -334,6 +338,14 @@ module.exports = function (ctx) {
       const action = String(req.params.action || '');
       const id = String((req.body || {}).id || '');
       if (!id) return res.status(400).json({ error: 'id required' });
+      // Dismiss it from every surface's list (buildSessions) without touching the session: it keeps
+      // running or stays parked, and the orchestrator still lists it.
+      if (action === 'hide') {
+        await sbWrite(`desk_sessions?id=eq.${encodeURIComponent(id)}`, 'PATCH', { hidden_at: new Date().toISOString() });
+        res.json({ ok: true });
+        pushSessions();
+        return;
+      }
       if (action === 'forget') {
         await sbWrite(`desk_sessions?id=eq.${encodeURIComponent(id)}`, 'DELETE');
         return res.json({ ok: true });

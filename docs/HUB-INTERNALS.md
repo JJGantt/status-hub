@@ -1129,7 +1129,9 @@ ones at 14, whoever made them.
 interleaved — parking is not activity, so an evicted session keeps its place (`active_at`, the last turn boundary — SESSIONS.md § Numbering says why not
 `last_seen` or `started`), from 1, one row per conversation (`claude_session_id`). **The rule is `desk_sessions_state()` in Postgres
 (data-layer 00164)**, which the voice tools read too — it is how "move session three to the Mac" resolves to
-the same row the pane is showing. The number is a position, not identity: closing one renumbers the
+the same row it means. No surface draws the number — it orders the rows, and the orchestrator picks a
+session by context rather than by number. Rows hidden with `/api/sessions/hide` are left out of the
+hub's list (not the voice tools'), so the hub's order can skip a number. The number is a position, not identity: closing one renumbers the
 rest, which is the price of it being short enough to say.
 
 `POST /api/sessions/transfer` hands a session to the other machine. The row says which machine it is

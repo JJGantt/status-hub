@@ -3,9 +3,8 @@
 // ONE implementation for every surface that shows it — the home wall's right column and the phone's
 // home column. They differ in which ELEMENTS they hand over: the wall gives a list, a head and a
 // reply panel; the phone gives a list alone, because a phone has nowhere to put a model's answer and
-// the list is the part a glance is for. Nothing else differs, which is the point — the numbering, the
-// ordering, the highlight and the activity line are what "the second session" means out loud, and two
-// copies of that is two surfaces that can disagree about which session is the second one.
+// the list is the part a glance is for. Nothing else differs, which is the point — the ordering, the
+// highlight and the activity line are shared, and two copies of them are two surfaces that disagree.
 //
 // DISPLAY ONLY. Voice starts sessions, voice focuses them; this is where the answer comes back.
 import { esc, liveStream, PIN_SVG } from '../shared.js';
@@ -28,9 +27,8 @@ const REFRESH_MS = 5 * 60 * 1000;
 const shown = (d) => (d.resident || []).find((s) => s.id === d.focus) || (d.resident || [])[0]
   || (d.evicted || [])[0] || null;
 
-// Running first, then parked, most recently active first within each — `n` is the number the user says out
-// loud, worked out by the server so every surface counts the same way. Ordering the list by it means
-// "the second session" points at the second line.
+// In the server's `n` order (pins first, then most recently active), so every surface lists the same
+// sessions in the same order. The number itself is not drawn.
 const listed = (d, max) => [...(d.resident || []), ...(d.evicted || [])]
   .sort((a, b) => (a.n || 99) - (b.n || 99)).slice(0, max);
 
@@ -82,15 +80,13 @@ function paint(p, d) {
       // `on` is the FOCUSED session — where a spoken follow-up goes, and what a surface with a reply
       // panel is showing below. `unread` is a finished answer nobody has opened. Two different
       // questions, so two different marks: one row can carry both.
-      `<div class="hw-row${on && s.id === on.id ? ' on' : ''}${s.unread ? ' unread' : ''}${s.incident ? ' incident' : ''}${s.codex ? ' codex' : ''}${s.prompt ? ' asking' : ''}` +
+      `<div class="hw-row${on && s.id === on.id ? ' on' : ''}${s.unread ? ' unread' : ''}${s.working ? ' working' : ''}${s.incident ? ' incident' : ''}${s.codex ? ' codex' : ''}${s.prompt ? ' asking' : ''}` +
         '"' +
         (s.machine_color ? ` style="--mc:${esc(s.machine_color)}"` : '') +
         `${p.tap ? ` data-open="${esc(String(s.id))}"` : ''}>` +
         '<div class="hw-row-top">' +
           `<span class="hw-sess-dot${s.working ? '' : ' idle'}"></span>` +
-          `<span class="hw-row-n">${s.n ?? ''}</span>` +
           `<span class="hw-row-name">${pinMark(d, s)}${esc(name(s))}</span>` +
-          `<span class="hw-row-where">${s.worker === 'desk' ? 'Mac' : s.worker === 'fly-desk' ? 'Fly' : 'Pi'}</span>` +
         '</div>' +
         rowActivity(s) +
       '</div>').join('');

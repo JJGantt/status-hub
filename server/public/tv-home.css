@@ -547,12 +547,9 @@ body.tv .hw-row.codex{outline:2px solid #3b82f6;outline-offset:-2px;background:#
 body.tv .hw-row.incident{outline:2px solid #d9443a;outline-offset:-2px;background:#1f0d0c}
 body.tv .hw-row.unread .hw-row-name{color:#fff}
 body.tv .hw-row.unread .hw-row-act{color:#e6c88a}
-body.tv .hw-row-n{font-size:17px;font-weight:700;color:#8b96a5;flex:0 0 auto;font-variant-numeric:tabular-nums}
 body.tv .hw-row-name{font-size:17px;font-weight:600;color:#c7cdd6;min-width:0;
   overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 body.tv .hw-row.on .hw-row-name{color:#fff}
-body.tv .hw-row-where{font-size:12px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;
-  color:#5c6675;margin-left:auto;flex:0 0 auto}
 /* The activity line under every name. It is ALWAYS here, holding its height whether or not anything
    is streaming through it — a row that grows on a tool call and shrinks when one stops makes the
    whole list jump every few seconds, which cannot be read from across a room.
@@ -603,3 +600,9 @@ body.tv .hw-row::after{content:'';position:absolute;right:0;top:3px;bottom:3px;w
 
 /* Stopped on a permission dialog: the row's line is the call it wants to make, in the asking pink. */
 body.tv .hw-row-act.asking{color:#ff5fa8}
+
+/* WORKING: a teal segment sweeping along the row's bottom edge while a turn runs (app.css says why). */
+@keyframes sessSweep{from{background-position:-100% 0}to{background-position:200% 0}}
+body.tv .hw-row.working::before{content:'';position:absolute;left:0;right:0;bottom:0;height:3px;pointer-events:none;
+  background:linear-gradient(90deg,transparent,#4fd1c5,transparent) no-repeat;background-size:40% 100%;
+  animation:sessSweep 1.8s linear infinite}

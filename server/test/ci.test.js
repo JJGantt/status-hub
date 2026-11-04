@@ -28,6 +28,10 @@ function fixture({ pushes = [], sessions = [], followUp = { status: 200, body: {
       if (path.startsWith('desk_sessions')) {
         return sessions.filter((s) => s.claude_session_id === eq('claude_session_id') && ['resident', 'evicted'].includes(s.status));
       }
+      if (path.startsWith('ci_runs?run_id=')) {
+        const r = runs.get(Number(eq('run_id')));
+        return r ? [r] : [];
+      }
       if (path.startsWith('ci_runs')) {
         const before = Date.parse(q.get('requested_at').replace(/^lt\./, ''));
         return [...runs.values()].filter((r) => !r.completed_at && !r.missing_reported_at && Date.parse(r.requested_at) < before);
@@ -167,9 +171,29 @@ describe('a run that never completes', () => {
     f.advance(MISSING_AFTER_MS * 2);
     await f.ci.onWorkflowRun(run('requested', { id: 9 }));
     assert.equal(f.calls.reports.length, 0);
-    await f.ci.onWorkflowRun(run('requested', { run_attempt: 2 }));
+    await f.ci.onWorkflowRun(run('in_progress', { run_attempt: 2 }));
     assert.equal(f.runs.get(41740664091).completed_at, null);
     assert.equal(f.runs.get(41740664091).attempt, 2);
+  });
+
+  test('a start delivered after its own completion does not erase the result', async () => {
+    const f = fixture();
+    await f.ci.onWorkflowRun(completed('success'));
+    await f.ci.onWorkflowRun(run('requested'));
+    await f.ci.onWorkflowRun(run('in_progress'));
+    assert.equal(f.runs.get(41740664091).conclusion, 'success');
+    f.advance(MISSING_AFTER_MS * 2);
+    await f.ci.onWorkflowRun(run('requested', { id: 9 }));
+    assert.equal(f.calls.reports.length, 0);
+  });
+
+  test('in_progress after requested keeps the original start time', async () => {
+    const f = fixture();
+    await f.ci.onWorkflowRun(run('requested'));
+    const t = f.runs.get(41740664091).requested_at;
+    f.advance(60e3);
+    await f.ci.onWorkflowRun(run('in_progress'));
+    assert.equal(f.runs.get(41740664091).requested_at, t);
   });
 });
 

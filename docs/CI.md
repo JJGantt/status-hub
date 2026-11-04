@@ -31,7 +31,10 @@ GitHub Actions run ──workflow_run webhook──▶ POST /api/ci/github ─�
     resumed with it. A follow-up saved for an asleep machine counts as delivered. An ended session,
     no record, or a follow-up refused outright starts a new session on the Pi (the Mac if the Pi is
     down); neither awake, it is dead-lettered and reported.
-  - A run requested and not completed after two hours is reported to the responder once. It is checked
+  - A run is started by `requested` (a new run) or `in_progress` (a re-run, which keeps the run id with a
+    higher attempt and sends no `requested`). Deliveries can arrive out of order, so a start for an
+    attempt already recorded changes nothing.
+  - A run started and not completed after two hours is reported to the responder once. It is checked
     whenever any webhook arrives, which is the next evidence there is; GitHub does not retry a webhook
     the hub missed, so a lost `completed` delivery surfaces this way.
 - **Not the incident agent.** It cannot edit or push (health/responder README § permissions), and a

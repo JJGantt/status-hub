@@ -3,7 +3,7 @@
 //
 // Two inputs. The git pre-push hook on every machine (claude-config shared/git-hooks/pre-push) records
 // which conversation pushed which commit (`recordPush`, table ci_pushes). GitHub's workflow_run webhook
-// reports each run as it is requested and completed (`onWorkflowRun`, table ci_runs). A failed run on a
+// reports each run as it starts and completes (`onWorkflowRun`, table ci_runs). A failed run on a
 // push to the default branch is typed into that conversation as a follow-up; when it cannot be reached
 // (ended, never recorded, a push by hand) a new session is started in the repo to fix it. The
 // incident agent is not used: it cannot edit or push, and a red test needs exactly that.
@@ -116,10 +116,16 @@ function createCi(deps) {
       else if (run.event !== 'push' || run.branch !== repoObj.default_branch) routed = 'skipped:not a push to the default branch';
       else routed = await routeFailure(run);
       await db.upsert('ci_runs', { ...done, routed });
-    } else if (payload.action === 'requested') {
-      // A re-run reuses the run id: it is requested again, and its earlier result no longer stands.
-      await db.upsert('ci_runs', { ...row, conclusion: null, completed_at: null, routed: null,
-                                   missing_reported_at: null, requested_at: new Date(now()).toISOString() });
+    } else if (payload.action === 'requested' || payload.action === 'in_progress') {
+      // The start of an attempt. A new run sends `requested`; a re-run reuses the run id with a higher
+      // attempt and sends only `in_progress`, and its earlier result no longer stands. Deliveries can
+      // arrive out of order, so a start for an attempt already started, or already completed, changes
+      // nothing (otherwise a late `requested` would erase the result and later read as a missing run).
+      const [have] = await db.select(`ci_runs?run_id=eq.${run.run_id}&select=attempt`);
+      if (!have || have.attempt < run.attempt) {
+        await db.upsert('ci_runs', { ...row, conclusion: null, completed_at: null, routed: null,
+                                     missing_reported_at: null, requested_at: new Date(now()).toISOString() });
+      }
     }
     await checkMissing();
     return { status: 200, body: { ok: true, routed } };

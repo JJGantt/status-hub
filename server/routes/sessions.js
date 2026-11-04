@@ -271,6 +271,61 @@ module.exports = function (ctx) {
   // stripped from the prompt everywhere it is displayed.
   const SPEAK_NOTE = '<speak-mode>This reply will be read aloud on his watch. Keep it complete, but as succinct as the content allows, and written for the ear: no tables, code blocks, file paths or URLs unless they are the answer. Do not summarise away anything he needs.</speak-mode>';
 
+  // Words for a session, given any row of its conversation: typed into it while it runs, resumed with
+  // them while it is parked, moved to an awake machine with them when its own is asleep. The phone's
+  // follow-up route and CI failures (routes/ci.js) both send through this.
+  async function followUpSession(row, { text = '', attachments = [], spoken = false, msgId = '', seenKey = '' } = {}) {
+    const reply = (status, body) => ({ status, body });
+    const now = await conversationNow(row);
+    if (now.opening) return reply(409, { error: 'that session is still opening' });
+    const target = now.live || now.parked;
+    if (!now.live && !target.claude_session_id) {
+      return reply(409, { error: 'that session has no conversation to resume' });
+    }
+    const machine = machineOf(target.worker);
+    const kind = now.live ? 'follow_up' : 'resume_session';
+    // Speak mode on the watch (docs/WATCH.md § Speak mode): the reply will be read aloud, so the
+    // session is asked to answer for the ear. One line, since it is typed into a terminal, and in a
+    // tag that resolvePrompt (voice-pipeline transcripts.js) strips, so every surface shows the user's words.
+    const prompt = spoken && text ? `${text} ${SPEAK_NOTE}` : text;
+    const payload = { session: target.id, prompt, target: machine,
+                      ...(attachments.length ? { attachments } : {}),
+                      // The sender's own message id, which the host stamps on the prompt these words
+                      // become (sessionWatch.js `expectPrompt`), so the sender can replace its
+                      // placeholder for them by id when they come back as an event.
+                      ...(msgId ? { msg: msgId } : {}) };
+    if (!(await machineAwake(machine))) {
+      // The words are for the SESSION, not the machine: with its machine asleep (a closed laptop),
+      // the conversation moves to the other machine from what was mirrored and is resumed there with
+      // them as its next prompt — data-layer's followUpElsewhere, and the two have to agree.
+      // `now.live` carries only id/worker/status; the conversation's own fields are on the full row.
+      const conv = { ...row, ...target };
+      // The other home machine first, then Fly, the last resort; waking Fly is the slow check.
+      let dest = null;
+      if (conv.claude_session_id && conv.agent !== 'codex') {
+        const order = machine === 'mac' ? ['pi', 'fly'] : machine === 'pi' ? ['mac', 'fly'] : ['pi', 'mac'];
+        for (const m of order) if (await machineAwake(m)) { dest = m; break; }
+      }
+      if (dest) {
+        const cmdId = crypto.randomUUID();
+        await sbWrite('desk_commands', 'POST', { id: cmdId, kind: 'resume_mirrored',
+          payload: { target: dest, claude_session_id: conv.claude_session_id, repo: conv.repo,
+                     label: conv.label || null, origin: conv.origin || 'dispatched', from: machine,
+                     prompt, ...(attachments.length ? { attachments } : {}), ...(msgId ? { msg: msgId } : {}) } });
+        await sbWrite(`desk_sessions?id=eq.${encodeURIComponent(target.id)}`, 'PATCH',
+          { status: 'transferred', ended: new Date().toISOString(), working: false });
+        markSeen(seenKey, cmdId);
+        return reply(200, { id: cmdId, session: target.id, resumed: true, moved: dest });
+      }
+      const saved = await deadLetter(kind, payload, machine, `the ${MACHINE_NAME[machine]} is not responding`);
+      return reply(409, { error: `the ${MACHINE_NAME[machine]} is not responding`, saved });
+    }
+    const cmdId = crypto.randomUUID();
+    await sbWrite('desk_commands', 'POST', { id: cmdId, kind, payload });
+    markSeen(seenKey, cmdId);
+    return reply(200, { id: cmdId, session: target.id, resumed: !now.live });
+  }
+
   // Act on one: 'end' closes it for good, 'resume' brings an evicted one back, 'forget' drops the row
   // without touching the machine (the transcript stays on disk; it just stops being offered), and
   // 'followup' types words into a running one (see below).
@@ -306,54 +361,8 @@ module.exports = function (ctx) {
         const msgId = String((req.body || {}).client_msg_id || '').slice(0, 64);
         const seenKey = msgId ? 'followup:' + msgId : '';
         if (seenKey && seenMsgIds.has(seenKey)) return res.json({ id: seenMsgIds.get(seenKey), duplicate: true });
-        const now = await conversationNow(rowsFull[0]);
-        if (now.opening) return res.status(409).json({ error: 'that session is still opening' });
-        const target = now.live || now.parked;
-        if (!now.live && !target.claude_session_id) {
-          return res.status(409).json({ error: 'that session has no conversation to resume' });
-        }
-        const machine = machineOf(target.worker);
-        const kind = now.live ? 'follow_up' : 'resume_session';
-        // Speak mode on the watch (docs/WATCH.md § Speak mode): the reply will be read aloud, so the
-        // session is asked to answer for the ear. One line, since it is typed into a terminal, and in a
-        // tag that resolvePrompt (voice-pipeline transcripts.js) strips, so every surface shows the user's words.
-        const prompt = (req.body || {}).spoken === true && text ? `${text} ${SPEAK_NOTE}` : text;
-        const payload = { session: target.id, prompt, target: machine,
-                          ...(attachments.length ? { attachments } : {}),
-                          // The sender's own message id, which the host stamps on the prompt these words
-                          // become (sessionWatch.js `expectPrompt`), so the sender can replace its
-                          // placeholder for them by id when they come back as an event.
-                          ...(msgId ? { msg: msgId } : {}) };
-        if (!(await machineAwake(machine))) {
-          // The words are for the SESSION, not the machine: with its machine asleep (a closed laptop),
-          // the conversation moves to the other machine from what was mirrored and is resumed there with
-          // them as its next prompt — data-layer's followUpElsewhere, and the two have to agree.
-          // `now.live` carries only id/worker/status; the conversation's own fields are on the full row.
-          const conv = { ...rowsFull[0], ...target };
-          // The other home machine first, then Fly, the last resort; waking Fly is the slow check.
-          let dest = null;
-          if (conv.claude_session_id && conv.agent !== 'codex') {
-            const order = machine === 'mac' ? ['pi', 'fly'] : machine === 'pi' ? ['mac', 'fly'] : ['pi', 'mac'];
-            for (const m of order) if (await machineAwake(m)) { dest = m; break; }
-          }
-          if (dest) {
-            const cmdId = crypto.randomUUID();
-            await sbWrite('desk_commands', 'POST', { id: cmdId, kind: 'resume_mirrored',
-              payload: { target: dest, claude_session_id: conv.claude_session_id, repo: conv.repo,
-                         label: conv.label || null, origin: conv.origin || 'dispatched', from: machine,
-                         prompt, ...(attachments.length ? { attachments } : {}), ...(msgId ? { msg: msgId } : {}) } });
-            await sbWrite(`desk_sessions?id=eq.${encodeURIComponent(target.id)}`, 'PATCH',
-              { status: 'transferred', ended: new Date().toISOString(), working: false });
-            markSeen(seenKey, cmdId);
-            return res.json({ id: cmdId, session: target.id, resumed: true, moved: dest });
-          }
-          const saved = await deadLetter(kind, payload, machine, `the ${MACHINE_NAME[machine]} is not responding`);
-          return res.status(409).json({ error: `the ${MACHINE_NAME[machine]} is not responding`, saved });
-        }
-        const cmdId = crypto.randomUUID();
-        await sbWrite('desk_commands', 'POST', { id: cmdId, kind, payload });
-        markSeen(seenKey, cmdId);
-        return res.json({ id: cmdId, session: target.id, resumed: !now.live });
+        const r = await followUpSession(rowsFull[0], { text, attachments, spoken: (req.body || {}).spoken === true, msgId, seenKey });
+        return res.status(r.status).json(r.body);
       }
 
       // Hand it to the other machine, carrying the conversation. Same two paths as the voice tool, and
@@ -454,5 +463,5 @@ module.exports = function (ctx) {
     } catch (e) { res.status(500).json({ error: String(e.message || e) }); }
   });
 
-  return { MACHINE_NAME, machineAwake, pushSessions };
+  return { MACHINE_NAME, deadLetter, followUpSession, machineAwake, pushSessions };
 };

@@ -306,13 +306,15 @@ describe('which routes are public', () => {
   }
   // Every path anyone may call signed out, and why: the hub's own health and sign-in; the legal pages
   // and Search Console file Google fetches anonymously; the Menu app's routes, which check the owner
-  // themselves; the surf app's page and feeds (public data, shown with no sign-in).
+  // themselves; the surf app's page and feeds (public data, shown with no sign-in); GitHub's CI webhook,
+  // which carries no hub credential and is authenticated by its HMAC signature (routes/ci.js).
   const PUBLIC = new Set([
     'GET /healthz', 'GET /login', 'POST /login', 'GET /${doc}', 'GET /${process.env.GSC_VERIFICATION}',
     'POST /api/cg/transcribe', 'GET /api/cg/orders', 'POST /api/cg/orders', 'POST /api/cg/orders/standardize',
     'POST /api/cg/orders/done',
     'GET /surf', 'GET /api/surf/live', 'GET /api/surf/stream', 'GET /api/surf/history',
     'GET /app.css', 'GET /surf.css', 'GET /dist/surf.js',
+    'POST /api/ci/github',
   ]);
 
   test('the source was read', () => assert.ok(routes.filter((r) => r.router === 'gated').length > 50));

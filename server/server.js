@@ -149,7 +149,7 @@ const { itemTitle } = require('./routes/lists')({
 
 const { TV_SIDEBAR_FONT, TV_SIDEBAR_WIDTH, tvPush } = require('./routes/tv')({ PING, gated, putSetting, sb, sbWrite, sessionClients });
 
-const { MACHINE_NAME, machineAwake, pushSessions } = require('./routes/sessions')({
+const { MACHINE_NAME, deadLetter, followUpSession, machineAwake, pushSessions } = require('./routes/sessions')({
   DESK_STALE_S, EPOCH, TV_SIDEBAR_FONT, TV_SIDEBAR_WIDTH, cleanSaid, convOfRow, ensureLog, gated,
   markSeen, numbered, rowConv, sb, sbInsert, sbWrite, seenMsgIds, sessionClients, settingsAll,
   // Read on every build of the payload, by which time `prompts` below exists.
@@ -157,6 +157,7 @@ const { MACHINE_NAME, machineAwake, pushSessions } = require('./routes/sessions'
 });
 
 require('./routes/failures')({ MACHINE_NAME, gated, machineAwake, sb, sbWrite });
+require('./routes/ci')({ MACHINE_NAME, SUPABASE_KEY, SUPABASE_URL, deadLetter, followUpSession, gated, machineAwake, pub, sb, sbWrite });
 
 const prompts = require('./routes/prompts')({ auth, gated, pushAll, pushSessions, sb });
 

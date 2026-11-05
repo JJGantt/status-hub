@@ -99,6 +99,11 @@ white glyph; a reply is read wrist-down with the screen off; a reply to a sessio
 is read while another page is showing; the `<speak-mode>` note never shows on the phone, wall or
 watch; replies actually come back shorter; and how fast the battery goes with it on.
 
+### Inbox ✕ and session rows: first real test (built 2026-11-05, build 180)
+`docs/WATCH.md` § The inbox. Check on the watch: the ✕ on an open answer returns to the list at the
+place it was left and does not start a recording; a teal row opens that session on the sessions page;
+on the phone a teal row closes the sheet and opens the session view.
+
 ### Unread answers and their push: first real test (built 2026-10-29, build 138)
 `docs/WATCH.md` § The inbox. Nothing has run on the devices yet; the first flagged answer is the
 test. Check: the push arrives titled with the question; it is dropped unshown on the watch with home in

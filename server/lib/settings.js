@@ -3,9 +3,6 @@
 // it. One instance, made in server.js.
 const { getTZ, setTZ } = require('./dates');
 
-// app_settings.agent_mode is stored as text; these are the values that mean "on".
-const agentModeOn = (v) => ['1', 'true', 'on', 'yes'].includes(String(v ?? '0').toLowerCase());
-
 // `onDirty` is called on every invalidation, so whatever caches a build of these values can tell it is stale.
 function createSettings({ sb, onDirty }) {
   // Settings cache: app_settings is read several times per status build but only changes on explicit
@@ -101,4 +98,4 @@ function createSettings({ sb, onDirty }) {
            routingConfig };
 }
 
-module.exports = { createSettings, agentModeOn };
+module.exports = { createSettings };

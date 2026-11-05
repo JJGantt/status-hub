@@ -3,43 +3,43 @@
 // and where a context begins.
 const express = require('express');
 const { DAY_START_HOUR, localDate } = require('../lib/dates');
-const { agentModeOn } = require('../lib/settings');
 
 module.exports = function (ctx) {
   const { VOICE_RESET_SENTINEL, gated, sb, sbWrite, settingsAll, settingsCached } = ctx;
 
   // Whether a message at `at` opens a new conversation context after one at `prev` (both epoch ms). The
   // SAME boundary the worker replays to the model (voice-pipeline `recent_context`): the hub agent is
-  // handed the whole day since 4 AM in the display zone, so a new 4am-day starts a context (hub only;
-  // full-agent never resets on its own), and so does a manual reset (voice_reset_at) in between. An idle
+  // handed the whole day since 4 AM in the display zone, so a new 4am-day starts a context, and so does
+  // a manual reset (voice_reset_at) in between. An idle
   // gap does NOT: drawing a break at an hour of quiet hid a thread the model could still see.
   // The one rule behind both the history endpoint and the live stream.
   const DAY_MS = DAY_START_HOUR * 3600 * 1000;
   const dayOf = (t) => localDate(new Date(t - DAY_MS));
-  function opensContext(prev, at, mode, s) {
+  function opensContext(prev, at, s) {
     const resetAt = Date.parse((s || {}).voice_reset_at || '');
-    return (mode === 'hub' && dayOf(prev) !== dayOf(at))
+    return dayOf(prev) !== dayOf(at)
       || (Number.isFinite(resetAt) && prev < resetAt && resetAt <= at);
   }
 
-  // The last message time per mode, so a live row is flagged as opening a new context by the same rule
+  // Rows written in the old coding mode (mode 'agent') are not part of the hub conversation; legacy rows
+  // with no mode count as hub.
+  const HUB_ROWS = 'or=(mode.is.null,mode.eq.hub)';
+
+  // The last message time, so a live row is flagged as opening a new context by the same rule
   // /api/voice-messages applies to history. Seeded from the table at boot; a row that arrives before the
   // seed is simply not flagged.
-  const lastVoiceAt = { hub: null, agent: null };
+  let lastVoiceAt = null;
   function markLive(row) {
-    if ((row.focus || 'hub') !== 'hub' || !row.created_at) return row;
-    const mode = row.mode === 'agent' ? 'agent' : 'hub';
-    const at = Date.parse(row.created_at), prev = lastVoiceAt[mode];
-    if (prev === null || at > prev) lastVoiceAt[mode] = at;
-    return prev !== null && opensContext(prev, at, mode, settingsCached()) ? { ...row, ctx_break: true } : row;
+    if ((row.focus || 'hub') !== 'hub' || !row.created_at || row.mode === 'agent') return row;
+    const at = Date.parse(row.created_at), prev = lastVoiceAt;
+    if (prev === null || at > prev) lastVoiceAt = at;
+    return prev !== null && opensContext(prev, at, settingsCached()) ? { ...row, ctx_break: true } : row;
   }
   async function seedLastVoiceAt() {
-    for (const [mode, filter] of [['hub', 'or=(mode.is.null,mode.eq.hub)'], ['agent', 'mode=eq.agent']]) {
-      try {
-        const r = await sb(`voice_messages?focus=eq.hub&${filter}&order=created_at.desc&limit=1&select=created_at`);
-        if (r && r[0] && lastVoiceAt[mode] === null) lastVoiceAt[mode] = Date.parse(r[0].created_at);
-      } catch (_) {}
-    }
+    try {
+      const r = await sb(`voice_messages?focus=eq.hub&${HUB_ROWS}&order=created_at.desc&limit=1&select=created_at`);
+      if (r && r[0] && lastVoiceAt === null) lastVoiceAt = Date.parse(r[0].created_at);
+    } catch (_) {}
   }
   seedLastVoiceAt();
 
@@ -49,16 +49,11 @@ module.exports = function (ctx) {
   gated.get('/api/voice-messages', async (req, res) => {
     try {
       const focus = String(req.query.focus || 'hub');
-      // mode=active resolves to whichever mode agent_mode selects — the watch has no settings frame to
-      // read it from, and asking it to fetch one would put that rule in a second place.
-      const want = String(req.query.mode || 'hub');
-      const mode = want === 'active' ? (agentModeOn((await settingsAll()).agent_mode) ? 'agent' : 'hub')
-        : want === 'agent' ? 'agent' : 'hub';
+      // Every `mode` a client sends (the watch asks for 'active') reads the hub thread.
       let limit = parseInt(req.query.limit, 10);
       if (!Number.isFinite(limit) || limit <= 0) limit = 50;
       limit = Math.min(limit, 500);
-      // Mode filter — legacy rows (mode NULL) predate the split and count as 'hub'.
-      const modeFilter = mode === 'agent' ? '&mode=eq.agent' : '&or=(mode.is.null,mode.eq.hub)';
+      const modeFilter = `&${HUB_ROWS}`;
       // ?before=<iso> pages further back: the rows older than that moment (the conversation box loads
       // the previous stretch this way as the user scrolls up past the start of the current one).
       const beforeMs = Date.parse(String(req.query.before || ''));
@@ -71,7 +66,7 @@ module.exports = function (ctx) {
       const s = await settingsAll();
       const breaks = rows.map((r, i) => {
         const prev = i > 0 ? rows[i - 1] : extra;
-        return !!prev && opensContext(Date.parse(prev.created_at), Date.parse(r.created_at), mode, s);
+        return !!prev && opensContext(Date.parse(prev.created_at), Date.parse(r.created_at), s);
       });
       // ?history=1 (the conversation card) → every row, the first of each context flagged so the card can
       // draw a divider there. Older contexts are the record of what the user said and what came of it; hiding

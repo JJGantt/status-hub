@@ -338,7 +338,7 @@ async function loadOlder() {
     }
     const first = older[0] || thread[0];
     const before = first ? first.at : new Date().toISOString();
-    const r = await fetch('/api/voice-messages?focus=hub&mode=active&history=1&limit=' + PAGE +
+    const r = await fetch('/api/voice-messages?focus=hub&history=1&limit=' + PAGE +
       '&before=' + encodeURIComponent(before));
     if (!r.ok) throw new Error('voice-messages ' + r.status);
     const rows = await r.json();
@@ -364,7 +364,7 @@ window.addEventListener('hubreset', () => { older = []; olderDone = false; paint
 
 async function resync() {
   try {
-    const rows = await (await fetch('/api/voice-messages?focus=hub&mode=active&limit=' + CTX_MAX)).json();
+    const rows = await (await fetch('/api/voice-messages?focus=hub&limit=' + CTX_MAX)).json();
     thread = shown((rows || []).map(rowOf));
     // What was scrolled back to stays, minus anything the current context now holds itself.
     const have = new Set(thread.map((x) => x.id));

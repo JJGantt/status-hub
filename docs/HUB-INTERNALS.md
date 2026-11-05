@@ -621,8 +621,8 @@ a list changes — the calendar surfaces' push path, separate from the status fr
 `/api/heat-history` (the heat-grid weeks OLDER than the frame's `HEAT_WEEKS` window, as a prefix the
 expanded sheet draws in front of it — the frame is re-pushed on every realtime event and history only
 grows, so it is fetched once by the one surface that can scroll through it) · `/api/voice-messages`
-(`?mode=active` resolves `agent_mode` on the server, for a client with no settings of its own — the
-watch; the current context — the 4am-day it is in, cut short only by a manual reset, which is the
+(the hub thread whatever `mode` a client sends, the watch's `active` included; rows a retired coding
+mode wrote as `mode = 'agent'` are left out. The current context — the 4am-day it is in, cut short only by a manual reset, which is the
 same stretch the worker replays to the model (`recent_context`) — preceded by every answer still unread (`needs_read`, no `read_at`, any
 age) with the question it answered, unless `?history=1`, which returns older contexts too with
 `ctx_break` on the first row of each so the conversation card draws a divider there, and `?before=<iso>`
@@ -1637,7 +1637,6 @@ callers; only the HTTP response is filtered.
 | `rewind_diarize` | `1` gives a rewind grab speaker labels (OpenAI `gpt-4o-transcribe-diarize`); anything else is plain Groq Whisper (`docs/REWIND.md`). No Settings control. |
 | `cg_orders_model_first` / `_second` | The model id each pass of the restaurant app's order list uses (`claude-sonnet-5` unset), returned by `GET /api/cg/orders` (§5). No Settings control. |
 | `watch_rewind_s` | Seconds the watch's rewind keeps (30 unset, 600 at most), read when it is engaged (`docs/REWIND.md`). No Settings control: write `app_settings` directly. |
-| `agent_mode` / `agent_cwd` | Full-agent (coding) mode toggle + working dir for the worker. |
 | `weight_reminder_enabled` / `_mode` / `_time` | The daily weigh-in push (On/Off, Manual/Dynamic, time). |
 | `push_enabled` | Gates session-reply pushes and flagged-answer pushes (`notifyAnswer`). No other orchestrator reply is pushed, whatever it says. |
 | `jaredbot_enabled` | JaredBot, the group-chat auto-replier in messages-mcp (`jaredbot.py`), which reads it before every decision. Also voice `set_jaredbot`. |

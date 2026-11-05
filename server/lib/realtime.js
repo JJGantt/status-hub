@@ -7,7 +7,7 @@ const WebSocket = require('ws');
 
 function createRealtime(ctx) {
   const {
-    MUTE_HOLD, SUPABASE_KEY, SUPABASE_URL, agentModeOn, auth, broadcast, dirtyDesk, dirtyDue, dirtyHeatHistory,
+    MUTE_HOLD, SUPABASE_KEY, SUPABASE_URL, auth, broadcast, dirtyDesk, dirtyDue, dirtyHeatHistory,
     dirtyNutDay, dirtyRows, dirtySettings, dirtySurfHist, dirtyWorkoutDay, markLive, notifyAnswer, pushDay,
     pushLists, pushSessions, pushSurfLive, pushVoice, recomputeMute, reportTick, requestView, sb, settleReply,
     surfAlarms, syncBadge, takeUsage, tvPush,
@@ -82,9 +82,6 @@ function createRealtime(ctx) {
         dirtySettings();
         dirtyNutDay();   // surplus_cal shapes the day header's goal figures
         broadcast(p);
-        // When the agent_mode toggle flips (from anywhere — voice, another device), tell the voice panel to
-        // switch to that mode's conversation live, so the on-screen context always matches the active mode.
-        if (p.new && p.new.key === 'agent_mode') pushVoice('mode', { agent: agentModeOn(p.new.value) });
         if (p.new && ['tv_sidebar_view', 'tv_sidebar_font', 'tv_sidebar_width'].includes(p.new.key)) pushSessions();
         // A holder written straight into the table (the Mac's listener) is a mute taken or given back.
         if (p.new && String(p.new.key || '').startsWith(MUTE_HOLD)) recomputeMute().catch((e) => console.error('[mute]', e.message || e));

@@ -3,7 +3,7 @@
 //
 // Which one is `sidebar_view` on the sessions frame (the tv_sidebar_view setting, written when a
 // `sidebar` command names a view): the focused session, or the voice orchestrator's conversation,
-// which is the CURRENT context of the voice thread (/api/voice-messages?mode=active, the watch's view).
+// which is the CURRENT context of the voice thread (/api/voice-messages, the watch's view).
 //
 // It shows the FOCUSED session (desk_sessions_state(), data-layer 00157): where a spoken follow-up goes, so it follows
 // whatever the user is working in. The `sessions` frame on the stream carries focus, so a change moves it.
@@ -177,7 +177,7 @@ liveStream('/api/session-stream', {
 const voBody = document.getElementById('vo-body');
 
 // Refetched on each voice frame rather than patched: the server owns which rows are the current
-// context (opensContext, reset, unread answers, agent_mode), and a frame arrives only when something
+// context (opensContext, reset, unread answers), and a frame arrives only when something
 // was said, so this is one request per message.
 let voBusy = false, voAgain = false;
 async function loadVoice() {
@@ -185,7 +185,7 @@ async function loadVoice() {
   if (voBusy) { voAgain = true; return; }
   voBusy = true;
   try {
-    const [r, q] = await Promise.all([fetch('/api/voice-messages?focus=hub&mode=active&limit=40'), fetch('/api/voice-pending')]);
+    const [r, q] = await Promise.all([fetch('/api/voice-messages?focus=hub&limit=40'), fetch('/api/voice-pending')]);
     if (r.ok) voRows = (await r.json()).filter((m) => m.role === 'user' || m.role === 'assistant');
     if (q.ok) { pending.clear(); for (const p of await q.json()) pending.set(p.id, p); }
     paintVoice();

@@ -67,7 +67,7 @@ through `POST /api/gestures`; `GET /api/gestures` lists the last week and `GET /
 
 `HomeView`: the last five exchanges of the shared hub thread, each in full — the user's words as the hub
 transcribed them, the reply as it was written — over `/api/voice-messages?focus=hub&mode=active`,
-the same current-context thread the phone and the TV show, in whichever mode `agent_mode` selects. It
+the same current-context thread the phone and the TV show (the server ignores `mode`). It
 follows `/api/voice-stream`: a `message` frame reloads the thread, and the worker's `activity` frames
 draw the running command's tool calls under it (`ActivityLines`), which the hub does not store, so they
 show only while the page is watching. They clear on `done`, on the command's own answer, on a

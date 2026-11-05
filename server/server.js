@@ -16,7 +16,7 @@ const { createAuth, createGate, publishFallbackConfig } = require('./lib/auth');
 const { etNowString, etStringAt } = require('./lib/dates');
 const { lateMoment } = require('./lib/score');
 const { timed } = require('./lib/timed');
-const { createSettings, agentModeOn } = require('./lib/settings');
+const { createSettings } = require('./lib/settings');
 const { createUsage } = require('./lib/usage');
 const { createWatchBattery } = require('./lib/watchbattery');
 const { createAlarmLog } = require('./lib/alarmlog');
@@ -171,7 +171,7 @@ const jobs = createJobs({
 });
 
 const realtime = createRealtime({
-  MUTE_HOLD, SUPABASE_KEY, SUPABASE_URL, agentModeOn, auth, broadcast, dirtyDesk: cache.dirtyDesk,
+  MUTE_HOLD, SUPABASE_KEY, SUPABASE_URL, auth, broadcast, dirtyDesk: cache.dirtyDesk,
   dirtyDue: jobs.dirtyDue, dirtyHeatHistory, dirtyNutDay, dirtyRows: cache.dirtyRows, dirtySettings, dirtySurfHist,
   dirtyWorkoutDay, markLive, notifyAnswer, pushDay, pushLists, pushSessions, pushSurfLive, pushVoice, recomputeMute,
   reportTick: jobs.reportTick, requestView, sb, settleReply, surfAlarms, syncBadge, takeUsage: usage.take, tvPush,

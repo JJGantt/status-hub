@@ -50,7 +50,6 @@ const VOICE_SEND_MS = 120000;
 // picture now goes through the composer. This only empties whatever that camera left behind.
 const photoBox = idbBox('hub-photo-outbox');
 const voiceBox = idbBox('hub-voice-outbox');
-let activeMode = 'hub';         // which mode's conversation the panel shows — follows agent_mode, live
 // Other views of the hub thread: a page can show the conversation somewhere besides the card, and the
 // phone home's one-line prompt/reply strip does. They subscribe here rather than opening their own
 // EventSource — this page already holds /api/voice-stream open, and a second one on the same endpoint
@@ -58,15 +57,6 @@ let activeMode = 'hub';         // which mode's conversation the panel shows —
 // since boot() runs above the bottom of this file.
 const threadSubs = [];
 
-// Switch the panel to a mode's conversation: reload its thread + update the on-screen indicator. Hub and
-// full-agent keep SEPARATE threads (the worker tags each message); this is what makes the visible context
-// follow the active mode, switching live when the agent_mode toggle flips from anywhere.
-function setMode(mode) {
-  const m = mode === 'agent' ? 'agent' : 'hub';
-  if (m !== activeMode) { activeMode = m; if (_card) _card.backfill(); }
-  const el = document.getElementById('ai-mode');
-  if (el) { el.textContent = activeMode === 'agent' ? 'Agent' : 'Hub'; el.classList.toggle('is-agent', activeMode === 'agent'); }
-}
 
 // The kiosk has tv.js's own voice layer and no input; everything else boots the interactive client.
 // KIOSK also picks the activity bar's mount point below.
@@ -93,7 +83,6 @@ function boot() {
     try { popSound.currentTime = 0; popSound.play().catch(() => {}); } catch (_) {}
   };
   _card = initCard();                // null if the conversation card isn't on this page
-  setMode('hub');                    // default indicator until settings load
 
   // Durable outboxes (photos, and every voice clip): resume any interrupted send now, and again whenever
   // we return to the foreground, regain the network, or restore from bfcache — so anything caught
@@ -121,14 +110,12 @@ function boot() {
   fetch('/api/settings').then((r) => r.json()).then((s) => {
     const n = parseFloat(s.phone_silence_s); if (Number.isFinite(n) && n > 0) phoneHangMs = n * 1000;
     applyActivitySettings(s);
-    setMode(['1', 'true', 'on', 'yes'].includes(String(s.agent_mode ?? '0').toLowerCase()) ? 'agent' : 'hub');
   }).catch(() => {});
 
-  // One voice stream feeds the conversation, the activity bar, and the live mode switch.
+  // One voice stream feeds the conversation and the activity bar.
   liveStream('/api/voice-stream', { voice: (e) => {
     let msg; try { msg = JSON.parse(e.data); } catch (_) { return; }
     if (msg.kind === 'reset') { if (_card) _card.rule(); activity.clear(); return; }   // the old context stays, behind a divider
-    if (msg.kind === 'mode') { setMode(msg.row && msg.row.agent ? 'agent' : 'hub'); return; }  // toggle flipped → switch thread
     if (msg.kind === 'activity') {                 // live progress, pushed direct from the worker (low-latency)
       const a = msg.row || {};
       if ((a.focus || 'hub') !== 'hub') return;
@@ -145,7 +132,7 @@ function boot() {
     if (msg.kind !== 'message') return;
     const row = msg.row;
     if (!row || (row.focus || 'hub') !== 'hub') return;
-    if ((row.mode || 'hub') !== activeMode) return;   // only the ACTIVE mode's messages land in the panel
+    if (row.mode === 'agent') return;              // the old coding mode's rows are not the hub thread
     if (row.role === 'tool') return;               // (tools now arrive as 'activity', never as messages)
     if (_card) _card.upsert(row);                  // user/assistant → conversation
     threadSubs.forEach((f) => f(row));             // any other view of the same thread
@@ -1238,7 +1225,7 @@ function initCard() {
   }
   async function backfill() {
     try {
-      const r = await fetch('/api/voice-messages?focus=hub&mode=' + activeMode + '&limit=200&history=1');   // the active mode's thread, older contexts included and flagged where each begins
+      const r = await fetch('/api/voice-messages?focus=hub&limit=200&history=1');   // the hub thread, older contexts included and flagged where each begins
       if (!r.ok) return;
       const rows = await r.json();
       const now = Date.now();

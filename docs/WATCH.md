@@ -167,12 +167,13 @@ Most replies only confirm that something was done and are never read. A reply th
 a question is the one that gets buried when the next command is spoken before it is
 read, so every such reply goes into an inbox: kept for good, newest first, read or not.
 
-- **The model flags them; Haiku names them.** The model ends such a reply with `[[read]]`, which the
-  worker strips and stores as `voice_messages.needs_read`; a few seconds later a separate Haiku pass
-  writes `label`, the question in a few words, which is what an inbox row shows (voice-pipeline
-  `docs/ROUTING.md`). A row with none yet shows the question's own words. Confirmations carry no flag
-  and never enter the inbox. A session's relayed first reply is flagged when the orchestrator
-  dispatched it with `start_session`'s `needs_read`, and labelled by Haiku from the dispatched prompt.
+- **The model flags them; a second call names them.** The model ends such a reply with `[[read]]`,
+  which the worker strips and stores as `voice_messages.needs_read`; a few seconds later a separate
+  Sonnet call writes `label` from what he said (never the answer): a few words, a question only when
+  he asked one. That is what an inbox row shows (voice-pipeline `docs/ROUTING.md`); a row with none
+  yet shows his own words. Confirmations carry no flag and never enter the inbox. A session's relayed
+  first reply is flagged when the orchestrator dispatched it with `start_session`'s `needs_read`, and
+  labelled the same way from the dispatched prompt.
 - **One question, one row.** A clarification of the question just answered ("I mean the new one")
   replaces its row rather than adding one, and a follow-up spoken from an open answer lists under that
   answer rather than as a row (voice-pipeline `docs/ROUTING.md`).

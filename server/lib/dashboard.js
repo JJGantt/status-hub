@@ -11,6 +11,7 @@ const { getWeather } = require('./weather');
 const { buildNutritionLog, buildGoalResolver } = require('./nutritionlog');
 const { computeScore } = require('./score');
 const { buildVariants } = require('./variants');
+const { buildWatchBattery, WATCH_DEVICE } = require('./watchbattery');
 const { buildLitter } = require('./litter');
 
 // Weeks of heat map the HOME wall shows, against the health wall's 20. Trimming is what makes the two
@@ -325,7 +326,8 @@ function createDashboard(ctx) {
     ]);
     const { today } = core;
 
-    const litter = buildLitter((deviceRows || []).find((d) => d.device !== 'cat-feeder') || null);
+    const litter = buildLitter((deviceRows || []).find((d) => d.device !== 'cat-feeder' && d.device !== WATCH_DEVICE) || null);
+    const watch_battery = buildWatchBattery((deviceRows || []).find((d) => d.device === WATCH_DEVICE) || null);
     const feeder = (deviceRows || []).find((d) => d.device === 'cat-feeder') || null;
     const surf = buildSurf((surfRows || [])[0]);
 
@@ -418,7 +420,7 @@ function createDashboard(ctx) {
     return { today, litter, feeder, surf, wind: liveWind.view((surfRows || [])[0]), buoys: liveBuoy.view(), weather: getWeather(), nutrition, maintenance, pace: paceData, volume, heatmap, nutrition_log,
       heatmap_home, nutrition_log_home, weight_plot, weight_plot_phone,
       last_set_at, session_start_at, sets_today, rep_watcher, routing, mics, score, desk_focus: deskFocus,
-      claude_usage: buildUsage(usageRow),
+      claude_usage: buildUsage(usageRow), watch_battery,
       // THE BUILD THIS FRAME CAME FROM. A page that has been open for hours never re-requests its own
       // bundle, so a deploy reaches the server and not the screen — which is how a phone spends an
       // afternoon running code that was replaced. Every client remembers the first commit it sees and

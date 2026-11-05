@@ -16,7 +16,7 @@ const { pipeline } = require('stream/promises');
 module.exports = function (ctx) {
   const {
     CLIENT_NOW_RE, GROQ_API_KEY, SUPABASE_KEY, SUPABASE_URL, VOICE_RESET_SENTINEL,
-    dirtySettings, gated, noteRinger, pushVoice, putSetting, sb, sbWrite, settingsAll,
+    dirtySettings, gated, noteRinger, pushVoice, putSetting, sb, sbWrite, settingsAll, watchBattery,
   } = ctx;
 
   // De-dupe resent sends: the durable outboxes (photos, and every voice clip) re-POST when a screen-lock
@@ -483,6 +483,8 @@ module.exports = function (ctx) {
   // only once it is stored, so a failed write leaves the lines on the watch to be sent again.
   gated.post('/api/clientlog', express.json({ limit: '256kb' }), async (req, res) => {
     const b = req.body || {};
+    // The watch's battery rides its batches (lib/watchbattery.js); a failed store never fails the log.
+    if (b.battery && watchBattery) watchBattery.ingest(b.battery);
     const lines = Array.isArray(b.lines) ? b.lines.filter((l) => l && typeof l === 'object') : [b];
     const keep = [];
     for (const l of lines) {

@@ -1395,6 +1395,10 @@ body.tv.phonewall .pane-todo .daycardwrap{padding:12px 14px 14px;flex:0 0 auto}
 #usagebars .ub-fill.ub-warm{background:#e6b93d}
 #usagebars .ub-fill.ub-hot{background:#e5484d}
 body.phonehome #usagebars{top:env(safe-area-inset-top,0px)}
+/* The watch's battery (cards/watchbattery.js): one hairline along the bottom edge of the TV walls, the
+   usage bars' weight. Its colour is the server's, red through green. */
+#watchbattery{position:fixed;bottom:0;left:0;right:0;z-index:9999;pointer-events:none;height:2px;background:rgba(255,255,255,.06)}
+#watchbattery .wb-fill{height:100%;width:0;transition:width .6s ease,background-color .6s ease}
 
 /* A voice reply written by a fallback engine (voice_messages.engine): amber on the API credits, blue on
    Codex, the colours the usage bars and the session list already use for the same states. */

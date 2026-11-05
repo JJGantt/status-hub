@@ -61,5 +61,16 @@ module.exports = function (ctx) {
     if (!r.ok) throw new Error(`settings upsert ${key} -> ${r.status}`);
   }
 
-  return { sb, sbRange, sbWrite, sbInsert, putSetting };
+  // Upsert one row of a keyed table (the same merge-duplicates Prefer as putSetting). Throws on failure.
+  async function sbUpsert(table, conflict, row) {
+    const r = await fetch(`${SUPABASE_URL}/rest/v1/${table}?on_conflict=${conflict}`, {
+      method: 'POST',
+      headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}`,
+                 'Content-Type': 'application/json', Prefer: 'resolution=merge-duplicates,return=minimal' },
+      body: JSON.stringify(row),
+    });
+    if (!r.ok) throw new Error(`upsert ${table} -> ${r.status}`);
+  }
+
+  return { sb, sbRange, sbWrite, sbInsert, putSetting, sbUpsert };
 };

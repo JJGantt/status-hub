@@ -2,6 +2,7 @@ import Foundation
 import Network
 import Security
 import WatchConnectivity
+import WatchKit
 
 /// The hub token, handed over by the iPhone app and kept in this watch's own Keychain. The watch
 /// cannot sign in by itself: it has no web view, and the phone's cookies and Keychain are not shared
@@ -632,9 +633,18 @@ enum Hub {
         Task { await LogOutbox.shared.flush() }
     }
 
+    /// **Every batch carries the battery**, which is how the walls' battery hairline learns it (server
+    /// lib/watchbattery.js). watchOS gives an app no battery-change event and nothing can ask the watch,
+    /// so the moments the app is already talking to the hub are the moments it is read.
     fileprivate static func sendLog(_ lines: [String]) async -> Bool {
         let objects = lines.compactMap { try? JSONSerialization.jsonObject(with: Data($0.utf8)) }
-        return (try? await call("/api/clientlog", method: "POST", body: ["lines": objects], timeout: 20)) != nil
+        let battery = await MainActor.run { () -> [String: Any] in
+            let device = WKInterfaceDevice.current()
+            device.isBatteryMonitoringEnabled = true
+            return ["level": Double(device.batteryLevel),
+                    "charging": device.batteryState == .charging || device.batteryState == .full]
+        }
+        return (try? await call("/api/clientlog", method: "POST", body: ["lines": objects, "battery": battery], timeout: 20)) != nil
     }
 
     /// A gesture capture (`GestureLab`), stored by the hub in the gesture-captures bucket. Answers with

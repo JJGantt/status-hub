@@ -1028,6 +1028,9 @@ no connection, so a new call must not use it.
 `fly logs -a jared-status-hub | grep '"src":"watch"'`. Read it before guessing at a report from the
 wrist. Fly keeps only the recent lines, so read it soon.
 
+Every batch also carries the watch's battery (`battery: {level, charging}` beside `lines`), which is
+how the walls' battery bar learns it (HUB-INTERNALS.md § Watch battery bar).
+
 | event | what it says |
 |---|---|
 | `thread` | what home loaded |

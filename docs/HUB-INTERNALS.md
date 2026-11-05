@@ -142,6 +142,7 @@ Supabase ──▶ lib/dashboard.js buildStatus() ──▶ /api/status payload 
 | `heatmap` | GitHub-style workout heatmap, a fixed `HEAT_WEEKS` window | `lib/heatmap` |
 | `weight_plot` | the home wall's weekly weigh-in average, one point per heat-map week column | `lib/weightplot` |
 | `litter` / `feeder` / `surf` | those device/status cards | Supabase rows (`device_status`, snapshots); litter through `buildLitter` |
+| `watch_battery` | the watch-battery hairline along the bottom of the TV walls | `device_status` row `watch`, through `lib/watchbattery` (§ Watch battery bar) |
 | `weather` | the rain-chance grid beside surf — 7 days x 24 hours, the drawn window, the week's peak and the palette | `lib/weather` (NWS gridpoint from the `NWS_GRIDPOINT` env, e.g. `TOP/31,80`; unset leaves the grid empty; cached 15m; **the only outbound fetch in the frame**, and it never blocks it — `getWeather()` returns the last good copy and refreshes behind the caller) |
 | `wind` | the live wind at the break — the dock's newest reading, its half-hour average, its type (onshore / offshore / cross-shore) and compass point, and beside it the forecast for this hour and the difference. The surf app's page draws it (`/api/surf/stream`) | `lib/livewind` (the MYPF1 dock via NOAA CO-OPS 8720218, read every 10m — a timer because the API pushes nothing) |
 | `buoys` | the two wave buoys either side of Mayport (41112 Fernandina, 41117 St. Augustine): each one's newest reading — whole-sea height, period and direction, the SWELL and WIND-WAVE split, water — and its age | `lib/livebuoy` (NDBC `.txt` + `.spec`, read every 10m, kept in `wave_readings`) |
@@ -1877,6 +1878,20 @@ fixed and overlaid, so nothing else on the page moves. The frame carries `claude
 (`buildUsage`: each window's fill, reset time and minutes to reset) from the newest row of Supabase
 `claude_usage`, which arrives over realtime; the 15-minute backstop re-reads it. A window whose reset
 has passed paints empty until the next turn reports the new one.
+
+## Watch battery bar
+
+One 2px bar pinned along the BOTTOM of the TV walls, the usage bars' weight, filling left to right
+with the watch's battery and coloured by hue from red at empty to green at full (`batteryColor` in
+`lib/watchbattery.js`). The phone home page does not draw it (`cards/watchbattery.js` skips
+`body.phonehome`). The frame carries `watch_battery` (`pct`, `charging`, `color`, `at`).
+
+The watch cannot be asked and watchOS gives an app no battery-change event, so every log batch it
+already sends to `/api/clientlog` carries `battery` beside `lines` (`Hub.sendLog`). The reading is
+therefore as fresh as the last time the app ran; `at` says when. It is stored as `device_status` row
+`watch` (`data: {level, charging}`), which realtime already pushes to every wall, and written only on
+a new whole percent or a charging flip, since a batch arrives every few seconds while the app is open.
+`buildLitter` takes the first `device_status` row that is neither the feeder nor `watch`.
 
 ## Fallback replies are coloured
 

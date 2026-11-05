@@ -18,6 +18,7 @@ const { lateMoment } = require('./lib/score');
 const { timed } = require('./lib/timed');
 const { createSettings, agentModeOn } = require('./lib/settings');
 const { createUsage } = require('./lib/usage');
+const { createWatchBattery } = require('./lib/watchbattery');
 const { createAlarmLog } = require('./lib/alarmlog');
 const { createRowCache } = require('./lib/rowcache');
 const { createDashboard } = require('./lib/dashboard');
@@ -62,11 +63,12 @@ app.use(gated);
 
 const { SURF_HTML } = require('./routes/pages')({ gated });
 
-const { sb, sbRange, sbWrite, sbInsert, putSetting } = require('./lib/supa')({ SUPABASE_KEY, SUPABASE_URL });
+const { sb, sbRange, sbWrite, sbInsert, putSetting, sbUpsert } = require('./lib/supa')({ SUPABASE_KEY, SUPABASE_URL });
 const cache = createRowCache({ sb });
 const settings = createSettings({ sb, onDirty: cache.bump });
 const { settingsAll, dirtySettings } = settings;
 const usage = createUsage({ sb });
+const watchBattery = createWatchBattery({ sbUpsert });
 const { alarmLog, noteRinger, ringerReport } = createAlarmLog({ sbWrite });
 
 const { buildSurf, dirtySurfHist, liveBuoy, liveWind, pushSurfLive, surfAlarms } = require('./routes/surf')({
@@ -129,7 +131,7 @@ require('./routes/healthdata')({ SUPABASE_KEY, SUPABASE_URL, gated, sbWrite });
 
 const { cleanSaid, markSeen, seenMsgIds, settleReply } = require('./routes/voice')({
   CLIENT_NOW_RE, GROQ_API_KEY, SUPABASE_KEY, SUPABASE_URL, VOICE_RESET_SENTINEL,
-  dirtySettings, gated, noteRinger, pushVoice, putSetting, sb, sbWrite, settingsAll,
+  dirtySettings, gated, noteRinger, pushVoice, putSetting, sb, sbWrite, settingsAll, watchBattery,
 });
 
 const { overdueCount, pushAll } = require('./routes/notify')({

@@ -13,6 +13,7 @@ import * as routing from './cards/routing.js';   // TV voice-column routing pane
 import * as deskfoot from './cards/deskfoot.js';  // TV footer: which session takes a follow-up (no-ops on phone)
 import * as score from './cards/score.js';       // TV overall-score health bar (no-ops on phone)
 import * as usage from './cards/usage.js';       // Claude usage hairlines across the top of every wall
+import * as watchbattery from './cards/watchbattery.js'; // the watch's battery, a hairline along the bottom of the walls
 import * as mics from './cards/mics.js';         // page voice-liveness card (no-ops on the TV wall)
 import * as maintviz from './cards/maintviz.js'; // phone-wall maintenance-window pane (no-ops elsewhere)
 import './cards/dayline.js';                     // the day column, wherever one is on the page — self-driving
@@ -98,6 +99,7 @@ function render(s){
  routing.render(s);    // TV-only routing panel (model/thinking/runner/voice + liveness chips)
  score.render(s);      // TV-only overall-score health bar (right column)
  usage.render(s);      // Claude usage hairlines (walls only)
+ watchbattery.render(s); // watch battery hairline (TV walls only)
  mics.render(s);       // page-only voice-liveness card (TV shows the same data in the routing strip)
  maintviz.render(s);   // phone-wall maintenance-window pane (fourth swipe pane)
  todo.render(s);       // phone-wall lists pane (fifth swipe pane; self-fetches)

@@ -10,8 +10,8 @@ import WatchKit
 /// it, with the spinner bigger now that the hub is running the command rather than hearing it; the
 /// reply lands, the view settles on the top of THAT, the control is a microphone again and the x goes.
 /// A reply is read from its first line, which is why each of those lands the view on a top rather than
-/// scrolling to the end. **None of it moves the view while the user is looking** (`holds`): each landing waits
-/// for the wrist to drop, so it is in place at the next raise.
+/// scrolling to the end. **None of it moves the view while the user is reading** (`holds`) — looking, and
+/// scrolled since the raise: each landing then waits for the wrist to drop, so it is in place at the next raise.
 struct HomeView: View {
     @EnvironmentObject private var chat: Chat
     /// Wrist down with the app still showing.
@@ -30,15 +30,21 @@ struct HomeView: View {
     /// pass after the jump, so the room above it (`room`) came too late or not at all.
     @State private var heights: [String: CGFloat] = [:]
     /// What the view is held at — `target`, except while something newer is HELD: **an arrival does not
-    /// take the view from an answer the user is looking at** (`holds`). It lands as soon as the user stops looking.
+    /// take the view from an answer the user is reading** (`holds`). It lands as soon as the user stops looking.
     @State private var landed: String?
     @State private var looking = false
+    /// **The user has scrolled since this look began** (the raise, the app coming to the front, the page
+    /// swiped to). Looking without having scrolled is not reading: a fresh raise is on whatever the page
+    /// left it on, so an arrival lands then. Cleared when the user stops looking.
+    @State private var touched = false
+    /// Reading (`engaged`), which is what holds an arrival (`holds`): looking, and scrolled since the look began.
+    private var engaged: Bool { looking && touched }
     /// The row that was at the top when the user scrolled there and more rows were asked for: the scroll goes
     /// back onto it once they have laid out above it.
     @State private var keepAtTop: String?
     /// A landing of the page's own is still settling: the thread lays out over several passes after a
     /// jump, and each one re-lands on `landed`. Only until the next arrival or the user's scroll — after
-    /// that, while the user is looking, **nothing re-lands** (`settle`).
+    /// that, while the user is reading, **nothing re-lands** (`settle`).
     @State private var settling = true
     /// The inbox is open over the thread (`InboxView`). The thread underneath is not being
     /// looked at then, so nothing in it counts as read.
@@ -111,23 +117,24 @@ struct HomeView: View {
             .onChange(of: chat.landings) { _, _ in land(proxy) }
             // The user stopped looking with something held: it lands now, so it is waiting for the next raise.
             .onChange(of: looking) { _, now in
+                if !now { touched = false }
                 if !now && landed != target { land(proxy) }
             }
-            // **Nothing moves the view while the user is looking**, a re-landing as much as a landing. Held,
+            // **Nothing moves the view while the user is reading**, a re-landing as much as a landing. Held,
             // `landed` is an older answer, and jumping back onto it each time the thread grows pulled the
             // view up the thread on every arrival — onto an answer that had itself moved. Content added
             // below moves nothing by itself, and `Chat.keepFrom` keeps rows from dropping off the top.
             .onScrollGeometryChange(for: CGFloat.self) { $0.contentSize.height } action: { _, _ in
-                if pinned { if settling || !looking { jump(proxy) } }
+                if pinned { if settling || !engaged { jump(proxy) } }
                 // Rows were added above: put back the one that was at the top, so they arrive above
                 // the user rather than under the user's finger.
                 else if let a = keepAtTop { keepAtTop = nil; proxy.scrollTo(a, anchor: .top) }
             }
             .onScrollPhaseChange { _, now in
-                if now == .interacting || now == .tracking { pinned = false; settling = false }
+                if now == .interacting || now == .tracking { pinned = false; settling = false; touched = looking }
             }
-            // Anything arriving ends a landing's settling: from then on it is the user's page until the user
-            // stops looking.
+            // Anything arriving while the user is reading ends a landing's settling: from then on it is the
+            // user's page until the user stops looking.
             .onChange(of: chat.thread.last?.id) { _, _ in settle() }
             .onChange(of: chat.pending.count) { _, _ in settle() }
             .onChange(of: chat.activity.count) { _, _ in settle() }
@@ -214,12 +221,12 @@ struct HomeView: View {
         }
     }
 
-    /// **Whether an arrival waits: always, while the user is looking.** Nothing that arrives — the user's transcribed
-    /// words, a tool call, a reply — moves the view while home is in front with the wrist up; it lands
-    /// the moment the user stops looking. A tap on the unread dot or an answer's notification (`chat.landings`)
-    /// is asked for, so it never waits.
+    /// **Whether an arrival waits: while the user is reading.** Nothing that arrives — the user's transcribed
+    /// words, a tool call, a reply — moves the view once the user has scrolled with the wrist up; it lands
+    /// the moment the user stops looking. Before that first scroll the raise is not reading, so it lands.
+    /// A tap on the unread dot or an answer's notification (`chat.landings`) is asked for, so it never waits.
     private func holds(_ next: String?) -> Bool {
-        guard looking, let landed, next != landed else { return false }
+        guard engaged, let landed, next != landed else { return false }
         return true
     }
 
@@ -233,7 +240,7 @@ struct HomeView: View {
     }
 
     private func settle() {
-        guard looking, settling else { return }
+        guard engaged, settling else { return }
         settling = false
     }
 

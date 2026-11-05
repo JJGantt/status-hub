@@ -76,8 +76,8 @@ seconds after a command is sent and the `done` frame then goes by while the stre
 leaves the tool calls drawn under a reply that came after them.
 
 **A command walks the page**, and each step lands the view on a TOP, because a reply is read from its
-first line rather than scrolled to the end — but only once the user is not looking (next paragraph but one);
-with the wrist up the view stays where it is:
+first line rather than scrolled to the end — but only while the user is not reading (next paragraph but one);
+once the user has scrolled with the wrist up, the view stays where it is:
 
 | | screen | control | x | wrist |
 |---|---|---|---|---|
@@ -90,23 +90,26 @@ screen only when there is enough below it to fill the screen; a short one stops 
 with what came before it above, as any list does. No blank space is added so that everything could reach the top. The view holds that spot through the laying out that follows
 (`pinned`) until the user scrolls. The session page lands the same way.
 
-**Nothing moves the view while the user is looking.** While home is in front with the wrist up, every new
-item — the user's own transcribed words, a tool call, the reply, a session's relayed answer — is HELD; it lands
-the moment the user stops looking (wrist down, app behind, another page), so it is waiting at the next raise,
-with the unread dot meanwhile if it is flagged. Holding only while the view is on an answer is not
+**Nothing moves the view while the user is reading** — looking (home in front, wrist up) AND scrolled since
+that look began (`touched`, cleared when the look ends). Then every new item — the user's own transcribed
+words, a tool call, the reply, a session's relayed answer — is HELD; it lands the moment the user stops
+looking (wrist down, app behind, another page), so it is waiting at the next raise, with the unread dot
+meanwhile if it is flagged. **A raise without a scroll is not reading**: the screen is on whatever the page
+left it on, so an arrival — a command spoken straight after the raise, its reply — lands as usual. The raise
+itself moves nothing; only an arrival does. Holding only while the view is on an answer is not
 enough: an earlier answer is often read while a command runs, and the new transcript and then its reply would each
 pull the view off it. A tap on the unread dot or an answer's notification is asked for and never waits.
 `landed` is the spot the view is held at, and the room above the newest item follows IT, not `target`
 — keyed on the target, the room would vanish from above the answer being read and shift it. Each hold is
 logged as `land-held`.
 
-**A hold freezes the view, not a spot.** While the user is looking, nothing re-lands either: the landing
+**A hold freezes the view, not a spot.** While the user is reading, nothing re-lands either: the landing
 is not re-applied as the thread grows, because the spot held is an older answer, and jumping back onto it
 on every arrival drags the view up the thread — and a short item resting at the end of the scroll is
 pulled to the top the moment anything arrives under it. Content added below moves nothing by itself, so
 doing nothing IS staying put. Re-landing as the page lays out happens only while a landing of the page's
 own is settling (`settling`: from a landing until the next arrival or the user's scroll), and whenever the
-user is not looking. **Nor does anything drop off the top**: the laid-out window keeps the row (home,
+user is not reading. **Nor does anything drop off the top**: the laid-out window keeps the row (home,
 `Chat.keepFrom`) or event (session, `keepFrom`) it started at when the user began looking, and grows
 downward instead, since a row trimmed from above the screen shifts everything on it by that row's height.
 Both let go when the user stops looking.
@@ -305,18 +308,20 @@ thank-you-shaped transcription), drops its placeholder.
 with what the session does about them underneath; with none, the last event — the reply when it lands
 (`newest`). The top of that sits at the top of the screen.
 
-**Nothing moves the page while the user is looking**, by home's rule: with the wrist up, a newer item — a
-placeholder, a tool call, the reply, a prompt typed from elsewhere — is held in `spot` and lands when the user
-stops looking.
+**Nothing moves the page while the user is reading**, by home's rule: with the wrist up and a scroll since
+the raise, a newer item — a placeholder, a tool call, the reply, a prompt typed from elsewhere — is held in
+`spot` and lands when the user stops looking.
 
 **A user scroll ends the following**, finger or crown, and nothing moves the page after that until the
-session is opened again or the user scrolls it to the very end (letting go with the end on screen after a
-user scroll; the page merely sitting at the end does not count). A drag reports a scroll phase; the
+session is opened again, the user scrolls it to the very end (letting go with the end on screen after a
+user scroll; the page merely sitting at the end does not count), or something new arrives while the user is
+not reading — wrist down, or raised and not yet scrolled — which follows the newest again (`why`: `fresh`,
+or `away` when it lands at the wrist dropping). A drag reports a scroll phase; the
 crown is not trusted to, so any move of the offset that is neither one of the page's own jumps nor a
 change in content height counts as a user scroll too, once the page has landed: before its first landing
 the scroll view moves itself (it shifts by the space under the title as it opens). The page's jumps are never animated, which makes each
 one exactly one move to discount. Every change of following is logged to the hub as `follow`, with
-`why` (`drag`, `move`, `end`), so a fight on the wrist can be read back afterwards. The end is a one-point marker at the bottom of `PagedScroll`, asked whether
+`why` (`drag`, `move`, `end`, `fresh`, `away`), so a fight on the wrist can be read back afterwards. The end is a one-point marker at the bottom of `PagedScroll`, asked whether
 it is VISIBLE (`onScrollVisibilityChange`), not a sum over the scroll view's reported offsets, which
 this app does not trust (§ Double tap, and scrolling).
 

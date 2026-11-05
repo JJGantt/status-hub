@@ -485,6 +485,10 @@ It also beats app.css's `body.tv.wallportrait` block on equal specificity, by lo
   hidden with something new, opening the chat sheet or a session, the reset button. Jared has asked for
   this repeatedly; "follow the tail when already at the bottom" is the attractive rule and it is the
   one he keeps reporting as a bug.
+  **BEING LOOKED AT MEANS SCROLLED SINCE THE LOOK BEGAN** — on the watch so far (`touched` in HomeView
+  and SessionView, docs/WATCH.md): a wrist raised and not yet scrolled is not reading, so a command
+  spoken straight after the raise and its reply land as usual. The raise itself moves nothing; only an
+  arrival does. The phone surfaces are meant to follow the same rule and do not yet.
   **IT LANDS ON THE TOP OF THE LAST MESSAGE**, not at the bottom of the thread: a reply is read from
   its first line, and a box scrolled to the very end shows its last line with the rest above. Clamped,
   so a short last message rests at the end of the scroll. The session view lands the same way (`open`

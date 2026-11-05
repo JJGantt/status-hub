@@ -734,15 +734,21 @@ module.exports = function (ctx) {
   // it correctly drops off the badge until it comes round again. Works on any list. No dedupe-row
   // surgery needed: the ledger key includes the due (see dueTick), so moving the date is already a new
   // occupancy and the item can fire again on its own.
+  //
+  // AN ALARM'S SNOOZE moves `scheduled_at` too. The ringers ring from `when` (scheduled_at, else due), so
+  // moving `due` alone would leave it ringing; an alarm is exempt, so the scoring anchor scheduled_at
+  // normally keeps costs nothing here. `minutes` is the alarm buttons' unit, `hours` the reminders'.
   gated.post('/api/todos/snooze', express.json(), async (req, res) => {
     try {
       const b = req.body || {};
       const id = String(b.id || '');
-      const hours = Number(b.hours);
+      const hours = b.minutes != null ? Number(b.minutes) / 60 : Number(b.hours);
       if (!id) return res.status(400).json({ error: 'id required' });
       if (!Number.isFinite(hours) || hours <= 0 || hours > 24 * 30) return res.status(400).json({ error: 'hours out of range' });
       const due = etStringAt(new Date(Date.now() + hours * 3600 * 1000));
-      await sbWrite(`list_items?id=eq.${encodeURIComponent(id)}`, 'PATCH', { due, updated: new Date().toISOString() });
+      const [row] = await sb(`list_items?id=eq.${encodeURIComponent(id)}&select=alarm`);
+      await sbWrite(`list_items?id=eq.${encodeURIComponent(id)}`, 'PATCH',
+        { due, ...(row && row.alarm ? { scheduled_at: due } : {}), updated: new Date().toISOString() });
       announceListWrite();
       res.json({ ok: true, due, badge: await overdueCount() });
       syncBadge().catch((e) => console.error('[badge]', e.message || e));

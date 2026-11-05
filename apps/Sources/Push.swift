@@ -90,6 +90,17 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
         actions: [UNNotificationAction(identifier: "REMINDER_DONE", title: "Done", options: [])],
         intentIdentifiers: [], options: [])
 
+    // An ALARM's notification (docs/ALARMS.md): **Stop** completes the item and **Snooze** moves it
+    // `alarmSnoozeMinutes` on, and either one silences the TV and every open page, which ring from the
+    // item. Background actions, so the phone does not open. Registered on the watch as well.
+    private static let alarmCategory = UNNotificationCategory(
+        identifier: "ALARM",
+        actions: [UNNotificationAction(identifier: "ALARM_STOP", title: "Stop", options: []),
+                  UNNotificationAction(identifier: "ALARM_SNOOZE", title: "Snooze", options: [])],
+        intentIdentifiers: [], options: [])
+    /// The same as the hub page's SNOOZE_MIN and the watch's.
+    static let alarmSnoozeMinutes = 9
+
     // An orchestrator answer worth reading (docs/WATCH.md, "The inbox"). No buttons;
     // `customDismissAction` is what reports a swipe-away, so tapping it and dismissing it both reach
     // the delegate, and either one marks the answer read.
@@ -109,7 +120,7 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
     func application(_ application: UIApplication,
                      didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil) -> Bool {
         UNUserNotificationCenter.current().delegate = self
-        UNUserNotificationCenter.current().setNotificationCategories([Self.reminderCategory, Self.answerCategory,
+        UNUserNotificationCenter.current().setNotificationCategories([Self.reminderCategory, Self.alarmCategory, Self.answerCategory,
                                                                        Self.promptCategory])
         WatchLink.shared.start()   // hands the hub token to the watch app
         HealthSync.shared.start()  // Apple Health -> the hub, and SleepSync after it (docs/HEALTH.md, docs/SLEEP.md)
@@ -175,6 +186,10 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
         // which is what Done did until the scoring existed, and why pressing it seemed to do nothing.
         case "REMINDER_DONE":
             HubAPI.post("/api/todos/complete", ["id": id], done: completionHandler)
+        case "ALARM_STOP":
+            HubAPI.post("/api/todos/complete", ["id": id], done: completionHandler)
+        case "ALARM_SNOOZE":
+            HubAPI.post("/api/todos/snooze", ["id": id, "minutes": Self.alarmSnoozeMinutes], done: completionHandler)
         default:
             completionHandler()
         }

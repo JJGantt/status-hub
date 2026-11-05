@@ -1320,8 +1320,8 @@ body.tv.phonewall .pane-todo .daycardwrap{padding:12px 14px 14px;flex:0 0 auto}
 }
 #alarmfire .af-when { font-size: 22vw; font-weight: 800; letter-spacing: -.03em; font-variant-numeric: tabular-nums; line-height: 1; }
 #alarmfire .af-what { font-size: 22px; font-weight: 700; opacity: .95; }
-#alarmfire .af-stop {
-  margin-top: 10px;
+#alarmfire .af-btns { display: flex; gap: 14px; margin-top: 10px; }
+#alarmfire .af-snooze, #alarmfire .af-stop {
   font: inherit;
   font-size: 24px;
   font-weight: 800;
@@ -1330,8 +1330,9 @@ body.tv.phonewall .pane-todo .daycardwrap{padding:12px 14px 14px;flex:0 0 auto}
   background: #fff;
   border: 0;
   border-radius: 16px;
-  padding: 20px 56px;
+  padding: 20px 36px;
 }
+#alarmfire .af-snooze { color: #fff; background: rgba(0,0,0,.28); }
 @keyframes alarmflash { 50% { opacity: .55; } }
 
 /* ---- sound bench (audiotest.js) — temporary, remove with it ---- */

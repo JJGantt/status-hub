@@ -4,11 +4,43 @@ Two ringers, one rule. An alarm-marked item rings on the **TV** (`tv-ring.servic
 **any open hub page** (`alarmclock.js`), and each one holds its own timer to the moment, so nothing has
 to be delivered at the moment itself.
 
-| | **The TV** | **The hub page** |
-|---|---|---|
-| Rings via | `tv-ring.py` playing the tone through HDMI with `ffmpeg` | `alarmclock.js` playing the tone as a media element |
-| Needs | the Pi up and the TV on | the app open, screen on |
-| Covers | every alarm, whether or not the phone is open | the phone, whenever the app is open |
+| | **The TV** | **The hub page** | **The watch app** |
+|---|---|---|---|
+| Rings via | `tv-ring.py` playing the tone through HDMI with `ffmpeg` | `alarmclock.js` playing the tone as a media element | `Watch/Alarm.swift`, the notification haptic on a loop |
+| Needs | the Pi up and the TV on | the app open, screen on | the app in front |
+| Covers | every alarm, whether or not the phone is open | the phone, whenever the app is open | the wrist, whenever the app is opened |
+
+Under all three, `dueTick` sends the item's notification once at its moment.
+
+## Answering it: Stop and Snooze, from anywhere
+
+An alarm rings until its ITEM changes, so every way of answering it is a write to the item and every
+ringer follows:
+
+- **Stop** completes the item. **Snooze** moves it nine minutes from now (`/api/todos/snooze` with
+  `minutes`), and for an alarm that moves `scheduled_at` as well as `due`, because the ringers ring from
+  `when` (scheduled_at, else due). A snoozed alarm is still in the feed with its moment in the future,
+  which every ringer reads as not ringing, and it rings again when that moment arrives — notification
+  included, since the dedupe key carries the due.
+- **The notification** carries the `ALARM` category: Stop and Snooze buttons, background actions on the
+  phone and on the watch alike, so neither opens.
+- **The hub page** — the phone app and every wall — covers itself with the alarm while it rings: its
+  time, its name, SNOOZE and STOP, and nothing under it reachable.
+- **The watch app** does the same (`AlarmView`), whichever page was open. It follows `/api/list-stream`
+  while the app is in front and drops it when the app leaves; wrist down, the notification is the
+  watch's alarm.
+- **Voice**, or checking it off any list, completes it like Stop.
+
+So a swiped-away notification loses nothing: opening the app on the phone or the watch while the alarm
+rings lands on the alarm.
+
+The page and the watch reload on the LIST stream (`hub:lists` on a page), which is what a Stop or a
+Snooze changes and what `tv-ring` follows. The status stream also reloads the page, but its frame can
+take tens of seconds to build, and an overlay waiting on it outlasts the TV's sound by that much.
+
+A surf alarm's item is the user's once its moment has passed: the `item` output records the moment it
+set (`state.at`) and never moves or deletes the item after it, so a later forecast or the wind veto
+cannot undo a snooze.
 
 ## Nothing registers an alarm on the phone
 
@@ -46,7 +78,8 @@ rule whenever they look: `dueNow()` in `alarmclock.js`, `due_now()` in `tv-ring.
 - the page rings whenever it is open, in Guided Access or not;
 - opening the app in the middle of the TV's ring joins it, STOP and all, however long it has been
   ringing;
-- STOP anywhere completes the item, the item leaves the feed, and every ringer goes quiet.
+- STOP anywhere completes the item, the item leaves the feed, and every ringer goes quiet; SNOOZE
+  moves its moment on, which every ringer reads the same way.
 
 STOP reaches the TV in under a second because the hub announces its own completion at once
 (`announceListWrite` in `routes/lists.js`) instead of waiting for the realtime echo, which takes seconds —

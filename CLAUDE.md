@@ -156,9 +156,10 @@ since they are one process already.
 ## Alarms: the TV and the hub page, mirrored
 
 `docs/ALARMS.md` is the whole picture — the mirror rule, the surf scenario end to end, and what has
-to be true the night before. An alarm rings on the TV (`tv-ring` on the Pi) and on any open hub page,
-and both apply one rule: past its moment and still in the feed means ringing. STOP anywhere completes
-the item and silences both.
+to be true the night before. An alarm rings on the TV (`tv-ring` on the Pi), on any open hub page and
+in the watch app while it is open, and all of them apply one rule: past its moment and still in the
+feed means ringing. STOP anywhere completes the item and silences every one; SNOOZE moves its moment
+nine minutes on. Both are on the alarm's notification too (the `ALARM` category).
 
 **Nothing registers an alarm on the phone.** AlarmKit is the obvious tool and it does not fit: its
 Stop completes nothing, so the TV rings on after it, and a change decided at 4am cannot reach a
@@ -216,7 +217,9 @@ alarm:
   the page are a mirror.
 - **The ring is unbounded, and STOP completes the item.** An alarm that gives up is not an alarm.
   The feed is the state: STOP posts the completion, the item leaves the feed, and every surface
-  ringing it stops together. Clearing it anywhere else ends the noise the same way. `closeExempt`
+  ringing it stops together. Clearing it anywhere else ends the noise the same way, and so does a
+  SNOOZE, which leaves it in the feed with its moment moved on. The overlay also reloads on
+  `hub:lists`, which lands with the TV's stop where the status frame can lag it by tens of seconds. `closeExempt`
   never closes an alarm item, since that would end the ring in the minute it starts.
 
 ## An alarm notifies too, once

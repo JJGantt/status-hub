@@ -14,6 +14,7 @@ import { esc } from './shared.js';
 const FEED = '/api/due-widget';
 const RELOAD_MS = 120000;     // backstop only; the stream is what makes a 4am change land
 const BEEP_MS = 1400;
+const SNOOZE_MIN = 9;          // the same on the notification's Snooze and the watch's
 
 // THE MEDIA ELEMENT IS THE PATH THAT SURVIVES GUIDED ACCESS, and that is the whole reason the sound
 // is a file rather than synthesised. Measured on the device: inside a Guided Access session an
@@ -132,7 +133,18 @@ function overlay(title, at) {
   el.id = 'alarmfire';
   el.innerHTML = `<div class="af-when">${esc(at)}</div>`
     + `<div class="af-what">${esc(title || '')}</div>`
-    + `<button class="af-stop" type="button">STOP</button>`;
+    + `<div class="af-btns"><button class="af-snooze" type="button">SNOOZE</button>`
+    + `<button class="af-stop" type="button">STOP</button></div>`;
+  // SNOOZE moves the item's moment SNOOZE_MIN from now, and the feed does the rest: an alarm whose
+  // moment is in the future is not ringing, here or on the TV, and it rings again when it arrives.
+  el.querySelector('.af-snooze').addEventListener('click', () => {
+    const id = ringing && ringing.id;
+    if (ringing) stopped.add(keyOf(ringing));
+    stopRing('snooze');
+    if (id) fetch('/api/todos/snooze', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+                                         body: JSON.stringify({ id, minutes: SNOOZE_MIN }) })
+      .then(load).catch((e) => console.error('[alarmclock] snooze failed', e));
+  });
   el.querySelector('.af-stop').addEventListener('click', () => {
     // Complete the item, not just quiet this page: the feed is the state, and every other surface
     // ringing this alarm stops when it leaves. Exempt, so completing costs nothing on the score.
@@ -244,7 +256,8 @@ async function load() {
     // DEALT WITH ELSEWHERE IS STILL DEALT WITH. Clearing the item on the watch or another phone drops
     // it from this feed, and a page still beeping about something already handled is noise nobody can
     // trace back to a cause. The feed is the state; STOP is only one way of changing it.
-    if (ringing && !items.some((x) => x.id === ringing.id)) return stopRing('feed');
+    // A SNOOZE anywhere else is the same: the item is still in the feed, but its moment has moved on.
+    if (ringing && !items.some((x) => x.id === ringing.id && new Date(x.when).getTime() <= Date.now())) return stopRing('feed');
     schedule();
   } catch (_) { /* keep the schedule already held rather than losing it to a blip */ }
 }
@@ -303,6 +316,10 @@ document.addEventListener('visibilitychange', () => {
 // `hub:stream` rides core.js's existing EventSource — a second one on this page is what put two
 // streams on a phone once already.
 document.addEventListener('hub:stream', load);
+// …and on the LIST stream (cards/dayline.js passes it on as `hub:lists`), which is what a STOP or a
+// snooze actually changes. It lands within a second where the status frame above can take tens of
+// seconds to build, and it is the stream tv-ring follows — so the overlay and the TV's sound end together.
+document.addEventListener('hub:lists', load);
 // `guided` in the beacon is how the night-before setup is checked from the hub log, so a session
 // starting or ending beacons at once rather than within the minute.
 document.addEventListener('hub:guidedaccess', beacon);

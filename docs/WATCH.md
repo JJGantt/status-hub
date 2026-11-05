@@ -375,6 +375,11 @@ than waking the phone. `docs/PROMPTS.md` is the whole path. The same dialog is O
 line becomes the call in pink, and the open session holds a card with the call and Approve / Deny over
 the bottom of the glass (`askCard`, in place of the speaker glyph) until the dialog is answered anywhere.
 
+**A ringing alarm takes the app over** (`Alarm.swift`): while the app is in front it follows the list
+stream, and an alarm past its moment covers every page with its time, Snooze and Stop, buzzing the
+notification haptic until it is answered. The `ALARM` notification's Stop and Snooze are answered on the
+wrist without the phone. `docs/ALARMS.md` § Answering it.
+
 **A session's reply notification opens it.** `WatchAppDelegate` registers the `SESSION_REPLY`
 category with one foreground action, Open — the button double tap presses on a watch notification —
 and answers it, or a tap on the notification itself, with `Sessions.open(rowId:)`: the app lands on

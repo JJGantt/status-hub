@@ -62,12 +62,13 @@ function createJobs(ctx) {
     // category + the row id give the notification its Done button and tell the
     // app which item an action refers to. `reminder_id` keeps its name: the app's notification
     // actions and the APNs category are built around it, and renaming it would break every
-    // notification already sitting in Notification Centre on the phone.
+    // notification already sitting in Notification Centre on the phone. An ALARM gets its own
+    // category, whose buttons are Stop and Snooze rather than Done (docs/ALARMS.md).
     push: (item, dedupeKey) =>
       // `emoji` overrides NOTIFY_STYLE.reminder's clock — pushAll merges `extra` over the style, so a
       // list's own mark wins and a list without one falls back to ⏰ automatically.
       pushAll('reminder', notifyHeadline(item), itemBody(item), dedupeKey,
-              { category: 'REMINDER', payload: { reminder_id: item.id },
+              { category: item.alarm ? 'ALARM' : 'REMINDER', payload: { reminder_id: item.id },
                 ...(item.emoji ? { emoji: item.emoji } : {}) }),
   };
 

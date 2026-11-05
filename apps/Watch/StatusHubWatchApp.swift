@@ -49,6 +49,14 @@ final class WatchAppDelegate: NSObject, WKApplicationDelegate, UNUserNotificatio
         actions: [UNNotificationAction(identifier: "REMINDER_DONE", title: "Done", options: [])],
         intentIdentifiers: [], options: [])
 
+    /// An alarm's notification, forwarded from the phone: Stop and Snooze, answered here as on the phone.
+    /// Tapping it opens the app, which the ringing alarm takes over (`AlarmView`).
+    private static let alarmCategory = UNNotificationCategory(
+        identifier: "ALARM",
+        actions: [UNNotificationAction(identifier: "ALARM_STOP", title: "Stop", options: []),
+                  UNNotificationAction(identifier: "ALARM_SNOOZE", title: "Snooze", options: [])],
+        intentIdentifiers: [], options: [])
+
     /// An orchestrator answer worth reading (docs/WATCH.md, "The inbox"). No buttons: tapping it
     /// opens home on the answer, and `customDismissAction` is what tells the app it was swiped away.
     /// Either one is reading it.
@@ -67,6 +75,7 @@ final class WatchAppDelegate: NSObject, WKApplicationDelegate, UNUserNotificatio
         UNUserNotificationCenter.current().delegate = self
         UNUserNotificationCenter.current().setNotificationCategories([Self.sessionCategory,
                                                                        Self.reminderCategory,
+                                                                       Self.alarmCategory,
                                                                        Self.answerCategory,
                                                                        Self.promptCategory])
     }
@@ -111,6 +120,16 @@ final class WatchAppDelegate: NSObject, WKApplicationDelegate, UNUserNotificatio
             }
             return
         }
+        if let item = info["reminder_id"] as? String,
+           ["ALARM_STOP", "ALARM_SNOOZE"].contains(response.actionIdentifier) {
+            let snooze = response.actionIdentifier == "ALARM_SNOOZE"
+            Task { @MainActor in
+                if snooze { await Hub.snooze(item) } else { await Hub.complete(item) }
+                await Alarm.shared.load()
+                completionHandler()
+            }
+            return
+        }
         if response.actionIdentifier == "REMINDER_DONE", let item = info["reminder_id"] as? String {
             Task { @MainActor in
                 await Hub.complete(item)
@@ -150,6 +169,7 @@ struct RootView: View {
     @EnvironmentObject private var workout: Workout
     @EnvironmentObject private var router: Router
     @ObservedObject private var rewind = Rewind.shared
+    @ObservedObject private var alarm = Alarm.shared
     @Environment(\.scenePhase) private var phase
     @State private var page = Page.home
     /// Black over everything from the moment the app leaves the screen until a launch has turned to its
@@ -182,6 +202,8 @@ struct RootView: View {
         // glass (`CommandBorder`), which also holds the double-tap binding. Inside a page it would be
         // part of that page's content and slide with it on a swipe; over the row it stays put.
         .overlay { CommandBorder() }
+        // A ringing alarm covers every page, and the border, until it is answered (`Alarm`).
+        .overlay { if let r = alarm.ringing { AlarmView(item: r) } }
         // Never takes a touch: if it ever outstays its beat, the page under it still works.
         .overlay { if veiled { Color.black.ignoresSafeArea().allowsHitTesting(false) } }
         // A rewind's words, over whatever page is showing: the grab came from a control, not a page.
@@ -234,6 +256,7 @@ struct RootView: View {
         .onAppear {
             if !sessions.path.isEmpty { page = .sessions }
             sessions.speakModeChanged = { follow() }
+            if phase == .active { alarm.activate() }
             follow()
             Task { await WatchSettings.refresh() }
             Hub.flushLog()
@@ -266,6 +289,7 @@ struct RootView: View {
             Hub.log("phase", ["to": "\(now)", "veiled": veiled])
             if now == .background { veiled = true }
             if now == .active { LocationTrail.shared.fix() }  // one point per use (docs/LOCATION.md)
+            if now == .active { alarm.activate() } else { alarm.deactivate() }
             // Lifted a beat after becoming active, the same beat `follow()` waits: a launcher's URL
             // turns the page in this pass, so the first thing shown is already its page. The deadline
             // behind it is because a veil that stays up is a black watch: it is the one way this

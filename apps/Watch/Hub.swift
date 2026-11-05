@@ -491,6 +491,18 @@ enum Hub {
         _ = try? await call("/api/todos/complete", method: "POST", body: ["id": id])
     }
 
+    /// Moves an alarm `Alarm.snoozeMinutes` on — its notification's Snooze, or the takeover's.
+    static func snooze(_ id: String) async {
+        _ = try? await call("/api/todos/snooze", method: "POST", body: ["id": id, "minutes": Alarm.snoozeMinutes])
+    }
+
+    /// The dated-item feed, for the alarms in it (`Alarm`).
+    static func dueFeed() async throws -> [Alarm.Item] {
+        struct Feed: Decodable { let items: [Alarm.Item] }
+        let f: Feed = try await json("/api/due-widget")
+        return f.items
+    }
+
     /// Answers a session's permission dialog: "allow" or "deny" (docs/PROMPTS.md).
     static func decidePrompt(_ id: String, _ decision: String) async {
         _ = try? await call("/api/session-prompts/\(id)/decide", method: "POST", body: ["decision": decision])

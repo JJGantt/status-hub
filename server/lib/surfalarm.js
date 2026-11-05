@@ -70,13 +70,15 @@ function makeOutputs({ sb, sbWrite, uuid }) {
           // back. This output forgets an item only when it deletes one itself.
           if (!cur || cur.deleted || cur.completed_at) return state;
           // A moment that has arrived has rung, or is ringing: a later forecast does not move it.
-          if (cur.due && cur.due <= now) return state;
+          // `state.at` is the moment this output set, which a SNOOZE moves the item past — so a snoozed
+          // alarm is the user's from then on, and neither a new forecast nor the wind veto touches it.
+          if ((cur.due && cur.due <= now) || (state.at && state.at <= now)) return state;
           if (!at) {
             await sbWrite(`list_items?id=eq.${id}`, 'PATCH', { deleted: true, updated: stamp });
             return {};
           }
           if (cur.due !== at) await sbWrite(`list_items?id=eq.${id}`, 'PATCH', { due: at, scheduled_at: at, updated: stamp });
-          return state;
+          return { ...state, at };
         }
         if (!at) return {};
         // An alarm is not a task: it goes on the alarms list, and it is EXEMPT, because waking up is
@@ -88,7 +90,7 @@ function makeOutputs({ sb, sbWrite, uuid }) {
           due: at, scheduled_at: at, priority: -1, alarm: true,
           deleted: false, created: stamp, updated: stamp,
         });
-        return { id: fresh };
+        return { id: fresh, at };
       },
     },
   };

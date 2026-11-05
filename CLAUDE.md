@@ -478,17 +478,16 @@ It also beats app.css's `body.tv.wallportrait` block on equal specificity, by lo
   it is a float over a surface that fits exactly, and this line is what replaces it. It never moves
   the box. The caret pulses through dimnesses rather than
   blinking off, because at 9px a hard on/off reads as something failing.
-  **NOTHING MOVES A THREAD WHILE IT IS BEING LOOKED AT** — this box, the chat sheet, the session view,
-  and the watch's home and session pages alike. Not the user's own words or transcript, not a reply, not
-  the activity line, not even with the view already at the bottom: what arrives lands below and waits
-  to be scrolled to. A thread lands only on ARRIVAL — the first load, the app coming back after it was
-  hidden with something new, opening the chat sheet or a session, the reset button. Jared has asked for
-  this repeatedly; "follow the tail when already at the bottom" is the attractive rule and it is the
-  one he keeps reporting as a bug.
-  **BEING LOOKED AT MEANS SCROLLED SINCE THE LOOK BEGAN** — on the watch so far (`touched` in HomeView
-  and SessionView, docs/WATCH.md): a wrist raised and not yet scrolled is not reading, so a command
-  spoken straight after the raise and its reply land as usual. The raise itself moves nothing; only an
-  arrival does. The phone surfaces are meant to follow the same rule and do not yet.
+  **NOTHING MOVES A THREAD WHILE IT IS BEING READ** — this box, the chat sheet, the session view, and
+  the watch's home and session pages alike. READING means the user has SCROLLED it since the look began
+  (the app coming to the front, the thread coming on screen, the wrist raised) and did not let go with
+  the very end in view. While reading, nothing that arrives moves it — not the user's own words, not a
+  reply — and it waits below. Otherwise every new message LANDS as it comes: a look with no scroll yet
+  is on whatever the page left it on, and resting at the bottom is asking for what comes next. The look
+  beginning moves nothing by itself; only an arrival does (and coming back to something new, opening a
+  sheet or a session, the reset button). One test decides it: `readingWatch` in shared.js, `touched`
+  in the watch's HomeView and SessionView. Being merely LOOKED AT is not the test: that version held a
+  command spoken right after a raise, and the reply after it, off the screen.
   **IT LANDS ON THE TOP OF THE LAST MESSAGE**, not at the bottom of the thread: a reply is read from
   its first line, and a box scrolled to the very end shows its last line with the rest above. Clamped,
   so a short last message rests at the end of the scroll. The session view lands the same way (`open`
@@ -700,12 +699,11 @@ a turn still running ends in the caret, and the caret goes as far up as the scro
 with history above it, is simply the bottom. The browser's own clamp is what turns "as far up as it
 can" into "at the end" when the tail is shorter than the box, so there is one rule and no cases.
 
-**It lands only on ARRIVAL, and never moves while it is being looked at.** Arrival is opening a
-session, or coming back to one — the app returning to the foreground, or the sessions pane swiped back
-into view — with something new in it since the user left (`awayAt`). A reply, tool call or thought
-landing while the view is on screen repaints it with the scroll left exactly where it was, even when
-already at the bottom: following the tail drags the reader off whatever they were reading the moment a
-step arrives.
+**It never moves while it is being READ**, the thread rule above (`readingWatch`): scrolled since the
+view came on screen and not let go at the very end. Then a reply, tool call or thought repaints it with
+the scroll left exactly where it was. Otherwise each one lands on the newest thing as it comes, and so
+does opening a session or coming back to one — the app returning to the foreground, or the sessions pane
+swiped back into view — with something new in it since the user left (`awayAt`).
 
 ### Wall-sized numbers a surface can override
 

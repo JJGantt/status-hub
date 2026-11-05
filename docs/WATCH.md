@@ -96,7 +96,9 @@ words, a tool call, the reply, a session's relayed answer — is HELD; it lands 
 looking (wrist down, app behind, another page), so it is waiting at the next raise, with the unread dot
 meanwhile if it is flagged. **A raise without a scroll is not reading**: the screen is on whatever the page
 left it on, so an arrival — a command spoken straight after the raise, its reply — lands as usual. The raise
-itself moves nothing; only an arrival does. Holding only while the view is on an answer is not
+itself moves nothing; only an arrival does. **Nor is resting at the bottom**: letting go of a scroll with
+the very end on screen (a one-point marker's visibility, `atEnd`) clears `touched`, so the next arrival
+lands. The phone's threads apply the same rule (`readingWatch` in `public/shared.js`). Holding only while the view is on an answer is not
 enough: an earlier answer is often read while a command runs, and the new transcript and then its reply would each
 pull the view off it. A tap on the unread dot or an answer's notification is asked for and never waits.
 `landed` is the spot the view is held at, and the room above the newest item follows IT, not `target`
@@ -309,7 +311,7 @@ with what the session does about them underneath; with none, the last event — 
 (`newest`). The top of that sits at the top of the screen.
 
 **Nothing moves the page while the user is reading**, by home's rule: with the wrist up and a scroll since
-the raise, a newer item — a placeholder, a tool call, the reply, a prompt typed from elsewhere — is held in
+the raise that was not let go at the end, a newer item — a placeholder, a tool call, the reply, a prompt typed from elsewhere — is held in
 `spot` and lands when the user stops looking.
 
 **A user scroll ends the following**, finger or crown, and nothing moves the page after that until the

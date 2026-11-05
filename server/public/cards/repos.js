@@ -13,7 +13,7 @@
 //
 // Self-fetching (NOT part of the status stream), like the todo pane. No-ops where #repospane is
 // absent (/page). Every wall's markup carries it, hidden on the kiosk, so it mounts there too.
-import { esc, md, mdInline, PIN_SVG, liveStream} from '../shared.js';
+import { esc, md, mdInline, PIN_SVG, liveStream, readingWatch } from '../shared.js';
 import { makeRecorder, bindMic } from '../voiceagent.js';
 import { speak, stopSpeaking, speaking, paused, pauseSpeaking, resumeSpeaking } from '../speak.js';
 
@@ -354,7 +354,7 @@ async function fetchEvents(at, since) {
     const j = await r.json();
     if (cur !== at) return;
     take(at, j.events, j.epoch);
-    paintBody();
+    paintBody({ top: !reading() });
   } catch (_) { /* the next frame's seq will ask again */ }
 }
 
@@ -368,7 +368,7 @@ function frame(a) {
   if (!Number.isFinite(seq) || seq <= at.last) return;
   if (seq > at.last + 1) fetchEvents(at, at.last);            // a gap: what went by while this was not listening
   take(at, [a.ev]);
-  paintBody();
+  paintBody({ top: !reading() });
 }
 
 let following = false, connected = false;
@@ -387,12 +387,14 @@ function follow() {
   });
 }
 
-// THE VIEW NEVER MOVES WHILE THE USER IS LOOKING AT IT. Nothing arriving — a reply, a tool call, a thought —
-// scrolls it: the user may be halfway up the thread reading, and a jump there is lost place. It lands on the
-// newest thing only when the user COMES BACK to it (the app returning to the foreground, or the sessions pane
-// swiped back into view) and something arrived while the user was gone. `awayAt` is how far the
-// conversation had got when the user stopped looking; null while the user is looking.
+// THE VIEW NEVER MOVES WHILE THE USER IS READING IT (`readingWatch` in shared.js: scrolled since the look
+// began, and not let go at the very end). Then nothing arriving — a reply, a tool call, a thought — scrolls
+// it: the user may be halfway up the thread, and a jump there is lost place. Otherwise each arrival lands on
+// the newest thing, and so does COMING BACK to it (the app returning to the foreground, or the sessions pane
+// swiped back into view) with something new since the user left. `awayAt` is how far the conversation had
+// got when the user stopped looking; null while the user is looking.
 let awayAt = null, paneSeen = true;
+const reading = () => !!(cur && cur.watch && cur.watch.reading());
 function looking() { return document.visibilityState === 'visible' && paneSeen; }
 function lookChanged() {
   if (!cur) { awayAt = null; return; }
@@ -523,7 +525,7 @@ async function sendWords(text, at = cur) {
       for (const a of shots) URL.revokeObjectURL(a.url);
       shots = [];
       const tray = el.querySelector('.sv-tray'); if (tray) tray.innerHTML = '';
-      paintBody();   // and nothing more: the words land at the end, and the view stays where the user has it
+      paintBody({ top: !reading() });   // the words land like any arrival: on them, unless the user is reading
     }
   } catch (e) {
     // Words that were spoken exist nowhere else, so a failed send leaves them in the box to resend.
@@ -630,6 +632,7 @@ async function openSession(id) {
       '</div>' +
       '<div class="sv-tray"></div>' +
     '</div>';
+  at.watch = readingWatch(el.querySelector('.sv-body'));
   paintHead();
   paintBody({ open: true });
   // The session's last reply, read aloud in a real voice (speak.js). While it plays the button is a

@@ -224,7 +224,8 @@ struct SessionView: View {
     private var looking: Bool { !dimmed && phase == .active && onScreen }
     /// **The user has scrolled since this look began.** Looking without having scrolled is not reading, so
     /// an arrival lands then, even on a page the user scrolled away from in an earlier look. Cleared when
-    /// the user stops looking.
+    /// the user stops looking, and when a scroll is let go with the very end on screen: resting at the
+    /// bottom is not reading either.
     @State private var touched = false
     /// Reading (`engaged`), which is what holds an arrival (`holds`).
     private var engaged: Bool { looking && touched }
@@ -358,7 +359,7 @@ struct SessionView: View {
                 // Let go with the very end on screen after scrolling there: following again, from the
                 // next new item on. Not a jump now: the user is already looking at the end.
                 case .idle:
-                    if hisScroll && atEnd { refollow("end") }
+                    if hisScroll && atEnd { touched = false; refollow("end") }
                 default: break
                 }
             }

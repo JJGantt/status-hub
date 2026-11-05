@@ -5,7 +5,7 @@
 // It is the phone's analogue of tv-home.js. Where the wall gives a column to today's dial and a
 // column to the focused session's whole answer, this gives neither: a phone is read at arm's length
 // for a few seconds, so the day lies down and a session is a title with a line under it.
-import { esc, md, state } from './shared.js';
+import { esc, md, state, readingWatch } from './shared.js';
 import { mount } from './cards/dayline.js';
 import { mountStrip } from './cards/daystrip.js';
 import { mountMonth } from './cards/month.js';
@@ -162,14 +162,16 @@ let thread = [];        // [{id, at, role, text, session, ctx}] oldest first —
 let older = [];         // the same, loaded by scrolling up past its start
 let olderDone = false, olderBusy = false;
 
-// NOTHING MOVES THE BOX WHILE IT IS BEING LOOKED AT. Not the user's transcript appearing, not the reply,
-// not the activity line, not with the box already at the bottom: what arrives lands below and waits.
-// The box LANDS (`toLast`) only on ARRIVAL — the first load, coming back to the page after it was hidden
-// (`owed`, spent by the resync the stream does on the way back), and the reset button.
+// NOTHING MOVES THE BOX WHILE IT IS BEING READ (`readingWatch` in shared.js: scrolled since the look
+// began, and not let go at the very end). Then the user's transcript appearing, the reply, the activity
+// line all land below and wait. Otherwise a new line or placeholder LANDS (`toLast`) as it comes — and so
+// does coming back to the page after it was hidden (`owed`, spent by the resync the stream does on the way
+// back), the first load, and the reset button. The activity line alone never lands: it is not a message.
 // `settling` is the stretch after a landing while the box's own height is still being decided by the
 // flex pass; the ResizeObserver re-lands only then, and the user's first touch ends it.
 let owed = true;
 let settling = false;
+const convWatch = conv ? readingWatch(conv) : { reading: () => true };
 document.addEventListener('visibilitychange', () => { if (document.hidden) owed = true; });
 
 // WHAT HAS BEEN HEARD BUT IS NOT IN THE THREAD YET. The worker writes the user bubble only when the run
@@ -187,7 +189,7 @@ onPending((p) => {
   else if (p.state === 'prompt') pending = { text: String(p.text || '') };
   else return;
   if (pending) pendingT = setTimeout(() => { pending = null; paintConv(); }, 5 * 60 * 1000);
-  paintConv();
+  paintConv(!!pending && !convWatch.reading());
 });
 // WHAT THE MODEL IS DOING RIGHT NOW, on ONE line, at the bottom of the box. The run pushes a frame
 // per tool call and per thought; this keeps only the NEWEST, and keeps nothing at all once the reply
@@ -239,7 +241,9 @@ function settle(row) {
 // is against some ancestor and the difference is only a shift, not the number wanted.
 function toLast() {
   if (!conv) return;
-  const el = conv.lastElementChild;
+  // The activity line is not a message: the last one above it is what lands.
+  let el = conv.lastElementChild;
+  if (el && el.classList.contains('work')) el = el.previousElementSibling;
   const max = Math.max(0, conv.scrollHeight - conv.clientHeight);
   if (!el) { conv.scrollTop = max; return; }
   const delta = el.getBoundingClientRect().top - conv.getBoundingClientRect().top;
@@ -381,7 +385,7 @@ async function resync() {
   } catch (_) { /* the next push or resync reconciles */ }
 }
 
-onThread((row) => { if (!row) { resync(); return; } takeRow(row); settle(row); paintConv(); });
+onThread((row) => { if (!row) { resync(); return; } takeRow(row); settle(row); paintConv(!convWatch.reading()); });
 
 // ---- the swipe panes -----------------------------------------------------
 //

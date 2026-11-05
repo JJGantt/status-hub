@@ -6,7 +6,7 @@
 //      Listening / Transcribing / Thinking, then each tool call WITH its arguments as it runs.
 // Tool-call rows (role='tool') are surfaced ONLY in the activity bar, never in the conversation
 // thread. All skipped on the TV wall (no mic; it renders the conversation itself via tv.js).
-import { esc, md, localNowNaive, liveStream, KIOSK, holdReload } from './shared.js';
+import { esc, md, localNowNaive, liveStream, KIOSK, holdReload, readingWatch } from './shared.js';
 
 let phoneHangMs = 3000;   // the always-on listener's trailing silence (ms); overridden by the phone_silence_s setting
 // How long a FINISHED row — the reply, or an error — holds on the kiosk's activity bar before it hides.
@@ -134,7 +134,7 @@ function boot() {
     if (!row || (row.focus || 'hub') !== 'hub') return;
     if (row.mode === 'agent') return;              // the old coding mode's rows are not the hub thread
     if (row.role === 'tool') return;               // (tools now arrive as 'activity', never as messages)
-    if (_card) _card.upsert(row);                  // user/assistant → conversation
+    if (_card) { _card.upsert(row); _card.arrived(); }   // user/assistant → conversation
     threadSubs.forEach((f) => f(row));             // any other view of the same thread
   } }, { onOpen: () => { if (_card) _card.backfill(); threadSubs.forEach((f) => f(null)); } });
   // The conversation must reflect the active mode's thread live, from ANY source — hence the onOpen
@@ -1125,10 +1125,12 @@ function initCard() {
   const PENDING_TTL = 120000;  // an optimistic bubble no server row matched is dropped after this on the next backfill (self-heals a missed reconcile)
   const MAX_MSGS = 240;   // cap retained bubbles so a long-open hub tab never grows #ai-log + `seen` unbounded
   const scrollEnd = () => { log.scrollTop = log.scrollHeight; };
-  // NOTHING MOVES THE THREAD WHILE IT IS BEING LOOKED AT — not the user's own words, not a transcript, not
-  // a reply, not even with the view already at the bottom. A new line lands below and waits to be scrolled
-  // to. The thread lands on its newest line only on ARRIVAL: the first load, coming back to the page after
-  // it was hidden (`owed`), and opening the chat sheet (navbar.js).
+  // NOTHING MOVES THE THREAD WHILE IT IS BEING READ (`readingWatch` in shared.js: scrolled since the look
+  // began, and not let go at the very end) — not the user's own words, not a transcript, not a reply; a new
+  // line lands below and waits. Otherwise a new line lands on arrival (`arrived`), and so do the first
+  // load, coming back to the page after it was hidden (`owed`), and opening the chat sheet (navbar.js).
+  const watch = readingWatch(log);
+  const arrived = () => { if (!watch.reading()) scrollEnd(); };
   let owed = true;
   document.addEventListener('visibilitychange', () => { if (document.hidden) owed = true; });
   function bubbleHtml(row) {
@@ -1204,6 +1206,7 @@ function initCard() {
     pending.set(cid, { el, paths: (o.paths || []).filter(Boolean), text: (o.text || '').trim(),
       kind: o.kind || (o.localImages && o.localImages.length ? 'photo' : (o.text ? 'text' : 'voice')),
       localImages: o.localImages || [], at: Date.now() });
+    arrived();
     return cid;
   }
   function setPendingPath(cid, paths) { const p = pending.get(cid); if (p) p.paths = [].concat(paths || []).filter(Boolean); }
@@ -1330,6 +1333,6 @@ function initCard() {
   });
   bindMic(micBtn, cardRec);
 
-  return { upsert, clear, rule, backfill, optimistic, setPendingPath, dropPending };
+  return { upsert, clear, rule, backfill, optimistic, setPendingPath, dropPending, arrived };
 }
 

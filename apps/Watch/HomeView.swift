@@ -37,6 +37,9 @@ struct HomeView: View {
     /// swiped to). Looking without having scrolled is not reading: a fresh raise is on whatever the page
     /// left it on, so an arrival lands then. Cleared when the user stops looking.
     @State private var touched = false
+    /// The very end of the thread is on screen. **Letting go of a scroll with the end on screen is not
+    /// reading** (`touched` goes false): resting at the bottom, the next arrival lands like any other.
+    @State private var atEnd = false
     /// Reading (`engaged`), which is what holds an arrival (`holds`): looking, and scrolled since the look began.
     private var engaged: Bool { looking && touched }
     /// The row that was at the top when the user scrolled there and more rows were asked for: the scroll goes
@@ -91,6 +94,9 @@ struct HomeView: View {
                         ActivityLines(lines: chat.activity)
                     }
                     CommandStatus()
+                    // The very end of the thread is on screen (`atEnd`), asked of a marker's visibility.
+                    Color.clear.frame(height: 1)
+                        .onScrollVisibilityChange(threshold: 1) { atEnd = $0 }
                 }
                 .padding(.horizontal, 8)
                 .padding(.bottom, PageInset.bottom)
@@ -132,6 +138,7 @@ struct HomeView: View {
             }
             .onScrollPhaseChange { _, now in
                 if now == .interacting || now == .tracking { pinned = false; settling = false; touched = looking }
+                if now == .idle && atEnd && touched { touched = false; Hub.log("reading", ["on": false, "why": "end"]) }
             }
             // Anything arriving while the user is reading ends a landing's settling: from then on it is the
             // user's page until the user stops looking.

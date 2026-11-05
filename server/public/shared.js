@@ -47,6 +47,37 @@ export const KIOSK = document.body.classList.contains('tv')
 export const heatPick = (s, key) =>
   (document.body.classList.contains('homewall') && s[key + '_home']) || {};
 
+// WHETHER A THREAD IS BEING READ — the one test every thread here asks before it moves. Reading is having
+// SCROLLED it since the look began (the app coming to the front, the element coming on screen) and not
+// having let go with the very end in view. Looking without a scroll is not reading: the screen is on
+// whatever the page left it on, so an arrival lands. Resting at the bottom is not reading either, so
+// the next arrival lands there too. While reading, nothing that arrives moves the thread; the watch
+// applies the same rule (`touched` in apps/Watch/HomeView.swift and SessionsView.swift).
+//
+// A scroll counts as the user's only while a finger is down or within a moment of the last input, so
+// the page's own landings (setting scrollTop) never mark it read. Momentum keeps the window open: each
+// of its scroll events is itself an input.
+export function readingWatch(el) {
+  let touched = false, down = false, last = 0, idle = 0;
+  const atEnd = () => el.scrollHeight - el.scrollTop - el.clientHeight < 4;
+  const settle = () => { clearTimeout(idle); idle = setTimeout(() => { if (!down && touched && atEnd()) touched = false; }, 150); };
+  el.addEventListener('touchstart', () => { down = true; last = Date.now(); }, { passive: true });
+  for (const ev of ['touchend', 'touchcancel']) el.addEventListener(ev, () => { down = false; last = Date.now(); if (touched) settle(); }, { passive: true });
+  el.addEventListener('wheel', () => { last = Date.now(); }, { passive: true });
+  el.addEventListener('scroll', () => {
+    if (!down && Date.now() - last > 300) return;   // the page's own scroll
+    last = Date.now();
+    touched = true;
+    settle();
+  }, { passive: true });
+  const end = () => { touched = false; };
+  document.addEventListener('visibilitychange', () => { if (document.hidden) end(); });
+  try {
+    new IntersectionObserver((es) => { if (!es[es.length - 1].isIntersecting) end(); }).observe(el);
+  } catch (_) { /* no IntersectionObserver: only the app going behind ends a look */ }
+  return { reading: () => touched && !document.hidden };
+}
+
 // CAN A DRAG STARTING HERE SCROLL SOMETHING? Scrubbing a heat map and scrolling one want the same
 // gesture and the grid can only have one of them: where it scrolls, the drag belongs to the browser
 // and the tap arrives afterwards as a click; where it cannot, the drag is a scrub and the handler

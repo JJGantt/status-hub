@@ -189,7 +189,8 @@ read, so every such reply goes into an inbox: kept for good, newest first, read 
   is open carries it as `about` (`Hub.about`, read into the clip when it is made), so the worker hands
   the model that question and answer, which may be days out of the replayed context; the follow-ups
   and their replies list under the answer. Nothing moves it after it opens. The phone has
-  the same inbox (`public/inbox.js`), opened from a dot in the conversation's corner.
+  the same inbox (`public/inbox.js`), opened from a dot in the conversation's corner; its sheet has one
+  ✕, which steps back from an open answer to the list and closes the list.
 - **Each one is pushed as it lands** (`notifyAnswer` in the hub, category `VOICE_ANSWER`, titled with
   the command's words, the answer as the body); no other orchestrator reply is. The watch drops it unshown whenever
   home is the page showing and the app is not in the background, wrist up or down (`Chat.homeOpen`):

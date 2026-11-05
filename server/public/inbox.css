@@ -10,9 +10,8 @@
   z-index:990;display:none;flex-direction:column;background:#000;
   padding:calc(env(safe-area-inset-top, 0px) + 6px) 10px 6px}
 .ib-sheet.open{display:flex}
-.ib-head{flex:none;display:flex;align-items:center;gap:8px;height:34px}
-.ib-title{flex:1 1 auto;font-size:13px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:#8b96a5}
-.ib-back,.ib-x{flex:none;width:34px;height:34px;border:0;background:transparent;color:#d5dde6;font-size:20px;padding:0}
+.ib-head{flex:none;display:flex;align-items:center;justify-content:flex-end;height:34px}
+.ib-x{flex:none;width:34px;height:34px;border:0;background:transparent;color:#d5dde6;font-size:20px;padding:0}
 .ib-list,.ib-view{flex:1 1 auto;min-height:0;overflow-y:auto;-webkit-overflow-scrolling:touch}
 .ib-list::-webkit-scrollbar,.ib-view::-webkit-scrollbar{display:none}
 

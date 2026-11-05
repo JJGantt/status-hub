@@ -133,14 +133,13 @@ function build() {
   if (sheet) return;
   sheet = document.createElement('div');
   sheet.className = 'ib-sheet';
-  sheet.innerHTML = '<div class="ib-head"><button type="button" class="ib-back" aria-label="Back">‹</button>' +
-    '<span class="ib-title">Answers</span><button type="button" class="ib-x" aria-label="Close">✕</button></div>' +
+  // One button: from an open answer it steps back to the list, from the list it closes, as on the watch.
+  sheet.innerHTML = '<div class="ib-head"><button type="button" class="ib-x" aria-label="Close">✕</button></div>' +
     '<div class="ib-list"></div><div class="ib-view" hidden></div>';
   document.body.appendChild(sheet);
   listEl = sheet.querySelector('.ib-list');
   viewEl = sheet.querySelector('.ib-view');
-  sheet.querySelector('.ib-x').addEventListener('click', close);
-  sheet.querySelector('.ib-back').addEventListener('click', () => (openId ? back() : close()));
+  sheet.querySelector('.ib-x').addEventListener('click', () => (openId ? back() : close()));
   listEl.addEventListener('click', (e) => {
     const b = e.target.closest('.ib-row');
     if (b) openView(b.dataset.id);
@@ -154,7 +153,7 @@ function mount() {
   const card = document.querySelector('.ph-convcard');
   if (!card || dot) return;
   dot = document.createElement('button');
-  dot.type = 'button'; dot.className = 'ib-dot'; dot.setAttribute('aria-label', 'Answers');
+  dot.type = 'button'; dot.className = 'ib-dot'; dot.setAttribute('aria-label', 'Inbox');
   card.appendChild(dot);
   dot.addEventListener('click', openList);
   // Event-driven: a new or newly read answer arrives on the thread's own stream, and `null` is a

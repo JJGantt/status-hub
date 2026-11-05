@@ -184,12 +184,15 @@ read, so every such reply goes into an inbox: kept for good, newest first, read 
   every surface through the voice stream.
 - **A dot at the top of home, always**: amber while any answer is unread, gray otherwise. It is the
   inbox's only door, drawn over the inbox too: a tap on home opens the list (`InboxView`), a tap on an
-  open answer steps back to the list, a tap on the list closes it. There is no close or back button.
+  open answer steps back to the list, a tap on the list closes it. An open answer also has a ✕ that steps back to the list.
   The inbox is a layer drawn over home inside the page rather than a sheet, because the
   command is the double tap `CommandBorder` binds above the page row and a sheet would cover it. Read
   rows are dimmed and stay, so an answer marked read by a glance is still one tap away. While the inbox
   is open the thread under it is not being looked at, so nothing there counts as read.
-- **A row opens its answer on its own**, not in the thread: the question, then the answer, then the
+- **A session's row opens the session itself** (teal, like the session's own colour): on the watch the
+  sessions page with it open (`Sessions.open`), on the phone the session view (`__showSession`). It is
+  marked read as it opens; on the watch the inbox stays open on home to come back to.
+- **Any other row opens its answer on its own**, not in the thread: the question, then the answer, then the
   follow-ups, opened at its top. The row stays on the list until `GET /api/voice-inbox/:id` has
   answered, so the page appears whole rather than empty and then filled in. Opening it marks it read.
   **A tap anywhere on it is the press**, as on home, and so is double tap: a command recorded while it
@@ -197,7 +200,9 @@ read, so every such reply goes into an inbox: kept for good, newest first, read 
   the model that question and answer, which may be days out of the replayed context; the follow-ups
   and their replies list under the answer. Nothing moves it after it opens. The phone has
   the same inbox (`public/inbox.js`), opened from a dot in the conversation's corner; its sheet has one
-  ✕, which steps back from an open answer to the list and closes the list.
+  ✕, which steps back from an open answer to the list and closes the list. On the watch an open answer
+  also has a ✕ in its top-left corner, outside the tap-to-record area, which steps back to the list at
+  the place it was left.
 - **Each one is pushed as it lands** (`notifyAnswer` in the hub, category `VOICE_ANSWER`, titled with
   the command's words, the answer as the body); no other orchestrator reply is. The watch drops it unshown whenever
   home is the page showing and the app is not in the background, wrist up or down (`Chat.homeOpen`):

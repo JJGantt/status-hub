@@ -3,8 +3,8 @@ import SwiftUI
 /// **The inbox** (docs/WATCH.md § The inbox): every reply flagged worth reading, newest
 /// first, read or not, kept for good. The dot at the top of home, which is always there — amber while
 /// anything is unread, gray otherwise — opens it, steps back out of an answer, and closes it; an open
-/// answer also has a ✕ in its top-left corner that steps back to the list, where it was left. A row
-/// opens its answer ON ITS OWN, question above it, opened at the top; a tap on that page records a
+/// answer also has a ✕ in its top-left corner that steps back to the list, where it was left. A
+/// session's row (teal) opens that session on the sessions page; any other row opens its answer ON ITS OWN, question above it, opened at the top; a tap on that page records a
 /// command about it (`Hub.about`), and the follow-ups and their replies list under it.
 ///
 /// Drawn as a layer OVER home rather than a sheet, because the command is the double tap bound by
@@ -99,7 +99,9 @@ struct InboxView: View {
         ScrollView {
             LazyVStack(alignment: .leading, spacing: 0) {
                 ForEach(rows) { r in
-                    Button { Task { await show(r.id) } } label: { row(r) }
+                    Button {
+                        Task { if let sid = r.session_id { await openSession(sid, row: r) } else { await show(r.id) } }
+                    } label: { row(r) }
                         .buttonStyle(.plain)
                         .opacity(opening == r.id ? 0.5 : 1)
                         .onAppear { if r.id == rows.last?.id { Task { await more() } } }
@@ -124,6 +126,13 @@ struct InboxView: View {
             open = got
             if !got.read { chat.markRead(id) }
         } catch { Hub.log("inbox-answer-failed", ["id": id, "error": "\(error)"]) }
+    }
+
+    /// **A session's answer opens the session itself**, on the sessions page, where it can be read in
+    /// full and answered; the inbox stays open on home for coming back to.
+    private func openSession(_ sid: String, row r: InboxRow) async {
+        if !r.read { chat.markRead(r.id) }
+        await Sessions.shared.open(rowId: sid)
     }
 
     private func row(_ r: InboxRow) -> some View {

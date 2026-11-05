@@ -5,7 +5,7 @@
 // the conversation's corner opens it — amber while anything is unread, gray otherwise, and there always,
 // because the inbox is how an old answer is reread.
 //
-// A row opens ON ITS OWN, not in the main thread: the question, then the answer, landed on the answer.
+// A session's row opens that session (`__showSession`). Any other row opens ON ITS OWN, not in the main thread: the question, then the answer, landed on the answer.
 // While it is open every command sent from the page is ABOUT it (`setAbout` in voiceagent.js), and the
 // follow-ups and what came back are listed under it. It lands only when it is opened: a follow-up's
 // words or its reply arriving repaint it where the reader left it, like every thread here.
@@ -57,7 +57,7 @@ function paintList() {
   if (!listEl) return;
   // Repainted in place: the list's scroll position is the reader's, so nothing here touches it.
   listEl.innerHTML = rows.length
-    ? rows.map((x) => `<button type="button" class="ib-row${x.read ? ' read' : ''}${x.session_id ? ' sess' : ''}" data-id="${esc(x.id)}">` +
+    ? rows.map((x) => `<button type="button" class="ib-row${x.read ? ' read' : ''}${x.session_id ? ' sess' : ''}" data-id="${esc(x.id)}"${x.session_id ? ` data-sess="${esc(x.session_id)}"` : ''}>` +
         `<span class="ib-label">${esc(x.label || '')}</span><span class="ib-when">${esc(when(x.at))}</span></button>`).join('')
     : '';
 }
@@ -116,6 +116,18 @@ async function paintView(id, land) {
     }
   } catch (e) { console.error('inbox: opening an answer failed', e); }
 }
+// A session's answer opens the session itself, where it can be read in full and answered.
+function openSession(id, sid) {
+  const row = rows.find((x) => x.id === id);
+  if (row && !row.read) {
+    fetch('/api/voice-messages/read', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id }) }).catch((e) => console.error('inbox: marking read failed', e));
+    row.read = true;
+  }
+  close();
+  if (window.__showSession) window.__showSession(sid);
+}
+
 function openView(id) {
   openId = id; setAbout(id);
   listEl.hidden = true; viewEl.hidden = false;
@@ -142,7 +154,8 @@ function build() {
   sheet.querySelector('.ib-x').addEventListener('click', () => (openId ? back() : close()));
   listEl.addEventListener('click', (e) => {
     const b = e.target.closest('.ib-row');
-    if (b) openView(b.dataset.id);
+    if (!b) return;
+    if (b.dataset.sess) openSession(b.dataset.id, b.dataset.sess); else openView(b.dataset.id);
   });
   listEl.addEventListener('scroll', () => {
     if (listEl.scrollTop + listEl.clientHeight > listEl.scrollHeight - 200) loadMore();

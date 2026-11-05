@@ -39,6 +39,7 @@
 		5D50E610532DA949FF006920 /* OpenTodoItem.swift in Sources */ = {isa = PBXBuildFile; fileRef = 980C6D4E9785922A04236D2D /* OpenTodoItem.swift */; };
 		6188D9BD5163465CBE9D4FFB /* StatusHubWatch.app in Embed Watch Content */ = {isa = PBXBuildFile; fileRef = 94DD1B301CE525AF6B208DC7 /* StatusHubWatch.app */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		62377EFC112DA32097338F77 /* LiveListen.swift in Sources */ = {isa = PBXBuildFile; fileRef = 011F77A80F4DF604831A2925 /* LiveListen.swift */; };
+		63FFBBAE3A494E2C4AC846FA /* BatteryRefresh.swift in Sources */ = {isa = PBXBuildFile; fileRef = 69F83A73B6DF335C067054D5 /* BatteryRefresh.swift */; };
 		68E90B2316D4D69B4288AF5B /* RingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A86CE732DC51F6BC6973C5F0 /* RingsView.swift */; };
 		69C6B1241F836204E5FB5EB4 /* AssetsWatch.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 9F6A38324B6E1FE85ABDB8B6 /* AssetsWatch.xcassets */; };
 		6A70F2AD168EE3EAEF10A245 /* LocationTrail.swift in Sources */ = {isa = PBXBuildFile; fileRef = 45C78D4725DD9720852DFFD9 /* LocationTrail.swift */; };
@@ -185,6 +186,7 @@
 		61B4D21322132BFB2C145C0C /* ReposWidget.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReposWidget.swift; sourceTree = "<group>"; };
 		630A58399AEBE9A0EB63449B /* HubVoiceIntent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HubVoiceIntent.swift; sourceTree = "<group>"; };
 		65394C860C697D281720B76A /* Chat.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Chat.swift; sourceTree = "<group>"; };
+		69F83A73B6DF335C067054D5 /* BatteryRefresh.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BatteryRefresh.swift; sourceTree = "<group>"; };
 		7300D161B8F2C8E565CA4FAB /* NutritionView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NutritionView.swift; sourceTree = "<group>"; };
 		73F9EE0177B282256E68470C /* StatusHubWatchWidgets.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StatusHubWatchWidgets.swift; sourceTree = "<group>"; };
 		79EC24B4E553A538E5D4CC9A /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
@@ -273,6 +275,7 @@
 			isa = PBXGroup;
 			children = (
 				48D67EA0EDD114BE83131655 /* Alarm.swift */,
+				69F83A73B6DF335C067054D5 /* BatteryRefresh.swift */,
 				E8CB6EB26E2B1AFE0D9B2153 /* BodyFigure.swift */,
 				CAEDD165B40FC7BE05380CE2 /* BodyPaths.swift */,
 				3EE13DD050BF1BC4B943C3CC /* Capture.swift */,
@@ -579,6 +582,7 @@
 			files = (
 				CD22A3EBA6EE9D2C53EDDF1E /* Alarm.swift in Sources */,
 				48D80B4A545868D78E2DC799 /* Auth.swift in Sources */,
+				63FFBBAE3A494E2C4AC846FA /* BatteryRefresh.swift in Sources */,
 				CD84EBB55F5F0A883DCBDE96 /* BodyFigure.swift in Sources */,
 				D331FFF01B536787A0263385 /* BodyPaths.swift in Sources */,
 				12D0DCB4808D439F40DEDCC4 /* Capture.swift in Sources */,

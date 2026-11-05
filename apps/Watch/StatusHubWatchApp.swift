@@ -30,6 +30,7 @@ struct StatusHubWatchApp: App {
                 .environmentObject(workout)
                 .environmentObject(router)
         }
+        .backgroundTask(.appRefresh) { _ in await BatteryRefresh.run() }
     }
 }
 
@@ -72,6 +73,7 @@ final class WatchAppDelegate: NSObject, WKApplicationDelegate, UNUserNotificatio
         intentIdentifiers: [], options: [])
 
     func applicationDidFinishLaunching() {
+        BatteryRefresh.schedule()   // the battery report's half-hourly wake (BatteryRefresh.swift)
         UNUserNotificationCenter.current().delegate = self
         UNUserNotificationCenter.current().setNotificationCategories([Self.sessionCategory,
                                                                        Self.reminderCategory,

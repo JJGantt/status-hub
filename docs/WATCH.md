@@ -1029,7 +1029,10 @@ no connection, so a new call must not use it.
 wrist. Fly keeps only the recent lines, so read it soon.
 
 Every batch also carries the watch's battery (`battery: {level, charging}` beside `lines`), which is
-how the walls' battery bar learns it (HUB-INTERNALS.md § Watch battery bar).
+how the walls' battery bar learns it (HUB-INTERNALS.md § Watch battery bar). A scheduled background
+refresh wakes the app about every half hour to send a `battery` line (`BatteryRefresh.swift`): each
+wake books the next and every launch books one, so a broken chain restarts the next time the app runs.
+It is the app's only background refresh, and it handles every refresh task it is given.
 
 | event | what it says |
 |---|---|

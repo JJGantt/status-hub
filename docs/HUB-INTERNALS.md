@@ -1887,8 +1887,9 @@ with the watch's battery and coloured by hue from red at empty to green at full 
 `body.phonehome`). The frame carries `watch_battery` (`pct`, `charging`, `color`, `at`).
 
 The watch cannot be asked and watchOS gives an app no battery-change event, so every log batch it
-already sends to `/api/clientlog` carries `battery` beside `lines` (`Hub.sendLog`). The reading is
-therefore as fresh as the last time the app ran; `at` says when. It is stored as `device_status` row
+already sends to `/api/clientlog` carries `battery` beside `lines` (`Hub.sendLog`), and the app
+wakes itself in the background about every half hour to send one (`apps/Watch/BatteryRefresh.swift`,
+a `battery` log line), so the reading is at most about that old while the watch is on; `at` says when. It is stored as `device_status` row
 `watch` (`data: {level, charging}`), which realtime already pushes to every wall, and written only on
 a new whole percent or a charging flip, since a batch arrives every few seconds while the app is open.
 `buildLitter` takes the first `device_status` row that is neither the feeder nor `watch`.

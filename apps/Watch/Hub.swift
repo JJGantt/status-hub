@@ -619,13 +619,24 @@ enum Hub {
     /// own time. Sent once and forgotten, every line written while the watch had no connection, or just
     /// before it slept, was gone, and those are exactly the moments a lost command has to be traced.
     static func log(_ event: String, _ fields: [String: Any] = [:]) {
+        guard let text = line(event, fields) else { return }
+        Task { await LogOutbox.shared.add(text) }
+    }
+
+    /// `log`, returning once the outbox has been sent (or the send failed): for a background wake,
+    /// which is suspended the moment its work returns.
+    static func logNow(_ event: String, _ fields: [String: Any] = [:]) async {
+        guard let text = line(event, fields) else { return }
+        await LogOutbox.shared.add(text)
+    }
+
+    private static func line(_ event: String, _ fields: [String: Any]) -> String? {
         var body = fields
         body["src"] = "watch"
         body["ev"] = event
         body["t"] = ISO8601DateFormatter().string(from: Date())
-        guard let line = try? JSONSerialization.data(withJSONObject: body),
-              let text = String(data: line, encoding: .utf8) else { return }
-        Task { await LogOutbox.shared.add(text) }
+        guard let line = try? JSONSerialization.data(withJSONObject: body) else { return nil }
+        return String(data: line, encoding: .utf8)
     }
 
     /// Sends what the outbox holds. Called after each line and when the app comes to the front.

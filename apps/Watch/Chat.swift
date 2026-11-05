@@ -62,7 +62,8 @@ final class Chat: ObservableObject {
         thread.filter { $0.role == "assistant" && $0.needs_read == true && $0.read_at == nil && !readHere.contains($0.id) }
     }
     /// The answer home lands on (the dot, or an answer's notification opened); nil lands on the newest.
-    /// The next command's words take the landing back.
+    /// **One landing, not a tether**: the user's own scroll (`releaseLanding`) or the next command's words
+    /// take it back, and from then on the page lands on the newest like any other.
     @Published private(set) var landOn: String?
     /// Counts each request to land, so a second one on the same answer still moves the view.
     @Published private(set) var landings = 0
@@ -180,8 +181,12 @@ final class Chat: ObservableObject {
         stream?.cancel()
         stream = nil
         activity = []
-        held = []
     }
+
+    /// Home left the screen: the older answers laid out above the window go. Not on `deactivate`, which
+    /// a notification over the app also causes: rows removed and re-added above the screen shift
+    /// everything on it.
+    func dropHeld() { held = [] }
 
     func load() async {
         #if targetEnvironment(simulator)
@@ -341,10 +346,17 @@ final class Chat: ObservableObject {
         }
     }
 
-    /// Home lands on this answer instead of the newest row, until the next command the user speaks.
+    /// Home lands on this answer instead of the newest row, until the user scrolls or speaks a command.
     func land(on id: String) {
         landOn = id
         landings += 1
+    }
+
+    /// The user scrolled: an answer landed on by request has been delivered, and the page is theirs again.
+    func releaseLanding() {
+        guard let id = landOn else { return }
+        landOn = nil
+        Hub.log("land-released", ["id": id])
     }
 
     private func tokenArrived() {

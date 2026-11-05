@@ -56,6 +56,10 @@ struct HomeView: View {
     /// page appears whole rather than empty and then filled in.
     @State private var inboxAnswer: InboxAnswer?
     @State private var lastScrollLog: (key: String, at: Date) = ("", .distantPast)
+    /// Until then a move of the offset is the page's own: a jump (animated ones run 0.2s) or the scroll view
+    /// placing itself as it opens. After it, any move that is not a change of content height is the user's
+    /// (`userScrolled`), which is how the crown counts: it is not trusted to report a scroll phase.
+    @State private var ownMoveUntil = Date.distantPast
 
     var body: some View {
         ScrollViewReader { proxy in
@@ -132,15 +136,12 @@ struct HomeView: View {
             // `landed` is an older answer, and jumping back onto it each time the thread grows pulled the
             // view up the thread on every arrival — onto an answer that had itself moved. Content added
             // below moves nothing by itself, and `Chat.keepFrom` keeps rows from dropping off the top.
-            .onScrollGeometryChange(for: CGFloat.self) { $0.contentSize.height } action: { _, _ in
-                if pinned { if settling || !engaged { jump(proxy, "layout") } }
-                // Rows were added above: put back the one that was at the top, so they arrive above
-                // the user rather than under the user's finger.
-                else if let a = keepAtTop { keepAtTop = nil; scrollLog("keep-top", a); proxy.scrollTo(a, anchor: .top) }
+            .onScrollGeometryChange(for: Scroll.self) { Scroll(y: $0.contentOffset.y, h: $0.contentSize.height) } action: { old, new in
+                guard new.h == old.h else { relayout(proxy); return }
+                if abs(new.y - old.y) > 0.5 && Date() > ownMoveUntil { userScrolled("move") }
             }
-            .onScrollPhaseChange { was, now in
-                if was == .idle && now != .idle { scrollLog("user-\(now)", nil) }
-                if now == .interacting || now == .tracking { pinned = false; settling = false; touched = looking }
+            .onScrollPhaseChange { _, now in
+                if now == .interacting || now == .tracking || now == .decelerating { userScrolled("\(now)") }
                 if now == .idle && atEnd && touched { touched = false; Hub.log("reading", ["on": false, "why": "end"]) }
             }
             // Anything arriving while the user is reading ends a landing's settling: from then on it is the
@@ -148,7 +149,7 @@ struct HomeView: View {
             .onChange(of: chat.thread.last?.id) { _, _ in settle() }
             .onChange(of: chat.pending.count) { _, _ in settle() }
             .onChange(of: chat.activity.count) { _, _ in settle() }
-            .onAppear { landed = target; settling = true; jump(proxy, "appear") }
+            .onAppear { landed = target; settling = true; ownMoveUntil = Date() + 0.6; jump(proxy, "appear") }
         }
         // Over the thread, inside the page, so the double tap above the page row still records.
         .overlay { if inbox { InboxView(open: $inboxAnswer) } }
@@ -173,7 +174,7 @@ struct HomeView: View {
         .onChange(of: dimmed) { _, _ in attend() }
         .onChange(of: phase) { _, _ in attend() }
         .onChange(of: onScreen) { _, now in
-            if !now { chat.resetWindow() }
+            if !now { chat.resetWindow(); chat.dropHeld() }
             attend()
         }
         .onChange(of: chat.unread) { _, _ in attend() }
@@ -216,7 +217,10 @@ struct HomeView: View {
     /// **The read rule**: an unread answer counts as read after two seconds on screen, with the app in
     /// front, home showing and the wrist up. Any of those ending first stops the count.
     private func attend() {
-        looking = !dimmed && phase == .active && onScreen && !inbox
+        // **A notification over the app is not looking away**: it drops the scene to `inactive` with
+        // the wrist still up, and counted as away it would clear `touched` and land the view under the
+        // user. The wrist going down dims the screen, which is what says the user stopped.
+        looking = !dimmed && phase != .background && onScreen && !inbox
         chat.looking = looking
         chat.homeOpen = onScreen && phase != .background
         let due = looking ? Set(chat.unread.map(\.id)).intersection(visible) : []
@@ -268,6 +272,31 @@ struct HomeView: View {
                            "seen": chat.recent.indices.filter { visible.contains(chat.recent[$0].id) }.map(String.init).joined(separator: ",")])
     }
 
+    /// The content changed height. While pinned, the landing is re-applied as it lays out; rows added
+    /// above put back the row that was at the top, so they arrive above the user rather than under the user's finger.
+    private func relayout(_ proxy: ScrollViewProxy) {
+        if pinned { if settling || !engaged { jump(proxy, "layout") } }
+        else if let a = keepAtTop {
+            keepAtTop = nil
+            scrollLog("keep-top", a)
+            ownMoveUntil = Date() + 0.15
+            proxy.scrollTo(a, anchor: .top)
+        }
+    }
+
+    /// **The user scrolled — a finger or the crown.** The page is the user's from here: no landing is held
+    /// against it, an answer landed on by request lets go (`Chat.releaseLanding`), and while the wrist is
+    /// up an arrival waits.
+    private func userScrolled(_ how: String) {
+        if !touched || pinned { scrollLog("user-\(how)", nil) }
+        pinned = false
+        settling = false
+        touched = looking
+        chat.releaseLanding()
+    }
+
+    private struct Scroll: Equatable { let y: CGFloat; let h: CGFloat }
+
     private func settle() {
         guard engaged, settling else { return }
         settling = false
@@ -276,6 +305,7 @@ struct HomeView: View {
     private func jump(_ proxy: ScrollViewProxy, _ why: String, animated: Bool = false) {
         guard let at = landed ?? target else { return }
         scrollLog(why, at)
+        ownMoveUntil = Date() + (animated ? 0.4 : 0.15)
         if animated {
             withAnimation(.easeOut(duration: 0.2)) { proxy.scrollTo(at, anchor: .top) }
         } else {

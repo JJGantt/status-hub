@@ -91,7 +91,15 @@ with what came before it above, as any list does. No blank space is added so tha
 (`pinned`) until the user scrolls. The session page lands the same way.
 
 **Nothing moves the view while the user is reading** — looking (home in front, wrist up) AND scrolled since
-that look began (`touched`, cleared when the look ends). Then every new item — the user's own transcribed
+that look began (`touched`, cleared when the look ends). **A notification banner over the app is not the look
+ending**: it drops the scene to `inactive` with the wrist up, so looking is the screen not dimmed and the
+scene not in the background, never `phase == .active`. Nor does the banner's `deactivate` take the older
+answers laid out above the window (`held`) away — they go when home leaves the screen — because rows
+removed and re-added above the screen shift everything on it. **A scroll is a finger or the crown**: home
+counts any move of the offset that is neither its own jump nor a change of content height, as the session
+page does, since the crown is not trusted to report a scroll phase. **An answer landed on by request (a
+notification opened) is one landing**: the user's first scroll releases it (`land-released`), and every
+landing after that is on the newest again. Then every new item — the user's own transcribed
 words, a tool call, the reply, a session's relayed answer — is HELD; it lands the moment the user stops
 looking (wrist down, app behind, another page), so it is waiting at the next raise, with the unread dot
 meanwhile if it is flagged. **A raise without a scroll is not reading**: the screen is on whatever the page
@@ -1051,8 +1059,8 @@ It is the app's only background refresh, and it handles every refresh task it is
 | event | what it says |
 |---|---|
 | `thread` | what home loaded |
-| `scroll` | every scroll home makes and the start of every scroll the user makes. `why`: `appear`, `target` (something new landed), `asked` (a notification or the dot), `unlook` (a held landing placed as the wrist dropped), `layout` (re-landing while pinned as the thread lays out), `more` / `keep-top` (scrolled to the top: older rows asked for, then the row that was at the top put back), `user-<phase>` (the user's own). `at`, `landed`, `target` are rows by place in the thread (0 = oldest shown, of `rows`); `seen` is the rows on screen; `pinned`, `settling`, `looking`, `touched`, `atEnd` are the state that decided it. The same move within two seconds is one line |
-| `land-held`, `reading` | an arrival held because the user is reading; reading ended by letting go at the end |
+| `scroll` | every scroll home makes and the start of every scroll the user makes. `why`: `appear`, `target` (something new landed), `asked` (a notification or the dot), `unlook` (a held landing placed as the wrist dropped), `layout` (re-landing while pinned as the thread lays out), `more` / `keep-top` (scrolled to the top: older rows asked for, then the row that was at the top put back), `user-<how>` (the user's own: a scroll phase, or `move` for an offset change that was not the page's, which is how the crown shows up). `at`, `landed`, `target` are rows by place in the thread (0 = oldest shown, of `rows`); `seen` is the rows on screen; `pinned`, `settling`, `looking`, `touched`, `atEnd` are the state that decided it. The same move within two seconds is one line |
+| `land-held`, `reading`, `land-released` | an arrival held because the user is reading; reading ended by letting go at the end; an answer landed on by request let go at the user's scroll |
 | `log` | a conversation's list fetched from the hub: from which seq, how many events came, the last seq held |
 | `control` | a press of the bottom control, with its mode |
 | `record` | a finger tap on the text |

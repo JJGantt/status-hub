@@ -1051,6 +1051,8 @@ It is the app's only background refresh, and it handles every refresh task it is
 | event | what it says |
 |---|---|
 | `thread` | what home loaded |
+| `scroll` | every scroll home makes and the start of every scroll the user makes. `why`: `appear`, `target` (something new landed), `asked` (a notification or the dot), `unlook` (a held landing placed as the wrist dropped), `layout` (re-landing while pinned as the thread lays out), `more` / `keep-top` (scrolled to the top: older rows asked for, then the row that was at the top put back), `user-<phase>` (the user's own). `at`, `landed`, `target` are rows by place in the thread (0 = oldest shown, of `rows`); `seen` is the rows on screen; `pinned`, `settling`, `looking`, `touched`, `atEnd` are the state that decided it. The same move within two seconds is one line |
+| `land-held`, `reading` | an arrival held because the user is reading; reading ended by letting go at the end |
 | `log` | a conversation's list fetched from the hub: from which seq, how many events came, the last seq held |
 | `control` | a press of the bottom control, with its mode |
 | `record` | a finger tap on the text |

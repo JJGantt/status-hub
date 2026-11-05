@@ -55,6 +55,7 @@ struct HomeView: View {
     /// The answer open in the inbox, already loaded: a row opens only once its answer is in hand, so the
     /// page appears whole rather than empty and then filled in.
     @State private var inboxAnswer: InboxAnswer?
+    @State private var lastScrollLog: (key: String, at: Date) = ("", .distantPast)
 
     var body: some View {
         ScrollViewReader { proxy in
@@ -70,6 +71,7 @@ struct HomeView: View {
                             .onScrollVisibilityChange(threshold: 1) { seen in
                                 guard seen, !pinned, keepAtTop == nil else { return }
                                 keepAtTop = chat.recent.first.map { "msg\($0.id)" }
+                                scrollLog("more", keepAtTop)
                                 chat.showMore()
                             }
                     }
@@ -116,27 +118,28 @@ struct HomeView: View {
             .background(Color.black.ignoresSafeArea())
             .onChange(of: target) { _, now in
                 if holds(now) { Hub.log("land-held", ["at": landed ?? "", "next": now ?? ""]); return }
-                land(proxy)
+                land(proxy, "target")
             }
             // Asked to land again on the same answer, after scrolling away from it: the target has not
             // changed, so nothing above moves the view.
-            .onChange(of: chat.landings) { _, _ in land(proxy) }
+            .onChange(of: chat.landings) { _, _ in land(proxy, "asked") }
             // The user stopped looking with something held: it lands now, so it is waiting for the next raise.
             .onChange(of: looking) { _, now in
                 if !now { touched = false }
-                if !now && landed != target { land(proxy) }
+                if !now && landed != target { land(proxy, "unlook") }
             }
             // **Nothing moves the view while the user is reading**, a re-landing as much as a landing. Held,
             // `landed` is an older answer, and jumping back onto it each time the thread grows pulled the
             // view up the thread on every arrival — onto an answer that had itself moved. Content added
             // below moves nothing by itself, and `Chat.keepFrom` keeps rows from dropping off the top.
             .onScrollGeometryChange(for: CGFloat.self) { $0.contentSize.height } action: { _, _ in
-                if pinned { if settling || !engaged { jump(proxy) } }
+                if pinned { if settling || !engaged { jump(proxy, "layout") } }
                 // Rows were added above: put back the one that was at the top, so they arrive above
                 // the user rather than under the user's finger.
-                else if let a = keepAtTop { keepAtTop = nil; proxy.scrollTo(a, anchor: .top) }
+                else if let a = keepAtTop { keepAtTop = nil; scrollLog("keep-top", a); proxy.scrollTo(a, anchor: .top) }
             }
-            .onScrollPhaseChange { _, now in
+            .onScrollPhaseChange { was, now in
+                if was == .idle && now != .idle { scrollLog("user-\(now)", nil) }
                 if now == .interacting || now == .tracking { pinned = false; settling = false; touched = looking }
                 if now == .idle && atEnd && touched { touched = false; Hub.log("reading", ["on": false, "why": "end"]) }
             }
@@ -145,7 +148,7 @@ struct HomeView: View {
             .onChange(of: chat.thread.last?.id) { _, _ in settle() }
             .onChange(of: chat.pending.count) { _, _ in settle() }
             .onChange(of: chat.activity.count) { _, _ in settle() }
-            .onAppear { landed = target; settling = true; jump(proxy) }
+            .onAppear { landed = target; settling = true; jump(proxy, "appear") }
         }
         // Over the thread, inside the page, so the double tap above the page row still records.
         .overlay { if inbox { InboxView(open: $inboxAnswer) } }
@@ -237,13 +240,32 @@ struct HomeView: View {
         return true
     }
 
-    private func land(_ proxy: ScrollViewProxy) {
+    private func land(_ proxy: ScrollViewProxy, _ why: String) {
         chat.resetWindow()
         keepAtTop = nil
         landed = target
         pinned = true
         settling = true
-        jump(proxy, animated: true)
+        jump(proxy, why, animated: true)
+    }
+
+    /// **Every scroll the page makes, and the start of every scroll the user makes**, as a `scroll` line
+    /// with why it moved and the state that decided it (docs/WATCH.md § It logs what it does). A repeat
+    /// of the same move within two seconds is one line: layout re-lands on every pass while it settles.
+    private func scrollLog(_ why: String, _ at: String?) {
+        let key = "\(why)|\(at ?? "")"
+        if key == lastScrollLog.key && Date().timeIntervalSince(lastScrollLog.at) < 2 { return }
+        lastScrollLog = (key, Date())
+        // Row ids as their place in the thread (0 = oldest shown), which is what a reader of the log needs.
+        func row(_ id: String?) -> String {
+            guard let id else { return "" }
+            if let i = chat.recent.firstIndex(where: { "msg\($0.id)" == id }) { return String(i) }
+            return id
+        }
+        Hub.log("scroll", ["why": why, "at": row(at), "landed": row(landed), "target": row(target),
+                           "pinned": pinned, "settling": settling, "looking": looking, "touched": touched,
+                           "atEnd": atEnd, "inbox": inbox, "rows": chat.recent.count, "more": chat.hasMore,
+                           "seen": chat.recent.indices.filter { visible.contains(chat.recent[$0].id) }.map(String.init).joined(separator: ",")])
     }
 
     private func settle() {
@@ -251,8 +273,9 @@ struct HomeView: View {
         settling = false
     }
 
-    private func jump(_ proxy: ScrollViewProxy, animated: Bool = false) {
+    private func jump(_ proxy: ScrollViewProxy, _ why: String, animated: Bool = false) {
         guard let at = landed ?? target else { return }
+        scrollLog(why, at)
         if animated {
             withAnimation(.easeOut(duration: 0.2)) { proxy.scrollTo(at, anchor: .top) }
         } else {

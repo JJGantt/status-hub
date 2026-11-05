@@ -2,7 +2,8 @@ import SwiftUI
 
 /// **The inbox** (docs/WATCH.md § The inbox): every reply flagged worth reading, newest
 /// first, read or not, kept for good. The dot at the top of home, which is always there — amber while
-/// anything is unread, gray otherwise — opens it, steps back out of an answer, and closes it. A row
+/// anything is unread, gray otherwise — opens it, steps back out of an answer, and closes it; an open
+/// answer also has a ✕ in its top-left corner that steps back to the list, where it was left. A row
 /// opens its answer ON ITS OWN, question above it, opened at the top; a tap on that page records a
 /// command about it (`Hub.about`), and the follow-ups and their replies list under it.
 ///
@@ -66,10 +67,28 @@ struct InboxView: View {
     var body: some View {
         ZStack {
             Color.black.ignoresSafeArea()
+            // The list stays alive under an open answer, so closing the answer returns to the same place
+            // in it rather than to the top.
+            list
+                .opacity(open == nil ? 1 : 0)
+                .allowsHitTesting(open == nil)
             if let open {
                 AnswerView(initial: open)
-            } else {
-                list
+                    .background(Color.black.ignoresSafeArea())
+                    .id(open.id)
+            }
+        }
+        // **The ✕ closes an open answer back to the list.** Outside AnswerView, whose every tap is the
+        // press, so a tap on it never also records.
+        .overlay(alignment: .topLeading) {
+            if open != nil {
+                Button { open = nil } label: {
+                    Image(systemName: "xmark").font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(Color(hex: "#8b96a5"))
+                        .frame(width: 44, height: 30).contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .ignoresSafeArea()
             }
         }
         .onChange(of: chat.thread.last?.id) { _, _ in if open == nil { Task { await refresh() } } }

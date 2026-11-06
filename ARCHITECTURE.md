@@ -166,7 +166,7 @@ them into `veg_g` / `dark_green_g` / `fruit_g` (dark green ⊂ veg).
 ## 4. Surfaces (all share the web hub codebase)
 
 - **Web hub** — `status-hub/server/public/` (`core.js`, `cards/*`, `app.css`). Desktop `/page` =
-  scrolling rows; phone = swipe panes on `/` (**sessions** · **home** · **reports**), where the home
+  scrolling rows; phone = swipe panes on `/` (**sessions** · **home** · **guide**, the bedroom TV's TV Guide), where the home
   pane is `phone-home.html` — everything the TV's home wall carries in
   ONE SCREEN, laid out in portrait at the phone's own scale rather than as a scaled-down wall. The
   hub conversation is on the home pane, so the phone has no chat pane; the walls still do. All off

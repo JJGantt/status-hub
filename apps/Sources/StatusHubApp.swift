@@ -271,12 +271,12 @@ final class PageLaunch {
 
 // statushub://report/<id> — a write-up published by a dispatched session, opened from its push.
 //
-// Preferred path: hand it to the hub's Reports pane, which opens the report in a sandboxed frame. You
-// then land INSIDE the app, on the pane that lists every other report, so backing out of the one you
-// were sent is a button rather than a reload of the whole dashboard.
+// Preferred path: hand it to a hub page with a Reports pane (`__showReport`), which opens the report in
+// a sandboxed frame. The phone page has none — its right-hand pane is the TV Guide — so there this
+// falls through to the fallback after its retries.
 //
 // Fallback: navigate the web view to /report/<id> outright. That is what happens if the page never
-// mounts the bridge — an older hub, or the pane machinery absent — and it is why the web view enables
+// mounts the bridge — the phone page, an older hub — and it is why the web view enables
 // back/forward gestures: a top-level report has to be escapable too.
 final class ReportLaunch {
     static let shared = ReportLaunch()

@@ -289,7 +289,7 @@ function unclaimMic() {
 // only wires the events that make a held capture suspect or unwanted.
 export function watchMic() {
   // Anything on this page that PLAYS audio may have taken the session with it — the alarm, a tone
-  // preview in Settings, the sound bench. They say so rather than this trying to detect it
+  // preview in Settings. They say so rather than this trying to detect it
   // (`hub:audioplaying` as the sound starts, `hub:audioplayed` once it is over), and a capture held
   // across either is re-acquired by the next claim.
   document.addEventListener('hub:audioplaying', dirtyMic);

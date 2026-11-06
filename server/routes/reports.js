@@ -80,7 +80,7 @@ module.exports = function (ctx) {
   </body></html>`);
   });
 
-  // The index as JSON, for the phone's reports pane. `html` is deliberately not selected: a list of a
+  // The index as JSON, for the walls' reports pane (cards/reports.js). `html` is deliberately not selected: a list of a
   // hundred reports would otherwise carry every page's full markup to a screen that renders none of it.
   gated.get('/api/reports', async (req, res) => {
     try {

@@ -258,7 +258,7 @@ an idle robot otherwise look identical. `SELF_CYCLING` means the robot left slee
 cycling on its own and nothing here is driving it.
 
 **Surfaces (same code, different chrome):** desktop `/page` = scrolling rows; phone = swipe panes on
-`/`, in the markup order of `phone-home.html` — sessions · home · reports, landing on home (index 1).
+`/`, in the markup order of `phone-home.html` — sessions · home · guide (the bedroom TV's TV Guide, `cards/guide.js`), landing on home (index 1).
 Everything else is a sheet (`expand.js`): the weight page opens from the weigh-in plot, the calendar
 and lists from the day strip, utilities from the navbar, the voice system at the bottom of Settings. No chat pane: the hub conversation is on the home pane, and the sessions
 view takes the slot left of it; TV `/tv` = the home wall + a voice panel (auth: a one-time `?token=`, § Auth); the `/mic` page = a

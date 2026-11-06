@@ -160,6 +160,8 @@ to be true the night before. An alarm rings on the TV (`tv-ring` on the Pi), on 
 in the watch app while it is open, and all of them apply one rule: past its moment and still in the
 feed means ringing. STOP anywhere completes the item and silences every one; SNOOZE moves its moment
 nine minutes on. Both are on the alarm's notification too (the `ALARM` category).
+A TIMER is the gentle tier: the same ring, no page overlay, and the hub completes it about ten seconds
+after its moment (`closeExempt`), which ends it everywhere at once.
 
 **Nothing registers an alarm on the phone.** AlarmKit is the obvious tool and it does not fit: its
 Stop completes nothing, so the TV rings on after it, and a change decided at 4am cannot reach a

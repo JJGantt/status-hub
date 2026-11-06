@@ -12,6 +12,23 @@ to be delivered at the moment itself.
 
 Under all three, `dueTick` sends the item's notification once at its moment.
 
+## Two tiers: alarm and timer
+
+A ringing item is one of two tiers (`list_items.alarm`, `list_items.timer`, data-layer 00173):
+
+| | **Alarm** | **Timer** |
+|---|---|---|
+| Said as | "set an alarm", "wake me" | "a timer for six minutes", "tell me in 90 seconds" |
+| Rings | until Stop or Snooze | about ten seconds, then the hub ends it |
+| Hub page | covers the screen with Stop and Snooze | plays the tone, leaves the screen alone |
+| Stored | `alarm` | `alarm` and `timer` |
+
+A timer is an alarm that ends itself, so `alarm` is true on both and every ringer rings a timer exactly
+as it rings an alarm. The ten seconds is not a ringer rule: `closeExempt` in `lib/jobs.js` completes a
+timer `TIMER_RING_MS` after its moment, on whatever list it is on, and announces it with `quiet`, so the
+TV, every page and the watch app all stop on the same feed change that a Stop makes. The tools take
+`ring: alarm | timer | none`; a ringing item with no list named goes on Alarms, which is exempt.
+
 ## Answering it: Stop and Snooze, from anywhere
 
 An alarm rings until its ITEM changes, so every way of answering it is a write to the item and every

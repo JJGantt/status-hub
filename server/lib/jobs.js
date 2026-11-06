@@ -8,8 +8,8 @@ const { taskDeadline } = require('./score');
 
 function createJobs(ctx) {
   const {
-    SUPABASE_KEY, SUPABASE_URL, alarmLog, apns, etNowString, itemTitle, pushAll, ringerReport, sb, sbInsert,
-    sbWrite, settingsAll, syncBadge,
+    SUPABASE_KEY, SUPABASE_URL, alarmLog, apns, broadcast, dirtyRows, etNowString, itemTitle, pushAll, pushLists,
+    ringerReport, sb, sbInsert, sbWrite, settingsAll, syncBadge,
   } = ctx;
 
   // ---- reminder firing: app-push a reminder once its due time (local) has passed. Dedupe via a
@@ -77,6 +77,8 @@ function createJobs(ctx) {
   // no queries at all; a `list_items` change dirties it through the realtime subscription. The clock
   // stays because a moment arriving is not a row changing — but the QUERY goes: this read every open
   // dated item 1,440 times a day, overwhelmingly to learn that 9am has still not come.
+  // How long a timer rings before the hub ends it. An alarm has no such limit: it rings until stopped.
+  const TIMER_RING_MS = 10000;
   let dueNextAt = '';
   let dueDirty = true;
   // A list_items change re-reads within a second rather than at the next minute tick, so an item due
@@ -114,7 +116,7 @@ function createJobs(ctx) {
     if (!dueDirty && (!dueNextAt || nowET < dueNextAt)) return;
     let rows;
     // Every list, not just todo — "reminder" is a predicate (has a due), not a place.
-    try { rows = await sb('list_items?deleted=eq.false&completed_at=is.null&due=not.is.null&select=id,list_name,text,title,due,scheduled_at,priority,series_id,alarm'); } catch (_) { return; }
+    try { rows = await sb('list_items?deleted=eq.false&completed_at=is.null&due=not.is.null&select=id,list_name,text,title,due,scheduled_at,priority,series_id,alarm,timer'); } catch (_) { return; }
     // Only once the read succeeded: a failed read must leave the state dirty so the next tick retries.
     dueDirty = false;
     dueNextAt = '';
@@ -163,6 +165,22 @@ function createJobs(ctx) {
     const now = Date.parse(nowET + 'Z');   // both sides are naive ET, compared in one pseudo-UTC space
     let next = '';
     for (const r of rows || []) {
+      // A TIMER ends itself TIMER_RING_MS after its moment, whatever list it is on: completing it drops it
+      // from the feed, which is what silences every ringer (the TV, the pages, the watch). Announced at
+      // once with `quiet`, so the TV stops on the frame rather than after the realtime echo.
+      if (r.timer) {
+        const end = Date.parse(`${dueMoment(r.scheduled_at || r.due)}Z`) + TIMER_RING_MS;
+        if (isNaN(end)) continue;
+        if (end > now) { next = earlierOf(next, new Date(end).toISOString().slice(0, 19)); continue; }
+        try {
+          await sbWrite(`list_items?id=eq.${encodeURIComponent(r.id)}`, 'PATCH',
+            { completed_at: etNowString(), updated: new Date().toISOString() });
+          dirtyRows('list_items'); pushLists({ quiet: r.id }); broadcast();
+          console.log(`[due] timer ended ${r.id} "${String(r.title || r.text).slice(0, 40)}"`);
+          alarmLog('hub', 'timer-end', { title: itemTitle(r), due: r.due }, r.id);
+        } catch (e) { console.error('[due] timer end:', e.message); }
+        continue;
+      }
       if (!(Number(r.priority) < 0)) continue;   // exempt items only — what the old query's filter said
       // An ALARM is never closed here. The page rings it until STOP, and STOP is what completes it;
       // closing it on time would silence the alarm in the minute it starts.

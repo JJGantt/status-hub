@@ -166,8 +166,8 @@ const prompts = require('./routes/prompts')({ auth, gated, pushAll, pushSessions
 require('./routes/streams')({ gated });
 
 const jobs = createJobs({
-  SUPABASE_KEY, SUPABASE_URL, alarmLog, apns, etNowString, itemTitle, pushAll, ringerReport, sb, sbInsert,
-  sbWrite, settingsAll, syncBadge,
+  SUPABASE_KEY, SUPABASE_URL, alarmLog, apns, broadcast, dirtyRows: cache.dirtyRows, etNowString, itemTitle,
+  pushAll, pushLists, ringerReport, sb, sbInsert, sbWrite, settingsAll, syncBadge,
 });
 
 const realtime = createRealtime({

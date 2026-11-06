@@ -68,7 +68,7 @@ module.exports = function (ctx) {
   gated.get('/api/due-widget', async (req, res) => {
     try {
       const [rows, listRows] = await Promise.all([
-        sb('list_items?deleted=eq.false&completed_at=is.null&due=not.is.null&select=id,list_name,text,title,due,scheduled_at,priority,series_id,alarm&order=scheduled_at.asc'),
+        sb('list_items?deleted=eq.false&completed_at=is.null&due=not.is.null&select=id,list_name,text,title,due,scheduled_at,priority,series_id,alarm,timer&order=scheduled_at.asc'),
         sb('lists?select=name,emoji'),
       ]);
       const emojiOf = {};
@@ -83,6 +83,7 @@ module.exports = function (ctx) {
         heat: overdueHeat(r, nowET),
         priority: r.priority || 0,
         alarm: !!r.alarm,
+        timer: !!r.timer,
         when: r.scheduled_at || r.due,
         repeating: !!r.series_id,
       }));
@@ -763,8 +764,9 @@ module.exports = function (ctx) {
       const id = String(b.id || '');
       if (!id) return res.status(400).json({ error: 'id required' });
       const alarm = !(b.alarm === false || b.alarm === 0 || b.alarm === '0' || b.alarm === 'false');
+      // Taking the alarm off takes the timer tier with it: a timer is an alarm that ends itself (00173).
       await sbWrite(`list_items?id=eq.${encodeURIComponent(id)}`, 'PATCH',
-        { alarm, updated: new Date().toISOString() });
+        { alarm, ...(alarm ? {} : { timer: false }), updated: new Date().toISOString() });
       res.json({ ok: true, id, alarm });
     } catch (e) { res.status(500).json({ error: String(e.message || e) }); }
   });

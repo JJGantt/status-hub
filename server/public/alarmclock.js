@@ -195,10 +195,14 @@ function startRing(it) {
   nativeAudio(true);   // BEFORE any playback: the session has to be ours before the sound starts
   ringing = it;
   beaconSound({ ev: 'ring', id: it.id, when: it.when });
-  const d = new Date(it.at);
-  const when = `${((d.getHours() + 11) % 12) + 1}:${String(d.getMinutes()).padStart(2, '0')}`;
-  overlay(it.title, when).classList.add('on');
-  document.body.classList.add('alarming');
+  // A TIMER plays and leaves the screen alone: the hub ends it about ten seconds in by completing it,
+  // and the feed dropping it is what stops this. An alarm covers the page until it is answered.
+  if (!it.timer) {
+    const d = new Date(it.at);
+    const when = `${((d.getHours() + 11) % 12) + 1}:${String(d.getMinutes()).padStart(2, '0')}`;
+    overlay(it.title, when).classList.add('on');
+    document.body.classList.add('alarming');
+  }
   makeNoise();
   try { if (navigator.vibrate) navigator.vibrate([600, 300, 600, 300, 600]); } catch (_) {}
 }

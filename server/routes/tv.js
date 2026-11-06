@@ -27,6 +27,9 @@ module.exports = function (ctx) {
   const TV_SIDEBAR_WIDTH = 0.35;  // the panel's minimum, fraction of the screen
   async function tvPush(row) {
     if (!row || row.done_at || TV_PI_OPS.has(row.op)) return;
+    // The TV Guide changed: the phone's guide pane (cards/guide.js) redraws too, told on the session
+    // stream the phone already holds rather than a stream of its own.
+    if (row.op === 'guide_refresh') for (const c of sessionClients) { try { c.write('event: guide\ndata: {}\n\n'); } catch {} }
     if (row.op === 'sidebar') {
       const a = row.args = row.args || {};
       const put = (k, v) => putSetting(k, v).catch((e) => console.error('[tv] sidebar', k, e.message || e));
@@ -81,6 +84,24 @@ module.exports = function (ctx) {
         items: s.tv_shelf_items.map(({ position, ...it }) => it) })) });
     } catch (e) {
       console.error('[tv] guide', e.message || e);
+      res.status(502).json({ error: String(e.message || e) });
+    }
+  });
+
+  // Play a TV Guide item on the bedroom TV, from the phone's guide pane. An ordinary `open` command, so
+  // it wakes the TV and gets past Prime's profile picker exactly as a voice `open` does.
+  gated.post('/api/tv/guide/open', express.json(), async (req, res) => {
+    const id = String((req.body || {}).id || '');
+    if (!/^pk_[0-9a-f]+$/.test(id)) return res.status(400).json({ error: 'id required' });
+    try {
+      const [it] = await sb(`tv_shelf_items?id=eq.${id}&select=url,package`);
+      if (!it) return res.status(404).json({ error: 'no such item' });
+      const args = { url: it.url };
+      if (it.package && !it.url.startsWith('intent:')) args.package = it.package;
+      await sbWrite('tv_commands', 'POST', { op: 'open', args });
+      res.json({ ok: true });
+    } catch (e) {
+      console.error('[tv] guide open', e.message || e);
       res.status(502).json({ error: String(e.message || e) });
     }
   });

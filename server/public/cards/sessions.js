@@ -150,6 +150,8 @@ export function mountSessions({ list = null, head = null, reply = null, max = 3,
     // THE MECHANISM: the whole list, queue and focus, pushed when any of them changes — a session
     // starting or dying, the focus moving, the numbering changing, a turn's reply landing.
     sessions: (e) => { try { render(JSON.parse(e.data)); } catch (_) {} },
+    // The TV Guide's shelves changed (routes/tv.js): passed on to cards/guide.js, which has no stream.
+    guide: () => window.dispatchEvent(new Event('hub:guide')),
     // Live activity from either machine, one event of a conversation's list (routes/conversation.js, the event
     // log): a tool call or in-between text is the row's live line; a prompt or a reply, the last thing
     // said. A finished turn also repaints from the `sessions` frame that follows its write.

@@ -1477,8 +1477,8 @@ writes a self-contained HTML page, it lands as a push notification, and tapping 
 | the instruction to publish | `REPORT_DIRECTIVE`, appended to the prompt by `pi-desk` and the Mac orchestrator |
 | the notification | `reportTick()` here — fired by realtime the moment a `reports` row is INSERTed, with a 10-minute backstop behind it |
 | the page | `GET /report/:id`; every report at `GET /reports` |
-| the way in | the **Reports pane** — the phone's last swipe pane, right of home |
-| the pane's data | `GET /api/reports` (list only; `html` is never selected) → `cards/reports.js` |
+| the way in | the notification; on the phone page it opens the standalone `/report/:id` (the phone has no reports pane, so the app's `__showReport` check falls through to loading the page) |
+| the list | `GET /reports`, and `GET /api/reports` (list only; `html` is never selected) → `cards/reports.js`, which mounts only where `#reportspane` exists |
 
 **Why the directive lives in the prompt and not in `CLAUDE.md`:** it should apply to dispatched work
 only. A session opened by hand at the keyboard has no business filing reports. Making it

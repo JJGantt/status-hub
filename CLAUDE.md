@@ -642,12 +642,15 @@ It also beats app.css's `body.tv.wallportrait` block on equal specificity, by lo
   automatic minimum is its CONTENT, so a plain `1fr` sizes each ring to its svg's intrinsic width and
   the ring column stands far taller than the one it is supposed to match.
 
-Its panes are [sessions] [home] [reports], landing on home — index 1, which is what
+Its panes are [sessions] [home] [guide], landing on home — index 1, which is what
 `panes.clientWidth` means in `phone-home.js` and what the reset returns to. Everything else is a SHEET
 opened by tapping what summarises it (the calendar and the lists, the weight page, the heat maps, surf,
 the body) or from the navbar (utilities, settings). A widget's launch into the old lists pane
 (`__showPane('todo')`) opens the calendar sheet instead. Driven by
 `phone-home.js` rather than `wall.js`, since there is no canvas to scale and only the paging is left.
+The guide pane is the bedroom TV's TV Guide (`cards/guide.js`, google-tv docs/GUIDE.md): the shelves from
+`/api/tv/guide`, redrawn on the `guide` event the session stream carries (passed on as `hub:guide`), and a
+tap plays the item on the TV through `POST /api/tv/guide/open`, an ordinary `open` command.
 
 **SESSIONS sits immediately left of home**, where the walls put their chat pane. It is the one pane
 reached by swiping rather than by tapping something, and it is the answer to the home page's session

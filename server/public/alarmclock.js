@@ -94,7 +94,10 @@ const keyOf = (it) => `${it.id}:${it.when}`;
 function unlock() {
   try {
     if (!actx) actx = new (window.AudioContext || window.webkitAudioContext)();
-    if (actx.state === 'suspended') actx.resume();
+    // iOS can refuse to start audio (a call, another app holding the session) and WebKit rejects the
+    // resume with "Failed to start the audio device". The context stays suspended, the next touch
+    // retries, and the 'alarmclock' beacon reports the state, so the rejection is handled here.
+    if (actx.state === 'suspended') actx.resume().catch(() => {});
   } catch (_) { actx = null; }
 }
 function beep(at, freq) {

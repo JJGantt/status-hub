@@ -30,7 +30,7 @@ function nativeAudio(on) {
 let actx = null;
 function ctx() {
   if (!actx) { try { actx = new (window.AudioContext || window.webkitAudioContext)(); } catch (_) { return null; } }
-  if (actx.state === 'suspended') actx.resume();
+  if (actx.state === 'suspended') actx.resume().catch(() => {});   // a refusal shows as state= in the result
   return actx;
 }
 function osc(label, extra) {

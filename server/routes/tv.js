@@ -18,9 +18,10 @@ module.exports = function (ctx) {
   // Ops that make sense to wake the TV for. While it is off the app is not connected, so these are held
   // for the replay on connect rather than failed; the Pi, subscribed to the same inserts, wakes the TV.
   const TV_WAKE_OPS = new Set(['open', 'launch', 'input']);
-  // Done by the Pi over adb (power, its sleep timer, and remote keys, which an app cannot inject), never by the app, so
+  // Done by the Pi over adb (power, its sleep timer, remote keys, which an app cannot inject, and reading the Apple
+  // TV app's screen, which an app cannot do), never by the app, so
   // the hub leaves the row to it.
-  const TV_PI_OPS = new Set(['power', 'key', 'sleep']);
+  const TV_PI_OPS = new Set(['power', 'key', 'sleep', 'appletv']);
   // The sidebar's look, kept as settings so a size chosen once holds until changed (§ The TV sidebar).
   // All three are the page's business, delivered on the sessions frame it already holds.
   const TV_SIDEBAR_FONT = 17;     // px, the page's base size

@@ -79,8 +79,35 @@ function createJobs(ctx) {
   // dated item 1,440 times a day, overwhelmingly to learn that 9am has still not come.
   let dueNextAt = '';
   let dueDirty = true;
-  const dirtyDue = () => { dueDirty = true; };
+  // A list_items change re-reads within a second rather than at the next minute tick, so an item due
+  // in 30 seconds is seen (and its timer armed) in time. Debounced: a burst of writes is one read.
+  let dirtyTimer = null;
+  const dirtyDue = () => {
+    dueDirty = true;
+    if (dirtyTimer) return;
+    dirtyTimer = setTimeout(() => { dirtyTimer = null; dueTick().catch((e) => console.error('[due] error', e.message)); }, 1000);
+  };
   const earlierOf = (a, b) => (!a ? (b || '') : (!b || a <= b ? a : b));
+
+  // Due times carry seconds, and the minute tick alone would fire up to 59s late, so the soonest moment
+  // gets a timer of its own. The gap is wall-clock arithmetic on the two naive strings; across a DST
+  // change that is an hour off, which the minute tick still covers (an early wake just re-arms).
+  // Capped so a far-off moment cannot overflow setTimeout.
+  let dueTimer = null;
+  function armDue() {
+    clearTimeout(dueTimer);
+    dueTimer = null;
+    if (!dueNextAt) return;
+    const ms = Date.parse(`${dueNextAt.slice(0, 19)}Z`) - Date.parse(`${etNowString()}Z`);
+    if (isNaN(ms)) return;
+    // A quarter second past the moment, and forced to read: a wake that lands a hair early would
+    // otherwise meet the not-yet-due early return and leave the push to the minute tick.
+    dueTimer = setTimeout(() => {
+      dueTimer = null;
+      dueDirty = true;
+      dueTick().catch((e) => console.error('[due] error', e.message));
+    }, Math.min(Math.max(ms, 0), 6 * 3600000) + 250);
+  }
 
   async function dueTick() {
     const nowET = etNowString();
@@ -91,7 +118,7 @@ function createJobs(ctx) {
     // Only once the read succeeded: a failed read must leave the state dirty so the next tick retries.
     dueDirty = false;
     dueNextAt = '';
-    if (!rows.length) return;
+    if (!rows.length) { armDue(); return; }
     // One lookup for the whole tick rather than one per item — a handful of lists, read at most once a
     // minute, and only when something is actually dated.
     let emojiOf = {};
@@ -119,6 +146,7 @@ function createJobs(ctx) {
       // lets it sit there visibly overdue and drain the score until it is dealt with.
     }
     dueNextAt = earlierOf(dueNextAt, await closeExempt(nowET, rows));
+    armDue();
     // The badge follows what just fired or closed. It is pushed from the `list_items` subscription too,
     // so its own timer can be a backstop rather than the thing that keeps the icon honest.
     syncBadge().catch((e) => console.error('[badge] error', e.message));

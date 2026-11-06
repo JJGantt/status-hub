@@ -235,9 +235,9 @@ alone — a notification that re-fires every minute is a second alarm nobody ask
 `apps/tools/render-*.swift` compiles them standalone and writes PNGs at real device point sizes.
 Importing WidgetKit there costs the whole iterate-without-a-device loop.
 
-## A dated item with a past `due` pushes to the phone within 60 seconds
+## A dated item with a past `due` pushes to the phone within seconds
 
-`dueTick` scans every 60s and app-pushes anything overdue. So inserting a test item with a due time
+A `list_items` write makes `dueTick` re-read within a second, and it app-pushes anything overdue. So inserting a test item with a due time
 in the past does not simulate an overdue item — it **sends a real notification** to the owner's
 phone with fake content, and there is no way to unsend it.
 

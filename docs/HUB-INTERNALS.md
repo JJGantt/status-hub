@@ -808,9 +808,11 @@ Consequences worth knowing:
   calls something overdue reads that one: chip red and dimming, the badge, the pane, both widgets. Mix
   them and an all-day chip goes red at 9:30am while it is still worth its full +7. data-layer's
   `isExpired` holds the same rule.
-- **The scheduler** (`dueTick`) wakes every 60s but only SCANS when the next due moment has arrived or
-  a `list_items` change dirtied it — a moment passing is not a row changing, so the clock stays and the
-  query goes. It reads `list_items` where `due` is past, dedupes against
+- **The scheduler** (`dueTick`) holds the next due moment in memory and arms a timer for it, to the
+  second (a `due` can carry seconds: a six-minute timer said at 10:53:29 is due 10:59:29). It SCANS
+  only when that moment arrives or a `list_items` change dirties it (re-read within a second) — a
+  moment passing is not a row changing, so the clock stays and the query goes. The 60s tick that also
+  carries the heartbeat stays under it as the net. It reads `list_items` where `due` is past, dedupes against
   `notifications.dedupe_key`, and hands off to a **named handler** in `DUE_HANDLERS` rather than
   calling `pushAll` directly. Only `push` exists today.
 - **`kind` is gone** from `/api/todos/clear` — one table, one thing to clear.

@@ -201,6 +201,7 @@ with the same MCP servers, approvals off and full access.
 | `resume_session` | owning machine | `claude --resume <id>` in a new tab or tmux session, with an optional prompt; a Pi with no memory to spare hands it to the Mac with its conversation, like new work (§ Capacity). Aimed at a session that is still running, both machines type the prompt into it |
 | `transfer_session` | machine GIVING IT UP | close, flush the mirror, ask the other to resume |
 | `get_sessions` | — | the numbered list |
+| `read_session` | — | one session's last few turns from `desk_turns` (his prompt and its reply, oldest first, up to the 20 kept): how voice finds something he "was talking about" in a session rather than to it |
 
 The hub's `POST /api/sessions/followup` (the watch's and the phone's session view) is `follow_up` addressed by session
 id instead of by focus, and for a parked session it writes `resume_session` with the words as the
@@ -432,7 +433,7 @@ A session any other agent dispatches has no `relay` flag and stays out of the th
 | **TV session focus** (`/tv-session-focus`) | the running sessions as tabs, and the shown one's reply | none — voice only |
 | the home wall (`/tv`, `tv-home.js`) | three, the pinned one first and then most recently active, each with a live line of what it is doing; the shown one's full reply below | none — voice only |
 | the watch (`SessionsView`) | queued sessions on top, then every running and parked one, live off the `sessions` frames | open a session; a follow-up is always locked until the next press |
-| voice (`get_sessions`) | the numbered list, and what each last said (the turn's one-sentence summary from `desk_turns.summary`, else the reply's first 200 characters) | every verb |
+| voice (`get_sessions`, `read_session`) | the numbered list, and what each last said (the turn's one-sentence summary from `desk_turns.summary`, else the reply's first 200 characters); `read_session` gives one session's recent turns in full | every verb |
 | the hub conversation (web `.ai-msg-session`, watch tint) | a hub-dispatched session's first reply, tinted and named by its label | reply is a fresh command |
 
 A Codex session is outlined blue on a dark blue ground in every list above that draws rows (phone, both

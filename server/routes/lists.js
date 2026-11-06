@@ -689,7 +689,7 @@ module.exports = function (ctx) {
   // waiting for their realtime echo, which takes seconds. A ring on the TV stops only when the feed
   // changes, so a STOP that waits for the echo leaves the TV ringing long enough to read as not having
   // worked. The echo still arrives and repeats the announcement; that is one redundant reload per tap.
-  function announceListWrite() { dirtyRows('list_items'); pushLists(); broadcast(); }
+  function announceListWrite(quiet) { dirtyRows('list_items'); pushLists(quiet ? { quiet } : {}); broadcast(); }
   gated.post('/api/todos/complete', express.json(), async (req, res) => {
     try {
       const b = req.body || {};
@@ -709,7 +709,7 @@ module.exports = function (ctx) {
         { completed_at: completedAt, updated: now });
       console.log(`[todos] ${b.undo ? 'uncomplete' : 'complete'} ${id}`);
       res.json({ ok: true, completed_at: completedAt });
-      announceListWrite();
+      announceListWrite(id);
       syncBadge().catch((e) => console.error('[badge]', e.message || e));   // don't make the caller wait on APNs
     } catch (e) { res.status(500).json({ error: String(e.message || e) }); }
   });
@@ -725,7 +725,7 @@ module.exports = function (ctx) {
       // number here: the pane re-reads /api/badge after every load anyway, and syncBadge() pushes the
       // authoritative count to the devices a moment later.
       res.json({ ok: true });
-      announceListWrite();
+      announceListWrite(id);
       syncBadge().catch((e) => console.error('[badge]', e.message || e));   // don't make the caller wait on APNs
     } catch (e) { res.status(500).json({ error: String(e.message || e) }); }
   });
@@ -749,7 +749,7 @@ module.exports = function (ctx) {
       const [row] = await sb(`list_items?id=eq.${encodeURIComponent(id)}&select=alarm`);
       await sbWrite(`list_items?id=eq.${encodeURIComponent(id)}`, 'PATCH',
         { due, ...(row && row.alarm ? { scheduled_at: due } : {}), updated: new Date().toISOString() });
-      announceListWrite();
+      announceListWrite(id);
       res.json({ ok: true, due, badge: await overdueCount() });
       syncBadge().catch((e) => console.error('[badge]', e.message || e));
     } catch (e) { res.status(500).json({ error: String(e.message || e) }); }

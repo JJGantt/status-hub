@@ -42,8 +42,10 @@ function pushVoice(kind, row) {
 // signal carries no payload on purpose: what each surface needs back differs (the wall wants
 // `calendar_months` months plus today's timeline, the phone wants whichever month it has paged to),
 // so the fetch that follows is the only thing that knows what to ask for.
-function pushLists() {
-  const frame = 'event: lists\ndata: {}\n\n';
+// `quiet` names an item that must stop ringing NOW (stopped, snoozed or deleted), so a ringer can go
+// silent on the frame itself instead of after re-reading the feed, which can take seconds.
+function pushLists(data = {}) {
+  const frame = `event: lists\ndata: ${JSON.stringify(data)}\n\n`;
   for (const res of listClients) { try { res.write(frame); } catch {} }
 }
 

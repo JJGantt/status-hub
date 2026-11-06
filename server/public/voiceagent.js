@@ -1159,8 +1159,10 @@ function initCard() {
     // A reply a fallback engine wrote (voice_messages.engine: 'credits' or 'codex') is coloured by it.
     const engine = side === 'assistant' && /^(credits|codex)$/.test(row.engine || '') ? ' ai-engine-' + row.engine : '';
     // `data-sess` makes it a way into that session (cards/repos.js opens it on a tap).
-    const sessAttr = session ? ' data-sess="' + esc(String(row.session_id)) + '"' : '';
-    return '<div' + sessAttr + ' class="ai-msg ai-msg-' + side + (session ? ' ai-msg-session' : '') + engine + (row.pending ? ' ai-msg-pending' : '') + '">' + inner + '</div>';
+    let attrs = session ? ' data-sess="' + esc(String(row.session_id)) + '"' : '';
+    // `data-mid` is what a tapped answer notification lands on (`__showAnswer`).
+    if (row.id) attrs += ' data-mid="' + esc(String(row.id)) + '"';
+    return '<div' + attrs + ' class="ai-msg ai-msg-' + side + (session ? ' ai-msg-session' : '') + engine + (row.pending ? ' ai-msg-pending' : '') + '">' + inner + '</div>';
   }
   // A divider where one conversation context ends and the next begins; never two in a row.
   function rule() {
@@ -1243,6 +1245,35 @@ function initCard() {
       if (owed && !document.hidden) { scrollEnd(); owed = false; } else log.scrollTop = keep;
     } catch (_) {}
   }
+
+  // A TAPPED ANSWER NOTIFICATION (the app's PageLaunch.answer) opens the chat sheet ON that answer: the
+  // top of the message at the top of the log, the same landing as every thread here. On a cold launch the
+  // thread may not be painted yet, so it re-reads the thread first. An answer too old to be in it opens
+  // in the inbox instead (`__showInboxAnswer`). It is marked read only once it is on screen: the
+  // notification does not mark a tap, since marking first can drop an old answer out of this thread.
+  let landOn = null;
+  function landOnAnswer() {
+    if (!landOn) return false;
+    const el = log.querySelector('[data-mid="' + CSS.escape(landOn) + '"]');
+    if (!el) return false;
+    log.scrollTop += el.getBoundingClientRect().top - log.getBoundingClientRect().top;
+    owed = false;
+    fetch('/api/voice-messages/read', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: landOn }) }).catch((e) => console.error('answer: marking read failed', e));
+    landOn = null;
+    return true;
+  }
+  window.__showAnswer = async (id) => {
+    const sheet = document.getElementById('ph-chat');
+    if (sheet) sheet.classList.add('open');
+    landOn = String(id);
+    if (landOnAnswer()) return;
+    await backfill();
+    if (landOn !== String(id) || landOnAnswer()) return;
+    landOn = null;
+    if (window.__showInboxAnswer) { if (sheet) sheet.classList.remove('open'); window.__showInboxAnswer(String(id)); }
+    else console.error('answer: ' + id + ' is not in the thread and there is no inbox to open it in');
+  };
 
   // ---- photo attachments --------------------------------------------------
   // An image button in the composer row + a pending-thumbnail tray above it. iOS presents its native

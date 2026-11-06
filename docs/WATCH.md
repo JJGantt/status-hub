@@ -220,7 +220,9 @@ read, so every such reply goes into an inbox: kept for good, newest first, read 
   system shows it. Any interaction with it is reading it: swiped away, on the watch or the phone, it is marked
   read at once (`customDismissAction` is what reports the swipe); tapped on the watch, home lands on
   the answer and the read rule marks it (closing the inbox if it was open), since marking it first would drop an old answer out of the
-  thread before home could land on it; tapped on the phone, it is marked read. Only seeing it, with no
+  thread before home could land on it; tapped on the phone, the app opens the chat sheet with the top of
+  that answer at the top (`__showAnswer` in voiceagent.js, through `PageLaunch.answer`) and marks it read once
+  it is there, or opens it in the inbox when it is too old to be in the thread. Only seeing it, with no
   touch, does not count: nothing reports that.
 - **None is lost to age.** `/api/voice-messages` returns every unread answer however old, with the
   words that asked for it, ahead of the current context; the watch draws them above the last ten

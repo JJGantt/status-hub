@@ -177,6 +177,8 @@ function mount() {
     if (openId) paintView(openId, false);
   });
   window.addEventListener('hubreset', close);
+  // A tapped answer notification whose answer is too old for the chat's thread (`__showAnswer`).
+  window.__showInboxAnswer = (id) => { build(); sheet.classList.add('open'); openView(id); };
 }
 
 if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', mount);

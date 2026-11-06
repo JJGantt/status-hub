@@ -239,25 +239,29 @@ final class RepoLaunch {
     }
 }
 
-// A session's reply notification, tapped: opens that session on the repos pane (the page's
-// `__showSession` decides what that means). Same polling shape as RecordLaunch — a tap can cold-launch
-// the app before the page has mounted.
-final class SessionLaunch {
-    static let shared = SessionLaunch()
+// A tapped notification that opens something on the page: a session's reply opens that session on the
+// sessions pane (`__showSession`), an orchestrator answer opens the chat sheet on that answer
+// (`__showAnswer`). The page decides what each means. Same polling shape as RecordLaunch — a tap can
+// cold-launch the app before the page has mounted.
+final class PageLaunch {
+    static let session = PageLaunch("__showSession")
+    static let answer = PageLaunch("__showAnswer")
     weak var webView: WKWebView?
+    private let fn: String
     private var pendingId: String?
+    private init(_ fn: String) { self.fn = fn }
 
     func request(_ id: String) { pendingId = id; fire() }
     func fireIfPending() { if pendingId != nil { fire() } }
 
     private func fire(retries: Int = 12) {
         guard let id = pendingId, let wv = webView else { return }
-        wv.evaluateJavaScript("!!(window.__showSession)") { [weak self] ready, _ in
+        wv.evaluateJavaScript("!!(window.\(fn))") { [weak self] ready, _ in
             guard let self, self.pendingId != nil else { return }
             if (ready as? Bool) == true {
                 self.pendingId = nil
                 let arg = String(data: (try? JSONSerialization.data(withJSONObject: [id])) ?? Data(), encoding: .utf8) ?? "[\"\"]"
-                wv.evaluateJavaScript("window.__showSession(\(arg)[0])", completionHandler: nil)
+                wv.evaluateJavaScript("window.\(self.fn)(\(arg)[0])", completionHandler: nil)
             } else if retries > 0 {
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) { self.fire(retries: retries - 1) }
             }
@@ -485,7 +489,8 @@ struct HubWebView {
             PaneLaunch.shared.fireIfPending()     // statushub://pane/<name> cold launch → land there
             RepoLaunch.shared.fireIfPending()     // statushub://repo/<path> cold launch → dictate there
             ReportLaunch.shared.fireIfPending()   // statushub://report/<id> cold launch → open it
-            SessionLaunch.shared.fireIfPending()  // a session-reply notification cold launch → land on it
+            PageLaunch.session.fireIfPending()   // a session-reply notification cold launch → land on it
+            PageLaunch.answer.fireIfPending()    // an answer notification cold launch → land on the answer
         }
         #endif
 
@@ -561,7 +566,8 @@ struct HubWebView {
         PaneLaunch.shared.webView = wv     // …and statushub://pane/<name>
         RepoLaunch.shared.webView = wv     // …and statushub://repo/<path>
         ReportLaunch.shared.webView = wv   // …and statushub://report/<id>
-        SessionLaunch.shared.webView = wv  // …and a tapped session-reply notification
+        PageLaunch.session.webView = wv    // …and a tapped session-reply notification
+        PageLaunch.answer.webView = wv     // …and a tapped answer notification
         MainActor.assumeIsolated { LiveMic.shared.web = wv }   // so the live mic can report its state to the page
         #endif
         #if os(iOS)

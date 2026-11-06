@@ -102,8 +102,8 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
     static let alarmSnoozeMinutes = 9
 
     // An orchestrator answer worth reading (docs/WATCH.md, "The inbox"). No buttons;
-    // `customDismissAction` is what reports a swipe-away, so tapping it and dismissing it both reach
-    // the delegate, and either one marks the answer read.
+    // `customDismissAction` is what reports a swipe-away. Swiped away, it is marked read here; tapped,
+    // the app opens the chat on the answer and the page marks it read once it has landed there.
     private static let answerCategory = UNNotificationCategory(
         identifier: "VOICE_ANSWER", actions: [], intentIdentifiers: [], options: [.customDismissAction])
 
@@ -155,9 +155,15 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
     func userNotificationCenter(_ center: UNUserNotificationCenter,
                                 didReceive response: UNNotificationResponse,
                                 withCompletionHandler completionHandler: @escaping () -> Void) {
-        // An answer's notification, tapped or swiped away: read.
+        // An answer's notification. Swiped away: read. Tapped: the chat opens on it, and the page marks
+        // it read after landing — marking it first can drop an old answer out of the thread it lands in.
         if let mid = response.notification.request.content.userInfo["voice_message_id"] as? String {
-            HubAPI.post("/api/voice-messages/read", ["id": mid], done: completionHandler)
+            if response.actionIdentifier == UNNotificationDismissActionIdentifier {
+                HubAPI.post("/api/voice-messages/read", ["id": mid], done: completionHandler)
+            } else {
+                PageLaunch.answer.request(mid)
+                completionHandler()
+            }
             return
         }
         // A permission prompt's button. Checked before the session branch: the prompt carries the
@@ -169,7 +175,7 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
         }
         // A session's finished reply: tapping the banner opens that session on the repos pane.
         if let sid = response.notification.request.content.userInfo["session_id"] as? String {
-            SessionLaunch.shared.request(sid)
+            PageLaunch.session.request(sid)
             return completionHandler()
         }
         // A published report: tapping the banner opens that page. Checked before the reminder guard,

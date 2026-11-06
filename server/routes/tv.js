@@ -67,16 +67,16 @@ module.exports = function (ctx) {
     } catch (e) { res.status(502).json({ error: String(e.message || e) }); }
   });
 
-  // The picks screen's shelves (google-tv docs/PICKS.md; data-layer tvPicks.ts writes them). The app reads
-  // this whenever the screen comes up and on a `picks_refresh` command, which the tool sends after a write.
-  gated.get('/api/tv/picks', async (req, res) => {
+  // The TV Guide's shelves (google-tv docs/GUIDE.md; data-layer tvGuide.ts writes them). The app reads
+  // this whenever the screen comes up and on a `guide_refresh` command, which the tool sends after a write.
+  gated.get('/api/tv/guide', async (req, res) => {
     try {
       const rows = await sb('tv_shelves?select=id,title,tv_shelf_items(id,title,image,url,package,position)'
         + '&order=position&tv_shelf_items.order=position');
       res.json({ shelves: rows.map((s) => ({ id: s.id, title: s.title,
         items: s.tv_shelf_items.map(({ position, ...it }) => it) })) });
     } catch (e) {
-      console.error('[tv] picks', e.message || e);
+      console.error('[tv] guide', e.message || e);
       res.status(502).json({ error: String(e.message || e) });
     }
   });

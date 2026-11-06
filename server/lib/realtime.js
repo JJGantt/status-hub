@@ -82,7 +82,7 @@ function createRealtime(ctx) {
         dirtySettings();
         dirtyNutDay();   // surplus_cal shapes the day header's goal figures
         broadcast(p);
-        if (p.new && ['tv_sidebar_view', 'tv_sidebar_font', 'tv_sidebar_width'].includes(p.new.key)) pushSessions();
+        if (p.new && ['tv_sidebar_view', 'tv_sidebar_font', 'tv_sidebar_width', 'tv_sidebar_content'].includes(p.new.key)) pushSessions();
         // A holder written straight into the table (the Mac's listener) is a mute taken or given back.
         if (p.new && String(p.new.key || '').startsWith(MUTE_HOLD)) recomputeMute().catch((e) => console.error('[mute]', e.message || e));
       })

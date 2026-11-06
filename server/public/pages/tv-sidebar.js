@@ -8,6 +8,9 @@
 // It shows the FOCUSED session (desk_sessions_state(), data-layer 00157): where a spoken follow-up goes, so it follows
 // whatever the user is working in. The `sessions` frame on the stream carries focus, so a change moves it.
 // Its own small renderer rather than cards/repos.js, which carries a composer, a recorder and a list.
+//
+// The third view, `content`, is whatever an agent put on the panel (`sidebar_content`, any markdown),
+// drawn from the top and held until replaced, so he can keep talking while it stays up.
 import { esc, md, liveStream } from '../shared.js';
 
 let rowId = null, conv = null, epoch = null, events = [];
@@ -109,6 +112,9 @@ function focusOn(id) {
 
 const vo = document.getElementById('vo');
 const ss = document.getElementById('ss');
+const cv = document.getElementById('cv');
+const cvBody = document.getElementById('cv-body');
+let content = null;
 let view = 'session';
 
 // ---- width -----------------------------------------------------------------------------------------
@@ -123,8 +129,9 @@ let minWidth = 0.35;
 
 function fit() {
   const W = window.innerWidth;
-  const box = view === 'orchestrator' ? voBody : body;
-  const fits = (w) => {
+  const box = view === 'orchestrator' ? voBody : view === 'content' ? cvBody : body;
+  // Content is drawn from the top, so it fits when nothing runs off the bottom.
+  const fits = view === 'content' ? (w) => { panel.style.width = w + 'px'; return box.scrollHeight <= box.clientHeight + 1; } : (w) => {
     panel.style.width = w + 'px';
     const els = box.querySelectorAll('.sb-reply, .sb-thought');
     const el = els[els.length - 1];
@@ -143,11 +150,16 @@ function frame(d) {
   if (!d) return;
   // A deploy reaches the server, not an open page: reload when the build changes.
   if (d.commit) { if (build && d.commit !== build) { location.reload(); return; } build = d.commit; }
-  view = d.sidebar_view === 'orchestrator' ? 'orchestrator' : 'session';
+  view = ['orchestrator', 'content'].includes(d.sidebar_view) ? d.sidebar_view : 'session';
   if (Number(d.sidebar_font) > 0) document.body.style.fontSize = d.sidebar_font + 'px';
   if (Number(d.sidebar_width) > 0) minWidth = Number(d.sidebar_width);
   vo.hidden = view !== 'orchestrator';
-  ss.hidden = view === 'orchestrator';
+  cv.hidden = view !== 'content';
+  ss.hidden = view !== 'session';
+  if (typeof d.sidebar_content === 'string' && d.sidebar_content !== content) {
+    content = d.sidebar_content;
+    cvBody.innerHTML = `<div class="sb-reply">${md(content.trim())}</div>`;
+  }
   fit();   // after the switch: a hidden box measures as nothing and would never fit
   if (view === 'orchestrator') loadVoice();
   focusOn(d.focus);

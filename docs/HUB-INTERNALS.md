@@ -1408,8 +1408,9 @@ tab, a closed row would be kept running by the next session opened in its tab.
 
 ### The TV sidebar (`/tv-sidebar`)
 
-One conversation down the strip: the focused session, or the voice orchestrator's conversation.
-Which is the `tv_sidebar_view` setting (`session` | `orchestrator`, default session), written by
+One conversation down the strip: the focused session, the voice orchestrator's conversation, or
+`content`, whatever an agent put there. Which is the `tv_sidebar_view` setting (`session` |
+`orchestrator` | `content`, default session), written by
 `tvPush` when a `sidebar` command carries `view` and delivered as `sidebar_view` on the sessions frame
 the page already holds, so switching needs no new build of the TV app. That frame also carries `commit`,
 and the page reloads when it changes, since it holds no status frame to learn of a deploy from.
@@ -1432,6 +1433,12 @@ The orchestrator view is the current context of the hub thread, fetched from
 carries a `message` or `reset` frame, so which rows belong to the current context stays the server's
 rule. After 4 AM or a reset it is empty under its header until the next command. A reply relayed
 from a session (a row with `session_id`) is drawn in the teal (`#9fe3d3`) the phone and watch give it.
+
+The content view is the `tv_sidebar_content` setting: any markdown, written by `tvPush` when a
+`sidebar` command carries `content` (which also switches the view to it) and delivered as
+`sidebar_content` on the sessions frame. It is held until replaced, so the panel keeps it while the
+conversation goes on, and the agent edits it by sending the whole of it again. It is drawn from the
+top under no header, and `fit` widens the panel until nothing runs off the bottom.
 
 The user's words appear the moment the request exists, not when the conversation row does: the worker
 writes the user's `voice_messages` row only beside the answer, up to half a minute later. Every `voice_requests`

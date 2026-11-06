@@ -174,7 +174,9 @@ module.exports = function (ctx) {
       pinned,
       // What the bedroom TV's sidebar shows (§ The TV sidebar): the focused session, or the voice
       // orchestrator's conversation. Here so the sidebar learns a change from the frame it already holds.
-      sidebar_view: (await settingsAll()).tv_sidebar_view === 'orchestrator' ? 'orchestrator' : 'session',
+      sidebar_view: ['orchestrator', 'content'].includes((await settingsAll()).tv_sidebar_view) ? (await settingsAll()).tv_sidebar_view : 'session',
+      // What the agent put on the panel, shown when sidebar_view is `content`.
+      sidebar_content: String((await settingsAll()).tv_sidebar_content || ''),
       sidebar_font: Number((await settingsAll()).tv_sidebar_font) || TV_SIDEBAR_FONT,
       sidebar_width: Number((await settingsAll()).tv_sidebar_width) || TV_SIDEBAR_WIDTH,
       // The build, so a page that holds only this stream (the TV sidebar) reloads on a deploy, as every

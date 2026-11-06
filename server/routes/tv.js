@@ -30,7 +30,11 @@ module.exports = function (ctx) {
     if (row.op === 'sidebar') {
       const a = row.args = row.args || {};
       const put = (k, v) => putSetting(k, v).catch((e) => console.error('[tv] sidebar', k, e.message || e));
-      if (a.view === 'session' || a.view === 'orchestrator') put('tv_sidebar_view', a.view);
+      // `content` is what the agent puts on the panel (§ The TV sidebar): any markdown, held until
+      // replaced. Sending it switches the panel to it; `view` alone switches without changing it.
+      if (typeof a.content === 'string') { put('tv_sidebar_content', a.content); if (!a.view) a.view = 'content'; }
+      if (['session', 'orchestrator', 'content'].includes(a.view)) put('tv_sidebar_view', a.view);
+      delete a.content;   // the page reads it from the settings; the app has no use for it
       if (Number(a.font_size) > 0) put('tv_sidebar_font', Number(a.font_size));
       if (Number(a.width) > 0) put('tv_sidebar_width', Number(a.width));
       // The app's window spans the screen, see-through; the page draws the panel at the stored width as

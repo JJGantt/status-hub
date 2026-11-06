@@ -71,7 +71,7 @@ module.exports = function (ctx) {
   // this whenever the screen comes up and on a `guide_refresh` command, which the tool sends after a write.
   gated.get('/api/tv/guide', async (req, res) => {
     try {
-      const rows = await sb('tv_shelves?select=id,title,tv_shelf_items(id,title,image,url,package,position)'
+      const rows = await sb('tv_shelves?select=id,title,tv_shelf_items(id,title,image,url,package,note,position)'
         + '&order=position&tv_shelf_items.order=position');
       res.json({ shelves: rows.map((s) => ({ id: s.id, title: s.title,
         items: s.tv_shelf_items.map(({ position, ...it }) => it) })) });

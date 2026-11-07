@@ -460,3 +460,15 @@ Function, not liveness — ask it to do something and see whether it did:
 
     # end to end, without SSH: dispatch a session and read its reply back
     #   "start a session in status-hub and reply with just: ready"
+
+Two checks report on their own, to the ops responder:
+
+- **A session never opens empty.** `GET /api/sessions/:id`, which every surface opens a session
+  through, reports once per conversation when the thread is empty although the row was told something
+  (a launch prompt, a last prompt or reply, or a turn in flight) and is over 90s old
+  (`emptyThread` in `server/lib/outcomes.js`). An empty thread means every surface draws a blank page.
+- **A turn in flight has its transcript.** The Mac's desk tick (voice-pipeline
+  `orchestrator/src/deskSessions.js`) reports a session busy for over 15s whose `transcript_path` does
+  not exist. Claude Code names a project directory by turning every character that is not a letter or
+  digit into a dash (`projectDir` in `orchestrator/src/transcripts.js`); a path built any other way
+  points at nothing, and every reader then sees an empty session.

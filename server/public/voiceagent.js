@@ -923,9 +923,9 @@ async function deliverVoice(item, onStatus, owner) {
   // The card's placeholder, until the hub's own frame for this clip (which names it by `cmid`) or its answer.
   const local = 'c:' + item.id;
   if (!item.dry && _card) _card.request({ id: local, text: '', status: 'transcribing' });
-  try { await sendVoice(item, onStatus, owner); } finally { if (_card) _card.request({ id: local, status: 'dropped' }); }
+  try { await uploadVoice(item, onStatus, owner); } finally { if (_card) _card.request({ id: local, status: 'dropped' }); }
 }
-async function sendVoice(item, onStatus, owner) {
+async function uploadVoice(item, onStatus, owner) {
   const qp = new URLSearchParams();
   if (item.dry) qp.set('dry', '1');
   if (item.quick) qp.set('quick', '1');

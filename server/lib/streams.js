@@ -31,12 +31,31 @@ function pushDay(kind) {
 
 // Push a single voice event to every /tv client. Shape: { kind, row }. Kinds:
 //   'message'  — a voice_messages row (append/update the conversation)
+//   'request'  — a hub request before its conversation row exists (requestView, and heardStart above)
 // (Transient 'activity'/'reset' events are pushed directly from the worker via /api/voice-activity.)
 // The browser keys off kind.
 function pushVoice(kind, row) {
   const frame = 'event: voice\ndata: ' + JSON.stringify({ kind, row }) + '\n\n';
   for (const res of voiceClients) { try { res.write(frame); } catch {} }
 }
+
+// A COMMAND THE HUB IS HEARING BUT HAS NOT ENQUEUED YET. From the moment /api/voice-command starts taking a
+// pressed command's audio until its voice_requests row exists there is nothing in the database to show,
+// and on the watch that stretch (the audio arriving, then transcription) is the longest wait in the
+// whole command. So the hub announces it itself, as a `request` frame with no text and status
+// `transcribing`, and every thread view draws a placeholder for it; the same request id then carries the
+// transcript (`heardEnd` with the row's view) or, when nothing was enqueued, status `dropped`.
+// `cmid` is the sender's client_msg_id, which is how the device that recorded it knows the frame is its own.
+// Held here as well so /api/voice-pending can list them for a view that (re)loads mid-transcription.
+const heard = new Map();   // request id -> its view
+function heardStart(view) { heard.set(view.id, view); pushVoice('request', view); }
+function heardEnd(id, view) {
+  const was = heard.get(id);
+  if (!was) return;
+  heard.delete(id);
+  pushVoice('request', view ? { ...view, cmid: was.cmid } : { id, cmid: was.cmid, text: '', status: 'dropped' });
+}
+const hearing = () => [...heard.values()];
 
 // Tell every open calendar surface that dated items changed, so it re-reads /api/calendar. The
 // signal carries no payload on purpose: what each surface needs back differs (the wall wants
@@ -49,4 +68,5 @@ function pushLists(data = {}) {
   for (const res of listClients) { try { res.write(frame); } catch {} }
 }
 
-module.exports = { PING, sseClients, voiceClients, listClients, sessionClients, dayClients, pushDay, pushVoice, pushLists };
+module.exports = { PING, sseClients, voiceClients, listClients, sessionClients, dayClients, pushDay, pushVoice, pushLists,
+  heardStart, heardEnd, hearing };

@@ -3,6 +3,7 @@
 // and where a context begins.
 const express = require('express');
 const { DAY_START_HOUR, localDate } = require('../lib/dates');
+const { hearing } = require('../lib/streams');
 
 module.exports = function (ctx) {
   const { VOICE_RESET_SENTINEL, gated, sb, sbWrite, settingsAll, settingsCached } = ctx;
@@ -146,18 +147,26 @@ module.exports = function (ctx) {
     } catch (e) { res.status(500).json({ error: String(e.message || e) }); }
   });
 
-  // A request as the TV sidebar draws it before its voice_messages row exists; null for one that is not
-  // the user's words to the hub conversation (another focus, the reset sentinel) or has no transcript yet.
+  // A request as every thread view draws it before its voice_messages row exists; null for one that is not
+  // the user's words to the hub conversation (another focus, the reset sentinel) or has no words yet. A row
+  // queued `untranscribed` (the Mac's Whisper is doing it) is drawn as `transcribing`, like a command the
+  // hub is still hearing (lib/streams.js heardStart). `always_on` marks a listener's capture, which may
+  // turn out to be room noise: the watch and the phone leave those out.
   function requestView(r) {
-    if ((r.focus || 'hub') !== 'hub' || !r.transcript || r.transcript === VOICE_RESET_SENTINEL) return null;
-    return { id: r.id, text: r.transcript, status: r.status, created_at: r.created_at };
+    if ((r.focus || 'hub') !== 'hub' || r.transcript === VOICE_RESET_SENTINEL) return null;
+    if (!r.transcript && r.status !== 'untranscribed') return null;
+    return { id: r.id, text: r.transcript || '', status: r.transcript ? r.status : 'transcribing',
+      created_at: r.created_at, ...(r.always_on ? { always_on: true } : {}) };
   }
 
-  // Requests not yet finished: what the TV sidebar shows ahead of their rows on (re)load.
+  // Requests not yet finished, and commands still being heard: what a thread view shows ahead of their
+  // rows on (re)load.
   gated.get('/api/voice-pending', async (req, res) => {
     try {
-      const rows = await sb('voice_requests?focus=eq.hub&status=not.in.(done,error)&order=created_at&select=id,transcript,status,focus,created_at') || [];
-      res.json(rows.map(requestView).filter(Boolean));
+      const rows = await sb('voice_requests?focus=eq.hub&status=not.in.(done,error)&order=created_at&select=id,transcript,status,focus,created_at,always_on') || [];
+      const listed = rows.map(requestView).filter(Boolean);
+      const have = new Set(listed.map((r) => r.id));
+      res.json(listed.concat(hearing().filter((h) => !have.has(h.id))));
     } catch (e) { res.status(500).json({ error: String(e.message || e) }); }
   });
 

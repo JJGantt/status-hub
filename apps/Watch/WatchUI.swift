@@ -31,6 +31,24 @@ enum Ink {
     static let thought = Color(white: 0.62)
 }
 
+/// Three dots, one lit at a time: a command in flight whose next thing is not here yet. In the user's
+/// colour where the user's words will land, in the thought colour where the run's steps will.
+struct Dots: View {
+    var color: Color = Ink.mine
+
+    var body: some View {
+        TimelineView(.periodic(from: .now, by: 0.35)) { t in
+            let lit = Int(t.date.timeIntervalSinceReferenceDate / 0.35) % 3
+            HStack(spacing: 3) {
+                ForEach(0..<3, id: \.self) { i in
+                    Circle().fill(color).frame(width: 4, height: 4).opacity(i == lit ? 1 : 0.3)
+                }
+            }
+            .frame(height: 12)
+        }
+    }
+}
+
 struct ActivityLine: Equatable {
     enum Kind { case tool, thought, said }
     let text: String

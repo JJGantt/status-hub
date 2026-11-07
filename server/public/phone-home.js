@@ -178,15 +178,19 @@ document.addEventListener('visibilitychange', () => { if (document.hidden) owed 
 // is over, so without this the box sat unchanged from the moment the user spoke until the whole reply landed,
 // and then both lines appeared together. `null` is nothing in flight; `{text:''}` is a clip being
 // transcribed, where the words are not known yet and the line is three dots; anything else is the
-// transcript, standing in for the row that will replace it.
+// transcript, standing in for the row that will replace it. `id` is the hub's request id once a frame
+// has named it: a `drop` (the hub enqueued nothing) takes down only the line it names, and a command still
+// being heard never replaces another one's words.
 let pending = null;
 let pendingT = 0;       // a run that never reports back must not leave the line up forever
 onPending((p) => {
   if (!p) return;
+  if (p.state === 'drop' && !(pending && (pending.id === p.id || (!pending.id && !pending.text)))) return;
+  if (p.state === 'transcribing' && pending && pending.text) return;
   clearTimeout(pendingT);
-  if (p.state === 'clear') pending = null;
-  else if (p.state === 'transcribing') pending = { text: '' };
-  else if (p.state === 'prompt') pending = { text: String(p.text || '') };
+  if (p.state === 'clear' || p.state === 'drop') pending = null;
+  else if (p.state === 'transcribing') pending = { text: '', id: p.id || (pending && pending.id) };
+  else if (p.state === 'prompt') pending = { text: String(p.text || ''), id: p.id || (pending && pending.id) };
   else return;
   if (pending) pendingT = setTimeout(() => { pending = null; paintConv(); }, 5 * 60 * 1000);
   paintConv(!!pending && !convWatch.reading());
@@ -283,12 +287,13 @@ function paintConv(land) {
     ? '<div class="ph-convline ask pend"><div class="ph-convt">' +
       (pending.text ? md(pending.text) : '<span class=ph-dots><i></i><i></i><i></i></span>') +
       '</div></div>'
-    : '') + (act
+    : '') + (act || (pending && pending.text)
     // The lowest line, under the user's words and above nothing: the caret says it is working and the step
     // says what it is doing. Plain text, collapsed and clipped to the one line — a thought arrives as
-    // markdown and this is not the surface that reads one.
+    // markdown and this is not the surface that reads one. Words heard with no step reported yet are
+    // the caret alone, so there is never a gap between the words landing and the first tool call.
     ? '<div class="ph-convline work"><div class="ph-convt"><span class="ph-caret">\u258d</span>' +
-      '<span class="ph-worktxt">' + esc(act.text) + '</span></div></div>'
+      '<span class="ph-worktxt">' + esc(act ? act.text : '') + '</span></div></div>'
     : '');
   // Twice: once now, because the layout is already final after the assignment above, and once on the
   // next frame, because this block's own height is whatever the rest of the screen did not need and

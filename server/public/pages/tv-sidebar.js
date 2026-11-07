@@ -220,7 +220,8 @@ async function loadVoice() {
 }
 
 // The user's words are drawn from the request the moment it is created (`request` frames, /api/voice-pending)
-// and handed over to the conversation row once that exists, which is only when the answer lands.
+// and handed over to the conversation row once that exists, which is only when the answer lands. Before
+// that, a pressed command the hub is still hearing is a request with no words (lib/streams.js heardStart).
 let voRows = [];
 let voTool = null;   // the orchestrator's tool call in progress, from `activity` frames
 const pending = new Map();   // request id -> { id, text, status }
@@ -234,7 +235,8 @@ function paintVoice() {
     ? `<div class="sb-words">${esc(m.text || '')}</div>`
     // A session's reply relayed into the thread wears the teal the phone and watch give it.
     : `<div class="sb-reply${m.session_id ? ' sb-sess' : ''}">${md(String(m.text || '').trim())}</div>`).join('') +
-    [...pending.values()].map((p) => `<div class="sb-words">${esc(p.text)}</div>`).join('') +
+    // A command still being heard has no words yet: three dots stand where they will land.
+    [...pending.values()].map((p) => `<div class="sb-words">${p.text ? esc(p.text) : '<span class="sb-dots"><i></i><i></i><i></i></span>'}</div>`).join('') +
     (working ? toolLine(voTool) + '<div class="sb-caret">▍</div>' : '');
   fit();
 }
@@ -255,7 +257,8 @@ liveStream('/api/voice-stream', {
     }
     else if (m.kind === 'request' && m.row) {
       // A finished request is dropped: its row arrives as a message, and a failed one may never get one.
-      if (m.row.status === 'done' || m.row.status === 'error') pending.delete(m.row.id);
+      // `dropped` is a command the hub heard and enqueued nothing for (no words, not him).
+      if (['done', 'error', 'dropped'].includes(m.row.status)) pending.delete(m.row.id);
       else pending.set(m.row.id, m.row);
       if (view === 'orchestrator') paintVoice();
     }

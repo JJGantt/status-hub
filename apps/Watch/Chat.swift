@@ -83,8 +83,21 @@ final class Chat: ObservableObject {
     /// Read on this watch, kept so the mark goes the moment it is read rather than at the next reload.
     @Published private var readHere: Set<String> = []
     /// What the hub heard of each command still running, oldest first, shown until it lands in the
-    /// thread.
+    /// thread: this watch's own, and those sent from anywhere else (the hub's `request` frames).
     @Published private(set) var pending: [String] = []
+    /// Commands sent whose words are not known yet: the audio is on its way or being transcribed. Home
+    /// draws them as dots where the words will land.
+    @Published private(set) var hearing = 0
+    /// Words are in and the run has reported no step yet: home draws dots where the steps will be, so
+    /// something says it is working from the moment the words land until the first tool call.
+    var thinking: Bool { !pending.isEmpty && activity.isEmpty }
+    /// Commands from other devices, by request id, from the hub's `request` frames and /api/voice-pending:
+    /// the words, or nil while the hub is still hearing them. A listener's capture is left out (it may be
+    /// room noise) until the worker takes it up.
+    private var others: [(id: String, words: String?)] = [] { didSet { recount() } }
+    /// This watch's own requests as the hub named them, request id -> msgId: a frame naming one is the
+    /// command already shown here, so it only fills in that command's words.
+    private var mine: [String: String] = [:]
     /// A command is on its way or running. Any number can be: firing one blocks nothing.
     @Published private(set) var waiting = false
     @Published private(set) var failure: Failure?
@@ -124,12 +137,18 @@ final class Chat: ObservableObject {
     }
     private var commands: [Command] = [] {
         didSet {
-            let live = commands.filter { !$0.failed }
-            waiting = !live.isEmpty
-            pending = live.compactMap(\.words)
-            if !pending.isEmpty { landOn = nil }
+            waiting = commands.contains { !$0.failed }
+            recount()
             StayAwake.shared.refresh()
         }
+    }
+    private func recount() {
+        let live = commands.filter { !$0.failed }
+        let words = live.compactMap(\.words) + others.compactMap(\.words)
+        let unheard = live.filter { $0.words == nil }.count + others.filter { $0.words == nil }.count
+        if words != pending { pending = words }
+        if unheard != hearing { hearing = unheard }
+        if !pending.isEmpty || hearing > 0 { landOn = nil }
     }
     private var tasks: [String: Task<Void, Never>] = [:]
     /// The grab the recording now running is instructions for (`startInstructions`).
@@ -181,6 +200,7 @@ final class Chat: ObservableObject {
         stream?.cancel()
         stream = nil
         activity = []
+        others = []
     }
 
     /// Home left the screen: the older answers laid out above the window go. Not on `deactivate`, which
@@ -199,6 +219,8 @@ final class Chat: ObservableObject {
             reloadAfter = false
             do {
                 thread = try await Hub.thread()
+                if let flying = try? await Hub.inFlight() { others = []; flying.forEach(request) }
+                dropAnswered()
                 hold()
                 noteShown()
                 if failure == .noToken { failure = nil }
@@ -336,8 +358,31 @@ final class Chat: ObservableObject {
         if next.count > Self.threadCap { next.removeFirst(next.count - Self.threadCap) }
         guard next != thread else { return }
         thread = next
+        dropAnswered()
         hold()
         noteShown()
+    }
+    /// Another device's command whose row is in the thread has landed.
+    private func dropAnswered() {
+        let answered = Set(thread.compactMap(\.request_id))
+        if others.contains(where: { answered.contains($0.id) }) { others.removeAll { answered.contains($0.id) } }
+    }
+
+    /// A hub request before its conversation row exists (status-hub lib/streams.js heardStart).
+    private func request(_ r: RequestView) {
+        if r.always_on == true { return }
+        let over = ["done", "error", "dropped"].contains(r.status ?? "")
+        if let cmid = r.cmid, commands.contains(where: { $0.msgId == cmid }) { mine[r.id] = cmid }
+        if let msgId = mine[r.id] {
+            if over { mine[r.id] = nil; return }
+            if let words = r.text, !words.isEmpty { update(msgId) { if $0.words == nil { $0.words = words } } }
+            return
+        }
+        if over { others.removeAll { $0.id == r.id }; return }
+        if thread.contains(where: { $0.request_id == r.id }) { return }
+        let words = (r.text ?? "").isEmpty ? nil : r.text
+        if let i = others.firstIndex(where: { $0.id == r.id }) { others[i].words = words ?? others[i].words }
+        else { others.append((r.id, words)) }
     }
     /// The most rows kept: what `Hub.thread` reads, with room for the unread answers it adds.
     private static let threadCap = 60
@@ -406,6 +451,7 @@ final class Chat: ObservableObject {
             try? FileManager.default.removeItem(at: clip.url)
         }
         commands.removeAll { $0.msgId == msgId }
+        mine = mine.filter { $0.value != msgId }
         tasks[msgId] = nil
     }
 
@@ -433,6 +479,8 @@ final class Chat: ObservableObject {
             } else {
                 await load()
             }
+        case "request":
+            if let r = (try? JSONDecoder().decode(RequestFrame.self, from: Data(data.utf8)))?.row { request(r) }
         case "mode", "reset":
             await load()
         default:
@@ -471,6 +519,7 @@ final class Chat: ObservableObject {
                         return
                     }
                     requestId = id
+                    mine[id] = msgId
                     if let about = clip.about { askedAbout[id] = about }
                     update(msgId) { $0.requestId = id; $0.words = heard.transcript; $0.fallback = fallback }
                 }
@@ -517,6 +566,11 @@ final class Chat: ObservableObject {
 /// A `message` frame of `/api/voice-stream`: the conversation row itself, as written.
 private struct MessageFrame: Decodable {
     let row: Message?
+}
+
+/// A `request` frame of `/api/voice-stream`.
+private struct RequestFrame: Decodable {
+    let row: RequestView?
 }
 
 /// A frame of `/api/voice-stream`. `activity` rows are the worker's live reports (a tool call, the

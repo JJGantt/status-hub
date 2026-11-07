@@ -9,6 +9,7 @@ const { localDate } = require('../lib/dates');
 const ops = require('../lib/report');
 const { vanishedRecordings, RECORD_EVENTS } = require('../lib/outcomes');
 const { FrameReader, endOf } = require('../lib/livestream');
+const { heardStart, heardEnd } = require('../lib/streams');
 const os = require('os');
 const path = require('path');
 const { pipeline } = require('stream/promises');
@@ -229,6 +230,7 @@ module.exports = function (ctx) {
     const t0 = Date.now();
     const timing = { hub_received: new Date(t0).toISOString() };
     const since = (t) => Date.now() - t;
+    let id = null;
     try {
       if (!GROQ_API_KEY && !process.env.OPENAI_API_KEY) { req.resume(); return res.status(503).json({ error: 'transcription not configured' }); }
       // ?dry=1 → transcribe only, no enqueue. The chat composer uses this while photos are pending: the
@@ -236,6 +238,18 @@ module.exports = function (ctx) {
       const dry = String(req.query.dry || '') === '1';
       const msgId = String(req.query.client_msg_id || '').slice(0, 64);
       if (!dry && msgId && seenMsgIds.has(msgId)) { req.resume(); return res.json({ enqueued: true, duplicate: true, id: seenMsgIds.get(msgId) }); }
+      // The navbar mic sends ?quick=1, which tags the request's source `web-quick`.
+      const quick = String(req.query.quick || '') === '1';
+      // A listener names itself, so a new device is a label rather than a code change here. Unknown or
+      // absent falls back to the two the FAB has always used.
+      const srcRaw = String(req.query.source || '').trim().toLowerCase();
+      const source = /^[a-z0-9][a-z0-9-]{0,23}$/.test(srcRaw) ? srcRaw : (quick ? 'web-quick' : 'web');
+      id = crypto.randomUUID();   // chosen here so the caller can wait on it (/api/voice-reply/:id)
+      // A PRESSED command is on screen everywhere from this moment, before its audio has even arrived
+      // (heardStart). Not a listener's capture, which is often room noise, and not a dictation.
+      if (!dry && !GATED_SOURCES.has(source)) {
+        heardStart({ id, cmid: msgId || undefined, text: '', status: 'transcribing', created_at: new Date(t0).toISOString() });
+      }
       // A command whose recording was streamed while it ran (/api/voice-live) is sent as just its details,
       // with no body: the hub already holds the audio, so the clip does not cross the network a second
       // time. 409 `upload` when the stream did not arrive whole; the watch then sends the clip itself.
@@ -339,8 +353,6 @@ module.exports = function (ctx) {
       // Instructions recorded for a rewind grab: the command the model sees is the grab plus the user's words.
       const rewindId = REWIND_ID.test(String(req.query.rewind || '')) ? String(req.query.rewind) : null;
       if (rewindId && !untranscribed) transcript = await withRewind(rewindId, transcript);
-      // The navbar mic sends ?quick=1, which tags the request's source `web-quick`.
-      const quick = String(req.query.quick || '') === '1';
       const client_now = CLIENT_NOW_RE.test(String(req.query.client_now || '')) ? String(req.query.client_now) : null;
       const location = parseLocation(req.query);
       // THE CAPTURE WINDOW IS WHAT MAKES A LISTENER A PEER. The worker collapses two mics that heard the
@@ -353,11 +365,6 @@ module.exports = function (ctx) {
       const isoAt = (v) => { const t = Date.parse(String(v || '')); return Number.isFinite(t) ? new Date(t).toISOString() : null; };
       const capture_start = isoAt(req.query.capture_start);
       const capture_end = isoAt(req.query.capture_end);
-      // A listener names itself, so a new device is a label rather than a code change here. Unknown or
-      // absent falls back to the two the FAB has always used.
-      const srcRaw = String(req.query.source || '').trim().toLowerCase();
-      const source = /^[a-z0-9][a-z0-9-]{0,23}$/.test(srcRaw) ? srcRaw : (quick ? 'web-quick' : 'web');
-      const id = crypto.randomUUID();   // chosen here so the caller can wait on it (/api/voice-reply/:id)
       // An always-on device's clip has to sound like the user before it becomes a command.
       const tVerify = Date.now();
       const him = await soundsLikeHim(id, tmp, source);
@@ -376,6 +383,8 @@ module.exports = function (ctx) {
         ...(capture_start ? { capture_start } : {}), ...(capture_end ? { capture_end } : {}),
         ...(client_now ? { client_now } : {}), ...(location ? { location } : {}) });
       markSeen(msgId, id);
+      // The words, straight onto every screen rather than after the row's realtime echo (which says the same).
+      heardEnd(id, { id, text: untranscribed ? '' : transcript, status: untranscribed ? 'transcribing' : 'pending', created_at: new Date(t0).toISOString() });
       if (untranscribed) {
         // The Mac needs the clip before it can do anything, so it is kept BEFORE the answer here, and the
         // row only becomes claimable for it once `audio` is on it.
@@ -387,6 +396,10 @@ module.exports = function (ctx) {
     } catch (e) {
       res.status(e.status || 500).json({ error: String(e.message || e) });
     } finally {
+      // Every way out that enqueued nothing (no words, not him, a damaged or missing clip, a failure)
+      // takes the placeholder down. An untranscribed row keeps it: the row is still `transcribing` until
+      // the Mac's Whisper writes its words, and its update reaches every screen as a `request` frame.
+      if (id) heardEnd(id, null);
       fs.promises.unlink(tmp).catch(() => {});
       if (short) fs.promises.unlink(short.file).catch(() => {});
     }

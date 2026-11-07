@@ -85,9 +85,13 @@ once the user has scrolled with the wrist up, the view stays where it is:
 
 | | screen | control | x | wrist |
 |---|---|---|---|---|
-| the command goes (silence, or a press) | — | the spinner | appears | tapped |
-| the hub has transcribed it | the user's words appended in full, the view on their top | the spinner, larger and brighter: the worker is running it now, not hearing it | stays | — |
+| the command goes (silence, or a press) | three dots in the user's colour where the words will land (`Chat.hearing`), the view on them | the spinner | appears | tapped |
+| the hub has transcribed it | the user's words appended in full, the view on their top, and grey dots under them until the first tool call (`Chat.thinking`) | the spinner, larger and brighter: the worker is running it now, not hearing it | stays | — |
 | the reply lands | the reply appended in full, the view on ITS top | back to the microphone | goes | tapped, with the sound |
+
+A command sent from another device walks the same rows, from the hub's `request` frames (HUB-INTERNALS
+§ A command in flight): dots from the moment the hub starts taking it, then its words. Those are read
+again from `/api/voice-pending` on every load, since the stream is closed whenever home is not on screen.
 
 **Nothing is padded under the thread.** A landing puts the top of the newest thing at the top of the
 screen only when there is enough below it to fill the screen; a short one stops where the content ends,

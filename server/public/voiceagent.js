@@ -129,6 +129,16 @@ function boot() {
       else activity.tool(a.text);
       return;
     }
+    if (msg.kind === 'request') {               // a hub command before its conversation row exists
+      const q = msg.row;
+      // A listener's capture may be room noise: it shows once the worker takes it up (`working`).
+      if (!q || q.always_on) return;
+      const over = ['done', 'error', 'dropped'].includes(q.status);
+      if (_card) _card.request(q);
+      pushPending(over ? { state: 'drop', id: q.id }
+        : q.text ? { state: 'prompt', text: q.text, id: q.id } : { state: 'transcribing', id: q.id });
+      return;
+    }
     if (msg.kind !== 'message') return;
     const row = msg.row;
     if (!row || (row.focus || 'hub') !== 'hub') return;
@@ -170,10 +180,11 @@ export function setAbout(id) { aboutAnswer = id || null; }
 // and the reply, and then both lines at once. The conversation CARD covers that with its own optimistic
 // bubble; this is the same thing for every OTHER view of the thread (the phone home page's box).
 //
-// Two sources, and both are needed. `transcribing` and the transcript that comes back from the upload
-// are LOCAL — only the device that recorded knows a clip is in the air. The worker's `working` activity
-// carries the transcript to every device, which is what makes a command spoken at the ESP or the Mac
-// appear here too; it arrives second on the recording device and says the same thing.
+// Three sources. `transcribing` and the transcript that comes back from the upload are LOCAL, and come
+// first on the device that recorded. The hub's `request` frames carry the same two steps to every device,
+// from the moment a pressed command starts arriving (lib/streams.js heardStart), with the request id, and
+// `drop` when the hub enqueued nothing. The worker's `working` activity carries the transcript of a
+// command no button sent (the ESP, the Mac's listener), and says the same thing again for the rest.
 const pendingSubs = [];
 export function onPending(fn) { pendingSubs.push(fn); }
 function pushPending(p) { for (const f of pendingSubs) { try { f(p); } catch (_) {} } }
@@ -909,6 +920,12 @@ async function deliverVoice(item, onStatus, owner) {
   onStatus('Transcribing…', 'busy');
   // A dictation goes into a text box, not into the conversation, so it is nobody else's business.
   if (!item.dry) pushPending({ state: 'transcribing' });
+  // The card's placeholder, until the hub's own frame for this clip (which names it by `cmid`) or its answer.
+  const local = 'c:' + item.id;
+  if (!item.dry && _card) _card.request({ id: local, text: '', status: 'transcribing' });
+  try { await sendVoice(item, onStatus, owner); } finally { if (_card) _card.request({ id: local, status: 'dropped' }); }
+}
+async function sendVoice(item, onStatus, owner) {
   const qp = new URLSearchParams();
   if (item.dry) qp.set('dry', '1');
   if (item.quick) qp.set('quick', '1');
@@ -971,8 +988,8 @@ async function deliverVoice(item, onStatus, owner) {
   else if (item.dry) { captureResetAt = 0; owner.onTranscript(j.transcript); onStatus('', 'clear'); }   // compose mode: into the text box
   else {                                                                     // show what was heard, then stream the run
     captureResetAt = 0;
-    if (_card) _card.optimistic({ text: j.transcript, kind: 'text' });       // the spoken command as its own live user bubble
-    pushPending({ state: 'prompt', text: j.transcript });                    // and in every other view of the thread
+    if (_card && j.id) _card.request({ id: j.id, text: j.transcript, status: 'pending' });   // the spoken command as its own live user bubble
+    pushPending({ state: 'prompt', text: j.transcript, id: j.id });          // and in every other view of the thread
     onStatus(j.transcript, 'prompt'); onStatus('Thinking…', 'busy');
   }
 }
@@ -1172,9 +1189,41 @@ function initCard() {
     hr.className = 'ai-ctx-rule';
     log.appendChild(hr);
   }
+  // COMMANDS IN FLIGHT, drawn under the thread until their conversation rows exist: the user's words
+  // (three dots while the hub is still hearing them) and, under the last, a caret that says it is working.
+  // Keyed by request id; a local clip's placeholder is `c:<client_msg_id>` until the hub's frame for it
+  // arrives (`cmid`). The box is kept the last thing in the log.
+  const reqs = new Map();   // id -> { text, at }
+  const reqBox = document.createElement('div');
+  reqBox.className = 'ai-reqs';
+  const REQ_TTL = 5 * 60 * 1000;   // a request whose end never reached this page must not stay up for ever
+  function paintReqs() {
+    const now = Date.now();
+    for (const [id, q] of reqs) if (now - q.at > REQ_TTL) reqs.delete(id);
+    reqBox.innerHTML = [...reqs.values()].map((q) => q.mirror ? '' :
+      '<div class="ai-msg ai-msg-user ai-msg-pending"><div class=ai-msg-text>' +
+      (q.text ? esc(q.text).replace(/\n/g, '<br>') : '<span class=ai-dots><i></i><i></i><i></i></span>') + '</div></div>').join('') +
+      (reqs.size ? '<div class="ai-msg ai-msg-assistant"><div class=ai-msg-text><span class=ai-caret>▍</span></div></div>' : '');
+    if (reqBox.parentNode !== log || log.lastElementChild !== reqBox) log.appendChild(reqBox);
+  }
+  function request(q) {
+    if (!q || !q.id) return;
+    if (q.cmid) reqs.delete('c:' + q.cmid);
+    if (['done', 'error', 'dropped'].includes(q.status)) reqs.delete(q.id);
+    else {
+      const text = String(q.text || '').trim();
+      // A typed command already has its optimistic bubble (photos and all): that bubble stands for its
+      // words, and this entry only holds the caret up.
+      const mirror = !!text && [...pending.values()].some((p) => p.text === text);
+      reqs.set(q.id, { text, mirror, at: (reqs.get(q.id) || {}).at || Date.now() });
+    }
+    paintReqs();
+    arrived();
+  }
   function upsert(row) {
     if (!row || (row.focus || 'hub') !== 'hub') return;
     if (row.role === 'tool') return;        // tool calls live in the activity bar, not the thread
+    if (row.request_id && reqs.delete(row.request_id)) paintReqs();   // its own row is here
     reconcile(row);                         // a real row for a locally-sent message replaces its optimistic bubble
     // The server flags the first row of each new context (an idle gap or a manual reset). The older
     // context stays in the thread behind a divider rather than being wiped.
@@ -1182,7 +1231,7 @@ function initCard() {
     if (fresh && row.ctx_break) rule();
     const tmp = document.createElement('div'); tmp.innerHTML = bubbleHtml(row);
     const el = tmp.firstElementChild, existing = seen.get(row.id);
-    if (existing) existing.replaceWith(el); else log.appendChild(el);
+    if (existing) existing.replaceWith(el); else log.insertBefore(el, reqBox.parentNode === log ? reqBox : null);
     seen.set(row.id, el);
     while (log.childElementCount > MAX_MSGS) {
       const o = log.firstElementChild;
@@ -1204,7 +1253,7 @@ function initCard() {
     const holder = document.createElement('div');
     holder.innerHTML = bubbleHtml({ role: 'user', text: o.text || '', localImages: o.localImages || [], pending: true });
     const el = holder.firstElementChild;
-    log.appendChild(el);
+    log.insertBefore(el, reqBox.parentNode === log ? reqBox : null);
     pending.set(cid, { el, paths: (o.paths || []).filter(Boolean), text: (o.text || '').trim(),
       kind: o.kind || (o.localImages && o.localImages.length ? 'photo' : (o.text ? 'text' : 'voice')),
       localImages: o.localImages || [], at: Date.now() });
@@ -1242,6 +1291,15 @@ function initCard() {
         if (now - p.at > PENDING_TTL) dropPending(cid);  // never matched in time → it landed under a different key; stop showing it
         else log.appendChild(p.el);
       }
+      // What is still in flight, from the hub: the stream may have missed a request's end while it was down.
+      const q = await fetch('/api/voice-pending').then((x) => (x.ok ? x.json() : null)).catch(() => null);
+      if (Array.isArray(q)) {
+        const live = new Set(q.filter((x) => !x.always_on).map((x) => x.id));
+        for (const id of [...reqs.keys()]) if (!id.startsWith('c:') && !live.has(id)) reqs.delete(id);
+        for (const x of q) if (!x.always_on) request(x);
+      }
+      for (const row of rows) if (row.request_id) reqs.delete(row.request_id);
+      paintReqs();
       if (owed && !document.hidden) { scrollEnd(); owed = false; } else log.scrollTop = keep;
     } catch (_) {}
   }
@@ -1364,6 +1422,6 @@ function initCard() {
   });
   bindMic(micBtn, cardRec);
 
-  return { upsert, clear, rule, backfill, optimistic, setPendingPath, dropPending, arrived };
+  return { upsert, clear, rule, backfill, optimistic, setPendingPath, dropPending, arrived, request };
 }
 

@@ -616,7 +616,7 @@ the health wall) · `/tv-session-focus` (sessions wall) · `/tv-calendar` (calen
 launcher) · `/reports` + `/report/:id` (§6c) · `/login` · `/healthz` · `/privacy` · `/terms`.
 
 **Read:** `/api/status` (full payload) · `/api/stream` (SSE status) · `/api/voice-stream` (SSE voice
-frames for the kiosk, and `request` frames for the TV sidebar) · `/api/voice-pending` (unfinished hub requests, the sidebar's reload) · `/api/list-stream` (SSE, one bodiless `lists` event whenever a dated item or
+frames for the kiosk, and `request` frames for every thread view, § A command in flight) · `/api/voice-pending` (unfinished hub requests and commands still being heard, a thread view's reload) · `/api/list-stream` (SSE, one bodiless `lists` event whenever a dated item or
 a list changes — the calendar surfaces' push path, separate from the status frame they don't render) · `/api/workout-day` · `/api/nutrition-day` ·
 `/api/heat-history` (the heat-grid weeks OLDER than the frame's `HEAT_WEEKS` window, as a prefix the
 expanded sheet draws in front of it — the frame is re-pushed on every realtime event and history only
@@ -1441,12 +1441,9 @@ The content view is the `tv_sidebar_content` setting: any markdown, written by `
 conversation goes on, and the agent edits it by sending the whole of it again. It is drawn from the
 top under no header, and `fit` widens the panel until nothing runs off the bottom.
 
-The user's words appear the moment the request exists, not when the conversation row does: the worker
-writes the user's `voice_messages` row only beside the answer, up to half a minute later. Every `voice_requests`
-insert or update for the hub conversation goes out on `/api/voice-stream` as a `request` frame
-(`requestView`: id, transcript, status), and `/api/voice-pending` lists the unfinished ones for a
-(re)load. The page draws them after the conversation until a row with that `request_id` arrives, and
-drops one when its request is `done` or `error`, since a failed request may never get a row.
+The user's words appear the moment the request exists, not when the conversation row does (§ A command
+in flight). The page draws each request after the conversation until a row with that `request_id`
+arrives: three dots while it has no words, then the words, with the caret under them.
 
 Neither view lists tool calls. While a turn is running the page draws only the call in progress above
 the caret, each new one replacing the last (the session's latest `tool` event since its prompt; the
@@ -1465,6 +1462,33 @@ conversation, and `/api/session-stream` for every frame after: a `sessions` fram
 focus, an `ev` frame for its conversation is appended, and a seq gap or new epoch refetches. The box
 is anchored to its bottom with nothing scrolling, so the newest thing is always on screen. The page
 background is transparent and the panel is `rgba(0,0,0,.55)`: the video shows through.
+
+## 6b-ii. A command in flight
+
+Every thread view (the phone's chat sheet and home box, the Mac app, the TV sidebar's orchestrator view,
+the watch's home) draws a pressed command from the moment the hub starts taking it until its conversation
+row lands: three dots where the user's words will be, then the words, with a working caret (dots on the
+watch) under them until the first tool call replaces it. The worker writes the user's `voice_messages` row
+only beside the answer, so without this a thread showed nothing between the press and the reply.
+
+It all comes from `request` frames on `/api/voice-stream`, `{id, text, status, created_at, cmid?, always_on?}`:
+
+- **Before the row exists.** `/api/voice-command` announces a pressed command (not a dictation, not a
+  `GATED_SOURCES` listener's capture) as soon as the request arrives, before its audio has finished
+  arriving: `heardStart` in `lib/streams.js`, text `''`, status `transcribing`, `cmid` its client_msg_id.
+  Every way out of the handler ends it (`heardEnd` in its `finally`): the transcript with status `pending`
+  when a row was enqueued, `transcribing` again when the row is queued `untranscribed`, otherwise status
+  `dropped`. A start with no end leaves a placeholder up on every screen; `test/heard.test.js` holds this.
+- **After.** Every `voice_requests` insert or update for the hub conversation goes out through
+  `requestView` (realtime, `lib/realtime.js`); an `untranscribed` row is shown as `transcribing`.
+- **Ends.** `done`, `error` and `dropped` take an entry down, and so does a conversation row carrying its
+  `request_id`. `/api/voice-pending` lists the unfinished requests plus the commands still being heard,
+  for a view that (re)loads.
+
+`cmid` is how the device that recorded a command knows a frame is its own: the watch and the chat sheet
+already show their own command and only take the words from the frame. A frame with `always_on` is a
+listener's capture, which may be room noise; the watch and the phone leave it out and show it once the
+worker's `working` activity says it is being run. The TV sidebar shows it, as it always has.
 
 ## 6c. Reports — a session's HTML write-up
 

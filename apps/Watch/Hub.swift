@@ -104,6 +104,16 @@ final class PhoneLink: NSObject, WCSessionDelegate {
 }
 
 /// One row of the shared hub conversation (`voice_messages`), as `/api/voice-messages` returns it.
+/// A hub command before its conversation row exists (`request` frames, /api/voice-pending). No text is a
+/// command the hub is still hearing; `cmid` is the client_msg_id it was sent with, when the hub knows it.
+struct RequestView: Decodable {
+    let id: String
+    let text: String?
+    let status: String?
+    let cmid: String?
+    let always_on: Bool?
+}
+
 struct Message: Decodable, Identifiable, Equatable {
     let id: String
     let role: String?
@@ -256,6 +266,12 @@ enum Hub {
         // The newest 40 rows, about twenty exchanges: all a wrist needs, and a short thread lays out
         // fast enough on opening for the view to land on the newest reply.
         try await json("/api/voice-messages?focus=hub&mode=active&limit=40")
+    }
+
+    /// Hub commands not yet in the thread, oldest first: those whose words are in, and those the hub is
+    /// still hearing (no text).
+    static func inFlight() async throws -> [RequestView] {
+        try await json("/api/voice-pending")
     }
 
     /// What the hub heard in a clip, and the request it enqueued. No id means it heard no words, or the

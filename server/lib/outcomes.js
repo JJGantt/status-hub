@@ -35,4 +35,18 @@ function vanishedRecordings(events) {
   return out;
 }
 
-module.exports = { vanishedRecordings, RECORD_EVENTS };
+// A session's thread (`events`, routes/conversation.js) is never empty once the session has been told
+// anything: its launch prompt, a follow-up, or a reply reach the thread before any surface can open it.
+// An empty one means every surface shows a blank page and nothing else fails — a transcript read from
+// the wrong file, a host that never streamed, a seed that found no turns. `row` is the desk_sessions
+// row with its launch prompt as `launch_prompt`; a row younger than `graceMs` may not have streamed yet.
+const EMPTY_THREAD_GRACE_MS = 90 * 1000;
+function emptyThread(row, events, now = Date.now(), graceMs = EMPTY_THREAD_GRACE_MS) {
+  if (events && events.length) return false;
+  const told = row.launch_prompt || row.last_prompt || row.last_reply || row.working;
+  if (!told) return false;
+  const started = row.started ? new Date(row.started).getTime() : 0;
+  return now - started >= graceMs;
+}
+
+module.exports = { vanishedRecordings, RECORD_EVENTS, emptyThread };

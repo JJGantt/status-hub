@@ -1,5 +1,6 @@
 'use strict';
 const { NOTHING_SAID } = require('../lib/transcribe');
+const { emptyThread } = require('../lib/outcomes');
 const crypto = require('crypto');
 const express = require('express');
 
@@ -251,19 +252,26 @@ module.exports = function (ctx) {
     return { parked: row };
   }
 
+  // Conversations already reported for opening empty (lib/outcomes emptyThread), so one stays one incident.
+  const reportedEmpty = new Set();
+
   // One session in full, for a surface that shows a single session rather than the list — the watch's
   // session page and the phone's (openSession in cards/repos.js). `/api/sessions` sends most parked
   // sessions' replies only as the one-line `say`. The conversation itself is `events` (see above).
   gated.get('/api/sessions/:id', async (req, res) => {
     try {
       const rows = await sb(`desk_sessions?id=eq.${encodeURIComponent(String(req.params.id))}` +
-        '&select=id,label,custom_title,repo,worker,status,working,claude_session_id,last_prompt,last_reply,reply_at,agent');
+        '&select=id,label,custom_title,repo,worker,status,working,claude_session_id,last_prompt,last_reply,reply_at,agent,started,launch_prompt:prompt');
       if (!rows || !rows.length) return res.status(404).json({ error: 'no such session' });
-      const row = rows[0];
+      const { started, launch_prompt, ...row } = rows[0];
       if (row.last_prompt) row.last_prompt = cleanSaid(row.last_prompt);
       const conv = row.claude_session_id || row.id;
       rowConv.set(row.id, conv);
       const log = await ensureLog(conv);
+      if (!reportedEmpty.has(conv) && emptyThread({ ...row, started, launch_prompt }, log.events)) {
+        reportedEmpty.add(conv);
+        console.error(`[sessions] ${row.id} opened with an empty thread although it was told something (conversation ${conv})`);
+      }
       res.json({ ...row, incident: isIncident(row), codex: isCodex(row), prompt: pendingPrompt(row.id), epoch: EPOCH, events: log.events });
     } catch (e) { res.status(500).json({ error: String(e.message || e) }); }
   });

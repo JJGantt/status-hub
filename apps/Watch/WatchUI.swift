@@ -368,6 +368,25 @@ extension EnvironmentValues {
     @Entry var onScreen: Bool = true
 }
 
+/// The time, small, on home and in an open session: the system's own clock is hidden on every page
+/// (docs/WATCH.md § The clock). A clock arrival is what `.everyMinute` wakes for, nothing else.
+struct CornerClock: View {
+    var body: some View {
+        TimelineView(.everyMinute) { ctx in
+            Text(Self.format.string(from: ctx.date))
+                .font(.system(size: 13, weight: .medium).monospacedDigit())
+                .foregroundColor(Color(hex: "#9aa4ae"))
+        }
+    }
+
+    /// `h:mm`, no AM/PM. The format style's `.omitted` still pads the hour to two digits.
+    private static let format: DateFormatter = {
+        let f = DateFormatter()
+        f.dateFormat = "h:mm"
+        return f
+    }()
+}
+
 /// The session page's scroller. Scrolling is the user's finger or the crown; nothing moves the page on its
 /// own. It holds the content and nothing under it: a block near the end that cannot reach the top of
 /// the screen stops where the content ends, as any list does.

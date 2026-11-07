@@ -174,8 +174,13 @@ on watchOS 26.5, each alone:
 Underscored means unsupported, so a watchOS release can take it away — which would show as the clock
 simply coming back, not as a build failure. The simulator renders the clock faithfully, so removing the
 modifier and screenshotting is the check to re-run. Nothing here ships to the App Store, so private API is a
-risk to the look rather than to the app. The page draws no clock of its own either: it is for the
-conversation, and the watch face is one press of the crown away.
+risk to the look rather than to the app.
+
+**Home and an open session draw their own clock** (`CornerClock`, `h:mm` at 13pt, gray), and no other
+page does. On home it is an overlay at the top right, level with the inbox dot and above the landing
+line, taking no touch, so nothing in the thread moves and a tap there still records. In a session it is
+a trailing `ToolbarItem` on the name's line, so a long name truncates before it. A plain `Text` there
+gets no button glass.
 
 ### The inbox
 
@@ -372,8 +377,8 @@ hold two minutes after it was sent is let go**: the hub keeps a conversation's l
 for it would sweep the edge over an idle session until the app was killed. A follow-up being worked on shows
 in the list within seconds of being typed, so the limit never cuts a real wait short.
 
-**Its name is on the clock's line, and the name is how it closes.** A leading `ToolbarItem` holds it
-(a trailing one moves the clock to the other end of the strip), and tapping it pops the session. The
+**Its name is on the clock's line, and the name is how it closes.** A leading `ToolbarItem` holds it,
+the page's own clock trails it, and tapping the name pops the session. The
 swipe back watchOS gives a pushed view does not survive a page row that also takes sideways swipes, so
 the way out is the thing at the top that says which session this is — or a swipe right (above).
 The swipe's drag is SIMULTANEOUS, never high-priority (the `SideScroll` trick): a high-priority drag

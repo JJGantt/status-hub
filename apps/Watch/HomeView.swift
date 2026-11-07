@@ -178,6 +178,15 @@ struct HomeView: View {
             .buttonStyle(.plain)
             .ignoresSafeArea()
         }
+        // The time at the top right, level with the inbox dot and above the landing line, so nothing in
+        // the thread moves for it. It takes no touch: a tap there still records.
+        .overlay(alignment: .topTrailing) {
+            CornerClock()
+                .frame(height: 30)
+                .padding(.trailing, Self.clockInset)
+                .allowsHitTesting(false)
+                .ignoresSafeArea()
+        }
         // An answer's notification lands on the answer in the thread, so the inbox gets out of the way.
         .onChange(of: chat.landings) { _, _ in inbox = false; inboxAnswer = nil }
         .onChange(of: inbox) { _, _ in attend() }
@@ -212,6 +221,10 @@ struct HomeView: View {
             Color.clear.frame(height: Landing.top - 2 * Landing.itemGap)
         }
     }
+
+    /// How far the clock stands in from the right edge: the glass's corner curve still cuts into the
+    /// top line this far in.
+    private static let clockInset: CGFloat = 22
 
     /// The amber the sessions list marks unread with.
     private static let unreadDot = Color(hex: "#e0a03a")

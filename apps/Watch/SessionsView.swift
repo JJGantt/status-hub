@@ -395,8 +395,8 @@ struct SessionView: View {
                 .ignoresSafeArea(.container, edges: .bottom)
         }
         // The session's name on the clock's line, and NO system back arrow: a title bar with a button in
-        // it costs the top of a screen this page spends on the answer. A leading toolbar item leaves the clock where watchOS
-        // puts it; a trailing one would push the time to the other end of the strip.
+        // it costs the top of a screen this page spends on the answer. The name leads; the time
+        // (`CornerClock`, the system's own being hidden) trails, so a long name truncates before it.
         .navigationBarBackButtonHidden(true)
         .toolbar {
             ToolbarItem(placement: .topBarLeading) {
@@ -421,6 +421,7 @@ struct SessionView: View {
                 }
                 .buttonStyle(.plain)
             }
+            ToolbarItem(placement: .topBarTrailing) { CornerClock() }
         }
         // An incident run is framed red while open, as its row is in the list; a Codex session blue.
         .overlay(RoundedRectangle(cornerRadius: 12)

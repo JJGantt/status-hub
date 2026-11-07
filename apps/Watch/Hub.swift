@@ -117,6 +117,11 @@ struct Message: Decodable, Identifiable, Equatable {
     var read_at: String? = nil
     /// The engine that wrote a reply when it was not the Claude subscription: "credits" or "codex".
     var engine: String? = nil
+    /// Which conversation and part of it the row belongs to; the thread is focus `hub`, mode `hub` or none.
+    var focus: String? = nil
+    var mode: String? = nil
+    /// Set by the hub on a live row that opens a new context (a gap, or the day's start).
+    var ctx_break: Bool? = nil
 }
 
 enum HubError: LocalizedError {
@@ -274,6 +279,20 @@ enum Hub {
         var query = await commandQuery(clip, msgId: msgId, dry: dry, listener: listener)
         // Instructions for a rewind grab: the hub sends the grab's words along with them (docs/REWIND.md).
         if let rewind { query += "&rewind=\(rewind)" }
+        // **A recording that was streamed is not uploaded again.** The hub already holds its audio from
+        // `/api/voice-live`, so the command goes up as just its details and the hub transcribes what it
+        // has. It answers 409 when the stream did not arrive whole, and only then does the clip go up.
+        if !dry, listener == nil, let live = clip.live {
+            var r = try request("/api/voice-command?" + query, method: "POST", timeout: timeout)
+            r.setValue("live", forHTTPHeaderField: "X-Audio-Source")
+            let (data, resp) = try await resending { try await session.data(for: r) }
+            let code = (resp as? HTTPURLResponse)?.statusCode ?? 0
+            if code != 409 {
+                try await check(resp)
+                return try JSONDecoder().decode(Heard.self, from: data)
+            }
+            log("live-refused", ["live": live, "why": String(data: data, encoding: .utf8)?.prefix(80).description ?? ""])
+        }
         var r = try request("/api/voice-command?" + query, method: "POST", timeout: timeout)
         r.setValue("audio/mp4", forHTTPHeaderField: "Content-Type")
         let (data, resp) = try await resending { try await session.upload(for: r, fromFile: clip.url) }
@@ -529,8 +548,11 @@ enum Hub {
     struct Outcome: Decodable {
         let status: String
         let error: String?
-        /// The reply's text. Only the fallback sends it: the hub's own thread carries the reply otherwise.
+        /// The reply's text, which the fallback shows: the hub's own thread may be down with the hub.
         let result: String?
+        /// The turn's thread rows (the user's words and the reply), so the reply is shown from this
+        /// answer rather than after re-reading the thread. Nil from the fallback and older hubs.
+        let messages: [Message]?
     }
 
     /// Waits for a command to finish. The hub holds each request open until it does, and answers

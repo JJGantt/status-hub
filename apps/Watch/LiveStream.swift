@@ -3,9 +3,10 @@ import Foundation
 
 /// A command or follow-up STREAMED TO THE HUB WHILE IT RECORDS (`/api/voice-live`, server/lib/livestream.js).
 ///
-/// The finished clip still goes up the ordinary way (`Hub.sendAudio`). This stream exists for the case
-/// that path cannot cover: the app dying mid-recording, which takes the clip in memory with it and throws
-/// nothing anywhere. With the stream open, the watch's operating system closes the connection the moment
+/// It is also how a finished command's audio reaches the hub: `Hub.sendAudio` sends the command without
+/// the clip and the hub uses what this stream delivered, uploading the clip only when the hub says the
+/// stream did not arrive whole. And it covers the app dying mid-recording, which takes the clip in memory
+/// with it and throws nothing anywhere. With the stream open, the watch's operating system closes the connection the moment
 /// the process goes, and the hub, seeing it close without an end frame, reports the recording lost and
 /// transcribes the audio it already has.
 ///
@@ -189,7 +190,8 @@ final class LiveStream: NSObject, URLSessionTaskDelegate, @unchecked Sendable {
             self.closed = true
             self.output?.close()
             // A stream that ended before the recording did is the stream failing, not the recording:
-            // the clip still goes up the ordinary way, but nothing would notice this one dying now.
+            // the hub refuses it as the command's audio and the clip goes up instead, but nothing would
+            // notice this one dying now.
             Hub.log(early ? "live-dropped" : "live-done", ["id": self.id, "status": code,
                                                           "error": error.map { String(describing: $0).prefix(120).description } ?? ""])
         }

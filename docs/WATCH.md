@@ -68,7 +68,11 @@ through `POST /api/gestures`; `GET /api/gestures` lists the last week and `GET /
 `HomeView`: the last five exchanges of the shared hub thread, each in full — the user's words as the hub
 transcribed them, the reply as it was written — over `/api/voice-messages?focus=hub&mode=active`,
 the same current-context thread the phone and the TV show (the server ignores `mode`). It
-follows `/api/voice-stream`: a `message` frame reloads the thread, and the worker's `activity` frames
+follows `/api/voice-stream`: a `message` frame carries its row, which goes straight into the thread
+(`Chat.take`), and only a row that opens a new context reads the thread again. A command's own reply is
+shown from its answer (`/api/voice-reply/:id` carries the turn's rows as `messages`), so neither path waits
+on re-reading the thread, which on a poor link took twenty seconds with the reply already on the watch.
+The worker's `activity` frames
 draw the running command's tool calls under it (`ActivityLines`), which the hub does not store, so they
 show only while the page is watching. They clear on `done`, on the command's own answer, on a
 reconnect and when the page goes inactive — never on `done` alone, because the page goes inactive
@@ -206,7 +210,8 @@ read, so every such reply goes into an inbox: kept for good, newest first, read 
   **A tap anywhere on it is the press**, as on home, and so is double tap: a command recorded while it
   is open carries it as `about` (`Hub.about`, read into the clip when it is made), so the worker hands
   the model that question and answer, which may be days out of the replayed context; the follow-ups
-  and their replies list under the answer. Nothing moves it after it opens. The phone has
+  and their replies list under the answer, taken from the thread as they land there (`Chat.askedAbout`
+  names which requests were spoken from which answer) rather than by reading the answer again. Nothing moves it after it opens. The phone has
   the same inbox (`public/inbox.js`), opened from a dot in the conversation's corner; its sheet has one
   ✕, which steps back from an open answer to the list and closes the list. On the watch an open answer
   also has a ✕ in its top-left corner, outside the tap-to-record area, which steps back to the list at
@@ -734,8 +739,12 @@ the last audio and no `E`, which is why `unmarked` is the death signal and not a
 yet measured on a watch, where traffic may go through the iPhone. Every stream logs its verdict as
 `[voice-live] <id> <verdict>: …` in the hub log, with the gap from the last byte to the close.
 
-The finished clip still goes up through `/api/voice-command` (carrying `live=<id>`); the stream is only
-the copy that survives the app. On the watch, `live-open`, `live-done` and `live-dropped` (the stream
+**A streamed command is not uploaded a second time.** `Hub.sendAudio` posts `/api/voice-command`
+(carrying `live=<id>`) with `X-Audio-Source: live` and no body, and the hub transcribes the audio the stream
+already delivered, waiting up to 12s for a stream still draining its backlog. It answers 409 `upload` when
+it has no such stream, the stream did not end with `E`, it is still open, or it holds more than 0.6s less
+than the recording; only then does the clip itself go up (`live-refused` in `client_log`, and the request's
+`timing.audio_via` says which path ran). On the watch, `live-open`, `live-done` and `live-dropped` (the stream
 failed while the recording carried on) are in `client_log`.
 
 **The next-start check is the backstop** for the one case the stream cannot see: an app that dies while

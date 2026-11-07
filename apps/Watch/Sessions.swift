@@ -141,7 +141,8 @@ final class Sessions: ObservableObject {
     /// A session's reply notification, opened: shows that conversation on the sessions page. The row
     /// named may be one the list has not loaded yet — a resumed session's new row.
     func open(rowId: String) async {
-        await load()
+        // The list is read first only when it does not know the row yet; a known row opens at once.
+        if !rows.contains(where: { $0.id == rowId }) { await load() }
         let key = rows.first { $0.id == rowId }?.key ?? rowId
         path = [key]
         markSeen(key)

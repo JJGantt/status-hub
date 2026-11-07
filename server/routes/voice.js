@@ -584,8 +584,8 @@ module.exports = function (ctx) {
   // open until the recording ends, saying how it ended (E or C) before closing it. A connection that
   // drops mid-audio without that is a recording that died with the app, found the moment it happens: it
   // is reported, and the audio up to that second is kept and transcribed, so what was said is not lost
-  // with it. The finished clip still arrives the ordinary way (/api/voice-command); this stream is only
-  // the part that survives the app.
+  // with it. A finished command takes its audio from here (liveAudio) rather than from a second upload
+  // of the clip, which goes up only when the stream did not arrive whole.
   const LIVE_ID = /^[0-9A-Fa-f-]{36}$/;
   const LIVE_MAX_BYTES = 16 << 20;
   // Streams by id, so a command can take its audio from the stream instead of a second upload
@@ -593,8 +593,9 @@ module.exports = function (ctx) {
   const liveStreams = new Map();
   const LIVE_KEEP_MS = 2 * 60 * 1000;
   // How long a command waits for its stream to finish arriving. On a poor link the stream is still
-  // delivering its backlog when the command lands; past this the clip is asked for instead.
-  const LIVE_WAIT_MS = 30 * 1000;
+  // delivering its backlog when the command lands; past this the clip is asked for instead. Well inside
+  // the watch's own patience with the hub (Hub.hubPatience, 25s), so that upload still fits in it.
+  const LIVE_WAIT_MS = 12 * 1000;
   // A stream may begin a moment after the file (it opens once the microphone is live), so it is judged
   // whole when it is within this much of the recorded length.
   const LIVE_SHORT_S = 0.6;
@@ -793,7 +794,15 @@ module.exports = function (ctx) {
       if (!waiting.size && replyWaiters.get(id) === waiting) replyWaiters.delete(id);
       send();
     };
-    const settle = (row) => finish(() => res.json({ status: row.status, result: row.result ?? null, error: row.error ?? null }));
+    // The turn's thread rows ride the answer, so the caller can show the reply from this response
+    // instead of re-reading its whole thread first (the watch did, and on a poor link that read held a
+    // reply it already had off the screen for twenty seconds).
+    const settle = async (row) => {
+      let messages = null;
+      try { messages = await sb(`voice_messages?request_id=eq.${id}&order=created_at.asc&select=*`); }
+      catch (e) { console.error(`[voice-reply] ${id} rows not read: ${e.message || e}`); }
+      finish(() => res.json({ status: row.status, result: row.result ?? null, error: row.error ?? null, messages }));
+    };
     waiting.add(settle);
     const timer = setTimeout(() => finish(() => res.json({ status: 'pending' })), REPLY_WAIT_MS);
     req.on('close', () => finish(() => {}));

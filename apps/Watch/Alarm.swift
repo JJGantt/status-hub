@@ -36,10 +36,26 @@ final class Alarm: ObservableObject {
         guard stream == nil else { return }
         stream = Task {
             await load()
-            await Hub.listen("/api/list-stream", reconnected: { await self.load() }) { event, _ in
-                if event == "lists" { await self.load() }
+            await Hub.listen("/api/list-stream", reconnected: { await self.load() }) { event, data in
+                guard event == "lists" else { return }
+                // A frame naming the ringing item as `quiet` (stopped, snoozed or deleted elsewhere)
+                // silences it at once; the feed read that follows brings everything else.
+                if let quiet = (try? JSONDecoder().decode(ListsFrame.self, from: Data(data.utf8)))?.quiet {
+                    await self.quieted(quiet)
+                }
+                await self.load()
             }
         }
+    }
+
+    private struct ListsFrame: Decodable { let quiet: String? }
+
+    private func quieted(_ id: String) {
+        guard let it = ringing, it.id == id else { return }
+        answered.insert(key(it))
+        Hub.log("alarm-quiet", ["id": id])
+        set(nil)
+        settle()
     }
 
     func deactivate() {

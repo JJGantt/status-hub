@@ -200,6 +200,7 @@ final class Chat: ObservableObject {
             do {
                 thread = try await Hub.thread()
                 hold()
+                noteShown()
                 if failure == .noToken { failure = nil }
                 Hub.log("thread", ["rows": thread.count, "last": String((thread.last?.text ?? "").prefix(80))])
             } catch HubError.noToken {
@@ -325,6 +326,38 @@ final class Chat: ObservableObject {
         }
     }
 
+    /// Rows the hub has written, put into the thread in place (an update) or at its end (a new row).
+    /// What a voice frame and an answer bring: nothing here waits on reading the thread again.
+    private func take(_ rows: [Message]) {
+        var next = thread
+        for row in rows {
+            if let i = next.firstIndex(where: { $0.id == row.id }) { next[i] = row } else { next.append(row) }
+        }
+        if next.count > Self.threadCap { next.removeFirst(next.count - Self.threadCap) }
+        guard next != thread else { return }
+        thread = next
+        hold()
+        noteShown()
+    }
+    /// The most rows kept: what `Hub.thread` reads, with room for the unread answers it adds.
+    private static let threadCap = 60
+
+    /// The request each command spoken from an open inbox answer was about, so that answer's page can
+    /// take its follow-up from the thread (Inbox.swift `AnswerView`).
+    private(set) var askedAbout: [String: String] = [:]
+
+    /// Logs `shown` once per request, the moment its reply is in the thread: the last stamp of a
+    /// command's timing (status-hub docs/HUB-INTERNALS.md § Command timing).
+    private func noteShown() {
+        let mine = Set(commands.compactMap(\.requestId))
+        for m in thread where m.role == "assistant" {
+            guard let rid = m.request_id, mine.contains(rid), !shownReplies.contains(rid) else { continue }
+            shownReplies.insert(rid)
+            Hub.log("shown", ["id": rid])
+        }
+    }
+    private var shownReplies: Set<String> = []
+
     private func hold() {
         let tail = Set(thread.suffix(shownCount).map(\.id))
         let asks = Set(unread.compactMap(\.request_id))
@@ -391,7 +424,16 @@ final class Chat: ObservableObject {
             default:
                 break
             }
-        case "message", "mode", "reset":
+        case "message":
+            // The frame carries the row: it goes straight into the thread. Only a row that opens a new
+            // context, or one this view cannot place, reads the thread again.
+            if let row = (try? JSONDecoder().decode(MessageFrame.self, from: Data(data.utf8)))?.row {
+                guard (row.focus ?? "hub") == "hub", (row.mode ?? "hub") == "hub" else { return }
+                if row.ctx_break == true { await load() } else { take([row]) }
+            } else {
+                await load()
+            }
+        case "mode", "reset":
             await load()
         default:
             break
@@ -429,6 +471,7 @@ final class Chat: ObservableObject {
                         return
                     }
                     requestId = id
+                    if let about = clip.about { askedAbout[id] = about }
                     update(msgId) { $0.requestId = id; $0.words = heard.transcript; $0.fallback = fallback }
                 }
                 let outcome = fallback ? try await Hub.fallbackOutcome(requestId!) : try await Hub.outcome(requestId!)
@@ -444,7 +487,9 @@ final class Chat: ObservableObject {
                     Hub.log("answered", ["view": "chat", "id": requestId ?? ""])
                     // The reply IS the end of the run, whether or not its `done` frame got here.
                     activity = []
-                    await load()
+                    // Shown from the answer itself. The thread is read again only when the answer did
+                    // not carry its rows, which is the hub before this change.
+                    if let rows = outcome.messages, !rows.isEmpty { take(rows) } else if !fallback { await load() }
                     // A fallback reply is shown from its outcome when the thread did not bring it: the
                     // hub that serves the thread is the thing that did not answer.
                     if fallback, let id = requestId, !thread.contains(where: { $0.request_id == id }) {
@@ -467,6 +512,11 @@ final class Chat: ObservableObject {
             }
         }
     }
+}
+
+/// A `message` frame of `/api/voice-stream`: the conversation row itself, as written.
+private struct MessageFrame: Decodable {
+    let row: Message?
 }
 
 /// A frame of `/api/voice-stream`. `activity` rows are the worker's live reports (a tool call, the

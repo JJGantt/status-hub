@@ -35,7 +35,7 @@ struct InboxAnswer: Decodable {
     let answer: String
     let session_id: String?
     let session_label: String?
-    let follow: [Follow]
+    var follow: [Follow]
 }
 
 extension Hub {
@@ -215,13 +215,19 @@ private struct AnswerView: View {
             CommandBorder.tapped(at)
             CommandBorder.press(chat: chat, sessions: Sessions.shared, how: "inbox-tap")
         }
-        .onChange(of: chat.thread.last?.id) { _, _ in Task { await load() } }
+        // A follow-up spoken from this page lands in the thread; its rows are taken from there.
+        .onChange(of: chat.thread) { _, thread in takeFollow(thread) }
         .onAppear { Hub.about = a.id }
         .onDisappear { if Hub.about == a.id { Hub.about = nil } }
     }
 
-    private func load() async {
-        do { a = try await Hub.inboxAnswer(a.id) }
-        catch { Hub.log("inbox-answer-failed", ["id": a.id, "error": "\(error)"]) }
+    private func takeFollow(_ thread: [Message]) {
+        let have = Set(a.follow.map(\.id))
+        let rows = thread.filter { m in
+            guard let rid = m.request_id, chat.askedAbout[rid] == a.id, !have.contains(m.id) else { return false }
+            return m.role == "user" || m.role == "assistant"
+        }
+        guard !rows.isEmpty else { return }
+        a.follow += rows.map { InboxAnswer.Follow(id: $0.id, role: $0.role ?? "assistant", text: $0.text ?? "") }
     }
 }

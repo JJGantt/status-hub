@@ -10,7 +10,8 @@ const crypto = require('crypto');
 const h = require('./harness');
 
 let supa, hub;
-before(async () => { supa = await h.fakeSupabase(); hub = await h.startHub(supa); });
+// A Groq key that is never reached: the cases below are refused before any transcription.
+before(async () => { supa = await h.fakeSupabase(); hub = await h.startHub(supa, { GROQ_API_KEY: 'unused' }); });
 after(async () => { await hub.stop(); supa.close(); });
 
 const frame = (type, data = Buffer.alloc(0)) => {
@@ -68,4 +69,24 @@ test('a dropped connection while paused is stalled, not lost', async () => {
 
 test('a stream without a valid id is refused', async () => {
   assert.equal((await hub.req('/api/voice-live?id=nope', { method: 'POST', headers: { 'X-Hub-Token': h.DEVICE_TOKEN } })).status, 400);
+});
+
+// A command sent as just its details takes its audio from the stream (no second upload). When the stream
+// cannot supply the whole recording the hub answers 409 `upload`, and the watch sends the clip instead.
+const fromLive = (live) => hub.req(`/api/voice-command?live=${live}&dur=3.0&client_msg_id=${crypto.randomUUID()}&source=watch-cmd`,
+  { method: 'POST', headers: { 'X-Hub-Token': h.DEVICE_TOKEN, 'X-Audio-Source': 'live' } });
+
+test('a command naming a stream the hub never saw asks for the clip', async () => {
+  const r = await fromLive(crypto.randomUUID());
+  assert.equal(r.status, 409);
+  assert.equal((await r.json()).why, 'unknown');
+});
+
+test('a command naming a stream that was lost asks for the clip', async () => {
+  const id = crypto.randomUUID();
+  await stream(id, [frame('A', Buffer.from('xx')), frame('A', Buffer.from('yy'))], { cut: true });
+  await settled(id);
+  const r = await fromLive(id);
+  assert.equal(r.status, 409);
+  assert.equal((await r.json()).why, 'lost');
 });

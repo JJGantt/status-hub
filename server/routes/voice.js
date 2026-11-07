@@ -224,6 +224,11 @@ module.exports = function (ctx) {
   gated.post('/api/voice-command', async (req, res) => {
     const tmp = path.join(os.tmpdir(), 'voice-' + crypto.randomUUID());
     let short = null;   // the pause-shortened copy of a locked clip, removed with tmp
+    // Where this command's time goes, written on the request row (voice_requests.timing, HUB-INTERNALS.md
+    // § Command timing) so a slow turn can be traced after the process log has rolled over.
+    const t0 = Date.now();
+    const timing = { hub_received: new Date(t0).toISOString() };
+    const since = (t) => Date.now() - t;
     try {
       if (!GROQ_API_KEY && !process.env.OPENAI_API_KEY) { req.resume(); return res.status(503).json({ error: 'transcription not configured' }); }
       // ?dry=1 → transcribe only, no enqueue. The chat composer uses this while photos are pending: the
@@ -231,11 +236,29 @@ module.exports = function (ctx) {
       const dry = String(req.query.dry || '') === '1';
       const msgId = String(req.query.client_msg_id || '').slice(0, 64);
       if (!dry && msgId && seenMsgIds.has(msgId)) { req.resume(); return res.json({ enqueued: true, duplicate: true, id: seenMsgIds.get(msgId) }); }
-      await pipeline(req, fs.createWriteStream(tmp));
+      // A command whose recording was streamed while it ran (/api/voice-live) is sent as just its details,
+      // with no body: the hub already holds the audio, so the clip does not cross the network a second
+      // time. 409 `upload` when the stream did not arrive whole; the watch then sends the clip itself.
+      const fromLive = String(req.headers['x-audio-source'] || '') === 'live';
+      const dur = parseFloat(req.query.dur);
+      let ct = String(req.headers['content-type'] || 'audio/webm');
+      if (fromLive) {
+        req.resume();
+        const got = await liveAudio(String(req.query.live || ''), tmp, dur);
+        timing.live_wait_ms = since(t0);
+        if (!got.ok) {
+          console.log(`[voice-command] live audio for ${req.query.live || '-'} not usable (${got.why}); asking for the clip`);
+          return res.status(409).json({ upload: true, why: got.why });
+        }
+        ct = 'audio/mp4';
+        timing.audio_via = 'live';
+      } else {
+        await pipeline(req, fs.createWriteStream(tmp));
+        timing.audio_via = 'upload';
+      }
+      timing.audio_in_ms = since(t0);
       const { size } = await fs.promises.stat(tmp);
       if (!size) return res.status(400).json({ error: 'no audio' });
-      const ct = String(req.headers['content-type'] || 'audio/webm');
-      const dur = parseFloat(req.query.dur);
       // A CLIP THAT HOLDS A FRACTION OF WHAT WAS RECORDED IS REFUSED, NOT TRANSCRIBED. The phone's
       // capture can drop most of its frames while still producing a valid file: 36.7s of talking came
       // up as 4.2s of chopped fragments, one frame kept in about nine. Whisper hears that as noise and
@@ -244,6 +267,10 @@ module.exports = function (ctx) {
       // half of it is damaged (a sound one keeps over 99%). The page resets its microphone on
       // `capture: 'damaged'` — see captureDamaged() in voiceagent.js.
       const heldS = dur >= CAPTURE_CHECK_MIN_S ? await clipSeconds(tmp) : null;
+      if (fromLive && heldS != null && heldS < dur - LIVE_SHORT_S) {
+        console.log(`[voice-command] live audio holds ${heldS.toFixed(2)}s of ${dur.toFixed(1)}s; asking for the clip`);
+        return res.status(409).json({ upload: true, why: 'short', held_s: +heldS.toFixed(2), dur });
+      }
       if (heldS != null && heldS < dur * CAPTURE_MIN_KEPT) {
         console.log(`[voice-command] DAMAGED ${size} bytes ${ct}: holds ${heldS.toFixed(2)}s of ${dur.toFixed(1)}s recorded, refused`);
         return res.json({ transcript: '', enqueued: false, capture: 'damaged', held_s: +heldS.toFixed(2), dur });
@@ -271,10 +298,14 @@ module.exports = function (ctx) {
         short = locked ? await shortenPauses(tmp, quiet).catch((e) => { console.log(`[voice-command] pause shortening failed: ${e.message}`); return null; }) : null;
         if (short) console.log(`[voice-command] locked clip: ${short.gaps} pause(s) shortened, ${short.cut.toFixed(1)}s cut`);
         const [file, type] = short ? [short.file, 'audio/wav'] : [tmp, ct];
+        const tStt = Date.now();
         const second = dry ? null : transcribe(file, type, GROQ_API_KEY, { model: altModel })
+          .then((r) => { timing.stt_alt_ms = since(tStt); return r; })
           .catch((e) => { console.log(`[voice-command] second transcriber failed: ${e.message || e}`); return null; });
         ({ transcript, segments } = await transcribe(file, type, GROQ_API_KEY, { model: whisperModel }));
+        timing.stt_ms = since(tStt);
         const other = second && (await second);
+        timing.stt_both_ms = since(tStt);
         const words = (s) => String(s || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
         if (other && other.transcript && words(other.transcript) !== words(transcript)) {
           alt = other.transcript;
@@ -287,9 +318,10 @@ module.exports = function (ctx) {
       }
       // Bytes per second of speech is what decides whether a clip fits Groq's cap, and it is set by the
       // recording device, not by us — so every clip reports it.
-      console.log(`[voice-command] ${size} bytes ${ct}` +
+      console.log(`[voice-command] ${size} bytes ${ct} via ${timing.audio_via}` +
         (dur > 0 ? ` ${dur.toFixed(1)}s ${Math.round(size * 8 / dur / 1000)} kbps` : '') +
-        (segments ? ` re-encoded into ${segments} segment(s)` : ''));
+        (segments ? ` re-encoded into ${segments} segment(s)` : '') +
+        ` audio ${timing.audio_in_ms}ms stt ${timing.stt_ms}ms alt ${timing.stt_alt_ms ?? '-'}ms`);
       // THE WORDS SAID BEFORE AN INTERRUPTION. The phone pauses a command when a timer, Siri or a call
       // takes the microphone, and the parts recorded before it cannot be joined to this one as audio, so
       // they arrive already transcribed, as this clip's prefix (makeRecorder / deliverVoice in
@@ -325,7 +357,9 @@ module.exports = function (ctx) {
       const source = /^[a-z0-9][a-z0-9-]{0,23}$/.test(srcRaw) ? srcRaw : (quick ? 'web-quick' : 'web');
       const id = crypto.randomUUID();   // chosen here so the caller can wait on it (/api/voice-reply/:id)
       // An always-on device's clip has to sound like the user before it becomes a command.
+      const tVerify = Date.now();
       const him = await soundsLikeHim(id, tmp, source);
+      if (GATED_SOURCES.has(source)) timing.verify_ms = since(tVerify);
       console.log(`[voice-command] ${source} voice ${him.ok ? 'accepted' : 'REFUSED'}` +
         (him.sim != null ? ` sim=${him.sim.toFixed(2)}${him.bar ? ` bar=${him.bar}` : ''}` : '') +
         (him.why ? ` (${him.why})` : ''));
@@ -336,6 +370,7 @@ module.exports = function (ctx) {
         ...(alt ? { alt_transcript: alt } : {}),
         ...(untranscribed ? { status: 'untranscribed' } : {}),
         always_on: GATED_SOURCES.has(source),
+        timing: { ...timing, hub_enqueued: new Date().toISOString(), hub_ms: since(t0), bytes: size },
         ...(capture_start ? { capture_start } : {}), ...(capture_end ? { capture_end } : {}),
         ...(client_now ? { client_now } : {}), ...(location ? { location } : {}) });
       markSeen(msgId, id);
@@ -481,6 +516,7 @@ module.exports = function (ctx) {
   // A client may send one line, or a batch as `{ lines: [...] }`: the watch keeps its lines until they
   // are acknowledged and sends what piled up while it was offline all at once. A kept batch is answered
   // only once it is stored, so a failed write leaves the lines on the watch to be sent again.
+  const WATCH_TIMING_EVENTS = { sent: 'watch_sent', answered: 'watch_answered', shown: 'watch_shown' };
   gated.post('/api/clientlog', express.json({ limit: '256kb' }), async (req, res) => {
     const b = req.body || {};
     // The watch's battery rides its batches (lib/watchbattery.js); a failed store never fails the log.
@@ -503,6 +539,15 @@ module.exports = function (ctx) {
         // clock when it sent one, which is when it happened rather than when it got here.
         keep.push({ src, ev: String(ev).slice(0, 40), data, at: new Date(Number.isFinite(at) ? at : Date.now()).toISOString() });
       }
+    }
+    // The watch's own stamps for a command (it has the id, the answer arrived, the answer is on screen)
+    // go onto that request's timing, next to the hub's and the worker's.
+    for (const k of keep) {
+      const key = WATCH_TIMING_EVENTS[k.ev];
+      const rid = k.data && k.data.id;
+      if (k.src !== 'watch' || !key || !/^[0-9a-f-]{36}$/i.test(String(rid || ''))) continue;
+      sbWrite('rpc/voice_timing', 'POST', { p_id: rid, p_timing: { [key]: k.at, ...(k.data.ms != null ? { [`${key}_ms`]: k.data.ms } : {}) } })
+        .catch((e) => console.error(`[clientlog] timing for ${rid} not kept: ${e.message || e}`));
     }
     if (keep.length) {
       try { await sbWrite('client_log', 'POST', keep); }
@@ -541,9 +586,45 @@ module.exports = function (ctx) {
   // the part that survives the app.
   const LIVE_ID = /^[0-9A-Fa-f-]{36}$/;
   const LIVE_MAX_BYTES = 16 << 20;
+  // Streams by id, so a command can take its audio from the stream instead of a second upload
+  // (liveAudio). Each entry settles when its connection closes and is dropped two minutes after.
+  const liveStreams = new Map();
+  const LIVE_KEEP_MS = 2 * 60 * 1000;
+  // How long a command waits for its stream to finish arriving. On a poor link the stream is still
+  // delivering its backlog when the command lands; past this the clip is asked for instead.
+  const LIVE_WAIT_MS = 30 * 1000;
+  // A stream may begin a moment after the file (it opens once the microphone is live), so it is judged
+  // whole when it is within this much of the recorded length.
+  const LIVE_SHORT_S = 0.6;
+
+  // The audio of a finished stream, written to `file` as m4a. { ok:false, why } when there is no such
+  // stream on this machine, it did not end with E, or it is still open after LIVE_WAIT_MS.
+  async function liveAudio(id, file, dur) {
+    const s = LIVE_ID.test(id) ? liveStreams.get(id) : null;
+    if (!s) return { ok: false, why: 'unknown' };
+    const end = await Promise.race([s.ended, new Promise((r) => setTimeout(() => r(null), LIVE_WAIT_MS))]);
+    if (!end) return { ok: false, why: 'still open' };
+    if (end.verdict !== 'ended' || !end.audio.length) return { ok: false, why: end.verdict };
+    const raw = `${file}.aac`;
+    try {
+      await fs.promises.writeFile(raw, end.audio);
+      await new Promise((resolve, reject) => execFile('ffmpeg', ['-v', 'error', '-y', '-f', 'aac', '-i', raw, '-c', 'copy', '-f', 'mp4', file],
+        (e) => (e ? reject(e) : resolve())));
+      return { ok: true };
+    } catch (e) {
+      console.error(`[voice-live] ${id} could not be made into a clip: ${e.message || e}`);
+      return { ok: false, why: 'remux' };
+    } finally {
+      fs.promises.unlink(raw).catch(() => {});
+    }
+  }
+
   gated.post('/api/voice-live', (req, res) => {
     const id = String(req.query.id || '');
     if (!LIVE_ID.test(id)) { req.resume(); return res.status(400).json({ error: 'id required' }); }
+    let settleEntry;
+    const entry = { ended: new Promise((r) => { settleEntry = r; }) };
+    liveStreams.set(id, entry);
     const meta = { id, view: String(req.query.view || '').slice(0, 16), flow: String(req.query.flow || '').slice(0, 16) };
     const reader = new FrameReader();
     const audio = [];
@@ -564,6 +645,8 @@ module.exports = function (ctx) {
       const seconds = (Date.now() - startedAt) / 1000;
       console.log(`[voice-live] ${id} ${verdict}: ${seconds.toFixed(1)}s open, ${bytes} audio bytes, last ${last || '-'}, `
         + `${Date.now() - lastByteAt}ms from the last byte to the close${reader.bad ? `, ${reader.bad}` : ''}`);
+      settleEntry({ verdict, audio: verdict === 'ended' ? Buffer.concat(audio) : Buffer.alloc(0) });
+      setTimeout(() => { if (liveStreams.get(id) === entry) liveStreams.delete(id); }, LIVE_KEEP_MS).unref();
       if (verdict === 'lost' || verdict === 'unmarked') {
         lostRecording(meta, verdict, Buffer.concat(audio), seconds)
           .catch((e) => console.error(`[voice-live] ${id} could not handle a ${verdict} recording: ${e.message || e}`));

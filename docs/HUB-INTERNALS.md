@@ -1909,3 +1909,29 @@ subscription's usage limit, `codex` when Claude cannot answer; null is the subsc
 surface colours the reply text by it: amber for credits, blue for Codex, the colours the usage bars and
 the session list already use. Web: `ai-engine-*` in voiceagent.js, `eng-*` in phone-home.js; watch:
 `ThreadRow.engine`.
+
+## Command timing
+
+Every voice command carries `voice_requests.timing` (jsonb, data-layer 00177): each stage stamped by
+the machine that ran it, so a slow turn is traced from the row alone. Process logs are no substitute:
+Fly keeps minutes of them. Writers merge keys with `rpc/voice_timing` (or, for the worker, inside
+`voice_finish`), never by reading and rewriting the object, since three writers stamp one row.
+
+| key | written by | meaning |
+|---|---|---|
+| `hub_received` | hub, `/api/voice-command` | the request arrived |
+| `audio_via` | hub | `live` (audio taken from the `/api/voice-live` stream) or `upload` (the clip in the body) |
+| `live_wait_ms` | hub | how long the command waited for its stream to finish arriving |
+| `audio_in_ms` | hub | from arrival until the audio was all on disk |
+| `stt_ms`, `stt_alt_ms`, `stt_both_ms` | hub | the primary Whisper, the second opinion, and both (the enqueue waits for both) |
+| `verify_ms` | hub | the voiceprint check, listeners only |
+| `hub_enqueued`, `hub_ms`, `bytes` | hub | the row was written; total hub time; audio size |
+| `watch_sent`, `watch_sent_ms` | watch, via `/api/clientlog` | the watch had the request id; `ms` from the end of recording |
+| `worker`, `worker_start`, `prompt_built` | worker | which worker claimed it, and when it started and had built the prompt |
+| `run_sent`, `first_output`, `model_done` | worker | the turn was sent to the model, its first output of any kind, its result |
+| `duration_ms`, `duration_api_ms`, `num_turns` | worker | the run's own account |
+| `input_tokens`, `cache_read_input_tokens`, `cache_creation_input_tokens`, `output_tokens` | worker | whether the prompt cache was warm |
+| `finished` | worker | the reply rows were written |
+| `watch_answered`, `watch_shown` | watch, via `/api/clientlog` | the answer reached the watch, and was on its screen |
+
+`capture_start` / `capture_end`, `created_at` and `claimed_at` are columns of their own and are not repeated.

@@ -488,9 +488,13 @@ tick();
 // liveStream, which judges the connection by whether the server's `ping` keeps arriving.
 // The push is also passed on as `hub:lists`, for anything else on the page that shows dated items
 // (the phone's month calendar) — one stream per page, not one per card.
-liveStream('/api/list-stream', { lists: () => {
+liveStream('/api/list-stream', { lists: (e) => {
   columns.forEach(load);
-  document.dispatchEvent(new CustomEvent('hub:lists'));
+  // The frame's `quiet` (an item just stopped, snoozed or deleted) rides along, so a ringer can go
+  // silent on the frame instead of after re-reading the feed.
+  let quiet = null;
+  try { quiet = (JSON.parse(e.data || '{}') || {}).quiet || null; } catch (_) {}
+  document.dispatchEvent(new CustomEvent('hub:lists', { detail: { quiet } }));
 } });
 
 // The phone's lists pane mounts itself: it is plain markup in the page, with no module of its own to

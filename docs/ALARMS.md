@@ -101,8 +101,10 @@ rule whenever they look: `dueNow()` in `alarmclock.js`, `due_now()` in `tv-ring.
 STOP reaches the TV in under a second because the hub announces its own completion at once
 (`announceListWrite` in `routes/lists.js`) instead of waiting for the realtime echo, which takes seconds —
 long enough for STOP to look as if it had not reached the TV. The announcement names the item
-(`data: {"quiet": <id>}` on `/api/list-stream`, for stop, snooze and delete), and `tv-ring` goes silent
-on that frame rather than after re-reading the feed, which can itself take seconds when the hub is busy.
+(`data: {"quiet": <id>}` on `/api/list-stream`, for stop, snooze and delete), and every ringer goes silent
+on that frame rather than after re-reading the feed, which can itself take seconds when the hub is busy:
+`tv-ring`, the watch (`Alarm.swift`), and the phone's alarm clock, which gets the frame's `quiet` as the
+`detail` of `cards/dayline.js`'s `hub:lists` event.
 
 **The page cannot detect a Guided Access session** — there is no web API, and the giveaway (Web Audio
 being silenced) is not measurable from inside the audio graph. `GuidedAccess` in `StatusHubApp.swift`

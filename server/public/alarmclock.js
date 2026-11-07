@@ -326,7 +326,12 @@ document.addEventListener('hub:stream', load);
 // …and on the LIST stream (cards/dayline.js passes it on as `hub:lists`), which is what a STOP or a
 // snooze actually changes. It lands within a second where the status frame above can take tens of
 // seconds to build, and it is the stream tv-ring follows — so the overlay and the TV's sound end together.
-document.addEventListener('hub:lists', load);
+// A frame naming the ringing item as `quiet` stops it at once; the reload then brings the rest.
+document.addEventListener('hub:lists', (e) => {
+  const quiet = e.detail && e.detail.quiet;
+  if (quiet && ringing && String(ringing.id) === String(quiet)) { stopped.add(keyOf(ringing)); stopRing('quiet'); }
+  load();
+});
 // `guided` in the beacon is how the night-before setup is checked from the hub log, so a session
 // starting or ending beacons at once rather than within the minute.
 document.addEventListener('hub:guidedaccess', beacon);

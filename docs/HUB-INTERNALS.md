@@ -1429,9 +1429,10 @@ not fit even at full width leaves the panel full width. `bin/tv sidebar on <w>` 
 directly, so its window is that width and the panel fills it.
 
 The orchestrator view is the current context of the hub thread, fetched from
-`/api/voice-messages?focus=hub&mode=active` (the watch's view) and refetched whenever `/api/voice-stream`
-carries a `message` or `reset` frame, so which rows belong to the current context stays the server's
-rule. After 4 AM or a reset it is empty under its header until the next command. A reply relayed
+`/api/voice-messages?focus=hub` when the view opens, when the stream reconnects and on a `reset` frame,
+so which rows belong to the current context stays the server's rule. A `message` frame carries its row,
+and the row is patched in from the frame (`takeVoiceRow`) rather than refetched, so a reply is on the
+strip the moment it is written. After 4 AM or a reset it is empty under its header until the next command. A reply relayed
 from a session (a row with `session_id`) is drawn in the teal (`#9fe3d3`) the phone and watch give it.
 
 The content view is the `tv_sidebar_content` setting: any markdown, written by `tvPush` when a

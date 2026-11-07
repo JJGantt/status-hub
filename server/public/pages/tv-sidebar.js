@@ -150,6 +150,7 @@ function frame(d) {
   if (!d) return;
   // A deploy reaches the server, not an open page: reload when the build changes.
   if (d.commit) { if (build && d.commit !== build) { location.reload(); return; } build = d.commit; }
+  const was = view;
   view = ['orchestrator', 'content'].includes(d.sidebar_view) ? d.sidebar_view : 'session';
   if (Number(d.sidebar_font) > 0) document.body.style.fontSize = d.sidebar_font + 'px';
   if (Number(d.sidebar_width) > 0) minWidth = Number(d.sidebar_width);
@@ -161,7 +162,8 @@ function frame(d) {
     cvBody.innerHTML = `<div class="sb-reply">${md(content.trim())}</div>`;
   }
   fit();   // after the switch: a hidden box measures as nothing and would never fit
-  if (view === 'orchestrator') loadVoice();
+  // Read when the orchestrator view opens; while it stays open, voice frames keep it current.
+  if (view === 'orchestrator' && was !== 'orchestrator') loadVoice();
   focusOn(d.focus);
 }
 
@@ -188,10 +190,21 @@ liveStream('/api/session-stream', {
 // ---- the orchestrator ----------------------------------------------------------------------------
 const voBody = document.getElementById('vo-body');
 
-// Refetched on each voice frame rather than patched: the server owns which rows are the current
-// context (opensContext, reset, unread answers), and a frame arrives only when something
-// was said, so this is one request per message.
+// Read whole when the view opens and after a reset, because the server owns which rows are the current
+// context; each new or changed message after that is patched in from its frame (takeVoiceRow).
 let voBusy = false, voAgain = false;
+function takeVoiceRow(row) {
+  if (view !== 'orchestrator') return;
+  if ((row.role !== 'user' && row.role !== 'assistant') || (row.mode && row.mode !== 'hub')) return;
+  const i = voRows.findIndex((m) => m.id === row.id);
+  if (i >= 0) voRows[i] = row;
+  else {
+    voRows.push(row);
+    voRows.sort((a, b) => String(a.created_at).localeCompare(String(b.created_at)));
+    if (voRows.length > 40) voRows = voRows.slice(-40);
+  }
+  paintVoice();
+}
 async function loadVoice() {
   if (view !== 'orchestrator') return;
   if (voBusy) { voAgain = true; return; }
@@ -230,7 +243,10 @@ liveStream('/api/voice-stream', {
   voice: (e) => {
     let m; try { m = JSON.parse(e.data); } catch (_) { return; }
     if (!m) return;
-    if (m.kind === 'message' || m.kind === 'reset') loadVoice();
+    // A message frame carries the row, so it is drawn from the frame; only a reset (which changes
+    // which rows are the current context) or a frame without a row goes back to the server.
+    if (m.kind === 'message' && m.row && (m.row.focus || 'hub') === 'hub') takeVoiceRow(m.row);
+    else if (m.kind === 'message' || m.kind === 'reset') loadVoice();
     else if (m.kind === 'activity' && m.row && (m.row.focus || 'hub') === 'hub') {
       const st = m.row.state;
       if (st === 'tool') voTool = m.row.text || null;

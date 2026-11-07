@@ -177,8 +177,11 @@ modifier and screenshotting is the check to re-run. Nothing here ships to the Ap
 risk to the look rather than to the app.
 
 **Home and an open session draw their own clock** (`CornerClock`, `h:mm` at 13pt, gray), and no other
-page does. On home it is an overlay at the top right, level with the inbox dot and above the landing
-line, taking no touch, so nothing in the thread moves and a tap there still records. In a session it is
+page does. On home it sits in **the top strip**: a band of `.ultraThinMaterial` the height of the inbox
+dot's row (30pt, above the 32pt landing line), over the thread, which scrolls on blurred beneath it.
+The time is centred halfway between the dot and the right edge, because watchOS draws its microphone
+indicator in the top right corner while the app records, and no app can move or hide that. The strip
+takes no touch, so nothing in the thread moves and a tap there still records. In a session it is
 a trailing `ToolbarItem` on the name's line, so a long name truncates before it. A plain `Text` there
 gets no button glass.
 

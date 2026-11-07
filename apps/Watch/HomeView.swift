@@ -163,6 +163,23 @@ struct HomeView: View {
         }
         // Over the thread, inside the page, so the double tap above the page row still records.
         .overlay { if inbox { InboxView(open: $inboxAnswer) } }
+        // **The top strip**: a band of glass the height of the inbox dot's row, ending above the landing
+        // line, so the thread scrolls on visibly beneath it and nothing in it moves. The time sits in it
+        // halfway between the dot and the right edge — clear of the corner, and of the microphone
+        // indicator watchOS draws at the top right while recording, which no app can move. It takes no
+        // touch: a tap there still records.
+        .overlay(alignment: .top) {
+            ZStack {
+                Rectangle().fill(.ultraThinMaterial)
+                HStack(spacing: 0) {
+                    Color.clear
+                    CornerClock().frame(maxWidth: .infinity)
+                }
+            }
+            .frame(height: Self.strip)
+            .allowsHitTesting(false)
+            .ignoresSafeArea()
+        }
         // **The inbox** (docs/WATCH.md): a dot at the top, always — amber while any answer is
         // unread, gray otherwise — drawn over the inbox as well as home, because it is the inbox's only
         // way in and out: home -> the list, an open answer -> the list, the list -> home. A button of its
@@ -173,19 +190,10 @@ struct HomeView: View {
                 Hub.log("inbox-dot", ["open": inbox, "answer": inboxAnswer?.id ?? "", "unread": chat.unread.count])
             } label: {
                 Circle().fill(chat.unread.isEmpty ? Self.readDot : Self.unreadDot).frame(width: 10, height: 10)
-                    .frame(width: 48, height: 30).contentShape(Rectangle())
+                    .frame(width: 48, height: Self.strip).contentShape(Rectangle())
             }
             .buttonStyle(.plain)
             .ignoresSafeArea()
-        }
-        // The time at the top right, level with the inbox dot and above the landing line, so nothing in
-        // the thread moves for it. It takes no touch: a tap there still records.
-        .overlay(alignment: .topTrailing) {
-            CornerClock()
-                .frame(height: 30)
-                .padding(.trailing, Self.clockInset)
-                .allowsHitTesting(false)
-                .ignoresSafeArea()
         }
         // An answer's notification lands on the answer in the thread, so the inbox gets out of the way.
         .onChange(of: chat.landings) { _, _ in inbox = false; inboxAnswer = nil }
@@ -222,9 +230,8 @@ struct HomeView: View {
         }
     }
 
-    /// How far the clock stands in from the right edge: the glass's corner curve still cuts into the
-    /// top line this far in.
-    private static let clockInset: CGFloat = 22
+    /// The top strip's height: the inbox dot's row, short of the landing line.
+    private static let strip: CGFloat = 30
 
     /// The amber the sessions list marks unread with.
     private static let unreadDot = Color(hex: "#e0a03a")

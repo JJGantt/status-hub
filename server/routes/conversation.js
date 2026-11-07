@@ -81,6 +81,28 @@ module.exports = function (ctx) {
     return log;
   }
 
+  // A SESSION'S THREAD HOLDS ITS LAUNCH PROMPT FROM THE MOMENT IT EXISTS. The row is written at
+  // dispatch, but the host streams the prompt only once Claude Code has started and written it, and a
+  // session opened in between would be a blank page. So an empty thread is given the row's launch
+  // prompt, marked `launch`; the host's copy of that prompt, when it arrives, is recognised by the
+  // dispatch command's id (or, from a host that sent none, by its text) and not appended a second time.
+  function seedLaunch(conv, rowId, log, prompt, cmd) {
+    const text = cleanSaid(String(prompt || '')).slice(0, 20000);
+    if (log.events.length || !text) return;
+    appendEvent(conv, rowId, log, { id: crypto.randomUUID(), kind: 'prompt', text, seen: true, launch: true,
+                                    ...(cmd ? { cmd: String(cmd).slice(0, 64) } : {}) });
+  }
+
+  /** Whether `ev` is the host's copy of a seeded launch prompt; the seed then stops standing in for it. */
+  function launchEcho(log, ev) {
+    if (ev.kind !== 'prompt') return false;
+    const seed = log.events.find((e) => e.launch
+      && ((ev.cmd && e.cmd === ev.cmd) || flatText(e.text) === flatText(ev.text)));
+    if (!seed) return false;
+    delete seed.launch;
+    return true;
+  }
+
   function appendEvent(conv, rowId, log, ev) {
     ev.seq = ++log.seq;
     log.events.push(ev);
@@ -131,7 +153,7 @@ module.exports = function (ctx) {
     for (const e of events.filter((x) => x && Number.isInteger(x.n)).sort((x, y) => x.n - y.n)) {
       if (e.n <= have) continue;
       const ev = hostEvent(e);
-      if (ev) appendEvent(conv, rowId, log, ev);
+      if (ev && !launchEcho(log, ev)) appendEvent(conv, rowId, log, ev);
       have = e.n;
     }
     log.cur = { turn, n: have };
@@ -174,9 +196,9 @@ module.exports = function (ctx) {
       // A host that numbers nothing (older than the above): appended as it arrives.
       if (!text) return {};
       if (state === 'text' || state === 'tool') { appendEvent(conv, rowId, log, { id: crypto.randomUUID(), kind: state, text }); return {}; }
-      appendEvent(conv, rowId, log, { id: typeof b.id === 'string' && b.id ? b.id.slice(0, 64) : crypto.randomUUID(),
-                                      kind: 'prompt', text, seen: state === 'said',
-                                      ...(b.cmd ? { cmd: String(b.cmd).slice(0, 64) } : {}) });
+      const ev = { id: typeof b.id === 'string' && b.id ? b.id.slice(0, 64) : crypto.randomUUID(),
+                   kind: 'prompt', text, seen: state === 'said', ...(b.cmd ? { cmd: String(b.cmd).slice(0, 64) } : {}) };
+      if (!launchEcho(log, ev)) appendEvent(conv, rowId, log, ev);
       return {};
     }
     if (state === 'done') {
@@ -319,5 +341,5 @@ module.exports = function (ctx) {
     return ev ? { kind: ev.kind, text: flatText(ev.text).slice(0, 400) } : null;
   }
 
-  return { EPOCH, convOfRow, ensureLog, liveLine, notifyAnswer, numbered, rowConv };
+  return { EPOCH, convOfRow, ensureLog, liveLine, notifyAnswer, numbered, rowConv, seedLaunch };
 };

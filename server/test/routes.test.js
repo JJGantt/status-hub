@@ -114,3 +114,40 @@ describe('permission prompts (/api/session-prompts)', () => {
     assert.equal((await json(h.PASSWORD_TOKEN, 'POST', `/api/session-prompts/${id}/decide`, { decision: 'maybe' })).status, 400);
   });
 });
+
+describe('a session thread (/api/sessions/:id)', () => {
+  const json = async (token, method, p, body) => {
+    const r = await hub.req(p, { method, headers: { 'Content-Type': 'application/json', 'X-Hub-Token': token },
+                                 ...(body ? { body: JSON.stringify(body) } : {}) });
+    return { status: r.status, json: await r.json().catch(() => ({})) };
+  };
+  const PROMPT = 'How often have the cats been using the litter box?';
+  const launched = (id, claude, o = {}) => supa.tables.desk_sessions.push({
+    id, claude_session_id: claude, status: 'resident', label: 'Litter', repo: 'litter_robot_analyzer',
+    prompt: PROMPT, command_id: `cmd-${id}`, started: new Date().toISOString(), ...o });
+  const kinds = (r) => r.json.events.map((e) => `${e.kind}:${e.text}`);
+  before(() => { supa.tables.desk_sessions = supa.tables.desk_sessions || []; });
+
+  test('holds the launch prompt before the host has said anything', async () => {
+    launched('s-thread01', 'aaaa0001-0000-0000-0000-000000000000');
+    assert.deepEqual(kinds(await json(h.DEVICE_TOKEN, 'GET', '/api/sessions/s-thread01')), [`prompt:${PROMPT}`]);
+  });
+
+  test('the host\'s copy of the launch prompt replaces the stand-in rather than repeating it', async () => {
+    launched('s-thread02', 'aaaa0002-0000-0000-0000-000000000000');
+    await json(h.DEVICE_TOKEN, 'GET', '/api/sessions/s-thread02');
+    const said = (n, state, text, extra = {}) => json(h.DEVICE_TOKEN, 'POST', '/api/session-activity',
+      { session: 's-thread02', turn: 't1', n, state, text, ...extra });
+    await said(1, 'said', PROMPT, { cmd: 'cmd-s-thread02' });
+    await said(2, 'tool', 'Bash: sqlite3 litter.db');
+    assert.deepEqual(kinds(await json(h.DEVICE_TOKEN, 'GET', '/api/sessions/s-thread02')),
+      [`prompt:${PROMPT}`, 'tool:Bash: sqlite3 litter.db']);
+  });
+
+  test('matched by text when the host sent no command id', async () => {
+    launched('s-thread03', 'aaaa0003-0000-0000-0000-000000000000');
+    await json(h.DEVICE_TOKEN, 'GET', '/api/sessions/s-thread03');
+    await json(h.DEVICE_TOKEN, 'POST', '/api/session-activity', { session: 's-thread03', turn: 't1', n: 1, state: 'said', text: PROMPT });
+    assert.deepEqual(kinds(await json(h.DEVICE_TOKEN, 'GET', '/api/sessions/s-thread03')), [`prompt:${PROMPT}`]);
+  });
+});

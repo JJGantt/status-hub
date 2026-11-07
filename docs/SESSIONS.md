@@ -463,10 +463,14 @@ Function, not liveness — ask it to do something and see whether it did:
 
 Two checks report on their own, to the ops responder:
 
-- **A session never opens empty.** `GET /api/sessions/:id`, which every surface opens a session
-  through, reports once per conversation when the thread is empty although the row was told something
-  (a launch prompt, a last prompt or reply, or a turn in flight) and is over 90s old
-  (`emptyThread` in `server/lib/outcomes.js`). An empty thread means every surface draws a blank page.
+- **A session never opens empty, and its host confirms it.** `GET /api/sessions/:id`, which every
+  surface opens a session through, puts the row's launch prompt in an empty thread (`seedLaunch` in
+  `server/routes/conversation.js`), so a session is never a blank page while it starts; the host's own
+  copy of that prompt replaces the stand-in, matched by the dispatch command id or its text. The route
+  reports once per conversation when the thread still holds nothing from the host 30s after `started`
+  although the row was told something (`unconfirmedThread` in `server/lib/outcomes.js`). Claude Code
+  writes a launch prompt within about a second of the row, so that is a session every surface draws as
+  its prompt and then nothing.
 - **A turn in flight has its transcript.** The Mac's desk tick (voice-pipeline
   `orchestrator/src/deskSessions.js`) reports a session busy for over 15s whose `transcript_path` does
   not exist. Claude Code names a project directory by turning every character that is not a letter or

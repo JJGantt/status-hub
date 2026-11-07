@@ -3,7 +3,7 @@
 // started for nothing (false positive) or a lost command nobody hears about (false negative).
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
-const { vanishedRecordings, emptyThread } = require('../lib/outcomes');
+const { vanishedRecordings, unconfirmedThread } = require('../lib/outcomes');
 
 const ev = (e, at) => ({ ev: e, at: `2026-11-02T06:${at}Z` });
 
@@ -38,22 +38,25 @@ test('a batch delivered twice is one recording, not a vanished one', () => {
   ]), []);
 });
 
-// emptyThread: an opened session whose thread holds nothing although it was told something.
+// unconfirmedThread: an opened session whose thread holds nothing from the host although it was told something.
 const NOW = Date.parse('2026-11-07T18:40:00Z');
-const row = (o) => ({ started: '2026-11-07T18:28:48Z', ...o });
+const OLD = { started: '2026-11-07T18:28:48Z' };
+const SEED = { kind: 'prompt', text: 'How often have the cats...', launch: true };
 
-test('a session that was dispatched with a prompt and shows nothing is reported', () => {
+test('a session whose thread holds nothing from the host is reported', () => {
   // 2026-11-07: a repo with an underscore pointed the host at a transcript that did not exist.
-  assert.equal(emptyThread(row({ launch_prompt: 'How often have the cats...' }), [], NOW), true);
-  assert.equal(emptyThread(row({ last_reply: 'Short answer' }), [], NOW), true);
-  assert.equal(emptyThread(row({ working: true }), [], NOW), true);
+  assert.equal(unconfirmedThread({ ...OLD, launch_prompt: SEED.text }, [SEED], NOW), true);
+  assert.equal(unconfirmedThread({ ...OLD, launch_prompt: SEED.text }, [], NOW), true);
+  assert.equal(unconfirmedThread({ ...OLD, last_reply: 'Short answer' }, [], NOW), true);
+  assert.equal(unconfirmedThread({ ...OLD, working: true }, [], NOW), true);
 });
 
-test('a session with anything in its thread is not reported', () => {
-  assert.equal(emptyThread(row({ launch_prompt: 'x' }), [{ kind: 'prompt', text: 'x' }], NOW), false);
+test('a session with anything from the host is not reported', () => {
+  assert.equal(unconfirmedThread({ ...OLD, launch_prompt: 'x' }, [{ kind: 'prompt', text: 'x' }], NOW), false);
+  assert.equal(unconfirmedThread({ ...OLD, launch_prompt: 'x' }, [SEED, { kind: 'tool', text: 'Bash' }], NOW), false);
 });
 
-test('a session never told anything, or only just started, is not reported', () => {
-  assert.equal(emptyThread(row({}), [], NOW), false);   // a terminal opened by hand, idle
-  assert.equal(emptyThread({ started: '2026-11-07T18:39:30Z', launch_prompt: 'x' }, [], NOW), false);
+test('a session never told anything, or still launching, is not reported', () => {
+  assert.equal(unconfirmedThread({ ...OLD }, [], NOW), false);   // a terminal opened by hand, idle
+  assert.equal(unconfirmedThread({ started: '2026-11-07T18:39:50Z', launch_prompt: 'x' }, [SEED], NOW), false);
 });

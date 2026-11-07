@@ -1,13 +1,13 @@
 'use strict';
 const { NOTHING_SAID } = require('../lib/transcribe');
-const { emptyThread } = require('../lib/outcomes');
+const { unconfirmedThread } = require('../lib/outcomes');
 const crypto = require('crypto');
 const express = require('express');
 
 module.exports = function (ctx) {
   const {
     DESK_STALE_S, EPOCH, TV_SIDEBAR_FONT, TV_SIDEBAR_WIDTH, cleanSaid, convOfRow, ensureLog, gated, liveLine,
-    markSeen, numbered, rowConv, sb, sbInsert, sbWrite, seenMsgIds, sessionClients, settingsAll, pendingPrompt,
+    markSeen, numbered, rowConv, sb, sbInsert, sbWrite, seedLaunch, seenMsgIds, sessionClients, settingsAll, pendingPrompt,
   } = ctx;
 
   // ---- desk control: repo picker -> a fresh Claude session on the Mac ----
@@ -252,7 +252,7 @@ module.exports = function (ctx) {
     return { parked: row };
   }
 
-  // Conversations already reported for opening empty (lib/outcomes emptyThread), so one stays one incident.
+  // Conversations already reported for opening with nothing from the host (lib/outcomes unconfirmedThread), so one stays one incident.
   const reportedEmpty = new Set();
 
   // One session in full, for a surface that shows a single session rather than the list — the watch's
@@ -261,16 +261,18 @@ module.exports = function (ctx) {
   gated.get('/api/sessions/:id', async (req, res) => {
     try {
       const rows = await sb(`desk_sessions?id=eq.${encodeURIComponent(String(req.params.id))}` +
-        '&select=id,label,custom_title,repo,worker,status,working,claude_session_id,last_prompt,last_reply,reply_at,agent,started,launch_prompt:prompt');
+        '&select=id,label,custom_title,repo,worker,status,working,claude_session_id,last_prompt,last_reply,reply_at,agent,started,prompt,command_id');
       if (!rows || !rows.length) return res.status(404).json({ error: 'no such session' });
-      const { started, launch_prompt, ...row } = rows[0];
+      // `prompt` is the launch prompt; the payload's `prompt` is the waiting permission dialog.
+      const { started, prompt: launch_prompt, command_id, ...row } = rows[0];
       if (row.last_prompt) row.last_prompt = cleanSaid(row.last_prompt);
       const conv = row.claude_session_id || row.id;
       rowConv.set(row.id, conv);
       const log = await ensureLog(conv);
-      if (!reportedEmpty.has(conv) && emptyThread({ ...row, started, launch_prompt }, log.events)) {
+      seedLaunch(conv, row.id, log, launch_prompt, command_id);
+      if (!reportedEmpty.has(conv) && unconfirmedThread({ ...row, started, launch_prompt }, log.events)) {
         reportedEmpty.add(conv);
-        console.error(`[sessions] ${row.id} opened with an empty thread although it was told something (conversation ${conv})`);
+        console.error(`[sessions] ${row.id} opened with nothing from its host in the thread (conversation ${conv})`);
       }
       res.json({ ...row, incident: isIncident(row), codex: isCodex(row), prompt: pendingPrompt(row.id), epoch: EPOCH, events: log.events });
     } catch (e) { res.status(500).json({ error: String(e.message || e) }); }

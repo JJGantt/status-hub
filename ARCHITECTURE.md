@@ -266,8 +266,8 @@ has a fresh heartbeat** (`HEARTBEAT_FRESH_S`).
 `WORKER_PRIORITY` is `fly,pi,mac` everywhere (`worker/run.sh`'s default, the Pi's `.env`, the Fly
 image), so the order is **Fly → Pi → Mac**. Fly is first because it answers the common turn
 faster (2.8s median against the Pi's 4.4s on identical commands) and
-does not depend on the house; it has no route to iMessage, Gmail or the feeder, which are rare enough
-not to count. The Mac is last so work started by voice outlives the laptop closing. Measurements:
+does not depend on the house; it has no route to iMessage, Gmail or the feeder's own server (it feeds through the data MCP's
+`feed_cats` relay), which are rare enough not to count. The Mac is last so work started by voice outlives the laptop closing. Measurements:
 `voice-pipeline/docs/WORKER-PLACEMENT.md`.
 
 | Worker | `WORKER_ID` | Where | Runner |

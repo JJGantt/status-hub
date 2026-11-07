@@ -266,7 +266,9 @@ module.exports = function (ctx) {
       // device knows how long it recorded, so the check needs its `dur`; a clip that keeps well under
       // half of it is damaged (a sound one keeps over 99%). The page resets its microphone on
       // `capture: 'damaged'` — see captureDamaged() in voiceagent.js.
+      const tProbe = Date.now();
       const heldS = dur >= CAPTURE_CHECK_MIN_S ? await clipSeconds(tmp) : null;
+      if (heldS != null) timing.probe_ms = since(tProbe);
       if (fromLive && heldS != null && heldS < dur - LIVE_SHORT_S) {
         console.log(`[voice-command] live audio holds ${heldS.toFixed(2)}s of ${dur.toFixed(1)}s; asking for the clip`);
         return res.status(409).json({ upload: true, why: 'short', held_s: +heldS.toFixed(2), dur });

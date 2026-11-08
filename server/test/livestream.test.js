@@ -49,3 +49,8 @@ test('a drop after the bytes had stopped, or while paused, is a stalled network'
   assert.equal(endOf({ complete: false, last: 'P', paused: true, gapMs: 100 }), 'stalled');
   assert.equal(endOf({ complete: false, last: null, paused: false, gapMs: undefined }), 'stalled');
 });
+
+test('a stream the hub closed at its own request limit is not a lost recording', () => {
+  assert.equal(endOf({ complete: false, last: null, paused: false, gapMs: 82, limited: true }), 'limited');
+  assert.equal(endOf({ complete: false, last: 'E', gapMs: 10, limited: true }), 'ended');
+});

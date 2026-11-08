@@ -45,6 +45,10 @@ class FrameReader {
 //   lost               the connection dropped mid-body while audio was flowing, the close following the
 //                      last byte at once: something between the app and the hub went away rather than
 //                      the network going quiet. Reported, and the audio so far is kept.
+//   limited            the hub closed it itself: the stream reached the server's request limit
+//                      (server.requestTimeout, sent to the watch as 408). Only a locked recording runs that
+//                      long. The watch carries on recording and uploads the whole clip when it ends, so
+//                      nothing is lost; logged only, and the next-start check still covers the recording.
 //   stalled            the connection dropped after bytes had already stopped arriving, or while the
 //                      recording was paused, when none are expected. That is what a lost network looks
 //                      like, and the watch may still be recording and will upload the clip itself. Not
@@ -52,9 +56,10 @@ class FrameReader {
 //                      next-start check (lib/outcomes.js).
 const LOST_GAP_MS = 3000;
 
-function endOf({ complete, last, paused, gapMs }) {
+function endOf({ complete, last, paused, gapMs, limited }) {
   if (last === 'E') return 'ended';
   if (last === 'C') return 'cancelled';
+  if (limited && !complete) return 'limited';
   if (complete) return 'unmarked';
   if (paused || !(gapMs < LOST_GAP_MS)) return 'stalled';
   return 'lost';

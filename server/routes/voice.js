@@ -657,7 +657,11 @@ module.exports = function (ctx) {
     const settle = () => {
       if (settled) return;
       settled = true;
-      const verdict = endOf({ complete, last, paused, gapMs: Date.now() - lastByteAt });
+      // The server's request limit is checked on an interval, so a stream it closes has been open at least
+      // that long (this handler starts a moment after the request did, hence the second of slack).
+      const limit = req.socket && req.socket.server && req.socket.server.requestTimeout;
+      const limited = limit > 0 && Date.now() - startedAt >= limit - 1000;
+      const verdict = endOf({ complete, last, paused, gapMs: Date.now() - lastByteAt, limited });
       const seconds = (Date.now() - startedAt) / 1000;
       console.log(`[voice-live] ${id} ${verdict}: ${seconds.toFixed(1)}s open, ${bytes} audio bytes, last ${last || '-'}, `
         + `${Date.now() - lastByteAt}ms from the last byte to the close${reader.bad ? `, ${reader.bad}` : ''}`);

@@ -744,6 +744,7 @@ out of `Capture` sends `E` or `C` before closing (`closeLive`), so the hub reads
 | the body closed cleanly with neither | `unmarked`: the app was killed | reported, audio kept in `voice-clips/lost/`, transcribed into the report |
 | the connection dropped mid-audio | `lost` | the same |
 | the connection dropped after the bytes had already stopped, or while paused | `stalled`: a network gone quiet, the watch may still be recording | logged only |
+| the hub closed it at its own request limit (`server.requestTimeout`, 30 min; the watch logs `live-dropped` 408) | `limited`: only a locked recording runs that long, and the watch keeps recording and uploads the whole clip when it ends | logged only |
 
 A killed app does NOT drop the connection: the system's networking ends the body cleanly for a process
 that is no longer there. Measured in the simulator with SIGKILL mid-recording: a clean end 50ms after

@@ -693,7 +693,7 @@ token; Fly secret `CG_OWNER_TOKEN_SHA256` is its hash) or, from builds up to 44,
 whose SHA-256 is `CG_OWNER_KEY_SHA256`, the same hash as `AppGate.ownerKeyHash` in the Menu repo. When
 `X-Owner-Token` is sent it alone decides. `X-Owner-Key` goes once no build in use sends it. Every request writes one `[cg-transcribe]` line: size, time
 and word count, or `REFUSED` / `FAILED` with the reason (`CLIENT GONE`, a plain line rather than an error,
-when the watch hangs up mid-upload — its own `voice_*` rows record that side), and one `app_logs` row (`kind` `voice_hub`) under
+when the watch hangs up mid-upload — its own `voice_*` rows record that side; `UNREADABLE CLIP`, status 422, when every provider refuses the file with a 4xx, as for the watch's empty recording — an error the first time per interaction id and a plain `UNREADABLE CLIP AGAIN` line for the watch's later re-sends of the same clip), and one `app_logs` row (`kind` `voice_hub`) under
 the watch's `X-Interaction-Id`. The watch logs its own side of each question to
 Supabase `app_logs` (`voice_*` rows, the Menu app's `VoiceLog`).
 

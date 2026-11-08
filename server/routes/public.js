@@ -56,6 +56,8 @@ module.exports = function (ctx) {
     const key = String(req.headers['x-owner-key'] || '');
     return !!key && safeEqual(sha256hex(key), CG_OWNER_KEY_SHA256);
   }
+  // Interaction ids whose clip every provider has already refused as unreadable (see the catch below).
+  const cgUnreadable = new Set();
   pub.post('/api/cg/transcribe', async (req, res) => {
     const arrived = Date.now();
     if (!cgOwner(req)) {
@@ -90,10 +92,23 @@ module.exports = function (ctx) {
       // The watch hanging up mid-upload (its own timeout, a dropped link) is the client's failure, not the
       // hub's: the watch logs it as voice_transcribe_retry / orders_failed, so here it is a plain line.
       const clientGone = !uploaded && (e.code === 'ECONNRESET' || e.code === 'ERR_STREAM_PREMATURE_CLOSE' || e.message === 'aborted');
-      (clientGone ? console.log : console.error)(`[cg-transcribe] ${clientGone ? 'CLIENT GONE' : 'FAILED'}: ${e.status || 500} ${String(e.message || e).slice(0, 200)}`);
+      // Every provider refusing the file with a 4xx means the clip itself is unreadable (the watch's empty
+      // recording: an m4a header with no audio frames). Sending it again cannot work, so it answers 422,
+      // which the watch does not retry, and is reported as an error once per recording: the watch keeps an
+      // unsent clip and re-sends it each time the app comes to the front, under the same interaction id.
+      const unreadable = !!e.allFailed && / 4\d\d\)$/.test(String(e.message));
+      const id = String(req.headers['x-interaction-id'] || '').toLowerCase();
+      const repeat = unreadable && cgUnreadable.has(id);
+      if (unreadable && id && !repeat) {
+        if (cgUnreadable.size >= 500) cgUnreadable.clear();
+        cgUnreadable.add(id);
+      }
+      const status = unreadable ? 422 : (e.status || 500);
+      const label = clientGone ? 'CLIENT GONE' : unreadable ? (repeat ? 'UNREADABLE CLIP AGAIN' : 'UNREADABLE CLIP') : 'FAILED';
+      (clientGone || repeat ? console.log : console.error)(`[cg-transcribe] ${label}: ${status} ${String(e.message || e).slice(0, 200)}${unreadable ? ` (interaction ${id || 'none'})` : ''}`);
       cgLog(req, arrived, { error: String(e.message || e).slice(0, 200),
         output: uploaded ? `upload ${uploaded - arrived}ms, failed in groq` : 'failed during upload' });
-      res.status(e.status || 500).json({ error: String(e.message || e) });
+      res.status(status).json({ error: unreadable ? 'unreadable audio' : String(e.message || e) });
     } finally {
       fs.promises.unlink(tmp).catch(() => {});
     }

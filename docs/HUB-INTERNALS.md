@@ -1465,10 +1465,11 @@ background is transparent and the panel is `rgba(0,0,0,.55)`: the video shows th
 
 ## 6b-ii. A command in flight
 
-Every thread view (the phone's chat sheet and home box, the Mac app, the TV sidebar's orchestrator view,
-the watch's home) draws a pressed command from the moment the hub starts taking it until its conversation
-row lands: three dots where the user's words will be, then the words, with a working caret (dots on the
-watch) under them until the first tool call replaces it. The worker writes the user's `voice_messages` row
+Every thread view (the phone's chat sheet and home box, the Mac app, the TV sidebar's orchestrator view)
+draws a pressed command from the moment the hub starts taking it until its conversation row lands: three
+dots where the user's words will be, then the words, with a working caret under them until the first tool
+call replaces it. The watch's home shows only the words: its border animation already says a command is
+running, so it draws no dots. The worker writes the user's `voice_messages` row
 only beside the answer, so without this a thread showed nothing between the press and the reply.
 
 It all comes from `request` frames on `/api/voice-stream`, `{id, text, status, created_at, cmid?, always_on?}`:

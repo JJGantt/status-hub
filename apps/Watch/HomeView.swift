@@ -96,17 +96,8 @@ struct HomeView: View {
                         ThreadRow(text: words, user: true).id("pending\(i)")
                             .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { heights["pending\(i)"] = $0 }
                     }
-                    // A command whose words are not in yet: dots where they will land.
-                    if chat.hearing > 0 {
-                        room("hearing")
-                        Dots().id("hearing")
-                            .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { heights["hearing"] = $0 }
-                    }
                     if !chat.activity.isEmpty {
                         ActivityLines(lines: chat.activity)
-                    } else if chat.thinking {
-                        // Words in, no step reported yet: it is working all the same.
-                        Dots(color: Ink.thought)
                     }
                     CommandStatus()
                     // The very end of the thread is on screen (`atEnd`), asked of a marker's visibility.
@@ -157,7 +148,6 @@ struct HomeView: View {
             // user's page until the user stops looking.
             .onChange(of: chat.thread.last?.id) { _, _ in settle() }
             .onChange(of: chat.pending.count) { _, _ in settle() }
-            .onChange(of: chat.hearing) { _, _ in settle() }
             .onChange(of: chat.activity.count) { _, _ in settle() }
             .onAppear { landed = target; settling = true; ownMoveUntil = Date() + 0.6; jump(proxy, "appear") }
         }
@@ -214,7 +204,6 @@ struct HomeView: View {
     /// an id to the first view carrying it, so it landed the top of the ROOM on the landing line and
     /// left the room on screen with the item before it showing above.
     private var target: String? {
-        if chat.hearing > 0 && chat.pending.isEmpty { return "hearing" }
         if let last = chat.pending.indices.last { return "pending\(last)" }
         if let id = chat.landOn, chat.recent.contains(where: { $0.id == id }) { return "msg\(id)" }
         return chat.recent.last.map { "msg\($0.id)" }

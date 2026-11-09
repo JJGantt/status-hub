@@ -85,12 +85,6 @@ final class Chat: ObservableObject {
     /// What the hub heard of each command still running, oldest first, shown until it lands in the
     /// thread: this watch's own, and those sent from anywhere else (the hub's `request` frames).
     @Published private(set) var pending: [String] = []
-    /// Commands sent whose words are not known yet: the audio is on its way or being transcribed. Home
-    /// draws them as dots where the words will land.
-    @Published private(set) var hearing = 0
-    /// Words are in and the run has reported no step yet: home draws dots where the steps will be, so
-    /// something says it is working from the moment the words land until the first tool call.
-    var thinking: Bool { !pending.isEmpty && activity.isEmpty }
     /// Commands from other devices, by request id, from the hub's `request` frames and /api/voice-pending:
     /// the words, or nil while the hub is still hearing them. A listener's capture is left out (it may be
     /// room noise) until the worker takes it up.
@@ -145,10 +139,8 @@ final class Chat: ObservableObject {
     private func recount() {
         let live = commands.filter { !$0.failed }
         let words = live.compactMap(\.words) + others.compactMap(\.words)
-        let unheard = live.filter { $0.words == nil }.count + others.filter { $0.words == nil }.count
         if words != pending { pending = words }
-        if unheard != hearing { hearing = unheard }
-        if !pending.isEmpty || hearing > 0 { landOn = nil }
+        if !pending.isEmpty { landOn = nil }
     }
     private var tasks: [String: Task<Void, Never>] = [:]
     /// The grab the recording now running is instructions for (`startInstructions`).

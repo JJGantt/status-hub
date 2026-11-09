@@ -57,7 +57,21 @@ module.exports = function (ctx) {
     return !!key && safeEqual(sha256hex(key), CG_OWNER_KEY_SHA256);
   }
   // Interaction ids whose clip every provider has already refused as unreadable (see the catch below).
+  // Interaction ids already reported as an unreadable clip. The set is only a cache: a deploy empties it
+  // while the watch is still re-sending the same clip, so on a miss the clip's own earlier attempts in
+  // app_logs decide (any hub:transcribe row with an error under that id; this attempt's row is written after).
   const cgUnreadable = new Set();
+  async function cgReportedBefore(id) {
+    if (cgUnreadable.has(id)) return true;
+    if (!/^[0-9a-f-]{36}$/.test(id)) return false;
+    try {
+      const rows = await sb(`app_logs?select=id&interaction_id=eq.${id}&backend=eq.hub:transcribe&error=not.is.null&limit=1`);
+      return rows.length > 0;
+    } catch (err) {
+      console.error(`[cg-transcribe] could not read earlier attempts for ${id}: ${err.message}`);
+      return false;
+    }
+  }
   pub.post('/api/cg/transcribe', async (req, res) => {
     const arrived = Date.now();
     if (!cgOwner(req)) {
@@ -98,8 +112,8 @@ module.exports = function (ctx) {
       // unsent clip and re-sends it each time the app comes to the front, under the same interaction id.
       const unreadable = !!e.allFailed && / 4\d\d\)$/.test(String(e.message));
       const id = String(req.headers['x-interaction-id'] || '').toLowerCase();
-      const repeat = unreadable && cgUnreadable.has(id);
-      if (unreadable && id && !repeat) {
+      const repeat = unreadable && await cgReportedBefore(id);
+      if (unreadable && id && !cgUnreadable.has(id)) {
         if (cgUnreadable.size >= 500) cgUnreadable.clear();
         cgUnreadable.add(id);
       }

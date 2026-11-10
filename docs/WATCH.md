@@ -224,7 +224,9 @@ read, so every such reply goes into an inbox: kept for good, newest first, read 
   is open carries it as `about` (`Hub.about`, read into the clip when it is made), so the worker hands
   the model that question and answer, which may be days out of the replayed context; the follow-ups
   and their replies list under the answer, taken from the thread as they land there (`Chat.askedAbout`
-  names which requests were spoken from which answer) rather than by reading the answer again. Nothing moves it after it opens. The phone has
+  names which requests were spoken from which answer) rather than by reading the answer again. The
+  hub writes a turn's rows only with its reply, so a follow-up still running is listed from its words
+  the moment the hub returns them (`Chat.pending(about:)`), as home lists `pending`. Nothing moves it after it opens. The phone has
   the same inbox (`public/inbox.js`), opened from a dot in the conversation's corner; its sheet has one
   ✕, which steps back from an open answer to the list and closes the list. On the watch an open answer
   also has a ✕ in its top-left corner, outside the tap-to-record area, which steps back to the list at

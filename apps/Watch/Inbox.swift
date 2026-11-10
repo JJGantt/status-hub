@@ -203,6 +203,11 @@ private struct AnswerView: View {
                         .foregroundStyle(m.role == "user" ? Color(hex: "#8b96a5") : .white)
                         .frame(maxWidth: .infinity, alignment: m.role == "user" ? .trailing : .leading)
                 }
+                // A follow-up still running: its words, from the moment the hub has heard them.
+                ForEach(chat.pending(about: a.id), id: \.request) { p in
+                    Markdown(text: p.words, size: 13).foregroundStyle(Color(hex: "#8b96a5"))
+                        .frame(maxWidth: .infinity, alignment: .trailing)
+                }
             }
             .padding(.horizontal, 8)
             .padding(.bottom, PageInset.bottom)

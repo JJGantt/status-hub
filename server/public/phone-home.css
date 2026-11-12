@@ -625,7 +625,7 @@ body.tv.phonehome .hw-row.working::before{content:'';position:absolute;left:0;ri
    at the bottom left, as the TV draws them (google-tv Guide.java). */
 .guidecard{padding:6px 0 0;overflow-y:auto}
 .gd-shelf h3{margin:14px 16px 8px;font-size:17px;font-weight:600;color:#e6ebf2}
-.gd-row{display:flex;gap:10px;overflow-x:auto;padding:0 16px 6px;scroll-padding:0 16px;scroll-snap-type:x proximity;-webkit-overflow-scrolling:touch;scrollbar-width:none}
+.gd-row{display:flex;align-items:flex-start;gap:10px;overflow-x:auto;padding:0 16px 6px;scroll-padding:0 16px;scroll-snap-type:x proximity;-webkit-overflow-scrolling:touch;scrollbar-width:none}
 .gd-row::-webkit-scrollbar{display:none}
 .gd-card{flex:0 0 62%;max-width:260px;scroll-snap-align:start;background:none;border:0;padding:0;text-align:left;color:inherit;cursor:pointer;-webkit-tap-highlight-color:transparent;transition:opacity .15s}
 .gd-card:active,.gd-card.gd-sent{opacity:.55}
@@ -636,3 +636,4 @@ body.tv.phonehome .hw-row.working::before{content:'';position:absolute;left:0;ri
 .gd-note{position:absolute;left:7px;bottom:7px;max-width:calc(100% - 14px);padding:2px 8px 3px;border-radius:7px;background:#000;color:#33d6f0;
   font-size:12.5px;line-height:1.3;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:3;overflow:hidden}
 .gd-title{display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden;margin-top:6px;font-size:14px;line-height:1.3;color:#d6dde6}
+.gd-desc{display:block;margin-top:4px;font-size:12.5px;line-height:1.35;color:#9aa4b0;white-space:normal}

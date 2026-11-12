@@ -1,5 +1,5 @@
 // TV Guide pane — the bedroom TV's TV Guide (google-tv docs/GUIDE.md) on the phone: the same titled
-// shelves of thumbnails, each with its service's icon and its note, read from /api/tv/guide. Tapping a
+// shelves of thumbnails, each with its service's icon, its note and its description, read from /api/tv/guide. Tapping a
 // card plays it on the bedroom TV (/api/tv/guide/open), waking the TV if it is off.
 //
 // Redrawn when the shelves change: the hub sends a `guide` event on the session stream the phone
@@ -30,6 +30,7 @@ function card(it) {
       (it.note ? `<span class="gd-note">${esc(it.note)}</span>` : '') +
     '</span>' +
     `<span class="gd-title">${esc(it.title || '')}</span>` +
+    (it.description ? `<span class="gd-desc">${esc(it.description)}</span>` : '') +
   '</button>';
 }
 

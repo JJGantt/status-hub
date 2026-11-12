@@ -15,8 +15,8 @@ of the iOS app to try the watch: that build cannot receive push (`CLAUDE.md`). H
 compiles on this Mac, with or without a simulator runtime, is in `CLAUDE.md` § Checking the Swift
 compiles.
 
-The sessions list ends with the build number (`CFBundleVersion`, which CI sets to the TestFlight
-build), so a fix that has not been installed is not mistaken for one that failed.
+The sessions list ends with the build number (the watch app's own `CFBundleVersion`, which every TestFlight build stamps into the phone app and the watch app alike —
+`apps/tools/testflight.sh` sets it to the TestFlight build number), so a fix that has not been installed is not mistaken for one that failed. A watch reading lower than the phone has not installed the new watch app yet; the build itself is fine.
 
 ## Pages
 

@@ -34,7 +34,7 @@ struct SessionsView: View {
                         .overlay(alignment: .top) { if i > 0 { rule } }
                 }
                 // Which build is on the wrist, so a fix that has not arrived is not taken for one that
-                // failed. The TestFlight build number: CI stamps the run number into CFBundleVersion.
+                // failed. The TestFlight build number, which testflight.sh stamps into CFBundleVersion.
                 Text("Build \(Self.build)")
                     .font(.system(size: 11))
                     .foregroundColor(.gray)

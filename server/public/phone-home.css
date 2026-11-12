@@ -403,8 +403,9 @@ body.tv.phonehome .hw-row.on{background:#161d25}
 body.tv.phonehome .hw-row.unread{box-shadow:inset 2px 0 0 #e0a03a}
 /* A session on Codex (`codex` from buildSessions): blue, the incident's treatment. Also in tv-home.css. */
 body.tv.phonehome .hw-row.codex{outline:1px solid #3b82f6;outline-offset:-1px;background:#0b1730}
-/* An ops-responder incident run (`incident` from buildSessions). Also in tv-home.css. */
-body.tv.phonehome .hw-row.incident{outline:1px solid #d9443a;outline-offset:-1px;background:#1f0d0c}
+/* An ops-responder incident run (`incident` from buildSessions): a red GROUND and no outline. An outline
+   on alternating rows puts a red rule at every gap, so every row in the run reads as an incident. */
+body.tv.phonehome .hw-row.incident{background:#381614}
 body.tv.phonehome .hw-row.unread .hw-row-name{color:#fff}
 body.tv.phonehome .hw-row.unread .hw-row-act{color:#e6c88a}
 body.tv.phonehome .hw-sess-dot{width:6px;height:6px;border-radius:50%;background:#39d353;flex:0 0 auto;

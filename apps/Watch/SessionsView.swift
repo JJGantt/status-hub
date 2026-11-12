@@ -146,17 +146,16 @@ struct SessionsView: View {
         }
         .padding(.vertical, 8)
         .frame(maxWidth: .infinity, alignment: .leading)
-        // An incident run: a red outline and a dark red ground, as on the phone. A Codex session: the
-        // same in blue.
-        .background(s.incident == true ? Self.incidentGround : s.codex == true ? Self.codexGround : Color.clear)
+        // An incident run: a dark red ground and no outline, as on the phone — an outline on alternating
+        // rows puts a red rule at every gap. A Codex session: a blue outline and ground.
+        .background(RoundedRectangle(cornerRadius: 4)
+            .fill(s.incident == true ? Self.incidentGround : s.codex == true ? Self.codexGround : Color.clear))
         .overlay(RoundedRectangle(cornerRadius: 4)
-            .stroke(s.incident == true ? Self.incidentEdge : s.codex == true ? SessionView.codexEdge : Color.clear,
-                    lineWidth: 1.5))
+            .stroke(s.codex == true && s.incident != true ? SessionView.codexEdge : Color.clear, lineWidth: 1.5))
         .contentShape(Rectangle())
     }
 
-    private static let incidentEdge = Color(hex: "#d9443a")
-    private static let incidentGround = Color(hex: "#1f0d0c")
+    private static let incidentGround = Color(hex: "#2b1210")
     private static let codexGround = Color(hex: "#0b1730")
 
     /// What this session's machine is doing, newest step only, in the colours of `Ink`. The line is

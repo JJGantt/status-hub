@@ -226,8 +226,10 @@ read, so every such reply goes into an inbox: kept for good, newest first, read 
   and their replies list under the answer, taken from the thread as they land there (`Chat.askedAbout`
   names which requests were spoken from which answer) rather than by reading the answer again. The
   hub writes a turn's rows only with its reply, so a follow-up still running is listed from its words
-  the moment the hub returns them (`Chat.pending(about:)`), as home lists `pending`. Nothing moves it after it opens. The phone has
-  the same inbox (`public/inbox.js`), opened from a dot in the conversation's corner; its sheet has one
+  the moment the hub returns them (`Chat.pending(about:)`), as home lists `pending`. On the watch nothing moves it after it opens. The phone has
+  the same inbox (`public/inbox.js`), opened from a dot in the conversation's corner; there an open answer
+  follows the thread rule, landing on each follow-up's words and reply as they arrive unless it is being
+  read (`readingWatch`). Its sheet has one
   ✕, which steps back from an open answer to the list and closes the list. On the watch an open answer
   also has a ✕ in its top-left corner, outside the tap-to-record area, which steps back to the list at
   the place it was left.

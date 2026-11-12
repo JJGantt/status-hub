@@ -7,15 +7,18 @@
 //
 // A session's row opens that session (`__showSession`). Any other row opens ON ITS OWN, not in the main thread: the question, then the answer, landed on the answer.
 // While it is open every command sent from the page is ABOUT it (`setAbout` in voiceagent.js), and the
-// follow-ups and what came back are listed under it. It lands only when it is opened: a follow-up's
-// words or its reply arriving repaint it where the reader left it, like every thread here.
+// follow-ups and what came back are listed under it. It lands on the answer when opened, and on each
+// follow-up's words and reply as they arrive unless the reader is scrolled back (the thread rule).
 import { onThread, setAbout } from './voiceagent.js';
-import { md, esc } from './shared.js';
+import { md, esc, readingWatch } from './shared.js';
 
 const PAGE = 60;
 let dot = null, sheet = null, listEl = null, viewEl = null;
 let rows = [], done = false, busy = false;
 let openId = null;
+let watch = null;       // readingWatch on the answer view
+let shownN = 0;         // blocks the open view last drew, so a repaint knows something new arrived
+let paintSeq = 0;       // repaints are fetches; only the newest one draws
 let unread = false;
 
 function when(iso) {
@@ -91,13 +94,17 @@ function close() {
   openId = null; setAbout(null);
 }
 
-// One answer on its own. `land` is true only on opening it: that is the one moment the view moves.
+// One answer on its own. `land` is true on opening it, and it lands on the answer. After that it follows
+// the thread rule (`readingWatch` in shared.js): a follow-up's words or its reply arriving land on the
+// newest of them, unless the reader has scrolled the view and not let go at the very end, in which case
+// it repaints where they left it. Landing is the top of the newest block, as in every thread here.
 async function paintView(id, land) {
+  const seq = ++paintSeq;
   try {
     const r = await fetch('/api/voice-inbox/' + encodeURIComponent(id));
     if (!r.ok) throw new Error('voice-inbox/:id ' + r.status);
     const a = await r.json();
-    if (openId !== id) return;                       // closed or moved on while it loaded
+    if (openId !== id || seq !== paintSeq) return;   // closed, moved on, or a newer repaint is in flight
     const top = viewEl.scrollTop;
     viewEl.innerHTML =
       (a.question ? `<div class="ib-q">${md(a.question)}</div>` : '') +
@@ -105,10 +112,13 @@ async function paintView(id, land) {
         (a.session_id ? `<span class="ib-k">${esc(a.session_label || '')}</span>` : '') +
         `${md(a.answer)}</div>` +
       (a.follow || []).map((m) => `<div class="${m.role === 'user' ? 'ib-q' : 'ib-a'}">${md(m.text)}</div>`).join('');
-    if (land) {
-      const el = document.getElementById('ib-answer');
-      viewEl.scrollTop = el ? el.offsetTop - viewEl.offsetTop : 0;
-    } else viewEl.scrollTop = top;
+    const n = viewEl.childElementCount;
+    const grew = !land && n > shownN;
+    shownN = n;
+    const el = land ? document.getElementById('ib-answer')
+      : grew && !(watch && watch.reading()) ? viewEl.lastElementChild : null;
+    if (el) viewEl.scrollTop += el.getBoundingClientRect().top - viewEl.getBoundingClientRect().top;
+    else viewEl.scrollTop = top;
     if (!a.read) {
       fetch('/api/voice-messages/read', { method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ id }) }).catch((e) => console.error('inbox: marking read failed', e));
@@ -131,7 +141,7 @@ function openSession(id, sid) {
 function openView(id) {
   openId = id; setAbout(id);
   listEl.hidden = true; viewEl.hidden = false;
-  viewEl.innerHTML = '';
+  viewEl.innerHTML = ''; shownN = 0;
   paintView(id, true);
 }
 function back() {
@@ -151,6 +161,7 @@ function build() {
   document.body.appendChild(sheet);
   listEl = sheet.querySelector('.ib-list');
   viewEl = sheet.querySelector('.ib-view');
+  watch = readingWatch(viewEl);
   sheet.querySelector('.ib-x').addEventListener('click', () => (openId ? back() : close()));
   listEl.addEventListener('click', (e) => {
     const b = e.target.closest('.ib-row');

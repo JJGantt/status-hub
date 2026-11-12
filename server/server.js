@@ -151,15 +151,15 @@ const { itemTitle } = require('./routes/lists')({
 
 const { TV_SIDEBAR_FONT, TV_SIDEBAR_WIDTH, tvPush } = require('./routes/tv')({ PING, gated, putSetting, sb, sbWrite, sessionClients });
 
-const { MACHINE_NAME, deadLetter, followUpSession, machineAwake, pushSessions } = require('./routes/sessions')({
-  DESK_STALE_S, EPOCH, TV_SIDEBAR_FONT, TV_SIDEBAR_WIDTH, cleanSaid, convOfRow, ensureLog, gated, liveLine,
+const { MACHINE_NAME, deadLetter, desk, followUpSession, machineAwake, openSession, pushSessions, sessionVerb, transferSession } = require('./routes/sessions')({
+  DESK_STALE_S, EPOCH, SUPABASE_KEY, SUPABASE_URL, TV_SIDEBAR_FONT, TV_SIDEBAR_WIDTH, cleanSaid, convOfRow, ensureLog, gated, liveLine,
   markSeen, numbered, rowConv, sb, sbInsert, sbWrite, seedLaunch, seenMsgIds, sessionClients, settingsAll,
   // Read on every build of the payload, by which time `prompts` below exists.
   pendingPrompt: (rowId) => prompts.pendingFor(rowId),
 });
 
-require('./routes/failures')({ MACHINE_NAME, gated, machineAwake, sb, sbWrite });
-require('./routes/ci')({ MACHINE_NAME, SUPABASE_KEY, SUPABASE_URL, deadLetter, followUpSession, gated, machineAwake, pub, sb, sbWrite });
+require('./routes/failures')({ followUpSession, gated, openSession, sb, sbWrite, sessionVerb, transferSession });
+require('./routes/ci')({ MACHINE_NAME, SUPABASE_KEY, SUPABASE_URL, followUpSession, gated, openSession, pub, sb, sbWrite });
 
 const prompts = require('./routes/prompts')({ auth, gated, pushAll, pushSessions, sb });
 
@@ -173,7 +173,7 @@ const jobs = createJobs({
 const realtime = createRealtime({
   MUTE_HOLD, SUPABASE_KEY, SUPABASE_URL, auth, broadcast, dirtyDesk: cache.dirtyDesk,
   dirtyDue: jobs.dirtyDue, dirtyHeatHistory, dirtyNutDay, dirtyRows: cache.dirtyRows, dirtySettings, dirtySurfHist,
-  dirtyWorkoutDay, markLive, notifyAnswer, pushDay, pushLists, pushSessions, pushSurfLive, pushVoice, recomputeMute,
+  dirtyWorkoutDay, markLive, notifyAnswer, onDeskCommand: desk.onCommand, pushDay, pushLists, pushSessions, pushSurfLive, pushVoice, recomputeMute,
   reportTick: jobs.reportTick, requestView, sb, settleReply, surfAlarms, syncBadge, takeUsage: usage.take, tvPush,
 });
 

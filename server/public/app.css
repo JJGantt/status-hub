@@ -584,7 +584,6 @@ body.tv.phonewall .pane-reports .reportscard>div{flex:1 1 auto;min-height:0;disp
 .repos li:last-child{border-bottom:none}
 .repos li[data-path]{cursor:pointer;-webkit-tap-highlight-color:transparent}
 .repos li[data-path]:active{background:#0e1318}
-.repos.off li[data-path]{opacity:.4;cursor:default}
 .repos .rp-main{flex:1 1 auto;min-width:0;display:flex;align-items:baseline;gap:9px}
 .repos .rp-name{font-size:16px;color:#e6ebf2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .repos .rp-meta{flex:0 0 auto;display:flex;align-items:center;gap:6px}
@@ -597,7 +596,6 @@ body.tv.phonewall .pane-reports .reportscard>div{flex:1 1 auto;min-height:0;disp
 .sessions{margin:0 0 16px}
 .sessions h3{display:flex;align-items:center;gap:8px;margin:0 0 8px;font-size:13px;font-weight:700;
   letter-spacing:.4px;text-transform:uppercase;color:#8b96a5}
-.sessions .sess-q{font-size:11px;font-weight:600;color:#e6b93d;text-transform:none;letter-spacing:0}
 .sessions ul{list-style:none;margin:0;padding:0}
 .sessions li.sess{display:flex;align-items:center;gap:10px;padding:9px 2px;border-bottom:1px solid #1c232b}
 .sessions .sess-main{flex:1 1 auto;min-width:0}
@@ -615,7 +613,6 @@ body.tv.phonewall .pane-reports .reportscard>div{flex:1 1 auto;min-height:0;disp
 .sessions li.sess.unread{box-shadow:inset 2px 0 0 #e0a03a}
 .sessions li.sess.unread .sess-repo{color:#fff}
 .sessions li.sess.unread .sess-say{color:#e6c88a}
-.sessions li.queued .sess-repo,.sessions li.queued .sess-say{color:#5d6672}
 /* Reports — the write-ups dispatched sessions hand back. List, then the report itself in a sandboxed
    frame that fills the card, so reading one and getting back out never leaves the hub. */
 .reportscard{padding:14px}
@@ -709,7 +706,6 @@ body.tv.phonewall .pane-repos.sv-open #repospane{flex:1 1 auto;min-height:0;disp
 .repos.no-pi .rp-t[data-target=pi],.repos.no-mac .rp-t[data-target=mac]{opacity:.28}
 .repos li.rec::after{color:#e5484d}
 .repos li.rec{animation:wallpttPulse 1s ease-in-out infinite}
-.repos .rp-off{margin:0 0 10px;padding:8px 10px;border-radius:8px;background:#1a1410;border:1px solid #3a2a18;color:#e6b93d;font-size:13px}
 .repos li.empty{color:#5d6672;font-size:14px}
 .todocard{padding:14px}
 .todo section{margin:0 0 20px}

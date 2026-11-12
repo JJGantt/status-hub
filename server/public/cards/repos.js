@@ -53,8 +53,8 @@ const notable = (b) => !!b && b !== 'main' && b !== 'master';
 // needs a control of its own.
 function sessionsHtml(s) {
   if (!s) return '';
-  const res = s.resident || [], ev = s.evicted || [], q = s.queued || [];
-  if (!res.length && !ev.length && !q.length) return '';
+  const res = s.resident || [], ev = s.evicted || [];
+  if (!res.length && !ev.length) return '';
 
   // The machine is the bar on the row's right edge (`--mc`), so the name carries only the repo.
   // The × HIDES the row from every surface's list (`/api/sessions/hide`); the session itself is
@@ -71,17 +71,11 @@ function sessionsHtml(s) {
       `<button class="sess-x" data-act="hide" aria-label="Hide">\u00d7</button>` +
     '</li>';
 
-  let out = '<div class="sessions"><h3>Sessions';
-  if (q.length) out += `<span class="sess-q">${q.length} queued</span>`;
-  out += '</h3>';
-  out += '<ul>';
+  let out = '<div class="sessions"><h3>Sessions</h3><ul>';
   // In the server's `n` order, running and parked interleaved: pins first, then by activity alone
   // (buildSessions), the same order every other surface lists them in.
   out += [...res, ...ev].sort((a, b) => (a.n || 1e9) - (b.n || 1e9))
     .map((x) => line(x, x.status === 'resident')).join('');
-  out += q.map((x) =>
-    `<li class="sess queued"><div class="sess-main"><span class="sess-repo">${esc(x.repo)}</span>` +
-    `<span class="sess-say">waiting for a slot</span></div></li>`).join('');
   return out + '</ul></div>';
 }
 
@@ -101,14 +95,12 @@ function html(d) {
       `${r.dirty ? '<span class="rp-dirty" title="uncommitted changes"></span>' : ''}</span></div>` +
       `<span class="rp-age">${esc(ago(r.last_active))}</span>` + targets +
     '</li>').join('');
-  // Only warn when NOTHING can take the work. The Mac being asleep is normal and no longer blocking,
-  // since the Pi is the default target — saying "Mac is asleep" then would be alarming about nothing.
+  // Both buttons always launch: a machine that cannot take the work hands it to the next one, and Fly is
+  // always there to be woken (server lib/failover.js). Only the dimming says which machine is down.
   const m = d.machines || {};
-  const off = (m.pi || m.mac) ? '' :
-    '<div class="rp-off">Neither machine is reachable — nothing to launch into</div>';
   return sessionsHtml(d.sessions) +
-    `<div class="repos${(m.pi || m.mac) ? '' : ' off'}${m.pi ? '' : ' no-pi'}${m.mac ? '' : ' no-mac'}">` +
-    `<h3>Start a session</h3>${off}` +
+    `<div class="repos${m.pi ? '' : ' no-pi'}${m.mac ? '' : ' no-mac'}">` +
+    `<h3>Start a session</h3>` +
     `<ul>${rows || '<li class="empty">No repos published</li>'}</ul></div>`;
 }
 
@@ -133,25 +125,29 @@ async function load() {
   wire(el);
 }
 
-// Enqueue, then watch the command row until the Mac reports back. The launch itself is realtime
-// (~1s); the ceiling here only exists so a wedged daemon can't leave the row spinning forever.
+// The hub answers once a machine has taken it — the one asked for, or the next one that would — and names
+// the machine; a launch it took but has not confirmed is then watched on its command row. The ceiling
+// only exists so a wedged daemon can't leave the row spinning forever.
+const MACHINE = { mac: 'the Mac', pi: 'the Pi', fly: 'Fly' };
 async function launch(li, prompt, target) {
   if (li.dataset.say) return;   // a launch is in flight, or its result is still on screen
   const say = (cls, text) => { li.className = cls; li.dataset.say = text; };
-  say('busy', `Opening on the ${target === 'mac' ? 'Mac' : 'Pi'}…`);
+  say('busy', `Opening on ${MACHINE[target]}…`);
   try {
     const r = await (await fetch('/api/repos/open', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ path: li.dataset.path, target, ...(prompt ? { prompt } : {}) }),
     })).json();
     if (!r.id) throw new Error(r.error || 'failed');
-    for (let i = 0; i < 20; i++) {                       // ~20s ceiling
+    const on = MACHINE[r.machine] || MACHINE[target];
+    for (let i = 0; i < 20 && !r.confirmed; i++) {       // ~20s ceiling
       await new Promise((res) => setTimeout(res, 1000));
       const c = await (await fetch('/api/repos/cmd/' + encodeURIComponent(r.id))).json();
-      if (c.status === 'done') { say('ok', 'Open on the Mac'); break; }
+      if (c.status === 'done') { r.confirmed = true; break; }
       if (c.status === 'error' || c.status === 'expired') { say('bad', c.detail || c.status); break; }
-      if (i === 19) say('bad', 'No response from the Mac');
+      if (i === 19) say('bad', `No response from ${on}`);
     }
+    if (r.confirmed) say('ok', `Open on ${on}`);
   } catch (e) {
     say('bad', String(e.message || e));
   }
@@ -246,7 +242,6 @@ function wire(el) {
       b.addEventListener('click', (e) => {
         e.stopPropagation();
         const target = b.dataset.target;
-        if (!machines[target]) return;   // that machine is not reachable; do not queue into a void
         li.classList.remove('pick');
         beginDictation(li, target);
       }));

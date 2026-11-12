@@ -8,7 +8,7 @@ const WebSocket = require('ws');
 function createRealtime(ctx) {
   const {
     MUTE_HOLD, SUPABASE_KEY, SUPABASE_URL, auth, broadcast, dirtyDesk, dirtyDue, dirtyHeatHistory,
-    dirtyNutDay, dirtyRows, dirtySettings, dirtySurfHist, dirtyWorkoutDay, markLive, notifyAnswer, pushDay,
+    dirtyNutDay, dirtyRows, dirtySettings, dirtySurfHist, dirtyWorkoutDay, markLive, notifyAnswer, onDeskCommand, pushDay,
     pushLists, pushSessions, pushSurfLive, pushVoice, recomputeMute, reportTick, requestView, sb, settleReply,
     surfAlarms, syncBadge, takeUsage, tvPush,
   } = ctx;
@@ -124,18 +124,20 @@ function createRealtime(ctx) {
           const r = requestView(p.new);
           if (r) pushVoice('request', r);
         })
-      // The three tables a session view is assembled from. These are why the walls no longer poll
-      // /api/sessions every 5s: a session starting, ending, being renamed, finishing a turn, being
-      // focused or queueing behind another one all land here, and each pushes a fresh payload.
-      // dirtyDesk on the two that feed the status strip, so the NEXT frame is fresh. Deliberately no
+      // The two tables a session view is assembled from. These are why the walls no longer poll
+      // /api/sessions every 5s: a session starting, ending, being renamed, finishing a turn or being
+      // focused all land here, and each pushes a fresh payload.
+      // dirtyDesk on both, since they feed the status strip, so the NEXT frame is fresh. Deliberately no
       // broadcast() here: a frame still costs four uncached presence reads, so pushing one per desk
       // change would spend more than the poll it replaced.
       .on('postgres_changes', { event: '*', schema: 'public', table: 'desk_sessions' },
         () => { seen(); dirtyDesk(); pushSessions(); })
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'desk_queue' },
-        () => { seen(); pushSessions(); })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'desk_pins' },
         () => { seen(); dirtyDesk(); pushSessions(); })
+      // A route waiting on a machine's verdict for a command it wrote (lib/failover.js) is answered the
+      // moment the consumer marks it done or error.
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'desk_commands' },
+        (p) => { seen(); onDeskCommand(p.new); })
       // A written report announces itself rather than being discovered: reportTick's timer is now only
       // the net under this, instead of the fastest database timer on the server.
       .on('postgres_changes', { event: '*', schema: 'public', table: 'hub_sessions' }, (p) => { seen(); auth.onChange(p); })

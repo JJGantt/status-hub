@@ -1,13 +1,12 @@
 'use strict';
 // CI results back to the session that pushed — the routes. The rules are lib/ci.js; docs/CI.md is the
 // whole mechanism.
-const crypto = require('crypto');
 const express = require('express');
 const ops = require('../lib/report');
 const { createCi, verifySignature } = require('../lib/ci');
 
 module.exports = function (ctx) {
-  const { MACHINE_NAME, SUPABASE_KEY, SUPABASE_URL, deadLetter, followUpSession, gated, machineAwake, pub, sb, sbWrite } = ctx;
+  const { MACHINE_NAME, SUPABASE_KEY, SUPABASE_URL, followUpSession, gated, openSession, pub, sb, sbWrite } = ctx;
   const SECRET = process.env.GITHUB_WEBHOOK_SECRET || '';
 
   async function upsert(table, row) {
@@ -20,20 +19,14 @@ module.exports = function (ctx) {
     if (!r.ok) throw new Error(`supabase upsert ${table} -> ${r.status} ${await r.text()}`);
   }
 
-  // A new session in the repo, on the Pi unless it is down, the Mac otherwise. Neither awake: the
-  // command is saved like any other undeliverable one, and the caller reports it.
+  // A new session in the repo, on the Pi unless it cannot take it, then the Mac, then Fly
+  // (routes/sessions.js openSession). Saved like any other undeliverable command only when none did.
   async function startFix(name, prompt, label) {
     const rows = await sb(`repos?name=eq.${encodeURIComponent(name)}&select=path,name`);
     if (!rows.length) return { ok: false, error: `no machine has published a checkout of ${name}` };
-    const machine = (await machineAwake('pi')) ? 'pi' : (await machineAwake('mac')) ? 'mac' : null;
-    const payload = { path: rows[0].path, name: rows[0].name, target: machine || 'pi', prompt, label };
-    if (!machine) {
-      await deadLetter('open_session', payload, 'pi', 'neither the Pi nor the Mac is responding');
-      return { ok: false, error: 'neither the Pi nor the Mac is responding; the session is saved in failures' };
-    }
-    const id = crypto.randomUUID();
-    await sbWrite('desk_commands', 'POST', { id, kind: 'open_session', payload });
-    return { ok: true, id, machine: MACHINE_NAME[machine] };
+    const r = await openSession({ path: rows[0].path, name: rows[0].name, prompt, label }, 'pi');
+    if (!r.ok) return { ok: false, error: `${r.why}; the session is saved in failures` };
+    return { ok: true, id: r.id, machine: MACHINE_NAME[r.machine] };
   }
 
   const ci = createCi({

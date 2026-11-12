@@ -1,7 +1,7 @@
 import SwiftUI
 
-/// The page left of home: sessions still queued for a machine on top, then one row per conversation
-/// the hub knows, running first, then parked, most recently active first within each. A tap opens one.
+/// The page left of home: one row per conversation the hub knows, running first, then parked, most
+/// recently active first within each. A tap opens one.
 ///
 /// A row carries the same marks as the phone's list (`cards/sessions.js`, `phone-home.css`), because they
 /// answer different questions and are read together: a PIN beside the name of every session the user
@@ -28,14 +28,10 @@ struct SessionsView: View {
     private var list: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 0) {
-                ForEach(Array(sessions.queued.enumerated()), id: \.element.id) { i, q in
-                    queuedRow(q)
-                        .overlay(alignment: .top) { if i > 0 { rule } }
-                }
                 ForEach(Array(sessions.list.enumerated()), id: \.offset) { i, s in
                     NavigationLink(value: s.key) { row(s) }
                         .buttonStyle(.plain)
-                        .overlay(alignment: .top) { if i > 0 || !sessions.queued.isEmpty { rule } }
+                        .overlay(alignment: .top) { if i > 0 { rule } }
                 }
                 // Which build is on the wrist, so a fix that has not arrived is not taken for one that
                 // failed. The TestFlight build number: CI stamps the run number into CFBundleVersion.
@@ -56,33 +52,6 @@ struct SessionsView: View {
     }
 
     private var rule: some View { Rectangle().fill(Color(hex: "#222a33")).frame(height: 1) }
-
-    /// A session waiting for a machine to have room: on top, since it is the newest thing asked for,
-    /// and not a link, since there is nothing running to open yet.
-    private func queuedRow(_ q: QueuedRow) -> some View {
-        HStack(alignment: .top, spacing: 6) {
-            Rectangle().fill(Color.clear).frame(width: 2)
-            VStack(alignment: .leading, spacing: 2) {
-                Text(q.name)
-                    .font(.system(size: 14))
-                    .foregroundColor(Self.name)
-                    .lineLimit(2)
-                if let p = q.prompt, !p.isEmpty {
-                    Text(snippet(p))
-                        .font(.system(size: 11))
-                        .foregroundColor(.gray)
-                        .lineLimit(2)
-                }
-                Text("Queued")
-                    .font(.system(size: 9))
-                    .foregroundColor(Self.amber)
-                    .frame(height: 11, alignment: .leading)
-            }
-            Spacer(minLength: 0)
-        }
-        .padding(.vertical, 8)
-        .frame(maxWidth: .infinity, alignment: .leading)
-    }
 
     private static let build = Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "?"
 

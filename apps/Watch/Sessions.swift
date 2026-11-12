@@ -57,18 +57,6 @@ struct SessionRow: Decodable, Identifiable, Equatable {
     var key: String { claude_session_id ?? id }
 }
 
-/// Work sent to a machine with no room for it yet (`desk_queue`): the Pi holds a new session until a
-/// slot and enough memory are free. Nothing to open until it launches, but it is the work the user just
-/// asked for, so the list shows it.
-struct QueuedRow: Decodable, Identifiable, Equatable {
-    let id: String
-    let repo: String?
-    let label: String?
-    let prompt: String?
-
-    var name: String { sessionName(label, repo) ?? "Session" }
-}
-
 /// **One event of a conversation's list**, as the hub keeps it (routes/conversation.js, the event log): the user's words
 /// (`prompt`), a tool call, what the session says between tool calls (`text`), or its reply. `seq` is
 /// its position in the conversation, given by the hub; `id` its identity. A prompt queued behind a
@@ -153,8 +141,6 @@ final class Sessions: ObservableObject {
 
     /// One row per conversation: its running row if it has one, else its newest parked one.
     @Published private(set) var list: [SessionRow] = []
-    /// Sessions waiting for a machine to have room, oldest first.
-    @Published private(set) var queued: [QueuedRow] = []
     /// Each OPENED conversation's list. A conversation nobody has opened is not fetched: its frames
     /// only keep `latest` for the list's row.
     @Published private(set) var logs: [String: ConversationLog] = [:]
@@ -274,11 +260,10 @@ final class Sessions: ObservableObject {
     }
 
     /// The hub's session payload: `/api/sessions`, or a `sessions` frame on the stream, which carries
-    /// the same thing whenever a session starts, ends or queues.
+    /// the same thing whenever a session starts or ends.
     private struct Lists: Decodable {
         let resident: [SessionRow]
         let evicted: [SessionRow]
-        let queued: [QueuedRow]?
     }
 
     private func fetchSessions() async {
@@ -293,7 +278,6 @@ final class Sessions: ObservableObject {
         var seen = Set<String>()
         list = rows.filter { seen.insert($0.key).inserted }
             .sorted { ($0.n ?? .max) < ($1.n ?? .max) }
-        queued = l.queued ?? []
     }
 
     /// The row a conversation's words go to: its running row, else its newest parked one.

@@ -211,8 +211,8 @@ struct SessionView: View {
     static let askInk = Color(hex: "#ff5fa8")
     static let incidentEdge = Color(hex: "#d9443a")
     static let codexEdge = Color(hex: "#3b82f6")
-    /// The frame an open session wears: red for an incident run, blue for a Codex session.
-    private var alertEdge: Color? { incident ? SessionView.incidentEdge : codex ? SessionView.codexEdge : nil }
+    /// The name's colour: red for an incident run, blue for a Codex session.
+    private var nameInk: Color { incident ? SessionView.incidentEdge : codex ? SessionView.codexEdge : .white }
     private var placeholders: [Placeholder] { sessions.placeholders[key] ?? [] }
 
     /// Every event in order, a prompt at the position of its LATEST occurrence — it moves from where it
@@ -362,16 +362,17 @@ struct SessionView: View {
                 }
                 .ignoresSafeArea(.container, edges: .bottom)
         }
-        // The session's name on the clock's line, and NO system back arrow: a title bar with a button in
-        // it costs the top of a screen this page spends on the answer. The name leads; the time
-        // (`CornerClock`, the system's own being hidden) trails, so a long name truncates before it.
+        // **The name on the clock's line, in the same top strip as home** (`TopStrip`), and NO system
+        // back arrow or toolbar: a toolbar row sits lower than the strip, pushes the page down and moves
+        // the microphone indicator. A long name truncates before the clock.
         .navigationBarBackButtonHidden(true)
-        .toolbar {
-            ToolbarItem(placement: .topBarLeading) {
+        .toolbar(.hidden, for: .navigationBar)
+        .overlay(alignment: .top) {
+            TopStrip {
                 // **The name closes it**, as does a swipe right (above). The swipe back watchOS gives a
                 // pushed view does not survive a page row that also takes sideways swipes.
                 // A small chevron before the name says it is a way back without having to know it; the
-                // name and the chevron are one button.
+                // name and the chevron are one button. An incident's name is red, a Codex session's blue.
                 // Guarded: two taps close enough together that the first pop hasn't dismissed this
                 // button yet would call removeLast() on an already-empty path and crash.
                 Button { if !sessions.path.isEmpty { sessions.path.removeLast() } } label: {
@@ -381,19 +382,19 @@ struct SessionView: View {
                             .foregroundColor(Color(hex: "#7d8894"))
                         Text(sessions.row(for: key)?.name ?? "")
                             .font(.system(size: 15, weight: .semibold))
-                            .foregroundColor(alertEdge ?? .white)
+                            .foregroundColor(nameInk)
                             .lineLimit(1)
                             .truncationMode(.tail)
                     }
+                    .frame(maxHeight: .infinity)
                     .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
             }
-            ToolbarItem(placement: .topBarTrailing) { CornerClock() }
         }
-        // An incident run is framed red while open, as its row is in the list; a Codex session blue.
+        // A Codex session is framed blue while open. An incident is not framed: its red name says it.
         .overlay(RoundedRectangle(cornerRadius: 12)
-            .stroke(alertEdge ?? Color.clear, lineWidth: 2)
+            .stroke(codex && !incident ? SessionView.codexEdge : Color.clear, lineWidth: 2)
             .ignoresSafeArea()
             .allowsHitTesting(false))
         .task {
@@ -612,11 +613,11 @@ struct SessionView: View {
     /// only when the item is tall enough to reach the landing line: a short last item rests at the end of
     /// the scroll with what came before it on screen anyway, where the room is only a blank band.
     @ViewBuilder private func room(_ id: String) -> some View {
-        if id == (spot ?? newest) && tallEnough(id) { Color.clear.frame(height: Landing.underTitle - 2 * Landing.itemGap) }
+        if id == (spot ?? newest) && tallEnough(id) { Color.clear.frame(height: Landing.top - 2 * Landing.itemGap) }
     }
 
     private func tallEnough(_ id: String) -> Bool {
-        (heights[id] ?? 0) > WKInterfaceDevice.current().screenBounds.height - Landing.underTitle - PageInset.bottom
+        (heights[id] ?? 0) > WKInterfaceDevice.current().screenBounds.height - Landing.top - PageInset.bottom
     }
 
     /// One event, in the colours of `Ink`: the user's words a soft blue (dimmed while queued, not yet read),

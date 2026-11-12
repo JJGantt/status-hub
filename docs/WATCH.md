@@ -182,9 +182,11 @@ page does. On home it sits in **the top strip**: a band of `.ultraThinMaterial` 
 dot's row (30pt, above the 32pt landing line), over the thread, which scrolls on blurred beneath it.
 The time is centred halfway between the dot and the right edge, because watchOS draws its microphone
 indicator in the top right corner while the app records, and no app can move or hide that. The strip
-takes no touch, so nothing in the thread moves and a tap there still records. In a session it is
-a trailing `ToolbarItem` on the name's line, so a long name truncates before it. A plain `Text` there
-gets no button glass.
+takes no touch, so nothing in the thread moves and a tap there still records. An open session wears
+the SAME strip (`TopStrip` in WatchUI.swift), with its name at the left and the time in the same place,
+so the two pages' tops are identical. It must stay an overlay, never a toolbar: a `ToolbarItem` adds a
+navigation bar row lower than the strip, pushes the page's first line down with it, and moves the
+microphone indicator from the top right to the middle.
 
 ### The inbox
 
@@ -382,8 +384,10 @@ hold two minutes after it was sent is let go**: the hub keeps a conversation's l
 for it would sweep the edge over an idle session until the app was killed. A follow-up being worked on shows
 in the list within seconds of being typed, so the limit never cuts a real wait short.
 
-**Its name is on the clock's line, and the name is how it closes.** A leading `ToolbarItem` holds it,
-the page's own clock trails it, and tapping the name pops the session. The
+**Its name is on the clock's line, and the name is how it closes.** The name sits at the left of the
+top strip (§ The clock), short of the time, and tapping it pops the session. An incident's name is
+red and a Codex session's blue; a Codex session is also framed blue while open, an incident is not
+framed (its row in the list is a red ground with no outline). The
 swipe back watchOS gives a pushed view does not survive a page row that also takes sideways swipes, so
 the way out is the thing at the top that says which session this is — or a swipe right (above).
 The swipe's drag is SIMULTANEOUS, never high-priority (the `SideScroll` trick): a high-priority drag

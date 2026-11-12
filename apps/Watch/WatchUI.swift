@@ -306,12 +306,11 @@ struct BeyondEdge: Shape {
 ///
 /// Low enough that a full-width first line clears the corner curve and the thickest default edge: text
 /// sits 8pt in from the side, and the glass's corner only comes within 4.5pt of the side (leaving room
-/// for a 2.5pt edge) from about 31pt down. A session's title owns the top down to about 41pt, so there
-/// the landing is just under it. The GAP between items equals the landing, so with the newest item in
-/// place the one before it ends just above the top of the screen rather than showing a sliver.
+/// for a 2.5pt edge) from about 31pt down. It is also just under `TopStrip`, on home and in a session
+/// alike. The GAP between items equals the landing, so with the newest item in place the one before it
+/// ends just above the top of the screen rather than showing a sliver.
 enum Landing {
     static let top: CGFloat = 32
-    static let underTitle: CGFloat = 58
     /// The gap between items everywhere EXCEPT above the newest one, which gets the landing's height so
     /// the item before it ends just above the top of the screen. The others need no such room.
     static let itemGap: CGFloat = 12
@@ -348,6 +347,40 @@ extension EnvironmentValues {
     /// Whether the page this view is on is the one showing. Every page of the app stays alive side by
     /// side in the TabView, so a control that binds double tap asks this first.
     @Entry var onScreen: Bool = true
+}
+
+/// **The top strip**, on home and in an open session, so the two pages' tops are the same: a band of glass
+/// the height of the inbox dot's row, ending above the landing line, so the page scrolls on visibly
+/// beneath it. The time sits halfway between the middle and the right edge, at 3/4 of the width,
+/// clear of the corner, and of the microphone indicator watchOS draws at the top right while recording,
+/// which no app can move. `leading` is what the page puts at the left (nothing on home, where the inbox
+/// dot is its own overlay; the session's name in a session), kept short of the clock. Only `leading`
+/// takes touches, so a tap anywhere else on the strip still records.
+///
+/// An overlay rather than a toolbar: a `ToolbarItem` puts a navigation bar's row there, which sits
+/// lower than this band, pushes the page's first line down with it, and moves watchOS's microphone
+/// indicator off the top right to the middle.
+struct TopStrip<Leading: View>: View {
+    static var height: CGFloat { 30 }
+    @ViewBuilder var leading: () -> Leading
+
+    var body: some View {
+        GeometryReader { g in
+            ZStack(alignment: .leading) {
+                Rectangle().fill(.ultraThinMaterial).allowsHitTesting(false)
+                HStack(spacing: 0) {
+                    Color.clear.allowsHitTesting(false)
+                    CornerClock().frame(maxWidth: .infinity).allowsHitTesting(false)
+                }
+                // Up to the clock's left edge (centred at 3/4, about 32pt wide) less a gap.
+                leading()
+                    .frame(maxWidth: max(0, g.size.width * 0.75 - 22 - 16), alignment: .leading)
+                    .padding(.leading, 16)
+            }
+        }
+        .frame(height: Self.height)
+        .ignoresSafeArea()
+    }
 }
 
 /// The time, small, on home and in an open session: the system's own clock is hidden on every page
@@ -390,7 +423,7 @@ struct PagedScroll<Content: View>: View {
             .padding(.bottom, PageInset.bottom)
         }
         .scrollIndicators(.never)
-        .topOfTheScreen(scrollTop: Landing.underTitle)
+        .topOfTheScreen(scrollTop: Landing.top)
         .background(Color.black.ignoresSafeArea())
     }
 }

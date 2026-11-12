@@ -153,23 +153,8 @@ struct HomeView: View {
         }
         // Over the thread, inside the page, so the double tap above the page row still records.
         .overlay { if inbox { InboxView(open: $inboxAnswer) } }
-        // **The top strip**: a band of glass the height of the inbox dot's row, ending above the landing
-        // line, so the thread scrolls on visibly beneath it and nothing in it moves. The time sits in it
-        // halfway between the dot and the right edge — clear of the corner, and of the microphone
-        // indicator watchOS draws at the top right while recording, which no app can move. It takes no
-        // touch: a tap there still records.
-        .overlay(alignment: .top) {
-            ZStack {
-                Rectangle().fill(.ultraThinMaterial)
-                HStack(spacing: 0) {
-                    Color.clear
-                    CornerClock().frame(maxWidth: .infinity)
-                }
-            }
-            .frame(height: Self.strip)
-            .allowsHitTesting(false)
-            .ignoresSafeArea()
-        }
+        // **The top strip** (`TopStrip`): nothing in it moves, and it takes no touch, so a tap there still records.
+        .overlay(alignment: .top) { TopStrip { EmptyView() } }
         // **The inbox** (docs/WATCH.md): a dot at the top, always — amber while any answer is
         // unread, gray otherwise — drawn over the inbox as well as home, because it is the inbox's only
         // way in and out: home -> the list, an open answer -> the list, the list -> home. A button of its
@@ -180,7 +165,7 @@ struct HomeView: View {
                 Hub.log("inbox-dot", ["open": inbox, "answer": inboxAnswer?.id ?? "", "unread": chat.unread.count])
             } label: {
                 Circle().fill(chat.unread.isEmpty ? Self.readDot : Self.unreadDot).frame(width: 10, height: 10)
-                    .frame(width: 48, height: Self.strip).contentShape(Rectangle())
+                    .frame(width: 48, height: TopStrip<EmptyView>.height).contentShape(Rectangle())
             }
             .buttonStyle(.plain)
             .ignoresSafeArea()
@@ -220,9 +205,6 @@ struct HomeView: View {
             Color.clear.frame(height: Landing.top - 2 * Landing.itemGap)
         }
     }
-
-    /// The top strip's height: the inbox dot's row, short of the landing line.
-    private static let strip: CGFloat = 30
 
     /// The amber the sessions list marks unread with.
     private static let unreadDot = Color(hex: "#e0a03a")

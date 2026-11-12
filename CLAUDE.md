@@ -467,7 +467,9 @@ It also beats app.css's `body.tv.wallportrait` block on equal specificity, by lo
   A reply RELAYED FROM A SESSION carries that session's name and the tint the conversation card gives
   it: it is a machine reporting back, not the hub answering. TAPPING IT OPENS THAT SESSION, from this box and from
   the chat sheet (which closes on the way): `data-sess` on the line, and a capture-phase handler beside
-  `__showSession` in cards/repos.js, so it wins over this box's own tap into the chat sheet. There is no `You` / `Hub` label — THE
+  `__showSession` in cards/repos.js, so it wins over this box's own tap into the chat sheet. That handler
+  takes `[data-sess]` ANYWHERE on the page, so a surface that opens a session its own way (the inbox, which
+  must close first) carries the id under another name, or the session opens behind it. There is no `You` / `Hub` label — THE
   USER'S WORDS ARE DIM AND ON THE RIGHT, hugging their own width, and the hub's are bright and take the
   whole of it, so a thread of short commands and long replies reads as two columns before any of it
   is read. A word in a gutter says the same thing a third time at the cost of that gutter's width on

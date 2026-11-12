@@ -25,6 +25,7 @@ let armed = null;         // the <li> currently listening
 let rows = [];            // every row of the last /api/sessions payload, running and parked
 let last = null;          // the last list payload load() drew, so showList can paint before refetching
 let cur = null;           // the session open in place of the list (openSession), or null for the list
+let opening = 0;          // counts openSession calls, so only the latest one paints
 // Pictures queued for the next message, as {url, name}: a local object URL to show, and the hub's
 // object name once it has landed. Cleared when they go, so a failed send keeps them.
 let shots = [];
@@ -108,8 +109,10 @@ async function load() {
   const el = document.getElementById('repospane');
   if (!el) return;
   let d;
-  try { d = await (await fetch('/api/repos')).json(); } catch (_) { return; }
-  if (!d || d.error) return;
+  // A failure leaves whatever is drawn and is reported; the next look at the pane (it swiped into view,
+  // the app back in front) tries again.
+  try { d = await (await fetch('/api/repos')).json(); } catch (e) { console.error('sessions pane: /api/repos failed', e); return; }
+  if (!d || d.error) { console.error('sessions pane: /api/repos answered', d && d.error); return; }
   // Fetched alongside rather than folded into /api/repos: sessions change on their own schedule and
   // a failure to read them must not blank the project list, which is the pane's primary job.
   try { d.sessions = await (await fetch('/api/sessions')).json(); } catch (_) { d.sessions = null; }
@@ -592,12 +595,16 @@ async function openSession(id) {
   const live = tapped && rows.find((r) => r.status === 'resident' && keyOfRow(r) === keyOfRow(tapped));
   const rowId = (live || tapped || { id }).id;
   markSeen(rowId);
+  const ticket = ++opening;
   let d;
   try {
     const r = await fetch('/api/sessions/' + encodeURIComponent(rowId));
     if (!r.ok) return false;
     d = await r.json();
   } catch (_) { return false; }
+  // A later open overtook this one while it loaded (a notification tap racing the session restored at
+  // mount): that one is what is on screen, so this one stands down as handled.
+  if (ticket !== opening) return true;
   if (cur && cur.rec) cur.rec.cancel();   // leaving mid-recording abandons it; a clip already stopped still sends
   cur = { id: d.id, key: keyOfRow(d), head: d, epoch: null, events: [], last: 0, placeholders: [], msg: null, sending: false, rec: null };
   remember(d.id);
@@ -786,7 +793,6 @@ window.__startRepoSession = async (path) => {
   const el = document.getElementById('repospane');
   if (!el) return;
   try { window.__showPane && window.__showPane('repos'); } catch (_) {}
-  if (!mounted) { mounted = true; }
   await showList();
   const li = el.querySelector(`li[data-path="${CSS.escape(String(path))}"]`);
   if (!li) return;
@@ -801,7 +807,6 @@ window.__showSession = async (id) => {
   const el = document.getElementById('repospane');
   if (!el) return;
   try { window.__showPane && window.__showPane('repos'); } catch (_) {}
-  if (!mounted) { mounted = true; }
   if (!(await openSession(String(id)))) showList();
 };
 
@@ -823,21 +828,31 @@ document.addEventListener('click', (e) => {
   window.__showSession(m.dataset.sess);
 }, true);
 
-export function render() {
-  if (mounted) return;                                // self-refreshing; not driven by the status stream
+// MOUNTED AT LOAD, not on the first status frame: the pane fetches everything it shows itself, and
+// waiting on /api/stream left it blank whenever that stream was slow to deliver after a launch or a
+// reload. `render` stays only because core.js calls every card.
+export function render() {}
+function mount() {
+  if (mounted) return;
   if (!document.getElementById('repospane')) return;  // absent on kiosk/mac/page → no-op
   mounted = true;
   const back = remembered();
   if (back) openSession(back).then((ok) => { if (!ok) { remember(null); load(); } }); else load();
-  // Coming back to the app re-reads whichever is showing. Re-reading the list over an open session
-  // would put the user back on the list every time the user switched apps mid-read.
-  window.addEventListener('focus', () => (cur ? reload() : load()));
-  // The sessions pane swiped out of view is as good as the app going away: coming back lands on news.
+  // Coming back to the app re-reads the list. An open session is re-read by lookChanged instead;
+  // re-reading the list over it would put the user back on the list after every app switch.
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible' && !cur) load();
+  });
+  // The sessions pane swiped out of view is as good as the app going away: coming back lands on news,
+  // and the list is re-read, since nothing pushes list changes to it while no session is open.
   const pane = document.getElementById('repospane');
   if (pane && 'IntersectionObserver' in window) {
     new IntersectionObserver((es) => {
       const seen = es[es.length - 1].intersectionRatio > 0.5;
-      if (seen !== paneSeen) { paneSeen = seen; lookChanged(); }
+      if (seen === paneSeen) return;
+      paneSeen = seen; lookChanged();
+      if (seen && !cur) load();
     }, { threshold: [0, 0.5, 1] }).observe(pane);
   }
 }
+mount();

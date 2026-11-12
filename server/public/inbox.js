@@ -5,7 +5,10 @@
 // the conversation's corner opens it — amber while anything is unread, gray otherwise, and there always,
 // because the inbox is how an old answer is reread.
 //
-// A session's row opens that session (`__showSession`). Any other row opens ON ITS OWN, not in the main thread: the question, then the answer, landed on the answer.
+// A session's row opens that session (`__showSession`), closing the inbox first. Its id rides `data-sid`, not
+// `data-sess`: cards/repos.js opens any `[data-sess]` tapped anywhere on the page, in the capture phase,
+// which would open the session behind the inbox and leave the list on top.
+// Any other row opens ON ITS OWN, not in the main thread: the question, then the answer, landed on the answer.
 // While it is open the NEXT command sent from the page is about it (`setAbout` in voiceagent.js): it
 // carries the answer as context, and sending it closes the inbox, so the command and its reply go in
 // line in the main thread like any other.
@@ -57,7 +60,7 @@ function paintList() {
   if (!listEl) return;
   // Repainted in place: the list's scroll position is the reader's, so nothing here touches it.
   listEl.innerHTML = rows.length
-    ? rows.map((x) => `<button type="button" class="ib-row${x.read ? ' read' : ''}${x.session_id ? ' sess' : ''}" data-id="${esc(x.id)}"${x.session_id ? ` data-sess="${esc(x.session_id)}"` : ''}>` +
+    ? rows.map((x) => `<button type="button" class="ib-row${x.read ? ' read' : ''}${x.session_id ? ' sess' : ''}" data-id="${esc(x.id)}"${x.session_id ? ` data-sid="${esc(x.session_id)}"` : ''}>` +
         `<span class="ib-label">${esc(x.label || '')}</span><span class="ib-when">${esc(when(x.at))}</span></button>`).join('')
     : '';
 }
@@ -151,7 +154,7 @@ function build() {
   listEl.addEventListener('click', (e) => {
     const b = e.target.closest('.ib-row');
     if (!b) return;
-    if (b.dataset.sess) openSession(b.dataset.id, b.dataset.sess); else openView(b.dataset.id);
+    if (b.dataset.sid) openSession(b.dataset.id, b.dataset.sid); else openView(b.dataset.id);
   });
   listEl.addEventListener('scroll', () => {
     if (listEl.scrollTop + listEl.clientHeight > listEl.scrollHeight - 200) loadMore();

@@ -71,9 +71,9 @@ async function whisper(file, type, name, key, prompt, model) {
   throw Object.assign(new Error(`transcription failed (${last ? last.message : 'no provider'})`), { status: 502, allFailed: true });
 }
 
-// How many seconds of audio a clip actually holds, read off its packet timestamps by a stream copy —
-// nothing is decoded, so it costs tens of milliseconds whatever the length. null when ffmpeg cannot
-// read it, which says nothing either way.
+// How many seconds of audio a clip actually holds, read off its packet timestamps by a stream copy.
+// Nothing is decoded, but starting ffmpeg on the hub's machine costs 2-3s whatever the length, so
+// nothing waits on it alone. null when ffmpeg cannot read it, which says nothing either way.
 function clipSeconds(file) {
   return new Promise((resolve) => {
     const p = spawn('ffmpeg', ['-hide_banner', '-nostats', '-i', file, '-map', '0:a:0', '-c', 'copy', '-f', 'null', '-'],

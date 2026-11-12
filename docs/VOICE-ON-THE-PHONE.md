@@ -113,8 +113,11 @@ read shows it; the clip does.
 
 So `/api/voice-command` measures every clip that carries a `dur` of a second or more: `clipSeconds`
 (`lib/transcribe.js`) reads the audio's length off its packet timestamps with an ffmpeg stream copy,
-tens of milliseconds, and a clip holding under half its recorded time is refused as
-`{capture: 'damaged'}` before transcription. Measured over every stored clip, sound ones hold 95-101%
+and a clip holding under half its recorded time is refused as `{capture: 'damaged'}`. Starting ffmpeg
+costs the hub 2-3s, so the measurement runs alongside transcription and the transcript of a damaged clip
+is discarded unread; nothing waits on the measurement alone. A watch recording that was streamed
+(`/api/voice-live`) is measured from its ADTS frame headers instead (`adtsSeconds`, `lib/livestream.js`),
+which is instant, and judged before transcription. Measured over every stored clip, sound ones hold 95-101%
 and damaged ones 11-12%. The hub log line is `[voice-command] DAMAGED`.
 
 The page's recovery escalates (`captureDamaged` in `voiceagent.js`). First a fresh capture: every

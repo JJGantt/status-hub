@@ -8,7 +8,7 @@ const heicConvert = require('heic-convert');
 const { localDate } = require('../lib/dates');
 const ops = require('../lib/report');
 const { vanishedRecordings, RECORD_EVENTS } = require('../lib/outcomes');
-const { FrameReader, endOf } = require('../lib/livestream');
+const { FrameReader, endOf, adtsSeconds } = require('../lib/livestream');
 const { heardStart, heardEnd } = require('../lib/streams');
 const os = require('os');
 const path = require('path');
@@ -254,6 +254,7 @@ module.exports = function (ctx) {
       // with no body: the hub already holds the audio, so the clip does not cross the network a second
       // time. 409 `upload` when the stream did not arrive whole; the watch then sends the clip itself.
       const fromLive = String(req.headers['x-audio-source'] || '') === 'live';
+      let liveHeld = null;   // seconds the streamed audio holds, counted from its frames (adtsSeconds)
       const dur = parseFloat(req.query.dur);
       let ct = String(req.headers['content-type'] || 'audio/webm');
       if (fromLive) {
@@ -266,6 +267,7 @@ module.exports = function (ctx) {
         }
         ct = 'audio/mp4';
         timing.audio_via = 'live';
+        liveHeld = got.heldS;
       } else {
         await pipeline(req, fs.createWriteStream(tmp));
         timing.audio_via = 'upload';
@@ -280,17 +282,29 @@ module.exports = function (ctx) {
       // device knows how long it recorded, so the check needs its `dur`; a clip that keeps well under
       // half of it is damaged (a sound one keeps over 99%). The page resets its microphone on
       // `capture: 'damaged'` — see captureDamaged() in voiceagent.js.
+      // A streamed recording's length is counted from its frames, instantly, and judged before anything
+      // else: a short one is asked for again as a clip. An uploaded clip is measured by ffmpeg, which
+      // costs the hub 2-3s, so that runs alongside transcription and is judged once both are done; a
+      // damaged clip's transcript is then thrown away unread, exactly as if it had never been made.
       const tProbe = Date.now();
-      const heldS = dur >= CAPTURE_CHECK_MIN_S ? await clipSeconds(tmp) : null;
-      if (heldS != null) timing.probe_ms = since(tProbe);
-      if (fromLive && heldS != null && heldS < dur - LIVE_SHORT_S) {
-        console.log(`[voice-command] live audio holds ${heldS.toFixed(2)}s of ${dur.toFixed(1)}s; asking for the clip`);
-        return res.status(409).json({ upload: true, why: 'short', held_s: +heldS.toFixed(2), dur });
-      }
-      if (heldS != null && heldS < dur * CAPTURE_MIN_KEPT) {
-        console.log(`[voice-command] DAMAGED ${size} bytes ${ct}: holds ${heldS.toFixed(2)}s of ${dur.toFixed(1)}s recorded, refused`);
-        return res.json({ transcript: '', enqueued: false, capture: 'damaged', held_s: +heldS.toFixed(2), dur });
-      }
+      const probe = dur < CAPTURE_CHECK_MIN_S ? Promise.resolve(null)
+        : fromLive && liveHeld != null ? Promise.resolve(liveHeld) : clipSeconds(tmp);
+      probe.then((s) => { if (s != null) timing.probe_ms = since(tProbe); });
+      const refused = (heldS) => {
+        if (heldS == null) return false;
+        if (fromLive && heldS < dur - LIVE_SHORT_S) {
+          console.log(`[voice-command] live audio holds ${heldS.toFixed(2)}s of ${dur.toFixed(1)}s; asking for the clip`);
+          res.status(409).json({ upload: true, why: 'short', held_s: +heldS.toFixed(2), dur });
+          return true;
+        }
+        if (heldS < dur * CAPTURE_MIN_KEPT) {
+          console.log(`[voice-command] DAMAGED ${size} bytes ${ct}: holds ${heldS.toFixed(2)}s of ${dur.toFixed(1)}s recorded, refused`);
+          res.json({ transcript: '', enqueued: false, capture: 'damaged', held_s: +heldS.toFixed(2), dur });
+          return true;
+        }
+        return false;
+      };
+      if (fromLive && refused(await probe)) return;
       // THE LAST TRANSCRIBER IS THE MAC. When Groq and OpenAI both fail, a command is not lost while the Mac
       // worker is up: the clip is kept and the row is queued 'untranscribed', which the Mac's worker takes,
       // runs through its local Whisper and turns 'pending' (voice-pipeline worker.py `transcribe_local`).
@@ -332,6 +346,7 @@ module.exports = function (ctx) {
         untranscribed = true;
         console.error('[voice-command] every transcription provider failed; queued for the Mac\'s local Whisper');
       }
+      if (!fromLive && refused(await probe)) return;
       // Bytes per second of speech is what decides whether a clip fits Groq's cap, and it is set by the
       // recording device, not by us — so every clip reports it.
       console.log(`[voice-command] ${size} bytes ${ct} via ${timing.audio_via}` +
@@ -626,7 +641,7 @@ module.exports = function (ctx) {
       await fs.promises.writeFile(raw, end.audio);
       await new Promise((resolve, reject) => execFile('ffmpeg', ['-v', 'error', '-y', '-f', 'aac', '-i', raw, '-c', 'copy', '-f', 'mp4', file],
         (e) => (e ? reject(e) : resolve())));
-      return { ok: true };
+      return { ok: true, heldS: adtsSeconds(end.audio) };
     } catch (e) {
       console.error(`[voice-live] ${id} could not be made into a clip: ${e.message || e}`);
       return { ok: false, why: 'remux' };

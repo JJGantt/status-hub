@@ -4,7 +4,7 @@
 // unreported.
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
-const { FrameReader, endOf } = require('../lib/livestream');
+const { FrameReader, endOf, adtsSeconds } = require('../lib/livestream');
 
 const frame = (type, data = Buffer.alloc(0)) => {
   const h = Buffer.alloc(5);
@@ -53,4 +53,26 @@ test('a drop after the bytes had stopped, or while paused, is a stalled network'
 test('a stream the hub closed at its own request limit is not a lost recording', () => {
   assert.equal(endOf({ complete: false, last: null, paused: false, gapMs: 82, limited: true }), 'limited');
   assert.equal(endOf({ complete: false, last: 'E', gapMs: 10, limited: true }), 'ended');
+});
+
+// One ADTS frame header (7 bytes, no CRC) for `len` bytes in all: 1024 samples at `rateIndex`.
+const adts = (len, rateIndex = 8) => {
+  const f = Buffer.alloc(len);
+  f[0] = 0xFF; f[1] = 0xF1; f[2] = 0x40 | (rateIndex << 2);
+  f[3] = (len >> 11) & 0x03; f[4] = (len >> 3) & 0xFF; f[5] = ((len & 0x07) << 5) | 0x1F; f[6] = 0xFC;
+  return f;
+};
+
+test('streamed audio is measured from its frame headers, however it was chunked', () => {
+  const frames = Array.from({ length: 125 }, () => adts(40));   // 125 x 1024 samples at 16 kHz = 8s
+  const near = (a, b) => assert.ok(Math.abs(a - b) < 1e-9, `${a} is not ${b}`);
+  near(adtsSeconds(frames), 8);
+  near(adtsSeconds(Buffer.concat(frames)), 8);
+  near(adtsSeconds(adts(40, 3)), 1024 / 48000);
+});
+
+test('bytes that are not ADTS measure as unknown, never as a short recording', () => {
+  assert.equal(adtsSeconds(Buffer.from('not audio at all')), null);
+  assert.equal(adtsSeconds(Buffer.concat([adts(40), Buffer.from('garbage!')])), null);
+  assert.equal(adtsSeconds([]), null);
 });

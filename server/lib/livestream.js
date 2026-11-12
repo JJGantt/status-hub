@@ -65,4 +65,23 @@ function endOf({ complete, last, paused, gapMs, limited }) {
   return 'lost';
 }
 
-module.exports = { FrameReader, endOf, LOST_GAP_MS };
+// Seconds of audio in an ADTS stream, read off its frame headers: every frame says its own byte length,
+// how many 1024-sample blocks it holds and at what sample rate. Nothing is decoded and no process is
+// started, so it is instant; ffmpeg reading the same file costs the hub 2-3s, most of it starting ffmpeg.
+// null when the bytes are not ADTS from the first byte, which says nothing either way.
+const ADTS_RATES = [96000, 88200, 64000, 48000, 44100, 32000, 24000, 22050, 16000, 12000, 11025, 8000, 7350];
+function adtsSeconds(buffers) {
+  const b = Buffer.isBuffer(buffers) ? buffers : Buffer.concat(buffers);
+  let i = 0, secs = 0;
+  while (i + 7 <= b.length) {
+    if (b[i] !== 0xFF || (b[i + 1] & 0xF0) !== 0xF0) return null;
+    const rate = ADTS_RATES[(b[i + 2] >> 2) & 0x0F];
+    const len = ((b[i + 3] & 0x03) << 11) | (b[i + 4] << 3) | (b[i + 5] >> 5);
+    if (!rate || len < 7) return null;
+    secs += (((b[i + 6] & 0x03) + 1) * 1024) / rate;
+    i += len;
+  }
+  return i === 0 ? null : secs;
+}
+
+module.exports = { FrameReader, endOf, adtsSeconds, LOST_GAP_MS };

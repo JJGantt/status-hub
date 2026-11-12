@@ -438,7 +438,8 @@ It also beats app.css's `body.tv.wallportrait` block on equal specificity, by lo
 - **THE INBOX is a dot in the conversation's corner** (`public/inbox.js`, `inbox.css`): amber
   while any flagged answer is unread, gray otherwise, always there. It opens a sheet that stops above
   the navbar, because the navbar's microphone is how a follow-up to an open answer is spoken; while one
-  is open every command from the page carries it as `about` (`setAbout` in voiceagent.js).
+  is open the next command from the page carries it as `about` (`setAbout` in voiceagent.js) and
+  closes the inbox, so the command and its reply go in line in the thread.
   `docs/WATCH.md` § The inbox is the whole design.
 - **Which day it is, is pinned to the left of the strip** and does not scroll with it (`.ds-here`).
   The day names inside the strip sit at their own midnights, so today's is off the left end whenever

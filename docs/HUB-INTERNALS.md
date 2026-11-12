@@ -1311,8 +1311,8 @@ marks read through `POST /api/voice-messages/read`, which stamps `read_at` once;
 UPDATE carries it to every surface. What the watch does with it is `WATCH.md` § The inbox. A relayed session reply in the inbox is not pushed by `notifyAnswer`: `notifySessionReply` already pushed it.
 
 `GET /api/voice-inbox` lists every flagged answer, newest first (`?before=` pages back), with its label
-and whether it is read; `GET /api/voice-inbox/:id` returns one with its whole question and the follow-ups
-spoken from it (requests whose `about_id` names it). `/api/voice-command` (`?about=`) and `/api/voice-text`
+and whether it is read; `GET /api/voice-inbox/:id` returns one with its whole question and answer.
+`/api/voice-command` (`?about=`) and `/api/voice-text`
 (`about`) store that id on the request.
 
 The payload's `session_id` is what a tap opens: `SessionLaunch` → `window.__showSession` opens that

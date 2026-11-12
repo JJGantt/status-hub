@@ -187,6 +187,8 @@ struct HomeView: View {
         }
         // An answer's notification lands on the answer in the thread, so the inbox gets out of the way.
         .onChange(of: chat.landings) { _, _ in inbox = false; inboxAnswer = nil }
+        // A command spoken from an open answer goes in line in the thread, so the inbox gets out of the way.
+        .onChange(of: chat.askedFromAnswer) { _, _ in inbox = false; inboxAnswer = nil }
         .onChange(of: inbox) { _, _ in attend() }
         .onChange(of: dimmed) { _, _ in attend() }
         .onChange(of: phase) { _, _ in attend() }

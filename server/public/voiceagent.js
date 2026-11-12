@@ -165,13 +165,22 @@ function boot() {
 // back to the foreground, where a suspended stream has already missed whatever arrived.
 export function onThread(fn) { threadSubs.push(fn); fn(null); }
 
-// THE ANSWER BEING LOOKED AT. While an answer from the inbox is open on its own (inbox.js), every
+// THE ANSWER BEING LOOKED AT. While an answer from the inbox is open on its own (inbox.js), the NEXT
 // command sent from this page — the mic or typed — is about it: it rides as `about`, and the worker
-// hands the model that question and answer with the words (docs/WATCH.md § The inbox).
+// hands the model that question and answer with the words (docs/WATCH.md § The inbox). One command
+// only: taking it clears it and announces `hub:aboutsent`, which closes the inbox, so the command and
+// its reply go in line in the main thread and nothing stays attached to the answer afterwards.
 // Taken when the clip is QUEUED, not when it uploads, so a clip that waits in the outbox stays about
 // what was on screen when it was said.
 let aboutAnswer = null;
 export function setAbout(id) { aboutAnswer = id || null; }
+function takeAbout() {
+  const id = aboutAnswer;
+  if (!id) return {};
+  aboutAnswer = null;
+  window.dispatchEvent(new CustomEvent('hub:aboutsent', { detail: id }));
+  return { about: id };
+}
 
 // ---- the command that has been HEARD but is not in the thread yet ---------
 //
@@ -888,7 +897,7 @@ export async function runPhotoOutbox(onStatus) {
 // by a reload is kept, not sent.
 async function sendVoice(clip, owner) {
   const item = { id: uid(), createdAt: Date.now(), client_now: localNowNaive(), type: clip.blob.type || 'audio/webm',
-    ...(aboutAnswer && !clip.dry ? { about: aboutAnswer } : {}), ...clip };
+    ...(clip.dry ? {} : takeAbout()), ...clip };
   try { await voiceBox.put(item); }
   catch (_) {                                          // no IndexedDB (a private window) — memory is the only copy there is
     try { await deliverVoice(item, owner.onStatus, owner); } catch (e) { voiceFailed(e, item, owner.onStatus); }
@@ -1393,7 +1402,7 @@ function initCard() {
       const r = await fetch('/api/voice-text', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ text, client_now: localNowNaive(), ...(attachments.length ? { attachments } : {}),
-                               ...(aboutAnswer ? { about: aboutAnswer } : {}),
+                               ...takeAbout(),
                                ...(where ? { location: where } : {}) }) });
       if (r.ok) clearTray(); else dropPending(cid);
       setStatus(r.ok ? '' : 'Send failed');

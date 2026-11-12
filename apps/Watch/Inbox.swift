@@ -5,7 +5,8 @@ import SwiftUI
 /// anything is unread, gray otherwise — opens it, steps back out of an answer, and closes it; an open
 /// answer also has a ✕ in its top-left corner that steps back to the list, where it was left. A
 /// session's row (teal) opens that session on the sessions page; any other row opens its answer ON ITS OWN, question above it, opened at the top; a tap on that page records a
-/// command about it (`Hub.about`), and the follow-ups and their replies list under it.
+/// command about it (`Hub.about`) — the next one only: sending it closes the inbox, so the command and its
+/// reply go in line in the thread on home.
 ///
 /// Drawn as a layer OVER home rather than a sheet, because the command is the double tap bound by
 /// `CommandBorder` above the page row, and a sheet would cover it.
@@ -24,18 +25,12 @@ struct InboxPage: Decodable {
 }
 
 struct InboxAnswer: Decodable {
-    struct Follow: Decodable, Identifiable {
-        let id: String
-        let role: String
-        let text: String
-    }
     let id: String
     let read: Bool
     let question: String
     let answer: String
     let session_id: String?
     let session_label: String?
-    var follow: [Follow]
 }
 
 extension Hub {
@@ -73,7 +68,7 @@ struct InboxView: View {
                 .opacity(open == nil ? 1 : 0)
                 .allowsHitTesting(open == nil)
             if let open {
-                AnswerView(initial: open)
+                AnswerView(a: open)
                     .background(Color.black.ignoresSafeArea())
                     .id(open.id)
             }
@@ -173,17 +168,14 @@ struct InboxView: View {
     }
 }
 
-/// One answer on its own: the question, the answer, then the follow-ups spoken from it. Opens at its
-/// top, already loaded, and never moves after: a follow-up's words or its reply arriving lay out below.
+/// One answer on its own: the question, then the answer. Opens at its top, already loaded.
 ///
 /// **A tap anywhere on it is the press** — the same as a tap on home: it starts a recording and the
-/// next press sends it, and while this page is up the command carries the answer as `about`
-/// (`Hub.about`), so the model gets this question and answer with it.
+/// next press sends it, and that command carries the answer as `about` (`Hub.about`), so the model gets
+/// this question and answer with it. Sending it closes the inbox (`Chat.askedFromAnswer`).
 private struct AnswerView: View {
     @EnvironmentObject private var chat: Chat
-    @State private var a: InboxAnswer
-
-    init(initial: InboxAnswer) { _a = State(initialValue: initial) }
+    let a: InboxAnswer
 
     var body: some View {
         ScrollView {
@@ -198,16 +190,6 @@ private struct AnswerView: View {
                     }
                     Markdown(text: a.answer, size: 14)
                 }
-                ForEach(a.follow) { m in
-                    Markdown(text: m.text, size: m.role == "user" ? 13 : 14)
-                        .foregroundStyle(m.role == "user" ? Color(hex: "#8b96a5") : .white)
-                        .frame(maxWidth: .infinity, alignment: m.role == "user" ? .trailing : .leading)
-                }
-                // A follow-up still running: its words, from the moment the hub has heard them.
-                ForEach(chat.pending(about: a.id), id: \.request) { p in
-                    Markdown(text: p.words, size: 13).foregroundStyle(Color(hex: "#8b96a5"))
-                        .frame(maxWidth: .infinity, alignment: .trailing)
-                }
             }
             .padding(.horizontal, 8)
             .padding(.bottom, PageInset.bottom)
@@ -220,19 +202,7 @@ private struct AnswerView: View {
             CommandBorder.tapped(at)
             CommandBorder.press(chat: chat, sessions: Sessions.shared, how: "inbox-tap")
         }
-        // A follow-up spoken from this page lands in the thread; its rows are taken from there.
-        .onChange(of: chat.thread) { _, thread in takeFollow(thread) }
         .onAppear { Hub.about = a.id }
         .onDisappear { if Hub.about == a.id { Hub.about = nil } }
-    }
-
-    private func takeFollow(_ thread: [Message]) {
-        let have = Set(a.follow.map(\.id))
-        let rows = thread.filter { m in
-            guard let rid = m.request_id, chat.askedAbout[rid] == a.id, !have.contains(m.id) else { return false }
-            return m.role == "user" || m.role == "assistant"
-        }
-        guard !rows.isEmpty else { return }
-        a.follow += rows.map { InboxAnswer.Follow(id: $0.id, role: $0.role ?? "assistant", text: $0.text ?? "") }
     }
 }

@@ -6,19 +6,16 @@
 // because the inbox is how an old answer is reread.
 //
 // A session's row opens that session (`__showSession`). Any other row opens ON ITS OWN, not in the main thread: the question, then the answer, landed on the answer.
-// While it is open every command sent from the page is ABOUT it (`setAbout` in voiceagent.js), and the
-// follow-ups and what came back are listed under it. It lands on the answer when opened, and on each
-// follow-up's words and reply as they arrive unless the reader is scrolled back (the thread rule).
+// While it is open the NEXT command sent from the page is about it (`setAbout` in voiceagent.js): it
+// carries the answer as context, and sending it closes the inbox, so the command and its reply go in
+// line in the main thread like any other.
 import { onThread, setAbout } from './voiceagent.js';
-import { md, esc, readingWatch } from './shared.js';
+import { md, esc } from './shared.js';
 
 const PAGE = 60;
 let dot = null, sheet = null, listEl = null, viewEl = null;
 let rows = [], done = false, busy = false;
 let openId = null;
-let watch = null;       // readingWatch on the answer view
-let shownN = 0;         // blocks the open view last drew, so a repaint knows something new arrived
-let paintSeq = 0;       // repaints are fetches; only the newest one draws
 let unread = false;
 
 function when(iso) {
@@ -94,31 +91,20 @@ function close() {
   openId = null; setAbout(null);
 }
 
-// One answer on its own. `land` is true on opening it, and it lands on the answer. After that it follows
-// the thread rule (`readingWatch` in shared.js): a follow-up's words or its reply arriving land on the
-// newest of them, unless the reader has scrolled the view and not let go at the very end, in which case
-// it repaints where they left it. Landing is the top of the newest block, as in every thread here.
-async function paintView(id, land) {
-  const seq = ++paintSeq;
+// One answer on its own, landed on the answer.
+async function paintView(id) {
   try {
     const r = await fetch('/api/voice-inbox/' + encodeURIComponent(id));
     if (!r.ok) throw new Error('voice-inbox/:id ' + r.status);
     const a = await r.json();
-    if (openId !== id || seq !== paintSeq) return;   // closed, moved on, or a newer repaint is in flight
-    const top = viewEl.scrollTop;
+    if (openId !== id) return;                       // closed or moved on while it loaded
     viewEl.innerHTML =
       (a.question ? `<div class="ib-q">${md(a.question)}</div>` : '') +
       `<div class="ib-a${a.session_id ? ' sess' : ''}" id="ib-answer">` +
         (a.session_id ? `<span class="ib-k">${esc(a.session_label || '')}</span>` : '') +
-        `${md(a.answer)}</div>` +
-      (a.follow || []).map((m) => `<div class="${m.role === 'user' ? 'ib-q' : 'ib-a'}">${md(m.text)}</div>`).join('');
-    const n = viewEl.childElementCount;
-    const grew = !land && n > shownN;
-    shownN = n;
-    const el = land ? document.getElementById('ib-answer')
-      : grew && !(watch && watch.reading()) ? viewEl.lastElementChild : null;
+        `${md(a.answer)}</div>`;
+    const el = document.getElementById('ib-answer');
     if (el) viewEl.scrollTop += el.getBoundingClientRect().top - viewEl.getBoundingClientRect().top;
-    else viewEl.scrollTop = top;
     if (!a.read) {
       fetch('/api/voice-messages/read', { method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ id }) }).catch((e) => console.error('inbox: marking read failed', e));
@@ -141,8 +127,8 @@ function openSession(id, sid) {
 function openView(id) {
   openId = id; setAbout(id);
   listEl.hidden = true; viewEl.hidden = false;
-  viewEl.innerHTML = ''; shownN = 0;
-  paintView(id, true);
+  viewEl.innerHTML = '';
+  paintView(id);
 }
 function back() {
   openId = null; setAbout(null);
@@ -161,7 +147,6 @@ function build() {
   document.body.appendChild(sheet);
   listEl = sheet.querySelector('.ib-list');
   viewEl = sheet.querySelector('.ib-view');
-  watch = readingWatch(viewEl);
   sheet.querySelector('.ib-x').addEventListener('click', () => (openId ? back() : close()));
   listEl.addEventListener('click', (e) => {
     const b = e.target.closest('.ib-row');
@@ -181,12 +166,11 @@ function mount() {
   card.appendChild(dot);
   dot.addEventListener('click', openList);
   // Event-driven: a new or newly read answer arrives on the thread's own stream, and `null` is a
-  // resync (connect, foreground). A follow-up's reply repaints the open answer, never moving it.
-  onThread((row) => {
-    if (row && row.role !== 'assistant') { if (openId) paintView(openId, false); return; }
-    soon();
-    if (openId) paintView(openId, false);
-  });
+  // resync (connect, foreground).
+  onThread((row) => { if (!row || row.role === 'assistant') soon(); });
+  // A command sent while an answer was open carried it as context; the command and its reply belong in
+  // the main thread, so the inbox gets out of the way.
+  window.addEventListener('hub:aboutsent', close);
   window.addEventListener('hubreset', close);
   // A tapped answer notification whose answer is too old for the chat's thread (`__showAnswer`).
   window.__showInboxAnswer = (id) => { build(); sheet.classList.add('open'); openView(id); };

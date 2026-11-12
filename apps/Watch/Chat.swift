@@ -300,6 +300,7 @@ final class Chat: ObservableObject {
         command.rewind = instructing
         instructing = nil
         commands.append(command)
+        if finished.about != nil { askedFromAnswer += 1 }
         run(command.msgId)
     }
 
@@ -379,17 +380,10 @@ final class Chat: ObservableObject {
     /// The most rows kept: what `Hub.thread` reads, with room for the unread answers it adds.
     private static let threadCap = 60
 
-    /// The request each command spoken from an open inbox answer was about, so that answer's page can
-    /// take its follow-up from the thread (Inbox.swift `AnswerView`).
-    private(set) var askedAbout: [String: String] = [:]
-    /// The words of the commands spoken from answer `id` that are still running, oldest first: its page
-    /// lists them under the answer at once, since their rows reach the thread only with the reply.
-    func pending(about id: String) -> [(request: String, words: String)] {
-        commands.compactMap { c in
-            guard !c.failed, let rid = c.requestId, askedAbout[rid] == id, let words = c.words else { return nil }
-            return (rid, words)
-        }
-    }
+    /// Counts commands sent with an inbox answer open (`Recorder.Clip.about`). The answer is context for
+    /// that one command; home closes the inbox on it, so the command and its reply go in line in the
+    /// thread (docs/WATCH.md § The inbox).
+    @Published private(set) var askedFromAnswer = 0
 
     /// Logs `shown` once per request, the moment its reply is in the thread: the last stamp of a
     /// command's timing (status-hub docs/HUB-INTERNALS.md § Command timing).
@@ -520,7 +514,6 @@ final class Chat: ObservableObject {
                     }
                     requestId = id
                     mine[id] = msgId
-                    if let about = clip.about { askedAbout[id] = about }
                     update(msgId) { $0.requestId = id; $0.words = heard.transcript; $0.fallback = fallback }
                 }
                 let outcome = fallback ? try await Hub.fallbackOutcome(requestId!) : try await Hub.outcome(requestId!)

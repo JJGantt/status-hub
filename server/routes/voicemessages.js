@@ -136,14 +136,7 @@ module.exports = function (ctx) {
       const [r] = await sb(`voice_messages?id=eq.${id}&select=*`) || [];
       if (!r) return res.status(404).json({ error: 'not found' });
       const qs = await questionsFor([r]);
-      // The follow-ups spoken from this answer and what came back, so the conversation about it
-      // continues on the same page rather than only in the main thread.
-      const asked = await sb(`voice_requests?about_id=eq.${id}&select=id&order=created_at&limit=50`) || [];
-      const follow = asked.length
-        ? (await sb(`voice_messages?request_id=in.(${asked.map((x) => x.id).join(',')})&role=in.(user,assistant)&order=created_at&select=id,role,text,created_at,engine`) || [])
-        : [];
-      res.json({ ...inboxRow(r, qs.get(r.request_id)), question: qs.get(r.request_id) || '', answer: r.text || '', engine: r.engine || null,
-        follow: follow.map((m) => ({ id: m.id, role: m.role, text: m.text || '', at: m.created_at, engine: m.engine || null })) });
+      res.json({ ...inboxRow(r, qs.get(r.request_id)), question: qs.get(r.request_id) || '', answer: r.text || '', engine: r.engine || null });
     } catch (e) { res.status(500).json({ error: String(e.message || e) }); }
   });
 

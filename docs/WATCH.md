@@ -200,8 +200,7 @@ read, so every such reply goes into an inbox: kept for good, newest first, read 
   first reply is flagged when the orchestrator dispatched it with `start_session`'s `needs_read`, and
   labelled the same way from the dispatched prompt.
 - **One question, one row.** A clarification of the question just answered ("I mean the new one")
-  replaces its row rather than adding one, and a follow-up spoken from an open answer lists under that
-  answer rather than as a row (voice-pipeline `docs/ROUTING.md`).
+  replaces its row rather than adding one (voice-pipeline `docs/ROUTING.md`).
 - **Read means shown**: two seconds on screen with the app in front, home showing and the wrist up
   (`HomeView.attend`). On screen is half the row, or for a row taller than the screen, enough of it to
   fill a little under half the screen, so a long answer counts once its opening has been on screen.
@@ -217,19 +216,17 @@ read, so every such reply goes into an inbox: kept for good, newest first, read 
 - **A session's row opens the session itself** (teal, like the session's own colour): on the watch the
   sessions page with it open (`Sessions.open`), on the phone the session view (`__showSession`). It is
   marked read as it opens; on the watch the inbox stays open on home to come back to.
-- **Any other row opens its answer on its own**, not in the thread: the question, then the answer, then the
-  follow-ups, opened at its top. The row stays on the list until `GET /api/voice-inbox/:id` has
+- **Any other row opens its answer on its own**, not in the thread: the question, then the answer,
+  opened at its top. The row stays on the list until `GET /api/voice-inbox/:id` has
   answered, so the page appears whole rather than empty and then filled in. Opening it marks it read.
-  **A tap anywhere on it is the press**, as on home, and so is double tap: a command recorded while it
-  is open carries it as `about` (`Hub.about`, read into the clip when it is made), so the worker hands
-  the model that question and answer, which may be days out of the replayed context; the follow-ups
-  and their replies list under the answer, taken from the thread as they land there (`Chat.askedAbout`
-  names which requests were spoken from which answer) rather than by reading the answer again. The
-  hub writes a turn's rows only with its reply, so a follow-up still running is listed from its words
-  the moment the hub returns them (`Chat.pending(about:)`), as home lists `pending`. On the watch nothing moves it after it opens. The phone has
-  the same inbox (`public/inbox.js`), opened from a dot in the conversation's corner; there an open answer
-  follows the thread rule, landing on each follow-up's words and reply as they arrive unless it is being
-  read (`readingWatch`). Its sheet has one
+  **A tap anywhere on it is the press**, as on home, and so is double tap: the NEXT command recorded
+  while it is open carries it as `about` (`Hub.about`, read into the clip when it is made), so the worker
+  hands the model that question and answer, which may be days out of the replayed context. **That
+  command closes the inbox** (`Chat.askedFromAnswer`; on the phone `hub:aboutsent` from `takeAbout` in
+  voiceagent.js), and its words and reply go in line in the thread like any other command. There are no
+  threads under an answer: a context that stayed attached to whatever was left open gave every later
+  command a stale `about` with nothing on screen saying so. The phone has
+  the same inbox (`public/inbox.js`), opened from a dot in the conversation's corner. Its sheet has one
   ✕, which steps back from an open answer to the list and closes the list. On the watch an open answer
   also has a ✕ in its top-left corner, outside the tap-to-record area, which steps back to the list at
   the place it was left.

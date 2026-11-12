@@ -119,7 +119,13 @@ module.exports = function (ctx) {
   // An incident outranks it: one row carries one alert, and the red one is the louder fact.
   const isCodex = (s) => !!s && s.agent === 'codex' && !isIncident(s);
 
-  async function buildSessions({ brief: allBrief = false } = {}) {
+  // PARKED ROWS ARE CAPPED. Every session ever parked stays resumable, and there are hundreds; every
+  // surface drew all of them, and every change to any session pushed the whole list to each one — the
+  // watch decoding ~130KB per frame. A list shows the most recent PARKED, plus any pinned; `parked_total`
+  // says how many there are, and `?parked=all` (the phone's pane, scrolled to its end) asks for the rest.
+  const PARKED = 25;
+
+  async function buildSessions({ brief: allBrief = false, parked = PARKED } = {}) {
     // The NUMBER the user says out loud, the PINS and the SHOWN session (`focus`: the most recently pinned,
     // else the most recently active running one — what a wall's reply column shows) are
     // desk_sessions_state() in Postgres (data-layer 00164), the one definition the voice tools read too.
@@ -190,12 +196,14 @@ module.exports = function (ctx) {
     // `?brief=1` (the watch) gets every row as `brief`: it draws one line per row and opens a session
     // through `/api/sessions/:id`, so a whole reply here is bytes it decodes past.
     const full = allBrief ? brief : (s) => ({ ...brief(s), last_reply: cleanSaid(s.last_reply) });
-    const evicted = listed.filter((s) => s.status === 'evicted').sort(byActivity);
+    const parkedAll = listed.filter((s) => s.status === 'evicted').sort(byActivity);
+    const evicted = parkedAll.filter((s, i) => i < parked || pins.has(s.id));
     return {
       // Resident = running now, reachable over Remote Control. Evicted = closed to free the machine
       // but resumable with full context, which is the distinction the panel has to make obvious.
       resident: listed.filter((s) => s.status === 'resident').sort(byActivity).map(full),
       evicted: evicted.map((s, i) => (i === 0 ? full(s) : brief(s))),
+      parked_total: parkedAll.length,
       focus,
       pinned,
       // What the bedroom TV's sidebar shows (§ The TV sidebar): the focused session, or the voice
@@ -225,7 +233,7 @@ module.exports = function (ctx) {
   });
 
   gated.get('/api/sessions', async (req, res) => {
-    try { res.json(await buildSessions({ brief: req.query.brief === '1' })); }
+    try { res.json(await buildSessions({ brief: req.query.brief === '1', parked: req.query.parked === 'all' ? Infinity : PARKED })); }
     catch (e) { res.status(500).json({ error: String(e.message || e) }); }
   });
 

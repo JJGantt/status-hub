@@ -151,3 +151,33 @@ describe('a session thread (/api/sessions/:id)', () => {
     assert.deepEqual(kinds(await json(h.DEVICE_TOKEN, 'GET', '/api/sessions/s-thread03')), [`prompt:${PROMPT}`]);
   });
 });
+
+describe('the session list (/api/sessions)', () => {
+  const list = async (q = '') => (await hub.req('/api/sessions' + q, { headers: { 'X-Hub-Token': h.DEVICE_TOKEN } })).json();
+  const day = (i) => new Date(Date.UTC(2026, 0, 1) + i * 60000).toISOString();
+  before(() => {
+    supa.tables.desk_sessions = supa.tables.desk_sessions || [];
+    const numbers = {};
+    for (let i = 0; i < 40; i++) {
+      const id = `s-park${String(i).padStart(2, '0')}`;
+      supa.tables.desk_sessions.push({ id, status: 'evicted', label: 'p', repo: 'r', started: day(i), active_at: day(i) });
+      numbers[id] = 40 - i;
+    }
+    supa.tables.desk_sessions.push({ id: 's-run01', status: 'resident', label: 'r', repo: 'r', started: day(50), active_at: day(50) });
+    numbers['s-run01'] = 41;
+    supa.rpc.desk_sessions_state = () => ({ numbers, pins: ['s-park00'], focus: { session_id: null, pinned: false } });
+  });
+  test('lists the 25 most recent parked rows and any older pinned one, and counts them all', async () => {
+    const d = await list();
+    const ids = d.evicted.map((x) => x.id);
+    assert.equal(d.parked_total, 40);
+    assert.equal(ids.length, 26);
+    assert.equal(ids[0], 's-park39');
+    assert.ok(ids.includes('s-park15') && !ids.includes('s-park14'));
+    assert.ok(ids.includes('s-park00'), 'a pinned parked row is never cut');
+    assert.deepEqual(d.resident.map((x) => x.id), ['s-run01']);
+  });
+  test('?parked=all lists every parked row', async () => {
+    assert.equal((await list('?parked=all')).evicted.length, 40);
+  });
+});

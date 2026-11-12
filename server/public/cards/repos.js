@@ -26,6 +26,7 @@ let rows = [];            // every row of the last /api/sessions payload, runnin
 let last = null;          // the last list payload load() drew, so showList can paint before refetching
 let cur = null;           // the session open in place of the list (openSession), or null for the list
 let opening = 0;          // counts openSession calls, so only the latest one paints
+let allParked = false;    // the list was scrolled to its end, so it lists every parked session, not the recent ones
 // Pictures queued for the next message, as {url, name}: a local object URL to show, and the hub's
 // object name once it has landed. Cleared when they go, so a failed send keeps them.
 let shots = [];
@@ -115,7 +116,7 @@ async function load() {
   if (!d || d.error) { console.error('sessions pane: /api/repos answered', d && d.error); return; }
   // Fetched alongside rather than folded into /api/repos: sessions change on their own schedule and
   // a failure to read them must not blank the project list, which is the pane's primary job.
-  try { d.sessions = await (await fetch('/api/sessions')).json(); } catch (_) { d.sessions = null; }
+  try { d.sessions = await (await fetch('/api/sessions' + (allParked ? '?parked=all' : ''))).json(); } catch (_) { d.sessions = null; }
   if (d.sessions) keep(d.sessions);
   desk = d.desk || { online: false };
   machines = d.machines || { mac: desk.online, pi: false };
@@ -846,6 +847,15 @@ function mount() {
   // The sessions pane swiped out of view is as good as the app going away: coming back lands on news,
   // and the list is re-read, since nothing pushes list changes to it while no session is open.
   const pane = document.getElementById('repospane');
+  // The hub lists the most recent parked sessions (routes/sessions.js PARKED); scrolling the list to its
+  // end asks for the rest, once, and the list stays whole from then on.
+  const scroller = pane && pane.closest('.pane');
+  if (scroller) scroller.addEventListener('scroll', () => {
+    const s = last && last.sessions;
+    if (allParked || cur || !s || !(s.parked_total > (s.evicted || []).length)) return;
+    if (scroller.scrollTop + scroller.clientHeight < scroller.scrollHeight - 400) return;
+    allParked = true; load();
+  }, { passive: true });
   if (pane && 'IntersectionObserver' in window) {
     new IntersectionObserver((es) => {
       const seen = es[es.length - 1].intersectionRatio > 0.5;

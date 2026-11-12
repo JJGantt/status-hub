@@ -1145,6 +1145,12 @@ session by context rather than by number. Rows hidden with `/api/sessions/hide` 
 hub's list (not the voice tools'), so the hub's order can skip a number. The number is a position, not identity: closing one renumbers the
 rest, which is the price of it being short enough to say.
 
+The list carries only the 25 most recently active PARKED rows, plus any parked row that is pinned, and
+`parked_total` counts them all (`PARKED` in routes/sessions.js); the stream's `sessions` frame is the same
+capped payload. `?parked=all` lists every one — the phone's sessions pane asks for it once the list is
+scrolled to its end. Everything parked stays resumable by voice either way: the voice tools read
+`desk_sessions` themselves.
+
 `POST /api/sessions/transfer` hands a session to the other home machine (a Fly session goes to the
 Pi), or to Fly when that one cannot take it. Two paths, matching the voice tool exactly: if the
 source machine is up it closes the session and flushes the mirror first; if it is not, the old row is

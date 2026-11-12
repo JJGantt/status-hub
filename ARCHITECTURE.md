@@ -149,9 +149,9 @@ reported. A completed item is not deleted: it leaves every active surface but st
   mute, weight-reminder, agent mode…). Full catalog: [docs/HUB-INTERNALS.md](docs/HUB-INTERNALS.md) §7.
 - `litter_events` — the litter-watcher's persisted event stream (cycles, resets, alerts, presence).
 - `repos` / `desk_commands` — the Mac's published projects, and the launch queue behind them (§9).
-- `desk_sessions` / `desk_queue` / `desk_pins` — every Claude session on either machine (dispatched
-  or adopted), work waiting for a Pi slot, and the pinned conversations, which head every list; a
-  follow-up always names its session (docs/SESSIONS.md).
+- `desk_sessions` / `desk_pins` — every Claude session on any machine (dispatched or adopted), and
+  the pinned conversations, which head every list; a follow-up always names its session
+  (docs/SESSIONS.md). `desk_queue` is inert: nothing writes it.
 - `reports` — the HTML write-ups a dispatched session publishes (`/report/:id`).
 - `govee_devices` — auto-discovered Govee lights (synced from the cloud API).
 - `device_tokens` — APNs tokens for push (with per-token `environment`).
@@ -384,20 +384,20 @@ is the bus; the daemon on each machine owns everything local:
 ```
   orchestrator ──scan ~/repos (60s, change-gated)──▶ repos ──▶ hub lists them
   hub tap ──INSERT──▶ desk_commands ──realtime──▶ orchestrator ──▶ Terminal + claude --remote-control
-  orchestrator ──beat (30s)──▶ worker_presence('desk') ──▶ hub greys the list out when the Mac sleeps
+  orchestrator ──beat (30s)──▶ worker_presence('desk') ──▶ hub dims the Mac's button when it sleeps
 ```
 
 - **Tables:** `repos` (path PK, branch, dirty, HEAD date) · `desk_commands` (pending → running →
   done | error | expired) · `desk_dead_letters` (everything that never ran). Presence reuses
   `worker_presence` under `worker='desk'` / `'pi-desk'`.
-- **A session can be moved to the other machine, conversation and all.** Both machines mirror the
-  tail of every transcript to the `transcripts` bucket at the end of each turn, so a session is
-  always pickable up elsewhere — including when the machine that ran it is asleep, which is the
-  usual reason for asking. A transfer is claimed by the machine GIVING IT UP: it closes the session,
+- **A session can be moved to the other machine, conversation and all.** Every machine mirrors
+  each transcript to the `transcripts` bucket as it is written, whole lines only, so a session is
+  always pickable up elsewhere — including when the machine that ran it is asleep or dead, which is
+  the usual reason for asking. A transfer is claimed by the machine GIVING IT UP: it closes the session,
   flushes the mirror, then asks the destination to resume. One writer at a time, always — `--resume`
   on a live transcript forks the conversation into two copies with one id. When the source is
-  unreachable there is nothing to close, so the destination resumes from the mirror as of the last
-  completed turn. `transfer_session` by voice, or by asking the session itself to move.
+  unreachable there is nothing to close, so the destination resumes from what was mirrored, and a
+  machine that comes back closes its own copy (docs/SESSIONS.md § When a machine stops). `transfer_session` by voice, or by asking the session itself to move.
 - **Sessions are numbered so they can be named out loud.** Active sessions, **most recently active
   first, running and parked together, from 1** — one rule, `desk_sessions_state()` in Postgres, read by the voice
   tools and `/api/sessions`, because "session three" has to mean one thing. The number is a position in the current list, never
@@ -416,12 +416,14 @@ is the bus; the daemon on each machine owns everything local:
   sessions (`ended`/`transferred`) go at 7 days, parked (`evicted`) at 14, the `desk_commands` log at
   30, and `voice_requests` — the raw captures — at 7. Dropping a row does not destroy a conversation;
   the transcript stays on disk and resumes by id. Dead letters are exempt.
-- **Nothing dispatched is ever dropped.** The queue has no way to fail: a command written for a
-  machine that is asleep is claimed by nobody and expires unread, while the caller has already been
-  told a session started. So every entry point — the MCP, the repo picker, the sessions panel — checks
-  the target machine is beating *before* it writes, and anything that still fails (expired, errored,
-  or claimed by a machine that then stopped) is kept whole in `desk_dead_letters` with its payload.
-  A dictated prompt is minutes of speech nobody can repeat; the launch is the cheap part.
+- **Nothing dispatched waits on a machine that cannot run it.** A command written for a machine
+  that is asleep is claimed by nobody, while the caller would already have been told a session
+  started. So every entry point — the MCP, the repo picker, the sessions panel — sends work to a
+  machine that is beating and signed in, waits for its verdict, and when that machine refuses or stays
+  silent takes the command back and sends it to the next: the other home machine, then Fly, which is
+  woken on demand (docs/SESSIONS.md § 5). Only when Fly too fails is it kept whole in
+  `desk_dead_letters` with its payload. A dictated prompt is minutes of speech nobody can repeat; the
+  launch is the cheap part.
   Deliberately **not** a retry queue — work that could not run when it was asked for has usually
   stopped being wanted by the time the machine returns. `GET /api/failures` lists them,
   `POST /api/failures/:id/{retry,dismiss}` acts on one.

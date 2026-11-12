@@ -49,8 +49,10 @@ a change with `npm test` instead.
 process against an in-memory fake of Supabase's REST API, so a test goes through the same middleware
 and routes as Fly; Groq, APNs and the ops responder are left unconfigured. They cover only what is
 costly to break: every way a request authenticates and every way it is refused, the per-address guess limit on the password and its derived token,
-session issue, upgrade, revocation and survival across a restart, the Menu app's owner check, and
-`/api/notify`'s device-token rule. `.github/workflows/server-test.yml` runs them on every push to main
+session issue, upgrade, revocation and survival across a restart, the Menu app's owner check,
+`/api/notify`'s device-token rule, and where the session routes send work when a machine cannot take
+it (`failover.test.js`, the rules; `desk-routes.test.js`, the routes against a fake consumer and a fake
+Fly `/wake`). `.github/workflows/server-test.yml` runs them on every push to main
 that touches `server/`.
 
 ## Apps (`apps/`)

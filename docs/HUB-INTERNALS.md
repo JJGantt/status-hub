@@ -44,10 +44,11 @@ Supabase ──▶ lib/dashboard.js buildStatus() ──▶ /api/status payload 
   `fly logs -a jared-status-hub | grep timing` (the broadcast logs only a build over 500ms).
 - **Realtime:** the server subscribes to Supabase realtime on the tables that must invalidate the
   cached payload (nutrition, sets, app_settings, voice_*), so a voice/MCP write reflects in seconds
-  rather than waiting for the tick. It also subscribes to `desk_sessions` / `desk_queue` / `desk_pins`
-  and to `reports`, which do not invalidate a cache so much as PUSH: the first three build a `sessions`
-  frame (see `pushSessions`, and §3 — it is why the walls no longer poll `/api/sessions`), and a new
-  `reports` row fires `reportTick` directly.
+  rather than waiting for the tick. It also subscribes to `desk_sessions` / `desk_pins`, `desk_commands`
+  and `reports`, which do not invalidate a cache so much as PUSH: the first two build a `sessions`
+  frame (see `pushSessions`, and §3 — it is why the walls no longer poll `/api/sessions`), an UPDATE
+  to `desk_commands` answers a route waiting on that command's verdict (`onCommand` in
+  `lib/failover.js`), and a new `reports` row fires `reportTick` directly.
 - **Realtime invalidation is a fast path, never a cache's only refresh.** Every server-side cache
   needs an age check too. Events get dropped — CHANNEL_ERROR and half-open silence are both routine,
   which is what `REALTIME_SILENCE_LIMIT_MS` and the socket recycle exist for — and a cache that only
@@ -659,7 +660,7 @@ below) ·
 `unread`, a finished reply nobody has opened) · `/api/sessions/seen` (opening one stamps
 `desk_sessions.seen_at`, which is what clears it on every surface) ·
 `/api/session-stream` (SSE: `ev` — one event of a conversation's list, with its seq and the hub's
-epoch; `sessions`, the whole `/api/sessions` payload, pushed whenever `desk_sessions`/`desk_queue`/
+epoch; `sessions`, the whole `/api/sessions` payload, pushed whenever `desk_sessions`/
 `desk_pins` change — see SESSIONS.md §10; and, until the
 older watch build is gone, `session`) · `/api/sessions/:id/events?since=N` (the list after seq N,
 what a client fetches when a frame's seq shows a gap) · `/api/reports`
@@ -1086,27 +1087,34 @@ falls back to the directory's mtime.
 This server is on Fly — it can't see the Mac's filesystem or reach it over the LAN — so Supabase
 carries both directions and a daemon on the target machine owns everything local: the Mac's
 **voice-orchestrator** (Terminal tabs) and the Pi's **pi-desk** (tmux, so a session outlives the
-laptop closing). A command reaches the Pi when the hub targets it explicitly, or when it is
-untargeted and the Mac's presence has gone stale.
+laptop closing). The phone picks the Pi or the Mac; when that one cannot take it, the hub sends it to
+the other, then to the Fly session machine (`pi-desk` on `jared-desk-fly`) — SESSIONS.md § 5.
 
 ```
 orchestrator ──scan ~/repos (60s)──▶ repos table ──▶ GET /api/repos ──▶ cards/repos.js
 cards/repos.js ──POST /api/repos/open──▶ desk_commands ──realtime──▶ orchestrator ──▶ Terminal
-orchestrator ──beat(30s)──▶ worker_presence(worker='desk') ──▶ the list greys out when the Mac sleeps
+orchestrator ──beat(30s)──▶ worker_presence(worker='desk') ──▶ the Mac's button dims while it sleeps
 ```
 
 - **Card:** `public/cards/repos.js` — the phone's sessions swipe pane, self-fetching. The age column doubles as
-  launch feedback (blue → green/red) while it polls `/api/repos/cmd/:id`.
-- **Endpoints:** `GET /api/repos` (repos + desk presence) · `POST /api/repos/open` (enqueue) ·
-  `GET /api/repos/cmd/:id` (pending → running → done | error | expired) · `GET /api/failures` +
-  `POST /api/failures/:id/{retry,dismiss}` (commands that never ran).
-- **A launch is refused, not queued, when its machine is asleep** — 409 with a `saved` id. The
-  payload lands in `desk_dead_letters` instead of a `desk_commands` row nobody will claim. Same for
-  `/api/sessions/end` and `/resume`, which target the machine that OWNS the session (read from
-  its `worker`).
+  launch feedback (blue → green/red), naming the machine the launch landed on; a launch a machine took
+  but has not confirmed is watched on `/api/repos/cmd/:id`.
+- **Endpoints:** `GET /api/repos` (repos + desk presence) · `POST /api/repos/open` (route and launch;
+  answers `{id, machine, confirmed, rerouted}`) · `GET /api/repos/cmd/:id` (pending → running → done |
+  error | expired) · `GET /api/failures` + `POST /api/failures/:id/{retry,dismiss}` (commands that never
+  ran; a retry goes through the same routing as a new one).
+- **A launch goes to the next machine, not to a dead letter, when its machine cannot take it.**
+  `server/lib/failover.js` is data-layer desk.ts's routing restated (the hub has no dependency on
+  data-layer, and the two must agree): the machine asked for if it is beating and signed in, else the
+  other home machine, else Fly, woken first; each command waits up to 20s for a verdict
+  (`DESK_CONFIRM_MS`), a silent machine's command is taken back atomically before the next is tried,
+  and a `handed to … as <id>` verdict is followed. Only when Fly too fails is it a 409 with a `saved`
+  id in `desk_dead_letters`, and a console.error. `/api/sessions/end`, `/resume`, `/transfer` and
+  `/followup` start from the machine that OWNS the session (its `worker`) and follow the same rules.
+  `server/test/failover.test.js` and `desk-routes.test.js` hold the cases.
 - **Guardrail:** the client's path selects a published ROW; the row's own path is what gets enqueued,
-  so a crafted request can't `cd` anywhere else. The orchestrator re-validates independently, and
-  commands older than 120s expire rather than opening terminals when the Mac wakes.
+  so a crafted request can't `cd` anywhere else. The orchestrator re-validates independently, and a
+  command older than 120s when the Mac wakes is not run late there; it goes to Fly (SESSIONS.md § 5).
 
 ---
 
@@ -1137,11 +1145,13 @@ session by context rather than by number. Rows hidden with `/api/sessions/hide` 
 hub's list (not the voice tools'), so the hub's order can skip a number. The number is a position, not identity: closing one renumbers the
 rest, which is the price of it being short enough to say.
 
-`POST /api/sessions/transfer` hands a session to the other machine. The row says which machine it is
-on now (`worker`), so the destination is implied. Two paths, matching the voice tool exactly: if the
-source machine is up it closes the session and flushes the mirror first; if it is not, the
-destination resumes from what was already mirrored and the old row is marked `transferred`. A
-session with no `claude_session_id` has no transcript to carry, so it cannot be moved. No surface has a
+`POST /api/sessions/transfer` hands a session to the other home machine (a Fly session goes to the
+Pi), or to Fly when that one cannot take it. Two paths, matching the voice tool exactly: if the
+source machine is up it closes the session and flushes the mirror first; if it is not, the old row is
+marked `transferred` (only while it still has the status it was read with) and the destination resumes
+from what was already mirrored, and the row is put back when no machine takes it. A session with no
+`claude_session_id` has no transcript to carry, and a Codex one is not mirrored, so neither can be
+moved. No surface has a
 move button: moving is asked of the voice tool (`transfer_session`) or of the session itself.
 
 ### Naming one
@@ -1161,14 +1171,19 @@ through the command instead.
 `POST /api/sessions/followup` (`{id, text, client_msg_id}`) hands words to one session's conversation,
 which is how the watch and the phone answer the session they are showing. Running, the words are typed in — the same
 `desk_commands` `follow_up` the voice tool writes. Parked, the session is
-resumed with the words as its prompt: `resume_session` takes one on both machines, and a Pi with no
-memory to spare hands it to the Mac (or queues it while the Mac is asleep). An asleep machine gets the words dead-lettered, like every desk command from the
-hub, and a repeated `client_msg_id` returns the first command rather than sending them twice.
+resumed with the words as its prompt: `resume_session` takes one on every machine, and a Pi with no
+memory to spare hands it to the Mac, else to Fly. With the session's machine down, or silent for 20s,
+the conversation moves with the words to the next machine that resumes it from the mirror
+(`resume_mirrored`, the other home machine then Fly); a session that cannot move (Codex, or nothing
+mirrored) gets the words as a new session in its repo instead (`started: true`, `session: null`). The
+words are dead-lettered (409, `saved`) only when no machine took them. A repeated `client_msg_id`
+returns the command already written for them, including while routing is still waiting on a machine,
+rather than sending them twice. The answer can take as long as the routing does: seconds normally, and
+up to a Fly cold start past a 20s silence when a machine is down.
 
 **It asks about the conversation, not the row** (`conversationNow`). A resume makes a new row and leaves
 the parked one parked, and `claude --resume` keeps the conversation's id — so words for a parked row
-whose conversation is running again go to the running row, and a resume still opening or queued
-answers 409. A second resume would put two processes on one transcript and fork it; `POST /api/sessions/resume`
+whose conversation is running again go to the running row, and a resume still opening answers 409. A second resume would put two processes on one transcript and fork it; `POST /api/sessions/resume`
 goes through the same check. Every case is an exact lookup: both machines stamp a resumed row
 with the resume command's id, and the Pi publishes the conversation id at launch.
 
@@ -1380,8 +1395,8 @@ are all repo plus a timestamp suffix. None describes the work, so several jobs i
 indistinguishable in any list.
 
 `start_session` therefore takes a `label` — three to six words naming the WORK — written by the router
-at dispatch, the only moment the request exists as language. `desk_sessions.label` and
-`desk_queue.label` carry it (a queued job can wait a long time and must not lose its name). The panel
+at dispatch, the only moment the request exists as language. `desk_sessions.label`
+carries it, and every handoff and resume carries it on. The panel
 and the TV strip show the label and fall back to the repo.
 
 One trap: `pi-desk`'s reconcile tick upserts with `resolution=merge-duplicates`, so any column it

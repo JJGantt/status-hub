@@ -28,9 +28,10 @@ GitHub Actions run ──workflow_run webhook──▶ POST /api/ci/github ─�
   - Only a push to the repo's default branch is routed. A pull request or another branch is recorded
     with `routed = skipped:…`.
   - The conversation's newest resident or parked row gets the follow-up, so a parked session is
-    resumed with it. A follow-up saved for an asleep machine counts as delivered. An ended session,
-    no record, or a follow-up refused outright starts a new session on the Pi (the Mac if the Pi is
-    down); neither awake, it is dead-lettered and reported.
+    resumed with it; a session whose machine is down moves to one that is up with it (the hub's
+    `followUpSession`). A follow-up saved because no machine could take it counts as delivered. An
+    ended session, no record, or a follow-up refused outright starts a new session on the Pi, else the
+    Mac, else Fly; only when none takes it is it dead-lettered and reported.
   - A run is started by `requested` (a new run) or `in_progress` (a re-run, which keeps the run id with a
     higher attempt and sends no `requested`). Deliveries can arrive out of order, so a start for an
     attempt already recorded changes nothing.

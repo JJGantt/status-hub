@@ -1425,3 +1425,18 @@ body.phonehome #usagebars{top:env(safe-area-inset-top,0px)}
 .sessions li.sess.working::before{content:'';position:absolute;left:0;right:0;bottom:0;height:2px;pointer-events:none;
   background:linear-gradient(90deg,transparent,#4fd1c5,transparent) no-repeat;background-size:40% 100%;
   animation:sessSweep 1.8s linear infinite}
+
+/* The focused session's running turn, in a wall's reply panel (cards/sessions.js paintTurn): what was
+   said to it, then each tool call and note as it happens, held at the bottom. Sized in em so each wall's
+   panel sets the scale. The argument line breaks anywhere: an unbroken run of JSON is laid out but never
+   painted by the bedroom TV's WebView. */
+.sess-turn{white-space:normal}
+.sess-turn-words{color:#8ab4e8;white-space:pre-wrap;margin:0 0 .6em}
+.sess-turn-text{color:#c8c8c8;font-size:.9em;margin:.3em 0}
+.sess-turn-text p{margin:0 0 .4em}
+.sess-turn-text pre,.sess-turn-text code{font-size:.85em;white-space:pre-wrap}
+.sess-turn-tool{color:#b39ddb;font-size:.8em;margin:.35em 0 .1em}
+.sess-turn-args{color:#9e8fc2;font-size:.9em;word-break:break-all;display:-webkit-box;-webkit-box-orient:vertical;
+  -webkit-line-clamp:2;overflow:hidden}
+.sess-turn-caret{color:#8ab4e8;animation:sessCaret 1.2s ease-in-out infinite}
+@keyframes sessCaret{0%,100%{opacity:.25}50%{opacity:1}}

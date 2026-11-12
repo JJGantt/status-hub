@@ -11,7 +11,7 @@
 //
 // The third view, `content`, is whatever an agent put on the panel (`sidebar_content`, any markdown),
 // drawn from the top and held until replaced, so he can keep talking while it stays up.
-import { esc, md, liveStream } from '../shared.js';
+import { esc, md, liveStream, toolParts } from '../shared.js';
 
 let rowId = null, conv = null, epoch = null, events = [];
 
@@ -43,28 +43,6 @@ function shown() {
 // draws the name and the call's description on one line and the arguments under it, wrapped and held
 // to three lines: an unbroken run of JSON is laid out but never painted by the TV's WebView, so the
 // argument line must be allowed to break anywhere (`.sb-args`).
-function toolParts(t) {
-  const s = String(t || ''), sp = s.indexOf(' ');
-  const name = (sp < 0 ? s : s.slice(0, sp)).replace(/^mcp__[^_]+(?:_[^_]+)*?__/, '');
-  const raw = sp < 0 ? '' : s.slice(sp + 1);
-  const m = raw.match(/"description":"((?:[^"\\]|\\.)*)/);
-  const what = m ? m[1].replace(/\\(.)/g, '$1') : '';
-  // The arguments without the description already shown beside the name: a lone argument as its bare
-  // value, several as `key: value`. The JSON is whole when it fits in 400 characters; past that it is
-  // cut, and only tidied as text.
-  let args = '';
-  try {
-    const o = JSON.parse(raw); delete o.description;
-    const show = (v) => (typeof v === 'string' ? v : JSON.stringify(v));
-    const keys = Object.keys(o);
-    args = keys.length === 1 ? show(o[keys[0]]) : keys.map((k) => `${k}: ${show(o[k])}`).join(', ');
-  } catch (_) {
-    args = raw.replace(/,?"description":"(?:[^"\\]|\\.)*"?/, '').replace(/^\{"[a-z_]+":"?/i, '')
-      .replace(/\\n/g, ' ').replace(/\\(.)/g, '$1');
-  }
-  args = args.replace(/\s+/g, ' ').trim();
-  return { head: what ? `${name} · ${what}` : name, args };
-}
 const toolLine = (t) => {
   if (!t) return '';
   const { head, args } = toolParts(t);

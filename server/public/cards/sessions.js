@@ -7,7 +7,7 @@
 // highlight and the activity line are shared, and two copies of them are two surfaces that disagree.
 //
 // DISPLAY ONLY. Voice starts sessions, voice focuses them; this is where the answer comes back.
-import { esc, liveStream, PIN_SVG } from '../shared.js';
+import { esc, md, liveStream, PIN_SVG, toolParts } from '../shared.js';
 
 // A BACKSTOP, not the mechanism: every change arrives as a `sessions` frame the moment it happens.
 // This only covers what a dropped frame or a reconnect would lose. At 5s it was ~76k Supabase reads a
@@ -107,9 +107,89 @@ function paint(p, d) {
     p.head.innerHTML = `<span class="hw-sess-name">${pinMark(d, on)}${esc(name(on))}</span>` +
       `<span class="hw-sess-where">${esc(on.repo)} · ${on.worker === 'desk' ? 'Mac' : on.worker === 'fly-desk' ? 'Fly' : 'Pi'}</span>`;
   }
+  if (p.reply) paintTurn(p.reply, on);
+}
+
+// ---- the focused session's turn, in the reply panel ---------------------------------------------
+//
+// While a turn runs, the panel is that turn as it happens: what was said to the session, then every
+// tool call and every note between them, newest at the bottom and the panel held there. When it ends,
+// the panel is the answer, from its first line, scrolled rather than cut however long it is. Only a
+// surface with a reply panel follows the conversation; the phone's list alone never fetches it.
+//
+// The events are the conversation's own list (routes/conversation.js): loaded whole when the focus
+// moves or the stream reconnects, then extended by each `ev` frame. A frame that skips a sequence
+// number, or a new epoch, means something was missed, and the list is loaded again.
+const turn = { row: null, conv: null, epoch: null, events: [] };
+
+function absorb(list) {
+  const by = new Map(turn.events.map((e) => [e.seq, e]));
+  for (const e of list || []) if (e && Number.isFinite(e.seq)) by.set(e.seq, e);
+  turn.events = [...by.values()].sort((a, b) => a.seq - b.seq);
+}
+
+async function loadTurn(id) {
+  try {
+    const r = await fetch('/api/sessions/' + encodeURIComponent(id));
+    if (!r.ok) return;
+    const d = await r.json();
+    if (id !== turn.row) return;
+    if (d.epoch !== turn.epoch) turn.events = [];
+    turn.epoch = d.epoch;
+    turn.conv = d.claude_session_id || d.id;   // the key `ev` frames carry (routes/conversation.js rowConv)
+    absorb(d.events);
+    render(null);
+  } catch (_) { /* the stream's reconnect loads it again */ }
+}
+
+function follow(id) {
+  if (!id || id === turn.row) return;
+  Object.assign(turn, { row: id, conv: null, epoch: null, events: [] });
+  loadTurn(id);
+}
+
+// The running turn's events: from its prompt (its latest copy — a prompt moves from queued to read) on.
+// Null when the newest event is a reply, i.e. no turn is running.
+function running() {
+  const ev = turn.events;
+  if (!ev.length || ev[ev.length - 1].kind === 'reply') return null;
+  let i = ev.length - 1;
+  while (i > 0 && ev[i - 1].kind !== 'reply') i--;
+  const seen = new Set(), out = [];
+  for (let j = ev.length - 1; j >= i; j--) {
+    const e = ev[j];
+    if (e.kind === 'prompt') { if (seen.has(e.id)) continue; seen.add(e.id); }
+    out.push(e);
+  }
+  return out.reverse().slice(-80);
+}
+
+function turnHtml(list) {
+  return '<div class="sess-turn">' + list.map((e) => {
+    if (e.kind === 'prompt') return `<div class="sess-turn-words">${esc(e.text || '')}</div>`;
+    if (e.kind === 'text') return `<div class="sess-turn-text">${md(String(e.text || '').trim())}</div>`;
+    const { head, args } = toolParts(e.text);
+    return `<div class="sess-turn-tool">${esc(head)}${args ? `<div class="sess-turn-args">${esc(args)}</div>` : ''}</div>`;
+  }).join('') + '<div class="sess-turn-caret">▍</div></div>';
+}
+
+function paintTurn(el, on) {
+  follow(on.id);
+  const live = turn.row === on.id ? running() : null;
+  if (live) {
+    el.innerHTML = turnHtml(live);
+    el.scrollTop = el.scrollHeight;
+    el.dataset.view = 'turn';
+    return;
+  }
   // textContent, not innerHTML: a reply is a model's prose and may hold anything that looks like
   // markup. The panel scrolls rather than truncating — however long the answer is, it is the answer.
-  if (p.reply) p.reply.textContent = (on.last_reply || '').trim();
+  const text = (on.last_reply || '').trim();
+  if (el.dataset.view !== 'reply' || el.textContent !== text) {
+    el.textContent = text;
+    el.scrollTop = 0;
+  }
+  el.dataset.view = 'reply';
 }
 
 async function load() {
@@ -161,7 +241,12 @@ export function mountSessions({ list = null, head = null, reply = null, max = 3,
       if (!a || !a.ev) return;
       const live = a.ev.kind === 'tool' || a.ev.kind === 'text';
       activity.set(a.session, { state: live ? a.ev.kind : 'done', text: a.ev.text });
+      if (turn.conv && a.conversation === turn.conv) {
+        const lastSeq = turn.events.length ? turn.events[turn.events.length - 1].seq : 0;
+        if (a.epoch !== turn.epoch || a.ev.seq > lastSeq + 1) loadTurn(turn.row);
+        else absorb([a.ev]);
+      }
       render(null);
     },
-  });
+  }, { onOpen: () => { if (turn.row) loadTurn(turn.row); } });
 }

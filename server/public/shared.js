@@ -222,6 +222,34 @@ export function paintScrolled(host, html, { sel = null, stick = false } = {}) {
   return after;
 }
 
+// A tool event's text is the tool's name and then its arguments as JSON, cut at 400 characters
+// (routes/conversation.js). Split for display: `head` is the name (the MCP server prefix dropped) and
+// the call's description, `args` the rest on one line — a lone argument as its bare value, several as
+// `key: value`. The JSON is whole when it fits in 400 characters; past that it is cut, and only tidied
+// as text.
+export function toolParts(t) {
+  const s = String(t || ''), sp = s.indexOf(' ');
+  const name = (sp < 0 ? s : s.slice(0, sp)).replace(/^mcp__[^_]+(?:_[^_]+)*?__/, '');
+  const raw = sp < 0 ? '' : s.slice(sp + 1);
+  const m = raw.match(/"description":"((?:[^"\\]|\\.)*)/);
+  const what = m ? m[1].replace(/\\(.)/g, '$1') : '';
+  // The arguments without the description already shown beside the name: a lone argument as its bare
+  // value, several as `key: value`. The JSON is whole when it fits in 400 characters; past that it is
+  // cut, and only tidied as text.
+  let args = '';
+  try {
+    const o = JSON.parse(raw); delete o.description;
+    const show = (v) => (typeof v === 'string' ? v : JSON.stringify(v));
+    const keys = Object.keys(o);
+    args = keys.length === 1 ? show(o[keys[0]]) : keys.map((k) => `${k}: ${show(o[k])}`).join(', ');
+  } catch (_) {
+    args = raw.replace(/,?"description":"(?:[^"\\]|\\.)*"?/, '').replace(/^\{"[a-z_]+":"?/i, '')
+      .replace(/\\n/g, ' ').replace(/\\(.)/g, '$1');
+  }
+  args = args.replace(/\s+/g, ' ').trim();
+  return { head: what ? `${name} · ${what}` : name, args };
+}
+
 // ---- markdown -------------------------------------------------------------------------------
 //
 // Every reply is written in markdown, and every surface that shows one renders it here: the phone's

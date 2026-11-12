@@ -46,7 +46,9 @@ function prompts({ repo, sha, workflow, runId, url }) {
  *   now()                        ms
  */
 function createCi(deps) {
-  const { db, followUp, startFix, report, now = Date.now } = deps;
+  // lookup(repo, runId): the run as GitHub has it now ({ status, conclusion, ...workflow_run fields,
+  // default_branch }), or null. It recovers a completion whose webhook never arrived.
+  const { db, followUp, startFix, report, lookup, now = Date.now } = deps;
 
   async function recordPush(body) {
     const b = body || {};
@@ -87,19 +89,64 @@ function createCi(deps) {
     return `unrouted:${s.error}`.slice(0, 300);
   }
 
-  // Runs requested long ago that never completed: GitHub lost the run, or the hub lost its webhook.
-  // Checked whenever any webhook arrives, which is the next evidence there is.
+  // GitHub's answer for a run we hold open, applied as if its `completed` delivery had arrived.
+  // Returns the routing when GitHub has it completed, undefined when it is still running or the
+  // lookup failed (a failed lookup is logged; the two-hour check still covers the run).
+  async function recover(r) {
+    if (!lookup) return undefined;
+    let wr;
+    try { wr = await lookup(r.repo, r.run_id); } catch (e) {
+      console.error(`[ci] looking up run ${r.run_id} on ${r.repo} failed:`, e.message || e);
+      return undefined;
+    }
+    if (!wr || wr.status !== 'completed') return undefined;
+    const res = await complete({ action: 'completed', workflow_run: wr,
+                                 repository: { full_name: r.repo, default_branch: wr.default_branch } });
+    return res.routed;
+  }
+
+  // Every run still open, asked of GitHub. Called when the hub starts: a deploy is the moment
+  // deliveries are lost (GitHub waits 10s for an answer and never retries), so a run that finished
+  // while the hub was down is routed now rather than reported missing two hours later.
+  async function reconcile() {
+    if (!lookup) return 0;
+    const open = await db.select(`ci_runs?completed_at=is.null&requested_at=lt.${new Date(now()).toISOString()}&select=run_id,repo,workflow,sha,url`);
+    let n = 0;
+    for (const r of open) {
+      const routed = await recover(r);
+      if (routed === undefined) continue;
+      n++;
+      console.log(`[ci] recovered run ${r.run_id} on ${r.repo} from GitHub after a restart (routed: ${routed})`);
+    }
+    return n;
+  }
+
+  // Runs requested long ago that never completed: GitHub lost the run, or the hub lost its webhook
+  // while it was up. Checked whenever any webhook arrives, which is the next evidence there is. GitHub
+  // is asked first, so a lost delivery is still routed; either way it is reported, since a delivery
+  // lost outside a restart is itself a failure.
   async function checkMissing() {
     const before = new Date(now() - MISSING_AFTER_MS).toISOString();
     const stuck = await db.select(`ci_runs?completed_at=is.null&missing_reported_at=is.null&requested_at=lt.${before}&select=run_id,repo,workflow,sha,url`);
     for (const r of stuck) {
-      report(`CI run on ${r.repo} (${r.workflow}, ${String(r.sha || '').slice(0, 7)}) was requested and never completed`, { context: r.url || '' });
+      const routed = await recover(r);
+      const what = `CI run on ${r.repo} (${r.workflow}, ${String(r.sha || '').slice(0, 7)})`;
+      report(routed === undefined ? `${what} was requested and never completed`
+                                  : `${what} completed but its webhook never arrived; recovered from GitHub (routed: ${routed || 'nothing to route'})`,
+             { context: r.url || '' });
       await db.patch(`ci_runs?run_id=eq.${r.run_id}`, { missing_reported_at: new Date(now()).toISOString() });
     }
     return stuck.length;
   }
 
   async function onWorkflowRun(payload) {
+    const r = await complete(payload);
+    if (r.status === 200) await checkMissing();
+    return r.status === 200 ? { status: 200, body: { ok: true, routed: r.routed } } : r;
+  }
+
+  // One workflow_run event, from a delivery or recovered from GitHub.
+  async function complete(payload) {
     const wr = (payload || {}).workflow_run, repoObj = (payload || {}).repository;
     if (!wr || !repoObj) return { status: 400, body: { error: 'not a workflow_run' } };
     const run = {
@@ -127,11 +174,10 @@ function createCi(deps) {
                                      missing_reported_at: null, requested_at: new Date(now()).toISOString() });
       }
     }
-    await checkMissing();
-    return { status: 200, body: { ok: true, routed } };
+    return { status: 200, routed };
   }
 
-  return { recordPush, onWorkflowRun, checkMissing, routeFailure };
+  return { recordPush, onWorkflowRun, checkMissing, reconcile, routeFailure };
 }
 
 module.exports = { createCi, verifySignature, prompts, MISSING_AFTER_MS };

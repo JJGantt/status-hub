@@ -12,7 +12,7 @@ const T0 = Date.parse('2026-11-03T20:00:00Z');
 
 // An in-memory stand-in for the three tables the module touches, read through the same PostgREST
 // paths it builds.
-function fixture({ pushes = [], sessions = [], followUp = { status: 200, body: { id: 'cmd' } }, fix = { ok: true, id: 'new-1' } } = {}) {
+function fixture({ pushes = [], sessions = [], followUp = { status: 200, body: { id: 'cmd' } }, fix = { ok: true, id: 'new-1' }, github } = {}) {
   const runs = new Map();
   const calls = { followUps: [], fixes: [], reports: [] };
   let clock = T0;
@@ -49,6 +49,7 @@ function fixture({ pushes = [], sessions = [], followUp = { status: 200, body: {
     startFix: async (name, prompt, label) => { calls.fixes.push({ name, prompt, label }); return fix; },
     report: (msg) => calls.reports.push(msg),
     now: () => clock,
+    lookup: github ? async (repo, id) => { calls.lookups = (calls.lookups || 0) + 1; return github(repo, id); } : undefined,
   });
   return { ci, runs, calls, pushes, advance: (ms) => { clock += ms; } };
 }
@@ -234,5 +235,46 @@ describe('the webhook signature', () => {
     assert.equal(verifySignature(secret, body, undefined), false);
     assert.equal(verifySignature('', body, sig), false);
     assert.equal(verifySignature(secret, body, sig.slice(0, -1)), false);
+  });
+});
+
+describe('a completion whose webhook never arrived', () => {
+  const asGithub = (conclusion, status = 'completed') => async () => ({
+    ...run('completed', { conclusion }).workflow_run, status, default_branch: 'main' });
+
+  test('is recovered from GitHub when the hub starts, and a failure is routed', async () => {
+    const f = fixture({ github: asGithub('failure') });
+    await f.ci.onWorkflowRun(run('requested'));
+    f.advance(60e3);
+    assert.equal(await f.ci.reconcile(), 1);
+    assert.equal(f.runs.get(41740664091).conclusion, 'failure');
+    assert.equal(f.calls.fixes.length, 1);
+    assert.equal(f.calls.reports.length, 0);
+  });
+
+  test('a run GitHub still has in progress is left open', async () => {
+    const f = fixture({ github: asGithub(null, 'in_progress') });
+    await f.ci.onWorkflowRun(run('requested'));
+    f.advance(60e3);
+    assert.equal(await f.ci.reconcile(), 0);
+    assert.equal(f.runs.get(41740664091).completed_at, null);
+  });
+
+  test('found by the two-hour check, it is routed and still reported as a lost delivery', async () => {
+    const f = fixture({ github: asGithub('failure') });
+    await f.ci.onWorkflowRun(run('requested'));
+    f.advance(MISSING_AFTER_MS + 60e3);
+    await f.ci.onWorkflowRun(run('requested', { id: 7 }));
+    assert.equal(f.calls.fixes.length, 1);
+    assert.equal(f.calls.reports.length, 1);
+    assert.match(f.calls.reports[0], /webhook never arrived; recovered from GitHub/);
+  });
+
+  test('a lookup that fails leaves the run to be reported missing', async () => {
+    const f = fixture({ github: async () => { throw new Error('GitHub down'); } });
+    await f.ci.onWorkflowRun(run('requested'));
+    f.advance(MISSING_AFTER_MS + 60e3);
+    await f.ci.onWorkflowRun(run('requested', { id: 7 }));
+    assert.match(f.calls.reports[0], /requested and never completed/);
   });
 });

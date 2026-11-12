@@ -8,6 +8,24 @@ const { createCi, verifySignature } = require('../lib/ci');
 module.exports = function (ctx) {
   const { MACHINE_NAME, SUPABASE_KEY, SUPABASE_URL, followUpSession, gated, openSession, pub, sb, sbWrite } = ctx;
   const SECRET = process.env.GITHUB_WEBHOOK_SECRET || '';
+  // Read-only GitHub access, used only to ask about a run whose completion never arrived.
+  const GH_TOKEN = process.env.GH_TOKEN || '';
+
+  async function gh(path) {
+    const r = await fetch(`https://api.github.com/${path}`, {
+      headers: { Authorization: `Bearer ${GH_TOKEN}`, Accept: 'application/vnd.github+json', 'User-Agent': 'status-hub' },
+      signal: AbortSignal.timeout(15000),
+    });
+    if (!r.ok) throw new Error(`GitHub ${path} -> ${r.status}`);
+    return r.json();
+  }
+
+  async function lookup(repo, runId) {
+    const wr = await gh(`repos/${repo}/actions/runs/${runId}`);
+    const def = wr.repository && wr.repository.default_branch
+      ? wr.repository.default_branch : (await gh(`repos/${repo}`)).default_branch;
+    return { ...wr, default_branch: def };
+  }
 
   async function upsert(table, row) {
     const r = await fetch(`${SUPABASE_URL}/rest/v1/${table}`, {
@@ -34,7 +52,11 @@ module.exports = function (ctx) {
     followUp: (row, text) => followUpSession(row, { text }),
     startFix,
     report: (msg, extra) => ops.report(msg, { service: 'status-hub:ci', ...(extra || {}) }),
+    lookup: GH_TOKEN ? lookup : undefined,
   });
+
+  if (!GH_TOKEN) console.error('[ci] GH_TOKEN is not set; a CI result lost during a restart is found only after two hours');
+  else ci.reconcile().catch((e) => console.error('[ci] reconciling open runs at start failed:', e));
 
   // GitHub's webhook, on every repo with workflows (bin/ci-webhooks installs it). Public, because
   // GitHub carries no hub credential: the HMAC over the raw body with GITHUB_WEBHOOK_SECRET is the auth,

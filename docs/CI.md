@@ -35,9 +35,14 @@ GitHub Actions run ──workflow_run webhook──▶ POST /api/ci/github ─�
   - A run is started by `requested` (a new run) or `in_progress` (a re-run, which keeps the run id with a
     higher attempt and sends no `requested`). Deliveries can arrive out of order, so a start for an
     attempt already recorded changes nothing.
+  - GitHub waits 10s for each delivery and never retries, so a `completed` sent while the hub is
+    deploying is lost. When the hub starts it asks GitHub (`GH_TOKEN`, read-only use) about every run
+    still open and applies any that finished, routing a failure as if the delivery had come
+    (`reconcile`).
   - A run started and not completed after two hours is reported to the responder once. It is checked
-    whenever any webhook arrives, which is the next evidence there is; GitHub does not retry a webhook
-    the hub missed, so a lost `completed` delivery surfaces this way.
+    whenever any webhook arrives, which is the next evidence there is. GitHub is asked first: a run it
+    has completed is routed, and reported as a lost delivery; one it does not is reported as never
+    completed. Without `GH_TOKEN` only the report happens, and the hub logs an error at start.
 - **Not the incident agent.** It cannot edit or push (health/responder README § permissions), and a
   red test needs both. The responder hears only when no session could be given the failure.
 - **What the session is told** is `prompts()` in `lib/ci.js`: read the failed log, re-run it if GitHub

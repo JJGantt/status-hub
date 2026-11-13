@@ -50,7 +50,8 @@ function rowActivity(s) {
   // answer. The line is the call it wants to make; the session view has the buttons.
   if (s.prompt) return `<span class="hw-row-act asking">${esc(oneLine(s.prompt.line))}</span>`;
   // Live first — a tool call in flight, or what the session said between two of them, is the most
-  // current thing it has to say. Falling back to `last_reply` is what makes a quiet session say
+  // current thing it has to say. Falling back to `last_reply` (or `say`, the one-line cut of it that
+  // every parked row but the newest carries instead, routes/sessions.js) is what makes a quiet session say
   // anything at all: nothing is streaming to it, but it still answered something, and a blank line
   // reads as a session that has done nothing. The surface is also blank on arrival otherwise, since
   // live frames only start once it is watching.
@@ -61,7 +62,7 @@ function rowActivity(s) {
   const heard = a && (a.state === 'tool' || a.state === 'text');
   if (s.working && !heard && s.live) a = { state: s.live.kind === 'prompt' ? 'done' : s.live.kind, text: s.live.text };
   const live = a && (a.state === 'tool' || a.state === 'text');
-  const text = oneLine(live ? a.text : ((a && a.text) || s.last_reply));
+  const text = oneLine(live ? a.text : ((a && a.text) || s.last_reply || s.say));
   // The line is ALWAYS rendered, empty or not. Growing a row when a tool fires and collapsing it when
   // one stops would make the whole list jump every few seconds, which is unreadable at any size.
   if (!text) return '<span class="hw-row-act idle"></span>';

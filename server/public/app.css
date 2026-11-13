@@ -1420,11 +1420,16 @@ body.phonehome #usagebars{top:env(safe-area-inset-top,0px)}
 /* WORKING (`working` from buildSessions): a short teal segment sweeping along the row's bottom edge for
    as long as a turn is running, so a busy session reads as busy wherever it sits in the list. Teal is the
    tool-call colour already; it is the one mark here that moves, so it competes with none of the edges.
-   Written in phone-home.css and tv-home.css too, since each surface loads only its own row rules. */
-@keyframes sessSweep{from{background-position:-100% 0}to{background-position:200% 0}}
-.sessions li.sess.working::before{content:'';position:absolute;left:0;right:0;bottom:0;height:2px;pointer-events:none;
-  background:linear-gradient(90deg,transparent,#4fd1c5,transparent) no-repeat;background-size:40% 100%;
-  animation:sessSweep 1.8s linear infinite}
+   Written in phone-home.css and tv-home.css too, since each surface loads only its own row rules.
+   It moves by transform at 15 frames a second, because the Pi's wall kiosk pays per frame: animating
+   background-position repaints every frame and held about 40% of a Pi core (the Pi has no fan, and that
+   alone kept it in the 70s °C), while this costs about 4%. The three copies must stay identical, since
+   they share one @keyframes name. */
+@keyframes sessSweep{from{transform:translateX(-150%)}to{transform:translateX(300%)}}
+.sessions li.sess.working{clip-path:inset(0)}
+.sessions li.sess.working::before{content:'';position:absolute;left:0;width:40%;bottom:0;height:2px;pointer-events:none;
+  background:linear-gradient(90deg,transparent,#4fd1c5,transparent);will-change:transform;
+  animation:sessSweep 1.8s steps(27) infinite}
 
 /* The focused session's running turn, in a wall's reply panel (cards/sessions.js paintTurn): what was
    said to it, then each tool call and note as it happens, held at the bottom. Sized in em so each wall's

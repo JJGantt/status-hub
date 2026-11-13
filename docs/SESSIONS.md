@@ -25,7 +25,7 @@ Everything below serves one of those five.
 
 ```
      voice ──┐
-     phone ──┼──▶  desk_commands  ──realtime──▶  orchestrator (Mac)   ──▶  Terminal tab
+     phone ──┼──▶  desk_commands  ──realtime──▶  orchestrator (Mac)   ──▶  Terminal tab (an incident session: tmux)
     the hub ─┘                                   pi-desk       (Pi)   ──▶  tmux session
                                                  pi-desk       (Fly)  ──▶  tmux session
                                                       │
@@ -40,7 +40,7 @@ still dispatch to it and report back.
 
 | Piece | Where | Does |
 |---|---|---|
-| `orchestrator/src/commands.js` | Mac (launchd) | drains `desk_commands`, opens Terminal tabs |
+| `orchestrator/src/commands.js` | Mac (launchd) | drains `desk_commands`, opens Terminal tabs (incident sessions run headless in tmux) |
 | `orchestrator/src/deskSessions.js` | Mac, every 30s | adopts, reports liveness, mirrors, starts watchers |
 | `orchestrator/src/sessionWatch.js` | both, on file events | watches live transcripts: pushes tool calls + finished turns |
 | `orchestrator/src/discover.js` | both | which conversation each `claude` process is in, from Claude Code's own record |
@@ -68,7 +68,7 @@ still dispatch to it and report back.
 | `status` | see below |
 | `claude_session_id` / `transcript_path` | the conversation, and where to read it. **This is the session's identity**: a resume makes a new row for the same conversation and `claude --resume` keeps this id, so the tools' permanent handle is `s-` plus its first eight characters (`sessionHandle` in data-layer), never the row `id` |
 | `pid` | the Claude Code process the row belongs to — what liveness and the conversation are read from |
-| `tty` | Mac only: the Terminal tab, and the handle a follow-up is typed into |
+| `tty` | Mac only: the Terminal tab (or an incident session's tmux pane), and the handle a follow-up is typed into |
 | `working` / `last_reply` / `reply_at` | is a turn in flight; the last COMPLETED answer, and when |
 | `last_prompt` | the prompt that answer was to. A long message is recorded as `<pasted_content>…</pasted_content>` (how it was pasted in, voice-pipeline `handoff.js`), and `resolvePrompt` in the orchestrator's transcripts.js strips that back to the typed words. Older turns hold a stub naming a file in `~/.claude-desk-prompts`, which the same function resolves until the file is swept at thirty days. Earlier turns are kept in `desk_turns`, by trigger (HUB-INTERNALS § The turns before the last one) |
 | `active_at` | the last turn boundary (a prompt sent, a turn finished) — what orders, numbers and focuses sessions |

@@ -5,10 +5,42 @@ import WatchKit
 /// words stay as plain text with no target. On the watch a tapped link only ever opened an error, and
 /// as a hit target inside a reply it took the tap meant for the screen around it.
 func inlineMarkdown(_ s: String) -> AttributedString {
-    var a = (try? AttributedString(markdown: s, options: .init(interpretedSyntax: .inlineOnlyPreservingWhitespace)))
+    var a = (try? AttributedString(markdown: literalAngles(s), options: .init(interpretedSyntax: .inlineOnlyPreservingWhitespace)))
         ?? AttributedString(s)
     a.link = nil
     return a
+}
+
+/// **Every `<` outside a code span is escaped**, so it renders as itself. Foundation's parser drops raw
+/// HTML, and a line that is only a tag (`<incident-data-…>` opening an incident agent's prompt) starts a
+/// CommonMark HTML block that runs to the next blank line: the tag and everything under it vanished from
+/// the page. A watch never renders HTML, so a `<` is always text. Inside a code span a backslash would
+/// show, and HTML is not parsed there anyway, so those are left alone.
+func literalAngles(_ s: String) -> String {
+    guard s.contains("<") else { return s }
+    let c = Array(s)
+    var out = "", i = 0
+    while i < c.count {
+        if c[i] == "`" {
+            var n = 0
+            while i + n < c.count, c[i + n] == "`" { n += 1 }
+            // The span closes at the next run of exactly n backticks; with none it is literal backticks.
+            var j = i + n, close: Int? = nil
+            while j < c.count {
+                if c[j] == "`" {
+                    var m = 0
+                    while j + m < c.count, c[j + m] == "`" { m += 1 }
+                    if m == n { close = j; break }
+                    j += m
+                } else { j += 1 }
+            }
+            if let close { out += String(c[i..<(close + n)]); i = close + n; continue }
+            out += String(c[i..<(i + n)]); i += n; continue
+        }
+        if c[i] == "<" && (i == 0 || c[i - 1] != "\\") { out += "\\" }
+        out.append(c[i]); i += 1
+    }
+    return out
 }
 
 /// A reply's opening for the line under a title: its markdown syntax gone and none of the bold, code

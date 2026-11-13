@@ -115,7 +115,7 @@ const { dirtyHeatHistory } = require('./routes/heathistory')({
 });
 
 const { MUTE_HOLD, recomputeMute } = require('./routes/settings')({
-  GROQ_API_KEY, SUPABASE_KEY, SUPABASE_URL, dirtySettings, gated, putSetting, sb, settingsAll,
+  GROQ_API_KEY, SUPABASE_KEY, SUPABASE_URL, dirtySettings, gated, nutritionCore, putSetting, settingsAll,
 });
 
 const { CLIENT_NOW_RE, dirtyNutDay } = require('./routes/logging')({

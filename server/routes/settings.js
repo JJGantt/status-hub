@@ -5,7 +5,7 @@ const speech = require('../lib/speech');
 
 module.exports = function (ctx) {
   const {
-    GROQ_API_KEY, SUPABASE_KEY, SUPABASE_URL, dirtySettings, gated, putSetting, sb, settingsAll,
+    GROQ_API_KEY, SUPABASE_KEY, SUPABASE_URL, dirtySettings, gated, nutritionCore, putSetting, settingsAll,
   } = ctx;
 
   // ---- app settings (voice routing mode + per-device trailing-silence). Read by the worker + devices;
@@ -115,17 +115,16 @@ module.exports = function (ctx) {
       await putSetting(key, value);
       dirtySettings();   // synchronous — a write-then-read client must not race the realtime round-trip
       // A goal sign-flip (bulk↔cut) starts a NEW maintenance phase, seeded with the maintenance measured
-      // robustly up to now (= today's synced target − the OLD surplus) and held until the new phase has its
-      // own data. Same-sign magnitude tweaks (e.g. +150→+250) do NOT reset the phase.
+      // robustly up to now and held until the new phase has its own data. Same-sign magnitude tweaks
+      // (e.g. +150→+250) do NOT reset the phase. The seed is the estimator's own maintenance, not today's
+      // stored target, which on a day with a manual override says nothing about maintenance.
       if (key === 'surplus_cal') {
         const oldS = parseInt(prevSurplus, 10), newS = parseInt(value, 10);
         const oldSign = Number.isFinite(oldS) ? Math.sign(oldS) : 0;
         const newSign = Number.isFinite(newS) ? Math.sign(newS) : 0;
         if (newSign !== 0 && newSign !== oldSign) {
           const today = nutritionWindow().day;
-          const trows = await sb(`nutrition_targets?date=eq.${today}&select=calories`);
-          const curTarget = trows && trows[0] ? Number(trows[0].calories) : null;
-          const seed = (curTarget != null && Number.isFinite(oldS)) ? Math.round(curTarget - oldS) : null;
+          const seed = Math.round((await nutritionCore()).maintenance.maintenance);
           const phaseRec = { start: today, seed, sign: newSign, hold: false };
           await putSetting('maintenance_phase', JSON.stringify(phaseRec));
           dirtySettings();

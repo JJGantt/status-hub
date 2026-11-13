@@ -36,23 +36,26 @@ function createDashboard(ctx) {
     statusEpoch, surplusCal,
   } = ctx;
 
-  // Keep the stored nutrition_targets row in sync with the hub's live dynamic goal so the
-  // MCP (which reads that row) and the hub always agree. Writes only when the value changes;
-  // one row per day (updates today's row, else inserts). Fire-and-forget from buildStatus.
-  let lastSyncedTarget = null;
-  async function syncStoredTarget(m, today) {
-    if (!m) return;
-    const key = `${m.calories}/${m.protein_g}/${m.carbs_g}/${m.fat_g}`;
-    if (key === lastSyncedTarget) return;
-    const rows = await sb(`nutrition_targets?date=eq.${today}&select=id,calories,protein_g,carbs_g,fat_g`);
-    const vals = { calories: m.calories, protein_g: m.protein_g, carbs_g: m.carbs_g, fat_g: m.fat_g };
-    const existing = (rows || [])[0];
-    if (existing && existing.calories === vals.calories && existing.protein_g === vals.protein_g
-        && existing.carbs_g === vals.carbs_g && existing.fat_g === vals.fat_g) { lastSyncedTarget = key; return; }
+  // Keep today's stored nutrition_targets row equal to the goal the hub is showing, so the MCP (which
+  // reads that row) and the hub always agree: the computed goal normally, or — on a day with a manual
+  // override — the override's calories with the macros re-split by the hub's own rule. Compares against
+  // the cached target rows, so it writes only on a change and reads nothing. Fire-and-forget from
+  // buildStatus.
+  // `lastWrite` covers the moment between a write and the cached rows catching up with it, when a
+  // second build would otherwise see no row for today and insert another.
+  let lastWrite = null;
+  async function syncStoredTarget(t, targetRows, today) {
+    if (!t) return;
+    const vals = { calories: t.calories, protein_g: t.protein_g, carbs_g: t.carbs_g, fat_g: t.fat_g };
+    const key = `${today}/${vals.calories}/${vals.protein_g}/${vals.carbs_g}/${vals.fat_g}`;
+    const todays = (targetRows || []).filter((r) => String(r.date).slice(0, 10) === today);
+    const existing = todays.find((r) => r.override) || todays[0];
+    if (existing && ['calories', 'protein_g', 'carbs_g', 'fat_g'].every((k) => Number(existing[k]) === vals[k])) return;
+    if (key === lastWrite) return;
+    lastWrite = key;
     const logged_at = new Date().toISOString();
     if (existing) await sbWrite(`nutrition_targets?id=eq.${existing.id}`, 'PATCH', { ...vals, logged_at });
     else await sbWrite('nutrition_targets', 'POST', { ...vals, date: today, logged_at });
-    lastSyncedTarget = key;
   }
 
 
@@ -98,7 +101,7 @@ function createDashboard(ctx) {
       return { entries, stagedEntries, histRows, nutLogRows };
     }),
     weight: () => groupRows('weight', '', async () => ({ weightRows: await sb('weight_log?select=date,weight_lbs&order=date.asc') })),
-    targets: () => groupRows('targets', '', async () => ({ targetRows: await sb('nutrition_targets?select=date,calories&order=date.asc') })),
+    targets: () => groupRows('targets', '', async () => ({ targetRows: await sb('nutrition_targets?select=id,date,calories,protein_g,carbs_g,fat_g,override&order=date.asc') })),
     train: (w) => groupRows('train', [w.week[0], w.heatStart].join('|'), async () => {
       // The week's muscle volume comes computed: muscle_volume() is its one definition (lib/volume.js).
       const [volRows, heatRows] = await Promise.all([
@@ -173,7 +176,15 @@ function createDashboard(ctx) {
       surplusCal(), maintenanceMinDays(), maintenancePhase(), produceTargets(),
     ]);
     const m = maintenanceOf(weightRows, nut.histRows, w.today, surplus, minAlignedDays, JSON.stringify(phase ?? null));
-    return { w, today: w.today, ...nut, weightRows, targetRows, surplus, minAlignedDays, produceGoal, ...m };
+    // The day's goal: the computed one, unless today's row carries a manual override. An override
+    // replaces the calories only; protein and fat stay anchored to bodyweight (the latest weigh-in, as
+    // the per-day log endpoint splits them) and carbs absorb the difference.
+    const ov = (targetRows || []).find((r) => r.override && String(r.date).slice(0, 10) === w.today);
+    const lastW = m.weights.length ? m.weights[m.weights.length - 1].weight : null;
+    const target = ov ? { calories: Math.round(Number(ov.calories)), ...macroTargets(Number(ov.calories), lastW) }
+      : m.maintenance.target_macros;
+    return { w, today: w.today, ...nut, weightRows, targetRows, surplus, minAlignedDays, produceGoal, ...m,
+      target, override: !!ov };
   }
 
   // The day's totals and the pace rings at THIS instant — the one piece that moves with the clock, so
@@ -190,7 +201,8 @@ function createDashboard(ctx) {
       veg_g: Math.round(sum('veg_g')),
       dark_green_g: Math.round(sum('dark_green_g')),
       fruit_g: Math.round(sum('fruit_g')),
-      target: core.maintenance.target_macros, // the macro goal is the live dynamic target
+      target: core.target, // the computed goal, or today's manual override
+      target_override: core.override,
     };
     // ---- gamified intake pacing (drain bars) ----
     // What is staged but not eaten. Kept OUT of `nutrition` and out of `consumed` — it is what the day
@@ -201,7 +213,7 @@ function createDashboard(ctx) {
                            carbs_g: stagedSum('carbs_g'), fat_g: stagedSum('fat_g') };
     const paceData = pace.computePace({
       consumed: { calories: nutrition.calories, protein_g: nutrition.protein_g, carbs_g: nutrition.carbs_g, fat_g: nutrition.fat_g },
-      goal: core.maintenance.target_macros,
+      goal: core.target,
       staged: stagedMacros,
       window: core.eatWindow,
       nowOff: nowOffsetTZ(),
@@ -369,7 +381,7 @@ function createDashboard(ctx) {
       })(),
     };
     const maintenance = maintenanceWithHistory(core);
-    syncStoredTarget(maintenance.target_macros, today).catch((e) => console.error('target sync:', e.message));
+    syncStoredTarget(core.target, core.targetRows, today).catch((e) => console.error('target sync:', e.message));
     const { nutrition, paceData } = paceOf(core);
     const { volume } = train;
     const { weights, surplus } = core;
@@ -378,7 +390,7 @@ function createDashboard(ctx) {
     const heatmap = buildWorkoutHeatmap(train.heatRows, HEAT_WEEKS, today); // 4am `today`, matching the nutrition heatmap
 
     // ---- nutrition log: calorie-adherence calendar (per-day historical targets) + calorie/weight trend ----
-    const nutrition_log = buildNutritionLog(core.nutLogRows || [], weights, maintenance.target, maintenance.maintenance, today, core.targetRows || [], HEAT_WEEKS, surplus, 150, paceData.fraction);
+    const nutrition_log = buildNutritionLog(core.nutLogRows || [], weights, core.target.calories, maintenance.maintenance, today, core.targetRows || [], HEAT_WEEKS, surplus, 150, paceData.fraction);
 
 
     // `months` is parallel to `weeks` and labels a column only where the month changes, so a slice can

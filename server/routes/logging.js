@@ -54,7 +54,7 @@ module.exports = function (ctx) {
         sbRange(`nutrition_entries?occurred_at=gte.${date}T${hh}:00:00&occurred_at=lt.${next}T${hh}:00:00&staged=eq.false&select=${SEL}&order=occurred_at`),
         // Staged meals (any day) always surface in the CURRENT day's list.
         isToday ? sbRange(`nutrition_entries?staged=eq.true&select=${SEL}&order=logged`) : Promise.resolve([]),
-        sb('nutrition_targets?select=date,calories&order=date.asc'),
+        sb('nutrition_targets?select=date,calories,override&order=date.asc'),
         sbRange('nutrition_entries?staged=eq.false&select=occurred_at,calories&order=occurred_at'), // full history → clusters + per-day maintenance
         sb('weight_log?select=date,weight_lbs&order=date.asc'),
         surplusCal(),
@@ -83,6 +83,7 @@ module.exports = function (ctx) {
       const weights = (weightRows || []).map((r) => ({ date: String(r.date).slice(0, 10), weight: Number(r.weight_lbs) }));
       const { goalForDay } = buildGoalResolver({ rows: allIntake, weights, targets: targetRows, today, surplus });
       const target_cal = goalForDay(date);
+      const target_override = (targetRows || []).some((r) => r.override && String(r.date).slice(0, 10) === date);
       const delta_color = target_cal > 0 ? calorieColor(total_cal / target_cal) : null;
       // Per-day macro GOALS = this day's calorie goal split by bodyweight as of this day.
       const wAsOf = weights.filter((w) => w.date <= date);
@@ -98,7 +99,7 @@ module.exports = function (ctx) {
         date,
         total_cal, total_protein: Math.round(total_protein),
         total_carbs: Math.round(total_carbs), total_fat: Math.round(total_fat),
-        target_cal, target_macros, delta_color, produce,
+        target_cal, target_macros, target_override, delta_color, produce,
         entries, recent,
       };
       nutDayCache.set(cacheKey, { body, at: Date.now() });

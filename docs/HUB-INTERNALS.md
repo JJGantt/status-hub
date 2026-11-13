@@ -392,6 +392,19 @@ The math lives here; each file has a thorough header. Summary map:
 | `maintenance.js` | Adaptive TDEE via energy balance (avg intake − trend·kcal/lb), the dynamic calorie+macro goal, and the **goal-phase** logic (window bounded by a bulk↔cut sign flip, with a seed held until the new phase has data). Also `estimateHistory` (per-day replay for the viz). |
 | `pace.js` | Within-day intake pacing — the eating window (median first/last meal over the last **two weeks** of logs, IQR-trimmed), each macro's drain/refill fill + green→red/amber color vs the expected-by-now line, and the staged-meal arcs (below). |
 | `nutritionlog.js` | The calorie/weight dual-axis plot, the diverging-color adherence calendar, and `buildGoalResolver` (per-day calorie goal, respecting stored targets + phases). |
+
+**The day's goal and its stored row.** The hub keeps today's `nutrition_targets` row equal to the goal
+it shows (`syncStoredTarget` in `dashboard.js`), so the data MCP, which reads that table, agrees with
+every ring. A row with `override = true` is a **manual goal for that one date** (the data MCP's
+`set_nutrition_targets`, data-layer 00181): `nutritionCore()` uses its calories as `core.target`, with
+the macros split by `macroTargets` against the latest weigh-in, and the sync re-splits that row rather
+than overwriting it. It is its own row beside the computed one, and clearing it deletes it, so the
+computed row is the goal again. `buildGoalResolver` looks an override up by exact date and keeps it out
+of the carry-forward series, so a later day without a row of its own never inherits it. Nothing in the
+estimator reads targets, so an override cannot change any other day's computed goal. The frame carries
+`nutrition.target_override` and `/api/nutrition-day` carries `target_override` for the day it answers.
+The phase seed on a bulk↔cut flip is the estimator's own maintenance, never today's row, which on an
+override day is not maintenance plus surplus.
 | `volume.js` | The muscle gauges, from `muscle_volume()` in Postgres (data-layer 00156), which defines the window, the credit per set (primary=1.0, secondary=0.5), the per-bout cap and the targets (`muscle_volume_targets`) for this and `get_weekly_volume` alike. |
 | `bodymap.js` | The front/back body SVG (viewBox 0 0 72 93); volume colors paint onto it. |
 | `heatmap.js` | Per-day set-count heatmap laid out as week columns. Shade is an **absolute** count — one level per 6 sets, topping out at 37+ — so a colour means the same thing in every window and on every surface. |

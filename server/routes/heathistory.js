@@ -71,7 +71,7 @@ module.exports = function (ctx) {
         sbRange(`nutrition_entries?occurred_at=gte.${daysBefore(today, weeks * 7 + 7)}T00:00:00&staged=eq.false` +
           '&select=occurred_at,calories,protein_g,fat_g&order=occurred_at'),
         sb('weight_log?select=date,weight_lbs&order=date.asc'),
-        sb('nutrition_targets?select=date,calories&order=date.asc'),
+        sb('nutrition_targets?select=date,calories,override&order=date.asc'),
         sbRange(`sets?occurred_at=gte.${daysBefore(today, weeks * 7 + 7)}T00:00:00&select=occurred_at&order=occurred_at`),
       ]);
       const weights = (weightRows || []).map((r) => ({ date: String(r.date).slice(0, 10), weight: Number(r.weight_lbs) }));
@@ -147,7 +147,7 @@ module.exports = function (ctx) {
         sbRange('sets?select=occurred_at&order=occurred_at'),
         sbRange('nutrition_entries?staged=eq.false&select=occurred_at,calories,protein_g,fat_g&order=occurred_at'),
         sb('weight_log?select=date,weight_lbs&order=date.asc'),
-        sb('nutrition_targets?select=date,calories&order=date.asc'),
+        sb('nutrition_targets?select=date,calories,override&order=date.asc'),
       ]);
 
       const weights = (weightRows || []).map((r) => ({ date: String(r.date).slice(0, 10), weight: Number(r.weight_lbs) }));

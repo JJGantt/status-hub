@@ -44,8 +44,13 @@ function targetCalFor(ds, targets, fallbackCal) {
 function buildGoalResolver({ rows = [], weights = [], targets = [], today, surplus = 150, deficit = 150, fallbackMaint = null }) {
   const cal = {};
   for (const r of rows) { const d = dayBucketOf(r.occurred_at); cal[d] = (cal[d] || 0) + (Number(r.calories) || 0); }
-  const tgs = (targets || []).map((t) => ({ date: String(t.date).slice(0, 10), calories: Number(t.calories) || 0 }))
+  const all = (targets || []).map((t) => ({ date: String(t.date).slice(0, 10), calories: Number(t.calories) || 0, override: !!t.override }))
     .filter((t) => t.calories > 0).sort((a, b) => (a.date < b.date ? -1 : 1));
+  // A manual override is that one day's goal and nothing else's: it is looked up by exact date and kept
+  // out of the carry-forward series, so a later day with no stored row yet never inherits it.
+  const overrideCal = {};
+  for (const t of all) if (t.override) overrideCal[t.date] = t.calories;
+  const tgs = all.filter((t) => !t.override);
   const intakeByDay = Object.entries(cal).map(([date, calories]) => ({ date, calories }));
   const dms = (d) => Date.parse(d + 'T12:00:00Z');
   const trackedDays = Object.keys(cal).filter((d) => cal[d] > 0 && d <= today).sort();
@@ -65,6 +70,7 @@ function buildGoalResolver({ rows = [], weights = [], targets = [], today, surpl
     return (maintCache[ds] = estimateMaintenance({ weights: wUpTo, intakeByDay: iUpTo, today: ds }).maintenance);
   };
   const goalForDay = (ds) => {
+    if (overrideCal[ds] != null) return Math.round(overrideCal[ds]);
     const m = maintFor(ds);
     // The LIVE day's goal is ALWAYS maintenance + the current surplus/deficit setting — that is
     // exactly what the surplus knob is defined to drive. A goal that only appears once you've logged

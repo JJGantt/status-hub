@@ -444,6 +444,11 @@ waiting for a round trip through Postgres.
 Only what is NEW is read — these transcripts reach tens of megabytes, so the watcher keeps a byte
 offset and a trailing partial line. A watcher starts at the file's current end, never at zero, or
 attaching to a running session would replay its whole history as though it were happening now.
+The reconcile pass is what attaches a watcher, so the launch path runs one the moment it binds a new
+session to its transcript (`tickSoon` on the Mac, `reconcileSoon` in pi-desk) rather than leaving it to
+the next interval: a 30s tick is as long as the hub waits for a launch's first frame
+(`unconfirmedThread`, § 12), and a session noticed late is reported as empty. The watcher's first append
+backfills the turn in progress from its start (`loadPrefix`), so nothing written before it attached is lost.
 
 **The tick still does both of these jobs**, deliberately. Liveness
 cannot be event-driven — nothing fires when a process stops existing — and `fs.watch` genuinely drops

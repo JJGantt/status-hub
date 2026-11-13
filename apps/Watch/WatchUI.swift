@@ -443,12 +443,15 @@ struct PagedScroll<Content: View>: View {
     /// tap, and scrolling in docs/WATCH.md).
     var reachedEnd: (Bool) -> Void = { _ in }
     @ViewBuilder let content: () -> Content
+    /// The scroll id of that marker, for a page that keeps its end on screen.
+    static var endId: String { "page-end" }
 
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 10) {
                 content()
                 Color.clear.frame(height: 1)
+                    .id(Self.endId)
                     .onScrollVisibilityChange(threshold: 1) { reachedEnd($0) }
             }
             .padding(.horizontal, 8)

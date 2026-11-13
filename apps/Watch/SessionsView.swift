@@ -174,6 +174,10 @@ struct SessionView: View {
     /// The user has scrolled since following stopped: only THE USER'S scroll reaching the end hands it back, not the
     /// page merely being at the end when it stopped.
     @State private var hisScroll = false
+    /// **The user let go with the end on screen**: while the turn grows, the page keeps its END on screen,
+    /// rather than going back up onto `spot`, which mid-turn is the prompt the turn started from. Until the
+    /// next landing (`toNewest`) or the user's next scroll.
+    @State private var atBottom = false
     /// A jump of the page's own is on its way; the move it makes is not the user's.
     @State private var jumping = false
     /// The page has landed once. Before that, the scroll view moves itself as it lays out (it shifts by
@@ -310,7 +314,10 @@ struct SessionView: View {
                     // **Nothing moves the page while the user is reading**, a re-landing as much as a
                     // landing: held, `spot` is an older item, and a short one resting at the end is pulled
                     // up to the top the moment more arrives under it. Content added below moves nothing.
-                    if following { if settling || !engaged { toSpot(proxy) } }
+                    if following {
+                        if atBottom { jumping = true; proxy.scrollTo(PagedScroll<EmptyView>.endId, anchor: .bottom) }
+                        else if settling || !engaged { toSpot(proxy) }
+                    }
                     // Earlier turns were added above: back onto the row that was at the top, so they
                     // arrive above the user rather than under the user's finger.
                     else if let a = keepAtTop { keepAtTop = nil; jumping = true; proxy.scrollTo(a, anchor: .top) }
@@ -327,7 +334,7 @@ struct SessionView: View {
                 // Let go with the very end on screen after scrolling there: following again, from the
                 // next new item on. Not a jump now: the user is already looking at the end.
                 case .idle:
-                    if hisScroll && atEnd { touched = false; refollow("end") }
+                    if hisScroll && atEnd { touched = false; atBottom = true; refollow("end") }
                 default: break
                 }
             }
@@ -512,6 +519,7 @@ struct SessionView: View {
     /// allows: a short last item sits at the bottom with what came before it filling the screen.
     private func toNewest(_ proxy: ScrollViewProxy) {
         settling = true
+        atBottom = false
         spot = newest
         toSpot(proxy)
     }
@@ -563,6 +571,7 @@ struct SessionView: View {
     /// the user scrolls to the end.
     private func scrolled(_ how: String) {
         settling = false
+        atBottom = false
         hisScroll = true
         touched = looking
         guard following else { return }

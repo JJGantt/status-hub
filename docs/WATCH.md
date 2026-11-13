@@ -352,6 +352,11 @@ with what the session does about them underneath; with none, the last event — 
 the raise that was not let go at the end, a newer item — a placeholder, a tool call, the reply, a prompt typed from elsewhere — is held in
 `spot` and lands when the user stops looking.
 
+**Let go at the end, the end stays on screen** (`atBottom`) as the running turn grows under it, until the
+next landing (a new prompt, the reply, the wrist dropping) or the user's next scroll. Mid-turn `spot` is the
+prompt the turn started from, so re-landing on it at each new tool call pulls the page from the bottom up to
+that prompt every few seconds, under the finger of someone reading the stream.
+
 **A user scroll ends the following**, finger or crown, and nothing moves the page after that until the
 session is opened again, the user scrolls it to the very end (letting go with the end on screen after a
 user scroll; the page merely sitting at the end does not count), or something new arrives while the user is

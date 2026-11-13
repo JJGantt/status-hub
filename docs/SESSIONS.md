@@ -515,9 +515,12 @@ Two checks report on their own, to the ops responder:
 - **A session never opens empty, and its host confirms it.** `GET /api/sessions/:id`, which every
   surface opens a session through, puts the row's launch prompt in an empty thread (`seedLaunch` in
   `server/routes/conversation.js`), so a session is never a blank page while it starts; the host's own
-  copy of that prompt replaces the stand-in, matched by the dispatch command id or its text. The route
-  reports once per conversation when the thread still holds nothing from the host 30s after `started`
-  although the row was told something (`unconfirmedThread` in `server/lib/outcomes.js`). Claude Code
+  copy of that prompt replaces the stand-in, matched by the dispatch command id or by its text starting
+  with the stand-in's (the stored prompt can be a cut-down copy, and a replayed prompt has no command id;
+  `echoesLaunch` in `server/lib/outcomes.js`). The route reports once per conversation when the thread
+  still holds nothing from the host 30s after `started`, or after the hub process started if that is
+  later, although the row was told something (`unconfirmedThread`). The thread is in memory, so after a
+  deploy a turn in flight is back only when the host's next frame replays it. Claude Code
   writes a launch prompt within about a second of the row, so that is a session every surface draws as
   its prompt and then nothing.
 - **A turn in flight has its transcript.** The Mac's desk tick (voice-pipeline

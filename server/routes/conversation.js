@@ -1,6 +1,7 @@
 'use strict';
 const crypto = require('crypto');
 const express = require('express');
+const { echoesLaunch } = require('../lib/outcomes');
 
 module.exports = function (ctx) {
   const {
@@ -97,7 +98,7 @@ module.exports = function (ctx) {
   function launchEcho(log, ev) {
     if (ev.kind !== 'prompt') return false;
     const seed = log.events.find((e) => e.launch
-      && ((ev.cmd && e.cmd === ev.cmd) || flatText(e.text) === flatText(ev.text)));
+      && ((ev.cmd && e.cmd === ev.cmd) || echoesLaunch(e.text, ev.text)));
     if (!seed) return false;
     delete seed.launch;
     return true;

@@ -42,11 +42,22 @@ function vanishedRecordings(events) {
 // host streams it at once. A thread with nothing from the host past `HOST_CONFIRM_MS` is a session every
 // surface draws as its prompt and then nothing, for ever: a transcript read from the wrong file, a host
 // that never streamed. `row` is the desk_sessions row with its launch prompt as `launch_prompt`.
+// `since` is when this process started: the thread lives in memory, so after a restart the turn in flight
+// is back only once the host's next frame replays it, and the clock runs from whichever came later.
 const HOST_CONFIRM_MS = 30 * 1000;
-function unconfirmedThread(row, events, now = Date.now()) {
+function unconfirmedThread(row, events, now = Date.now(), since = 0) {
   if ((events || []).some((e) => !e.launch)) return false;
   if (!(row.launch_prompt || row.last_prompt || row.last_reply || row.working)) return false;
-  return now - (row.started ? new Date(row.started).getTime() : 0) >= HOST_CONFIRM_MS;
+  return now - Math.max(row.started ? new Date(row.started).getTime() : 0, since) >= HOST_CONFIRM_MS;
 }
 
-module.exports = { vanishedRecordings, RECORD_EVENTS, unconfirmedThread };
+// Whether a host's prompt is its copy of the launch stand-in. The stand-in is the row's stored prompt, which
+// can be a cut-down copy of what the host was given, and a replayed prompt carries no command id, so the
+// host's text has to START with the stand-in's rather than equal it. Whitespace is ignored.
+const flatText = (t) => String(t || '').replace(/\s+/g, ' ').trim();
+function echoesLaunch(seedText, hostText) {
+  const seed = flatText(seedText);
+  return !!seed && flatText(hostText).startsWith(seed);
+}
+
+module.exports = { vanishedRecordings, RECORD_EVENTS, unconfirmedThread, echoesLaunch };

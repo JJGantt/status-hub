@@ -3,7 +3,7 @@
 // started for nothing (false positive) or a lost command nobody hears about (false negative).
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
-const { vanishedRecordings, unconfirmedThread } = require('../lib/outcomes');
+const { vanishedRecordings, unconfirmedThread, echoesLaunch } = require('../lib/outcomes');
 
 const ev = (e, at) => ({ ev: e, at: `2026-11-02T06:${at}Z` });
 
@@ -59,4 +59,18 @@ test('a session with anything from the host is not reported', () => {
 test('a session never told anything, or still launching, is not reported', () => {
   assert.equal(unconfirmedThread({ ...OLD }, [], NOW), false);   // a terminal opened by hand, idle
   assert.equal(unconfirmedThread({ started: '2026-11-07T18:39:50Z', launch_prompt: 'x' }, [SEED], NOW), false);
+});
+
+test('after a hub restart, the host gets the full window from the restart', () => {
+  // 2026-11-12: a deploy mid-turn left only the stand-in until the host's next frame replayed the turn.
+  const boot = NOW - 12 * 1000;
+  assert.equal(unconfirmedThread({ ...OLD, working: true, launch_prompt: 'x' }, [SEED], NOW, boot), false);
+  assert.equal(unconfirmedThread({ ...OLD, working: true, launch_prompt: 'x' }, [SEED], NOW, NOW - 31 * 1000), true);
+});
+
+test('the host copy of a launch prompt is matched even when the stand-in is cut down', () => {
+  assert.equal(echoesLaunch('Do we have  a mechanism', 'Do we have a mechanism\nin place to change it?'), true);
+  assert.equal(echoesLaunch('Do we have a mechanism', 'Do we have a mechanism'), true);
+  assert.equal(echoesLaunch('Do we have a mechanism', 'Something else entirely'), false);
+  assert.equal(echoesLaunch('', 'anything'), false);
 });

@@ -284,6 +284,7 @@ module.exports = function (ctx) {
 
   // Conversations already reported for opening with nothing from the host (lib/outcomes unconfirmedThread), so one stays one incident.
   const reportedEmpty = new Set();
+  const BOOT = Date.now();
 
   // One session in full, for a surface that shows a single session rather than the list — the watch's
   // session page and the phone's (openSession in cards/repos.js). `/api/sessions` sends most parked
@@ -300,7 +301,7 @@ module.exports = function (ctx) {
       rowConv.set(row.id, conv);
       const log = await ensureLog(conv);
       seedLaunch(conv, row.id, log, launch_prompt, command_id);
-      if (!reportedEmpty.has(conv) && unconfirmedThread({ ...row, started, launch_prompt }, log.events)) {
+      if (!reportedEmpty.has(conv) && unconfirmedThread({ ...row, started, launch_prompt }, log.events, Date.now(), BOOT)) {
         reportedEmpty.add(conv);
         console.error(`[sessions] ${row.id} opened with nothing from its host in the thread (conversation ${conv})`);
       }

@@ -511,7 +511,10 @@ It also beats app.css's `body.tv.wallportrait` block on equal specificity, by lo
   user row, found ANYWHERE in the thread rather than as the newest message: with the phone asleep a
   watch command's rows arrive by resync, often behind a later command. Never on an assistant row
   replayed from history. Matching is a prefix, since `working` carries the transcript cut to 240
-  characters. A run that reports nothing back drops it after five minutes.
+  characters. A run that reports nothing back drops it after five minutes. A pending frame naming a
+  request whose user row is already in the thread is ignored (§ A command in flight in
+  docs/HUB-INTERNALS.md), and a row the box already holds is an UPDATE (a label, a read mark) that
+  changes in place, never a new line.
   **There is no chat PANE; there is a chat SHEET.** The navbar's keyboard button opens `#ph-chat`
   over the page — the same `ai-shell` markup the walls carry, wired by the same `initCard()` in
   voiceagent.js — with the whole thread, the composer, the mic, the attach tray and Reset context. A

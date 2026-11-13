@@ -1203,6 +1203,7 @@ function initCard() {
   // Keyed by request id; a local clip's placeholder is `c:<client_msg_id>` until the hub's frame for it
   // arrives (`cmid`). The box is kept the last thing in the log.
   const reqs = new Map();   // id -> { text, at }
+  const answeredReqs = new Set();   // request ids whose user row is in the log: a frame about one of these is late
   const reqBox = document.createElement('div');
   reqBox.className = 'ai-reqs';
   const REQ_TTL = 5 * 60 * 1000;   // a request whose end never reached this page must not stay up for ever
@@ -1218,7 +1219,7 @@ function initCard() {
   function request(q) {
     if (!q || !q.id) return;
     if (q.cmid) reqs.delete('c:' + q.cmid);
-    if (['done', 'error', 'dropped'].includes(q.status)) reqs.delete(q.id);
+    if (['done', 'error', 'dropped'].includes(q.status) || answeredReqs.has(q.id)) reqs.delete(q.id);
     else {
       const text = String(q.text || '').trim();
       // A typed command already has its optimistic bubble (photos and all): that bubble stands for its
@@ -1232,6 +1233,7 @@ function initCard() {
   function upsert(row) {
     if (!row || (row.focus || 'hub') !== 'hub') return;
     if (row.role === 'tool') return;        // tool calls live in the activity bar, not the thread
+    if (row.request_id && row.role === 'user') answeredReqs.add(row.request_id);
     if (row.request_id && reqs.delete(row.request_id)) paintReqs();   // its own row is here
     reconcile(row);                         // a real row for a locally-sent message replaces its optimistic bubble
     // The server flags the first row of each new context (an idle gap or a manual reset). The older
@@ -1254,7 +1256,7 @@ function initCard() {
     (p.localImages || []).forEach((u) => { try { URL.revokeObjectURL(u); } catch (_) {} });
     pending.delete(cid);
   }
-  function clear() { log.innerHTML = ''; seen.clear(); for (const cid of [...pending.keys()]) dropPending(cid); }
+  function clear() { log.innerHTML = ''; seen.clear(); answeredReqs.clear(); for (const cid of [...pending.keys()]) dropPending(cid); }
   // Optimistic send: render the user's own message/photo the instant they send it, before the worker has
   // processed anything. The matching server row (via SSE or backfill) replaces it later — see reconcile().
   function optimistic(o) {

@@ -185,6 +185,10 @@ let pending = null;
 let pendingT = 0;       // a run that never reports back must not leave the line up forever
 onPending((p) => {
   if (!p) return;
+  // A frame about a command whose row is ALREADY in the thread is late, not news: the upload's own answer
+  // reaches a page that was backgrounded mid-upload only after the reply has landed, and drawn then it put
+  // the prompt a second time under its own reply.
+  if (p.id && answered(p.id) && p.state !== 'drop' && p.state !== 'clear') return;
   if (p.state === 'drop' && !(pending && (pending.id === p.id || (!pending.id && !pending.text)))) return;
   if (p.state === 'transcribing' && pending && pending.text) return;
   clearTimeout(pendingT);
@@ -223,6 +227,9 @@ function isPending(r) {
   const p = norm(pending.text), t = norm(r.text);
   return !!p && (t === p || (p.length >= 200 && t.startsWith(p)));
 }
+
+// Whether the thread already holds the user's row for this request.
+function answered(id) { return older.concat(thread).some((x) => x.rid === id && x.role === 'user'); }
 
 // The row the placeholder was standing in for has arrived — or the reply has, which means the run is
 // over whatever the thread looks like. Only ever called on a LIVE row: a resync replays the whole
@@ -309,7 +316,7 @@ function paintConv(land) {
 // context still draws the rule — on the next row that does have words.
 function rowOf(r) {
   if (r.role !== 'user' && r.role !== 'assistant') return null;
-  return { id: r.id, at: r.created_at, role: r.role, text: String(r.text == null ? '' : r.text).trim(),
+  return { id: r.id, rid: r.request_id || '', at: r.created_at, role: r.role, text: String(r.text == null ? '' : r.text).trim(),
     session: r.session_id ? (r.session_label || '') : '', sid: r.session_id || '', engine: r.engine || '', ctx: !!r.ctx_break };
 }
 function shown(list) {
@@ -326,6 +333,12 @@ function shown(list) {
 function takeRow(r) {
   const row = rowOf(r);
   if (!row) return;
+  // A row already held is an UPDATE (a label, a read mark): it changes in place. Appended, it showed the
+  // same reply again at the bottom each time.
+  for (const list of [thread, older]) {
+    const k = list.findIndex((x) => x.id === row.id);
+    if (k >= 0) { if (row.text) list[k] = { ...row, ctx: list[k].ctx }; return; }
+  }
   // A live row that opens a new context (the 4 AM rollover, a reset) moves what was the current
   // context up into the scrolled-back part rather than dropping it.
   if (row.ctx && thread.length) { older = older.concat(thread); thread = []; }
@@ -383,7 +396,7 @@ async function resync() {
     // ANYWHERE in it, not only as the newest message. A command from the watch reaches this page only
     // as its `working` frame, so with the phone asleep its rows arrive here, and by then a later
     // command can be the newest: matched against that alone, the placeholder never came down.
-    if (pending && pending.text && thread.some(isPending)) { clearTimeout(pendingT); pending = null; }
+    if (pending && ((pending.text && thread.some(isPending)) || (pending.id && answered(pending.id)))) { clearTimeout(pendingT); pending = null; }
     const land = owed && !document.hidden;
     if (land) owed = false;
     paintConv(land);

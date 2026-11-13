@@ -1517,7 +1517,9 @@ It all comes from `request` frames on `/api/voice-stream`, `{id, text, status, c
 - **After.** Every `voice_requests` insert or update for the hub conversation goes out through
   `requestView` (realtime, `lib/realtime.js`); an `untranscribed` row is shown as `transcribing`.
 - **Ends.** `done`, `error` and `dropped` take an entry down, and so does a conversation row carrying its
-  `request_id`. `/api/voice-pending` lists the unfinished requests plus the commands still being heard,
+  `request_id`. A frame for a request whose user row is already on the page is late, and every view
+  ignores it: a page backgrounded mid-upload gets the upload's own answer only after the reply has
+  landed, and drawing it then put the prompt a second time under its own reply. `/api/voice-pending` lists the unfinished requests plus the commands still being heard,
   for a view that (re)loads.
 
 `cmid` is how the device that recorded a command knows a frame is its own: the watch and the chat sheet

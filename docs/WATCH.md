@@ -134,8 +134,8 @@ downward instead, since a row trimmed from above the screen shifts everything on
 Both let go when the user stops looking.
 
 **The landing spot is fixed, per page** (`Landing` in `WatchUI.swift`): 32pt from the top of the glass
-on home, where a full-width first line clears the corner curve and the thickest default edge; 58pt in
-a session, under its title and clear of the fade the title draws over what scrolls beneath it. It does
+on home and in a session alike, just under the top strip, where a full-width first line clears the
+corner curve and the thickest default edge. It does
 not move with the edge: text that shifted whenever a command lit the border would jump on every
 command. **Items sit an ordinary 12pt apart (`Landing.itemGap`); only the newest has room above it**,
 enough that when it lands the item before it ends just above the top of the screen. That room is a
@@ -184,7 +184,12 @@ The time is centred halfway between the dot and the right edge, because watchOS 
 indicator in the top right corner while the app records, and no app can move or hide that. The strip
 takes no touch, so nothing in the thread moves and a tap there still records. An open session wears
 the SAME strip (`TopStrip` in WatchUI.swift), with its name at the left and the time in the same place,
-so the two pages' tops are identical. It must stay an overlay, never a toolbar: a `ToolbarItem` adds a
+so the two pages' tops are identical. The strip's row (the time, the name, home's inbox dot) sits 4pt
+below the band's middle (`TopStrip.drop`), and the name starts where the glass begins at the top of its
+capitals, past the lit edge (`GlassEdge.sideInset`, read off the corner's curves): the corner is still
+18pt in from the side 12pt down, so a name started a fixed distance from the side is cut off on the
+wrist. Check it with `simctl io … screenshot --mask=black`, which draws the glass's outline; a plain
+screenshot is a flat rectangle and shows nothing wrong. It must stay an overlay, never a toolbar: a `ToolbarItem` adds a
 navigation bar row lower than the strip, pushes the page's first line down with it, and moves the
 microphone indicator from the top right to the middle.
 

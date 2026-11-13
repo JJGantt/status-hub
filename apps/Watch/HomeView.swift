@@ -168,6 +168,7 @@ struct HomeView: View {
                     .frame(width: 48, height: TopStrip<EmptyView>.height).contentShape(Rectangle())
             }
             .buttonStyle(.plain)
+            .offset(y: TopStrip<EmptyView>.drop)   // on the strip's row, beside the clock
             .ignoresSafeArea()
         }
         // An answer's notification lands on the answer in the thread, so the inbox gets out of the way.

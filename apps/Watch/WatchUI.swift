@@ -273,17 +273,42 @@ struct GlassEdge: Shape {
     /// The 46mm display's corner radius in points (`DeviceCornerRadius` in its device profile).
     static let radius: CGFloat = 50
 
+    /// One corner, as offsets from the corner point along its two edges, in units of the radius: the
+    /// straight edge ends 1.307581 radii from the corner and three curves turn it.
+    static let corner: [(CGFloat, CGFloat)] = [
+        (0, 1.307581),
+        (0, 0.852907), (0.04734106, 0.6880309), (0.1362377, 0.5218087),
+        (0.2251343, 0.3555865), (0.3555865, 0.2251343), (0.5218087, 0.1362377),
+        (0.6880309, 0.04734106), (0.852907, 0), (1.307581, 0),
+    ]
+
+    /// **How far in from the side the glass begins, `depth` points down from the top** (the same at the
+    /// bottom, and at either side). Read off the corner's curves, so something drawn at the left of a
+    /// line `depth` down clears the corner by starting here.
+    static func sideInset(atDepth depth: CGFloat) -> CGFloat {
+        let y = depth / radius
+        guard y < corner[0].1 else { return 0 }
+        guard y > 0 else { return corner[corner.count - 1].0 * radius }
+        // The curves run from the side (large y) to the top (y = 0), y falling monotonically; find the
+        // one spanning `y` and bisect it on t.
+        for j in stride(from: 1, to: corner.count, by: 3) {
+            let p = [corner[j - 1], corner[j], corner[j + 1], corner[j + 2]]
+            guard y <= p[0].1, y >= p[3].1 else { continue }
+            func at(_ t: CGFloat) -> (CGFloat, CGFloat) {
+                let u = 1 - t, b = [u * u * u, 3 * u * u * t, 3 * u * t * t, t * t * t]
+                return ((0..<4).reduce(0) { $0 + b[$1] * p[$1].0 }, (0..<4).reduce(0) { $0 + b[$1] * p[$1].1 })
+            }
+            var lo: CGFloat = 0, hi: CGFloat = 1
+            for _ in 0..<30 { let m = (lo + hi) / 2; if at(m).1 > y { lo = m } else { hi = m } }
+            return at(lo).0 * radius
+        }
+        return 0
+    }
+
     func path(in r: CGRect) -> Path {
         let rect = r.insetBy(dx: inset, dy: inset)
         let R = Self.radius - inset
-        // One corner, as offsets from the corner point along its two edges, in units of R: the
-        // straight edge ends 1.307581 R from the corner and three curves turn it.
-        let k: [(CGFloat, CGFloat)] = [
-            (0, 1.307581),
-            (0, 0.852907), (0.04734106, 0.6880309), (0.1362377, 0.5218087),
-            (0.2251343, 0.3555865), (0.3555865, 0.2251343), (0.5218087, 0.1362377),
-            (0.6880309, 0.04734106), (0.852907, 0), (1.307581, 0),
-        ]
+        let k = Self.corner
         // Each corner maps (along the edge before it, along the edge after it) to a point.
         let corners: [(CGPoint, CGVector, CGVector)] = [
             (CGPoint(x: rect.minX, y: rect.minY), CGVector(dx: 0, dy: 1), CGVector(dx: 1, dy: 0)),
@@ -392,22 +417,41 @@ extension EnvironmentValues {
 /// An overlay rather than a toolbar: a `ToolbarItem` puts a navigation bar's row there, which sits
 /// lower than this band, pushes the page's first line down with it, and moves watchOS's microphone
 /// indicator off the top right to the middle.
+///
+/// **The row sits `drop` below the band's middle, and `leading` starts where the glass does at the
+/// top of its text** (`GlassEdge.sideInset`), clear of the lit edge as well. The top-left corner is a
+/// continuous curve that is still 18pt in from the side 12pt down, so a name centred in the band and
+/// started a fixed distance from the side has its chevron and first letters cut off on the wrist — and
+/// not in a simulator screenshot, which is a flat rectangle.
 struct TopStrip<Leading: View>: View {
     static var height: CGFloat { 30 }
+    /// How far the row (clock, name, home's inbox dot) sits below the band's middle.
+    static var drop: CGFloat { 4 }
     @ViewBuilder var leading: () -> Leading
+    @ObservedObject private var style = BorderStyle.shared
+
+    /// From the side to the start of `leading`: the glass at the top of a 15pt line's capitals (about
+    /// 6pt above the row's middle), past the edge line and its band, and a small gap.
+    private var leadingInset: CGFloat {
+        let edge = CGFloat(style.px + style.bandPx) / WKInterfaceDevice.current().screenScale
+        return (GlassEdge.sideInset(atDepth: Self.height / 2 + Self.drop - 6) + edge + 3).rounded(.up)
+    }
 
     var body: some View {
         GeometryReader { g in
             ZStack(alignment: .leading) {
                 Rectangle().fill(.ultraThinMaterial).allowsHitTesting(false)
-                HStack(spacing: 0) {
-                    Color.clear.allowsHitTesting(false)
-                    CornerClock().frame(maxWidth: .infinity).allowsHitTesting(false)
+                ZStack(alignment: .leading) {
+                    HStack(spacing: 0) {
+                        Color.clear.allowsHitTesting(false)
+                        CornerClock().frame(maxWidth: .infinity).allowsHitTesting(false)
+                    }
+                    // Up to the clock's left edge (centred at 3/4, about 32pt wide) less a gap.
+                    leading()
+                        .frame(maxWidth: max(0, g.size.width * 0.75 - 22 - leadingInset), alignment: .leading)
+                        .padding(.leading, leadingInset)
                 }
-                // Up to the clock's left edge (centred at 3/4, about 32pt wide) less a gap.
-                leading()
-                    .frame(maxWidth: max(0, g.size.width * 0.75 - 22 - 16), alignment: .leading)
-                    .padding(.leading, 16)
+                .offset(y: Self.drop)
             }
         }
         .frame(height: Self.height)

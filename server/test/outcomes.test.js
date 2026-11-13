@@ -61,11 +61,12 @@ test('a session never told anything, or still launching, is not reported', () =>
   assert.equal(unconfirmedThread({ started: '2026-11-07T18:39:50Z', launch_prompt: 'x' }, [SEED], NOW), false);
 });
 
-test('after a hub restart, the host gets the full window from the restart', () => {
-  // 2026-11-12: a deploy mid-turn left only the stand-in until the host's next frame replayed the turn.
-  const boot = NOW - 12 * 1000;
-  assert.equal(unconfirmedThread({ ...OLD, working: true, launch_prompt: 'x' }, [SEED], NOW, boot), false);
-  assert.equal(unconfirmedThread({ ...OLD, working: true, launch_prompt: 'x' }, [SEED], NOW, NOW - 31 * 1000), true);
+test('a session launched before the hub process started is not judged', () => {
+  // 2026-11-12: a deploy mid-turn left only the stand-in until the host's next frame, minutes later.
+  const row = { ...OLD, working: true, launch_prompt: 'x' };
+  assert.equal(unconfirmedThread(row, [SEED], NOW, NOW - 12 * 1000), false);
+  assert.equal(unconfirmedThread(row, [SEED], NOW, NOW - 10 * 60 * 1000), false);
+  assert.equal(unconfirmedThread(row, [SEED], NOW, Date.parse(OLD.started) - 1000), true);
 });
 
 test('the host copy of a launch prompt is matched even when the stand-in is cut down', () => {

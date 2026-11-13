@@ -42,13 +42,15 @@ function vanishedRecordings(events) {
 // host streams it at once. A thread with nothing from the host past `HOST_CONFIRM_MS` is a session every
 // surface draws as its prompt and then nothing, for ever: a transcript read from the wrong file, a host
 // that never streamed. `row` is the desk_sessions row with its launch prompt as `launch_prompt`.
-// `since` is when this process started: the thread lives in memory, so after a restart the turn in flight
-// is back only once the host's next frame replays it, and the clock runs from whichever came later.
+// `since` is when this process started. The thread lives in memory, so after a restart the turn in flight
+// is back only once the host's next frame replays it, and a host inside a long tool call sends nothing for
+// minutes. A session launched before `since` therefore cannot be judged here and is never reported.
 const HOST_CONFIRM_MS = 30 * 1000;
 function unconfirmedThread(row, events, now = Date.now(), since = 0) {
   if ((events || []).some((e) => !e.launch)) return false;
   if (!(row.launch_prompt || row.last_prompt || row.last_reply || row.working)) return false;
-  return now - Math.max(row.started ? new Date(row.started).getTime() : 0, since) >= HOST_CONFIRM_MS;
+  const started = row.started ? new Date(row.started).getTime() : 0;
+  return started >= since && now - started >= HOST_CONFIRM_MS;
 }
 
 // Whether a host's prompt is its copy of the launch stand-in. The stand-in is the row's stored prompt, which

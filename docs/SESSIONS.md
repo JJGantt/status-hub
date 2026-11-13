@@ -518,9 +518,10 @@ Two checks report on their own, to the ops responder:
   copy of that prompt replaces the stand-in, matched by the dispatch command id or by its text starting
   with the stand-in's (the stored prompt can be a cut-down copy, and a replayed prompt has no command id;
   `echoesLaunch` in `server/lib/outcomes.js`). The route reports once per conversation when the thread
-  still holds nothing from the host 30s after `started`, or after the hub process started if that is
-  later, although the row was told something (`unconfirmedThread`). The thread is in memory, so after a
-  deploy a turn in flight is back only when the host's next frame replays it. Claude Code
+  still holds nothing from the host 30s after `started` although the row was told something
+  (`unconfirmedThread`). A session launched before the hub process started is not checked: the thread is
+  in memory, so after a deploy a turn in flight is back only when the host's next frame replays it, which
+  can be minutes away inside a long tool call. Claude Code
   writes a launch prompt within about a second of the row, so that is a session every surface draws as
   its prompt and then nothing.
 - **A turn in flight has its transcript.** The Mac's desk tick (voice-pipeline

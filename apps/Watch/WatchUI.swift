@@ -589,8 +589,10 @@ struct ThreadRow: View {
 extension View {
     /// **The user's words hug the right edge** and the replies take the whole width, so a thread reads as
     /// two columns before any of it is read — the same as the web hub. The text inside stays left-aligned:
-    /// a prompt is not always one line. Held off the left edge so even a long prompt reads as the right column.
+    /// a prompt is not always one line. At most 85% of the thread's width, the same as the hub's pages, so even
+    /// a long prompt starts 15% in from the left and reads as the right column.
     func mine() -> some View {
-        frame(maxWidth: .infinity, alignment: .trailing).padding(.leading, 24)
+        containerRelativeFrame(.horizontal, alignment: .trailing) { w, _ in w * 0.85 }
+            .frame(maxWidth: .infinity, alignment: .trailing)
     }
 }

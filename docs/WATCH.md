@@ -139,7 +139,7 @@ command. **Items sit an ordinary 12pt apart (`Landing.itemGap`), the newest incl
 above it when it lands shows under the top strip's shade, which is what keeps it from reading as part
 of the newest item. A row's scroll id is never the id its `ForEach` already uses (home scrolls to
 `msg<id>`): `scrollTo` lands the first view carrying an id. **The user's words hug the right edge**
-(`mine()` in `WatchUI.swift`, held 24pt off the left so a long prompt still reads as the right column) and
+(`mine()` in `WatchUI.swift`, at most 85% of the width as on the hub's pages, so a long prompt starts 15% in) and
 replies take the whole width, as on the hub's pages; the text inside stays left-aligned. The tool calls of a running
 turn land as one block (`activity`), not line by line. Within that block a session's echo of the user's words (`said`, or `queued` behind a running turn) is drawn as
 the user's words, in full; only tool calls are cut to two lines. Words the watch sent are already on screen, so

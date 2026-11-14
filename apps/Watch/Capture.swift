@@ -457,8 +457,7 @@ final class Capture: ObservableObject {
         segment += seconds
         if mutes, Int(segment / Self.nudge) > Int((segment - seconds) / Self.nudge) {
             WKInterfaceDevice.current().play(.directionDown)
-            Hub.log("mic-nudge", ["minutes": Int(segment / Self.nudge), "flow": flow.rawValue,
-                                  "build": Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? ""])
+            Hub.log("mic-nudge", ["minutes": Int(segment / Self.nudge), "flow": flow.rawValue])
         }
         if endpoint.heard && !wasHeard { spokeAt = Date() }
         // Accidentally recording: nobody spoke into it, or it has run on and on unlocked. Either way

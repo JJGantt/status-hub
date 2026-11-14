@@ -1099,6 +1099,9 @@ refresh wakes the app about every half hour to send a `battery` line (`BatteryRe
 wake books the next and every launch books one, so a broken chain restarts the next time the app runs.
 It is the app's only background refresh, and it handles every refresh task it is given.
 
+Every line carries `build`, the app's `CFBundleVersion`, so a fault that starts with an update in place
+shows the build it started on.
+
 | event | what it says |
 |---|---|
 | `thread` | what home loaded |
@@ -1108,7 +1111,7 @@ It is the app's only background refresh, and it handles every refresh task it is
 | `control` | a press of the bottom control, with its mode |
 | `record` | a finger tap on the text |
 | `record-refused`, `mic-refused`, `mic-failed`, `mic-open` | why a recording did or did not start |
-| `mic-nudge` | the once-a-minute tap on a recording still open: minutes so far, the flow, the build |
+| `mic-nudge` | the once-a-minute tap on a recording still open: minutes so far, the flow |
 | `mic-end` | what the endpoint saw when a recording ended, and why (`silence`, `unspoken`) |
 | `mic-paused`, `mic-resume` | a command or follow-up held through an interruption (`seconds` recorded, `heard`), and carried on: `how` (`interruption-ended`, `active`, `press`), `ok` |
 | `mic-interrupted`, `mic-interruption-ended` | the system took the microphone mid-recording, and gave it back: the system's `reason` (0 default — Siri, a call, an alarm; 1 app suspended; 2 built-in mic muted; 3 route disconnected), `options` on the end (1 = may resume), the route, `recording` (seconds since the microphone opened), and on the start the endpoint's state — `quiet` (seconds since the last speech), `voice` (the classifier's last score), `heard`, `seconds`, `flow`. `quiet` near 0 with `voice` high is a cut mid-word |
@@ -1130,7 +1133,7 @@ It is the app's only background refresh, and it handles every refresh task it is
 | `session-shown` | what the session page actually has on screen and why it was logged (see The sessions page) |
 | `stream-open`, `stream-end`, `stream-error` | the event streams |
 | `resend` | a call's connection dropped mid-flight and it was sent again |
-| `net` | the watch's route changed (`Net`, NWPathMonitor): `status`, `via` (`other` is the phone, `wifi` / `cellular` the watch's own), `expensive`, `constrained`, `phone` (the phone link reachable), and `after`, the seconds the previous route lasted. Read it first when commands sat on the wrist and landed together |
+| `net` | the watch's route changed (`Net`, NWPathMonitor): `status`, `via` (`other` is the phone, `wifi` / `cellular` the watch's own), `expensive`, `constrained`, `phone` (the phone link reachable), `after`, the seconds the previous route lasted, `path` (NWPath's own description), and, when there is no route, `reason`: watchOS's `unsatisfiedReason`, where `cellularDenied` / `wifiDenied` mean the system refused this app a route that exists rather than there being none. `status` alone is not proof the watch is offline: a fresh install has logged `unsatisfied` while its commands went through. Read it first when commands sat on the wrist and landed together |
 | `phone-link` | WatchConnectivity's reachability to the phone changed |
 | `frame` | each `ev` frame for the session on screen: its seq and kind |
 

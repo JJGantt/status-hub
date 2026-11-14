@@ -194,10 +194,24 @@ final class Net {
             default: return "other"
             }
         }
-        Hub.log("net", ["status": "\(path.status)", "via": kinds.joined(separator: ","),
+        var fields: [String: Any] = ["status": "\(path.status)", "via": kinds.joined(separator: ","),
                         "expensive": path.isExpensive, "constrained": path.isConstrained,
                         "phone": WCSession.default.activationState == .activated && WCSession.default.isReachable,
-                        "after": Int(now.timeIntervalSince(since))])
+                        "after": Int(now.timeIntervalSince(since)),
+                        "path": String(describing: path).prefix(300)]
+        // Why there is no route, as watchOS gives it: no network at all, or this app refused one
+        // (`cellularDenied`, `wifiDenied`), which nothing else the app can see tells apart.
+        if path.status != .satisfied {
+            switch path.unsatisfiedReason {
+            case .notAvailable: fields["reason"] = "notAvailable"
+            case .cellularDenied: fields["reason"] = "cellularDenied"
+            case .wifiDenied: fields["reason"] = "wifiDenied"
+            case .localNetworkDenied: fields["reason"] = "localNetworkDenied"
+            case .vpnInactive: fields["reason"] = "vpnInactive"
+            @unknown default: fields["reason"] = "unknown(\(path.unsatisfiedReason))"
+            }
+        }
+        Hub.log("net", fields)
         since = now
         up = path.status == .satisfied
         if up {
@@ -668,11 +682,15 @@ enum Hub {
         await LogOutbox.shared.add(text)
     }
 
+    /// Stamped on every line, so a fault that begins with an update shows which build it began on.
+    private static let build = Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "?"
+
     private static func line(_ event: String, _ fields: [String: Any]) -> String? {
         var body = fields
         body["src"] = "watch"
         body["ev"] = event
         body["t"] = ISO8601DateFormatter().string(from: Date())
+        body["build"] = build
         guard let line = try? JSONSerialization.data(withJSONObject: body) else { return nil }
         return String(data: line, encoding: .utf8)
     }

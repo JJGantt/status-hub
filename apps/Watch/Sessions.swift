@@ -362,7 +362,21 @@ final class Sessions: ObservableObject {
             left.remove(at: i)
         }
         if left != placeholders[key] { placeholders[key] = left }
+        // A reply after the words were sent, with their placeholder still up ten seconds later, means the event
+        // for them never arrived by either rule: the doubled prompt on screen. Reported once, as an error, so
+        // the responder hears of it rather than the user. The wait lets the event for words typed just as the
+        // previous turn ended arrive behind that turn's reply.
+        for p in left where !stuckChecked.contains(p.msgId)
+            && events.contains(where: { $0.kind == "reply" && $0.seq > p.after }) {
+            stuckChecked.insert(p.msgId)
+            Task { @MainActor [weak self] in
+                try? await Task.sleep(for: .seconds(10))
+                guard let self, self.placeholders[key]?.contains(where: { $0.msgId == p.msgId }) == true else { return }
+                Hub.log("error", ["msg": "watch session page: a sent prompt's placeholder is still up after a reply (session \(self.row(for: key)?.id ?? key), msg \(p.msgId))"])
+            }
+        }
     }
+    private var stuckChecked = Set<String>()
 
     /// The wait ends when a reply lands after every follow-up the user is waiting on has been read.
     private func settle(_ key: String) {

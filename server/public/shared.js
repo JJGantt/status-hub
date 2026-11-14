@@ -5,7 +5,7 @@
 // Every page's uncaught error reaches the hub as a client-log line with `ev: 'error'`, and the hub hands
 // it to the ops responder (health/responder). Here, in the first module every page evaluates, so it is
 // listening before anything else can throw; a beacon, so a page on its way out still gets it sent.
-function reportPageError(message, stack) {
+export function reportPageError(message, stack) {
   try {
     const body = JSON.stringify({ src: 'web', ev: 'error', page: location.pathname, msg: String(message).slice(0, 500),
       stack: String(stack || '').slice(0, 2000), t: new Date().toISOString() });

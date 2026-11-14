@@ -13,7 +13,7 @@
 //
 // Self-fetching (NOT part of the status stream), like the todo pane. No-ops where #repospane is
 // absent (/page). Every wall's markup carries it, hidden on the kiosk, so it mounts there too.
-import { esc, md, mdInline, PIN_SVG, liveStream, readingWatch } from '../shared.js';
+import { esc, md, mdInline, PIN_SVG, liveStream, readingWatch, reportPageError } from '../shared.js';
 import { makeRecorder, bindMic } from '../voiceagent.js';
 import { speak, stopSpeaking, speaking, paused, pauseSpeaking, resumeSpeaking } from '../speak.js';
 
@@ -365,6 +365,18 @@ function settlePlaceholders(at) {
     left = left.filter((_, j) => j !== i);
   }
   at.placeholders = left;
+  // A reply after the words were sent, with their placeholder still up ten seconds later, means the event
+  // for them never arrived by either rule: the doubled prompt on screen. Reported once, as an error, so the
+  // responder hears of it rather than the user. The wait lets the event for words typed just as the
+  // previous turn ended arrive behind that turn's reply.
+  for (const p of left) {
+    if (p.checking || !at.events.some((e) => e.kind === 'reply' && e.seq > p.after)) continue;
+    p.checking = true;
+    setTimeout(() => {
+      if (!at.placeholders.includes(p)) return;
+      reportPageError(`session view: a sent prompt's placeholder is still up after a reply (session ${at.id}, msg ${p.cmd})`);
+    }, 10000);
+  }
 }
 
 async function fetchEvents(at, since) {

@@ -355,7 +355,9 @@ arrives BEFORE the send's own answer, because the hub hears the host's frame whi
 on the command, so a check limited to the arriving batch misses it and the placeholder stays up for
 good. And a prompt that comes back with no `cmd` after the placeholder was drawn (`after`, the list's
 last seq then) takes down the oldest placeholder, so a path that loses the id cannot leave one up
-either. Neither rule compares text.
+either. Neither rule compares text. A placeholder still up ten seconds after a reply that came after it is reported as an
+error (`ev: error` on the client log, so the ops responder opens an incident): the doubled prompt is a
+failure the device notices, not one the user has to.
 
 **It lands on the newest words sent**: a placeholder if any, else the last prompt since the last reply,
 with what the session does about them underneath; with none, the last event — the reply when it lands

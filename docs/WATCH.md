@@ -804,7 +804,9 @@ carries the clip's recording window (`Recorder.Clip.start` plus its duration) as
 `capture_end`: the start is what a voice-logged set is stamped with (`LISTENERS.md`), and the window is
 what lets the worker drop it as a duplicate only when a room mic heard the same sentence. The hub
 answers with the transcript, shown until the turn lands, and the request id, and the watch waits on
-`/api/voice-reply/:id`.
+`/api/voice-reply/:id`. That wait (`Hub.outcome`) retries a dropped connection and any 5xx with backoff, because the command
+is already the worker's: a hub deploy answers 502 for a few seconds, and failing there would offer a Retry
+that runs the command twice.
 
 **A locked recording is transcribed differently** (`flow=locked` on the upload, from `Recorder.Clip.locked`).
 It is long, with pauses while the speaker does other things, so the hub sends it to `whisper-large-v3` rather

@@ -487,6 +487,11 @@ enum Hub {
                 try await Task.sleep(for: .seconds(backoff))
                 backoff = min(backoff * 2, 30)
             }
+            catch HubError.status(let c) where c >= 500 {
+                log("reply-wait", ["status": c, "via": "fallback"])
+                try await Task.sleep(for: .seconds(backoff))
+                backoff = min(backoff * 2, 30)
+            }
             try Task.checkCancellation()
         }
     }
@@ -606,6 +611,14 @@ enum Hub {
                 backoff = 1
             } catch let e as URLError where e.code != .cancelled {
                 log("reply-wait", ["error": e.code.rawValue])
+                try await Task.sleep(for: .seconds(backoff))
+                backoff = min(backoff * 2, 30)
+            }
+            // A 5xx is the hub (or Fly's proxy while the hub restarts for a deploy), not the command:
+            // the request is already in the worker's hands, so failing here would offer a Retry that
+            // runs it a second time.
+            catch HubError.status(let c) where c >= 500 {
+                log("reply-wait", ["status": c])
                 try await Task.sleep(for: .seconds(backoff))
                 backoff = min(backoff * 2, 30)
             }

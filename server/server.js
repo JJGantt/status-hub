@@ -50,6 +50,16 @@ const VOICE_RESET_SENTINEL = '__RESET_CONTEXT__';
 const DESK_STALE_S = 90;   // 3 missed 30s beats
 
 const app = express();
+// Every request from the watch app, with its answer: whether the wrist is reaching the hub at all, and
+// what it is told, cannot otherwise be seen from here (the watch's own log rides the same connection).
+app.use((req, res, next) => {
+  const ua = String(req.headers['user-agent'] || '');
+  if (!ua.startsWith('StatusHubWatch')) return next();
+  const t = Date.now();
+  res.on('finish', () => console.log(`[watch-req] ${req.method} ${req.path} ${res.statusCode} ${Date.now() - t}ms ${ua.slice(0, 80)}`));
+  res.on('close', () => { if (!res.writableFinished) console.log(`[watch-req] ${req.method} ${req.path} closed early ${Date.now() - t}ms`); });
+  next();
+});
 app.use(express.urlencoded({ extended: false }));
 // EVERY ROUTE IS ON ONE OF TWO ROUTERS, and that choice is its auth: `pub` answers anyone, `gated`
 // only a signed-in request (`hubGate`, lib/auth.js). They are mounted here, once, so where in a file a

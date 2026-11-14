@@ -177,6 +177,18 @@ const realtime = createRealtime({
   reportTick: jobs.reportTick, requestView, sb, settleReply, surfAlarms, syncBadge, takeUsage: usage.take, tvPush,
 });
 
+// A client that hangs up before its request body finishes arriving (a phone locking or losing signal
+// mid-POST) makes the body parser fail with `request.aborted`. Nobody is left to answer and nothing
+// was half-done, so it is counted as an occurrence; anything else goes on to Express's own handler,
+// which logs it with console.error.
+app.use((err, req, res, next) => {
+  if (err && err.type === 'request.aborted') {
+    console.warn(`[http] client aborted the request body\n${req.method} ${req.path}`);
+    return;
+  }
+  next(err);
+});
+
 const server = app.listen(PORT, '0.0.0.0', () => {
   console.log(`status-hub on :${PORT}`);
   realtime.start();

@@ -227,7 +227,8 @@ struct RootView: View {
             case "record":
                 // `?flow=silence|locked|quick`: which complication it was. None is the standard flow.
                 let flow = query.first { $0.name == "flow" }?.value.flatMap(Capture.Flow.init) ?? .standard
-                chat.requestRecording(flow)
+                // `?route=fast`: the Hub Fast complication, whose command takes the worker's fast route.
+                chat.requestRecording(flow, fast: query.contains { $0.name == "route" && $0.value == "fast" })
             case "open":
                 // `?page=day|sessions`: a complication that only travels, as a page's control does.
                 if let p = query.first(where: { $0.name == "page" })?.value.flatMap({ WatchPage(rawValue: $0) }) {

@@ -107,6 +107,10 @@ final class Chat: ObservableObject {
     private(set) var requestedAt = Date.distantPast
     /// Which press flow the launcher asked for (`Capture.Flow`): each watch-face complication has its own.
     private(set) var requestedFlow = Capture.Flow.standard
+    /// The launcher was the Hub Fast complication: the command it records takes the fast route.
+    private(set) var requestedFast = false
+    /// The recording under way was started for the fast route; its clip says so when it stops.
+    private var recordingFast = false
     static let requestWindow: TimeInterval = 20
 
     private let capture = Capture.shared
@@ -153,9 +157,10 @@ final class Chat: ObservableObject {
         PhoneLink.shared.onToken = { [weak self] in self?.tokenArrived() }
     }
 
-    func requestRecording(_ flow: Capture.Flow = .standard) {
+    func requestRecording(_ flow: Capture.Flow = .standard, fast: Bool = false) {
         requestedAt = Date()
         requestedFlow = flow
+        requestedFast = fast
         recordRequested = true
     }
 
@@ -254,13 +259,14 @@ final class Chat: ObservableObject {
     }
     #endif
 
-    func startRecording(flow: Capture.Flow = .standard) {
+    func startRecording(flow: Capture.Flow = .standard, fast: Bool = false) {
         guard capture.free else {
             Hub.log("record-refused", ["view": "chat", "owner": String(describing: capture.owner)])
             return
         }
-        Hub.log("record-start", ["view": "chat", "running": commands.count, "flow": flow.rawValue])
+        Hub.log("record-start", ["view": "chat", "running": commands.count, "flow": flow.rawValue, "fast": fast])
         failure = nil
+        recordingFast = fast
         // A command ends itself at the silence after the user speaks, or at the next press. A session's follow-up records the same way (Sessions.startRecording).
         capture.start(for: .hub, flow: flow, onSilence: { [weak self] in self?.stopRecording() }) { [weak self] error in
             self?.failure = (error as? Recorder.Failure) == .denied ? .micDenied : .message(error.localizedDescription)
@@ -282,6 +288,7 @@ final class Chat: ObservableObject {
         }
         Hub.log("record-start", ["view": "rewind", "running": commands.count])
         failure = nil
+        recordingFast = false
         instructing = grab
         capture.start(for: .hub, flow: .locked) { [weak self] error in
             self?.instructing = nil
@@ -292,7 +299,9 @@ final class Chat: ObservableObject {
     /// Ends the recording and sends it. The wrist is tapped at the moment the microphone closes —
     /// which the silence may have decided, so it is the one moment nothing else reports.
     func stopRecording() {
-        guard capture.owner == .hub, let finished = capture.stop() else { return }
+        guard capture.owner == .hub, var finished = capture.stop() else { return }
+        finished.fast = recordingFast
+        recordingFast = false
         WKInterfaceDevice.current().play(.stop)
         Hub.log("record-stop", ["view": "chat", "seconds": finished.duration, "heard": finished.heard, "peak": finished.peak,
                                    "chirped": finished.chirped.map { $0 as Any } ?? NSNull()])

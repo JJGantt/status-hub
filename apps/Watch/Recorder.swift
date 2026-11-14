@@ -35,6 +35,8 @@ final class Recorder {
         var live: String?
         /// The inbox answer open when it was recorded (`Hub.about`): a pressed command is about it.
         var about: String? = Hub.about
+        /// Started from the Hub Fast complication: the hub sends it to the worker's fast route.
+        var fast = false
     }
 
     enum Failure: Error {

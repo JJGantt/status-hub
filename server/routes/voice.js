@@ -391,6 +391,9 @@ module.exports = function (ctx) {
       const about = aboutId(req.query.about);
       await sbWrite('voice_requests', 'POST', { id, transcript, source, focus: 'hub', ...(rewindId ? { rewind_id: rewindId } : {}),
         ...(about ? { about_id: about } : {}),
+        // `route=fast`: the watch's Hub Fast complication. The worker runs it in fast mode on the
+        // Console key (voice-pipeline docs/ROUTING.md § The fast route); anything else is the standard route.
+        ...(String(req.query.route || '') === 'fast' ? { route: 'fast' } : {}),
         ...(alt ? { alt_transcript: alt } : {}),
         ...(untranscribed ? { status: 'untranscribed' } : {}),
         always_on: GATED_SOURCES.has(source),

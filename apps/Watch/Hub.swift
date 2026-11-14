@@ -374,6 +374,8 @@ enum Hub {
         // A locked recording is long and full of pauses: the hub gives it the larger Whisper and shortens
         // the pauses marked here before transcribing.
         if let live = clip.live { query += "&live=\(live)" }
+        // Recorded from the Hub Fast complication: the worker runs it in fast mode on the Console key.
+        if clip.fast { query += "&route=fast" }
         if clip.locked {
             query += "&flow=locked"
             if !clip.quiet.isEmpty {

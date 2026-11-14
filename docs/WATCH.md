@@ -974,11 +974,16 @@ the watch it does not play wrist-down at all, so holding the microphone is the o
 
 ### Launchers, one request
 
-Six complications (circular and corner), all invisible on the face. The face editor shows a complication's drawing rather than its display name, so each writes a one-word name only in a preview (`context.isPreview`) — clear everywhere, all six are identical blank tiles there. Four record: `RecordComplication` opens
+Seven complications (circular and corner), all invisible on the face. The face editor shows a complication's drawing rather than its display name, so each writes a one-word name only in a preview (`context.isPreview`) — clear everywhere, all seven are identical blank tiles there. Five record: `RecordComplication` opens
 `statushub://record` (the standard flow), `RecordSilenceComplication` `statushub://record?flow=silence`,
-`RecordLockedComplication` `statushub://record?flow=locked` and `RecordQuickComplication`
-`statushub://record?flow=quick`; `onOpenURL` passes the flow through `Chat.requestRecording` to the
-recording. Two only travel, as a page's control does (`Router.open`): `DayComplication`
+`RecordLockedComplication` `statushub://record?flow=locked`, `RecordQuickComplication`
+`statushub://record?flow=quick` and `RecordFastComplication` ("Hub Fast") `statushub://record?route=fast`;
+`onOpenURL` passes the flow through `Chat.requestRecording` to the recording. Hub Fast records exactly
+as the standard launcher does; its clip carries `fast` (`Recorder.Clip`), sent to `/api/voice-command`
+as `route=fast`, which the hub writes to `voice_requests.route` and the worker runs in Claude Code's fast
+mode on the Console key (voice-pipeline docs/ROUTING.md § The fast route). Only the press the
+complication started carries it; the watch's Supabase fallback does not, so a command sent that way
+takes the standard route. Two only travel, as a page's control does (`Router.open`): `DayComplication`
 (`statushub://open?page=day`, the day page with nothing opened on it) and `SessionsComplication`
 (`statushub://open?page=sessions`, always the list). Each draws nothing — a clear view filling the slot — so the face shows no trace of it and the empty slot is still the button — which also means the face does not say which slot is which. The Record control
 (`RecordControl`, watchOS 26 — Control Center, the Smart Stack, and the Action button on an Ultra)

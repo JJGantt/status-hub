@@ -8,6 +8,7 @@ struct StatusHubWatchWidgets: WidgetBundle {
         RecordSilenceComplication()
         RecordLockedComplication()
         RecordQuickComplication()
+        RecordFastComplication()
         DayComplication()
         SessionsComplication()
         if #available(watchOS 26.0, *) {
@@ -196,6 +197,22 @@ struct RecordQuickComplication: Widget {
         }
         .configurationDisplayName("Hub Quick")
         .description("Hub Quick")
+        .supportedFamilies([.accessoryCircular, .accessoryCorner])
+    }
+}
+
+/// The standard press flow, but the command it records runs on the worker's fast route: Claude Code's fast
+/// mode on the Console key (voice-pipeline docs/ROUTING.md § The fast route). Invisible, like the
+/// standard one.
+struct RecordFastComplication: Widget {
+    var body: some WidgetConfiguration {
+        StaticConfiguration(kind: "RecordFastComplication", provider: Provider()) { entry in
+            RecordFace(entry: entry, name: "Fast")
+                .widgetURL(URL(string: "statushub://record?route=fast"))
+                .containerBackground(for: .widget) { Color.clear }
+        }
+        .configurationDisplayName("Hub Fast")
+        .description("Hub Fast")
         .supportedFamilies([.accessoryCircular, .accessoryCorner])
     }
 }

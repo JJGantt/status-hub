@@ -560,7 +560,7 @@ private struct RecordWhenAsked: ViewModifier {
             return
         }
         Capture.trigger = "launcher"
-        chat.startRecording(flow: chat.requestedFlow)
+        chat.startRecording(flow: chat.requestedFlow, fast: chat.requestedFast)
     }
 }
 

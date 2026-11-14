@@ -56,6 +56,7 @@ app.use((req, res, next) => {
   const ua = String(req.headers['user-agent'] || '');
   if (!ua.startsWith('StatusHubWatch')) return next();
   const t = Date.now();
+  console.log(`[watch-req] ${req.method} ${req.path} arrived ${ua.slice(0, 80)}`);
   res.on('finish', () => console.log(`[watch-req] ${req.method} ${req.path} ${res.statusCode} ${Date.now() - t}ms ${ua.slice(0, 80)}`));
   res.on('close', () => { if (!res.writableFinished) console.log(`[watch-req] ${req.method} ${req.path} closed early ${Date.now() - t}ms`); });
   next();

@@ -196,7 +196,8 @@ read, so every such reply goes into an inbox: kept for good, newest first, read 
   which the worker strips and stores as `voice_messages.needs_read`; a few seconds later a separate
   Sonnet call writes `label` from what he said (never the answer): a few words, a question only when
   he asked one. That is what an inbox row shows (voice-pipeline `docs/ROUTING.md`); a row with none
-  yet shows his own words. Confirmations carry no flag and never enter the inbox. A session's relayed
+  yet shows his own words. On the watch each row ends in its age, small and right-aligned (`3m`,
+  `2h`, `1d`, `agoLabel` — the sessions list's format); the phone's rows carry the clock time. Confirmations carry no flag and never enter the inbox. A session's relayed
   first reply is flagged when the orchestrator dispatched it with `start_session`'s `needs_read`, and
   labelled the same way from the dispatched prompt.
 - **One question, one row.** A clarification of the question just answered ("I mean the new one")

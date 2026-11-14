@@ -138,6 +138,11 @@ struct InboxView: View {
                 .foregroundStyle(r.read ? Color(hex: "#7d8794") : (r.session_id != nil ? Color(hex: "#9fe3d3") : .white))
                 .lineLimit(2)
                 .frame(maxWidth: .infinity, alignment: .leading)
+            // How long ago it was answered, small and right-aligned, as on the sessions list.
+            if let ago = agoLabel(r.at) {
+                Text(ago).font(.system(size: 10)).foregroundStyle(Color(hex: "#8b96a5"))
+                    .padding(.top, 3)
+            }
         }
         .padding(.vertical, 6)
         .contentShape(Rectangle())

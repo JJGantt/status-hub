@@ -41,20 +41,26 @@ struct SessionRow: Decodable, Identifiable, Equatable {
 
     var name: String { sessionName(custom_title, label, repo) ?? id }
     var running: Bool { status == "resident" }
-    /// `at` as the phone's sessions list writes it: now / 12m / 3h / 2d.
-    var ago: String? {
-        let iso = ISO8601DateFormatter()
-        iso.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        guard let at, let t = iso.date(from: at) else { return nil }
-        let s = Date().timeIntervalSince(t)
-        if s < 90 { return "now" }
-        if s < 3600 { return "\(Int((s / 60).rounded()))m" }
-        if s < 86400 { return "\(Int((s / 3600).rounded()))h" }
-        return "\(Int((s / 86400).rounded()))d"
-    }
+    var ago: String? { agoLabel(at) }
     /// The conversation this row is a stretch of. A resume makes a new row for the same conversation
     /// (`claude --resume` keeps its id), so everything the page keeps about a session is keyed by this.
     var key: String { claude_session_id ?? id }
+}
+
+/// An ISO instant as the phone's sessions list writes its age: now / 12m / 3h / 2d. Used by the sessions
+/// list and the inbox. Postgres drops the fraction when it is zero, so both forms parse.
+func agoLabel(_ at: String?) -> String? {
+    guard let at else { return nil }
+    let iso = ISO8601DateFormatter()
+    iso.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+    var t = iso.date(from: at)
+    if t == nil { iso.formatOptions = [.withInternetDateTime]; t = iso.date(from: at) }
+    guard let t else { return nil }
+    let s = Date().timeIntervalSince(t)
+    if s < 90 { return "now" }
+    if s < 3600 { return "\(Int((s / 60).rounded()))m" }
+    if s < 86400 { return "\(Int((s / 3600).rounded()))h" }
+    return "\(Int((s / 86400).rounded()))d"
 }
 
 /// **One event of a conversation's list**, as the hub keeps it (routes/conversation.js, the event log): the user's words

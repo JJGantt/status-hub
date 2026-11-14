@@ -568,6 +568,11 @@ enum Hub {
         _ = try await call("/api/voice-messages/read", method: "POST", body: ["id": id])
     }
 
+    /// Every unread answer in the inbox, read at once.
+    static func readAll() async throws {
+        _ = try await call("/api/voice-messages/read-all", method: "POST", body: [:])
+    }
+
     /// Takes the mute for the watch, or gives it back. Every microphone in the house is deaf while any
     /// source holds one (`/api/voice-mute`), so giving this one back cannot wake them while another is
     /// still capturing. Best effort, as on the phone.

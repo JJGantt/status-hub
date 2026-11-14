@@ -16,7 +16,7 @@ import { onThread, setAbout } from './voiceagent.js';
 import { md, esc } from './shared.js';
 
 const PAGE = 60;
-let dot = null, sheet = null, listEl = null, viewEl = null;
+let dot = null, sheet = null, listEl = null, viewEl = null, allBtn = null;
 let rows = [], done = false, busy = false;
 let openId = null;
 let unread = false;
@@ -31,7 +31,19 @@ function when(iso) {
     : d.toLocaleDateString([], { month: 'short', day: 'numeric' });
 }
 
-function paintDot() { if (dot) dot.classList.toggle('unread', unread); }
+function paintDot() {
+  if (dot) dot.classList.toggle('unread', unread);
+  if (allBtn) allBtn.hidden = !unread || !!openId;
+}
+
+// Every unread answer read at once. Marked here first, so the list and the dot answer the tap.
+function readAll() {
+  fetch('/api/voice-messages/read-all', { method: 'POST' })
+    .then((r) => { if (!r.ok) throw new Error('read-all ' + r.status); })
+    .catch((e) => { console.error('inbox: marking all read failed', e); soon(); });
+  for (const x of rows) x.read = true;
+  unread = false; paintDot(); paintList();
+}
 
 async function fetchPage(before) {
   const r = await fetch('/api/voice-inbox?limit=' + PAGE + (before ? '&before=' + encodeURIComponent(before) : ''));
@@ -84,6 +96,7 @@ function openList() {
   openId = null; setAbout(null);
   viewEl.hidden = true; listEl.hidden = false;
   sheet.classList.add('open');
+  paintDot();
   rows = []; done = false;
   listEl.scrollTop = 0;
   loadMore();
@@ -131,11 +144,13 @@ function openView(id) {
   openId = id; setAbout(id);
   listEl.hidden = true; viewEl.hidden = false;
   viewEl.innerHTML = '';
+  paintDot();
   paintView(id);
 }
 function back() {
   openId = null; setAbout(null);
   viewEl.hidden = true; listEl.hidden = false;
+  paintDot();
   paintList();
   soon();
 }
@@ -145,11 +160,14 @@ function build() {
   sheet = document.createElement('div');
   sheet.className = 'ib-sheet';
   // One button: from an open answer it steps back to the list, from the list it closes, as on the watch.
-  sheet.innerHTML = '<div class="ib-head"><button type="button" class="ib-x" aria-label="Close">✕</button></div>' +
+  sheet.innerHTML = '<div class="ib-head"><button type="button" class="ib-all" hidden>Mark all read</button>' +
+    '<button type="button" class="ib-x" aria-label="Close">✕</button></div>' +
     '<div class="ib-list"></div><div class="ib-view" hidden></div>';
   document.body.appendChild(sheet);
   listEl = sheet.querySelector('.ib-list');
   viewEl = sheet.querySelector('.ib-view');
+  allBtn = sheet.querySelector('.ib-all');
+  allBtn.addEventListener('click', readAll);
   sheet.querySelector('.ib-x').addEventListener('click', () => (openId ? back() : close()));
   listEl.addEventListener('click', (e) => {
     const b = e.target.closest('.ib-row');

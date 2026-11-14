@@ -212,7 +212,10 @@ read, so every such reply goes into an inbox: kept for good, newest first, read 
   open answer steps back to the list, a tap on the list closes it. An open answer also has a ✕ that steps back to the list.
   The inbox is a layer drawn over home inside the page rather than a sheet, because the
   command is the double tap `CommandBorder` binds above the page row and a sheet would cover it. Read
-  rows are dimmed and stay, so an answer marked read by a glance is still one tap away. While the inbox
+  rows are dimmed and stay, so an answer marked read by a glance is still one tap away. While anything is unread the
+  list starts with **Mark all read** (the phone's sheet carries it in its head), which stamps every unread
+  answer at once (`POST /api/voice-messages/read-all`). An opened row dims on the spot rather than when
+  the hub's next page says so, so a refresh that beats the read cannot leave it amber. While the inbox
   is open the thread under it is not being looked at, so nothing there counts as read.
 - **A session's row opens the session itself** (teal, like the session's own colour): on the watch the
   sessions page with it open (`Sessions.open`), on the phone the session view (`__showSession`). It is

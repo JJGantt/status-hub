@@ -418,6 +418,15 @@ final class Chat: ObservableObject {
         }
     }
 
+    /// The inbox's "Mark all read": every unread answer cleared here at once, and on the hub.
+    func markAllRead() {
+        readHere.formUnion(unread.map(\.id))
+        Hub.log("read-all")
+        Task {
+            do { try await Hub.readAll() } catch { Hub.log("read-all-failed", ["error": "\(error)"]) }
+        }
+    }
+
     /// Home lands on this answer instead of the newest row, until the user scrolls or speaks a command.
     func land(on id: String) {
         landOn = id

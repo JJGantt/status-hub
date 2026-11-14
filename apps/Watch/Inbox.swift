@@ -93,6 +93,18 @@ struct InboxView: View {
     private var list: some View {
         ScrollView {
             LazyVStack(alignment: .leading, spacing: 0) {
+                if rows.contains(where: { !$0.read }) || !chat.unread.isEmpty {
+                    Button {
+                        chat.markAllRead()
+                        for i in rows.indices { rows[i].read = true }
+                    } label: {
+                        Text("Mark all read").font(.system(size: 13)).foregroundStyle(Color(hex: "#e0a03a"))
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(.vertical, 6)
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                }
                 ForEach(rows) { r in
                     Button {
                         Task { if let sid = r.session_id { await openSession(sid, row: r) } else { await show(r.id) } }
@@ -119,15 +131,21 @@ struct InboxView: View {
         do {
             let got = try await Hub.inboxAnswer(id)
             open = got
-            if !got.read { chat.markRead(id) }
+            if !got.read { chat.markRead(id); dim(id) }
         } catch { Hub.log("inbox-answer-failed", ["id": id, "error": "\(error)"]) }
     }
 
     /// **A session's answer opens the session itself**, on the sessions page, where it can be read in
     /// full and answered; the inbox stays open on home for coming back to.
     private func openSession(_ sid: String, row r: InboxRow) async {
-        if !r.read { chat.markRead(r.id) }
+        if !r.read { chat.markRead(r.id); dim(r.id) }
         await Sessions.shared.open(rowId: sid)
+    }
+
+    /// An opened row dims at once, rather than when the hub's next page says so: a refresh that lands
+    /// before the read does would otherwise leave it marked unread.
+    private func dim(_ id: String) {
+        if let i = rows.firstIndex(where: { $0.id == id }) { rows[i].read = true }
     }
 
     private func row(_ r: InboxRow) -> some View {
@@ -167,7 +185,8 @@ struct InboxView: View {
         do {
             let page = try await Hub.inbox()
             var byId = Dictionary(uniqueKeysWithValues: rows.map { ($0.id, $0) })
-            for r in page.rows { byId[r.id] = r }
+            // A row read here stays read, whatever a page fetched before the hub stamped it says.
+            for var r in page.rows { if byId[r.id]?.read == true { r.read = true }; byId[r.id] = r }
             rows = byId.values.sorted { $0.at > $1.at }
         } catch { Hub.log("inbox-failed", ["error": "\(error)"]) }
     }

@@ -11,6 +11,8 @@
   padding:calc(env(safe-area-inset-top, 0px) + 6px) 10px 6px}
 .ib-sheet.open{display:flex}
 .ib-head{flex:none;display:flex;align-items:center;justify-content:flex-end;height:34px}
+.ib-all{flex:none;margin-right:auto;height:34px;border:0;background:transparent;color:#e0a03a;font-size:13px;padding:0 6px}
+.ib-all[hidden]{display:none}
 .ib-x{flex:none;width:34px;height:34px;border:0;background:transparent;color:#d5dde6;font-size:20px;padding:0}
 .ib-list,.ib-view{flex:1 1 auto;min-height:0;overflow-y:auto;-webkit-overflow-scrolling:touch}
 .ib-list::-webkit-scrollbar,.ib-view::-webkit-scrollbar{display:none}

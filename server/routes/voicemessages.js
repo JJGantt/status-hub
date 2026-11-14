@@ -174,5 +174,15 @@ module.exports = function (ctx) {
     } catch (e) { res.status(500).json({ error: String(e.message || e) }); }
   });
 
+  // Every unread answer in the inbox at once (the inbox's "Mark all read"). Each row's UPDATE reaches every
+  // surface through the voice stream, as a single read does.
+  gated.post('/api/voice-messages/read-all', async (req, res) => {
+    try {
+      await sbWrite('voice_messages?focus=eq.hub&role=eq.assistant&needs_read=is.true&read_at=is.null', 'PATCH',
+        { read_at: new Date().toISOString() });
+      res.json({ ok: true });
+    } catch (e) { res.status(500).json({ error: String(e.message || e) }); }
+  });
+
   return { markLive, requestView };
 };

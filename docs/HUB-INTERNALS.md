@@ -1466,7 +1466,8 @@ directly, so its window is that width and the panel fills it.
 The orchestrator view is the current context of the hub thread, fetched from
 `/api/voice-messages?focus=hub` when the view opens, when the stream reconnects and on a `reset` frame,
 so which rows belong to the current context stays the server's rule. A `message` frame carries its row,
-and the row is patched in from the frame (`takeVoiceRow`) rather than refetched, so a reply is on the
+always whole: an UPDATE whose long `text` Postgres left out of the realtime payload is read again before
+it is pushed (`lib/realtime.js` `pushVoiceUpdate`), since a client puts the row in place of its own. And the row is patched in from the frame (`takeVoiceRow`) rather than refetched, so a reply is on the
 strip the moment it is written. After 4 AM or a reset it is empty under its header until the next command. A reply relayed
 from a session (a row with `session_id`) is drawn in the teal (`#9fe3d3`) the phone and watch give it.
 

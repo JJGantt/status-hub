@@ -273,6 +273,15 @@ struct RootView: View {
             if let i = args.firstIndex(of: "-page"), i + 1 < args.count, let p = Page(rawValue: args[i + 1]) {
                 page = p
             }
+            // `-landon <message id>`: home lands on that row once the thread is in, so any reply in the
+            // live thread can be screenshotted.
+            if let i = args.firstIndex(of: "-landon"), i + 1 < args.count {
+                let id = args[i + 1]
+                Task {
+                    try? await Task.sleep(for: .seconds(4))
+                    chat.land(on: id)
+                }
+            }
             // `-record <seconds>`: a locked command recorded for that long, then stopped, so the stream to
             // the hub (LiveStream) can be watched end to end. 0 records until the app is killed.
             if let i = args.firstIndex(of: "-record"), i + 1 < args.count, let secs = Double(args[i + 1]) {

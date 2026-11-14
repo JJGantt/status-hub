@@ -37,6 +37,21 @@ function createRealtime(ctx) {
   let rtEvents = 0;
   const fpSeen = () => { rtEvents++; };
 
+  // **An UPDATE of a voice_messages row arrives without its `text` when the text is long.** Postgres
+  // leaves an unchanged TOASTed column (roughly 2KB and up) out of an UPDATE's WAL record, so the
+  // realtime payload simply has no `text` key. Every client puts a message frame's row into its thread
+  // in place of the one it has, so relaying it as is blanks the reply on screen — marking a long answer
+  // read (read_at) did exactly that. Such a row is read whole before it is pushed.
+  function pushVoiceUpdate(row) {
+    if ('text' in row) { pushVoice('message', row); return; }
+    sb(`voice_messages?id=eq.${encodeURIComponent(row.id)}&select=*`)
+      .then((rows) => {
+        if (rows && rows[0]) pushVoice('message', rows[0]);
+        else console.error(`[realtime] voice_messages ${row.id} updated without its text and not found on re-read`);
+      })
+      .catch((e) => console.error(`[realtime] voice_messages ${row.id} updated without its text; re-read failed: ${e.message || e}`));
+  }
+
   function startRealtime() {
     // A change to any cached source table dirties the row cache, then rebuilds + pushes. The extra
     // subscriptions (weight_log … surf_snapshots) exist for the cache: without them an edit would sit
@@ -109,8 +124,12 @@ function createRealtime(ctx) {
         (p) => {
           seen();
           if (!p.new) return;
-          pushVoice('message', p.eventType === 'INSERT' ? markLive(p.new) : p.new);
-          if (p.eventType === 'INSERT') notifyAnswer(p.new);
+          if (p.eventType === 'INSERT') {
+            pushVoice('message', markLive(p.new));
+            notifyAnswer(p.new);
+          } else {
+            pushVoiceUpdate(p.new);
+          }
         })
       // A client waiting on its own command (/api/voice-reply/:id) is answered the moment the worker
       // marks the request finished.

@@ -1148,6 +1148,7 @@ device builds:
 
 - the token comes from `SIMCTL_CHILD_HUB_TOKEN` (the kiosk's, sent as `X-Hub-Token` like the phone's);
 - `-opensession <row id>` opens a session as its notification would;
+- `-landon <message id>` lands home on that row of the live thread once it has loaded;
 - `-threaddemo` gives home a made-up thread and then walks one command through it as the hub delivers a
   real one (the words pending, tool calls, the reply loaded, the pending words dropped), so each landing
   can be screenshotted without a token;

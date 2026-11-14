@@ -1125,7 +1125,7 @@ It is the app's only background refresh, and it handles every refresh task it is
 | `chirp`, `chirp-done` | the start chirp asked for (whether the engine and player were running) and heard to finish, with how long it took. A `chirp` with no `chirp-done` is a chirp the speaker never played |
 | `record-stop` | a recording stopped: its length, `heard` (seconds actually written to the clip), `peak` (loudest RMS written) and `chirped`. `heard` far short of `seconds` is a deaf microphone; `heard` with `peak` near 0 is a live one hearing silence |
 | `listener-sent`, `listener-failed` | an always-on utterance going up |
-| `sent`, `send-failed` | a command's clip going up, with how long it took |
+| `sent`, `send-failed` | a command's clip going up, with how long it took. The hub reports every `send-failed` and `command-failed` to the ops responder as a `client/watch` error, when the line arrives (it arrives only once the watch reaches the hub again) |
 | `listen-alive` | always-on listening still has the microphone, with minutes since it was engaged — one line per twenty silent segments, about five minutes. **This is how long watchOS lets it hold the microphone with the wrist down**, which is otherwise unknown: read the gap between the last line and when it was engaged |
 | `rewind`, `rewind-alive`, `rewind-check`, `rewind-grab` | rewind engaged and dropped, still fed, checked on wake, grabbed — each with minutes engaged and the battery ([REWIND.md](REWIND.md)) |
 | `speak`, `speak-end`, `speak-failed` | a spoken reply starting (its length and output port) and how it ended, with seconds played |

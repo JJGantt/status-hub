@@ -543,6 +543,8 @@ module.exports = function (ctx) {
   // per tool call, and say nothing a step of a command does not.
   const CLIENT_LOG_SOURCES = new Set(['watch', 'phone']);
   const CLIENT_LOG_SKIP = new Set(['frame', 'geo', 'alarmclock', 'tvring']);
+  // The watch's own lines for a send that failed for good (apps/Watch/Chat.swift, Sessions.swift).
+  const WATCH_FAILURES = new Set(['send-failed', 'command-failed']);
   // A client may send one line, or a batch as `{ lines: [...] }`: the watch keeps its lines until they
   // are acknowledged and sends what piled up while it was offline all at once. A kept batch is answered
   // only once it is stored, so a failed write leaves the lines on the watch to be sent again.
@@ -561,6 +563,13 @@ module.exports = function (ctx) {
       if (l.ev === 'error') {
         ops.report(String(l.msg || 'client error'), { machine: 'client', service: `${l.src || 'unknown'}${l.page ? `:${l.page}` : ''}`,
           stack: l.stack ? String(l.stack) : undefined, context: { ua: req.headers['user-agent'] } });
+      }
+      // A watch command or follow-up that ended in Retry. The watch logs it as a plain line, so it is
+      // reported here; it arrives only once the watch can reach the hub again, stamped with its own time.
+      if (l.src === 'watch' && WATCH_FAILURES.has(l.ev)) {
+        ops.report(`watch ${l.view === 'session' ? 'follow-up' : 'command'} ${l.ev}: ${String(l.error || '').slice(0, 160)}`,
+          { machine: 'client', service: 'watch', context: { at: l.t, id: l.id, view: l.view,
+            look: 'client_log where src=watch around that time (docs/WATCH.md)' } });
       }
       if (CLIENT_LOG_SOURCES.has(l.src) && l.ev && !CLIENT_LOG_SKIP.has(l.ev)) {
         const { src, ev, t, ...data } = l;

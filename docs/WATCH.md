@@ -349,6 +349,14 @@ of a turn it attached to late, which is how a resumed session's first prompt is 
 skips either leaves its placeholder drawn under the whole turn, below the same words already in place. A send the hub refused, or took nothing from (a
 thank-you-shaped transcription), drops its placeholder.
 
+**A placeholder is checked against the whole list held, never only the events that just arrived**
+(`settlePlaceholders`, here and in the phone's cards/repos.js). The event for the words routinely
+arrives BEFORE the send's own answer, because the hub hears the host's frame while it is still waiting
+on the command, so a check limited to the arriving batch misses it and the placeholder stays up for
+good. And a prompt that comes back with no `cmd` after the placeholder was drawn (`after`, the list's
+last seq then) takes down the oldest placeholder, so a path that loses the id cannot leave one up
+either. Neither rule compares text.
+
 **It lands on the newest words sent**: a placeholder if any, else the last prompt since the last reply,
 with what the session does about them underneath; with none, the last event — the reply when it lands
 (`newest`). The top of that sits at the top of the screen.

@@ -81,10 +81,12 @@ struct ConversationLog: Equatable {
 }
 
 /// The user's words sent from this watch that the hub does not have yet: shown the instant they are
-/// transcribed, and replaced by the event that carries the same id back (`cmd`).
+/// transcribed, and replaced by the event that carries the same id back (`cmd`). `after` is how far the
+/// conversation's list had got when it was drawn (see `settlePlaceholders`).
 struct Placeholder: Equatable {
     let msgId: String
     let text: String
+    let after: Int
 }
 
 /// The name a session goes by everywhere: the one the user gave it, else the router's label, else its repo.
@@ -335,13 +337,31 @@ final class Sessions: ObservableObject {
         log.events = by.values.sorted { $0.seq < $1.seq }
         logs[key] = log
         if let last = log.events.last { latest[key] = last }
-        let cmds = Set(events.compactMap(\.cmd))
-        if !cmds.isEmpty { placeholders[key] = placeholders[key]?.filter { !cmds.contains($0.msgId) } }
+        settlePlaceholders(key)
         // Before `settle`, which lets go of the wait that makes this a reply worth speaking.
         if let held, let reply = log.events.last(where: { $0.kind == "reply" }), reply.seq > held {
             speakIfNew(key, reply)
         }
         settle(key)
+    }
+
+    /// A placeholder ends when the list holds its words, judged against EVERYTHING held, never only the
+    /// events that just arrived, so the order the event and the send's answer come in cannot leave one
+    /// up. A prompt that comes back with no `cmd` at all (the host could not stamp it) after the
+    /// placeholder was drawn is taken as the oldest placeholder's words; otherwise that placeholder has
+    /// no way to end and sits under the whole turn. Neither rule compares text.
+    private func settlePlaceholders(_ key: String) {
+        guard var left = placeholders[key], !left.isEmpty else { return }
+        let events = logs[key]?.events ?? []
+        let cmds = Set(events.compactMap { $0.kind == "prompt" ? $0.cmd : nil })
+        left.removeAll { cmds.contains($0.msgId) }
+        var orphans = Set<String>()
+        for e in events where e.kind == "prompt" && e.cmd == nil && !orphans.contains(e.id) {
+            guard let i = left.firstIndex(where: { e.seq > $0.after }) else { continue }
+            orphans.insert(e.id)
+            left.remove(at: i)
+        }
+        if left != placeholders[key] { placeholders[key] = left }
     }
 
     /// The wait ends when a reply lands after every follow-up the user is waiting on has been read.
@@ -440,7 +460,8 @@ final class Sessions: ObservableObject {
                     update(key, item)
                     Hub.log("heard", ["view": "session", "words": text.count])
                     // The user's words on screen the instant they are transcribed, before the hub has them.
-                    placeholders[key, default: []].append(Placeholder(msgId: msgId, text: text))
+                    placeholders[key, default: []].append(Placeholder(msgId: msgId, text: text, after: logs[key]?.last ?? 0))
+                    settlePlaceholders(key)
                 }
                 let words = item.words ?? ""
                 let rowId = row(for: key)?.id ?? key

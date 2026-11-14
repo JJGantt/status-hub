@@ -343,7 +343,28 @@ function take(at, events, epoch) {
   if (epoch) at.epoch = epoch;
   at.events = absorb(at.events, events);
   at.last = at.events.length ? at.events[at.events.length - 1].seq : 0;
-  for (const e of events || []) if (e && e.cmd) at.placeholders = at.placeholders.filter((p) => p.cmd !== e.cmd);
+  settlePlaceholders(at);
+}
+
+// A PLACEHOLDER ENDS WHEN THE LIST HOLDS ITS WORDS, judged against EVERYTHING held, never only the events
+// that just arrived: the event for the words routinely lands BEFORE the send's own answer (the hub hears
+// the host's frame while it is still waiting on the command), so a placeholder pushed on that answer has
+// already missed the batch that carried its id. And a prompt that comes back with no `cmd` at all (the
+// host could not stamp it) after the send began is taken as the oldest placeholder's words — otherwise
+// that placeholder has no way to end and sits under the whole turn. Neither rule compares text.
+function settlePlaceholders(at) {
+  if (!at.placeholders.length) return;
+  const cmds = new Set(at.events.filter((e) => e.kind === 'prompt' && e.cmd).map((e) => e.cmd));
+  let left = at.placeholders.filter((p) => !cmds.has(p.cmd));
+  const orphans = new Set();
+  for (const e of at.events) {
+    if (e.kind !== 'prompt' || e.cmd || orphans.has(e.id)) continue;
+    const i = left.findIndex((p) => e.seq > p.after);
+    if (i < 0) continue;
+    orphans.add(e.id);
+    left = left.filter((_, j) => j !== i);
+  }
+  at.placeholders = left;
 }
 
 async function fetchEvents(at, since) {
@@ -503,6 +524,7 @@ async function sendWords(text, at = cur) {
   const say = (t) => { if (status && cur === at) status.textContent = t || ''; };
   if (!at.msg || at.msg.text !== text) at.msg = { text, id: newMsgId() };
   const msgId = at.msg.id;
+  const after = at.last;   // how far the list had got before these words could be in it
   at.sending = true;
   if (cur === at) el.querySelector('.sv').classList.add('sending');
   say('');
@@ -520,7 +542,7 @@ async function sendWords(text, at = cur) {
       // The user's words on screen the instant they are sent, before the machine has typed them in. Keyed by
       // the message's own id, which the event for them carries back (`cmd`), so it is replaced by id.
       // The hub taking nothing (`ignored`: a thank-you-shaped transcription) shows nothing.
-      if (!j.ignored) at.placeholders.push({ cmd: msgId, text: text || '(picture)' });
+      if (!j.ignored) { at.placeholders.push({ cmd: msgId, text: text || '(picture)', after }); settlePlaceholders(at); }
       for (const a of shots) URL.revokeObjectURL(a.url);
       shots = [];
       const tray = el.querySelector('.sv-tray'); if (tray) tray.innerHTML = '';

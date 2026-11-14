@@ -118,9 +118,7 @@ the very end on screen (a one-point marker's visibility, `atEnd`) clears `touche
 lands. The phone's threads apply the same rule (`readingWatch` in `public/shared.js`). Holding only while the view is on an answer is not
 enough: an earlier answer is often read while a command runs, and the new transcript and then its reply would each
 pull the view off it. A tap on the unread dot or an answer's notification is asked for and never waits.
-`landed` is the spot the view is held at, and the room above the newest item follows IT, not `target`
-— keyed on the target, the room would vanish from above the answer being read and shift it. Each hold is
-logged as `land-held`.
+`landed` is the spot the view is held at. Each hold is logged as `land-held`.
 
 **A hold freezes the view, not a spot.** While the user is reading, nothing re-lands either: the landing
 is not re-applied as the thread grows, because the spot held is an older answer, and jumping back onto it
@@ -137,17 +135,12 @@ Both let go when the user stops looking.
 on home and in a session alike, just under the top strip, where a full-width first line clears the
 corner curve and the thickest default edge. It does
 not move with the edge: text that shifted whenever a command lit the border would jump on every
-command. **Items sit an ordinary 12pt apart (`Landing.itemGap`); only the newest has room above it**,
-enough that when it lands the item before it ends just above the top of the screen. That room is a
-spacer of its own (`room`), never padding on the item: SwiftUI measures a scroll target INCLUDING
-padding, so padding put the item's text a whole landing too low. For the same reason a row's scroll
-id is never the id its `ForEach` already uses (home scrolls to `msg<id>`): `scrollTo` lands the first
-view carrying an id, and the ForEach's identity covers the room and the row together, so the room's top
-lands on the line and the item before it shows above the blank. And the room appears only when the newest
-item is tall enough to reach the landing line: a short last item rests at the end of the scroll with the
-thread above it on screen anyway, where the room is a blank band. Every row's height is measured, not
-just the newest's: the newest changes in the same update that lands it, so a height taken only once a row
-is newest arrives after the landing, or never when the row's height does not change. The tool calls of a running
+command. **Items sit an ordinary 12pt apart (`Landing.itemGap`), the newest included**: whatever is
+above it when it lands shows under the top strip's shade, which is what keeps it from reading as part
+of the newest item. A row's scroll id is never the id its `ForEach` already uses (home scrolls to
+`msg<id>`): `scrollTo` lands the first view carrying an id. **The user's words hug the right edge**
+(`mine()` in `WatchUI.swift`, held 24pt off the left so a long prompt still reads as the right column) and
+replies take the whole width, as on the hub's pages; the text inside stays left-aligned. The tool calls of a running
 turn land as one block (`activity`), not line by line. Within that block a session's echo of the user's words (`said`, or `queued` behind a running turn) is drawn as
 the user's words, in full; only tool calls are cut to two lines. Words the watch sent are already on screen, so
 their echo is dropped, and `summary` frames are ignored because the detail fetch brings the reply.

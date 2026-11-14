@@ -25,9 +25,7 @@ struct HomeView: View {
     /// Whether the view is held at `target`. Kept until the user scrolls themselves: a thread still laying out
     /// moves the spot, so a single jump lands short of it.
     @State private var pinned = true
-    /// Every item's height, kept for all of them rather than only the newest: the newest changes in the
-    /// same update that lands it, and a height measured only once an item IS the newest arrives a layout
-    /// pass after the jump, so the room above it (`room`) came too late or not at all.
+    /// Every message's height, which decides how much of it must be on screen to count as shown (`shownAt`).
     @State private var heights: [String: CGFloat] = [:]
     /// What the view is held at — `target`, except while something newer is HELD: **an arrival does not
     /// take the view from an answer the user is reading** (`holds`). It lands as soon as the user stops looking.
@@ -64,8 +62,8 @@ struct HomeView: View {
     var body: some View {
         ScrollViewReader { proxy in
             ScrollView {
-                // Items sit an ordinary gap apart; only the newest has the landing's height above it, so
-                // the one before it is off the top when it lands (`lift`).
+                // Items sit an ordinary gap apart. What is above the newest one when it lands stays on
+                // screen, under the top strip's shade.
                 VStack(alignment: .leading, spacing: Landing.itemGap) {
                     // **Scrolled to the very top lays out more** (`Chat.window`). Asked of a marker's
                     // visibility, not of offsets, which this scroll view reports unreliably
@@ -80,7 +78,6 @@ struct HomeView: View {
                             }
                     }
                     ForEach(chat.recent) { m in
-                        room("msg\(m.id)")
                         ThreadRow(text: m.text ?? "", user: m.role == "user", session: m.session_id != nil,
                                   engine: m.role == "assistant" ? m.engine : nil)
                             .id("msg\(m.id)")
@@ -92,9 +89,7 @@ struct HomeView: View {
                     }
                     // What the hub heard, until the turn itself lands in the thread.
                     ForEach(Array(chat.pending.enumerated()), id: \.offset) { i, words in
-                        room("pending\(i)")
                         ThreadRow(text: words, user: true).id("pending\(i)")
-                            .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { heights["pending\(i)"] = $0 }
                     }
                     if !chat.activity.isEmpty {
                         ActivityLines(lines: chat.activity)
@@ -187,24 +182,11 @@ struct HomeView: View {
     }
 
     /// Where the view settles: the top of the user's words while they are being worked on, otherwise the top
-    /// of the newest thing in the thread. **A row's scroll id is NOT the message id**: the ForEach
-    /// already uses that as the identity of the row together with its `room`, and `scrollTo` resolves
-    /// an id to the first view carrying it, so it landed the top of the ROOM on the landing line and
-    /// left the room on screen with the item before it showing above.
+    /// of the newest thing in the thread, by the row's scroll id (`msg<id>`, `pending<i>`).
     private var target: String? {
         if let last = chat.pending.indices.last { return "pending\(last)" }
         if let id = chat.landOn, chat.recent.contains(where: { $0.id == id }) { return "msg\(id)" }
         return chat.recent.last.map { "msg\($0.id)" }
-    }
-
-    /// The room above the newest item: a spacer of its OWN, not padding on the item. Padding becomes part
-    /// of the frame a scroll lands on, which put the item's text a whole landing's height too low. And
-    /// only when the item is tall enough to reach the landing line: a short last message rests at the
-    /// end of the scroll with the thread above it on screen anyway, where the room is only a blank band.
-    @ViewBuilder private func room(_ id: String) -> some View {
-        if id == landed && (heights[id] ?? 0) > WKInterfaceDevice.current().screenBounds.height - Landing.top - PageInset.bottom {
-            Color.clear.frame(height: Landing.top - 2 * Landing.itemGap)
-        }
     }
 
     /// The amber the sessions list marks unread with.

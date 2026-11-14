@@ -10,6 +10,8 @@ struct Markdown: View {
     let text: String
     var size: CGFloat = 13
     var weight: Font.Weight = .regular
+    /// Take the whole width (a reply), or only the text's own (the user's words, which hug the right edge).
+    var fill = true
 
     var body: some View {
         let blocks = MarkdownBlock.parse(text)
@@ -17,7 +19,7 @@ struct Markdown: View {
             ForEach(Array(blocks.enumerated()), id: \.offset) { _, b in block(b) }
         }
         .font(.system(size: size, weight: weight))
-        .frame(maxWidth: .infinity, alignment: .leading)
+        .frame(maxWidth: fill ? .infinity : nil, alignment: .leading)
     }
 
     @ViewBuilder private func block(_ b: MarkdownBlock) -> some View {

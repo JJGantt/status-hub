@@ -183,10 +183,6 @@ struct SessionView: View {
     /// The page has landed once. Before that, the scroll view moves itself as it lays out (it shifts by
     /// the space under the title as it opens), and none of that is the user's.
     @State private var landed = false
-    /// Every item's height, which decides whether the newest needs room above it (`room`). Kept for all
-    /// of them: the newest changes in the same update that lands it, and a height taken only once an item
-    /// IS the newest arrives after the landing, or never when its height does not change.
-    @State private var heights: [String: CGFloat] = [:]
     /// The item the page is on — `newest`, except while something newer is held: **nothing that arrives
     /// moves the page while the user is reading.** It lands once the user stops looking (home's rule too).
     @State private var spot: String?
@@ -582,8 +578,8 @@ struct SessionView: View {
     private struct Scroll: Equatable { let y: CGFloat; let h: CGFloat }
 
     private var content: some View {
-        // An ordinary gap between items, and the landing's height above the newest one only (`room`),
-        // so the item before it is off the top of the screen when it lands.
+        // An ordinary gap between items. What is above the newest one when it lands stays on screen,
+        // under the top strip's shade.
         let (shown, more) = window
         return VStack(alignment: .leading, spacing: Landing.itemGap) {
             // **Scrolled to the very top lays out more** (`turns`). Asked of a marker's visibility, not
@@ -599,14 +595,11 @@ struct SessionView: View {
                     }
             }
             ForEach(shown, id: \.seq) { e in
-                room("ev\(e.seq)")
-                row(e).id("ev\(e.seq)").onGeometryChange(for: CGFloat.self) { $0.size.height } action: { heights["ev\(e.seq)"] = $0 }
+                row(e).id("ev\(e.seq)")
             }
             // The user's words on their way from this watch, dimmed until the hub has them.
             ForEach(placeholders, id: \.msgId) { p in
-                room("ph\(p.msgId)")
                 words(p.text).opacity(0.5).id("ph\(p.msgId)")
-                    .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { heights["ph\(p.msgId)"] = $0 }
             }
         }
         // At least a screen tall, so a short conversation's blank space below the last line is still
@@ -615,18 +608,6 @@ struct SessionView: View {
         // no press, and no way to stop a reply mid-speech by tapping there.
         .frame(maxWidth: .infinity, minHeight: WKInterfaceDevice.current().screenBounds.height, alignment: .topLeading)
         .contentShape(Rectangle())
-    }
-
-    /// The room above the newest item: a spacer of its OWN, not padding on the item. Padding becomes part
-    /// of the frame a scroll lands on, which put the item's text a whole landing's height too low. And
-    /// only when the item is tall enough to reach the landing line: a short last item rests at the end of
-    /// the scroll with what came before it on screen anyway, where the room is only a blank band.
-    @ViewBuilder private func room(_ id: String) -> some View {
-        if id == (spot ?? newest) && tallEnough(id) { Color.clear.frame(height: Landing.top - 2 * Landing.itemGap) }
-    }
-
-    private func tallEnough(_ id: String) -> Bool {
-        (heights[id] ?? 0) > WKInterfaceDevice.current().screenBounds.height - Landing.top - PageInset.bottom
     }
 
     /// One event, in the colours of `Ink`: the user's words a soft blue (dimmed while queued, not yet read),
@@ -657,7 +638,7 @@ struct SessionView: View {
         Text(inlineMarkdown(text))
             .foregroundColor(Ink.mine)
             .font(.system(size: 12, weight: .medium))
-            .frame(maxWidth: .infinity, alignment: .leading)
+            .mine()
     }
 
     @ViewBuilder private var status: some View {

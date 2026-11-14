@@ -73,20 +73,17 @@ struct ActivityLine: Equatable {
 /// said INTO the session — the user's prompt, as the session took it in — are drawn as the user's words, in full.
 struct ActivityLines: View {
     let lines: [ActivityLine]
-    /// A line to open extra room above (the newest item, when it is one of these lines), and how much.
-    var lift: (index: Int, by: CGFloat)? = nil
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
             ForEach(Array(lines.enumerated()), id: \.offset) { i, line in
-                // The room above the newest line, as its own spacer so the landing lands on the line.
-                if lift?.index == i { Color.clear.frame(height: max(0, lift!.by - 4)) }
                 Group {
                     switch line.kind {
                     case .said:
                         Text(inlineMarkdown(line.text))
                             .font(.system(size: 12, weight: .medium))
                             .foregroundColor(Ink.mine)
+                            .mine()
                     case .thought:
                         Markdown(text: line.text, size: 12)
                             .foregroundColor(Ink.thought)
@@ -364,12 +361,11 @@ struct BeyondEdge: Shape {
 /// Low enough that a full-width first line clears the corner curve and the thickest default edge: text
 /// sits 8pt in from the side, and the glass's corner only comes within 4.5pt of the side (leaving room
 /// for a 2.5pt edge) from about 31pt down. It is also just under `TopStrip`, on home and in a session
-/// alike. The GAP between items equals the landing, so with the newest item in place the one before it
-/// ends just above the top of the screen rather than showing a sliver.
+/// alike. Whatever sits above the newest item when it lands shows under the strip's shade, so the
+/// newest item gets no extra room above it.
 enum Landing {
     static let top: CGFloat = 32
-    /// The gap between items everywhere EXCEPT above the newest one, which gets the landing's height so
-    /// the item before it ends just above the top of the screen. The others need no such room.
+    /// The gap between items in a thread.
     static let itemGap: CGFloat = 12
 }
 
@@ -583,8 +579,18 @@ struct ThreadRow: View {
     private static let codexTint = Color(red: 0.416, green: 0.647, blue: 1.0)
 
     var body: some View {
-        Markdown(text: text, size: user ? 12 : 13, weight: user ? .medium : .regular)
+        let line = Markdown(text: text, size: user ? 12 : 13, weight: user ? .medium : .regular, fill: !user)
             .foregroundColor(user ? Ink.mine : session ? Self.sessionTint
                              : engine == "codex" ? Self.codexTint : engine == "credits" ? Self.creditsTint : .white)
+        if user { line.mine() } else { line }
+    }
+}
+
+extension View {
+    /// **The user's words hug the right edge** and the replies take the whole width, so a thread reads as
+    /// two columns before any of it is read — the same as the web hub. The text inside stays left-aligned:
+    /// a prompt is not always one line. Held off the left edge so even a long prompt reads as the right column.
+    func mine() -> some View {
+        frame(maxWidth: .infinity, alignment: .trailing).padding(.leading, 24)
     }
 }

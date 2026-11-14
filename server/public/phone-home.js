@@ -437,6 +437,9 @@ if (panes) {
     const el = panes.querySelector(`.pane-${String(name).replace(/[^a-z]/g, '')}`);
     if (!el) return false;
     panes.dataset.chosen = '1';
+    // Kept now rather than by the scroll listener's debounce, which a reload in the next 200ms (a
+    // notification tap bringing a stale page forward) would beat.
+    try { sessionStorage.setItem(PANE_KEY, String(Math.round(el.offsetLeft / panes.clientWidth))); } catch (_) {}
     // scroll-snap owns the physics; setting scrollLeft to the pane's offset lands it exactly.
     panes.scrollTo({ left: el.offsetLeft, behavior: 'smooth' });
     return true;

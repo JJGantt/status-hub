@@ -58,11 +58,20 @@ module.exports = function (ctx) {
   // How many finished turns a log is seeded with, from `desk_turns` (filled by a trigger on
   // `desk_sessions`, data-layer 00105), keyed by conversation so the history survives a resume or transfer.
   const SESSION_TURNS = 10;
+  // EVERY CALLER WAITS FOR THE ONE SEED. The log is in the map before its seed query returns, so a second
+  // caller would otherwise get it empty and append to it: a turn appended and stored meanwhile is then read
+  // back by the seed and appended again, and the thread shows that prompt and reply twice.
   async function ensureLog(conv) {
     let log = sessionLog.get(conv);
-    if (log) { log.touched = Date.now(); return log; }
+    if (log) { log.touched = Date.now(); await log.seeded; return log; }
     log = { seq: 0, events: [], touched: Date.now() };
     sessionLog.set(conv, log);
+    log.seeded = seedLog(conv, log);
+    await log.seeded;
+    return log;
+  }
+
+  async function seedLog(conv, log) {
     try {
       const turns = ((await sb(`desk_turns?conversation=eq.${encodeURIComponent(conv)}` +
         `&select=at,prompt,reply,events&order=at.desc&limit=${SESSION_TURNS}`)) || []).reverse();
@@ -79,7 +88,6 @@ module.exports = function (ctx) {
       }
     } catch (e) { console.error('[sessions] seed:', e.message); }
     sweepLogs();
-    return log;
   }
 
   // A SESSION'S THREAD HOLDS ITS LAUNCH PROMPT FROM THE MOMENT IT EXISTS. The row is written at

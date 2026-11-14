@@ -144,6 +144,24 @@ describe('a session thread (/api/sessions/:id)', () => {
       [`prompt:${PROMPT}`, 'tool:Bash: sqlite3 litter.db']);
   });
 
+  test('a turn stored while the history is still loading is in the thread once', async () => {
+    const conv = 'aaaa0004-0000-0000-0000-000000000000';
+    launched('s-thread04', conv);
+    supa.tables.desk_turns = supa.tables.desk_turns || [];
+    supa.rpc.desk_turn_events = (_, b) => { supa.tables.desk_turns.push({ conversation: b.conv, at: b.turn_at, reply: b.turn_reply, events: b.turn_events }); };
+    supa.slowReads.desk_turns = 400;
+    try {
+      const said = (n, state, text, extra = {}) => json(h.DEVICE_TOKEN, 'POST', '/api/session-activity',
+        { session: 's-thread04', turn: 't1', n, state, text, ...extra });
+      const opening = json(h.DEVICE_TOKEN, 'GET', '/api/sessions/s-thread04');
+      await new Promise((r) => setTimeout(r, 100));
+      await said(1, 'said', PROMPT, { cmd: 'cmd-s-thread04' });
+      await said(2, 'done', 'Twice a day.', { at: '2026-11-13T22:00:00Z', events: [{ n: 1, state: 'said', text: PROMPT }] });
+      await opening;
+    } finally { supa.slowReads.desk_turns = 0; }
+    assert.deepEqual(kinds(await json(h.DEVICE_TOKEN, 'GET', '/api/sessions/s-thread04')), [`prompt:${PROMPT}`, 'reply:Twice a day.']);
+  });
+
   test('matched by text when the host sent no command id', async () => {
     launched('s-thread03', 'aaaa0003-0000-0000-0000-000000000000');
     await json(h.DEVICE_TOKEN, 'GET', '/api/sessions/s-thread03');

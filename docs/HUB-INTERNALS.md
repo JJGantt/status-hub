@@ -1307,7 +1307,8 @@ its own placeholder by id. A follow-up to a PARKED session is a `resume_session`
 
 Kept in memory per conversation, 2000 events, dropped after a day untouched, and seeded on first
 touch from `desk_turns` (each finished turn's `events`, then its reply) so a cold open or a restart
-has the history in order.
+has the history in order. Every caller waits for that one seed (`ensureLog`): a frame appended while it was
+still loading is stored to `desk_turns` and then read back by the seed, which draws that turn twice.
 
 **The turn in flight survives a restart because the host can say it again.** Every deploy empties this
 list, and the running turn is in no table. A host numbers a turn's events (`turn`, the uuid of the

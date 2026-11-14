@@ -34,16 +34,20 @@ function fakeSupabase() {
       const u = new URL(req.url, 'http://x');
       res.setHeader('Content-Type', 'application/json');
       res.setHeader('Content-Range', '0-0/0');
+      let data = [];
+      try { data = body ? JSON.parse(body) : []; } catch {}
       const fn = /^\/rest\/v1\/rpc\/([^/]+)$/.exec(u.pathname);
-      if (fn) return res.end(JSON.stringify(api.rpc[fn[1]] ? api.rpc[fn[1]](u.searchParams) : null));
+      if (fn) return res.end(JSON.stringify(api.rpc[fn[1]] ? api.rpc[fn[1]](u.searchParams, data) : null));
       const m = /^\/rest\/v1\/([^/]+)$/.exec(u.pathname);
       if (!m) { res.statusCode = 404; return res.end('{}'); }
       const rows = (tables[m[1]] = tables[m[1]] || []);
-      const hit = rows.filter((r) => matches(r, u.searchParams));
       if (api.failWrites && req.method !== 'GET') { res.statusCode = 500; return res.end('{}'); }
-      let data = [];
-      try { data = body ? JSON.parse(body) : []; } catch {}
-      if (req.method === 'GET') return res.end(JSON.stringify(hit));
+      // `slowReads[table]` holds a read back that long, so a test can land a write inside it.
+      if (req.method === 'GET') {
+        const answer = () => res.end(JSON.stringify(rows.filter((r) => matches(r, u.searchParams))));
+        return api.slowReads[m[1]] ? setTimeout(answer, api.slowReads[m[1]]) : answer();
+      }
+      const hit = rows.filter((r) => matches(r, u.searchParams));
       if (req.method === 'POST') {
         const added = [].concat(data).map((r) => ({ created_at: new Date().toISOString(), ...r }));
         rows.push(...added);
@@ -60,7 +64,7 @@ function fakeSupabase() {
     muscle_volume: () => ({ window: [], bouts: [], days: [], targets: { _default: 14 } }),
     desk_sessions_state: () => ({ numbers: {}, focus: { session_id: null, pinned: false, pending: false } }),
   };
-  api = { tables, rpc, failWrites: false, close: () => server.close() };
+  api = { tables, rpc, failWrites: false, slowReads: {}, close: () => server.close() };
   return new Promise((resolve) => server.listen(0, '127.0.0.1', () => {
     api.url = `http://127.0.0.1:${server.address().port}`;
     resolve(api);

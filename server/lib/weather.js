@@ -124,8 +124,9 @@ async function refresh() {
     if (built.pop.replace(/\./g, '')) { cache = built; at = Date.now(); }
   } catch (e) {
     // Keep the last good copy. A gridpoint that 500s for an hour is normal for this API, and a stale
-    // grid is worth far more than an empty one — `at` is left alone so the next tick retries.
-    console.error('[weather] refresh failed:', e.message);
+    // grid is worth far more than an empty one — `at` is left alone so the next tick retries. So it
+    // reports as an occurrence: a watch on its count raises an outage that lasts, not one blip.
+    console.warn('[weather] refresh failed:', e.message);
   } finally { pending = false; }
 }
 

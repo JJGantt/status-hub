@@ -271,10 +271,11 @@ struct SessionView: View {
             }
             // **Swiping right closes it.** Sessions is the leftmost page, so the page row has nothing to
             // turn to on a rightward swipe and the drag is free to mean back. Mostly sideways, so a
-            // scroll that drifts is not one; simultaneous, so the scroll and the page row keep theirs.
+            // scroll that drifts is not one; simultaneous, so the scroll and the page row keep theirs. Not
+            // while a table is being dragged sideways (`TableScroll`), which is the same motion.
             .simultaneousGesture(DragGesture(minimumDistance: 20).onEnded { g in
                 let dx = g.translation.width, dy = g.translation.height
-                guard dx > 40, dx > 2 * abs(dy), !sessions.path.isEmpty else { return }
+                guard dx > 40, dx > 2 * abs(dy), !sessions.path.isEmpty, !TableDrag.recently else { return }
                 Hub.log("swipe-close", ["row": key])
                 sessions.path.removeLast()
             })

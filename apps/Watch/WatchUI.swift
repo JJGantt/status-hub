@@ -1,15 +1,22 @@
 import SwiftUI
 import WatchKit
 
-/// Inline markdown (bold, italics, code) renders; blocks are `Markdown`'s job. LINKS DO NOT: a link's
-/// words stay as plain text with no target. On the watch a tapped link only ever opened an error, and
-/// as a hit target inside a reply it took the tap meant for the screen around it.
+/// Inline markdown (bold, italics, code, links) renders; blocks are `Markdown`'s job. A bare http(s) URL
+/// is made a link too, since that is how a model usually writes one.
 func inlineMarkdown(_ s: String) -> AttributedString {
     var a = (try? AttributedString(markdown: literalAngles(s), options: .init(interpretedSyntax: .inlineOnlyPreservingWhitespace)))
         ?? AttributedString(s)
-    a.link = nil
+    guard let detector = linkDetector else { return a }
+    let plain = String(a.characters)
+    for m in detector.matches(in: plain, range: NSRange(plain.startIndex..., in: plain)) {
+        guard let url = m.url, let sr = Range(m.range, in: plain), plain[sr].hasPrefix("http"),
+              let r = Range(m.range, in: a), a[r].link == nil else { continue }
+        a[r].link = url
+    }
     return a
 }
+
+private let linkDetector = try? NSDataDetector(types: NSTextCheckingResult.CheckingType.link.rawValue)
 
 /// **Every `<` outside a code span is escaped**, so it renders as itself. Foundation's parser drops raw
 /// HTML, and a line that is only a tag (`<incident-data-…>` opening an incident agent's prompt) starts a
@@ -48,6 +55,7 @@ func literalAngles(_ s: String) -> String {
 func snippet(_ s: String) -> AttributedString {
     var a = inlineMarkdown(s)
     a.inlinePresentationIntent = nil
+    a.link = nil
     return a
 }
 

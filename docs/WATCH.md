@@ -257,12 +257,14 @@ read, so every such reply goes into an inbox: kept for good, newest first, read 
 
 Every reply and thought on the watch, home's thread and a session's alike, is drawn by `Markdown`
 (`Markdown.swift`): headings at their own sizes, nested lists, fenced code, quotes, rules and tables,
-with `inlineMarkdown` doing the inside of each block (bold, italics, code).
+with `inlineMarkdown` doing the inside of each block (bold, italics, code, links, bare http(s) URLs).
 `Text` alone renders only the inline part and runs every block into one paragraph, which is why the
-blocks are split out first. A table wider than the screen scrolls sideways (`ViewThatFits`) instead of
-wrapping each cell to a word a line. **Links are not links on the watch**: `inlineMarkdown` drops every
-link target and keeps its words as plain text, because a tapped link opened only an error and, as a hit
-target inside a reply, swallowed taps meant for the screen.
+blocks are split out first. A table wider than the screen drags sideways instead of wrapping each cell to
+a word a line: `ViewThatFits` picks `TableScroll`, which moves the table by hand under a high-priority
+drag, because the page row's swipe beats a horizontal ScrollView inside a page and turns the page
+instead. A vertical drag that starts on such a table is the table's too; the crown still scrolls. While
+a table is being dragged, a session's swipe-right-to-close stands aside (`TableDrag.recently`). A tapped
+link opens in the watch's own web view.
 
 ### The sessions page
 

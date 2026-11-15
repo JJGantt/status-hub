@@ -53,10 +53,11 @@ struct Markdown: View {
         case .rule:
             Rectangle().frame(height: 1).opacity(0.3)
         case .table(let align, let header, let rows):
-            // Wider than the screen scrolls sideways rather than wrapping every cell to a word a line.
+            // Wider than the screen drags sideways rather than wrapping every cell to a word a line —
+            // by hand (`TableScroll`), since the page row's swipe beats a horizontal ScrollView.
             ViewThatFits(in: .horizontal) {
                 grid(align, header, rows)
-                ScrollView(.horizontal, showsIndicators: false) { grid(align, header, rows) }
+                TableScroll { grid(align, header, rows) }
             }
         }
     }
@@ -193,4 +194,45 @@ enum MarkdownBlock {
             p.hasPrefix(":") && p.hasSuffix(":") ? .center : p.hasSuffix(":") ? .trailing : .leading
         }
     }
+}
+
+/// **A table wider than the screen, dragged sideways under a HIGH-PRIORITY drag**, the `SideScroll` trick:
+/// the page row's swipe beats a horizontal ScrollView inside a page, so a ScrollView here turned the page
+/// instead of moving the table. Rests on the left and clamps to the content. The drag starts after 6pt,
+/// so a tap still reaches the page. While it moves, `SessionView`'s swipe-right-to-close stands aside
+/// (`TableDrag.recently`), since that drag is simultaneous and would otherwise close the session mid-scroll.
+/// A vertical drag that starts on the table is claimed too; the crown, or a drag off the table, scrolls.
+struct TableScroll<Content: View>: View {
+    @ViewBuilder let content: () -> Content
+    @State private var shift: CGFloat = 0
+    @State private var contentW: CGFloat = 0
+    @State private var boxW: CGFloat = 0
+    @GestureState private var drag: CGFloat = 0
+
+
+    var body: some View {
+        let room = max(0, contentW - boxW)
+        let shown = min(max(shift - drag, 0), room)
+        content()
+            .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { contentW = $0 }
+            .offset(x: -shown)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { boxW = $0 }
+            .clipped()
+            .contentShape(Rectangle())
+            .highPriorityGesture(
+                DragGesture(minimumDistance: 6)
+                    .updating($drag) { v, state, _ in state = v.translation.width; TableDrag.last = Date() }
+                    .onEnded { v in
+                        TableDrag.last = Date()
+                        shift = min(max(shift - v.translation.width, 0), room)
+                    }
+            )
+    }
+}
+
+/// When a table was last dragged, for the swipe that closes a session to stand aside.
+@MainActor enum TableDrag {
+    static var last = Date.distantPast
+    static var recently: Bool { Date().timeIntervalSince(last) < 0.6 }
 }

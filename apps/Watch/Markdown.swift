@@ -216,7 +216,10 @@ struct TableScroll<Content: View>: View {
         content()
             .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { contentW = $0 }
             .offset(x: -shown)
-            .frame(maxWidth: .infinity, alignment: .leading)
+            // minWidth 0 is what makes this frame narrower than the table: with only maxWidth it
+            // takes the table's width, and the whole reply around it is laid out that wide and
+            // centred, spilling off both edges.
+            .frame(minWidth: 0, maxWidth: .infinity, alignment: .leading)
             .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { boxW = $0 }
             .clipped()
             .contentShape(Rectangle())

@@ -437,6 +437,13 @@ an event, so `sessionWatch.js` watches it on both machines and pushes what it se
 
     Every surface draws that list and nothing else (HUB-INTERNALS.md § The conversation as one list).
 
+**`done` and the summary behind it are sent until the hub takes them** (`pushUntilHeard`, about four
+minutes of retries, then an error). The watcher writes `last_reply` to the row directly, so the tick
+reads a turn whose `done` was lost as already reported and never re-sends it: without the retry, a
+network drop at the turn's end leaves the prompt with no reply under it in every view, while the
+notification (from the summary, sent seconds later) still arrives. The summary goes only once `done`
+has landed, so a notification never announces a reply the conversation does not show.
+
 The database write is not in the delivery path. It still happens, because the reply has to outlive
 the moment, but the wall hears from the machine that has the answer rather than
 waiting for a round trip through Postgres.

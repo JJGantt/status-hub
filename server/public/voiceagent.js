@@ -316,7 +316,16 @@ export function watchMic() {
   document.addEventListener('hub:audioplayed', dirtyMic);
   // Hidden closes the device whoever holds it, and forgets the holders: each recorder's own release
   // afterwards finds nothing left to close.
-  const drop = () => { micUsers = 0; releaseMic(); };
+  //
+  // A RECORDING IS HELD BEFORE ITS DEVICE IS CUT. `hub:micdrop` is dispatched first, synchronously, and a
+  // recorder that is capturing stops itself to hold what it has (pause() in makeRecorder). Stopping the
+  // tracks first and leaving the MediaRecorder to notice is the attractive order and the unsafe one: what
+  // a recorder delivers after its source ended under it is not something the page can check, and a
+  // command whose first half went missing that way reached a session as a bare ".".
+  const drop = () => {
+    document.dispatchEvent(new CustomEvent('hub:micdrop'));
+    micUsers = 0; releaseMic();
+  };
   document.addEventListener('visibilitychange', () => { if (document.hidden) drop(); });
   window.addEventListener('pagehide', drop);
   // A device arriving or leaving (AirPods, a car) re-routes a held capture, which makes it the first
@@ -455,6 +464,7 @@ export function makeRecorder({ onStatus = () => {}, onState: paint = () => {}, q
   let held = [];                      // parts recorded before an interruption, waiting for the rest
   let paused = false;                 // interrupted: `held` is waiting for the user to carry on
   let pausing = false;                // pause(): the recorder is stopping to be held, not sent
+  let pauseWhy = '';                  // what paused it, for the `voice-paused` log line
   const pickMime = () => {
     for (const m of ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4', 'audio/ogg'])
       if (window.MediaRecorder && MediaRecorder.isTypeSupported(m)) return m;
@@ -527,7 +537,7 @@ export function makeRecorder({ onStatus = () => {}, onState: paint = () => {}, q
   // nothing to keep.
   function pause(why) {
     if (!recording || !rec || rec.state === 'inactive') return;
-    pausing = true;
+    pausing = true; pauseWhy = why;
     trace('pause', { why });
     try { rec.stop(); } catch (_) { pausing = false; }
   }
@@ -535,6 +545,11 @@ export function makeRecorder({ onStatus = () => {}, onState: paint = () => {}, q
     const blob = new Blob(chunks, { type: mime || 'audio/webm' });
     chunks = [];
     if (blob.size) held.push(blob);
+    // Kept in client_log (src phone): a paused command is the case nothing else on the page can show
+    // afterwards, and an empty part here is a command losing its words.
+    clientLog({ src: 'phone', ev: 'voice-paused', why: pauseWhy || 'ended', bytes: blob.size,
+                secs: +((performance.now() - startedAt) / 1000).toFixed(1), parts: held.length });
+    pauseWhy = '';
     for (const t of (stream ? stream.getAudioTracks() : [])) t.onmute = null;
     release();
     dirtyMic();          // whatever capture survives the interruption is suspect: the next claim reopens
@@ -548,6 +563,7 @@ export function makeRecorder({ onStatus = () => {}, onState: paint = () => {}, q
     if (e.detail && e.detail.began) pause('interrupted'); else carryOn('interruption-ended');
   });
   document.addEventListener('visibilitychange', () => { if (!document.hidden) carryOn('shown'); });
+  document.addEventListener('hub:micdrop', () => pause('hidden'));
   // A finished recording lets go of the microphone, which closes it unless another recorder holds it.
   function release() {
     stream = null;
@@ -574,6 +590,8 @@ export function makeRecorder({ onStatus = () => {}, onState: paint = () => {}, q
       onStatus('', 'clear');
       return;
     }
+    if (prefixParts.length) clientLog({ src: 'phone', ev: 'voice-parts', dry: !!dry, last: blob.size,
+      secs: +dur.toFixed(1), parts: prefixParts.map((b) => b.size) });
     if (!blob.size) { blob = prefixParts[prefixParts.length - 1]; prefixParts = prefixParts.slice(0, -1); dur = 0; }
     // Durable from here: the clip stays on the phone until the server confirms it (the voice outbox).
     await sendVoice({ blob, dry, quick: !!quick, dur,
@@ -989,7 +1007,8 @@ async function uploadVoice(item, onStatus, owner) {
     // Bytes are the qualifier: a clip too short to contain anything is not evidence of a dead mic.
     if ((item.blob ? item.blob.size : 0) > 2048) {
       dirtyMic();
-      clientLog({ ev: 'mic-empty-transcript', bytes: item.blob.size, dur: item.dur, dry: !!item.dry });
+      clientLog({ src: 'phone', ev: 'mic-empty-transcript', bytes: item.blob.size, dur: item.dur, dry: !!item.dry,
+        parts: (item.prefixParts || []).length });
     }
     onStatus('Didn’t catch that — try again', 'err');
     if (!item.dry) pushPending({ state: 'clear' });

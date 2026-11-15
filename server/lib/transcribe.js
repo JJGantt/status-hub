@@ -93,8 +93,14 @@ function clipSeconds(file) {
 // typed into a session. The cost is that saying only "thank you" is dropped too. The same rule is in
 // voice-pipeline's server.py and mac-listener/listener.py, the other two places speech becomes text, and
 // again where a model is started from words: the voice worker, and a session follow-up (routes/sessions.js).
+//
+// A TRANSCRIPT WITH NO LETTER OR DIGIT IN IT IS NOTHING HEARD TOO. Whisper writes "." for a clip of
+// near-silence (a phone command resumed after an app switch and stopped at once), and a dictation that
+// came back as "." was typed into a session as the whole message. Unicode classes, because JS `\W`
+// counts every non-ASCII letter as punctuation.
 const NOTHING_SAID = /^\W*thank\s+you\W*$/i;
-const heard = (t) => (NOTHING_SAID.test(t) ? '' : t);
+const NO_WORDS = /^[^\p{L}\p{N}]*$/u;
+const heard = (t) => (NOTHING_SAID.test(t) || NO_WORDS.test(t) ? '' : t);
 
 // `model` picks the Groq model; omitted, it is turbo. Turbo can drop a whole stretch of a clip and
 // return the rest as if that were everything: a 27s watch command lost its first 10s (the cereal) on
@@ -187,4 +193,4 @@ async function diarize(file, contentType) {
   return { transcript, segments, model: DIARIZE_MODEL };
 }
 
-module.exports = { transcribe, shortenPauses, diarize, NOTHING_SAID, clipSeconds, extFor, GROQ_MAX_BYTES, SEGMENT_S };
+module.exports = { transcribe, heard, shortenPauses, diarize, NOTHING_SAID, clipSeconds, extFor, GROQ_MAX_BYTES, SEGMENT_S };

@@ -37,6 +37,11 @@ recorder's other guarantees (a recording ended underneath it — a timer, Siri, 
 is paused and carried on, never sent half-said or dropped; an upload is bounded;
 `cancel()` is the only way to end one without sending).
 
+Leaving the app pauses a recording BEFORE the page closes the microphone: `watchMic`'s drop dispatches
+`hub:micdrop` first, and a capturing recorder stops itself to hold its audio. Every pause and every
+multi-part send is kept in `client_log` (src `phone`) as `voice-paused` and `voice-parts`, with each
+part's size, so a command that loses its words across an app switch shows which part came up empty.
+
 ## The always-on button
 
 `makeListener()` in `voiceagent.js`. Engaged, it holds the mic, watches level against a noise floor
@@ -94,9 +99,10 @@ An iOS capture track that loses the audio session produces zeros while still rep
 silence itself.
 
 So the signal is the one EVERY recorder produces: a clip with real bytes in it coming back with an
-empty transcript. Whisper writes "Thank you." for a clip with no speech in it, and the hub turns that
-phrase alone into an empty transcript (`heard()` in `lib/transcribe.js`), so empty means the microphone
-reported nothing.
+empty transcript. Whisper writes "Thank you." or a bare "." for a clip with no speech in it, and the hub
+turns that phrase alone, and any transcript with no letter or digit in it, into an empty transcript
+(`heard()` in `lib/transcribe.js`), so empty means the microphone reported nothing — and a dictation
+that heard nothing is never typed into a session as a message.
 `deliverVoice` marks the stream dirty there and the next press re-acquires. Clips under 2KB are
 exempt — too short to contain anything is not evidence of a dead device.
 

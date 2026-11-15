@@ -425,6 +425,19 @@ function muteOthers(on) {
 
 const VOICE_BPS = 96000;
 
+// THE APP RECORDS A PRESSED COMMAND NATIVELY, so it survives leaving the app (apps/Sources/NativeRec.swift).
+// WebKit stops a page's capture the moment the app goes to the background, so a command recorded here
+// loses everything said in another app; the native recorder keeps going behind it, like the watch's.
+// In a browser, or an app build without the handler, the recorder falls back to getUserMedia.
+const nativeRec = (() => { try { return window.webkit.messageHandlers.nativeRec || null; } catch (_) { return null; } })();
+// A page loading while the app still records belongs to no recorder here: the app drops it.
+if (nativeRec) { try { nativeRec.postMessage({ op: 'reset' }); } catch (_) {} }
+function b64Blob(b64, type) {
+  const bin = atob(b64), bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  return new Blob([bytes], { type });
+}
+
 // A self-contained recorder: getUserMedia → MediaRecorder → upload to /api/voice-command.
 // quick=true marks a one-off quick-add (the FAB) so the server tags it for a terse reply.
 // dryWhen (optional): checked at upload time — when true, the server only transcribes (?dry=1) and the
@@ -476,8 +489,37 @@ export function makeRecorder({ onStatus = () => {}, onState: paint = () => {}, q
   // on top of the first. Both then shared one `chunks`, and the orphaned stream held the mic open, so
   // what reached Groq was an empty clip — which it transcribes as "Thank you." rather than as nothing.
   // `arming` is set synchronously, before the await, so a second tap can only ever be a stop.
+  // The native path: the app records, and answers on `hub:nativerec` for this recording's id.
+  let nativeId = '';
+  if (nativeRec) document.addEventListener('hub:nativerec', (e) => {
+    const d = e.detail || {};
+    if (!d.id || d.id !== nativeId) return;
+    if (d.state === 'rec') {
+      if (!arming) { nativeRec.postMessage({ op: 'cancel', id: nativeId }); nativeId = ''; return; }
+      arming = false; recording = true; onState('rec');
+      trace('start:recording', { native: true });
+      muteOthers(true);
+      onStatus('Listening… tap to send', 'rec');
+    } else if (d.state === 'done') {
+      nativeId = '';
+      trace('upload:begin', { native: true });
+      ship(b64Blob(d.b64, d.mime || 'audio/mp4'), +d.secs || 0)
+        .finally(() => { sending = false; onState('idle'); trace('upload:end'); });
+    } else if (d.state === 'error') {
+      nativeId = ''; arming = false; recording = false; sending = false;
+      muteOthers(false);
+      onState('idle'); onStatus(d.error || 'Recording failed', 'err');
+    }
+  });
   async function start() {
     if (recording || arming || sending) return;
+    if (nativeRec) {
+      arming = true; onState('armed');
+      nativeId = crypto.randomUUID();
+      trace('start:arming', { native: true });
+      nativeRec.postMessage({ op: 'start', id: nativeId });
+      return;
+    }
     const resuming = paused;
     paused = false;
     arming = true; onState('armed');          // the tap is acknowledged here, not when the mic opens
@@ -514,6 +556,17 @@ export function makeRecorder({ onStatus = () => {}, onState: paint = () => {}, q
     // long instructions off mid-sentence.
   }
   function stop() {
+    if (nativeRec) {
+      if (arming) { arming = false; nativeRec.postMessage({ op: 'cancel', id: nativeId }); nativeId = '';
+                    onState('idle'); onStatus('', 'clear'); return; }
+      if (!recording) return;
+      recording = false; sending = true; onState('armed');
+      trace('stop:enter', { native: true });
+      if (discard) { discard = false; sending = false; nativeRec.postMessage({ op: 'cancel', id: nativeId }); nativeId = '';
+                     muteOthers(false); onState('idle'); onStatus('', 'clear'); return; }
+      nativeRec.postMessage({ op: 'stop', id: nativeId });
+      return;
+    }
     // Tapped again before the mic ever opened: cancel the arming rather than fall through as a no-op.
     if (arming) {
       arming = false;
@@ -575,12 +628,17 @@ export function makeRecorder({ onStatus = () => {}, onState: paint = () => {}, q
   }
   async function send(mime) {
     release();
+    const blob = new Blob(chunks, { type: mime || 'audio/webm' });
+    chunks = [];
+    await ship(blob, (performance.now() - startedAt) / 1000);
+  }
+  // The clip, from either recorder, into the outbox with whatever was held before an interruption.
+  async function ship(clip, secs) {
     muteOthers(false);   // FAB done with the mic → the other listeners resume
     const dry = typeof dryWhen === 'function' && dryWhen();
-    let blob = new Blob(chunks, { type: mime || 'audio/webm' });
-    let dur = (performance.now() - startedAt) / 1000;
+    let blob = clip, dur = secs;
     let prefixParts = held;
-    chunks = []; held = [];
+    held = [];
     if (discard) { discard = false; onStatus('', 'clear'); return; }
     // No bytes at all: nothing to send. A dictation caller is told, so it can leave its own state.
     // A clip WITH bytes always goes up — the hub's transcript is the judge of whether it held words.

@@ -532,6 +532,10 @@ struct HubWebView {
                 // The Stream button in Utilities: the capture is native (LiveMic.swift), the page only asks.
                 let body = message.body
                 DispatchQueue.main.async { LiveMic.shared.handle(body) }
+            case "nativeRec":
+                // The page's mic buttons record natively so a recording survives leaving the app (NativeRec.swift).
+                let body = message.body
+                DispatchQueue.main.async { MainActor.assumeIsolated { NativeRec.shared.handle(body) } }
             default: break
             }
             #endif
@@ -547,6 +551,7 @@ struct HubWebView {
         cfg.userContentController.add(coordinator, name: "alarmAudio")     // page -> claim a .playback session while ringing
         #if os(iOS)
         cfg.userContentController.add(coordinator, name: "liveMic")        // page -> stream the microphone to the watch
+        cfg.userContentController.add(coordinator, name: "nativeRec")      // page -> record a command natively
         cfg.userContentController.add(coordinator, name: "openURL")        // page -> open a reply's link in Safari
         #endif
         cfg.mediaTypesRequiringUserActionForPlayback = []
@@ -569,6 +574,7 @@ struct HubWebView {
         PageLaunch.session.webView = wv    // …and a tapped session-reply notification
         PageLaunch.answer.webView = wv     // …and a tapped answer notification
         MainActor.assumeIsolated { LiveMic.shared.web = wv }   // so the live mic can report its state to the page
+        MainActor.assumeIsolated { NativeRec.shared.web = wv } // and the native recorder can hand back its clip
         #endif
         #if os(iOS)
         wv.scrollView.contentInsetAdjustmentBehavior = .never

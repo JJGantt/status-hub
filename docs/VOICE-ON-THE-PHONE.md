@@ -37,8 +37,19 @@ recorder's other guarantees (a recording ended underneath it — a timer, Siri, 
 is paused and carried on, never sent half-said or dropped; an upload is bounded;
 `cancel()` is the only way to end one without sending).
 
-Leaving the app pauses a recording BEFORE the page closes the microphone: `watchMic`'s drop dispatches
-`hub:micdrop` first, and a capturing recorder stops itself to hold its audio. Every pause and every
+**In the app, a pressed recording is native and keeps going behind other apps**
+(`apps/Sources/NativeRec.swift`, message `nativeRec`). WebKit stops a page's capture the moment the app
+leaves the screen, so `makeRecorder` hands the recording to an `AVAudioRecorder` under the app's `audio`
+background mode whenever the handler exists: switching apps mid-sentence records straight through, an
+interruption (a call, Siri, a timer) pauses the same file and carries on into it, and the stop tap gets the
+whole clip back as base64 AAC with its recorded seconds, which then goes up through the same outbox as any
+clip. A page loading while the app records sends `reset`, which drops that recording (it belongs to no
+recorder on the new page) and logs `nativerec-orphaned`. The always-on button (`makeListener`) stays on
+WebKit, because it needs the live level to cut utterances.
+
+In a browser, or an app build without the handler, the recorder uses `getUserMedia`, and leaving the page
+pauses it BEFORE the page closes the microphone: `watchMic`'s drop dispatches `hub:micdrop` first, and a
+capturing recorder stops itself to hold its audio. Every pause and every
 multi-part send is kept in `client_log` (src `phone`) as `voice-paused` and `voice-parts`, with each
 part's size, so a command that loses its words across an app switch shows which part came up empty.
 

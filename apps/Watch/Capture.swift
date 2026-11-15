@@ -274,6 +274,20 @@ final class Capture: ObservableObject {
         return clip
     }
 
+    /// Switches the command or follow-up under way to the locked flow (amber to red) without stopping it:
+    /// the audio so far stays in the same clip and it carries on recording, only the silence and the
+    /// quick cap no longer end it, so the next press sends it. The clip goes up as a locked one
+    /// (`Clip.locked`), its quiet map starting here. The live stream keeps the flow it opened with.
+    func lock() {
+        guard mutes, flow != .locked else { return }
+        let from = flow
+        flow = .locked
+        locked = endsOnSilence
+        quiet = []
+        quietSince = nil
+        Hub.log("mic-locked", ["from": from.rawValue, "seconds": segment])
+    }
+
     /// Ends the recording and throws it away.
     func cancel() {
         guard owner != nil else { return }

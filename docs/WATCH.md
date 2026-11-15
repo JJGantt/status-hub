@@ -465,8 +465,8 @@ reaches the top and its first line still starts below the strip.
 
 ### The command is on every page
 
-There is no control on screen. **Double tap runs a command, press and hold (home only) starts a locked
-one or throws a recording away, and a line around the very edge of the glass says what is happening** (`CommandBorder`, one overlay on
+There is no control on screen. **Double tap runs a command, press and hold turns an amber recording red,
+throws a red one away, or (home only) starts a red one, and a line around the very edge of the glass says what is happening** (`CommandBorder`, one overlay on
 `RootView`'s whole navigation stack, so it is the same on every page and inside a session, where a
 command goes to the session instead of the hub):
 
@@ -701,7 +701,10 @@ itself `watch_quick_s` seconds (Settings → Watch: quick command, 5 when unset)
 opens — counted from the chirp, in seconds of audio — whatever is being said; a cap reached with no speech
 heard throws the clip away instead, and either logs `mic-end` with `reason: cap`.
 
-**Press and hold (0.6s) cancels the recording under way**, on home and in a session. On home, with
+**Press and hold (0.6s) on an AMBER recording turns it red** (`Capture.lock`): nothing stops, the
+audio so far stays in the same clip, and it records on with the silence and the quick cap no longer
+ending it, so the next press sends it, as a locked clip. **A hold on a RED recording cancels it**, on
+home and in a session, so cancelling an amber one takes two holds. On home, with
 nothing recording, it starts a locked recording (red, the `Hub Locked` flow), so home offers both: a
 tap for the amber recording that sends at the silence, a hold for the one only a press sends. A hold
 while a reply is being spoken stops the speech instead (`CommandBorder.hold`). **In a session a

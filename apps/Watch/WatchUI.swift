@@ -110,7 +110,7 @@ struct ActivityLines: View {
 }
 
 /// **The command's state is the edge of the glass.** There is no control on screen: double tap runs a
-/// command, press and hold starts a locked one or throws a recording away, and a one-pixel line around the very edge of the display
+/// command, press and hold turns an amber one red, throws a red one away, or starts a red one, and a one-pixel line around the very edge of the display
 /// says what is happening — the whole screen stays content. It is ONE overlay over the whole
 /// navigation stack, so it is the same on every page and inside a session, where the command goes
 /// to the session instead of the hub.
@@ -246,12 +246,19 @@ struct CommandBorder: View {
         }
     }
 
-    /// Press and hold: throw away the recording under way, or with none, start a locked one (red,
-    /// `Capture.Flow.locked`), which only the next press sends. A command already sent is never thrown
-    /// away. `starts` is false on the pages where a tap does something else.
+    /// Press and hold: an amber recording turns red (`Capture.lock`), keeping everything said so far and
+    /// recording on; a red one is thrown away; with none, it starts a red one (`Capture.Flow.locked`),
+    /// which only the next press sends. So cancelling an amber recording is two holds. A command already
+    /// sent is never thrown away. `starts` is false on the pages where a tap does something else.
     static func hold(chat: Chat, sessions: Sessions, starts: Bool) {
         let target = sessions.target
         let capture = Capture.shared
+        let mine = capture.owner == .hub || (target != nil && capture.owner == target.map(Capture.Owner.session))
+        if mine && capture.flow != .locked {
+            capture.lock()
+            WKInterfaceDevice.current().play(.success)
+            return
+        }
         if let target, capture.owner == .session(target) { sessions.cancelRecording(target); return }
         if capture.owner == .hub { chat.cancelRecording(); return }
         guard starts else { return }

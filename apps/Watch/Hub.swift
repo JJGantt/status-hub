@@ -393,7 +393,7 @@ enum Hub {
     // MARK: The fallback, for when the hub does not answer
 
     /// Supabase's `voice-fallback` edge function (data-layer supabase/functions). It runs off Fly, so it
-    /// is up when the hub is not: it transcribes the clip and queues it for the workers (the Pi's first), which runs
+    /// is up when the hub is not: it transcribes the clip and queues it for the voice workers, which runs
     /// it on Opus and says it came this way. Same token as the hub; the function checks its hash.
     static let fallbackURL = "https://felyggqjjhltwokdfhop.supabase.co/functions/v1/voice-fallback"
 

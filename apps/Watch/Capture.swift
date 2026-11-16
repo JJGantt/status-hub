@@ -178,6 +178,19 @@ final class Capture: ObservableObject {
         }
         live = LiveStream.open(view: view, flow: flow.rawValue, format: format)
         recorder.live = live
+        let id = live?.id
+        live?.onDropped = { [weak self] in Task { @MainActor in self?.streamDropped(id) } }
+    }
+
+    /// THE HUB STOPPED RECEIVING WHILE THE USER IS STILL TALKING: the recording stops now rather than
+    /// letting them talk on into a failure. The wrist gets the failure haptic, and the recording is sent
+    /// exactly as a press would send it (`onSilence`, which the views hand in as their stop-and-send): the
+    /// clip goes up whole, since the hub answers a broken stream with `upload`. Reported as `live-broken`.
+    private func streamDropped(_ id: String?) {
+        guard let id, live?.id == id, mutes else { return }
+        Hub.log("live-broken", ["id": id, "seconds": segment, "view": String(describing: owner)])
+        WKInterfaceDevice.current().play(.failure)
+        onSilence?()
     }
 
     /// Every way out of a recording tells the stream which one it was before it closes.

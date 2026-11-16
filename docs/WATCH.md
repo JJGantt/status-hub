@@ -806,6 +806,14 @@ than the recording; only then does the clip itself go up (`live-refused` in `cli
 `timing.audio_via` says which path ran). On the watch, `live-open`, `live-done` and `live-dropped` (the stream
 failed while the recording carried on) are in `client_log`.
 
+**A stream that fails mid-recording stops the recording** (`streamDropped` in `Capture.swift`), except the
+hub's own 408 on a long locked one: the wrist gets the failure haptic and the recording is sent as a press
+would send it, through the view's `onSilence` stop-and-send, so the clip goes up whole. It logs
+`live-broken`, which `/api/clientlog` reports to the ops responder. A recording with no stop-and-send (a
+rewind's instructions) gets the haptic and carries on. This catches a connection that ERRORS; a network
+that silently swallows the body is not seen until it errors, since nothing acknowledges the stream while
+its body is open (the phone's chunked streams are acknowledged per second, `VOICE-ON-THE-PHONE.md`).
+
 **The next-start check is the backstop** for the one case the stream cannot see: an app that dies while
 its network is down, or a stream that never opened. `/api/clientlog` runs `checkRecordings`
 (`server/routes/voice.js`, rule in `server/lib/outcomes.js`) on every batch holding a `record-start`: an

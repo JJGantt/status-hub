@@ -34,6 +34,9 @@ final class LiveStream: NSObject, URLSessionTaskDelegate, @unchecked Sendable {
     /// Bytes of audio dropped because the stream had fallen this far behind; logged at the end.
     private var dropped = 0
     private static let backlogCap = 512 * 1024
+    /// Called once, off the main thread, when the stream fails while the recording is still going — the
+    /// hub has stopped receiving it. Capture stops the recording on it, loudly, and sends the clip.
+    var onDropped: (@Sendable () -> Void)?
 
     /// Opens the stream for a recording whose 16 kHz mono float audio will arrive through `write`. Nil
     /// when there is no token yet or the encoder cannot be built; the recording then goes on without one.
@@ -194,6 +197,9 @@ final class LiveStream: NSObject, URLSessionTaskDelegate, @unchecked Sendable {
             // notice this one dying now.
             Hub.log(early ? "live-dropped" : "live-done", ["id": self.id, "status": code,
                                                           "error": error.map { String(describing: $0).prefix(120).description } ?? ""])
+            // 408 is the hub's own request limit on a long locked recording, which carries on and uploads
+            // its clip at the end (lib/livestream.js `limited`); anything else early is the hub not receiving.
+            if early && code != 408 { self.onDropped?() }
         }
     }
 }

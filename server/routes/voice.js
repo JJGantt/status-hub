@@ -579,7 +579,7 @@ module.exports = function (ctx) {
   const CLIENT_LOG_SOURCES = new Set(['watch', 'phone']);
   const CLIENT_LOG_SKIP = new Set(['frame', 'geo', 'alarmclock', 'tvring']);
   // The watch's own lines for a send that failed for good (apps/Watch/Chat.swift, Sessions.swift).
-  const WATCH_FAILURES = new Set(['send-failed', 'command-failed']);
+  const WATCH_FAILURES = new Set(['send-failed', 'command-failed', 'live-broken']);
   // A client may send one line, or a batch as `{ lines: [...] }`: the watch keeps its lines until they
   // are acknowledged and sends what piled up while it was offline all at once. A kept batch is answered
   // only once it is stored, so a failed write leaves the lines on the watch to be sent again.

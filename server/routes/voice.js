@@ -694,7 +694,9 @@ module.exports = function (ctx) {
       e.next = seq + 1;
       const secs = parseFloat(req.query.secs);
       if (Number.isFinite(secs) && secs > e.secs) e.secs = secs;
-      if (e.state === 'rec' || e.state === 'paused') e.state = state;
+      // rec and paused move anywhere; an ended stream can still be cancelled (thrown away before its clip
+      // went up); cancelled is final.
+      if (e.state === 'rec' || e.state === 'paused' || (e.state === 'end' && state === 'cancel')) e.state = state;
       e.held = chunked.heldSeconds(e.type, e.parts) ?? e.held;
       if (!e.damaged && chunked.isDamaged(e.held, e.secs)) {
         e.damaged = true;

@@ -60,7 +60,8 @@ part's size, so a command that loses its words across an app switch shows which 
 While a pressed recording runs, its audio goes to the hub about once a second (`/api/voice-chunk`,
 `lib/chunkstream.js`), and the answer to each chunk is its acknowledgement. The page's recorder streams
 its WebM slices (`ChunkStream` in `voiceagent.js`); the app's native recorder streams AAC itself
-(`NativeRec.swift`). The finished clip still goes up whole through the outbox and names its streams
+(`NativeRec.swift`); the Mac's double-tap-Control hub key streams its sox WAV (`~/.hammerspoon/voice.lua`,
+source `mac-cmd`). The finished clip still goes up whole through the outbox and names its streams
 (`streams=` on `/api/voice-command`), which marks them used.
 
 **A failure stops the recording while the user is still talking.** A chunk unacknowledged for six

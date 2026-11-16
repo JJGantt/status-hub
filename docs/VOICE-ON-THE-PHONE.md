@@ -39,11 +39,13 @@ is paused and carried on, never sent half-said or dropped; an upload is bounded;
 
 **In the app, a pressed recording is native and keeps going behind other apps**
 (`apps/Sources/NativeRec.swift`, message `nativeRec`). WebKit stops a page's capture the moment the app
-leaves the screen, so `makeRecorder` hands the recording to an `AVAudioRecorder` under the app's `audio`
+leaves the screen, so `makeRecorder` hands the recording to an `AVAudioEngine` tap under the app's `audio`
 background mode whenever the handler exists: switching apps mid-sentence records straight through, an
 interruption (a call, Siri, a timer) pauses the same file and carries on into it, and the stop tap gets the
-whole clip back as base64 AAC with its recorded seconds, which then goes up through the same outbox as any
-clip. A page loading while the app records sends `reset`, which drops that recording (it belongs to no
+whole clip back as base64 AAC (16 kHz mono) with its recorded seconds and its stream id, which then goes up
+through the same outbox as any clip. It streams to the hub itself (`NativeChunks`) while it records, so the
+stream keeps going while the app is behind another one; when it stops itself on a failure it buzzes, and
+posts a notification if the app is not on screen. A page loading while the app records sends `reset`, which drops that recording (it belongs to no
 recorder on the new page) and logs `nativerec-orphaned`. The always-on button (`makeListener`) stays on
 WebKit, because it needs the live level to cut utterances.
 

@@ -599,7 +599,7 @@ export function makeRecorder({ onStatus = () => {}, onState: paint = () => {}, q
       arming = true; onState('armed');
       nativeId = crypto.randomUUID();
       trace('start:arming', { native: true });
-      nativeRec.postMessage({ op: 'start', id: nativeId });
+      nativeRec.postMessage({ op: 'start', id: nativeId, source: quick ? 'web-quick' : 'web', dry: typeof dryWhen === 'function' && !!dryWhen() });
       return;
     }
     const resuming = paused;

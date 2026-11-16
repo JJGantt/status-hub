@@ -857,7 +857,8 @@ The hub is one machine on Fly, and every command the watch sends goes through it
 gets no answer from the hub in `Hub.hubPatience` (25s), or gets Fly's proxy answering for it (a 5xx),
 goes to the **fallback** instead (`Hub.sendCommand`): Supabase's `voice-fallback` edge function
 (data-layer `supabase/functions`), which runs off Fly, transcribes the clip with Groq and queues it as
-status `fallback`. Only the Pi's worker claims that status. It runs the command on Opus with every
+status `fallback`. The Pi's worker claims it first, then the Mac's, then Fly's (voice-pipeline
+`CLAUDE.md` § Status `fallback`). It runs the command on Opus with every
 tool, opens the reply by saying it came the fallback way, and the first fallback command in thirty
 minutes also starts a session to find out why the hub did not answer.
 

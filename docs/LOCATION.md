@@ -27,7 +27,7 @@ moved when a command is spoken; this is the history.
   location indicator up and the hub page running in it, for a one-second track. Rows from before
   2026-11-03 with a null `source` are that stream.
 - **Watch:** one `requestLocation()` each time the app comes to the front (scene phase `active`, and
-  at launch), at hundred-metre accuracy, sent the moment it lands (`source` `fix`). Nothing in the background, and no
+  at launch), at best accuracy, sent the moment it lands (`source` `fix`). Nothing in the background, and no
   `location` background mode: a background session makes watchOS treat the app like a workout, and
   every wrist raise then returns to the app instead of the watch face. The watch's points are sparse
   on purpose; they cover the times it is out without the phone.

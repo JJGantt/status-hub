@@ -68,8 +68,7 @@ final class LocationTrail: NSObject, CLLocationManagerDelegate {
             .flatMap { try? JSONSerialization.jsonObject(with: $0) as? [[String: Any]] } ?? []
         fixer.delegate = self
         #if WATCH_APP
-        // A place, not a track: a hundred metres answers "when did I get home" and lands fastest.
-        fixer.desiredAccuracy = kCLLocationAccuracyHundredMeters
+        fixer.desiredAccuracy = kCLLocationAccuracyBest
         if fixer.authorizationStatus == .notDetermined { fixer.requestWhenInUseAuthorization() }
         #else
         fixer.desiredAccuracy = kCLLocationAccuracyBest

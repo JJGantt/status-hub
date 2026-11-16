@@ -130,18 +130,20 @@ read shows it; the clip does.
 
 So `/api/voice-command` measures every clip that carries a `dur` of a second or more: `clipSeconds`
 (`lib/transcribe.js`) reads the audio's length off its packet timestamps with an ffmpeg stream copy,
-and a clip holding under half its recorded time is refused as `{capture: 'damaged'}`. Starting ffmpeg
-costs the hub 2-3s, so the measurement runs alongside transcription and the transcript of a damaged clip
-is discarded unread; nothing waits on the measurement alone. A watch recording that was streamed
-(`/api/voice-live`) is measured from its ADTS frame headers instead (`adtsSeconds`, `lib/livestream.js`),
-which is instant, and judged before transcription. Measured over every stored clip, sound ones hold 95-101%
-and damaged ones 11-12%. The hub log line is `[voice-command] DAMAGED`.
+and a clip holding under half its recorded time is DAMAGED. **A damaged clip is still a command**: what
+survived is transcribed and acted on, the clip is kept, the hub logs `[voice-command] DAMAGED` as an
+error (so the ops responder investigates), and the answer carries `capture: 'damaged'` so the page
+replaces its microphone. A recorded command is never answered with "try again". A pressed recording
+that comes back with no words at all is kept under `unheard/` in the clips bucket and reported the same
+way. A watch recording that was streamed (`/api/voice-live`) is measured from its ADTS frame headers
+instead (`adtsSeconds`, `lib/livestream.js`), which is instant. Measured over every stored clip, sound
+ones hold 95-101% and damaged ones 11-12%.
 
 The page's recovery escalates (`captureDamaged` in `voiceagent.js`). First a fresh capture: every
 track stopped and the device asked for again, and the always-on mode re-engages onto it
 (`hub:micreset`). If a clip recorded AFTER that reset is damaged too, the fault is below the stream and
 the page reloads, which discards every AudioContext, media element and capture the page owns at once.
-The reload waits for the outbox to drop the clip — resent on load it would be refused, and reload again.
+The reload waits for the outbox to drop the clip, so it is never resent.
 
 **The trigger is not yet known.** Every damaged clip beacons `ev: "mic-damaged"` to the hub log with
 the track's settings (`sampleRate`, device label), the audio devices present, how long the page has

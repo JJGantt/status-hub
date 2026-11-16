@@ -1049,18 +1049,15 @@ async function uploadVoice(item, onStatus, owner) {
   const j = await r.json().catch(() => ({}));
   if (!r.ok || j.error) throw Object.assign(new Error(j.error || 'Send failed'), { refused: true });
   if (j.duplicate) { onStatus('', 'clear'); pushPending({ state: 'clear' }); }  // an earlier attempt already enqueued it
-  else if (j.capture === 'damaged') {
-    captureDamaged(item, j);
-    onStatus('Didn’t catch that — try again', 'err');
-    if (!item.dry) pushPending({ state: 'clear' });
-  }
-  else if (!j.transcript) {
+  // A DAMAGED capture is still a command: the hub acted on whatever words survived and reported the rest.
+  // The page's part is only to replace the microphone that dropped them.
+  if (j.capture === 'damaged') captureDamaged(item, j);
+  if (j.duplicate) return;
+  if (!j.transcript) {
     // NOTHING CAME BACK FROM A CLIP THAT HAD AUDIO IN IT. Whisper returns empty for silence, so this
     // is the evidence EVERY recorder produces that the microphone handed us zeros — and the stream
-    // it came from stays `readyState: 'live'` while doing it, so nothing else will ever notice.
-    //
-    // Here rather than in any recorder, because every recorder produces this and none of them judges
-    // silence itself.
+    // it came from stays `readyState: 'live'` while doing it, so nothing else will ever notice. The hub
+    // has kept the clip and reported it; here the microphone is marked for replacement.
     //
     // Bytes are the qualifier: a clip too short to contain anything is not evidence of a dead mic.
     if ((item.blob ? item.blob.size : 0) > 2048) {
@@ -1068,12 +1065,13 @@ async function uploadVoice(item, onStatus, owner) {
       clientLog({ src: 'phone', ev: 'mic-empty-transcript', bytes: item.blob.size, dur: item.dur, dry: !!item.dry,
         parts: (item.prefixParts || []).length });
     }
-    onStatus('Didn’t catch that — try again', 'err');
+    if (item.dry && owner) owner.onTranscript('');
+    onStatus('Nothing heard', 'err');
     if (!item.dry) pushPending({ state: 'clear' });
   }
-  else if (item.dry) { captureResetAt = 0; owner.onTranscript(j.transcript); onStatus('', 'clear'); }   // compose mode: into the text box
+  else if (item.dry) { if (!j.capture) captureResetAt = 0; owner.onTranscript(j.transcript); onStatus('', 'clear'); }   // compose mode: into the text box
   else {                                                                     // show what was heard, then stream the run
-    captureResetAt = 0;
+    if (!j.capture) captureResetAt = 0;
     if (_card && j.id) _card.request({ id: j.id, text: j.transcript, status: 'pending' });   // the spoken command as its own live user bubble
     pushPending({ state: 'prompt', text: j.transcript, id: j.id });          // and in every other view of the thread
     onStatus(j.transcript, 'prompt'); onStatus('Thinking…', 'busy');

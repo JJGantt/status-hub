@@ -126,6 +126,20 @@ module.exports = function (ctx) {
     } catch { return false; }
   }
 
+  // A pressed recording that came back with no words: its clip, kept under unheard/ so it can be listened
+  // to or transcribed again. Answers the storage path, or null when the upload failed (logged).
+  async function keepUnheard(id, file, contentType) {
+    const type = contentType.split(';')[0].trim();
+    const object = `unheard/${id}.${extFor(contentType)}`;
+    try {
+      const r = await fetch(`${SUPABASE_URL}/storage/v1/object/${CLIP_BUCKET}/${object}`, {
+        method: 'POST', headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}`, 'Content-Type': type },
+        body: await fs.openAsBlob(file, { type }) });
+      if (!r.ok) throw new Error(`upload -> ${r.status}`);
+      return `${CLIP_BUCKET}/${object}`;
+    } catch (e) { console.error(`[voice-command] could not keep unheard clip ${id}: ${e.message || e}`); return null; }
+  }
+
   async function keepClip(id, file, contentType, bytes, dur) {
     try {
       const type = contentType.split(';')[0].trim();
@@ -275,36 +289,32 @@ module.exports = function (ctx) {
       timing.audio_in_ms = since(t0);
       const { size } = await fs.promises.stat(tmp);
       if (!size) return res.status(400).json({ error: 'no audio' });
-      // A CLIP THAT HOLDS A FRACTION OF WHAT WAS RECORDED IS REFUSED, NOT TRANSCRIBED. The phone's
-      // capture can drop most of its frames while still producing a valid file: 36.7s of talking came
-      // up as 4.2s of chopped fragments, one frame kept in about nine. Whisper hears that as noise and
-      // writes "Thank you." — which would then be enqueued and acted on as the user's command. Only the
-      // device knows how long it recorded, so the check needs its `dur`; a clip that keeps well under
-      // half of it is damaged (a sound one keeps over 99%). The page resets its microphone on
-      // `capture: 'damaged'` — see captureDamaged() in voiceagent.js.
-      // A streamed recording's length is counted from its frames, instantly, and judged before anything
-      // else: a short one is asked for again as a clip. An uploaded clip is measured by ffmpeg, which
-      // costs the hub 2-3s, so that runs alongside transcription and is judged once both are done; a
-      // damaged clip's transcript is then thrown away unread, exactly as if it had never been made.
+      // A CLIP THAT HOLDS A FRACTION OF WHAT WAS RECORDED IS STILL A COMMAND. The phone's capture can drop
+      // most of its frames while still producing a valid file: 36.7s of talking came up as 4.2s of chopped
+      // fragments, one frame kept in about nine. Only the device knows how long it recorded, so the check
+      // needs its `dur`; a clip that keeps well under half of it is damaged (a sound one keeps over 99%).
+      // Damaged is REPORTED, never refused: whatever words survived are transcribed and acted on, the clip
+      // is kept, and the answer carries `capture: 'damaged'` so the page replaces its microphone
+      // (captureDamaged() in voiceagent.js). A recorded command is never answered with "try again".
+      // A streamed recording's length is counted from its frames, instantly; an uploaded clip is measured
+      // by ffmpeg, which costs the hub 2-3s, so that runs alongside transcription.
       const tProbe = Date.now();
       const probe = dur < CAPTURE_CHECK_MIN_S ? Promise.resolve(null)
         : fromLive && liveHeld != null ? Promise.resolve(liveHeld) : clipSeconds(tmp);
       probe.then((s) => { if (s != null) timing.probe_ms = since(tProbe); });
-      const refused = (heldS) => {
+      let damaged = null;   // { held_s, dur } when the clip holds under CAPTURE_MIN_KEPT of its recorded time
+      // true when the answer has been sent: a streamed recording that arrived short is asked for as a clip.
+      const judge = (heldS) => {
         if (heldS == null) return false;
         if (fromLive && heldS < dur - LIVE_SHORT_S) {
           console.log(`[voice-command] live audio holds ${heldS.toFixed(2)}s of ${dur.toFixed(1)}s; asking for the clip`);
           res.status(409).json({ upload: true, why: 'short', held_s: +heldS.toFixed(2), dur });
           return true;
         }
-        if (heldS < dur * CAPTURE_MIN_KEPT) {
-          console.log(`[voice-command] DAMAGED ${size} bytes ${ct}: holds ${heldS.toFixed(2)}s of ${dur.toFixed(1)}s recorded, refused`);
-          res.json({ transcript: '', enqueued: false, capture: 'damaged', held_s: +heldS.toFixed(2), dur });
-          return true;
-        }
+        if (heldS < dur * CAPTURE_MIN_KEPT) damaged = { held_s: +heldS.toFixed(2), dur };
         return false;
       };
-      if (fromLive && refused(await probe)) return;
+      if (fromLive && judge(await probe)) return;
       // THE LAST TRANSCRIBER IS THE MAC. When Groq and OpenAI both fail, a command is not lost while the Mac
       // worker is up: the clip is kept and the row is queued 'untranscribed', which the Mac's worker takes,
       // runs through its local Whisper and turns 'pending' (voice-pipeline worker.py `transcribe_local`).
@@ -346,7 +356,7 @@ module.exports = function (ctx) {
         untranscribed = true;
         console.error('[voice-command] every transcription provider failed; queued for the Mac\'s local Whisper');
       }
-      if (!fromLive && refused(await probe)) return;
+      if (!fromLive) judge(await probe);
       // Bytes per second of speech is what decides whether a clip fits Groq's cap, and it is set by the
       // recording device, not by us — so every clip reports it.
       console.log(`[voice-command] ${size} bytes ${ct} via ${timing.audio_via}` +
@@ -363,8 +373,22 @@ module.exports = function (ctx) {
         transcript = transcript ? `${prefix} ${transcript}` : prefix;
         if (alt) alt = `${prefix} ${alt}`;
       }
-      if (!transcript && !untranscribed) return res.json({ transcript: '', enqueued: false });
-      if (dry) return res.json({ transcript, enqueued: false });
+      const pressed = !GATED_SOURCES.has(source);
+      if (damaged) {
+        console.error(`[voice-command] DAMAGED capture from ${source}${dry ? ' (dictation)' : ''}: ${size} bytes ${ct} holds `
+          + `${damaged.held_s}s of ${damaged.dur}s recorded; acting on what survived: ${JSON.stringify(transcript.slice(0, 200))}`);
+      }
+      // A PRESSED recording that came back with no words is a failure, not an answer: the user spoke and
+      // nothing was heard. Its clip is kept so the words can be recovered, and it is reported.
+      if (!transcript && !untranscribed) {
+        if (pressed && size > 2048) {
+          const kept = await keepUnheard(id, tmp, ct);
+          console.error(`[voice-command] a ${dur > 0 ? dur.toFixed(1) + 's ' : ''}recording from ${source}${dry ? ' (dictation)' : ''} `
+            + `came back with no words (${size} bytes ${ct}${damaged ? `, holds ${damaged.held_s}s` : ''}); clip kept at ${kept || 'nowhere — upload failed'}`);
+        }
+        return res.json({ transcript: '', enqueued: false, ...(damaged ? { capture: 'damaged', ...damaged } : {}) });
+      }
+      if (dry) return res.json({ transcript, enqueued: false, ...(damaged ? { capture: 'damaged', ...damaged } : {}) });
       // Instructions recorded for a rewind grab: the command the model sees is the grab plus the user's words.
       const rewindId = REWIND_ID.test(String(req.query.rewind || '')) ? String(req.query.rewind) : null;
       if (rewindId && !untranscribed) transcript = await withRewind(rewindId, transcript);
@@ -409,7 +433,7 @@ module.exports = function (ctx) {
         await keepClip(id, tmp, ct, size, dur);
         return res.json({ transcript: '', enqueued: true, id, untranscribed: true });
       }
-      res.json({ transcript, enqueued: true, id });
+      res.json({ transcript, enqueued: true, id, ...(damaged ? { capture: 'damaged', ...damaged } : {}) });
       await keepClip(id, tmp, ct, size, dur);   // before the finally below deletes the temp file
     } catch (e) {
       res.status(e.status || 500).json({ error: String(e.message || e) });

@@ -85,3 +85,17 @@ test('a capture holding a fraction of its recorded time is told it is damaged wh
 test('a stream the hub does not know, past its first chunk, is gone', async () => {
   assert.equal((await chunk(crypto.randomUUID(), 4, 5.0, frames(1))).status, 410);
 });
+
+test('a WAV stream is measured from its header, and sealed into a file whose lengths are true', () => {
+  const { wavSeconds, sealWav } = require('../lib/chunkstream');
+  const head = Buffer.alloc(44);
+  head.write('RIFF', 0, 'latin1'); head.writeUInt32LE(0xFFFFFFFF, 4); head.write('WAVE', 8, 'latin1');
+  head.write('fmt ', 12, 'latin1'); head.writeUInt32LE(16, 16); head.writeUInt16LE(1, 20); head.writeUInt16LE(1, 22);
+  head.writeUInt32LE(16000, 24); head.writeUInt32LE(32000, 28); head.writeUInt16LE(2, 32); head.writeUInt16LE(16, 34);
+  head.write('data', 36, 'latin1'); head.writeUInt32LE(0xFFFFFFFF, 40);
+  const wav = Buffer.concat([head, Buffer.alloc(48000)]);
+  assert.equal(wavSeconds([wav.subarray(0, 20), wav.subarray(20)]), 1.5);
+  const sealed = sealWav(wav);
+  assert.equal(sealed.readUInt32LE(40), 48000);
+  assert.equal(sealed.readUInt32LE(4), sealed.length - 8);
+});

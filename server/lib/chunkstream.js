@@ -64,10 +64,39 @@ function webmSeconds(buffers) {
   return ((max - Math.min(min, 0)) * scale) / 1e9 + OPUS_FRAME_S;
 }
 
+// A WAV stream (the Mac's command key records with sox, which writes the header before it knows the
+// length): where its samples start and how many bytes a second of them is. null when it is not WAV yet.
+function wavLayout(b) {
+  if (b.length < 12 || b.toString('latin1', 0, 4) !== 'RIFF' || b.toString('latin1', 8, 12) !== 'WAVE') return null;
+  let i = 12, byteRate = 0;
+  while (i + 8 <= b.length) {
+    const tag = b.toString('latin1', i, i + 4), size = b.readUInt32LE(i + 4);
+    if (tag === 'fmt ' && i + 16 <= b.length) byteRate = b.readUInt32LE(i + 16);
+    if (tag === 'data') return byteRate ? { data: i + 8, byteRate } : null;
+    i += 8 + size + (size & 1);
+  }
+  return null;
+}
+function wavSeconds(buffers) {
+  const b = Buffer.isBuffer(buffers) ? buffers : Buffer.concat(buffers);
+  const w = wavLayout(b);
+  return w ? Math.max(0, b.length - w.data) / w.byteRate : null;
+}
+// The same bytes with the header's two lengths made true, so a stream cut off anywhere is a playable file.
+function sealWav(b) {
+  const w = wavLayout(b);
+  if (!w) return b;
+  const out = Buffer.from(b);
+  out.writeUInt32LE(out.length - 8, 4);
+  out.writeUInt32LE(out.length - w.data, w.data - 4);
+  return out;
+}
+
 // Seconds held by a stream's audio, by its type.
 function heldSeconds(type, parts) {
   if (!parts.length) return 0;
-  return (type === 'aac' ? adtsSeconds(parts) : webmSeconds(parts)) ?? null;
+  const f = type === 'aac' ? adtsSeconds : type === 'wav' ? wavSeconds : webmSeconds;
+  return f(parts) ?? null;
 }
 
 // A capture that keeps under half of the time it recorded is DAMAGED — the same line the finished clip is
@@ -93,4 +122,4 @@ function sequence(next, seq) {
   return 'gap';
 }
 
-module.exports = { webmSeconds, heldSeconds, isDamaged, sequence, SILENT_LOST_MS, PAUSED_LOST_MS, DAMAGED_MIN_S };
+module.exports = { webmSeconds, wavSeconds, sealWav, heldSeconds, isDamaged, sequence, SILENT_LOST_MS, PAUSED_LOST_MS, DAMAGED_MIN_S };

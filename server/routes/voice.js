@@ -665,7 +665,7 @@ module.exports = function (ctx) {
   // sends nothing, so only silence can say so.
   const chunkStreams = new Map();
   const CHUNK_KEEP_MS = 10 * 60 * 1000;
-  const CHUNK_TYPES = new Set(['webm', 'aac']);
+  const CHUNK_TYPES = new Set(['webm', 'aac', 'wav']);
   const CHUNK_STATES = new Set(['rec', 'paused', 'end', 'cancel']);
 
   gated.post('/api/voice-chunk', express.raw({ type: () => true, limit: '4mb' }), (req, res) => {
@@ -747,16 +747,17 @@ module.exports = function (ctx) {
       return;
     }
     const base = path.join(os.tmpdir(), `chunk-${e.id}`);
-    const file = e.type === 'aac' ? `${base}.m4a` : `${base}.webm`;
-    const ct = e.type === 'aac' ? 'audio/mp4' : 'audio/webm';
+    const ext = { aac: 'm4a', webm: 'webm', wav: 'wav' }[e.type];
+    const file = `${base}.${ext}`;
+    const ct = { aac: 'audio/mp4', webm: 'audio/webm', wav: 'audio/wav' }[e.type];
     let words = '', kept = null;
     try {
       if (e.type === 'aac') {
         await fs.promises.writeFile(`${base}.aac`, audio);
         await new Promise((resolve, reject) => execFile('ffmpeg', ['-v', 'error', '-y', '-f', 'aac', '-i', `${base}.aac`, '-c', 'copy', '-f', 'mp4', file],
           (err) => (err ? reject(err) : resolve())));
-      } else await fs.promises.writeFile(file, audio);
-      const object = `lost/${e.id}.${e.type === 'aac' ? 'm4a' : 'webm'}`;
+      } else await fs.promises.writeFile(file, e.type === 'wav' ? chunked.sealWav(audio) : audio);
+      const object = `lost/${e.id}.${ext}`;
       const put = await fetch(`${SUPABASE_URL}/storage/v1/object/${CLIP_BUCKET}/${object}`, {
         method: 'POST', headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}`, 'Content-Type': ct },
         body: await fs.openAsBlob(file, { type: ct }) });

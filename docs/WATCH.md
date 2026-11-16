@@ -75,9 +75,26 @@ on re-reading the thread, which on a poor link took twenty seconds with the repl
 The worker's `activity` frames
 draw the running command's tool calls under it (`ActivityLines`), which the hub does not store, so they
 show only while the page is watching. They clear on `done`, on the command's own answer, on a
-reconnect and when the page goes inactive — never on `done` alone, because the page goes inactive
-seconds after a command is sent and the `done` frame then goes by while the stream is closed, which
-leaves the tool calls drawn under a reply that came after them.
+reconnect and when home leaves the screen or the app goes to the background — never on `done` alone,
+because the `done` frame can go by while the stream is closed, which leaves the tool calls drawn under a
+reply that came after them.
+
+**Home follows the thread while the app is INACTIVE too**, not only active (`follow()` in
+StatusHubWatchApp.swift): a raise can sit inactive for its whole length — a banner over the app, or the
+watch still waking — and a reply arriving then has to land on the screen being looked at. Only the
+background closes the stream.
+
+**A stale thread looks stale.** `Chat.current` is false from the moment the app goes to the background,
+its stream drops, or a load fails, until a load succeeds; while it is false the thread is dimmed and a
+spinner turns at the left of the top strip. The watch has nothing delivered while it is suspended, so on
+every wake the thread on screen is the one it went to sleep with until that load lands. That load is
+`Hub.catchUpThread`: on a wake the route is often denied for seconds after the raise, and a request on
+the waiting session then starts on URLSession's own schedule, so one quick request goes out that fails
+at once without a route, and only if it fails is the waiting request raced against the quick one resent
+every 0.4s (bounded by `connectionWait`). The `thread` line says which won (`via`), after how many
+`tries`, the load's `ms` and how long the thread had been stale (`stale_ms`). A look that ends with the
+thread still stale, whose catch-up then brings newer rows, is reported as an `error` line, so a reply
+missed on a raise reaches the ops responder.
 
 **A command walks the page**, and each step lands the view on a TOP, because a reply is read from its
 first line rather than scrolled to the end — but only while the user is not reading (next paragraph but one);
@@ -100,11 +117,12 @@ with what came before it above, as any list does. No blank space is added so tha
 (`pinned`) until the user scrolls. The session page lands the same way.
 
 **Nothing moves the view while the user is reading** — looking (home in front, wrist up) AND scrolled since
-that look began (`touched`, cleared when the look ends). **A notification banner over the app is not the look
+that look began (`touched`, cleared when the look ends). **A scroll over a stale thread is not reading**
+(`Chat.current` false): it is the user looking for what has not arrived, and counted, it holds the reply
+the catch-up brings below the screen until the wrist drops. **A notification banner over the app is not the look
 ending**: it drops the scene to `inactive` with the wrist up, so looking is the screen not dimmed and the
-scene not in the background, never `phase == .active`. Nor does the banner's `deactivate` take the older
-answers laid out above the window (`held`) away — they go when home leaves the screen — because rows
-removed and re-added above the screen shift everything on it. **A scroll is a finger or the crown**: home
+scene not in the background, never `phase == .active`. The older answers laid out above the window (`held`) go only
+when home leaves the screen, because rows removed and re-added above the screen shift everything on it. **A scroll is a finger or the crown**: home
 counts any move of the offset that is neither its own jump nor a change of content height, as the session
 page does, since the crown is not trusted to report a scroll phase. **An answer landed on by request (a
 notification opened) is one landing**: the user's first scroll releases it (`land-released`), and every

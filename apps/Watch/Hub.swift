@@ -252,6 +252,13 @@ enum Hub {
         return URLSession(configuration: c)
     }()
 
+    /// Fails at once when there is no route, for `catchUpThread`'s resends.
+    private static let quickSession: URLSession = {
+        let c = URLSessionConfiguration.default
+        c.waitsForConnectivity = false
+        return URLSession(configuration: c)
+    }()
+
     /// The same with no overall limit, for the event streams, which stay open as long as their page is
     /// showing. A stream opened with no connection simply starts when one arrives.
     private static let streamSession: URLSession = {
@@ -280,6 +287,55 @@ enum Hub {
         // The newest 40 rows, about twenty exchanges: all a wrist needs, and a short thread lays out
         // fast enough on opening for the view to land on the newest reply.
         try await json("/api/voice-messages?focus=hub&mode=active&limit=40")
+    }
+
+    /// The thread, fetched to catch up after the app was away (`Chat.current` false), as fast as the route
+    /// allows. **On a wake the route is often not there yet** (the path denied for seconds after the raise),
+    /// and a request on `session` then waits for it on URLSession's own schedule. So one request goes
+    /// out that fails at once without a route; only if it fails does the waiting request start, raced
+    /// against the same quick request resent every 0.4s, and whichever answers first is the thread. The
+    /// resends stop at the first answer, a failure that is not about the route, or `connectionWait`.
+    static func catchUpThread() async throws -> (rows: [Message], via: String, tries: Int) {
+        let path = "/api/voice-messages?focus=hub&mode=active&limit=40"
+        do {
+            let rows: [Message] = try await quick(path)
+            return (rows, "quick", 1)
+        } catch let e as URLError where noRoute(e) {}
+        return try await withThrowingTaskGroup(of: (rows: [Message], via: String, tries: Int).self) { g in
+            g.addTask { (try await json(path), "wait", 1) }
+            g.addTask {
+                let start = Date()
+                var tries = 1
+                while true {
+                    try await Task.sleep(for: .milliseconds(400))
+                    tries += 1
+                    do {
+                        let rows: [Message] = try await quick(path)
+                        return (rows, "quick", tries)
+                    } catch let e as URLError where noRoute(e) && Date().timeIntervalSince(start) < connectionWait {}
+                }
+            }
+            var failed: Error?
+            for _ in 0..<2 {
+                do {
+                    if let r = try await g.next() { g.cancelAll(); return r }
+                } catch { failed = failed ?? error }
+            }
+            throw failed ?? URLError(.unknown)
+        }
+    }
+
+    /// A failure that says only that there is no route yet, which a resend can outlast.
+    private static func noRoute(_ e: URLError) -> Bool {
+        [.notConnectedToInternet, .networkConnectionLost, .cannotConnectToHost, .cannotFindHost,
+         .dnsLookupFailed, .dataNotAllowed, .internationalRoamingOff, .timedOut].contains(e.code)
+    }
+
+    /// One GET on `quickSession`: no waiting for a route.
+    private static func quick<T: Decodable>(_ path: String) async throws -> T {
+        let (data, resp) = try await quickSession.data(for: try request(path, timeout: 10))
+        try await check(resp)
+        return try JSONDecoder().decode(T.self, from: data)
     }
 
     /// Hub commands not yet in the thread, oldest first: those whose words are in, and those the hub is
@@ -631,8 +687,10 @@ enum Hub {
     /// Holds a hub event stream open and hands every frame's event name and data to `frame`, running
     /// `reconnected` after each reconnect, since something may have gone by while it was down. Every
     /// frame the hub sends has a `data:` line, keepalives included. Backs off while the hub cannot be
-    /// reached. Returns when the calling task is cancelled.
+    /// reached. `dropped` runs each time an open stream ends or a connection attempt fails: until the next
+    /// `reconnected`, nothing that happens reaches the page. Returns when the calling task is cancelled.
     static func listen(_ path: String, reconnected: @escaping () async -> Void = {},
+                       dropped: @escaping () async -> Void = {},
                        frame: @escaping (_ event: String, _ data: String) async -> Void) async {
         var backoff: Double = 1
         var first = true
@@ -662,6 +720,7 @@ enum Hub {
                 if !Task.isCancelled { log("stream-error", ["path": path, "error": String(describing: error).prefix(120).description]) }
             }
             guard !Task.isCancelled else { return }
+            await dropped()
             try? await Task.sleep(nanoseconds: UInt64(backoff * 1_000_000_000))
             backoff = min(backoff * 2, 60)
         }

@@ -300,7 +300,7 @@ struct RootView: View {
         .onChange(of: page) { _, _ in follow() }
         .onChange(of: phase) { _, now in
             Hub.log("phase", ["to": "\(now)", "veiled": veiled])
-            if now == .background { veiled = true }
+            if now == .background { veiled = true; chat.stale() }
             if now == .active { LocationTrail.shared.fix() }  // one point per use (docs/LOCATION.md)
             if now == .active { alarm.activate() } else { alarm.deactivate() }
             // Lifted a beat after becoming active, the same beat `follow()` waits: a launcher's URL
@@ -340,7 +340,10 @@ struct RootView: View {
         // Speak mode keeps the sessions stream on every page and with the wrist down (the app is held
         // running by StayAwake), since a reply it does not hear is a reply it cannot speak.
         if (live && page == .sessions) || sessions.speakMode { first.append(sessions.activate()) } else { sessions.deactivate() }
-        if live && page == .home { first.append(chat.activate()) } else { chat.deactivate() }
+        // Home follows its thread whenever it is the page and the app is not in the background, INACTIVE
+        // included: a raise can sit inactive for its whole length (a banner, the watch still waking), and
+        // a reply that arrives then must land on the screen being looked at.
+        if phase != .background && page == .home { first.append(chat.activate()) } else { chat.deactivate() }
         // The day page draws food and training live, so it follows both or neither. The health page
         // is weeks, loaded when it appears (`loadHistory`), and needs neither stream.
         if live && page == .day { first.append(nutrition.activate()); first.append(workout.activate()) }

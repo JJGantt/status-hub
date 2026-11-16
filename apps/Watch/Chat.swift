@@ -72,7 +72,27 @@ final class Chat: ObservableObject {
         didSet {
             guard looking != oldValue else { return }
             keepFrom = looking ? thread.suffix(shownCount).first?.id : nil
+            if looking { lookBegan = Date() }
+            // A look spent entirely on a stale thread: kept until the thread catches up, which says whether
+            // it missed anything. Not when the thread went stale after the look began — that is the app
+            // leaving the screen, not the user reading something old.
+            else if !current, staleSince <= lookBegan, staleLook == nil { staleLook = (thread.last?.id, staleSince) }
         }
+    }
+    /// **The thread is known to be current**: a load has succeeded since the app was last in the background
+    /// or its stream last dropped. Until then home dims the thread and turns a spinner in the top strip,
+    /// so what is on screen is never taken for the latest, and a scroll over it is not reading (`HomeView`).
+    @Published private(set) var current = false
+    private var staleSince = Date.distantPast
+    private var lookBegan = Date.distantPast
+    private var staleLook: (last: String?, since: Date)?
+
+    /// What is on screen can no longer be trusted to be the latest: the app went to the background, or the
+    /// stream dropped.
+    func stale() {
+        guard current else { return }
+        current = false
+        staleSince = Date()
     }
     /// Home is the page showing and the app is not in the background, wrist up or down
     /// (`HomeView.attend`). An answer's notification arriving now is not shown: the answer is in front
@@ -179,7 +199,8 @@ final class Chat: ObservableObject {
         stream = Task {
             // Frames that went by while the stream was down are gone, `done` among them, so whatever
             // tool lines are up describe a run that may have ended: drop them with the reload.
-            await Hub.listen("/api/voice-stream", reconnected: { [weak self] in await self?.caughtUp() }) { [weak self] event, data in
+            await Hub.listen("/api/voice-stream", reconnected: { [weak self] in await self?.caughtUp() },
+                             dropped: { [weak self] in self?.stale() }) { [weak self] event, data in
                 await self?.voiceFrame(event, data)
             }
         }
@@ -190,9 +211,9 @@ final class Chat: ObservableObject {
         await load()
     }
 
-    /// Also drops the tool lines. The page goes inactive about two seconds after a command is sent,
-    /// so the run's `done` arrives while the stream is closed; kept, its tool calls sat UNDER the reply
-    /// the next activation loaded, as if they had come after it.
+    /// Home left the screen or the app went to the background. Also drops the tool lines: the run's
+    /// `done` can go by while the stream is closed, and kept, its tool calls sat UNDER the reply the next
+    /// activation loaded, as if they had come after it.
     func deactivate() {
         stream?.cancel()
         stream = nil
@@ -200,9 +221,8 @@ final class Chat: ObservableObject {
         others = []
     }
 
-    /// Home left the screen: the older answers laid out above the window go. Not on `deactivate`, which
-    /// a notification over the app also causes: rows removed and re-added above the screen shift
-    /// everything on it.
+    /// Home left the screen: the older answers laid out above the window go. Only then, because rows
+    /// removed and re-added above the screen shift everything on it.
     func dropHeld() { held = [] }
 
     func load() async {
@@ -215,17 +235,35 @@ final class Chat: ObservableObject {
         repeat {
             reloadAfter = false
             do {
-                thread = try await Hub.thread()
+                let catchingUp = !current
+                let began = Date()
+                var how: [String: Any] = [:]
+                if catchingUp {
+                    let r = try await Hub.catchUpThread()
+                    thread = r.rows
+                    how = ["via": r.via, "tries": r.tries, "ms": Int(Date().timeIntervalSince(began) * 1000),
+                           "stale_ms": Int(Date().timeIntervalSince(staleSince) * 1000)]
+                } else {
+                    thread = try await Hub.thread()
+                }
+                current = true
+                if let s = staleLook {
+                    staleLook = nil
+                    if thread.last?.id != s.last {
+                        Hub.log("error", ["msg": "watch home: a look ended on a stale thread that was missing newer rows; the catch-up brought them \(Int(Date().timeIntervalSince(s.since)))s after it went stale (\(how["via"] ?? "-"), \(how["tries"] ?? 0) tries)"])
+                    }
+                }
                 if let flying = try? await Hub.inFlight() { others = []; flying.forEach(request) }
                 dropAnswered()
                 hold()
                 noteShown()
                 if failure == .noToken { failure = nil }
-                Hub.log("thread", ["rows": thread.count, "last": String((thread.last?.text ?? "").prefix(80))])
+                Hub.log("thread", ["rows": thread.count, "last": String((thread.last?.text ?? "").prefix(80))].merging(how) { a, _ in a })
             } catch HubError.noToken {
                 failure = .noToken
             } catch {
-                // Keep showing what was there; the next frame or activation reloads.
+                // Keep showing what was there, marked stale; the next frame or activation reloads.
+                stale()
             }
         } while reloadAfter
     }

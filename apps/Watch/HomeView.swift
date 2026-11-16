@@ -102,7 +102,8 @@ struct HomeView: View {
                 .padding(.horizontal, 8)
                 .padding(.bottom, PageInset.bottom)
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .opacity(dimmed ? 0.6 : 1)
+                // A thread not yet caught up (`Chat.current`) is dimmed, so it is never taken for the latest.
+                .opacity(dimmed ? 0.6 : chat.current ? 1 : 0.45)
             }
             // **A tap ANYWHERE on home is the same press as double tap**: start, then send. On the
             // scroll view rather than its content, so the glass below a short thread presses too. A
@@ -149,7 +150,12 @@ struct HomeView: View {
         // Over the thread, inside the page, so the double tap above the page row still records.
         .overlay { if inbox { InboxView(open: $inboxAnswer) } }
         // **The top strip** (`TopStrip`): nothing in it moves, and it takes no touch, so a tap there still records.
-        .overlay(alignment: .top) { TopStrip { EmptyView() } }
+        // A spinner at its left while the thread is catching up (`Chat.current`).
+        .overlay(alignment: .top) {
+            TopStrip {
+                if !chat.current { ProgressView().scaleEffect(0.5).frame(width: 18, height: 18) }
+            }
+        }
         // **The inbox** (docs/WATCH.md): a dot at the top, always — amber while any answer is
         // unread, gray otherwise — drawn over the inbox as well as home, because it is the inbox's only
         // way in and out: home -> the list, an open answer -> the list, the list -> home. A button of its
@@ -278,7 +284,9 @@ struct HomeView: View {
         if !touched || pinned { scrollLog("user-\(how)", nil) }
         pinned = false
         settling = false
-        touched = looking
+        // **A scroll over a stale thread is not reading** (`Chat.current`): it is the user looking for what
+        // has not arrived yet, and counted, it held the reply off the screen when the catch-up brought it.
+        touched = looking && chat.current
         chat.releaseLanding()
     }
 

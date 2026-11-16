@@ -438,6 +438,79 @@ function b64Blob(b64, type) {
   return new Blob([bytes], { type });
 }
 
+// EVERY PRESSED RECORDING STREAMS TO THE HUB WHILE IT RECORDS (/api/voice-chunk, lib/chunkstream.js on
+// the hub), a chunk about once a second, each acknowledged. Two things depend on it:
+//   - the recording is never only on this device: if the page dies mid-sentence the hub uses what arrived;
+//   - a failure is caught WHILE the user is still talking. A chunk left unacknowledged for STREAM_STALL_MS
+//     means the hub is not receiving; an acknowledgement saying `damaged` means the capture is dropping
+//     audio. Either one stops the recording on the spot (onBroken), keeps everything recorded so far for
+//     the outbox, and says so — instead of letting the user talk for minutes into a failure.
+// One request in flight at a time, in order. A chunk the hub already has is answered again, not counted
+// twice; a hub that lost the stream (a restart) answers 410 and is sent the whole recording again.
+const STREAM_STALL_MS = 6000;
+class ChunkStream {
+  constructor({ type, source, dry, onBroken }) {
+    this.id = uid();
+    this.type = type;            // 'webm' (the page's recorder) — the app's native recorder streams itself
+    this.source = source;
+    this.dry = !!dry;
+    this.onBroken = onBroken;
+    this.chunks = [];            // { blob, secs, state, at }
+    this.sent = 0;               // the next chunk the hub has not acknowledged
+    this.busy = false;
+    this.broken = false;
+    this.closed = false;
+  }
+  push(blob, secs, state = 'rec') {
+    if (this.broken && state === 'rec') return;   // its end still goes, so the hub knows the clip is coming
+    this.chunks.push({ blob, secs, state, at: Date.now() });
+    if (state !== 'rec' && state !== 'paused') this.closed = true;
+    this.check();
+    this.pump();
+  }
+  // The oldest chunk the hub has not taken, and how long it has waited. Run on every new chunk, which
+  // arrives every second while recording, so a stall is caught within a second of crossing the line.
+  check() {
+    if (this.broken || this.closed) return;
+    const oldest = this.chunks[this.sent];
+    if (oldest && Date.now() - oldest.at > STREAM_STALL_MS) this.fail('stream');
+  }
+  fail(why) {
+    if (this.broken) return;
+    this.broken = true;
+    this.onBroken(why);
+  }
+  async pump() {
+    if (this.busy) return;
+    this.busy = true;
+    try {
+      while (this.sent < this.chunks.length) {
+        const seq = this.sent, c = this.chunks[seq];
+        const qp = new URLSearchParams({ id: this.id, seq: String(seq), type: this.type, secs: c.secs.toFixed(1),
+          state: c.state, source: this.source, ...(this.dry ? { dry: '1' } : {}) });
+        let r, j;
+        try {
+          r = await fetch('/api/voice-chunk?' + qp, { method: 'POST', headers: { 'Content-Type': 'application/octet-stream' }, body: c.blob,
+            ...(AbortSignal.timeout ? { signal: AbortSignal.timeout(STREAM_STALL_MS) } : {}) });
+          j = await r.json().catch(() => ({}));
+        } catch (_) { r = null; }
+        if (r && r.ok) {
+          this.sent = Math.max(this.sent, j.next || seq + 1);
+          if (j.damaged && !this.closed) this.fail('damaged');
+          continue;
+        }
+        if (r && r.status === 409 && Number.isInteger(j.next)) { this.sent = j.next; continue; }
+        if (r && r.status === 410) { this.sent = 0; continue; }
+        // Not taken. Stopped here; the next chunk tries again, and check() decides when waiting is a failure.
+        this.check();
+        break;
+      }
+    } finally { this.busy = false; }
+  }
+}
+// What a stopped-on-failure recording says on its button's status line.
+const BROKEN_LABEL = { stream: 'Hub not receiving', damaged: 'Mic dropping audio' };
+
 // A self-contained recorder: getUserMedia → MediaRecorder → upload to /api/voice-command.
 // quick=true marks a one-off quick-add (the FAB) so the server tags it for a terse reply.
 // dryWhen (optional): checked at upload time — when true, the server only transcribes (?dry=1) and the
@@ -478,6 +551,9 @@ export function makeRecorder({ onStatus = () => {}, onState: paint = () => {}, q
   let paused = false;                 // interrupted: `held` is waiting for the user to carry on
   let pausing = false;                // pause(): the recorder is stopping to be held, not sent
   let pauseWhy = '';                  // what paused it, for the `voice-paused` log line
+  let live = null;                    // this recording's stream to the hub (ChunkStream), WebKit path only
+  let streams = [];                   // every part's stream (a ChunkStream, or the app's stream id), named with the clip
+  let brokeWhy = '';                  // the recording was stopped by a failure: said again once it is sent
   const pickMime = () => {
     for (const m of ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4', 'audio/ogg'])
       if (window.MediaRecorder && MediaRecorder.isTypeSupported(m)) return m;
@@ -500,11 +576,17 @@ export function makeRecorder({ onStatus = () => {}, onState: paint = () => {}, q
       trace('start:recording', { native: true });
       muteOthers(true);
       onStatus('Listening… tap to send', 'rec');
+    } else if (d.state === 'broken') {
+      // The app stopped the recording itself: its stream to the hub stalled, or its capture is dropping
+      // audio. The clip follows as 'done' like any other.
+      recording = false; sending = true; onState('armed');
+      broke(d.why || 'stream', { native: true });
     } else if (d.state === 'done') {
       nativeId = '';
       trace('upload:begin', { native: true });
+      streams = d.stream ? [d.stream] : [];
       ship(b64Blob(d.b64, d.mime || 'audio/mp4'), +d.secs || 0)
-        .finally(() => { sending = false; onState('idle'); trace('upload:end'); });
+        .finally(() => { sending = false; onState('idle'); trace('upload:end'); sayBroken(); });
     } else if (d.state === 'error') {
       nativeId = ''; arming = false; recording = false; sending = false;
       muteOthers(false);
@@ -538,7 +620,16 @@ export function makeRecorder({ onStatus = () => {}, onState: paint = () => {}, q
     const mime = pickMime();
     chunks = [];
     rec = new MediaRecorder(stream, { ...(mime ? { mimeType: mime } : {}), audioBitsPerSecond: VOICE_BPS });
-    rec.ondataavailable = (e) => { if (e.data && e.data.size) chunks.push(e.data); };
+    // Streamed as it records, a slice a second (ChunkStream). Only WebM is measured by the hub, so a
+    // browser recording anything else records without one.
+    live = /webm/.test(mime) ? new ChunkStream({ type: 'webm', source: quick ? 'web-quick' : 'web',
+      dry: typeof dryWhen === 'function' && dryWhen(), onBroken: (why) => broke(why) }) : null;
+    if (live) streams.push(live);
+    const thisLive = live;
+    rec.ondataavailable = (e) => {
+      if (e.data && e.data.size) chunks.push(e.data);
+      if (thisLive && e.data && e.data.size) thisLive.push(e.data, (performance.now() - startedAt) / 1000);
+    };
     // A recording can end WITHOUT stop(): hiding the page closes the mic under it, and so does a
     // capture reset or an interruption. That is a PAUSE (hold): the state has to follow, or `recording`
     // stays true over a dead recorder and the next tap is spent stopping it.
@@ -548,7 +639,7 @@ export function makeRecorder({ onStatus = () => {}, onState: paint = () => {}, q
     };
     // The capture going quiet under the recording is the other face of an interruption.
     for (const t of stream.getAudioTracks()) t.onmute = () => pause('track-muted');
-    rec.start(); recording = true; startedAt = performance.now(); onState('rec');   // capturing for real now — full fill
+    rec.start(live ? 1000 : undefined); recording = true; startedAt = performance.now(); onState('rec');   // capturing for real now — full fill
     trace('start:recording', { mime });
     muteOthers(true);   // mute every other listener (Mac + ESP) while this explicit command records
     onStatus('Listening… tap to send', 'rec');
@@ -597,6 +688,7 @@ export function makeRecorder({ onStatus = () => {}, onState: paint = () => {}, q
   function hold(mime) {
     const blob = new Blob(chunks, { type: mime || 'audio/webm' });
     chunks = [];
+    closeLive('paused');
     if (blob.size) held.push(blob);
     // Kept in client_log (src phone): a paused command is the case nothing else on the page can show
     // afterwards, and an empty part here is a command losing its words.
@@ -624,12 +716,43 @@ export function makeRecorder({ onStatus = () => {}, onState: paint = () => {}, q
   }
   async function upload(mime) {
     trace('upload:begin');
-    try { await send(mime); } finally { sending = false; onState('idle'); trace('upload:end'); }
+    try { await send(mime); } finally { sending = false; onState('idle'); trace('upload:end'); sayBroken(); }
+  }
+  // The stream of the part that just ended says how it ended. A paused part's stream waits on the hub for
+  // the rest of the command; an ended one for its clip; a cancelled one for nothing.
+  function closeLive(state) {
+    if (!live) return;
+    live.push(new Blob([]), (performance.now() - startedAt) / 1000, state);
+    live = null;
+  }
+  // A FAILURE STOPS THE RECORDING AT ONCE, and keeps all of it. Everything recorded so far is sent exactly
+  // as a stop tap would send it — the outbox holds it until the hub takes it — and the failure is said
+  // now and again after the send, so the status the send writes does not cover it. Reported as an error.
+  function broke(why, extra) {
+    if (brokeWhy) return;
+    brokeWhy = why;
+    trace('broken', { why, ...(extra || {}) });
+    clientLog({ src: 'phone', ev: 'error', page: 'recorder',
+      msg: `a pressed recording was stopped mid-recording: ${why === 'damaged' ? 'the hub found the capture dropping audio'
+        : 'its stream to the hub stopped being acknowledged'}`,
+      why, secs: +((performance.now() - startedAt) / 1000).toFixed(1), ...(extra || {}) });
+    onStatus(BROKEN_LABEL[why] || BROKEN_LABEL.stream, 'err');
+    if (recording && !nativeRec) stop();
+  }
+  // A command thrown away tells the hub, so no part of it is ever used as a lost recording.
+  function cancelStreams(list) {
+    for (const p of list) if (typeof p !== 'string') p.push(new Blob([]), 0, 'cancel');
+  }
+  function sayBroken() {
+    if (!brokeWhy) return;
+    onStatus(BROKEN_LABEL[brokeWhy] || BROKEN_LABEL.stream, 'err');
+    brokeWhy = '';
   }
   async function send(mime) {
     release();
     const blob = new Blob(chunks, { type: mime || 'audio/webm' });
     chunks = [];
+    closeLive(discard ? 'cancel' : 'end');
     await ship(blob, (performance.now() - startedAt) / 1000);
   }
   // The clip, from either recorder, into the outbox with whatever was held before an interruption.
@@ -639,7 +762,9 @@ export function makeRecorder({ onStatus = () => {}, onState: paint = () => {}, q
     let blob = clip, dur = secs;
     let prefixParts = held;
     held = [];
-    if (discard) { discard = false; onStatus('', 'clear'); return; }
+    const parts = streams;
+    streams = [];
+    if (discard) { discard = false; cancelStreams(parts); onStatus('', 'clear'); return; }
     // No bytes at all: nothing to send. A dictation caller is told, so it can leave its own state.
     // A clip WITH bytes always goes up — the hub's transcript is the judge of whether it held words.
     // A last part with nothing in it still sends the parts held before it.
@@ -652,7 +777,7 @@ export function makeRecorder({ onStatus = () => {}, onState: paint = () => {}, q
       secs: +dur.toFixed(1), parts: prefixParts.map((b) => b.size) });
     if (!blob.size) { blob = prefixParts[prefixParts.length - 1]; prefixParts = prefixParts.slice(0, -1); dur = 0; }
     // Durable from here: the clip stays on the phone until the server confirms it (the voice outbox).
-    await sendVoice({ blob, dry, quick: !!quick, dur,
+    await sendVoice({ blob, dry, quick: !!quick, dur, ...(parts.length ? { streams: parts.map((p) => (typeof p === 'string' ? p : p.id)) } : {}),
                       ...(prefixParts.length ? { prefixParts } : {}) }, { onStatus, onTranscript });
   }
   return {
@@ -665,7 +790,7 @@ export function makeRecorder({ onStatus = () => {}, onState: paint = () => {}, q
     // Ends the recording WITHOUT sending it — for a caller whose recording has lost its purpose (the user
     // navigated away from what it was for). stop() always sends; that is what a stop tap means.
     cancel() {
-      if (paused) { paused = false; held = []; onState('idle'); onStatus('', 'clear'); return; }
+      if (paused) { paused = false; held = []; cancelStreams(streams); streams = []; onState('idle'); onStatus('', 'clear'); return; }
       if (recording) discard = true;
       stop();
     },
@@ -1025,6 +1150,7 @@ async function uploadVoice(item, onStatus, owner) {
   if (item.capture_end) qp.set('capture_end', item.capture_end);
   if (item.source) qp.set('source', item.source);
   if (item.about) qp.set('about', item.about);
+  if (item.streams && item.streams.length) qp.set('streams', item.streams.join(','));
   // The parts recorded before an interruption (makeRecorder): each is transcribed on its own and the
   // words ride the last part as its prefix, so the hub enqueues the whole command once. A part that
   // fails throws, and the outbox retries the whole item.

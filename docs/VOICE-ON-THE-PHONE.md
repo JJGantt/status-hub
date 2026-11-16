@@ -53,6 +53,29 @@ capturing recorder stops itself to hold its audio. Every pause and every
 multi-part send is kept in `client_log` (src `phone`) as `voice-paused` and `voice-parts`, with each
 part's size, so a command that loses its words across an app switch shows which part came up empty.
 
+## Every pressed recording streams to the hub
+
+While a pressed recording runs, its audio goes to the hub about once a second (`/api/voice-chunk`,
+`lib/chunkstream.js`), and the answer to each chunk is its acknowledgement. The page's recorder streams
+its WebM slices (`ChunkStream` in `voiceagent.js`); the app's native recorder streams AAC itself
+(`NativeRec.swift`). The finished clip still goes up whole through the outbox and names its streams
+(`streams=` on `/api/voice-command`), which marks them used.
+
+**A failure stops the recording while the user is still talking.** A chunk unacknowledged for six
+seconds means the hub is not receiving; an acknowledgement saying `damaged` means the capture holds
+under half of the time it recorded (the dropped-frames failure below, measured from the stream's own
+timestamps as it arrives). Either one stops the recording on the spot, sends everything recorded so far
+through the outbox exactly as a stop tap would, shows the failure on the button's status line
+(`Hub not receiving` / `Mic dropping audio`), and reports it: the page as a client `error`, the hub as
+`[voice-chunk] … DAMAGED`. The app also buzzes.
+
+**A stream that goes silent is used.** The app killed, the page reloaded, the phone gone from the
+network for good: a stream with no chunk for a minute (thirty while it said it was paused or ended) is
+LOST. Its audio is kept under `lost/` in the clips bucket, transcribed, enqueued as the command when it
+was one (a dictation is only reported), and reported with what it heard. If the clip then arrives after
+all, it is a duplicate unless it holds more than two seconds beyond what streamed, in which case it is
+enqueued too — a command run twice is the price of never dropping the end of one.
+
 ## The always-on button
 
 `makeListener()` in `voiceagent.js`. Engaged, it holds the mic, watches level against a noise floor

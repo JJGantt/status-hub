@@ -10,6 +10,7 @@ const ops = require('../lib/report');
 const { vanishedRecordings, RECORD_EVENTS } = require('../lib/outcomes');
 const { FrameReader, endOf, adtsSeconds } = require('../lib/livestream');
 const { heardStart, heardEnd } = require('../lib/streams');
+const chunked = require('../lib/chunkstream');
 const os = require('os');
 const path = require('path');
 const { pipeline } = require('stream/promises');
@@ -270,6 +271,13 @@ module.exports = function (ctx) {
       const fromLive = String(req.headers['x-audio-source'] || '') === 'live';
       let liveHeld = null;   // seconds the streamed audio holds, counted from its frames (adtsSeconds)
       const dur = parseFloat(req.query.dur);
+      // THE STREAM THIS CLIP WAS RECORDED THROUGH (/api/voice-chunk), and the streams of any parts held
+      // before an interruption. The upload is the definitive copy; the streams only stand in for it when it
+      // never comes. One the hub already used — the device went silent and the hub acted on what had
+      // streamed — makes this upload a duplicate, unless the upload holds clearly more than the stream did.
+      const streamIds = String(req.query.streams || '').split(',').filter((v) => LIVE_ID.test(v)).slice(0, 16);
+      const used = await consumeStreams(streamIds, dur);
+      if (used && !dry) { req.resume(); return res.json({ enqueued: true, duplicate: true, id: used }); }
       let ct = String(req.headers['content-type'] || 'audio/webm');
       if (fromLive) {
         req.resume();
@@ -641,6 +649,136 @@ module.exports = function (ctx) {
         { machine: 'client', service: 'watch', context: { started: v.at, next: v.next, start: start && start.data,
           look: 'client_log where src=watch between those two times (docs/WATCH.md § The wrist can drop mid-recording)' } });
     }
+  }
+
+  // ---- THE PHONE'S RECORDINGS, STREAMED IN ACKNOWLEDGED CHUNKS (lib/chunkstream.js) -------------------
+  // Every pressed recording on the phone posts its audio here about once a second while it records, and
+  // the answer to each post is its acknowledgement. The recorder stops the recording the moment chunks
+  // stop being acknowledged or an answer says the capture is damaged, so the user is never left talking
+  // into a failure (docs/VOICE-ON-THE-PHONE.md § Every pressed recording streams to the hub).
+  //
+  // The finished clip still goes up whole through the page's outbox, naming its stream (`streams=` on
+  // /api/voice-command), which marks the stream used. A stream that goes silent without that — the app
+  // killed, the page reloaded, the phone dropping off the network for good — is LOST after
+  // SILENT_LOST_MS (PAUSED_LOST_MS while it said it was paused): its audio is kept, transcribed, acted
+  // on as the command when it was one, and reported. That timer is a liveness check — a device that dies
+  // sends nothing, so only silence can say so.
+  const chunkStreams = new Map();
+  const CHUNK_KEEP_MS = 10 * 60 * 1000;
+  const CHUNK_TYPES = new Set(['webm', 'aac']);
+  const CHUNK_STATES = new Set(['rec', 'paused', 'end', 'cancel']);
+
+  gated.post('/api/voice-chunk', express.raw({ type: () => true, limit: '4mb' }), (req, res) => {
+    const id = String(req.query.id || '');
+    const seq = parseInt(req.query.seq, 10);
+    const type = String(req.query.type || '');
+    const state = CHUNK_STATES.has(String(req.query.state)) ? String(req.query.state) : 'rec';
+    if (!LIVE_ID.test(id) || !Number.isInteger(seq) || seq < 0 || !CHUNK_TYPES.has(type)) {
+      return res.status(400).json({ error: 'id, seq and type required' });
+    }
+    let e = chunkStreams.get(id);
+    if (!e) {
+      if (seq !== 0) return res.status(410).json({ error: 'unknown stream' });   // the hub restarted under it
+      const srcRaw = String(req.query.source || '').toLowerCase();
+      e = { id, type, source: /^[a-z0-9][a-z0-9-]{0,23}$/.test(srcRaw) ? srcRaw : 'web',
+        dry: String(req.query.dry || '') === '1', parts: [], bytes: 0, next: 0, secs: 0, held: 0,
+        state: 'rec', timer: null, consumed: false, recovered: null, recovering: null, damaged: false, startedAt: Date.now() };
+      chunkStreams.set(id, e);
+    }
+    if (e.type !== type) return res.status(400).json({ error: 'type changed' });
+    const step = chunked.sequence(e.next, seq);
+    if (step === 'gap') return res.status(409).json({ error: 'gap', next: e.next });
+    if (step === 'take') {
+      const body = Buffer.isBuffer(req.body) ? req.body : Buffer.alloc(0);
+      if (body.length && e.bytes + body.length <= LIVE_MAX_BYTES) { e.parts.push(body); e.bytes += body.length; }
+      e.next = seq + 1;
+      const secs = parseFloat(req.query.secs);
+      if (Number.isFinite(secs) && secs > e.secs) e.secs = secs;
+      if (e.state === 'rec' || e.state === 'paused') e.state = state;
+      e.held = chunked.heldSeconds(e.type, e.parts) ?? e.held;
+      if (!e.damaged && chunked.isDamaged(e.held, e.secs)) {
+        e.damaged = true;
+        console.error(`[voice-chunk] ${id} DAMAGED while recording on ${e.source}: holds ${e.held.toFixed(2)}s of `
+          + `${e.secs.toFixed(1)}s recorded (${e.type}); the recorder is told to stop`);
+      }
+      armChunkTimer(e);
+    }
+    res.json({ ok: true, next: e.next, held_s: +e.held.toFixed(2), secs: e.secs, damaged: e.damaged });
+  });
+
+  // The liveness timer: a recording that says nothing for long enough is lost. Once it has ended (or been
+  // used, or cancelled) only its record is kept, for the upload that names it.
+  function armChunkTimer(e) {
+    clearTimeout(e.timer);
+    const live = !e.consumed && e.state !== 'cancel';
+    // An ENDED stream's clip is in the device's outbox, which retries until the hub takes it, so it is
+    // given the paused stretch before its stream stands in for it.
+    const wait = !live ? CHUNK_KEEP_MS : e.state === 'rec' ? chunked.SILENT_LOST_MS : chunked.PAUSED_LOST_MS;
+    e.timer = setTimeout(() => {
+      if (!live) { if (chunkStreams.get(e.id) === e) chunkStreams.delete(e.id); return; }
+      e.recovering = recoverStream(e)
+        .catch((err) => console.error(`[voice-chunk] ${e.id} could not be recovered: ${err.message || err}`))
+        .finally(() => { e.recovering = null; e.consumed = true; armChunkTimer(e); });
+    }, wait);
+    e.timer.unref();
+  }
+
+  // Marks the named streams used by the upload that carries them, and answers the request id of one the
+  // hub already acted on when this upload adds nothing to it.
+  async function consumeStreams(ids, dur) {
+    let used = null;
+    for (const sid of ids) {
+      const e = chunkStreams.get(sid);
+      if (!e) continue;
+      if (e.recovering) await e.recovering;
+      if (e.recovered && !(dur > e.held + 2)) used = e.recovered;
+      e.consumed = true;
+      armChunkTimer(e);
+    }
+    return used;
+  }
+
+  // A stream that went silent before its clip was uploaded: the audio that did arrive is the command.
+  async function recoverStream(e) {
+    const audio = Buffer.concat(e.parts);
+    const tag = `${e.held.toFixed(1)}s of a ${e.secs.toFixed(1)}s ${e.dry ? 'dictation' : 'command'} from ${e.source}`;
+    if (!audio.length) {
+      console.error(`[voice-chunk] ${e.id} went silent mid-recording (${tag}, state ${e.state}) with no audio to recover`);
+      return;
+    }
+    const base = path.join(os.tmpdir(), `chunk-${e.id}`);
+    const file = e.type === 'aac' ? `${base}.m4a` : `${base}.webm`;
+    const ct = e.type === 'aac' ? 'audio/mp4' : 'audio/webm';
+    let words = '', kept = null;
+    try {
+      if (e.type === 'aac') {
+        await fs.promises.writeFile(`${base}.aac`, audio);
+        await new Promise((resolve, reject) => execFile('ffmpeg', ['-v', 'error', '-y', '-f', 'aac', '-i', `${base}.aac`, '-c', 'copy', '-f', 'mp4', file],
+          (err) => (err ? reject(err) : resolve())));
+      } else await fs.promises.writeFile(file, audio);
+      const object = `lost/${e.id}.${e.type === 'aac' ? 'm4a' : 'webm'}`;
+      const put = await fetch(`${SUPABASE_URL}/storage/v1/object/${CLIP_BUCKET}/${object}`, {
+        method: 'POST', headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}`, 'Content-Type': ct },
+        body: await fs.openAsBlob(file, { type: ct }) });
+      if (put.ok) kept = `${CLIP_BUCKET}/${object}`;
+      else console.error(`[voice-chunk] ${e.id} clip not kept: upload -> ${put.status}`);
+      words = ((await transcribe(file, ct, GROQ_API_KEY)).transcript || '').trim();
+      // A command is acted on: the hub enqueues what arrived exactly as an upload would have.
+      if (words && !e.dry && !e.consumed) {
+        const rid = crypto.randomUUID();
+        await sbWrite('voice_requests', 'POST', { id: rid, transcript: words, source: e.source, focus: 'hub', always_on: false,
+          timing: { audio_via: 'stream-recovered', hub_enqueued: new Date().toISOString(), bytes: audio.length } });
+        e.recovered = rid;
+        heardEnd(rid, { id: rid, text: words, status: 'pending', created_at: new Date().toISOString() });
+        sbWrite(`voice_requests?id=eq.${rid}`, 'PATCH', { audio: { path: object, bytes: audio.length, type: ct, dur: +e.held.toFixed(1) } })
+          .catch((err) => console.error(`[voice-chunk] ${rid} audio not linked: ${err.message || err}`));
+      }
+    } finally {
+      for (const f of [`${base}.aac`, file]) fs.promises.unlink(f).catch(() => {});
+    }
+    console.error(`[voice-chunk] ${e.id} went silent mid-recording and was recovered from its stream (${tag}, state ${e.state}); `
+      + `${e.recovered ? `enqueued as ${e.recovered}` : e.dry ? 'a dictation, so not enqueued' : 'nothing enqueued'}; `
+      + `clip ${kept || 'not kept'}; heard: ${JSON.stringify(words.slice(0, 300))}`);
   }
 
   // ---- A RECORDING STREAMED WHILE IT RECORDS (lib/livestream.js) ------------------------------------------

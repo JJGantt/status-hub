@@ -212,7 +212,7 @@ with the same MCP servers, approvals off and full access.
 | `resume_mirrored` | the destination | resume a conversation from the `transcripts` bucket. The sender marks the old row `transferred` FIRST, atomically on the status it read, and puts it back if no machine takes the session, so two movers of one conversation never both resume it |
 | `evacuate` | the machine the ops responder addressed | move every resident Claude session of a machine that has gone DOWN (§ When a machine stops) |
 | `get_sessions` | — | the numbered list |
-| `read_session` | — | one session's last few turns from `desk_turns` (his prompt and its reply, oldest first, up to the 20 kept): how voice finds something he "was talking about" in a session rather than to it |
+| `read_session` | — | one session's last few turns from `desk_turns` (his prompt and its reply, oldest first, up to the 20 kept), with every message he sent it in place: the ones it read mid-turn (from the turn's `events`) and, from `desk_commands`, any that no finished turn holds (a turn cut off by a park or a crash has no `desk_turns` row): how voice finds something he "was talking about" in a session rather than to it |
 
 The hub's `POST /api/sessions/followup` (the watch's and the phone's session view) is `follow_up` addressed by session
 id instead of by focus, and for a parked session it writes `resume_session` with the words as the

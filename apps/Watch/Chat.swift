@@ -75,15 +75,17 @@ final class Chat: ObservableObject {
             if looking { lookBegan = Date() }
             // A look spent entirely on a stale thread: kept until the thread catches up, which says whether
             // it missed anything. Not when the thread went stale after the look began — that is the app
-            // leaving the screen, not the user reading something old.
-            else if !current, staleSince <= lookBegan, staleLook == nil { staleLook = (thread.last?.id, staleSince) }
+            // leaving the screen, not the user reading something old. Nor at launch, before the first load:
+            // nothing old was on screen, so there is nothing a catch-up could show was missed.
+            else if !current, let since = staleSince, since <= lookBegan, staleLook == nil { staleLook = (thread.last?.id, since) }
         }
     }
     /// **The thread is known to be current**: a load has succeeded since the app was last in the background
     /// or its stream last dropped. Until then home dims the thread and turns a spinner in the top strip,
     /// so what is on screen is never taken for the latest, and a scroll over it is not reading (`HomeView`).
     @Published private(set) var current = false
-    private var staleSince = Date.distantPast
+    /// When `stale()` last ran; nil at launch, when the thread has never been loaded at all.
+    private var staleSince: Date?
     private var lookBegan = Date.distantPast
     private var staleLook: (last: String?, since: Date)?
 
@@ -241,8 +243,8 @@ final class Chat: ObservableObject {
                 if catchingUp {
                     let r = try await Hub.catchUpThread()
                     thread = r.rows
-                    how = ["via": r.via, "tries": r.tries, "ms": Int(Date().timeIntervalSince(began) * 1000),
-                           "stale_ms": Int(Date().timeIntervalSince(staleSince) * 1000)]
+                    how = ["via": r.via, "tries": r.tries, "ms": Int(Date().timeIntervalSince(began) * 1000)]
+                    if let staleSince { how["stale_ms"] = Int(Date().timeIntervalSince(staleSince) * 1000) }
                 } else {
                     thread = try await Hub.thread()
                 }

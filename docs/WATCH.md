@@ -94,7 +94,8 @@ at once without a route, and only if it fails is the waiting request raced again
 every 0.4s (bounded by `connectionWait`). The `thread` line says which won (`via`), after how many
 `tries`, the load's `ms` and how long the thread had been stale (`stale_ms`). A look that ends with the
 thread still stale, whose catch-up then brings newer rows, is reported as an `error` line, so a reply
-missed on a raise reaches the ops responder.
+missed on a raise reaches the ops responder. A look before the first load after launch is not one: the
+thread starts empty, so there was nothing old on screen, and every first load "brings newer rows".
 
 **A command walks the page**, and each step lands the view on a TOP, because a reply is read from its
 first line rather than scrolled to the end — but only while the user is not reading (next paragraph but one);

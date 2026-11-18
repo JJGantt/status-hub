@@ -137,9 +137,9 @@ module.exports = function (ctx) {
       op = 'volume';
       args = b.value === undefined ? {} : { value: Math.max(0, Math.min(100, Math.round(Number(b.value)))) };
       if (Number.isNaN(args.value)) return res.status(400).json({ error: 'value must be a number' });
-    } else if (b.op === 'media' && ['play', 'pause', 'toggle'].includes(b.action)) { op = 'media'; args = { action: b.action }; }
+    } else if (b.op === 'media' && ['play', 'pause'].includes(b.action)) { op = 'media'; args = { action: b.action }; }
     else if (b.op === 'now') { op = 'now'; args = {}; }
-    else return res.status(400).json({ error: 'op must be volume, media (play|pause|toggle) or now' });
+    else return res.status(400).json({ error: 'op must be volume, media (play|pause) or now' });
     const row = { id: crypto.randomUUID(), op, args };
     const answered = new Promise((resolve) => waiters.set(row.id, resolve));
     try {

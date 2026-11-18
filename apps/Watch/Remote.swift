@@ -18,7 +18,6 @@ final class TvRemote: ObservableObject {
     @Published private(set) var playing: Bool?
     /// The TV's own words when a press did not land ("the TV is off…", "nothing is playing").
     @Published private(set) var problem: String?
-    @Published private(set) var busy = false
 
     /// One volume command on the wire at a time: the TV app reaches a level a step at a time, and two
     /// walks at once would fight. Turns made meanwhile only move `target`; when the answer comes back
@@ -78,16 +77,10 @@ final class TvRemote: ObservableObject {
         }
     }
 
-    /// A toggle the TV decides (`toggle` in the TV app's TvLink), from its own state at the moment of
-    /// the press. The watch's `playing` only draws the glyph: it can be from before the tap, and a page
-    /// opened and tapped at once has not heard back yet.
-    func playPause() {
-        guard !busy else { return }
-        busy = true
-        Task {
-            if let a = await send(["op": "media", "action": "toggle"]) { take(a) }
-            busy = false
-        }
+    /// `play` or `pause`, exactly as pressed: two buttons, never a toggle, so a press does what it says
+    /// whatever the watch last heard about the TV.
+    func media(_ action: String) {
+        Task { if let a = await send(["op": "media", "action": action]) { take(a) } }
     }
 
     private func take(_ a: Answer) {
@@ -117,14 +110,12 @@ struct RemoteView: View {
 
     var body: some View {
         VStack(spacing: 10) {
-            Button { tap(); remote.playPause() } label: {
-                Image(systemName: remote.playing.map { $0 ? "pause.fill" : "play.fill" } ?? "playpause.fill")
-                    .font(.system(size: 40, weight: .semibold))
-                    .frame(maxWidth: .infinity, minHeight: 74)
+            // The button matching what the TV last reported is lit; the other is dim. Only a look: each
+            // one always sends its own action.
+            HStack(spacing: 8) {
+                mediaButton("play.fill", "play", lit: remote.playing == true)
+                mediaButton("pause.fill", "pause", lit: remote.playing == false)
             }
-            .buttonStyle(.plain)
-            .background(Color.white.opacity(0.12), in: RoundedRectangle(cornerRadius: 16))
-            .opacity(remote.busy ? 0.5 : 1)
 
             HStack(spacing: 8) {
                 volumeButton("minus", -1)
@@ -153,6 +144,15 @@ struct RemoteView: View {
         // on from where the tap left it.
         .onChange(of: remote.target) { _, t in if let t, Int(crown.rounded()) != t { crown = Double(t) } }
         .onAppear { focused = true }
+    }
+
+    private func mediaButton(_ glyph: String, _ action: String, lit: Bool) -> some View {
+        Button { tap(); remote.media(action) } label: {
+            Image(systemName: glyph).font(.system(size: 30, weight: .semibold))
+                .frame(maxWidth: .infinity, minHeight: 70)
+        }
+        .buttonStyle(.plain)
+        .background(Color.white.opacity(lit ? 0.3 : 0.1), in: RoundedRectangle(cornerRadius: 16))
     }
 
     private func volumeButton(_ glyph: String, _ by: Int) -> some View {

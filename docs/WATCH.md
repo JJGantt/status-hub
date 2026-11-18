@@ -49,10 +49,9 @@ the `tv_commands` row, pushes it to the TV's app itself instead of waiting for r
 insert back (`tvInserted` then skips the echo), and holds the request open for the app's
 `/api/tv/result` — so the number shown is what the TV reports, never what was asked. It skips the Pi's
 check of what is really playing (data-layer `bedroomTv.ts` `judge`), which costs seconds a button
-cannot spend. **Play/pause is a toggle the TV decides** (`toggle` in google-tv's TvLink), from the
-media session's state at the moment of the press: the watch's own reading can predate the tap, and a
-page tapped as it opens has not heard back yet. The glyph shows the last state the TV reported, and
-the combined play/pause glyph until it has reported one. **One volume command is on the wire
+cannot spend. **Play and pause are two buttons, each always sending its own action** — never a
+toggle, so a press does what it says regardless of what the watch last heard. The button matching the
+state the TV last reported is lit. **One volume command is on the wire
 at a time**: the TV app walks to a level a key step at a time and two walks would fight, so a crown
 spin only moves the target, and the newest target goes out when the answer comes back. The page reads
 the volume and the playing state each time it comes on screen and holds no stream. Only play/pause and

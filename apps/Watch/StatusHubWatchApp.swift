@@ -148,12 +148,12 @@ final class WatchAppDelegate: NSObject, WKApplicationDelegate, UNUserNotificatio
     }
 }
 
-/// Six pages, left to right: the sessions, home — the conversation — the rings and today's log, the
+/// Pages, left to right: the bedroom TV's remote (`RemoteView`), the sessions, home — the conversation — the rings and today's log, the
 /// workout block, the live mic (`LiveListenView`), and the gesture recorder (`GestureLabView`). Home is
 /// where the app opens.
 struct RootView: View {
     enum Page: String {
-        case sessions, home, day, health, live, gesture, usage
+        case remote, sessions, home, day, health, live, gesture, usage
 
         /// Nutrition and Workout land on the day page, which opens the list each names
         /// (`Router.dayList`): today's food log, or the exercise list. Day lands on the page itself.
@@ -190,6 +190,7 @@ struct RootView: View {
         // row takes the sideways swipe, so the system's swipe back never fires: the session's name closes
         // it, and so does a rightward drag on the session itself (`SessionView`).
         TabView(selection: $page) {
+            RemoteView().tag(Page.remote)
             SessionsView().tag(Page.sessions).environment(\.onScreen, page == .sessions)
             HomeView().tag(Page.home).environment(\.onScreen, page == .home)
             DayView().tag(Page.day)
@@ -349,6 +350,9 @@ struct RootView: View {
         if live && page == .day { first.append(nutrition.activate()); first.append(workout.activate()) }
         else { nutrition.deactivate(); workout.deactivate() }
         if live && page == .usage { first.append(ClaudeUsage.shared.activate()) } else { ClaudeUsage.shared.deactivate() }
+        // The remote reads the TV's volume and what is playing whenever it comes on screen; nothing to
+        // hold open, since the TV only changes when something presses it.
+        if live && page == .remote { first.append(TvRemote.shared.activate()) }
         if !live { warmed = false; return }
         loadingFirst = first
         guard !warmed else { return }

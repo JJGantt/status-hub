@@ -10,7 +10,7 @@ function createRealtime(ctx) {
     MUTE_HOLD, SUPABASE_KEY, SUPABASE_URL, auth, broadcast, dirtyDesk, dirtyDue, dirtyHeatHistory,
     dirtyNutDay, dirtyRows, dirtySettings, dirtySurfHist, dirtyWorkoutDay, markLive, notifyAnswer, onDeskCommand, pushDay,
     pushLists, pushSessions, pushSurfLive, pushVoice, recomputeMute, reportTick, requestView, sb, settleReply,
-    surfAlarms, syncBadge, takeUsage, tvPush,
+    surfAlarms, syncBadge, takeUsage, tvInserted,
   } = ctx;
 
   // Supabase client used only for the Realtime subscription (push). Data reads use sb() REST.
@@ -78,9 +78,9 @@ function createRealtime(ctx) {
         (p) => { dirtySurfHist(); changed(p); surfAlarms.tick('snapshot'); pushSurfLive(); })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'surf_alarms' },
         () => { seen(); surfAlarms.tick('rule'); })
-      // A TV command, pushed to the TV's app the moment it is written (tvPush).
+      // A TV command, pushed to the TV's app the moment it is written (tvInserted in routes/tv.js).
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'tv_commands' },
-        (p) => { seen(); tvPush(p.new).catch((e) => console.error('[tv] push', e.message || e)); })
+        (p) => { seen(); tvInserted(p.new).catch((e) => console.error('[tv] push', e.message || e)); })
       // The rep watcher, so setting it appears at once rather than on the next periodic
       // frame. Its whole value is confirming BEFORE a set that sets are being logged as
       // the right thing, and a delay there defeats the purpose. workset_reports is NOT

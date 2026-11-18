@@ -160,7 +160,7 @@ const { itemTitle } = require('./routes/lists')({
   pushLists, sb, sbWrite, settingsAll, syncBadge, timed,
 });
 
-const { TV_SIDEBAR_FONT, TV_SIDEBAR_WIDTH, tvPush } = require('./routes/tv')({ PING, gated, putSetting, sb, sbWrite, sessionClients });
+const { TV_SIDEBAR_FONT, TV_SIDEBAR_WIDTH, tvInserted } = require('./routes/tv')({ PING, gated, putSetting, sb, sbWrite, sessionClients });
 
 const { MACHINE_NAME, deadLetter, desk, followUpSession, machineAwake, openSession, pushSessions, sessionVerb, transferSession } = require('./routes/sessions')({
   DESK_STALE_S, EPOCH, SUPABASE_KEY, SUPABASE_URL, TV_SIDEBAR_FONT, TV_SIDEBAR_WIDTH, cleanSaid, convOfRow, ensureLog, gated, liveLine,
@@ -185,7 +185,7 @@ const realtime = createRealtime({
   MUTE_HOLD, SUPABASE_KEY, SUPABASE_URL, auth, broadcast, dirtyDesk: cache.dirtyDesk,
   dirtyDue: jobs.dirtyDue, dirtyHeatHistory, dirtyNutDay, dirtyRows: cache.dirtyRows, dirtySettings, dirtySurfHist,
   dirtyWorkoutDay, markLive, notifyAnswer, onDeskCommand: desk.onCommand, pushDay, pushLists, pushSessions, pushSurfLive, pushVoice, recomputeMute,
-  reportTick: jobs.reportTick, requestView, sb, settleReply, surfAlarms, syncBadge, takeUsage: usage.take, tvPush,
+  reportTick: jobs.reportTick, requestView, sb, settleReply, surfAlarms, syncBadge, takeUsage: usage.take, tvInserted,
 });
 
 // A client that hangs up before its request body finishes arriving (a phone locking or losing signal

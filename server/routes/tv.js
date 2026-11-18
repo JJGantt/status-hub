@@ -1,4 +1,5 @@
 'use strict';
+const crypto = require('crypto');
 const express = require('express');
 
 module.exports = function (ctx) {
@@ -25,6 +26,15 @@ module.exports = function (ctx) {
   // All three are the page's business, delivered on the sessions frame it already holds.
   const TV_SIDEBAR_FONT = 17;     // px, the page's base size
   const TV_SIDEBAR_WIDTH = 0.35;  // the panel's minimum, fraction of the screen
+  // Callers holding the request open for a row's answer (the watch's remote, /api/tv/remote), by row id.
+  const waiters = new Map();
+  function settle(id, result) {
+    const w = waiters.get(id);
+    if (w) { waiters.delete(id); w(result); }
+  }
+  // Rows already pushed by the route that wrote them, so the realtime insert of the same row does not
+  // send it to the TV a second time (tvInserted).
+  const pushedDirect = new Set();
   async function tvPush(row) {
     if (!row || row.done_at || TV_PI_OPS.has(row.op)) return;
     // The TV Guide changed: the phone's guide pane (cards/guide.js) redraws too, told on the session
@@ -48,9 +58,16 @@ module.exports = function (ctx) {
     for (const c of tvClients) { try { c.write(frame); } catch {} }
     if (!tvClients.size && !TV_WAKE_OPS.has(row.op)) {
       // Nobody to do it: answer the row now so the caller is not left waiting for the timeout.
+      const result = { ok: false, error: 'the TV is off, or its app is not connected to the hub' };
+      settle(row.id, result);
       sbWrite(`tv_commands?id=eq.${row.id}`, 'PATCH',
-        { done_at: new Date().toISOString(), result: { ok: false, error: 'the TV is off, or its app is not connected to the hub' } }).catch((e) => console.error('[tv] answer', e.message || e));
+        { done_at: new Date().toISOString(), result }).catch((e) => console.error('[tv] answer', e.message || e));
     }
+  }
+  /** A tv_commands insert seen on realtime: pushed unless the route that wrote it already did. */
+  function tvInserted(row) {
+    if (row && pushedDirect.delete(row.id)) return Promise.resolve();
+    return tvPush(row);
   }
   gated.get('/api/tv/stream', async (req, res) => {
     res.set({ 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache',
@@ -68,6 +85,7 @@ module.exports = function (ctx) {
   gated.post('/api/tv/result', express.json({ limit: '64kb' }), async (req, res) => {
     const id = String((req.body || {}).id || '');
     if (!/^[0-9a-f-]{36}$/i.test(id)) return res.status(400).json({ error: 'id required' });
+    settle(id, (req.body || {}).result ?? null);
     try {
       await sbWrite(`tv_commands?id=eq.${id}`, 'PATCH', { done_at: new Date().toISOString(), result: (req.body || {}).result ?? null });
       res.json({ ok: true });
@@ -106,6 +124,47 @@ module.exports = function (ctx) {
     }
   });
 
+  // The watch's remote (docs/WATCH.md § The remote page): volume and play/pause, answered with what the
+  // TV app reports. The row is pushed here rather than waiting for realtime to bring the insert back,
+  // because a remote button is judged by how fast it lands, and the answer is awaited in-process off
+  // /api/tv/result. It skips the Pi's check of what is really playing (bedroomTv.ts `judge`), which costs
+  // seconds: a remote's job is to press the button, and the app's state is what decides the next press.
+  const REMOTE_TIMEOUT_MS = 15000;
+  gated.post('/api/tv/remote', express.json(), async (req, res) => {
+    const b = req.body || {};
+    let op, args;
+    if (b.op === 'volume') {
+      op = 'volume';
+      args = b.value === undefined ? {} : { value: Math.max(0, Math.min(100, Math.round(Number(b.value)))) };
+      if (Number.isNaN(args.value)) return res.status(400).json({ error: 'value must be a number' });
+    } else if (b.op === 'media' && ['play', 'pause'].includes(b.action)) { op = 'media'; args = { action: b.action }; }
+    else if (b.op === 'now') { op = 'now'; args = {}; }
+    else return res.status(400).json({ error: 'op must be volume, media (play|pause) or now' });
+    const row = { id: crypto.randomUUID(), op, args };
+    const answered = new Promise((resolve) => waiters.set(row.id, resolve));
+    try {
+      pushedDirect.add(row.id);
+      await sbWrite('tv_commands', 'POST', row);
+    } catch (e) {
+      pushedDirect.delete(row.id);
+      waiters.delete(row.id);
+      console.error('[tv] remote insert', e.message || e);
+      return res.status(502).json({ error: String(e.message || e) });
+    }
+    setTimeout(() => pushedDirect.delete(row.id), 60000).unref?.();
+    await tvPush(row);
+    let timer;
+    const result = await Promise.race([answered,
+      new Promise((resolve) => { timer = setTimeout(() => resolve(null), REMOTE_TIMEOUT_MS); })]);
+    clearTimeout(timer);
+    if (!result) {
+      waiters.delete(row.id);
+      console.error(`[tv] remote ${op}: no answer from the TV app in ${REMOTE_TIMEOUT_MS / 1000}s`);
+      return res.json({ ok: false, error: 'no answer from the TV' });
+    }
+    res.json(result);
+  });
+
   gated.get('/api/session-stream', (req, res) => {
     res.set({ 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache',
               Connection: 'keep-alive', 'X-Accel-Buffering': 'no' });
@@ -115,5 +174,5 @@ module.exports = function (ctx) {
     req.on('close', () => { clearInterval(ka); sessionClients.delete(res); });
   });
 
-  return { TV_SIDEBAR_FONT, TV_SIDEBAR_WIDTH, tvPush };
+  return { TV_SIDEBAR_FONT, TV_SIDEBAR_WIDTH, tvPush, tvInserted };
 };

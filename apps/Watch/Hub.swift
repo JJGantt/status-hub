@@ -795,6 +795,11 @@ enum Hub {
         return try JSONDecoder().decode(Saved.self, from: try await call("/api/gestures", method: "POST", body: body, timeout: 60)).path
     }
 
+    /// A JSON POST, answered with the raw body: for a caller decoding its own answer (`TvRemote`).
+    static func post(_ path: String, _ body: [String: Any], timeout: TimeInterval = 20) async throws -> Data {
+        try await call(path, method: "POST", body: body, timeout: timeout)
+    }
+
     static func json<T: Decodable>(_ path: String, timeout: TimeInterval = 20) async throws -> T {
         try JSONDecoder().decode(T.self, from: try await call(path, timeout: timeout))
     }

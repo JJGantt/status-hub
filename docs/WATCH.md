@@ -20,7 +20,7 @@ The sessions list ends with the build number (the watch app's own `CFBundleVersi
 
 ## Pages
 
-Seven, swiped left to right: **sessions · home · day · health · live · gesture · usage**. The app opens on home,
+Eight, swiped left to right: **remote · sessions · home · day · health · live · gesture · usage**. The app opens on home,
 which IS the conversation — there is no separate prompt page. New layouts are added as NEW pages beside the old
 ones rather than by reshaping a page in place, and the ones that lose are deleted; `day` and `health`
 are two layouts of the same food-and-training data, and one of them is expected to go.
@@ -42,6 +42,18 @@ dispatches on.
 
 Every page stays alive side by side in the TabView, so anything that binds double tap or acts on a
 request asks `onScreen` (an environment value `RootView` sets per page) first.
+
+`remote` is the bedroom TV's remote (`Remote.swift`): play/pause and volume. The crown IS the volume
+while the page is showing, and − / + step it by one. Each press is `POST /api/tv/remote`, which writes
+the `tv_commands` row, pushes it to the TV's app itself instead of waiting for realtime to bring the
+insert back (`tvInserted` then skips the echo), and holds the request open for the app's
+`/api/tv/result` — so the number shown is what the TV reports, never what was asked. It skips the Pi's
+check of what is really playing (data-layer `bedroomTv.ts` `judge`), which costs seconds a button
+cannot spend; play/pause toggles on the app's media-session state. **One volume command is on the wire
+at a time**: the TV app walks to a level a key step at a time and two walks would fight, so a crown
+spin only moves the target, and the newest target goes out when the answer comes back. The page reads
+the volume and the playing state each time it comes on screen and holds no stream. Only play/pause and
+volume exist: remote KEYS (arrows, select, back) are pressed by the Pi over adb, not by the app.
 
 `live` is the live mic: one control that plays what the phone's microphone hears
 (`LiveListen.swift`, [LIVE-MIC.md](LIVE-MIC.md)). It holds no stream until it is pressed.

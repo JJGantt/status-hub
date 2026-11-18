@@ -1,0 +1,165 @@
+import SwiftUI
+import WatchKit
+
+/// **The bedroom TV's remote** (docs/WATCH.md § The remote page): play/pause and volume, through the
+/// hub's `/api/tv/remote`, which hands each press to the TV's companion app and answers with what the
+/// TV reports afterwards. Every number shown is the TV's own answer, never the one asked for.
+@MainActor
+final class TvRemote: ObservableObject {
+    static let shared = TvRemote()
+
+    /// The TV's volume as it last reported it; nil until read, or when the TV did not answer.
+    @Published private(set) var volume: Int?
+    /// The level the user is steering to: the crown and the buttons move this at once, and the TV
+    /// follows it.
+    @Published private(set) var target: Int?
+    /// What the playing app's media session says: true playing, false paused, nil nothing playing.
+    @Published private(set) var playing: Bool?
+    /// The TV's own words when a press did not land ("the TV is off…", "nothing is playing").
+    @Published private(set) var problem: String?
+    @Published private(set) var busy = false
+
+    /// One volume command on the wire at a time: the TV app reaches a level a step at a time, and two
+    /// walks at once would fight. Turns made meanwhile only move `target`; when the answer comes back
+    /// the newest target goes out, so a fast crown spin is a few sends, not one per detent.
+    private var sending = false
+
+    private struct Answer: Decodable {
+        let ok: Bool?
+        let error: String?
+        let volume: Int?
+        let state: String?
+        let playing: Bool?
+    }
+
+    private init() {}
+
+    /// Reads the TV's volume and what is playing, each time the page comes on screen.
+    @discardableResult func activate() -> Task<Void, Never> {
+        Task {
+            async let v = send(["op": "volume"])
+            async let n = send(["op": "now"])
+            let (vol, now) = await (v, n)
+            if let vol, vol.ok == true, let x = vol.volume { volume = x; if !sending { target = x } }
+            if let now { take(now) }
+            problem = [vol, now].compactMap { $0 }.first { $0.ok == false }?.error
+        }
+    }
+
+    func step(_ by: Int) {
+        guard let base = target ?? volume else { return }
+        steer(to: base + by)
+    }
+
+    func steer(to level: Int) {
+        let next = max(0, min(100, level))
+        guard next != target else { return }
+        target = next
+        pushVolume()
+    }
+
+    private func pushVolume() {
+        guard !sending, let want = target, want != volume else { return }
+        sending = true
+        Task {
+            let a = await send(["op": "volume", "value": want])
+            sending = false
+            if let a, a.ok == true, let x = a.volume {
+                volume = x
+                problem = nil
+            } else {
+                problem = a?.error ?? "no answer"
+                Hub.log("remote_fail", ["op": "volume", "error": problem ?? ""])
+                target = volume
+                return
+            }
+            pushVolume()
+        }
+    }
+
+    func playPause() {
+        guard !busy else { return }
+        busy = true
+        let action = playing == true ? "pause" : "play"
+        Task {
+            if let a = await send(["op": "media", "action": action]) { take(a) }
+            busy = false
+        }
+    }
+
+    private func take(_ a: Answer) {
+        if a.ok == true {
+            playing = a.state.map { $0 == "playing" }
+            problem = nil
+        } else {
+            problem = a.error ?? "no answer"
+        }
+    }
+
+    private func send(_ body: [String: Any]) async -> Answer? {
+        do {
+            return try JSONDecoder().decode(Answer.self, from: try await Hub.post("/api/tv/remote", body, timeout: 20))
+        } catch {
+            Hub.log("remote_fail", ["op": body["op"] ?? "", "error": "\(error)"])
+            return nil
+        }
+    }
+}
+
+struct RemoteView: View {
+    @ObservedObject private var remote = TvRemote.shared
+    /// The crown's position, which IS the volume while this page is showing.
+    @State private var crown = 0.0
+    @FocusState private var focused: Bool
+
+    var body: some View {
+        VStack(spacing: 10) {
+            Button { tap(); remote.playPause() } label: {
+                Image(systemName: remote.playing == true ? "pause.fill" : "play.fill")
+                    .font(.system(size: 40, weight: .semibold))
+                    .frame(maxWidth: .infinity, minHeight: 74)
+            }
+            .buttonStyle(.plain)
+            .background(Color.white.opacity(0.12), in: RoundedRectangle(cornerRadius: 16))
+            .opacity(remote.busy ? 0.5 : 1)
+
+            HStack(spacing: 8) {
+                volumeButton("minus", -1)
+                Text(remote.target.map(String.init) ?? "–")
+                    .font(.system(size: 30, weight: .semibold).monospacedDigit())
+                    .foregroundStyle(remote.target == remote.volume ? .primary : .secondary)
+                    .frame(minWidth: 54)
+                volumeButton("plus", 1)
+            }
+
+            if let p = remote.problem {
+                Text(p).font(.system(size: 12)).foregroundStyle(.secondary).lineLimit(2)
+                    .multilineTextAlignment(.center)
+            }
+        }
+        .padding(.horizontal, 6)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .focusable()
+        .focused($focused)
+        .digitalCrownRotation($crown, from: 0, through: 100, by: 1, sensitivity: .low,
+                              isContinuous: false, isHapticFeedbackEnabled: true)
+        .onChange(of: crown) { _, v in
+            if Int(v.rounded()) != remote.target { remote.steer(to: Int(v.rounded())) }
+        }
+        // The crown starts from the TV's level, and follows the buttons, so a turn after a tap moves
+        // on from where the tap left it.
+        .onChange(of: remote.target) { _, t in if let t, Int(crown.rounded()) != t { crown = Double(t) } }
+        .onAppear { focused = true }
+    }
+
+    private func volumeButton(_ glyph: String, _ by: Int) -> some View {
+        Button { tap(); remote.step(by) } label: {
+            Image(systemName: glyph).font(.system(size: 22, weight: .bold))
+                .frame(maxWidth: .infinity, minHeight: 52)
+        }
+        .buttonStyle(.plain)
+        .background(Color.white.opacity(0.12), in: RoundedRectangle(cornerRadius: 14))
+    }
+
+    private func tap() { WKInterfaceDevice.current().play(.click) }
+}

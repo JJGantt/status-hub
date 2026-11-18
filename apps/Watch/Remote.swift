@@ -13,7 +13,8 @@ final class TvRemote: ObservableObject {
     /// The level the user is steering to: the crown and the buttons move this at once, and the TV
     /// follows it.
     @Published private(set) var target: Int?
-    /// What the playing app's media session says: true playing, false paused, nil nothing playing.
+    /// What the playing app's media session says: true playing, false paused, nil not known (not read
+    /// yet, or nothing playing).
     @Published private(set) var playing: Bool?
     /// The TV's own words when a press did not land ("the TV is off…", "nothing is playing").
     @Published private(set) var problem: String?
@@ -77,12 +78,14 @@ final class TvRemote: ObservableObject {
         }
     }
 
+    /// A toggle the TV decides (`toggle` in the TV app's TvLink), from its own state at the moment of
+    /// the press. The watch's `playing` only draws the glyph: it can be from before the tap, and a page
+    /// opened and tapped at once has not heard back yet.
     func playPause() {
         guard !busy else { return }
         busy = true
-        let action = playing == true ? "pause" : "play"
         Task {
-            if let a = await send(["op": "media", "action": action]) { take(a) }
+            if let a = await send(["op": "media", "action": "toggle"]) { take(a) }
             busy = false
         }
     }
@@ -115,7 +118,7 @@ struct RemoteView: View {
     var body: some View {
         VStack(spacing: 10) {
             Button { tap(); remote.playPause() } label: {
-                Image(systemName: remote.playing == true ? "pause.fill" : "play.fill")
+                Image(systemName: remote.playing.map { $0 ? "pause.fill" : "play.fill" } ?? "playpause.fill")
                     .font(.system(size: 40, weight: .semibold))
                     .frame(maxWidth: .infinity, minHeight: 74)
             }

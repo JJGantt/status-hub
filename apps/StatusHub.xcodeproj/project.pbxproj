@@ -46,6 +46,7 @@
 		6F48E2C9C6071F502AB252A0 /* ReposView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AF1D1C7A5D148A4366347C65 /* ReposView.swift */; };
 		70AEAF3F633ACDFC32C23FF6 /* LiveMic.swift in Sources */ = {isa = PBXBuildFile; fileRef = FC9DA7D425E32C05CDE6A7EA /* LiveMic.swift */; };
 		734F54125D4F0BC0B31B51EF /* VolumeKnob.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1E94C4C0D42288352ED7299B /* VolumeKnob.swift */; };
+		7361D0C7E360603243CFD673 /* Remote.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8CA83F39B78BED158714499A /* Remote.swift */; };
 		745EBC9E16BCB0B7808949B4 /* reminder.caf in Resources */ = {isa = PBXBuildFile; fileRef = D45C11A97894E271FE097B5B /* reminder.caf */; };
 		751D569CB797DF41F82F80DB /* ReposWidget.swift in Sources */ = {isa = PBXBuildFile; fileRef = 61B4D21322132BFB2C145C0C /* ReposWidget.swift */; };
 		77A3FC66BCC0B5FAA82C04C6 /* StatusHubWatchApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = C00E5B1C61B9780EE2BE1945 /* StatusHubWatchApp.swift */; };
@@ -198,6 +199,7 @@
 		835C09DFE3C581C0FCD41116 /* Push.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Push.swift; sourceTree = "<group>"; };
 		8500D56F95DF5A6D21132960 /* SleepSync.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SleepSync.swift; sourceTree = "<group>"; };
 		88D699B5FDC0F7476374CF07 /* Auth.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Auth.swift; sourceTree = "<group>"; };
+		8CA83F39B78BED158714499A /* Remote.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Remote.swift; sourceTree = "<group>"; };
 		94DD1B301CE525AF6B208DC7 /* StatusHubWatch.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = StatusHubWatch.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		951A385F7EE64123592C4DA6 /* WatchSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchSettings.swift; sourceTree = "<group>"; };
 		980C6D4E9785922A04236D2D /* OpenTodoItem.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenTodoItem.swift; sourceTree = "<group>"; };
@@ -295,6 +297,7 @@
 				38BD5AA187D80545B616356B /* Nutrition.swift */,
 				7300D161B8F2C8E565CA4FAB /* NutritionView.swift */,
 				14EB30894FADCF33B66D0455 /* Recorder.swift */,
+				8CA83F39B78BED158714499A /* Remote.swift */,
 				5A7D22E52C6A0ABBCB9FF3BF /* Rewind.swift */,
 				2BA599375B5694F4C40BB517 /* RewindBuffer.swift */,
 				04D43ADC9891823E1EFA0E4C /* Router.swift */,
@@ -602,6 +605,7 @@
 				B63E8DE2508FDBEB38EC60C7 /* NutritionView.swift in Sources */,
 				1C569FFA9D76D921D56B85D8 /* RecordIntent.swift in Sources */,
 				51D9EC4E888D09D03D22734A /* Recorder.swift in Sources */,
+				7361D0C7E360603243CFD673 /* Remote.swift in Sources */,
 				4DE2F21E70EC60A06611DF49 /* Rewind.swift in Sources */,
 				F6AB2F65BC1CE1BE65F7EF8A /* RewindBuffer.swift in Sources */,
 				0A405A9C2335E55FE66C39DB /* RingsView.swift in Sources */,

@@ -61,12 +61,12 @@ Use `lib/dates.js` (`localDate`, `nutritionWindow`, `dayBucketOf`) — never
 rendered in one display timezone (default America/New_York); a UTC date puts a late meal on the
 wrong day.
 
-## The watch and phone apps never make a voice command wait
+## A wait on a voice command is approved by Jared before it is built
 
-Nothing may run between the end of a recording and its upload that was not already there: no location
-fix, no lookup, no extra request. Anything a command could use is gathered when the app opens or while the
-user speaks, or fetched later by the worker when the request needs it. The rule and its reasons are
-voice-pipeline `CLAUDE.md` § Nothing may add latency to a voice command.
+Anything new between the end of a recording and its upload (a location fix, a lookup, an extra request) is
+proposed to Jared with what it costs, and built only once he approves. The default is to gather what a
+command could use when the app opens or while the user speaks, or have the worker fetch it later. The rule
+is voice-pipeline `CLAUDE.md` § Adding latency to a voice command needs Jared's approval first.
 
 ## `apps/StatusHub.xcodeproj` is generated
 

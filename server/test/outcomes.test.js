@@ -27,6 +27,18 @@ test('a start stopped before its mic opened is not reported', () => {
   assert.deepEqual(vanishedRecordings([ev('record-start', '21:00'), ev('record-start', '21:02')]), []);
 });
 
+const end = (reason, at, owner = 'hub') => ({ ...ev('mic-end', at), data: { reason, owner } });
+
+test('a command the watch closed itself for nothing said is ended, unless it paused instead', () => {
+  assert.deepEqual(vanishedRecordings([
+    ev('record-start', '21:00'), ev('mic-open', '21:01'), end('unspoken', '21:16'),
+    ev('record-start', '22:00'), ev('mic-open', '22:01'), end('cap', '22:06'),
+    ev('record-start', '23:00'), ev('mic-open', '23:01'), end('unspoken', '23:16'), ev('mic-paused', '23:16'),
+    ev('record-start', '24:00'), ev('mic-open', '24:01'), end('silence', '24:05'),
+    ev('record-start', '25:00'),
+  ]), [{ at: '2026-11-02T06:23:00Z', next: '2026-11-02T06:24:00Z' }, { at: '2026-11-02T06:24:00Z', next: '2026-11-02T06:25:00Z' }]);
+});
+
 test('the newest start, still running, is not reported', () => {
   assert.deepEqual(vanishedRecordings([ev('record-start', '21:00'), ev('mic-open', '21:01')]), []);
 });

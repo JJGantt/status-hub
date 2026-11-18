@@ -821,6 +821,10 @@ its network is down, or a stream that never opened. `/api/clientlog` runs `check
 earlier start whose microphone opened and that has no `record-stop`, `record-cancel`, `mic-failed` or
 `record-lost` (written by the hub when the stream reported it) before the next start is reported, once.
 A start stopped before its microphone opened ends without a `record-stop` by design and is not reported.
+Nor is one the watch closed itself: `Capture` cancels a command with nothing spoken (`unspoken`) or a
+quick one that hit its cap unheard (`cap`) without the view logging `record-cancel`, so a `mic-end` with
+either reason counts as its end, unless `mic-paused` follows it (a resumed recording pausing again is
+still open).
 
 **Testing it without starting an incident**: a simulator build reads `HUB_HOST` (`Shared/Auth.swift`),
 so `SIMCTL_CHILD_HUB_HOST=http://127.0.0.1:<port> SIMCTL_CHILD_HUB_TOKEN=x xcrun simctl launch … -record

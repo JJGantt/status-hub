@@ -8,13 +8,19 @@
 // A watch recording ends in exactly one of these. `mic-failed` counts: the microphone never opened, and
 // that failure is already a line of its own.
 const RECORD_ENDS = new Set(['record-stop', 'record-cancel', 'mic-failed', 'record-lost']);
-const RECORD_EVENTS = ['record-start', 'mic-open', ...RECORD_ENDS];
+// The watch also closes a command itself, in Capture, without the view logging an end: nothing spoken in
+// its first 15s (`mic-end` reason `unspoken`) or the quick flow's cap reached with nothing heard (`cap`).
+// Both log `mic-end` and throw the clip away. An `unspoken` from a recording resumed after an
+// interruption is followed by `mic-paused` instead, and that recording is still open.
+const SELF_CLOSES = new Set(['unspoken', 'cap']);
+const RECORD_EVENTS = ['record-start', 'mic-open', 'mic-end', 'mic-paused', ...RECORD_ENDS];
 
 // `events`: one device's recording events oldest first, each { ev, at }. Answers every record-start
 // whose microphone opened and that was followed by another record-start (or nothing yet, which is not
 // counted: it may still be running) with no end between. A start before its mic opened that is stopped
 // at once ends without a `record-stop` by design (Capture.stop while arming), hence the mic-open test.
 // The outbox can deliver a batch twice, so a repeat of the same event at the same moment is one event.
+// `data` (the event's own fields) is read only for `mic-end`.
 function vanishedRecordings(events) {
   const seen = new Set();
   const out = [];
@@ -24,10 +30,15 @@ function vanishedRecordings(events) {
     if (seen.has(key)) continue;
     seen.add(key);
     if (e.ev === 'record-start') {
-      if (open && open.opened) out.push({ at: open.at, next: e.at });
+      if (open && open.opened && !open.selfClosed) out.push({ at: open.at, next: e.at });
       open = { at: e.at, opened: false };
     } else if (e.ev === 'mic-open') {
       if (open) open.opened = true;
+    } else if (e.ev === 'mic-end') {
+      const d = e.data || {};
+      if (open && SELF_CLOSES.has(d.reason) && d.owner !== 'listener') open.selfClosed = true;
+    } else if (e.ev === 'mic-paused') {
+      if (open) open.selfClosed = false;
     } else if (RECORD_ENDS.has(e.ev)) {
       open = null;
     }

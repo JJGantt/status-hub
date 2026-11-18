@@ -362,7 +362,7 @@ enum Hub {
                           listener: (start: Date, end: Date)? = nil, rewind: String? = nil,
                           timeout: TimeInterval = 60) async throws -> Heard {
         try blockInSimulator("voice-command")
-        var query = await commandQuery(clip, msgId: msgId, dry: dry, listener: listener)
+        var query = commandQuery(clip, msgId: msgId, dry: dry, listener: listener)
         // Instructions for a rewind grab: the hub sends the grab's words along with them (docs/REWIND.md).
         if let rewind { query += "&rewind=\(rewind)" }
         // **A recording that was streamed is not uploaded again.** The hub already holds its audio from
@@ -406,7 +406,7 @@ enum Hub {
 
     /// What a clip's upload says about it, to the hub and to the fallback alike.
     private static func commandQuery(_ clip: Recorder.Clip, msgId: String, dry: Bool,
-                                     listener: (start: Date, end: Date)?) async -> String {
+                                     listener: (start: Date, end: Date)?) -> String {
         var query = "client_msg_id=\(msgId)&client_now=\(clientNow())&dur=\(String(format: "%.1f", clip.duration))"
             + (dry ? "&dry=1" : "")
         let iso = ISO8601DateFormatter()
@@ -437,11 +437,6 @@ enum Hub {
             if !clip.quiet.isEmpty {
                 query += "&quiet=" + clip.quiet.prefix(200).map { String(format: "%.1f-%.1f", $0[0], $0[1]) }.joined(separator: ",")
             }
-        }
-        // Where the user is, for "near me" and a pickup point; a dictation (dry) goes nowhere yet.
-        if !dry, let l = await Here.shared.fix() {
-            query += String(format: "&lat=%.5f&lon=%.5f&acc=%.0f",
-                            l.coordinate.latitude, l.coordinate.longitude, l.horizontalAccuracy)
         }
         return query
     }
@@ -520,7 +515,7 @@ enum Hub {
 
     static func sendFallback(_ clip: Recorder.Clip, msgId: String) async throws -> Heard {
         try blockInSimulator("voice-fallback")
-        let query = await commandQuery(clip, msgId: msgId, dry: false, listener: nil)
+        let query = commandQuery(clip, msgId: msgId, dry: false, listener: nil)
         var r = try fallbackRequest(query, method: "POST", timeout: 60)
         r.setValue("audio/mp4", forHTTPHeaderField: "Content-Type")
         let (data, resp) = try await resending { try await session.upload(for: r, fromFile: clip.url) }

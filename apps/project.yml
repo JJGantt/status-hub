@@ -190,7 +190,7 @@ targets:
         WKCompanionAppBundleIdentifier: com.jaredgantt.statushub
         ITSAppUsesNonExemptEncryption: false
         NSMicrophoneUsageDescription: Status Hub uses the microphone for voice commands.
-        NSLocationWhenInUseUsageDescription: For nearby requests.   # Watch/Location.swift
+        NSLocationWhenInUseUsageDescription: For nearby requests.   # Shared/LocationTrail.swift
         NSMotionUsageDescription: Records motion for gesture testing.   # Watch/GestureLab.swift
         # A recording started on screen keeps going with the wrist lowered, so a command still ends at
         # its silence and the listener keeps listening (Watch/Capture.swift). UIBackgroundModes, not

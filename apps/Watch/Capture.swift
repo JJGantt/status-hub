@@ -160,7 +160,6 @@ final class Capture: ObservableObject {
             // to start talking, where the gentle `.start` tap was easy to miss.
             WKInterfaceDevice.current().play(.directionUp)
             self?.recorder.cue()
-            Here.shared.warm()   // the GPS gets the speaking time, so sending never waits on it
             self?.openLive(owner, flow)
         }
     }

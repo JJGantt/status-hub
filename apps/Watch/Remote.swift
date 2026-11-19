@@ -3,25 +3,26 @@ import WatchKit
 
 /// **The bedroom TV's remote** (docs/WATCH.md § The remote page): play/pause and volume, through the
 /// hub's `/api/tv/remote`, which hands each press to the TV's companion app and answers with what the
-/// TV reports afterwards. Every number shown is the TV's own answer, never the one asked for.
+/// TV reports afterwards. The volume shown is the TV's last answer plus the steps it has not answered yet.
 @MainActor
 final class TvRemote: ObservableObject {
     static let shared = TvRemote()
 
     /// The TV's volume as it last reported it; nil until read, or when the TV did not answer.
     @Published private(set) var volume: Int?
-    /// The level the user is steering to: the crown and the buttons move this at once, and the TV
-    /// follows it.
-    @Published private(set) var target: Int?
+    /// Steps pressed or turned that the TV has not answered yet: queued plus on the wire. What is shown
+    /// is `volume + outstanding`, the level the user asked for, and the TV's answer catches up to it.
+    @Published private(set) var outstanding = 0
     /// What the playing app's media session says: true playing, false paused, nil not known (not read
     /// yet, or nothing playing).
     @Published private(set) var playing: Bool?
     /// The TV's own words when a press did not land ("the TV is off…", "nothing is playing").
     @Published private(set) var problem: String?
 
-    /// One volume command on the wire at a time: the TV app reaches a level a step at a time, and two
-    /// walks at once would fight. Turns made meanwhile only move `target`; when the answer comes back
-    /// the newest target goes out, so a fast crown spin is a few sends, not one per detent.
+    /// One volume command on the wire at a time: the TV app walks to a level a step at a time, and two
+    /// walks at once would fight. Presses made meanwhile add to `queued`, which goes out as one step
+    /// when the answer comes back, so a fast crown spin is a few sends, not one per detent.
+    private var queued = 0
     private var sending = false
 
     private struct Answer: Decodable {
@@ -40,38 +41,38 @@ final class TvRemote: ObservableObject {
             async let v = send(["op": "volume"])
             async let n = send(["op": "now"])
             let (vol, now) = await (v, n)
-            if let vol, vol.ok == true, let x = vol.volume { volume = x; if !sending { target = x } }
+            if let vol, vol.ok == true, let x = vol.volume { volume = x }
             if let now { take(now) }
             problem = [vol, now].compactMap { $0 }.first { $0.ok == false }?.error
         }
     }
 
+    /// A press or a crown detent: always taken, whatever the watch knows about the TV. It is a STEP,
+    /// relative to wherever the TV is when it arrives, so nothing waits for a read.
     func step(_ by: Int) {
-        guard let base = target ?? volume else { return }
-        steer(to: base + by)
-    }
-
-    func steer(to level: Int) {
-        let next = max(0, min(100, level))
-        guard next != target else { return }
-        target = next
+        queued += by
+        outstanding += by
         pushVolume()
     }
 
+    /// The level to show: what the user has asked for, when the TV's level is known.
+    var shown: Int? { volume.map { max(0, min(100, $0 + outstanding)) } }
+
     private func pushVolume() {
-        guard !sending, let want = target, want != volume else { return }
+        guard !sending, queued != 0 else { return }
         sending = true
+        let by = queued
+        queued = 0
         Task {
-            let a = await send(["op": "volume", "value": want])
+            let a = await send(["op": "volume", "step": by])
             sending = false
+            outstanding -= by
             if let a, a.ok == true, let x = a.volume {
                 volume = x
                 problem = nil
             } else {
                 problem = a?.error ?? "no answer"
                 Hub.log("remote_fail", ["op": "volume", "error": problem ?? ""])
-                target = volume
-                return
             }
             pushVolume()
         }
@@ -104,8 +105,9 @@ final class TvRemote: ObservableObject {
 
 struct RemoteView: View {
     @ObservedObject private var remote = TvRemote.shared
-    /// The crown's position, which IS the volume while this page is showing.
+    /// The crown's raw position, and the detent last turned into a step.
     @State private var crown = 0.0
+    @State private var detent = 0
     @FocusState private var focused: Bool
 
     var body: some View {
@@ -119,9 +121,9 @@ struct RemoteView: View {
 
             HStack(spacing: 8) {
                 volumeButton("minus", -1)
-                Text(remote.target.map(String.init) ?? "–")
+                Text(remote.shown.map(String.init) ?? "–")
                     .font(.system(size: 30, weight: .semibold).monospacedDigit())
-                    .foregroundStyle(remote.target == remote.volume ? .primary : .secondary)
+                    .foregroundStyle(remote.outstanding == 0 ? .primary : .secondary)
                     .frame(minWidth: 54)
                 volumeButton("plus", 1)
             }
@@ -135,14 +137,14 @@ struct RemoteView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .focusable()
         .focused($focused)
-        .digitalCrownRotation($crown, from: 0, through: 100, by: 1, sensitivity: .low,
-                              isContinuous: false, isHapticFeedbackEnabled: true)
+        // The crown is a stream of detents, each one a step: it holds no level of its own, so it never
+        // has to be lined up with the TV's.
+        .digitalCrownRotation($crown, from: -10000, through: 10000, by: 1, sensitivity: .low,
+                              isContinuous: true, isHapticFeedbackEnabled: true)
         .onChange(of: crown) { _, v in
-            if Int(v.rounded()) != remote.target { remote.steer(to: Int(v.rounded())) }
+            let d = Int(v.rounded()) - detent
+            if d != 0 { detent += d; remote.step(d) }
         }
-        // The crown starts from the TV's level, and follows the buttons, so a turn after a tap moves
-        // on from where the tap left it.
-        .onChange(of: remote.target) { _, t in if let t, Int(crown.rounded()) != t { crown = Double(t) } }
         .onAppear { focused = true }
     }
 

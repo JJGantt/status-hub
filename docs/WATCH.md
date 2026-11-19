@@ -43,17 +43,20 @@ dispatches on.
 Every page stays alive side by side in the TabView, so anything that binds double tap or acts on a
 request asks `onScreen` (an environment value `RootView` sets per page) first.
 
-`remote` is the bedroom TV's remote (`Remote.swift`): play/pause and volume. The crown IS the volume
-while the page is showing, and − / + step it by one. Each press is `POST /api/tv/remote`, which writes
+`remote` is the bedroom TV's remote (`Remote.swift`): play/pause and volume. Each crown detent
+while the page is showing is a volume step, and so is each − / +. Each press is `POST /api/tv/remote`, which writes
 the `tv_commands` row, pushes it to the TV's app itself instead of waiting for realtime to bring the
 insert back (`tvInserted` then skips the echo), and holds the request open for the app's
-`/api/tv/result` — so the number shown is what the TV reports, never what was asked. It skips the Pi's
+`/api/tv/result`, so every answer is what the TV reports. It skips the Pi's
 check of what is really playing (data-layer `bedroomTv.ts` `judge`), which costs seconds a button
 cannot spend. **Play and pause are two buttons, each always sending its own action** — never a
 toggle, so a press does what it says regardless of what the watch last heard. The button matching the
-state the TV last reported is lit. **One volume command is on the wire
-at a time**: the TV app walks to a level a key step at a time and two walks would fight, so a crown
-spin only moves the target, and the newest target goes out when the answer comes back. The page reads
+state the TV last reported is lit. **Volume is sent as STEPS** (`step`, relative to
+the level the TV is at when it arrives), never as a level built on the watch's last reading, so a press
+or a crown detent is taken the instant it happens, before the TV has been read at all. The number shown
+is the TV's last answer plus the steps not yet answered, dimmed while any are outstanding. One command
+is on the wire at a time (the TV app walks to a level a step at a time and two walks would fight), and
+steps made meanwhile go out together when it answers. The page reads
 the volume and the playing state each time it comes on screen and holds no stream. Only play/pause and
 volume exist: remote KEYS (arrows, select, back) are pressed by the Pi over adb, not by the app.
 

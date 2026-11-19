@@ -135,8 +135,10 @@ module.exports = function (ctx) {
     let op, args;
     if (b.op === 'volume') {
       op = 'volume';
-      args = b.value === undefined ? {} : { value: Math.max(0, Math.min(100, Math.round(Number(b.value)))) };
-      if (Number.isNaN(args.value)) return res.status(400).json({ error: 'value must be a number' });
+      // `step` is relative to wherever the TV is when it arrives, so a press never waits on a read.
+      if (b.step !== undefined) args = { step: Math.max(-100, Math.min(100, Math.round(Number(b.step)))) };
+      else args = b.value === undefined ? {} : { value: Math.max(0, Math.min(100, Math.round(Number(b.value)))) };
+      if (Number.isNaN(args.value) || Number.isNaN(args.step)) return res.status(400).json({ error: 'value and step must be numbers' });
     } else if (b.op === 'media' && ['play', 'pause'].includes(b.action)) { op = 'media'; args = { action: b.action }; }
     else if (b.op === 'now') { op = 'now'; args = {}; }
     else return res.status(400).json({ error: 'op must be volume, media (play|pause) or now' });

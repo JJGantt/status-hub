@@ -430,6 +430,12 @@ transcribed, handed over or worked on, on home and in a session alike: each is i
 `commands`, `Sessions`' `outgoing`), sent and retried by itself. Each shows as its own placeholder the
 moment it is transcribed, and each is replaced by its own event.
 
+**A session's follow-ups reach it in the order they were spoken.** Clips upload and transcribe in
+parallel, so they come back in any order — a long clip and a short one held through a dropped
+connection are transcribed together — and the short one wins a race to the hub. So each send waits on
+the hand-over before it (`Sessions.delivery`) before posting its words. One that fails holds every later
+one (logged `followup-held`), and the retry resends them all in order.
+
 **The edge sweeps until every follow-up sent from here is answered**: `awaiting` holds their message
 ids, and the wait ends when a reply lands AFTER every one of them has been read — a prompt event
 carrying that id, `seen`, with a seq below the reply's (`settle`). A reply to an earlier command, or

@@ -158,11 +158,17 @@ final class Sessions: ObservableObject {
     @Published private(set) var placeholders: [String: [Placeholder]] = [:]
     /// Conversations with a clip being transcribed or words being handed over right now.
     @Published private(set) var busy: Set<String> = []
-    /// **Commands can overlap.** Each recording is its own `Outgoing`, sent on its own; one still being
-    /// transcribed, or waiting on a session still working on the one before, blocks nothing. Kept until
-    /// its words are in the session, which is what a retry resends.
+    /// **Commands can overlap, and still arrive in the order they were spoken.** Each recording is its
+    /// own `Outgoing`, uploaded and transcribed on its own, so one still transcribing blocks no new
+    /// recording. Kept until its words are in the session, which is what a retry resends.
     private struct Outgoing { let msgId: String; var clip: Recorder.Clip?; var words: String? }
     private var outgoing: [String: [Outgoing]] = [:]
+    /// The last hand-over per conversation, true once its words are in (or there were none to send). Each
+    /// send waits on the one before it before handing its words to the hub, because transcriptions finish
+    /// in any order: a long clip and a short one held through a dropped connection come back together, and
+    /// racing them put "wait, don't do that yet" into a session ahead of the request it was cancelling.
+    /// A hand-over that failed holds everything after it; the retry resends all of them, in order.
+    private var delivery: [String: Task<Bool, Never>] = [:]
     private var inFlight: [String: Int] = [:] {
         didSet { busy = Set(inFlight.filter { $0.value > 0 }.keys) }
     }
@@ -450,6 +456,7 @@ final class Sessions: ObservableObject {
     /// Sends again whatever has not reached the session.
     func retry(_ key: String) {
         failures[key] = nil
+        delivery[key] = nil
         for item in outgoing[key] ?? [] { send(key, item.msgId) }
     }
 
@@ -461,11 +468,12 @@ final class Sessions: ObservableObject {
     private func send(_ key: String, _ msgId: String) {
         guard var item = outgoing[key]?.first(where: { $0.msgId == msgId }) else { return }
         inFlight[key, default: 0] += 1
-        Task {
+        let before = delivery[key]
+        delivery[key] = Task { @MainActor in
             defer { inFlight[key, default: 1] -= 1 }
             do {
                 if item.words == nil {
-                    guard let clip = item.clip else { return }
+                    guard let clip = item.clip else { return true }
                     Hub.log("upload", ["view": "session", "seconds": clip.duration])
                     let heard = try await Hub.sendAudio(clip, msgId: msgId, dry: true)
                     try? FileManager.default.removeItem(at: clip.url)
@@ -473,7 +481,7 @@ final class Sessions: ObservableObject {
                         Hub.log("heard-nothing", ["view": "session"])
                         drop(key, msgId)
                         WKInterfaceDevice.current().play(.failure)
-                        return
+                        return true
                     }
                     item.words = text
                     item.clip = nil
@@ -482,6 +490,11 @@ final class Sessions: ObservableObject {
                     // The user's words on screen the instant they are transcribed, before the hub has them.
                     placeholders[key, default: []].append(Placeholder(msgId: msgId, text: text, after: logs[key]?.last ?? 0))
                     settlePlaceholders(key)
+                }
+                // In the order spoken: the words before these go in first, or these wait for the retry.
+                if let before, await before.value == false {
+                    Hub.log("followup-held", ["row": row(for: key)?.id ?? key, "words": item.words?.count ?? 0])
+                    return false
                 }
                 let words = item.words ?? ""
                 let rowId = row(for: key)?.id ?? key
@@ -492,14 +505,16 @@ final class Sessions: ObservableObject {
                 // session: no event will come for it, and nothing is waited on.
                 if ignored {
                     placeholders[key] = placeholders[key]?.filter { $0.msgId != msgId }
-                    return
+                    return true
                 }
                 awaiting[key, default: []].insert(msgId)
                 sentAt[msgId] = Date()
+                return true
             } catch {
                 Hub.log("send-failed", ["view": "session", "error": String(describing: error).prefix(120).description])
                 failures[key] = .message(error.localizedDescription)
                 WKInterfaceDevice.current().play(.failure)
+                return false
             }
         }
     }

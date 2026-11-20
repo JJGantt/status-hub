@@ -46,7 +46,17 @@ whole clip back as base64 AAC (16 kHz mono) with its recorded seconds and its st
 through the same outbox as any clip. It streams to the hub itself (`NativeChunks`) while it records, so the
 stream keeps going while the app is behind another one; when it stops itself on a failure it buzzes, and
 posts a notification if the app is not on screen. A page loading while the app records sends `reset`, which drops that recording (it belongs to no
-recorder on the new page) and logs `nativerec-orphaned`. The always-on button (`makeListener`) stays on
+recorder on the new page) and logs `nativerec-orphaned`.
+
+**The app holds ONE recording for the whole page**, and a `start` from any recorder replaces it, cancelled,
+without telling the recorder that owned it. So the page tracks the owner (`nativeOwner` in
+`voiceagent.js`) and hands the replaced recorder back to idle; otherwise its button stays live over a
+recording the app no longer has and every later tap on it is lost. The app also ignores a `cancel` that
+arrives while it is still opening the microphone and records on regardless, so a recording tapped off
+in that window is cancelled again when it reports `rec` (`nativeAbandoned`). Each native recording logs
+its end beside the app's `nativerec-start`: `nativerec-end` in `client_log` (src `phone`) with `how` —
+`sent`, `held` (press and hold), `tapped-while-opening`, `replaced`, `error` — and `mic` (`quick` for the
+navbar, `card` for the chat sheet). The always-on button (`makeListener`) stays on
 WebKit, because it needs the live level to cut utterances.
 
 In a browser, or an app build without the handler, the recorder uses `getUserMedia`, and leaving the page

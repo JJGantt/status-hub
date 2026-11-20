@@ -432,6 +432,26 @@ const VOICE_BPS = 96000;
 const nativeRec = (() => { try { return window.webkit.messageHandlers.nativeRec || null; } catch (_) { return null; } })();
 // A page loading while the app still records belongs to no recorder here: the app drops it.
 if (nativeRec) { try { nativeRec.postMessage({ op: 'reset' }); } catch (_) {} }
+// THE APP HOLDS ONE RECORDING, and a start from any recorder on the page replaces it with no word to the
+// recorder that owned it — which then waits for an answer that never comes: its button stays live, the
+// next tap is spent "stopping" a recording the app no longer has, and nothing is sent. `nativeOwner` is
+// the recorder holding the app's recording, told when another one takes it.
+let nativeOwner = null;
+// A recording the page abandoned while the app was still opening the microphone. The app drops a cancel
+// that arrives before its engine is up and carries on recording, unowned and with the mic open, so the
+// cancel is sent again the moment it reports `rec`.
+const nativeAbandoned = new Set();
+if (nativeRec) document.addEventListener('hub:nativerec', (e) => {
+  const d = e.detail || {};
+  if (d.state !== 'rec' || !nativeAbandoned.has(d.id)) return;
+  nativeAbandoned.delete(d.id);
+  nativeRec.postMessage({ op: 'cancel', id: d.id });
+});
+// Every native recording's end, beside the app's `nativerec-start` (client_log, src phone): which way it
+// ended, so a recording that never became a command says why.
+function nativeEnd(how, quick, extra) {
+  clientLog({ src: 'phone', ev: 'nativerec-end', how, mic: quick ? 'quick' : 'card', ...(extra || {}) });
+}
 function b64Blob(b64, type) {
   const bin = atob(b64), bytes = new Uint8Array(bin.length);
   for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
@@ -583,11 +603,15 @@ export function makeRecorder({ onStatus = () => {}, onState: paint = () => {}, q
       broke(d.why || 'stream', { native: true });
     } else if (d.state === 'done') {
       nativeId = '';
+      if (nativeOwner === self) nativeOwner = null;
+      nativeEnd('sent', quick, { secs: +d.secs || 0, dry: !!(typeof dryWhen === 'function' && dryWhen()) });
       trace('upload:begin', { native: true });
       streams = d.stream ? [d.stream] : [];
       ship(b64Blob(d.b64, d.mime || 'audio/mp4'), +d.secs || 0)
         .finally(() => { sending = false; onState('idle'); trace('upload:end'); sayBroken(); });
     } else if (d.state === 'error') {
+      if (nativeOwner === self) nativeOwner = null;
+      nativeEnd('error', quick, { error: String(d.error || '') });
       nativeId = ''; arming = false; recording = false; sending = false;
       muteOthers(false);
       onState('idle'); onStatus(d.error || 'Recording failed', 'err');
@@ -596,6 +620,8 @@ export function makeRecorder({ onStatus = () => {}, onState: paint = () => {}, q
   async function start() {
     if (recording || arming || sending) return;
     if (nativeRec) {
+      if (nativeOwner && nativeOwner !== self) nativeOwner.replaced();
+      nativeOwner = self;
       arming = true; onState('armed');
       nativeId = crypto.randomUUID();
       trace('start:arming', { native: true });
@@ -648,12 +674,16 @@ export function makeRecorder({ onStatus = () => {}, onState: paint = () => {}, q
   }
   function stop() {
     if (nativeRec) {
-      if (arming) { arming = false; nativeRec.postMessage({ op: 'cancel', id: nativeId }); nativeId = '';
+      if (arming) { arming = false; nativeAbandoned.add(nativeId); nativeRec.postMessage({ op: 'cancel', id: nativeId }); nativeId = '';
+                    if (nativeOwner === self) nativeOwner = null;
+                    nativeEnd('tapped-while-opening', quick);
                     onState('idle'); onStatus('', 'clear'); return; }
       if (!recording) return;
       recording = false; sending = true; onState('armed');
       trace('stop:enter', { native: true });
       if (discard) { discard = false; sending = false; nativeRec.postMessage({ op: 'cancel', id: nativeId }); nativeId = '';
+                     if (nativeOwner === self) nativeOwner = null;
+                     nativeEnd('held', quick);
                      muteOthers(false); onState('idle'); onStatus('', 'clear'); return; }
       nativeRec.postMessage({ op: 'stop', id: nativeId });
       return;
@@ -780,7 +810,7 @@ export function makeRecorder({ onStatus = () => {}, onState: paint = () => {}, q
     await sendVoice({ blob, dry, quick: !!quick, dur, ...(parts.length ? { streams: parts.map((p) => (typeof p === 'string' ? p : p.id)) } : {}),
                       ...(prefixParts.length ? { prefixParts } : {}) }, { onStatus, onTranscript });
   }
-  return {
+  const self = {
     toggle() {
       trace('toggle', { recording, arming, sending, paused, recState: rec ? rec.state : null });
       if (sending) return;
@@ -796,7 +826,15 @@ export function makeRecorder({ onStatus = () => {}, onState: paint = () => {}, q
     },
     // Recording, or tapped and waiting for the mic: what a press and hold can still throw away.
     get live() { return recording || arming; },
+    // Another recorder on the page took the app's one recording (see nativeOwner): this one is over.
+    replaced() {
+      if (!(arming || recording)) return;
+      nativeEnd('replaced', quick, { was: recording ? 'rec' : 'opening' });
+      nativeId = ''; arming = false; recording = false;
+      onState('idle'); onStatus('', 'clear');
+    },
     start, stop };
+  return self;
 }
 
 // ---- always-on listening, on the phone -----------------------------------

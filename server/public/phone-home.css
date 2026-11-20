@@ -542,7 +542,10 @@ body.tv.phonehome .ph-chat .ai-text{flex:1 1 auto;min-width:0;font-size:16px;pad
  border-radius:10px;border:1px solid #222a33;background:#0e1318;color:#e6eaf0}
 body.tv.phonehome .ph-chat .ai-mic,body.tv.phonehome .ph-chat .ai-send{flex:0 0 auto;padding:9px 12px;
  border-radius:10px;border:1px solid #222a33;background:#0e1318;color:#c7ced8;font-size:14px}
-body.tv.phonehome .ph-chat .ai-mic.rec{background:#7f1d1d;border-color:#b91c1c;color:#fff}
+/* The recorder sets ai-rec / ai-armed (initCard in voiceagent.js). The rule above outranks app.css's,
+   so without these the button looks the same recording or not. */
+body.tv.phonehome .ph-chat .ai-mic.ai-rec{background:#7f1d1d;border-color:#b91c1c;color:#fff}
+body.tv.phonehome .ph-chat .ai-mic.ai-armed{border-color:#ef4444;color:#ef4444}
 /* Inside the composer row and floating just above it, as the session view's does (app.css .sv-status):
    it takes no space, so the composer sits on the bottom edge and a failure moves nothing. */
 body.tv.phonehome .ph-chat .ai-input{position:relative}

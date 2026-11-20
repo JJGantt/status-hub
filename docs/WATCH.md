@@ -827,7 +827,9 @@ failed while the recording carried on) are in `client_log`.
 **A stream that fails mid-recording stops the recording** (`streamDropped` in `Capture.swift`), except the
 hub's own 408 on a long locked one: the wrist gets the failure haptic and the recording is sent as a press
 would send it, through the view's `onSilence` stop-and-send, so the clip goes up whole. It logs
-`live-broken`, which `/api/clientlog` reports to the ops responder. A recording with no stop-and-send (a
+`live-broken` with `view` (`chat` or `session`) and `error` (the failure as `<domain> <code>`, e.g.
+`NSURLErrorDomain -1009` for the watch's own network going offline), which `/api/clientlog` reports to
+the ops responder under that error. A recording with no stop-and-send (a
 rewind's instructions) gets the haptic and carries on. This catches a connection that ERRORS; a network
 that silently swallows the body is not seen until it errors, since nothing acknowledges the stream while
 its body is open (the phone's chunked streams are acknowledged per second, `VOICE-ON-THE-PHONE.md`).

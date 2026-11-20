@@ -58,7 +58,15 @@ app.use((req, res, next) => {
   const t = Date.now();
   console.log(`[watch-req] ${req.method} ${req.path} arrived ${ua.slice(0, 80)}`);
   res.on('finish', () => console.log(`[watch-req] ${req.method} ${req.path} ${res.statusCode} ${Date.now() - t}ms ${ua.slice(0, 80)}`));
-  res.on('close', () => { if (!res.writableFinished) console.log(`[watch-req] ${req.method} ${req.path} closed early ${Date.now() - t}ms`); });
+  // A spoken send the watch abandoned before its answer is an occurrence, so it outlives Fly's log
+  // buffer: present means the hub had the request and the wrist gave up; absent means it never
+  // arrived. Streams close early by design and stay plain lines.
+  const send = req.method === 'POST' && (req.path === '/api/voice-command' || req.path === '/api/sessions/followup');
+  res.on('close', () => {
+    if (res.writableFinished) return;
+    const line = `[watch-req] ${req.method} ${req.path} closed early ${Date.now() - t}ms`;
+    if (send) console.warn(line); else console.log(line);
+  });
   next();
 });
 app.use(express.urlencoded({ extended: false }));

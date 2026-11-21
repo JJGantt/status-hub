@@ -3,10 +3,10 @@
 # This is the only part of the stack that genuinely cannot run on the Pi — Xcode is macOS-only — so
 # GitHub rents a real Mac for it. Nothing about it needs the Mac.
 #
-# TRIGGERED DELIBERATELY, never on push. macOS runners bill at a 10x multiplier, which puts a free
-# allowance at roughly 16-25 builds a month; auto-building every merge would spend that in days on
-# commits that never touched Swift. A tag names a build you can find again later; the manual dispatch
-# is for "I want one now" — and the Pi can fire either on its own.
+# TRIGGERED DELIBERATELY, never on push: every run is a real TestFlight build, and most merges never
+# touch Swift. A tag names a build you can find again later; the manual dispatch is for "I want one
+# now" — and the Pi can fire either on its own.
+
 name: iOS TestFlight
 
 on:

@@ -16,6 +16,15 @@ describe('the Menu app owner check (/api/cg/*)', () => {
     assert.equal((await orders({ 'X-Owner-Token': h.OWNER_TOKEN })).status, 200));
   test('the owner\'s Anthropic key, what builds up to 44 send, is still let through', async () =>
     assert.equal((await orders({ 'X-Owner-Key': h.OWNER_KEY })).status, 200));
+  test('every key in the comma-separated owner list is let through', async () => {
+    const two = await h.startHub(supa, { CG_OWNER_KEY_SHA256: `${h.sha256hex(h.OWNER_KEY)}, ${h.sha256hex('second-key')}` });
+    try {
+      for (const key of [h.OWNER_KEY, 'second-key']) {
+        assert.equal((await two.req('/api/cg/orders', { headers: { 'X-Owner-Key': key } })).status, 200, key);
+      }
+      assert.equal((await two.req('/api/cg/orders', { headers: { 'X-Owner-Key': 'third-key' } })).status, 401);
+    } finally { await two.stop(); }
+  });
   test('anyone else is refused: no credential, a wrong one, or a hub credential', async () => {
     for (const headers of [{}, { 'X-Owner-Token': 'nope' }, { 'X-Owner-Key': 'nope' },
                            { 'X-Hub-Token': h.DEVICE_TOKEN }, { Cookie: `hub=${h.PASSWORD_TOKEN}` }]) {

@@ -28,10 +28,12 @@ module.exports = function (ctx) {
   // The owner is recognised by either of two credentials, both matched by SHA-256:
   //   - `X-Owner-Token`: a dedicated random token (Fly secret CG_OWNER_TOKEN_SHA256 holds its hash). What
   //     the app should send.
-  //   - `X-Owner-Key`: the owner's Anthropic API key (the same hash as `AppGate.ownerKeyHash` in
-  //     the Menu repo). What every build up to 44 sends. Retire it once no build in use sends it.
-  const CG_OWNER_KEY_SHA256 = process.env.CG_OWNER_KEY_SHA256
-    || '0c4eb3445e20e7d8b5164aca839f65fad2d05683f7556addbf4ca774d9a9c990';
+  //   - `X-Owner-Key`: an Anthropic API key on the owner's devices. The watch sends whatever key the phone
+  //     gave it, so the owner may hold more than one: CG_OWNER_KEY_SHA256 is a comma-separated list of
+  //     hashes, the first the same as `AppGate.ownerKeyHash` in the Menu repo.
+  const CG_OWNER_KEY_SHA256S = (process.env.CG_OWNER_KEY_SHA256
+    || '0c4eb3445e20e7d8b5164aca839f65fad2d05683f7556addbf4ca774d9a9c990')
+    .split(',').map((h) => h.trim().toLowerCase()).filter(Boolean);
   const CG_OWNER_TOKEN_SHA256 = process.env.CG_OWNER_TOKEN_SHA256 || '';
   // What the clips are about, as Whisper's vocabulary hint: brand names otherwise come back as ordinary
   // English that sounds alike.
@@ -54,7 +56,9 @@ module.exports = function (ctx) {
     const token = String(req.headers['x-owner-token'] || '');
     if (token) return !!CG_OWNER_TOKEN_SHA256 && safeEqual(sha256hex(token), CG_OWNER_TOKEN_SHA256);
     const key = String(req.headers['x-owner-key'] || '');
-    return !!key && safeEqual(sha256hex(key), CG_OWNER_KEY_SHA256);
+    if (!key) return false;
+    const h = sha256hex(key);
+    return CG_OWNER_KEY_SHA256S.some((owner) => safeEqual(h, owner));
   }
   // Interaction ids whose clip every provider has already refused as unreadable (see the catch below).
   // Interaction ids already reported as an unreadable clip. The set is only a cache: a deploy empties it
@@ -77,6 +81,10 @@ module.exports = function (ctx) {
     if (!cgOwner(req)) {
       const sent = req.headers['x-owner-token'] || req.headers['x-owner-key'];
       console.log(`[cg-transcribe] REFUSED: ${sent ? 'not the owner' : 'no key'}`);
+      // The refused key's hash, so a key of the owner's can be added to CG_OWNER_KEY_SHA256 without
+      // anyone reading the key itself.
+      const key = String(req.headers['x-owner-key'] || '');
+      if (key) cgLog(req, arrived, { error: 'not the owner', output: `key sha256 ${sha256hex(key)}` });
       req.resume();
       return res.status(401).json({ error: 'unauthorized' });
     }

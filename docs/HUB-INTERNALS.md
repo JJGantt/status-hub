@@ -703,9 +703,12 @@ deleted by pi-desk after 7 days; optional `lat`/`lon`/`acc`/`place` query → `v
 **Outside the gate:** `/api/cg/transcribe` — the restaurant watch app's voice input, raw audio → Groq
 Whisper → `{transcript}`, nothing enqueued. That app ships to TestFlight testers, so it cannot hold the hub
 token. Only the owner's device gets through, recognised by either `X-Owner-Token` (a dedicated random
-token; Fly secret `CG_OWNER_TOKEN_SHA256` is its hash) or, from builds up to 44, `X-Owner-Key`: the owner's Anthropic key,
-whose SHA-256 is `CG_OWNER_KEY_SHA256`, the same hash as `AppGate.ownerKeyHash` in the Menu repo. When
-`X-Owner-Token` is sent it alone decides. `X-Owner-Key` goes once no build in use sends it. Every request writes one `[cg-transcribe]` line: size, time
+token; Fly secret `CG_OWNER_TOKEN_SHA256` is its hash) or `X-Owner-Key`: an Anthropic key on the owner's devices, which is what
+every current build sends. The watch sends whatever key its phone holds, so `CG_OWNER_KEY_SHA256` is a
+comma-separated list of SHA-256 hashes (unset, it is the one hash in `AppGate.ownerKeyHash` in the Menu
+repo). A refused `X-Owner-Key` writes its hash to `app_logs` (`voice_hub`, error `not the owner`, output
+`key sha256 …`), which is how a new key of the owner's is added to the list without reading the key. When
+`X-Owner-Token` is sent it alone decides. Every request writes one `[cg-transcribe]` line: size, time
 and word count, or `REFUSED` / `FAILED` with the reason (`CLIENT GONE`, a plain line rather than an error,
 when the watch hangs up mid-upload — its own `voice_*` rows record that side; `UNREADABLE CLIP`, status 422, when every provider refuses the file with a 4xx, as for the watch's empty recording — an error the first time per interaction id and a plain `UNREADABLE CLIP AGAIN` line for the watch's later re-sends of the same clip), and one `app_logs` row (`kind` `voice_hub`) under
 the watch's `X-Interaction-Id`. The watch logs its own side of each question to

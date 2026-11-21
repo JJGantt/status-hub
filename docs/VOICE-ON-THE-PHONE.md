@@ -56,7 +56,7 @@ arrives while it is still opening the microphone and records on regardless, so a
 in that window is cancelled again when it reports `rec` (`nativeAbandoned`). Each native recording logs
 its end beside the app's `nativerec-start`: `nativerec-end` in `client_log` (src `phone`) with `how` —
 `sent`, `held` (press and hold), `tapped-while-opening`, `replaced`, `error` — and `mic` (`quick` for the
-navbar, `card` for the chat sheet). The always-on button (`makeListener`) stays on
+navbar, `card` for every other button). A `tapped-while-opening` end also carries `own` (its recording's id, first eight characters) and `seen`, the last few events the app sent with their ids and page times, so a recording that never left "opening" shows whether the app's `rec` reached the page and under which id. The always-on button (`makeListener`) stays on
 WebKit, because it needs the live level to cut utterances.
 
 In a browser, or an app build without the handler, the recorder uses `getUserMedia`, and leaving the page

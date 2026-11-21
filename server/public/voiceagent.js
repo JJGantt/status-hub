@@ -441,8 +441,13 @@ let nativeOwner = null;
 // that arrives before its engine is up and carries on recording, unowned and with the mic open, so the
 // cancel is sent again the moment it reports `rec`.
 const nativeAbandoned = new Set();
+// The last few events the app sent, so a recording abandoned while "opening" says whether its `rec`
+// arrived at all, and under which id (`nativerec-end` `seen`).
+const nativeSeen = [];
 if (nativeRec) document.addEventListener('hub:nativerec', (e) => {
   const d = e.detail || {};
+  nativeSeen.push({ id: String(d.id || '').slice(0, 8), state: d.state, at: Math.round(performance.now()) });
+  if (nativeSeen.length > 6) nativeSeen.shift();
   if (d.state !== 'rec' || !nativeAbandoned.has(d.id)) return;
   nativeAbandoned.delete(d.id);
   nativeRec.postMessage({ op: 'cancel', id: d.id });
@@ -674,9 +679,11 @@ export function makeRecorder({ onStatus = () => {}, onState: paint = () => {}, q
   }
   function stop() {
     if (nativeRec) {
-      if (arming) { arming = false; nativeAbandoned.add(nativeId); nativeRec.postMessage({ op: 'cancel', id: nativeId }); nativeId = '';
+      if (arming) { const own = nativeId.slice(0, 8);
+                    arming = false; nativeAbandoned.add(nativeId); nativeRec.postMessage({ op: 'cancel', id: nativeId }); nativeId = '';
                     if (nativeOwner === self) nativeOwner = null;
-                    nativeEnd('tapped-while-opening', quick);
+                    nativeEnd('tapped-while-opening', quick, { own, now: Math.round(performance.now()),
+                      seen: nativeSeen.slice() });
                     onState('idle'); onStatus('', 'clear'); return; }
       if (!recording) return;
       recording = false; sending = true; onState('armed');

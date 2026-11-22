@@ -731,6 +731,7 @@ async function openSession(id) {
   // is sent as the follow-up. PRESS TO START, PRESS TO SEND, the same as every mic button (makeRecorder).
   at.rec = makeRecorder({
     dryWhen: () => true,
+    session: at.id,
     // Failures only: the red mic is what says it is listening (see initCard in voiceagent.js). A send
     // starting again ('busy', the outbox retrying a clip) takes the last failure down.
     onStatus: (t, kind) => {

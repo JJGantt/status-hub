@@ -20,27 +20,36 @@ BUILD=$(mktemp -d)
 trap 'rm -rf "$BUILD"' EXIT
 git -C .. archive HEAD server | tar -x -C "$BUILD" || { echo "could not export $SHA"; exit 1; }
 
-# NEVER SHIP UNDER A COMMAND BEING SPOKEN. A deploy restarts the hub and makes every open page reload,
-# and a page that reloads mid-recording loses the clip. The page now holds its reloads off while it is
-# recording (safeReload in public/shared.js), but a phone still running the bundle from before that
-# does not, and the restart itself drops any upload in flight. `voice_muted` is 1 exactly while some
-# microphone — phone, watch, Mac — is capturing an explicit command (stale holders are already
-# discounted by the hub), so wait for it to clear. A bounded wait at deploy time, not a standing poll:
-# 5s steps, ten minutes at most, then ship anyway. Unreadable (no supabase CLI, no link) means ship.
+# NEVER SHIP UNDER A COMMAND BEING SPOKEN OR SENT. A deploy restarts the hub and makes every open page
+# reload: a page that reloads mid-recording loses the clip, and the restart cuts off any upload in flight.
+# So the image is BUILT first (a remote build takes a minute or two, long enough for a command to start
+# and finish inside it) and the wait runs right before the release, on two things:
+#   - `voice_muted` is 1 exactly while some microphone (phone, watch, Mac) is capturing an explicit
+#     command (stale holders are already discounted by the hub);
+#   - /api/voice-inflight counts clips still uploading, which outlive the recording that made them.
+# A bounded wait at deploy time, not a standing poll: 5s steps, ten minutes at most, then ship anyway.
+# Unreadable (no supabase CLI, no link, hub down) means ship. macOS has no `timeout`, so it is not used:
+# a check that cannot run reads as "not recording" and the wait silently does nothing.
+(cd "$BUILD/server" && fly deploy --remote-only --build-only --push --image-label "$SHA") \
+  || { echo "build FAILED"; exit 1; }
+IMAGE="registry.fly.io/jared-status-hub:$SHA"
 DL=$( [ -d "$HOME/repos/data-layer/supabase" ] && echo "$HOME/repos/data-layer" || echo "$HOME/data-layer" )
 recording() {
-  (cd "$DL" 2>/dev/null && timeout 30 supabase db query --linked \
+  (cd "$DL" 2>/dev/null && supabase db query --linked \
     "select value from app_settings where key = 'voice_muted'" 2>/dev/null) | grep -q '"value": "1"'
 }
+uploading() {
+  ../bin/hub GET /api/voice-inflight 2>/dev/null | grep -qE '"inflight": *[1-9]'
+}
 for i in $(seq 1 120); do
-  recording || break
-  [ "$i" = 1 ] && echo "a voice command is being recorded — waiting for it to finish before deploying"
+  recording || uploading || break
+  [ "$i" = 1 ] && echo "a voice command is being recorded or uploaded — waiting for it before deploying"
   sleep 5
 done
 
 # COMMIT is what /healthz reports, and the only way to tell a deploy that shipped from one that did
 # not. Verified below rather than assumed.
-(cd "$BUILD/server" && fly deploy --remote-only --env COMMIT="$SHA") || { echo "deploy FAILED"; exit 1; }
+(cd "$BUILD/server" && fly deploy --image "$IMAGE" --env COMMIT="$SHA") || { echo "deploy FAILED"; exit 1; }
 
 for _ in $(seq 1 20); do
   got=$(curl -s --max-time 10 https://jared-status-hub.fly.dev/healthz | awk '{print $2}')

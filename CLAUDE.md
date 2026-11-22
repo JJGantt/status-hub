@@ -35,9 +35,11 @@ a bundle cannot be stale against the source it shipped with. Locally, `npm run b
 
     curl -s https://jared-status-hub.fly.dev/healthz     # ok <sha>
 
-`deploy.sh` first **waits while any microphone is recording a command** (`voice_muted` = 1, read with
-the linked `supabase` CLI), up to ten minutes: a deploy makes every open page reload, and a page on a
-bundle older than `safeReload` loses a clip mid-sentence.
+`deploy.sh` builds the image first, then **waits while any microphone is recording a command**
+(`voice_muted` = 1, read with the linked `supabase` CLI) **or a clip is still uploading**
+(`GET /api/voice-inflight`), up to ten minutes, and only then releases: a deploy restarts the hub,
+which cuts off an upload in flight, and makes every open page reload, which loses a clip mid-sentence
+on a bundle older than `safeReload`.
 
 ## A route's router is its auth
 

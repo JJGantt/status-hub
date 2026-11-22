@@ -558,7 +558,7 @@ const BROKEN_LABEL = { stream: 'Hub not receiving', damaged: 'Mic dropping audio
 // word, and on the user's phone it judges whole spoken commands silent — the button records, throws the
 // words away and shows nothing. A pressed button has already said the user is talking; the always-on
 // listener (makeListener) is where a machine decides.
-export function makeRecorder({ onStatus = () => {}, onState: paint = () => {}, quick, dryWhen, onTranscript }) {
+export function makeRecorder({ onStatus = () => {}, onState: paint = () => {}, quick, dryWhen, onTranscript, session }) {
   // Every path through a recording ends in 'idle', so the state is what holds a reload off: anything
   // else — arming, capturing, the clip on its way up — is a recording a reload would destroy.
   let holding = false;
@@ -814,7 +814,8 @@ export function makeRecorder({ onStatus = () => {}, onState: paint = () => {}, q
       secs: +dur.toFixed(1), parts: prefixParts.map((b) => b.size) });
     if (!blob.size) { blob = prefixParts[prefixParts.length - 1]; prefixParts = prefixParts.slice(0, -1); dur = 0; }
     // Durable from here: the clip stays on the phone until the server confirms it (the voice outbox).
-    await sendVoice({ blob, dry, quick: !!quick, dur, ...(parts.length ? { streams: parts.map((p) => (typeof p === 'string' ? p : p.id)) } : {}),
+    // A dictation for a session names it, so a reload that loses this recorder can still deliver it.
+    await sendVoice({ blob, dry, quick: !!quick, dur, ...(dry && session ? { session } : {}), ...(parts.length ? { streams: parts.map((p) => (typeof p === 'string' ? p : p.id)) } : {}),
                       ...(prefixParts.length ? { prefixParts } : {}) }, { onStatus, onTranscript });
   }
   const self = {
@@ -1144,13 +1145,15 @@ export async function runPhotoOutbox(onStatus) {
 async function sendVoice(clip, owner) {
   const item = { id: uid(), createdAt: Date.now(), client_now: localNowNaive(), type: clip.blob.type || 'audio/webm',
     ...(clip.dry ? {} : takeAbout()), ...clip };
+  // Owned BEFORE it is stored: a pass already running must never see it ownerless and take it for stranded.
+  voiceOwners.set(item.id, owner);
   try { await voiceBox.put(item); }
   catch (_) {                                          // no IndexedDB (a private window) — memory is the only copy there is
+    voiceOwners.delete(item.id);
     try { await deliverVoice(item, owner.onStatus, owner); } catch (e) { voiceFailed(e, item, owner.onStatus); }
     if (reloadForCapture) location.reload();
     return;
   }
-  voiceOwners.set(item.id, owner);
   await runVoiceOutbox();
 }
 
@@ -1314,16 +1317,45 @@ export function runVoiceOutbox() {
   _voiceChain = _voiceChain.then(voicePass, voicePass);
   return _voiceChain;
 }
+// A STRANDED DICTATION is one whose recorder is gone — the page reloaded (a deploy reloads every page)
+// before it was delivered. One that names its session is transcribed and sent to it as the follow-up it was
+// recorded as, under the clip's id so a resend is a no-op. One that names nothing (a launcher prompt, the
+// composer with photos) has nowhere to go, so its transcript is reported (voice-dictation-stranded) rather
+// than kept forever where nobody will ever see it.
+function strandedOwner(item) {
+  let words = null;
+  return {
+    onStatus: _voiceBacklogStatus,
+    onTranscript: (t) => { words = String(t || '').trim(); },
+    async finish() {
+      if (words === null) return;                      // not transcribed: the upload threw, and the clip stays
+      if (item.session && words) {
+        const r = await fetch('/api/sessions/followup', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ id: item.session, text: words, client_msg_id: item.id }) });
+        const j = await r.json().catch(() => ({}));
+        if (!r.ok) throw Object.assign(new Error(j.error || String(r.status)), { refused: true });
+      }
+      // Awaited, not a beacon: for a dictation that names no session this line is the only copy of its words.
+      const r = await fetch('/api/clientlog', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ src: 'phone', ev: 'voice-dictation-stranded', session: item.session || '',
+          delivered: !!(item.session && words), words, dur: item.dur, recorded: new Date(item.createdAt || 0).toISOString(),
+          ua: navigator.userAgent }) });
+      if (!r.ok) throw new Error('stranded dictation not reported: ' + r.status);
+    },
+  };
+}
 async function voicePass() {
   let items;
   try { items = (await voiceBox.all()) || []; } catch (_) { return; }
-  items = items.filter((i) => !i.dry || voiceOwners.has(i.id))
-    .sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
+  items = items.sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
   for (let k = 0; k < items.length; k++) {
-    const item = items[k], owner = voiceOwners.get(item.id);
+    const item = items[k];
+    const stranded = item.dry && !voiceOwners.has(item.id) ? strandedOwner(item) : null;
+    const owner = stranded || voiceOwners.get(item.id);
     const onStatus = owner ? owner.onStatus : _voiceBacklogStatus;
     try {
       await deliverVoice(item, onStatus, owner);
+      if (stranded) await stranded.finish();
     } catch (e) {
       voiceFailed(e, item, onStatus, true);
       noteVoiceFailure(item, e);

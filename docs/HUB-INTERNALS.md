@@ -360,9 +360,12 @@ fails stays on the phone and resends on the photo outbox's triggers — boot, re
 Clips go oldest first. A network failure ends the pass, because everything behind it would fail the
 same way and must not overtake it. A server refusal keeps the clip but lets later clips through, so one
 the server can never take cannot hold every later command hostage. A dictation (`dryWhen` — the
-composer with photos pending, the repos card's session prompt) is only sent while the recorder that
-took it is alive; one stranded by a reload stays in the store unsent, since nothing else knows what it
-was for.
+composer with photos pending, the repos card's session prompt) is sent by the recorder that took it.
+One whose recorder is gone (the page reloaded first, which every deploy causes) is STRANDED: a
+dictation into a session's view names that session on the clip, so the next pass transcribes it and
+sends it there as the follow-up it was, under the clip's id. One that names no session has nowhere to
+go, so its whole transcript is posted as `voice-dictation-stranded` (kept in `client_log`, reported to
+the ops responder) before the clip is deleted. Both cases are reported.
 
 A clip that cannot go is kept, never dropped, and there is deliberately no count of waiting clips on
 screen: one should never pile up, and when one does it is investigated from the log. A network

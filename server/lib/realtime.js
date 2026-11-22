@@ -4,6 +4,7 @@
 // server.js; the two timers are armed when it is made, the channel is opened by `start`.
 const { createClient } = require('@supabase/supabase-js');
 const WebSocket = require('ws');
+const { latency } = require('./latency');
 
 function createRealtime(ctx) {
   const {
@@ -53,6 +54,10 @@ function createRealtime(ctx) {
   }
 
   function startRealtime() {
+    // The slowdown check's history (lib/latency.js): the last fortnight of commands, read once.
+    sb(`voice_requests?select=id,created_at,timing&created_at=gte.${new Date(Date.now() - 14 * 86400000).toISOString()}&order=created_at.asc&limit=5000`)
+      .then((rows) => latency.seed(rows || []))
+      .catch((e) => console.error(`[latency] could not read command history: ${e.message || e}`));
     // A change to any cached source table dirties the row cache, then rebuilds + pushes. The extra
     // subscriptions (weight_log … surf_snapshots) exist for the cache: without them an edit would sit
     // invisible until the 15-min backstop refetch.
@@ -137,7 +142,7 @@ function createRealtime(ctx) {
         (p) => {
           seen();
           if (!p.new) return;
-          if (p.eventType === 'UPDATE') settleReply(p.new);
+          if (p.eventType === 'UPDATE') { settleReply(p.new); latency.request(p.new); }
           // The user's words the moment they exist: the worker writes the user's voice_messages row only beside the
           // answer, which can be half a minute later. The TV sidebar shows them from this.
           const r = requestView(p.new);

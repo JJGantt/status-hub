@@ -16,4 +16,8 @@ primary_region = "iad"
 
 [[vm]]
   size = "shared-cpu-1x"
-  memory = "256mb"
+  # 512 MB, not 256: node holds ~100 MB, and at 256 MB ffmpeg's shared libraries no longer fit in the
+  # page cache beside it, so every ffmpeg launch (the watch's live remux, the speaker check, a
+  # re-encode) re-reads them off disk and takes 7-20 s instead of a fraction of one. Every voice
+  # command waits on at least one of those.
+  memory = "512mb"

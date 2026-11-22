@@ -1,5 +1,6 @@
 'use strict';
 const { transcribe, shortenPauses, diarize, clipSeconds, extFor } = require('../lib/transcribe');
+const { latency } = require('../lib/latency');
 const crypto = require('crypto');
 const { execFile } = require('child_process');
 const express = require('express');
@@ -316,8 +317,8 @@ module.exports = function (ctx) {
       // is kept, and the answer carries `capture: 'damaged'` so the page replaces its microphone
       // (captureDamaged() in voiceagent.js). A recorded command is never answered with "try again".
       // A streamed recording's length is counted from its frames, instantly; an uploaded MP4 from its
-      // boxes, also instantly. Anything else is measured by ffmpeg, which costs the hub 10-20s
-      // (clipSeconds), and the answer waits for it.
+      // boxes, also instantly. Anything else is measured by ffmpeg (clipSeconds), and the
+      // answer waits for it.
       const tProbe = Date.now();
       const probe = dur < CAPTURE_CHECK_MIN_S ? Promise.resolve(null)
         : fromLive && liveHeld != null ? Promise.resolve(liveHeld) : clipSeconds(tmp);
@@ -408,6 +409,7 @@ module.exports = function (ctx) {
         }
         return res.json({ transcript: '', enqueued: false, ...(damaged ? { capture: 'damaged', ...damaged } : {}) });
       }
+      if (dry) latency.sample(`hub:${timing.audio_via}`, since(t0));   // a dictation writes no row to be judged from
       if (dry) return res.json({ transcript, enqueued: false, ...(damaged ? { capture: 'damaged', ...damaged } : {}) });
       // Instructions recorded for a rewind grab: the command the model sees is the grab plus the user's words.
       const rewindId = REWIND_ID.test(String(req.query.rewind || '')) ? String(req.query.rewind) : null;

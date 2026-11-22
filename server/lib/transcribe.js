@@ -74,10 +74,8 @@ async function whisper(file, type, name, key, prompt, model) {
 
 // How many seconds of audio a clip actually holds. An MP4 (every iPhone and watch recording) is read
 // from its own boxes in-process (lib/mp4.js), in microseconds. Anything else falls back to an ffmpeg
-// stream copy, read off its packet timestamps — and starting ffmpeg on the hub's 256 MB machine costs
-// 10-20 s, because its shared libraries do not fit in the free memory, so a format that reaches that
-// path makes every command from it wait that long. null when neither can read it, which says nothing
-// either way.
+// stream copy, read off its packet timestamps, and the command's answer waits for it (see fly.toml on
+// what an ffmpeg launch costs). null when neither can read it, which says nothing either way.
 async function clipSeconds(file) {
   try {
     const s = mp4AudioSeconds(await fs.promises.readFile(file));

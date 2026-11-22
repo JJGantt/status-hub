@@ -3,8 +3,7 @@
 // This is what the damaged-capture check in /api/voice-command measures: the sum of the audio track's
 // sample durations, which is what ffmpeg's stream copy reports as its last `time=`. A capture that drops
 // frames writes fewer samples, so it reads short here exactly as it did there. Reading it here costs
-// microseconds; starting ffmpeg on the hub's 256 MB machine costs 10-20 s, because its shared libraries
-// no longer fit in the free memory and are read back off disk on every launch.
+// microseconds, where an ffmpeg launch costs a process start and every library it links (see fly.toml).
 //
 // Handles a plain MP4 (moov → trak → mdia: mdhd timescale + stts) and a fragmented one (moof → traf →
 // trun, with tfhd/trex defaults). null when the file is not an MP4 or has no audio track to read.

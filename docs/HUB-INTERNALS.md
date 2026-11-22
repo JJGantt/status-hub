@@ -1999,7 +1999,7 @@ Fly keeps minutes of them. Writers merge keys with `rpc/voice_timing` (or, for t
 | `audio_via` | hub | `live` (audio taken from the `/api/voice-live` stream) or `upload` (the clip in the body) |
 | `live_wait_ms` | hub | how long the command waited for its stream to finish arriving |
 | `audio_in_ms` | hub | from arrival until the audio was all on disk |
-| `probe_ms` | hub | measuring how much audio the file holds (the damaged-capture check): counted from the frames for streamed audio, read from the MP4's boxes for an upload (ffmpeg, 10-20s, for any other format) |
+| `probe_ms` | hub | measuring how much audio the file holds (the damaged-capture check): counted from the frames for streamed audio, read from the MP4's boxes for an upload (ffmpeg for any other format) |
 | `stt_ms`, `stt_alt_ms`, `stt_both_ms` | hub | the primary Whisper, the second opinion, and both (the enqueue waits for both) |
 | `verify_ms` | hub | the voiceprint check, listeners only |
 | `hub_enqueued`, `hub_ms`, `bytes` | hub | the row was written; total hub time; audio size |
@@ -2012,3 +2012,16 @@ Fly keeps minutes of them. Writers merge keys with `rpc/voice_timing` (or, for t
 | `watch_answered`, `watch_shown` | watch, via `/api/clientlog` | the answer reached the watch, and was on its screen |
 
 `capture_start` / `capture_end`, `created_at` and `claimed_at` are columns of their own and are not repeated.
+
+### A stage getting slower is reported
+
+`lib/latency.js` judges every command against the ones before it, so a stage that quietly goes from
+3s to 14s opens an incident at the ops responder instead of waiting to be noticed. Three stages:
+`hub:<audio_via>` (`hub_ms`; a dictation, which writes no row, is fed its hub time straight from
+`/api/voice-command`), `pickup` (`hub_enqueued` to `worker_start`) and `first_output` (`hub_received` to
+the model's first output, what the user waits through). A command counts when realtime delivers its row
+with `first_output` stamped; the last fortnight is read once when realtime starts. A stage is reported,
+as a `console.error`, when the median of its last 5 commands is at least twice its median over the
+commands one to fourteen days old (at least 10 of them) and at least 1s more, and again only after it
+has come back under 1.5 times. Replayed over October and November it fires on exactly the day the hub
+fell short of memory for ffmpeg (`fly.toml`), on all three stages, and nowhere else.

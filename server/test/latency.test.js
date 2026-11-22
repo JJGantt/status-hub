@@ -54,6 +54,22 @@ test('tracker: reports a regression once, and again only after it recovered', ()
   assert.strictEqual(said.length, 2);
 });
 
+test('tracker: a regression already in the history it starts with is not reported again', () => {
+  const said = [];
+  let clock = NOW;
+  const t = makeTracker({ report: (m) => said.push(m), now: () => clock });
+  const row = (id, at, ms) => ({ id, created_at: new Date(at).toISOString(), timing: { hub_ms: ms } });
+  t.seed([
+    ...Array.from({ length: 20 }, (_, i) => row('old' + i, NOW - 3 * DAY + i * 60000, 3500)),
+    ...Array.from({ length: RECENT_N }, (_, i) => row('slow' + i, NOW - 3600000 + i * 60000, 14000)),
+  ]);
+  t.sample('hub:upload', 2300);
+  assert.strictEqual(said.length, 0);
+  for (let i = 0; i < RECENT_N; i++) t.sample('hub:upload', 3500);
+  for (let i = 0; i < RECENT_N; i++) t.sample('hub:upload', 14000);
+  assert.strictEqual(said.length, 1);
+});
+
 test('tracker: a request is counted once its run has started answering, and only once', () => {
   const t = makeTracker({ report: () => {}, now: () => NOW });
   const row = { id: 'r1', timing: { hub_ms: 1000, hub_received: '2026-11-22T19:00:00Z', first_output: '2026-11-22T19:00:05Z' } };

@@ -83,7 +83,10 @@ function makeTracker({ report = (msg) => console.error(msg), now = () => Date.no
     }
   }
   return {
-    // History, oldest first, without judging it: what the process was started into.
+    // History, oldest first: what the process was started into. A stage already slow in it is a
+    // regression the previous process saw and reported, so it is flagged and counted as an occurrence
+    // rather than raised again: a restart forgets both the flag and the dictation samples (which write
+    // no row) that may have shown it recovering, and would otherwise re-report the same samples.
     seed(rows) {
       for (const r of rows) {
         if (!r || !r.id || seenIds.has(r.id)) continue;
@@ -92,6 +95,14 @@ function makeTracker({ report = (msg) => console.error(msg), now = () => Date.no
         seenIds.add(r.id);
         const at = Date.parse(r.created_at) || now();
         for (const [k, v] of Object.entries(st)) add(k, at, v);
+      }
+      for (const [stage, s] of series) {
+        const v = judge(s, now());
+        if (v.slow && !flagged.has(stage)) {
+          flagged.add(stage);
+          console.warn(`[latency] ${stage} was already slow in the history this process started with: ` +
+            `median ${Math.round(v.recent)}ms over the last ${RECENT_N}, against ${Math.round(v.baseline)}ms`);
+        }
       }
     },
     // A voice_requests row as realtime delivers it. Counted once, when the worker has stamped its first

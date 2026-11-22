@@ -2023,5 +2023,8 @@ the model's first output, what the user waits through). A command counts when re
 with `first_output` stamped; the last fortnight is read once when realtime starts. A stage is reported,
 as a `console.error`, when the median of its last 5 commands is at least twice its median over the
 commands one to fourteen days old (at least 10 of them) and at least 1s more, and again only after it
-has come back under 1.5 times. Replayed over October and November it fires on exactly the day the hub
+has come back under 1.5 times. A stage already slow in the history read at start is flagged and sent as a
+`console.warn` (an occurrence) instead: a restart forgets the flag and the dictation samples that may have
+shown the recovery, so judging that history afresh re-reports a regression the last process already did.
+Replayed over October and November it fires on exactly the day the hub
 fell short of memory for ffmpeg (`fly.toml`), on all three stages, and nowhere else.

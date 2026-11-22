@@ -365,9 +365,16 @@ took it is alive; one stranded by a reload stays in the store unsent, since noth
 was for.
 
 A clip that cannot go is kept, never dropped, and there is deliberately no count of waiting clips on
-screen: one should never pile up, and when one does it is investigated from the log. Every failed
-attempt is in the hub log with its size, type, duration and the server's answer —
-`fly logs -a jared-status-hub | grep voice-send-fail`.
+screen: one should never pile up, and when one does it is investigated from the log. A network
+failure shows `Waiting to send`, not `Send failed`, because the clip is still in the box; the session
+view's status line clears as soon as a retry starts. `Send failed` is kept for a clip that cannot be
+stored (no IndexedDB), and a refusal shows the server's own answer.
+
+A failed attempt is logged as `voice-send-fail` (src `phone`, in `client_log`, and reported to the ops
+responder), but that beacon is often lost: an iOS page suspended mid-upload, which is the common way an
+upload fails, cannot send one either. So the first failure is also written onto the stored clip, and
+the send that finally gets it through logs and reports `voice-send-late` with how long it waited, how
+many attempts failed and the first error.
 
 A phone command is streamed while it records to `/api/voice-chunk`, a chunk a second, each acknowledged (`docs/VOICE-ON-THE-PHONE.md` § Every pressed recording streams to the hub). A watch command is ALSO streamed while it records to `/api/voice-live`, which reports a recording cut off by the app dying and keeps its audio (`docs/WATCH.md` § The wrist can drop mid-recording); `server.requestTimeout` is raised to 30 minutes for it.
 

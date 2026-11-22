@@ -606,6 +606,17 @@ module.exports = function (ctx) {
           { machine: 'client', service: 'watch', context: { at: l.t, id: l.id, view: l.view,
             look: 'client_log where src=watch around that time (docs/WATCH.md)' } });
       }
+      // The phone's voice outbox: an upload that failed, or one that went through only on a later attempt
+      // (voice-send-late, which carries the first failure — the failure's own beacon is often lost,
+      // because a page suspended mid-upload cannot send one).
+      if (l.src === 'phone' && (l.ev === 'voice-send-fail' || l.ev === 'voice-send-late')) {
+        const what = l.dry ? 'dictation' : 'command';
+        ops.report(l.ev === 'voice-send-late'
+          ? `phone ${what} sent ${l.waited_s}s late after ${l.attempts} failed upload(s): ${String(l.err || '').slice(0, 160)}`
+          : `phone ${what} upload failed${l.kept ? ', kept to resend' : ''}: ${String(l.err || '').slice(0, 160)}`,
+          { machine: 'client', service: 'phone', context: { at: l.t, dur: l.dur, bytes: l.bytes,
+            look: 'client_log where src=phone around that time (docs/HUB-INTERNALS.md § voice outbox)' } });
+      }
       if (CLIENT_LOG_SOURCES.has(l.src) && l.ev && !CLIENT_LOG_SKIP.has(l.ev)) {
         const { src, ev, t, ...data } = l;
         const at = Date.parse(t);

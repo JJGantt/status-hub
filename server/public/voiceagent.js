@@ -1288,11 +1288,23 @@ function audioDevices() {
   } catch (_) { return Promise.resolve(null); }
 }
 
-function voiceFailed(err, item, onStatus) {
-  onStatus(err && err.refused ? err.message : 'Send failed', 'err');
+// `kept`: the clip is still in the outbox and goes again on the next trigger, so a network failure says
+// so rather than that the words are lost.
+function voiceFailed(err, item, onStatus, kept) {
+  const refused = !!(err && err.refused);
+  onStatus(refused ? err.message : kept ? VOICE_WAITING : 'Send failed', 'err');
   if (!item.dry) pushPending({ state: 'clear' });   // nothing is coming — take the placeholder down
-  clientLog({ ev: 'voice-send-fail', err: String((err && err.message) || err), refused: !!(err && err.refused),
-    bytes: item.blob ? item.blob.size : 0, type: item.type, dur: item.dur });
+  clientLog({ src: 'phone', ev: 'voice-send-fail', err: String((err && err.message) || err), refused, kept: !!kept,
+    bytes: item.blob ? item.blob.size : 0, type: item.type, dur: item.dur, dry: !!item.dry });
+}
+const VOICE_WAITING = 'Waiting to send';
+// The failure's own beacon is often lost: a page suspended mid-upload cannot send one either. So the first
+// failure is written onto the stored clip, and the send that finally gets it through reports how long it
+// waited and why (voice-send-late).
+function noteVoiceFailure(item, err) {
+  if (!item.failedAt) { item.failedAt = Date.now(); item.failErr = String((err && err.message) || err); }
+  item.attempts = (item.attempts || 0) + 1;
+  voiceBox.put(item).catch(() => {});
 }
 
 // Passes run one after another, never two at once: every caller — boot, a trigger, a recorder that has
@@ -1313,14 +1325,17 @@ async function voicePass() {
     try {
       await deliverVoice(item, onStatus, owner);
     } catch (e) {
-      voiceFailed(e, item, onStatus);
+      voiceFailed(e, item, onStatus, true);
+      noteVoiceFailure(item, e);
       if (e && e.refused) continue;
       for (const later of items.slice(k + 1)) {        // held back behind it; a live recorder still hears so
         const o = voiceOwners.get(later.id);
-        if (o) o.onStatus('Send failed', 'err');
+        if (o) o.onStatus(VOICE_WAITING, 'err');
       }
       return;
     }
+    if (item.failedAt) clientLog({ src: 'phone', ev: 'voice-send-late', waited_s: Math.round((Date.now() - item.failedAt) / 1000),
+      attempts: item.attempts, err: item.failErr, dry: !!item.dry, dur: item.dur, bytes: item.blob ? item.blob.size : 0 });
     await voiceBox.del(item.id).catch(() => {});       // a failed delete only means a resend, which the server drops
     voiceOwners.delete(item.id);
     if (reloadForCapture) { location.reload(); return; }   // only now that the damaged clip is out of the box

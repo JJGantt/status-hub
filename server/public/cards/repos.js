@@ -731,8 +731,13 @@ async function openSession(id) {
   // is sent as the follow-up. PRESS TO START, PRESS TO SEND, the same as every mic button (makeRecorder).
   at.rec = makeRecorder({
     dryWhen: () => true,
-    // Failures only: the red mic is what says it is listening (see initCard in voiceagent.js).
-    onStatus: (t, kind) => { if (cur === at && (kind === 'err' || kind === 'clear')) status.textContent = t || ''; },
+    // Failures only: the red mic is what says it is listening (see initCard in voiceagent.js). A send
+    // starting again ('busy', the outbox retrying a clip) takes the last failure down.
+    onStatus: (t, kind) => {
+      if (cur !== at) return;
+      if (kind === 'err' || kind === 'clear') status.textContent = t || '';
+      else if (kind === 'busy') status.textContent = '';
+    },
     onState: (s) => { mic.classList.toggle('ai-rec', s === 'rec'); mic.classList.toggle('ai-armed', s === 'armed'); },
     onTranscript: (t) => {
       const words = String(t || '').trim();

@@ -165,8 +165,8 @@ as noise and writes `Thank you.`, which would otherwise be enqueued and acted on
 read shows it; the clip does.
 
 So `/api/voice-command` measures every clip that carries a `dur` of a second or more: `clipSeconds`
-(`lib/transcribe.js`) reads the audio's length off its packet timestamps with an ffmpeg stream copy,
-and a clip holding under half its recorded time is DAMAGED. **A damaged clip is still a command**: what
+(`lib/transcribe.js`) reads the audio's length from an MP4's own boxes in-process (`lib/mp4.js`), and
+only for any other format off its packet timestamps with an ffmpeg stream copy, and a clip holding under half its recorded time is DAMAGED. **A damaged clip is still a command**: what
 survived is transcribed and acted on, the clip is kept, the hub logs `[voice-command] DAMAGED` as an
 error (so the ops responder investigates), and the answer carries `capture: 'damaged'` so the page
 replaces its microphone. A recorded command is never answered with "try again". A pressed recording

@@ -237,7 +237,18 @@ module.exports = function (ctx) {
   // There is NO size or length limit on a command. The body streams to a temp file rather than into
   // memory (a long uncompressed phone clip would not fit in this 256 MB machine), and lib/transcribe.js
   // re-encodes and splits anything too big for Groq. The file is deleted as soon as the request ends.
-  gated.post('/api/voice-command', async (req, res) => {
+  // Uploads in the air, which a restart would cut off: `deploy.sh` waits for this to reach zero
+  // (GET /api/voice-inflight) after the microphones are free, since a clip is still uploading after
+  // its recording has ended and released `voice_muted`.
+  let voiceInflight = 0;
+  const inflight = (req, res, next) => {
+    voiceInflight++;
+    let done = false;
+    res.on('close', () => { if (!done) { done = true; voiceInflight--; } });
+    next();
+  };
+  gated.get('/api/voice-inflight', (req, res) => res.json({ inflight: voiceInflight }));
+  gated.post('/api/voice-command', inflight, async (req, res) => {
     const tmp = path.join(os.tmpdir(), 'voice-' + crypto.randomUUID());
     let short = null;   // the pause-shortened copy of a locked clip, removed with tmp
     // Where this command's time goes, written on the request row (voice_requests.timing, HUB-INTERNALS.md
@@ -304,8 +315,9 @@ module.exports = function (ctx) {
       // Damaged is REPORTED, never refused: whatever words survived are transcribed and acted on, the clip
       // is kept, and the answer carries `capture: 'damaged'` so the page replaces its microphone
       // (captureDamaged() in voiceagent.js). A recorded command is never answered with "try again".
-      // A streamed recording's length is counted from its frames, instantly; an uploaded clip is measured
-      // by ffmpeg, which costs the hub 2-3s, so that runs alongside transcription.
+      // A streamed recording's length is counted from its frames, instantly; an uploaded MP4 from its
+      // boxes, also instantly. Anything else is measured by ffmpeg, which costs the hub 10-20s
+      // (clipSeconds), and the answer waits for it.
       const tProbe = Date.now();
       const probe = dur < CAPTURE_CHECK_MIN_S ? Promise.resolve(null)
         : fromLive && liveHeld != null ? Promise.resolve(liveHeld) : clipSeconds(tmp);
@@ -616,6 +628,14 @@ module.exports = function (ctx) {
           : `phone ${what} upload failed${l.kept ? ', kept to resend' : ''}: ${String(l.err || '').slice(0, 160)}`,
           { machine: 'client', service: 'phone', context: { at: l.t, dur: l.dur, bytes: l.bytes,
             look: 'client_log where src=phone around that time (docs/HUB-INTERNALS.md § voice outbox)' } });
+      }
+      // A dictation whose recorder was gone before it was delivered (public/voiceagent.js strandedOwner).
+      if (l.src === 'phone' && l.ev === 'voice-dictation-stranded') {
+        ops.report(l.delivered
+          ? `phone dictation for ${l.session} was stranded by a reload and delivered late`
+          : `phone dictation stranded by a reload with no session to deliver it to: ${String(l.words || '').slice(0, 300)}`,
+          { machine: 'client', service: 'phone', context: { recorded: l.recorded, dur: l.dur, session: l.session,
+            look: "client_log where ev='voice-dictation-stranded' has the whole transcript" } });
       }
       if (CLIENT_LOG_SOURCES.has(l.src) && l.ev && !CLIENT_LOG_SKIP.has(l.ev)) {
         const { src, ev, t, ...data } = l;

@@ -14,6 +14,7 @@ const { spawn } = require('child_process');
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
+const { mp4AudioSeconds } = require('./mp4');
 
 const GROQ_URL = 'https://api.groq.com/openai/v1/audio/transcriptions';
 const GROQ_MAX_BYTES = 24 * 1024 * 1024;   // a margin under Groq's 25 MB direct-upload cap
@@ -71,10 +72,20 @@ async function whisper(file, type, name, key, prompt, model) {
   throw Object.assign(new Error(`transcription failed (${last ? last.message : 'no provider'})`), { status: 502, allFailed: true });
 }
 
-// How many seconds of audio a clip actually holds, read off its packet timestamps by a stream copy.
-// Nothing is decoded, but starting ffmpeg on the hub's machine costs 2-3s whatever the length, so
-// nothing waits on it alone. null when ffmpeg cannot read it, which says nothing either way.
-function clipSeconds(file) {
+// How many seconds of audio a clip actually holds. An MP4 (every iPhone and watch recording) is read
+// from its own boxes in-process (lib/mp4.js), in microseconds. Anything else falls back to an ffmpeg
+// stream copy, read off its packet timestamps — and starting ffmpeg on the hub's 256 MB machine costs
+// 10-20 s, because its shared libraries do not fit in the free memory, so a format that reaches that
+// path makes every command from it wait that long. null when neither can read it, which says nothing
+// either way.
+async function clipSeconds(file) {
+  try {
+    const s = mp4AudioSeconds(await fs.promises.readFile(file));
+    if (s != null) return s;
+  } catch (e) { console.error(`[transcribe] reading the clip's MP4 boxes failed: ${e.message || e}`); }
+  return ffmpegSeconds(file);
+}
+function ffmpegSeconds(file) {
   return new Promise((resolve) => {
     const p = spawn('ffmpeg', ['-hide_banner', '-nostats', '-i', file, '-map', '0:a:0', '-c', 'copy', '-f', 'null', '-'],
       { stdio: ['ignore', 'ignore', 'pipe'] });

@@ -1996,7 +1996,7 @@ Fly keeps minutes of them. Writers merge keys with `rpc/voice_timing` (or, for t
 | `audio_via` | hub | `live` (audio taken from the `/api/voice-live` stream) or `upload` (the clip in the body) |
 | `live_wait_ms` | hub | how long the command waited for its stream to finish arriving |
 | `audio_in_ms` | hub | from arrival until the audio was all on disk |
-| `probe_ms` | hub | measuring how much audio the file holds (the damaged-capture check): counted from the frames for streamed audio, ffmpeg alongside transcription for an upload |
+| `probe_ms` | hub | measuring how much audio the file holds (the damaged-capture check): counted from the frames for streamed audio, read from the MP4's boxes for an upload (ffmpeg, 10-20s, for any other format) |
 | `stt_ms`, `stt_alt_ms`, `stt_both_ms` | hub | the primary Whisper, the second opinion, and both (the enqueue waits for both) |
 | `verify_ms` | hub | the voiceprint check, listeners only |
 | `hub_enqueued`, `hub_ms`, `bytes` | hub | the row was written; total hub time; audio size |

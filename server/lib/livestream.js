@@ -67,7 +67,7 @@ function endOf({ complete, last, paused, gapMs, limited }) {
 
 // Seconds of audio in an ADTS stream, read off its frame headers: every frame says its own byte length,
 // how many 1024-sample blocks it holds and at what sample rate. Nothing is decoded and no process is
-// started, so it is instant; ffmpeg reading the same file costs the hub 2-3s, most of it starting ffmpeg.
+// started, so it is instant; starting ffmpeg on the hub's 256 MB machine costs 10-20s.
 // null when the bytes are not ADTS from the first byte, which says nothing either way.
 const ADTS_RATES = [96000, 88200, 64000, 48000, 44100, 32000, 24000, 22050, 16000, 12000, 11025, 8000, 7350];
 function adtsSeconds(buffers) {

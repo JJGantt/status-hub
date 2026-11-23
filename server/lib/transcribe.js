@@ -50,6 +50,7 @@ async function whisper(file, type, name, key, prompt, model) {
     process.env.OPENAI_API_KEY && { url: OPENAI_URL, key: process.env.OPENAI_API_KEY, model: 'whisper-1', label: 'openai' },
   ].filter(Boolean);
   let last;
+  const statuses = [];
   for (const p of providers) {
     try {
       const form = new FormData();
@@ -62,14 +63,17 @@ async function whisper(file, type, name, key, prompt, model) {
       if (prompt) form.append('prompt', prompt);
       const r = await fetch(p.url, { method: 'POST', headers: { Authorization: `Bearer ${p.key}` }, body: form,
                                      signal: AbortSignal.timeout(30000) });
-      if (!r.ok) throw new Error(`${p.label} ${r.status}`);
+      if (!r.ok) { statuses.push(r.status); throw new Error(`${p.label} ${r.status}`); }
       return (await r.text()).trim();
     } catch (e) {
       last = e;
       console.log(`[transcribe] ${p.label} failed: ${e.message || e}`);
     }
   }
-  throw Object.assign(new Error(`transcription failed (${last ? last.message : 'no provider'})`), { status: 502, allFailed: true });
+  // `refused`: every provider answered 400, i.e. the FILE is unreadable (a watch clip that is only an MP4
+  // header, 557 bytes for any length), not a provider outage. No other transcriber will read it either.
+  const refused = statuses.length === providers.length && statuses.every((s) => s === 400);
+  throw Object.assign(new Error(`transcription failed (${last ? last.message : 'no provider'})`), { status: 502, allFailed: true, refused });
 }
 
 // How many seconds of audio a clip actually holds. An MP4 (every iPhone and watch recording) is read

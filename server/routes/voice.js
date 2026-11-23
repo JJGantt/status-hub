@@ -354,7 +354,7 @@ module.exports = function (ctx) {
       // second either way, so it adds no wait. A dry run's words are typed into a session, which gets
       // only the primary reading.
       const altModel = whisperModel ? 'whisper-large-v3-turbo' : 'whisper-large-v3';
-      let transcript = '', segments = 0, untranscribed = false, alt = null;
+      let transcript = '', segments = 0, untranscribed = false, alt = null, unreadable = false;
       try {
         short = locked ? await shortenPauses(tmp, quiet).catch((e) => { console.log(`[voice-command] pause shortening failed: ${e.message}`); return null; }) : null;
         if (short) console.log(`[voice-command] locked clip: ${short.gaps} pause(s) shortened, ${short.cut.toFixed(1)}s cut`);
@@ -373,9 +373,14 @@ module.exports = function (ctx) {
           console.log(`[voice-command] transcribers disagree: ${JSON.stringify(transcript.slice(0, 120))} vs ${altModel} ${JSON.stringify(alt.slice(0, 120))}`);
         }
       } catch (e) {
-        if (!e.allFailed || dry || !(await macWorkerUp())) throw e;
-        untranscribed = true;
-        console.error('[voice-command] every transcription provider failed; queued for the Mac\'s local Whisper');
+        // A clip every provider refuses as a bad file goes down the no-words path below: the Mac's
+        // Whisper cannot read it either, and queueing it only turns one mis-tap into two failures.
+        if (e.refused) unreadable = true;
+        else if (!e.allFailed || dry || !(await macWorkerUp())) throw e;
+        else {
+          untranscribed = true;
+          console.error('[voice-command] every transcription provider failed; queued for the Mac\'s local Whisper');
+        }
       }
       if (!fromLive) judge(await probe);
       // Bytes per second of speech is what decides whether a clip fits Groq's cap, and it is set by the
@@ -402,7 +407,14 @@ module.exports = function (ctx) {
       // A PRESSED recording that came back with no words is a failure, not an answer: the user spoke and
       // nothing was heard. Its clip is kept so the words can be recovered, and it is reported.
       if (!transcript && !untranscribed) {
-        if (pressed && size > 2048) {
+        // UNREADABLE: the recorder wrote no audio. Under 2s it is a start tapped and stopped before the
+        // watch's chirp finished (`record-stop chirped:false peak:0`), where nothing could be said, so it
+        // is counted; a longer one is a recording that lost its audio, which is an error.
+        if (unreadable) {
+          const line = `[voice-command] UNREADABLE CLIP: a ${dur > 0 ? dur.toFixed(1) + 's ' : ''}recording from ${source}`
+            + `${dry ? ' (dictation)' : ''} was refused by every transcriber (${size} bytes ${ct}); no audio in it`;
+          if (pressed && dur >= 2) console.error(line); else console.warn(line);
+        } else if (pressed && size > 2048) {
           const kept = await keepUnheard(id, tmp, ct);
           console.error(`[voice-command] a ${dur > 0 ? dur.toFixed(1) + 's ' : ''}recording from ${source}${dry ? ' (dictation)' : ''} `
             + `came back with no words (${size} bytes ${ct}${damaged ? `, holds ${damaged.held_s}s` : ''}); clip kept at ${kept || 'nowhere — upload failed'}`);

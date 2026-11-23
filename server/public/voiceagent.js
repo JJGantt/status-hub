@@ -33,19 +33,19 @@ export function applyActivitySettings(s) {
   const p = parseFloat((s || {}).phone_activity_hold_s);
   if (Number.isFinite(p) && p > 0) phoneHoldMs = p * 1000;
 }
-let _activityBar = null;        // shared activity-popup singleton — declared up here so boot() (below) can call activityBar() without a TDZ error
-let _outboxBusy = false;        // photo-outbox reentrancy latch — up here for the same reason: boot() runs runPhotoOutbox()
+let _activityBar = null;        // shared activity-popup singleton
+let _outboxBusy = false;        // photo-outbox reentrancy latch
 let _card = null;               // the conversation card (null on pages without it)
-let micStream = null;           // the page's one microphone, open only while something records — see claimMic(); up here for the same reason
+let micStream = null;           // the page's one microphone, open only while something records — see claimMic()
 let micPending = null;          // an in-flight getUserMedia, so concurrent callers share one acquisition
 let micUsers = 0;               // how many recorders hold it right now; the device closes at zero
 let _voiceChain = Promise.resolve();   // voice-outbox passes run one after another — see runVoiceOutbox()
 let _voiceBacklogStatus = () => {};    // where a resent clip with no live recorder reports; boot() points it at the activity bar
 const voiceOwners = new Map();         // clip id -> the live recorder that took it: { onStatus, onTranscript }
-// One clip's upload + transcription, up here because boot() starts the outbox. A ten-minute clip at
+// One clip's upload + transcription. A ten-minute clip at
 // VOICE_BPS is ~7MB and Groq answers in seconds, so two minutes means the request is not coming back.
 const VOICE_SEND_MS = 120000;
-// Both durable outboxes, up here because boot() drains them at load (idbBox is a hoisted declaration).
+// Both durable outboxes, drained by boot() at load.
 // The PHOTO outbox is drained and never filled: the navbar camera that queued into it is gone, and a
 // picture now goes through the composer. This only empties whatever that camera left behind.
 const photoBox = idbBox('hub-photo-outbox');
@@ -53,14 +53,10 @@ const voiceBox = idbBox('hub-voice-outbox');
 // Other views of the hub thread: a page can show the conversation somewhere besides the card, and the
 // phone home's one-line prompt/reply strip does. They subscribe here rather than opening their own
 // EventSource — this page already holds /api/voice-stream open, and a second one on the same endpoint
-// is the duplication tv.js was split out to stop. Declared up here with the rest of boot()'s state,
-// since boot() runs above the bottom of this file.
+// is the duplication tv.js was split out to stop.
 const threadSubs = [];
 
 
-// The kiosk has tv.js's own voice layer and no input; everything else boots the interactive client.
-// KIOSK also picks the activity bar's mount point below.
-if (!KIOSK) boot();
 
 function boot() {
   watchMic();                      // the microphone opens only while something is recording
@@ -1729,3 +1725,8 @@ function initCard() {
   return { upsert, clear, rule, backfill, optimistic, setPendingPath, dropPending, arrived, request };
 }
 
+// The kiosk has tv.js's own voice layer and no input; everything else boots the interactive client.
+// LAST IN THE FILE, after every top-level declaration has run. The bundle turns top-level `const` into
+// `var`, so a boot() above a declaration reads it as `undefined` without throwing: `nativeRec` was, and
+// the chat sheet's recorder never subscribed to the app's `rec`, so its mic armed and never recorded.
+if (!KIOSK) boot();

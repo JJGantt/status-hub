@@ -660,7 +660,7 @@ path) · `/api/nutrition-day` also takes `date=today`, so a client with no 4am-o
 gets the server's, and ships that day's own `produce` fill gauges beside its totals and targets so a
 surface pointing the rings at a selected day moves all seven of them together ·
 `/api/todos/alarm` (sets or clears a dated item's `alarm` mark; what rings is `docs/ALARMS.md`) ·
-`/api/todos` (lists + the derived `due` view) · `/api/calendar` (month grid(s) of every
+`/api/todos` (lists, each with its `parent_id` — the card draws sublists inside their parent — + the derived `due` view) · `/api/calendar` (month grid(s) of every
 dated item — every occurrence is a real row, so nothing is projected; `?month=` pages, `?wall=1` adds
 the day timeline and reads `calendar_months` for the spread, `?day=1` is the timeline alone and
 `&full=1` makes it a rolling ±12h window instead of a calendar day — see the dial below, and

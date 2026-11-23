@@ -710,6 +710,9 @@ body.tv.phonewall .pane-repos.sv-open #repospane{flex:1 1 auto;min-height:0;disp
 .repos li.empty{color:#5d6672;font-size:14px}
 .todocard{padding:14px}
 .todo section{margin:0 0 20px}
+.todo .sublists{margin:12px 0 0 4px;padding-left:12px;border-left:2px solid #222a33}
+.todo .sublists section{margin:0 0 14px}
+.todo .sublists section:last-child{margin-bottom:0}
 .todo h3{margin:0 0 8px;font-size:12px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:#8b96a5}
 .todo ul{list-style:none;margin:0;padding:0}
 .todo li{border-bottom:1px solid #1c232b}

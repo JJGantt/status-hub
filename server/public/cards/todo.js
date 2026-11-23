@@ -79,12 +79,21 @@ function html(d) {
   let out = `<section><h3>Due ${count}</h3><ul>${due || '<li class="empty">Nothing due</li>'}</ul>` +
     `<div class="add"><input type="text" placeholder="New dated item" data-add="item" data-list="l_todo">` +
     `<input type="datetime-local" data-due="item" aria-label="when"></div></section>`;
-  for (const l of d.lists || []) {
+  // Lists nest (`parent_id`): a list's sublists are drawn inside its section, after its own items. A
+  // list whose parent is not in the payload is drawn at the top level rather than lost.
+  const all = d.lists || [];
+  const ids = new Set(all.map((l) => l.id));
+  const kids = (pid) => all.filter((l) => (l.parent_id && ids.has(l.parent_id) ? l.parent_id : null) === pid);
+  const section = (l, depth) => {
     const items = (l.items || []).map((i) => row(i.id, itemInner(i, false), bodyFor(i), i.expired)).join('');
     const mark = l.emoji ? `${esc(l.emoji)} ` : '';
-    out += `<section><h3>${mark}${esc(l.name)}</h3><ul>${items || '<li class="empty">Empty</li>'}</ul>` +
-      `<div class="add"><input type="text" placeholder="Add to ${esc(l.name)}" data-add="item" data-list="${esc(l.id)}"></div></section>`;
-  }
+    const subs = depth < 16 ? kids(l.id).map((k) => section(k, depth + 1)).join('') : '';
+    const empty = items || subs ? '' : '<li class="empty">Empty</li>';
+    return `<section><h3>${mark}${esc(l.name)}</h3><ul>${items}${empty}</ul>` +
+      `<div class="add"><input type="text" placeholder="Add to ${esc(l.name)}" data-add="item" data-list="${esc(l.id)}"></div>` +
+      (subs ? `<div class="sublists">${subs}</div>` : '') + `</section>`;
+  };
+  for (const l of kids(null)) out += section(l, 0);
   return `<div class="todo">${out}</div>`;
 }
 

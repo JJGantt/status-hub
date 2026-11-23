@@ -31,13 +31,14 @@ module.exports = function (ctx) {
   gated.get('/api/todos', async (req, res) => {
     try {
       const [listNames, items] = await Promise.all([
-        sb('lists?select=id,name,emoji&order=name'),
+        sb('lists?select=id,name,emoji,parent_id&order=name'),
         sb('list_items?deleted=eq.false&completed_at=is.null&select=id,list_id,list_name,text,title,due,scheduled_at,priority,series_id,alarm&order=created.asc'),
       ]);
       const all = items || [];
       // Grouped by `list_id`, and the id is sent on so the composer can post it back. `list_name` is a
       // derived copy (data-layer 00094) — fine to display, never the thing to match or write on.
-      const lists = (listNames || []).map((l) => ({ id: l.id, name: l.name, emoji: l.emoji, items: all.filter((i) => i.list_id === l.id) }));
+      // `parent_id` nests a list inside another (data-layer 00184); the card draws the tree from it.
+      const lists = (listNames || []).map((l) => ({ id: l.id, name: l.name, emoji: l.emoji, parent_id: l.parent_id || null, items: all.filter((i) => i.list_id === l.id) }));
       // Longest outstanding first, then upcoming.
       const nowET = etNowString();
       const due = all.filter((i) => i.due)

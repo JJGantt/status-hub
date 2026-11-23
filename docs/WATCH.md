@@ -1107,7 +1107,10 @@ paused recording resumes it and never sends it. A resume the system refuses (sti
 front) logs `mic-resume` `ok:false` and stays paused for the next. After a resume the endpoint starts
 over, so the silence only ends the command once speech is heard again, and the `unspoken` and `quick`
 caps count from the resume; a resumed recording with nothing more said into it pauses again rather than
-discarding what came before. Press and hold still throws it away. The draft lives only in the app's
+discarding what came before. Press and hold still throws it away. The clip's `dur` stays wall-clock, pause included, so the
+hub times the pause from the stream's `P` and `R` frames and takes it off before judging the clip damaged
+(`PauseClock`, server `lib/livestream.js`); without the stream it cannot, and a long pause reads as a
+`DAMAGED capture`. The draft lives only in the app's
 process, so a watchOS kill while paused loses it. A listener utterance that had begun goes up, and when
 the microphone comes back listening picks it up again. Without that handling always-on listening ends at
 the first Siri while the glyph goes on claiming it is listening.

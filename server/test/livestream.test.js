@@ -4,7 +4,7 @@
 // unreported.
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
-const { FrameReader, endOf, adtsSeconds } = require('../lib/livestream');
+const { FrameReader, endOf, adtsSeconds, PauseClock } = require('../lib/livestream');
 
 const frame = (type, data = Buffer.alloc(0)) => {
   const h = Buffer.alloc(5);
@@ -75,4 +75,17 @@ test('bytes that are not ADTS measure as unknown, never as a short recording', (
   assert.equal(adtsSeconds(Buffer.from('not audio at all')), null);
   assert.equal(adtsSeconds(Buffer.concat([adts(40), Buffer.from('garbage!')])), null);
   assert.equal(adtsSeconds([]), null);
+});
+
+test('the pause clock times every P to its R, counts an open pause up to now, and ignores repeats', () => {
+  let t = 0;
+  const c = new PauseClock(() => t);
+  c.frame('A'); t = 10_000;
+  c.frame('P'); t = 12_000;
+  c.frame('P'); t = 280_000;          // a second P while paused does not restart the pause
+  c.frame('R'); t = 290_000;
+  c.frame('R');                       // an R with no pause open adds nothing
+  assert.equal(c.seconds(), 270);
+  c.frame('P'); t = 295_000;
+  assert.equal(c.seconds(), 275);     // still paused: counted up to now
 });

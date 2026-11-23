@@ -9,7 +9,7 @@ const heicConvert = require('heic-convert');
 const { localDate } = require('../lib/dates');
 const ops = require('../lib/report');
 const { vanishedRecordings, RECORD_EVENTS } = require('../lib/outcomes');
-const { FrameReader, endOf, adtsSeconds } = require('../lib/livestream');
+const { FrameReader, endOf, adtsSeconds, PauseClock } = require('../lib/livestream');
 const { heardStart, heardEnd } = require('../lib/streams');
 const chunked = require('../lib/chunkstream');
 const os = require('os');
@@ -332,7 +332,14 @@ module.exports = function (ctx) {
           res.status(409).json({ upload: true, why: 'short', held_s: +heldS.toFixed(2), dur });
           return true;
         }
-        if (heldS < dur * CAPTURE_MIN_KEPT) damaged = { held_s: +heldS.toFixed(2), dur };
+        // A watch command paused by an interruption (docs/WATCH.md § The always-on listener) reports its
+        // wall-clock length, pause included, while its clip holds only the time it recorded: the pause its
+        // stream timed comes off before the clip is judged.
+        const live = liveStreams.get(String(req.query.live || ''));
+        const pausedS = live ? live.pausedS() : 0;
+        if (heldS < (dur - pausedS) * CAPTURE_MIN_KEPT) {
+          damaged = { held_s: +heldS.toFixed(2), dur, ...(pausedS >= 1 ? { paused_s: +pausedS.toFixed(1) } : {}) };
+        }
         return false;
       };
       if (fromLive && judge(await probe)) return;
@@ -402,7 +409,7 @@ module.exports = function (ctx) {
       const pressed = !GATED_SOURCES.has(source);
       if (damaged) {
         console.error(`[voice-command] DAMAGED capture from ${source}${dry ? ' (dictation)' : ''}: ${size} bytes ${ct} holds `
-          + `${damaged.held_s}s of ${damaged.dur}s recorded; acting on what survived: ${JSON.stringify(transcript.slice(0, 200))}`);
+          + `${damaged.held_s}s of ${damaged.dur}s recorded${damaged.paused_s ? ` (${damaged.paused_s}s of it paused)` : ''}; acting on what survived: ${JSON.stringify(transcript.slice(0, 200))}`);
       }
       // A PRESSED recording that came back with no words is a failure, not an answer: the user spoke and
       // nothing was heard. Its clip is kept so the words can be recovered, and it is reported.
@@ -876,7 +883,8 @@ module.exports = function (ctx) {
     const id = String(req.query.id || '');
     if (!LIVE_ID.test(id)) { req.resume(); return res.status(400).json({ error: 'id required' }); }
     let settleEntry;
-    const entry = { ended: new Promise((r) => { settleEntry = r; }) };
+    const pauses = new PauseClock();
+    const entry = { ended: new Promise((r) => { settleEntry = r; }), pausedS: () => pauses.seconds() };
     liveStreams.set(id, entry);
     const meta = { id, view: String(req.query.view || '').slice(0, 16), flow: String(req.query.flow || '').slice(0, 16) };
     const reader = new FrameReader();
@@ -887,7 +895,7 @@ module.exports = function (ctx) {
       lastByteAt = Date.now();
       for (const f of reader.push(chunk)) {
         if (f.type === 'A') { if (bytes + f.data.length <= LIVE_MAX_BYTES) { audio.push(Buffer.from(f.data)); bytes += f.data.length; } }
-        else { last = f.type; paused = f.type === 'P' ? true : f.type === 'R' ? false : paused; }
+        else { last = f.type; paused = f.type === 'P' ? true : f.type === 'R' ? false : paused; pauses.frame(f.type); }
       }
     });
     req.on('end', () => { complete = true; if (!res.headersSent) res.status(204).end(); });

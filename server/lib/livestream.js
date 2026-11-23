@@ -84,4 +84,17 @@ function adtsSeconds(buffers) {
   return i === 0 ? null : secs;
 }
 
-module.exports = { FrameReader, endOf, adtsSeconds, LOST_GAP_MS };
+// How long a stream spent PAUSED, timed from when its P and R frames arrive (they carry no payload). A
+// paused recording's file holds only the time it was recording, while the device reports its length as
+// wall-clock from the start, so a check of the file against that length has to take this off first or
+// every interrupted-and-resumed command reads as damaged. An open pause counts up to now.
+class PauseClock {
+  constructor(now = Date.now) { this.now = now; this.ms = 0; this.since = null; }
+  frame(type) {
+    if (type === 'P' && this.since == null) this.since = this.now();
+    else if (type === 'R' && this.since != null) { this.ms += this.now() - this.since; this.since = null; }
+  }
+  seconds() { return (this.ms + (this.since != null ? this.now() - this.since : 0)) / 1000; }
+}
+
+module.exports = { FrameReader, endOf, adtsSeconds, PauseClock, LOST_GAP_MS };

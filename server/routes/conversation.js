@@ -283,15 +283,33 @@ module.exports = function (ctx) {
       if (sentSessionReplies.has(key)) return;
       sentSessionReplies.add(key);
       if (sentSessionReplies.size > 500) sentSessionReplies.delete(sentSessionReplies.values().next().value);
-      const seen = await sb(`notifications?dedupe_key=eq.${encodeURIComponent(key)}&select=id&limit=1`);
-      if (seen && seen.length) return;
-      const [row] = (await sb(`desk_sessions?id=eq.${encodeURIComponent(sessionId)}&select=label,custom_title,repo`)) || [];
-      const title = (row && (row.custom_title || row.label || row.repo)) || 'Session';
-      // The sentence if there is one, the reply's opening if not. Tapping it opens that session either
-      // way — the payload is what the app reads and it is unchanged.
-      const body = (typeof summary === 'string' && summary.trim()) ? summary.trim() : text;
-      await pushAll('session', title, body, key, { category: 'SESSION_REPLY', payload: { session_id: sessionId } });
+      await retrying('[session-push]', async () => {
+        const seen = await sb(`notifications?dedupe_key=eq.${encodeURIComponent(key)}&select=id&limit=1`);
+        if (seen && seen.length) return;
+        const [row] = (await sb(`desk_sessions?id=eq.${encodeURIComponent(sessionId)}&select=label,custom_title,repo`)) || [];
+        const title = (row && (row.custom_title || row.label || row.repo)) || 'Session';
+        // The sentence if there is one, the reply's opening if not. Tapping it opens that session either
+        // way — the payload is what the app reads and it is unchanged.
+        const body = (typeof summary === 'string' && summary.trim()) ? summary.trim() : text;
+        await pushAll('session', title, body, key, { category: 'SESSION_REPLY', payload: { session_id: sessionId } });
+      });
     } catch (e) { console.error('[session-push]', e.message); }
+  }
+
+  // A reply push whose Supabase call fails (a 522 while Supabase is briefly unreachable) is tried
+  // again rather than dropped: nothing else ever sends it. Safe to repeat because every attempt
+  // checks the notification's dedupe key first. A retry is an occurrence; only the last failure is
+  // an error.
+  const PUSH_RETRY_MS = [30_000, 120_000];
+  async function retrying(tag, fn) {
+    for (let i = 0; ; i++) {
+      try { return await fn(); }
+      catch (e) {
+        if (i >= PUSH_RETRY_MS.length) throw e;
+        console.warn(tag, `${e.message} (will retry)`);
+        await new Promise((r) => setTimeout(r, PUSH_RETRY_MS[i]));
+      }
+    }
   }
 
   // The Settings → Push switch, which every reply push obeys.
@@ -312,14 +330,16 @@ module.exports = function (ctx) {
     try {
       if (pushOff(await settingsAll())) return;
       const key = `voice-answer:${row.id}`;
-      if ((await sb(`notifications?dedupe_key=eq.${encodeURIComponent(key)}&select=id&limit=1`)).length) return;
-      const [ask] = row.request_id
-        ? (await sb(`voice_messages?role=eq.user&request_id=eq.${encodeURIComponent(row.request_id)}&select=text&limit=1`)) || []
-        : [];
-      const words = String((ask && ask.text) || '').trim();
-      const title = words.length > 80 ? words.slice(0, 79) + '…' : words || 'Hub';
-      await pushAll('answer', title, String(row.text || '').slice(0, 1500), key,
-        { category: 'VOICE_ANSWER', payload: { voice_message_id: row.id } });
+      await retrying('[answer-push]', async () => {
+        if ((await sb(`notifications?dedupe_key=eq.${encodeURIComponent(key)}&select=id&limit=1`)).length) return;
+        const [ask] = row.request_id
+          ? (await sb(`voice_messages?role=eq.user&request_id=eq.${encodeURIComponent(row.request_id)}&select=text&limit=1`)) || []
+          : [];
+        const words = String((ask && ask.text) || '').trim();
+        const title = words.length > 80 ? words.slice(0, 79) + '…' : words || 'Hub';
+        await pushAll('answer', title, String(row.text || '').slice(0, 1500), key,
+          { category: 'VOICE_ANSWER', payload: { voice_message_id: row.id } });
+      });
     } catch (e) { console.error('[answer-push]', e.message); }
   }
 

@@ -677,7 +677,12 @@ module.exports = function (ctx) {
     }
     if (keep.length) {
       try { await sbWrite('client_log', 'POST', keep); }
-      catch (e) { console.error('[clientlog] not kept:', e.message || e); return res.status(502).end(); }
+      catch (e) {
+        // A batch stays on the watch and comes again, so its failure is an occurrence; a single line
+        // (the phone, a page's beacon) is sent once and is lost.
+        (Array.isArray(b.lines) ? console.warn : console.error)('[clientlog] not kept:', e.message || e);
+        return res.status(502).end();
+      }
       checkRecordings(keep).catch((e) => console.error('[clientlog] recording check failed:', e.message || e));
     }
     res.status(204).end();

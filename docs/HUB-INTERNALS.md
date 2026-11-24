@@ -1357,6 +1357,7 @@ INSERT of that assistant row, kind `answer`, category `VOICE_ANSWER`, titled wit
 answers and keyed `voice-answer:<id>`. The payload's `voice_message_id` is what a tap or a dismissal
 marks read through `POST /api/voice-messages/read`, which stamps `read_at` once; the row's realtime
 UPDATE carries it to every surface. What the watch does with it is `WATCH.md` § The inbox. A relayed session reply in the inbox is not pushed by `notifyAnswer`: `notifySessionReply` already pushed it.
+Both reply pushes retry a failed Supabase call twice (after 30s and 2 min; `retrying` in `routes/conversation.js`), because nothing else ever sends that push; each retry is an occurrence, and only the last failure is an error. A retry cannot push twice: `pushAll` never throws once it has sent, and each attempt checks the dedupe key first.
 
 `GET /api/voice-inbox` lists every flagged answer, newest first (`?before=` pages back), with its label
 and whether it is read; `GET /api/voice-inbox/:id` returns one with its whole question and answer.

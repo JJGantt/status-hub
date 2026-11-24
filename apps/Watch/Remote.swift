@@ -191,18 +191,22 @@ struct RemoteView: View {
         Button { tap(); remote.media(action) } label: {
             Image(systemName: glyph).font(.system(size: 30, weight: .semibold))
                 .frame(maxWidth: .infinity, minHeight: 70)
+                .background(Color.white.opacity(lit ? 0.3 : 0.1), in: RoundedRectangle(cornerRadius: 16))
+                .contentShape(RoundedRectangle(cornerRadius: 16))
         }
         .buttonStyle(.plain)
-        .background(Color.white.opacity(lit ? 0.3 : 0.1), in: RoundedRectangle(cornerRadius: 16))
     }
 
     private func volumeButton(_ glyph: String, _ by: Int) -> some View {
         Button { tap(); remote.step(by) } label: {
             Image(systemName: glyph).font(.system(size: 22, weight: .bold))
                 .frame(maxWidth: .infinity, minHeight: 52)
+                .background(Color.white.opacity(0.12), in: RoundedRectangle(cornerRadius: 14))
+                // A plain button takes taps only where its label draws; without this the minus, a thin
+                // bar, catches a fraction of the taps the plus does.
+                .contentShape(RoundedRectangle(cornerRadius: 14))
         }
         .buttonStyle(.plain)
-        .background(Color.white.opacity(0.12), in: RoundedRectangle(cornerRadius: 14))
     }
 
     private func tap() { WKInterfaceDevice.current().play(.click) }

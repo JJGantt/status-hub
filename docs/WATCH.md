@@ -51,12 +51,14 @@ insert back (`tvInserted` then skips the echo), and holds the request open for t
 check of what is really playing (data-layer `bedroomTv.ts` `judge`), which costs seconds a button
 cannot spend. **Play and pause are two buttons, each always sending its own action** — never a
 toggle, so a press does what it says regardless of what the watch last heard. The button matching the
-state the TV last reported is lit. **Volume is sent as STEPS** (`step`, relative to
-the level the TV is at when it arrives), never as a level built on the watch's last reading, so a press
-or a crown detent is taken the instant it happens, before the TV has been read at all. The number shown
-is the TV's last answer plus the steps not yet answered, dimmed while any are outstanding. One command
-is on the wire at a time (the TV app walks to a level a step at a time and two walks would fight), and
-steps made meanwhile go out together when it answers. The page reads
+state the TV last reported is lit. **The number shown is the level the user wants, and a press moves it at
+once**: no press waits on the TV, the network, or a read. On launch it starts from the last level the TV
+reported (kept in UserDefaults), so there is a number before anything answers. It is dimmed until the TV
+reports exactly that level, and the watch sends the level itself (`value`), never a step. One command is
+on the wire at a time (the TV app walks to a level a step at a time and two walks would fight); presses
+made meanwhile only move the number, and whatever it shows when the answer comes back is what goes out
+next, so rapid presses never queue stale levels or snap the number back. A failed send is retried with
+exponential backoff (capped at 30s) while the TV is behind, and the next press sends at once. The page reads
 the volume and the playing state each time it comes on screen and holds no stream. Only play/pause and
 volume exist: remote KEYS (arrows, select, back) are pressed by the Pi over adb, not by the app.
 

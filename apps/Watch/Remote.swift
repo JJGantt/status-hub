@@ -3,27 +3,38 @@ import WatchKit
 
 /// **The bedroom TV's remote** (docs/WATCH.md § The remote page): play/pause and volume, through the
 /// hub's `/api/tv/remote`, which hands each press to the TV's companion app and answers with what the
-/// TV reports afterwards. The volume shown is the TV's last answer plus the steps it has not answered yet.
+/// TV reports afterwards. The volume shown is the level the user wants; the TV catches up to it.
 @MainActor
 final class TvRemote: ObservableObject {
     static let shared = TvRemote()
 
-    /// The TV's volume as it last reported it; nil until read, or when the TV did not answer.
-    @Published private(set) var volume: Int?
-    /// Steps pressed or turned that the TV has not answered yet: queued plus on the wire. What is shown
-    /// is `volume + outstanding`, the level the user asked for, and the TV's answer catches up to it.
-    @Published private(set) var outstanding = 0
+    /// The level the user wants, which is what the page shows. A press changes it at once and never
+    /// waits on anything; until the TV has been read it starts from the last level the TV reported.
+    @Published private(set) var target: Int?
+    /// The TV's volume as it last reported it in this run; nil until it has answered.
+    @Published private(set) var confirmed: Int?
     /// What the playing app's media session says: true playing, false paused, nil not known (not read
     /// yet, or nothing playing).
     @Published private(set) var playing: Bool?
     /// The TV's own words when a press did not land ("the TV is off…", "nothing is playing").
     @Published private(set) var problem: String?
 
+    /// True once the user has pressed since the TV last matched `target`: the level has to be sent.
+    private var dirty = false
+    /// A read was asked for (the page came on screen) and has not gone out yet.
+    private var needsRead = false
+    /// Steps pressed before any level was known (first launch only), added to the first reading.
+    private var pendingSteps = 0
     /// One volume command on the wire at a time: the TV app walks to a level a step at a time, and two
-    /// walks at once would fight. Presses made meanwhile add to `queued`, which goes out as one step
-    /// when the answer comes back, so a fast crown spin is a few sends, not one per detent.
-    private var queued = 0
+    /// walks at once would fight. Presses made meanwhile only move `target`; whatever it is when the
+    /// answer comes back is what goes out next, so a fast crown spin is a few sends, never a queue.
     private var sending = false
+    /// A failed send is retried with exponential backoff while the TV is still behind; a press
+    /// cancels the wait and sends straight away.
+    private var failures = 0
+    private var retry: Task<Void, Never>?
+
+    private static let cacheKey = "tvRemote.volume"
 
     private struct Answer: Decodable {
         let ok: Bool?
@@ -33,48 +44,76 @@ final class TvRemote: ObservableObject {
         let playing: Bool?
     }
 
-    private init() {}
+    private init() {
+        target = UserDefaults.standard.object(forKey: Self.cacheKey) as? Int
+    }
+
+    /// True while the TV has not yet reported the level shown.
+    var behind: Bool { target == nil || target != confirmed }
 
     /// Reads the TV's volume and what is playing, each time the page comes on screen.
     @discardableResult func activate() -> Task<Void, Never> {
-        Task {
-            async let v = send(["op": "volume"])
-            async let n = send(["op": "now"])
-            let (vol, now) = await (v, n)
-            if let vol, vol.ok == true, let x = vol.volume { volume = x }
-            if let now { take(now) }
-            problem = [vol, now].compactMap { $0 }.first { $0.ok == false }?.error
-        }
+        needsRead = true
+        retry?.cancel()
+        retry = nil
+        pumpVolume()
+        return Task { if let now = await send(["op": "now"]) { take(now) } }
     }
 
-    /// A press or a crown detent: always taken, whatever the watch knows about the TV. It is a STEP,
-    /// relative to wherever the TV is when it arrives, so nothing waits for a read.
+    /// A press or a crown detent: moves the shown level immediately, whatever the TV is doing.
     func step(_ by: Int) {
-        queued += by
-        outstanding += by
-        pushVolume()
+        if let t = target {
+            target = max(0, min(100, t + by))
+            dirty = true
+        } else {
+            pendingSteps += by
+            needsRead = true
+        }
+        retry?.cancel()
+        retry = nil
+        failures = 0
+        pumpVolume()
     }
 
-    /// The level to show: what the user has asked for, when the TV's level is known.
-    var shown: Int? { volume.map { max(0, min(100, $0 + outstanding)) } }
-
-    private func pushVolume() {
-        guard !sending, queued != 0 else { return }
+    private func pumpVolume() {
+        guard !sending, retry == nil else { return }
+        let asked: Int? = dirty ? target : nil
+        guard asked != nil || needsRead else { return }
         sending = true
-        let by = queued
-        queued = 0
+        needsRead = false
+        var body: [String: Any] = ["op": "volume"]
+        if let asked { body["value"] = asked }
         Task {
-            let a = await send(["op": "volume", "step": by])
+            let a = await send(body)
             sending = false
-            outstanding -= by
             if let a, a.ok == true, let x = a.volume {
-                volume = x
+                confirmed = x
+                UserDefaults.standard.set(x, forKey: Self.cacheKey)
+                if let asked {
+                    // Landed, or the TV settled elsewhere with nothing newer asked: the TV's level stands.
+                    if target == asked { target = x; dirty = false }
+                } else if !dirty {
+                    target = max(0, min(100, x + pendingSteps))
+                    dirty = pendingSteps != 0
+                    pendingSteps = 0
+                }
+                failures = 0
                 problem = nil
             } else {
                 problem = a?.error ?? "no answer"
                 Hub.log("remote_fail", ["op": "volume", "error": problem ?? ""])
+                if asked == nil { needsRead = true }
+                failures += 1
+                let wait = min(30.0, pow(2.0, Double(failures - 1)))
+                retry = Task {
+                    try? await Task.sleep(for: .seconds(wait))
+                    guard !Task.isCancelled else { return }
+                    retry = nil
+                    pumpVolume()
+                }
+                return
             }
-            pushVolume()
+            pumpVolume()
         }
     }
 
@@ -121,9 +160,9 @@ struct RemoteView: View {
 
             HStack(spacing: 8) {
                 volumeButton("minus", -1)
-                Text(remote.shown.map(String.init) ?? "–")
+                Text(remote.target.map(String.init) ?? "–")
                     .font(.system(size: 30, weight: .semibold).monospacedDigit())
-                    .foregroundStyle(remote.outstanding == 0 ? .primary : .secondary)
+                    .foregroundStyle(remote.behind ? .secondary : .primary)
                     .frame(minWidth: 54)
                 volumeButton("plus", 1)
             }

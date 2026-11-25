@@ -10,7 +10,7 @@ const heicConvert = require('heic-convert');
 const { localDate, etNowString } = require('../lib/dates');
 const ops = require('../lib/report');
 const { vanishedRecordings, RECORD_EVENTS } = require('../lib/outcomes');
-const { FrameReader, endOf, adtsSeconds, PauseClock } = require('../lib/livestream');
+const { FrameReader, endOf, adtsSeconds, PauseClock, BrokenStreams, RECOVER_GRACE_MS } = require('../lib/livestream');
 const { heardStart, heardEnd } = require('../lib/streams');
 const chunked = require('../lib/chunkstream');
 const os = require('os');
@@ -361,6 +361,13 @@ module.exports = function (ctx) {
     const timing = { hub_received: new Date(t0).toISOString() };
     const since = (t) => Date.now() - t;
     let id = null;
+    // A watch command names the stream it was recorded through. Noted first, before anything can answer
+    // early: it is what tells a broken stream's grace that the watch delivered the recording itself.
+    const liveRef = String(req.query.live || '');
+    if (LIVE_ID.test(liveRef)) {
+      const recovered = brokenStreams.sent(liveRef);
+      if (recovered) timing.supersedes = recovered;
+    }
     try {
       if (!GROQ_API_KEY && !process.env.OPENAI_API_KEY) { req.resume(); return res.status(503).json({ error: 'transcription not configured' }); }
       // ?dry=1 → transcribe only, no enqueue. The chat composer uses this while photos are pending: the
@@ -799,11 +806,14 @@ module.exports = function (ctx) {
     if (!starts.length) return;
     const from = new Date(Date.parse(starts[0]) - 6 * 3600e3).toISOString();
     const to = rows.reduce((m, r) => (r.at > m ? r.at : m), starts[0]);
-    const events = await sb(`client_log?src=eq.watch&ev=in.(${RECORD_EVENTS.join(',')})`
+    const events = await sb(`client_log?src=eq.watch&ev=in.(${[...RECORD_EVENTS, 'live-open'].join(',')})`
       + `&at=gte.${encodeURIComponent(from)}&at=lte.${encodeURIComponent(to)}&select=ev,at,data&order=at.asc,id.asc`);
     const mine = new Set(starts.map((t) => Date.parse(t)));
     for (const v of vanishedRecordings(events)) {
       if (!mine.has(Date.parse(v.next))) continue;
+      // A recording whose stream broke is the stream's to handle while its grace runs (brokenStream).
+      const live = events.find((e) => e.ev === 'live-open' && e.at >= v.at && e.at < v.next && e.data && brokenStreams.pending(e.data.id));
+      if (live) { console.log(`[clientlog] recording started ${v.at} is waiting on its broken stream ${live.data.id}`); continue; }
       const start = events.find((e) => e.ev === 'record-start' && e.at === v.at);
       ops.report(`watch recording started at ${v.at} never ended: no record-stop, record-cancel or mic-failed before the next record-start at ${v.next}; the clip was not sent`,
         { machine: 'client', service: 'watch', context: { started: v.at, next: v.next, start: start && start.data,
@@ -930,7 +940,8 @@ module.exports = function (ctx) {
       if (words && !e.dry && !e.consumed) {
         const rid = crypto.randomUUID();
         await sbWrite('voice_requests', 'POST', { id: rid, transcript: words, source: e.source, focus: 'hub', always_on: false,
-          timing: { audio_via: 'stream-recovered', hub_enqueued: new Date().toISOString(), bytes: audio.length } });
+          timing: { audio_via: 'stream-recovered', hub_enqueued: new Date().toISOString(), bytes: audio.length,
+            cut_off: { verdict: 'silent', held_s: +e.held.toFixed(1), of_s: +e.secs.toFixed(1) } } });
         e.recovered = rid;
         heardEnd(rid, { id: rid, text: words, status: 'pending', created_at: new Date().toISOString() });
         sbWrite(`voice_requests?id=eq.${rid}`, 'PATCH', { audio: { path: object, bytes: audio.length, type: ct, dur: +e.held.toFixed(1) } })
@@ -964,6 +975,9 @@ module.exports = function (ctx) {
   // A stream may begin a moment after the file (it opens once the microphone is live), so it is judged
   // whole when it is within this much of the recorded length.
   const LIVE_SHORT_S = 0.6;
+  // How long a broken stream waits for the watch to send the recording itself before the hub acts on
+  // what it holds (lib/livestream.js BrokenStreams). The tests shorten it.
+  const brokenStreams = new BrokenStreams({ graceMs: Number(process.env.LIVE_RECOVER_GRACE_MS) || RECOVER_GRACE_MS });
 
   // The audio of a finished stream, written to `file` as m4a. { ok:false, why } when there is no such
   // stream on this machine, it did not end with E, or it is still open after LIVE_WAIT_MS.
@@ -1020,21 +1034,38 @@ module.exports = function (ctx) {
         + `${Date.now() - lastByteAt}ms from the last byte to the close${reader.bad ? `, ${reader.bad}` : ''}`);
       settleEntry({ verdict, audio: verdict === 'ended' ? Buffer.concat(audio) : Buffer.alloc(0) });
       setTimeout(() => { if (liveStreams.get(id) === entry) liveStreams.delete(id); }, LIVE_KEEP_MS).unref();
-      if (verdict === 'lost' || verdict === 'unmarked') {
-        lostRecording(meta, verdict, Buffer.concat(audio), seconds)
-          .catch((e) => console.error(`[voice-live] ${id} could not handle a ${verdict} recording: ${e.message || e}`));
+      if (verdict === 'lost' || verdict === 'unmarked' || verdict === 'stalled') {
+        brokenStream(meta, verdict, Buffer.concat(audio), seconds, startedAt, lastByteAt);
       }
     };
     // 'close' fires for a finished body and for a dropped connection alike; `complete` tells them apart.
     req.on('close', settle);
   });
 
-  async function lostRecording(meta, verdict, audio, seconds) {
-    // Marks the recording ended in the watch's own log, so the next-start check (lib/outcomes.js) does
-    // not report the same loss a second time when the user next records.
-    await sbWrite('client_log', 'POST', [{ src: 'watch', ev: 'record-lost', at: new Date().toISOString(),
-      data: { live: meta.id, verdict, seconds: +seconds.toFixed(1), bytes: audio.length } }]);
-    let words = '', kept = null;
+  // A stream that broke before its recording ended. The watch gets its grace to send the recording itself,
+  // and when it has not, the recording is marked ended in the watch's own log (`record-lost`, stamped when
+  // its audio stopped, so it sorts before any later press) and lostRecording acts on the audio the stream
+  // delivered. While the grace runs, the next-start check leaves this recording alone (checkRecordings);
+  // after a hub restart nothing is waiting, and that check reports it instead.
+  function brokenStream(meta, verdict, audio, seconds, startedAt, lastByteAt) {
+    brokenStreams.broke(meta.id, {
+      skipped: () => console.log(`[voice-live] ${meta.id} ${verdict}: the watch sent the recording itself; nothing recovered`),
+      recover: async () => {
+        await sbWrite('client_log', 'POST', [{ src: 'watch', ev: 'record-lost', at: new Date(lastByteAt).toISOString(),
+          data: { live: meta.id, verdict, seconds: +seconds.toFixed(1), bytes: audio.length } }]);
+        const rid = await lostRecording(meta, verdict, audio, seconds, startedAt);
+        console.log(`[voice-live] ${meta.id} ${verdict}: no recording from the watch within the grace; ${rid ? `enqueued as ${rid}` : 'no words to enqueue'}`);
+        return rid;
+      },
+    });
+  }
+
+  // A recording the watch never delivered: what its stream held is kept, transcribed and ENQUEUED, marked
+  // cut off (timing.cut_off), so the worker tells the model it may be a fragment that he may already have
+  // repeated another way (voice-pipeline worker/voice_worker/prompts.py cut_off_directive). Reported as an
+  // error either way, since a recording was broken. Resolves to the enqueued request's id, or null.
+  async function lostRecording(meta, verdict, audio, seconds, startedAt) {
+    let words = '', kept = null, rid = null;
     if (audio.length) {
       const raw = path.join(os.tmpdir(), `live-${meta.id}.aac`);
       const m4a = path.join(os.tmpdir(), `live-${meta.id}.m4a`);
@@ -1056,12 +1087,30 @@ module.exports = function (ctx) {
         fs.promises.unlink(m4a).catch(() => {});
       }
     }
+    words = words.trim();
+    if (words) {
+      rid = crypto.randomUUID();
+      const heldS = adtsSeconds(audio);
+      await sbWrite('voice_requests', 'POST', { id: rid, transcript: words, source: 'watch-cmd', focus: 'hub', always_on: false,
+        capture_start: new Date(startedAt).toISOString(),
+        timing: { audio_via: 'stream-recovered', hub_enqueued: new Date().toISOString(), bytes: audio.length,
+          cut_off: { verdict, held_s: heldS != null ? +heldS.toFixed(1) : null, view: meta.view || 'chat', flow: meta.flow || null } } });
+      heardEnd(rid, { id: rid, text: words, status: 'pending', created_at: new Date().toISOString() });
+      if (kept) {
+        sbWrite(`voice_requests?id=eq.${rid}`, 'PATCH', { audio: { path: `lost/${meta.id}.m4a`, bytes: audio.length, type: 'audio/mp4',
+          ...(heldS != null ? { dur: +heldS.toFixed(1) } : {}) } })
+          .catch((e) => console.error(`[voice-live] ${rid} audio not linked: ${e.message || e}`));
+      }
+    }
     const how = verdict === 'lost' ? 'the connection dropped while audio was still arriving'
+      : verdict === 'stalled' ? 'the stream went quiet mid-recording, which is what the watch restarting or losing its network looks like'
       : 'the stream closed without the recording saying it had ended or been cancelled, which is what the app being killed looks like';
-    ops.report(`watch recording lost after ${seconds.toFixed(1)}s (${meta.view || 'chat'}${meta.flow ? `, ${meta.flow}` : ''}): ${how}; `
-      + (words ? `it had heard: "${words.slice(0, 300)}"` : 'no words recovered'),
-      { machine: 'client', service: 'watch', context: { live: meta.id, verdict, seconds, audio_bytes: audio.length, kept, words,
+    ops.report(`watch recording lost after ${seconds.toFixed(1)}s (${meta.view || 'chat'}${meta.flow ? `, ${meta.flow}` : ''}): ${how}, `
+      + `and the watch sent no recording in the ${Math.round(brokenStreams.graceMs / 1000)}s after; `
+      + (words ? `enqueued what it had heard as ${rid}, marked cut off: "${words.slice(0, 300)}"` : 'no words recovered'),
+      { machine: 'client', service: 'watch', context: { live: meta.id, verdict, seconds, audio_bytes: audio.length, kept, words, recovered: rid,
         look: 'hub log [voice-live], and client_log where src=watch around now (docs/WATCH.md § The wrist can drop mid-recording)' } });
+    return rid;
   }
 
   async function sweepClientLog() {

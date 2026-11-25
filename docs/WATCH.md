@@ -820,17 +820,19 @@ event: a silence end logs `mic-end`, an interruption logs `mic-interrupted` and 
 events raise it: a Siri timer going off does (`reason` 0). An ordinary notification has not been seen to; Siri (Raise to Speak) and a call are the
 other candidates. `mic-interrupted` carries the system's reason and the endpoint's state.
 
-**A third way a recording ends leaves no end event at all: the app process goes.** The log shows
+**A third way a recording ends leaves no end event at all: the app process goes, or the whole watch
+restarts.** The log shows
 `record-start` and `mic-open`, perhaps a `phase` → `inactive`, and then nothing: no `record-stop`,
 `record-cancel`, `mic-end` or `mic-interrupted`, the hub's mute stays held, and nothing is uploaded.
 The next press logs `record-start` with the microphone free; a process that was only suspended would
 still own the microphone, so the app has been relaunched. The clip in memory is lost with the process.
 Searching `client_log` for a `record-start` with no end after it finds these (about 1% of starts).
-Whether it is a crash or watchOS ending the app is not yet known.
+Whether it is a crash or watchOS ending the app is not yet known. A watch that restarts reads the same in
+`client_log`; seen once, with the app's own build unchanged and running normally before it.
 
 **Every command and follow-up is streamed to the hub while it records** (`Watch/LiveStream.swift` →
-`/api/voice-live`, `server/lib/livestream.js`), so a recording lost this way is reported THE MOMENT IT
-IS LOST, with the audio received so far kept and transcribed. The stream opens when the microphone goes
+`/api/voice-live`, `server/lib/livestream.js`), so a recording lost this way is not lost with it: the
+audio received so far is kept, transcribed and acted on, marked as possibly cut off (below). The stream opens when the microphone goes
 live and carries AAC in ADTS framing (about 30 kbps), each frame typed: `A` audio, `P` / `R` the
 microphone paused and resumed, and `E` / `C` the recording ended (being sent) or was cancelled. Every way
 out of `Capture` sends `E` or `C` before closing (`closeLive`), so the hub reads the end like this:
@@ -838,10 +840,25 @@ out of `Capture` sends `E` or `C` before closing (`closeLive`), so the hub reads
 | the hub saw | verdict | done |
 |---|---|---|
 | `E` or `C` | ended / cancelled | nothing |
-| the body closed cleanly with neither | `unmarked`: the app was killed | reported, audio kept in `voice-clips/lost/`, transcribed into the report |
-| the connection dropped mid-audio | `lost` | the same |
-| the connection dropped after the bytes had already stopped, or while paused | `stalled`: a network gone quiet, the watch may still be recording | logged only |
+| the body closed cleanly with neither | `unmarked`: the app was killed | recovered (below) |
+| the connection dropped mid-audio | `lost` | recovered |
+| the connection dropped after the bytes had already stopped, or while paused | `stalled`: a network gone quiet, or a watch that restarted mid-recording | recovered |
 | the hub closed it at its own request limit (`server.requestTimeout`, 30 min; the watch logs `live-dropped` 408) | `limited`: only a locked recording runs that long, and the watch keeps recording and uploads the whole clip when it ends | logged only |
+
+**A broken stream is recovered, not just reported** (`brokenStream` in `server/routes/voice.js`,
+`BrokenStreams` in `lib/livestream.js`). The hub gives the watch three minutes to send the recording
+itself: a live watch does, on a `/api/voice-command` naming the stream (`live=<id>`), and that copy is the
+one acted on. When nothing names the stream in that time, the hub writes `record-lost` into the watch's
+log (stamped when the audio stopped, so it sorts before any later press), keeps the audio in
+`voice-clips/lost/`, transcribes it, ENQUEUES it as a `watch-cmd` command with `timing.cut_off`, and
+reports the loss with the words. The worker tells the model the command may be cut off and may already
+have been repeated (he usually says it again on the phone), so it checks the conversation, never does
+anything twice, and asks whether there was more rather than act on a fragment (voice-pipeline
+`docs/ROUTING.md` § A command can arrive recovered from a broken recording). A clip that arrives after
+its stream was recovered is still a command, carrying `timing.supersedes` with the recovered request's
+id. The grace lives in the hub's memory: while it runs, the next-start check below leaves that recording
+alone (it finds the stream from the watch's `live-open` line), and after a hub restart nothing is
+waiting, so that check reports it as before.
 
 A killed app does NOT drop the connection: the system's networking ends the body cleanly for a process
 that is no longer there. Measured in the simulator with SIGKILL mid-recording: a clean end 50ms after
@@ -871,7 +888,8 @@ its body is open (the phone's chunked streams are acknowledged per second, `VOIC
 its network is down, or a stream that never opened. `/api/clientlog` runs `checkRecordings`
 (`server/routes/voice.js`, rule in `server/lib/outcomes.js`) on every batch holding a `record-start`: an
 earlier start whose microphone opened and that has no `record-stop`, `record-cancel`, `mic-failed` or
-`record-lost` (written by the hub when the stream reported it) before the next start is reported, once.
+`record-lost` (written by the hub when it recovered the stream) before the next start is reported, once,
+unless its stream is still inside its grace on this hub.
 A start stopped before its microphone opened ends without a `record-stop` by design and is not reported.
 Nor is one the watch closed itself: `Capture` cancels a command with nothing spoken (`unspoken`) or a
 quick one that hit its cap unheard (`cap`) without the view logging `record-cancel`, so a `mic-end` with

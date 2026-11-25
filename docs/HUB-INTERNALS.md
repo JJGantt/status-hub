@@ -2027,7 +2027,9 @@ Fly keeps minutes of them. Writers merge keys with `rpc/voice_timing` (or, for t
 | key | written by | meaning |
 |---|---|---|
 | `hub_received` | hub, `/api/voice-command` | the request arrived |
-| `audio_via` | hub | `live` (audio taken from the `/api/voice-live` stream) or `upload` (the clip in the body) |
+| `audio_via` | hub | `live` (audio taken from the `/api/voice-live` stream), `upload` (the clip in the body), or `stream-recovered` (the device never delivered the recording, and the hub acted on what its stream held) |
+| `cut_off` | hub | on a `stream-recovered` row only: `{verdict, held_s, view, flow}` (watch) or `{verdict: 'silent', held_s, of_s}` (phone). The worker frames the command as possibly cut off and possibly already repeated (`docs/WATCH.md` § The wrist can drop mid-recording) |
+| `supersedes` | hub | the id of the request recovered from this command's stream before its clip arrived; the worker treats this one as the whole of it |
 | `live_wait_ms` | hub | how long the command waited for its stream to finish arriving |
 | `audio_in_ms` | hub | from arrival until the audio was all on disk |
 | `probe_ms` | hub | measuring how much audio the file holds (the damaged-capture check): counted from the frames for streamed audio, read from the MP4's boxes for an upload (ffmpeg for any other format) |

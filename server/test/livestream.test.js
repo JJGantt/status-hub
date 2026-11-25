@@ -4,7 +4,7 @@
 // unreported.
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
-const { FrameReader, endOf, adtsSeconds, PauseClock } = require('../lib/livestream');
+const { FrameReader, endOf, adtsSeconds, PauseClock, BrokenStreams } = require('../lib/livestream');
 
 const frame = (type, data = Buffer.alloc(0)) => {
   const h = Buffer.alloc(5);
@@ -88,4 +88,28 @@ test('the pause clock times every P to its R, counts an open pause up to now, an
   assert.equal(c.seconds(), 270);
   c.frame('P'); t = 295_000;
   assert.equal(c.seconds(), 275);     // still paused: counted up to now
+});
+
+test('a broken stream is recovered only when no command names it within the grace', async () => {
+  const b = new BrokenStreams({ graceMs: 20, keepMs: 1000 });
+  const wait = () => new Promise((r) => setTimeout(r, 60));
+  let recovered = 0, skipped = 0;
+  b.broke('sent', { recover: async () => { recovered++; return 'r1'; }, skipped: () => { skipped++; } });
+  b.sent('sent');
+  b.broke('silent', { recover: async () => { recovered++; return 'r2'; }, skipped: () => { skipped++; } });
+  assert.ok(b.pending('silent') && !b.pending('other'));
+  await wait();
+  assert.ok(!b.pending('silent'));
+  assert.equal(recovered, 1);
+  assert.equal(skipped, 1);
+  // The clip arriving after its stream was recovered is told which request it supersedes.
+  assert.equal(b.sent('silent'), 'r2');
+  assert.equal(b.sent('sent'), null);
+});
+
+test('a recovery that fails is logged and remembers nothing', async () => {
+  const b = new BrokenStreams({ graceMs: 5, keepMs: 1000 });
+  b.broke('x', { recover: async () => { throw new Error('boom'); } });
+  await new Promise((r) => setTimeout(r, 40));
+  assert.equal(b.sent('x'), null);
 });

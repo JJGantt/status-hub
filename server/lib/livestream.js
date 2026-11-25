@@ -51,9 +51,12 @@ class FrameReader {
 //                      nothing is lost; logged only, and the next-start check still covers the recording.
 //   stalled            the connection dropped after bytes had already stopped arriving, or while the
 //                      recording was paused, when none are expected. That is what a lost network looks
-//                      like, and the watch may still be recording and will upload the clip itself. Not
-//                      reported here; a recording that is never heard from again is still caught by the
-//                      next-start check (lib/outcomes.js).
+//                      like, and the watch may still be recording and will upload the clip itself. It
+//                      is also what a watch that restarts mid-recording looks like, and that one never
+//                      uploads anything.
+//
+// lost, unmarked and stalled all go to BrokenStreams below: the watch gets RECOVER_GRACE_MS to send the
+// recording itself, and when it has not, the hub acts on the audio it holds.
 const LOST_GAP_MS = 3000;
 
 function endOf({ complete, last, paused, gapMs, limited }) {
@@ -97,4 +100,44 @@ class PauseClock {
   seconds() { return (this.ms + (this.since != null ? this.now() - this.since : 0)) / 1000; }
 }
 
-module.exports = { FrameReader, endOf, adtsSeconds, PauseClock, LOST_GAP_MS };
+// Streams that broke before their recording ended (lost, unmarked, stalled), and what became of them.
+// A broken stream is not yet a lost command: a watch that is still alive sends the clip itself, on a
+// /api/voice-command naming the stream (`live=<id>`), and that is the copy to act on. So each one waits
+// RECOVER_GRACE_MS for that upload, and only when none has come does `recover` run, to act on the audio
+// the stream delivered. A clip that arrives AFTER the hub recovered its stream is still a command (the
+// whole of what was said, where the recovered one may be a fragment), and `sent` answers it with the id
+// of the request recovered from it, so the worker treats it as superseding that one rather than as new.
+const RECOVER_GRACE_MS = 3 * 60 * 1000;
+const SENT_KEEP_MS = 60 * 60 * 1000;
+class BrokenStreams {
+  constructor({ graceMs = RECOVER_GRACE_MS, keepMs = SENT_KEEP_MS } = {}) {
+    this.graceMs = graceMs; this.keepMs = keepMs;
+    this.sentIds = new Set();      // streams a command has named
+    this.recoveredAs = new Map();  // stream id -> the request the hub recovered from it
+    this.waiting = new Set();      // streams inside their grace
+  }
+  // Whether this stream is inside its grace here. The next-start check leaves such a recording to it.
+  pending(id) { return this.waiting.has(id); }
+  _expire(fn) { setTimeout(fn, this.keepMs).unref(); }
+  // A command named this stream. Returns the request recovered from it earlier, or null.
+  sent(id) {
+    this.sentIds.add(id);
+    this._expire(() => this.sentIds.delete(id));
+    return this.recoveredAs.get(id) || null;
+  }
+  // The stream broke. `recover()` runs after the grace unless a command names the stream first; it
+  // resolves to the recovered request's id (or null when nothing was enqueued). `skipped()` runs instead
+  // when the watch sent the recording itself.
+  broke(id, { recover, skipped }) {
+    this.waiting.add(id);
+    setTimeout(async () => {
+      this.waiting.delete(id);
+      if (this.sentIds.has(id)) return skipped && skipped();
+      let rid = null;
+      try { rid = await recover(); } catch (e) { console.error(`[voice-live] ${id} could not be recovered: ${e.message || e}`); }
+      if (rid) { this.recoveredAs.set(id, rid); this._expire(() => this.recoveredAs.delete(id)); }
+    }, this.graceMs).unref();
+  }
+}
+
+module.exports = { FrameReader, endOf, adtsSeconds, PauseClock, BrokenStreams, LOST_GAP_MS, RECOVER_GRACE_MS };

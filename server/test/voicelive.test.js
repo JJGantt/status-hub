@@ -10,8 +10,13 @@ const crypto = require('crypto');
 const h = require('./harness');
 
 let supa, hub;
-// A Groq key that is never reached: the cases below are refused before any transcription.
-before(async () => { supa = await h.fakeSupabase(); hub = await h.startHub(supa, { GROQ_API_KEY: 'unused' }); });
+// A Groq key that is never reached: the cases below are refused before any transcription. A broken
+// stream's grace is shortened so its outcome can be waited for.
+const GRACE_MS = 400;
+before(async () => {
+  supa = await h.fakeSupabase();
+  hub = await h.startHub(supa, { GROQ_API_KEY: 'unused', LIVE_RECOVER_GRACE_MS: String(GRACE_MS) });
+});
 after(async () => { await hub.stop(); supa.close(); });
 
 const frame = (type, data = Buffer.alloc(0)) => {
@@ -52,7 +57,7 @@ test('a recording that ends with E is ended, and nothing is marked lost', async 
   assert.equal(lostRows(id).length, 0);
 });
 
-test('a connection dropped while audio flows is lost, and marked so at once', async () => {
+test('a connection dropped while audio flows is lost, and marked ended once its grace has passed', async () => {
   const id = crypto.randomUUID();
   await stream(id, [frame('A', Buffer.from('xx')), frame('A', Buffer.from('yy'))], { cut: true });
   assert.match(await settled(id), / lost:/);
@@ -60,11 +65,36 @@ test('a connection dropped while audio flows is lost, and marked so at once', as
   assert.equal(lostRows(id).length, 1);
 });
 
-test('a dropped connection while paused is stalled, not lost', async () => {
+test('a dropped connection while paused is stalled, not lost, and still marked ended', async () => {
   const id = crypto.randomUUID();
   await stream(id, [frame('A', Buffer.from('xx')), frame('P')], { cut: true });
   assert.match(await settled(id), / stalled:/);
+  for (let i = 0; i < 50 && !lostRows(id).length; i++) await new Promise((r) => setTimeout(r, 50));
+  assert.equal(lostRows(id).length, 1);
+});
+
+// A broken stream waits for the watch to send the recording itself; only when it has not is the stream's
+// audio acted on and the loss reported.
+const pause = (ms) => new Promise((r) => setTimeout(r, ms));
+
+test('a broken stream whose watch sends the recording within the grace is not recovered or reported', async () => {
+  const id = crypto.randomUUID();
+  await stream(id, [frame('A', Buffer.from('xx')), frame('A', Buffer.from('yy'))], { cut: true });
+  await settled(id);
+  await fromLive(id);
+  await pause(GRACE_MS * 3);
+  assert.ok(hub.output().includes(`[voice-live] ${id} lost: the watch sent the recording itself`));
+  assert.ok(!hub.output().includes(`[voice-live] ${id} lost: no recording from the watch`));
   assert.equal(lostRows(id).length, 0);
+});
+
+test('a broken stream the watch never follows up is reported once the grace has passed', async () => {
+  const id = crypto.randomUUID();
+  await stream(id, [frame('A', Buffer.from('xx')), frame('P')], { cut: true });
+  await settled(id);
+  const line = () => hub.output().includes(`[voice-live] ${id} stalled: no recording from the watch within the grace`);
+  for (let i = 0; i < 60 && !line(); i++) await pause(50);
+  assert.ok(line());
 });
 
 test('a stream without a valid id is refused', async () => {

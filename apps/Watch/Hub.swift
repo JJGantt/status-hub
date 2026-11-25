@@ -621,6 +621,18 @@ enum Hub {
         _ = try? await call("/api/session-prompts/\(id)/decide", method: "POST", body: ["decision": decision])
     }
 
+    /// A handoff as the hub has it, held until its screenshot is newer than `after` or it has ended
+    /// (routes/handoffs.js): a held request the agent's next screenshot answers, asked again at its end.
+    static func handoff(_ id: String, after: Int, wait: Int) async throws -> HandoffState {
+        let data = try await call("/api/handoffs/\(id)?after=\(after)&wait=\(wait)", timeout: TimeInterval(wait + 15))
+        return try JSONDecoder().decode(HandoffState.self, from: data)
+    }
+
+    /// A tap (x, y as fractions of the screenshot), text, a key, refresh, done or cancel.
+    static func handoffAct(_ id: String, _ body: [String: Any]) async throws {
+        _ = try await call("/api/handoffs/\(id)/act", method: "POST", body: body)
+    }
+
     /// A session has been read here, so its unread mark clears everywhere.
     static func seen(_ id: String) async throws {
         _ = try await call("/api/sessions/seen", method: "POST", body: ["id": id])

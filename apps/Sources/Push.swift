@@ -173,6 +173,12 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
             HubAPI.post("/api/session-prompts/\(pid)/decide", ["decision": decision], done: completionHandler)
             return
         }
+        // A handoff (a session's screen waiting on a tap): the banner opens the tap screen itself.
+        // Checked before the session branch, since it carries the session's id too.
+        if let hid = response.notification.request.content.userInfo["handoff_id"] as? String {
+            PageLaunch.handoff.request(hid)
+            return completionHandler()
+        }
         // A session's finished reply: tapping the banner opens that session on the repos pane.
         if let sid = response.notification.request.content.userInfo["session_id"] as? String {
             PageLaunch.session.request(sid)

@@ -198,6 +198,8 @@ struct SessionView: View {
     private var codex: Bool { sessions.row(for: key)?.codex == true }
     /// The permission dialog the session is stopped on, if any (routes/prompts.js).
     private var ask: SessionRow.Ask? { sessions.row(for: key)?.prompt }
+    private var handoff: SessionRow.Handoff? { sessions.row(for: key)?.handoff }
+    @State private var handoffOpen: String?
     /// The prompt id a button was pressed for, so a second press does not send twice.
     @State private var answering: String?
     /// PINK, as on the phone: amber, red, blue, white and the machine colours already mean something.
@@ -322,7 +324,7 @@ struct SessionView: View {
         .overlay {
             Color.clear
                 .overlay(alignment: .bottom) {
-                    if let ask { askCard(ask) }
+                    if let ask { askCard(ask) } else if let handoff { handoffCard(handoff) }
                 }
                 .overlay(alignment: .bottomTrailing) {
                     // While the voice plays the crown is the watch's volume, not the scroll. Beside the
@@ -419,6 +421,28 @@ struct SessionView: View {
         .overlay(RoundedRectangle(cornerRadius: 10).stroke(Self.askInk, lineWidth: 1))
         .padding(.horizontal, 6)
         .padding(.bottom, 4)
+    }
+
+    /// **A screen the session handed over**, waiting on a tap: its screenshot and what it needs. A tap
+    /// opens it full screen (`HandoffView`), where taps and typing reach the real screen.
+    private func handoffCard(_ h: SessionRow.Handoff) -> some View {
+        Button { handoffOpen = h.id } label: {
+            HStack(spacing: 6) {
+                if let img = h.img { HubThumb(path: img).frame(width: 52, height: 34).clipShape(RoundedRectangle(cornerRadius: 4)) }
+                Text(h.note ?? h.target).font(.system(size: 12, weight: .semibold)).lineLimit(2)
+                    .foregroundColor(Color(hex: "#cfe5ff"))
+                Spacer(minLength: 0)
+            }
+            .padding(8)
+            .background(RoundedRectangle(cornerRadius: 10).fill(Color(hex: "#0f1a2a")))
+            .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color(hex: "#4aa3ff"), lineWidth: 1))
+        }
+        .buttonStyle(.plain)
+        .padding(.horizontal, 6)
+        .padding(.bottom, 4)
+        .fullScreenCover(item: Binding(get: { handoffOpen.map { HandoffID(id: $0) } }, set: { handoffOpen = $0?.id })) {
+            HandoffView(id: $0.id)
+        }
     }
 
     private func answer(_ ask: SessionRow.Ask, _ decision: String) {

@@ -32,6 +32,7 @@
 		4D60B234E0ADF4D9465FE606 /* SessionsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AC7643D7992852F757EF0A7E /* SessionsView.swift */; };
 		4DB8BD1AC2A03D075B399CA4 /* WorkoutView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A3F70079ED5B30314C83B6BD /* WorkoutView.swift */; };
 		4DE2F21E70EC60A06611DF49 /* Rewind.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A7D22E52C6A0ABBCB9FF3BF /* Rewind.swift */; };
+		4F9B517337A50F616186B0DF /* HandoffView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9C54DAA3F7B8ECC9A1ED73A8 /* HandoffView.swift */; };
 		51D9EC4E888D09D03D22734A /* Recorder.swift in Sources */ = {isa = PBXBuildFile; fileRef = 14EB30894FADCF33B66D0455 /* Recorder.swift */; };
 		58F20A294FB54B942342ABB3 /* StatusHubControls.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = AD44A10C47F3ACE73074E7B2 /* StatusHubControls.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		5B95BB853AE0BB3D7E93EC0F /* OpenTodoItem.swift in Sources */ = {isa = PBXBuildFile; fileRef = 980C6D4E9785922A04236D2D /* OpenTodoItem.swift */; };
@@ -205,6 +206,7 @@
 		94DD1B301CE525AF6B208DC7 /* StatusHubWatch.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = StatusHubWatch.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		951A385F7EE64123592C4DA6 /* WatchSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchSettings.swift; sourceTree = "<group>"; };
 		980C6D4E9785922A04236D2D /* OpenTodoItem.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenTodoItem.swift; sourceTree = "<group>"; };
+		9C54DAA3F7B8ECC9A1ED73A8 /* HandoffView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HandoffView.swift; sourceTree = "<group>"; };
 		9C61C65954CA9A7056B2B127 /* HomeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeView.swift; sourceTree = "<group>"; };
 		9F6A38324B6E1FE85ABDB8B6 /* AssetsWatch.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = AssetsWatch.xcassets; sourceTree = "<group>"; };
 		A3F70079ED5B30314C83B6BD /* WorkoutView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkoutView.swift; sourceTree = "<group>"; };
@@ -288,6 +290,7 @@
 				65394C860C697D281720B76A /* Chat.swift */,
 				01225D88DDA6CA36478FE1CA /* DayView.swift */,
 				00882FF56FFCD793EF960A19 /* GestureLab.swift */,
+				9C54DAA3F7B8ECC9A1ED73A8 /* HandoffView.swift */,
 				7D90424F70095351BD348487 /* HistoryView.swift */,
 				9C61C65954CA9A7056B2B127 /* HomeView.swift */,
 				FD06B420AFC554D37540118C /* Hub.swift */,
@@ -596,6 +599,7 @@
 				86F3FAF2206C002FF5A79054 /* Chat.swift in Sources */,
 				37CD0E58D2EE7273A012632B /* DayView.swift in Sources */,
 				1E649E0468AC44DE55183537 /* GestureLab.swift in Sources */,
+				4F9B517337A50F616186B0DF /* HandoffView.swift in Sources */,
 				0F13CF9CFA7602FE6562864D /* HistoryView.swift in Sources */,
 				1962BCC150815491A3F92EB1 /* HomeView.swift in Sources */,
 				C4250430822C333D041CEEA1 /* Hub.swift in Sources */,

@@ -38,6 +38,10 @@ struct SessionRow: Decodable, Identifiable, Equatable {
     /// Approve / Deny answer. On the row until the dialog is answered anywhere.
     let prompt: Ask?
     struct Ask: Decodable, Equatable { let id: String; let line: String }
+    /// A screen it handed over and is waiting on (routes/handoffs.js): its newest screenshot and what it
+    /// needs. On the row until he presses Done or Cancel.
+    let handoff: Handoff?
+    struct Handoff: Decodable, Equatable { let id: String; let note: String?; let target: String; let img: String?; let seq: Int }
     /// What it still has running in the background once its turn is over: each background agent by its
     /// description, and whether a background shell is running. Nil when nothing is.
     let background: Background?

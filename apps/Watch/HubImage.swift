@@ -103,3 +103,19 @@ enum HubImageCache {
 }
 
 enum HubImageError: Error { case undecodable }
+
+/// A small fixed-size thumbnail of a hub image, cropped to fill (the handoff card's screenshot).
+struct HubThumb: View {
+    let path: String
+    @State private var image: UIImage?
+    var body: some View {
+        Group {
+            if let image { Image(uiImage: image).resizable().scaledToFill() } else { Color(hex: "#11151b") }
+        }
+        .task(id: path) {
+            do { image = try await HubImageCache.load(path, maxPixels: 160) } catch {
+                if !Task.isCancelled { Hub.log("error", ["msg": "thumbnail \(path) did not load: \(String(describing: error).prefix(160))"]) }
+            }
+        }
+    }
+}

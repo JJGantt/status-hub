@@ -246,6 +246,7 @@ final class RepoLaunch {
 final class PageLaunch {
     static let session = PageLaunch("__showSession")
     static let answer = PageLaunch("__showAnswer")
+    static let handoff = PageLaunch("__openHandoff")
     weak var webView: WKWebView?
     private let fn: String
     private var pendingId: String?
@@ -491,6 +492,7 @@ struct HubWebView {
             ReportLaunch.shared.fireIfPending()   // statushub://report/<id> cold launch → open it
             PageLaunch.session.fireIfPending()   // a session-reply notification cold launch → land on it
             PageLaunch.answer.fireIfPending()    // an answer notification cold launch → land on the answer
+            PageLaunch.handoff.fireIfPending()   // a handoff notification cold launch → its tap screen
         }
         #endif
 
@@ -573,6 +575,7 @@ struct HubWebView {
         ReportLaunch.shared.webView = wv   // …and statushub://report/<id>
         PageLaunch.session.webView = wv    // …and a tapped session-reply notification
         PageLaunch.answer.webView = wv     // …and a tapped answer notification
+        PageLaunch.handoff.webView = wv    // …and a tapped handoff notification
         MainActor.assumeIsolated { LiveMic.shared.web = wv }   // so the live mic can report its state to the page
         MainActor.assumeIsolated { NativeRec.shared.web = wv } // and the native recorder can hand back its clip
         #endif

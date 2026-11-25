@@ -1,12 +1,13 @@
 'use strict';
-const { transcribe, shortenPauses, diarize, clipSeconds, extFor } = require('../lib/transcribe');
+const { transcribe, shortenPauses, diarize, clipSeconds, extFor, wordTimes, cutFrom } = require('../lib/transcribe');
+const { startAfter, timedLine } = require('../lib/recording');
 const { latency } = require('../lib/latency');
 const crypto = require('crypto');
 const { execFile } = require('child_process');
 const express = require('express');
 const fs = require('fs');
 const heicConvert = require('heic-convert');
-const { localDate } = require('../lib/dates');
+const { localDate, etNowString } = require('../lib/dates');
 const ops = require('../lib/report');
 const { vanishedRecordings, RECORD_EVENTS } = require('../lib/outcomes');
 const { FrameReader, endOf, adtsSeconds, PauseClock } = require('../lib/livestream');
@@ -142,7 +143,15 @@ module.exports = function (ctx) {
     } catch (e) { console.error(`[voice-command] could not keep unheard clip ${id}: ${e.message || e}`); return null; }
   }
 
-  async function keepClip(id, file, contentType, bytes, dur) {
+  // A clip upload still in flight, by request id: the request is claimable before its clip is stored, so
+  // /api/list-recordings waits on this rather than finding no audio yet. The hub is one instance.
+  const clipUploads = new Map();
+  function keepClip(id, file, contentType, bytes, dur) {
+    const p = storeClip(id, file, contentType, bytes, dur).finally(() => clipUploads.delete(id));
+    clipUploads.set(id, p);
+    return p;
+  }
+  async function storeClip(id, file, contentType, bytes, dur) {
     try {
       const type = contentType.split(';')[0].trim();
       const path = `${id}.${extFor(contentType)}`;
@@ -157,6 +166,100 @@ module.exports = function (ctx) {
     } catch (e) { console.error(`[voice-command] could not keep clip ${id}: ${e.message || e}`); }
   }
 
+
+  // ---- SAVED RECORDINGS: a command's clip kept on a list item (data-layer 00186) ------------------------
+  // The data MCP's `save_recording` posts here with the request the command came from. The clip is cut
+  // at the end of the spoken marker (lib/recording.js) using Whisper's word timings, stored whole in the
+  // private `list-audio` bucket and appended to the item's `recordings`. `start_s` instead of `after`
+  // cuts at a time the model chose from the timed words a missing marker answers with; neither keeps
+  // the whole clip.
+  const AUDIO_BUCKET = 'list-audio';
+  const storageHeaders = { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` };
+  gated.post('/api/list-recordings', express.json(), async (req, res) => {
+    const { request_id: rid, item_id: item, after } = req.body || {};
+    const startGiven = req.body && req.body.start_s != null ? Number(req.body.start_s) : null;
+    if (!/^[0-9a-f-]{36}$/i.test(String(rid || '')) || !item) return res.status(400).json({ error: 'request_id and item_id are required' });
+    if (startGiven != null && !(startGiven >= 0)) return res.status(400).json({ error: 'start_s must be a number of seconds' });
+    const dir = await fs.promises.mkdtemp(path.join(os.tmpdir(), 'rec-'));
+    try {
+      if (clipUploads.has(rid)) await clipUploads.get(rid);
+      const [row] = (await sb(`voice_requests?id=eq.${rid}&select=audio`)) || [];
+      const audio = row && row.audio;
+      if (!audio || !audio.path) return res.status(404).json({ error: 'this command kept no recording (only phone and watch recordings are kept)' });
+      const src = path.join(dir, 'src.' + audio.path.split('.').pop());
+      const got = await fetch(`${SUPABASE_URL}/storage/v1/object/${CLIP_BUCKET}/${audio.path}`, { headers: storageHeaders });
+      if (!got.ok) throw new Error(`clip download -> ${got.status}`);
+      await pipeline(got.body, fs.createWriteStream(src));
+
+      let start = startGiven ?? 0;
+      let words = null;
+      if (startGiven == null && after) {
+        words = await wordTimes(src, audio.type, GROQ_API_KEY);
+        const at = startAfter(words, after);
+        if (at == null) {
+          return res.status(422).json({ error: `the marker "${after}" is not in the recording's words`,
+                                        words: timedLine(words) });
+        }
+        start = at;
+      }
+      let file = src;
+      if (start > 0.05) {
+        file = path.join(dir, 'take.' + audio.path.split('.').pop());
+        await cutFrom(src, start, file);
+      }
+      const dur = await clipSeconds(file).catch(() => 0);
+      const ext = file.split('.').pop();
+      const object = `${String(item).replace(/[^\w-]/g, '')}/${crypto.randomUUID()}.${ext}`;
+      const put = await fetch(`${SUPABASE_URL}/storage/v1/object/${AUDIO_BUCKET}/${object}`, {
+        method: 'POST', headers: { ...storageHeaders, 'Content-Type': audio.type || 'audio/mp4' },
+        body: await fs.openAsBlob(file, { type: audio.type || 'audio/mp4' }),
+      });
+      if (!put.ok) throw new Error(`recording upload -> ${put.status}`);
+      const rec = { path: object, type: audio.type || 'audio/mp4', dur: dur > 0 ? +dur.toFixed(1) : null,
+                    at: etNowString(), request_id: rid, start_s: +start.toFixed(2) };
+      const r = await fetch(`${SUPABASE_URL}/rest/v1/rpc/append_list_recording`, {
+        method: 'POST', headers: { ...storageHeaders, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ p_item: String(item), p_rec: rec, p_updated: etNowString() }),
+      });
+      if (!r.ok) throw new Error(`append -> ${r.status} ${(await r.text()).slice(0, 200)}`);
+      const all = await r.json();
+      if (!Array.isArray(all)) {
+        await fetch(`${SUPABASE_URL}/storage/v1/object/${AUDIO_BUCKET}/${object}`, { method: 'DELETE', headers: storageHeaders })
+          .catch((e) => console.error(`[list-recordings] orphan delete ${object}: ${e.message || e}`));
+        return res.status(404).json({ error: `no list item ${item}` });
+      }
+      // What the take holds, so the caller can check the cut landed where it meant.
+      const heardAfter = words ? words.filter((w) => w.start >= start).slice(0, 25).map((w) => w.word).join(' ') : null;
+      console.log(`[list-recordings] saved ${rec.dur}s from ${rid} (cut at ${rec.start_s}s) on ${item}: ${object}`);
+      res.json({ recording: rec, count: all.length, ...(heardAfter != null ? { starts_with: heardAfter } : {}) });
+    } catch (e) {
+      console.error(`[list-recordings] save from ${rid} onto ${item} failed: ${e.message || e}`);
+      res.status(500).json({ error: String(e.message || e) });
+    } finally {
+      fs.promises.rm(dir, { recursive: true, force: true }).catch(() => {});
+    }
+  });
+
+  // Playback: a short-lived signed link to the object, so the browser's audio element streams it straight
+  // from storage with its own range requests (iOS will not play media from a server that ignores them).
+  const AUDIO_PATH = /^[\w-]+\/[0-9a-f-]{36}\.(m4a|webm|ogg|mp3|wav)$/;
+  gated.get(/^\/api\/list-recordings\/(.+)$/, async (req, res) => {
+    const object = req.params[0];
+    if (!AUDIO_PATH.test(object)) return res.status(400).end();
+    try {
+      const r = await fetch(`${SUPABASE_URL}/storage/v1/object/sign/${AUDIO_BUCKET}/${object}`, {
+        method: 'POST', headers: { ...storageHeaders, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ expiresIn: 6 * 3600 }),
+      });
+      if (r.status === 404 || r.status === 400) return res.status(404).end();
+      if (!r.ok) throw new Error(`sign -> ${r.status}`);
+      const { signedURL } = await r.json();
+      res.redirect(302, `${SUPABASE_URL}/storage/v1${signedURL}`);
+    } catch (e) {
+      console.error(`[list-recordings] play ${object}: ${e.message || e}`);
+      res.status(502).end();
+    }
+  });
 
   // ---- REWIND: a grab from the watch's ring (docs/REWIND.md) -----------------------------------------
   // The watch posts the last N seconds it heard. Every grab is kept whole while the feature is built: the

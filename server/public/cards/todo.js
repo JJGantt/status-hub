@@ -36,7 +36,7 @@ function fmtDue(due) {
 function row(id, inner, body = '', expired = false, heat = 0) {
   // The body is rendered but collapsed. Only rows whose text says more than their title carry one —
   // expanding a row to reveal exactly what was already on it would be a dead gesture.
-  const detail = body ? `<div class="body">${esc(body)}</div>` : '';
+  const detail = body ? `<div class="body">${body}</div>` : '';
   // `heat` comes from the server (1-3, escalating with how long it has been overdue). It exists
   // because the health bar's gold band floors at zero: once it is pinned there, a second neglected
   // item cannot show on the bar at all, so the row is what carries the growing cost.
@@ -62,13 +62,19 @@ function itemInner(i, withList) {
   // not "this one will come back".
   const rep = i.series_id ? '<span class="rep">\u21bb</span>' : '';
   const imp = i.priority > 0 ? '<span class="imp">!</span>' : '';
-  return `${imp}<span class="txt">${esc(label)}</span>${where}${due}${rep}`;
+  const n = (i.recordings || []).length;
+  const rec = n ? `<span class="recs">\u266a${n > 1 ? n : ''}</span>` : '';
+  return `${imp}<span class="txt">${esc(label)}</span>${where}${due}${rec}${rep}`;
 }
 
-// Full text is only worth revealing when it says more than the label already does.
+// The expanded body, as markup: the full text when it says more than the label already does, and a
+// player for each saved recording (data-layer 00186), streamed through the hub's signed-link route.
 function bodyFor(i) {
   const full = String(i.text || '').trim();
-  return full && full !== itemLabel(i) ? full : '';
+  const text = full && full !== itemLabel(i) ? esc(full) : '';
+  const recs = (i.recordings || []).map((r) =>
+    `<audio class="rec" controls preload="none" src="/api/list-recordings/${esc(r.path)}"></audio>`).join('');
+  return text + recs;
 }
 
 function html(d) {

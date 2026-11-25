@@ -32,7 +32,7 @@ module.exports = function (ctx) {
     try {
       const [listNames, items] = await Promise.all([
         sb('lists?select=id,name,emoji,parent_id&order=name'),
-        sb('list_items?deleted=eq.false&completed_at=is.null&select=id,list_id,list_name,text,title,due,scheduled_at,priority,series_id,alarm&order=created.asc'),
+        sb('list_items?deleted=eq.false&completed_at=is.null&select=id,list_id,list_name,text,title,due,scheduled_at,priority,series_id,alarm,recordings&order=created.asc'),
       ]);
       const all = items || [];
       // Grouped by `list_id`, and the id is sent on so the composer can post it back. `list_name` is a

@@ -144,6 +144,63 @@ async function transcribeAll(file, contentType, key, prompt, model) {
 }
 
 
+// WORD TIMINGS, for cutting a saved recording at the end of a spoken marker ("starting now") — see
+// lib/recording.js. Not on the command path: only /api/list-recordings calls it, on a clip already kept.
+// Same providers as `whisper` (both return per-word times with `verbose_json`), and the same half-hour
+// pieces for a clip over the upload cap, with each piece's times shifted by where it starts.
+// → [{ word, start, end }] in seconds of the original file.
+async function wordTimes(file, contentType, key) {
+  const ct = String(contentType || 'audio/mp4');
+  const one = async (f, type, name, offset) => {
+    const providers = [
+      key && { url: GROQ_URL, key, model: 'whisper-large-v3-turbo', label: 'groq' },
+      process.env.OPENAI_API_KEY && { url: OPENAI_URL, key: process.env.OPENAI_API_KEY, model: 'whisper-1', label: 'openai' },
+    ].filter(Boolean);
+    let last;
+    for (const p of providers) {
+      try {
+        const form = new FormData();
+        form.append('file', await fs.openAsBlob(f, { type }), name);
+        form.append('model', p.model);
+        form.append('response_format', 'verbose_json');
+        form.append('timestamp_granularities[]', 'word');
+        form.append('language', 'en');
+        const r = await fetch(p.url, { method: 'POST', headers: { Authorization: `Bearer ${p.key}` }, body: form,
+                                       signal: AbortSignal.timeout(120000) });
+        if (!r.ok) throw new Error(`${p.label} ${r.status}: ${(await r.text()).slice(0, 200)}`);
+        const body = await r.json();
+        return (body.words || []).map((w) => ({ word: String(w.word || '').trim(), start: +w.start + offset, end: +w.end + offset }));
+      } catch (e) {
+        last = e;
+        console.log(`[transcribe] word times: ${p.label} failed: ${e.message || e}`);
+      }
+    }
+    throw new Error(`word timing failed (${last ? last.message : 'no provider'})`);
+  };
+  const { size } = await fs.promises.stat(file);
+  if (size <= GROQ_MAX_BYTES) return one(file, ct, `clip.${extFor(ct)}`, 0);
+  const dir = await fs.promises.mkdtemp(path.join(os.tmpdir(), 'words-'));
+  try {
+    await run('ffmpeg', ['-hide_banner', '-loglevel', 'error', '-i', file, '-vn', '-ac', '1', '-ar', '16000',
+      '-c:a', 'libopus', '-b:a', '24k', '-vbr', 'constrained', '-f', 'segment', '-segment_time', String(SEGMENT_S),
+      path.join(dir, 'part%04d.ogg')]);
+    const parts = (await fs.promises.readdir(dir)).filter((n) => n.endsWith('.ogg')).sort();
+    const words = [];
+    for (let i = 0; i < parts.length; i++) words.push(...await one(path.join(dir, parts[i]), 'audio/ogg', parts[i], i * SEGMENT_S));
+    return words;
+  } finally {
+    await fs.promises.rm(dir, { recursive: true, force: true }).catch(() => {});
+  }
+}
+
+// Everything from `startS` on, without re-encoding: a stream copy, so the saved take is the recorded
+// audio itself. `+faststart` puts an MP4's index first, so a player can start before the whole file loads.
+async function cutFrom(file, startS, out) {
+  const mp4 = /\.(m4a|mp4)$/.test(out);
+  await run('ffmpeg', ['-hide_banner', '-loglevel', 'error', '-y', '-ss', startS.toFixed(3), '-i', file, '-vn',
+    '-c:a', 'copy', ...(mp4 ? ['-movflags', '+faststart'] : []), out]);
+}
+
 // SHORTENING THE LONG PAUSES IN A LOCKED WATCH RECORDING. A locked recording is held open while the user does
 // something else, so it can hold minutes of no speech. Whisper fills a
 // long stretch like that with invented words ("Thank you." over and over, or a stranger's sentence), so
@@ -206,4 +263,4 @@ async function diarize(file, contentType) {
   return { transcript, segments, model: DIARIZE_MODEL };
 }
 
-module.exports = { transcribe, heard, shortenPauses, diarize, NOTHING_SAID, clipSeconds, extFor, GROQ_MAX_BYTES, SEGMENT_S };
+module.exports = { transcribe, wordTimes, cutFrom, heard, shortenPauses, diarize, NOTHING_SAID, clipSeconds, extFor, GROQ_MAX_BYTES, SEGMENT_S };

@@ -47,6 +47,8 @@
 	<string>For nearby requests.</string>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>Status Hub uses the microphone for voice commands.</string>
+	<key>NSMotionUsageDescription</key>
+	<string>Counts your reps and records motion for gesture testing.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>Status Hub attaches photos of food and nutrition labels.</string>
 	<key>UIApplicationSupportsIndirectInputEvents</key>

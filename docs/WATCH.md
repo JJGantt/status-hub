@@ -20,7 +20,7 @@ The sessions list ends with the build number (the watch app's own `CFBundleVersi
 
 ## Pages
 
-Eight, swiped left to right: **remote · sessions · home · day · health · live · gesture · usage**. The app opens on home,
+Nine, swiped left to right: **remote · sessions · home · day · watchset · health · live · gesture · usage**. The app opens on home,
 which IS the conversation — there is no separate prompt page. New layouts are added as NEW pages beside the old
 ones rather than by reshaping a page in place, and the ones that lose are deleted; `day` and `health`
 are two layouts of the same food-and-training data, and one of them is expected to go.
@@ -557,11 +557,26 @@ workout is saved to Apple Health. The end is one sleep to a deadline held in mem
   `WatchAppDelegate.handle(_:)` in the background. HealthKit allows that call only while the phone app
   is active. A set logged with neither app open (the ESP, the Mac, a locked phone) starts the hold the
   next time the watch app comes to the front.
-- **Only one app holds a workout at a time.** Starting this one ends Watchset's capture session, and
-  Watchset starting one ends this; the hold logs `why: ended-elsewhere` when that happens.
-- Lines: `workout-hold` with `on` and `why` (`set`, `phone`, `idle`, `ended-elsewhere`, `failed`);
+- **The Watchset page's counter holds the same session** (`holdForCapture` / `releaseCapture`): while
+  it is watching the idle deadline does not end the hold, and once it stops the hold runs on to ten
+  minutes after the newest set. Only one app on the watch can hold a workout, which is why the rep
+  counter is a page here and not an app of its own. Another app starting a workout still ends this one,
+  logged as `why: ended-elsewhere`.
+- Lines: `workout-hold` with `on` and `why` (`set`, `phone`, `watchset`, `idle`, `watchset-off`,
+  `ended-elsewhere`, `failed`);
   failures are `ev: error` (`page: workout-hold`), which the hub reports. The phone logs
   `watch-workout-launch`, or an error with `page: watch-workout`.
+
+### The Watchset page
+
+The rep counter, one swipe right of the day page: `WatchsetPage` from the local package
+`apps/Packages/Watchset`, whose README is the whole of how it counts, reports and records. **Count
+reps** is one switch for the whole workout (Start watches for sets, counts each live with a haptic and
+a spoken number, logs it as whatever the rep watcher is armed to); **Record a set** records without
+counting. The package holds no workout session, credential or log of its own: the app installs a
+`WatchsetHost` at launch (`StatusHubWatchApp.init`) that gives it the workout hold, the hub token (its
+writes go to the hub's `/api/workset/*`, server `routes/workset.js`), whether the app is using the
+audio session, and `Hub.log`.
 
 ### The workout page
 

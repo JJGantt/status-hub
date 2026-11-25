@@ -858,6 +858,19 @@ enum Hub {
         return r
     }
 
+    /// Watchset's requests (`Packages/Watchset`), to the hub's pass-through to the `workset` function
+    /// (server routes/workset.js). Nil until the phone has handed over a token.
+    nonisolated static func worksetRequest(_ route: String, method: String, contentType: String, body: Data?) -> URLRequest? {
+        guard let token = HubToken.get(), let url = URL(string: Auth.host + "/api/workset/" + route) else { return nil }
+        var r = URLRequest(url: url)
+        r.httpMethod = method
+        r.timeoutInterval = 60
+        r.setValue(token, forHTTPHeaderField: "X-Hub-Token")
+        r.setValue(contentType, forHTTPHeaderField: "Content-Type")
+        r.httpBody = body
+        return r
+    }
+
     /// An authenticated POST for `LiveStream`, which needs its own delegate session for a streamed body.
     static func liveRequest(_ path: String) throws -> URLRequest {
         try request(path, method: "POST", timeout: 900)

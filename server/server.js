@@ -147,6 +147,7 @@ const { markLive, requestView } = require('./routes/voicemessages')({
   VOICE_RESET_SENTINEL, gated, sb, sbWrite, settingsAll, settingsCached: settings.cached,
 });
 
+require('./routes/workset')({ SUPABASE_URL, gated });
 require('./routes/healthdata')({ SUPABASE_KEY, SUPABASE_URL, gated, sbWrite });
 
 const { cleanSaid, markSeen, seenMsgIds, settleReply } = require('./routes/voice')({

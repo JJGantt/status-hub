@@ -1,5 +1,6 @@
 import Foundation
 import HealthKit
+import Watchset
 import WatchKit
 
 /// **A workout session while he is lifting, so a wrist raise comes back to this app.** watchOS returns
@@ -16,7 +17,10 @@ import WatchKit
 ///
 /// The end is a clock arrival, not a poll: the deadline is held in memory and one sleep runs to it.
 ///
-/// Only one app can hold a workout session. Starting this one ends any other app's, Watchset's included.
+/// **Watchset's capture rides the same session** (`Packages/Watchset`, through `WatchsetHost` in
+/// `StatusHubWatchApp`): while its counter is watching, the hold does not end on the idle deadline,
+/// and when watching stops it ends on that deadline as usual. Only one app can hold a workout session
+/// at a time, which is why Watchset is a page of this app and holds none of its own.
 @MainActor
 final class WorkoutHold: NSObject {
     static let shared = WorkoutHold()
@@ -31,6 +35,8 @@ final class WorkoutHold: NSObject {
     private var ends: Date?
     private var ender: Task<Void, Never>?
     private var starting = false
+    /// Watchset's counter is watching: the hold stays on whatever the deadline says.
+    private var captureHeld = false
 
     /// Told whenever the session starts or ends, so the workout stream can open or close behind it.
     var changed: (() -> Void)?
@@ -57,13 +63,29 @@ final class WorkoutHold: NSObject {
         if let n: WorkoutNow = try? await Hub.json("/api/workout-now") { saw(lastSetAt: n.last_set_at) }
     }
 
-    private func extend(to deadline: Date) {
-        if let e = ends, e >= deadline, ender != nil { return }
+    /// Watchset started watching (a tap on its Start, so the app is in front). Nil once the session
+    /// is holding, else why it is not.
+    func holdForCapture() async -> String? {
+        captureHeld = true
+        await start(why: "watchset")
+        return session == nil ? "workout session did not start" : nil
+    }
+
+    /// Watchset stopped watching. The hold carries on to the idle deadline after the newest set, and
+    /// ends now when there is none.
+    func releaseCapture() {
+        captureHeld = false
+        guard session != nil else { return }
+        if let e = ends, e > Date() { extend(to: e, force: true) } else { Task { await stop(why: "watchset-off") } }
+    }
+
+    private func extend(to deadline: Date, force: Bool = false) {
+        if !force, let e = ends, e >= deadline, ender != nil { return }
         ends = deadline
         ender?.cancel()
         ender = Task { [weak self] in
             try? await Task.sleep(for: .seconds(max(0, deadline.timeIntervalSinceNow)))
-            guard !Task.isCancelled, let self, let e = self.ends, e <= Date() else { return }
+            guard !Task.isCancelled, let self, let e = self.ends, e <= Date(), !self.captureHeld else { return }
             await self.stop(why: "idle")
         }
     }
@@ -93,6 +115,7 @@ final class WorkoutHold: NSObject {
             builder = b
             s.startActivity(with: Date())
             try await b.beginCollection(at: Date())
+            KeepAlive.shared.update(holding: true)
             Hub.log("workout-hold", ["on": true, "why": why,
                                      "until": ends.map { ISO8601DateFormatter().string(from: $0) } ?? ""])
             changed?()
@@ -105,6 +128,7 @@ final class WorkoutHold: NSObject {
     }
 
     private func stop(why: String) async {
+        captureHeld = false
         ender?.cancel()
         ender = nil
         ends = nil
@@ -121,6 +145,7 @@ final class WorkoutHold: NSObject {
                 Hub.log("error", ["page": "workout-hold", "msg": "workout hold save: \(error.localizedDescription)"])
             }
         }
+        KeepAlive.shared.update(holding: false)
         Hub.log("workout-hold", ["on": false, "why": why])
         changed?()
     }

@@ -43,6 +43,9 @@ final class StayAwake {
 
     private init() {}
 
+    /// Holding the microphone open now (Watchset's rep sounds play inside it then).
+    var isHolding: Bool { holding }
+
     /// Holds or lets go to match what is waiting now.
     func refresh() {
         if Sessions.shared.speakMode { start() }

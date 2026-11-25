@@ -36,6 +36,7 @@
 		4E481C843B282A73A6959192 /* WatchWorkout.swift in Sources */ = {isa = PBXBuildFile; fileRef = 122F17573AF11E3BFB34C78C /* WatchWorkout.swift */; };
 		4F9B517337A50F616186B0DF /* HandoffView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9C54DAA3F7B8ECC9A1ED73A8 /* HandoffView.swift */; };
 		51D9EC4E888D09D03D22734A /* Recorder.swift in Sources */ = {isa = PBXBuildFile; fileRef = 14EB30894FADCF33B66D0455 /* Recorder.swift */; };
+		52BE51A996FC01A545A5FF93 /* Watchset in Frameworks */ = {isa = PBXBuildFile; productRef = CE96B08D8352AA5DFAC296E7 /* Watchset */; };
 		58F20A294FB54B942342ABB3 /* StatusHubControls.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = AD44A10C47F3ACE73074E7B2 /* StatusHubControls.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		5B95BB853AE0BB3D7E93EC0F /* OpenTodoItem.swift in Sources */ = {isa = PBXBuildFile; fileRef = 980C6D4E9785922A04236D2D /* OpenTodoItem.swift */; };
 		5D50E610532DA949FF006920 /* OpenTodoItem.swift in Sources */ = {isa = PBXBuildFile; fileRef = 980C6D4E9785922A04236D2D /* OpenTodoItem.swift */; };
@@ -221,6 +222,7 @@
 		AD44A10C47F3ACE73074E7B2 /* StatusHubControls.appex */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = "wrapper.app-extension"; path = StatusHubControls.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		AF1D1C7A5D148A4366347C65 /* ReposView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReposView.swift; sourceTree = "<group>"; };
 		B1AD8CFD4B9B1D6C7A06379E /* NativeRec.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NativeRec.swift; sourceTree = "<group>"; };
+		B42DFB1DCF42C6F293770A86 /* Watchset */ = {isa = PBXFileReference; lastKnownFileType = folder; name = Watchset; path = Packages/Watchset; sourceTree = SOURCE_ROOT; };
 		B47D0D32A221BCBB3473BE45 /* LiveStream.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveStream.swift; sourceTree = "<group>"; };
 		BFB816327EEE71F799C893C8 /* ShareViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShareViewController.swift; sourceTree = "<group>"; };
 		C00E5B1C61B9780EE2BE1945 /* StatusHubWatchApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StatusHubWatchApp.swift; sourceTree = "<group>"; };
@@ -243,7 +245,26 @@
 		FDACDF8F4E8551D7430E12F2 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
+/* Begin PBXFrameworksBuildPhase section */
+		5CAC9CCED59C184EC25FF0D1 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				52BE51A996FC01A545A5FF93 /* Watchset in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
 /* Begin PBXGroup section */
+		206E33D9A650D82AD55D9D89 /* Packages */ = {
+			isa = PBXGroup;
+			children = (
+				B42DFB1DCF42C6F293770A86 /* Watchset */,
+			);
+			path = Packages;
+			sourceTree = "<group>";
+		};
 		28DDBE315FD7A2196B48531F /* Products */ = {
 			isa = PBXGroup;
 			children = (
@@ -346,6 +367,7 @@
 				43113D1E0A8CEB8334CFC02E /* AssetsMac.xcassets */,
 				9F6A38324B6E1FE85ABDB8B6 /* AssetsWatch.xcassets */,
 				949CE30CB2642F8013288295 /* Controls */,
+				206E33D9A650D82AD55D9D89 /* Packages */,
 				74BB75C2E95DDFE3BD63FDF9 /* Share */,
 				46F4A2164300BF712B758B03 /* Shared */,
 				F1C581DB520978DD991D147C /* Sounds */,
@@ -456,6 +478,7 @@
 			buildPhases = (
 				6F634D718AC222309280A9D0 /* Sources */,
 				C0F5644CD774BA9C804CF98C /* Resources */,
+				5CAC9CCED59C184EC25FF0D1 /* Frameworks */,
 				F7CF6164931DF17DF5643ED5 /* Embed Foundation Extensions */,
 			);
 			buildRules = (
@@ -465,6 +488,7 @@
 			);
 			name = StatusHubWatch;
 			packageProductDependencies = (
+				CE96B08D8352AA5DFAC296E7 /* Watchset */,
 			);
 			productName = StatusHubWatch;
 			productReference = 94DD1B301CE525AF6B208DC7 /* StatusHubWatch.app */;
@@ -549,6 +573,9 @@
 			);
 			mainGroup = 8B3D9C515137832BB1FDEE95;
 			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				8D49C2198CA64C6A8FEFD3EF /* XCLocalSwiftPackageReference "Packages/Watchset" */,
+			);
 			preferredProjectObjectVersion = 77;
 			projectDirPath = "";
 			projectRoot = "";
@@ -1174,6 +1201,20 @@
 			defaultConfigurationName = Debug;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCLocalSwiftPackageReference section */
+		8D49C2198CA64C6A8FEFD3EF /* XCLocalSwiftPackageReference "Packages/Watchset" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = Packages/Watchset;
+		};
+/* End XCLocalSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		CE96B08D8352AA5DFAC296E7 /* Watchset */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = Watchset;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = 9D244CDCFECA7707C38735B8 /* Project object */;
 }

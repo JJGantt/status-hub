@@ -1,6 +1,7 @@
 import HealthKit
 import SwiftUI
 import UserNotifications
+import Watchset
 import WatchKit
 
 @main
@@ -17,6 +18,16 @@ struct StatusHubWatchApp: App {
         PhoneLink.shared.start()
         Net.shared.start()
         LocationTrail.shared.start()  // the watch's own location history (docs/LOCATION.md)
+        // Watchset's page runs on this app's workout hold, hub token, audio session and log.
+        WatchsetHost.install(WatchsetHost(
+            hold: { await WorkoutHold.shared.holdForCapture() },
+            release: { WorkoutHold.shared.releaseCapture() },
+            request: { Hub.worksetRequest($0, method: $1, contentType: $2, body: $3) },
+            audioInUse: {
+                Capture.shared.owner != nil || Speaker.shared.isSpeaking || LiveListen.shared.isOn
+                    || StayAwake.shared.isHolding
+            },
+            log: { event, fields in Hub.log(event, fields.merging(["page": "watchset"]) { a, _ in a }) }))
     }
 
     var body: some Scene {
@@ -156,11 +167,11 @@ final class WatchAppDelegate: NSObject, WKApplicationDelegate, UNUserNotificatio
 }
 
 /// Pages, left to right: the bedroom TV's remote (`RemoteView`), the sessions, home — the conversation — the rings and today's log, the
-/// workout block, the live mic (`LiveListenView`), and the gesture recorder (`GestureLabView`). Home is
+/// workout block, Watchset's rep counter (`WatchsetPage`, Packages/Watchset), the live mic (`LiveListenView`), and the gesture recorder (`GestureLabView`). Home is
 /// where the app opens.
 struct RootView: View {
     enum Page: String {
-        case remote, sessions, home, day, health, live, gesture, usage
+        case remote, sessions, home, day, watchset, health, live, gesture, usage
 
         /// Nutrition and Workout land on the day page, which opens the list each names
         /// (`Router.dayList`): today's food log, or the exercise list. Day lands on the page itself.
@@ -201,6 +212,7 @@ struct RootView: View {
             SessionsView().tag(Page.sessions).environment(\.onScreen, page == .sessions)
             HomeView().tag(Page.home).environment(\.onScreen, page == .home)
             DayView().tag(Page.day)
+            WatchsetPage().tag(Page.watchset)
             HealthView().tag(Page.health)
             LiveListenView().tag(Page.live)
             GestureLabView().tag(Page.gesture)

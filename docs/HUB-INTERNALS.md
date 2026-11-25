@@ -626,6 +626,7 @@ by `server.js`) returning what the rest of the server calls:
 | `lists.js` | the lists pane and the calendar (they share their item helpers) |
 | `tv.js` | the bedroom TV link and sidebar settings |
 | `widgets.js` | the watch and widget feeds (`/api/rings`, `/api/workout-day`, `/api/workout-now`) |
+| `workset.js` | `/api/workset/*`: the watch's Watchset page to the data layer's `workset` function, on the hub's `WORKSET_DEVICE_TOKEN` |
 | `heathistory.js`, `reports.js`, `healthdata.js`, `failures.js` | heat-map archive, published reports, Apple Health uploads, failed commands |
 
 No route is registered in `lib/`: `test/auth.test.js` finds routes by reading `server.js` and

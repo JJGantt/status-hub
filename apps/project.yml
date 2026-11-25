@@ -22,6 +22,11 @@ settings:
     # (camera) and Photo Library natively, but only when these usage strings exist.
     INFOPLIST_KEY_NSCameraUsageDescription: Status Hub uses the camera to capture food and nutrition labels.
     INFOPLIST_KEY_NSPhotoLibraryUsageDescription: Status Hub attaches photos of food and nutrition labels.
+packages:
+  # The rep counter's watch feature, a page of the watch app (Packages/Watchset). It pulls the private
+  # counter package (JJGantt/Workset-Algorithms) over SSH.
+  Watchset:
+    path: Packages/Watchset
 targets:
   StatusHub:
     type: application
@@ -73,6 +78,9 @@ targets:
           - UIInterfaceOrientationLandscapeLeft
           - UIInterfaceOrientationLandscapeRight
         NSMicrophoneUsageDescription: Status Hub uses the microphone for voice commands.
+        # The watch's rep counter reads motion, and Apple's scan attributes the embedded watch binary's
+        # CoreMotion use to this bundle too.
+        NSMotionUsageDescription: Counts your reps and records motion for gesture testing.
         NSCameraUsageDescription: Status Hub uses the camera to capture food and nutrition labels.
         NSPhotoLibraryUsageDescription: Status Hub attaches photos of food and nutrition labels.
         # The hub page's navigator.geolocation in the WKWebView (voiceagent.js hereNow) needs it.
@@ -198,7 +206,7 @@ targets:
         ITSAppUsesNonExemptEncryption: false
         NSMicrophoneUsageDescription: Status Hub uses the microphone for voice commands.
         NSLocationWhenInUseUsageDescription: For nearby requests.   # Shared/LocationTrail.swift
-        NSMotionUsageDescription: Records motion for gesture testing.   # Watch/GestureLab.swift
+        NSMotionUsageDescription: Counts your reps and records motion for gesture testing.   # Watchset, Watch/GestureLab.swift
         # The workout hold (Watch/WorkoutHold.swift): a workout session while sets are being logged.
         NSHealthShareUsageDescription: Keeps the app on screen while you work out.
         NSHealthUpdateUsageDescription: Records your workouts.
@@ -228,6 +236,7 @@ targets:
     dependencies:
       - target: StatusHubWatchWidgets
         embed: true
+      - package: Watchset
   # The watch-face complication and the Record control (watchOS 26), both opening the app into
   # recording.
   StatusHubWatchWidgets:

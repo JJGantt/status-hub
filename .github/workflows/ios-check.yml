@@ -99,7 +99,7 @@ jobs:
         run: |
           xcodebuild -project StatusHub.xcodeproj -scheme StatusHub \
             -scmProvider system \
-            -configuration Debug -sdk iphonesimulator \
+            -configuration Debug \
             -destination 'generic/platform=iOS Simulator' \
             CODE_SIGNING_ALLOWED=NO \
             build 2>&1 | tail -40

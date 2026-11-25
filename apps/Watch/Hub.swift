@@ -638,6 +638,12 @@ enum Hub {
         _ = try await call("/api/sessions/seen", method: "POST", body: ["id": id])
     }
 
+    /// Takes a session row off every surface's list (`hidden_at`), the phone's × exactly: the session
+    /// itself keeps running or stays parked, and anything new in it brings the row back.
+    static func hideSession(_ id: String) async throws {
+        _ = try await call("/api/sessions/hide", method: "POST", body: ["id": id])
+    }
+
     /// An answer has been on screen, so it leaves the unread queue everywhere.
     static func read(_ id: String) async throws {
         _ = try await call("/api/voice-messages/read", method: "POST", body: ["id": id])

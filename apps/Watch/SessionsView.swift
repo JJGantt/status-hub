@@ -12,6 +12,8 @@ import SwiftUI
 struct SessionsView: View {
     @EnvironmentObject private var sessions: Sessions
     @ObservedObject private var capture = Capture.shared
+    /// The row a long press asked about. A long press only offers the hide; choosing it is what hides.
+    @State private var asking: SessionRow?
 
     var body: some View {
         // A ScrollView, not a List: a watchOS List puts every row in a grey rounded slab, and this page
@@ -30,8 +32,11 @@ struct SessionsView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 0) {
                 ForEach(Array(sessions.list.enumerated()), id: \.offset) { i, s in
-                    NavigationLink(value: s.key) { row(s) }
-                        .buttonStyle(.plain)
+                    // A tap opens it; a long press offers to hide it. Gestures rather than a NavigationLink,
+                    // because a link also fires on the release that ends a long press.
+                    row(s)
+                        .onTapGesture { sessions.path.append(s.key) }
+                        .onLongPressGesture(minimumDuration: 0.5) { asking = s }
                         .overlay(alignment: .top) { if i > 0 { rule } }
                 }
                 // Which build is on the wrist, so a fix that has not arrived is not taken for one that
@@ -48,6 +53,14 @@ struct SessionsView: View {
             .padding(.horizontal, 8)
         }
         .scrollIndicators(.never)
+        .confirmationDialog(asking?.name ?? "", isPresented: Binding(
+            get: { asking != nil }, set: { if !$0 { asking = nil } })) {
+            Button("Hide", role: .destructive) {
+                if let s = asking { sessions.hide(s.key) }
+                asking = nil
+            }
+            Button("Cancel", role: .cancel) { asking = nil }
+        }
         .topOfTheScreen()
         .background(Color.black.ignoresSafeArea())
     }

@@ -321,6 +321,12 @@ phone and the wall too.
 The list is a **ScrollView, not a List**: a watchOS List puts every row in a grey rounded slab, and
 this page is a list of names — rules separate them, as they do on the food log and the exercises.
 
+**A long press on a row offers to HIDE it** (a confirmation dialog; the press alone removes nothing),
+and choosing Hide does what the phone's × does: `POST /api/sessions/hide` for every row of that
+conversation, which drops it from every surface's list while the session keeps running or stays
+parked, until anything new in it brings it back. The rows take a tap and a long press as gestures
+rather than a `NavigationLink`, because a link also fires on the release that ends a long press.
+
 **A tapped row opens its session INSIDE the sessions page** (a `NavigationStack` of the page's own, in
 `SessionsView`), so the row of pages still swipes with a session open — to home, to the day page — and
 the session is still open on swiping back. The page row takes the sideways swipe, so the system's

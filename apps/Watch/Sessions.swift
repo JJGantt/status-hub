@@ -331,6 +331,22 @@ final class Sessions: ObservableObject {
         }
     }
 
+    /// Hide a conversation from the list, as the phone's × does. Every row of it is hidden (a running row
+    /// and its older parked ones share the key, and the list shows one per key), and it leaves this list at
+    /// once rather than on the reload.
+    func hide(_ key: String) {
+        let ids = rows.filter { $0.key == key }.map(\.id)
+        list.removeAll { $0.key == key }
+        Task {
+            do {
+                for id in ids { try await Hub.hideSession(id) }
+            } catch {
+                Hub.log("hide-failed", ["key": key, "error": String(describing: error).prefix(120).description])
+            }
+            await load()
+        }
+    }
+
     /// The conversation's list from the hub — the whole of it, or with `since` only what comes after
     /// that seq, which is what a gap in the stream asks for. Merged by seq (`take`), so a fetch and a
     /// frame that arrived while it was in flight cannot disagree, whichever lands first.

@@ -36,6 +36,7 @@
 		58F20A294FB54B942342ABB3 /* StatusHubControls.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = AD44A10C47F3ACE73074E7B2 /* StatusHubControls.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		5B95BB853AE0BB3D7E93EC0F /* OpenTodoItem.swift in Sources */ = {isa = PBXBuildFile; fileRef = 980C6D4E9785922A04236D2D /* OpenTodoItem.swift */; };
 		5D50E610532DA949FF006920 /* OpenTodoItem.swift in Sources */ = {isa = PBXBuildFile; fileRef = 980C6D4E9785922A04236D2D /* OpenTodoItem.swift */; };
+		5D5E4C9B466EDC1E99D1AC4D /* HubImage.swift in Sources */ = {isa = PBXBuildFile; fileRef = 873557B07E80836244D009CE /* HubImage.swift */; };
 		6188D9BD5163465CBE9D4FFB /* StatusHubWatch.app in Embed Watch Content */ = {isa = PBXBuildFile; fileRef = 94DD1B301CE525AF6B208DC7 /* StatusHubWatch.app */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		62377EFC112DA32097338F77 /* LiveListen.swift in Sources */ = {isa = PBXBuildFile; fileRef = 011F77A80F4DF604831A2925 /* LiveListen.swift */; };
 		63FFBBAE3A494E2C4AC846FA /* BatteryRefresh.swift in Sources */ = {isa = PBXBuildFile; fileRef = 69F83A73B6DF335C067054D5 /* BatteryRefresh.swift */; };
@@ -198,6 +199,7 @@
 		824876CC8A2DF46BE8BF406A /* TodoView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TodoView.swift; sourceTree = "<group>"; };
 		835C09DFE3C581C0FCD41116 /* Push.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Push.swift; sourceTree = "<group>"; };
 		8500D56F95DF5A6D21132960 /* SleepSync.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SleepSync.swift; sourceTree = "<group>"; };
+		873557B07E80836244D009CE /* HubImage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HubImage.swift; sourceTree = "<group>"; };
 		88D699B5FDC0F7476374CF07 /* Auth.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Auth.swift; sourceTree = "<group>"; };
 		8CA83F39B78BED158714499A /* Remote.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Remote.swift; sourceTree = "<group>"; };
 		94DD1B301CE525AF6B208DC7 /* StatusHubWatch.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = StatusHubWatch.app; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -289,6 +291,7 @@
 				7D90424F70095351BD348487 /* HistoryView.swift */,
 				9C61C65954CA9A7056B2B127 /* HomeView.swift */,
 				FD06B420AFC554D37540118C /* Hub.swift */,
+				873557B07E80836244D009CE /* HubImage.swift */,
 				1AFDE309B6B2A7FC8858ABF7 /* Inbox.swift */,
 				1395E04227DD7450E1CBC8AD /* Info.plist */,
 				011F77A80F4DF604831A2925 /* LiveListen.swift */,
@@ -596,6 +599,7 @@
 				0F13CF9CFA7602FE6562864D /* HistoryView.swift in Sources */,
 				1962BCC150815491A3F92EB1 /* HomeView.swift in Sources */,
 				C4250430822C333D041CEEA1 /* Hub.swift in Sources */,
+				5D5E4C9B466EDC1E99D1AC4D /* HubImage.swift in Sources */,
 				2F21E62C9C469627AE83C165 /* Inbox.swift in Sources */,
 				62377EFC112DA32097338F77 /* LiveListen.swift in Sources */,
 				49EFB53930636E1DA9D5EA54 /* LiveStream.swift in Sources */,

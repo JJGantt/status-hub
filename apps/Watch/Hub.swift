@@ -331,6 +331,11 @@ enum Hub {
          .dnsLookupFailed, .dataNotAllowed, .internationalRoamingOff, .timedOut].contains(e.code)
     }
 
+    /// The bytes of an image the hub serves (`/img/<name>`, data-layer share_image), for `HubImage`.
+    static func image(_ path: String) async throws -> Data {
+        try await call(path, timeout: 30)
+    }
+
     /// One GET on `quickSession`: no waiting for a route.
     private static func quick<T: Decodable>(_ path: String) async throws -> T {
         let (data, resp) = try await quickSession.data(for: try request(path, timeout: 10))

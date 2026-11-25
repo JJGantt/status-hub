@@ -283,7 +283,7 @@ read, so every such reply goes into an inbox: kept for good, newest first, read 
 
 Every reply and thought on the watch, home's thread and a session's alike, is drawn by `Markdown`
 (`Markdown.swift`): headings at their own sizes, nested lists, fenced code, quotes, rules and tables,
-with `inlineMarkdown` doing the inside of each block (bold, italics, code, links, bare http(s) URLs).
+with `inlineMarkdown` doing the inside of each block (bold, italics, code, links, bare http(s) URLs). An image the hub holds (`![caption](…/img/<name>)`, from data-layer `share_image`) is lifted into its own block and drawn by `HubImage` (`HubImage.swift`), fetched with the watch's token and decoded straight to a thumbnail; a tap opens it full screen, where the Digital Crown zooms (1-6x), a drag pans and a double tap fits it again.
 `Text` alone renders only the inline part and runs every block into one paragraph, which is why the
 blocks are split out first. A table wider than the screen drags sideways instead of wrapping each cell to
 a word a line: `ViewThatFits` picks `TableScroll`, which moves the table by hand under a high-priority

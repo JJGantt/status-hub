@@ -52,6 +52,8 @@ struct Markdown: View {
             .fixedSize(horizontal: false, vertical: true)
         case .rule:
             Rectangle().frame(height: 1).opacity(0.3)
+        case .image(let alt, let path):
+            HubImage(path: path, caption: alt, size: size)
         case .table(let align, let header, let rows):
             // Wider than the screen drags sideways rather than wrapping every cell to a word a line —
             // by hand (`TableScroll`), since the page row's swipe beats a horizontal ScrollView.
@@ -93,9 +95,16 @@ enum MarkdownBlock {
     case quote(String)
     case rule
     case table([HorizontalAlignment], [String], [[String]])
+    /// An image the hub holds — `![caption](…/img/<name>)`, from data-layer share_image — drawn in place.
+    /// Any other image keeps the inline renderer's treatment (its words).
+    case image(String, String)
+
+    static let hubImage = #/!\[([^\]\n]*)\]\((?:https?://[^/\s)]+)?(/img/[\w-]+\.(?:jpe?g|png|webp|gif))\)/#.ignoresCase()
 
     static func parse(_ src: String) -> [MarkdownBlock] {
-        let lines = src.replacingOccurrences(of: "\r\n", with: "\n").components(separatedBy: "\n")
+        // An image mid-sentence is lifted onto its own line, so it becomes its own block.
+        let lifted = src.replacing(hubImage) { "\n" + String($0.output.0) + "\n" }
+        let lines = lifted.replacingOccurrences(of: "\r\n", with: "\n").components(separatedBy: "\n")
         var out: [MarkdownBlock] = []
         var para: [String] = [], quote: [String] = [], items: [Item] = [], indents: [Int] = []
         var code: [String]? = nil
@@ -117,6 +126,9 @@ enum MarkdownBlock {
             }
             if code != nil { code!.append(raw); continue }
             if line.isEmpty { flush(); continue }
+            if let m = line.wholeMatch(of: hubImage) {
+                flush(); out.append(.image(String(m.1), String(m.2))); continue
+            }
 
             if let m = line.firstMatch(of: #/^(#{1,6})\s+(.*)$/#) {
                 flush(); out.append(.heading(m.1.count, String(m.2))); continue
@@ -172,7 +184,7 @@ enum MarkdownBlock {
             case .list(let items): return items.map { plain($0.text) }.joined(separator: ". ")
             case .table(_, let header, let rows):
                 return ([header] + rows).map { $0.map(plain).joined(separator: ", ") }.joined(separator: ". ")
-            case .rule: return nil
+            case .rule, .image: return nil
             }
         }
         .joined(separator: ". ")

@@ -335,6 +335,31 @@ document.addEventListener('click', (e) => {
   e.preventDefault();
   h.postMessage(a.href);
 });
+// A tap on an inline image opens it over everything, fitted to the screen; a tap on the picture toggles
+// it to full size (scrollable, for reading a mockup's detail), a tap anywhere else closes it. Caught in
+// the capture phase so the card the reply sits in never also takes the tap as its own.
+document.addEventListener('click', (e) => {
+  const fig = e.target.closest && e.target.closest('.md-img[data-img]');
+  if (!fig) return;
+  e.preventDefault();
+  e.stopPropagation();
+  const ov = document.createElement('div');
+  ov.className = 'md-imgview';
+  const img = document.createElement('img');
+  img.src = fig.dataset.img;
+  img.alt = '';
+  ov.appendChild(img);
+  ov.addEventListener('click', (ev) => {
+    if (ev.target === img) {
+      const big = !ov.classList.contains('zoom');
+      ov.classList.toggle('zoom', big);
+      img.style.width = big ? Math.max(img.naturalWidth / (window.devicePixelRatio || 1), window.innerWidth * 2) + 'px' : '';
+      return;
+    }
+    ov.remove();
+  });
+  document.body.appendChild(ov);
+}, true);
 const MD_MARK = '';                                // a private-use character: where a lifted span goes back
 const MD_HELD = new RegExp(MD_MARK + '(\\d+)' + MD_MARK, 'g');
 export function mdInline(text) {
@@ -343,6 +368,13 @@ export function mdInline(text) {
   const link = (url, words) => lift(`<a href="${url}" target="_blank" rel="noopener noreferrer">${words}</a>`);
   return esc(String(text == null ? '' : text).split(MD_MARK).join(''))
     .replace(/`([^`\n]+)`/g, (_, c) => lift('<code>' + c + '</code>'))
+    // An image the hub holds (data-layer share_image → /img/<name>) is drawn in place; any other image
+    // keeps its words as a link, the way it did before images were drawn. The src is always rebuilt as
+    // this origin's /img/<name>, so a reply can only ever point an <img> at the hub's own route.
+    .replace(/!\[([^\]\n]*)\]\((?:https?:\/\/[^\/\s)]+)?\/img\/([\w-]+\.(?:jpe?g|png|webp|gif))\)/gi,
+      (_, alt, name) => lift(`<span class=md-img role=button data-img="/img/${name}"><img src="/img/${name}" alt="${alt}" loading=lazy>`
+        + (alt ? `<span class=md-imgcap>${alt}</span>` : '') + '</span>'))
+    .replace(/!\[([^\]\n]*)\]\((https?:\/\/[^)\s]+)\)/g, (_, words, url) => link(url, words || url))
     .replace(/\[([^\]\n]+)\]\((https?:\/\/[^)\s]+)\)/g, (_, words, url) => link(url, words))
     .replace(/\[([^\]\n]+)\]\([^)\s]*\)/g, '$1')
     // A bare address, as a model usually writes one. It stops at an escaped quote and gives back the

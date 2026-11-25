@@ -1077,6 +1077,13 @@ body.tv .hmonths{margin-left:0;font-size:11px}
 /* Markdown blocks (`md` in shared.js), wherever a reply is shown. Sized in em, so each surface's own
    font size carries them; a surface that needs it tighter overrides (phone-home.css, .ph-convt). */
 .md-p{margin:0 0 .55em}
+.md-img{display:block;margin:.4em 0;cursor:zoom-in}
+.md-img img{display:block;max-width:100%;max-height:60vh;border-radius:8px;background:#11151b}
+.md-imgcap{display:block;font-size:.85em;color:#9aa5b3;margin-top:.25em}
+.md-imgview{position:fixed;inset:0;z-index:100000;background:rgba(0,0,0,.94);display:flex;align-items:center;justify-content:center;overflow:auto;-webkit-overflow-scrolling:touch}
+.md-imgview img{max-width:100vw;max-height:100vh;object-fit:contain}
+.md-imgview.zoom{display:block}
+.md-imgview.zoom img{max-width:none;max-height:none}
 /* A bare URL is one unbroken word, often wider than a phone. */
 .md-p a,.md-l a,.md-q a,.md-tbl a{overflow-wrap:anywhere}
 .md-h{font-weight:700;color:#eef1f5;margin:.6em 0 .25em;line-height:1.25}

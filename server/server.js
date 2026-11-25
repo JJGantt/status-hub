@@ -119,6 +119,7 @@ pub.get(['/app.css', '/surf.css', '/dist/surf.js'], serveStatic);
 
 require('./routes/auth')({ auth, gated });
 require('./routes/reports')({ gated, sb });
+require('./routes/images')({ SUPABASE_KEY, SUPABASE_URL, gated });
 // Static client assets (core.js, app.css, cards/*.js), behind the gate.
 // no-cache (revalidate via ETag each load) so a deploy is never masked by a stale cached asset.
 gated.use(serveStatic);

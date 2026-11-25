@@ -637,7 +637,7 @@ A module that needs something made later in `server.js` gets it moved up rather 
 **Pages:** `/` + `/phone` (the phone's home page — the home wall's content, in portrait and at the
 phone's own scale) · `/tv` (the home wall, the TV default) · `/tv-health` (health wall — what
 the health wall) · `/tv-session-focus` (sessions wall) · `/tv-calendar` (calendar wall) · `/calendar` (phone/desktop calendar) · `/page` (desktop dashboard) · `/mic` (voice
-launcher) · `/reports` + `/report/:id` (§6c) · `/login` · `/healthz` · `/privacy` · `/terms`.
+launcher) · `/reports` + `/report/:id` (§6c) · `/img/:name` (§6c, images in a reply) · `/login` · `/healthz` · `/privacy` · `/terms`.
 
 **Read:** `/api/status` (full payload) · `/api/stream` (SSE status) · `/api/voice-stream` (SSE voice
 frames for the kiosk, and `request` frames for every thread view, § A command in flight) · `/api/voice-pending` (unfinished hub requests and commands still being heard, a thread view's reload) · `/api/list-stream` (SSE, one bodiless `lists` event whenever a dated item or
@@ -1623,6 +1623,24 @@ The visible consequence: **charts must be inline `<svg>`** — no chart library,
 `<script>`. Inline `<style>` and style attributes do work, and images work as `data:` or `https:`
 URLs. The `publish_report` tool description states this, so the model does not discover it by having
 a chart silently fail to render.
+
+### Images in a reply
+
+A picture a session or the orchestrator wants Jared to see — a mockup, a chart, a photo looked up for
+him — goes through data-layer `share_image`, which stores it in the private `shared-images` bucket and
+answers with a markdown line, `![caption](https://<hub>/img/<name>)`, for the model to put in its reply.
+`GET /img/:name` (`routes/images.js`) serves it behind the gate.
+
+| surface | what draws it |
+|---|---|
+| phone, web, TV | `mdInline` in `shared.js` turns that line into an inline `<img>`; a tap opens the full-screen viewer (tap the picture for full size, anywhere else to close) |
+| watch | `Markdown.swift` lifts it into its own block, `HubImage`, loaded with `X-Hub-Token`; a tap opens it full screen with the Digital Crown zooming |
+
+The `<img src>` is always rebuilt as this origin's `/img/<name>`, whatever host the line names, so a
+reply can never point an image at anything but the hub's own route. Any other `![...](url)` renders as
+a plain link. The route refuses any name that is not flat `name.ext` with a raster extension, and
+answers with `nosniff` and a sandboxing CSP, because it is served on the authenticated origin. SVG is
+refused at upload: the watch cannot decode it and it can carry script.
 
 ## 6d. Deploying, and confirming it shipped
 

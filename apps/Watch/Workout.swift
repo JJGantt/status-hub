@@ -23,9 +23,23 @@ final class Workout: ObservableObject {
     private var loading = false
     private var reloadAfter = false
     private var stream: Task<Void, Never>?
+    private var live = false
 
-    /// The page is on screen: load now, and follow changes until `deactivate`.
-    @discardableResult func activate() -> Task<Void, Never> {
+    init() {
+        WorkoutHold.shared.changed = { [weak self] in self?.refollow() }
+    }
+
+    /// **The workout stream is open while the app is in front, on any page, and while a workout is
+    /// held**, not only while the day page shows it: a set logged by any path is what starts and
+    /// extends the hold (`WorkoutHold`), and a set spoken from home has to reach it. Returns the load it
+    /// started, for the day page to wait on.
+    @discardableResult func follow(live: Bool) -> Task<Void, Never>? {
+        self.live = live
+        return refollow()
+    }
+
+    @discardableResult private func refollow() -> Task<Void, Never>? {
+        guard live || WorkoutHold.shared.isHolding else { deactivate(); return nil }
         let loaded = Task { await load() }
         if stream == nil { openStream() }
         return loaded
@@ -57,7 +71,7 @@ final class Workout: ObservableObject {
         defer { loading = false }
         repeat {
             reloadAfter = false
-            if let n: WorkoutNow = try? await Hub.json("/api/workout-now") { now = n }
+            if let n: WorkoutNow = try? await Hub.json("/api/workout-now") { now = n; WorkoutHold.shared.saw(lastSetAt: n.last_set_at) }
         } while reloadAfter
     }
 }

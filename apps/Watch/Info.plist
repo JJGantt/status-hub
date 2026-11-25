@@ -33,6 +33,10 @@
 	<string>$(CURRENT_PROJECT_VERSION)</string>
 	<key>ITSAppUsesNonExemptEncryption</key>
 	<false/>
+	<key>NSHealthShareUsageDescription</key>
+	<string>Keeps the app on screen while you work out.</string>
+	<key>NSHealthUpdateUsageDescription</key>
+	<string>Records your workouts.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>For nearby requests.</string>
 	<key>NSMicrophoneUsageDescription</key>
@@ -45,6 +49,10 @@
 	</array>
 	<key>WKApplication</key>
 	<true/>
+	<key>WKBackgroundModes</key>
+	<array>
+		<string>workout-processing</string>
+	</array>
 	<key>WKCompanionAppBundleIdentifier</key>
 	<string>com.jaredgantt.statushub</string>
 </dict>

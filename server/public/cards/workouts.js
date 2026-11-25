@@ -44,6 +44,21 @@ export function render(s){
  if(heatSelDate){ markHeatCell(heatSelDate); if(heatSelDate===s.today)loadHeatDay(heatSelDate); } // live-refresh today's sets
  else if(s.today)selectDay(s.today);      // default the day detail to today's sets
  tickRest();
+ tellWatch();
+}
+// In the iOS app, a set landing while the page is open launches the watch app into its workout hold
+// (apps/Sources/WatchWorkout.swift, docs/WATCH.md § The workout hold). Each set time is passed once,
+// and only while that set is inside the hold's ten minutes.
+const WATCH_HOLD_S=10*60;
+let toldWatch=null;
+function tellWatch(){
+ const lastAt=(state.last||{}).last_set_at;
+ if(!lastAt||lastAt===toldWatch)return;
+ toldWatch=lastAt;
+ const h=window.webkit&&window.webkit.messageHandlers&&window.webkit.messageHandlers.workoutSet;
+ if(!h||document.visibilityState!=='visible')return;
+ if((nowWallClockMs()-wallClockMs(lastAt))/1000>=WATCH_HOLD_S)return;
+ try{h.postMessage(lastAt);}catch(_){}
 }
 // Two live clocks driven off the set log, both counting up, plus today's tally:
 //  - SINCE LAST SET (left, always): time since the LAST set. mm:ss when recent, then coarse (Hh Mm /

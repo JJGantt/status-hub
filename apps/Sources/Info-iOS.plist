@@ -40,7 +40,7 @@
 	<key>NSHealthShareUsageDescription</key>
 	<string>Status Hub reads your sleep from Apple Health to keep a history of your nights alongside your other data.</string>
 	<key>NSHealthUpdateUsageDescription</key>
-	<string>Status Hub does not write to Apple Health.</string>
+	<string>Records your workouts.</string>
 	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
 	<string>Records your location history.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>

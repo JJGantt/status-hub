@@ -1,3 +1,4 @@
+import HealthKit
 import SwiftUI
 import UserNotifications
 import WatchKit
@@ -80,6 +81,12 @@ final class WatchAppDelegate: NSObject, WKApplicationDelegate, UNUserNotificatio
                                                                        Self.alarmCategory,
                                                                        Self.answerCategory,
                                                                        Self.promptCategory])
+    }
+
+    /// The phone launched this app for a workout (`Sources/WatchWorkout.swift`): a set was just logged
+    /// there. The one way watchOS lets a workout begin with the app in the background.
+    func handle(_ workoutConfiguration: HKWorkoutConfiguration) {
+        Task { @MainActor in await WorkoutHold.shared.phoneAsked() }
     }
 
     // Shown even while the app is open, as on the phone.
@@ -347,8 +354,10 @@ struct RootView: View {
         if phase != .background && page == .home { first.append(chat.activate()) } else { chat.deactivate() }
         // The day page draws food and training live, so it follows both or neither. The health page
         // is weeks, loaded when it appears (`loadHistory`), and needs neither stream.
-        if live && page == .day { first.append(nutrition.activate()); first.append(workout.activate()) }
-        else { nutrition.deactivate(); workout.deactivate() }
+        if live && page == .day { first.append(nutrition.activate()) } else { nutrition.deactivate() }
+        // Training follows on every page while the app is in front, and with it down while a workout is
+        // held (`Workout.follow`).
+        if let t = workout.follow(live: live), page == .day { first.append(t) }
         if live && page == .usage { first.append(ClaudeUsage.shared.activate()) } else { ClaudeUsage.shared.deactivate() }
         // The remote reads the TV's volume and what is playing whenever it comes on screen; nothing to
         // hold open, since the TV only changes when something presses it.
@@ -370,10 +379,9 @@ struct RootView: View {
             async let s: Void = on == .sessions ? () : sessions.load()
             async let c: Void = on == .home ? () : chat.load()
             async let n: Void = on == .day ? () : nutrition.load()
-            async let w: Void = on == .day ? () : workout.load()
             async let h: Void = on == .health ? () : nutrition.loadHistory()
             async let u: Void = on == .usage ? () : ClaudeUsage.shared.load()
-            _ = await (s, c, n, w, h, u)
+            _ = await (s, c, n, h, u)
         }
     }
 }

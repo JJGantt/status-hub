@@ -23,6 +23,7 @@
 		2DE5C68D7C666AA0FFB4B465 /* Markdown.swift in Sources */ = {isa = PBXBuildFile; fileRef = 50C9941AC596855E4C447F11 /* Markdown.swift */; };
 		2E99FBE2382B78CBEBE467EE /* Usage.swift in Sources */ = {isa = PBXBuildFile; fileRef = 50AE228EE180062CB3C46C98 /* Usage.swift */; };
 		2F21E62C9C469627AE83C165 /* Inbox.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1AFDE309B6B2A7FC8858ABF7 /* Inbox.swift */; };
+		37B8CD22B29443C972657287 /* WorkoutHold.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6B0D864852BB9CE5DFF9B363 /* WorkoutHold.swift */; };
 		37CD0E58D2EE7273A012632B /* DayView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 01225D88DDA6CA36478FE1CA /* DayView.swift */; };
 		3995C08AAC931FCC8F627A14 /* StatusHubShare.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 1C987C27ED7B0DC15E346FD4 /* StatusHubShare.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		4047BFD86E0305E129C06B77 /* Info-iOS.plist in Resources */ = {isa = PBXBuildFile; fileRef = 12B2F6A89FA87D30EEC5ED56 /* Info-iOS.plist */; };
@@ -32,6 +33,7 @@
 		4D60B234E0ADF4D9465FE606 /* SessionsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AC7643D7992852F757EF0A7E /* SessionsView.swift */; };
 		4DB8BD1AC2A03D075B399CA4 /* WorkoutView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A3F70079ED5B30314C83B6BD /* WorkoutView.swift */; };
 		4DE2F21E70EC60A06611DF49 /* Rewind.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A7D22E52C6A0ABBCB9FF3BF /* Rewind.swift */; };
+		4E481C843B282A73A6959192 /* WatchWorkout.swift in Sources */ = {isa = PBXBuildFile; fileRef = 122F17573AF11E3BFB34C78C /* WatchWorkout.swift */; };
 		4F9B517337A50F616186B0DF /* HandoffView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9C54DAA3F7B8ECC9A1ED73A8 /* HandoffView.swift */; };
 		51D9EC4E888D09D03D22734A /* Recorder.swift in Sources */ = {isa = PBXBuildFile; fileRef = 14EB30894FADCF33B66D0455 /* Recorder.swift */; };
 		58F20A294FB54B942342ABB3 /* StatusHubControls.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = AD44A10C47F3ACE73074E7B2 /* StatusHubControls.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
@@ -81,6 +83,7 @@
 		D8B3EEDED01AB105C95F173D /* Auth.swift in Sources */ = {isa = PBXBuildFile; fileRef = 88D699B5FDC0F7476374CF07 /* Auth.swift */; };
 		E34E8A8F7CA83D65E839396E /* LocationTrail.swift in Sources */ = {isa = PBXBuildFile; fileRef = 45C78D4725DD9720852DFFD9 /* LocationTrail.swift */; };
 		E5F01E32A844356CC4D3F449 /* WatchUI.swift in Sources */ = {isa = PBXBuildFile; fileRef = E15B459BE174F4274C78B54E /* WatchUI.swift */; };
+		E61B504A70548076F6AB0631 /* WatchWorkout.swift in Sources */ = {isa = PBXBuildFile; fileRef = 122F17573AF11E3BFB34C78C /* WatchWorkout.swift */; };
 		E8ABA2047F042D0E11B6C604 /* Workout.swift in Sources */ = {isa = PBXBuildFile; fileRef = F4BAD78C211DC1432CDEB572 /* Workout.swift */; };
 		EBD52912FF3B6259E305FBFA /* Sessions.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3DA8801FE7845595DD403F04 /* Sessions.swift */; };
 		ECC6D21A1ECB983A558C2DC5 /* WatchSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = 951A385F7EE64123592C4DA6 /* WatchSettings.swift */; };
@@ -168,6 +171,7 @@
 		01225D88DDA6CA36478FE1CA /* DayView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DayView.swift; sourceTree = "<group>"; };
 		04D43ADC9891823E1EFA0E4C /* Router.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Router.swift; sourceTree = "<group>"; };
 		0AD761F7ECC2DBF3FA1641B0 /* RingsWidget.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RingsWidget.swift; sourceTree = "<group>"; };
+		122F17573AF11E3BFB34C78C /* WatchWorkout.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchWorkout.swift; sourceTree = "<group>"; };
 		12B2F6A89FA87D30EEC5ED56 /* Info-iOS.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = "Info-iOS.plist"; sourceTree = "<group>"; };
 		1395E04227DD7450E1CBC8AD /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		14DD24EA8F44511AAE8A666A /* Speaker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Speaker.swift; sourceTree = "<group>"; };
@@ -191,6 +195,7 @@
 		630A58399AEBE9A0EB63449B /* HubVoiceIntent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HubVoiceIntent.swift; sourceTree = "<group>"; };
 		65394C860C697D281720B76A /* Chat.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Chat.swift; sourceTree = "<group>"; };
 		69F83A73B6DF335C067054D5 /* BatteryRefresh.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BatteryRefresh.swift; sourceTree = "<group>"; };
+		6B0D864852BB9CE5DFF9B363 /* WorkoutHold.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkoutHold.swift; sourceTree = "<group>"; };
 		7300D161B8F2C8E565CA4FAB /* NutritionView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NutritionView.swift; sourceTree = "<group>"; };
 		73F9EE0177B282256E68470C /* StatusHubWatchWidgets.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StatusHubWatchWidgets.swift; sourceTree = "<group>"; };
 		79EC24B4E553A538E5D4CC9A /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
@@ -275,6 +280,7 @@
 				8500D56F95DF5A6D21132960 /* SleepSync.swift */,
 				DBE4FD566029B00F912457DA /* StatusHubApp.swift */,
 				D87B899987639512DD905DCE /* WatchLink.swift */,
+				122F17573AF11E3BFB34C78C /* WatchWorkout.swift */,
 			);
 			path = Sources;
 			sourceTree = "<group>";
@@ -318,6 +324,7 @@
 				951A385F7EE64123592C4DA6 /* WatchSettings.swift */,
 				E15B459BE174F4274C78B54E /* WatchUI.swift */,
 				F4BAD78C211DC1432CDEB572 /* Workout.swift */,
+				6B0D864852BB9CE5DFF9B363 /* WorkoutHold.swift */,
 				A3F70079ED5B30314C83B6BD /* WorkoutView.swift */,
 			);
 			path = Watch;
@@ -629,6 +636,7 @@
 				ECC6D21A1ECB983A558C2DC5 /* WatchSettings.swift in Sources */,
 				E5F01E32A844356CC4D3F449 /* WatchUI.swift in Sources */,
 				E8ABA2047F042D0E11B6C604 /* Workout.swift in Sources */,
+				37B8CD22B29443C972657287 /* WorkoutHold.swift in Sources */,
 				4DB8BD1AC2A03D075B399CA4 /* WorkoutView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -667,6 +675,7 @@
 				6E741EA6022469DE675FB215 /* SleepSync.swift in Sources */,
 				ED30317D3B77A590C83D95BC /* StatusHubApp.swift in Sources */,
 				C692F0368E5A3BD1BA7E0679 /* WatchLink.swift in Sources */,
+				E61B504A70548076F6AB0631 /* WatchWorkout.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -683,6 +692,7 @@
 				D75951639D8E19EF3004D9E2 /* SleepSync.swift in Sources */,
 				80C001EA5124225A4538240B /* StatusHubApp.swift in Sources */,
 				AE3C14A7061F839013EA169A /* WatchLink.swift in Sources */,
+				4E481C843B282A73A6959192 /* WatchWorkout.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -834,6 +844,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_ENTITLEMENTS = StatusHubWatch.entitlements;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = Watch/Info.plist;
 				PRODUCT_BUNDLE_IDENTIFIER = com.jaredgantt.statushub.watch;
@@ -962,6 +973,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_ENTITLEMENTS = StatusHubWatch.entitlements;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = Watch/Info.plist;
 				PRODUCT_BUNDLE_IDENTIFIER = com.jaredgantt.statushub.watch;

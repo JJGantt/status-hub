@@ -537,6 +537,32 @@ between minutes without a copy of `lib/pace.js` in Swift; `DayLog` is today's lo
 lines (name, then `466 cal 23P 88C 4F 12:30P`) that tap open to their ingredients, staged entries on
 top with the gold edge.
 
+### The workout hold
+
+`WorkoutHold` runs an `HKWorkoutSession` (traditional strength training, with a live builder
+collecting) while sets are being logged, so a wrist raise comes back to this app instead of the watch
+face. Any set starts it, whatever logged it (a voice command, the hub's add-set button, the rep
+watcher); each later set moves its end to **ten minutes after the newest set**; then it ends and the
+workout is saved to Apple Health. The end is one sleep to a deadline held in memory.
+
+- **The source is `/api/workout-now`'s `last_set_at`.** `Workout` hands it over on every load, and its
+  `workout` stream is open whenever the app is in front, on any page, and with the wrist down while a
+  hold runs (the session is what keeps the app running then). A set's age is wall-clock digits, as
+  `RestClock` reads it.
+- **watchOS refuses to start a workout from the background.** So the hold starts only (a) when the app
+  is active and the newest set is under ten minutes old, which covers a set spoken from the watch and
+  opening the app mid-workout, or (b) when the phone launches the app for a workout: the iOS app's page
+  posts `workoutSet` (public/cards/workouts.js) when a new set lands while it is open, and
+  `Sources/WatchWorkout.swift` calls `HKHealthStore.startWatchApp`, which reaches
+  `WatchAppDelegate.handle(_:)` in the background. HealthKit allows that call only while the phone app
+  is active. A set logged with neither app open (the ESP, the Mac, a locked phone) starts the hold the
+  next time the watch app comes to the front.
+- **Only one app holds a workout at a time.** Starting this one ends Watchset's capture session, and
+  Watchset starting one ends this; the hold logs `why: ended-elsewhere` when that happens.
+- Lines: `workout-hold` with `on` and `why` (`set`, `phone`, `idle`, `ended-elsewhere`, `failed`);
+  failures are `ev: error` (`page: workout-hold`), which the hub reports. The phone logs
+  `watch-workout-launch`, or an error with `page: watch-workout`.
+
 ### The workout page
 
 Now `ExerciseList`, the training detail the day page opens (and the Workout control). **The clocks

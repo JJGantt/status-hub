@@ -174,7 +174,7 @@ private let digitCalendar: Calendar = {
 
 /// A naive "YYYY-MM-DDTHH:MM:SS" reading as seconds, digit for digit (cards/workouts.js wallClockMs).
 /// occurred_at is whatever clock logged it, with no zone, so it is never converted through one.
-private func wallClock(_ naive: String) -> Double? {
+func wallClock(_ naive: String) -> Double? {
     let p = naive.prefix(19).split(whereSeparator: { "-T:".contains($0) }).compactMap { Int($0) }
     guard p.count == 6 else { return nil }
     return digitCalendar.date(from: DateComponents(year: p[0], month: p[1], day: p[2],
@@ -182,7 +182,7 @@ private func wallClock(_ naive: String) -> Double? {
 }
 
 /// This watch's own wall clock, read the same way (nowWallClockMs).
-private func wallClock(_ now: Date) -> Double {
+func wallClock(_ now: Date) -> Double {
     let c = Calendar.current.dateComponents([.year, .month, .day, .hour, .minute, .second], from: now)
     return digitCalendar.date(from: c)?.timeIntervalSince1970 ?? now.timeIntervalSince1970
 }

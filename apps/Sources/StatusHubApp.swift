@@ -506,6 +506,10 @@ struct HubWebView {
             case "badge":
                 guard let n = message.body as? NSNumber else { return }
                 DispatchQueue.main.async { UNUserNotificationCenter.current().setBadgeCount(n.intValue) }
+            case "workoutSet":
+                // A set landed while the page is open: launch the watch app into its workout hold.
+                guard let at = message.body as? String else { return }
+                DispatchQueue.main.async { WatchWorkout.setLogged(at: at) }
             case "reloadWidgets":
                 // The page saw the numbers move. A widget can't notice that on its own — it only
                 // redraws when its timeline is rebuilt — so rebuild it now rather than leaving it
@@ -555,6 +559,7 @@ struct HubWebView {
         cfg.userContentController.add(coordinator, name: "liveMic")        // page -> stream the microphone to the watch
         cfg.userContentController.add(coordinator, name: "nativeRec")      // page -> record a command natively
         cfg.userContentController.add(coordinator, name: "openURL")        // page -> open a reply's link in Safari
+        cfg.userContentController.add(coordinator, name: "workoutSet")     // page -> a set landed; start the watch's workout
         #endif
         cfg.mediaTypesRequiringUserActionForPlayback = []
         cfg.websiteDataStore = .default()          // persistent cookies → stays signed in across launches

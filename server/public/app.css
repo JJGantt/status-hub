@@ -677,7 +677,7 @@ body.tv.phonewall .pane-repos.sv-open #repospane{flex:1 1 auto;min-height:0;disp
 .sv-bg{font:12px/1.4 ui-monospace,SFMono-Regular,Menlo,monospace;color:#4fd1c5;display:flex;gap:6px;align-items:flex-start}
 .sv-bg-lines{min-width:0;flex:1 1 auto}
 .sv-bg .ai-caret{color:#4fd1c5}
-.sv-bg-line{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;opacity:.8}
+.sv-bg-line{opacity:.8;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden;overflow-wrap:anywhere}
 .sv-bg-k{opacity:.6}
 .sv-tool{font:12px/1.4 ui-monospace,SFMono-Regular,Menlo,monospace;color:#6b7686;white-space:nowrap;
   overflow:hidden;text-overflow:ellipsis}

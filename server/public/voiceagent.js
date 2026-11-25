@@ -6,7 +6,7 @@
 //      Listening / Transcribing / Thinking, then each tool call WITH its arguments as it runs.
 // Tool-call rows (role='tool') are surfaced ONLY in the activity bar, never in the conversation
 // thread. All skipped on the TV wall (no mic; it renders the conversation itself via tv.js).
-import { esc, md, localNowNaive, liveStream, KIOSK, holdReload, readingWatch } from './shared.js';
+import { esc, md, localNowNaive, liveStream, KIOSK, holdReload, threadScroll } from './shared.js';
 
 let phoneHangMs = 3000;   // the always-on listener's trailing silence (ms); overridden by the phone_silence_s setting
 // How long a FINISHED row — the reply, or an error — holds on the kiosk's activity bar before it hides.
@@ -140,7 +140,7 @@ function boot() {
     if (!row || (row.focus || 'hub') !== 'hub') return;
     if (row.mode === 'agent') return;              // the old coding mode's rows are not the hub thread
     if (row.role === 'tool') return;               // (tools now arrive as 'activity', never as messages)
-    if (_card) { _card.upsert(row); _card.arrived(); }   // user/assistant → conversation
+    if (_card) _card.upsert(row);                  // user/assistant → conversation
     threadSubs.forEach((f) => f(row));             // any other view of the same thread
   } }, { onOpen: () => { if (_card) _card.backfill(); threadSubs.forEach((f) => f(null)); } });
   // The conversation must reflect the active mode's thread live, from ANY source — hence the onOpen
@@ -159,6 +159,9 @@ function boot() {
 // tv.js was split out to stop (a phone paying for two sockets and two backfills for the life of the
 // page). The callback gets each new row, and `null` meaning RESYNC — a reconnect, or the tab coming
 // back to the foreground, where a suspended stream has already missed whatever arrived.
+// Opening the chat sheet opens the conversation, which lands on its newest message.
+export function landChat() { if (_card) _card.land(); }
+
 export function onThread(fn) { threadSubs.push(fn); fn(null); }
 
 // THE ANSWER BEING LOOKED AT. While an answer from the inbox is open on its own (inbox.js), the NEXT
@@ -1439,15 +1442,11 @@ function initCard() {
   const pending = new Map();   // optimistic (locally-sent, not-yet-processed) bubbles: clientId -> {el, paths, text, kind, localImages, at}
   const PENDING_TTL = 120000;  // an optimistic bubble no server row matched is dropped after this on the next backfill (self-heals a missed reconcile)
   const MAX_MSGS = 240;   // cap retained bubbles so a long-open hub tab never grows #ai-log + `seen` unbounded
-  const scrollEnd = () => { log.scrollTop = log.scrollHeight; };
-  // NOTHING MOVES THE THREAD WHILE IT IS BEING READ (`readingWatch` in shared.js: scrolled since the look
-  // began, and not let go at the very end) — not the user's own words, not a transcript, not a reply; a new
-  // line lands below and waits. Otherwise a new line lands on arrival (`arrived`), and so do the first
-  // load, coming back to the page after it was hidden (`owed`), and opening the chat sheet (navbar.js).
-  const watch = readingWatch(log);
-  const arrived = () => { if (!watch.reading()) scrollEnd(); };
-  let owed = true;
-  document.addEventListener('visibilitychange', () => { if (document.hidden) owed = true; });
+  // How the log scrolls is `threadScroll` in shared.js; every change to it goes through `scroll.change`.
+  // A message is a bubble, or the in-flight box while it holds the user's words.
+  const scroll = threadScroll(log, {
+    lands: (n) => n.classList.contains('ai-msg') || (n === reqBox && !!reqBox.querySelector('.ai-msg-user')) });
+  let ruleN = 0;
   function bubbleHtml(row) {
     const side = (row.role || 'assistant') === 'user' ? 'user' : 'assistant';
     const t = row.text == null ? '' : String(row.text);
@@ -1485,6 +1484,7 @@ function initCard() {
     if (!last || last.classList.contains('ai-ctx-rule')) return;
     const hr = document.createElement('div');
     hr.className = 'ai-ctx-rule';
+    hr.dataset.key = 'r' + (++ruleN);
     log.appendChild(hr);
   }
   // COMMANDS IN FLIGHT, drawn under the thread until their conversation rows exist: the user's words
@@ -1495,6 +1495,7 @@ function initCard() {
   const answeredReqs = new Set();   // request ids whose user row is in the log: a frame about one of these is late
   const reqBox = document.createElement('div');
   reqBox.className = 'ai-reqs';
+  reqBox.dataset.key = 'reqs';
   const REQ_TTL = 5 * 60 * 1000;   // a request whose end never reached this page must not stay up for ever
   function paintReqs() {
     const now = Date.now();
@@ -1517,7 +1518,6 @@ function initCard() {
       reqs.set(q.id, { text, mirror, at: (reqs.get(q.id) || {}).at || Date.now() });
     }
     paintReqs();
-    arrived();
   }
   function upsert(row) {
     if (!row || (row.focus || 'hub') !== 'hub') return;
@@ -1529,8 +1529,12 @@ function initCard() {
     // context stays in the thread behind a divider rather than being wiped.
     const fresh = !seen.has(row.id);
     if (fresh && row.ctx_break) rule();
-    const tmp = document.createElement('div'); tmp.innerHTML = bubbleHtml(row);
-    const el = tmp.firstElementChild, existing = seen.get(row.id);
+    const html = bubbleHtml(row), existing = seen.get(row.id);
+    if (existing && existing._html === html) return;   // nothing changed: the node stays as it is
+    const tmp = document.createElement('div'); tmp.innerHTML = html;
+    const el = tmp.firstElementChild;
+    el.dataset.key = 'm' + row.id;
+    el._html = html;
     if (existing) existing.replaceWith(el); else log.insertBefore(el, reqBox.parentNode === log ? reqBox : null);
     seen.set(row.id, el);
     while (log.childElementCount > MAX_MSGS) {
@@ -1553,11 +1557,11 @@ function initCard() {
     const holder = document.createElement('div');
     holder.innerHTML = bubbleHtml({ role: 'user', text: o.text || '', localImages: o.localImages || [], pending: true });
     const el = holder.firstElementChild;
+    el.dataset.key = 'p' + cid;
     log.insertBefore(el, reqBox.parentNode === log ? reqBox : null);
     pending.set(cid, { el, paths: (o.paths || []).filter(Boolean), text: (o.text || '').trim(),
       kind: o.kind || (o.localImages && o.localImages.length ? 'photo' : (o.text ? 'text' : 'voice')),
       localImages: o.localImages || [], at: Date.now() });
-    arrived();
     return cid;
   }
   function setPendingPath(cid, paths) { const p = pending.get(cid); if (p) p.paths = [].concat(paths || []).filter(Boolean); }
@@ -1577,30 +1581,31 @@ function initCard() {
     }
     if (hit) dropPending(hit);
   }
+  // A resync: the thread as the hub has it, merged in by id. Rows already shown stay as they are (a changed
+  // one is updated in place) and missed ones are added, so nothing on screen moves unless it was following.
   async function backfill() {
     try {
       const r = await fetch('/api/voice-messages?focus=hub&limit=200&history=1');   // the hub thread, older contexts included and flagged where each begins
       if (!r.ok) return;
       const rows = await r.json();
       const now = Date.now();
-      const keep = log.scrollTop;            // a rebuild while being read puts the reader back where they were
-      log.innerHTML = ''; seen.clear();      // detaches server + optimistic els; the pending map still holds the optimistic ones
-      for (const row of rows) upsert(row);               // reconcile() drops any pending the server thread now contains
-      for (const cid of [...pending.keys()]) {           // re-append still-unmatched optimistic bubbles at the bottom
-        const p = pending.get(cid);
-        if (now - p.at > PENDING_TTL) dropPending(cid);  // never matched in time → it landed under a different key; stop showing it
-        else log.appendChild(p.el);
-      }
+      scroll.change(() => {
+        for (const row of rows) upsert(row);               // reconcile() drops any pending the server thread now contains
+        for (const cid of [...pending.keys()]) {
+          if (now - pending.get(cid).at > PENDING_TTL) dropPending(cid);   // never matched in time → it landed under a different key
+        }
+      });
       // What is still in flight, from the hub: the stream may have missed a request's end while it was down.
       const q = await fetch('/api/voice-pending').then((x) => (x.ok ? x.json() : null)).catch(() => null);
-      if (Array.isArray(q)) {
-        const live = new Set(q.filter((x) => !x.always_on).map((x) => x.id));
-        for (const id of [...reqs.keys()]) if (!id.startsWith('c:') && !live.has(id)) reqs.delete(id);
-        for (const x of q) if (!x.always_on) request(x);
-      }
-      for (const row of rows) if (row.request_id) reqs.delete(row.request_id);
-      paintReqs();
-      if (owed && !document.hidden) { scrollEnd(); owed = false; } else log.scrollTop = keep;
+      scroll.change(() => {
+        if (Array.isArray(q)) {
+          const live = new Set(q.filter((x) => !x.always_on).map((x) => x.id));
+          for (const id of [...reqs.keys()]) if (!id.startsWith('c:') && !live.has(id)) reqs.delete(id);
+          for (const x of q) if (!x.always_on) request(x);
+        }
+        for (const row of rows) if (row.request_id) reqs.delete(row.request_id);
+        paintReqs();
+      });
     } catch (_) {}
   }
 
@@ -1614,8 +1619,7 @@ function initCard() {
     if (!landOn) return false;
     const el = log.querySelector('[data-mid="' + CSS.escape(landOn) + '"]');
     if (!el) return false;
-    log.scrollTop += el.getBoundingClientRect().top - log.getBoundingClientRect().top;
-    owed = false;
+    scroll.land(el);
     fetch('/api/voice-messages/read', { method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ id: landOn }) }).catch((e) => console.error('answer: marking read failed', e));
     landOn = null;
@@ -1679,7 +1683,7 @@ function initCard() {
     const items = attItems.slice();
     if (!text && !items.length) return;
     textEl.value = '';
-    const cid = optimistic({ text, localImages: items.map((i) => i.rawUrl).filter(Boolean) });   // show it the instant it's sent
+    const cid = scroll.change(() => optimistic({ text, localImages: items.map((i) => i.rawUrl).filter(Boolean) }));   // show it the instant it's sent
     try {
       await Promise.all(items.map((i) => i.promise));
       const attachments = items.map((i) => i.path).filter(Boolean);
@@ -1703,7 +1707,7 @@ function initCard() {
   textEl.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); sendText(); } });
   resetBtn.addEventListener('click', async () => {
     if (!confirm('Reset the conversation? The prior context will be forgotten.')) return;
-    clear(); setStatus('Context reset');
+    scroll.change(clear); setStatus('Context reset');
     try { await fetch('/api/voice-reset', { method: 'POST' }); } catch (_) {}
     setTimeout(() => setStatus(''), 2500);
   });
@@ -1722,7 +1726,10 @@ function initCard() {
   });
   bindMic(micBtn, cardRec);
 
-  return { upsert, clear, rule, backfill, optimistic, setPendingPath, dropPending, arrived, request };
+  const changing = (f) => (...a) => scroll.change(() => f(...a));
+  return { upsert: changing(upsert), clear: changing(clear), rule: changing(rule), backfill,
+    optimistic: changing(optimistic), setPendingPath, dropPending: changing(dropPending), request: changing(request),
+    land: () => scroll.land() };
 }
 
 // The kiosk has tv.js's own voice layer and no input; everything else boots the interactive client.

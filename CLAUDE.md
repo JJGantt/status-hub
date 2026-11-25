@@ -391,8 +391,8 @@ the space, the last of them renders down into that padding and out under the bar
 block on it is either a declared height or sized by its own content.
 Exactly one takes the leftover: the conversation at the bottom, `flex:1 1 auto`, because it is the
 only block here that can spend an arbitrary amount of height — more room is simply more of the
-thread. It scrolls, and lands on the newest line only on arrival (below); a ResizeObserver re-lands it
-only in the moments after a landing, because its own height is not settled when the thread first paints into it. There are no card borders and almost no padding for the same
+thread. It scrolls by the thread rule below; its height is not settled when the thread first paints
+into it, which the rule's resize handling covers. There are no card borders and almost no padding for the same
 reason: a rule costs two pixels of height for something the black ground between blocks already says,
 and where two things genuinely need separating they get a background instead, which costs nothing.
 
@@ -492,22 +492,21 @@ It also beats app.css's `body.tv.wallportrait` block on equal specificity, by lo
   it is a float over a surface that fits exactly, and this line is what replaces it. It never moves
   the box. The caret pulses through dimnesses rather than
   blinking off, because at 9px a hard on/off reads as something failing.
-  **NOTHING MOVES A THREAD WHILE IT IS BEING READ** — this box, the chat sheet, the session view, and
-  the watch's home and session pages alike. READING means the user has SCROLLED it since the look began
-  (the app coming to the front, the thread coming on screen, the wrist raised) and did not let go with
-  the very end in view. While reading, nothing that arrives moves it — not the user's own words, not a
-  reply — and it waits below. Otherwise every new message LANDS as it comes: a look with no scroll yet
-  is on whatever the page left it on, and resting at the bottom is asking for what comes next. The look
-  beginning moves nothing by itself; only an arrival does (and coming back to something new, opening a
-  sheet or a session, the reset button). One test decides it: `readingWatch` in shared.js, `touched`
-  in the watch's HomeView and SessionView. Being merely LOOKED AT is not the test: that version held a
-  command spoken right after a raise, and the reply after it, off the screen.
-  **IT LANDS ON THE TOP OF THE LAST MESSAGE**, not at the bottom of the thread: a reply is read from
-  its first line, and a box scrolled to the very end shows its last line with the rest above. Clamped,
-  so a short last message rests at the end of the scroll. The session view lands the same way (`open`
-  in cards/repos.js puts the last turn's prompt at the top), and the reset button uses it too.
-  Measured off the rects rather than `offsetTop`: the box is not an offset parent, so offsetTop is
-  against some ancestor and the difference is a shift, not the number wanted.
+  **EVERY THREAD SCROLLS BY THREE RULES, AND NOTHING ELSE MOVES IT** — this box, the chat sheet and the
+  session view, all through `threadScroll` in shared.js: (1) opening a thread lands on its newest
+  message; (2) a new message lands only when the view was FOLLOWING — resting at the very end, or still
+  where the page last landed it; (3) everything else — the app coming back from Safari, a resync, an
+  edit, older rows loading above — leaves what is on screen where it was. LANDING puts the TOP of the
+  message at the top of the box, because a reply is read from its first line; clamped, so a short one
+  rests at the end. Opening the chat sheet, a tapped answer notification and the reset button land
+  explicitly. While following, a resize of the box (the layout settling, the keyboard) keeps the view
+  on what it showed.
+  The rules hold only because **a thread is never rebuilt wholesale**: rows carry a `data-key` and are
+  updated in place (`syncKeyed`, or the chat sheet's own keyed upserts), and every change runs inside
+  `change()`, which puts the first row on screen back at its own height afterwards. A view that sets
+  `innerHTML` over the whole thread loses the browser's scroll memory, and restoring it by hand is how
+  a dozen special cases (a "came back" flag, a settling window, a reading test) accumulated before.
+  A view that wants a new way to move is adding a fourth rule; that is a decision for Jared, not a fix.
   **A SPOKEN COMMAND APPEARS BEFORE THE REPLY DOES.** The worker writes the user bubble only
   once a run is over — deliberately, so a wake-word false positive never lands in the thread — so
   nothing in the thread itself marks the gap between speaking and answering. `onPending` in
@@ -712,18 +711,10 @@ records them, so the watcher sends them straight back as a `said` frame. The opt
 `mine`, and a matching frame CONSUMES exactly one of them rather than appending: saying the same thing
 twice still shows twice. This is invisible to anything that tests the frame path on its own.
 
-**The session view lands on the top of the NEWEST THING** (`paintBody` in `cards/repos.js`). The last
-block in the body is that thing; inside a turn it resolves one level further in, to the reply rather
-than the prompt that asked for it. A tool call or a thought after the last turn is newer, so it wins;
-a turn still running ends in the caret, and the caret goes as far up as the scroll allows — which,
-with history above it, is simply the bottom. The browser's own clamp is what turns "as far up as it
-can" into "at the end" when the tail is shorter than the box, so there is one rule and no cases.
-
-**It never moves while it is being READ**, the thread rule above (`readingWatch`): scrolled since the
-view came on screen and not let go at the very end. Then a reply, tool call or thought repaints it with
-the scroll left exactly where it was. Otherwise each one lands on the newest thing as it comes, and so
-does opening a session or coming back to one — the app returning to the foreground, or the sessions pane
-swiped back into view — with something new in it since the user left (`awayAt`).
+**The session view scrolls by the thread rules above.** Its newest message is whatever event came last —
+a reply, a thought, a tool call, the user's words; the caret of a running turn is not a message and never
+lands. Coming back to the app re-reads the open session, and that re-read moves it only if it was
+following.
 
 ### Wall-sized numbers a surface can override
 

@@ -2,7 +2,7 @@
 // panes — no nav buttons needed). /page (desktop): adds chat + back-to-wall buttons. Right side is
 // the single voice button — tap-to-talk, driving the shared activity popup.
 // Mounted once per page by core.js.
-import { makeRecorder, makeListener, activityBar, bindTap, bindMic } from './voiceagent.js';
+import { makeRecorder, makeListener, activityBar, bindTap, bindMic, landChat } from './voiceagent.js';
 import { open as openSettings } from './settings.js';
 
 const CHAT = '<svg viewBox="0 0 24 24" width="21" height="21" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
@@ -136,12 +136,11 @@ export function mountNavbar() {
   // thread, because composing a reply means seeing what you are replying to.
   const chatSheet = document.getElementById('ph-chat');
   if (chatSheet) {
-    const log = document.getElementById('ai-log');
     const openChat = () => {
       chatSheet.classList.add('open');
       // The newest line first, then the focus — focusing first makes iOS scroll the page itself to
       // the input and the log lands wherever that left it.
-      if (log) log.scrollTop = log.scrollHeight;
+      landChat();
       const t = document.getElementById('ai-text');
       if (t) requestAnimationFrame(() => t.focus());
     };

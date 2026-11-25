@@ -13,7 +13,7 @@
 //
 // Self-fetching (NOT part of the status stream), like the todo pane. No-ops where #repospane is
 // absent (/page). Every wall's markup carries it, hidden on the kiosk, so it mounts there too.
-import { esc, md, mdInline, PIN_SVG, liveStream, readingWatch, reportPageError } from '../shared.js';
+import { esc, md, mdInline, PIN_SVG, liveStream, threadScroll, syncKeyed, reportPageError } from '../shared.js';
 import { makeRecorder, bindMic } from '../voiceagent.js';
 import { speak, stopSpeaking, speaking, paused, pauseSpeaking, resumeSpeaking } from '../speak.js';
 
@@ -386,7 +386,7 @@ async function fetchEvents(at, since) {
     const j = await r.json();
     if (cur !== at) return;
     take(at, j.events, j.epoch);
-    paintBody({ top: !reading() });
+    paintBody();
   } catch (_) { /* the next frame's seq will ask again */ }
 }
 
@@ -400,7 +400,7 @@ function frame(a) {
   if (!Number.isFinite(seq) || seq <= at.last) return;
   if (seq > at.last + 1) fetchEvents(at, at.last);            // a gap: what went by while this was not listening
   take(at, [a.ev]);
-  paintBody({ top: !reading() });
+  paintBody();
 }
 
 let following = false, connected = false;
@@ -419,21 +419,9 @@ function follow() {
   });
 }
 
-// THE VIEW NEVER MOVES WHILE THE USER IS READING IT (`readingWatch` in shared.js: scrolled since the look
-// began, and not let go at the very end). Then nothing arriving — a reply, a tool call, a thought — scrolls
-// it: the user may be halfway up the thread, and a jump there is lost place. Otherwise each arrival lands on
-// the newest thing, and so does COMING BACK to it (the app returning to the foreground, or the sessions pane
-// swiped back into view) with something new since the user left. `awayAt` is how far the conversation had
-// got when the user stopped looking; null while the user is looking.
-let awayAt = null, paneSeen = true;
-const reading = () => !!(cur && cur.watch && cur.watch.reading());
-function looking() { return document.visibilityState === 'visible' && paneSeen; }
-function lookChanged() {
-  if (!cur) { awayAt = null; return; }
-  if (!looking()) { if (awayAt === null) awayAt = cur.last; return; }
-  if (awayAt !== null) reload();
-}
-document.addEventListener('visibilitychange', lookChanged);
+// Coming back to the app re-reads the open session, since a suspended stream missed whatever went by.
+// How the view scrolls is `threadScroll` in shared.js; the re-read moves it only if it was following.
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && cur) reload(); });
 
 // The header's facts and the whole list, from the hub. A merge, not a replacement: a frame that
 // arrived while this was in flight is kept, and a gap either way is filled.
@@ -450,10 +438,7 @@ async function reload() {
   at.head = d;
   take(at, d.events, d.epoch);
   paintHead();
-  // Back from away with something new: land on it. Otherwise leave the view exactly where it is.
-  const back = awayAt !== null && looking();
-  paintBody({ top: back && at.last !== awayAt });
-  if (back) awayAt = null;
+  paintBody();
 }
 
 function paintHead() {
@@ -482,44 +467,26 @@ function shown(at) {
   return out.reverse();
 }
 
-// WHERE IT LANDS: the top of the NEWEST THING, whatever that thing is. A finished reply puts its own
-// first line at the top, because that is where reading starts; a tool call or a thought after it is
-// newer, so that goes to the top instead; a turn still running ends in the caret, and the caret goes
-// as far up as the scroll allows — which with history above it is simply the bottom. One rule, and
-// the browser's own clamp is what turns "as far up as it can" into "at the end" when the tail is
-// shorter than the box.
-//
-// `open` and `top` are the same placement (arriving at a session, and coming back to one with something
-// new in it). Every other paint leaves the scroll where it is: see `awayAt`.
-function paintBody({ open = false, top = false } = {}) {
+// Every event in order, keyed so a repaint updates in place. The newest message is whatever came last —
+// a reply, a thought, a tool call, the user's own words — and the caret of a running turn is not one.
+function paintBody() {
   const el = document.getElementById('repospane');
   const body = el && el.querySelector('.sv-body');
-  if (!body || !cur) return;
+  if (!body || !cur || !cur.scroll) return;
   const list = shown(cur);
   const working = list.length > 0 && list[list.length - 1].kind !== 'reply';
-  const keep = body.scrollTop;   // held explicitly: a wholesale rebuild must not be what moves the reader
-  body.innerHTML =
-    list.map((e) => e.kind === 'prompt'
-      // Queued (sent, not yet read) is dimmed; it takes its full colour and its real place when read.
-      ? `<div class="sv-words${e.seen === false ? ' sv-queued' : ''}">${saidHtml(e.text)}</div>`
-      : e.kind === 'reply'
-        ? `<div class="sv-turn"><div class="sv-reply">${md(String(e.text || '').trim())}</div></div>`
-        : e.kind === 'text'
-          ? `<div class="sv-thought">${md(e.text)}</div>`
-          : `<div class="sv-tool">${esc(e.text)}</div>`).join('') +
-    (working ? '<div class="sv-working"><span class="ai-caret">▍</span></div>' : '') +
-    // The user's words the hub does not have yet: sent from here, on their way to being typed in.
-    cur.placeholders.map((p) => `<div class="sv-words sv-queued">${saidHtml(p.text)}</div>`).join('');
-  if (open || top) {
-    // The last block in the body IS the newest thing. Inside a turn the newest part is the reply, not
-    // the prompt that asked for it, so a turn resolves one level further in.
-    const last = body.lastElementChild;
-    const at = last && last.classList.contains('sv-turn')
-      ? (last.querySelector('.sv-reply') || last)
-      : last;
-    // Less the body's own padding, so the first turn of a conversation rests at zero.
-    body.scrollTop = at ? Math.max(0, at.offsetTop - body.offsetTop - 12) : 0;
-  } else body.scrollTop = keep;
+  const items = list.map((e) => e.kind === 'prompt'
+    // Queued (sent, not yet read) is dimmed; it takes its full colour and its real place when read.
+    ? { key: 'p' + e.id, html: `<div class="sv-words${e.seen === false ? ' sv-queued' : ''}">${saidHtml(e.text)}</div>` }
+    : { key: 'e' + e.seq, html: e.kind === 'reply'
+      ? `<div class="sv-turn"><div class="sv-reply">${md(String(e.text || '').trim())}</div></div>`
+      : e.kind === 'text'
+        ? `<div class="sv-thought">${md(e.text)}</div>`
+        : `<div class="sv-tool">${esc(e.text)}</div>` });
+  if (working) items.push({ key: 'working', html: '<div class="sv-working"><span class="ai-caret">▍</span></div>' });
+  // The user's words the hub does not have yet: sent from here, on their way to being typed in.
+  for (const p of cur.placeholders) items.push({ key: 'q' + p.cmd, html: `<div class="sv-words sv-queued">${saidHtml(p.text)}</div>` });
+  cur.scroll.change(() => syncKeyed(body, items));
 }
 
 // The user's words into the open conversation. The text stays in the box until the hub has taken it, and a
@@ -558,7 +525,7 @@ async function sendWords(text, at = cur) {
       for (const a of shots) URL.revokeObjectURL(a.url);
       shots = [];
       const tray = el.querySelector('.sv-tray'); if (tray) tray.innerHTML = '';
-      paintBody({ top: !reading() });   // the words land like any arrival: on them, unless the user is reading
+      paintBody();   // the words land like any arrival
     }
   } catch (e) {
     // Words that were spoken exist nowhere else, so a failed send leaves them in the box to resend.
@@ -643,7 +610,6 @@ async function openSession(id) {
   if (cur && cur.rec) cur.rec.cancel();   // leaving mid-recording abandons it; a clip already stopped still sends
   cur = { id: d.id, key: keyOfRow(d), head: d, epoch: null, events: [], last: 0, placeholders: [], msg: null, sending: false, rec: null };
   remember(d.id);
-  awayAt = null;                          // opening lands on the newest thing by itself
   const at = cur;
   take(at, d.events, d.epoch);
   const pane = el.closest('.pane');
@@ -669,9 +635,10 @@ async function openSession(id) {
       '</div>' +
       '<div class="sv-tray"></div>' +
     '</div>';
-  at.watch = readingWatch(el.querySelector('.sv-body'));
+  // A fresh body, so the first paint lands on the newest message, as opening a thread does.
+  at.scroll = threadScroll(el.querySelector('.sv-body'), { lands: (n) => !n.classList.contains('sv-working') });
   paintHead();
-  paintBody({ open: true });
+  paintBody();
   // The session's last reply, read aloud in a real voice (speak.js). While it plays the button is a
   // pause — which keeps the place, so carrying on does not start the reply over — and a stop sits
   // beside it.
@@ -881,13 +848,13 @@ function mount() {
   mounted = true;
   const back = remembered();
   if (back) openSession(back).then((ok) => { if (!ok) { remember(null); load(); } }); else load();
-  // Coming back to the app re-reads the list. An open session is re-read by lookChanged instead;
+  // Coming back to the app re-reads the list. An open session is re-read on its own (above);
   // re-reading the list over it would put the user back on the list after every app switch.
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'visible' && !cur) load();
   });
-  // The sessions pane swiped out of view is as good as the app going away: coming back lands on news,
-  // and the list is re-read, since nothing pushes list changes to it while no session is open.
+  // The sessions pane swiped back into view re-reads the list, since nothing pushes list changes to it
+  // while no session is open.
   const pane = document.getElementById('repospane');
   // The hub lists the most recent parked sessions (routes/sessions.js PARKED); scrolling the list to its
   // end asks for the rest, once, and the list stays whole from then on.
@@ -898,11 +865,12 @@ function mount() {
     if (scroller.scrollTop + scroller.clientHeight < scroller.scrollHeight - 400) return;
     allParked = true; load();
   }, { passive: true });
+  let paneSeen = true;
   if (pane && 'IntersectionObserver' in window) {
     new IntersectionObserver((es) => {
       const seen = es[es.length - 1].intersectionRatio > 0.5;
       if (seen === paneSeen) return;
-      paneSeen = seen; lookChanged();
+      paneSeen = seen;
       if (seen && !cur) load();
     }, { threshold: [0, 0.5, 1] }).observe(pane);
   }

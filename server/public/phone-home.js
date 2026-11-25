@@ -5,7 +5,7 @@
 // It is the phone's analogue of tv-home.js. Where the wall gives a column to today's dial and a
 // column to the focused session's whole answer, this gives neither: a phone is read at arm's length
 // for a few seconds, so the day lies down and a session is a title with a line under it.
-import { esc, md, state, readingWatch } from './shared.js';
+import { esc, md, state, threadScroll, syncKeyed } from './shared.js';
 import { mount } from './cards/dayline.js';
 import { mountStrip } from './cards/daystrip.js';
 import { mountMonth } from './cards/month.js';
@@ -128,7 +128,6 @@ window.addEventListener('hubreset', () => {
   // The pane it opens on. Instant, not smooth: this is the page as loaded, not a navigation.
   const pn = document.getElementById('wallpanes');
   if (pn) pn.scrollLeft = pn.clientWidth;
-  toLast();
 });
 
 // ---- what is running -----------------------------------------------------
@@ -162,17 +161,11 @@ let thread = [];        // [{id, at, role, text, session, ctx}] oldest first —
 let older = [];         // the same, loaded by scrolling up past its start
 let olderDone = false, olderBusy = false;
 
-// NOTHING MOVES THE BOX WHILE IT IS BEING READ (`readingWatch` in shared.js: scrolled since the look
-// began, and not let go at the very end). Then the user's transcript appearing, the reply, the activity
-// line all land below and wait. Otherwise a new line or placeholder LANDS (`toLast`) as it comes — and so
-// does coming back to the page after it was hidden (`owed`, spent by the resync the stream does on the way
-// back), the first load, and the reset button. The activity line alone never lands: it is not a message.
-// `settling` is the stretch after a landing while the box's own height is still being decided by the
-// flex pass; the ResizeObserver re-lands only then, and the user's first touch ends it.
-let owed = true;
-let settling = false;
-const convWatch = conv ? readingWatch(conv) : { reading: () => true };
-document.addEventListener('visibilitychange', () => { if (document.hidden) owed = true; });
+// How it scrolls is `threadScroll` in shared.js: it lands on the newest message when it first paints and
+// whenever it was following, and nothing else moves it. The activity line is not a message, so it never lands.
+const convScroll = conv
+  ? threadScroll(conv, { lands: (n) => n.classList.contains('ph-convline') && !n.classList.contains('work') })
+  : null;
 
 // WHAT HAS BEEN HEARD BUT IS NOT IN THE THREAD YET. The worker writes the user bubble only when the run
 // is over, so without this the box sat unchanged from the moment the user spoke until the whole reply landed,
@@ -197,7 +190,7 @@ onPending((p) => {
   else if (p.state === 'prompt') pending = { text: String(p.text || ''), id: p.id || (pending && pending.id) };
   else return;
   if (pending) pendingT = setTimeout(() => { pending = null; paintConv(); }, 5 * 60 * 1000);
-  paintConv(!!pending && !convWatch.reading());
+  paintConv();
 });
 // WHAT THE MODEL IS DOING RIGHT NOW, on ONE line, at the bottom of the box. The run pushes a frame
 // per tool call and per thought; this keeps only the NEWEST, and keeps nothing at all once the reply
@@ -242,41 +235,12 @@ function settle(row) {
   if (row.role === 'assistant' || isPending(row)) { clearTimeout(pendingT); pending = null; }
 }
 
-// WHERE IT LANDS: the top of the LAST message at the top of the box, not the bottom of the thread.
-// A reply is read from its first line, and a box scrolled to the very end opens on the last line of
-// it with the rest above — so the newest thing on screen was its own tail. The session view has
-// landed this way for a while (`open` in cards/repos.js); this is the same rule in the small box.
-//
-// Clamped, so a short last message simply rests at the end of the scroll, which is where it already
-// was. Measured off the rects rather than offsetTop: the box is not an offset parent, so offsetTop
-// is against some ancestor and the difference is only a shift, not the number wanted.
-function toLast() {
-  if (!conv) return;
-  // The activity line is not a message: the last one above it is what lands.
-  let el = conv.lastElementChild;
-  if (el && el.classList.contains('work')) el = el.previousElementSibling;
-  const max = Math.max(0, conv.scrollHeight - conv.clientHeight);
-  if (!el) { conv.scrollTop = max; return; }
-  const delta = el.getBoundingClientRect().top - conv.getBoundingClientRect().top;
-  conv.scrollTop = Math.max(0, Math.min(max, conv.scrollTop + delta));
-}
+if (conv) conv.addEventListener('scroll', () => { if (conv.scrollTop < 80) loadOlder(); }, { passive: true });
 
-if (conv) {
-  conv.addEventListener('scroll', () => { if (conv.scrollTop < 80) loadOlder(); }, { passive: true });
-  for (const ev of ['touchstart', 'wheel']) conv.addEventListener(ev, () => { settling = false; }, { passive: true });
-  // This block's height is whatever the rest of the screen did not need, so it is not settled when
-  // the thread first paints into it — and a position taken against the wrong height is a thread
-  // parked somewhere nothing afterwards corrects. Re-place it whenever the box itself resizes.
-  try {
-    new ResizeObserver(() => { if (settling) toLast(); }).observe(conv);
-  } catch (_) { /* no ResizeObserver: the paint-time placement is what there is */ }
-}
-
-function paintConv(land) {
+function paintConv({ land = false } = {}) {
   if (!conv) return;
-  const keep = conv.scrollTop;
-  const rows = older.concat(thread);
-  conv.innerHTML = rows.map((r, i) => {
+  const items = [];
+  older.concat(thread).forEach((r, i) => {
     const said = r.role === 'assistant';
     // NO `You` / `Hub` label. The user's own words are dim and the hub's are not, which already says which
     // is which — a word in a gutter said it twice and took the gutter's width off every line.
@@ -286,27 +250,22 @@ function paintConv(land) {
     // A reply a fallback engine wrote (credits, Codex) is coloured by it.
     const eng = said && /^(credits|codex)$/.test(r.engine || '') ? ' eng-' + r.engine : '';
     // Where one context ends and the next begins — only between rows, never above the first.
-    return (r.ctx && i > 0 ? '<div class="ph-convrule"></div>' : '') +
+    if (r.ctx && i > 0) items.push({ key: 'rule' + r.id, html: '<div class="ph-convrule"></div>' });
+    items.push({ key: 'm' + r.id, html:
       `<div class="ph-convline ${said ? 'said' : 'ask'}${from ? ' sess' : ''}${eng}"${said && r.sid ? ` data-sess="${esc(r.sid)}"` : ''}>` +
       (from ? `<span class="ph-convk">${esc(from)}</span>` : '') +
-      `<div class="ph-convt">${md(r.text)}</div></div>`;
-  }).join('') + (pending
-    ? '<div class="ph-convline ask pend"><div class="ph-convt">' +
-      (pending.text ? md(pending.text) : '<span class=ph-dots><i></i><i></i><i></i></span>') +
-      '</div></div>'
-    : '') + (act || (pending && pending.text)
-    // The lowest line, under the user's words and above nothing: the caret says it is working and the step
-    // says what it is doing. Plain text, collapsed and clipped to the one line — a thought arrives as
-    // markdown and this is not the surface that reads one. Words heard with no step reported yet are
-    // the caret alone, so there is never a gap between the words landing and the first tool call.
-    ? '<div class="ph-convline work"><div class="ph-convt"><span class="ph-caret">\u258d</span>' +
-      '<span class="ph-worktxt">' + esc(act ? act.text : '') + '</span></div></div>'
-    : '');
-  // Twice: once now, because the layout is already final after the assignment above, and once on the
-  // next frame, because this block's own height is whatever the rest of the screen did not need and
-  // is not settled until the flex pass has run.
-  if (land) { settling = true; toLast(); requestAnimationFrame(() => { if (settling) toLast(); }); }
-  else conv.scrollTop = keep;
+      `<div class="ph-convt">${md(r.text)}</div></div>` });
+  });
+  if (pending) items.push({ key: 'pending', html: '<div class="ph-convline ask pend"><div class="ph-convt">' +
+    (pending.text ? md(pending.text) : '<span class=ph-dots><i></i><i></i><i></i></span>') + '</div></div>' });
+  // The lowest line, under the user's words and above nothing: the caret says it is working and the step
+  // says what it is doing. Plain text, collapsed and clipped to the one line — a thought arrives as
+  // markdown and this is not the surface that reads one. Words heard with no step reported yet are
+  // the caret alone, so there is never a gap between the words landing and the first tool call.
+  if (act || (pending && pending.text)) items.push({ key: 'work', html:
+    '<div class="ph-convline work"><div class="ph-convt"><span class="ph-caret">\u258d</span>' +
+    '<span class="ph-worktxt">' + esc(act ? act.text : '') + '</span></div></div>' });
+  convScroll.change(() => syncKeyed(conv, items), { land });
 }
 
 // The text is kept WHOLE — paragraphs, lists and all. It arrives as markdown and is rendered as
@@ -369,11 +328,9 @@ async function loadOlder() {
     const page = shown(rows.map(rowOf).filter((x) => x && !have.has(x.id)));
     // The page's last row was followed by what is now the first one held; that row opens a context
     // exactly when it already says so, so nothing more is needed at the seam.
-    const fromBottom = conv.scrollHeight - conv.scrollTop;
     older = page.concat(older);
     if (rows.length < PAGE) olderDone = true;
-    paintConv(false);
-    conv.scrollTop = conv.scrollHeight - fromBottom;
+    paintConv();   // the rows land above what is on screen, which stays where it is
   } catch (e) {
     console.error('phone conversation: loading earlier messages failed', e);
   } finally { olderBusy = false; }
@@ -382,7 +339,7 @@ async function loadOlder() {
 }
 
 // A fresh load holds only the current context, so the reset gives the scrolled-back part up too.
-window.addEventListener('hubreset', () => { older = []; olderDone = false; paintConv(true); });
+window.addEventListener('hubreset', () => { older = []; olderDone = false; paintConv({ land: true }); });
 
 async function resync() {
   try {
@@ -397,13 +354,11 @@ async function resync() {
     // as its `working` frame, so with the phone asleep its rows arrive here, and by then a later
     // command can be the newest: matched against that alone, the placeholder never came down.
     if (pending && ((pending.text && thread.some(isPending)) || (pending.id && answered(pending.id)))) { clearTimeout(pendingT); pending = null; }
-    const land = owed && !document.hidden;
-    if (land) owed = false;
-    paintConv(land);
+    paintConv();
   } catch (_) { /* the next push or resync reconciles */ }
 }
 
-onThread((row) => { if (!row) { resync(); return; } takeRow(row); settle(row); paintConv(!convWatch.reading()); });
+onThread((row) => { if (!row) { resync(); return; } takeRow(row); settle(row); paintConv(); });
 
 // ---- the swipe panes -----------------------------------------------------
 //

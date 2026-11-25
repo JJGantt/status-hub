@@ -47,35 +47,92 @@ export const KIOSK = document.body.classList.contains('tv')
 export const heatPick = (s, key) =>
   (document.body.classList.contains('homewall') && s[key + '_home']) || {};
 
-// WHETHER A THREAD IS BEING READ — the one test every thread here asks before it moves. Reading is having
-// SCROLLED it since the look began (the app coming to the front, the element coming on screen) and not
-// having let go with the very end in view. Looking without a scroll is not reading: the screen is on
-// whatever the page left it on, so an arrival lands. Resting at the bottom is not reading either, so
-// the next arrival lands there too. While reading, nothing that arrives moves the thread; the watch
-// applies the same rule (`touched` in apps/Watch/HomeView.swift and SessionsView.swift).
+// HOW EVERY CONVERSATION ON THE PAGE SCROLLS. Three rules, and nothing else moves a thread:
+//   1. A thread opened for the first time lands on its newest message.
+//   2. A new message lands only when the view was FOLLOWING: resting at the very end, or still where the
+//      page last landed it. Scrolled anywhere else, nothing that arrives moves it.
+//   3. Everything else (the app coming back, a resync, a rebuild, an edit, older rows loading above) leaves
+//      what is on screen exactly where it was.
+// Landing puts the TOP of the message at the top of the box, because a reply is read from its first line.
 //
-// A scroll counts as the user's only while a finger is down or within a moment of the last input, so
-// the page's own landings (setting scrollTop) never mark it read. Momentum keeps the window open: each
-// of its scroll events is itself an input.
-export function readingWatch(el) {
-  let touched = false, down = false, last = 0, idle = 0;
-  const atEnd = () => el.scrollHeight - el.scrollTop - el.clientHeight < 4;
-  const settle = () => { clearTimeout(idle); idle = setTimeout(() => { if (!down && touched && atEnd()) touched = false; }, 150); };
-  el.addEventListener('touchstart', () => { down = true; last = Date.now(); }, { passive: true });
-  for (const ev of ['touchend', 'touchcancel']) el.addEventListener(ev, () => { down = false; last = Date.now(); if (touched) settle(); }, { passive: true });
-  el.addEventListener('wheel', () => { last = Date.now(); }, { passive: true });
+// The page only ever changes a thread inside `change(fn)`. Before fn runs it notes the first item on
+// screen, and afterwards puts that item back at the same height, which is what "stays put" needs once
+// rows are inserted, edited or removed above it. Items are elements carrying `data-key`; `lands(el)` says
+// which of them are messages (a rule or a "working" line is an item but never lands). Rows are updated in
+// place by key (`syncKeyed`), never rebuilt wholesale, so a stable key is what makes an update an update.
+export function threadScroll(el, { lands = () => true } = {}) {
+  let following = true, own = null, depth = 0, end = true;
+  const atEnd = () => el.scrollHeight - el.scrollTop - el.clientHeight < 8;
   el.addEventListener('scroll', () => {
-    if (!down && Date.now() - last > 300) return;   // the page's own scroll
-    last = Date.now();
-    touched = true;
-    settle();
+    end = atEnd();
+    if (own !== null && Math.abs(el.scrollTop - own) < 2) return;   // the page's own move, not the user's
+    own = null;
+    following = end;
   }, { passive: true });
-  const end = () => { touched = false; };
-  document.addEventListener('visibilitychange', () => { if (document.hidden) end(); });
+  const set = (top) => {
+    el.scrollTop = Math.max(0, Math.min(el.scrollHeight - el.clientHeight, Math.round(top)));
+    own = el.scrollTop;
+    end = atEnd();
+  };
+  // The box's own height can change under it (the page's layout settling, the keyboard). Following, the
+  // view stays on what it was showing: the end if it was at the end, otherwise the newest message.
   try {
-    new IntersectionObserver((es) => { if (!es[es.length - 1].isIntersecting) end(); }).observe(el);
-  } catch (_) { /* no IntersectionObserver: only the app going behind ends a look */ }
-  return { reading: () => touched && !document.hidden };
+    new ResizeObserver(() => { if (following) { if (end) set(el.scrollHeight); else land(); } }).observe(el);
+  } catch (_) { /* no ResizeObserver: a resize leaves the scroll where it was */ }
+  const newest = () => {
+    const all = el.querySelectorAll('[data-key]');
+    for (let i = all.length - 1; i >= 0; i--) if (lands(all[i])) return all[i];
+    return null;
+  };
+  function land(node = newest()) {
+    following = true;
+    if (!node) { set(el.scrollHeight); return; }
+    set(el.scrollTop + node.getBoundingClientRect().top - el.getBoundingClientRect().top);
+  }
+  function change(fn, { land: force = false } = {}) {
+    if (depth) return fn();
+    const top = el.getBoundingClientRect().top;
+    let anchor = null, was = 0;
+    for (const n of el.querySelectorAll('[data-key]')) {
+      const r = n.getBoundingClientRect();
+      if (r.bottom > top) { anchor = n.dataset.key; was = r.top; break; }
+    }
+    const before = newest(), beforeKey = before && before.dataset.key;
+    let out;
+    depth++;
+    try { out = fn(); } finally { depth--; }
+    const after = newest();
+    if (force || (following && after && after.dataset.key !== beforeKey)) { land(after); return out; }
+    const now = anchor != null && el.querySelector('[data-key="' + CSS.escape(anchor) + '"]');
+    if (now) { const d = now.getBoundingClientRect().top - was; if (Math.abs(d) >= 1) set(el.scrollTop + d); }
+    return out;
+  }
+  return { change, land };
+}
+
+// Makes `el`'s children exactly `items` ([{key, html}], html one element each), in order, touching only
+// what differs: a row whose html is unchanged keeps its node.
+export function syncKeyed(el, items) {
+  const have = new Map();
+  for (const n of [...el.children]) { if (n.dataset.key != null) have.set(n.dataset.key, n); else n.remove(); }
+  let prev = null;
+  for (const it of items) {
+    let n = have.get(it.key);
+    if (!n || n._html !== it.html) {
+      const t = document.createElement('template');
+      t.innerHTML = it.html;
+      const m = t.content.firstElementChild;
+      m.dataset.key = it.key;
+      m._html = it.html;
+      if (n) n.replaceWith(m);
+      n = m;
+    }
+    have.delete(it.key);
+    const want = prev ? prev.nextSibling : el.firstChild;
+    if (n !== want) el.insertBefore(n, want);
+    prev = n;
+  }
+  for (const n of have.values()) n.remove();
 }
 
 // CAN A DRAG STARTING HERE SCROLL SOMETHING? Scrubbing a heat map and scrolling one want the same

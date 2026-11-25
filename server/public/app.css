@@ -674,7 +674,8 @@ body.tv.phonewall .pane-repos.sv-open #repospane{flex:1 1 auto;min-height:0;disp
 .sv-thought{font-size:13.5px;line-height:1.45;color:#9aa5b3}
 /* What the session still has running in the background after its reply (cards/repos.js paintBody): the
    working teal, so it reads as the same kind of thing as the sweep on its row. */
-.sv-bg{font:12px/1.4 ui-monospace,SFMono-Regular,Menlo,monospace;color:#4fd1c5}
+.sv-bg{font:12px/1.4 ui-monospace,SFMono-Regular,Menlo,monospace;color:#4fd1c5;display:flex;gap:6px;align-items:flex-start}
+.sv-bg-lines{min-width:0;flex:1 1 auto}
 .sv-bg .ai-caret{color:#4fd1c5}
 .sv-bg-line{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;opacity:.8}
 .sv-bg-k{opacity:.6}

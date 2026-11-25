@@ -491,9 +491,9 @@ function paintBody() {
   const bg = !working && cur.head && cur.head.background;
   if (bg) {
     const lines = [...(bg.agents || []).map((a) => ['agent', a]), ...(bg.shell ? [['shell', '']] : [])];
-    items.push({ key: 'bg', html: '<div class="sv-bg"><span class="ai-caret">▍</span>' +
+    items.push({ key: 'bg', html: '<div class="sv-bg"><span class="ai-caret">▍</span><div class="sv-bg-lines">' +
       lines.map(([k, t]) => `<div class="sv-bg-line"><span class="sv-bg-k">${k}</span>${t ? ' ' + esc(t) : ''}</div>`).join('') +
-      '</div>' });
+      '</div></div>' });
   }
   // The user's words the hub does not have yet: sent from here, on their way to being typed in.
   for (const p of cur.placeholders) items.push({ key: 'q' + p.cmd, html: `<div class="sv-words sv-queued">${saidHtml(p.text)}</div>` });

@@ -10,17 +10,20 @@ const express = require('express');
 //                                                 `after` or it has ended (a held request answered by
 //                                                 the agent's update, not a poll)
 //   POST /api/handoffs/:id/act                    a tap (x, y as fractions of the screenshot), text, a
-//                                                 key, refresh, done or cancel → a handoff_actions row
+//                                                 key, refresh, view (crop ⇄ whole), done or cancel →
+//                                                 a handoff_actions row
 //   GET  /handoff/:id                             the tap page, for a browser or a notification tap
 //
 // An open handoff is also ON ITS SESSION (`openFor`, in the session payload), so the phone's and the
 // watch's session views show it for as long as it waits, as a permission prompt is shown.
-const COLS = 'id,session,target,note,status,image,seq,width,height,taps,typed,error,updated_at';
+const COLS = 'id,session,target,note,status,image,seq,width,height,taps,typed,error,updated_at,region,selector,whole';
 const view = (r) => r && {
   id: r.id, session: r.session, target: r.target, note: r.note, status: r.status, seq: r.seq,
   img: r.image ? `/img/${r.image}` : null, width: r.width, height: r.height, error: r.error,
+  // Shown cropped to the part that matters (a region or an element); `whole` is his toggle to see it all.
+  framed: !!(r.region || r.selector), whole: !!r.whole,
 };
-const KINDS = ['tap', 'text', 'key', 'refresh', 'done', 'cancel'];
+const KINDS = ['tap', 'text', 'key', 'refresh', 'view', 'done', 'cancel'];
 const KEYS = ['enter', 'tab', 'backspace', 'escape'];
 
 module.exports = function ({ gated, pushAll, pushSessions, sb, sbInsert }) {

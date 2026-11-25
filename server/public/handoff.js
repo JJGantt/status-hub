@@ -38,6 +38,8 @@ export function openHandoff(id, { page = false } = {}) {
     cur = v;
     note.textContent = v.note || v.target;
     if (v.img && img.getAttribute('src') !== v.img) img.src = v.img;
+    view.hidden = !v.framed;
+    view.textContent = v.whole ? 'Crop' : 'Full';
     if (!['new', 'open'].includes(v.status)) {
       ov.classList.add('ended');
       state.textContent = v.status === 'done' ? 'Done' : v.status === 'cancelled' ? 'Cancelled' : `Failed: ${v.error || ''}`;
@@ -69,7 +71,10 @@ export function openHandoff(id, { page = false } = {}) {
     const text = input.value; input.value = '';
     act({ kind: 'text', text });
   }, 'ho-go'));
+  const view = btn('Full', () => act({ kind: 'view' }));
+  view.hidden = true;
   row2.append(
+    view,
     btn('Enter', () => act({ kind: 'key', key: 'enter' })),
     btn('Tab', () => act({ kind: 'key', key: 'tab' })),
     btn('Zoom', () => { zoom = !zoom; ov.classList.toggle('zoom', zoom); }),

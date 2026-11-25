@@ -30,9 +30,15 @@ data-layer README § Handoffs.
 |---|---|
 | phone, notification | the banner opens the tap screen (`Push.swift` → `PageLaunch.handoff` → `window.__openHandoff`) |
 | phone, session view | a blue bar with the screenshot and the note (`cards/repos.js`, `paintHandoff`); a tap opens the tap screen |
-| phone, tap screen | `public/handoff.js`: tap the screenshot to click; the box and Type to type; Enter, Tab, Zoom, Refresh, Cancel, Done |
+| phone, tap screen | `public/handoff.js`: tap the screenshot to click; the box and Type to type; Full/Crop, Enter, Tab, Zoom, Refresh, Cancel, Done |
 | browser | `/handoff/:id`, the same tap screen as a page |
 | watch | the session page's card (`handoffCard` in `SessionsView.swift`; the notification opens the session); full screen in `HandoffView.swift`: tap to click, the crown zooms, a drag pans, a double tap fits, buttons for keyboard, Enter, Refresh, Cancel, Done |
+
+**The screenshot is the part that matters, not the whole screen.** `mac-screen` captures one app's
+window (on whichever display it is), `mac-chrome` Chrome's front window, `pi-browser` the page; the
+session can crop further to a `region` (fractions of the window or page) or, on the Pi, a CSS
+`selector`, whose element is followed as the page changes. A cropped handoff has `framed` set, and the
+tap screen offers Full / Crop (watch: the expand glyph), the `view` action, which flips `whole`.
 
 A tap is sent as fractions (0-1) of the screenshot, so it lands in the same place whatever size the
 screenshot is drawn at.

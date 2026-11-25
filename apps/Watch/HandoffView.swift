@@ -11,6 +11,9 @@ struct HandoffState: Decodable, Equatable {
     let width: Int?
     let height: Int?
     let error: String?
+    /// Cropped to the part that matters; `whole` is the toggle to see the whole window or page.
+    let framed: Bool?
+    let whole: Bool?
     var open: Bool { status == "new" || status == "open" }
 }
 
@@ -18,7 +21,8 @@ struct HandoffID: Identifiable { let id: String }
 
 /// **The screen a session handed over, full screen** (docs/HANDOFFS.md). A tap on the screenshot is
 /// clicked at that spot on the real screen; the keyboard button types there; then a fresh screenshot
-/// arrives. The crown zooms (to tap something small), a drag pans, a double tap fits it again. Followed
+/// arrives. The crown zooms (to tap something small), a drag pans, a double tap fits it again; when the
+/// session cropped it to the part that matters, a button shows the whole window or page instead. Followed
 /// with a held request per screenshot, never a timer.
 struct HandoffView: View {
     let id: String
@@ -79,6 +83,11 @@ struct HandoffView: View {
                 Image(systemName: "keyboard")
             } onSubmit: { text in
                 if !text.isEmpty { act(["kind": "text", "text": text]) }
+            }
+            if state?.framed == true {
+                button(state?.whole == true ? "arrow.down.right.and.arrow.up.left" : "arrow.up.left.and.arrow.down.right") {
+                    act(["kind": "view"])
+                }
             }
             button("return") { act(["kind": "key", "key": "enter"]) }
             button("arrow.clockwise") { act(["kind": "refresh"]) }

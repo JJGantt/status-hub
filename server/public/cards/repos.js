@@ -62,7 +62,7 @@ function sessionsHtml(s) {
   // The × HIDES the row from every surface's list (`/api/sessions/hide`); the session itself is
   // untouched and the orchestrator still sees it, and anything new in it brings the row back.
   const line = (x, live) =>
-    `<li class="sess${live ? ' live' : ''}${x.unread ? ' unread' : ''}${x.working ? ' working' : ''}${x.incident ? ' incident' : ''}${x.codex ? ' codex' : ''}${x.prompt ? ' asking' : ''}" data-id="${esc(x.id)}"${x.machine_color ? ` style="--mc:${esc(x.machine_color)}"` : ''}>` +
+    `<li class="sess${live ? ' live' : ''}${x.unread ? ' unread' : ''}${x.working ? ' working' : ''}${!x.working && x.background ? ' bg' : ''}${x.incident ? ' incident' : ''}${x.codex ? ' codex' : ''}${x.prompt ? ' asking' : ''}" data-id="${esc(x.id)}"${x.machine_color ? ` style="--mc:${esc(x.machine_color)}"` : ''}>` +
       `<div class="sess-main">` +
         `<span class="sess-repo">` +
         (x.pinned ? PIN_SVG : '') + `${esc(x.label || x.repo)}` +
@@ -282,6 +282,8 @@ function keep(payload) {
   cur.id = now.id;
   cur.head.prompt = now.prompt || null;
   paintAsk();
+  const bg = now.background || null;
+  if (JSON.stringify(bg) !== JSON.stringify(cur.head.background || null)) { cur.head.background = bg; paintBody(); }
   if (moved || now.status !== cur.head.status) reload();
 }
 
@@ -484,6 +486,15 @@ function paintBody() {
         ? `<div class="sv-thought">${md(e.text)}</div>`
         : `<div class="sv-tool">${esc(e.text)}</div>` });
   if (working) items.push({ key: 'working', html: '<div class="sv-working"><span class="ai-caret">▍</span></div>' });
+  // The turn is over but work it started goes on: each background agent by its description, and a
+  // background shell, under a pulsing caret, until the host says they have finished. Not a message.
+  const bg = !working && cur.head && cur.head.background;
+  if (bg) {
+    const lines = [...(bg.agents || []).map((a) => ['agent', a]), ...(bg.shell ? [['shell', '']] : [])];
+    items.push({ key: 'bg', html: '<div class="sv-bg"><span class="ai-caret">▍</span>' +
+      lines.map(([k, t]) => `<div class="sv-bg-line"><span class="sv-bg-k">${k}</span>${t ? ' ' + esc(t) : ''}</div>`).join('') +
+      '</div>' });
+  }
   // The user's words the hub does not have yet: sent from here, on their way to being typed in.
   for (const p of cur.placeholders) items.push({ key: 'q' + p.cmd, html: `<div class="sv-words sv-queued">${saidHtml(p.text)}</div>` });
   cur.scroll.change(() => syncKeyed(body, items));
@@ -636,7 +647,7 @@ async function openSession(id) {
       '<div class="sv-tray"></div>' +
     '</div>';
   // A fresh body, so the first paint lands on the newest message, as opening a thread does.
-  at.scroll = threadScroll(el.querySelector('.sv-body'), { lands: (n) => !n.classList.contains('sv-working') });
+  at.scroll = threadScroll(el.querySelector('.sv-body'), { lands: (n) => !n.classList.contains('sv-working') && !n.classList.contains('sv-bg') });
   paintHead();
   paintBody();
   // The session's last reply, read aloud in a real voice (speak.js). While it plays the button is a

@@ -607,3 +607,8 @@ body.tv .hw-row.working{clip-path:inset(0)}
 body.tv .hw-row.working::before{content:'';position:absolute;left:0;width:40%;bottom:0;height:3px;pointer-events:none;
   background:linear-gradient(90deg,transparent,#4fd1c5,transparent);will-change:transform;
   animation:sessSweep 1.8s steps(27) infinite}
+/* BACKGROUND: an agent or shell still running after the turn ended — fainter and slower (app.css says why). */
+body.tv .hw-row.bg{clip-path:inset(0)}
+body.tv .hw-row.bg::before{content:'';position:absolute;left:0;width:40%;bottom:0;height:3px;pointer-events:none;
+  background:linear-gradient(90deg,transparent,#4fd1c5,transparent);will-change:transform;opacity:.5;
+  animation:sessSweep 3.6s steps(54) infinite}

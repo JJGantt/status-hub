@@ -310,7 +310,9 @@ is left for recording and unread.
 because they answer different questions and are read together: a **white** left edge is the focused
 session — where a spoken follow-up goes — with a pin beside its name when it was pinned there; an
 **amber** left edge is a finished reply nobody has opened; a green **dot** is a session working
-now. Under each name is what that machine is doing, live off `/api/session-stream` — a tool call in
+now, drawn hollow when its turn is over but a background agent or shell it started is still running
+(`background`, docs/SESSIONS.md § 10) — the open session then lists that work under its reply
+(`BackgroundWork`). Under each name is what that machine is doing, live off `/api/session-stream` — a tool call in
 teal, what the model says between them in a plain light — and the line is always there, however empty,
 because a row that grows when a tool fires and shrinks when one stops makes the whole list jump every
 few seconds. Opening a session marks it seen (`POST /api/sessions/seen`), so the mark clears on the

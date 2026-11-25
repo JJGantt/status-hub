@@ -624,6 +624,11 @@ body.tv.phonehome .hw-row.working{clip-path:inset(0)}
 body.tv.phonehome .hw-row.working::before{content:'';position:absolute;left:0;width:40%;bottom:0;height:1.5px;pointer-events:none;
   background:linear-gradient(90deg,transparent,#4fd1c5,transparent);will-change:transform;
   animation:sessSweep 1.8s steps(27) infinite}
+/* BACKGROUND: an agent or shell still running after the turn ended — fainter and slower (app.css says why). */
+body.tv.phonehome .hw-row.bg{clip-path:inset(0)}
+body.tv.phonehome .hw-row.bg::before{content:'';position:absolute;left:0;width:40%;bottom:0;height:1.5px;pointer-events:none;
+  background:linear-gradient(90deg,transparent,#4fd1c5,transparent);will-change:transform;opacity:.5;
+  animation:sessSweep 3.6s steps(54) infinite}
 
 /* The TV Guide pane (cards/guide.js): the bedroom TV's shelves, each a titled row of 16:9 cards that
    scrolls sideways, the service's icon rimmed in white at the top right and the note, cyan on black,

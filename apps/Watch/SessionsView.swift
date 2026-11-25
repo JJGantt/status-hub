@@ -6,7 +6,8 @@ import SwiftUI
 /// A row carries the same marks as the phone's list (`cards/sessions.js`, `phone-home.css`), because they
 /// answer different questions and are read together: a PIN beside the name of every session the user
 /// pinned (pins head the list); the AMBER edge on the left, a finished reply nobody has opened; the DOT, a
-/// session working now; the thin bar on the right, the machine holding it.
+/// session working now (hollow: its turn is over, but a background agent or shell it started is still
+/// running); the thin bar on the right, the machine holding it.
 /// Under each name is what its machine is doing, live off `/api/session-stream`.
 struct SessionsView: View {
     @EnvironmentObject private var sessions: Sessions
@@ -100,6 +101,9 @@ struct SessionsView: View {
             VStack(alignment: .trailing, spacing: 4) {
                 if s.working == true {
                     Circle().fill(Color.green).frame(width: 7, height: 7).padding(.top, 4)
+                } else if s.inBackground {
+                    // A background agent or shell still running after the turn: the same dot, hollow.
+                    Circle().stroke(Color.green, lineWidth: 1.5).frame(width: 7, height: 7).padding(.top, 4)
                 }
                 Spacer(minLength: 0)
                 // A recording running in THIS session, while the user is somewhere else in the app: the one
@@ -553,6 +557,12 @@ struct SessionView: View {
             ForEach(placeholders, id: \.msgId) { p in
                 words(p.text).opacity(0.5).id("ph\(p.msgId)")
             }
+            // The turn is over but work it started goes on: each background agent by its description,
+            // and a background shell, until the host says they have finished. Not an event, so it is
+            // never what the page lands on.
+            if let row = sessions.row(for: key), row.inBackground, let bg = row.background {
+                BackgroundWork(agents: bg.agents, shell: bg.shell)
+            }
         }
         // At least a screen tall, so a short conversation's blank space below the last line is still
         // tappable: the tap gesture and its hit-testing (below) are on this view's own frame, which
@@ -613,3 +623,32 @@ struct SessionView: View {
     }
 }
 
+
+/// What a session still has running in the background after its reply, in the working green under a
+/// pulsing mark: one line per background agent, its description, and one for a background shell.
+private struct BackgroundWork: View {
+    let agents: [String]
+    let shell: Bool
+    @State private var lit = false
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 4) {
+            Circle().stroke(Color.green, lineWidth: 1.5).frame(width: 7, height: 7)
+                .opacity(lit ? 1 : 0.3)
+                .padding(.top, 3)
+                .onAppear { withAnimation(.easeInOut(duration: 0.8).repeatForever(autoreverses: true)) { lit = true } }
+            VStack(alignment: .leading, spacing: 2) {
+                ForEach(Array(agents.enumerated()), id: \.offset) { _, a in line("agent", a) }
+                if shell { line("shell", nil) }
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private func line(_ kind: String, _ text: String?) -> some View {
+        (Text(kind).foregroundColor(Color.green.opacity(0.6))
+            + Text(text.map { " " + $0 } ?? "").foregroundColor(Color.green.opacity(0.9)))
+            .font(.system(size: 10, design: .monospaced))
+            .lineLimit(2)
+    }
+}

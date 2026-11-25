@@ -437,6 +437,25 @@ an event, so `sessionWatch.js` watches it on both machines and pushes what it se
 
     Every surface draws that list and nothing else (HUB-INTERNALS.md § The conversation as one list).
 
+**Background work is the host's to read, not the transcript's.** A turn can end with work it started
+still running: an agent sent with `run_in_background`, or a shell sent to the background. The parent's
+transcript says nothing more until that work reports back (a `task-notification` that starts a new turn),
+so the watcher above sees a finished turn. Each host therefore publishes `desk_sessions.bg_agents` and
+`bg_shell` from Claude Code's own records (`backgroundOf` in `orchestrator/src/discover.js`):
+
+- `bg_shell` is the process record's `status: "shell"`, which Claude Code writes in place of `idle` while a
+  background shell is running and for nothing else. A background agent leaves the record `idle`.
+- `bg_agents` is the description of each agent whose sidecar `<conversation>/subagents/agent-<id>.meta.json`
+  says `requestShape: "background"` with no `finished` (or `stoppedByUser`, `sweptByStop`). A sidecar older
+  than the process is ignored: it belongs to a process that died with the agent in flight and never wrote
+  its end, and seven of those were lying around when this was built.
+
+Both are read on every tick and once more 1.5s after every turn end (`tickSoon` / `reconcileSoon`), since the
+record is rewritten just after the reply lands. The work ending is a new turn, which re-reads them. The hub
+sends them to every surface as `background` (`{ agents, shell }` or null, running rows only). The Mac's idle
+reaper, the Pi's reaper and its eviction never take a session with background work: parking it kills the
+work, and its transcript goes quiet while the work goes on. Codex has no background work to report.
+
 **`done` and the summary behind it are sent until the hub takes them** (`pushUntilHeard`, about four
 minutes of retries, then an error). The watcher writes `last_reply` to the row directly, so the tick
 reads a turn whose `done` was lost as already reported and never re-sends it: without the retry, a

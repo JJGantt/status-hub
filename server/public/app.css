@@ -672,6 +672,12 @@ body.tv.phonewall .pane-repos.sv-open #repospane{flex:1 1 auto;min-height:0;disp
 .sv-words{font-size:14px;line-height:1.45;color:#6ea8ff;align-self:flex-end;max-width:85%}
 .sv-reply{font-size:15px;line-height:1.5;color:#d5dbe3}
 .sv-thought{font-size:13.5px;line-height:1.45;color:#9aa5b3}
+/* What the session still has running in the background after its reply (cards/repos.js paintBody): the
+   working teal, so it reads as the same kind of thing as the sweep on its row. */
+.sv-bg{font:12px/1.4 ui-monospace,SFMono-Regular,Menlo,monospace;color:#4fd1c5}
+.sv-bg .ai-caret{color:#4fd1c5}
+.sv-bg-line{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;opacity:.8}
+.sv-bg-k{opacity:.6}
 .sv-tool{font:12px/1.4 ui-monospace,SFMono-Regular,Menlo,monospace;color:#6b7686;white-space:nowrap;
   overflow:hidden;text-overflow:ellipsis}
 .sv-body code{font:.9em ui-monospace,SFMono-Regular,Menlo,monospace;background:#0e1318;border-radius:4px;padding:1px 4px}
@@ -1436,6 +1442,13 @@ body.phonehome #usagebars{top:env(safe-area-inset-top,0px)}
 .sessions li.sess.working::before{content:'';position:absolute;left:0;width:40%;bottom:0;height:2px;pointer-events:none;
   background:linear-gradient(90deg,transparent,#4fd1c5,transparent);will-change:transform;
   animation:sessSweep 1.8s steps(27) infinite}
+/* BACKGROUND: the turn is over but a background agent or shell it started is still running (the hub's
+   `background`). The same sweep, fainter and at half the speed, so it reads as work still going on and
+   is still told apart from a turn in flight. Written in all three files, as the sweep is. */
+.sessions li.sess.bg{clip-path:inset(0)}
+.sessions li.sess.bg::before{content:'';position:absolute;left:0;width:40%;bottom:0;height:2px;pointer-events:none;
+  background:linear-gradient(90deg,transparent,#4fd1c5,transparent);will-change:transform;opacity:.5;
+  animation:sessSweep 3.6s steps(54) infinite}
 
 /* The focused session's running turn, in a wall's reply panel (cards/sessions.js paintTurn): what was
    said to it, then each tool call and note as it happens, held at the bottom. Sized in em so each wall's

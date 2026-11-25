@@ -118,6 +118,15 @@ module.exports = function (ctx) {
   // every surface that marks an incident red, so it is plain at a glance that Claude is not doing the work.
   // An incident outranks it: one row carries one alert, and the red one is the louder fact.
   const isCodex = (s) => !!s && s.agent === 'codex' && !isIncident(s);
+  // What a RUNNING session still has going in the background once its turn is over — the descriptions of
+  // its background agents, and whether a background shell is running — as its host read them from Claude
+  // Code's own records (voice-pipeline discover.js `backgroundOf`). Null when nothing is. Every surface
+  // draws it as work in progress, so a reply that handed the work to an agent is not read as the end of it.
+  const backgroundOf = (s) => {
+    if (!s || s.status !== 'resident') return null;
+    const agents = Array.isArray(s.bg_agents) ? s.bg_agents.filter(Boolean) : [];
+    return agents.length || s.bg_shell ? { agents, shell: !!s.bg_shell } : null;
+  };
 
   // PARKED ROWS ARE CAPPED. Every session ever parked stays resumable, and there are hundreds; every
   // surface drew all of them, and every change to any session pushed the whole list to each one — the
@@ -156,6 +165,7 @@ module.exports = function (ctx) {
       // Only a running session can be mid-turn. A parked row can still say `working` if whatever parked
       // it forgot to clear it, and then the sweep runs on a session that has nothing to show.
       worker: s.worker, status: s.status, working: s.status === 'resident' && !!s.working,
+      background: backgroundOf(s),
       // What a turn in flight is on right now — its newest tool call, the text between two, or the prompt
       // it started from — so a list opened mid-turn says that rather than the reply to the turn before.
       live: s.status === 'resident' && s.working ? liveLine(s.claude_session_id || s.id) : null,
@@ -292,10 +302,10 @@ module.exports = function (ctx) {
   gated.get('/api/sessions/:id', async (req, res) => {
     try {
       const rows = await sb(`desk_sessions?id=eq.${encodeURIComponent(String(req.params.id))}` +
-        '&select=id,label,custom_title,repo,worker,status,working,claude_session_id,last_prompt,last_reply,reply_at,agent,started,prompt,command_id');
+        '&select=id,label,custom_title,repo,worker,status,working,bg_agents,bg_shell,claude_session_id,last_prompt,last_reply,reply_at,agent,started,prompt,command_id');
       if (!rows || !rows.length) return res.status(404).json({ error: 'no such session' });
       // `prompt` is the launch prompt; the payload's `prompt` is the waiting permission dialog.
-      const { started, prompt: launch_prompt, command_id, ...row } = rows[0];
+      const { started, prompt: launch_prompt, command_id, bg_agents, bg_shell, ...row } = rows[0];
       if (row.last_prompt) row.last_prompt = cleanSaid(row.last_prompt);
       const conv = row.claude_session_id || row.id;
       rowConv.set(row.id, conv);
@@ -305,7 +315,7 @@ module.exports = function (ctx) {
         reportedEmpty.add(conv);
         console.error(`[sessions] ${row.id} opened with nothing from its host in the thread (conversation ${conv})`);
       }
-      res.json({ ...row, incident: isIncident(row), codex: isCodex(row), prompt: pendingPrompt(row.id), epoch: EPOCH, events: log.events });
+      res.json({ ...row, incident: isIncident(row), codex: isCodex(row), background: backgroundOf({ ...row, bg_agents, bg_shell }), prompt: pendingPrompt(row.id), epoch: EPOCH, events: log.events });
     } catch (e) { res.status(500).json({ error: String(e.message || e) }); }
   });
 

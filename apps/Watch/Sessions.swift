@@ -38,6 +38,12 @@ struct SessionRow: Decodable, Identifiable, Equatable {
     /// Approve / Deny answer. On the row until the dialog is answered anywhere.
     let prompt: Ask?
     struct Ask: Decodable, Equatable { let id: String; let line: String }
+    /// What it still has running in the background once its turn is over: each background agent by its
+    /// description, and whether a background shell is running. Nil when nothing is.
+    let background: Background?
+    struct Background: Decodable, Equatable { let agents: [String]; let shell: Bool }
+    /// Work it started still going on with no turn in flight, drawn as work in progress.
+    var inBackground: Bool { working != true && background != nil }
 
     var name: String { sessionName(custom_title, label, repo) ?? id }
     var running: Bool { status == "resident" }

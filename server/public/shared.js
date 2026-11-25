@@ -336,9 +336,10 @@ document.addEventListener('click', (e) => {
   e.preventDefault();
   h.postMessage(a.href);
 });
-// The tap screen for a handoff, reachable from anywhere: a session view's card and the app's
-// notification tap (Push.swift) both call this.
-window.__openHandoff = (id) => openHandoff(id);
+// A handoff's tap screen, from the app's notification tap (Push.swift). Where the sessions pane exists
+// it opens the handoff's session on its handoff tab (`__openHandoffTab`, cards/repos.js); anywhere else
+// it is drawn over everything.
+window.__openHandoff = (id) => (window.__openHandoffTab ? window.__openHandoffTab(id) : openHandoff(id));
 
 // A tap on an inline image opens it over everything, fitted to the screen; a tap on the picture toggles
 // it to full size (scrollable, for reading a mockup's detail), a tap anywhere else closes it. Caught in

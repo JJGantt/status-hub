@@ -28,10 +28,10 @@ data-layer README § Handoffs.
 
 | surface | what |
 |---|---|
-| phone, notification | the banner opens the tap screen (`Push.swift` → `PageLaunch.handoff` → `window.__openHandoff`) |
-| phone, session view | a blue bar with the screenshot and the note (`cards/repos.js`, `paintHandoff`); a tap opens the tap screen |
-| phone, tap screen | `public/handoff.js`: tap the screenshot to click; the box and Type to type; Full/Crop, Enter, Tab, Zoom, Refresh, Cancel, Done |
-| browser | `/handoff/:id`, the same tap screen as a page |
+| phone, session view | a **Handoff tab** beside the conversation (`cards/repos.js`, session tabs): it opens in front when the handoff arrives, and he can switch to the Session tab to read something (a number to type) and back without losing either; the tab closes itself once the handoff ends |
+| phone, notification | the banner opens the handoff's session on its Handoff tab (`Push.swift` → `PageLaunch.handoff` → `window.__openHandoff` → `__openHandoffTab`) |
+| phone, tap screen | `public/handoff.js`, drawn inside the tab: tap the screenshot to click; the box and Type to type; Full/Crop, Enter, Tab, Zoom, Refresh, Cancel, Done |
+| browser | `/handoff/:id`, the same tap screen as a page; with no sessions pane (the kiosk) a notification draws it over everything |
 | watch | the session page's card (`handoffCard` in `SessionsView.swift`; the notification opens the session); full screen in `HandoffView.swift`: tap to click, the crown zooms, a drag pans, a double tap fits, buttons for keyboard, Enter, Refresh, Cancel, Done |
 
 **The screenshot is the part that matters, not the whole screen.** `mac-screen` captures one app's

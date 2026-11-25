@@ -16,6 +16,7 @@
 import { esc, md, mdInline, PIN_SVG, liveStream, threadScroll, syncKeyed, reportPageError } from '../shared.js';
 import { makeRecorder, bindMic } from '../voiceagent.js';
 import { speak, stopSpeaking, speaking, paused, pauseSpeaking, resumeSpeaking } from '../speak.js';
+import { openHandoff } from '../handoff.js';
 
 let mounted = false;
 let desk = { online: false };
@@ -283,7 +284,7 @@ function keep(payload) {
   cur.head.prompt = now.prompt || null;
   cur.head.handoff = now.handoff || null;
   paintAsk();
-  paintHandoff();
+  paintTabs();
   const bg = now.background || null;
   if (JSON.stringify(bg) !== JSON.stringify(cur.head.background || null)) { cur.head.background = bg; paintBody(); }
   if (moved || now.status !== cur.head.status) reload();
@@ -306,20 +307,96 @@ function paintAsk() {
   ask.querySelector('.sv-ask-line').textContent = p.line;
 }
 
-// A SCREEN THE SESSION HANDED OVER (routes/handoffs.js): its latest screenshot and what the session
-// needs, for as long as it waits. A tap opens the tap screen (handoff.js).
-function paintHandoff() {
-  const el = document.getElementById('repospane');
-  const bar = el && el.querySelector('.sv-ho');
-  if (!bar || !cur) return;
-  const ho = cur.head && cur.head.handoff;
-  bar.hidden = !ho;
-  if (!ho) { bar.dataset.id = ''; return; }
-  bar.dataset.id = ho.id;
-  bar.querySelector('.sv-ho-note').textContent = ho.note || ho.target;
-  const img = bar.querySelector('img');
-  if (ho.img && img.getAttribute('src') !== ho.img) img.src = ho.img;
+// SESSION TABS. A session view is a strip of tabs: the conversation itself ('session', always there)
+// and any extra views the session has open beside it. Each tab keeps its pane mounted while another is
+// shown, so switching to the conversation to read something and back loses nothing. The strip shows only
+// when there is more than the conversation.
+//
+// A kind of tab is an entry in TAB_KINDS (how to draw it into its pane) plus a line in tabsOf (when the
+// session has one). `selfEnds` kinds take their own tab down through `done` once they have shown how
+// they ended; any other kind's tab goes the moment the session payload stops listing it.
+const TAB_KINDS = {
+  // A screen the session handed over (routes/handoffs.js): the tap screen itself (handoff.js).
+  handoff: { label: 'Handoff', selfEnds: true, mount: (pane, t, done) => openHandoff(t.id, { mount: pane, onEnd: done }) },
+};
+
+function tabsOf(head) {
+  const tabs = [];
+  if (head && head.handoff) tabs.push({ key: 'handoff:' + head.handoff.id, kind: 'handoff', id: head.handoff.id });
+  return tabs;
 }
+
+let pendingTab = null;   // a tab to show once its session opens (a notification tap names one)
+
+function paintTabs() {
+  const el = document.getElementById('repospane');
+  const sv = el && el.querySelector('.sv');
+  if (!sv || !cur) return;
+  const at = cur;
+  const want = tabsOf(at.head);
+  for (const t of want) {
+    if (at.tabs.has(t.key)) continue;
+    const pane = document.createElement('div');
+    pane.className = 'sv-pane'; pane.dataset.tab = t.key; pane.hidden = true;
+    sv.append(pane);
+    const entry = { t, pane, close: null };
+    at.tabs.set(t.key, entry);
+    entry.close = TAB_KINDS[t.kind].mount(pane, t, () => dropTab(at, t.key));
+    // A tab that just appeared is something the session needs him to look at: it comes to the front.
+    showTab(at, t.key);
+  }
+  for (const [key, entry] of at.tabs) {
+    if (!TAB_KINDS[entry.t.kind].selfEnds && !want.some((t) => t.key === key)) dropTab(at, key);
+  }
+  if (pendingTab && at.tabs.has(pendingTab)) { showTab(at, pendingTab); pendingTab = null; }
+  paintStrip(at);
+}
+
+function showTab(at, key) {
+  const el = document.getElementById('repospane');
+  if (!el || cur !== at) return;
+  at.tab = key;
+  el.querySelectorAll('.sv-pane').forEach((p) => { p.hidden = p.dataset.tab !== key; });
+  paintStrip(at);
+}
+
+function dropTab(at, key) {
+  const entry = at.tabs.get(key);
+  if (!entry) return;
+  at.tabs.delete(key);
+  try { entry.close && entry.close(); } catch (_) {}
+  entry.pane.remove();
+  if (at.tab === key) showTab(at, 'session'); else paintStrip(at);
+}
+
+function closeTabs(at) {
+  if (!at || !at.tabs) return;
+  for (const [, entry] of at.tabs) { try { entry.close && entry.close(); } catch (_) {} }
+  at.tabs.clear();
+}
+
+function paintStrip(at) {
+  const el = document.getElementById('repospane');
+  const strip = el && el.querySelector('.sv-tabs');
+  if (!strip || cur !== at) return;
+  strip.hidden = at.tabs.size === 0;
+  const tabs = [['session', 'Session'], ...[...at.tabs].map(([key, e]) => [key, TAB_KINDS[e.t.kind].label])];
+  strip.innerHTML = tabs.map(([key, label]) =>
+    `<button type="button" class="sv-tab${at.tab === key ? ' on' : ''}" data-tab="${esc(key)}">${esc(label)}</button>`).join('');
+}
+
+// A handoff notification tapped (shared.js `__openHandoff`): its session, on its handoff tab. A handoff
+// with no session, or one the hub no longer has, is drawn over everything as before.
+window.__openHandoffTab = async (id) => {
+  let session = null;
+  try {
+    const r = await fetch(`/api/handoffs/${encodeURIComponent(id)}?after=-1&wait=0`);
+    if (r.ok) session = (await r.json()).session || null;
+  } catch (_) {}
+  if (!session || !document.getElementById('repospane')) { openHandoff(id); return; }
+  pendingTab = 'handoff:' + id;
+  await window.__showSession(session);
+};
 
 async function answerAsk(decision) {
   const el = document.getElementById('repospane');
@@ -471,7 +548,7 @@ function paintHead() {
   const sv = el.querySelector('.sv');
   if (sv) { sv.classList.toggle('incident', !!d.incident); sv.classList.toggle('codex', !!d.codex); }
   paintAsk();
-  paintHandoff();
+  paintTabs();
 }
 
 // What is drawn: every event in order, a prompt at the position of its LATEST occurrence — it moves
@@ -638,7 +715,9 @@ async function openSession(id) {
   // mount): that one is what is on screen, so this one stands down as handled.
   if (ticket !== opening) return true;
   if (cur && cur.rec) cur.rec.cancel();   // leaving mid-recording abandons it; a clip already stopped still sends
-  cur = { id: d.id, key: keyOfRow(d), head: d, epoch: null, events: [], last: 0, placeholders: [], msg: null, sending: false, rec: null };
+  closeTabs(cur);
+  cur = { id: d.id, key: keyOfRow(d), head: d, epoch: null, events: [], last: 0, placeholders: [], msg: null, sending: false, rec: null,
+    tabs: new Map(), tab: 'session' };
   remember(d.id);
   const at = cur;
   take(at, d.events, d.epoch);
@@ -651,8 +730,9 @@ async function openSession(id) {
         '<span class="sv-where"></span>' +
         '<button class="sv-speak-stop" type="button" aria-label="Stop reading" hidden>' + STOP_SVG + '</button>' +
         '<button class="sv-speak" type="button" aria-label="Read the reply aloud">' + SPEAK_SVG + '</button></div>' +
+      '<div class="sv-tabs" hidden></div>' +
+      '<div class="sv-pane" data-tab="session">' +
       '<div class="sv-body"></div>' +
-      '<div class="sv-ho" hidden><img alt=""><span class="sv-ho-note"></span></div>' +
       '<div class="sv-ask" hidden><span class="sv-ask-line"></span>' +
         '<button class="sv-ask-btn deny" type="button" data-decide="deny">Deny</button>' +
         '<button class="sv-ask-btn allow" type="button" data-decide="allow">Approve</button></div>' +
@@ -665,6 +745,7 @@ async function openSession(id) {
         '<div class="ai-status sv-status"></div>' +
       '</div>' +
       '<div class="sv-tray"></div>' +
+      '</div>' +
     '</div>';
   // A fresh body, so the first paint lands on the newest message, as opening a thread does.
   at.scroll = threadScroll(el.querySelector('.sv-body'), { lands: (n) => !n.classList.contains('sv-working') && !n.classList.contains('sv-bg') });
@@ -716,9 +797,9 @@ async function openSession(id) {
       paintTray();
     }
   });
-  el.querySelector('.sv-ho').addEventListener('click', (e) => {
-    const id = e.currentTarget.dataset.id;
-    if (id) window.__openHandoff(id);
+  el.querySelector('.sv-tabs').addEventListener('click', (e) => {
+    const b = e.target.closest('.sv-tab');
+    if (b) showTab(at, b.dataset.tab);
   });
   el.querySelector('.sv-ask').addEventListener('click', (e) => {
     const b = e.target.closest('[data-decide]');
@@ -807,6 +888,7 @@ function swipeBack(sv, close) {
 async function showList() {
   const el = document.getElementById('repospane');
   if (cur && cur.rec) cur.rec.cancel();   // leaving mid-recording abandons it; a clip already stopped still sends
+  closeTabs(cur);
   cur = null;
   remember(null);
   const pane = el && el.closest('.pane');

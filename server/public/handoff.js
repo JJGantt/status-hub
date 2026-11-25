@@ -1,17 +1,20 @@
 // THE TAP SCREEN for a handoff (routes/handoffs.js, docs/HANDOFFS.md): the screenshot of the screen a
-// session is stuck on, where a tap is clicked on the real screen and the text box is typed there. Opened
-// from the session view, from a notification (`window.__openHandoff`, set by shared.js), or as its own
-// page (/handoff/:id). It follows the handoff with a held request per screenshot, never a timer.
+// session is stuck on, where a tap is clicked on the real screen and the text box is typed there. In the
+// phone app it lives in a TAB of its session's view (cards/repos.js, `mount`), so he can switch back to
+// the conversation to read something off it and return; elsewhere it is a full-screen overlay, or its
+// own page (/handoff/:id). It follows the handoff with a held request per screenshot, never a timer.
 
 const h = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
 
-export function openHandoff(id, { page = false } = {}) {
-  if (document.querySelector(`.ho[data-id="${id}"]`)) return;
-  const ov = h('div', 'ho'); ov.dataset.id = id;
+// `mount`: an element to draw into instead of over everything (a session tab); `onEnd` is called once
+// the handoff has ended and its final state has shown. Returns `close`, which stops following it.
+export function openHandoff(id, { page = false, mount = null, onEnd = null } = {}) {
+  if (!mount && document.querySelector(`.ho[data-id="${id}"]`)) return () => {};
+  const ov = h('div', mount ? 'ho ho-inline' : 'ho'); ov.dataset.id = id;
   const top = h('div', 'ho-top');
   const note = h('div', 'ho-note');
   const close = h('button', 'ho-btn ho-close', '×');
-  top.append(note); if (!page) top.append(close);
+  top.append(note); if (!page && !mount) top.append(close);
   const stage = h('div', 'ho-stage');
   const wrap = h('div', 'ho-wrap');
   const img = h('img', 'ho-img'); img.alt = '';
@@ -27,7 +30,7 @@ export function openHandoff(id, { page = false } = {}) {
   const state = h('div', 'ho-state');
   bar.append(row1, row2, state);
   ov.append(top, stage, bar);
-  document.body.append(ov);
+  (mount || document.body).append(ov);
 
   let cur = null, busy = false, alive = true, zoom = false;
   const setBusy = (b) => { busy = b; ov.classList.toggle('busy', b); };
@@ -43,7 +46,8 @@ export function openHandoff(id, { page = false } = {}) {
     if (!['new', 'open'].includes(v.status)) {
       ov.classList.add('ended');
       state.textContent = v.status === 'done' ? 'Done' : v.status === 'cancelled' ? 'Cancelled' : `Failed: ${v.error || ''}`;
-      if (!page) setTimeout(shut, 1500);
+      if (mount) setTimeout(() => { shut(); if (onEnd) onEnd(); }, 1500);
+      else if (!page) setTimeout(shut, 1500);
     }
   }
 
@@ -99,4 +103,5 @@ export function openHandoff(id, { page = false } = {}) {
       }
     }
   })();
+  return shut;
 }

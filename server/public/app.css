@@ -1430,10 +1430,15 @@ body.phonehome #usagebars{top:env(safe-area-inset-top,0px)}
 .sessions li.sess.asking .sess-say{color:#ff5fa8}
 .sv-ask{flex:0 0 auto;display:flex;align-items:center;gap:8px;padding:8px 12px;background:#2a0f1e;border-top:1px solid #ff5fa8}
 .sv-ask[hidden]{display:none}
-.sv-ho{flex:0 0 auto;display:flex;align-items:center;gap:10px;padding:8px 12px;background:#0f1a2a;border-top:1px solid #4aa3ff;cursor:pointer}
-.sv-ho[hidden]{display:none}
-.sv-ho img{height:54px;max-width:96px;object-fit:cover;border-radius:6px;background:#11151b}
-.sv-ho-note{flex:1 1 auto;min-width:0;font-size:14px;font-weight:600;color:#cfe5ff}
+/* Session tabs (cards/repos.js paintTabs): the conversation and any extra views, each pane kept mounted. */
+.sv-tabs{flex:0 0 auto;display:flex;gap:6px;padding:6px 12px;border-bottom:1px solid #222a33;overflow-x:auto}
+.sv-tabs[hidden]{display:none}
+.sv-tab{flex:0 0 auto;font:inherit;font-size:13px;font-weight:600;padding:6px 14px;border-radius:999px;border:1px solid #2a323d;background:#151a21;color:#9aa5b3;cursor:pointer}
+.sv-tab.on{background:#1f6feb;border-color:#1f6feb;color:#fff}
+.sv-pane{flex:1 1 auto;min-height:0;display:flex;flex-direction:column}
+.sv-pane[hidden]{display:none}
+.ho.ho-inline{position:relative;inset:auto;z-index:auto;flex:1 1 auto;min-height:0}
+.ho-inline .ho-img{max-height:calc(100vh - 280px)}
 .sv-ask-line{flex:1 1 auto;min-width:0;font-size:13px;color:#ffc2de;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-family:ui-monospace,Menlo,monospace}
 .sv-ask-btn{flex:0 0 auto;font:inherit;font-size:14px;font-weight:600;padding:8px 14px;border-radius:8px;border:1px solid #ff5fa8;background:transparent;color:#ff5fa8}
 .sv-ask-btn.allow{background:#ff5fa8;color:#1a0711}

@@ -824,6 +824,17 @@ to draw it: `bodyFor()` already expands an item whose `text` is longer than its 
 a note is. Reading and writing one goes through `get_lists` / `add_to_list` / `remove_from_list`;
 there are no note verbs.
 
+**An item can carry recordings** (data-layer `00186`, `save_recording`). `POST /api/list-recordings`
+takes `{request_id, item_id, after | start_s}`: it waits for that command's clip upload if it is still
+in flight (`clipUploads`), asks Whisper for word timings (`wordTimes`, only here, never on the command
+path), cuts at the end of the FIRST occurrence of the `after` marker (`lib/recording.js`) with a stream
+copy (`cutFrom`), stores the take in the private `list-audio` bucket and appends it through the
+`append_list_recording` RPC so two saves cannot overwrite each other. A marker that is not there is a
+422 carrying the timed words. `GET /api/list-recordings/<item>/<uuid>.<ext>` redirects to a 6-hour
+signed storage URL rather than proxying, because iOS will not play media from a server that ignores
+range requests. The list card draws a `♪` on the row and an `<audio>` player per recording in
+`bodyFor()`'s expanded body.
+
 Consequences worth knowing:
 
 - **Badge** = every overdue item across every list (`overdueCount()`), not just one table's. It is

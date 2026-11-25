@@ -74,6 +74,18 @@ jobs:
           path: /tmp/shots/*.png
           retention-days: 14
 
+      # The watch app's rep counter is the private package JJGantt/Workset-Algorithms, fetched over SSH
+      # with a read-only deploy key on that repo. `-scmProvider system` on xcodebuild makes it resolve
+      # packages with the system git, which reads ~/.ssh; its built-in client does not.
+      - name: Install the counter package's deploy key
+        env:
+          DEPLOY_KEY: ${{ secrets.WORKSET_ALGORITHMS_DEPLOY_KEY }}
+        run: |
+          mkdir -p ~/.ssh && chmod 700 ~/.ssh
+          printf '%s\n' "$DEPLOY_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          ssh-keyscan github.com >> ~/.ssh/known_hosts 2>/dev/null
+
       - name: Generate the Xcode project
         if: ${{ !inputs.render_only }}
         working-directory: apps
@@ -86,6 +98,7 @@ jobs:
         working-directory: apps
         run: |
           xcodebuild -project StatusHub.xcodeproj -scheme StatusHub \
+            -scmProvider system \
             -configuration Debug -sdk iphonesimulator \
             -destination 'generic/platform=iOS Simulator' \
             CODE_SIGNING_ALLOWED=NO \

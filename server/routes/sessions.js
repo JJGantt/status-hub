@@ -8,7 +8,7 @@ const { NAME: MACHINE_NAME, createDesk, failoverOrder, machineOf, routeCommand, 
 module.exports = function (ctx) {
   const {
     DESK_STALE_S, EPOCH, SUPABASE_KEY, SUPABASE_URL, TV_SIDEBAR_FONT, TV_SIDEBAR_WIDTH, cleanSaid, convOfRow, ensureLog, gated, liveLine,
-    markSeen, numbered, rowConv, sb, sbInsert, sbWrite, seedLaunch, seenMsgIds, sessionClients, settingsAll, pendingPrompt,
+    markSeen, numbered, rowConv, sb, sbInsert, sbWrite, seedLaunch, seenMsgIds, sessionClients, settingsAll, pendingPrompt, openHandoff,
   } = ctx;
 
   // ---- desk control: repo picker -> a fresh Claude session on a machine ----
@@ -189,6 +189,8 @@ module.exports = function (ctx) {
       // A permission dialog it is stopped on, `{ id, line }` (routes/prompts.js): every session view
       // offers Approve / Deny while it is here, and every row marks it.
       prompt: pendingPrompt(s.id),
+      // A screen it handed over and is waiting on (routes/handoffs.js): every session view shows it.
+      handoff: openHandoff(s.id),
       machine: machineOf(s.worker),
       machine_color: MACHINE_COLOR[machineOf(s.worker)],
     });
@@ -317,7 +319,7 @@ module.exports = function (ctx) {
         reportedEmpty.add(conv);
         console.error(`[sessions] ${row.id} opened with nothing from its host in the thread (conversation ${conv})`);
       }
-      res.json({ ...row, incident: isIncident(row), codex: isCodex(row), background: backgroundOf({ ...row, bg_agents, bg_shell, bg_shells }), prompt: pendingPrompt(row.id), epoch: EPOCH, events: log.events });
+      res.json({ ...row, incident: isIncident(row), codex: isCodex(row), background: backgroundOf({ ...row, bg_agents, bg_shell, bg_shells }), prompt: pendingPrompt(row.id), handoff: openHandoff(row.id), epoch: EPOCH, events: log.events });
     } catch (e) { res.status(500).json({ error: String(e.message || e) }); }
   });
 

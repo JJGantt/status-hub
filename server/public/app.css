@@ -1430,6 +1430,10 @@ body.phonehome #usagebars{top:env(safe-area-inset-top,0px)}
 .sessions li.sess.asking .sess-say{color:#ff5fa8}
 .sv-ask{flex:0 0 auto;display:flex;align-items:center;gap:8px;padding:8px 12px;background:#2a0f1e;border-top:1px solid #ff5fa8}
 .sv-ask[hidden]{display:none}
+.sv-ho{flex:0 0 auto;display:flex;align-items:center;gap:10px;padding:8px 12px;background:#0f1a2a;border-top:1px solid #4aa3ff;cursor:pointer}
+.sv-ho[hidden]{display:none}
+.sv-ho img{height:54px;max-width:96px;object-fit:cover;border-radius:6px;background:#11151b}
+.sv-ho-note{flex:1 1 auto;min-width:0;font-size:14px;font-weight:600;color:#cfe5ff}
 .sv-ask-line{flex:1 1 auto;min-width:0;font-size:13px;color:#ffc2de;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-family:ui-monospace,Menlo,monospace}
 .sv-ask-btn{flex:0 0 auto;font:inherit;font-size:14px;font-weight:600;padding:8px 14px;border-radius:8px;border:1px solid #ff5fa8;background:transparent;color:#ff5fa8}
 .sv-ask-btn.allow{background:#ff5fa8;color:#1a0711}
@@ -1472,3 +1476,27 @@ body.phonehome #usagebars{top:env(safe-area-inset-top,0px)}
   -webkit-line-clamp:2;overflow:hidden}
 .sess-turn-caret{color:#8ab4e8;animation:sessCaret 1.2s ease-in-out infinite}
 @keyframes sessCaret{0%,100%{opacity:.25}50%{opacity:1}}
+
+/* The handoff tap screen (handoff.js) */
+.ho{position:fixed;inset:0;z-index:100001;background:#050608;display:flex;flex-direction:column;color:#e6eaf0;
+ padding:env(safe-area-inset-top) 0 env(safe-area-inset-bottom);font:15px/1.35 -apple-system,system-ui,sans-serif}
+.ho-top{display:flex;align-items:center;gap:8px;padding:8px 12px}
+.ho-note{flex:1;font-weight:600}
+.ho-stage{flex:1;overflow:auto;-webkit-overflow-scrolling:touch;display:flex;align-items:center;justify-content:center}
+.ho.zoom .ho-stage{display:block}
+.ho-wrap{position:relative;max-width:100%;max-height:100%}
+.ho.zoom .ho-wrap{max-width:none;max-height:none;width:250%}
+.ho-img{display:block;max-width:100%;max-height:calc(100vh - 190px);cursor:crosshair}
+.ho.zoom .ho-img{width:100%;max-width:none;max-height:none}
+.ho-mark{position:absolute;width:22px;height:22px;margin:-11px 0 0 -11px;border:3px solid #ff3b6b;border-radius:50%;display:none;pointer-events:none}
+.ho-mark.on{display:block}
+.ho.busy .ho-img{opacity:.55}
+.ho-bar{padding:8px 10px 10px;display:flex;flex-direction:column;gap:8px;background:#0d1014}
+.ho-row{display:flex;gap:6px;flex-wrap:wrap}
+.ho-input{flex:1;min-width:0;font-size:16px;padding:9px 10px;border-radius:9px;border:1px solid #2a323d;background:#151a21;color:#e6eaf0}
+.ho-btn{font:inherit;font-size:14px;padding:8px 11px;border-radius:9px;border:1px solid #2a323d;background:#1a2029;color:#e6eaf0}
+.ho-go,.ho-done{background:#1f6feb;border-color:#1f6feb}
+.ho-close{font-size:20px;padding:2px 12px}
+.ho-state{color:#9aa5b3;font-size:13px;min-height:1em}
+.ho.ended .ho-bar .ho-row{display:none}
+body.handoff-page{margin:0;background:#050608}

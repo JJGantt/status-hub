@@ -34,6 +34,8 @@ module.exports = function (ctx) {
     // A session blocked on a permission dialog (routes/prompts.js), with Approve / Deny on it.
     // 'active': it has to light the wrist, and a session is stalled until somebody answers.
     prompt:   { interruptionLevel: 'active' },
+    // A session handing over a screen for a tap (routes/handoffs.js): stalled until he acts, like a prompt.
+    handoff:  { interruptionLevel: 'active' },
   };
 
   // The home-screen badge = every EXPIRED item: not cleared, dated, and past the moment it was FIRST

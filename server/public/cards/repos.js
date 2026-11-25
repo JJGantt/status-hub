@@ -281,7 +281,9 @@ function keep(payload) {
   const moved = now.id !== cur.id;
   cur.id = now.id;
   cur.head.prompt = now.prompt || null;
+  cur.head.handoff = now.handoff || null;
   paintAsk();
+  paintHandoff();
   const bg = now.background || null;
   if (JSON.stringify(bg) !== JSON.stringify(cur.head.background || null)) { cur.head.background = bg; paintBody(); }
   if (moved || now.status !== cur.head.status) reload();
@@ -302,6 +304,21 @@ function paintAsk() {
   ask.dataset.id = p.id;
   ask.classList.remove('sending');
   ask.querySelector('.sv-ask-line').textContent = p.line;
+}
+
+// A SCREEN THE SESSION HANDED OVER (routes/handoffs.js): its latest screenshot and what the session
+// needs, for as long as it waits. A tap opens the tap screen (handoff.js).
+function paintHandoff() {
+  const el = document.getElementById('repospane');
+  const bar = el && el.querySelector('.sv-ho');
+  if (!bar || !cur) return;
+  const ho = cur.head && cur.head.handoff;
+  bar.hidden = !ho;
+  if (!ho) { bar.dataset.id = ''; return; }
+  bar.dataset.id = ho.id;
+  bar.querySelector('.sv-ho-note').textContent = ho.note || ho.target;
+  const img = bar.querySelector('img');
+  if (ho.img && img.getAttribute('src') !== ho.img) img.src = ho.img;
 }
 
 async function answerAsk(decision) {
@@ -454,6 +471,7 @@ function paintHead() {
   const sv = el.querySelector('.sv');
   if (sv) { sv.classList.toggle('incident', !!d.incident); sv.classList.toggle('codex', !!d.codex); }
   paintAsk();
+  paintHandoff();
 }
 
 // What is drawn: every event in order, a prompt at the position of its LATEST occurrence — it moves
@@ -634,6 +652,7 @@ async function openSession(id) {
         '<button class="sv-speak-stop" type="button" aria-label="Stop reading" hidden>' + STOP_SVG + '</button>' +
         '<button class="sv-speak" type="button" aria-label="Read the reply aloud">' + SPEAK_SVG + '</button></div>' +
       '<div class="sv-body"></div>' +
+      '<div class="sv-ho" hidden><img alt=""><span class="sv-ho-note"></span></div>' +
       '<div class="sv-ask" hidden><span class="sv-ask-line"></span>' +
         '<button class="sv-ask-btn deny" type="button" data-decide="deny">Deny</button>' +
         '<button class="sv-ask-btn allow" type="button" data-decide="allow">Approve</button></div>' +
@@ -696,6 +715,10 @@ async function openSession(id) {
       catch (_) { shots.splice(shots.indexOf(a), 1); status.textContent = 'Upload failed'; }
       paintTray();
     }
+  });
+  el.querySelector('.sv-ho').addEventListener('click', (e) => {
+    const id = e.currentTarget.dataset.id;
+    if (id) window.__openHandoff(id);
   });
   el.querySelector('.sv-ask').addEventListener('click', (e) => {
     const b = e.target.closest('[data-decide]');

@@ -10,7 +10,7 @@ function createRealtime(ctx) {
   const {
     MUTE_HOLD, SUPABASE_KEY, SUPABASE_URL, auth, broadcast, dirtyDesk, dirtyDue, dirtyHeatHistory,
     dirtyNutDay, dirtyRows, dirtySettings, dirtySurfHist, dirtyWorkoutDay, markLive, notifyAnswer, onDeskCommand, pushDay,
-    pushLists, pushSessions, pushSurfLive, pushVoice, recomputeMute, reportTick, requestView, sb, settleReply,
+    pushLists, pushSessions, pushSurfLive, pushVoice, recomputeMute, reportTick, handoffChanged, requestView, sb, settleReply,
     surfAlarms, syncBadge, takeUsage, tvInserted,
   } = ctx;
 
@@ -165,6 +165,8 @@ function createRealtime(ctx) {
       // A written report announces itself rather than being discovered: reportTick's timer is now only
       // the net under this, instead of the fastest database timer on the server.
       .on('postgres_changes', { event: '*', schema: 'public', table: 'hub_sessions' }, (p) => { seen(); auth.onChange(p); })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'handoffs' },
+        (p) => { seen(); handoffChanged(p.new); })
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'reports' },
         () => { seen(); reportTick().catch((e) => console.error('[report] error', e.message)); })
       .subscribe((status) => {

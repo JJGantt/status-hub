@@ -1,6 +1,7 @@
 // Leaf module: shared singletons + pure utils used across core.js and the card modules.
-// Kept dependency-free so it fully initializes before any card module evaluates (avoids the
+// Imports only leaf modules (handoff.js) so it fully initializes before any card module evaluates (avoids the
 // circular-import temporal-dead-zone that bites a shared `const` imported from core.js).
+import { openHandoff } from './handoff.js';
 
 // Every page's uncaught error reaches the hub as a client-log line with `ev: 'error'`, and the hub hands
 // it to the ops responder (health/responder). Here, in the first module every page evaluates, so it is
@@ -335,6 +336,10 @@ document.addEventListener('click', (e) => {
   e.preventDefault();
   h.postMessage(a.href);
 });
+// The tap screen for a handoff, reachable from anywhere: a session view's card and the app's
+// notification tap (Push.swift) both call this.
+window.__openHandoff = (id) => openHandoff(id);
+
 // A tap on an inline image opens it over everything, fitted to the screen; a tap on the picture toggles
 // it to full size (scrollable, for reading a mockup's detail), a tap anywhere else closes it. Caught in
 // the capture phase so the card the reply sits in never also takes the tap as its own.

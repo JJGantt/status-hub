@@ -176,12 +176,14 @@ const { MACHINE_NAME, deadLetter, desk, followUpSession, machineAwake, openSessi
   markSeen, numbered, rowConv, sb, sbInsert, sbWrite, seedLaunch, seenMsgIds, sessionClients, settingsAll,
   // Read on every build of the payload, by which time `prompts` below exists.
   pendingPrompt: (rowId) => prompts.pendingFor(rowId),
+  openHandoff: (rowId) => handoffs.openFor(rowId),
 });
 
 require('./routes/failures')({ followUpSession, gated, openSession, sb, sbWrite, sessionVerb, transferSession });
 require('./routes/ci')({ MACHINE_NAME, SUPABASE_KEY, SUPABASE_URL, followUpSession, gated, openSession, pub, sb, sbWrite });
 
 const prompts = require('./routes/prompts')({ auth, gated, pushAll, pushSessions, sb });
+const handoffs = require('./routes/handoffs')({ gated, pushAll, pushSessions, sb, sbInsert });
 
 require('./routes/streams')({ gated });
 
@@ -194,7 +196,7 @@ const realtime = createRealtime({
   MUTE_HOLD, SUPABASE_KEY, SUPABASE_URL, auth, broadcast, dirtyDesk: cache.dirtyDesk,
   dirtyDue: jobs.dirtyDue, dirtyHeatHistory, dirtyNutDay, dirtyRows: cache.dirtyRows, dirtySettings, dirtySurfHist,
   dirtyWorkoutDay, markLive, notifyAnswer, onDeskCommand: desk.onCommand, pushDay, pushLists, pushSessions, pushSurfLive, pushVoice, recomputeMute,
-  reportTick: jobs.reportTick, requestView, sb, settleReply, surfAlarms, syncBadge, takeUsage: usage.take, tvInserted,
+  reportTick: jobs.reportTick, handoffChanged: (row) => handoffs.changed(row), requestView, sb, settleReply, surfAlarms, syncBadge, takeUsage: usage.take, tvInserted,
 });
 
 // A client that hangs up before its request body finishes arriving (a phone locking or losing signal

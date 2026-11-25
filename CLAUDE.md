@@ -493,7 +493,8 @@ It also beats app.css's `body.tv.wallportrait` block on equal specificity, by lo
   the box. The caret pulses through dimnesses rather than
   blinking off, because at 9px a hard on/off reads as something failing.
   **EVERY THREAD SCROLLS BY THREE RULES, AND NOTHING ELSE MOVES IT** — this box, the chat sheet and the
-  session view, all through `threadScroll` in shared.js: (1) opening a thread lands on its newest
+  session view, all through `threadScroll` in shared.js, and the watch's home and session pages by the
+  same rules (docs/WATCH.md): (1) opening a thread lands on its newest
   message; (2) a new message lands only when the view was FOLLOWING — resting at the very end, or still
   where the page last landed it; (3) everything else — the app coming back from Safari, a resync, an
   edit, older rows loading above — leaves what is on screen where it was. LANDING puts the TOP of the

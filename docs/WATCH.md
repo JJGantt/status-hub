@@ -117,8 +117,8 @@ missed on a raise reaches the ops responder. A look before the first load after 
 thread starts empty, so there was nothing old on screen, and every first load "brings newer rows".
 
 **A command walks the page**, and each step lands the view on a TOP, because a reply is read from its
-first line rather than scrolled to the end — but only while the user is not reading (next paragraph but one);
-once the user has scrolled with the wrist up, the view stays where it is:
+first line rather than scrolled to the end — but only while the view is following (below); once the
+user has scrolled away, the view stays where it is:
 
 | | screen | control | x | wrist |
 |---|---|---|---|---|
@@ -134,40 +134,28 @@ again from `/api/voice-pending` on every load, since the stream is closed whenev
 **Nothing is padded under the thread.** A landing puts the top of the newest thing at the top of the
 screen only when there is enough below it to fill the screen; a short one stops where the content ends,
 with what came before it above, as any list does. No blank space is added so that everything could reach the top. The view holds that spot through the laying out that follows
-(`pinned`) until the user scrolls. The session page lands the same way.
+until the user scrolls. The session page lands the same way.
 
-**Nothing moves the view while the user is reading** — looking (home in front, wrist up) AND scrolled since
-that look began (`touched`, cleared when the look ends). **A scroll over a stale thread is not reading**
-(`Chat.current` false): it is the user looking for what has not arrived, and counted, it holds the reply
-the catch-up brings below the screen until the wrist drops. **A notification banner over the app is not the look
-ending**: it drops the scene to `inactive` with the wrist up, so looking is the screen not dimmed and the
-scene not in the background, never `phase == .active`. The older answers laid out above the window (`held`) go only
-when home leaves the screen, because rows removed and re-added above the screen shift everything on it. **A scroll is a finger or the crown**: home
-counts any move of the offset that is neither its own jump nor a change of content height, as the session
-page does, since the crown is not trusted to report a scroll phase. **An answer landed on by request (a
-notification opened) is one landing**: the user's first scroll releases it (`land-released`), and every
-landing after that is on the newest again. Then every new item — the user's own transcribed
-words, a tool call, the reply, a session's relayed answer — is HELD; it lands the moment the user stops
-looking (wrist down, app behind, another page), so it is waiting at the next raise, with the unread dot
-meanwhile if it is flagged. **A raise without a scroll is not reading**: the screen is on whatever the page
-left it on, so an arrival — a command spoken straight after the raise, its reply — lands as usual. The raise
-itself moves nothing; only an arrival does. **Nor is resting at the bottom**: letting go of a scroll with
-the very end on screen (a one-point marker's visibility, `atEnd`) clears `touched`, so the next arrival
-lands. The phone's threads apply the same rule (`readingWatch` in `public/shared.js`). Holding only while the view is on an answer is not
-enough: an earlier answer is often read while a command runs, and the new transcript and then its reply would each
-pull the view off it. A tap on the unread dot or an answer's notification is asked for and never waits.
-`landed` is the spot the view is held at. Each hold is logged as `land-held`.
+**Three rules move the view, and nothing else does** — home, the session page and the phone's threads
+alike (`threadScroll` in `public/shared.js`): (1) opening the page lands on the newest message; (2) a new
+item — the user's transcribed words, a tool call, the reply, a session's relayed answer — lands only while
+the view is FOLLOWING: landed and not scrolled since, or let go with the very end on screen (a one-point
+marker's visibility, `atEnd`); (3) everything else — the wrist dropping and rising, the app coming back,
+swiping back to the page, a reload — leaves it where it is. A tap on the unread dot or an answer's
+notification is asked for and always lands (`chat.landings`); **an answer landed on by request is one
+landing**: the user's first scroll releases it (`land-released`). **A scroll is a finger or the crown**:
+any move of the offset that is neither the page's own jump nor a change of content height counts, since
+the crown is not trusted to report a scroll phase. The read rule (`looking`: the screen not dimmed and the
+scene not in the background, so a notification banner over the app is not the look ending) decides only
+what counts as read, never where the view is.
 
-**A hold freezes the view, not a spot.** While the user is reading, nothing re-lands either: the landing
-is not re-applied as the thread grows, because the spot held is an older answer, and jumping back onto it
-on every arrival drags the view up the thread — and a short item resting at the end of the scroll is
-pulled to the top the moment anything arrives under it. Content added below moves nothing by itself, so
-doing nothing IS staying put. Re-landing as the page lays out happens only while a landing of the page's
-own is settling (`settling`: from a landing until the next arrival or the user's scroll), and whenever the
-user is not reading. **Nor does anything drop off the top**: the laid-out window keeps the row (home,
-`Chat.keepFrom`) or event (session, `keepFrom`) it started at when the user began looking, and grows
-downward instead, since a row trimmed from above the screen shifts everything on it by that row's height.
-Both let go when the user stops looking.
+**Staying put takes two things SwiftUI does not do by itself.** Following, the landing is re-applied as
+the thread lays out over several passes, because one jump lands short (`layout`); let go at the end, the
+end is kept on screen instead (`atBottom`). Not following, nothing re-lands, and **nothing drops off the
+top**: the laid-out window keeps the row (home, `Chat.keepFrom`, set from `Chat.following`) or event
+(session, `keepFrom`) it started at when following stopped, since a row trimmed from above the screen
+shifts everything on it by that row's height. The older answers laid out above the window (`held`) and the
+rows asked for by scrolling to the top go only when the page leaves the screen while following.
 
 **The landing spot is fixed, per page** (`Landing` in `WatchUI.swift`): 32pt from the top of the glass
 on home and in a session alike, just under the top strip, where a full-width first line clears the
@@ -400,25 +388,19 @@ failure the device notices, not one the user has to.
 with what the session does about them underneath; with none, the last event — the reply when it lands
 (`newest`). The top of that sits at the top of the screen.
 
-**Nothing moves the page while the user is reading**, by home's rule: with the wrist up and a scroll since
-the raise that was not let go at the end, a newer item — a placeholder, a tool call, the reply, a prompt typed from elsewhere — is held in
-`spot` and lands when the user stops looking.
-
 **Let go at the end, the end stays on screen** (`atBottom`) as the running turn grows under it, until the
-next landing (a new prompt, the reply, the wrist dropping) or the user's next scroll. Mid-turn `spot` is the
+next landing or the user's next scroll. Mid-turn `spot` is the
 prompt the turn started from, so re-landing on it at each new tool call pulls the page from the bottom up to
 that prompt every few seconds, under the finger of someone reading the stream.
 
 **A user scroll ends the following**, finger or crown, and nothing moves the page after that until the
-session is opened again, the user scrolls it to the very end (letting go with the end on screen after a
-user scroll; the page merely sitting at the end does not count), or something new arrives while the user is
-not reading — wrist down, or raised and not yet scrolled — which follows the newest again (`why`: `fresh`,
-or `away` when it lands at the wrist dropping). A drag reports a scroll phase; the
+session is opened again or the user scrolls it to the very end (letting go with the end on screen after a
+user scroll; the page merely sitting at the end does not count). A drag reports a scroll phase; the
 crown is not trusted to, so any move of the offset that is neither one of the page's own jumps nor a
 change in content height counts as a user scroll too, once the page has landed: before its first landing
 the scroll view moves itself (it shifts by the space under the title as it opens). The page's jumps are never animated, which makes each
 one exactly one move to discount. Every change of following is logged to the hub as `follow`, with
-`why` (`drag`, `move`, `end`, `fresh`, `away`), so a fight on the wrist can be read back afterwards. The end is a one-point marker at the bottom of `PagedScroll`, asked whether
+`why` (`drag`, `move`, `end`), so a fight on the wrist can be read back afterwards. The end is a one-point marker at the bottom of `PagedScroll`, asked whether
 it is VISIBLE (`onScrollVisibilityChange`), not a sum over the scroll view's reported offsets, which
 this app does not trust (§ Double tap, and scrolling).
 
@@ -1183,8 +1165,8 @@ shows the build it started on.
 | event | what it says |
 |---|---|
 | `thread` | what home loaded |
-| `scroll` | every scroll home makes and the start of every scroll the user makes. `why`: `appear`, `target` (something new landed), `asked` (a notification or the dot), `unlook` (a held landing placed as the wrist dropped), `layout` (re-landing while pinned as the thread lays out), `more` / `keep-top` (scrolled to the top: older rows asked for, then the row that was at the top put back), `user-<how>` (the user's own: a scroll phase, or `move` for an offset change that was not the page's, which is how the crown shows up). `at`, `landed`, `target` are rows by place in the thread (0 = oldest shown, of `rows`); `seen` is the rows on screen; `pinned`, `settling`, `looking`, `touched`, `atEnd` are the state that decided it. The same move within two seconds is one line |
-| `land-held`, `reading`, `land-released` | an arrival held because the user is reading; reading ended by letting go at the end; an answer landed on by request let go at the user's scroll |
+| `scroll` | every scroll home makes and the start of every scroll the user makes. `why`: `appear`, `target` (something new landed while following), `asked` (a notification or the dot), `layout` (re-landing while following as the thread lays out), `end` (let go at the very end: following again), `more` / `keep-top` (scrolled to the top: older rows asked for, then the row that was at the top put back), `user-<how>` (the user's own, logged when it ends the following: a scroll phase, or `move` for an offset change that was not the page's, which is how the crown shows up). `at`, `target` are rows by place in the thread (0 = oldest shown, of `rows`); `seen` is the rows on screen; `following`, `atBottom`, `looking`, `atEnd` are the state that decided it. The same move within two seconds is one line |
+| `land-released` | an answer landed on by request let go at the user's scroll |
 | `log` | a conversation's list fetched from the hub: from which seq, how many events came, the last seq held |
 | `control` | a press of the bottom control, with its mode |
 | `record` | a finger tap on the text |

@@ -19,16 +19,15 @@ final class Chat: ObservableObject {
     /// hub sends forty rows; laying all of them out is what made swiping onto the page lag, and a wrist
     /// rarely reads past the last few exchanges.
     var recent: [Message] { held + thread.suffix(shownCount) }
-    /// How many of the thread's rows are laid out: `window`, or further back while the user is looking, so
-    /// the row at the top stays laid out (`keepFrom`).
+    /// How many of the thread's rows are laid out: `window`, or further back while home is not following,
+    /// so the row at the top stays laid out (`keepFrom`).
     private var shownCount: Int {
         guard let keepFrom, let i = thread.firstIndex(where: { $0.id == keepFrom }) else { return window }
         return max(window, thread.count - i)
     }
-    /// **The first row laid out when the user started looking.** Nothing drops off the top of the window
-    /// while the wrist is up: a row arriving at the bottom would otherwise push the oldest one out above
-    /// the screen, and everything on it would shift up by that row's height. Let go when the user stops
-    /// looking, when the page is free to move.
+    /// **The first row laid out when home stopped following.** Nothing drops off the top of the window
+    /// then: a row arriving at the bottom would otherwise push the oldest one out above the screen, and
+    /// everything on it would shift up by that row's height. Let go when home follows again.
     @Published private var keepFrom: String?
     /// **How many rows home lays out**: `windowStep` (five exchanges) at rest, a step more each time the user
     /// scrolls to the top (`showMore`), back to one step whenever the page lands on the newest again or
@@ -67,11 +66,18 @@ final class Chat: ObservableObject {
     @Published private(set) var landOn: String?
     /// Counts each request to land, so a second one on the same answer still moves the view.
     @Published private(set) var landings = 0
+    /// Home's view is on the newest message (`HomeView`): landed there and not scrolled since, or resting
+    /// at the very end. Not following, the window keeps its top row (`keepFrom`).
+    var following = true {
+        didSet {
+            guard following != oldValue else { return }
+            keepFrom = following ? nil : thread.suffix(shownCount).first?.id
+        }
+    }
     /// Home is on screen, in front, with the wrist up (`HomeView.attend`). The read rule's test.
     var looking = false {
         didSet {
             guard looking != oldValue else { return }
-            keepFrom = looking ? thread.suffix(shownCount).first?.id : nil
             if looking { lookBegan = Date() }
             // A look spent entirely on a stale thread: kept until the thread catches up, which says whether
             // it missed anything. Not when the thread went stale after the look began — that is the app

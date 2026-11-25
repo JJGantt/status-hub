@@ -10,8 +10,12 @@ import WatchKit
 /// it, with the spinner bigger now that the hub is running the command rather than hearing it; the
 /// reply lands, the view settles on the top of THAT, the control is a microphone again and the x goes.
 /// A reply is read from its first line, which is why each of those lands the view on a top rather than
-/// scrolling to the end. **None of it moves the view while the user is reading** (`holds`) — looking, and
-/// scrolled since the raise: each landing then waits for the wrist to drop, so it is in place at the next raise.
+/// scrolling to the end.
+///
+/// **The thread scrolls by three rules, the phone's too (`threadScroll` in public/shared.js), and nothing
+/// else moves it**: opening the page lands on the newest message; a new message lands only while the view
+/// is FOLLOWING (landed and not scrolled since, or let go at the very end); everything else — the wrist
+/// dropping and rising, the app coming back, a reload — leaves it where it is.
 struct HomeView: View {
     @EnvironmentObject private var chat: Chat
     /// Wrist down with the app still showing.
@@ -22,31 +26,23 @@ struct HomeView: View {
     @State private var visible: Set<String> = []
     /// An unread answer on screen, counting down to read.
     @State private var reading: [String: Task<Void, Never>] = [:]
-    /// Whether the view is held at `target`. Kept until the user scrolls themselves: a thread still laying out
-    /// moves the spot, so a single jump lands short of it.
-    @State private var pinned = true
     /// Every message's height, which decides how much of it must be on screen to count as shown (`shownAt`).
     @State private var heights: [String: CGFloat] = [:]
-    /// What the view is held at — `target`, except while something newer is HELD: **an arrival does not
-    /// take the view from an answer the user is reading** (`holds`). It lands as soon as the user stops looking.
-    @State private var landed: String?
+    /// The wrist is up with home in front: the read rule's test (`attend`). It never moves the view.
     @State private var looking = false
-    /// **The user has scrolled since this look began** (the raise, the app coming to the front, the page
-    /// swiped to). Looking without having scrolled is not reading: a fresh raise is on whatever the page
-    /// left it on, so an arrival lands then. Cleared when the user stops looking.
-    @State private var touched = false
-    /// The very end of the thread is on screen. **Letting go of a scroll with the end on screen is not
-    /// reading** (`touched` goes false): resting at the bottom, the next arrival lands like any other.
+    /// **The view is on the newest message**: landed there and not scrolled since, or let go at the very
+    /// end (`atBottom`). Only while following does an arrival land.
+    @State private var following = true
+    /// Following because the user let go at the very end: a re-layout keeps the end on screen rather than
+    /// jumping back to the top of the newest message.
+    @State private var atBottom = false
+    /// The very end of the thread is on screen, asked of a marker's visibility.
     @State private var atEnd = false
-    /// Reading (`engaged`), which is what holds an arrival (`holds`): looking, and scrolled since the look began.
-    private var engaged: Bool { looking && touched }
+    /// The page has landed once. Swiping back to it, or the app coming back, is not opening it.
+    @State private var opened = false
     /// The row that was at the top when the user scrolled there and more rows were asked for: the scroll goes
     /// back onto it once they have laid out above it.
     @State private var keepAtTop: String?
-    /// A landing of the page's own is still settling: the thread lays out over several passes after a
-    /// jump, and each one re-lands on `landed`. Only until the next arrival or the user's scroll — after
-    /// that, while the user is reading, **nothing re-lands** (`settle`).
-    @State private var settling = true
     /// The inbox is open over the thread (`InboxView`). The thread underneath is not being
     /// looked at then, so nothing in it counts as read.
     @State private var inbox = false
@@ -71,7 +67,7 @@ struct HomeView: View {
                     if chat.hasMore {
                         Color.clear.frame(height: 1)
                             .onScrollVisibilityChange(threshold: 1) { seen in
-                                guard seen, !pinned, keepAtTop == nil else { return }
+                                guard seen, !following, keepAtTop == nil else { return }
                                 keepAtTop = chat.recent.first.map { "msg\($0.id)" }
                                 scrollLog("more", keepAtTop)
                                 chat.showMore()
@@ -96,7 +92,7 @@ struct HomeView: View {
                     }
                     CommandStatus()
                     // The very end of the thread is on screen (`atEnd`), asked of a marker's visibility.
-                    Color.clear.frame(height: 1)
+                    Color.clear.frame(height: 1).id(Self.endId)
                         .onScrollVisibilityChange(threshold: 1) { atEnd = $0 }
                 }
                 .padding(.horizontal, 8)
@@ -116,36 +112,26 @@ struct HomeView: View {
             .scrollIndicators(.never)
             .topOfTheScreen(scrollTop: Landing.top)
             .background(Color.black.ignoresSafeArea())
-            .onChange(of: target) { _, now in
-                if holds(now) { Hub.log("land-held", ["at": landed ?? "", "next": now ?? ""]); return }
-                land(proxy, "target")
-            }
-            // Asked to land again on the same answer, after scrolling away from it: the target has not
-            // changed, so nothing above moves the view.
+            .onChange(of: target) { _, _ in if following { land(proxy, "target") } }
+            // Asked to land (the unread dot, an answer's notification): always, even on the same answer.
             .onChange(of: chat.landings) { _, _ in land(proxy, "asked") }
-            // The user stopped looking with something held: it lands now, so it is waiting for the next raise.
-            .onChange(of: looking) { _, now in
-                if !now { touched = false }
-                if !now && landed != target { land(proxy, "unlook") }
-            }
-            // **Nothing moves the view while the user is reading**, a re-landing as much as a landing. Held,
-            // `landed` is an older answer, and jumping back onto it each time the thread grows pulled the
-            // view up the thread on every arrival — onto an answer that had itself moved. Content added
-            // below moves nothing by itself, and `Chat.keepFrom` keeps rows from dropping off the top.
+            // **Any movement the page did not make is the user's**, the crown included, which is not trusted
+            // to report a scroll phase. A change of content height is the page re-laying out.
             .onScrollGeometryChange(for: Scroll.self) { Scroll(y: $0.contentOffset.y, h: $0.contentSize.height) } action: { old, new in
                 guard new.h == old.h else { relayout(proxy); return }
                 if abs(new.y - old.y) > 0.5 && Date() > ownMoveUntil { userScrolled("move") }
             }
             .onScrollPhaseChange { _, now in
                 if now == .interacting || now == .tracking || now == .decelerating { userScrolled("\(now)") }
-                if now == .idle && atEnd && touched { touched = false; Hub.log("reading", ["on": false, "why": "end"]) }
+                // Let go with the very end on screen: following again, from the next arrival on.
+                if now == .idle && atEnd && !following { follow(atBottom: true); scrollLog("end", nil) }
             }
-            // Anything arriving while the user is reading ends a landing's settling: from then on it is the
-            // user's page until the user stops looking.
-            .onChange(of: chat.thread.last?.id) { _, _ in settle() }
-            .onChange(of: chat.pending.count) { _, _ in settle() }
-            .onChange(of: chat.activity.count) { _, _ in settle() }
-            .onAppear { landed = target; settling = true; ownMoveUntil = Date() + 0.6; jump(proxy, "appear") }
+            .onAppear {
+                guard !opened else { return }
+                opened = true
+                ownMoveUntil = Date() + 0.6
+                jump(proxy, "appear")
+            }
         }
         // Over the thread, inside the page, so the double tap above the page row still records.
         .overlay { if inbox { InboxView(open: $inboxAnswer) } }
@@ -179,8 +165,10 @@ struct HomeView: View {
         .onChange(of: inbox) { _, _ in attend() }
         .onChange(of: dimmed) { _, _ in attend() }
         .onChange(of: phase) { _, _ in attend() }
+        // Off screen while following: the rows asked for above go again. Not while the user is up the
+        // thread, because rows removed above the screen move everything on it.
         .onChange(of: onScreen) { _, now in
-            if !now { chat.resetWindow(); chat.dropHeld() }
+            if !now && following { chat.resetWindow(); chat.dropHeld() }
             attend()
         }
         .onChange(of: chat.unread) { _, _ in attend() }
@@ -211,8 +199,7 @@ struct HomeView: View {
     /// front, home showing and the wrist up. Any of those ending first stops the count.
     private func attend() {
         // **A notification over the app is not looking away**: it drops the scene to `inactive` with
-        // the wrist still up, and counted as away it would clear `touched` and land the view under the
-        // user. The wrist going down dims the screen, which is what says the user stopped.
+        // the wrist still up. The wrist going down dims the screen, which is what says the user stopped.
         looking = !dimmed && phase != .background && onScreen && !inbox
         chat.looking = looking
         chat.homeOpen = onScreen && phase != .background
@@ -228,21 +215,18 @@ struct HomeView: View {
         }
     }
 
-    /// **Whether an arrival waits: while the user is reading.** Nothing that arrives — the user's transcribed
-    /// words, a tool call, a reply — moves the view once the user has scrolled with the wrist up; it lands
-    /// the moment the user stops looking. Before that first scroll the raise is not reading, so it lands.
-    /// A tap on the unread dot or an answer's notification (`chat.landings`) is asked for, so it never waits.
-    private func holds(_ next: String?) -> Bool {
-        guard engaged, let landed, next != landed else { return false }
-        return true
+    private static let endId = "end"
+
+    private func follow(atBottom bottom: Bool) {
+        following = true
+        atBottom = bottom
+        chat.following = true
     }
 
     private func land(_ proxy: ScrollViewProxy, _ why: String) {
+        follow(atBottom: false)
         chat.resetWindow()
         keepAtTop = nil
-        landed = target
-        pinned = true
-        settling = true
         jump(proxy, why, animated: true)
     }
 
@@ -259,17 +243,21 @@ struct HomeView: View {
             if let i = chat.recent.firstIndex(where: { "msg\($0.id)" == id }) { return String(i) }
             return id
         }
-        Hub.log("scroll", ["why": why, "at": row(at), "landed": row(landed), "target": row(target),
-                           "pinned": pinned, "settling": settling, "looking": looking, "touched": touched,
+        Hub.log("scroll", ["why": why, "at": row(at), "target": row(target),
+                           "following": following, "atBottom": atBottom, "looking": looking,
                            "atEnd": atEnd, "inbox": inbox, "rows": chat.recent.count, "more": chat.hasMore,
                            "seen": chat.recent.indices.filter { visible.contains(chat.recent[$0].id) }.map(String.init).joined(separator: ",")])
     }
 
-    /// The content changed height. While pinned, the landing is re-applied as it lays out; rows added
-    /// above put back the row that was at the top, so they arrive above the user rather than under the user's finger.
+    /// The content changed height. Following, the view stays on what it showed: the end if it rested there,
+    /// otherwise the top of the newest message, re-applied as the thread lays out over several passes.
+    /// Not following, rows added above put back the row that was at the top, so they arrive above the user
+    /// rather than under the user's finger.
     private func relayout(_ proxy: ScrollViewProxy) {
-        if pinned { if settling || !engaged { jump(proxy, "layout") } }
-        else if let a = keepAtTop {
+        if following {
+            if atBottom { ownMoveUntil = Date() + 0.15; proxy.scrollTo(Self.endId, anchor: .bottom) }
+            else { jump(proxy, "layout") }
+        } else if let a = keepAtTop {
             keepAtTop = nil
             scrollLog("keep-top", a)
             ownMoveUntil = Date() + 0.15
@@ -277,28 +265,21 @@ struct HomeView: View {
         }
     }
 
-    /// **The user scrolled — a finger or the crown.** The page is the user's from here: no landing is held
-    /// against it, an answer landed on by request lets go (`Chat.releaseLanding`), and while the wrist is
-    /// up an arrival waits.
+    /// **The user scrolled — a finger or the crown.** The view is the user's: nothing that arrives moves it
+    /// until the user lets go at the very end, and an answer landed on by request lets go
+    /// (`Chat.releaseLanding`).
     private func userScrolled(_ how: String) {
-        if !touched || pinned { scrollLog("user-\(how)", nil) }
-        pinned = false
-        settling = false
-        // **A scroll over a stale thread is not reading** (`Chat.current`): it is the user looking for what
-        // has not arrived yet, and counted, it held the reply off the screen when the catch-up brought it.
-        touched = looking && chat.current
+        if following { scrollLog("user-\(how)", nil) }
+        following = false
+        atBottom = false
+        chat.following = false
         chat.releaseLanding()
     }
 
     private struct Scroll: Equatable { let y: CGFloat; let h: CGFloat }
 
-    private func settle() {
-        guard engaged, settling else { return }
-        settling = false
-    }
-
     private func jump(_ proxy: ScrollViewProxy, _ why: String, animated: Bool = false) {
-        guard let at = landed ?? target else { return }
+        guard let at = target else { return }
         scrollLog(why, at)
         ownMoveUntil = Date() + (animated ? 0.4 : 0.15)
         if animated {

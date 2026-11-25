@@ -163,11 +163,11 @@ struct SessionView: View {
     let key: String
     @EnvironmentObject private var sessions: Sessions
 
-    /// **Following the newest item.** The page stays on whatever is newest — the user's words, a tool call, the
-    /// reply — until THE USER scrolls, by finger or crown, at all; then it is the user's, and nothing moves it until
-    /// the session is opened again, the user scrolls it to the very end, or something arrives while the user
-    /// is not reading (wrist down, or raised and not yet scrolled). Also what holds the landing
-    /// while the turns lay out after a jump, since a single jump lands short of the spot it aimed at.
+    /// **Following the newest item** — the thread rules home and the phone share (HomeView): the page stays
+    /// on whatever is newest — the user's words, a tool call, the reply — until THE USER scrolls, by finger
+    /// or crown, at all; then it is the user's, and nothing moves it until the session is opened again or the
+    /// user lets go at the very end. The wrist, the app coming back and a reload never move it. Also what
+    /// holds the landing while the turns lay out after a jump, since a single jump lands short of the spot.
     @State private var following = true
     /// The very end of the page is on screen.
     @State private var atEnd = false
@@ -183,20 +183,9 @@ struct SessionView: View {
     /// The page has landed once. Before that, the scroll view moves itself as it lays out (it shifts by
     /// the space under the title as it opens), and none of that is the user's.
     @State private var landed = false
-    /// The item the page is on — `newest`, except while something newer is held: **nothing that arrives
-    /// moves the page while the user is reading.** It lands once the user stops looking (home's rule too).
+    /// The item the page landed on, re-applied while the turns lay out.
     @State private var spot: String?
-    @Environment(\.isLuminanceReduced) private var dimmed
-    @Environment(\.scenePhase) private var phase
     @Environment(\.onScreen) private var onScreen
-    private var looking: Bool { !dimmed && phase == .active && onScreen }
-    /// **The user has scrolled since this look began.** Looking without having scrolled is not reading, so
-    /// an arrival lands then, even on a page the user scrolled away from in an earlier look. Cleared when
-    /// the user stops looking, and when a scroll is let go with the very end on screen: resting at the
-    /// bottom is not reading either.
-    @State private var touched = false
-    /// Reading (`engaged`), which is what holds an arrival (`holds`).
-    private var engaged: Bool { looking && touched }
 
     @ObservedObject private var speaker = Speaker.shared
 
@@ -235,14 +224,10 @@ struct SessionView: View {
     /// The row that was at the top when the user scrolled there for more: the scroll goes back onto it once
     /// the earlier turns have laid out above it.
     @State private var keepAtTop: String?
-    /// **The first event laid out when the user started looking**, by seq. Nothing drops off the top of the
-    /// window while the wrist is up: a new prompt would otherwise push the oldest turn out above the
-    /// screen and everything on it would shift up by that turn's height. Let go when the user stops looking.
+    /// **The first event laid out when the page stopped following**, by seq. Nothing drops off the top of
+    /// the window then: a new prompt would otherwise push the oldest turn out above the screen and
+    /// everything on it would shift up by that turn's height. Let go when it follows again.
     @State private var keepFrom: Int?
-    /// A landing of the page's own is still settling (the turns lay out over several passes after a
-    /// jump, and each re-lands on `spot`). Only until the next arrival or the user's scroll: after that,
-    /// while the user is reading, nothing re-lands.
-    @State private var settling = true
 
     /// What is drawn: the last `turns` turns of `all`.
     private var shown: [SessionEvent] { window.events }
@@ -280,23 +265,10 @@ struct SessionView: View {
                 sessions.path.removeLast()
             })
             // **The top of the NEWEST ITEM at the top of the screen**: the user's words the moment they are
-            // transcribed, then each tool call as it comes, then the reply — whichever is last, once the user
-            // is not looking (`holds`). Never
-            // an older one: the tool calls and the user's words stay until the reply that replaces them is
-            // in hand (`Sessions.sessionFrame`).
-            .onChange(of: newest) { _, now in
-                if holds(now) { settle(); Hub.log("land-held", ["row": key, "at": spot ?? "", "next": now ?? ""]); return }
-                guard following || !engaged else { return }
-                refollow("fresh")
-                toNewest(proxy)
-            }
-            // The user stopped looking with something new since the page landed: it lands now, so it is
-            // waiting for the next raise — after a scroll away as much as while following.
-            .onChange(of: looking) { _, now in
-                keepFrom = now ? shown.first?.seq : nil
-                if !now { touched = false }
-                if !now && spot != newest { refollow("away"); toNewest(proxy) }
-            }
+            // transcribed, then each tool call as it comes, then the reply — whichever is last, while
+            // following. Never an older one: the tool calls and the user's words stay until the reply that
+            // replaces them is in hand (`Sessions.sessionFrame`).
+            .onChange(of: newest) { _, _ in if following { toNewest(proxy) } }
             // Off screen while following the newest: the earlier turns the user asked for go again, so the
             // next swipe back lays out only the default.
             .onChange(of: onScreen) { _, now in
@@ -313,7 +285,7 @@ struct SessionView: View {
                     // up to the top the moment more arrives under it. Content added below moves nothing.
                     if following {
                         if atBottom { jumping = true; proxy.scrollTo(PagedScroll<EmptyView>.endId, anchor: .bottom) }
-                        else if settling || !engaged { toSpot(proxy) }
+                        else { toSpot(proxy) }
                     }
                     // Earlier turns were added above: back onto the row that was at the top, so they
                     // arrive above the user rather than under the user's finger.
@@ -331,20 +303,15 @@ struct SessionView: View {
                 // Let go with the very end on screen after scrolling there: following again, from the
                 // next new item on. Not a jump now: the user is already looking at the end.
                 case .idle:
-                    if hisScroll && atEnd { touched = false; atBottom = true; refollow("end") }
+                    if hisScroll && atEnd { atBottom = true; refollow("end") }
                 default: break
                 }
             }
-            .onAppear { keepFrom = looking ? shown.first?.seq : nil; toNewest(proxy); logShown("appear") }
+            // Opening it lands; swiping back to it, with the page already landed, leaves it where it was.
+            .onAppear { if !landed { toNewest(proxy) }; logShown("appear") }
             .onChange(of: newest) { _, n in logShown("newest") }
-            .onChange(of: events.count) { old, _ in
-                // The page opened before the log came: the floor is what the first load laid out.
-                if looking && keepFrom == nil { keepFrom = shown.first?.seq }
-                // A first load is the landing itself, not an arrival.
-                if old > 0 { settle() }
-                logShown("events")
-            }
-            .onChange(of: placeholders.count) { _, _ in settle(); logShown("placeholders") }
+            .onChange(of: events.count) { _, _ in logShown("events") }
+            .onChange(of: placeholders.count) { _, _ in logShown("placeholders") }
         }
         // In the corner of the GLASS, not of the safe area, which stops well short of the bottom while
         // the page scrolls on under it: a clear layer that reaches the screen's edge carries the button.
@@ -515,7 +482,6 @@ struct SessionView: View {
     /// The top of the newest item at the top of the screen, or as near it as the end of the content
     /// allows: a short last item sits at the bottom with what came before it filling the screen.
     private func toNewest(_ proxy: ScrollViewProxy) {
-        settling = true
         atBottom = false
         spot = newest
         toSpot(proxy)
@@ -526,14 +492,6 @@ struct SessionView: View {
         guard let id = spot ?? newest else { return }
         jumping = true
         proxy.scrollTo(id, anchor: .top)
-    }
-
-    /// **Whether an arrival waits: while the user is reading** — looking, and scrolled since the look began.
-    /// The user's words from this watch, a tool call, the reply — none of them moves the page then; it lands
-    /// when the user stops looking. Before that first scroll the raise is not reading, so it lands.
-    private func holds(_ next: String?) -> Bool {
-        guard engaged, let spot, next != spot else { return false }
-        return true
     }
 
     /// **What the screen actually holds**, logged whenever the reason it might be wrong changes: the
@@ -550,29 +508,22 @@ struct SessionView: View {
         ])
     }
 
-    private func settle() {
-        guard engaged, settling else { return }
-        settling = false
-    }
-
-    /// Following the newest again: the user scrolled back to the end, or something arrived while the user
-    /// was not reading.
+    /// Following the newest again: the user let go at the very end.
     private func refollow(_ why: String) {
         hisScroll = false
         guard !following else { return }
         following = true
+        keepFrom = nil
         Hub.log("follow", ["on": true, "why": why])
     }
 
-    /// The user moved the page: it is the user's until something arrives while the user is not reading, or
-    /// the user scrolls to the end.
+    /// The user moved the page: it is the user's until the user lets go at the very end.
     private func scrolled(_ how: String) {
-        settling = false
         atBottom = false
         hisScroll = true
-        touched = looking
         guard following else { return }
         following = false
+        keepFrom = shown.first?.seq
         Hub.log("follow", ["on": false, "why": how])
     }
 

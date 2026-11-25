@@ -41,7 +41,13 @@ struct SessionRow: Decodable, Identifiable, Equatable {
     /// What it still has running in the background once its turn is over: each background agent by its
     /// description, and whether a background shell is running. Nil when nothing is.
     let background: Background?
-    struct Background: Decodable, Equatable { let agents: [String]; let shell: Bool }
+    struct Background: Decodable, Equatable {
+        let agents: [String]
+        /// Each background shell by the description its Bash call gave it.
+        let shells: [String]?
+        /// A background shell is running, named in `shells` or not.
+        let shell: Bool
+    }
     /// Work it started still going on with no turn in flight, drawn as work in progress.
     var inBackground: Bool { working != true && background != nil }
 

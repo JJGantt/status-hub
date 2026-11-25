@@ -561,7 +561,7 @@ struct SessionView: View {
             // and a background shell, until the host says they have finished. Not an event, so it is
             // never what the page lands on.
             if let row = sessions.row(for: key), row.inBackground, let bg = row.background {
-                BackgroundWork(agents: bg.agents, shell: bg.shell)
+                BackgroundWork(agents: bg.agents, shells: bg.shells ?? [], shell: bg.shell)
             }
         }
         // At least a screen tall, so a short conversation's blank space below the last line is still
@@ -625,9 +625,10 @@ struct SessionView: View {
 
 
 /// What a session still has running in the background after its reply, in the working green under a
-/// pulsing mark: one line per background agent, its description, and one for a background shell.
+/// pulsing mark: one line per background agent and per background shell, each by its description.
 private struct BackgroundWork: View {
     let agents: [String]
+    let shells: [String]
     let shell: Bool
     @State private var lit = false
 
@@ -639,7 +640,8 @@ private struct BackgroundWork: View {
                 .onAppear { withAnimation(.easeInOut(duration: 0.8).repeatForever(autoreverses: true)) { lit = true } }
             VStack(alignment: .leading, spacing: 2) {
                 ForEach(Array(agents.enumerated()), id: \.offset) { _, a in line("agent", a) }
-                if shell { line("shell", nil) }
+                ForEach(Array(shells.enumerated()), id: \.offset) { _, s in line("shell", s) }
+                if shell && shells.isEmpty { line("shell", nil) }
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)

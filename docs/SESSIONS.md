@@ -445,6 +445,10 @@ so the watcher above sees a finished turn. Each host therefore publishes `desk_s
 
 - `bg_shell` is the process record's `status: "shell"`, which Claude Code writes in place of `idle` while a
   background shell is running and for nothing else. A background agent leaves the record `idle`.
+- `bg_shells` names each of those shells. They are the Bash-tool shells under the session's process in
+  the process table (Claude Code runs each as `… eval '<command>' < /dev/null …`), each named by the
+  `description` of the Bash call that started it, found in the conversation's transcript or a subagent's
+  (an agent can end and leave its shell running), else by the command's first line.
 - `bg_agents` is the description of each agent whose sidecar `<conversation>/subagents/agent-<id>.meta.json`
   says `requestShape: "background"` with no `finished` (or `stoppedByUser`, `sweptByStop`). A sidecar older
   than the process is ignored: it belongs to a process that died with the agent in flight and never wrote
@@ -452,7 +456,7 @@ so the watcher above sees a finished turn. Each host therefore publishes `desk_s
 
 Both are read on every tick and once more 1.5s after every turn end (`tickSoon` / `reconcileSoon`), since the
 record is rewritten just after the reply lands. The work ending is a new turn, which re-reads them. The hub
-sends them to every surface as `background` (`{ agents, shell }` or null, running rows only). The Mac's idle
+sends them to every surface as `background` (`{ agents, shells, shell }` or null, running rows only). The Mac's idle
 reaper, the Pi's reaper and its eviction never take a session with background work: parking it kills the
 work, and its transcript goes quiet while the work goes on. Codex has no background work to report.
 

@@ -490,7 +490,8 @@ function paintBody() {
   // background shell, under a pulsing caret, until the host says they have finished. Not a message.
   const bg = !working && cur.head && cur.head.background;
   if (bg) {
-    const lines = [...(bg.agents || []).map((a) => ['agent', a]), ...(bg.shell ? [['shell', '']] : [])];
+    const shells = bg.shells && bg.shells.length ? bg.shells : bg.shell ? [''] : [];
+    const lines = [...(bg.agents || []).map((a) => ['agent', a]), ...shells.map((t) => ['shell', t])];
     items.push({ key: 'bg', html: '<div class="sv-bg"><span class="ai-caret">▍</span><div class="sv-bg-lines">' +
       lines.map(([k, t]) => `<div class="sv-bg-line"><span class="sv-bg-k">${k}</span>${t ? ' ' + esc(t) : ''}</div>`).join('') +
       '</div></div>' });

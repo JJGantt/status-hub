@@ -125,7 +125,9 @@ module.exports = function (ctx) {
   const backgroundOf = (s) => {
     if (!s || s.status !== 'resident') return null;
     const agents = Array.isArray(s.bg_agents) ? s.bg_agents.filter(Boolean) : [];
-    return agents.length || s.bg_shell ? { agents, shell: !!s.bg_shell } : null;
+    // Each shell by the description its Bash call gave it; `shell` alone when one runs that could not be named.
+    const shells = Array.isArray(s.bg_shells) ? s.bg_shells.filter(Boolean) : [];
+    return agents.length || s.bg_shell ? { agents, shells, shell: !!s.bg_shell } : null;
   };
 
   // PARKED ROWS ARE CAPPED. Every session ever parked stays resumable, and there are hundreds; every
@@ -302,10 +304,10 @@ module.exports = function (ctx) {
   gated.get('/api/sessions/:id', async (req, res) => {
     try {
       const rows = await sb(`desk_sessions?id=eq.${encodeURIComponent(String(req.params.id))}` +
-        '&select=id,label,custom_title,repo,worker,status,working,bg_agents,bg_shell,claude_session_id,last_prompt,last_reply,reply_at,agent,started,prompt,command_id');
+        '&select=id,label,custom_title,repo,worker,status,working,bg_agents,bg_shell,bg_shells,claude_session_id,last_prompt,last_reply,reply_at,agent,started,prompt,command_id');
       if (!rows || !rows.length) return res.status(404).json({ error: 'no such session' });
       // `prompt` is the launch prompt; the payload's `prompt` is the waiting permission dialog.
-      const { started, prompt: launch_prompt, command_id, bg_agents, bg_shell, ...row } = rows[0];
+      const { started, prompt: launch_prompt, command_id, bg_agents, bg_shell, bg_shells, ...row } = rows[0];
       if (row.last_prompt) row.last_prompt = cleanSaid(row.last_prompt);
       const conv = row.claude_session_id || row.id;
       rowConv.set(row.id, conv);
@@ -315,7 +317,7 @@ module.exports = function (ctx) {
         reportedEmpty.add(conv);
         console.error(`[sessions] ${row.id} opened with nothing from its host in the thread (conversation ${conv})`);
       }
-      res.json({ ...row, incident: isIncident(row), codex: isCodex(row), background: backgroundOf({ ...row, bg_agents, bg_shell }), prompt: pendingPrompt(row.id), epoch: EPOCH, events: log.events });
+      res.json({ ...row, incident: isIncident(row), codex: isCodex(row), background: backgroundOf({ ...row, bg_agents, bg_shell, bg_shells }), prompt: pendingPrompt(row.id), epoch: EPOCH, events: log.events });
     } catch (e) { res.status(500).json({ error: String(e.message || e) }); }
   });
 

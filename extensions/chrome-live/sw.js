@@ -29,6 +29,7 @@ let refused = false;                // the hub turned the hello away: wrong toke
 const sentMeta = new Map();         // tab id -> 'title url' last sent, so a page retitling itself is one message
 let claimed = new Set();            // tab ids (strings) a session owns, per the hub
 const watching = new Map();         // tab id -> { w, h, lastAck }
+const queues = new Map();           // tab id -> the promise its last input settles
 
 const send = (m) => { if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(m)); };
 const report = (message, target) => {
@@ -70,7 +71,15 @@ async function handle(m) {
     }
   } else if (m.op === 'watch') await watch(String(m.target));
   else if (m.op === 'unwatch') await unwatch(String(m.target));
-  else if (m.op === 'input') await input(String(m.target), m.ev || {});
+  else if (m.op === 'input') {
+    // One tab's input in the order he gave it: a tap is three awaited events, and text sent right after
+    // must not land before the press that focused the field.
+    const t = String(m.target);
+    const prev = queues.get(t) || Promise.resolve();
+    const next = prev.then(() => input(t, m.ev || {})).catch((e) => report(`input on tab ${t}: ${e.message || e}`, t));
+    queues.set(t, next);
+    await next;
+  }
 }
 
 const cmd = (tabId, method, params = {}) => chrome.debugger.sendCommand({ tabId }, method, params);
@@ -187,7 +196,7 @@ chrome.tabs.onUpdated.addListener((tabId, change, tab) => {
   const t = String(tabId);
   if (claimed.has(t) && (change.title || change.url)) meta(t, tab);
 });
-chrome.tabs.onRemoved.addListener((tabId) => sentMeta.delete(String(tabId)));
+chrome.tabs.onRemoved.addListener((tabId) => { sentMeta.delete(String(tabId)); queues.delete(String(tabId)); });
 
 function meta(t, tab) {
   const k = `${tab.title} ${tab.url}`;

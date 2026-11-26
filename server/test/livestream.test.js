@@ -4,7 +4,7 @@
 // unreported.
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
-const { FrameReader, endOf, adtsSeconds, PauseClock, BrokenStreams } = require('../lib/livestream');
+const { FrameReader, endOf, adtsSeconds, PauseClock, BrokenStreams, endedBy } = require('../lib/livestream');
 
 const frame = (type, data = Buffer.alloc(0)) => {
   const h = Buffer.alloc(5);
@@ -112,4 +112,17 @@ test('a recovery that fails is logged and remembers nothing', async () => {
   b.broke('x', { recover: async () => { throw new Error('boom'); } });
   await new Promise((r) => setTimeout(r, 40));
   assert.equal(b.sent('x'), null);
+});
+
+test("the watch's own log says how a broken stream's recording ended", () => {
+  const open = (id) => ({ ev: 'live-open', data: { id } });
+  const ev = (e) => ({ ev: e, data: {} });
+  // Cancelled as the network dropped: the cancel is its end, whatever the stream saw.
+  assert.equal(endedBy([ev('record-start'), open('A'), ev('record-cancel'), ev('record-cancel'), ev('record-start'), open('B'), ev('record-stop')], 'A'), 'record-cancel');
+  assert.equal(endedBy([ev('record-start'), open('A'), ev('record-cancel'), ev('record-start'), open('B'), ev('record-stop')], 'B'), 'record-stop');
+  // No end before the next recording started, or none logged yet, or a stream the log never opened: unknown.
+  assert.equal(endedBy([open('A'), ev('record-start'), ev('record-cancel')], 'A'), null);
+  assert.equal(endedBy([open('A')], 'A'), null);
+  assert.equal(endedBy([ev('record-cancel')], 'A'), null);
+  assert.equal(endedBy(null, 'A'), null);
 });

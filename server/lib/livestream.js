@@ -140,4 +140,21 @@ class BrokenStreams {
   }
 }
 
-module.exports = { FrameReader, endOf, adtsSeconds, PauseClock, BrokenStreams, LOST_GAP_MS, RECOVER_GRACE_MS };
+// How the watch itself says a recording ended, from its own log: `events` (client_log rows oldest first,
+// each { ev, data }) is searched for the `live-open` naming stream `liveId`, and the first end after it
+// answered: 'record-cancel', 'record-stop' or 'mic-failed'. null when the log holds no end for it yet, or
+// another recording starts first. A stream can break at the very moment he cancels: the network drops,
+// the C frame never arrives, and the stream reads as lost while the watch's log, delivered once it is
+// back online, says it was cancelled on purpose.
+const WATCH_ENDS = new Set(['record-stop', 'record-cancel', 'mic-failed']);
+function endedBy(events, liveId) {
+  const i = (events || []).findIndex((e) => e.ev === 'live-open' && e.data && e.data.id === liveId);
+  if (i < 0) return null;
+  for (const e of events.slice(i + 1)) {
+    if (e.ev === 'record-start') return null;
+    if (WATCH_ENDS.has(e.ev)) return e.ev;
+  }
+  return null;
+}
+
+module.exports = { FrameReader, endOf, adtsSeconds, PauseClock, BrokenStreams, endedBy, LOST_GAP_MS, RECOVER_GRACE_MS };

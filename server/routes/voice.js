@@ -10,7 +10,7 @@ const heicConvert = require('heic-convert');
 const { localDate, etNowString } = require('../lib/dates');
 const ops = require('../lib/report');
 const { vanishedRecordings, RECORD_EVENTS } = require('../lib/outcomes');
-const { FrameReader, endOf, adtsSeconds, PauseClock, BrokenStreams, RECOVER_GRACE_MS } = require('../lib/livestream');
+const { FrameReader, endOf, adtsSeconds, PauseClock, BrokenStreams, endedBy, RECOVER_GRACE_MS } = require('../lib/livestream');
 const { heardStart, heardEnd } = require('../lib/streams');
 const chunked = require('../lib/chunkstream');
 const os = require('os');
@@ -1057,6 +1057,17 @@ module.exports = function (ctx) {
     brokenStreams.broke(meta.id, {
       skipped: () => console.log(`[voice-live] ${meta.id} ${verdict}: the watch sent the recording itself; nothing recovered`),
       recover: async () => {
+        // He may have cancelled it as the network dropped, so the C frame never came: the watch's own log
+        // says so by now, and a cancelled recording is not a command.
+        const from = new Date(startedAt - 30e3).toISOString();
+        const events = await sb(`client_log?src=eq.watch&ev=in.(live-open,record-start,record-stop,record-cancel,mic-failed)`
+          + `&at=gte.${encodeURIComponent(from)}&select=ev,at,data&order=at.asc,id.asc`).catch((e) => {
+          console.error(`[voice-live] ${meta.id} could not read the watch log: ${e.message || e}`); return [];
+        });
+        if (endedBy(events, meta.id) === 'record-cancel') {
+          console.warn(`[voice-live] ${meta.id} ${verdict}: the stream broke as he cancelled the recording (the watch log says record-cancel); nothing enqueued`);
+          return null;
+        }
         await sbWrite('client_log', 'POST', [{ src: 'watch', ev: 'record-lost', at: new Date(lastByteAt).toISOString(),
           data: { live: meta.id, verdict, seconds: +seconds.toFixed(1), bytes: audio.length } }]);
         const rid = await lostRecording(meta, verdict, audio, seconds, startedAt);

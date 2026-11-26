@@ -854,7 +854,10 @@ out of `Capture` sends `E` or `C` before closing (`closeLive`), so the hub reads
 **A broken stream is recovered, not just reported** (`brokenStream` in `server/routes/voice.js`,
 `BrokenStreams` in `lib/livestream.js`). The hub gives the watch three minutes to send the recording
 itself: a live watch does, on a `/api/voice-command` naming the stream (`live=<id>`), and that copy is the
-one acted on. When nothing names the stream in that time, the hub writes `record-lost` into the watch's
+one acted on. When nothing names the stream in that time, the hub first reads the watch's own log
+(`endedBy`): when the first end after that stream's `live-open` is `record-cancel`, he cancelled it as the
+network dropped, so the C frame never arrived; nothing is enqueued, and the hub logs it as an occurrence.
+Otherwise the hub writes `record-lost` into the watch's
 log (stamped when the audio stopped, so it sorts before any later press), keeps the audio in
 `voice-clips/lost/`, transcribes it, ENQUEUES it as a `watch-cmd` command with `timing.cut_off`, and
 reports the loss with the words. The worker tells the model the command may be cut off and may already

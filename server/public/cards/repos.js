@@ -17,6 +17,7 @@ import { esc, md, mdInline, PIN_SVG, liveStream, threadScroll, syncKeyed, report
 import { makeRecorder, bindMic } from '../voiceagent.js';
 import { speak, stopSpeaking, speaking, paused, pauseSpeaking, resumeSpeaking } from '../speak.js';
 import { openHandoff } from '../handoff.js';
+import { mountContent, mountLive } from '../sessiontabs.js';
 
 let mounted = false;
 let desk = { online: false };
@@ -283,6 +284,7 @@ function keep(payload) {
   cur.id = now.id;
   cur.head.prompt = now.prompt || null;
   cur.head.handoff = now.handoff || null;
+  cur.head.tabs = now.tabs || [];
   paintAsk();
   paintTabs();
   const bg = now.background || null;
@@ -313,16 +315,30 @@ function paintAsk() {
 // when there is more than the conversation.
 //
 // A kind of tab is an entry in TAB_KINDS (how to draw it into its pane) plus a line in tabsOf (when the
-// session has one). `selfEnds` kinds take their own tab down through `done` once they have shown how
-// they ended; any other kind's tab goes the moment the session payload stops listing it.
+// session has one). `mount` answers a close function or `{ close, update, shown }`: `update` takes a newer
+// head of the same tab (its `v` moved), `shown` whether its pane is the one on screen. `selfEnds` kinds take
+// their own tab down through `done` once they have shown how they ended; any other kind's tab goes the moment
+// the session payload stops listing it. `front` says when a tab that appears comes to the front: 'always'
+// (it needs him now), 'new' (only one that appears while the session is open, not one already there when
+// it opened), or never.
 const TAB_KINDS = {
   // A screen the session handed over (routes/handoffs.js): the tap screen itself (handoff.js).
-  handoff: { label: 'Handoff', selfEnds: true, mount: (pane, t, done) => openHandoff(t.id, { mount: pane, onEnd: done }) },
+  handoff: { label: () => 'Handoff', selfEnds: true, front: 'always',
+    mount: (pane, t, done) => openHandoff(t.id, { mount: pane, onEnd: done }) },
+  // Something the session put up with the session_tab tool (sessiontabs.js), labelled by the session.
+  content: { label: (t) => t.title || 'Tab', front: 'new', mount: (pane, t) => mountContent(pane, t) },
+  // A live view of a Chrome tab the session drives (sessiontabs.js, lib/liverelay.js), labelled by its site.
+  chrome: { label: (t) => hostOf(t.url) || 'Chrome', mount: (pane, t) => mountLive(pane, t) },
 };
+
+function hostOf(url) {
+  try { return url ? new URL(url).hostname.replace(/^www\./, '') : ''; } catch (_) { return ''; }
+}
 
 function tabsOf(head) {
   const tabs = [];
   if (head && head.handoff) tabs.push({ key: 'handoff:' + head.handoff.id, kind: 'handoff', id: head.handoff.id });
+  for (const t of (head && head.tabs) || []) if (TAB_KINDS[t.kind]) tabs.push({ ...t, key: `${t.kind}:${t.id}` });
   return tabs;
 }
 
@@ -339,15 +355,22 @@ function paintTabs() {
     const pane = document.createElement('div');
     pane.className = 'sv-pane'; pane.dataset.tab = t.key; pane.hidden = true;
     sv.append(pane);
-    const entry = { t, pane, close: null };
+    const entry = { t, pane, ctl: {} };
     at.tabs.set(t.key, entry);
-    entry.close = TAB_KINDS[t.kind].mount(pane, t, () => dropTab(at, t.key));
-    // A tab that just appeared is something the session needs him to look at: it comes to the front.
-    showTab(at, t.key);
+    const m = TAB_KINDS[t.kind].mount(pane, t, () => dropTab(at, t.key));
+    entry.ctl = typeof m === 'function' ? { close: m } : (m || {});
+    const front = TAB_KINDS[t.kind].front;
+    if (front === 'always' || (front === 'new' && at.tabsPainted)) showTab(at, t.key);
   }
   for (const [key, entry] of at.tabs) {
-    if (!TAB_KINDS[entry.t.kind].selfEnds && !want.some((t) => t.key === key)) dropTab(at, key);
+    const now = want.find((t) => t.key === key);
+    if (!now) { if (!TAB_KINDS[entry.t.kind].selfEnds) dropTab(at, key); continue; }
+    if (now.v !== entry.t.v || now.url !== entry.t.url || now.title !== entry.t.title) {
+      entry.t = now;
+      if (entry.ctl.update) entry.ctl.update(now);
+    }
   }
+  at.tabsPainted = true;
   if (pendingTab && at.tabs.has(pendingTab)) { showTab(at, pendingTab); pendingTab = null; }
   paintStrip(at);
 }
@@ -357,6 +380,7 @@ function showTab(at, key) {
   if (!el || cur !== at) return;
   at.tab = key;
   el.querySelectorAll('.sv-pane').forEach((p) => { p.hidden = p.dataset.tab !== key; });
+  for (const [k, e] of at.tabs) if (e.ctl.shown) e.ctl.shown(k === key);
   paintStrip(at);
 }
 
@@ -364,14 +388,14 @@ function dropTab(at, key) {
   const entry = at.tabs.get(key);
   if (!entry) return;
   at.tabs.delete(key);
-  try { entry.close && entry.close(); } catch (_) {}
+  try { entry.ctl.close && entry.ctl.close(); } catch (_) {}
   entry.pane.remove();
   if (at.tab === key) showTab(at, 'session'); else paintStrip(at);
 }
 
 function closeTabs(at) {
   if (!at || !at.tabs) return;
-  for (const [, entry] of at.tabs) { try { entry.close && entry.close(); } catch (_) {} }
+  for (const [, entry] of at.tabs) { try { entry.ctl.close && entry.ctl.close(); } catch (_) {} }
   at.tabs.clear();
 }
 
@@ -380,7 +404,7 @@ function paintStrip(at) {
   const strip = el && el.querySelector('.sv-tabs');
   if (!strip || cur !== at) return;
   strip.hidden = at.tabs.size === 0;
-  const tabs = [['session', 'Session'], ...[...at.tabs].map(([key, e]) => [key, TAB_KINDS[e.t.kind].label])];
+  const tabs = [['session', 'Session'], ...[...at.tabs].map(([key, e]) => [key, TAB_KINDS[e.t.kind].label(e.t)])];
   strip.innerHTML = tabs.map(([key, label]) =>
     `<button type="button" class="sv-tab${at.tab === key ? ' on' : ''}" data-tab="${esc(key)}">${esc(label)}</button>`).join('');
 }

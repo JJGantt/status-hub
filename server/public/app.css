@@ -1442,6 +1442,14 @@ body.phonehome #usagebars{top:env(safe-area-inset-top,0px)}
 .sv-tab.on{background:#1f6feb;border-color:#1f6feb;color:#fff}
 .sv-pane{flex:1 1 auto;min-height:0;display:flex;flex-direction:column}
 .sv-pane[hidden]{display:none}
+/* A session's content tab (sessiontabs.js): a page that scrolls, a picture fitted to the width, or a sandboxed frame. */
+.st-content{flex:1 1 auto;min-height:0;overflow:auto;-webkit-overflow-scrolling:touch;display:flex;flex-direction:column}
+.st-md{padding:12px 14px 40px;line-height:1.5}
+.st-img{display:block;width:100%;height:auto}
+.st-frame{flex:1 1 auto;width:100%;min-height:0;border:0;background:#fff}
+/* The live Chrome view: the handoff tap screen's look, with back and reload either side of the site. */
+.st-live .st-small{flex:0 0 auto;padding:4px 12px;font-size:16px}
+.st-live .st-where{text-align:center;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:13px;color:#9aa5b3}
 .ho.ho-inline{position:relative;inset:auto;z-index:auto;flex:1 1 auto;min-height:0}
 .sv-ask-line{flex:1 1 auto;min-width:0;font-size:13px;color:#ffc2de;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-family:ui-monospace,Menlo,monospace}
 .sv-ask-btn{flex:0 0 auto;font:inherit;font-size:14px;font-weight:600;padding:8px 14px;border-radius:8px;border:1px solid #ff5fa8;background:transparent;color:#ff5fa8}

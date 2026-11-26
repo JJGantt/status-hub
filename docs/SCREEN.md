@@ -75,6 +75,11 @@ it goes through the relay. Listens on UDP and TCP 3478 and TCP 443; relay ports 
 | typing in the box | each character as typed; ⌫ and ⏎ as keys |
 | ⌘ then a key or letter | that shortcut |
 
+A drag that starts on the picture never swipes back out of the session: the session view's swipe-back
+(`swipeBack` in `cards/repos.js`) ignores any touch that starts inside `.ho-stage`, which the handoff tap
+screen and the live Chrome tab share. The picture's own `preventDefault` stops only the browser's
+scrolling, not that handler.
+
 ## Measured
 
 Through the live hub, Mac and browser on one network, 1280x800 display: the agent hears the row about

@@ -921,6 +921,10 @@ function swipeBack(sv, close) {
     if (e.touches.length !== 1) { mode = 'no'; return; }
     const t = e.touches[0];
     x0 = t.clientX; y0 = t.clientY; t0 = Date.now(); dx = 0; mode = null;
+    // A picture that pans under the finger (a handoff, the Mac's screen, a live Chrome tab) owns every
+    // drag that starts on it. Its own preventDefault stops the browser scrolling, not this handler,
+    // which would otherwise read a rightward pan as a swipe out of the session.
+    if (e.target.closest && e.target.closest('.ho-stage')) { mode = 'no'; return; }
     for (let n = e.target; n && n !== sv; n = n.parentElement) {
       if (n.scrollLeft > 0 && getComputedStyle(n).overflowX !== 'visible') { mode = 'no'; return; }
     }

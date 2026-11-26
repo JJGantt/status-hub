@@ -9,19 +9,25 @@ const express = require('express');
 //   GET  /api/handoffs/:id?after=<seq>&wait=<s>   the handoff, held until its screenshot is newer than
 //                                                 `after` or it has ended (a held request answered by
 //                                                 the agent's update, not a poll)
-//   POST /api/handoffs/:id/act                    a tap (x, y as fractions of the screenshot), text, a
+//   POST /api/handoffs/:id/act                    a tap (x, y as fractions of the screenshot, or of the
+//                                                 whole screen with `full`), text, a
 //                                                 key, refresh, view (crop ⇄ whole), done or cancel →
 //                                                 a handoff_actions row
 //   GET  /handoff/:id                             the tap page, for a browser or a notification tap
 //
 // An open handoff is also ON ITS SESSION (`openFor`, in the session payload), so the phone's and the
 // watch's session views show it for as long as it waits, as a permission prompt is shown.
-const COLS = 'id,session,target,note,status,image,seq,width,height,taps,typed,error,updated_at,region,selector,whole';
+const COLS = 'id,session,target,note,status,image,seq,width,height,taps,typed,error,updated_at,region,selector,whole,full_image,focus,suggest';
 const view = (r) => r && {
   id: r.id, session: r.session, target: r.target, note: r.note, status: r.status, seq: r.seq,
   img: r.image ? `/img/${r.image}` : null, width: r.width, height: r.height, error: r.error,
-  // Shown cropped to the part that matters (a region or an element); `whole` is his toggle to see it all.
+  // `img` is cropped to the part that matters (a region or an element), for the watch; `whole` is his
+  // toggle there to see it all. The phone shows `full`, the whole screen, framed on `focus` (fractions
+  // of it), and pinches out to the rest.
   framed: !!(r.region || r.selector), whole: !!r.whole,
+  full: r.full_image ? `/img/${r.full_image}` : null, focus: r.focus || null,
+  // Values the session knows he will type (his email, a card number): buttons that fill his text box.
+  suggest: Array.isArray(r.suggest) ? r.suggest : [],
 };
 const KINDS = ['tap', 'text', 'key', 'refresh', 'view', 'done', 'cancel'];
 const KEYS = ['enter', 'tab', 'backspace', 'escape'];
@@ -125,7 +131,8 @@ module.exports = function ({ gated, pushAll, pushSessions, sb, sbInsert }) {
     if (kind === 'tap') {
       const x = Number(b.x), y = Number(b.y);
       if (!(x >= 0 && x <= 1 && y >= 0 && y <= 1)) return res.status(400).json({ error: 'x and y are fractions 0-1' });
-      Object.assign(row, { x, y });
+      // `full`: measured on the whole-screen picture (the phone), not the cropped one (the watch).
+      Object.assign(row, { x, y, full: b.full === true });
     }
     if (kind === 'text') {
       if (typeof b.text !== 'string' || !b.text.length) return res.status(400).json({ error: 'text required' });

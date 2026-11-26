@@ -34,18 +34,25 @@ data-layer README § Handoffs.
 |---|---|
 | phone, session view | a **Handoff tab** beside the conversation (`cards/repos.js`, session tabs): it opens in front when the handoff arrives, and he can switch to the Session tab to read something (a number to type) and back without losing either; the tab closes itself once the handoff ends |
 | phone, notification | the banner opens the handoff's session on its Handoff tab (`Push.swift` → `PageLaunch.handoff` → `window.__openHandoff` → `__openHandoffTab`) |
-| phone, tap screen | `public/handoff.js`, drawn inside the tab: tap the screenshot to click; the box and Type to type; Full/Crop, Enter, Tab, Zoom, Refresh, Cancel, Done |
+| phone, tap screen | `public/handoff.js`, drawn inside the tab: the whole screen, framed at first on the part that matters; one finger pans, two pinch to zoom, a tap that did not move clicks there; the session's suggested values as buttons that fill the box; the box and Type to type; Enter, Tab, Refresh, Cancel, Done |
 | browser | `/handoff/:id`, the same tap screen as a page; with no sessions pane (the kiosk) a notification draws it over everything |
 | watch | the session page's card (`handoffCard` in `SessionsView.swift`; the notification opens the session); full screen in `HandoffView.swift`: tap to click, the crown zooms, a drag pans, a double tap fits, buttons for keyboard, Enter, Refresh, Cancel, Done |
 
-**The screenshot is the part that matters, not the whole screen.** `mac-screen` captures one app's
-window (on whichever display it is), `mac-chrome` Chrome's front window, `pi-browser` the page; the
-session can crop further to a `region` (fractions of the window or page) or, on the Pi, a CSS
-`selector`, whose element is followed as the page changes. A cropped handoff has `framed` set, and the
-tap screen offers Full / Crop (watch: the expand glyph), the `view` action, which flips `whole`.
+**He starts on the part that matters.** The agent captures the whole screen (`mac-screen` and
+`mac-chrome`: the display the app is on, with the app brought to the front; `pi-browser`: the
+viewport) and stores it as `full_image`, with `focus`: the session's `region` (fractions of the
+screen or page) or, on the Pi, a CSS `selector`'s element, followed as the page changes, as
+fractions of it. The phone draws `full_image` framed on `focus` and pinches out to the rest. The watch
+has no room for that, so `image` is the focus cropped out (`cropPng`), and its expand glyph sends the
+`view` action, which flips `whole` and makes `image` the whole screen.
 
-A tap is sent as fractions (0-1) of the screenshot, so it lands in the same place whatever size the
-screenshot is drawn at.
+A tap is sent as fractions (0-1) of the picture it was made on, so it lands in the same place whatever
+size the picture is drawn at: the phone's carry `full` (fractions of `full_image`), the watch's do not
+(fractions of `image`).
+
+**Suggested values.** The session passes `suggest` ([{label, text}]: his email, a card number he gave
+it) with the request; the phone shows each as a button that fills the text box, and he presses Type
+himself. Never a password or a one-time code. The agent clears `suggest` when the handoff ends.
 
 ## Things that are not obvious
 

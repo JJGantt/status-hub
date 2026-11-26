@@ -100,6 +100,10 @@ A device that opens a new share (its page reloaded) has its earlier one ended by
 matched by the request's user agent, so two shares of one device never overlap. A capture macOS stops on its own ("Stream was stopped by the system", which one share's helper tearing
 down its capture can cause in another's) is started again; three stops within a minute end the share.
 
+When the screen agent starts, every share this machine claimed that is still `new`, `answered` or
+`live` is ended as `agent restarted` (its helper died with the agent); one that was `live` is reported,
+since its viewer was cut off.
+
 ## Failures
 
 - A share the Mac does not answer in 20 s is reported by the hub (the Mac asleep, its agent down, or

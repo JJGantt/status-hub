@@ -55,3 +55,8 @@ screenshot is drawn at.
   kept by realtime. Every held request reads the row itself first, so a deaf realtime channel delays an
   answer by at most one request's 40 s, never loses one.
 - **The notification is sent once**, when the row first turns `open`.
+- **Done and Cancel ignore taps for 0.7 s after the keyboard closes** (the box loses focus or the visible
+  area resizes). Closing the keyboard shifts the screen under the finger, and the same tap can land on a
+  Done that slid beneath it, which ends the handoff and wakes the session.
+- **Each action records the device that sent it** (`handoff_actions.source`, the request's user agent), so
+  an action nobody remembers sending can be traced to the phone or the watch.

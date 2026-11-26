@@ -118,7 +118,10 @@ module.exports = function ({ gated, pushAll, pushSessions, sb, sbInsert }) {
     const b = req.body || {};
     const kind = String(b.kind || '');
     if (!KINDS.includes(kind)) return res.status(400).json({ error: 'bad kind' });
-    const row = { handoff: id, kind, seq: Number.isInteger(b.seq) ? b.seq : null };
+    // The device it came from (the phone's web view, the watch app, a browser), kept on the row so an
+    // action nobody remembers sending can be traced.
+    const row = { handoff: id, kind, seq: Number.isInteger(b.seq) ? b.seq : null,
+      source: String(req.get('user-agent') || '').slice(0, 200) || null };
     if (kind === 'tap') {
       const x = Number(b.x), y = Number(b.y);
       if (!(x >= 0 && x <= 1 && y >= 0 && y <= 1)) return res.status(400).json({ error: 'x and y are fractions 0-1' });

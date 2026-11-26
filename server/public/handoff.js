@@ -33,8 +33,19 @@ export function openHandoff(id, { page = false, mount = null, onEnd = null } = {
   (mount || document.body).append(ov);
 
   let cur = null, busy = false, alive = true, zoom = false;
+  // When the keyboard closes the screen shifts under the finger, and the tap that closed it can land on
+  // whatever slid beneath: a Done or Cancel nobody pressed. Those two ignore taps for a moment after the
+  // box loses focus or the visible area resizes.
+  let shiftedAt = 0;
+  const shifted = () => { shiftedAt = Date.now(); };
+  const settled = () => Date.now() - shiftedAt > 700;
+  input.addEventListener('blur', shifted);
+  if (window.visualViewport) visualViewport.addEventListener('resize', shifted);
   const setBusy = (b) => { busy = b; ov.classList.toggle('busy', b); };
-  const shut = () => { alive = false; ov.remove(); };
+  const shut = () => {
+    alive = false; ov.remove();
+    if (window.visualViewport) visualViewport.removeEventListener('resize', shifted);
+  };
   close.onclick = shut;
 
   function paint(v) {
@@ -83,8 +94,8 @@ export function openHandoff(id, { page = false, mount = null, onEnd = null } = {
     btn('Tab', () => act({ kind: 'key', key: 'tab' })),
     btn('Zoom', () => { zoom = !zoom; ov.classList.toggle('zoom', zoom); }),
     btn('Refresh', () => act({ kind: 'refresh' })),
-    btn('Cancel', () => act({ kind: 'cancel' })),
-    btn('Done', () => act({ kind: 'done' }), 'ho-done'),
+    btn('Cancel', () => { if (settled()) act({ kind: 'cancel' }); }),
+    btn('Done', () => { if (settled()) act({ kind: 'done' }); }, 'ho-done'),
   );
 
   (async () => {

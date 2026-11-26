@@ -53,7 +53,7 @@ Heart rate is the bulk: a reading every few minutes at rest, every few seconds i
 
 The data MCP's `get_health_data` is the way in for voice and sessions — no type lists what exists,
 then per-day rollups, `sleep` per night, `workout` per workout, `readings: true` for raw samples in a
-window. It reads three SQL functions from data-layer 00137: `health_types()`, `health_daily(type,
+window. It reads three SQL functions from data-layer 00137 (`health_types` replaced by 00200): `health_types()`, `health_daily(type,
 from, to)` and `sleep_nights(from, to)`. Days are New York calendar days, not the hub's 4am day.
 
 ## What it is not

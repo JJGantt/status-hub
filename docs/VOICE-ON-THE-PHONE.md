@@ -74,13 +74,20 @@ its WebM slices (`ChunkStream` in `voiceagent.js`); the app's native recorder st
 source `mac-cmd`). The finished clip still goes up whole through the outbox and names its streams
 (`streams=` on `/api/voice-command`), which marks them used.
 
-**A failure stops the recording while the user is still talking.** A chunk unacknowledged for six
-seconds means the hub is not receiving; an acknowledgement saying `damaged` means the capture holds
-under half of the time it recorded (the dropped-frames failure below, measured from the stream's own
-timestamps as it arrives). Either one stops the recording on the spot, sends everything recorded so far
-through the outbox exactly as a stop tap would, shows the failure on the button's status line
-(`Hub not receiving` / `Mic dropping audio`), and reports it: the page as a client `error`, the hub as
+**Dropped audio stops the recording while the user is still talking.** An acknowledgement saying
+`damaged` means the capture holds under half of the time it recorded (the dropped-frames failure below,
+measured from the stream's own timestamps as it arrives). That stops the recording on the spot, sends
+everything recorded so far through the outbox exactly as a stop tap would, shows `Mic dropping audio`
+on the button's status line, and reports it: the page as a client `error`, the hub as
 `[voice-chunk] … DAMAGED`. The app also buzzes.
+
+**A hub that stops acknowledging does NOT stop the recording.** A chunk unacknowledged for six seconds
+means the hub is not receiving, which is what every deploy does for several seconds while it restarts.
+Stopping there sent commands half-said, so instead the status line reads `Hub reconnecting… keep
+talking` until an acknowledgement comes back, and the recording carries on: the whole of it is held on
+the phone (the page's chunks, the app's file), the stream resends from the start when the restarted hub
+answers 410, and the stop tap sends it through the outbox as always. Each stall is counted as an
+occurrence (`voice-stream-stall` on `/api/clientlog`), not raised as an incident.
 
 **A stream that goes silent is used.** The app killed, the page reloaded, the phone gone from the
 network for good: a stream with no chunk for a minute (thirty while it said it was paused or ended) is

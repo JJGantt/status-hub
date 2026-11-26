@@ -12,7 +12,8 @@ import WebKit
 ///
 /// The page drives it (message `nativeRec`, `makeRecorder` in voiceagent.js): `{op:'start', id}`,
 /// `{op:'stop', id}`, `{op:'cancel', id}`, and `{op:'reset'}` as a page loads. It answers on
-/// `hub:nativerec` with `{id, state}`: `rec` once capturing, `broken` with `why` when it stopped itself,
+/// `hub:nativerec` with `{id, state}`: `rec` once capturing, `stall` with `on` while the hub is not acknowledging its stream,
+/// `broken` with `why` when it stopped itself,
 /// `done` with the clip as base64 AAC, its recorded seconds and its `stream` id, `error` with why. The clip
 /// then goes up through the page's own outbox, exactly as a WebKit clip does.
 ///
@@ -108,6 +109,8 @@ final class NativeRec: NSObject {
             ], commonFormat: .pcmFormatFloat32, interleaved: false)
             guard let token = Auth.token(), let chunks = NativeChunks(token: token, source: source, dry: dry, format: speech, onBroken: { [weak self] why in
                 Task { @MainActor in self?.broken(why) }
+            }, onStall: { [weak self] on in
+                Task { @MainActor in self?.stalled(on) }
             }) else { throw NSError(domain: "NativeRec", code: 2, userInfo: [NSLocalizedDescriptionKey: "stream setup"]) }
             self.writer = writer; file = url; stream = chunks
             let engine = AVAudioEngine()
@@ -157,8 +160,16 @@ final class NativeRec: NSObject {
         try engine.start()
     }
 
-    /// The stream says the hub is not receiving, or that the capture is dropping audio: stop now, keep
-    /// everything, and make it impossible to miss.
+    /// The hub stopped acknowledging the stream (a deploy restarts it for several seconds, or the
+    /// connection dropped). The recording carries on: it is all in the file here, and the stream resends it
+    /// when the hub is back. The page says so on its status line, and it is counted, not raised.
+    private func stalled(_ on: Bool) {
+        guard engine != nil else { return }
+        if on { log("voice-stream-stall", ["secs": recorded, "native": true]) }
+        emit(["state": "stall", "on": on])
+    }
+
+    /// The capture is dropping audio: stop now, keep everything, and make it impossible to miss.
     private func broken(_ why: String) {
         guard engine != nil else { return }
         log("error", ["msg": "a native recording was stopped mid-recording: \(why == "damaged" ? "the hub found the capture dropping audio" : "its stream to the hub stopped being acknowledged")",
@@ -274,8 +285,9 @@ final class NativeRec: NSObject {
 
 /// One recording's stream to the hub (`/api/voice-chunk`, server/lib/chunkstream.js): its audio encoded to
 /// AAC in ADTS framing, posted a chunk a second, one request in flight, each acknowledged. The same rules
-/// as the page's `ChunkStream` in voiceagent.js: a chunk unacknowledged for `stall` seconds, or an answer
-/// saying `damaged`, calls `onBroken` once. A retry the hub already took is answered again, not counted
+/// as the page's `ChunkStream` in voiceagent.js: an answer saying `damaged` calls `onBroken` once; a chunk
+/// unacknowledged for `stall` seconds calls `onStall(true)`, and the next acknowledgement `onStall(false)`.
+/// A stall never stops the recording: a hub restart lasts several seconds and loses nothing. A retry the hub already took is answered again, not counted
 /// twice; 409 resends from where the hub is; 410 (the hub lost the stream) resends everything.
 ///
 /// The encoder and the ADTS header are the watch's (Watch/LiveStream.swift), at the same 16 kHz mono.
@@ -288,6 +300,8 @@ final class NativeChunks: @unchecked Sendable {
     private let dry: Bool
     private let encoder: AVAudioConverter
     private let onBroken: @Sendable (String) -> Void
+    private let onStall: @Sendable (Bool) -> Void
+    private var stalled = false
     private let q = DispatchQueue(label: "native-chunks")
     private var pending = Data()
     private var chunks: [(data: Data, secs: Double, state: String, at: Date)] = []
@@ -297,7 +311,8 @@ final class NativeChunks: @unchecked Sendable {
     private var closed = false
     private static let stall: TimeInterval = 6
 
-    init?(token: String, source: String, dry: Bool, format: AVAudioFormat, onBroken: @escaping @Sendable (String) -> Void) {
+    init?(token: String, source: String, dry: Bool, format: AVAudioFormat, onBroken: @escaping @Sendable (String) -> Void,
+          onStall: @escaping @Sendable (Bool) -> Void) {
         var aac = AudioStreamBasicDescription(mSampleRate: format.sampleRate, mFormatID: kAudioFormatMPEG4AAC,
                                               mFormatFlags: 0, mBytesPerPacket: 0, mFramesPerPacket: 1024,
                                               mBytesPerFrame: 0, mChannelsPerFrame: 1, mBitsPerChannel: 0, mReserved: 0)
@@ -308,6 +323,7 @@ final class NativeChunks: @unchecked Sendable {
         self.source = source
         self.dry = dry
         self.onBroken = onBroken
+        self.onStall = onStall
     }
 
     /// One converted buffer of the recording.
@@ -353,8 +369,9 @@ final class NativeChunks: @unchecked Sendable {
     }
 
     private func check() {
-        guard !broken, !closed, sent < chunks.count else { return }
-        if Date().timeIntervalSince(chunks[sent].at) > Self.stall { fail("stream") }
+        guard !broken, !closed else { return }
+        let now = sent < chunks.count && Date().timeIntervalSince(chunks[sent].at) > Self.stall
+        if now != stalled { stalled = now; onStall(now) }
     }
 
     private func fail(_ why: String) {
@@ -382,6 +399,7 @@ final class NativeChunks: @unchecked Sendable {
                 self.busy = false
                 if code == 200 {
                     self.sent = max(self.sent, (j["next"] as? Int) ?? seq + 1)
+                    if self.stalled { self.stalled = false; self.onStall(false) }
                     if (j["damaged"] as? Bool) == true && !self.closed { self.fail("damaged") }
                 } else if code == 409, let next = j["next"] as? Int {
                     self.sent = next

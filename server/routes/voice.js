@@ -763,6 +763,9 @@ module.exports = function (ctx) {
           { machine: 'client', service: 'phone', context: { at: l.t, dur: l.dur, bytes: l.bytes,
             look: 'client_log where src=phone around that time (docs/HUB-INTERNALS.md § voice outbox)' } });
       }
+      // A pressed recording whose stream to the hub went unacknowledged (a deploy, a dropped connection).
+      // The recording carries on and loses nothing, so it is counted, not raised (public/voiceagent.js).
+      if (l.ev === 'voice-stream-stall') ops.occurrence(`${l.src || 'client'} recording: the hub stopped acknowledging its stream; recording carried on`);
       // A dictation whose recorder was gone before it was delivered (public/voiceagent.js strandedOwner).
       if (l.src === 'phone' && l.ev === 'voice-dictation-stranded') {
         ops.report(l.delivered

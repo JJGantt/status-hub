@@ -465,20 +465,25 @@ function b64Blob(b64, type) {
 // EVERY PRESSED RECORDING STREAMS TO THE HUB WHILE IT RECORDS (/api/voice-chunk, lib/chunkstream.js on
 // the hub), a chunk about once a second, each acknowledged. Two things depend on it:
 //   - the recording is never only on this device: if the page dies mid-sentence the hub uses what arrived;
-//   - a failure is caught WHILE the user is still talking. A chunk left unacknowledged for STREAM_STALL_MS
-//     means the hub is not receiving; an acknowledgement saying `damaged` means the capture is dropping
-//     audio. Either one stops the recording on the spot (onBroken), keeps everything recorded so far for
-//     the outbox, and says so — instead of letting the user talk for minutes into a failure.
+//   - a failure is caught WHILE the user is still talking. An acknowledgement saying `damaged` means the
+//     capture is dropping audio: that stops the recording on the spot (onBroken), keeps everything recorded
+//     so far for the outbox, and says so. A chunk left unacknowledged for STREAM_STALL_MS means the hub is
+//     not receiving, which is NOT a reason to stop: every deploy restarts the hub for several seconds, and
+//     stopping there sent commands half-said. The recording is held whole on this device and the stream
+//     resends it when the hub is back (410), so the stall only says so on the status line (onStall) and is
+//     reported as an occurrence; the stop tap sends through the outbox as always.
 // One request in flight at a time, in order. A chunk the hub already has is answered again, not counted
 // twice; a hub that lost the stream (a restart) answers 410 and is sent the whole recording again.
 const STREAM_STALL_MS = 6000;
 class ChunkStream {
-  constructor({ type, source, dry, onBroken }) {
+  constructor({ type, source, dry, onBroken, onStall = () => {} }) {
     this.id = uid();
     this.type = type;            // 'webm' (the page's recorder) — the app's native recorder streams itself
     this.source = source;
     this.dry = !!dry;
     this.onBroken = onBroken;
+    this.onStall = onStall;
+    this.stalled = false;
     this.chunks = [];            // { blob, secs, state, at }
     this.sent = 0;               // the next chunk the hub has not acknowledged
     this.busy = false;
@@ -497,7 +502,8 @@ class ChunkStream {
   check() {
     if (this.broken || this.closed) return;
     const oldest = this.chunks[this.sent];
-    if (oldest && Date.now() - oldest.at > STREAM_STALL_MS) this.fail('stream');
+    const stalled = !!oldest && Date.now() - oldest.at > STREAM_STALL_MS;
+    if (stalled !== this.stalled) { this.stalled = stalled; this.onStall(stalled); }
   }
   fail(why) {
     if (this.broken) return;
@@ -520,6 +526,7 @@ class ChunkStream {
         } catch (_) { r = null; }
         if (r && r.ok) {
           this.sent = Math.max(this.sent, j.next || seq + 1);
+          if (this.stalled) { this.stalled = false; this.onStall(false); }
           if (j.damaged && !this.closed) this.fail('damaged');
           continue;
         }
@@ -534,6 +541,7 @@ class ChunkStream {
 }
 // What a stopped-on-failure recording says on its button's status line.
 const BROKEN_LABEL = { stream: 'Hub not receiving', damaged: 'Mic dropping audio' };
+const STALL_LABEL = 'Hub reconnecting… keep talking';
 
 // A self-contained recorder: getUserMedia → MediaRecorder → upload to /api/voice-command.
 // quick=true marks a one-off quick-add (the FAB) so the server tags it for a terse reply.
@@ -600,9 +608,12 @@ export function makeRecorder({ onStatus = () => {}, onState: paint = () => {}, q
       trace('start:recording', { native: true });
       muteOthers(true);
       onStatus('Listening… tap to send', 'rec');
+    } else if (d.state === 'stall') {
+      // The hub is not acknowledging the app's stream; the app keeps recording (NativeRec.swift `stalled`).
+      if (recording) onStatus(d.on ? STALL_LABEL : 'Listening… tap to send', d.on ? 'err' : 'rec');
     } else if (d.state === 'broken') {
-      // The app stopped the recording itself: its stream to the hub stalled, or its capture is dropping
-      // audio. The clip follows as 'done' like any other.
+      // The app stopped the recording itself: its capture is dropping audio. The clip follows as 'done'
+      // like any other.
       recording = false; sending = true; onState('armed');
       broke(d.why || 'stream', { native: true });
     } else if (d.state === 'done') {
@@ -653,7 +664,7 @@ export function makeRecorder({ onStatus = () => {}, onState: paint = () => {}, q
     // Streamed as it records, a slice a second (ChunkStream). Only WebM is measured by the hub, so a
     // browser recording anything else records without one.
     live = /webm/.test(mime) ? new ChunkStream({ type: 'webm', source: quick ? 'web-quick' : 'web',
-      dry: typeof dryWhen === 'function' && dryWhen(), onBroken: (why) => broke(why) }) : null;
+      dry: typeof dryWhen === 'function' && dryWhen(), onBroken: (why) => broke(why), onStall: (on) => stalled(on) }) : null;
     if (live) streams.push(live);
     const thisLive = live;
     rec.ondataavailable = (e) => {
@@ -774,6 +785,16 @@ export function makeRecorder({ onStatus = () => {}, onState: paint = () => {}, q
       why, secs: +((performance.now() - startedAt) / 1000).toFixed(1), ...(extra || {}) });
     onStatus(BROKEN_LABEL[why] || BROKEN_LABEL.stream, 'err');
     if (recording && !nativeRec) stop();
+  }
+  // The hub stopped acknowledging (a deploy, a dropped connection): the recording carries on, held whole
+  // here, and the line says so until the hub answers again. Counted as an occurrence, once per stall.
+  function stalled(on) {
+    if (!recording) return;
+    if (on) {
+      trace('stream-stall', {});
+      clientLog({ src: 'phone', ev: 'voice-stream-stall', secs: +((performance.now() - startedAt) / 1000).toFixed(1) });
+      onStatus(STALL_LABEL, 'err');
+    } else onStatus('Listening… tap to send', 'rec');
   }
   // A command thrown away tells the hub, so no part of it is ever used as a lost recording.
   function cancelStreams(list) {

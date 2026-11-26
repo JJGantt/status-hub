@@ -120,6 +120,9 @@ export function openHandoff(id, { page = false, mount = null, onEnd = null } = {
     if (e.type === 'pointerup' && pts.size === 0 && tapAt) tap(e.clientX, e.clientY);
     if (pts.size === 0) tapAt = null;
   };
+  // A finger on the picture is his alone: iOS lets the page's own scrollers (the swipe panes the session
+  // sits in) take a drag that touch-action alone does not hold back, so the move is refused here.
+  stage.addEventListener('touchmove', (e) => e.preventDefault(), { passive: false });
   stage.addEventListener('pointerup', lift);
   stage.addEventListener('pointercancel', lift);
   stage.addEventListener('wheel', (e) => {

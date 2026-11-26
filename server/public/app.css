@@ -656,6 +656,7 @@ body.tv.phonewall .pane-repos.sv-open #repospane{flex:1 1 auto;min-height:0;disp
 .sv-back{flex:0 0 auto;background:none;border:0;padding:0;color:#5b8def;font-size:15px;cursor:pointer}
 .sv-title{flex:1 1 auto;min-width:0;font-size:13px;font-weight:600;color:#e6ebf2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .sv-speak{flex:0 0 auto;background:none;border:0;padding:4px;color:#7d8894;display:flex;cursor:pointer}
+.sv-screen{flex:0 0 auto;background:none;border:0;padding:4px;color:#7d8894;display:flex;cursor:pointer}
 .sv-speak.on{color:#e6ebf2}
 .sv-speak-stop{flex:0 0 auto;background:none;border:0;padding:4px;color:#7d8894;display:flex;cursor:pointer}
 .sv-speak-stop[hidden]{display:none}
@@ -1516,3 +1517,17 @@ body.phonehome #usagebars{top:env(safe-area-inset-top,0px)}
 .ho-state{color:#9aa5b3;font-size:13px;min-height:1em}
 .ho.ended .ho-bar .ho-row{display:none}
 body.handoff-page{margin:0;background:#050608}
+/* The Mac's screen, live (screen.js): the tap screen's stage and bar around a video. */
+.scr-video{display:block;width:100%;height:100%;pointer-events:none;background:#000}
+.scr .ho-mark.on{animation:scr-mark .7s ease-out forwards}
+@keyframes scr-mark{from{opacity:1}to{opacity:0}}
+.scr-veil{position:absolute;inset:0;display:none;align-items:center;justify-content:center;flex-direction:column;gap:12px;background:rgba(5,6,8,.6)}
+.scr-veil.on{display:flex}
+.scr-spin{width:26px;height:26px;border:3px solid #2a323d;border-top-color:#9aa5b3;border-radius:50%;animation:scr-spin .9s linear infinite}
+.scr-veil:has(.scr-retry:not([hidden])) .scr-spin{display:none}
+@keyframes scr-spin{to{transform:rotate(360deg)}}
+.scr-retry{flex:0 0 auto}
+.scr-retry[hidden]{display:none}
+.scr-keys .ho-btn{flex:1 1 0;min-width:0;padding:8px 0}
+.scr .ho-btn.on{background:#1f6feb;border-color:#1f6feb}
+.scr .ho-bar{gap:6px;padding:6px 8px 8px}

@@ -10,7 +10,7 @@ function createRealtime(ctx) {
   const {
     MUTE_HOLD, SUPABASE_KEY, SUPABASE_URL, auth, broadcast, dirtyDesk, dirtyDue, dirtyHeatHistory,
     dirtyNutDay, dirtyRows, dirtySettings, dirtySurfHist, dirtyWorkoutDay, markLive, notifyAnswer, onDeskCommand, pushDay,
-    pushLists, pushSessions, pushSurfLive, pushVoice, recomputeMute, reportTick, handoffChanged, tabChanged, requestView, sb, settleReply,
+    pushLists, pushSessions, pushSurfLive, pushVoice, recomputeMute, reportTick, handoffChanged, tabChanged, screenChanged, requestView, sb, settleReply,
     surfAlarms, syncBadge, takeUsage, tvInserted,
   } = ctx;
 
@@ -169,6 +169,8 @@ function createRealtime(ctx) {
         (p) => { seen(); handoffChanged(p.new); })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'session_tabs' },
         (p) => { seen(); tabChanged(p.new); })
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'screen_shares' },
+        (p) => { seen(); screenChanged(p.new); })
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'reports' },
         () => { seen(); reportTick().catch((e) => console.error('[report] error', e.message)); })
       .subscribe((status) => {

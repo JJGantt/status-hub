@@ -17,6 +17,7 @@ import { esc, md, mdInline, PIN_SVG, liveStream, threadScroll, syncKeyed, report
 import { makeRecorder, bindMic } from '../voiceagent.js';
 import { speak, stopSpeaking, speaking, paused, pauseSpeaking, resumeSpeaking } from '../speak.js';
 import { openHandoff } from '../handoff.js';
+import { openScreen } from '../screen.js';
 import { mountContent, mountLive } from '../sessiontabs.js';
 
 let mounted = false;
@@ -322,9 +323,20 @@ function paintAsk() {
 // (it needs him now), 'new' (only one that appears while the session is open, not one already there when
 // it opened), or never.
 const TAB_KINDS = {
-  // A screen the session handed over (routes/handoffs.js): the tap screen itself (handoff.js).
-  handoff: { label: () => 'Handoff', selfEnds: true, front: 'always',
-    mount: (pane, t, done) => openHandoff(t.id, { mount: pane, onEnd: done }) },
+  // A screen the session handed over (routes/handoffs.js). The Mac's screen is shown LIVE (screen.js),
+  // its Done and Cancel ending the handoff; when no picture comes, and for the Pi's browser, it is the
+  // screenshot tap screen (handoff.js).
+  handoff: { label: () => 'Handoff', selfEnds: true, front: 'always', mount: (pane, t, done) => {
+    const taps = () => openHandoff(t.id, { mount: pane, onEnd: done });
+    if (!/^mac-/.test(t.target || '')) return taps();
+    let close = openScreen({ mount: pane, session: cur && cur.id, handoff: { id: t.id, focus: t.focus }, onEnd: done,
+      onFail: () => { close = taps(); } });
+    return () => close();
+  } },
+  // The Mac's whole screen, live (screen.js), opened from the session bar. It is the phone's, not the
+  // session's, so it stays until he closes it.
+  screen: { label: () => 'Mac', selfEnds: true, front: 'always',
+    mount: (pane, t, done) => openScreen({ mount: pane, session: cur && cur.id, onEnd: done }) },
   // Something the session put up with the session_tab tool (sessiontabs.js), labelled by the session.
   content: { label: (t) => t.title || 'Tab', front: 'new', mount: (pane, t) => mountContent(pane, t) },
   // A live view of a Chrome tab the session drives (sessiontabs.js, lib/liverelay.js), labelled by its site.
@@ -337,7 +349,7 @@ function hostOf(url) {
 
 function tabsOf(head) {
   const tabs = [];
-  if (head && head.handoff) tabs.push({ key: 'handoff:' + head.handoff.id, kind: 'handoff', id: head.handoff.id });
+  if (head && head.handoff) tabs.push({ key: 'handoff:' + head.handoff.id, kind: 'handoff', id: head.handoff.id, target: head.handoff.target, focus: head.handoff.focus });
   for (const t of (head && head.tabs) || []) if (TAB_KINDS[t.kind]) tabs.push({ ...t, key: `${t.kind}:${t.id}` });
   return tabs;
 }
@@ -350,18 +362,7 @@ function paintTabs() {
   if (!sv || !cur) return;
   const at = cur;
   const want = tabsOf(at.head);
-  for (const t of want) {
-    if (at.tabs.has(t.key)) continue;
-    const pane = document.createElement('div');
-    pane.className = 'sv-pane'; pane.dataset.tab = t.key; pane.hidden = true;
-    sv.append(pane);
-    const entry = { t, pane, ctl: {} };
-    at.tabs.set(t.key, entry);
-    const m = TAB_KINDS[t.kind].mount(pane, t, () => dropTab(at, t.key));
-    entry.ctl = typeof m === 'function' ? { close: m } : (m || {});
-    const front = TAB_KINDS[t.kind].front;
-    if (front === 'always' || (front === 'new' && at.tabsPainted)) showTab(at, t.key);
-  }
+  for (const t of want) if (!at.tabs.has(t.key)) addTab(at, sv, t);
   for (const [key, entry] of at.tabs) {
     const now = want.find((t) => t.key === key);
     if (!now) { if (!TAB_KINDS[entry.t.kind].selfEnds) dropTab(at, key); continue; }
@@ -373,6 +374,18 @@ function paintTabs() {
   at.tabsPainted = true;
   if (pendingTab && at.tabs.has(pendingTab)) { showTab(at, pendingTab); pendingTab = null; }
   paintStrip(at);
+}
+
+function addTab(at, sv, t) {
+  const pane = document.createElement('div');
+  pane.className = 'sv-pane'; pane.dataset.tab = t.key; pane.hidden = true;
+  sv.append(pane);
+  const entry = { t, pane, ctl: {} };
+  at.tabs.set(t.key, entry);
+  const m = TAB_KINDS[t.kind].mount(pane, t, () => dropTab(at, t.key));
+  entry.ctl = typeof m === 'function' ? { close: m } : (m || {});
+  const front = TAB_KINDS[t.kind].front;
+  if (front === 'always' || (front === 'new' && at.tabsPainted)) showTab(at, t.key);
 }
 
 function showTab(at, key) {
@@ -717,6 +730,7 @@ function markSeen(id) {
 }
 
 const SPEAK_SVG = '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 5L6 9H2v6h4l5 4V5z"></path><path d="M15.5 8.5a5 5 0 0 1 0 7"></path><path d="M19 5a10 10 0 0 1 0 14"></path></svg>';
+const SCREEN_SVG = '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="13" rx="2"></rect><path d="M8 21h8M12 17v4"></path></svg>';
 const STOP_SVG = '<svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><rect x="6" y="6" width="12" height="12" rx="1"></rect></svg>';
 const PAUSE_SVG = '<svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><rect x="6" y="5" width="4" height="14" rx="1"></rect><rect x="14" y="5" width="4" height="14" rx="1"></rect></svg>';
 const PLAY_SVG = '<svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M7 5v14l12-7z"></path></svg>';
@@ -755,6 +769,7 @@ async function openSession(id) {
       '<div class="sv-bar"><button class="sv-back" type="button">‹ Sessions</button>' +
         '<span class="sv-title"></span>' +
         '<button class="sv-halt" type="button" hidden>Stop</button>' +
+        '<button class="sv-screen" type="button" aria-label="The Mac\'s screen">' + SCREEN_SVG + '</button>' +
         '<span class="sv-where"></span>' +
         '<button class="sv-speak-stop" type="button" aria-label="Stop reading" hidden>' + STOP_SVG + '</button>' +
         '<button class="sv-speak" type="button" aria-label="Read the reply aloud">' + SPEAK_SVG + '</button></div>' +
@@ -846,6 +861,11 @@ async function openSession(id) {
       catch (_) { shots.splice(shots.indexOf(a), 1); status.textContent = 'Upload failed'; }
       paintTray();
     }
+  });
+  // The Mac's screen: opened beside the conversation, or brought forward when it is already open.
+  el.querySelector('.sv-screen').addEventListener('click', () => {
+    if (at.tabs.has('screen')) showTab(at, 'screen');
+    else { addTab(at, el.querySelector('.sv'), { key: 'screen', kind: 'screen' }); paintStrip(at); }
   });
   el.querySelector('.sv-tabs').addEventListener('click', (e) => {
     const b = e.target.closest('.sv-tab');

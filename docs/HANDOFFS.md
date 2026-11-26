@@ -53,8 +53,7 @@ size the picture is drawn at: the phone's carry `full` (fractions of `full_image
 
 **Suggested values.** The session passes `suggest` ([{label, text}]: his email, a card number he gave
 it) with the request; the phone shows each as a button that fills the text box, and he presses Type
-himself. Never a password or a one-time code. The agent clears `suggest` when the handoff ends. His standing values
-(his email) are added to every handoff (data-layer README § Handoffs, `handoff_suggest`). In the live Mac view
+himself. Never a password or a one-time code. The agent clears `suggest` when the handoff ends. The session chooses them from what the screen asks for. In the live Mac view
 (`screen.js`) the same values are buttons above the keys, and one tap types the value on the Mac.
 
 ## Things that are not obvious

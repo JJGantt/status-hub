@@ -1,5 +1,6 @@
 'use strict';
 const express = require('express');
+const { logged, notAFailure } = require('../lib/httpfail');
 
 module.exports = function (ctx) {
   const { SUPABASE_KEY, SUPABASE_URL, gated, sbWrite } = ctx;
@@ -31,7 +32,7 @@ module.exports = function (ctx) {
       res.json({ ok: true, stored: rows.length, deleted: deleted.length });
     } catch (e) {
       console.error('[sleep] write failed:', e.message);
-      res.status(502).json({ ok: false });
+      logged(res).status(502).json({ ok: false });
     }
   });
 
@@ -75,7 +76,7 @@ module.exports = function (ctx) {
     const wait = healthNextAt - Date.now();
     if (wait > 0) {
       res.set('Retry-After', String(Math.ceil(wait / 1000)));
-      return res.status(503).json({ ok: false, retry_after: Math.ceil(wait / 1000) });
+      return notAFailure(res).status(503).json({ ok: false, retry_after: Math.ceil(wait / 1000) });
     }
     const samples = Array.isArray(req.body?.samples) ? req.body.samples : [];
     const deleted = (Array.isArray(req.body?.deleted) ? req.body.deleted : []).filter((u) => SLEEP_UUID.test(u));
@@ -114,7 +115,7 @@ module.exports = function (ctx) {
       healthNextAt = Math.max(healthNextAt, Date.now() + 60_000);
       healthFails += 1;
       (healthFails >= HEALTH_FAILS_TO_REPORT ? console.error : console.warn)(`[health] write failed (${healthFails} in a row):`, e.message);
-      res.status(502).json({ ok: false });
+      logged(res).status(502).json({ ok: false });
     }
   });
 
@@ -153,7 +154,7 @@ module.exports = function (ctx) {
       res.json({ ok: true, stored: rows.length });
     } catch (e) {
       console.error('[location] write failed:', e.message);
-      res.status(502).json({ ok: false });
+      logged(res).status(502).json({ ok: false });
     }
   });
 };

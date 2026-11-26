@@ -333,7 +333,7 @@ function createDashboard(ctx) {
       sb('worker_presence?select=worker,last_seen,info'),
       // Alongside the other live reads rather than after the build: it is one more round trip, and
       // serially it was the frame's second.
-      sb('set_watcher?id=eq.1&select=exercise,weight_lbs,armed_at,last_set_at').catch(() => []),
+      sb('set_watcher?id=eq.1&select=exercise,weight_lbs,armed_at,last_set_at').catch((e) => { console.error('[status] rep watcher read failed:', e); return []; }),
       claudeUsageRow().catch((e) => { console.error('[usage] read failed:', e.message); return null; }),
     ]);
     const { today } = core;
@@ -348,7 +348,8 @@ function createDashboard(ctx) {
     // The session a spoken follow-up would land in — shown on the TV strip so the answer is ambient
     // rather than something you have to open a pane to learn.
     let deskFocus = null;
-    try { deskFocus = await fetchDeskFocus(); } catch (_) { /* the strip simply shows nothing rather than failing the whole payload */ }
+    // On a failure the strip shows nothing rather than failing the whole payload.
+    try { deskFocus = await fetchDeskFocus(); } catch (e) { console.error('[status] desk focus read failed:', e); }
 
     // ---- mic / worker liveness ----
     // Mics beacon voice_presence.alive_at every 30s WHILE audio frames are flowing (not merely while the

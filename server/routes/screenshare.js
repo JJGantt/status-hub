@@ -1,6 +1,7 @@
 'use strict';
 const crypto = require('crypto');
 const express = require('express');
+const { fail, logged } = require('../lib/httpfail');
 
 // LIVE SCREEN SHARE (docs/SCREEN.md): the Mac's whole screen streamed to the phone over WebRTC, his taps
 // and typing sent back on a data channel. The hub only signals: the media goes peer to peer, or through
@@ -57,15 +58,16 @@ module.exports = function ({ gated, sb, sbInsert, sbWrite }) {
     if (typeof b.offer !== 'string' || !b.offer.startsWith('v=')) return res.status(400).json({ error: 'offer required' });
     const id = crypto.randomUUID();
     try {
-      await sbInsert('screen_shares', {
+      const ok = await sbInsert('screen_shares', {
         id, target: 'mac', offer: b.offer, ice: iceServers('mac'),
         session: typeof b.session === 'string' ? b.session.slice(0, 64) : null,
         handoff: typeof b.handoff === 'string' && uuidOk(b.handoff) ? b.handoff : null,
         source: String(req.get('user-agent') || '').slice(0, 200) || null,
       });
+      if (!ok) throw new Error('insert into screen_shares failed');
     } catch (e) {
       console.error(`[screen] could not record a share: ${e.message || e}`);
-      return res.status(502).json({ error: 'could not start the share' });
+      return logged(res).status(502).json({ error: 'could not start the share' });
     }
     // A share asked for is answered by the Mac or it is reported: the Mac asleep, its agent down, or
     // its realtime channel deaf all look the same from here, and all of them leave the phone waiting.
@@ -73,7 +75,7 @@ module.exports = function ({ gated, sb, sbInsert, sbWrite }) {
       try {
         const r = await read(id);
         if (r && r.status === 'new') console.error(`[screen] share ${id} was not answered within ${ANSWER_MS / 1000}s: the Mac's screen agent did not take it`);
-      } catch (_) {}
+      } catch (e) { console.error(`[screen] checking share ${id} was answered failed:`, e); }
     }, ANSWER_MS + 2000).unref();
     res.json({ id });
   });
@@ -89,7 +91,7 @@ module.exports = function ({ gated, sb, sbInsert, sbWrite }) {
       let settled = false;
       const done = () => {
         if (settled) return; settled = true; clearTimeout(t);
-        read(id).then((x) => res.json(x || r)).catch(() => res.status(502).end());
+        read(id).then((x) => res.json(x || r)).catch((e) => fail(res, e, 502, ''));
       };
       const t = setTimeout(done, wait);
       if (!waiters.has(id)) waiters.set(id, new Set());
@@ -97,7 +99,7 @@ module.exports = function ({ gated, sb, sbInsert, sbWrite }) {
       req.on('close', () => { waiters.get(id)?.delete(done); settled = true; clearTimeout(t); });
     } catch (e) {
       console.error(`[screen] read ${id} failed: ${e.message || e}`);
-      res.status(502).json({ error: 'could not read the share' });
+      logged(res).status(502).json({ error: 'could not read the share' });
     }
   });
 
@@ -110,7 +112,7 @@ module.exports = function ({ gated, sb, sbInsert, sbWrite }) {
       res.json({ ok: true });
     } catch (e) {
       console.error(`[screen] stats for ${id} not recorded: ${e.message || e}`);
-      return res.status(502).json({ error: 'could not record' });
+      return logged(res).status(502).json({ error: 'could not record' });
     }
     // Getting slower is a failure too: the time from asking to a picture on the phone, against this
     // share's own recent history.

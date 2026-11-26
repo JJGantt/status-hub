@@ -13,7 +13,7 @@ function createBadge({ apns, overdueCount, sb }) {
     if (!Number.isInteger(n) || n === lastBadge) return;
     lastBadge = n;
     let tokens = [];
-    try { tokens = await sb('device_tokens?platform=eq.ios&select=token,environment'); } catch (_) { return; }
+    try { tokens = await sb('device_tokens?platform=eq.ios&select=token,environment'); } catch (e) { lastBadge = null; console.error('[badge] device token read failed:', e); return; }
     for (const { token, environment } of tokens) await apns.send(token, { environment, badge: n });
     console.log(`[badge] -> ${n}`);
   }

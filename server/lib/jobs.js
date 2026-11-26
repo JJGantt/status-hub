@@ -116,7 +116,7 @@ function createJobs(ctx) {
     if (!dueDirty && (!dueNextAt || nowET < dueNextAt)) return;
     let rows;
     // Every list, not just todo — "reminder" is a predicate (has a due), not a place.
-    try { rows = await sb('list_items?deleted=eq.false&completed_at=is.null&due=not.is.null&select=id,list_name,text,title,due,scheduled_at,priority,series_id,alarm,timer'); } catch (_) { return; }
+    try { rows = await sb('list_items?deleted=eq.false&completed_at=is.null&due=not.is.null&select=id,list_name,text,title,due,scheduled_at,priority,series_id,alarm,timer'); } catch (e) { console.error('[due] reminder read failed:', e); return; }
     // Only once the read succeeded: a failed read must leave the state dirty so the next tick retries.
     dueDirty = false;
     dueNextAt = '';
@@ -124,7 +124,7 @@ function createJobs(ctx) {
     // One lookup for the whole tick rather than one per item — a handful of lists, read at most once a
     // minute, and only when something is actually dated.
     let emojiOf = {};
-    try { for (const l of await sb('lists?select=name,emoji')) emojiOf[l.name] = l.emoji; } catch (_) {}
+    try { for (const l of await sb('lists?select=name,emoji')) emojiOf[l.name] = l.emoji; } catch (e) { console.error('[due] list emoji read failed:', e); }
     for (const r of rows) {
       if (dueMoment(r.due) > nowET) {                                   // not due yet
         dueNextAt = earlierOf(dueNextAt, dueMoment(r.due));             // …so wake for the soonest one
@@ -137,7 +137,12 @@ function createJobs(ctx) {
       const dk = `reminder:${r.id}:${r.due}`;
       // AN ALARM NOTIFIES TOO, always. The TV and the open hub page are what make noise; this is the
       // layer under them, and a redundant notification costs a buzz where a missing one costs the morning.
-      try { if ((await sb(`notifications?dedupe_key=eq.${encodeURIComponent(dk)}&select=id&limit=1`)).length) continue; } catch (_) { continue; }
+      try { if ((await sb(`notifications?dedupe_key=eq.${encodeURIComponent(dk)}&select=id&limit=1`)).length) continue; } catch (e) {
+        // Left dirty, so the next tick reads again rather than forgetting this occurrence.
+        console.error(`[due] dedupe read for ${dk} failed:`, e);
+        dueDirty = true;
+        continue;
+      }
       const handler = DUE_HANDLERS.push;
       if (handler === DUE_HANDLERS.push && !apns.configured()) continue;   // nothing to deliver through
       await handler({ ...r, emoji: emojiOf[r.list_name] }, dk);
@@ -208,7 +213,7 @@ function createJobs(ctx) {
   async function reportTick() {
     let rows = [];
     try { rows = await sb('reports?notified=eq.false&select=id,title,summary&order=created&limit=5'); }
-    catch (_) { return; }
+    catch (e) { console.error('[reports] unannounced report read failed:', e); return; }
     for (const r of rows) {
       const body = String(r.summary || '').trim() || 'Tap to read the write-up.';
       // report_id rides in the APNs payload so tapping the notification opens that page rather than
@@ -218,7 +223,7 @@ function createJobs(ctx) {
       // Flip the flag even when the push failed. pushAll has already logged the failure to
       // `notifications`, and leaving it false would re-buzz the phone every tick once APNs recovers.
       try {
-        await fetch(`${SUPABASE_URL}/rest/v1/reports?id=eq.${encodeURIComponent(r.id)}`, {
+        const res = await fetch(`${SUPABASE_URL}/rest/v1/reports?id=eq.${encodeURIComponent(r.id)}`, {
           method: 'PATCH',
           headers: {
             apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}`,
@@ -226,7 +231,8 @@ function createJobs(ctx) {
           },
           body: JSON.stringify({ notified: true }),
         });
-      } catch (_) {}
+        if (!res.ok) throw new Error(`${res.status} ${(await res.text()).slice(0, 200)}`);
+      } catch (e) { console.error(`[reports] marking ${r.id} notified failed, it will be announced again:`, e); }
     }
   }
 

@@ -16,6 +16,7 @@ const chunked = require('../lib/chunkstream');
 const os = require('os');
 const path = require('path');
 const { pipeline } = require('stream/promises');
+const { fail, logged } = require('../lib/httpfail');
 
 module.exports = function (ctx) {
   const {
@@ -126,7 +127,7 @@ module.exports = function (ctx) {
       const rows = await sb('worker_presence?worker=eq.mac&select=last_seen,info');
       const r = rows && rows[0];
       return !!r && !(r.info || {}).stopping && Date.now() - Date.parse(r.last_seen) < 90e3;
-    } catch { return false; }
+    } catch (e) { console.error('[voice] mac worker presence read failed, treating it as down:', e); return false; }
   }
 
   // A pressed recording that came back with no words: its clip, kept under unheard/ so it can be listened
@@ -207,7 +208,7 @@ module.exports = function (ctx) {
         file = path.join(dir, 'take.' + audio.path.split('.').pop());
         await cutFrom(src, start, file);
       }
-      const dur = await clipSeconds(file).catch(() => 0);
+      const dur = await clipSeconds(file).catch((e) => { console.error(`[list-recordings] reading the length of ${file} failed:`, e); return 0; });
       const ext = file.split('.').pop();
       const object = `${String(item).replace(/[^\w-]/g, '')}/${crypto.randomUUID()}.${ext}`;
       const put = await fetch(`${SUPABASE_URL}/storage/v1/object/${AUDIO_BUCKET}/${object}`, {
@@ -234,7 +235,7 @@ module.exports = function (ctx) {
       res.json({ recording: rec, count: all.length, ...(heardAfter != null ? { starts_with: heardAfter } : {}) });
     } catch (e) {
       console.error(`[list-recordings] save from ${rid} onto ${item} failed: ${e.message || e}`);
-      res.status(500).json({ error: String(e.message || e) });
+      fail(logged(res), e);
     } finally {
       fs.promises.rm(dir, { recursive: true, force: true }).catch(() => {});
     }
@@ -257,7 +258,7 @@ module.exports = function (ctx) {
       res.redirect(302, `${SUPABASE_URL}/storage/v1${signedURL}`);
     } catch (e) {
       console.error(`[list-recordings] play ${object}: ${e.message || e}`);
-      res.status(502).end();
+      logged(res).status(502).end();
     }
   });
 
@@ -511,7 +512,9 @@ module.exports = function (ctx) {
       // they arrive already transcribed, as this clip's prefix (makeRecorder / deliverVoice in
       // voiceagent.js). The command is one command: prefix, then whatever this clip holds.
       let prefix = '';
-      try { prefix = decodeURIComponent(String(req.headers['x-voice-prefix'] || '')).trim().slice(0, 8000); } catch (_) {}
+      try { prefix = decodeURIComponent(String(req.headers['x-voice-prefix'] || '')).trim().slice(0, 8000); } catch (e) {
+        console.error(`[voice] ${source} command: the words said before its interruption are lost, their header did not decode:`, e);
+      }
       if (prefix && !untranscribed) {
         transcript = transcript ? `${prefix} ${transcript}` : prefix;
         if (alt) alt = `${prefix} ${alt}`;
@@ -645,7 +648,7 @@ module.exports = function (ctx) {
       });
       if (!r.ok) return res.status(502).json({ error: `storage upload failed (${r.status})` });
       res.json({ path: name });
-    } catch (e) { res.status(500).json({ error: String(e.message || e) }); }
+    } catch (e) { fail(res, e); }
   });
 
   // Gesture captures from the watch's gesture page (apps/Watch/GestureLab.swift): raw motion around one
@@ -667,12 +670,12 @@ module.exports = function (ctx) {
       });
       if (!r.ok) {
         console.error('[gestures] storage upload failed', r.status, await r.text().catch(() => ''));
-        return res.status(502).json({ error: `storage upload failed (${r.status})` });
+        return logged(res).status(502).json({ error: `storage upload failed (${r.status})` });
       }
       res.json({ path: name });
     } catch (e) {
       console.error('[gestures] upload', e);
-      res.status(500).json({ error: String(e.message || e) });
+      fail(logged(res), e);
     }
   });
   // Newest first. `?day=YYYY-MM-DD` lists that day; without it, today and the six days before.
@@ -694,7 +697,7 @@ module.exports = function (ctx) {
       res.json({ captures: out });
     } catch (e) {
       console.error('[gestures] list', e);
-      res.status(500).json({ error: String(e.message || e) });
+      fail(logged(res), e);
     }
   });
   gated.get(/^\/api\/gestures\/(.+)$/, async (req, res) => {
@@ -708,7 +711,7 @@ module.exports = function (ctx) {
       res.type('application/json').send(Buffer.from(await r.arrayBuffer()));
     } catch (e) {
       console.error('[gestures] read', e);
-      res.status(500).json({ error: String(e.message || e) });
+      fail(logged(res), e);
     }
   });
 
@@ -791,7 +794,7 @@ module.exports = function (ctx) {
         // A batch stays on the watch and comes again, so its failure is an occurrence; a single line
         // (the phone, a page's beacon) is sent once and is lost.
         (Array.isArray(b.lines) ? console.warn : console.error)('[clientlog] not kept:', e.message || e);
-        return res.status(502).end();
+        return logged(res).status(502).end();
       }
       checkRecordings(keep).catch((e) => console.error('[clientlog] recording check failed:', e.message || e));
     }
@@ -1133,7 +1136,7 @@ module.exports = function (ctx) {
       res.setHeader('Content-Type', r.headers.get('content-type') || 'image/jpeg');
       res.setHeader('Cache-Control', 'private, max-age=86400');   // object content never changes
       res.send(Buffer.from(await r.arrayBuffer()));
-    } catch (e) { res.status(500).json({ error: String(e.message || e) }); }
+    } catch (e) { fail(res, e); }
   });
 
   async function sweepAttachments() {
@@ -1182,7 +1185,7 @@ module.exports = function (ctx) {
         ...(location ? { location } : {}) });
       markSeen(msgId, id);
       res.json({ enqueued: true, id });
-    } catch (e) { res.status(500).json({ error: String(e.message || e) }); }
+    } catch (e) { fail(res, e); }
   });
 
   // Wait for one command to finish: held open until voice_requests row :id is done or error, then
@@ -1230,7 +1233,7 @@ module.exports = function (ctx) {
       if (!rows || !rows.length) return finish(() => res.status(404).json({ error: 'no such request' }));
       settleReply(rows[0]);
     } catch (e) {
-      finish(() => res.status(500).json({ error: String(e.message || e) }));
+      finish(() => fail(res, e));
     }
   });
 
@@ -1245,7 +1248,7 @@ module.exports = function (ctx) {
       pushVoice('reset', null);
       await sbWrite('voice_requests', 'POST', { transcript: VOICE_RESET_SENTINEL, source: 'web', focus: 'hub' });
       res.json({ ok: true });
-    } catch (e) { res.status(500).json({ error: String(e.message || e) }); }
+    } catch (e) { fail(res, e); }
   });
 
   // Low-latency activity push from the Mac worker: transient "what Jarvis is doing right now" events

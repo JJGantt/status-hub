@@ -3,6 +3,7 @@ const { buildNutritionLog } = require('../lib/nutritionlog');
 const { buildWeightPlot } = require('../lib/weightplot');
 const { buildWorkoutHeatmap } = require('../lib/heatmap');
 const { nutritionWindow, dayBucketOf } = require('../lib/dates');
+const { fail } = require('../lib/httpfail');
 
 module.exports = function (ctx) {
   const {
@@ -91,7 +92,7 @@ module.exports = function (ctx) {
       };
       nutHistoryCache.set(weeks, { body, at: Date.now() });
       res.json(body);
-    } catch (e) { res.status(500).json({ error: String(e.message || e) }); }
+    } catch (e) { fail(res, e); }
   }));
 
   // The weight view (the phone's cards/maintviz.js), for the watch: the weigh-ins, each day's intake, the
@@ -108,7 +109,7 @@ module.exports = function (ctx) {
         series: (v.series || []).map((r) => ({ date: r.date, maintenance: r.maintenance ?? null, target: r.target ?? null })),
         slope_lb_day: v.slope_lb_day ?? null, weight_at_end: v.weight_at_end ?? null,
       });
-    } catch (e) { res.status(500).json({ error: String(e.message || e) }); }
+    } catch (e) { fail(res, e); }
   }));
 
   gated.get('/api/heat-history', timed(async (req, res) => {
@@ -160,7 +161,7 @@ module.exports = function (ctx) {
       const body = { today, window_weeks: HEAT_WEEKS, heatmap, nutrition_log, weight_plot };
       heatHistCache.body = body; heatHistCache.at = Date.now();
       res.json(body);
-    } catch (e) { res.status(500).json({ error: String(e.message || e) }); }
+    } catch (e) { fail(res, e); }
   }));
 
   return { dirtyHeatHistory };

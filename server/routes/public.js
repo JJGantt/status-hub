@@ -7,6 +7,7 @@ const path = require('path');
 const { pipeline } = require('stream/promises');
 const { safeEqual } = require('../lib/auth');
 const { transcribe } = require('../lib/transcribe');
+const { fail, logged } = require('../lib/httpfail');
 
 module.exports = function (ctx) {
   const {
@@ -148,13 +149,13 @@ module.exports = function (ctx) {
       + '&done_at=is.null&order=created_at.desc&limit=200');
   }
   async function cgOrderModels() {
-    const s = await settingsAll().catch(() => ({}));
+    const s = await settingsAll().catch((e) => { console.error('[cg] settings read failed, using the default models:', e); return {}; });
     return { first: s.cg_orders_model_first || 'claude-sonnet-5', second: s.cg_orders_model_second || 'claude-sonnet-5' };
   }
   pub.get('/api/cg/orders', async (req, res) => {
     if (!cgOwner(req)) return res.status(401).json({ error: 'unauthorized' });
     try { res.json({ orders: await cgOrdersOpen(), models: await cgOrderModels() }); }
-    catch (e) { res.status(502).json({ error: String(e.message || e) }); }
+    catch (e) { fail(res, e, 502); }
   });
   pub.post('/api/cg/orders', express.json({ limit: '64kb' }), async (req, res) => {
     if (!cgOwner(req)) return res.status(401).json({ error: 'unauthorized' });
@@ -198,7 +199,7 @@ module.exports = function (ctx) {
       const added = await r.json();
       console.log(`[cg-orders] +${rows.length}: ${rows.map((x) => `${x.qty}x ${x.name}`).join(', ').slice(0, 300)}`);
       res.json({ added, orders: await cgOrdersOpen() });
-    } catch (e) { res.status(502).json({ error: String(e.message || e) }); }
+    } catch (e) { fail(res, e, 502); }
   });
   // The second pass: each row the first pass wrote, matched to the menu ({id, kind, item_id, name, note}) or
   // left as heard ({id} alone). Either way the row is marked standardized.
@@ -219,7 +220,7 @@ module.exports = function (ctx) {
         await sbWrite(`cg_orders?id=eq.${u.id}`, 'PATCH', patch);
       }
       res.json({ orders: await cgOrdersOpen() });
-    } catch (e) { res.status(502).json({ error: String(e.message || e) }); }
+    } catch (e) { fail(res, e, 502); }
   });
   // Marks one order done ({id}) or every open one ({all: true}).
   pub.post('/api/cg/orders/done', express.json(), async (req, res) => {
@@ -230,7 +231,7 @@ module.exports = function (ctx) {
     try {
       await sbWrite(`cg_orders?${which}`, 'PATCH', { done_at: new Date().toISOString() });
       res.json({ orders: await cgOrdersOpen() });
-    } catch (e) { res.status(502).json({ error: String(e.message || e) }); }
+    } catch (e) { fail(res, e, 502); }
   });
   pub.get('/login', (req, res) => res.type('html').send(loginHtml()));
   // LOGIN LOCKOUT: a wrong password is a guess against the same per-address budget as a wrong
@@ -241,7 +242,7 @@ module.exports = function (ctx) {
     if (safeEqual(req.body.password || '', HUB_PASSWORD)) {
       return auth.login(req, res).then(() => res.redirect('/'), (e) => {
         console.error('[login] could not store the session:', e.message);
-        res.status(503).type('text').send('unavailable');
+        logged(res).status(503).type('text').send('unavailable');
       });
     }
     auth.failGuess(req, String(req.body.password || ''));

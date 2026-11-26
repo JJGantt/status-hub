@@ -40,7 +40,7 @@ function createSettings({ sb, onDirty }) {
         dark_green_g: pick('produce_target_dark_green_g', PRODUCE_TARGET_DEFAULTS.dark_green_g),
         fruit_g: pick('produce_target_fruit_g', PRODUCE_TARGET_DEFAULTS.fruit_g),
       };
-    } catch { return { ...PRODUCE_TARGET_DEFAULTS }; }
+    } catch (e) { console.error('[settings] produce targets read failed, using the defaults:', e); return { ...PRODUCE_TARGET_DEFAULTS }; }
   }
 
   async function surplusCal() {
@@ -48,7 +48,7 @@ function createSettings({ sb, onDirty }) {
       const v = parseInt((await settingsAll()).surplus_cal, 10);
       if (!Number.isFinite(v)) return 150;
       return Math.max(-SURPLUS_LIMIT, Math.min(SURPLUS_LIMIT, v));
-    } catch { return 150; }
+    } catch (e) { console.error('[settings] surplus read failed, using 150:', e); return 150; }
   }
   // Min length (days) of the aligned intake-tracking window before adaptive maintenance goes live.
   // Editable in settings; default 14, clamped to a sane 7–60.
@@ -56,7 +56,7 @@ function createSettings({ sb, onDirty }) {
     try {
       const v = parseInt((await settingsAll()).maintenance_min_days, 10);
       return Number.isFinite(v) && v >= 7 && v <= 60 ? v : 14;
-    } catch { return 14; }
+    } catch (e) { console.error('[settings] maintenance min days read failed, using 14:', e); return 14; }
   }
   // Current goal phase: { start, seed, sign, hold }. A phase begins when surplus_cal flips sign
   // (bulk↔cut); its start caps the maintenance window and `seed` holds the pre-flip maintenance until the
@@ -69,13 +69,13 @@ function createSettings({ sb, onDirty }) {
       if (!p || !p.start) return null;
       return { start: String(p.start).slice(0, 10), seed: p.seed != null ? Number(p.seed) : null,
                sign: Number(p.sign) || 0, hold: !!p.hold };
-    } catch { return null; }
+    } catch (e) { console.error('[settings] maintenance phase read failed:', e); return null; }
   }
   // Voice state for the TV strip + the mic-liveness check: whether always-on (wake-free) voice and inject
   // mode are on. Routing is fixed (every turn is Opus), so there's no model/route to resolve here.
   async function routingConfig() {
     let s = {};
-    try { s = await settingsAll(); } catch { /* fall through to defaults */ }
+    try { s = await settingsAll(); } catch (e) { console.error('[settings] routing read failed, using the defaults:', e); }
     return {
       wake: ['1', 'true', 'on', 'yes'].includes(String(s.wakefree_enabled ?? '0').toLowerCase()),
       inject: ['1', 'true', 'on', 'yes'].includes(String(s.voice_inject_mode ?? '0').toLowerCase()),

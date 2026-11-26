@@ -12,8 +12,10 @@ surfaces start disagreeing about the same number.
 `lib/report.js` (a copy of health/responder's reporter, installed on the first lines of server.js) sends
 every uncaught exception, unhandled rejection and `console.error` to the ops responder, and each new
 incident there starts an agent. `console.log` is invisible to it, and so is `.catch(() => {})`. A caught
-failure is logged with `console.error`; only a failure with a working fallback, or genuine noise (a temp
-file already gone), stays quiet. Page errors arrive through `/api/clientlog` as `ev: 'error'` lines
+failure is logged with `console.error`, a working fallback included; only genuine noise (a temp file
+already gone, a write to a socket that has closed) stays quiet. Every 5xx a route answers is reported
+by the hook in `lib/httpfail.js`; a handler that caught the exception answers with `fail(res, e)` so
+the stack goes with it (HUB-INTERNALS § 6f). Page errors arrive through `/api/clientlog` as `ev: 'error'` lines
 (`public/shared.js`) and are reported as the client's. The hub's heartbeat rides `dueTick`.
 
 ## Pushing does not deploy

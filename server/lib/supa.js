@@ -45,8 +45,9 @@ module.exports = function (ctx) {
                    'Content-Type': 'application/json', Prefer: 'return=minimal' },
         body: JSON.stringify(row),
       });
+      if (!r.ok) console.error(`[supa] insert into ${table} -> ${r.status} ${(await r.text().catch(() => '')).slice(0, 200)}`);
       return r.ok;
-    } catch (_) { return false; }
+    } catch (e) { console.error(`[supa] insert into ${table} failed:`, e); return false; }
   }
   // Upsert one app_settings row. app_settings is keyed, so this needs the merge-duplicates Prefer
   // header — a plain POST on an existing key 409s (which is why sbWrite, having no Prefer, can't

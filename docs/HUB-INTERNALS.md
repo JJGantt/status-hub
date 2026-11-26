@@ -1732,6 +1732,23 @@ The hub starts no investigations of its own. Its errors, the page errors it rela
 every machine and service and starts the agent; it also detects a machine going silent, without
 depending on Supabase.
 
+**Every 5xx the hub answers is an error.** `reportFailures()` (lib/httpfail.js), mounted first in
+server.js, logs `[http] <METHOD> <path> answered <status>: <body>` with `console.error` whenever a
+response finishes at 500 or above, so a route that answers 5xx is reported without doing anything
+itself. The query string is left out (a kiosk URL can carry the device token). A handler that caught
+an exception answers with `fail(res, e[, status, body])`, which hands the hook the exception so the
+report carries its stack; a thrown error reaches `errorHandler()` and is reported the same way. A
+handler that logs its own failure (its own wording, or a warning below a threshold, as
+`/api/health/samples` does) marks it `logged(res)` so it is not reported twice, and a 5xx that is a
+protocol answer rather than a failure (that route's `Retry-After` pacing) is `notAFailure(res)`. A
+request refused with `503 starting` before the boot load is a warning, an occurrence of every deploy.
+A 4xx is never reported by the hook. `test/httpfail.test.js` holds the rule.
+
+A failure caught outside a request (a job, a read behind a fallback value) is logged with
+`console.error` where it is caught, fallback kept: a failed read never turns into a normal-looking
+empty result unreported. `sbInsert` (lib/supa.js) logs its own failure and returns false, so a caller
+that must not carry on checks the boolean.
+
 ## 7. `app_settings` catalog (flat key/value)
 
 `GET /api/settings` returns this map **minus `voiceprint`** — 24KB of base64 exemplar bank that no

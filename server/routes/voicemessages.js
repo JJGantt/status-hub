@@ -4,6 +4,7 @@
 const express = require('express');
 const { DAY_START_HOUR, localDate } = require('../lib/dates');
 const { hearing } = require('../lib/streams');
+const { fail } = require('../lib/httpfail');
 
 module.exports = function (ctx) {
   const { VOICE_RESET_SENTINEL, gated, sb, sbWrite, settingsAll, settingsCached } = ctx;
@@ -40,7 +41,7 @@ module.exports = function (ctx) {
     try {
       const r = await sb(`voice_messages?focus=eq.hub&${HUB_ROWS}&order=created_at.desc&limit=1&select=created_at`);
       if (r && r[0] && lastVoiceAt === null) lastVoiceAt = Date.parse(r[0].created_at);
-    } catch (_) {}
+    } catch (e) { console.error('[voice] seeding the last voice message time failed:', e); }
   }
   seedLastVoiceAt();
 
@@ -96,7 +97,7 @@ module.exports = function (ctx) {
       const older = [...unread, ...words.filter((r) => !have.has(r.id))]
         .sort((a, b) => Date.parse(a.created_at) - Date.parse(b.created_at));
       res.json([...older, ...shown]);   // oldest→newest
-    } catch (e) { res.status(500).json({ error: String(e.message || e) }); }
+    } catch (e) { fail(res, e); }
   });
 
   // THE INBOX (docs/WATCH.md § The inbox): every reply flagged worth reading, newest
@@ -125,7 +126,7 @@ module.exports = function (ctx) {
       const rows = await sb(`voice_messages?focus=eq.hub&role=eq.assistant&needs_read=is.true${before}&order=created_at.desc&limit=${limit}&select=id,created_at,read_at,label,request_id,session_id,session_label,text`) || [];
       const qs = await questionsFor(rows);
       res.json({ unread: rows.some((r) => !r.read_at), rows: rows.map((r) => inboxRow(r, qs.get(r.request_id))) });
-    } catch (e) { res.status(500).json({ error: String(e.message || e) }); }
+    } catch (e) { fail(res, e); }
   });
   // One inbox entry opened on its own: the whole question and the whole answer. A follow-up spoken from
   // it names it (`about` on /api/voice-text and /api/voice-command), and the worker hands the model both.
@@ -137,7 +138,7 @@ module.exports = function (ctx) {
       if (!r) return res.status(404).json({ error: 'not found' });
       const qs = await questionsFor([r]);
       res.json({ ...inboxRow(r, qs.get(r.request_id)), question: qs.get(r.request_id) || '', answer: r.text || '', engine: r.engine || null });
-    } catch (e) { res.status(500).json({ error: String(e.message || e) }); }
+    } catch (e) { fail(res, e); }
   });
 
   // A request as every thread view draws it before its voice_messages row exists; null for one that is not
@@ -160,7 +161,7 @@ module.exports = function (ctx) {
       const listed = rows.map(requestView).filter(Boolean);
       const have = new Set(listed.map((r) => r.id));
       res.json(listed.concat(hearing().filter((h) => !have.has(h.id))));
-    } catch (e) { res.status(500).json({ error: String(e.message || e) }); }
+    } catch (e) { fail(res, e); }
   });
 
   // An answer has been shown (the watch: on screen, wrist up, a couple of seconds). Stamped once; the
@@ -171,7 +172,7 @@ module.exports = function (ctx) {
       if (!id) return res.status(400).json({ error: 'id required' });
       await sbWrite(`voice_messages?id=eq.${encodeURIComponent(id)}&read_at=is.null`, 'PATCH', { read_at: new Date().toISOString() });
       res.json({ ok: true });
-    } catch (e) { res.status(500).json({ error: String(e.message || e) }); }
+    } catch (e) { fail(res, e); }
   });
 
   // Every unread answer in the inbox at once (the inbox's "Mark all read"). Each row's UPDATE reaches every
@@ -181,7 +182,7 @@ module.exports = function (ctx) {
       await sbWrite('voice_messages?focus=eq.hub&role=eq.assistant&needs_read=is.true&read_at=is.null', 'PATCH',
         { read_at: new Date().toISOString() });
       res.json({ ok: true });
-    } catch (e) { res.status(500).json({ error: String(e.message || e) }); }
+    } catch (e) { fail(res, e); }
   });
 
   return { markLive, requestView };

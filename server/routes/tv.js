@@ -1,6 +1,7 @@
 'use strict';
 const crypto = require('crypto');
 const express = require('express');
+const { fail, logged } = require('../lib/httpfail');
 
 module.exports = function (ctx) {
   const { PING, gated, putSetting, sb, sbWrite, sessionClients } = ctx;
@@ -80,7 +81,7 @@ module.exports = function (ctx) {
     try {
       const since = new Date(Date.now() - TV_REPLAY_MS).toISOString();
       for (const row of await sb(`tv_commands?done_at=is.null&created_at=gte.${since}&order=created_at`)) await tvPush(row);
-    } catch {}
+    } catch (e) { console.error('[tv] replaying pending commands to a new connection failed:', e); }
   });
   gated.post('/api/tv/result', express.json({ limit: '64kb' }), async (req, res) => {
     const id = String((req.body || {}).id || '');
@@ -89,7 +90,7 @@ module.exports = function (ctx) {
     try {
       await sbWrite(`tv_commands?id=eq.${id}`, 'PATCH', { done_at: new Date().toISOString(), result: (req.body || {}).result ?? null });
       res.json({ ok: true });
-    } catch (e) { res.status(502).json({ error: String(e.message || e) }); }
+    } catch (e) { fail(res, e, 502); }
   });
 
   // The TV Guide's shelves (google-tv docs/GUIDE.md; data-layer tvGuide.ts writes them). The app reads
@@ -102,7 +103,7 @@ module.exports = function (ctx) {
         items: s.tv_shelf_items.map(({ position, ...it }) => it) })) });
     } catch (e) {
       console.error('[tv] guide', e.message || e);
-      res.status(502).json({ error: String(e.message || e) });
+      fail(logged(res), e, 502);
     }
   });
 
@@ -120,7 +121,7 @@ module.exports = function (ctx) {
       res.json({ ok: true });
     } catch (e) {
       console.error('[tv] guide open', e.message || e);
-      res.status(502).json({ error: String(e.message || e) });
+      fail(logged(res), e, 502);
     }
   });
 
@@ -151,7 +152,7 @@ module.exports = function (ctx) {
       pushedDirect.delete(row.id);
       waiters.delete(row.id);
       console.error('[tv] remote insert', e.message || e);
-      return res.status(502).json({ error: String(e.message || e) });
+      return fail(logged(res), e, 502);
     }
     setTimeout(() => pushedDirect.delete(row.id), 60000).unref?.();
     await tvPush(row);

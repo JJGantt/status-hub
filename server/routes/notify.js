@@ -57,7 +57,7 @@ module.exports = function (ctx) {
       // Exempt items (a shift, an appointment) owe nothing, so they can never be overdue and must
       // never badge — a red count the user cannot clear by doing anything is just noise.
       return rows.filter((r) => (r.priority || 0) >= 0 && lateMoment(r.scheduled_at || r.due) <= nowET).length;
-    } catch (_) { return null; }
+    } catch (e) { console.error('[notify] overdue count read failed:', e); return null; }
   }
 
   async function pushAll(kind, title, body, dedupe_key, extra = {}) {
@@ -67,9 +67,17 @@ module.exports = function (ctx) {
     const badge = await overdueCount();
     if (Number.isInteger(badge)) style.badge = badge;
     if (!apns.configured()) { await sbInsert('notifications', { ...base, ok: false, detail: 'apns not configured' }); return { ok: false, detail: 'apns not configured' }; }
-    let tokens = [];
-    try { tokens = await sb('device_tokens?platform=eq.ios&select=token,environment'); } catch (_) {}
-    if (!tokens.length) { await sbInsert('notifications', { ...base, ok: false, detail: 'no device tokens' }); return { ok: false, detail: 'no device tokens' }; }
+    let tokens;
+    try { tokens = await sb('device_tokens?platform=eq.ios&select=token,environment'); } catch (e) {
+      console.error(`[notify] device token read failed, "${String(title).slice(0, 60)}" not pushed:`, e);
+      await sbInsert('notifications', { ...base, ok: false, detail: `device token read failed: ${e.message}` });
+      return { ok: false, detail: 'device token read failed' };
+    }
+    if (!tokens.length) {
+      console.error(`[notify] no iOS device tokens, "${String(title).slice(0, 60)}" not pushed`);
+      await sbInsert('notifications', { ...base, ok: false, detail: 'no device tokens' });
+      return { ok: false, detail: 'no device tokens' };
+    }
     const details = []; let anyOk = false;
     for (const { token, environment } of tokens) {
       const r = await apns.send(token, { title, body, environment, ...style });

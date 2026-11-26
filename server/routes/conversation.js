@@ -44,7 +44,7 @@ module.exports = function (ctx) {
     try {
       const rows = await sb(`desk_sessions?id=eq.${encodeURIComponent(rowId)}&select=id,claude_session_id`);
       if (rows && rows[0]) conv = rows[0].claude_session_id || rows[0].id;
-    } catch (_) { /* the row id stands in until the list names its conversation */ }
+    } catch (e) { console.error(`[conversation] reading ${rowId}'s conversation failed, the row id stands in:`, e); }
     rowConv.set(rowId, conv);
     return conv;
   }

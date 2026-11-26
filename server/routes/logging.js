@@ -5,6 +5,7 @@ const crypto = require('crypto');
 const express = require('express');
 const { macroTargets } = require('../lib/maintenance');
 const pace = require('../lib/pace');
+const { fail } = require('../lib/httpfail');
 
 module.exports = function (ctx) {
   const {
@@ -104,7 +105,7 @@ module.exports = function (ctx) {
       };
       nutDayCache.set(cacheKey, { body, at: Date.now() });
       res.json(body);
-    } catch (e) { res.status(500).json({ error: String(e.message || e) }); }
+    } catch (e) { fail(res, e); }
   }));
 
 
@@ -136,7 +137,7 @@ module.exports = function (ctx) {
       await sbWrite('sets', 'POST', { occurred_at, exercise, weight_lbs, reps });
       dirtyWorkoutDay();   // synchronous — the client re-fetches the day immediately after this returns
       res.json({ ok: true, occurred_at });
-    } catch (e) { res.status(500).json({ error: String(e.message || e) }); }
+    } catch (e) { fail(res, e); }
   });
 
   // Edit a single logged set's weight/reps by id. Body: {id, weight_lbs, reps}. Realtime on `sets`
@@ -153,7 +154,7 @@ module.exports = function (ctx) {
       await sbWrite(`sets?id=eq.${id}`, 'PATCH', { weight_lbs, reps });
       dirtyWorkoutDay();   // synchronous — the client re-fetches the day immediately after this returns
       res.json({ ok: true });
-    } catch (e) { res.status(500).json({ error: String(e.message || e) }); }
+    } catch (e) { fail(res, e); }
   });
 
   // Nutrition invariant (mirrors the data-layer): every entry stores ≥1 ingredient and its totals are
@@ -239,7 +240,7 @@ module.exports = function (ctx) {
       dirtyNutDay();   // synchronous — the client re-fetches the day immediately after this returns
       await audit('add', row.id, null, row); // `row` is the full inserted snapshot (id known client-side)
       res.status(204).end();
-    } catch (e) { res.status(500).json({ error: String(e.message || e) }); }
+    } catch (e) { fail(res, e); }
   });
 
   // Edit an entry in place: PATCH {id, name?, calories, protein_g, carbs_g, fat_g, ingredients?}.
@@ -267,7 +268,7 @@ module.exports = function (ctx) {
       dirtyNutDay();   // synchronous — the client re-fetches the day immediately after this returns
       await audit('edit', id, before, { ...before, ...patch });
       res.status(204).end();
-    } catch (e) { res.status(500).json({ error: String(e.message || e) }); }
+    } catch (e) { fail(res, e); }
   });
 
   // Delete an entry: DELETE ?id=<uuid>. Snapshots the full row first so the audit `before`
@@ -283,7 +284,7 @@ module.exports = function (ctx) {
       dirtyNutDay();   // synchronous — the client re-fetches the day immediately after this returns
       await audit('delete', id, before, null);
       res.status(204).end();
-    } catch (e) { res.status(500).json({ error: String(e.message || e) }); }
+    } catch (e) { fail(res, e); }
   });
 
   // Commit a staged meal from the UI: flip staged→false and stamp it "now" so it logs as eaten and
@@ -301,7 +302,7 @@ module.exports = function (ctx) {
       dirtyNutDay();   // synchronous — the client re-fetches the day immediately after this returns
       await audit('edit', id, before, { ...before, ...patch });
       res.status(204).end();
-    } catch (e) { res.status(500).json({ error: String(e.message || e) }); }
+    } catch (e) { fail(res, e); }
   });
 
   // Feed the cat feeder. The feeder is LAN-only and this server runs on Fly, so we can't dispense
@@ -313,7 +314,7 @@ module.exports = function (ctx) {
       portions = Math.min(12, portions);
       await sbWrite('feeder_commands', 'POST', { action: 'feed', portions, source: 'hub-web', status: 'pending' });
       res.status(202).json({ ok: true, portions });
-    } catch (e) { res.status(500).json({ error: String(e.message || e) }); }
+    } catch (e) { fail(res, e); }
   });
 
   return { CLIENT_NOW_RE, dirtyNutDay };

@@ -1,4 +1,5 @@
 'use strict';
+const { logged } = require('../lib/httpfail');
 
 // ---- images shown in a reply: data-layer share_image → bucket `shared-images` → here --------------------
 //
@@ -26,7 +27,7 @@ module.exports = function ({ SUPABASE_KEY, SUPABASE_URL, gated }) {
       if (r.status === 404 || r.status === 400) return res.status(404).type('text').send('no such image');
       if (!r.ok) {
         console.error(`[img] storage answered ${r.status} for ${name}`);
-        return res.status(502).type('text').send('could not read image');
+        return logged(res).status(502).type('text').send('could not read image');
       }
       res.setHeader('Content-Type', r.headers.get('content-type') || 'image/jpeg');
       res.setHeader('X-Content-Type-Options', 'nosniff');
@@ -35,7 +36,7 @@ module.exports = function ({ SUPABASE_KEY, SUPABASE_URL, gated }) {
       res.send(Buffer.from(await r.arrayBuffer()));
     } catch (e) {
       console.error(`[img] ${name}: ${e.message || e}`);
-      res.status(502).type('text').send('could not read image');
+      logged(res).status(502).type('text').send('could not read image');
     }
   });
 };

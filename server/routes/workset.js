@@ -1,5 +1,6 @@
 'use strict';
 const express = require('express');
+const { logged } = require('../lib/httpfail');
 
 // The watch's Watchset page (apps/Packages/Watchset) reaches the data layer's `workset` edge function
 // (data-layer supabase/functions/workset) through here, on the watch's own hub token. The function
@@ -17,7 +18,7 @@ module.exports = function ({ SUPABASE_URL, gated }) {
     if (!ROUTES.has(req.params.route)) return res.status(404).json({ error: 'unknown route' });
     if (!token) {
       console.error('[workset] WORKSET_DEVICE_TOKEN is not set; the watch cannot log a set');
-      return res.status(503).json({ error: 'not configured' });
+      return logged(res).status(503).json({ error: 'not configured' });
     }
     const query = req.originalUrl.includes('?') ? req.originalUrl.slice(req.originalUrl.indexOf('?')) : '';
     try {
@@ -27,11 +28,14 @@ module.exports = function ({ SUPABASE_URL, gated }) {
         body: ['GET', 'HEAD'].includes(req.method) || !Buffer.isBuffer(req.body) || !req.body.length ? undefined : req.body,
       });
       const text = await r.text();
-      if (r.status >= 500) console.error(`[workset] ${req.method} ${req.params.route}: ${r.status} ${text.slice(0, 200)}`);
+      if (r.status >= 500) {
+        logged(res);
+        console.error(`[workset] ${req.method} ${req.params.route}: ${r.status} ${text.slice(0, 200)}`);
+      }
       res.status(r.status).type(r.headers.get('content-type') || 'application/json').send(text);
     } catch (e) {
       console.error(`[workset] ${req.method} ${req.params.route} failed: ${e.message || e}`);
-      res.status(502).json({ error: 'workset function unreachable' });
+      logged(res).status(502).json({ error: 'workset function unreachable' });
     }
   });
 };

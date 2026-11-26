@@ -4,6 +4,7 @@
 const express = require('express');
 const ops = require('../lib/report');
 const { createCi, verifySignature } = require('../lib/ci');
+const { fail, logged } = require('../lib/httpfail');
 
 module.exports = function (ctx) {
   const { MACHINE_NAME, SUPABASE_KEY, SUPABASE_URL, followUpSession, gated, openSession, pub, sb, sbWrite } = ctx;
@@ -64,7 +65,7 @@ module.exports = function (ctx) {
   pub.post('/api/ci/github', express.raw({ type: '*/*', limit: '5mb' }), async (req, res) => {
     if (!SECRET) {
       console.error('[ci] GITHUB_WEBHOOK_SECRET is not set; a GitHub delivery was refused');
-      return res.status(503).json({ error: 'not configured' });
+      return logged(res).status(503).json({ error: 'not configured' });
     }
     if (!verifySignature(SECRET, req.body, req.get('x-hub-signature-256'))) return res.status(401).json({ error: 'bad signature' });
     const event = req.get('x-github-event');
@@ -75,7 +76,7 @@ module.exports = function (ctx) {
       res.status(r.status).json(r.body);
     } catch (e) {
       console.error('[ci] workflow_run failed:', e);
-      res.status(500).json({ error: String(e.message || e) });
+      fail(logged(res), e);
     }
   });
 
@@ -86,7 +87,7 @@ module.exports = function (ctx) {
       res.status(r.status).json(r.body);
     } catch (e) {
       console.error('[ci] recording a push failed:', e);
-      res.status(500).json({ error: String(e.message || e) });
+      fail(logged(res), e);
     }
   });
 };

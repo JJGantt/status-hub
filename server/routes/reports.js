@@ -1,6 +1,7 @@
 'use strict';
 
 const { REPORT_CSP, REPORT_CSS } = require('../lib/untrusted');
+const { fail } = require('../lib/httpfail');
 
 module.exports = function (ctx) {
   const { gated, sb } = ctx;
@@ -23,7 +24,7 @@ module.exports = function (ctx) {
   gated.get('/report/:id', async (req, res) => {
     let rows;
     try { rows = await sb(`reports?id=eq.${encodeURIComponent(req.params.id)}&select=*`); }
-    catch (e) { return res.status(502).type('text').send('could not read report'); }
+    catch (e) { return fail(res, e, 502, 'could not read report'); }
     const r = rows && rows[0];
     if (!r) return res.status(404).type('text').send('no such report');
     const where = [r.repo, when(r.created)].filter(Boolean).join(' · ');
@@ -42,8 +43,8 @@ module.exports = function (ctx) {
   gated.get('/api/reports', async (req, res) => {
     try {
       res.json({ reports: await sb('reports?select=id,title,summary,repo,created&order=created.desc&limit=100') || [] });
-    } catch (_) {
-      res.status(502).json({ error: 'could not read reports' });
+    } catch (e) {
+      fail(res, e, 502, { error: 'could not read reports' });
     }
   });
 
@@ -51,7 +52,7 @@ module.exports = function (ctx) {
   gated.get('/reports', async (req, res) => {
     let rows = [];
     try { rows = await sb('reports?select=id,title,summary,repo,created&order=created.desc&limit=100'); }
-    catch (_) {}
+    catch (e) { return fail(res, e, 502, 'could not read reports'); }
     const items = rows.map((r) =>
       `<li><a href="/report/${escHtml(r.id)}">${escHtml(r.title)}</a>` +
       `<div class=meta>${escHtml([r.repo, when(r.created)].filter(Boolean).join(' · '))}</div>` +

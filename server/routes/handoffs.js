@@ -1,5 +1,6 @@
 'use strict';
 const express = require('express');
+const { fail, logged } = require('../lib/httpfail');
 
 // HANDOFFS: a session stuck on something only Jared can do hands him the screen (docs/HANDOFFS.md).
 //
@@ -57,7 +58,7 @@ module.exports = function ({ gated, pushAll, pushSessions, sb, sbInsert }) {
     try {
       const rows = await sb(`desk_sessions?id=eq.${encodeURIComponent(id)}&select=label,repo`);
       return rows[0] ? (rows[0].label || rows[0].repo) : null;
-    } catch (_) { return null; }
+    } catch (e) { console.error(`[handoff] session ${id} name read failed:`, e); return null; }
   }
 
   // Every change to a handoffs row, from realtime. The first screenshot is when he is asked.
@@ -107,14 +108,14 @@ module.exports = function ({ gated, pushAll, pushSessions, sb, sbInsert }) {
       // Held until the agent's next screenshot or the end; the timer only bounds the request, and the
       // client asks again with the same `after`.
       let settled = false;
-      const done = () => { if (settled) return; settled = true; clearTimeout(t); answer().catch(() => res.status(502).end()); };
+      const done = () => { if (settled) return; settled = true; clearTimeout(t); answer().catch((e) => fail(res, e, 502, '')); };
       const t = setTimeout(done, wait);
       if (!waiters.has(id)) waiters.set(id, new Set());
       waiters.get(id).add(done);
       req.on('close', () => { waiters.get(id)?.delete(done); settled = true; clearTimeout(t); });
     } catch (e) {
       console.error(`[handoff] read ${id} failed: ${e.message || e}`);
-      res.status(502).json({ error: 'could not read handoff' });
+      logged(res).status(502).json({ error: 'could not read handoff' });
     }
   });
 
@@ -146,11 +147,11 @@ module.exports = function ({ gated, pushAll, pushSessions, sb, sbInsert }) {
       const h = await read(id);
       if (!h) return res.status(404).json({ error: 'no such handoff' });
       if (h.status !== 'open') return res.status(409).json({ error: `handoff is ${h.status}`, handoff: view(h) });
-      await sbInsert('handoff_actions', { ...row, target: h.target });
+      if (!(await sbInsert('handoff_actions', { ...row, target: h.target }))) throw new Error('insert into handoff_actions failed');
       res.json({ ok: true, seq: h.seq });
     } catch (e) {
       console.error(`[handoff] action on ${id} not recorded: ${e.message || e}`);
-      res.status(502).json({ error: 'could not record the action' });
+      logged(res).status(502).json({ error: 'could not record the action' });
     }
   });
 

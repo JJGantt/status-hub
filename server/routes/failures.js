@@ -1,5 +1,6 @@
 'use strict';
 const express = require('express');
+const { fail } = require('../lib/httpfail');
 
 module.exports = function (ctx) {
   const { followUpSession, gated, openSession, sb, sbWrite, sessionVerb, transferSession } = ctx;
@@ -14,7 +15,7 @@ module.exports = function (ctx) {
       const all = String(req.query.all || '') === '1';
       const filter = all ? '' : '&retried=is.null&dismissed=is.null';
       res.json({ failures: await sb(`desk_dead_letters?select=*${filter}&order=created.desc&limit=50`) });
-    } catch (e) { res.status(500).json({ error: String(e.message || e) }); }
+    } catch (e) { fail(res, e); }
   });
 
   // Re-dispatch one, unchanged, through the same order a new one takes: its own machine, the other home
@@ -51,7 +52,7 @@ module.exports = function (ctx) {
       await sbWrite(`desk_dead_letters?id=eq.${encodeURIComponent(id)}`, 'PATCH',
         { retried: new Date().toISOString(), retry_command_id: r.body.id });
       res.json(r.body);
-    } catch (e) { res.status(500).json({ error: String(e.message || e) }); }
+    } catch (e) { fail(res, e); }
   });
 
   gated.post('/api/failures/:id/dismiss', express.json(), async (req, res) => {
@@ -59,7 +60,7 @@ module.exports = function (ctx) {
       await sbWrite(`desk_dead_letters?id=eq.${encodeURIComponent(String(req.params.id || ''))}`, 'PATCH',
         { dismissed: new Date().toISOString() });
       res.json({ ok: true });
-    } catch (e) { res.status(500).json({ error: String(e.message || e) }); }
+    } catch (e) { fail(res, e); }
   });
 
   // Poll target for the launch button: pending -> running -> done | error | expired.
@@ -68,6 +69,6 @@ module.exports = function (ctx) {
       const rows = await sb(`desk_commands?id=eq.${encodeURIComponent(req.params.id)}&select=status,detail`);
       if (!rows.length) return res.status(404).json({ error: 'not found' });
       res.json(rows[0]);
-    } catch (e) { res.status(500).json({ error: String(e.message || e) }); }
+    } catch (e) { fail(res, e); }
   });
 };

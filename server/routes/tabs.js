@@ -4,6 +4,7 @@ const { WebSocketServer } = require('ws');
 const upgrade = require('../lib/upgrade');
 const { createRelay } = require('../lib/liverelay');
 const { REPORT_CSP, REPORT_CSS } = require('../lib/untrusted');
+const { fail, logged } = require('../lib/httpfail');
 
 // SESSION TABS (docs/SESSION-TABS.md): what a session shows beside its conversation in the phone's session
 // view. A `session_tabs` row is one tab; the hub keeps every OPEN one in memory (loaded at start, kept by
@@ -91,7 +92,7 @@ module.exports = function ({ auth, gated, pushSessions, sb, sbWrite }) {
       res.json({ ...head(r), closed: !!r.closed_at, body: r.format === 'markdown' ? r.body : null });
     } catch (e) {
       console.error(`[tabs] read ${id} failed: ${e.message || e}`);
-      res.status(502).json({ error: 'could not read the tab' });
+      logged(res).status(502).json({ error: 'could not read the tab' });
     }
   });
 
@@ -99,7 +100,7 @@ module.exports = function ({ auth, gated, pushSessions, sb, sbWrite }) {
     const id = String(req.params.id);
     if (!uuidOk(id)) return res.status(400).type('text').send('bad id');
     let r;
-    try { r = await readTab(id); } catch (e) { return res.status(502).type('text').send('could not read the tab'); }
+    try { r = await readTab(id); } catch (e) { return fail(res, e, 502, 'could not read the tab'); }
     if (!r || r.format !== 'html') return res.status(404).type('text').send('no such page');
     res.setHeader('Content-Security-Policy', REPORT_CSP);
     res.setHeader('Cache-Control', 'no-cache');
@@ -133,7 +134,7 @@ ${r.body || ''}
       res.json({ ok: true, claimed: fresh.length });
     } catch (e) {
       console.error(`[tabs] chrome claim failed: ${e.message || e}`);
-      res.status(502).json({ error: 'could not claim' });
+      logged(res).status(502).json({ error: 'could not claim' });
     }
   });
 
@@ -146,7 +147,7 @@ ${r.body || ''}
       res.json({ ok: true, closed: ids.length });
     } catch (e) {
       console.error(`[tabs] chrome release failed: ${e.message || e}`);
-      res.status(502).json({ error: 'could not release' });
+      logged(res).status(502).json({ error: 'could not release' });
     }
   });
 

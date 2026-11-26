@@ -29,6 +29,7 @@
 // Sessions live in memory and are loaded from Supabase at boot. Until that load lands a session
 // credential answers 503 rather than 401, so a deploy never bounces a signed-in page to /login.
 const crypto = require('crypto');
+const { logged } = require('./httpfail');
 
 const COOKIE_MAX_AGE = 60 * 60 * 24 * 3650;   // ten years: signing in is meant to be one-time
 
@@ -266,7 +267,12 @@ function createGate(auth) {
     const q = typeof req.query.token === 'string' ? req.query.token : '';
     const nav = isNavigation(req);
     const who = auth.identify(req);
-    if (who && who.kind === 'pending') return res.status(503).type('text').send('starting');
+    // A signed-in request that lands before the boot load is refused and retried by its client: an
+    // occurrence of every deploy, counted rather than raised (lib/httpfail.js).
+    if (who && who.kind === 'pending') {
+      console.warn(`[auth] ${req.method} ${req.path} refused while sessions load`);
+      return logged(res).status(503).type('text').send('starting');
+    }
     if (nav && q && (who || auth.isDeviceToken(q))) {
       if (auth.isDeviceToken(q)) auth.setDeviceCookie(res);
       return res.redirect(302, stripToken(req.originalUrl));

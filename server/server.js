@@ -26,6 +26,7 @@ const { createDashboard } = require('./lib/dashboard');
 const { createBadge } = require('./lib/badge');
 const { createJobs } = require('./lib/jobs');
 const { createRealtime } = require('./lib/realtime');
+const { errorHandler, reportFailures } = require('./lib/httpfail');
 const { PING, sessionClients, sseClients, pushDay, pushLists, pushVoice } = require('./lib/streams');
 
 const PORT = process.env.PORT || 8080;
@@ -51,6 +52,8 @@ const VOICE_RESET_SENTINEL = '__RESET_CONTEXT__';
 const DESK_STALE_S = 90;   // 3 missed 30s beats
 
 const app = express();
+// Every 5xx answered below is reported to the ops responder as an error (lib/httpfail.js).
+app.use(reportFailures());
 // Every request from the watch app, with its answer: whether the wrist is reaching the hub at all, and
 // what it is told, cannot otherwise be seen from here (the watch's own log rides the same connection).
 app.use((req, res, next) => {
@@ -206,8 +209,8 @@ const realtime = createRealtime({
 
 // A client that hangs up before its request body finishes arriving (a phone locking or losing signal
 // mid-POST) makes the body parser fail with `request.aborted`. Nobody is left to answer and nothing
-// was half-done, so it is counted as an occurrence; anything else goes on to Express's own handler,
-// which logs it with console.error.
+// was half-done, so it is counted as an occurrence; anything else goes on to `errorHandler`, which
+// answers a 5xx and leaves its report to the hook (lib/httpfail.js), and passes a 4xx on to Express.
 app.use((err, req, res, next) => {
   if (err && err.type === 'request.aborted') {
     console.warn(`[http] client aborted the request body\n${req.method} ${req.path}`);
@@ -215,6 +218,7 @@ app.use((err, req, res, next) => {
   }
   next(err);
 });
+app.use(errorHandler());
 
 const server = app.listen(PORT, '0.0.0.0', () => {
   console.log(`status-hub on :${PORT}`);

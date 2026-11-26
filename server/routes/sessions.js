@@ -4,6 +4,7 @@ const { unconfirmedThread } = require('../lib/outcomes');
 const crypto = require('crypto');
 const express = require('express');
 const { NAME: MACHINE_NAME, createDesk, failoverOrder, machineOf, routeCommand, settle } = require('../lib/failover');
+const { fail } = require('../lib/httpfail');
 
 module.exports = function (ctx) {
   const {
@@ -65,7 +66,7 @@ module.exports = function (ctx) {
    * — the work still gets done (data-layer followUpElsewhere). Started from the other home machine.
    */
   async function startInstead(row, prompt, extra, routeDeps) {
-    const repos = row.repo ? await sb(`repos?name=eq.${encodeURIComponent(row.repo)}&select=path,name&limit=1`).catch(() => []) : [];
+    const repos = row.repo ? await sb(`repos?name=eq.${encodeURIComponent(row.repo)}&select=path,name&limit=1`).catch((e) => { console.error(`[sessions] repo ${row.repo} read failed, starting in ~:`, e); return []; }) : [];
     const where = (repos && repos[0]) || { path: '~', name: 'root' };
     const source = machineOf(row.worker);
     const agent = row.agent === 'codex' ? 'codex' : 'claude';
@@ -91,7 +92,7 @@ module.exports = function (ctx) {
       // the Mac sleeps, and one `online` flag could not express that.
       const desk = { online: fresh('desk'), seen: ((presence || []).find((p) => p.worker === 'desk') || {}).last_seen || null };
       res.json({ repos: repos || [], desk, machines: { mac: fresh('desk'), pi: fresh('pi-desk') } });
-    } catch (e) { res.status(500).json({ error: String(e.message || e) }); }
+    } catch (e) { fail(res, e); }
   });
 
   // Live and parked Claude sessions on the Pi. This is the ambient indicator: what is being worked on,
@@ -245,12 +246,12 @@ module.exports = function (ctx) {
       await sbWrite(`desk_sessions?id=eq.${encodeURIComponent(id)}`, 'PATCH', { seen_at: new Date().toISOString() });
       res.json({ ok: true });
       pushSessions();   // the mark clears on every open list, not just the one that read it
-    } catch (e) { res.status(500).json({ error: String(e.message || e) }); }
+    } catch (e) { fail(res, e); }
   });
 
   gated.get('/api/sessions', async (req, res) => {
     try { res.json(await buildSessions({ brief: req.query.brief === '1', parked: req.query.parked === 'all' ? Infinity : PARKED })); }
-    catch (e) { res.status(500).json({ error: String(e.message || e) }); }
+    catch (e) { fail(res, e); }
   });
 
   // One `event: sessions` frame carrying the whole payload, to the wall pool.
@@ -322,7 +323,7 @@ module.exports = function (ctx) {
         console.error(`[sessions] ${row.id} opened with nothing from its host in the thread (conversation ${conv})`);
       }
       res.json({ ...row, incident: isIncident(row), codex: isCodex(row), background: backgroundOf({ ...row, bg_agents, bg_shell, bg_shells }), prompt: pendingPrompt(row.id), handoff: openHandoff(row.id), tabs: sessionTabs(row.claude_session_id || row.id), epoch: EPOCH, events: log.events });
-    } catch (e) { res.status(500).json({ error: String(e.message || e) }); }
+    } catch (e) { fail(res, e); }
   });
 
   // The list, or the part of it after `since` — what a client fetches when a frame's seq shows a gap.
@@ -333,7 +334,7 @@ module.exports = function (ctx) {
       const since = Number(req.query.since);
       const events = Number.isFinite(since) && since > 0 ? log.events.filter((e) => e.seq > since) : log.events;
       res.json({ epoch: EPOCH, conversation: conv, events });
-    } catch (e) { res.status(500).json({ error: String(e.message || e) }); }
+    } catch (e) { fail(res, e); }
   });
 
   // Appended to a follow-up sent in speak mode. Written for the model, not shown to anyone: the tag is
@@ -381,7 +382,7 @@ module.exports = function (ctx) {
         // Refused by a machine that is up. A session that stopped running since it was looked up gets the
         // words through its conversation's current row; a running one that could not be typed into is not
         // moved, because its own process still holds the transcript.
-        const fresh = now.live ? await sb(`desk_sessions?id=eq.${encodeURIComponent(target.id)}&select=*`).catch(() => []) : [];
+        const fresh = now.live ? await sb(`desk_sessions?id=eq.${encodeURIComponent(target.id)}&select=*`).catch((e) => { console.error(`[sessions] re-reading ${target.id} failed:`, e); return []; }) : [];
         if (fresh && fresh[0] && fresh[0].status !== 'resident' && depth < 2) return followUpSession(fresh[0], opts, depth + 1);
         console.error(`[sessions] ${kind} for ${target.id}: ${r.why}`);
         const saved = await deadLetter(kind, { ...payload, target: machine }, machine, r.why);
@@ -598,7 +599,7 @@ module.exports = function (ctx) {
       // reach any machine directly — Supabase carries both directions.
       const r = await sessionVerb(rowsFull[0], kind);
       res.status(r.status).json(r.body);
-    } catch (e) { res.status(500).json({ error: String(e.message || e) }); }
+    } catch (e) { fail(res, e); }
   });
 
   gated.post('/api/repos/open', express.json(), async (req, res) => {
@@ -622,7 +623,7 @@ module.exports = function (ctx) {
       const r = await openSession({ path: rows[0].path, name: rows[0].name, ...(prompt ? { prompt } : {}) }, machine);
       if (!r.ok) return res.status(409).json({ error: r.why, saved: r.saved });
       res.json({ id: r.id, machine: r.machine, confirmed: r.state === 'done', rerouted: r.rerouted });
-    } catch (e) { res.status(500).json({ error: String(e.message || e) }); }
+    } catch (e) { fail(res, e); }
   });
 
   return { MACHINE_NAME, deadLetter, desk, followUpSession, machineAwake, openSession, pushSessions, sessionVerb, transferSession };

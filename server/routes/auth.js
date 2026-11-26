@@ -1,6 +1,7 @@
 'use strict';
 // The login sessions, as the settings panel manages them. The gate itself is lib/auth.js.
 const express = require('express');
+const { fail, logged } = require('../lib/httpfail');
 
 module.exports = function (ctx) {
   const { auth, gated } = ctx;
@@ -11,6 +12,6 @@ module.exports = function (ctx) {
     const b = req.body || {};
     if (!b.all && !b.id) return res.status(400).json({ error: 'id or all' });
     try { res.json({ revoked: await auth.revoke({ id: String(b.id || ''), all: !!b.all }) }); }
-    catch (e) { console.error('[auth] revoke failed:', e.message); res.status(502).json({ error: String(e.message || e) }); }
+    catch (e) { console.error('[auth] revoke failed:', e.message); fail(logged(res), e, 502); }
   });
 };

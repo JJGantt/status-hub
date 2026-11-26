@@ -1,6 +1,7 @@
 'use strict';
 const crypto = require('crypto');
 const express = require('express');
+const { fail, logged } = require('../lib/httpfail');
 
 // PERMISSION PROMPTS: a session blocked on a dialog is answered from the phone or the watch.
 //
@@ -100,7 +101,7 @@ module.exports = function (ctx) {
       res.json({ id, session: row.id });
     } catch (e) {
       console.error('[prompts] create:', e.message);
-      res.status(500).json({ error: e.message });
+      fail(logged(res), e);
     }
   });
 

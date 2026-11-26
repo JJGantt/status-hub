@@ -5,6 +5,7 @@ const { createSurfAlarms } = require('../lib/surfalarm');
 const crypto = require('crypto');
 const { getTZ, localDate, nowNaiveLocal } = require('../lib/dates');
 const { getWeather } = require('../lib/weather');
+const { fail } = require('../lib/httpfail');
 
 module.exports = function (ctx) {
   const {
@@ -182,7 +183,7 @@ module.exports = function (ctx) {
         const [full] = await sb(`surf_snapshots?slug=eq.mayport-poles&captured_at=eq.${encodeURIComponent(head.captured_at)}&select=slug,captured_at,rows`);
         if (full) surfSnap = full;
       }
-    } catch (_) { /* keep the copy already held */ }
+    } catch (e) { console.error('[surf] snapshot read failed, keeping the copy held:', e); }
     return surfSnap;
   }
   // The SEA-TEMPERATURE forecast (Open-Meteo's marine model, kept as station `open-meteo` in
@@ -196,7 +197,7 @@ module.exports = function (ctx) {
       const rows = await sb('water_readings?station=eq.open-meteo&lead_hours=not.is.null'
         + `&ts=gte.${encodeURIComponent(from)}&select=ts,water_f&order=ts.asc&limit=400`);
       sstCache = { at: Date.now(), rows: rows || [] };
-    } catch (_) { /* keep what is held */ }
+    } catch (e) { console.error('[surf] sea temperature forecast read failed, keeping what is held:', e); }
     return sstCache.rows;
   }
 
@@ -437,7 +438,7 @@ module.exports = function (ctx) {
   async function pushSurfLive() {
     if (!surfClients.size) return;
     let frame;
-    try { frame = 'event: surf\ndata: ' + JSON.stringify(await surfLive()) + '\n\n'; } catch (_) { return; }
+    try { frame = 'event: surf\ndata: ' + JSON.stringify(await surfLive()) + '\n\n'; } catch (e) { console.error('[surf] live frame build failed:', e); return; }
     for (const res of surfClients) { try { res.write(frame); } catch {} }
   }
 
@@ -456,7 +457,7 @@ module.exports = function (ctx) {
   // minutes allows one missed fetch. 0 turns it off.
   async function surfVeto() {
     let threshold = VETO_DEFAULT_KTS;
-    try { const v = parseFloat((await settingsAll()).surf_veto_kts); if (Number.isFinite(v)) threshold = v; } catch (_) {}
+    try { const v = parseFloat((await settingsAll()).surf_veto_kts); if (Number.isFinite(v)) threshold = v; } catch (e) { console.error('[surf] veto threshold read failed, using the default:', e); }
     if (!(threshold > 0)) return null;
     const c = liveWind.current();
     if (!c || c.age_min > 30 || !c.avg30) return null;
@@ -510,7 +511,7 @@ module.exports = function (ctx) {
           sbRange(`water_readings?select=ts,water_f&station=eq.41112${sinceT0}`),
           sbRange(`water_readings?select=ts,water_f&station=eq.open-meteo${sinceT0}`),
         ]);
-      } catch (_) { /* the grids are still worth drawing without it */ }
+      } catch (e) { console.error('[surf] water readings read failed, drawing the grids without them:', e); }
       // Mean of every reading inside the hour, matching how plots.py draws the same buoy.
       const hourOfTs = (r) => Math.floor(Date.parse(r.ts) / 3600000) * 3600;
       const measAcc = new Map();
@@ -562,8 +563,8 @@ module.exports = function (ctx) {
                      sizeColors, sizeLabels };
       Object.assign(surfHistCache, { at: Date.now(), body });
       res.json(body);
-    } catch (_) {
-      res.status(502).json({ error: 'could not read surf history' });
+    } catch (e) {
+      fail(res, e, 502, { error: 'could not read surf history' });
     }
   });
 
@@ -587,14 +588,14 @@ module.exports = function (ctx) {
         applyCorrection(out.days, out.wind, Math.floor(out.now_hour || 12));
       }
       res.json(out);
-    } catch (e) { res.status(500).json({ error: String(e.message || e) }); }
+    } catch (e) { fail(res, e); }
   });
   pub.get('/api/surf/stream', async (req, res) => {
     res.set({ 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache',
               Connection: 'keep-alive', 'X-Accel-Buffering': 'no' });
     res.flushHeaders();
     surfClients.add(res);
-    try { res.write('event: surf\ndata: ' + JSON.stringify(await surfLive()) + '\n\n'); } catch (_) {}
+    try { res.write('event: surf\ndata: ' + JSON.stringify(await surfLive()) + '\n\n'); } catch (e) { console.error('[surf] first live frame failed:', e); }
     const ka = setInterval(() => { try { res.write(PING); } catch {} }, 25000);
     req.on('close', () => { clearInterval(ka); surfClients.delete(res); });
   });
@@ -608,7 +609,7 @@ module.exports = function (ctx) {
   // carries, plus the last few hours of six-minute readings for a surface that wants to draw them.
   gated.get('/api/wind', async (req, res) => {
     let snap = null;
-    try { [snap] = await sb('surf_snapshots?slug=eq.mayport-poles&select=captured_at,rows&order=captured_at.desc&limit=1'); } catch (_) {}
+    try { [snap] = await sb('surf_snapshots?slug=eq.mayport-poles&select=captured_at,rows&order=captured_at.desc&limit=1'); } catch (e) { console.error('[wind] surf snapshot read failed:', e); }
     res.json({ now: liveWind.view(snap), readings: liveWind.readings() });
   });
 

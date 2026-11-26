@@ -1,5 +1,6 @@
 'use strict';
 const pace = require('../lib/pace');
+const { fail } = require('../lib/httpfail');
 
 module.exports = function (ctx) {
   const {
@@ -76,7 +77,7 @@ module.exports = function (ctx) {
                  overall: Math.max(0, Math.min(100, Number(sc.overall) || 0)) },
         frames,
       });
-    } catch (e) { res.status(500).json({ error: String(e.message || e) }); }
+    } catch (e) { fail(res, e); }
   }));
 
   async function workoutDay(date) {
@@ -109,7 +110,7 @@ module.exports = function (ctx) {
       const date = String(req.query.date || '').slice(0, 10);
       if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return res.status(400).json({ error: 'bad date' });
       res.json(await workoutDay(date));
-    } catch (e) { res.status(500).json({ error: String(e.message || e) }); }
+    } catch (e) { fail(res, e); }
   });
 
   // Compact feed for the watch's workout page: the inputs to the home wall's rest/session clocks and set
@@ -152,7 +153,7 @@ module.exports = function (ctx) {
         last_set_at: st.last_set_at, session_start_at: st.session_start_at, sets_today: st.sets_today, exercises,
         body: bodyColours(V.muscle_colors), volume,
       });
-    } catch (e) { res.status(500).json({ error: String(e.message || e) }); }
+    } catch (e) { fail(res, e); }
   }));
 
   return { dirtyWorkoutDay };

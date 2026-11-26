@@ -30,7 +30,7 @@ const KEY_ID = { sandbox: process.env.APNS_KEY_ID || '', production: process.env
 
 function pemFrom(inlineVar, pathVar) {
   let pem = process.env[inlineVar] || '';
-  if (!pem && process.env[pathVar]) { try { pem = fs.readFileSync(process.env[pathVar], 'utf8'); } catch (_) {} }
+  if (!pem && process.env[pathVar]) { try { pem = fs.readFileSync(process.env[pathVar], 'utf8'); } catch (e) { console.error(`[apns] ${pathVar} unreadable:`, e); } }
   if (pem && !pem.includes('BEGIN')) { try { pem = Buffer.from(pem, 'base64').toString('utf8'); } catch (_) {} }  // base64-wrapped inline key (easier as a Fly secret)
   return pem || null;
 }

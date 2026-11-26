@@ -191,7 +191,7 @@ function createDesk({ SUPABASE_URL, SUPABASE_KEY, sb, DESK_STALE_S = 90 }) {
         { status: 'error', detail: `rerouted: ${why}`, updated: new Date().toISOString() });
       if (won && won.length) return { cancelled: true };
     } catch (e) { console.error(`[desk] cancelling ${id}: ${e.message}`); }
-    const rows = await sb(`desk_commands?id=eq.${encodeURIComponent(id)}&select=status,detail`).catch(() => []);
+    const rows = await sb(`desk_commands?id=eq.${encodeURIComponent(id)}&select=status,detail`).catch((e) => { console.error(`[desk] reading ${id} after a failed cancel failed:`, e); return []; });
     const row = rows && rows[0];
     return { cancelled: false, status: String((row && row.status) || 'missing'), detail: String((row && row.detail) || '') };
   }
@@ -203,7 +203,7 @@ function createDesk({ SUPABASE_URL, SUPABASE_KEY, sb, DESK_STALE_S = 90 }) {
       confirmMs: CONFIRM_MS,
       ready: async (m) => {
         if (m === 'fly') return (await wakeFly()) ? { ok: true } : { ok: false, why: 'the Fly machine did not start' };
-        homes = homes || sb('worker_presence?worker=in.(desk,pi-desk)&select=worker,last_seen,info').catch(() => []);
+        homes = homes || sb('worker_presence?worker=in.(desk,pi-desk)&select=worker,last_seen,info').catch((e) => { console.error('[desk] presence read failed, treating every home machine as down:', e); return []; });
         const row = ((await homes) || []).find((r) => r.worker === DESK_WORKER[m]);
         return presenceReady(m, row, { staleS: DESK_STALE_S, agent });
       },
@@ -221,7 +221,10 @@ function createDesk({ SUPABASE_URL, SUPABASE_KEY, sb, DESK_STALE_S = 90 }) {
       const rows = await sb(`worker_presence?worker=eq.${DESK_WORKER[machine]}&select=last_seen`);
       const t = rows && rows[0] && rows[0].last_seen;
       return !!t && (Date.now() - new Date(t).getTime()) / 1000 <= DESK_STALE_S;
-    } catch { return false; }   // cannot tell → treat as down, and route around it
+    } catch (e) {   // cannot tell → treat as down, and route around it
+      console.error(`[desk] ${machine} presence read failed, treating it as down:`, e);
+      return false;
+    }
   }
 
   /** Whether anything of a conversation has been mirrored. A failed listing is not taken as empty. */

@@ -2,6 +2,7 @@
 const express = require('express');
 const { setTZ, nutritionWindow } = require('../lib/dates');
 const speech = require('../lib/speech');
+const { fail, logged } = require('../lib/httpfail');
 
 module.exports = function (ctx) {
   const {
@@ -59,14 +60,14 @@ module.exports = function (ctx) {
       dirtySettings();
       await recomputeMute();
       res.json({ ok: true });
-    } catch (e) { res.status(500).json({ error: String(e.message || e) }); }
+    } catch (e) { fail(res, e); }
   });
 
   gated.get('/api/settings', async (req, res) => {
     try {
       const all = await settingsAll();   // realtime-invalidated cache — see settingsAll()
       res.json(Object.fromEntries(Object.entries(all).filter(([k]) => !SETTINGS_SERVER_ONLY.has(k))));
-    } catch (e) { res.status(500).json({ error: String(e.message || e) }); }
+    } catch (e) { fail(res, e); }
   });
   // **A reply in a real voice** (`lib/speech.js`). The client posts the reply's text and which chunk it
   // wants; the answer is that chunk's audio, with the total count in a header so the first request is
@@ -85,7 +86,7 @@ module.exports = function (ctx) {
       res.send(wav);
     } catch (e) {
       console.error('[tts] FAILED', String(e.message || e));
-      res.status(502).json({ error: String(e.message || e).slice(0, 300) });
+      logged(res).status(502).json({ error: String(e.message || e).slice(0, 300) });
     }
   });
 
@@ -132,7 +133,7 @@ module.exports = function (ctx) {
         }
       }
       res.json({ ok: true });
-    } catch (e) { res.status(500).json({ error: String(e.message || e) }); }
+    } catch (e) { fail(res, e); }
   });
 
   // Register a device's APNs token (sent by the native app, authed by x-hub-token). Upsert so a
@@ -170,7 +171,7 @@ module.exports = function (ctx) {
         catch (e) { console.error('[tz] persist failed:', e.message); }   // in-memory zone still moved
       }
       res.json({ ok: true });
-    } catch (e) { res.status(500).json({ error: String(e.message || e) }); }
+    } catch (e) { fail(res, e); }
   });
 
   return { MUTE_HOLD, recomputeMute };

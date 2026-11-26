@@ -35,7 +35,7 @@ async function targetTime(sb, settings) {
     const rows = await sb(`nutrition_entries?occurred_at=gte.${histStart}T00:00:00&staged=eq.false&select=occurred_at`);
     const w = pace.deriveWindow((rows || []).map((r) => r.occurred_at));
     if (w && Number.isFinite(w.firstMin)) return minutesSince4amToHM(w.firstMin);
-  } catch (_) {}
+  } catch (e) { console.error('[weight-reminder] meal history read failed, using the manual time:', e); }
   return manual;  // fall back to the manual time if history is unavailable
 }
 
@@ -55,7 +55,7 @@ async function tick(ctx) {
   try {
     if (settingsAll) settings = await settingsAll();  // server's realtime-invalidated cache
     else (await sb('app_settings?select=key,value')).forEach((r) => (settings[r.key] = r.value));
-  } catch (_) { return; }
+  } catch (e) { console.error('[weight-reminder] settings read failed:', e); return; }
 
   const enabledRaw = String(settings.weight_reminder_enabled ?? '1').toLowerCase();
   if (['0', 'false', 'off', 'no'].includes(enabledRaw)) return;
@@ -73,7 +73,7 @@ async function tick(ctx) {
   try {
     const seen = await sb(`notifications?dedupe_key=eq.${encodeURIComponent(dedupe)}&select=id&limit=1`);
     if (seen.length) { claimedDay = today; return; }  // already handled (sent or skipped) today
-  } catch (_) { return; }
+  } catch (e) { console.error('[weight-reminder] dedupe read failed:', e); return; }
 
   // Suppress if weight OR food already logged today.
   let skip = null;
@@ -84,7 +84,7 @@ async function tick(ctx) {
       const food = await sb(`nutrition_entries?occurred_at=gte.${win.start}&occurred_at=lt.${win.end}&staged=eq.false&select=occurred_at&limit=1`);
       if (food.length) skip = 'food already logged';
     }
-  } catch (_) { return; }
+  } catch (e) { console.error('[weight-reminder] weight/food read failed:', e); return; }
 
   if (skip) {
     await supaInsert('notifications', { kind: 'weight_reminder', dedupe_key: dedupe, ok: false, detail: 'skipped: ' + skip });
@@ -93,9 +93,14 @@ async function tick(ctx) {
     return;
   }
 
-  let tokens = [];
-  try { tokens = await sb('device_tokens?platform=eq.ios&select=token,environment'); } catch (_) {}
+  let tokens;
+  // A failed read retries on the next tick: the day is not claimed and no dedupe row is written.
+  try { tokens = await sb('device_tokens?platform=eq.ios&select=token,environment'); } catch (e) {
+    console.error('[weight-reminder] device token read failed:', e);
+    return;
+  }
   if (!tokens.length) {
+    console.error('[weight-reminder] no iOS device tokens, the reminder is not pushed');
     await supaInsert('notifications', { kind: 'weight_reminder', dedupe_key: dedupe, ok: false, detail: 'no device tokens' });
     return;
   }

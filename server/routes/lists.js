@@ -2,6 +2,7 @@
 const { tasksScore, taskDeadline, completionValue, completionStamp, bandPoints, toPoints, TASK_GRACE_MIN, TASK_LATE_ZERO_H, TASK_DRAIN_FULL_H } = require('../lib/score');
 const crypto = require('crypto');
 const express = require('express');
+const { fail } = require('../lib/httpfail');
 
 module.exports = function (ctx) {
   const {
@@ -45,7 +46,7 @@ module.exports = function (ctx) {
         .map((i) => ({ ...i, expired: lateMoment(i.scheduled_at || i.due) <= nowET, heat: overdueHeat(i, nowET) }))
         .sort((a, b) => lateMoment(a.scheduled_at || a.due) < lateMoment(b.scheduled_at || b.due) ? -1 : 1);
       res.json({ lists, due });
-    } catch (e) { res.status(500).json({ error: String(e.message || e) }); }
+    } catch (e) { fail(res, e); }
   });
   // Compact feed for the iOS to-do widget. Deliberately NOT /api/todos: that one carries every list
   // and the full body of every item, and the widget draws one list's item titles.
@@ -89,7 +90,7 @@ module.exports = function (ctx) {
         repeating: !!r.series_id,
       }));
       res.json({ items });
-    } catch (e) { res.status(500).json({ error: String(e.message || e) }); }
+    } catch (e) { fail(res, e); }
   });
 
   // The repo widget's feed. Mirrors what cards/repos.js decides — which branch is worth showing, how
@@ -121,7 +122,7 @@ module.exports = function (ctx) {
           age: repoAgo(r.last_active),
         })),
       });
-    } catch (e) { res.status(500).json({ error: String(e.message || e) }); }
+    } catch (e) { fail(res, e); }
   });
 
   gated.get('/api/list-widget', async (req, res) => {
@@ -136,7 +137,7 @@ module.exports = function (ctx) {
         // Dated items live on ordinary lists now, so the widget marks the ones that have come due.
         overdue: !!r.due && lateMoment(r.due) <= nowET,
       })) });
-    } catch (e) { res.status(500).json({ error: String(e.message || e) }); }
+    } catch (e) { fail(res, e); }
   });
 
   // ---- calendar: a month of dated items as a finished grid, for /calendar and the calendar wall ----
@@ -411,7 +412,7 @@ module.exports = function (ctx) {
       let count = 1;
       if (wall) {
         let s = {};
-        try { s = await settingsAll(); } catch (_) {}
+        try { s = await settingsAll(); } catch (e) { console.error('[calendar] settings read failed, showing one month:', e); }
         const n = Number(s.calendar_months);
         count = Number.isInteger(n) && n >= 1 && n <= 12 ? n : 1;
       }
@@ -671,7 +672,7 @@ module.exports = function (ctx) {
         ...(ahead ? { ahead } : {}),
         next_transition: transition,
       });
-    } catch (e) { res.status(500).json({ error: String(e.message || e) }); }
+    } catch (e) { fail(res, e); }
   });
 
   // Clear an item. There is ONE cleared state — checking off and deleting are the same act — and it's
@@ -713,7 +714,7 @@ module.exports = function (ctx) {
       res.json({ ok: true, completed_at: completedAt });
       announceListWrite(id);
       syncBadge().catch((e) => console.error('[badge]', e.message || e));   // don't make the caller wait on APNs
-    } catch (e) { res.status(500).json({ error: String(e.message || e) }); }
+    } catch (e) { fail(res, e); }
   });
   gated.post('/api/todos/clear', express.json(), async (req, res) => {
     try {
@@ -729,7 +730,7 @@ module.exports = function (ctx) {
       res.json({ ok: true });
       announceListWrite(id);
       syncBadge().catch((e) => console.error('[badge]', e.message || e));   // don't make the caller wait on APNs
-    } catch (e) { res.status(500).json({ error: String(e.message || e) }); }
+    } catch (e) { fail(res, e); }
   });
   // Snooze: push an item's due time out by N hours from NOW (not from its old due, which may be long
   // past). It stays un-cleared — snoozing is deferral, not completion — but it stops being overdue, so
@@ -754,7 +755,7 @@ module.exports = function (ctx) {
       announceListWrite(id);
       res.json({ ok: true, due, badge: await overdueCount() });
       syncBadge().catch((e) => console.error('[badge]', e.message || e));
-    } catch (e) { res.status(500).json({ error: String(e.message || e) }); }
+    } catch (e) { fail(res, e); }
   });
 
   // Mark a dated item ALARM-GRADE, or take the mark off. An alarm breaks silent mode and a Focus, so
@@ -769,7 +770,7 @@ module.exports = function (ctx) {
       await sbWrite(`list_items?id=eq.${encodeURIComponent(id)}`, 'PATCH',
         { alarm, ...(alarm ? {} : { timer: false }), updated: new Date().toISOString() });
       res.json({ ok: true, id, alarm });
-    } catch (e) { res.status(500).json({ error: String(e.message || e) }); }
+    } catch (e) { fail(res, e); }
   });
 
   // The app reads this when it comes to the foreground, so the badge is right even if a silent
@@ -803,7 +804,7 @@ module.exports = function (ctx) {
       // occurrence — which is `add_to_list`'s job, not a text box's.
       await sbWrite('list_items', 'POST', { id: crypto.randomUUID(), list_id, text, title, due, scheduled_at: due, priority, deleted: false, created: now, updated: now });
       res.json({ ok: true, badge: await overdueCount() });
-    } catch (e) { res.status(500).json({ error: String(e.message || e) }); }
+    } catch (e) { fail(res, e); }
   });
 
   return { itemTitle };

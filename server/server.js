@@ -12,6 +12,7 @@ const express = require('express');
 const path = require('path');
 const apns = require('./lib/apns');
 const livemic = require('./lib/livemic');
+const upgrade = require('./lib/upgrade');
 const { createAuth, createGate, publishFallbackConfig } = require('./lib/auth');
 const { etNowString, etStringAt } = require('./lib/dates');
 const { lateMoment } = require('./lib/score');
@@ -178,6 +179,7 @@ const { MACHINE_NAME, deadLetter, desk, followUpSession, machineAwake, openSessi
   // Read on every build of the payload, by which time `prompts` below exists.
   pendingPrompt: (rowId) => prompts.pendingFor(rowId),
   openHandoff: (rowId) => handoffs.openFor(rowId),
+  sessionTabs: (conv) => tabs.tabsFor(conv),
 });
 
 require('./routes/failures')({ followUpSession, gated, openSession, sb, sbWrite, sessionVerb, transferSession });
@@ -185,6 +187,7 @@ require('./routes/ci')({ MACHINE_NAME, SUPABASE_KEY, SUPABASE_URL, followUpSessi
 
 const prompts = require('./routes/prompts')({ auth, gated, pushAll, pushSessions, sb });
 const handoffs = require('./routes/handoffs')({ gated, pushAll, pushSessions, sb, sbInsert });
+const tabs = require('./routes/tabs')({ auth, gated, pushSessions, sb, sbWrite });
 
 require('./routes/streams')({ gated });
 
@@ -197,7 +200,7 @@ const realtime = createRealtime({
   MUTE_HOLD, SUPABASE_KEY, SUPABASE_URL, auth, broadcast, dirtyDesk: cache.dirtyDesk,
   dirtyDue: jobs.dirtyDue, dirtyHeatHistory, dirtyNutDay, dirtyRows: cache.dirtyRows, dirtySettings, dirtySurfHist,
   dirtyWorkoutDay, markLive, notifyAnswer, onDeskCommand: desk.onCommand, pushDay, pushLists, pushSessions, pushSurfLive, pushVoice, recomputeMute,
-  reportTick: jobs.reportTick, handoffChanged: (row) => handoffs.changed(row), requestView, sb, settleReply, surfAlarms, syncBadge, takeUsage: usage.take, tvInserted,
+  reportTick: jobs.reportTick, handoffChanged: (row) => handoffs.changed(row), tabChanged: (row) => tabs.changed(row), requestView, sb, settleReply, surfAlarms, syncBadge, takeUsage: usage.take, tvInserted,
 });
 
 // A client that hangs up before its request body finishes arriving (a phone locking or losing signal
@@ -220,7 +223,8 @@ const server = app.listen(PORT, '0.0.0.0', () => {
   // having connected clients so it's free when nobody's watching.
   setInterval(() => { if (sseClients.size) broadcast(); }, 30000);
 });
-livemic.attach(server, auth.authed);
+livemic.attach(auth.authed);
+upgrade.attach(server);
 // A watch recording streams to /api/voice-live for as long as it runs, and a locked one can run for
 // many minutes. Node's default is to drop any request whose body takes more than five minutes.
 server.requestTimeout = 30 * 60 * 1000;

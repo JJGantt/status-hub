@@ -16,6 +16,7 @@
 // In memory only. The hub is one always-on machine, so the phone and every watch meet in this process;
 // a second machine would split them, and fly.toml keeping one is what this relies on.
 const { WebSocketServer } = require('ws');
+const upgrade = require('./upgrade');
 
 const PATH_UP = '/api/live-mic/up';
 // What a watch that joins (or rejoins, after the switch to its own LTE) is handed first: exactly the
@@ -80,14 +81,10 @@ function takeSource(ws) {
 
 // The phone's upload. A WebSocket upgrade never reaches Express's middleware, so the auth gate is
 // checked here.
-function attach(server, authed) {
+function attach(authed) {
   const wss = new WebSocketServer({ noServer: true });
-  server.on('upgrade', (req, socket, head) => {
-    if (!req.url.startsWith(PATH_UP) || !authed(req)) {
-      socket.write('HTTP/1.1 401 Unauthorized\r\n\r\n');
-      socket.destroy();
-      return;
-    }
+  upgrade.register(PATH_UP, (req, socket, head) => {
+    if (!authed(req)) return upgrade.refuse(socket);
     wss.handleUpgrade(req, socket, head, takeSource);
   });
 }

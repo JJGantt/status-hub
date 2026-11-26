@@ -84,6 +84,15 @@ recorder in the installed build: that control fires `window.__startVoiceCommand(
 touch, so it logs `start:arming` with **no `pointerdown` in front of it**. Once that is seen, delete
 the route and the `trace()` calls.
 
+## Hub Live on the Mac: not loaded into his Chrome yet
+
+Profile 37 has never had the extension (no `chrome-live` entry in its Preferences as of 2026-11-26), so every
+live Chrome tab on a Mac session shows `Offline` and logs a `[live] … no browser extension connected` error.
+Loading an unpacked extension is a click in `chrome://extensions` plus a native file picker, so it is his:
+Profile 37 → `chrome://extensions` → Developer mode → Load unpacked → `~/repos/status-hub/extensions/chrome-live`.
+`config.js` is already written. Then check the hub logs `[live] the mac's browser extension connected`, and delete
+this entry.
+
 ## Hub Live on the Pi: waiting for the Pi to come back
 
 The Pi has been down since 2026-11-22, so its half of the live Chrome tab (docs/SESSION-TABS.md) is

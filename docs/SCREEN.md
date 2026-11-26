@@ -92,6 +92,13 @@ connects.
 **The first share after a rebuild takes several seconds longer** (about 6.5 s to answer, measured):
 macOS checks the newly signed binary and framework on their first launch. Every share after it is fast.
 
+## Ending
+
+A page torn down without Close (a deploy's reload, the app closing) sends `bye` on `pagehide`, so the
+helper ends the share as `bye` rather than waiting ten seconds on a dead connection and reporting it failed.
+A capture macOS stops on its own ("Stream was stopped by the system", which one share's helper tearing
+down its capture can cause in another's) is started again; three stops within a minute end the share.
+
 ## Failures
 
 - A share the Mac does not answer in 20 s is reported by the hub (the Mac asleep, its agent down, or

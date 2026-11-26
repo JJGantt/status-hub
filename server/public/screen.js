@@ -361,6 +361,10 @@ export function openScreen({ mount, session = null, handoff = null, onEnd = null
     if (!pc || ['failed', 'closed', 'disconnected'].includes(pc.connectionState)) { ended = false; connect(); }
   };
   document.addEventListener('visibilitychange', onVis);
+  // A reload (a deploy's safeReload) or the app closing tears the page down without Close: the Mac is told
+  // the viewer has gone, so its helper ends the share as `bye` instead of waiting out a dead connection.
+  const onHide = (e) => { if (e.persisted) return; if (dc && dc.readyState === 'open') { try { dc.send(JSON.stringify({ t: 'bye' })); } catch (_) {} } };
+  addEventListener('pagehide', onHide);
 
   // ---- a handoff it stands in for --------------------------------------------------------------
   // Values the session knows he will type (his email, a card number): one tap types it on the Mac, where
@@ -404,6 +408,7 @@ export function openScreen({ mount, session = null, handoff = null, onEnd = null
     if (!alive) return;
     alive = false;
     document.removeEventListener('visibilitychange', onVis);
+    removeEventListener('pagehide', onHide);
     teardown('closed');
     ov.remove();
   }

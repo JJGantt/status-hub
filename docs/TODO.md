@@ -84,6 +84,15 @@ recorder in the installed build: that control fires `window.__startVoiceCommand(
 touch, so it logs `start:arming` with **no `pointerdown` in front of it**. Once that is seen, delete
 the route and the `trace()` calls.
 
+## Hub Live on the Pi: waiting for the Pi to come back
+
+The Pi has been down since 2026-11-22, so its half of the live Chrome tab (docs/SESSION-TABS.md) is
+committed but not installed. The repos arrive by the pull timer; three things do not: write the config
+(`bin/chrome-live-config pi`), install the changed unit (`sudo ~/repos/pi-browser/bin/install-services.sh`)
+and restart the browser once no session is using it (`sudo systemctl restart pi-browser`). Then check
+the hub logs `[live] the pi's browser extension connected`, and write the extension's resident memory into
+pi-browser's README.
+
 ## Not started
 
 ### Sleep: prove it on the phone, then use it (built 2026-10-30, builds 139/140)

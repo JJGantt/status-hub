@@ -3,8 +3,9 @@
 A session blocked on something only Jared can do (a sign-in, a 2FA code, a captcha, a choice that is
 his) calls the data MCP's `request_handoff(target, note)`. He gets the screenshot on his phone and
 watch; where he taps is clicked on the real screen, what he types is typed there, and a fresh
-screenshot follows each action until he presses Done or Cancel. The tool call is held open the whole
-time and answers with how it ended. The data side (tables, targets, the agents, the Mac's grants) is
+screenshot follows each action until he presses Done or Cancel. The tool call returns as soon as the
+screenshot is up; when he finishes, the session is sent a follow-up saying how it ended, which starts its
+next turn. Nothing waits on him in between. The data side (tables, targets, the agents, the Mac's grants) is
 data-layer README § Handoffs.
 
 ## The path
@@ -22,7 +23,10 @@ data-layer README § Handoffs.
 5. Each client holds `GET /api/handoffs/:id?after=<seq>&wait=40` open; the hub answers it the moment the
    row's `seq` passes `after` or it ends. A held request answered by the agent's update, not a poll; the
    40 s only bounds one request, and the client asks again.
-6. Done or Cancel ends the row, which ends the session's held tool call.
+6. Done or Cancel ends the row, and the agent sends the session a follow-up (`[Handoff <id>] …`) saying
+   how it ended; that message wakes the session. A tap or typing is acted on only while the screen still
+   matches the screenshot it was made on (data-layer README § Handoffs); otherwise he is sent the screen as
+   it is now.
 
 ## Where he sees it
 

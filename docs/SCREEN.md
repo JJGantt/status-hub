@@ -96,7 +96,8 @@ macOS checks the newly signed binary and framework on their first launch. Every 
 
 A page torn down without Close (a deploy's reload, the app closing) sends `bye` on `pagehide`, so the
 helper ends the share as `bye` rather than waiting ten seconds on a dead connection and reporting it failed.
-A capture macOS stops on its own ("Stream was stopped by the system", which one share's helper tearing
+A device that opens a new share (its page reloaded) has its earlier one ended by the screen agent as `stopped`,
+matched by the request's user agent, so two shares of one device never overlap. A capture macOS stops on its own ("Stream was stopped by the system", which one share's helper tearing
 down its capture can cause in another's) is started again; three stops within a minute end the share.
 
 ## Failures

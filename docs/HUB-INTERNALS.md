@@ -1262,7 +1262,9 @@ list with the hub's `epoch`; `ev` frames on `/api/session-stream` bring each new
 The rule (`frame`): the next seq is appended, a gap is fetched (`/events?since=`), an old seq is
 ignored, a different epoch is a restarted hub and the list is fetched afresh; a fetch and a frame are
 merged by seq (`take`), so they cannot disagree. A prompt queued behind a running turn is one event at
-two moments, same id — dimmed until the model reads it, and drawn where it read it (`shown`). The user's
+two moments, same id — dimmed until the model reads it, and drawn where it read it (`shown`). Every view draws ONE EVENT PER ID, at its latest occurrence (`shown` here, `all` on the watch); a
+reply's id is derived from its turn's `at` (`reply:<ms>`), so a turn the list comes to hold twice — a
+restart's seed and the host's report of the same turn — is still drawn once. The user's
 own words show the instant they are sent as a PLACEHOLDER keyed by the message's own id, which the event
 for them carries back as `cmd`; it is replaced by id. The caret shows while the last event is not a
 reply. The header's facts (name, machine, status) come from the row, re-read only when the `sessions`

@@ -223,13 +223,13 @@ struct SessionView: View {
     private var nameInk: Color { incident ? SessionView.incidentEdge : codex ? SessionView.codexEdge : .white }
     private var placeholders: [Placeholder] { sessions.placeholders[key] ?? [] }
 
-    /// Every event in order, a prompt at the position of its LATEST occurrence — it moves from where it
-    /// was queued to where the model read it — so one message is one line.
+    /// Every event in order, ONE PER ID, at the position of its LATEST occurrence — a prompt moves from
+    /// where it was queued to where the model read it, and a message held twice is drawn once.
     private var all: [SessionEvent] {
         var seen = Set<String>()
         var out: [SessionEvent] = []
         for e in events.reversed() {
-            if e.kind == "prompt" { if !seen.insert(e.id).inserted { continue } }
+            if !seen.insert(e.id).inserted { continue }
             out.append(e)
         }
         return out.reversed()

@@ -588,14 +588,15 @@ function paintHead() {
   paintTabs();
 }
 
-// What is drawn: every event in order, a prompt at the position of its LATEST occurrence — it moves
-// from where it was queued to where the model read it — and the user's own words the hub does not have yet
-// after everything it does. The session is working when the last event is not a reply.
+// What is drawn: every event in order, ONE PER ID, at the position of its LATEST occurrence — a prompt
+// moves from where it was queued to where the model read it, and a message the list came to hold twice
+// (a restart's seed and the host's report of the same turn) is drawn once — and the user's own words the
+// hub does not have yet after everything it does. The session is working when the last event is not a reply.
 function shown(at) {
   const seen = new Set(), out = [];
   for (let i = at.events.length - 1; i >= 0; i--) {
     const e = at.events[i];
-    if (e.kind === 'prompt') { if (seen.has(e.id)) continue; seen.add(e.id); }
+    if (e.id) { if (seen.has(e.id)) continue; seen.add(e.id); }
     out.push(e);
   }
   return out.reverse();

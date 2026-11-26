@@ -71,6 +71,11 @@ module.exports = function (ctx) {
     return log;
   }
 
+  // ONE ID IS ONE MESSAGE. A prompt's id is the host's (the transcript record) and a reply's is derived from
+  // its turn's `at`, so the same message reaching a view twice by any road is drawn once (`shown` in
+  // cards/repos.js). A random reply id is what let a restart draw a turn twice.
+  const replyId = (at) => { const ms = at ? Date.parse(at) : NaN; return Number.isFinite(ms) ? `reply:${ms}` : crypto.randomUUID(); };
+
   async function seedLog(conv, log) {
     try {
       const turns = ((await sb(`desk_turns?conversation=eq.${encodeURIComponent(conv)}` +
@@ -84,7 +89,7 @@ module.exports = function (ctx) {
                             ...(e.kind === 'prompt' ? { seen: e.seen !== false, ...(e.cmd ? { cmd: e.cmd } : {}) } : {}) });
         }
         if (!stored.length && t.prompt) log.events.push({ seq: ++log.seq, id: crypto.randomUUID(), kind: 'prompt', text: cleanSaid(t.prompt), seen: true, at: t.at });
-        if (t.reply) log.events.push({ seq: ++log.seq, id: crypto.randomUUID(), kind: 'reply', text: cleanSaid(t.reply), at: t.at });
+        if (t.reply) log.events.push({ seq: ++log.seq, id: replyId(t.at), kind: 'reply', text: cleanSaid(t.reply), at: t.at });
       }
     } catch (e) { console.error('[sessions] seed:', e.message); }
     sweepLogs();
@@ -231,7 +236,7 @@ module.exports = function (ctx) {
       const reply = typeof b.reply === 'string' && b.reply ? cleanSaid(b.reply).slice(0, 20000) : text;
       if (!reply) return {};
       const turn = sinceLastReply(log);
-      appendEvent(conv, rowId, log, { id: crypto.randomUUID(), kind: 'reply', text: reply, ...(at ? { at } : {}) });
+      appendEvent(conv, rowId, log, { id: replyId(at), kind: 'reply', text: reply, ...(at ? { at } : {}) });
       if (at) storeTurn(conv, at, reply, whole ? b.events.map(hostEvent).filter(Boolean) : turn);
     }
     return {};

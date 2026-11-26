@@ -185,6 +185,18 @@ describe('a session thread (/api/sessions/:id)', () => {
     assert.deepEqual(kinds(await json(h.DEVICE_TOKEN, 'GET', '/api/sessions/s-thread05')), [`prompt:${PROMPT}`, 'reply:Fixed it.']);
   });
 
+  test('a reply has the same id however it reached the list', async () => {
+    const conv = 'aaaa0006-0000-0000-0000-000000000000';
+    launched('s-thread06', conv);
+    supa.tables.desk_turns = supa.tables.desk_turns || [];
+    supa.tables.desk_turns.push({ conversation: conv, at: '2026-11-26T14:05:00+00:00', reply: 'Stored.', events: [] });
+    const seeded = (await json(h.DEVICE_TOKEN, 'GET', '/api/sessions/s-thread06')).json.events.find((e) => e.kind === 'reply');
+    await json(h.DEVICE_TOKEN, 'POST', '/api/session-activity', { session: 's-thread06', state: 'done', text: 'Live.', reply: 'Live.', at: '2026-11-26T14:06:00.000Z' });
+    const live = (await json(h.DEVICE_TOKEN, 'GET', '/api/sessions/s-thread06')).json.events.filter((e) => e.kind === 'reply').pop();
+    assert.equal(seeded.id, `reply:${Date.parse('2026-11-26T14:05:00Z')}`);
+    assert.equal(live.id, `reply:${Date.parse('2026-11-26T14:06:00Z')}`);
+  });
+
   test('matched by text when the host sent no command id', async () => {
     launched('s-thread03', 'aaaa0003-0000-0000-0000-000000000000');
     await json(h.DEVICE_TOKEN, 'GET', '/api/sessions/s-thread03');

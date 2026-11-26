@@ -1,0 +1,33 @@
+# TURN relay for live screen shares: status-hub docs/SCREEN.md. Deploy: `fly deploy` from this directory.
+app = "jared-turn"
+primary_region = "iad"
+
+[build]
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "256mb"
+
+# STUN/TURN over UDP, the normal path.
+[[services]]
+  protocol = "udp"
+  internal_port = 3478
+  [[services.ports]]
+    port = 3478
+
+# TURN over TCP, for a network that blocks UDP.
+[[services]]
+  protocol = "tcp"
+  internal_port = 3478
+  [[services.ports]]
+    port = 3478
+  [[services.ports]]
+    port = 443
+
+# The relay addresses handed out, one port per allocation.
+[[services]]
+  protocol = "udp"
+  internal_port = 50000
+  [[services.ports]]
+    start_port = 50000
+    end_port = 50099

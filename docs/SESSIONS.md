@@ -182,6 +182,11 @@ with the same MCP servers, approvals off and full access.
   READ from the process's open files (`/proc/<pid>/fd` on Linux, `lsof` on the Mac), searching the
   launched pid and its children because `codex` is a node wrapper around the binary. The thread id is
   stored in `claude_session_id`.
+- **A launch that never opens a rollout drops off the list.** The tick finds a Codex process only
+  through the rollout it holds, so a `codex` stuck before its first turn (a sign-in screen, a plan or
+  model notice) is invisible to it, and after the 90s launch grace the row is `ended` with no
+  conversation. On the Mac, `reportUnbound` in `orchestrator/src/commands.js` reports that case as an
+  error with the tab's screen; a launch that exited is checkLaunch's to report.
 - **Replies and live activity** come from the rollout: `task_started` / `task_complete` (with
   `last_agent_message`, the reply) bound a turn, and the user's words are the UserMessage item. `readTail` and
   `sessionWatch`'s `step` hand a rollout to codex.js, so the tick, the watcher, the relay and the hub

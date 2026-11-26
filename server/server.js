@@ -166,7 +166,7 @@ const { overdueCount, pushAll } = require('./routes/notify')({
 const { syncBadge } = createBadge({ apns, overdueCount, sb });
 
 const { EPOCH, convOfRow, ensureLog, liveLine, notifyAnswer, numbered, rowConv, seedLaunch } = require('./routes/conversation')({
-  cleanSaid, gated, pushAll, pushVoice, sb, sbWrite, sessionClients, settingsAll,
+  cleanSaid, gated, pushAll, pushVoice, sb, sbUpsert, sbWrite, sessionClients, settingsAll,
 });
 
 const { itemTitle } = require('./routes/lists')({

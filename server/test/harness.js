@@ -49,6 +49,12 @@ function fakeSupabase() {
       }
       const hit = rows.filter((r) => matches(r, u.searchParams));
       if (req.method === 'POST') {
+        // An upsert (on_conflict + merge-duplicates) replaces the row with the same key.
+        const keys = /merge-duplicates/.test(req.headers.prefer || '') && u.searchParams.get('on_conflict');
+        if (keys) for (const r of [].concat(data)) {
+          const i = rows.findIndex((x) => keys.split(',').every((k) => String(x[k]) === String(r[k])));
+          if (i >= 0) rows.splice(i, 1);
+        }
         const added = [].concat(data).map((r) => ({ created_at: new Date().toISOString(), ...r }));
         rows.push(...added);
         res.statusCode = 201;

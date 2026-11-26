@@ -197,6 +197,39 @@ describe('a session thread (/api/sessions/:id)', () => {
     assert.equal(live.id, `reply:${Date.parse('2026-11-26T14:06:00Z')}`);
   });
 
+  test('every event is saved as it arrives, under its id and position', async () => {
+    const conv = 'aaaa0007-0000-0000-0000-000000000000';
+    launched('s-thread07', conv);
+    supa.tables.session_events = supa.tables.session_events || [];
+    await json(h.DEVICE_TOKEN, 'GET', '/api/sessions/s-thread07');
+    const said = (n, state, text, extra = {}) => json(h.DEVICE_TOKEN, 'POST', '/api/session-activity',
+      { session: 's-thread07', turn: 't7', n, state, text, ...extra });
+    await said(1, 'said', PROMPT);              // the host's copy of the launch prompt: the same message
+    await said(2, 'said', 'And the water bowl?', { id: 'p-7' });
+    await said(3, 'tool', 'Bash: ls');
+    await new Promise((r) => setTimeout(r, 100));
+    const saved = supa.tables.session_events.filter((r) => r.conversation === conv).sort((a, b) => a.seq - b.seq);
+    assert.deepEqual(saved.map((r) => [r.kind, r.text, r.turn, r.n]),
+      [['prompt', PROMPT, null, null], ['prompt', 'And the water bowl?', 't7', 2], ['tool', 'Bash: ls', 't7', 3]]);
+    assert.equal(saved[1].id, 'p-7');
+  });
+
+  test('after a restart the saved list comes back exactly, and the host\'s replay adds nothing twice', async () => {
+    // A conversation this process has never touched, with events already saved: what a restarted hub sees.
+    const conv = 'aaaa0008-0000-0000-0000-000000000000';
+    launched('s-thread08', conv);
+    supa.tables.session_events = supa.tables.session_events || [];
+    supa.tables.session_events.push(
+      { conversation: conv, id: 'p-8', seq: 5, kind: 'prompt', text: PROMPT, seen: true, turn: 't8', n: 1 },
+      { conversation: conv, id: 'x-8', seq: 6, kind: 'tool', text: 'Bash: ls', turn: 't8', n: 2 });
+    const before = await json(h.DEVICE_TOKEN, 'GET', '/api/sessions/s-thread08');
+    assert.deepEqual(before.json.events.map((e) => [e.seq, e.id]), [[5, 'p-8'], [6, 'x-8']]);
+    await json(h.DEVICE_TOKEN, 'POST', '/api/session-activity', { session: 's-thread08', turn: 't8', state: 'replay',
+      events: [{ n: 1, state: 'said', id: 'p-8', text: PROMPT }, { n: 2, state: 'tool', text: 'Bash: ls' }, { n: 3, state: 'tool', text: 'Bash: pwd' }] });
+    assert.deepEqual(kinds(await json(h.DEVICE_TOKEN, 'GET', '/api/sessions/s-thread08')),
+      [`prompt:${PROMPT}`, 'tool:Bash: ls', 'tool:Bash: pwd']);
+  });
+
   test('matched by text when the host sent no command id', async () => {
     launched('s-thread03', 'aaaa0003-0000-0000-0000-000000000000');
     await json(h.DEVICE_TOKEN, 'GET', '/api/sessions/s-thread03');

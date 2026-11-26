@@ -5,7 +5,7 @@ const { echoesLaunch } = require('../lib/outcomes');
 
 module.exports = function (ctx) {
   const {
-    cleanSaid, gated, pushAll, pushVoice, sb, sbWrite, sessionClients, settingsAll,
+    cleanSaid, gated, pushAll, pushVoice, sb, sbUpsert, sbWrite, sessionClients, settingsAll,
   } = ctx;
 
   // ---- A CONVERSATION IS ONE ORDERED LIST OF EVENTS ---------------------------------------------
@@ -76,7 +76,44 @@ module.exports = function (ctx) {
   // cards/repos.js). A random reply id is what let a restart draw a turn twice.
   const replyId = (at) => { const ms = at ? Date.parse(at) : NaN; return Number.isFinite(ms) ? `reply:${ms}` : crypto.randomUUID(); };
 
+  // EVERY EVENT IS SAVED THE MOMENT IT IS TAKEN (`session_events`, data-layer 00204), so the list below is a
+  // cache of that table, not the record. A restart reads it back exactly — positions, ids, and how far into
+  // the host's current turn it had got (`log.cur`), so the host's replay after a restart appends nothing
+  // already held. Writes for one conversation go in order, one at a time; the same id written again
+  // updates its row (a prompt queued and then read keeps one row, at the position where it was read).
+  const SEED_EVENTS = 600;
+  const writing = new Map();   // conversation -> the tail of its write chain
+  function persist(conv, ev) {
+    const row = { conversation: conv, id: ev.id, seq: ev.seq, kind: ev.kind, text: ev.text, at: ev.at || null,
+                  seen: ev.kind === 'prompt' ? ev.seen !== false : null, cmd: ev.cmd || null,
+                  turn: ev.turn || null, n: Number.isInteger(ev.n) ? ev.n : null };
+    const next = (writing.get(conv) || Promise.resolve())
+      .then(() => sbUpsert('session_events', 'conversation,id', row))
+      .catch((e) => console.error(`[sessions] event ${ev.seq} of ${conv} not saved: ${e.message || e}`));
+    writing.set(conv, next);
+    next.then(() => { if (writing.get(conv) === next) writing.delete(conv); });
+  }
+
+  async function seedSaved(conv, log) {
+    const rows = await sb(`session_events?conversation=eq.${encodeURIComponent(conv)}` +
+      `&select=id,seq,kind,text,at,seen,cmd,turn,n&order=seq.desc&limit=${SEED_EVENTS}`);
+    if (!rows || !rows.length) return false;
+    rows.sort((a, b) => a.seq - b.seq);
+    for (const r of rows) {
+      log.events.push({ seq: r.seq, id: r.id, kind: r.kind, text: r.text, ...(r.at ? { at: r.at } : {}),
+                        ...(r.kind === 'prompt' ? { seen: r.seen !== false, ...(r.cmd ? { cmd: r.cmd } : {}) } : {}),
+                        ...(r.turn ? { turn: r.turn, n: r.n } : {}) });
+    }
+    log.seq = rows[rows.length - 1].seq;
+    const last = [...rows].reverse().find((r) => r.turn && Number.isInteger(r.n));
+    if (last) log.cur = { turn: last.turn, n: last.n };
+    return true;
+  }
+
   async function seedLog(conv, log) {
+    try {
+      if (await seedSaved(conv, log)) { sweepLogs(); return; }
+    } catch (e) { console.error('[sessions] reading saved events:', e.message); }
     try {
       const turns = ((await sb(`desk_turns?conversation=eq.${encodeURIComponent(conv)}` +
         `&select=at,prompt,reply,events&order=at.desc&limit=${SESSION_TURNS}`)) || []).reverse();
@@ -91,6 +128,7 @@ module.exports = function (ctx) {
         if (!stored.length && t.prompt) log.events.push({ seq: ++log.seq, id: crypto.randomUUID(), kind: 'prompt', text: cleanSaid(t.prompt), seen: true, at: t.at });
         if (t.reply) log.events.push({ seq: ++log.seq, id: replyId(t.at), kind: 'reply', text: cleanSaid(t.reply), at: t.at });
       }
+      for (const ev of log.events) persist(conv, ev);
     } catch (e) { console.error('[sessions] seed:', e.message); }
     sweepLogs();
   }
@@ -122,6 +160,7 @@ module.exports = function (ctx) {
     log.events.push(ev);
     if (log.events.length > LOG_MAX) log.events.splice(0, log.events.length - LOG_MAX);
     log.touched = Date.now();
+    persist(conv, ev);
     const frame = 'event: ev\ndata: ' + JSON.stringify({ conversation: conv, session: rowId, epoch: EPOCH, ev }) + '\n\n';
     for (const res of sessionClients) { try { res.write(frame); } catch {} }
   }
@@ -167,6 +206,7 @@ module.exports = function (ctx) {
     for (const e of events.filter((x) => x && Number.isInteger(x.n)).sort((x, y) => x.n - y.n)) {
       if (e.n <= have) continue;
       const ev = hostEvent(e);
+      if (ev) { ev.turn = turn; ev.n = e.n; }
       if (ev && !launchEcho(log, ev)) appendEvent(conv, rowId, log, ev);
       have = e.n;
     }

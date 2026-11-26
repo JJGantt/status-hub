@@ -176,13 +176,30 @@ export function mountLive(pane, t) {
       wheelDy = 0;
     }, 50);
   }
+  // A finger held still is a PRESS: the mouse goes down where it is and stays down until it lifts. A
+  // "press and hold" bot check is the case this is for; a quick tap stays a click.
+  const HOLD_MS = 350;
   const pts = new Map();
-  let tapAt = null, pinch = null;
+  let tapAt = null, pinch = null, holdTimer = null, holding = null;
+  const at = (cx, cy) => {
+    const r = stage.getBoundingClientRect();
+    const x = (cx - r.left - tx) / (s * W), y = (cy - r.top - ty) / (s * H);
+    return x < 0 || x > 1 || y < 0 || y > 1 ? null : { x, y };
+  };
   stage.addEventListener('pointerdown', (e) => {
     stage.setPointerCapture(e.pointerId);
     pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
-    if (pts.size === 1) tapAt = { x: e.clientX, y: e.clientY, t: Date.now() };
-    else { tapAt = null; const [a, b] = [...pts.values()]; pinch = { d: Math.hypot(a.x - b.x, a.y - b.y) || 1, mx: (a.x + b.x) / 2, my: (a.y + b.y) / 2, s, tx, ty }; }
+    clearTimeout(holdTimer);
+    if (pts.size === 1) {
+      tapAt = { x: e.clientX, y: e.clientY, t: Date.now() };
+      holdTimer = setTimeout(() => {
+        const p = tapAt && W && at(tapAt.x, tapAt.y);
+        if (!p) return;
+        holding = p; tapAt = null;
+        mark.style.left = `${p.x * 100}%`; mark.style.top = `${p.y * 100}%`; mark.classList.add('on', 'held');
+        send({ t: 'press', ...p });
+      }, HOLD_MS);
+    } else { tapAt = null; const [a, b] = [...pts.values()]; pinch = { d: Math.hypot(a.x - b.x, a.y - b.y) || 1, mx: (a.x + b.x) / 2, my: (a.y + b.y) / 2, s, tx, ty }; }
   });
   stage.addEventListener('pointermove', (e) => {
     const p = pts.get(e.pointerId);
@@ -198,7 +215,8 @@ export function mountLive(pane, t) {
       tx = mx - r.left - px * s; ty = my - r.top - py * s;
       clamp(); apply();
     } else if (pts.size === 1) {
-      if (tapAt && Math.hypot(e.clientX - tapAt.x, e.clientY - tapAt.y) > 8) tapAt = null;
+      if (holding) return;
+      if (tapAt && Math.hypot(e.clientX - tapAt.x, e.clientY - tapAt.y) > 8) { tapAt = null; clearTimeout(holdTimer); }
       if (tapAt) return;
       tx += dx; ty += dy;
       const { cutY } = clamp(); apply();
@@ -207,6 +225,8 @@ export function mountLive(pane, t) {
   });
   const lift = (e) => {
     if (!pts.delete(e.pointerId)) return;
+    clearTimeout(holdTimer);
+    if (holding && pts.size === 0) { send({ t: 'release', ...holding }); holding = null; mark.classList.remove('held'); tapAt = null; return; }
     if (pts.size < 2) pinch = null;
     if (e.type === 'pointerup' && pts.size === 0 && tapAt) tap(e.clientX, e.clientY);
     if (pts.size === 0) tapAt = null;
@@ -231,12 +251,10 @@ export function mountLive(pane, t) {
   }, { passive: false });
 
   function tap(cx, cy) {
-    if (!W) return;
-    const r = stage.getBoundingClientRect();
-    const x = (cx - r.left - tx) / (s * W), y = (cy - r.top - ty) / (s * H);
-    if (x < 0 || x > 1 || y < 0 || y > 1) return;
-    mark.style.left = `${x * 100}%`; mark.style.top = `${y * 100}%`; mark.classList.add('on');
-    send({ t: 'tap', x, y });
+    const p = W && at(cx, cy);
+    if (!p) return;
+    mark.style.left = `${p.x * 100}%`; mark.style.top = `${p.y * 100}%`; mark.classList.add('on');
+    send({ t: 'tap', ...p });
   }
 
   row1.append(input, btn('Type', () => {

@@ -73,7 +73,8 @@ on unwatch. So several sessions' tabs can each be watched at the same time, none
 both attached, and both screencast it at full rate. That is the case of Hub Live beside the Claude
 extension, which holds the `debugger` permission too.
 
-**Input never moves the real mouse.** Taps are `Input.dispatchMouseEvent` at the tab's CSS coordinates,
+**Input never moves the real mouse.** Taps are `Input.dispatchMouseEvent` at the tab's CSS coordinates
+(a finger held still for 350ms is a press that stays down until it lifts, for a "press and hold" check),
 typing `Input.insertText`, keys `Input.dispatchKeyEvent`, a drag past the picture's edge a `mouseWheel`
 — all into that tab through its debugger session, whatever is in front. A tap focuses a field in a
 background tab and the typed text lands there.

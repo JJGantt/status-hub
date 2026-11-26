@@ -1449,6 +1449,7 @@ body.phonehome #usagebars{top:env(safe-area-inset-top,0px)}
 .st-img{display:block;width:100%;height:auto}
 .st-frame{flex:1 1 auto;width:100%;min-height:0;border:0;background:#fff}
 /* The live Chrome view: the handoff tap screen's look, with back and reload either side of the site. */
+.st-live .ho-mark.held{border-color:#ffb020;width:30px;height:30px}
 .st-live .st-small{flex:0 0 auto;padding:4px 12px;font-size:16px}
 .st-live .st-where{text-align:center;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:13px;color:#9aa5b3}
 .ho.ho-inline{position:relative;inset:auto;z-index:auto;flex:1 1 auto;min-height:0}

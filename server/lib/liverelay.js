@@ -14,7 +14,7 @@
 // whose socket is backed up is skipped rather than queued: the next frame supersedes this one anyway,
 // so a slow phone sees a lower frame rate instead of a growing delay.
 //
-// A viewer's input is JSON (`{ t: 'tap' | 'wheel' | 'text' | 'key' | 'back' | 'reload', ... }`, positions
+// A viewer's input is JSON (`{ t: 'tap' | 'press' | 'release' | 'wheel' | 'text' | 'key' | 'back' | 'reload', ... }`, positions
 // as fractions of the frame), forwarded to the agent as `{ op: 'input', target, ev }`.
 
 const SKIP_BUFFERED = 512 * 1024;
@@ -143,7 +143,7 @@ function createRelay({ rows, closeTab, meta, timers = { setTimeout, clearTimeout
     if (row) stopWatch(row);
   }
 
-  const INPUTS = new Set(['tap', 'wheel', 'text', 'key', 'back', 'reload']);
+  const INPUTS = new Set(['tap', 'press', 'release', 'wheel', 'text', 'key', 'back', 'reload']);
   function viewerMessage(id, data) {
     const row = rowById(id);
     if (!row) return;

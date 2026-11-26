@@ -161,6 +161,12 @@ async function input(target, ev) {
     await cmd(tabId, 'Input.dispatchMouseEvent', { type: 'mouseMoved', x, y });
     await cmd(tabId, 'Input.dispatchMouseEvent', { type: 'mousePressed', x, y, button: 'left', clickCount: 1 });
     await cmd(tabId, 'Input.dispatchMouseEvent', { type: 'mouseReleased', x, y, button: 'left', clickCount: 1 });
+  } else if (ev.t === 'press') {
+    // Held until `release`: a press-and-hold bot check needs the button down for seconds.
+    await cmd(tabId, 'Input.dispatchMouseEvent', { type: 'mouseMoved', x, y });
+    await cmd(tabId, 'Input.dispatchMouseEvent', { type: 'mousePressed', x, y, button: 'left', clickCount: 1 });
+  } else if (ev.t === 'release') {
+    await cmd(tabId, 'Input.dispatchMouseEvent', { type: 'mouseReleased', x, y, button: 'left', clickCount: 1 });
   } else if (ev.t === 'wheel') {
     await cmd(tabId, 'Input.dispatchMouseEvent', { type: 'mouseWheel', x, y, deltaX: 0, deltaY: Number(ev.dy) || 0 });
   } else if (ev.t === 'text' && ev.text) {

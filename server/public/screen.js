@@ -31,6 +31,7 @@ export function openScreen({ mount, session = null, handoff = null, onEnd = null
   veil.append(spin, retry); stage.append(veil);
   const bar = h('div', 'ho-bar');
   const btn = (label, fn, cls = '') => { const b = h('button', `ho-btn ${cls}`, label); b.type = 'button'; b.onclick = fn; return b; };
+  const sugg = h('div', 'ho-row ho-sugg'); sugg.hidden = true;
   const keys = h('div', 'ho-row scr-keys');
   const row1 = h('div', 'ho-row');
   const row2 = h('div', 'ho-row');
@@ -38,7 +39,7 @@ export function openScreen({ mount, session = null, handoff = null, onEnd = null
   const input = h('input', 'ho-input');
   Object.assign(input, { type: 'text', autocomplete: 'off', autocapitalize: 'off', spellcheck: false, placeholder: 'Type' });
   input.setAttribute('autocorrect', 'off');
-  bar.append(keys, row1, row2, state);
+  bar.append(sugg, keys, row1, row2, state);
   ov.append(stage, bar);
   mount.append(ov);
 
@@ -190,17 +191,25 @@ export function openScreen({ mount, session = null, handoff = null, onEnd = null
   keys.append(cmdBtn, btn('Esc', () => key('escape')), btn('Tab', () => key('tab')), btn('⌫', () => key('backspace')),
     btn('←', () => key('left')), btn('↑', () => key('up')), btn('↓', () => key('down')), btn('→', () => key('right')),
     btn('⏎', () => key('enter')));
-  // Each character goes as it is typed; the box is emptied behind it, so it never holds what he typed.
+  // Each character goes as it is typed, and the box is reset behind it, so it never holds what he typed.
+  // It is reset to ONE INVISIBLE CHARACTER, not to empty: iOS sends nothing at all for the delete key in
+  // an empty box, so an empty box is a backspace that never reaches the Mac. With the character there, a
+  // delete always has something to remove, and removing it is the backspace.
+  const ZW = '\u200b';
+  const reset = () => { input.value = ZW; try { input.setSelectionRange(1, 1); } catch (_) {} };
+  input.addEventListener('focus', reset);
   input.addEventListener('beforeinput', (e) => {
-    if (e.inputType === 'deleteContentBackward') { e.preventDefault(); key('backspace'); return; }
+    if (e.inputType === 'deleteContentBackward') { e.preventDefault(); key('backspace'); reset(); return; }
     if (e.inputType === 'insertLineBreak') { e.preventDefault(); key('enter'); return; }
   });
   input.addEventListener('input', () => {
     const v = input.value;
-    input.value = '';
-    if (!v) return;
-    if (cmd && v.length === 1) key(v);
-    else send({ t: 'text', s: v });
+    reset();
+    if (!v) { key('backspace'); return; }       // the invisible character itself was deleted
+    const typed = v.split(ZW).join('');
+    if (!typed) return;
+    if (cmd && typed.length === 1) key(typed);
+    else send({ t: 'text', s: typed });
   });
   input.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); key('enter'); } });
   const dragBtn = btn('Drag', () => { dragMode = !dragMode; dragBtn.classList.toggle('on', dragMode); });
@@ -354,6 +363,16 @@ export function openScreen({ mount, session = null, handoff = null, onEnd = null
   document.addEventListener('visibilitychange', onVis);
 
   // ---- a handoff it stands in for --------------------------------------------------------------
+  // Values the session knows he will type (his email, a card number): one tap types it on the Mac, where
+  // the cursor is. The same `suggest` the screenshot tap screen shows (handoff.js).
+  let suggested = '';
+  function paintSuggest(list) {
+    const k = JSON.stringify(list);
+    if (k === suggested) return;
+    suggested = k;
+    sugg.replaceChildren(...list.map((o) => btn(o.label, () => send({ t: 'text', s: o.text }), 'ho-chip')));
+    sugg.hidden = !list.length;
+  }
   async function handoffAct(kind) {
     try {
       const r = await fetch(`/api/handoffs/${handoff.id}/act`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ kind }) });
@@ -369,6 +388,7 @@ export function openScreen({ mount, session = null, handoff = null, onEnd = null
         if (!r.ok) return;
         const v = await r.json();
         after = v.seq;
+        paintSuggest(v.suggest || []);
         if (!['new', 'open'].includes(v.status)) {
           setState(v.status === 'done' ? 'Done' : v.status === 'cancelled' ? 'Cancelled' : `Failed: ${v.error || ''}`);
           setTimeout(() => { close(); if (onEnd) onEnd(); }, 1200);

@@ -72,7 +72,8 @@ it goes through the relay. Listens on UDP and TCP 3478 and TCP 443; relay ports 
 | one finger drag | pans the picture; with **Drag** on, a mouse drag |
 | two fingers spreading | zooms the picture |
 | two fingers moving together | scrolls whatever is under them |
-| typing in the box | each character as typed; ⌫ and ⏎ as keys |
+| typing in the box | each character as typed; the phone's delete key and ⏎ as keys. The box is reset to one invisible character, never to empty, because iOS sends nothing for delete in an empty box |
+| a suggestion button (a handoff) | types that value on the Mac (his email, a card number the session gave) |
 | ⌘ then a key or letter | that shortcut |
 
 A drag that starts on the picture never swipes back out of the session: the session view's swipe-back

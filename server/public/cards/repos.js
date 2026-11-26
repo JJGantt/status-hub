@@ -581,6 +581,9 @@ function paintBody() {
         ? `<div class="sv-thought">${md(e.text)}</div>`
         : `<div class="sv-tool">${esc(e.text)}</div>` });
   if (working) items.push({ key: 'working', html: '<div class="sv-working"><span class="ai-caret">▍</span></div>' });
+  // STOP is there exactly while the caret is: it interrupts the turn, as Esc at the keyboard does.
+  const halt = el.querySelector('.sv-halt');
+  if (halt && !halt.disabled) halt.hidden = !working || !cur.head || cur.head.status !== 'resident' || !!cur.head.codex;
   // The turn is over but work it started goes on: each background agent by its description, and a
   // background shell, under a pulsing caret, until the host says they have finished. Not a message.
   const bg = !working && cur.head && cur.head.background;
@@ -727,6 +730,7 @@ async function openSession(id) {
     '<div class="sv">' +
       '<div class="sv-bar"><button class="sv-back" type="button">‹ Sessions</button>' +
         '<span class="sv-title"></span>' +
+        '<button class="sv-halt" type="button" hidden>Stop</button>' +
         '<span class="sv-where"></span>' +
         '<button class="sv-speak-stop" type="button" aria-label="Stop reading" hidden>' + STOP_SVG + '</button>' +
         '<button class="sv-speak" type="button" aria-label="Read the reply aloud">' + SPEAK_SVG + '</button></div>' +
@@ -768,6 +772,28 @@ async function openSession(id) {
     speak(reply.text, () => { say.classList.remove('on'); say.innerHTML = SPEAK_SVG; hush.hidden = true; });
   });
   hush.addEventListener('click', () => stopSpeaking());
+  // Interrupt the running turn (`/api/sessions/stop`). What was queued behind it runs next; otherwise the
+  // session waits for the next message. The button stays down until the machine has answered.
+  const halt = el.querySelector('.sv-halt');
+  halt.addEventListener('click', async () => {
+    if (halt.disabled) return;
+    halt.disabled = true;
+    halt.classList.add('busy');
+    const st = el.querySelector('.sv-status');
+    try {
+      const r = await fetch('/api/sessions/stop', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: at.id }),
+      });
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok && st && cur === at) st.textContent = j.error || ('Stop failed (' + r.status + ')');
+    } catch (_) {
+      if (st && cur === at) st.textContent = 'Stop failed';
+    } finally {
+      halt.disabled = false;
+      halt.classList.remove('busy');
+      if (cur === at) paintBody();
+    }
+  });
   const box = el.querySelector('.sv-text'), mic = el.querySelector('.sv-mic'), status = el.querySelector('.sv-status');
   // PICTURES INTO A TERMINAL SESSION. A session is typed into, so an image cannot be sent to it — what
   // is sent is a PATH. The hub keeps the bytes (`/api/attach`, the same bucket the chat composer uses)

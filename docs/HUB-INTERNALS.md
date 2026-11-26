@@ -1198,6 +1198,12 @@ from what was already mirrored, and the row is put back when no machine takes it
 moved. No surface has a
 move button: moving is asked of the voice tool (`transfer_session`) or of the session itself.
 
+`POST /api/sessions/stop` interrupts the turn a running session is in — the session view's **Stop**,
+shown while the turn's caret is (`.sv-halt`, `paintBody` in cards/repos.js). It writes `interrupt_session`
+to the machine that owns the session and answers with that machine's verdict. It is never routed to
+another machine, and a command not answered in time is taken back unrun, so a stop cannot land minutes
+later on a different turn. What the machine does is docs/SESSIONS.md § 5.
+
 ### Naming one
 
 `POST /api/sessions/rename` sets `desk_sessions.label` at once, and — when the session is running —

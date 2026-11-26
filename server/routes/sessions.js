@@ -480,7 +480,34 @@ module.exports = function (ctx) {
     return { status: 200, body: { id: r.id, to: r.machine, live: false, confirmed: r.confirmed } };
   }
 
-  // Act on one: 'hide' takes it off the surfaces' lists, 'end' closes it for good, 'resume' brings an evicted one back, 'forget' drops the row
+  /**
+   * Stop the turn a running session is in, as Esc at the keyboard does: the machine that owns it presses
+   * the key (voice-pipeline orchestrator/src/interrupt.js), and what was queued behind the turn runs next.
+   * Never routed to another machine: a stop is for the process on screen, and a machine that does not
+   * answer is told so. Taken back unrun when it is not answered in time, so it cannot land minutes later
+   * on whatever turn is running then.
+   */
+  async function stopSession(row) {
+    if (row.status !== 'resident') return { status: 409, body: { error: 'that session is not running' } };
+    const machine = machineOf(row.worker);
+    if (!(await machineAwake(machine))) return { status: 409, body: { error: `the ${MACHINE_NAME[machine]} is not responding` } };
+    const routeDeps = desk.deps(row.agent === 'codex' ? 'codex' : 'claude');
+    const id = routeDeps.newId();
+    let v = await routeDeps.send(id, 'interrupt_session', { session: row.id, target: machine });
+    if (v.state !== 'done' && v.state !== 'error') {
+      const c = await routeDeps.cancel(id, `no answer from the ${MACHINE_NAME[machine]}`);
+      if (c.cancelled || c.status === 'missing') {
+        console.error(`[sessions] interrupt_session ${row.id}: the ${MACHINE_NAME[machine]} did not take it`);
+        return { status: 409, body: { error: `the ${MACHINE_NAME[machine]} did not answer` } };
+      }
+      if (c.status === 'done' || c.status === 'error') v = { state: c.status, detail: c.detail };
+      else return { status: 200, body: { id, confirmed: false } };
+    }
+    if (v.state === 'error') return { status: 409, body: { error: v.detail } };
+    return { status: 200, body: { id, confirmed: true, detail: v.detail } };
+  }
+
+  // Act on one: 'hide' takes it off the surfaces' lists, 'stop' interrupts its turn, 'end' closes it for good, 'resume' brings an evicted one back, 'forget' drops the row
   // without touching the machine (the transcript stays on disk; it just stops being offered), and
   // 'followup' types words into a running one (see below).
   gated.post('/api/sessions/:action', express.json(), async (req, res) => {
@@ -524,6 +551,12 @@ module.exports = function (ctx) {
         const seenKey = msgId ? 'followup:' + msgId : '';
         if (seenKey && seenMsgIds.has(seenKey)) return res.json({ id: seenMsgIds.get(seenKey), duplicate: true });
         const r = await followUpSession(rowsFull[0], { text, attachments, spoken: (req.body || {}).spoken === true, msgId, seenKey });
+        return res.status(r.status).json(r.body);
+      }
+
+      // Stop the turn it is running (stopSession).
+      if (action === 'stop') {
+        const r = await stopSession(rowsFull[0]);
         return res.status(r.status).json(r.body);
       }
 

@@ -7,7 +7,9 @@ GS=$(getent hosts fly-global-services | awk '{print $1}' | head -1)
 [ -n "$GS" ] || { echo "fly-global-services does not resolve" >&2; exit 1; }
 : "${TURN_SECRET:?TURN_SECRET is not set}"
 : "${PUBLIC_IP:?PUBLIC_IP is not set}"
-ETH=$(ip -4 -o addr show eth0 | awk '{print $4}' | cut -d/ -f1)
+# Fly's TCP proxy connects to the machine's primary eth0 address, which is not fly-global-services (a
+# secondary address on the same interface): without a listener there, TURN over TCP is refused.
+ETH=$(ip -4 -o addr show eth0 | awk '{print $4}' | cut -d/ -f1 | grep -vx "$GS" | head -1)
 exec turnserver -n --log-file=stdout --simple-log \
   --listening-ip="$GS" --listening-ip="$ETH" --relay-ip="$GS" --external-ip="$PUBLIC_IP/$GS" \
   --listening-port=3478 --min-port=50000 --max-port=50099 \

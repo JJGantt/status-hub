@@ -241,11 +241,14 @@ export function openScreen({ mount, session = null, handoff = null, onEnd = null
       };
       const mine = pc;
       await pc.setLocalDescription(await pc.createOffer());
-      // No trickle: the offer goes once, with every candidate in it (a relay one takes a round trip).
+      // No trickle: the offer goes once. It waits for the relay candidate (one round trip to the TURN
+      // server) and no longer: what is still gathering after it (TCP relays, other interfaces) is not
+      // worth holding the offer for. At most 2 s, with whatever there is.
       await new Promise((ok) => {
         if (mine.iceGatheringState === 'complete') return ok();
         mine.addEventListener('icegatheringstatechange', () => mine.iceGatheringState === 'complete' && ok());
-        setTimeout(ok, 3000);
+        mine.addEventListener('icecandidate', (e) => { if (e.candidate && / typ relay/.test(e.candidate.candidate)) setTimeout(ok, 150); });
+        setTimeout(ok, 2000);
       });
       if (mine !== pc) return;
       const r = await fetch('/api/screen', { method: 'POST', headers: { 'Content-Type': 'application/json' },

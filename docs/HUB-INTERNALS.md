@@ -1347,7 +1347,9 @@ transcript record that opened it, and `n`, the position in it) and keeps the tur
 tracks how far into that turn its list is (`log.cur`): an event that is not the next one is NOT
 appended, the answer to it is `{ replay, have }`, and the host sends everything after `have` (state
 `replay`) before its next frame; an event already held is ignored. `done` carries the whole turn, which
-fills a list that heard none of it. A host that restarts mid-turn reads the turn's beginning back from
+fills a list that heard none of it. A `done` whose `at` matches a reply already held is ignored whole: after a
+restart the seed knows no turn keys, so the host's report of the turn that just ended would otherwise
+append its prompt and reply a second time. A host that restarts mid-turn reads the turn's beginning back from
 the transcript (`loadPrefix` in sessionWatch.js), so its numbering carries on. Without it, a
 prompt lost to a restart is re-added from `done` at the END of its turn, under the tool calls it
 started. `EPOCH` names this process and

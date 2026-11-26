@@ -171,6 +171,20 @@ describe('a session thread (/api/sessions/:id)', () => {
     assert.deepEqual(kinds(await json(h.DEVICE_TOKEN, 'GET', '/api/sessions/s-thread04')), [`prompt:${PROMPT}`, 'reply:Twice a day.']);
   });
 
+  test('a finished turn reported again after a restart is in the thread once', async () => {
+    // A deploy empties the list and it is rebuilt from desk_turns; the host then reports the turn that
+    // had just ended, whose `at` is already held, as a new one.
+    const conv = 'aaaa0005-0000-0000-0000-000000000000';
+    launched('s-thread05', conv);
+    supa.tables.desk_turns = supa.tables.desk_turns || [];
+    supa.tables.desk_turns.push({ conversation: conv, at: '2026-11-26T14:05:00Z', reply: 'Fixed it.',
+      events: [{ id: 'p-1', kind: 'prompt', text: PROMPT, seen: true }] });
+    await json(h.DEVICE_TOKEN, 'GET', '/api/sessions/s-thread05');
+    await json(h.DEVICE_TOKEN, 'POST', '/api/session-activity', { session: 's-thread05', turn: 't9', n: 2, state: 'done',
+      text: 'Fixed it.', reply: 'Fixed it.', at: '2026-11-26T14:05:00Z', events: [{ n: 1, state: 'said', id: 'p-1', text: PROMPT }] });
+    assert.deepEqual(kinds(await json(h.DEVICE_TOKEN, 'GET', '/api/sessions/s-thread05')), [`prompt:${PROMPT}`, 'reply:Fixed it.']);
+  });
+
   test('matched by text when the host sent no command id', async () => {
     launched('s-thread03', 'aaaa0003-0000-0000-0000-000000000000');
     await json(h.DEVICE_TOKEN, 'GET', '/api/sessions/s-thread03');

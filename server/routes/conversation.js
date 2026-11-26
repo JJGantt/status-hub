@@ -211,6 +211,13 @@ module.exports = function (ctx) {
       return {};
     }
     if (state === 'done') {
+      // A turn whose reply is already held is not a new turn: the watcher and the tick can both report one
+      // turn end, and after a deploy the list is rebuilt from
+      // desk_turns and knows nothing of the host's turn keys, so the host's report of the turn that just
+      // ended would otherwise append its prompt and reply a second time. `at` is the turn; compared as a
+      // time, since the stored one comes back from Postgres in another format.
+      const atMs = at ? Date.parse(at) : NaN;
+      if (Number.isFinite(atMs) && log.events.some((e) => e.kind === 'reply' && e.at && Date.parse(e.at) === atMs)) return {};
       const whole = typeof b.turn === 'string' && Array.isArray(b.events);
       if (whole) takeEvents(conv, rowId, log, b.turn, b.events);
       else {
@@ -223,9 +230,6 @@ module.exports = function (ctx) {
       }
       const reply = typeof b.reply === 'string' && b.reply ? cleanSaid(b.reply).slice(0, 20000) : text;
       if (!reply) return {};
-      // The watcher and the tick can both report one turn end; `at` is the turn.
-      const last = log.events[log.events.length - 1];
-      if (last && last.kind === 'reply' && at && last.at === at) return {};
       const turn = sinceLastReply(log);
       appendEvent(conv, rowId, log, { id: crypto.randomUUID(), kind: 'reply', text: reply, ...(at ? { at } : {}) });
       if (at) storeTurn(conv, at, reply, whole ? b.events.map(hostEvent).filter(Boolean) : turn);

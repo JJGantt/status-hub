@@ -25,6 +25,8 @@ const BACKED_UP = 1024 * 1024;      // skip a frame rather than queue it behind 
 
 let ws = null;
 let backoff = 0;
+let refused = false;                // the hub turned the hello away: wrong token, so retrying cannot help
+const sentMeta = new Map();         // tab id -> 'title url' last sent, so a page retitling itself is one message
 let claimed = new Set();            // tab ids (strings) a session owns, per the hub
 const watching = new Map();         // tab id -> { w, h, lastAck }
 
@@ -35,16 +37,23 @@ const report = (message, target) => {
 };
 
 function connect() {
+  if (refused) return;
   if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) return;
   const s = new WebSocket(`${config.hub.replace(/^http/, 'ws')}/api/live/agent`);
   s.binaryType = 'arraybuffer';
   ws = s;
-  s.onopen = () => { backoff = 0; s.send(JSON.stringify({ op: 'hello', machine: config.machine, token: config.token })); };
-  s.onmessage = (e) => { let m; try { m = JSON.parse(e.data); } catch (_) { return; } handle(m).catch((err) => report(err.message || err, m.target)); };
-  s.onclose = () => {
+  s.onopen = () => s.send(JSON.stringify({ op: 'hello', machine: config.machine, token: config.token }));
+  // The backoff resets only once the hub has accepted the hello (its first message is `tabs`), so a
+  // connection that opens and is refused keeps backing off instead of retrying every second.
+  s.onmessage = (e) => { backoff = 0; let m; try { m = JSON.parse(e.data); } catch (_) { return; } handle(m).catch((err) => report(err.message || err, m.target)); };
+  s.onclose = (e) => {
     if (ws !== s) return;
     ws = null;
     for (const t of [...watching.keys()]) unwatch(t);
+    sentMeta.clear();
+    // 4001: the hello was refused. Every retry would be refused too, and each one is an incident on the hub;
+    // the token is fixed by rewriting config.js (bin/chrome-live-config), which needs a reload anyway.
+    if (e.code === 4001) { refused = true; console.error('[hub-live] the hub refused this extension\'s token; run bin/chrome-live-config and reload it'); return; }
     setTimeout(connect, Math.min(1000 * 2 ** backoff++, 60000));
   };
   s.onerror = () => {};
@@ -56,7 +65,7 @@ async function handle(m) {
     for (const t of [...watching.keys()]) if (!claimed.has(t)) unwatch(t);
     for (const t of claimed) {
       // A tab closed while this was not connected (or a browser restart, which renumbers every tab).
-      try { const tab = await chrome.tabs.get(Number(t)); send({ op: 'meta', target: t, title: tab.title, url: tab.url }); }
+      try { const tab = await chrome.tabs.get(Number(t)); meta(t, tab); }
       catch (_) { send({ op: 'gone', target: t }); }
     }
   } else if (m.op === 'watch') await watch(String(m.target));
@@ -170,8 +179,16 @@ chrome.tabs.onRemoved.addListener((tabId) => {
 });
 chrome.tabs.onUpdated.addListener((tabId, change, tab) => {
   const t = String(tabId);
-  if (claimed.has(t) && (change.title || change.url)) send({ op: 'meta', target: t, title: tab.title, url: tab.url });
+  if (claimed.has(t) && (change.title || change.url)) meta(t, tab);
 });
+chrome.tabs.onRemoved.addListener((tabId) => sentMeta.delete(String(tabId)));
+
+function meta(t, tab) {
+  const k = `${tab.title} ${tab.url}`;
+  if (sentMeta.get(t) === k) return;
+  sentMeta.set(t, k);
+  send({ op: 'meta', target: t, title: tab.title, url: tab.url });
+}
 
 // The socket is what keeps this worker alive (the hub messages it every 20s). The alarm is the net under
 // that: a worker Chrome stopped anyway is started again by it, and reconnects.

@@ -15,5 +15,5 @@ if [ -z "${HUB_TOKEN:-}" ] && [ -f "$root/.env" ]; then HUB_TOKEN=$(sed -n 's/^H
 base=${HUB_URL:-https://jared-status-hub.fly.dev}
 out="$root/extensions/chrome-live/config.js"
 umask 077
-printf 'export default %s;\n' "$(HUB=$base M=$machine node -e 'process.stdout.write(JSON.stringify({hub:process.env.HUB,machine:process.env.M,token:process.env.T}))' T="$HUB_TOKEN")" > "$out"
+printf 'export default %s;\n' "$(HUB=$base M=$machine T=$HUB_TOKEN node -e 'process.stdout.write(JSON.stringify({hub:process.env.HUB,machine:process.env.M,token:process.env.T}))')" > "$out"
 echo "wrote $out (machine $machine, hub $base)"

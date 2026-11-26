@@ -1,0 +1,41 @@
+#!/usr/bin/env bash
+# Puts a live view of every Chrome tab a Claude session drives on that session's view on his phone
+# (docs/SESSION-TABS.md § Live Chrome). Claude Code hooks, on the Mac and on the Pi:
+#
+#   chrome-live claim     PostToolUse on mcp__claude-in-chrome__.*  — claim the tab ids the result names
+#   chrome-live release   SessionEnd                                — close this session's live tabs
+#
+# Every Chrome tool result names the session's tab group ("tabId N"), the same ids the browser and our
+# extension use. A claim goes to the hub only for an id this session has not claimed before (the state
+# file below), so a session making hundreds of Chrome calls sends one request per new tab, in the
+# background, and never slows the tool call down. The hub's unique index makes a repeat claim harmless.
+set -uo pipefail
+mode=${1:-}
+input=$(cat)
+sid=$(printf '%s' "$input" | jq -r '.session_id // empty' 2>/dev/null)
+[ -n "$sid" ] || exit 0
+hub="$(cd "$(dirname "$0")" && pwd)/hub"
+machine=$([ "$(uname)" = Darwin ] && echo mac || echo pi)
+dir="$HOME/.claude/chrome-live"; mkdir -p "$dir"; state="$dir/$sid"
+
+fail() { "$HOME/repos/health/responder/bin/ops" error chrome-live "$1" "${2:-}" >/dev/null 2>&1 || echo "chrome-live: $1" >&2; }
+
+case $mode in
+  claim)
+    ids=$(printf '%s' "$input" | grep -oE '(tabId|Tab ID)[^0-9]{1,6}[0-9]{6,}' | grep -oE '[0-9]{6,}$' | sort -u)
+    [ -n "$ids" ] || exit 0
+    new=$(comm -23 <(printf '%s\n' "$ids") <(sort -u "$state" 2>/dev/null))
+    [ -n "$new" ] || exit 0
+    printf '%s\n' "$new" >> "$state"
+    body=$(printf '%s\n' "$new" | jq -Rsc --arg c "$sid" --arg m "$machine" '{conversation:$c, machine:$m, targets:(split("\n")|map(select(length>0)))}')
+    ( out=$("$hub" POST /api/tabs/chrome/claim "$body" 2>&1) || fail "claiming live Chrome tabs for session $sid failed" "$out" ) >/dev/null 2>&1 &
+    ;;
+  release)
+    [ -f "$state" ] || exit 0
+    rm -f "$state"
+    body=$(jq -nc --arg c "$sid" --arg m "$machine" '{conversation:$c, machine:$m}')
+    out=$("$hub" POST /api/tabs/chrome/release "$body" 2>&1) || fail "releasing live Chrome tabs for session $sid failed" "$out"
+    ;;
+  *) echo "usage: chrome-live claim|release  (hook JSON on stdin)" >&2; exit 2 ;;
+esac
+exit 0

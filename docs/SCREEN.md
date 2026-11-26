@@ -9,12 +9,12 @@ ending the handoff.
 ## The path
 
 1. The phone (`public/screen.js`) fetches ICE servers (`GET /api/screen/ice`), builds a receive-only
-   video offer with a data channel `input`, waits for ICE gathering to finish (no trickle), and posts it
+   video offer with a data channel `input`, waits for its relay candidate (at most 2 s; no trickle), and posts it
    (`POST /api/screen`).
 2. The hub (`routes/screenshare.js`) inserts a `screen_shares` row carrying the offer and the Mac's own
    TURN credentials.
 3. The Mac's screen agent (data-layer `src/screenAgent.ts`, inside the handoff agent's process) claims
-   the row and starts `hands/bin/screenshare` (data-layer `hands/screenshare.swift`), which answers.
+   the row and starts `hands/bin/screenshare` (data-layer `hands/screenshare.swift`), which answers as soon as its own relay candidate is in (at most 2.5 s).
    The agent writes the answer back; the phone's held `GET /api/screen/:id?wait=20` is woken by the
    row's realtime update and returns it.
 4. Media flows peer to peer, or through the TURN relay. Input comes back on the data channel and the
@@ -58,6 +58,9 @@ it goes through the relay. Listens on UDP and TCP 3478 and TCP 443; relay ports 
   `TURN_SECRET`, set on both `jared-turn` and `jared-status-hub` (and kept in `~/.config/turn/secret` on
   the Mac). The hub mints them per request, valid 12 hours; the relay keeps no user list.
 - **The relay refuses private peer addresses**, so it cannot be used to reach Fly's own network.
+- **Fly's TCP proxy connects to the machine's primary eth0 address**, not `fly-global-services` (a
+  secondary address on the same interface), so the TCP listener is bound there as well; without it every
+  TURN-over-TCP connection is refused.
 - Deploy: `fly deploy` from `turn/`.
 
 ## Phone gestures
@@ -74,9 +77,14 @@ it goes through the relay. Listens on UDP and TCP 3478 and TCP 443; relay ports 
 
 ## Measured
 
-Mac and phone on one network, 1280x800 display: offer to answer about 0.3-0.7 s, first picture on
-glass about 1.2 s after asking, encode about 4.5 ms a frame. Forced through the relay from the same
-network: about 136 ms round trip, since both ends relay through `iad`.
+Through the live hub, Mac and browser on one network, 1280x800 display: the agent hears the row about
+0.4 s after it is asked, answers at 1.2 s, connects at 1.8 s; the picture is on glass under 3 s after
+the session opens. Encode about 4.5 ms a frame on VideoToolbox. Forced through the relay from the same
+network: about 136 ms round trip, since both ends relay through `iad`; TURN over TCP 443 alone also
+connects.
+
+**The first share after a rebuild takes several seconds longer** (about 6.5 s to answer, measured):
+macOS checks the newly signed binary and framework on their first launch. Every share after it is fast.
 
 ## Failures
 

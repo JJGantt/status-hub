@@ -1,0 +1,19 @@
+#!/usr/bin/env bash
+# Writes extensions/chrome-live/config.js for THIS machine: the hub's address, which machine this is,
+# and the hub's device token (HUB_TOKEN, from $HUB_TOKEN or this repo's .env). The file is gitignored;
+# the token never reaches git, the command line or this script's output.
+#
+#   bin/chrome-live-config [mac|pi]      default: mac on macOS, pi on Linux
+#
+# Reload the extension afterwards (chrome://extensions, or restart the browser) for it to take effect.
+set -euo pipefail
+root="$(cd "$(dirname "$0")/.." && pwd)"
+machine=${1:-$([ "$(uname)" = Darwin ] && echo mac || echo pi)}
+case $machine in mac|pi) ;; *) echo "machine is mac or pi" >&2; exit 2 ;; esac
+if [ -z "${HUB_TOKEN:-}" ] && [ -f "$root/.env" ]; then HUB_TOKEN=$(sed -n 's/^HUB_TOKEN=//p' "$root/.env" | tail -1); fi
+[ -n "${HUB_TOKEN:-}" ] || { echo "no HUB_TOKEN (set it in $root/.env)" >&2; exit 2; }
+base=${HUB_URL:-https://jared-status-hub.fly.dev}
+out="$root/extensions/chrome-live/config.js"
+umask 077
+printf 'export default %s;\n' "$(HUB=$base M=$machine node -e 'process.stdout.write(JSON.stringify({hub:process.env.HUB,machine:process.env.M,token:process.env.T}))' T="$HUB_TOKEN")" > "$out"
+echo "wrote $out (machine $machine, hub $base)"

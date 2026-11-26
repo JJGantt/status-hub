@@ -4,3 +4,4 @@ server/public/dist/
 supabase/.temp/
 __pycache__/
 .DS_Store
+extensions/chrome-live/config.js

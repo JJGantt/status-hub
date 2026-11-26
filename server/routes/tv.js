@@ -2,9 +2,10 @@
 const crypto = require('crypto');
 const express = require('express');
 const { fail, logged } = require('../lib/httpfail');
+const { playLink } = require('../lib/tvplay');
 
 module.exports = function (ctx) {
-  const { PING, gated, putSetting, sb, sbWrite, sessionClients } = ctx;
+  const { PING, gated, putSetting, sb, sbUpsert, sbWrite, sessionClients } = ctx;
 
   // Session SSE: one `event: session` frame per tool call or finished turn, from either machine.
   // ---- THE BEDROOM TV (google-tv repo, docs/VOICE.md) ----------------------------------------------
@@ -91,6 +92,47 @@ module.exports = function (ctx) {
       await sbWrite(`tv_commands?id=eq.${id}`, 'PATCH', { done_at: new Date().toISOString(), result: (req.body || {}).result ?? null });
       res.json({ ok: true });
     } catch (e) { fail(res, e, 502); }
+  });
+
+  // What played on the TV (data-layer 00203 tv_plays), posted by the app's PlayWatcher on every title
+  // change, pause and stop, whoever started it. `start` closes any play still open (the TV went off
+  // without saying so) and links the play to the `open` command it followed, when there was one in the
+  // last few minutes, which is where its url and YouTube id come from.
+  const PLAY_LINK_MS = 3 * 60 * 1000;
+  const int = (v) => (Number.isFinite(Number(v)) && v !== null && v !== '' ? Math.max(0, Math.round(Number(v))) : null);
+  gated.post('/api/tv/play', express.json({ limit: '16kb' }), async (req, res) => {
+    const b = req.body || {};
+    const id = String(b.id || '');
+    if (!/^[0-9a-f-]{36}$/i.test(id)) return res.status(400).json({ error: 'id required' });
+    if (!['start', 'update', 'end'].includes(b.event)) return res.status(400).json({ error: 'event must be start, update or end' });
+    const now = new Date().toISOString();
+    const watched = int(b.watched_s);
+    try {
+      if (b.event === 'start') {
+        if (!b.package) return res.status(400).json({ error: 'package required' });
+        await sbWrite(`tv_plays?ended_at=is.null&id=neq.${id}`, 'PATCH', { ended_at: now, updated_at: now });
+        const since = new Date(Date.now() - PLAY_LINK_MS).toISOString();
+        const [cmd] = await sb(`tv_commands?op=eq.open&created_at=gte.${since}&order=created_at.desc&limit=1&select=id,args`);
+        const pkg = String(b.package);
+        const link = playLink(pkg, cmd);
+        await sbUpsert('tv_plays', 'id', {
+          id, started_at: now, updated_at: now, ended_at: null, package: pkg,
+          title: b.title ? String(b.title).slice(0, 500) : null, artist: b.artist ? String(b.artist).slice(0, 300) : null,
+          duration_s: int(b.duration_s), watched_s: watched ?? 0,
+          url: link.url, video_id: link.video_id, command_id: link.command_id,
+        });
+      } else {
+        const patch = { updated_at: now };
+        if (watched !== null) patch.watched_s = watched;
+        if (int(b.duration_s)) patch.duration_s = int(b.duration_s);
+        if (b.event === 'end') patch.ended_at = now;
+        await sbWrite(`tv_plays?id=eq.${id}`, 'PATCH', patch);
+      }
+      res.json({ ok: true });
+    } catch (e) {
+      console.error('[tv] play', b.event, e.message || e);
+      fail(logged(res), e, 502);
+    }
   });
 
   // The TV Guide's shelves (google-tv docs/GUIDE.md; data-layer tvGuide.ts writes them). The app reads

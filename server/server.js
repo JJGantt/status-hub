@@ -174,7 +174,7 @@ const { itemTitle } = require('./routes/lists')({
   pushLists, sb, sbWrite, settingsAll, syncBadge, timed,
 });
 
-const { TV_SIDEBAR_FONT, TV_SIDEBAR_WIDTH, tvInserted } = require('./routes/tv')({ PING, gated, putSetting, sb, sbWrite, sessionClients });
+const { TV_SIDEBAR_FONT, TV_SIDEBAR_WIDTH, tvInserted } = require('./routes/tv')({ PING, gated, putSetting, sb, sbUpsert, sbWrite, sessionClients });
 
 const { MACHINE_NAME, deadLetter, desk, followUpSession, machineAwake, openSession, pushSessions, sessionVerb, transferSession } = require('./routes/sessions')({
   DESK_STALE_S, EPOCH, SUPABASE_KEY, SUPABASE_URL, TV_SIDEBAR_FONT, TV_SIDEBAR_WIDTH, cleanSaid, convOfRow, ensureLog, gated, liveLine,

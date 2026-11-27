@@ -13,11 +13,14 @@
 		0E69DD82E7A03FBF6DC8305C /* RingsWidget.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0AD761F7ECC2DBF3FA1641B0 /* RingsWidget.swift */; };
 		0F13CF9CFA7602FE6562864D /* HistoryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7D90424F70095351BD348487 /* HistoryView.swift */; };
 		0F141CDE69394C33EB49DFAE /* TodoView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 824876CC8A2DF46BE8BF406A /* TodoView.swift */; };
+		10DD348B16D8764A6B3B306C /* HubToken.swift in Sources */ = {isa = PBXBuildFile; fileRef = AE62C66DEC73AAEC556068CC /* HubToken.swift */; };
 		12D0DCB4808D439F40DEDCC4 /* Capture.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3EE13DD050BF1BC4B943C3CC /* Capture.swift */; };
 		14F93E7C978F91E1C8547E29 /* TodoWidget.swift in Sources */ = {isa = PBXBuildFile; fileRef = 279F09507BAD56AB8AD69831 /* TodoWidget.swift */; };
 		1962BCC150815491A3F92EB1 /* HomeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9C61C65954CA9A7056B2B127 /* HomeView.swift */; };
+		198833842B5B8E894A576616 /* Auth.swift in Sources */ = {isa = PBXBuildFile; fileRef = 88D699B5FDC0F7476374CF07 /* Auth.swift */; };
 		1C569FFA9D76D921D56B85D8 /* RecordIntent.swift in Sources */ = {isa = PBXBuildFile; fileRef = F62C833499BAA9A4A1C9F660 /* RecordIntent.swift */; };
 		1E649E0468AC44DE55183537 /* GestureLab.swift in Sources */ = {isa = PBXBuildFile; fileRef = 00882FF56FFCD793EF960A19 /* GestureLab.swift */; };
+		24624D422AC74EC5D29C9441 /* HubToken.swift in Sources */ = {isa = PBXBuildFile; fileRef = AE62C66DEC73AAEC556068CC /* HubToken.swift */; };
 		2865661A326AF6F9FE5F6E61 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = AC135E9E04A98CDB11B57AB2 /* Assets.xcassets */; };
 		2AE6971801629766230C380C /* Auth.swift in Sources */ = {isa = PBXBuildFile; fileRef = 88D699B5FDC0F7476374CF07 /* Auth.swift */; };
 		2DE5C68D7C666AA0FFB4B465 /* Markdown.swift in Sources */ = {isa = PBXBuildFile; fileRef = 50C9941AC596855E4C447F11 /* Markdown.swift */; };
@@ -49,6 +52,7 @@
 		6A70F2AD168EE3EAEF10A245 /* LocationTrail.swift in Sources */ = {isa = PBXBuildFile; fileRef = 45C78D4725DD9720852DFFD9 /* LocationTrail.swift */; };
 		6E741EA6022469DE675FB215 /* SleepSync.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8500D56F95DF5A6D21132960 /* SleepSync.swift */; };
 		6F48E2C9C6071F502AB252A0 /* ReposView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AF1D1C7A5D148A4366347C65 /* ReposView.swift */; };
+		6FE7499AA416AAC697E41564 /* DoorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57FE80CD7772EFB084E2F0BE /* DoorView.swift */; };
 		70AEAF3F633ACDFC32C23FF6 /* LiveMic.swift in Sources */ = {isa = PBXBuildFile; fileRef = FC9DA7D425E32C05CDE6A7EA /* LiveMic.swift */; };
 		734F54125D4F0BC0B31B51EF /* VolumeKnob.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1E94C4C0D42288352ED7299B /* VolumeKnob.swift */; };
 		7361D0C7E360603243CFD673 /* Remote.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8CA83F39B78BED158714499A /* Remote.swift */; };
@@ -66,11 +70,13 @@
 		9F6DFFB0796E9EE6B110235A /* RecordIntent.swift in Sources */ = {isa = PBXBuildFile; fileRef = F62C833499BAA9A4A1C9F660 /* RecordIntent.swift */; };
 		A30AD3DC0321A172ECEB9CC5 /* Auth.swift in Sources */ = {isa = PBXBuildFile; fileRef = 88D699B5FDC0F7476374CF07 /* Auth.swift */; };
 		A4E6D950656AE1A3B80EECAA /* Push.swift in Sources */ = {isa = PBXBuildFile; fileRef = 835C09DFE3C581C0FCD41116 /* Push.swift */; };
+		A5629E82AC55C81EF51B3691 /* DoorAPI.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0253684380F784DE235D4F43 /* DoorAPI.swift */; };
 		AE3C14A7061F839013EA169A /* WatchLink.swift in Sources */ = {isa = PBXBuildFile; fileRef = D87B899987639512DD905DCE /* WatchLink.swift */; };
 		B074269468DD14567FC7F3FF /* AssetsMac.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 43113D1E0A8CEB8334CFC02E /* AssetsMac.xcassets */; };
 		B0778EBC2C7F517F88E6662D /* HubVoiceIntent.swift in Sources */ = {isa = PBXBuildFile; fileRef = 630A58399AEBE9A0EB63449B /* HubVoiceIntent.swift */; };
 		B0A4730199CF2646C3BC2A37 /* Stretch.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5757142AE4AD25B5E06EA231 /* Stretch.swift */; };
 		B63E8DE2508FDBEB38EC60C7 /* NutritionView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7300D161B8F2C8E565CA4FAB /* NutritionView.swift */; };
+		BBE3B7EFBDC6DCAE302FC4BB /* DoorAPI.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0253684380F784DE235D4F43 /* DoorAPI.swift */; };
 		C4250430822C333D041CEEA1 /* Hub.swift in Sources */ = {isa = PBXBuildFile; fileRef = FD06B420AFC554D37540118C /* Hub.swift */; };
 		C692F0368E5A3BD1BA7E0679 /* WatchLink.swift in Sources */ = {isa = PBXBuildFile; fileRef = D87B899987639512DD905DCE /* WatchLink.swift */; };
 		C917F517205EDE3DA975EE4A /* HubVoiceIntent.swift in Sources */ = {isa = PBXBuildFile; fileRef = 630A58399AEBE9A0EB63449B /* HubVoiceIntent.swift */; };
@@ -170,6 +176,7 @@
 		00882FF56FFCD793EF960A19 /* GestureLab.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GestureLab.swift; sourceTree = "<group>"; };
 		011F77A80F4DF604831A2925 /* LiveListen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveListen.swift; sourceTree = "<group>"; };
 		01225D88DDA6CA36478FE1CA /* DayView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DayView.swift; sourceTree = "<group>"; };
+		0253684380F784DE235D4F43 /* DoorAPI.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DoorAPI.swift; sourceTree = "<group>"; };
 		04D43ADC9891823E1EFA0E4C /* Router.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Router.swift; sourceTree = "<group>"; };
 		0AD761F7ECC2DBF3FA1641B0 /* RingsWidget.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RingsWidget.swift; sourceTree = "<group>"; };
 		122F17573AF11E3BFB34C78C /* WatchWorkout.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchWorkout.swift; sourceTree = "<group>"; };
@@ -191,6 +198,7 @@
 		50AE228EE180062CB3C46C98 /* Usage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Usage.swift; sourceTree = "<group>"; };
 		50C9941AC596855E4C447F11 /* Markdown.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Markdown.swift; sourceTree = "<group>"; };
 		5757142AE4AD25B5E06EA231 /* Stretch.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Stretch.swift; sourceTree = "<group>"; };
+		57FE80CD7772EFB084E2F0BE /* DoorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DoorView.swift; sourceTree = "<group>"; };
 		5A7D22E52C6A0ABBCB9FF3BF /* Rewind.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Rewind.swift; sourceTree = "<group>"; };
 		61B4D21322132BFB2C145C0C /* ReposWidget.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReposWidget.swift; sourceTree = "<group>"; };
 		630A58399AEBE9A0EB63449B /* HubVoiceIntent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HubVoiceIntent.swift; sourceTree = "<group>"; };
@@ -220,6 +228,7 @@
 		AC135E9E04A98CDB11B57AB2 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		AC7643D7992852F757EF0A7E /* SessionsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionsView.swift; sourceTree = "<group>"; };
 		AD44A10C47F3ACE73074E7B2 /* StatusHubControls.appex */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = "wrapper.app-extension"; path = StatusHubControls.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		AE62C66DEC73AAEC556068CC /* HubToken.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HubToken.swift; sourceTree = "<group>"; };
 		AF1D1C7A5D148A4366347C65 /* ReposView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReposView.swift; sourceTree = "<group>"; };
 		B1AD8CFD4B9B1D6C7A06379E /* NativeRec.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NativeRec.swift; sourceTree = "<group>"; };
 		B42DFB1DCF42C6F293770A86 /* Watchset */ = {isa = PBXFileReference; lastKnownFileType = folder; name = Watchset; path = Packages/Watchset; sourceTree = SOURCE_ROOT; };
@@ -316,6 +325,7 @@
 				3EE13DD050BF1BC4B943C3CC /* Capture.swift */,
 				65394C860C697D281720B76A /* Chat.swift */,
 				01225D88DDA6CA36478FE1CA /* DayView.swift */,
+				57FE80CD7772EFB084E2F0BE /* DoorView.swift */,
 				00882FF56FFCD793EF960A19 /* GestureLab.swift */,
 				9C54DAA3F7B8ECC9A1ED73A8 /* HandoffView.swift */,
 				7D90424F70095351BD348487 /* HistoryView.swift */,
@@ -404,6 +414,8 @@
 		F7663297B326291AB3B883C7 /* WatchWidgets */ = {
 			isa = PBXGroup;
 			children = (
+				0253684380F784DE235D4F43 /* DoorAPI.swift */,
+				AE62C66DEC73AAEC556068CC /* HubToken.swift */,
 				79EC24B4E553A538E5D4CC9A /* Info.plist */,
 				F62C833499BAA9A4A1C9F660 /* RecordIntent.swift */,
 				73F9EE0177B282256E68470C /* StatusHubWatchWidgets.swift */,
@@ -632,12 +644,15 @@
 				12D0DCB4808D439F40DEDCC4 /* Capture.swift in Sources */,
 				86F3FAF2206C002FF5A79054 /* Chat.swift in Sources */,
 				37CD0E58D2EE7273A012632B /* DayView.swift in Sources */,
+				A5629E82AC55C81EF51B3691 /* DoorAPI.swift in Sources */,
+				6FE7499AA416AAC697E41564 /* DoorView.swift in Sources */,
 				1E649E0468AC44DE55183537 /* GestureLab.swift in Sources */,
 				4F9B517337A50F616186B0DF /* HandoffView.swift in Sources */,
 				0F13CF9CFA7602FE6562864D /* HistoryView.swift in Sources */,
 				1962BCC150815491A3F92EB1 /* HomeView.swift in Sources */,
 				C4250430822C333D041CEEA1 /* Hub.swift in Sources */,
 				5D5E4C9B466EDC1E99D1AC4D /* HubImage.swift in Sources */,
+				24624D422AC74EC5D29C9441 /* HubToken.swift in Sources */,
 				2F21E62C9C469627AE83C165 /* Inbox.swift in Sources */,
 				62377EFC112DA32097338F77 /* LiveListen.swift in Sources */,
 				49EFB53930636E1DA9D5EA54 /* LiveStream.swift in Sources */,
@@ -681,6 +696,9 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				198833842B5B8E894A576616 /* Auth.swift in Sources */,
+				BBE3B7EFBDC6DCAE302FC4BB /* DoorAPI.swift in Sources */,
+				10DD348B16D8764A6B3B306C /* HubToken.swift in Sources */,
 				9F6DFFB0796E9EE6B110235A /* RecordIntent.swift in Sources */,
 				8F4734EA7CF078B6F76963FB /* StatusHubWatchWidgets.swift in Sources */,
 			);
@@ -980,6 +998,7 @@
 		9047005A5B2EBBF5697396AB /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = StatusHubWatchWidgets.entitlements;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = WatchWidgets/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -1034,6 +1053,7 @@
 		BD45C1230D0C6CC17095A1C0 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = StatusHubWatchWidgets.entitlements;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = WatchWidgets/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (

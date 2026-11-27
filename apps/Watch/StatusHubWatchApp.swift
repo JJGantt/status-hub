@@ -197,6 +197,8 @@ struct RootView: View {
     /// complication's URL only arrives once it is active: unveiled, a launcher shows the page the user left
     /// and then visibly moves to the one the user asked for.
     @State private var veiled = false
+    /// The Door complication's sheet (`DoorSheet`).
+    @State private var door = false
     /// The other pages have been loaded behind the first since the app last came to the front.
     @State private var warmed = false
     /// The on-screen page's own loads, which the others wait behind.
@@ -230,6 +232,7 @@ struct RootView: View {
         .overlay { if veiled { Color.black.ignoresSafeArea().allowsHitTesting(false) } }
         // A rewind's words, over whatever page is showing: the grab came from a control, not a page.
         .sheet(item: $rewind.shown) { RewindSheet(shown: $0) }
+        .sheet(isPresented: $door) { DoorSheet() }
         // Press and hold turns an amber recording red, and throws a red one away, on home and in a
         // session alike (`CommandBorder.hold`). Only on
         // home does a hold with nothing recording START one (locked): in a session a follow-up is only
@@ -255,6 +258,8 @@ struct RootView: View {
                 if let p = query.first(where: { $0.name == "page" })?.value.flatMap({ WatchPage(rawValue: $0) }) {
                     router.open(p)
                 }
+            case "door":
+                door = true
             default: break
             }
         }

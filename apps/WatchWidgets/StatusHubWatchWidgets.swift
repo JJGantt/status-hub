@@ -1,3 +1,4 @@
+import AppIntents
 import SwiftUI
 import WidgetKit
 
@@ -11,6 +12,7 @@ struct StatusHubWatchWidgets: WidgetBundle {
         RecordFastComplication()
         DayComplication()
         SessionsComplication()
+        DoorComplication()
         if #available(watchOS 26.0, *) {
             RecordControl()
             ListenControl()
@@ -20,6 +22,7 @@ struct StatusHubWatchWidgets: WidgetBundle {
             SessionsControl()
             NutritionControl()
             WorkoutControl()
+            DoorControl()
         }
     }
 }
@@ -247,6 +250,21 @@ struct SessionsComplication: Widget {
     }
 }
 
+/// Opens the app's front-door sheet (`DoorSheet`): the lock's state, and a tap to change it. Invisible,
+/// like the record ones.
+struct DoorComplication: Widget {
+    var body: some WidgetConfiguration {
+        StaticConfiguration(kind: "DoorComplication", provider: Provider()) { entry in
+            RecordFace(entry: entry, name: "Door")
+                .widgetURL(URL(string: "statushub://door"))
+                .containerBackground(for: .widget) { Color.clear }
+        }
+        .configurationDisplayName("Hub Door")
+        .description("Hub Door")
+        .supportedFamilies([.accessoryCircular, .accessoryCorner])
+    }
+}
+
 /// Clear, but filling the slot, so the whole complication stays the tap target `widgetURL` opens.
 /// **Except in the face editor**, which shows each complication's drawing and not its
 /// `configurationDisplayName`: drawn clear there, all six are identical blank tiles. A preview
@@ -281,3 +299,41 @@ private struct Provider: TimelineProvider {
 }
 
 private struct Entry: TimelineEntry { let date: Date; let preview: Bool }
+
+/// The front door in Control Center: on is locked. The state is read from the hub when Control Center
+/// asks (`DoorValue`), and a tap locks or unlocks through it (`DoorToggleIntent`), both from the
+/// extension's own process, with the token from the shared keychain group (`HubToken`). The kind, title
+/// and symbols are literals for the reason the other controls' are.
+@available(watchOS 26.0, *)
+struct DoorControl: ControlWidget {
+    var body: some ControlWidgetConfiguration {
+        StaticControlConfiguration(kind: "com.jaredgantt.statushub.watch.door", provider: DoorValue()) { locked in
+            ControlWidgetToggle("Front door", isOn: locked, action: DoorToggleIntent()) { on in
+                Label(on ? "Locked" : "Unlocked", systemImage: on ? "lock.fill" : "lock.open.fill")
+            }
+        }
+        .displayName("Front door")
+    }
+}
+
+@available(watchOS 26.0, *)
+struct DoorValue: ControlValueProvider {
+    var previewValue: Bool { true }
+    func currentValue() async throws -> Bool {
+        try await DoorAPI.get().locked
+    }
+}
+
+/// Locks (`value` true) or unlocks the front door. Runs in the widget extension.
+struct DoorToggleIntent: SetValueIntent {
+    static var title: LocalizedStringResource = "Front door"
+
+    @Parameter(title: "Locked") var value: Bool
+
+    init() {}
+
+    func perform() async throws -> some IntentResult {
+        _ = try await DoorAPI.set(locked: value)
+        return .result()
+    }
+}

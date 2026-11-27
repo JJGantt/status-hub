@@ -1002,6 +1002,19 @@ open for swiping back. Hub (the mic control; `RecordControl` in the code) is the
 Each control is its own type, spelled out in full — the `kind`, title and symbol are literals, because
 Control Center reads them before the extension runs and a computed one is not there to read.
 
+### The front door
+
+**Front door** in Control Center is a toggle, not a launcher: on is locked (`lock.fill`), off unlocked
+(`lock.open.fill`). Unlike every other control it never opens the app. Control Center asks for its
+value (`DoorValue`, `GET /api/door`) and a tap runs `DoorToggleIntent`, a `SetValueIntent`
+(`POST /api/door`), both in the widget extension's own process. The hub answers a change only once the
+lock itself reports it, up to 15s. The extension reads the hub token from the keychain group
+`XMH4AVFC78.com.jaredgantt.statushub.watch`, which both watch targets are entitled to
+(`WatchWidgets/HubToken.swift`); that group is the app's own default, so the token stored before the
+group was explicit still resolves. The **Hub Door** complication (`statushub://door`) opens the app
+on `DoorSheet`: the state, and a tap on the glyph to change it. The hub side, and why its state comes
+from SwitchBot's cloud, is data-layer README § The front door.
+
 **Blank tiles — no name, no icon, on every one of the app's controls — are a stale cache on the watch,
 not the code.** Deleting the app from the watch and reinstalling it clears it. It is worth knowing
 before debugging: the controls still register correctly (the simulator log shows `query returned …

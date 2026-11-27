@@ -188,9 +188,15 @@ targets:
         # The workout hold (Watch/WorkoutHold.swift). The App ID's HEALTHKIT capability is what makes
         # it signable (`asc.mjs capability`).
         com.apple.developer.healthkit: true
+        # Shared with the widget extension so its front-door control can read the hub token
+        # (WatchWidgets/HubToken.swift). The app's own default group, so the stored token still resolves.
+        keychain-access-groups:
+          - $(AppIdentifierPrefix)com.jaredgantt.statushub.watch
     sources:
       - path: Watch
       - path: WatchWidgets/RecordIntent.swift   # the Record control's intent runs in the app (WATCH_APP)
+      - path: WatchWidgets/HubToken.swift   # the token the phone hands over, shared with the extension
+      - path: WatchWidgets/DoorAPI.swift   # the front door, for the door sheet
       - path: Shared/Auth.swift   # Auth.host only — the watch's token comes from the phone, not a password
       - path: Shared/LocationTrail.swift   # a point per use into the location history (docs/LOCATION.md)
       - path: Controls/RingsView.swift   # the /api/rings types and the card palette; its widget views go unused
@@ -245,6 +251,12 @@ targets:
     deploymentTarget: "11.0"
     sources:
       - path: WatchWidgets
+      - path: Shared/Auth.swift   # Auth.host, for DoorAPI
+    entitlements:
+      path: StatusHubWatchWidgets.entitlements
+      properties:
+        keychain-access-groups:
+          - $(AppIdentifierPrefix)com.jaredgantt.statushub.watch
     info:
       path: WatchWidgets/Info.plist
       properties:

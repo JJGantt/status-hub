@@ -27,7 +27,7 @@ Everything below serves one of those five.
 
 ```
      voice ──┐
-     phone ──┼──▶  desk_commands  ──realtime──▶  orchestrator (Mac)   ──▶  Terminal tab (an incident session: tmux)
+     phone ──┼──▶  desk_commands  ──realtime──▶  orchestrator (Mac)   ──▶  tmux session (a window only when shown)
     the hub ─┘                                   pi-desk       (Pi)   ──▶  tmux session
                                                  pi-desk       (Fly)  ──▶  tmux session
                                                       │
@@ -42,7 +42,7 @@ still dispatch to it and report back.
 
 | Piece | Where | Does |
 |---|---|---|
-| `orchestrator/src/commands.js` | Mac (launchd) | drains `desk_commands`, opens Terminal tabs (incident sessions run headless in tmux) |
+| `orchestrator/src/commands.js` | Mac (launchd) | drains `desk_commands`, launches every session headless in tmux (`tmux -L desk`), and attaches a Terminal window to one only when it is shown |
 | `orchestrator/src/deskSessions.js` | Mac, every 30s | adopts, reports liveness, mirrors, starts watchers |
 | `orchestrator/src/sessionWatch.js` | both, on file events | watches live transcripts: pushes tool calls + finished turns |
 | `orchestrator/src/discover.js` | both | which conversation each `claude` process is in, from Claude Code's own record |
@@ -70,7 +70,7 @@ still dispatch to it and report back.
 | `status` | see below |
 | `claude_session_id` / `transcript_path` | the conversation, and where to read it. **This is the session's identity**: a resume makes a new row for the same conversation and `claude --resume` keeps this id, so the tools' permanent handle is `s-` plus its first eight characters (`sessionHandle` in data-layer), never the row `id` |
 | `pid` | the Claude Code process the row belongs to — what liveness and the conversation are read from |
-| `tty` | Mac only: the Terminal tab (or an incident session's tmux pane), and the handle a follow-up is typed into |
+| `tty` | Mac only: the session's tmux pane (or the Terminal tab of one opened by hand), and the handle a follow-up is typed into |
 | `working` / `last_reply` / `reply_at` | is a turn in flight; the last COMPLETED answer, and when |
 | `last_prompt` | the prompt that answer was to. A long message is recorded as `<pasted_content>…</pasted_content>` (how it was pasted in, voice-pipeline `handoff.js`), and `resolvePrompt` in the orchestrator's transcripts.js strips that back to the typed words. Older turns hold a stub naming a file in `~/.claude-desk-prompts`, which the same function resolves until the file is swept at thirty days. Earlier turns are kept in `desk_turns`, by trigger (HUB-INTERNALS § The turns before the last one) |
 | `active_at` | the last turn boundary (a prompt sent, a turn finished) — what orders, numbers and focuses sessions |
@@ -173,8 +173,8 @@ with the same MCP servers, approvals off and full access.
 - **Where it can run.** A machine whose heartbeat says `info.codex: true` (the CLI installed and signed
   in, `codexReady` in `orchestrator/src/codex.js`); the same Pi → Mac → Fly order as Claude otherwise.
   Each machine signs in to Codex on its own (`codex login --device-auth`).
-- **Launch.** `pi-desk/launch-codex.sh`, in tmux on the Pi and Fly and in a Terminal tab on the Mac
-  (`openCodexTab`). The prompt comes through a file as for Claude; the dispatched-session and machine
+- **Launch.** `pi-desk/launch-codex.sh`, in tmux on every machine (`openCodexTab` on the Mac). It writes
+  the repo into Codex's `config.toml` as trusted first, since Codex otherwise stops on "Trust this folder?". The prompt comes through a file as for Claude; the dispatched-session and machine
   notes go in as Codex `developer_instructions`. `HUB_SESSION_ID` and `DATA_AGENT` are forwarded to the
   data MCP by name (`mcp_servers.data.env_vars`), because Codex starts MCP servers with a scrubbed
   environment. Each machine's `~/.codex/config.toml` must give every MCP server
@@ -214,9 +214,11 @@ with the same MCP servers, approvals off and full access.
 | `follow_up` | machine owning the target session | text typed into the live session, busy or not; the target is ALWAYS the session named (`session`, required — there is no default target). A parked session is resumed with the words instead. **With the owning machine down, or silent for 20s, the session moves**: a `resume_mirrored` to the other home machine, else to Fly, carrying the words as its prompt, as a transfer from a dead source does. A session that cannot move (Codex, or nothing of it mirrored) gets the words as a NEW session in its repo, without the earlier conversation, and the answer says so; only no machine taking either dead-letters them. **Sent just after the session was handed on**, the words follow it: pi-desk writes the same follow-up for the row it went to and answers `handed to the Mac as <id>` (or the Pi, or Fly), which the sender follows to that machine's verdict (pi-desk `moved.js`) |
 | `interrupt_session` | owning machine | the Esc key: the running turn stops, a message queued behind it runs next, and with nothing queued the session waits (`orchestrator/src/interrupt.js`, measured on Claude Code 2.1.332). A tmux pane gets a bare Escape; a Mac Terminal tab gets Ctrl-C, because `do script` appends a return and ESC plus a return reads as Alt-Return — so a Terminal tab on a permission prompt is refused, since that return could answer it. Confirmed by the turn ending (the transcript's `[Request interrupted by user` record, or the process record going idle when the turn was cut off before it answered). A turn cut off before answering puts its prompt back in the composer, where the next follow-up would be pasted onto it, so a composer left holding text is cleared with Ctrl-C. Nothing is sent to a session not running a turn: Ctrl-C on an idle, empty composer arms "press again to exit". Claude only. Never rerouted, never dead-lettered, and dropped when older than `COMMAND_TTL_S`: late, it would stop whatever turn runs then. The hub's `POST /api/sessions/stop` (the session view's Stop) |
 | `rename_session` | owning machine | `/rename <name>` typed in — the session renames itself |
-| `end_session` | owning machine | close the tab / tmux session, park the row. With the owning machine down there is nothing to tell, so the sender parks the row itself (`evicted`, or `ended` with no transcript). A session ending ITSELF is not closed by a command: see below |
-| `resume_session` | owning machine | `claude --resume <id>` in a new tab or tmux session, with an optional prompt; a Pi with no memory to spare hands it to the Mac with its conversation, else to Fly, like new work (§ Capacity). Aimed at a session that is still running, both machines type the prompt into it. With the owning machine down, the sender resumes it elsewhere from the mirror (`resume_mirrored`). The data MCP's `resume_session` also takes a `machine`: a parked session named onto the other machine is resumed there straight from the mirror (`resume_mirrored`, no command to its old machine), and a running one is moved there as `transfer_session` would |
-| `transfer_session` | machine GIVING IT UP | close, flush the mirror, ask the destination to resume — the machine named, else the next in the order (Fly last). With the source down, the destination resumes from the mirror directly |
+| `end_session` | owning machine | close the tmux session (or the tab of one opened by hand), park the row. With the owning machine down there is nothing to tell, so the sender parks the row itself (`evicted`, or `ended` with no transcript). A session ending ITSELF is not closed by a command: see below |
+| `resume_session` | owning machine | `claude --resume <id>` in a new tmux session, with an optional prompt and `show`; when any row of the same conversation is already running, the prompt goes to that one instead, so a conversation never has two processes; a Pi with no memory to spare hands it to the Mac with its conversation, else to Fly, like new work (§ Capacity). Aimed at a session that is still running, both machines type the prompt into it. With the owning machine down, the sender resumes it elsewhere from the mirror (`resume_mirrored`). The data MCP's `resume_session` also takes a `machine`: a parked session named onto the other machine is resumed there straight from the mirror (`resume_mirrored`, no command to its old machine), and a running one is moved there as `transfer_session` would |
+| `transfer_session` | machine GIVING IT UP | close, flush the mirror, ask the destination to resume — the machine named, else the next in the order (Fly last). With the source down, the destination resumes from the mirror directly. `show` carries through to a Mac destination |
+| `session_window` (`show_session` on the Mac) | the Mac | put a session on the Mac's screen (`show` true: a Terminal window attached to its tmux session) or take it off (false: the window is detached and closes; the session keeps running). A session on another machine is moved to the Mac to be shown, a parked one resumed there |
+| `close_window` | the Mac | close a Terminal window by tty when nothing but a login shell is on it; data-layer's handoff agent sends it when a `drive_screen` drive of Terminal ends |
 | `resume_mirrored` | the destination | resume a conversation from the `transcripts` bucket. The sender marks the old row `transferred` FIRST, atomically on the status it read, and puts it back if no machine takes the session, so two movers of one conversation never both resume it |
 | `evacuate` | the machine the ops responder addressed | move every resident Claude session of a machine that has gone DOWN (§ When a machine stops) |
 | `get_sessions` | — | the numbered list |

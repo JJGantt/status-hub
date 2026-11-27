@@ -18,7 +18,7 @@ const { fail, logged } = require('../lib/httpfail');
 //
 // An open handoff is also ON ITS SESSION (`openFor`, in the session payload), so the phone's and the
 // watch's session views show it for as long as it waits, as a permission prompt is shown.
-const COLS = 'id,session,target,note,status,image,seq,width,height,taps,typed,error,updated_at,region,selector,whole,full_image,focus,suggest';
+const COLS = 'id,session,target,note,status,image,seq,width,height,taps,typed,error,updated_at,region,selector,whole,full_image,focus,suggest,driver';
 const view = (r) => r && {
   id: r.id, session: r.session, target: r.target, note: r.note, status: r.status, seq: r.seq,
   img: r.image ? `/img/${r.image}` : null, width: r.width, height: r.height, error: r.error,
@@ -68,7 +68,8 @@ module.exports = function ({ gated, pushAll, pushSessions, sb, sbInsert }) {
     if (['done', 'cancelled', 'failed'].includes(row.status)) open.delete(row.id);
     else open.set(row.id, row);
     wake(row.id);
-    if (row.status === 'open' && (!before || before.status !== 'open')) {
+    // A screen a session drives itself (drive_screen, driver 'session') asks nothing of him: no push.
+    if (row.status === 'open' && (!before || before.status !== 'open') && row.driver !== 'session') {
       sessionName(row.session).then((name) => pushAll('handoff', name || 'Handoff', row.note || row.target,
         `handoff-${row.id}`, { payload: { handoff_id: row.id, ...(row.session ? { session_id: row.session } : {}) } }))
         .catch((e) => console.error(`[handoff] push for ${row.id} failed: ${e.message || e}`));

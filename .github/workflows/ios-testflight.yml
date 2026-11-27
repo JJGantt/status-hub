@@ -115,9 +115,18 @@ jobs:
         working-directory: apps
         run: brew install xcodegen >/dev/null && xcodegen generate
 
-      # TestFlight rejects a build number it has already seen, and project.yml pins
-      # CURRENT_PROJECT_VERSION to "1". The run number is monotonic per workflow, so it can never
-      # collide with itself — overriding here rather than editing the file keeps the repo clean.
+      # project.yml pins CURRENT_PROJECT_VERSION to "1", and the Mac's testflight.sh numbers builds
+      # from TestFlight itself. This has to ask the same place, one past the highest TestFlight holds:
+      # a build numbered below the one on the phone uploads fine and is never offered as an update.
+      - name: Choose the build number
+        env:
+          ASC_KEY_P8: ${{ secrets.ASC_KEY_P8 }}
+        run: |
+          BUILD="$(node apps/tools/asc.mjs next-build)"
+          [[ "$BUILD" =~ ^[0-9]+$ ]] || { echo "could not read the next build number: $BUILD"; exit 1; }
+          echo "build $BUILD"
+          echo "BUILD=$BUILD" >> "$GITHUB_ENV"
+
       - name: Archive
         working-directory: apps
         run: |
@@ -130,7 +139,7 @@ jobs:
             -authenticationKeyID "$ASC_KEY_ID" \
             -authenticationKeyIssuerID "$ASC_ISSUER_ID" \
             DEVELOPMENT_TEAM="$TEAM_ID" \
-            CURRENT_PROJECT_VERSION=${{ github.run_number }} \
+            CURRENT_PROJECT_VERSION="$BUILD" \
             archive 2>&1 | tail -40
 
       - name: Export the ipa

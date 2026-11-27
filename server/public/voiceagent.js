@@ -752,7 +752,20 @@ export function makeRecorder({ onStatus = () => {}, onState: paint = () => {}, q
   // Carries a paused command on, from anything that says the microphone is the user's again.
   const carryOn = (why) => { if (paused && !sending) { trace('resume', { why }); start(); } };
   document.addEventListener('hub:audiointerrupt', (e) => {
-    if (e.detail && e.detail.began) pause('interrupted'); else carryOn('interruption-ended');
+    const began = !!(e.detail && e.detail.began);
+    // The app's recorder pauses itself on an interruption and carries on when it ends (NativeRec.swift
+    // `interruption`), but says nothing to the page, and `pause` has no MediaRecorder to stop on that
+    // path. Without this the button reads Listening while nothing is being recorded.
+    if (nativeRec) {
+      if (!recording) return;
+      trace(began ? 'paused' : 'resume', { native: true });
+      if (began) {
+        clientLog({ src: 'phone', ev: 'voice-paused', why: 'interrupted', native: true, reason: e.detail.reason });
+        onState('armed'); onStatus('Paused', 'err');
+      } else { onState('rec'); onStatus('Listening… tap to send', 'rec'); }
+      return;
+    }
+    if (began) pause('interrupted'); else carryOn('interruption-ended');
   });
   document.addEventListener('visibilitychange', () => { if (!document.hidden) carryOn('shown'); });
   document.addEventListener('hub:micdrop', () => pause('hidden'));

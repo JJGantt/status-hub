@@ -835,7 +835,10 @@ export function makeRecorder({ onStatus = () => {}, onState: paint = () => {}, q
     if (!blob.size) { blob = prefixParts[prefixParts.length - 1]; prefixParts = prefixParts.slice(0, -1); dur = 0; }
     // Durable from here: the clip stays on the phone until the server confirms it (the voice outbox).
     // A dictation for a session names it, so a reload that loses this recorder can still deliver it.
-    await sendVoice({ blob, dry, quick: !!quick, dur, ...(dry && session ? { session } : {}), ...(parts.length ? { streams: parts.map((p) => (typeof p === 'string' ? p : p.id)) } : {}),
+    // A recording a failure ended (broke) was stopped by the phone, not by him: it may be only the start
+    // of what he said, so every delivery of it says so (cutOffNote, and the hub's timing.cut_off).
+    const cutOff = brokeWhy ? { why: brokeWhy, secs: +dur.toFixed(1) } : null;
+    await sendVoice({ blob, dry, quick: !!quick, dur, ...(cutOff ? { cutOff } : {}), ...(dry && session ? { session } : {}), ...(parts.length ? { streams: parts.map((p) => (typeof p === 'string' ? p : p.id)) } : {}),
                       ...(prefixParts.length ? { prefixParts } : {}) }, { onStatus, onTranscript });
   }
   const self = {
@@ -1194,6 +1197,15 @@ function hereNow() {
 
 // Upload one clip and act on the answer. Throws if the server did not take it; `refused` marks an
 // answer from the server, as opposed to never reaching it.
+// The marker a cut-off dictation carries into the session it is sent to: the reader there (a model) has
+// no other way to know the words may stop mid-sentence, and a truncated request can read as a complete
+// one that means something else.
+function cutOffNote(item) {
+  const c = item.cutOff;
+  if (!c) return '';
+  const why = c.why === 'damaged' ? 'the capture was dropping audio' : 'the hub stopped acknowledging it';
+  return `[Cut off: the phone stopped this recording itself after ${c.secs}s because ${why}. It may be only the start of what he said.] `;
+}
 async function deliverVoice(item, onStatus, owner) {
   onStatus('Transcribing…', 'busy');
   // A dictation goes into a text box, not into the conversation, so it is nobody else's business.
@@ -1237,6 +1249,7 @@ async function uploadVoice(item, onStatus, owner) {
   // timeout it is a network failure: the clip stays in the box and the button is free again.
   const headers = { 'Content-Type': item.type };
   if (prefix.length) headers['X-Voice-Prefix'] = encodeURIComponent(prefix.join(' '));
+  if (item.cutOff) headers['X-Voice-Cut-Off'] = `${item.cutOff.why}:${item.cutOff.secs}`;
   const r = await fetch('/api/voice-command?' + qp, {
     method: 'POST', headers, body: item.blob,
     ...(AbortSignal.timeout ? { signal: AbortSignal.timeout(VOICE_SEND_MS) } : {}) });
@@ -1263,7 +1276,7 @@ async function uploadVoice(item, onStatus, owner) {
     onStatus('Nothing heard', 'err');
     if (!item.dry) pushPending({ state: 'clear' });
   }
-  else if (item.dry) { if (!j.capture) captureResetAt = 0; owner.onTranscript(j.transcript); onStatus('', 'clear'); }   // compose mode: into the text box
+  else if (item.dry) { if (!j.capture) captureResetAt = 0; owner.onTranscript(cutOffNote(item) + j.transcript); onStatus('', 'clear'); }   // compose mode: into the text box
   else {                                                                     // show what was heard, then stream the run
     if (!j.capture) captureResetAt = 0;
     if (_card && j.id) _card.request({ id: j.id, text: j.transcript, status: 'pending' });   // the spoken command as its own live user bubble

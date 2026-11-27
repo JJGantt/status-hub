@@ -511,6 +511,11 @@ module.exports = function (ctx) {
       // takes the microphone, and the parts recorded before it cannot be joined to this one as audio, so
       // they arrive already transcribed, as this clip's prefix (makeRecorder / deliverVoice in
       // voiceagent.js). The command is one command: prefix, then whatever this clip holds.
+      // A RECORDING THE PHONE STOPPED ITSELF (makeRecorder broke(): the hub stopped acknowledging its
+      // stream, or the capture was dropping audio). He did not end it, so it may be only the start of what
+      // he said; the worker frames it that way (prompts.py cut_off_directive, verdict 'stopped').
+      const cutHdr = /^(stream|damaged):([\d.]+)$/.exec(String(req.headers['x-voice-cut-off'] || ''));
+      if (cutHdr) timing.cut_off = { verdict: 'stopped', why: cutHdr[1], held_s: +cutHdr[2] };
       let prefix = '';
       try { prefix = decodeURIComponent(String(req.headers['x-voice-prefix'] || '')).trim().slice(0, 8000); } catch (e) {
         console.error(`[voice] ${source} command: the words said before its interruption are lost, their header did not decode:`, e);

@@ -7,13 +7,14 @@ const crypto = require('crypto');
 const express = require('express');
 const ops = require('../lib/report');
 const { stateOf, eventsFor } = require('../lib/door');
+const { createSwitchBot } = require('../lib/switchbot');
 
 // A backstop behind the webhook, in minutes: a change the webhook never delivered is written as a
 // 'backstop' row and reported, because it means the webhook path is down.
 const BACKSTOP_MS = 5 * 60e3;
 
 module.exports = function (ctx) {
-  const { pub, sb, sbInsert, sbUpsert } = ctx;
+  const { gated, pub, sb, sbInsert, sbUpsert } = ctx;
   const HOOK = process.env.SWITCHBOT_WEBHOOK_TOKEN || '';
   const TOKEN = process.env.SWITCHBOT_TOKEN || '';
   const SECRET = process.env.SWITCHBOT_SECRET || '';
@@ -58,28 +59,52 @@ module.exports = function (ctx) {
     }
   });
 
-  async function api(path) {
-    const t = String(Date.now()), nonce = crypto.randomUUID();
-    const sign = crypto.createHmac('sha256', SECRET).update(TOKEN + t + nonce).digest('base64');
-    const r = await fetch(`https://api.switch-bot.com/v1.1${path}`, { headers: { Authorization: TOKEN, sign, t, nonce }, signal: AbortSignal.timeout(15000) });
-    const j = await r.json();
-    if (!r.ok || j.statusCode !== 100) throw new Error(`SwitchBot ${path} -> HTTP ${r.status}, statusCode ${j.statusCode} ${j.message || ''}`);
-    return j.body;
-  }
-  let lockId = process.env.SWITCHBOT_LOCK_ID || '';
+  const bot = createSwitchBot({ token: TOKEN, secret: SECRET, lockId: process.env.SWITCHBOT_LOCK_ID || '' });
+  const battery = (b) => (typeof b.battery === 'number' ? b.battery : undefined);
+
   async function backstop() {
     try {
-      if (!lockId) {
-        const locks = ((await api('/devices')).deviceList || []).filter((d) => /lock/i.test(String(d.deviceType)));
-        if (locks.length !== 1) throw new Error(`expected one lock on the SwitchBot account, found ${locks.length}`);
-        lockId = locks[0].deviceId;
-      }
-      const body = await api(`/devices/${lockId}/status`);
-      const { rows, first } = await record(stateOf(body), 'backstop', body, typeof body.battery === 'number' ? body.battery : undefined);
+      const body = await bot.status();
+      const { rows, first } = await record(stateOf(body), 'backstop', body, battery(body));
       // The first row ever has nothing to have missed; after that a backstop row is a missed webhook.
       if (rows.length && !first) report(`Front door webhook missed: the lock reports ${rows.map((r) => r.event).join(', ')} with no event delivered`);
     } catch (e) { console.error('[switchbot] backstop failed:', e); }
   }
+
+  const answer = (body, extra = {}) => {
+    const s = stateOf(body);
+    return { lock: s.lock, door: s.door, battery: battery(body) ?? null, at: new Date().toISOString(), ...extra };
+  };
+
+  // The watch's front-door complication and Control Center toggle (apps/WatchWidgets/Door.swift).
+  // Live from SwitchBot; when SwitchBot cannot be reached, the last recorded state, marked stale.
+  gated.get('/api/door', async (req, res) => {
+    try {
+      res.json(answer(await bot.status()));
+    } catch (e) {
+      console.error('[switchbot] reading the door failed:', e);
+      try {
+        const row = (await sb('device_status?select=data,updated_at&device=eq.front-door'))[0];
+        if (!row || !row.data) return res.status(502).json({ error: 'unreachable' });
+        res.json({ lock: row.data.lock, door: row.data.door, battery: row.data.battery ?? null, at: row.updated_at, stale: true });
+      } catch (e2) { console.error('[switchbot] reading device_status failed:', e2); res.status(502).json({ error: 'unreachable' }); }
+    }
+  });
+
+  gated.post('/api/door', express.json(), async (req, res) => {
+    const action = req.body && req.body.action;
+    if (action !== 'lock' && action !== 'unlock') return res.status(400).json({ error: 'action must be lock or unlock' });
+    const want = action === 'lock' ? 'locked' : 'unlocked';
+    try {
+      const { body, changed } = await bot.command(want, (b) => stateOf(b).lock);
+      if (changed) await record(stateOf(body), 'command', body, battery(body));
+      res.json(answer(body, { changed }));
+    } catch (e) {
+      console.error(`[switchbot] ${action} from the hub failed:`, e);
+      res.status(502).json({ error: String(e.message || e) });
+    }
+  });
+
   if (!TOKEN || !SECRET) console.error('[switchbot] SWITCHBOT_TOKEN / SWITCHBOT_SECRET not set; the front door backstop is off');
   else { setTimeout(backstop, 30e3); setInterval(backstop, BACKSTOP_MS); }
 };

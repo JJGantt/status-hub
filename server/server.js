@@ -187,7 +187,7 @@ const { MACHINE_NAME, deadLetter, desk, followUpSession, machineAwake, openSessi
 
 require('./routes/failures')({ followUpSession, gated, openSession, sb, sbWrite, sessionVerb, transferSession });
 require('./routes/ci')({ MACHINE_NAME, SUPABASE_KEY, SUPABASE_URL, followUpSession, gated, openSession, pub, sb, sbWrite });
-require('./routes/switchbot')({ pub, sb, sbInsert, sbUpsert });
+require('./routes/switchbot')({ gated, pub, sb, sbInsert, sbUpsert });
 
 const prompts = require('./routes/prompts')({ auth, gated, pushAll, pushSessions, sb });
 const handoffs = require('./routes/handoffs')({ gated, pushAll, pushSessions, sb, sbInsert });

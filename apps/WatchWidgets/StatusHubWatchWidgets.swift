@@ -320,7 +320,8 @@ struct DoorControl: ControlWidget {
 struct DoorValue: ControlValueProvider {
     var previewValue: Bool { true }
     func currentValue() async throws -> Bool {
-        try await DoorAPI.get().locked
+        do { return try await DoorAPI.get().locked }
+        catch { await DoorAPI.report("door-read-failed", error); throw error }
     }
 }
 
@@ -333,7 +334,8 @@ struct DoorToggleIntent: SetValueIntent {
     init() {}
 
     func perform() async throws -> some IntentResult {
-        _ = try await DoorAPI.set(locked: value)
+        do { _ = try await DoorAPI.set(locked: value) }
+        catch { await DoorAPI.report("door-set-failed", error); throw error }
         return .result()
     }
 }

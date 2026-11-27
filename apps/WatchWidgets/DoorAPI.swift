@@ -23,6 +23,23 @@ enum DoorAPI {
         try await call("POST", ["action": locked ? "lock" : "unlock"])
     }
 
+    /// A failure in the widget extension, sent straight to the hub's client log, which reports it
+    /// (server routes/voice.js). The extension has no `Hub.log` outbox; the app's door sheet uses that.
+    /// Without a token nothing can reach the hub, so `noToken` here goes unreported.
+    static func report(_ event: String, _ error: Error) async {
+        guard let token = HubToken.get() else { return }
+        var r = URLRequest(url: URL(string: Auth.host + "/api/clientlog")!)
+        r.httpMethod = "POST"
+        r.timeoutInterval = 15
+        r.setValue(token, forHTTPHeaderField: "X-Hub-Token")
+        r.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        let line: [String: Any] = ["src": "watch", "ev": event, "via": "control",
+                                   "error": String(describing: error).prefix(120).description,
+                                   "t": ISO8601DateFormatter().string(from: Date())]
+        r.httpBody = try? JSONSerialization.data(withJSONObject: line)
+        if (try? await URLSession.shared.data(for: r)) == nil { print("door failure not reported: \(event)") }
+    }
+
     private static func call(_ method: String, _ body: [String: String]?) async throws -> State {
         guard let token = HubToken.get() else { throw Failure.noToken }
         var r = URLRequest(url: URL(string: Auth.host + "/api/door")!)

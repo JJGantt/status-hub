@@ -757,6 +757,13 @@ module.exports = function (ctx) {
           { machine: 'client', service: 'watch', context: { at: l.t, id: l.id, view: l.view,
             look: 'client_log where src=watch around that time (docs/WATCH.md)' } });
       }
+      // The watch's front-door sheet or Control Center toggle could not read or set the lock. A 502 is
+      // the hub's own failure, already reported by routes/switchbot.js; anything else (no token, no
+      // network, a refused token) only the watch can see.
+      if (l.src === 'watch' && (l.ev === 'door-read-failed' || l.ev === 'door-set-failed') && !/status\(502\)/.test(String(l.error || ''))) {
+        ops.report(`watch ${l.via === 'control' ? 'door control' : 'door sheet'} ${l.ev === 'door-set-failed' ? 'could not set' : 'could not read'} the lock: ${String(l.error || '').slice(0, 160)}`,
+          { machine: 'client', service: 'watch', context: { at: l.t, look: 'client_log where src=watch around that time' } });
+      }
       // The phone's voice outbox: an upload that failed, or one that went through only on a later attempt
       // (voice-send-late, which carries the first failure — the failure's own beacon is often lost,
       // because a page suspended mid-upload cannot send one).

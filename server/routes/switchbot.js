@@ -76,6 +76,7 @@ module.exports = function (ctx) {
       res.json(answer(await bot.status()));
     } catch (e) {
       console.error('[switchbot] reading the door failed:', e);
+      report(`Reading the front door for the watch failed: ${e.message || e}`);
       try {
         const row = (await sb('device_status?select=data,updated_at&device=eq.front-door'))[0];
         if (!row || !row.data) return res.status(502).json({ error: 'unreachable' });
@@ -94,6 +95,7 @@ module.exports = function (ctx) {
       res.json(answer(body, { changed }));
     } catch (e) {
       console.error(`[switchbot] ${action} from the hub failed:`, e);
+      report(`Front door ${action} from the watch failed: ${e.message || e}`);
       res.status(502).json({ error: String(e.message || e) });
     }
   });

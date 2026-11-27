@@ -381,6 +381,18 @@ function createDashboard(ctx) {
         };
       })(),
     };
+    // ---- Claude logins: one row per machine whose login needs him to know ----
+    // Each machine's session host publishes its login's expiry on its heartbeat (`info.login_expires_at`:
+    // the Mac's 'desk', the Pi's 'pi-desk'). The weekly renewal (health runbooks/claude-login.md) renews a
+    // login at 23 days left, so one at LOGIN_ALERT_DAYS or fewer means renewal has failed for days. Those,
+    // and any expired one, are what the phone's banner shows; an empty list shows nothing.
+    const LOGIN_ALERT_DAYS = 20;
+    const logins = [['desk', 'Mac'], ['pi-desk', 'Pi']].flatMap(([worker, name]) => {
+      const exp = (workerRows || []).find((r) => r.worker === worker)?.info?.login_expires_at;
+      if (exp === undefined) return [];
+      const days = exp ? (Date.parse(exp) - Date.now()) / 86_400_000 : 0;
+      return days <= LOGIN_ALERT_DAYS ? [{ machine: name, days: Math.max(0, Math.round(days * 10) / 10) }] : [];
+    });
     const maintenance = maintenanceWithHistory(core);
     syncStoredTarget(core.target, core.targetRows, today).catch((e) => console.error('target sync:', e.message));
     const { nutrition, paceData } = paceOf(core);
@@ -432,7 +444,7 @@ function createDashboard(ctx) {
     const { last_set_at, session_start_at, sets_today } = train;
     return { today, litter, feeder, surf, wind: liveWind.view((surfRows || [])[0]), buoys: liveBuoy.view(), weather: getWeather(), nutrition, maintenance, pace: paceData, volume, heatmap, nutrition_log,
       heatmap_home, nutrition_log_home, weight_plot, weight_plot_phone,
-      last_set_at, session_start_at, sets_today, rep_watcher, routing, mics, score, desk_focus: deskFocus,
+      last_set_at, session_start_at, sets_today, rep_watcher, routing, mics, logins, score, desk_focus: deskFocus,
       claude_usage: buildUsage(usageRow), watch_battery,
       // THE BUILD THIS FRAME CAME FROM. A page that has been open for hours never re-requests its own
       // bundle, so a deploy reaches the server and not the screen — which is how a phone spends an

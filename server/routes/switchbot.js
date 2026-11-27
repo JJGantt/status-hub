@@ -85,18 +85,52 @@ module.exports = function (ctx) {
     }
   });
 
+  // `reason` names what asked for it ('elevator' from the phone's elevator watch; the watch sends none)
+  // and is kept on the command's door_events row.
   gated.post('/api/door', express.json(), async (req, res) => {
     const action = req.body && req.body.action;
     if (action !== 'lock' && action !== 'unlock') return res.status(400).json({ error: 'action must be lock or unlock' });
+    const reason = typeof req.body.reason === 'string' ? req.body.reason.slice(0, 40) : 'watch';
     const want = action === 'lock' ? 'locked' : 'unlocked';
     try {
       const { body, changed } = await bot.command(want, (b) => stateOf(b).lock);
-      if (changed) await record(stateOf(body), 'command', body, battery(body));
+      if (changed) await record(stateOf(body), 'command', { ...body, reason }, battery(body));
       res.json(answer(body, { changed }));
     } catch (e) {
-      console.error(`[switchbot] ${action} from the hub failed:`, e);
-      report(`Front door ${action} from the watch failed: ${e.message || e}`);
+      console.error(`[switchbot] ${action} (${reason}) failed:`, e);
+      report(`Front door ${action} for ${reason} failed: ${e.message || e}`);
       res.status(502).json({ error: String(e.message || e) });
+    }
+  });
+
+  // The phone's elevator watch (apps/Sources/ElevatorUnlock.swift): where home is, for its geofence.
+  gated.get('/api/door/home', async (req, res) => {
+    try {
+      const row = (await sb('app_settings?select=value&key=eq.home_location'))[0];
+      const m = /^\s*(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)\s*$/.exec((row && row.value) || '');
+      if (!m) { report('app_settings.home_location is missing or malformed; the elevator unlock has no home'); return res.status(404).json({ error: 'no home' }); }
+      res.json({ lat: Number(m[1]), lon: Number(m[2]), radius_m: 150 });
+    } catch (e) { console.error('[switchbot] reading home_location failed:', e); res.status(502).json({ error: 'unreachable' }); }
+  });
+
+  // Each window the elevator watch ran, with its whole trace (data-layer 00212), for tuning.
+  gated.post('/api/elevator/rides', express.json({ limit: '2mb' }), async (req, res) => {
+    const b = req.body || {};
+    const row = { device: String(b.device || 'phone').slice(0, 20), started_at: b.started_at, ended_at: b.ended_at || null,
+      outcome: b.outcome, rise_m: b.rise_m ?? null, ride_s: b.ride_s ?? null, steps_in_ride: b.steps_in_ride ?? null,
+      steps_after: b.steps_after ?? null, unlock_ms: b.unlock_ms ?? null, thresholds: b.thresholds ?? null,
+      trace: b.trace ?? null, error: b.error ? String(b.error).slice(0, 500) : null };
+    try {
+      const r = await fetch(`${SUPABASE_URL}/rest/v1/elevator_rides`, { method: 'POST',
+        headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}`, 'Content-Type': 'application/json', Prefer: 'return=minimal' },
+        body: JSON.stringify(row) });
+      if (!r.ok) throw new Error(`${r.status} ${(await r.text().catch(() => '')).slice(0, 200)}`);
+      if (row.outcome === 'unlock_failed') report(`Elevator unlock failed: ${row.error || 'no error given'}`);
+      res.json({ ok: true });
+    } catch (e) {
+      console.error('[switchbot] storing an elevator ride failed:', e);
+      report(`Storing an elevator ride failed: ${e.message || e}`);
+      res.status(500).json({ error: 'failed' });
     }
   });
 

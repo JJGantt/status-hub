@@ -101,7 +101,7 @@ final class TvRemote: ObservableObject {
                 problem = nil
             } else {
                 problem = a?.error ?? "no answer"
-                Hub.log("remote_fail", ["op": "volume", "error": problem ?? ""])
+                Hub.fail("remote-failed", ["op": "volume", "error": problem ?? ""])
                 if asked == nil { needsRead = true }
                 failures += 1
                 let wait = min(30.0, pow(2.0, Double(failures - 1)))
@@ -136,7 +136,7 @@ final class TvRemote: ObservableObject {
         do {
             return try JSONDecoder().decode(Answer.self, from: try await Hub.post("/api/tv/remote", body, timeout: 20))
         } catch {
-            Hub.log("remote_fail", ["op": body["op"] ?? "", "error": "\(error)"])
+            Hub.fail("remote-failed", ["op": body["op"] ?? "", "error": "\(error)"])
             return nil
         }
     }

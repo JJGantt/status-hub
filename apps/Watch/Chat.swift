@@ -307,7 +307,7 @@ final class Chat: ObservableObject {
 
     func startRecording(flow: Capture.Flow = .standard, fast: Bool = false) {
         guard capture.free else {
-            Hub.log("record-refused", ["view": "chat", "owner": String(describing: capture.owner)])
+            Hub.fail("record-refused", ["view": "chat", "owner": String(describing: capture.owner)])
             return
         }
         Hub.log("record-start", ["view": "chat", "running": commands.count, "flow": flow.rawValue, "fast": fast])
@@ -324,12 +324,12 @@ final class Chat: ObservableObject {
     /// together with the user's words (docs/REWIND.md).
     func startInstructions(for grab: Grab?) {
         guard let grab else {
-            Hub.log("record-refused", ["view": "rewind", "why": "no-grab"])
+            Hub.fail("record-refused", ["view": "rewind", "why": "no-grab"])
             WKInterfaceDevice.current().play(.failure)
             return
         }
         guard capture.free else {
-            Hub.log("record-refused", ["view": "rewind", "owner": String(describing: capture.owner)])
+            Hub.fail("record-refused", ["view": "rewind", "owner": String(describing: capture.owner)])
             return
         }
         Hub.log("record-start", ["view": "rewind", "running": commands.count])

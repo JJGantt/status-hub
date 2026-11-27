@@ -359,7 +359,7 @@ final class LiveListen: ObservableObject {
                             seq = seq << 8 | UInt64(b)
                         }
                         if first, let last = lastSeq, seq > last + 1 {
-                            Hub.log("live-listen-missed", ["messages": seq - last - 1])
+                            Hub.fail("live-listen-missed", ["messages": seq - last - 1])
                         }
                         first = false
                         lastSeq = seq
@@ -378,7 +378,7 @@ final class LiveListen: ObservableObject {
                 }
                 Hub.log("live-listen-end")
             } catch {
-                if !Task.isCancelled { Hub.log("live-listen-error", ["error": String(describing: error).prefix(120).description]) }
+                if !Task.isCancelled { Hub.fail("live-listen-error", ["error": String(describing: error).prefix(120).description]) }
             }
             if lostAt == nil { lostAt = Date() }
             guard !Task.isCancelled else { return }

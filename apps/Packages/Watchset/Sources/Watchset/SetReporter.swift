@@ -24,11 +24,18 @@ enum SetReporter {
                                    "occurred_at": iso.string(from: at),
                                    "session": session,
                                    "algorithm": algorithm]
-        guard let req = DataLayer.request("report", "POST", json: body) else { then(nil); return }
-        URLSession.shared.dataTask(with: req) { data, _, _ in
+        guard let req = DataLayer.request("report", "POST", json: body) else {
+            WatchsetHost.fail("set-report-failed", ["reps": "\(reps)", "error": "no token"]); then(nil); return
+        }
+        URLSession.shared.dataTask(with: req) { data, resp, err in
+            if let why = WatchsetHost.failure(resp, err) {
+                WatchsetHost.fail("set-report-failed", ["reps": "\(reps)", "error": why]); then(nil); return
+            }
             guard let d = data,
                   let rows = try? JSONSerialization.jsonObject(with: d) as? [[String: Any]],
-                  let id = rows.first?["id"] as? Int else { then(nil); return }
+                  let id = rows.first?["id"] as? Int else {
+                WatchsetHost.fail("set-report-failed", ["reps": "\(reps)", "error": "no report id in the answer"]); then(nil); return
+            }
             then(id)
         }.resume()
     }
@@ -38,7 +45,11 @@ enum SetReporter {
         guard reps > 0,
               let req = DataLayer.request("report?id=\(reportID)", "PATCH",
                                           json: ["corrected_reps": reps]) else { return }
-        URLSession.shared.dataTask(with: req).resume()
+        URLSession.shared.dataTask(with: req) { _, resp, err in
+            if let why = WatchsetHost.failure(resp, err) {
+                WatchsetHost.fail("set-correct-failed", ["report": "\(reportID)", "error": why])
+            }
+        }.resume()
     }
 
     /// Remove the set — the ✕ button. The report survives, so the algorithm's original
@@ -46,7 +57,11 @@ enum SetReporter {
     static func remove(reportID: Int) {
         guard let req = DataLayer.request("report?id=\(reportID)", "PATCH",
                                           json: ["deleted": true]) else { return }
-        URLSession.shared.dataTask(with: req).resume()
+        URLSession.shared.dataTask(with: req) { _, resp, err in
+            if let why = WatchsetHost.failure(resp, err) {
+                WatchsetHost.fail("set-remove-failed", ["report": "\(reportID)", "error": why])
+            }
+        }.resume()
     }
 
     /// What the watcher is currently armed to, so the watch can say whether a set it
@@ -62,11 +77,14 @@ enum SetReporter {
         guard let req = DataLayer.request("watcher", "POST")
         else { then(nil, false); return }
         URLSession.shared.dataTask(with: req) { data, resp, err in
-            let code = (resp as? HTTPURLResponse)?.statusCode ?? 0
-            guard err == nil, (200..<300).contains(code) else { then(nil, false); return }
+            if let why = WatchsetHost.failure(resp, err) {
+                WatchsetHost.fail("watcher-read-failed", ["error": why]); then(nil, false); return
+            }
             guard let d = data,
                   let rows = try? JSONSerialization.jsonObject(with: d) as? [[String: Any]],
-                  let row = rows.first else { then(nil, false); return }
+                  let row = rows.first else {
+                WatchsetHost.fail("watcher-read-failed", ["error": "no row in the answer"]); then(nil, false); return
+            }
             guard let ex = row["exercise"] as? String else { then(nil, true); return }
             // Bodyweight reads as "bodyweight", not "0 lb" — matching the hub.
             let w = row["weight_lbs"] as? Double

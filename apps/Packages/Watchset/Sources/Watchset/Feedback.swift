@@ -70,7 +70,9 @@ final class Feedback {
 
     private func load(_ name: String) -> AVAudioPlayer? {
         guard let url = Bundle.module.url(forResource: name, withExtension: "wav", subdirectory: "Resources"),
-              let p = try? AVAudioPlayer(contentsOf: url) else { return nil }
+              let p = try? AVAudioPlayer(contentsOf: url) else {
+            WatchsetHost.fail("rep-sound-failed", ["sound": name, "error": "not loaded"]); return nil
+        }
         p.prepareToPlay()          // decode up front; the first rep should not be late
         return p
     }
@@ -89,10 +91,14 @@ final class Feedback {
         // `.playback` so a counted rep is still audible with the watch silenced, and
         // `.mixWithOthers` because people lift to music and ducking it every few
         // seconds would be worse than saying nothing.
-        if !ready || s.category != .playback {
-            try? s.setCategory(.playback, mode: .default, options: [.mixWithOthers])
+        do {
+            if !ready || s.category != .playback {
+                try s.setCategory(.playback, mode: .default, options: [.mixWithOthers])
+            }
+            try s.setActive(true, options: [])
+        } catch {
+            WatchsetHost.fail("rep-sound-failed", ["error": String(describing: error).prefix(120).description])
         }
-        try? s.setActive(true, options: [])
         ready = true
     }
 

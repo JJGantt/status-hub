@@ -18,7 +18,7 @@ counter so it tests anywhere: `cd ../SessionCore && swift test`.
 | `hold` / `release` | the workout session. watchOS lets one app hold a workout at a time and it must be an actively collecting one, or the app is suspended on wrist-down and most of a set's samples are lost. The app's workout hold provides it (`Watch/WorkoutHold.swift`) |
 | `request` | the `workset` routes, authenticated as the app. Status Hub sends them to the hub (`/api/workset/*`), which forwards them to the data layer's `workset` edge function with the device token |
 | `audioInUse` | true while the app holds the audio session (a recording, a spoken reply). The rep tones then play inside it, and `Feedback` neither reconfigures nor releases it |
-| `log` | the app's log; `error` lines are reported as failures |
+| `log` | the app's log. `WatchsetHost.fail` sends a line with `level: error`, which the hub reports as a failure: a set report, an edit, the armed-watcher read, a recording that could not be queued or was refused, the rep sounds. A capture upload with no connection is a plain `capture-upload-retry`, because the queue resends it |
 
 `KeepAlive.shared.update(holding:)` is how the app tells the screens whether the session is holding;
 **NOT PROTECTED** shows whenever it is not.

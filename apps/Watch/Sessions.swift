@@ -432,7 +432,7 @@ final class Sessions: ObservableObject {
             waiting.subtract(gone)
             gone.forEach { sentAt[$0] = nil }
             awaiting[key] = waiting.isEmpty ? nil : waiting
-            Hub.log("await-dropped", ["row": row(for: key)?.id ?? key, "count": gone.count])
+            Hub.fail("await-dropped", ["row": row(for: key)?.id ?? key, "count": gone.count])
             if waiting.isEmpty { return }
         }
         guard let reply = events.last(where: { $0.kind == "reply" }) else { return }
@@ -451,7 +451,7 @@ final class Sessions: ObservableObject {
     func startRecording(_ key: String) {
         guard capture.free, row(for: key) != nil else {
             // Each of these used to return in silence, which from the wrist is a record tap doing nothing.
-            Hub.log("record-refused", ["view": "session", "owner": String(describing: capture.owner),
+            Hub.fail("record-refused", ["view": "session", "owner": String(describing: capture.owner),
                                        "row": row(for: key)?.id ?? "none"])
             return
         }

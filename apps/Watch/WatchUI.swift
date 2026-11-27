@@ -571,7 +571,7 @@ private struct RecordWhenAsked: ViewModifier {
         guard chat.recordRequested, phase == .active, onScreen else { return }
         chat.recordRequested = false
         guard chat.requestIsFresh else {
-            Hub.log("record-stale", ["age": Int(Date().timeIntervalSince(chat.requestedAt))])
+            Hub.fail("record-stale", ["age": Int(Date().timeIntervalSince(chat.requestedAt))])
             return
         }
         Capture.trigger = "launcher"

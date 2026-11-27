@@ -336,7 +336,7 @@ struct RootView: View {
                 Task { await Task.yield(); veiled = false }
                 Task {
                     try? await Task.sleep(for: .milliseconds(400))
-                    if veiled && phase == .active { Hub.log("veil-stuck"); veiled = false }
+                    if veiled && phase == .active { Hub.fail("veil-stuck"); veiled = false }
                 }
             }
             if now == .active { Speaker.shared.checkOnWake(); Rewind.shared.check(); Capture.shared.resumeDraft(how: "active") }

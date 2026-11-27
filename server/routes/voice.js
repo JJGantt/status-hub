@@ -9,6 +9,7 @@ const fs = require('fs');
 const heicConvert = require('heic-convert');
 const { localDate, etNowString } = require('../lib/dates');
 const ops = require('../lib/report');
+const { watchFailure } = require('../lib/clientfail');
 const { vanishedRecordings, RECORD_EVENTS } = require('../lib/outcomes');
 const { FrameReader, endOf, adtsSeconds, PauseClock, BrokenStreams, endedBy, RECOVER_GRACE_MS } = require('../lib/livestream');
 const { heardStart, heardEnd } = require('../lib/streams');
@@ -729,8 +730,6 @@ module.exports = function (ctx) {
   // per tool call, and say nothing a step of a command does not.
   const CLIENT_LOG_SOURCES = new Set(['watch', 'phone']);
   const CLIENT_LOG_SKIP = new Set(['frame', 'geo', 'alarmclock', 'tvring']);
-  // The watch's own lines for a send that failed for good (apps/Watch/Chat.swift, Sessions.swift).
-  const WATCH_FAILURES = new Set(['send-failed', 'command-failed', 'live-broken']);
   // A client may send one line, or a batch as `{ lines: [...] }`: the watch keeps its lines until they
   // are acknowledged and sends what piled up while it was offline all at once. A kept batch is answered
   // only once it is stored, so a failed write leaves the lines on the watch to be sent again.
@@ -745,25 +744,15 @@ module.exports = function (ctx) {
       try { console.log('[clientlog]', JSON.stringify(l).slice(0, 900)); } catch (_) {}
       if (l.ev === 'alarmclock' || l.ev === 'tvring') noteRinger(l, req);
       // A client's own error, sent by the page's global handler (public/shared.js) or by an app, is
-      // reported as that client's, not the hub's.
-      if (l.ev === 'error') {
+      // reported as that client's, not the hub's. The watch's are decided by lib/clientfail.js.
+      if (l.ev === 'error' && l.src !== 'watch') {
         ops.report(String(l.msg || 'client error'), { machine: 'client', service: `${l.src || 'unknown'}${l.page ? `:${l.page}` : ''}`,
           stack: l.stack ? String(l.stack) : undefined, context: { ua: req.headers['user-agent'] } });
       }
-      // A watch command or follow-up that ended in Retry. The watch logs it as a plain line, so it is
-      // reported here; it arrives only once the watch can reach the hub again, stamped with its own time.
-      if (l.src === 'watch' && WATCH_FAILURES.has(l.ev)) {
-        ops.report(`watch ${l.view === 'session' ? 'follow-up' : 'command'} ${l.ev}: ${String(l.error || '').slice(0, 160)}`,
-          { machine: 'client', service: 'watch', context: { at: l.t, id: l.id, view: l.view,
-            look: 'client_log where src=watch around that time (docs/WATCH.md)' } });
-      }
-      // The watch's front-door sheet or Control Center toggle could not read or set the lock. A 502 is
-      // the hub's own failure, already reported by routes/switchbot.js; anything else (no token, no
-      // network, a refused token) only the watch can see.
-      if (l.src === 'watch' && (l.ev === 'door-read-failed' || l.ev === 'door-set-failed') && !/status\(502\)/.test(String(l.error || ''))) {
-        ops.report(`watch ${l.via === 'control' ? 'door control' : 'door sheet'} ${l.ev === 'door-set-failed' ? 'could not set' : 'could not read'} the lock: ${String(l.error || '').slice(0, 160)}`,
-          { machine: 'client', service: 'watch', context: { at: l.t, look: 'client_log where src=watch around that time' } });
-      }
+      // Every failure the watch logged (lib/clientfail.js): it arrives only once the watch can reach the
+      // hub again, stamped with its own time.
+      const watchFail = watchFailure(l);
+      if (watchFail) ops.report(watchFail.message, { machine: 'client', service: 'watch', context: watchFail.context });
       // The phone's voice outbox: an upload that failed, or one that went through only on a later attempt
       // (voice-send-late, which carries the first failure — the failure's own beacon is often lost,
       // because a page suspended mid-upload cannot send one).

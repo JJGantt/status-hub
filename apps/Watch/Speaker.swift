@@ -258,7 +258,7 @@ final class Speaker: NSObject, ObservableObject {
     /// off while the wrist was down; it carries on from where it stopped.
     func checkOnWake() {
         guard speaking, !paused, !(engine.isRunning && player.isPlaying) else { return }
-        Hub.log("speak-stalled", ["engine": engine.isRunning, "player": player.isPlaying])
+        Hub.fail("speak-stalled", ["engine": engine.isRunning, "player": player.isPlaying])
         resume("wake")
     }
 

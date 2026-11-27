@@ -153,7 +153,7 @@ final class Recorder {
                         try self.engine.start()
                         Hub.log("mic-engine-restart", ["ok": true])
                     } catch {
-                        Hub.log("mic-engine-restart", ["ok": false, "error": String(describing: error).prefix(120).description])
+                        Hub.fail("mic-engine-restart", ["ok": false, "error": String(describing: error).prefix(120).description])
                     }
                 }
             },

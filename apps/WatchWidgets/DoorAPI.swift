@@ -24,7 +24,8 @@ enum DoorAPI {
     }
 
     /// A failure in the widget extension, sent straight to the hub's client log, which reports it
-    /// (server routes/voice.js). The extension has no `Hub.log` outbox; the app's door sheet uses that.
+    /// (server lib/clientfail.js). The extension has no `Hub.log` outbox; the app's door sheet uses that.
+    /// The door is the extension's only request, so this is every failure it can have.
     /// Without a token nothing can reach the hub, so `noToken` here goes unreported.
     static func report(_ event: String, _ error: Error) async {
         guard let token = HubToken.get() else { return }
@@ -33,7 +34,7 @@ enum DoorAPI {
         r.timeoutInterval = 15
         r.setValue(token, forHTTPHeaderField: "X-Hub-Token")
         r.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        let line: [String: Any] = ["src": "watch", "ev": event, "via": "control",
+        let line: [String: Any] = ["src": "watch", "ev": event, "via": "control", "level": "error",
                                    "error": String(describing: error).prefix(120).description,
                                    "t": ISO8601DateFormatter().string(from: Date())]
         r.httpBody = try? JSONSerialization.data(withJSONObject: line)

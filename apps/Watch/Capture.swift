@@ -322,7 +322,7 @@ final class Capture: ObservableObject {
         // Rewind's hold gives way to anything; the ring keeps filling from whatever records next.
         if owner != .rewind, self.owner == .rewind { cancel() }
         guard self.owner == nil, !opening else {
-            Hub.log("mic-refused", ["owner": String(describing: self.owner), "opening": opening])
+            Hub.fail("mic-refused", ["owner": String(describing: self.owner), "opening": opening])
             return
         }
         self.owner = owner
@@ -453,7 +453,7 @@ final class Capture: ObservableObject {
         do {
             try recorder.resume()
         } catch {
-            Hub.log("mic-resume", ["ok": false, "how": how, "error": String(describing: error).prefix(120).description])
+            Hub.fail("mic-resume", ["ok": false, "how": how, "error": String(describing: error).prefix(120).description])
             if how == "press" { WKInterfaceDevice.current().play(.failure) }
             return
         }

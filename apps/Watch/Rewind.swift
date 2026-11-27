@@ -107,7 +107,7 @@ final class Rewind: ObservableObject {
                     try FileManager.default.moveItem(at: part, to: url)
                 } catch {
                     grab.unwritten = true
-                    Hub.log("rewind-grab", ["ok": false, "why": "encode: " + String(describing: error).prefix(100), "held": held])
+                    Hub.fail("rewind-grab", ["ok": false, "why": "encode: " + String(describing: error).prefix(100), "held": held])
                     throw error
                 }
                 _ = try await grab.upload()
@@ -191,7 +191,7 @@ final class Grab {
                 Rewind.shared.landed(text, on: self.shownId)
                 return id
             } catch {
-                Hub.log("rewind-grab", ["ok": false, "why": String(describing: error).prefix(120).description,
+                Hub.fail("rewind-grab", ["ok": false, "why": String(describing: error).prefix(120).description,
                                         "held": held, "ask": ask, "ms": Int(Date().timeIntervalSince(began) * 1000)])
                 throw error
             }

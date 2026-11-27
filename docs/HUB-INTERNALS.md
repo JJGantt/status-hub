@@ -1737,8 +1737,9 @@ rebuilds its own stream when the hub answers; killing it anyway blanks the wall 
 
 ## 6f. Incidents go to the ops responder
 
-The hub starts no investigations of its own. Its errors, the page errors it relays from
-`/api/clientlog`, and its heartbeat go to the ops responder (health/responder/README.md), which watches
+The hub starts no investigations of its own. Its errors, the page errors and watch failures it relays
+from `/api/clientlog` (which watch lines are failures: `lib/clientfail.js`, docs/WATCH.md § It logs what
+it does to the hub), and its heartbeat go to the ops responder (health/responder/README.md), which watches
 every machine and service and starts the agent; it also detects a machine going silent, without
 depending on Supabase.
 

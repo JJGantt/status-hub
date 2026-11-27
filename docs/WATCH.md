@@ -1245,6 +1245,20 @@ It is the app's only background refresh, and it handles every refresh task it is
 Every line carries `build`, the app's `CFBundleVersion`, so a fault that starts with an update in place
 shows the build it started on.
 
+**Every failure is reported to the ops responder by default** (server `lib/clientfail.js`): a line is a
+failure when it carries `level: error` (`Hub.fail`), is the `error` line, or is named `…-failed` /
+`…-broken`. So a new way for something to not happen is `Hub.fail("<what>-failed", …)`, and nothing on
+the server has to name it. A plain `Hub.log` is only for a retry or fallback already handling it.
+- **Every request through `Hub.call` that fails is a `request-failed` line**, made by the transport, so
+  a `try?` at a call site is reported too (a cancelled task and a missing token are not). Its decode
+  failing is `decode-failed`. The call site's own line for the same error, within three seconds, is
+  marked `also` and stored without a second report.
+- **A 5xx is not reported from the watch**: the hub reported it when it answered (HUB-INTERNALS § 6f).
+- **Watchset** (`Packages/Watchset`) reports through `WatchsetHost.fail`, which lands in this log with
+  `page: watchset`; its requests use their own session, so it says each failure itself.
+- **The widget extension** has no outbox: its only request is the door, and `DoorAPI.report` posts a
+  failure straight to `/api/clientlog`.
+
 | event | what it says |
 |---|---|
 | `thread` | what home loaded |
@@ -1264,7 +1278,8 @@ shows the build it started on.
 | `chirp`, `chirp-done` | the start chirp asked for (whether the engine and player were running) and heard to finish, with how long it took. A `chirp` with no `chirp-done` is a chirp the speaker never played |
 | `record-stop` | a recording stopped: its length, `heard` (seconds actually written to the clip), `peak` (loudest RMS written) and `chirped`. `heard` far short of `seconds` is a deaf microphone; `heard` with `peak` near 0 is a live one hearing silence |
 | `listener-sent`, `listener-failed` | an always-on utterance going up |
-| `sent`, `send-failed` | a command's clip going up, with how long it took. The hub reports every `send-failed` and `command-failed` to the ops responder as a `client/watch` error, when the line arrives (it arrives only once the watch reaches the hub again) |
+| `sent`, `send-failed` | a command's clip going up, with how long it took. Like every failure line (above), a `send-failed` or `command-failed` is reported to the ops responder as a `client/watch` error when the line arrives, which is only once the watch reaches the hub again |
+| `request-failed`, `decode-failed` | a request through `Hub.call` that failed, or whose answer did not decode: `method`, `path`, `error` |
 | `listen-alive` | always-on listening still has the microphone, with minutes since it was engaged — one line per twenty silent segments, about five minutes. **This is how long watchOS lets it hold the microphone with the wrist down**, which is otherwise unknown: read the gap between the last line and when it was engaged |
 | `rewind`, `rewind-alive`, `rewind-check`, `rewind-grab` | rewind engaged and dropped, still fed, checked on wake, grabbed — each with minutes engaged and the battery ([REWIND.md](REWIND.md)) |
 | `speak`, `speak-end`, `speak-failed` | a spoken reply starting (its length and output port) and how it ended, with seconds played |

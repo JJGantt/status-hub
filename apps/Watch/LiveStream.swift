@@ -156,7 +156,7 @@ final class LiveStream: NSObject, URLSessionTaskDelegate, @unchecked Sendable {
             q.asyncAfter(deadline: .now() + 0.05) { self.closeWhenDrained(tries: tries + 1) }
             return
         }
-        if !pending.isEmpty || dropped > 0 { Hub.log("live-behind", ["id": id, "unsent": pending.count, "dropped": dropped]) }
+        if !pending.isEmpty || dropped > 0 { Hub.fail("live-behind", ["id": id, "unsent": pending.count, "dropped": dropped]) }
         output?.close()
         closed = true
         session?.finishTasksAndInvalidate()

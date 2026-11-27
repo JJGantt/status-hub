@@ -33,6 +33,19 @@ public struct WatchsetHost: Sendable {
     nonisolated(unsafe) static var current: WatchsetHost?
 
     @MainActor public static func install(_ host: WatchsetHost) { current = host }
+
+    /// A failure, as a line the app's log reports (`level: error`). Every way a set, a report edit, a
+    /// recording or the rep sounds did not happen goes through here.
+    static func fail(_ event: String, _ fields: [String: String] = [:]) {
+        current?.log(event, fields.merging(["level": "error"]) { _, b in b })
+    }
+
+    /// A request's outcome as a failure description, or nil when it succeeded (2xx, or one of `ok`).
+    static func failure(_ resp: URLResponse?, _ err: Error?, ok: Set<Int> = []) -> String? {
+        if let err { return String(describing: err).prefix(120).description }
+        let code = (resp as? HTTPURLResponse)?.statusCode ?? 0
+        return (200..<300).contains(code) || ok.contains(code) ? nil : "HTTP \(code)"
+    }
 }
 
 /// Whether the app is holding the workout session, as the screens show it. The app sets it whenever

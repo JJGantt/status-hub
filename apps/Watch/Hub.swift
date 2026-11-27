@@ -1,5 +1,6 @@
 import Foundation
 import Network
+import os
 import Security
 import WatchConnectivity
 import WatchKit
@@ -727,6 +728,14 @@ enum Hub {
 
     /// `log`, returning once the outbox has been sent (or the send failed): for a background wake,
     /// which is suspended the moment its work returns.
+    /// A failure: the hub reports it to the ops responder (server lib/clientfail.js), which opens an
+    /// incident. Use it for every way something on the watch did not happen — a request, the mic, the
+    /// speaker, HealthKit — and `log` for everything else. A line named `…-failed` / `…-broken` is
+    /// reported even through `log`, but `fail` says it.
+    static func fail(_ event: String, _ fields: [String: Any] = [:]) {
+        log(event, fields.merging(["level": "error"]) { _, b in b })
+    }
+
     static func logNow(_ event: String, _ fields: [String: Any] = [:]) async {
         guard let text = line(event, fields) else { return }
         await LogOutbox.shared.add(text)
@@ -741,6 +750,11 @@ enum Hub {
         body["ev"] = event
         body["t"] = ISO8601DateFormatter().string(from: Date())
         body["build"] = build
+        if event != "request-failed", let recent = recentRequestFailure.withLock({ $0 }),
+           Date().timeIntervalSince(recent.at) < 3,
+           body.values.contains(where: { ($0 as? String)?.contains(recent.text) == true }) {
+            body["also"] = "request-failed"
+        }
         guard let line = try? JSONSerialization.data(withJSONObject: body) else { return nil }
         return String(data: line, encoding: .utf8)
     }
@@ -777,7 +791,9 @@ enum Hub {
     }
 
     static func json<T: Decodable>(_ path: String, timeout: TimeInterval = 20) async throws -> T {
-        try JSONDecoder().decode(T.self, from: try await call(path, timeout: timeout))
+        let data = try await call(path, timeout: timeout)
+        do { return try JSONDecoder().decode(T.self, from: data) }
+        catch { fail("decode-failed", ["path": path, "error": String(describing: error).prefix(160).description]); throw error }
     }
 
     /// One path segment, escaped: session ids go into URLs.
@@ -797,11 +813,36 @@ enum Hub {
 
     private static func call(_ path: String, method: String = "GET", body: [String: Any]? = nil,
                              timeout: TimeInterval = 20) async throws -> Data {
-        let r = try request(path, method: method, body: body, timeout: timeout)
-        let (data, resp) = try await resending(note: path != "/api/clientlog") { try await session.data(for: r) }
-        try await check(resp)
-        return data
+        do {
+            let r = try request(path, method: method, body: body, timeout: timeout)
+            let (data, resp) = try await resending(note: path != "/api/clientlog") { try await session.data(for: r) }
+            try await check(resp)
+            return data
+        } catch {
+            requestFailed(method, path, error)
+            throw error
+        }
     }
+
+    /// **Every request through `call` that fails is a failure line**, whoever made it and whether or
+    /// not they look at the error: a `try?` at the call site is how a STOP from the wrist, a setting or a
+    /// read used to fail with nothing anywhere knowing. Not the log's own post (that would log itself
+    /// forever), not a cancelled task (the view that wanted it is gone), and not a missing token (nothing
+    /// can reach the hub then, and the phone link is already asking for one). A 5xx is sent as well: the
+    /// hub reported its own failure, and the server drops the copy (lib/clientfail.js).
+    private static func requestFailed(_ method: String, _ path: String, _ error: Error) {
+        guard path != "/api/clientlog", !Task.isCancelled, !(error is CancellationError) else { return }
+        if let e = error as? URLError, e.code == .cancelled { return }
+        if case HubError.noToken = error { return }
+        let text = String(describing: error).prefix(120).description
+        recentRequestFailure.withLock { $0 = (text, Date()) }
+        fail("request-failed", ["method": method, "path": String(path.prefix(120)), "error": text])
+    }
+
+    /// The last `request-failed` line, so the call site's own line for the same failure (`send-failed`,
+    /// `inbox-failed`, …, which say what the request was FOR) is marked `also` and stored without being
+    /// reported a second time.
+    private static let recentRequestFailure = OSAllocatedUnfairLock<(text: String, at: Date)?>(initialState: nil)
 
     private static func request(_ path: String, method: String = "GET", body: [String: Any]? = nil,
                                 timeout: TimeInterval) throws -> URLRequest {

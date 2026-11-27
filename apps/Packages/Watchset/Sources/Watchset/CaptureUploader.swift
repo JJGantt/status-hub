@@ -31,9 +31,13 @@ enum CaptureUploader {
         let body = Data(CaptureFormat.csv(samples, session: session, verdict: verdict,
                                           exercise: exercise, weightLbs: weightLbs,
                                           cancelled: cancelled).utf8)
-        if let dir = queueDir {
-            try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
-            try? body.write(to: dir.appendingPathComponent("\(session).csv"))
+        do {
+            guard let dir = queueDir else { throw CocoaError(.fileNoSuchFile) }
+            try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+            try body.write(to: dir.appendingPathComponent("\(session).csv"))
+        } catch {
+            // Not queued, so a failed send below loses the recording for good.
+            WatchsetHost.fail("capture-queue-failed", ["session": session, "error": String(describing: error).prefix(120).description])
         }
         flush()
     }
@@ -51,13 +55,17 @@ enum CaptureUploader {
             // workset-captures bucket, never overwriting.
             guard let req = DataLayer.request("capture?session=\(session)", "POST",
                                               contentType: "text/csv", body: body) else { continue }
-            URLSession.shared.dataTask(with: req) { _, resp, _ in
-                let code = (resp as? HTTPURLResponse)?.statusCode ?? 0
+            URLSession.shared.dataTask(with: req) { _, resp, err in
                 // 409 means this session is already stored — also a reason to stop
                 // retrying, not a failure.
-                if (200..<300).contains(code) || code == 409 {
+                guard let why = WatchsetHost.failure(resp, err, ok: [409]) else {
                     try? FileManager.default.removeItem(at: f)
+                    return
                 }
+                // No connection is what the queue is for: the file stays and the next flush sends it.
+                // An answer that refused it will refuse it on every flush, so that one is a failure.
+                if err == nil { WatchsetHost.fail("capture-upload-failed", ["session": session, "error": why]) }
+                else { WatchsetHost.current?.log("capture-upload-retry", ["session": session, "error": why]) }
             }.resume()
         }
     }

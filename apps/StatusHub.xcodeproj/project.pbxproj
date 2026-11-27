@@ -40,8 +40,10 @@
 		4F9B517337A50F616186B0DF /* HandoffView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9C54DAA3F7B8ECC9A1ED73A8 /* HandoffView.swift */; };
 		51D9EC4E888D09D03D22734A /* Recorder.swift in Sources */ = {isa = PBXBuildFile; fileRef = 14EB30894FADCF33B66D0455 /* Recorder.swift */; };
 		52BE51A996FC01A545A5FF93 /* Watchset in Frameworks */ = {isa = PBXBuildFile; productRef = CE96B08D8352AA5DFAC296E7 /* Watchset */; };
+		569570CC6401CDD2E901C2A0 /* ElevatorUnlock.swift in Sources */ = {isa = PBXBuildFile; fileRef = AFEE3FF677694CD6E81410DE /* ElevatorUnlock.swift */; };
 		58F20A294FB54B942342ABB3 /* StatusHubControls.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = AD44A10C47F3ACE73074E7B2 /* StatusHubControls.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		5B95BB853AE0BB3D7E93EC0F /* OpenTodoItem.swift in Sources */ = {isa = PBXBuildFile; fileRef = 980C6D4E9785922A04236D2D /* OpenTodoItem.swift */; };
+		5C4FDFB95CAA6A48D814F684 /* ElevatorDetector.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3251682C199FAA956E5C87A4 /* ElevatorDetector.swift */; };
 		5D50E610532DA949FF006920 /* OpenTodoItem.swift in Sources */ = {isa = PBXBuildFile; fileRef = 980C6D4E9785922A04236D2D /* OpenTodoItem.swift */; };
 		5D5E4C9B466EDC1E99D1AC4D /* HubImage.swift in Sources */ = {isa = PBXBuildFile; fileRef = 873557B07E80836244D009CE /* HubImage.swift */; };
 		6188D9BD5163465CBE9D4FFB /* StatusHubWatch.app in Embed Watch Content */ = {isa = PBXBuildFile; fileRef = 94DD1B301CE525AF6B208DC7 /* StatusHubWatch.app */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
@@ -67,6 +69,7 @@
 		906DA291FF0B9503A9D28AF4 /* LiveMic.swift in Sources */ = {isa = PBXBuildFile; fileRef = FC9DA7D425E32C05CDE6A7EA /* LiveMic.swift */; };
 		99C55A70179E1025B9004EF9 /* RecordControl.swift in Sources */ = {isa = PBXBuildFile; fileRef = FAC9C25A7B946678D80BA77A /* RecordControl.swift */; };
 		9D93338C7128191D773C1991 /* NativeRec.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1AD8CFD4B9B1D6C7A06379E /* NativeRec.swift */; };
+		9E515CC9B4B7DE81D5FDE1E4 /* ElevatorUnlock.swift in Sources */ = {isa = PBXBuildFile; fileRef = AFEE3FF677694CD6E81410DE /* ElevatorUnlock.swift */; };
 		9F6DFFB0796E9EE6B110235A /* RecordIntent.swift in Sources */ = {isa = PBXBuildFile; fileRef = F62C833499BAA9A4A1C9F660 /* RecordIntent.swift */; };
 		A30AD3DC0321A172ECEB9CC5 /* Auth.swift in Sources */ = {isa = PBXBuildFile; fileRef = 88D699B5FDC0F7476374CF07 /* Auth.swift */; };
 		A4E6D950656AE1A3B80EECAA /* Push.swift in Sources */ = {isa = PBXBuildFile; fileRef = 835C09DFE3C581C0FCD41116 /* Push.swift */; };
@@ -91,6 +94,7 @@
 		E34E8A8F7CA83D65E839396E /* LocationTrail.swift in Sources */ = {isa = PBXBuildFile; fileRef = 45C78D4725DD9720852DFFD9 /* LocationTrail.swift */; };
 		E5F01E32A844356CC4D3F449 /* WatchUI.swift in Sources */ = {isa = PBXBuildFile; fileRef = E15B459BE174F4274C78B54E /* WatchUI.swift */; };
 		E61B504A70548076F6AB0631 /* WatchWorkout.swift in Sources */ = {isa = PBXBuildFile; fileRef = 122F17573AF11E3BFB34C78C /* WatchWorkout.swift */; };
+		E7F73336CAD33F9713A3C981 /* ElevatorDetector.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3251682C199FAA956E5C87A4 /* ElevatorDetector.swift */; };
 		E8ABA2047F042D0E11B6C604 /* Workout.swift in Sources */ = {isa = PBXBuildFile; fileRef = F4BAD78C211DC1432CDEB572 /* Workout.swift */; };
 		EBD52912FF3B6259E305FBFA /* Sessions.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3DA8801FE7845595DD403F04 /* Sessions.swift */; };
 		ECC6D21A1ECB983A558C2DC5 /* WatchSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = 951A385F7EE64123592C4DA6 /* WatchSettings.swift */; };
@@ -189,6 +193,7 @@
 		1E94C4C0D42288352ED7299B /* VolumeKnob.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VolumeKnob.swift; sourceTree = "<group>"; };
 		279F09507BAD56AB8AD69831 /* TodoWidget.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TodoWidget.swift; sourceTree = "<group>"; };
 		2BA599375B5694F4C40BB517 /* RewindBuffer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RewindBuffer.swift; sourceTree = "<group>"; };
+		3251682C199FAA956E5C87A4 /* ElevatorDetector.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ElevatorDetector.swift; sourceTree = "<group>"; };
 		38BD5AA187D80545B616356B /* Nutrition.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Nutrition.swift; sourceTree = "<group>"; };
 		3DA8801FE7845595DD403F04 /* Sessions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sessions.swift; sourceTree = "<group>"; };
 		3EE13DD050BF1BC4B943C3CC /* Capture.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Capture.swift; sourceTree = "<group>"; };
@@ -230,6 +235,7 @@
 		AD44A10C47F3ACE73074E7B2 /* StatusHubControls.appex */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = "wrapper.app-extension"; path = StatusHubControls.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		AE62C66DEC73AAEC556068CC /* HubToken.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HubToken.swift; sourceTree = "<group>"; };
 		AF1D1C7A5D148A4366347C65 /* ReposView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReposView.swift; sourceTree = "<group>"; };
+		AFEE3FF677694CD6E81410DE /* ElevatorUnlock.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ElevatorUnlock.swift; sourceTree = "<group>"; };
 		B1AD8CFD4B9B1D6C7A06379E /* NativeRec.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NativeRec.swift; sourceTree = "<group>"; };
 		B42DFB1DCF42C6F293770A86 /* Watchset */ = {isa = PBXFileReference; lastKnownFileType = folder; name = Watchset; path = Packages/Watchset; sourceTree = SOURCE_ROOT; };
 		B47D0D32A221BCBB3473BE45 /* LiveStream.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveStream.swift; sourceTree = "<group>"; };
@@ -301,6 +307,8 @@
 		4F3C15E0045F52C4F298B679 /* Sources */ = {
 			isa = PBXGroup;
 			children = (
+				3251682C199FAA956E5C87A4 /* ElevatorDetector.swift */,
+				AFEE3FF677694CD6E81410DE /* ElevatorUnlock.swift */,
 				DE5381BDCB65D60B40634510 /* HealthSync.swift */,
 				12B2F6A89FA87D30EEC5ED56 /* Info-iOS.plist */,
 				FC9DA7D425E32C05CDE6A7EA /* LiveMic.swift */,
@@ -709,6 +717,8 @@
 			buildActionMask = 2147483647;
 			files = (
 				D8B3EEDED01AB105C95F173D /* Auth.swift in Sources */,
+				5C4FDFB95CAA6A48D814F684 /* ElevatorDetector.swift in Sources */,
+				569570CC6401CDD2E901C2A0 /* ElevatorUnlock.swift in Sources */,
 				09ECD41B51EB9F304B7B6306 /* HealthSync.swift in Sources */,
 				C917F517205EDE3DA975EE4A /* HubVoiceIntent.swift in Sources */,
 				906DA291FF0B9503A9D28AF4 /* LiveMic.swift in Sources */,
@@ -729,6 +739,8 @@
 			buildActionMask = 2147483647;
 			files = (
 				2AE6971801629766230C380C /* Auth.swift in Sources */,
+				E7F73336CAD33F9713A3C981 /* ElevatorDetector.swift in Sources */,
+				9E515CC9B4B7DE81D5FDE1E4 /* ElevatorUnlock.swift in Sources */,
 				905EEDBA7E6CAC2D5CCFF2F3 /* HealthSync.swift in Sources */,
 				70AEAF3F633ACDFC32C23FF6 /* LiveMic.swift in Sources */,
 				F36D787F3CD628CEA04839C7 /* NativeRec.swift in Sources */,

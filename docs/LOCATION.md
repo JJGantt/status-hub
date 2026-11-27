@@ -53,8 +53,10 @@ A visit's `arrive` / `depart` pair is how long was spent where. A day of driving
   the phone records only when the app is opened.
 - **Watch:** nothing runs in the background; a point is taken only when the app is used. Its While
   Using grant (the one "near me" commands already ask for) is all it needs.
-- Neither app has `location` in `UIBackgroundModes` (project.yml). Visits and significant changes do
-  not need it, and on the phone it is what let the old stream keep the app running.
+- The location history does not use the `location` background mode. Visits and significant changes do
+  not need it, and a continuous stream under it is what kept the app running all day. The phone app does
+  have the mode, for one thing only: the elevator unlock's window near home (docs/DOOR.md), which ends
+  within 15 minutes. The watch app does not have it.
 
 ## Prerequisites
 

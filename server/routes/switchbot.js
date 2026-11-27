@@ -125,7 +125,8 @@ module.exports = function (ctx) {
         headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}`, 'Content-Type': 'application/json', Prefer: 'return=minimal' },
         body: JSON.stringify(row) });
       if (!r.ok) throw new Error(`${r.status} ${(await r.text().catch(() => '')).slice(0, 200)}`);
-      if (row.outcome === 'unlock_failed') report(`Elevator unlock failed: ${row.error || 'no error given'}`);
+      // A hub-side failure (502) was already reported by POST /api/door.
+      if (row.outcome === 'unlock_failed' && !/502/.test(row.error || '')) report(`Elevator unlock failed: ${row.error || 'no error given'}`);
       res.json({ ok: true });
     } catch (e) {
       console.error('[switchbot] storing an elevator ride failed:', e);

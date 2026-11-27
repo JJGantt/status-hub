@@ -355,9 +355,13 @@ export function openScreen({ mount, session = null, handoff = null, onEnd = null
   }
   retry.onclick = () => connect();
 
-  // Back from the background: a connection iOS let go of comes back without being asked.
+  // Into the background: iOS freezes the page without a pagehide, so the Mac would see a dead peer and end
+  // the share `failed`. The share is ended with `bye` here instead. Back from the background: a connection
+  // that is gone comes back without being asked.
   const onVis = () => {
-    if (document.visibilityState !== 'visible' || !alive || !ov.isConnected) return;
+    if (!alive || !ov.isConnected) return;
+    if (document.visibilityState === 'hidden') { if (pc) teardown('hidden'); return; }
+    if (document.visibilityState !== 'visible') return;
     if (!pc || ['failed', 'closed', 'disconnected'].includes(pc.connectionState)) { ended = false; connect(); }
   };
   document.addEventListener('visibilitychange', onVis);

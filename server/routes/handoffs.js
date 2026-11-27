@@ -68,8 +68,9 @@ module.exports = function ({ gated, pushAll, pushSessions, sb, sbInsert }) {
     if (['done', 'cancelled', 'failed'].includes(row.status)) open.delete(row.id);
     else open.set(row.id, row);
     wake(row.id);
-    // A screen a session drives itself (drive_screen, driver 'session') asks nothing of him: no push.
-    if (row.status === 'open' && (!before || before.status !== 'open') && row.driver !== 'session') {
+    // A screen a session drives itself (driver 'session') is pushed too: he sees it is being worked and can
+    // watch, though nothing is asked of him. Its note says what the session is doing there.
+    if (row.status === 'open' && (!before || before.status !== 'open')) {
       sessionName(row.session).then((name) => pushAll('handoff', name || 'Handoff', row.note || row.target,
         `handoff-${row.id}`, { payload: { handoff_id: row.id, ...(row.session ? { session_id: row.session } : {}) } }))
         .catch((e) => console.error(`[handoff] push for ${row.id} failed: ${e.message || e}`));

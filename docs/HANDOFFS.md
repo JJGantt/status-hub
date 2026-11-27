@@ -1,5 +1,11 @@
 # Handoffs: a session hands Jared the screen it is stuck on
 
+One of the capabilities in the shared `~/CLAUDE.md` § What each machine can do (claude-config `shared/CLAUDE.md`), which lists the rest.
+
+A session can also drive a screen itself with `drive_screen` (`handoffs.driver = 'session'`): the same
+rows and agents, pushed to his phone so he can watch, but nothing is asked of him (data-layer `README.md`
+§ Driving a screen).
+
 A session blocked on something only Jared can do (a sign-in, a 2FA code, a captcha, a choice that is
 his) calls the data MCP's `request_handoff(target, note)`. He gets the screenshot on his phone and
 watch; where he taps is clicked on the real screen, what he types is typed there, and a fresh

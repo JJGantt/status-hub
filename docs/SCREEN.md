@@ -1,5 +1,7 @@
 # The Mac's screen, live, on the phone
 
+One of the capabilities in the shared `~/CLAUDE.md` § What each machine can do (claude-config `shared/CLAUDE.md`), which lists the rest.
+
 The whole Mac display streamed to the phone's session view and driven from it: a tap clicks, a long
 press right-clicks, two fingers moving together scroll, typing goes straight to the Mac. It is a
 session tab (`cards/repos.js`, kind `screen`), opened by the monitor button in the session bar, and it

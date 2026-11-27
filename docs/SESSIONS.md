@@ -1,5 +1,7 @@
 # Claude sessions as a managed system
 
+One of the capabilities in the shared `~/CLAUDE.md` § What each machine can do (claude-config `shared/CLAUDE.md`), which lists the rest.
+
 Every Claude Code session running anywhere in this setup — dispatched by voice, started from the
 phone, or opened by hand in a Terminal tab — is one row in one table, with one set of verbs. This is
 what that system is, what holds it together, and what will break it.

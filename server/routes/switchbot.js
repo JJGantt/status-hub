@@ -1,44 +1,36 @@
 'use strict';
-// The front door's SwitchBot webhook and its backstop (data-layer README § The front door). Every lock
-// change and door open/close reaches SwitchBot's cloud through the Hub Mini, which POSTs it here; each
-// becomes a door_events row and the device_status row 'front-door'. The data MCP's front_door tool
-// reads both, and waits on door_events to confirm its own lock/unlock.
+// The front door in the hub (data-layer README § The front door): SwitchBot's webhook, the five-minute
+// backstop, and GET/POST /api/door for the watch. The Bluetooth listeners (data-layer door/) are the
+// primary event source; everything here writes through the same door_report() they do.
 const crypto = require('crypto');
 const express = require('express');
 const ops = require('../lib/report');
-const { stateOf, eventsFor } = require('../lib/door');
+const { stateOf } = require('../lib/door');
 const { createSwitchBot } = require('../lib/switchbot');
 
-// A backstop behind the webhook, in minutes: a change the webhook never delivered is written as a
-// 'backstop' row and reported, because it means the webhook path is down.
+// A backstop behind the event sources, in minutes: a change none of them recorded is written as a
+// 'backstop' row and reported, because it means every event path missed it.
 const BACKSTOP_MS = 5 * 60e3;
 
 module.exports = function (ctx) {
-  const { gated, pub, sb, sbInsert, sbUpsert } = ctx;
+  const { SUPABASE_KEY, SUPABASE_URL, gated, pub, sb } = ctx;
   const HOOK = process.env.SWITCHBOT_WEBHOOK_TOKEN || '';
   const TOKEN = process.env.SWITCHBOT_TOKEN || '';
   const SECRET = process.env.SWITCHBOT_SECRET || '';
   const report = (msg) => ops.report(msg, { service: 'status-hub:switchbot' });
 
-  // Serialised, so two reports arriving together cannot both read the same previous row.
-  let chain = Promise.resolve();
-  function record(next, source, raw, battery) {
-    const run = chain.then(async () => {
-      const prev = (await sb('door_events?select=lock_state,door_state&order=at.desc&limit=1'))[0] || null;
-      const rows = eventsFor(prev, next, source, raw);
-      for (const r of rows) if (!(await sbInsert('door_events', r))) throw new Error('insert into door_events failed');
-      const last = rows.length ? rows[rows.length - 1] : prev;
-      const prior = (await sb("device_status?select=data&device=eq.front-door"))[0];
-      await sbUpsert('device_status', 'device', {
-        device: 'front-door', name: 'Front door', online: true, updated_at: new Date().toISOString(),
-        status: last ? last.lock_state : null,
-        data: { lock: last ? last.lock_state : null, door: last ? last.door_state : null,
-                battery: battery ?? (prior && prior.data ? prior.data.battery : null) },
-      });
-      return { rows, first: !prev };
+  // Every write goes through Supabase's door_report() (data-layer migration 00209), the one writer for
+  // all sources: the Bluetooth listeners, this webhook, the hub's own lock/unlock and the backstop. Its
+  // lock serialises them across machines, so one change heard twice is one row.
+  async function record(next, source, raw, battery) {
+    const r = await fetch(`${SUPABASE_URL}/rest/v1/rpc/door_report`, {
+      method: 'POST',
+      headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ p_source: source, p_lock: next.lock, p_door: next.door, p_battery: battery ?? null,
+                             p_machine: 'fly', p_raw: raw ?? null }),
     });
-    chain = run.catch(() => {});
-    return run;
+    if (!r.ok) throw new Error(`door_report -> ${r.status} ${(await r.text().catch(() => '')).slice(0, 200)}`);
+    return { rows: await r.json() };
   }
   // Public, because SwitchBot carries no hub credential and signs nothing: the secret path segment
   // SWITCHBOT_WEBHOOK_TOKEN is the auth.
@@ -65,9 +57,10 @@ module.exports = function (ctx) {
   async function backstop() {
     try {
       const body = await bot.status();
-      const { rows, first } = await record(stateOf(body), 'backstop', body, battery(body));
-      // The first row ever has nothing to have missed; after that a backstop row is a missed webhook.
-      if (rows.length && !first) report(`Front door webhook missed: the lock reports ${rows.map((r) => r.event).join(', ')} with no event delivered`);
+      const { rows } = await record(stateOf(body), 'backstop', body, battery(body));
+      // A backstop row is a change no source recorded: not the Bluetooth listeners, the webhook or a
+      // command. That means every event path missed it.
+      if (rows.length) report(`Front door change recorded by no source: the lock reports ${rows.map((r) => r.event).join(', ')}`);
     } catch (e) { console.error('[switchbot] backstop failed:', e); }
   }
 

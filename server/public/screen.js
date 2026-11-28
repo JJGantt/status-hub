@@ -378,9 +378,13 @@ export function openScreen({ mount, session = null, handoff = null, onEnd = null
   }
 
   // The phone's receiving counters, once, at the end: they are cumulative, so one read is the whole share.
-  async function report(id, why) {
+  // `frozen_ms`: how long iOS held this page frozen while it stayed visible. The Mac sees that as a dead
+  // peer and ends the share `failed`; it reads this to count that end rather than raise it (data-layer
+  // screenAgent.ts), since this page has already counted the freeze.
+  async function report(id, why, froze) {
     if (!pc || !id) return;
-    const out = { why, first_picture_ms: firstAt ? firstAt - askedAt : null, secs: Math.round((Date.now() - askedAt) / 1000) };
+    const out = { why, first_picture_ms: firstAt ? firstAt - askedAt : null, secs: Math.round((Date.now() - askedAt) / 1000),
+      frozen_ms: froze > 0 ? froze : null };
     try {
       const st = await pc.getStats();
       st.forEach((x) => {
@@ -403,13 +407,13 @@ export function openScreen({ mount, session = null, handoff = null, onEnd = null
     fetch(`/api/screen/${id}/stats`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(out) }).catch(() => {});
   }
 
-  function teardown(why) {
+  function teardown(why, froze) {
     clearTimeout(timer);
     const id = shareId; shareId = null;
     if (pc) {
       if (dc && dc.readyState === 'open') { try { dc.send(JSON.stringify({ t: 'bye' })); } catch (_) {} }
       const p = pc;
-      report(id, why).finally(() => { try { p.close(); } catch (_) {} });
+      report(id, why, froze).finally(() => { try { p.close(); } catch (_) {} });
     }
     pc = null; dc = null; path = '';
   }
@@ -420,8 +424,9 @@ export function openScreen({ mount, session = null, handoff = null, onEnd = null
     if (!firstAt && replaced) reportPageOccurrence('[screen] no picture from the Mac: replaced by a newer share from this device');
     else if (!firstAt && frozen) reportPageOccurrence(`[screen] no picture from the Mac: the page was frozen ${Math.round(frozen / 1000)}s`);
     else if (!firstAt) console.error(`[screen] no picture from the Mac: ${why}`);
+    const froze = frozen;
     frozen = 0; replaced = false;
-    teardown(why);
+    teardown(why, froze);
     if (onFail && !firstAt) { close(); onFail(); return; }
     // A share that was showing and dropped (the Mac's agent restarted, the network blinked) comes back by
     // itself: a few attempts a few seconds apart, and only then the Retry button.

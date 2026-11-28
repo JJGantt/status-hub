@@ -113,7 +113,10 @@ since its viewer was cut off.
 - A share the Mac does not answer in 20 s is reported by the hub (the Mac asleep, its agent down, or
   its realtime channel deaf look alike).
 - The agent reports any end that is not `bye`, `stopped`, `disconnected` or `closed`, and a helper that
-  exits without saying why.
+  exits without saying why. A `failed` end waits 45 s for the phone's `phone_stats` first: a page iOS
+  froze stops answering, so the Mac sees a dead peer, and when the phone's stats carry `frozen_ms` the
+  end is the occurrence `… share ended: failed: the phone's page was frozen Ns` (the phone has counted
+  the freeze itself, below). No stats by then, or stats with no freeze, and it is the error.
 - The phone reports a share that never showed a picture (`console.error`, reported through
   `/api/clientlog`). When its 25 s timer fires more than 2 s late, iOS froze the page while it stayed
   `visible` (no `visibilitychange`, so no `bye`), the viewer could not connect, and the end is an

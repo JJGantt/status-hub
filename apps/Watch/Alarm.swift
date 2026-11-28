@@ -68,6 +68,13 @@ final class Alarm: ObservableObject {
         do {
             items = try await Hub.dueFeed().filter { $0.alarm == true && $0.when != nil }
         } catch {
+            // `deactivate()` cancels the stream task the read runs in when the scene leaves `active`, which
+            // ends it as URLError -999. That is the app stopping on purpose, not a failure: the next
+            // activation reads the feed again.
+            if Task.isCancelled || (error as? URLError)?.code == .cancelled {
+                Hub.log("alarm-feed-cancelled")
+                return
+            }
             Hub.log("alarm-feed-failed", ["error": String(describing: error).prefix(120).description])
             return
         }

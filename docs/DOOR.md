@@ -67,6 +67,9 @@ elevator pane's log:
 - CoreBluetooth connection events (`registerForConnectionEvents`), matched on Device Information,
   Battery, Apple's Continuity and Nearby services and on every peripheral already seen connected;
   `bluetooth-central` in UIBackgroundModes and a restore identifier let them arrive in the background.
+  iOS answers every `registerForConnectionEvents` call with the current state of each match, so the
+  handler re-registers only when a peripheral is new and logs only a change of state; re-registering
+  on every event is an endless loop on the main queue that freezes the app.
 - `retrieveConnectedPeripherals(withServices:)` at launch and whenever watching near home starts.
 - WatchConnectivity pairing, install and reachability changes (from `WatchLink`'s delegate).
   Reachability is the watch app being reachable, not the radio link.

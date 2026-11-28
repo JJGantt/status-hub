@@ -30,6 +30,8 @@ final class WatchLinkWatch: NSObject, CBCentralManagerDelegate {
     private var central: CBCentralManager?
     /// Peripherals seen connected to the system, by identifier: their names, and matched for events.
     private var known: [UUID: String] = [:]
+    /// The last connection event logged for each peripheral, so a repeat of the same state is not logged.
+    private var lastState: [UUID: String] = [:]
 
     /// At launch, and each time watching near home starts. The first call creates the manager, which is
     /// also when iOS asks for Bluetooth permission.
@@ -71,10 +73,16 @@ final class WatchLinkWatch: NSObject, CBCentralManagerDelegate {
     nonisolated func centralManager(_ c: CBCentralManager, connectionEventDidOccur event: CBConnectionEvent,
                                     for peripheral: CBPeripheral) {
         MainActor.assumeIsolated {
+            let state = event == .peerConnected ? "connected" : "disconnected"
+            // iOS answers every registerForConnectionEvents with the current state of each match, so
+            // re-registering from here on every event is an endless loop on the main queue. Re-register
+            // only when a peripheral is new, and log only a change of state.
+            let isNew = known[peripheral.identifier] == nil
             known[peripheral.identifier] = peripheral.name ?? known[peripheral.identifier] ?? "?"
-            log(event == .peerConnected ? "connected" : "disconnected",
-                ["name": peripheral.name ?? "?", "id": peripheral.identifier.uuidString.prefix(8).description])
-            register(c)
+            guard lastState[peripheral.identifier] != state else { return }
+            lastState[peripheral.identifier] = state
+            log(state, ["name": peripheral.name ?? "?", "id": peripheral.identifier.uuidString.prefix(8).description])
+            if isNew { register(c) }
         }
     }
 

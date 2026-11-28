@@ -1749,6 +1749,10 @@ page is hidden, when iOS kills its requests) are `ev: 'error'` lines. The iPhone
 through `ClientLog.fail` (`apps/Shared/ClientLog.swift`, app and widgets, held in an outbox until the hub
 has them) and the watch's through `Hub.fail`; `lib/clientfail.js` decides which phone and watch lines are
 failures — marked `level: error` or named `…-failed` / `…-broken`, never by a list of events.
+A device logging in a loop raises nothing that way, since its lines are plain, so `lib/clientflood.js`
+counts every line per device, event and minute of the device's clock: past 300 of one kind (the busiest
+normal minute in two weeks was 47) it is reported as that device's error and the rest of the minute's
+are dropped rather than stored.
 
 **A push that reached no device is an error and is tried again.** `pushAll` logs it with `console.error`
 and writes its `notifications` row WITHOUT the dedupe key, since the key is what marks an occurrence

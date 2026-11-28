@@ -10,6 +10,7 @@ const heicConvert = require('heic-convert');
 const { localDate, etNowString } = require('../lib/dates');
 const ops = require('../lib/report');
 const { clientFailure } = require('../lib/clientfail');
+const { createFloodGuard } = require('../lib/clientflood');
 const { vanishedRecordings, RECORD_EVENTS } = require('../lib/outcomes');
 const { FrameReader, endOf, adtsSeconds, PauseClock, BrokenStreams, endedBy, RECOVER_GRACE_MS } = require('../lib/livestream');
 const { heardStart, heardEnd } = require('../lib/streams');
@@ -738,6 +739,10 @@ module.exports = function (ctx) {
   // are acknowledged and sends what piled up while it was offline all at once. A kept batch is answered
   // only once it is stored, so a failed write leaves the lines on the watch to be sent again.
   const WATCH_TIMING_EVENTS = { sent: 'watch_sent', answered: 'watch_answered', shown: 'watch_shown' };
+  // A device logging far more than it ever does is reported and its excess dropped (lib/clientflood.js).
+  const admitClientLine = createFloodGuard({ report: (message, src, context) =>
+    ops.report(message, { machine: 'client', service: src, context }) });
+
   gated.post('/api/clientlog', express.json({ limit: '256kb' }), async (req, res) => {
     const b = req.body || {};
     // The watch's battery rides its batches (lib/watchbattery.js); a failed store never fails the log.
@@ -745,6 +750,7 @@ module.exports = function (ctx) {
     const lines = Array.isArray(b.lines) ? b.lines.filter((l) => l && typeof l === 'object') : [b];
     const keep = [];
     for (const l of lines) {
+      if (!admitClientLine(l)) continue;
       try { console.log('[clientlog]', JSON.stringify(l).slice(0, 900)); } catch (_) {}
       if (l.ev === 'alarmclock' || l.ev === 'tvring') noteRinger(l, req);
       // A client's own error, sent by the page's global handler (public/shared.js) or by an app, is

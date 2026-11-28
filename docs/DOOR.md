@@ -92,6 +92,11 @@ and set by `GET` / `POST /api/door/modes` and the debug page's switches, so each
 - **Bluetooth:** data-layer `presence/ble.py` writes `arrive` / `leave` rows to `presence_events` for his
   phone and watch, which the Mac recognises by their real addresses. The hub (realtime INSERT,
   `presenceEvent`) unlocks on an `arrive` when `bluetooth` is on. `GET /api/presence/events`.
+- **Only after he really left** (`lib/door.js` `leftAndCameBack`, tested in `test/door-arrival.test.js`): an
+  arrival counts only if the door opened, after that one of his devices went unheard over Bluetooth
+  (`presence_events` `leave`) or the phone rode the elevator down, and the door has not opened since. A
+  phone restart or Bluetooth toggled at home has no door opening behind it. Every verdict is logged
+  (`[switchbot] … an arrival / not an arrival (why)` in the hub's log), switch on or off.
 - Both unlock at most once per device a minute, record the command with `reason` `wifi:<device>` /
   `bluetooth:<device>`, and report a failed unlock.
 

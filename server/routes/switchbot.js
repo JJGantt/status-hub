@@ -5,7 +5,7 @@
 const crypto = require('crypto');
 const express = require('express');
 const ops = require('../lib/report');
-const { stateOf } = require('../lib/door');
+const { stateOf, leftAndCameBack } = require('../lib/door');
 const { createSwitchBot } = require('../lib/switchbot');
 
 // A backstop behind the event sources, in minutes: a change none of them recorded is written as a
@@ -216,6 +216,21 @@ module.exports = function (ctx) {
     catch (e) { console.error('[switchbot] reading lan_joins failed:', e); res.status(502).json({ error: 'unreachable' }); }
   });
 
+  // Whether an arrival at `atIso` follows him really leaving (lib/door.js leftAndCameBack), from the last
+  // day of door openings, Bluetooth departures and elevator rides down. Logged either way, for tuning.
+  async function cameBack(atIso, what) {
+    const since = new Date(Date.now() - 24 * 3600e3).toISOString();
+    const [opens, leaves, downs] = await Promise.all([
+      sb(`door_events?select=at&event=eq.opened&at=gte.${since}`),
+      sb(`presence_events?select=at&event=eq.leave&at=gte.${since}`),
+      sb(`elevator_rides?select=started_at&outcome=eq.down&started_at=gte.${since}`),
+    ]);
+    const ms = (xs, k) => xs.map((r) => Date.parse(r[k]));
+    const v = leftAndCameBack(Date.parse(atIso), { opens: ms(opens, 'at'), leaves: ms(leaves, 'at'), downs: ms(downs, 'started_at') });
+    console.log(`[switchbot] ${what} at ${atIso}: ${v.ok ? 'an arrival' : 'not an arrival'} (${v.why})`);
+    return v.ok;
+  }
+
   // Phone and watch arrivals and departures heard over Bluetooth (data-layer presence/ble.py).
   gated.get('/api/presence/events', async (req, res) => {
     try { res.json(await sb('presence_events?select=at,machine,device,source,event,rssi,away_s&order=at.desc&limit=30')); }
@@ -228,6 +243,7 @@ module.exports = function (ctx) {
   async function presenceEvent(row) {
     try {
       if (!row || row.source !== 'ble' || row.event !== 'arrive') return;
+      if (!(await cameBack(row.at, `${row.device} heard over Bluetooth`))) return;
       if (!(await modes()).bluetooth) { console.log(`[switchbot] ${row.device} arrived over Bluetooth; bluetooth approach is off`); return; }
       if (Date.now() - (lastBleUnlock.get(row.device) || 0) < 60e3) return;
       lastBleUnlock.set(row.device, Date.now());
@@ -258,6 +274,7 @@ module.exports = function (ctx) {
     try { devices = JSON.parse((devRow && devRow.value) || '{}'); } catch (e) { report(`app_settings.presence_devices is not JSON: ${e.message}`); return; }
     const who = devices[String(row.mac).toLowerCase()];
     if (!who) return;
+    if (!(await cameBack(row.at, `${who} joined the Wi-Fi`))) return;
     if (!(await modes()).wifi) { console.log(`[switchbot] ${who} joined the Wi-Fi; wifi approach is off`); return; }
     if (Date.now() - (lastWifiUnlock.get(row.mac) || 0) < 60e3) return;
     lastWifiUnlock.set(row.mac, Date.now());

@@ -223,8 +223,10 @@ app.use((err, req, res, next) => {
 });
 app.use(errorHandler());
 
+const { warmFfmpeg } = require('./lib/ffwarm');
 const server = app.listen(PORT, '0.0.0.0', () => {
   console.log(`status-hub on :${PORT}`);
+  warmFfmpeg();
   realtime.start();
   // Time-based fields (pace drain, volume drop-off) change with the clock, not just on DB
   // edits — so re-push a fresh frame on a timer too. Push, not client polling; gated on

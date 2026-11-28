@@ -325,8 +325,9 @@ function paintAsk() {
 const TAB_KINDS = {
   // A screen the session handed over (routes/handoffs.js). The Mac's screen is shown LIVE (screen.js),
   // its Done and Cancel ending the handoff; when no picture comes, and for the Pi's browser, it is the
-  // screenshot tap screen (handoff.js).
-  handoff: { label: () => 'Handoff', selfEnds: true, front: 'always', mount: (pane, t, done) => {
+  // screenshot tap screen (handoff.js). Opening the session lands on the conversation even with one open:
+  // its notification names the tab when that is where he should land (pendingTab).
+  handoff: { label: () => 'Handoff', selfEnds: true, front: 'new', mount: (pane, t, done) => {
     const taps = () => openHandoff(t.id, { mount: pane, onEnd: done });
     if (!/^mac-/.test(t.target || '')) return taps();
     let close = openScreen({ mount: pane, session: cur && cur.id, handoff: { id: t.id, focus: t.focus }, onEnd: done,

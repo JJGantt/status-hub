@@ -39,7 +39,7 @@ data-layer README § Handoffs.
 
 | surface | what |
 |---|---|
-| phone, session view | a **Handoff tab** beside the conversation (`cards/repos.js`, session tabs): it opens in front when the handoff arrives, and he can switch to the Session tab to read something (a number to type) and back without losing either; the tab closes itself once the handoff ends |
+| phone, session view | a **Handoff tab** beside the conversation (`cards/repos.js`, session tabs): it comes to the front when the handoff arrives while the session is open, but opening the session lands on the conversation (only the notification opens it on the handoff); he can switch to the Session tab to read something (a number to type) and back without losing either; the tab closes itself once the handoff ends |
 | phone, notification | the banner opens the handoff's session on its Handoff tab (`Push.swift` → `PageLaunch.handoff` → `window.__openHandoff` → `__openHandoffTab`) |
 | phone, Mac targets | `mac-screen` and `mac-chrome` show the Mac's screen LIVE in the tab (`public/screen.js`, docs/SCREEN.md), framed on `focus`, with Cancel and Done ending the handoff; when no picture comes within 25 s it falls back to the tap screen |
 | phone, tap screen | `public/handoff.js`, drawn inside the tab: the whole screen, framed at first on the part that matters; one finger pans, two pinch to zoom, a tap that did not move clicks there; the session's suggested values as buttons that fill the box; the box and Type to type; Enter, Tab, Refresh, Cancel, Done |

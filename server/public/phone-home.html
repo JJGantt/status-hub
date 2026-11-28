@@ -44,7 +44,6 @@
   </div>
 </div>
 
-<div class="loginbanner" id="loginbanner" hidden></div>
 <div class="wallpanes" id="wallpanes">
 
 
@@ -61,6 +60,11 @@
 <section class="pane pane-wall">
 <div class="tv-shell">
   <div class="rows">
+
+    <!-- CLAUDE LOGIN BANNER (cards/logins.js), only while a login needs renewing. A block IN the
+         column, on the home pane only: it takes its height from the conversation, the one block that
+         absorbs slack, and covers nothing. Fixed over the page it sat on the sessions pane's controls. -->
+    <div class="loginbanner" id="loginbanner" hidden></div>
 
     <!-- HEALTH BAR — the three scores, lying on their side. -->
     <div class="healthbar" id="healthbar"></div>

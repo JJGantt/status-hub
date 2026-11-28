@@ -35,6 +35,10 @@ data-layer README § Handoffs.
    matches the screenshot it was made on (data-layer README § Handoffs); otherwise he is sent the screen as
    it is now.
 
+**One at a time on a screen.** A second session's ask on the Mac's screen waits as `queued` until the
+open one ends; the hub shows and pushes it only when it turns `open`, titled with its session's name like
+any other (data-layer README § Handoffs).
+
 ## Where he sees it
 
 | surface | what |

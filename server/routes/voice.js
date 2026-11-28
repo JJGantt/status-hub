@@ -411,6 +411,14 @@ module.exports = function (ctx) {
         const got = await liveAudio(String(req.query.live || ''), tmp, dur);
         timing.live_wait_ms = since(t0);
         if (got.ok) Object.assign(timing, { live_end_wait_ms: got.endWaitMs, live_remux_ms: got.remuxMs });
+        // A streamed command normally finds its audio within ~100 ms. A longer wait is reported per command
+        // with where it went, since the stage's latency report fires only on the change (WATCHLIST 'A
+        // voice-command stage gets slower').
+        if (got.ok && timing.live_wait_ms > LIVE_SLOW_MS) {
+          console.error(`[voice-live] ${req.query.live} took ${timing.live_wait_ms}ms to give its audio to command ${id}: `
+            + `waited ${got.endWaitMs}ms for the stream to settle (settled ${got.settledVsAsk}ms and last byte ${got.lastByteVsAsk}ms `
+            + `from the ask), remux ${got.remuxMs}ms`);
+        }
         if (!got.ok) {
           console.log(`[voice-command] live audio for ${req.query.live || '-'} not usable (${got.why}); asking for the clip`);
           return res.status(409).json({ upload: true, why: got.why });
@@ -994,6 +1002,8 @@ module.exports = function (ctx) {
   // delivering its backlog when the command lands; past this the clip is asked for instead. Well inside
   // the watch's own patience with the hub (Hub.hubPatience, 25s), so that upload still fits in it.
   const LIVE_WAIT_MS = 12 * 1000;
+  // A live command's wait for its stream's audio above this is reported (normally ~100 ms).
+  const LIVE_SLOW_MS = 2000;
   // A stream may begin a moment after the file (it opens once the microphone is live), so it is judged
   // whole when it is within this much of the recorded length.
   const LIVE_SHORT_S = 0.6;
@@ -1009,6 +1019,9 @@ module.exports = function (ctx) {
     const t = Date.now();
     const end = await Promise.race([s.ended, new Promise((r) => setTimeout(() => r(null), LIVE_WAIT_MS))]);
     const endWaitMs = Date.now() - t;
+    // When the stream settled against when this command asked for it: negative means it had already
+    // settled before the command arrived, so any wait is not the stream's.
+    const settledVsAsk = s.settledAt ? s.settledAt - t : null;
     if (!end) return { ok: false, why: 'still open' };
     if (end.verdict !== 'ended' || !end.audio.length) return { ok: false, why: end.verdict };
     const raw = `${file}.aac`;
@@ -1016,7 +1029,8 @@ module.exports = function (ctx) {
       await fs.promises.writeFile(raw, end.audio);
       await new Promise((resolve, reject) => execFile('ffmpeg', ['-v', 'error', '-y', '-f', 'aac', '-i', raw, '-c', 'copy', '-f', 'mp4', file],
         (e) => (e ? reject(e) : resolve())));
-      return { ok: true, heldS: adtsSeconds(end.audio), endWaitMs, remuxMs: Date.now() - t - endWaitMs };
+      return { ok: true, heldS: adtsSeconds(end.audio), endWaitMs, remuxMs: Date.now() - t - endWaitMs, settledVsAsk,
+        lastByteVsAsk: s.lastByteAt ? s.lastByteAt - t : null };
     } catch (e) {
       console.error(`[voice-live] ${id} could not be made into a clip: ${e.message || e}`);
       return { ok: false, why: 'remux' };
@@ -1039,6 +1053,7 @@ module.exports = function (ctx) {
     const startedAt = Date.now();
     req.on('data', (chunk) => {
       lastByteAt = Date.now();
+      entry.lastByteAt = lastByteAt;
       for (const f of reader.push(chunk)) {
         if (f.type === 'A') { if (bytes + f.data.length <= LIVE_MAX_BYTES) { audio.push(Buffer.from(f.data)); bytes += f.data.length; } }
         else { last = f.type; paused = f.type === 'P' ? true : f.type === 'R' ? false : paused; pauses.frame(f.type); }
@@ -1051,6 +1066,7 @@ module.exports = function (ctx) {
     const settle = () => {
       if (settled) return;
       settled = true;
+      entry.settledAt = Date.now();
       // The server's request limit is checked on an interval, so a stream it closes has been open at least
       // that long (this handler starts a moment after the request did, hence the second of slack).
       const limit = req.socket && req.socket.server && req.socket.server.requestTimeout;

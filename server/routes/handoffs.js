@@ -71,10 +71,11 @@ module.exports = function ({ gated, pushAll, pushSessions, sb, sbInsert }) {
     // A screen a session drives itself (driver 'session') is pushed too: he sees it is being worked and can
     // watch, though nothing is asked of him. Its note says what the session is doing there.
     // A drive handed over in place (data-layer requestHandoff) is pushed again: it is now his to act on.
+    // That push is a second delivery of the same handoff, so it carries its own dedupe key.
     const handedOver = before && before.driver === 'session' && !row.driver;
     if (row.status === 'open' && (!before || before.status !== 'open' || handedOver)) {
       sessionName(row.session).then((name) => pushAll('handoff', name || 'Handoff', row.note || row.target,
-        `handoff-${row.id}`, { payload: { handoff_id: row.id, ...(row.session ? { session_id: row.session } : {}) } }))
+        handedOver ? `handoff-${row.id}-handover-${row.updated_at}` : `handoff-${row.id}`, { payload: { handoff_id: row.id, ...(row.session ? { session_id: row.session } : {}) } }))
         .catch((e) => console.error(`[handoff] push for ${row.id} failed: ${e.message || e}`));
     }
     if (row.session && (row.status !== before?.status || row.seq !== before?.seq)) pushSessions();

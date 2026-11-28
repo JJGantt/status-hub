@@ -97,7 +97,10 @@ Stopping there sent commands half-said, so instead the status line reads `Hub re
 talking` until an acknowledgement comes back, and the recording carries on: the whole of it is held on
 the phone (the page's chunks, the app's file), the stream resends from the start when the restarted hub
 answers 410, and the stop tap sends it through the outbox as always. Each stall is counted as an
-occurrence (`voice-stream-stall` on `/api/clientlog`), not raised as an incident.
+occurrence (`voice-stream-stall` on `/api/clientlog`), not raised as an incident. A stall within a
+minute of the hub's own start is counted as `… stopped acknowledging its stream during a hub restart`,
+apart from the rest (`server/lib/streamstall.js`), so its watch can follow how often the hub is deployed
+while the plain fingerprint keeps a tight watch for stalls the network caused.
 
 **A stream that goes silent is used.** The app killed, the page reloaded, the phone gone from the
 network for good: a stream with no chunk for a minute (thirty while it said it was paused or ended) is

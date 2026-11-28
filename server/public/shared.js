@@ -15,10 +15,11 @@ export function reportPageError(message, stack) {
 }
 // A failure the page handles by itself, or one a frozen page causes: counted by the responder, raised only
 // when its watch rate is crossed (routes/voice.js `/api/clientlog`, `ev: 'occurrence'`).
-export function reportPageOccurrence(message) {
+// `detail` rides along for the hub log and stays out of the fingerprint, which is the message alone.
+export function reportPageOccurrence(message, detail) {
   try {
     const body = JSON.stringify({ src: 'web', ev: 'occurrence', page: location.pathname, msg: String(message).slice(0, 500),
-      t: new Date().toISOString() });
+      ...(detail ? { detail: String(detail).slice(0, 300) } : {}), t: new Date().toISOString() });
     navigator.sendBeacon('/api/clientlog', new Blob([body], { type: 'application/json' }));
   } catch (_) { /* nothing left to report it with */ }
 }
@@ -60,16 +61,21 @@ window.fetch = async (input, init) => {
   const url = new URL(typeof input === 'string' || input instanceof URL ? input : input.url, location.href);
   const method = (init && init.method) || (input instanceof Request ? input.method : 'GET');
   const watched = url.origin === location.origin && url.pathname !== '/api/clientlog';
-  const say = (why) => {
+  // `noAnswer`: the request was rejected with no HTTP response at all ("Load failed", "Failed to fetch").
+  // The hub never answered, so this is the connection: the phone's network dropping every request in
+  // flight at once while the hub keeps serving. A card refetches on its next update, so it is counted
+  // under one fingerprint, raised past its watch; a hub that is really down is caught by its own beat.
+  const say = (why, noAnswer) => {
     if (!watched) return;
     lastRequestFailure = { why, at: Date.now() };
     if (document.visibilityState === 'hidden' || leaving) return;
     if (Date.now() - wokeAt < 3000) reportPageOccurrence(`request failed after the page was frozen ${Math.round(frozeFor / 1000)}s: ${method} ${url.pathname}: ${why}`);
+    else if (noAnswer) reportPageOccurrence(`request got no answer from the network: ${why}`, `${method} ${url.pathname}`);
     else reportPageError(`request failed: ${method} ${url.pathname}: ${why}`);
   };
   let r;
   try { r = await pageFetch(input, init); } catch (e) {
-    if (!(e && e.name === 'AbortError')) say(e && e.message || String(e));
+    if (!(e && e.name === 'AbortError')) say(e && e.message || String(e), e instanceof TypeError);
     throw e;
   }
   if (!r.ok && r.status < 500) say(`HTTP ${r.status}`);

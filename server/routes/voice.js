@@ -20,6 +20,9 @@ const os = require('os');
 const path = require('path');
 const { pipeline } = require('stream/promises');
 const { fail, logged } = require('../lib/httpfail');
+const { stallMessage } = require('../lib/streamstall');
+
+const BOOT_MS = Date.now();
 
 module.exports = function (ctx) {
   const {
@@ -819,8 +822,8 @@ module.exports = function (ctx) {
             look: 'client_log where src=phone around that time (docs/HUB-INTERNALS.md § voice outbox)' } });
       }
       // A pressed recording whose stream to the hub went unacknowledged (a deploy, a dropped connection).
-      // The recording carries on and loses nothing, so it is counted, not raised (public/voiceagent.js).
-      if (l.ev === 'voice-stream-stall') ops.occurrence(`${l.src || 'client'} recording: the hub stopped acknowledging its stream; recording carried on`);
+      // The recording carries on and loses nothing, so it is counted, not raised (lib/streamstall.js).
+      if (l.ev === 'voice-stream-stall') ops.occurrence(stallMessage(l, BOOT_MS));
       // A dictation whose recorder was gone before it was delivered (public/voiceagent.js strandedOwner).
       if (l.src === 'phone' && l.ev === 'voice-dictation-stranded') {
         ops.report(l.delivered

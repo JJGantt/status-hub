@@ -32,8 +32,14 @@ console.error = (...args) => {
 
 // EVERY REQUEST TO THE HUB THAT FAILS IS REPORTED, here at the one place every call passes through, so a
 // `.catch(() => {})` at a call site (a STOP, a snooze, a setting) cannot hide one. Not the log's own post,
-// not an abort (the caller gave it up), not a 5xx (the hub reported its own when it answered it), and not
-// while the page is hidden: iOS kills a suspended page's requests, which is the OS, not the system failing.
+// not an abort (the caller gave it up), not a 5xx (the hub reported its own when it answered it), not
+// while the page is hidden: iOS kills a suspended page's requests, which is the OS, not the system failing,
+// and not once the page is unloading: a reload cancels every request still in flight and WebKit rejects
+// each as "Load failed". That is the common case, not a rare one: a phone returning to the hub after a
+// deploy reloads (safeReload, from core.js's visibilitychange) at the same instant it refetches its cards.
+let leaving = false;
+addEventListener('pagehide', () => { leaving = true; });
+addEventListener('pageshow', () => { leaving = false; });   // back from the back-forward cache
 const pageFetch = window.fetch.bind(window);
 window.fetch = async (input, init) => {
   const url = new URL(typeof input === 'string' || input instanceof URL ? input : input.url, location.href);
@@ -42,7 +48,7 @@ window.fetch = async (input, init) => {
   const say = (why) => {
     if (!watched) return;
     lastRequestFailure = { why, at: Date.now() };
-    if (document.visibilityState !== 'hidden') reportPageError(`request failed: ${method} ${url.pathname}: ${why}`);
+    if (document.visibilityState !== 'hidden' && !leaving) reportPageError(`request failed: ${method} ${url.pathname}: ${why}`);
   };
   let r;
   try { r = await pageFetch(input, init); } catch (e) {
@@ -214,6 +220,7 @@ export function holdReload(on) {
 export function safeReload() {
   if (reloadHolds) { reloadWanted = true; return; }
   reloadWanted = false;
+  leaving = true;   // set before the reload, which rejects in-flight requests ahead of pagehide
   location.reload();
 }
 

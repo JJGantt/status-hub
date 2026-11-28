@@ -315,7 +315,7 @@ describe('which routes are public', () => {
     'POST /api/cg/orders/done',
     'GET /surf', 'GET /api/surf/live', 'GET /api/surf/stream', 'GET /api/surf/history',
     'GET /app.css', 'GET /surf.css', 'GET /dist/surf.js',
-    'POST /api/ci/github', 'POST /api/switchbot/:token', 'GET /api/lobby/opened/:nonce/:path',
+    'POST /api/ci/github', 'POST /api/switchbot/:token', 'GET /api/lobby/opened/:nonce/:path', 'GET /api/lobby/started/:nonce/:path',
   ]);
 
   test('the source was read', () => assert.ok(routes.filter((r) => r.router === 'gated').length > 50));

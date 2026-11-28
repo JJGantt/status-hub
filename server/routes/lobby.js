@@ -114,23 +114,27 @@ module.exports = function (ctx) {
 
   // The phone's report, sent by the Shortcuts automation right after it opens the door. Public: the
   // code is one-time per path and expires (lib/lobby.js), and nothing here opens anything.
-  pub.get('/api/lobby/opened/:nonce/:path', async (req, res) => {
-    const { nonce, path } = req.params;
-    try {
-      if (!/^[A-Za-z0-9_-]{8,32}$/.test(nonce)) return res.status(404).type('text').send('unknown code');
-      const race = (await sb(`lobby_races?select=id,created_at,reason,door&nonce=eq.${encodeURIComponent(nonce)}`))[0] || null;
-      const arrivals = race ? (await sb(`lobby_events?select=path&kind=eq.arrive&race_id=eq.${race.id}`)).map((e) => e.path) : [];
-      const v = judgeArrival(race, path, arrivals, Date.now());
-      if (!v.ok) return res.status(v.status).type('text').send(v.why);
-      await insert('lobby_events', { race_id: race.id, kind: 'arrive', path });
-      console.log(`[lobby] ${race.id} ${path} arrived${arrivals.length ? '' : ' first'}`);
-      res.type('text').send('ok');
-    } catch (e) {
-      console.error('[lobby] recording an arrival failed:', e);
-      report(`Recording a lobby door arrival failed: ${e.message || e}`);
-      res.status(500).type('text').send('failed');
-    }
-  });
+  // `opened` is reported after the door's unlock shortcut; `started` (measurement) at the automation's
+  // first step, before it. Each at most once per path per race.
+  const stageReport = (stage, kind) => async (req, res) => {
+      const { nonce, path } = req.params;
+      try {
+        if (!/^[A-Za-z0-9_-]{8,32}$/.test(nonce)) return res.status(404).type('text').send('unknown code');
+        const race = (await sb(`lobby_races?select=id,created_at,reason,door&nonce=eq.${encodeURIComponent(nonce)}`))[0] || null;
+        const seen = race ? (await sb(`lobby_events?select=path&kind=eq.${kind}&race_id=eq.${race.id}`)).map((e) => e.path) : [];
+        const v = judgeArrival(race, path, seen, Date.now());
+        if (!v.ok) return res.status(v.status).type('text').send(v.why);
+        await insert('lobby_events', { race_id: race.id, kind, path });
+        console.log(`[lobby] ${race.id} ${path} ${stage}${seen.length ? '' : ' first'}`);
+        res.type('text').send('ok');
+      } catch (e) {
+        console.error(`[lobby] recording a ${stage} report failed:`, e);
+        report(`Recording a lobby door ${stage} report failed: ${e.message || e}`);
+        res.status(500).type('text').send('failed');
+      }
+    };
+  pub.get('/api/lobby/opened/:nonce/:path', stageReport('opened', 'arrive'));
+  pub.get('/api/lobby/started/:nonce/:path', stageReport('started', 'start'));
 
   gated.get('/api/lobby/races', async (req, res) => {
     try {

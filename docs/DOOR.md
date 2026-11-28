@@ -137,6 +137,8 @@ door on the first to land and then reports which one it was.
 - `GET /api/lobby/races`: the last 10 races (winner, each path's send result and arrival), shown in the
   elevator page's Lobby section.
 
+A second, measurement-only report, `GET /api/lobby/started/<nonce>/<path>` (kind `start`, data-layer 00222), is sent by the automation's first step, before the unlock shortcut; with `opened` it splits a race's delay into message delivery plus automation start, and the unlock itself (`started_s` / `arrived_s` in `GET /api/lobby/races`).
+
 ## Near-home trace (phone)
 
 While the elevator watch runs (inside the 500 m home geofence), `apps/Sources/HomeTrace.swift` records

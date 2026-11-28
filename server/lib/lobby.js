@@ -32,12 +32,13 @@ function judgeArrival(race, path, arrivals, now) {
 function summarize(race, events) {
   const t0 = Date.parse(race.created_at);
   const paths = {};
-  for (const p of PATHS) paths[p] = { sent: null, error: null, skipped: false, arrived_s: null };
+  for (const p of PATHS) paths[p] = { sent: null, error: null, skipped: false, started_s: null, arrived_s: null };
   for (const e of events) {
     const p = paths[e.path];
     if (!p) continue;
     if (e.kind === 'send') { p.sent = e.ok && !e.skipped; p.skipped = !!e.skipped; p.error = e.error || null; }
     else if (e.kind === 'arrive') p.arrived_s = Math.round((Date.parse(e.at) - t0) / 100) / 10;
+    else if (e.kind === 'start') p.started_s = Math.round((Date.parse(e.at) - t0) / 100) / 10;
   }
   const arrived = PATHS.filter((p) => paths[p].arrived_s != null).sort((a, b) => paths[a].arrived_s - paths[b].arrived_s);
   return { id: race.id, at: race.created_at, door: race.door || 'main', reason: race.reason || null, winner: arrived[0] || null, paths };

@@ -98,8 +98,8 @@ final class ElevatorUnlock: NSObject, CLLocationManagerDelegate {
             let asked = Date()
             Task {
                 do {
-                    let changed = try await Self.unlock()
-                    ride["outcome"] = changed ? "unlocked" : "already_unlocked"
+                    try await Self.unlock()
+                    ride["outcome"] = "unlocked"
                 } catch {
                     ride["outcome"] = "unlock_failed"
                     ride["error"] = String(describing: error)
@@ -189,13 +189,12 @@ final class ElevatorUnlock: NSObject, CLLocationManagerDelegate {
         var description: String { switch self { case .noToken: "no hub token"; case let .status(c): "HTTP \(c)" } }
     }
 
-    /// True when the door was locked and is now unlocked; false when it was already unlocked.
-    nonisolated private static func unlock() async throws -> Bool {
+    /// Answers once the lock reports unlocked. Sent whether or not it already was; that costs nothing.
+    nonisolated private static func unlock() async throws {
         guard let req = request("/api/door", "POST", ["action": "unlock", "reason": "elevator"]) else { throw Failure.noToken }
-        let (data, resp) = try await URLSession.shared.data(for: req)
+        let (_, resp) = try await URLSession.shared.data(for: req)
         let code = (resp as? HTTPURLResponse)?.statusCode ?? 0
         guard code == 200 else { throw Failure.status(code) }
-        return ((try? JSONSerialization.jsonObject(with: data)) as? [String: Any])?["changed"] as? Bool ?? true
     }
 
     nonisolated private static func post(_ path: String, _ json: [String: Any]) {

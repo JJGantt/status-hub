@@ -23,15 +23,15 @@ function fake(states) {
 const norm = (b) => String(b.lockState).toLowerCase();
 
 test('a command answers once the lock reports the new state', async () => {
-  const f = fake(['unlocked', 'unlocked', 'locked']);
+  const f = fake(['unlocked', 'locked']);
   const r = await f.withClock(() => f.bot.command('locked', norm));
-  assert.deepEqual([r.changed, norm(r.body), f.sent], [true, 'locked', ['lock']]);
+  assert.deepEqual([norm(r.body), f.sent], ['locked', ['lock']]);
 });
 
-test('already in the wanted state sends nothing', async () => {
+test('the command is sent without reading the lock first, even when it is already in that state', async () => {
   const f = fake(['locked']);
-  const r = await f.bot.command('locked', norm);
-  assert.deepEqual([r.changed, f.sent], [false, []]);
+  const r = await f.withClock(() => f.bot.command('locked', norm));
+  assert.deepEqual([norm(r.body), f.sent], ['locked', ['lock']]);
 });
 
 test('a command that never takes effect throws', async () => {

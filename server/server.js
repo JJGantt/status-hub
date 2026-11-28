@@ -187,7 +187,8 @@ const { MACHINE_NAME, deadLetter, desk, followUpSession, machineAwake, openSessi
 
 require('./routes/failures')({ followUpSession, gated, openSession, sb, sbWrite, sessionVerb, transferSession });
 require('./routes/ci')({ MACHINE_NAME, SUPABASE_KEY, SUPABASE_URL, followUpSession, gated, openSession, pub, sb, sbWrite });
-require('./routes/switchbot')({ SUPABASE_KEY, SUPABASE_URL, gated, pub, sb });
+const { lanJoined } = require('./routes/switchbot')({ SUPABASE_KEY, SUPABASE_URL, gated, pub, sb });
+require('./routes/elevator')({ gated, sb });
 
 const prompts = require('./routes/prompts')({ auth, gated, pushAll, pushSessions, sb });
 const handoffs = require('./routes/handoffs')({ gated, pushAll, pushSessions, sb, sbInsert });
@@ -205,7 +206,7 @@ const realtime = createRealtime({
   MUTE_HOLD, SUPABASE_KEY, SUPABASE_URL, auth, broadcast, dirtyDesk: cache.dirtyDesk,
   dirtyDue: jobs.dirtyDue, dirtyHeatHistory, dirtyNutDay, dirtyRows: cache.dirtyRows, dirtySettings, dirtySurfHist,
   dirtyWorkoutDay, markLive, notifyAnswer, onDeskCommand: desk.onCommand, pushDay, pushLists, pushSessions, pushSurfLive, pushVoice, recomputeMute,
-  reportTick: jobs.reportTick, handoffChanged: (row) => handoffs.changed(row), tabChanged: (row) => tabs.changed(row), screenChanged: (row) => screenshare.changed(row), requestView, sb, settleReply, surfAlarms, syncBadge, takeUsage: usage.take, tvInserted,
+  reportTick: jobs.reportTick, handoffChanged: (row) => handoffs.changed(row), tabChanged: (row) => tabs.changed(row), screenChanged: (row) => screenshare.changed(row), requestView, sb, settleReply, surfAlarms, syncBadge, takeUsage: usage.take, tvInserted, lanJoined,
 });
 
 // A client that hangs up before its request body finishes arriving (a phone locking or losing signal

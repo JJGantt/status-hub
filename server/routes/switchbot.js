@@ -136,6 +136,69 @@ module.exports = function (ctx) {
     }
   });
 
+  // ── Arrival approaches (docs/DOOR.md § Arrival) ──
+  // Which approaches may unlock: app_settings.door_unlock_modes (data-layer 00215), so each can be tested
+  // alone. Read per decision; it is one small row and the decisions are rare.
+  const MODES = ['elevator', 'wifi', 'bluetooth'];
+  async function modes() {
+    const row = (await sb('app_settings?select=value&key=eq.door_unlock_modes'))[0];
+    let m = {};
+    try { m = JSON.parse((row && row.value) || '{}'); } catch (e) { report(`app_settings.door_unlock_modes is not JSON: ${e.message}`); }
+    return Object.fromEntries(MODES.map((k) => [k, m[k] === true]));
+  }
+  gated.get('/api/door/modes', async (req, res) => {
+    try { res.json(await modes()); } catch (e) { console.error('[switchbot] reading modes failed:', e); res.status(502).json({ error: 'unreachable' }); }
+  });
+  gated.post('/api/door/modes', express.json(), async (req, res) => {
+    try {
+      const next = { ...(await modes()) };
+      for (const k of MODES) if (typeof (req.body || {})[k] === 'boolean') next[k] = req.body[k];
+      const r = await fetch(`${SUPABASE_URL}/rest/v1/app_settings?on_conflict=key`, { method: 'POST',
+        headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}`, 'Content-Type': 'application/json',
+                   Prefer: 'resolution=merge-duplicates,return=minimal' },
+        body: JSON.stringify({ key: 'door_unlock_modes', value: JSON.stringify(next), updated_at: new Date().toISOString() }) });
+      if (!r.ok) throw new Error(`${r.status} ${(await r.text().catch(() => '')).slice(0, 200)}`);
+      res.json(next);
+    } catch (e) { console.error('[switchbot] setting modes failed:', e); report(`Setting door unlock modes failed: ${e.message || e}`); res.status(502).json({ error: 'failed' }); }
+  });
+
+  // Wi-Fi joins heard by the presence listeners (data-layer presence/, table lan_joins).
+  gated.get('/api/presence/joins', async (req, res) => {
+    try { res.json(await sb('lan_joins?select=at,machine,mac,ip,hostname,message&order=at.desc&limit=30')); }
+    catch (e) { console.error('[switchbot] reading lan_joins failed:', e); res.status(502).json({ error: 'unreachable' }); }
+  });
+
+  // A device joining the home Wi-Fi (a DHCP Discover or Request, which a phone or watch sends only when it
+  // joins or rejoins) unlocks the door when the wifi approach is on and the MAC is his: app_settings
+  // presence_devices, {"<mac>": "phone" | "watch"}. Both listeners hear the same join; one unlock per
+  // device a minute is plenty, and an extra unlock does nothing anyway.
+  const lastWifiUnlock = new Map();
+  async function lanJoined(row) {
+    try { await wifiArrival(row); }
+    catch (e) { console.error('[switchbot] handling a Wi-Fi join failed:', e); report(`Handling a Wi-Fi join failed: ${e.message || e}`); }
+  }
+  async function wifiArrival(row) {
+    if (!row || !/^(Discover|Request)$/.test(String(row.message || ''))) return;
+    const devRow = (await sb('app_settings?select=value&key=eq.presence_devices'))[0];
+    let devices = {};
+    try { devices = JSON.parse((devRow && devRow.value) || '{}'); } catch (e) { report(`app_settings.presence_devices is not JSON: ${e.message}`); return; }
+    const who = devices[String(row.mac).toLowerCase()];
+    if (!who) return;
+    if (!(await modes()).wifi) { console.log(`[switchbot] ${who} joined the Wi-Fi; wifi approach is off`); return; }
+    if (Date.now() - (lastWifiUnlock.get(row.mac) || 0) < 60e3) return;
+    lastWifiUnlock.set(row.mac, Date.now());
+    const t = Date.now();
+    try {
+      const { body } = await bot.command('unlocked', (b) => stateOf(b).lock);
+      await record(stateOf(body), 'command', { ...body, reason: `wifi:${who}`, join_at: row.at }, battery(body));
+      console.log(`[switchbot] unlocked for ${who} joining the Wi-Fi, ${Date.now() - t}ms`);
+    } catch (e) {
+      console.error(`[switchbot] Wi-Fi unlock for ${who} failed:`, e);
+      report(`Front door unlock for ${who} joining the Wi-Fi failed: ${e.message || e}`);
+    }
+  }
+
   if (!TOKEN || !SECRET) console.error('[switchbot] SWITCHBOT_TOKEN / SWITCHBOT_SECRET not set; the front door backstop is off');
   else { setTimeout(backstop, 30e3); setInterval(backstop, BACKSTOP_MS); }
+  return { lanJoined };
 };

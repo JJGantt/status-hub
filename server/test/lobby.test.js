@@ -36,5 +36,6 @@ test('the winner is the first arrival, with each path latency and send result', 
   assert.equal(summarize(race, []).winner, null);
 });
 test('the message carries the codeword, the code and the path', () => {
-  assert.equal(message('abc123XYZ', 'imessage'), 'open-lobby-7731 abc123XYZ imessage');
+  assert.equal(message('north', 'abc123XYZ', 'imessage'), 'open-lobby-7731 north abc123XYZ imessage');
+  assert.equal(message(undefined, 'abc123XYZ', 'email'), 'open-lobby-7731 main abc123XYZ email');
 });

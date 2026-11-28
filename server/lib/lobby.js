@@ -3,13 +3,15 @@
 // came to. Pure, so the route stays thin and the rules are tested (test/lobby.test.js).
 
 const PATHS = ['imessage', 'sms', 'email'];
+// The building's ButterflyMX doors; his phone's automation runs the matching "Unlock … Entrance" shortcut.
+const DOORS = ['main', 'north', 'south'];
 const CODEWORD = 'open-lobby-7731';
 // A nonce works this long after its race started: long enough for the slowest path, short enough that
 // a forwarded or leaked message cannot open the door later.
 const VALID_MS = 10 * 60e3;
 
-/** The text every path sends for a race. */
-const message = (nonce, path) => `${CODEWORD} ${nonce} ${path}`;
+/** The text every path sends for a race: codeword, door, nonce, path (the phone splits it on spaces). */
+const message = (door, nonce, path) => `${CODEWORD} ${door || 'main'} ${nonce} ${path}`;
 
 /**
  * Whether the phone's report of `path` for `race` counts, at `now` (ms). `arrivals` are the paths
@@ -38,7 +40,7 @@ function summarize(race, events) {
     else if (e.kind === 'arrive') p.arrived_s = Math.round((Date.parse(e.at) - t0) / 100) / 10;
   }
   const arrived = PATHS.filter((p) => paths[p].arrived_s != null).sort((a, b) => paths[a].arrived_s - paths[b].arrived_s);
-  return { id: race.id, at: race.created_at, reason: race.reason || null, winner: arrived[0] || null, paths };
+  return { id: race.id, at: race.created_at, door: race.door || 'main', reason: race.reason || null, winner: arrived[0] || null, paths };
 }
 
-module.exports = { PATHS, CODEWORD, VALID_MS, message, judgeArrival, summarize };
+module.exports = { PATHS, DOORS, CODEWORD, VALID_MS, message, judgeArrival, summarize };

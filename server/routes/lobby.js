@@ -8,7 +8,7 @@
 // race shows which path won and how long each took.
 const express = require('express');
 const ops = require('../lib/report');
-const { message, judgeArrival, summarize } = require('../lib/lobby');
+const { DOORS, message, judgeArrival, summarize } = require('../lib/lobby');
 
 // A race nobody's phone reported within this long, with at least one path sent, is a failure: the
 // messages went out and the door did not open (or the shortcut never reported).
@@ -65,7 +65,7 @@ module.exports = function (ctx) {
 
   async function send(race, path, fn) {
     try {
-      const r = await fn(message(race.nonce, path));
+      const r = await fn(message(race.door, race.nonce, path));
       if (r.skipped) console.log(`[lobby] ${race.id} ${path} skipped: ${r.skipped}`);
       await insert('lobby_events', { race_id: race.id, kind: 'send', path, ok: !r.skipped, skipped: !!r.skipped, error: r.skipped || null });
       return !r.skipped;
@@ -100,7 +100,9 @@ module.exports = function (ctx) {
   gated.post('/api/lobby/open', express.json(), async (req, res) => {
     try {
       const reason = typeof (req.body || {}).reason === 'string' ? req.body.reason.slice(0, 60) : 'hub';
-      const race = await insert('lobby_races', { reason }, true);
+      const door = (req.body || {}).door || 'main';
+      if (!DOORS.includes(door)) return res.status(400).json({ error: `door must be one of ${DOORS.join(', ')}` });
+      const race = await insert('lobby_races', { reason, door }, true);
       raceStarted(race);
       res.json({ id: race.id, started: race.created_at });
     } catch (e) {
@@ -116,7 +118,7 @@ module.exports = function (ctx) {
     const { nonce, path } = req.params;
     try {
       if (!/^[A-Za-z0-9_-]{8,32}$/.test(nonce)) return res.status(404).type('text').send('unknown code');
-      const race = (await sb(`lobby_races?select=id,created_at,reason&nonce=eq.${encodeURIComponent(nonce)}`))[0] || null;
+      const race = (await sb(`lobby_races?select=id,created_at,reason,door&nonce=eq.${encodeURIComponent(nonce)}`))[0] || null;
       const arrivals = race ? (await sb(`lobby_events?select=path&kind=eq.arrive&race_id=eq.${race.id}`)).map((e) => e.path) : [];
       const v = judgeArrival(race, path, arrivals, Date.now());
       if (!v.ok) return res.status(v.status).type('text').send(v.why);
@@ -132,7 +134,7 @@ module.exports = function (ctx) {
 
   gated.get('/api/lobby/races', async (req, res) => {
     try {
-      const races = await sb('lobby_races?select=id,created_at,reason&order=created_at.desc&limit=10');
+      const races = await sb('lobby_races?select=id,created_at,reason,door&order=created_at.desc&limit=10');
       const ids = races.map((r) => r.id);
       const events = ids.length ? await sb(`lobby_events?select=race_id,kind,path,ok,skipped,error,at&race_id=in.(${ids.join(',')})`) : [];
       res.json(races.map((r) => summarize(r, events.filter((e) => e.race_id === r.id))));

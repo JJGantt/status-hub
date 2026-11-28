@@ -110,6 +110,8 @@ arming lives in the hub's memory, so a hub restart inside that window drops it.
 
 ## Lobby door (ButterflyMX)
 
+The building has three ButterflyMX doors: `door` is `main`, `north` or `south` (data-layer 00220, default `main`), carried in every message so his phone's automation runs the matching shortcut ("Unlock Main Entrance", "Unlock North Entrance", "Unlock South Entrance"). `POST /api/lobby/open {door}`; the `front_door` tool's `lobby` op takes `door`.
+
 The building's downstairs door opens only from his phone: ButterflyMX's app exposes each door as a Siri
 shortcut, and iOS lets no app run another app's shortcut in the background. So opening it is a race of
 messages to the phone, whose Shortcuts automation (a Message or Mail trigger, Run Immediately) opens the
@@ -117,7 +119,7 @@ door on the first to land and then reports which one it was.
 
 - **A race** is a `lobby_races` row (data-layer 00219) with a one-time `nonce`, started by
   `POST /api/lobby/open` (`{reason}`) or the data MCP's `front_door` op `lobby`. Every path sends
-  `open-lobby-7731 <nonce> <path>`:
+  `open-lobby-7731 <door> <nonce> <path>`:
   - `sms`: the hub, through Twilio (`TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_FROM` on Fly), to
     `app_settings.lobby_phone`.
   - `email`: the hub, through the Gmail API (`GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`,

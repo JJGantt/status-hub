@@ -366,7 +366,10 @@ function paintTabs() {
   for (const t of want) if (!at.tabs.has(t.key)) addTab(at, sv, t);
   for (const [key, entry] of at.tabs) {
     const now = want.find((t) => t.key === key);
-    if (!now) { if (!TAB_KINDS[entry.t.kind].selfEnds) dropTab(at, key); continue; }
+    // A handoff tab the session no longer shows goes when another handoff takes its place: two live views at
+    // once are two screen shares from one phone, and the screen agent keeps only the newest of those.
+    const replaced = entry.t.kind === 'handoff' && want.some((t) => t.kind === 'handoff');
+    if (!now) { if (!TAB_KINDS[entry.t.kind].selfEnds || replaced) dropTab(at, key); continue; }
     if (now.v !== entry.t.v || now.url !== entry.t.url || now.title !== entry.t.title) {
       entry.t = now;
       if (entry.ctl.update) entry.ctl.update(now);

@@ -24,7 +24,10 @@ data-layer README § Handoffs.
    - pushes `kind: 'handoff'` with `handoff_id` and `session_id` (titled with the session's name, the
      body the session's note);
    - puts the handoff on its session's row (`handoff` in `/api/sessions` and `/api/sessions/:id`), as a
-     permission prompt is, so the session view shows it for as long as it waits.
+     permission prompt is, so the session view shows it for as long as it waits. One per session: an ask of his
+     before a screen the session drives, then the newest by creation (never by `updated_at`, which every
+     screenshot bumps). The phone drops a handoff tab another handoff has replaced, so it never holds two
+     live views, which are two screen shares from one device.
 4. He taps or types: `POST /api/handoffs/:id/act` inserts a `handoff_actions` row; the agent acts on the
    screen, clears any typed text, screenshots, and bumps `seq`.
 5. Each client holds `GET /api/handoffs/:id?after=<seq>&wait=40` open; the hub answers it the moment the

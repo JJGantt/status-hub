@@ -18,7 +18,7 @@ const { fail, logged } = require('../lib/httpfail');
 //
 // An open handoff is also ON ITS SESSION (`openFor`, in the session payload), so the phone's and the
 // watch's session views show it for as long as it waits, as a permission prompt is shown.
-const COLS = 'id,session,target,note,status,image,seq,width,height,taps,typed,error,updated_at,region,selector,whole,full_image,focus,suggest,driver';
+const COLS = 'id,session,target,note,status,image,seq,width,height,taps,typed,error,created_at,updated_at,region,selector,whole,full_image,focus,suggest,driver';
 const view = (r) => r && {
   id: r.id, session: r.session, target: r.target, note: r.note, status: r.status, seq: r.seq,
   img: r.image ? `/img/${r.image}` : null, width: r.width, height: r.height, error: r.error,
@@ -44,11 +44,17 @@ module.exports = function ({ gated, pushAll, pushSessions, sb, sbInsert }) {
     for (const w of ws) w();
   };
 
-  // The newest open handoff a session row is waiting on, for the session payload.
+  // The open handoff a session row shows, for the session payload: an ask of his before a screen the session
+  // drives, then the newest by creation. Never by updated_at, which every screenshot bumps: a session with a
+  // drive and an ask open at once flipped between them, and the phone mounted a live view of each.
+  const rank = (r) => [r.driver ? 0 : 1, String(r.created_at || '')];
   function openFor(sessionId) {
     let best = null;
     for (const r of open.values()) {
-      if (r.session === sessionId && r.status === 'open' && (!best || r.updated_at > best.updated_at)) best = r;
+      if (r.session !== sessionId || r.status !== 'open') continue;
+      if (!best) { best = r; continue; }
+      const [a, b] = [rank(r), rank(best)];
+      if (a[0] > b[0] || (a[0] === b[0] && a[1] > b[1])) best = r;
     }
     return view(best);
   }

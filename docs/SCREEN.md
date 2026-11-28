@@ -71,7 +71,7 @@ it goes through the relay. Listens on UDP and TCP 3478 and TCP 443; relay ports 
 |---|---|
 | tap | left click; two taps close together are a double click |
 | long press (0.55 s) | right click |
-| one finger drag | pans the picture; with **Drag** on, a mouse drag |
+| one finger drag | pans the picture, never past its own edges (smaller than the stage, it stays wholly inside); with **Drag** on, a mouse drag. **Fit** frames it again |
 | two fingers spreading | zooms the picture |
 | two fingers moving together | scrolls whatever is under them |
 | typing in the box | each character as typed; the phone's delete key and ⏎ as keys. The box is reset to one invisible character, never to empty, because iOS sends nothing for delete in an empty box |

@@ -51,7 +51,18 @@ export function openScreen({ mount, session = null, handoff = null, onEnd = null
 
   // ---- the picture: scale s and offset (tx, ty) of the video's own pixels within the stage ----------
   let s = 1, tx = 0, ty = 0, W = 0, H = 0, unframed = true;
+  // THE PICTURE NEVER LEAVES THE STAGE. A one-finger drag pans it, and nothing else brings it back in a
+  // handoff, so an unbounded pan (a stray drag with something in the other hand) leaves him a black box
+  // over a share that is still live. Larger than the stage, its edges stop at the stage's edges; smaller,
+  // it stays wholly inside.
+  const bound = () => {
+    if (!W || !stage.clientWidth || !stage.clientHeight) return;
+    const pw = W * s, ph = H * s, sw = stage.clientWidth, sh = stage.clientHeight;
+    tx = pw <= sw ? Math.min(Math.max(tx, 0), sw - pw) : Math.min(Math.max(tx, sw - pw), 0);
+    ty = ph <= sh ? Math.min(Math.max(ty, 0), sh - ph) : Math.min(Math.max(ty, sh - ph), 0);
+  };
   const apply = () => {
+    bound();
     wrap.style.transform = `translate(${tx}px,${ty}px) scale(${s})`;
     mark.style.transform = `translate(-50%,-50%) scale(${1 / s})`;
   };
@@ -263,7 +274,7 @@ export function openScreen({ mount, session = null, handoff = null, onEnd = null
   const dragBtn = btn('Drag', () => { dragMode = !dragMode; dragBtn.classList.toggle('on', dragMode); });
   row1.append(input, dragBtn);
   if (handoff) {
-    row2.append(btn('Cancel', () => handoffAct('cancel')), btn('Done', () => handoffAct('done'), 'ho-done'));
+    row2.append(btn('Fit', fit), btn('Cancel', () => handoffAct('cancel')), btn('Done', () => handoffAct('done'), 'ho-done'));
   } else {
     row2.append(btn('Fit', fit), btn('Close', () => { close(); if (onEnd) onEnd(); }));
   }

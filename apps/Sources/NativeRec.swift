@@ -26,6 +26,12 @@ import WebKit
 /// **An interruption pauses the recording and the end of it carries on into the same file** (a call,
 /// Siri, a timer): the engine stops, the stream is told `paused`, and the engine restarts into the same
 /// file when the system hands the microphone back. Paused time is not counted as recorded time.
+/// **A `began` is only believed once the audio has actually stopped arriving.** iOS posts some that stop
+/// nothing (another audio client in the app, the page's own AudioContext), and taking one at its word
+/// showed Paused and stopped the clock over a recording that went on capturing every word. So `began`
+/// waits `confirmGap` and pauses only if no buffer reached the file meanwhile; otherwise it is logged
+/// (`nativerec-interrupt-ignored`) and the recording carries on. The page is told `paused` and `rec`
+/// here rather than reading the raw notification (`pauses` on the first `rec` says so).
 ///
 /// **The built-in microphone, never AirPods** — the same rule as the page's (`acquireBuiltIn`): opening
 /// AirPods' mic drops the link into the hands-free profile.
@@ -54,6 +60,9 @@ final class NativeRec: NSObject {
     /// Seconds recorded: the running stretch since `since`, plus every stretch before an interruption.
     private var banked: TimeInterval = 0
     private var since: Date?
+    /// Buffers written so far, touched only on `q`: whether audio is still arriving after an interruption.
+    private let frames = BufferCount()
+    private let confirmGap: TimeInterval = 0.6
     /// The audio thread's work (conversion, the file, the encoder) runs here, never on the main thread.
     private let q = DispatchQueue(label: "native-rec")
     /// 16 kHz mono: what Whisper reads, and the watch's format.
@@ -65,7 +74,8 @@ final class NativeRec: NSObject {
                                                object: AVAudioSession.sharedInstance(), queue: .main) { note in
             let raw = note.userInfo?[AVAudioSessionInterruptionTypeKey] as? UInt ?? 0
             let began = AVAudioSession.InterruptionType(rawValue: raw) == .began
-            MainActor.assumeIsolated { self.interruption(began: began) }
+            let reason = note.userInfo?[AVAudioSessionInterruptionReasonKey] as? UInt ?? 0
+            MainActor.assumeIsolated { self.interruption(began: began, reason: reason) }
         }
     }
 
@@ -117,10 +127,11 @@ final class NativeRec: NSObject {
             self.engine = engine
             try startEngine(engine)
             banked = 0; since = Date(); interrupted = false
+            q.sync { frames.n = 0 }
             tick = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { _ in
                 MainActor.assumeIsolated { self.stream?.flush(secs: self.recorded, state: self.interrupted ? "paused" : "rec") }
             }
-            emit(["state": "rec"])
+            emit(["state": "rec", "pauses": true])
             log("nativerec-start", ["stream": chunks.id])
         } catch {
             ClientLog.fail("nativerec-failed", ["error": String(describing: error).prefix(160).description])
@@ -137,7 +148,7 @@ final class NativeRec: NSObject {
             throw NSError(domain: "NativeRec", code: 1, userInfo: [NSLocalizedDescriptionKey: "no input format"])
         }
         let speech = self.speech, q = self.q
-        let writer = self.writer, stream = self.stream
+        let writer = self.writer, stream = self.stream, frames = self.frames
         input.removeTap(onBus: 0)
         input.installTap(onBus: 0, bufferSize: 4096, format: format) { buffer, _ in
             let ratio = speech.sampleRate / format.sampleRate
@@ -154,6 +165,7 @@ final class NativeRec: NSObject {
             q.async {
                 do { try writer?.write(from: out) } catch { NSLog("nativeRec write: \(error)") }
                 stream?.write(out)
+                frames.n += 1
             }
         }
         engine.prepare()
@@ -227,15 +239,28 @@ final class NativeRec: NSObject {
         restore()
     }
 
-    private func interruption(began: Bool) {
+    private func interruption(began: Bool, reason: UInt) {
         guard let engine else { return }
         if began {
             guard !interrupted else { return }
-            interrupted = true
-            if let s = since { banked += Date().timeIntervalSince(s) }
-            since = nil
-            stream?.flush(secs: recorded, state: "paused")
-            log("nativerec-interrupted", ["secs": recorded])
+            let at = Date(), rid = id
+            let before = q.sync { frames.n }
+            DispatchQueue.main.asyncAfter(deadline: .now() + confirmGap) {
+                MainActor.assumeIsolated {
+                    guard self.engine != nil, self.id == rid, !self.interrupted else { return }
+                    let after = self.q.sync { self.frames.n }
+                    if after > before {
+                        self.log("nativerec-interrupt-ignored", ["secs": self.recorded, "reason": reason, "buffers": after - before])
+                        return
+                    }
+                    self.interrupted = true
+                    if let s = self.since { self.banked += at.timeIntervalSince(s) }
+                    self.since = nil
+                    self.stream?.flush(secs: self.recorded, state: "paused")
+                    self.log("nativerec-interrupted", ["secs": self.recorded, "reason": reason])
+                    self.emit(["state": "paused"])
+                }
+            }
             return
         }
         guard interrupted else { return }
@@ -244,6 +269,7 @@ final class NativeRec: NSObject {
             try startEngine(engine)
             interrupted = false
             since = Date()
+            emit(["state": "rec"])
         } catch {
             ClientLog.fail("nativerec-resume-failed", ["error": String(describing: error).prefix(160).description])
         }
@@ -282,6 +308,9 @@ final class NativeRec: NSObject {
         URLSession.shared.dataTask(with: req).resume()
     }
 }
+
+/// Buffers the tap has written, read and written only on `NativeRec.q`.
+final class BufferCount: @unchecked Sendable { var n = 0 }
 
 /// One recording's stream to the hub (`/api/voice-chunk`, server/lib/chunkstream.js): its audio encoded to
 /// AAC in ADTS framing, posted a chunk a second, one request in flight, each acknowledged. The same rules

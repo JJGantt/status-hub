@@ -66,10 +66,12 @@ multi-part send is kept in `client_log` (src `phone`) as `voice-paused` and `voi
 part's size, so a command that loses its words across an app switch shows which part came up empty.
 
 The native recorder pauses itself on an audio interruption (a call, Siri, a timer) and carries on into
-the same file when it ends (`NativeRec.swift` `interruption`), without telling the page. The page learns
-of it from the app's `hub:audiointerrupt` and shows the button `armed` with `Paused` until it ends, logging
-`voice-paused` with `native: true`; without that the button reads Listening over a recording that is
-taking nothing in. A tap while paused sends what was recorded before the interruption.
+the same file when it ends (`NativeRec.swift` `interruption`). A `began` counts only once the audio has
+stopped arriving: iOS posts some that stop nothing, so the recorder waits 0.6 s and pauses only if no
+buffer reached the file meanwhile, logging `nativerec-interrupt-ignored` otherwise. It tells the page
+`paused` and `rec` on `hub:nativerec`, and the page shows the button `armed` with `Paused` only on that,
+logging `voice-paused` with `native: true`. App builds older than that (no `pauses` on their first
+`rec`) are still read from the raw `hub:audiointerrupt`. A tap while paused sends what was recorded before the interruption.
 
 ## Every pressed recording streams to the hub
 

@@ -599,10 +599,22 @@ export function makeRecorder({ onStatus = () => {}, onState: paint = () => {}, q
   // `arming` is set synchronously, before the await, so a second tap can only ever be a stop.
   // The native path: the app records, and answers on `hub:nativerec` for this recording's id.
   let nativeId = '';
+  // An app build that reports its own pauses (`pauses` on `rec`) is believed over the raw notification,
+  // which iOS also posts for interruptions that stop nothing.
+  let nativeSaysPauses = false;
   if (nativeRec) document.addEventListener('hub:nativerec', (e) => {
     const d = e.detail || {};
     if (!d.id || d.id !== nativeId) return;
-    if (d.state === 'rec') {
+    if (d.state === 'rec' && recording) {
+      // The app carried on after a pause it confirmed (NativeRec.swift `interruption`).
+      onState('rec'); onStatus('Listening… tap to send', 'rec');
+    } else if (d.state === 'paused') {
+      if (!recording) return;
+      trace('paused', { native: true });
+      clientLog({ src: 'phone', ev: 'voice-paused', why: 'interrupted', native: true });
+      onState('armed'); onStatus('Paused', 'err');
+    } else if (d.state === 'rec') {
+      if (d.pauses) nativeSaysPauses = true;
       if (!arming) { nativeRec.postMessage({ op: 'cancel', id: nativeId }); nativeId = ''; return; }
       arming = false; recording = true; onState('rec');
       trace('start:recording', { native: true });
@@ -753,11 +765,11 @@ export function makeRecorder({ onStatus = () => {}, onState: paint = () => {}, q
   const carryOn = (why) => { if (paused && !sending) { trace('resume', { why }); start(); } };
   document.addEventListener('hub:audiointerrupt', (e) => {
     const began = !!(e.detail && e.detail.began);
-    // The app's recorder pauses itself on an interruption and carries on when it ends (NativeRec.swift
-    // `interruption`), but says nothing to the page, and `pause` has no MediaRecorder to stop on that
-    // path. Without this the button reads Listening while nothing is being recorded.
+    // An app build that does not report its own pauses (no `pauses` on its first `rec`) pauses itself
+    // on the raw notification and says nothing to the page, so the page reads the notification instead.
+    // `pause` has no MediaRecorder to stop on that path.
     if (nativeRec) {
-      if (!recording) return;
+      if (!recording || nativeSaysPauses) return;
       trace(began ? 'paused' : 'resume', { native: true });
       if (began) {
         clientLog({ src: 'phone', ev: 'voice-paused', why: 'interrupted', native: true, reason: e.detail.reason });

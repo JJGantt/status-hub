@@ -11,7 +11,7 @@ function createRealtime(ctx) {
     MUTE_HOLD, SUPABASE_KEY, SUPABASE_URL, auth, broadcast, dirtyDesk, dirtyDue, dirtyHeatHistory,
     dirtyNutDay, dirtyRows, dirtySettings, dirtySurfHist, dirtyWorkoutDay, markLive, notifyAnswer, onDeskCommand, pushDay,
     pushLists, pushSessions, pushSurfLive, pushVoice, recomputeMute, reportTick, handoffChanged, tabChanged, screenChanged, requestView, sb, settleReply,
-    surfAlarms, syncBadge, takeUsage, tvInserted, lanJoined, presenceEvent, doorEvent,
+    surfAlarms, syncBadge, takeUsage, tvInserted, lanJoined, presenceEvent, doorEvent, lobbyRace,
   } = ctx;
 
   // Supabase client used only for the Realtime subscription (push). Data reads use sb() REST.
@@ -86,6 +86,9 @@ function createRealtime(ctx) {
       // A Wi-Fi join heard by a presence listener: the wifi arrival approach (routes/switchbot.js).
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'lan_joins' },
         (p) => { seen(); lanJoined(p.new).catch((e) => console.error('[presence] join', e.message || e)); })
+      // A lobby-door race started anywhere (routes/lobby.js): the hub sends its paths.
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'lobby_races' },
+        (p) => { seen(); lobbyRace(p.new); })
       // A front-door change, for the relock after an automatic unlock (routes/switchbot.js doorEvent).
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'door_events' },
         (p) => { seen(); doorEvent(p.new); })

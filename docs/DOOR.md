@@ -107,3 +107,30 @@ Only while `door_unlock_modes.relock` is on (the page's Relock button; off by de
 It never locks an open door (reported instead), and any lock in the meantime disarms it. It follows
 `door_events` over realtime (`doorEvent`). The lock's own auto-lock in the SwitchBot app is off. The
 arming lives in the hub's memory, so a hub restart inside that window drops it.
+
+## Lobby door (ButterflyMX)
+
+The building's downstairs door opens only from his phone: ButterflyMX's app exposes each door as a Siri
+shortcut, and iOS lets no app run another app's shortcut in the background. So opening it is a race of
+messages to the phone, whose Shortcuts automation (a Message or Mail trigger, Run Immediately) opens the
+door on the first to land and then reports which one it was.
+
+- **A race** is a `lobby_races` row (data-layer 00219) with a one-time `nonce`, started by
+  `POST /api/lobby/open` (`{reason}`) or the data MCP's `front_door` op `lobby`. Every path sends
+  `open-lobby-7731 <nonce> <path>`:
+  - `sms`: the hub, through Twilio (`TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_FROM` on Fly), to
+    `app_settings.lobby_phone`.
+  - `email`: the hub, through the Gmail API (`GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`,
+    `GOOGLE_REFRESH_TOKEN` on Fly), to `app_settings.lobby_icloud_email`. iCloud mail reaches Apple Mail
+    at once, which the Mail trigger needs; Gmail in Apple Mail is fetched, not pushed, so it is too slow.
+  - `imessage`: the Mac only (data-layer `lobby.ts` in the home agent, through the messages MCP), to
+    `app_settings.lobby_imessage_to`. No other machine has iMessage; the other paths cover the Mac asleep.
+  A path not set up is recorded as skipped (a `send` row with `skipped`), not as a failure; a failed send
+  is reported.
+- **The phone reports** with `GET /api/lobby/opened/<nonce>/<path>` after opening the door. It is public:
+  the nonce is the authorization, good once per path for 10 minutes (`lib/lobby.js`, tested in
+  `test/lobby.test.js`), and the route opens nothing. Every path that lands reports, so each race records
+  which won and each path's latency.
+- A race with a path sent and no report within 90 s is reported as a failure.
+- `GET /api/lobby/races`: the last 10 races (winner, each path's send result and arrival), shown in the
+  elevator page's Lobby section.

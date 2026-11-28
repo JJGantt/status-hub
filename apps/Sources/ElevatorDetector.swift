@@ -6,11 +6,15 @@ import Foundation
 /// `apps/tests/elevator-detector.swift`. The thresholds are deliberately loose to start with and are
 /// tuned from the traces in `elevator_rides` (docs/DOOR.md).
 ///
+/// A ride counts from its lowest point. Standing still at another floor (someone else getting off) is
+/// still the same ride: only walking out ends it, and the whole climb counts.
+///
 /// - A RIDE is a rise of `minRise` metres within `rideWindow` seconds while taking at most
 ///   `maxRideSteps` steps (an elevator, not stairs).
-/// - It has ENDED once the altitude has risen less than `stillRise` over the last `stillFor` seconds.
-/// - Then `exitSteps` steps within `exitWithin` seconds of the end is walking out: unlock. A rise that
-///   resumes (the car stopped at another floor) goes back to riding; no steps in time gives up on it.
+/// - It has STOPPED once the altitude has risen less than `stillRise` over the last `stillFor` seconds.
+/// - Then `exitSteps` steps within `exitWithin` seconds is walking out: unlock. A rise that resumes (the
+///   car stopped at another floor) goes back to riding from the same lowest point; no steps in time
+///   gives up on it.
 struct ElevatorDetector {
     struct Thresholds: Codable {
         var minRise = 3.5
@@ -26,11 +30,15 @@ struct ElevatorDetector {
         case none
         case unlock(rise: Double, rideSeconds: Double, stepsInRide: Int, stepsAfter: Int)
         case noExit(rise: Double, rideSeconds: Double, stepsInRide: Int)
+        /// A ride down (a fall of `minRise` within `rideWindow` with at most `maxRideSteps` steps). Only
+        /// recorded, for tuning; leaving is not acted on.
+        case down(drop: Double)
     }
 
     private enum State {
         case idle
         case riding(start: TimeInterval, base: Double)
+        case falling(top: Double)
         /// `steps` is the cumulative count when the ride ended; steps after it are counted from there.
         case ended(rideStart: TimeInterval, base: Double, at: TimeInterval, top: Double, steps: Int, stepsInRide: Int)
     }
@@ -47,11 +55,27 @@ struct ElevatorDetector {
     /// Cumulative steps counted by time `at` (the last report at or before it).
     func steps(at time: TimeInterval) -> Int { steps.last(where: { $0.t <= time })?.n ?? 0 }
 
+    /// Samples older than this are dropped: the detector runs for as long as he is near home.
+    static let keep: TimeInterval = 15 * 60
+
     mutating func altitude(_ m: Double, at time: TimeInterval) -> Event {
         alt.append((time, m))
+        if let first = alt.first, first.t < time - Self.keep - 60 { alt.removeAll { $0.t < time - Self.keep } }
+        if let first = steps.first, first.t < time - Self.keep - 60 {
+            // Keep the last count before the cut, so step differences across it stay right.
+            let cut = time - Self.keep
+            let last = steps.last(where: { $0.t < cut })
+            steps.removeAll { $0.t < cut }
+            if let last { steps.insert(last, at: 0) }
+        }
         switch state {
         case .idle:
             let recent = alt.filter { $0.t >= max(time - t.rideWindow, since) }
+            if let high = recent.max(by: { $0.m < $1.m }), high.m - m >= t.minRise,
+               steps(at: time) - steps(at: high.t) <= t.maxRideSteps {
+                state = .falling(top: high.m)
+                return .none
+            }
             guard let low = recent.min(by: { $0.m < $1.m }), m - low.m >= t.minRise,
                   steps(at: time) - steps(at: low.t) <= t.maxRideSteps else { return .none }
             state = .riding(start: low.t, base: low.m)
@@ -62,6 +86,11 @@ struct ElevatorDetector {
                 state = .ended(rideStart: start, base: base, at: time, top: m, steps: steps(at: time),
                                stepsInRide: steps(at: time) - steps(at: start))
             }
+        case let .falling(top):
+            // Recorded once the car has stopped going down, with the whole drop.
+            guard let past = alt.last(where: { $0.t <= time - t.stillFor }), past.m - m < t.stillRise else { return .none }
+            state = .idle; since = time
+            return .down(drop: top - m)
         case let .ended(rideStart, base, at, top, _, stepsInRide):
             if m - top >= 1.0 { state = .riding(start: rideStart, base: base); return .none }
             if time - at > t.exitWithin {

@@ -110,7 +110,7 @@ module.exports = function (ctx) {
       const row = (await sb('app_settings?select=value&key=eq.home_location'))[0];
       const m = /^\s*(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)\s*$/.exec((row && row.value) || '');
       if (!m) { report('app_settings.home_location is missing or malformed; the elevator unlock has no home'); return res.status(404).json({ error: 'no home' }); }
-      res.json({ lat: Number(m[1]), lon: Number(m[2]), radius_m: 150 });
+      res.json({ lat: Number(m[1]), lon: Number(m[2]), radius_m: 500 });
     } catch (e) { console.error('[switchbot] reading home_location failed:', e); res.status(502).json({ error: 'unreachable' }); }
   });
 

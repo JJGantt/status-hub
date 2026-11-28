@@ -2,25 +2,28 @@
 import CoreLocation
 import CoreMotion
 import Foundation
+import UIKit
 
 /// Unlocks the front door when he rides the elevator up and walks out of it (docs/DOOR.md).
 ///
-/// A geofence around home (`app_settings.home_location`, from `GET /api/door/home`) wakes the app on
-/// arrival, even after iOS has terminated it. The app then opens a WINDOW of `windowFor`: it keeps
-/// itself running with background location updates (the only way an app may keep running in the
-/// background, and the reason for `location` in UIBackgroundModes), reads the barometer
-/// (`CMAltimeter`) and the step counter (`CMPedometer`), and feeds both to `ElevatorDetector`. On its
-/// unlock the door is unlocked through `POST /api/door`. The window ends on the unlock, on leaving the
-/// geofence, or after `windowFor`, and stops all of it, so the app is not kept alive at home all day.
+/// WHILE HE IS NEAR HOME (a geofence on `app_settings.home_location`, from `GET /api/door/home`) the app
+/// keeps itself running with low-accuracy background location updates (the only way an app may keep
+/// running in the background, and the reason for `location` in UIBackgroundModes), reads the
+/// barometer (`CMAltimeter`) and the step counter (`CMPedometer`) without a break, and feeds both to
+/// `ElevatorDetector`. Its unlock unlocks the door through `POST /api/door`. Watching goes on after an
+/// unlock (a trip down for the mail and back up is another ride). Leaving the geofence stops all of it;
+/// entering it, which wakes the app even after iOS has terminated it, starts it again, and so does a
+/// launch inside it.
 ///
-/// Every window is stored with its whole trace (`POST /api/elevator/rides`, table `elevator_rides`),
-/// rides that did not unlock included, so the thresholds can be tuned from real rides.
+/// Every ride, up or down, unlocked or not, is stored with its trace (`POST /api/elevator/rides`, table
+/// `elevator_rides`) a minute after it, so the thresholds can be tuned from real rides.
 @MainActor
 final class ElevatorUnlock: NSObject, CLLocationManagerDelegate {
     static let shared = ElevatorUnlock()
 
     nonisolated private static let region = "home-door"
-    private static let windowFor: TimeInterval = 15 * 60
+    /// How much trace goes with a ride: this long before it, and the minute after.
+    private static let traceBefore: TimeInterval = 4 * 60
 
     private let geofence = CLLocationManager()
     /// Keeps the app running through a window; its positions are not used.
@@ -30,8 +33,6 @@ final class ElevatorUnlock: NSObject, CLLocationManagerDelegate {
 
     private var detector = ElevatorDetector()
     private var started: Date?
-    private var ends: Timer?
-    private var rides: [[String: Any]] = []
 
     func start() {
         geofence.delegate = self
@@ -49,9 +50,10 @@ final class ElevatorUnlock: NSObject, CLLocationManagerDelegate {
         region.notifyOnEntry = true
         region.notifyOnExit = true
         geofence.startMonitoring(for: region)
+        geofence.requestState(for: region)   // already inside at launch: start now
     }
 
-    // MARK: The window
+    // MARK: Watching
 
     private func open() {
         guard started == nil else { return }
@@ -61,7 +63,7 @@ final class ElevatorUnlock: NSObject, CLLocationManagerDelegate {
         let now = Date()
         started = now
         detector = ElevatorDetector()
-        rides = []
+        Self.note("elevator-watch-start")
         keepAlive.allowsBackgroundLocationUpdates = true
         keepAlive.pausesLocationUpdatesAutomatically = false
         keepAlive.showsBackgroundLocationIndicator = false
@@ -83,16 +85,17 @@ final class ElevatorUnlock: NSObject, CLLocationManagerDelegate {
                 self.handle(self.detector.stepCount(data.numberOfSteps.intValue, at: Date().timeIntervalSince(s)))
             }
         }
-        ends = Timer.scheduledTimer(withTimeInterval: Self.windowFor, repeats: false) { [weak self] _ in
-            MainActor.assumeIsolated { self?.close() }
-        }
     }
 
     private func handle(_ e: ElevatorDetector.Event) {
+        guard let s = started else { return }
+        let at = Date().timeIntervalSince(s)
         switch e {
         case .none: return
+        case let .down(drop):
+            store(["outcome": "down", "rise_m": -drop], at: at)
         case let .noExit(rise, rideSeconds, stepsInRide):
-            rides.append(["outcome": "no_exit", "rise_m": rise, "ride_s": rideSeconds, "steps_in_ride": stepsInRide])
+            store(["outcome": "no_exit", "rise_m": rise, "ride_s": rideSeconds, "steps_in_ride": stepsInRide], at: at)
         case let .unlock(rise, rideSeconds, stepsInRide, stepsAfter):
             var ride: [String: Any] = ["rise_m": rise, "ride_s": rideSeconds, "steps_in_ride": stepsInRide, "steps_after": stepsAfter]
             let asked = Date()
@@ -105,31 +108,49 @@ final class ElevatorUnlock: NSObject, CLLocationManagerDelegate {
                     ride["error"] = String(describing: error)
                 }
                 ride["unlock_ms"] = Int(Date().timeIntervalSince(asked) * 1000)
-                self.rides.append(ride)
-                self.close()
+                self.store(ride, at: at)
             }
         }
     }
 
-    /// Stops everything and stores the window: one row per ride in it, or one `no_ride` row.
-    private func close() {
+    /// Stores a ride a minute after `at` (seconds into watching), with the trace from `traceBefore`
+    /// ahead of it to then. Sent at once instead if watching stops first.
+    private func store(_ ride: [String: Any], at: TimeInterval) {
         guard let s = started else { return }
+        let send = { [weak self] in
+            guard let self else { return }
+            let from = at - Self.traceBefore
+            let alt: [[Double]] = self.detector.alt.filter { $0.t >= from }.map { a in [(a.t * 10).rounded() / 10, (a.m * 100).rounded() / 100] }
+            let steps: [[Double]] = self.detector.steps.filter { $0.t >= from }.map { p in [(p.t * 10).rounded() / 10, Double(p.n)] }
+            let iso = ISO8601DateFormatter()
+            let thresholds = (try? JSONSerialization.jsonObject(with: JSONEncoder().encode(self.detector.t))) ?? [:]
+            let row: [String: Any] = ["device": "phone", "started_at": iso.string(from: s.addingTimeInterval(at)),
+                                      "ended_at": iso.string(from: Date()), "thresholds": thresholds,
+                                      "trace": ["t0": iso.string(from: s), "alt": alt, "steps": steps]]
+            Self.post("/api/elevator/rides", row.merging(ride) { _, new in new })
+        }
+        pendingStores.append(send)
+        Timer.scheduledTimer(withTimeInterval: 60, repeats: false) { [weak self] _ in
+            MainActor.assumeIsolated {
+                guard let self, !self.pendingStores.isEmpty else { return }
+                self.pendingStores.removeFirst()()
+            }
+        }
+    }
+    private var pendingStores: [() -> Void] = []
+
+    /// Leaving the area: stores anything still waiting, then stops everything.
+    private func close() {
+        guard started != nil else { return }
+        let waiting = pendingStores
+        pendingStores = []
+        waiting.forEach { $0() }
         started = nil
-        ends?.invalidate(); ends = nil
         altimeter.stopRelativeAltitudeUpdates()
         pedometer.stopUpdates()
         keepAlive.stopUpdatingLocation()
         keepAlive.allowsBackgroundLocationUpdates = false
-        let iso = ISO8601DateFormatter()
-        let alt: [[Double]] = detector.alt.map { a in [(a.t * 10).rounded() / 10, (a.m * 100).rounded() / 100] }
-        let steps: [[Double]] = detector.steps.map { p in [(p.t * 10).rounded() / 10, Double(p.n)] }
-        let trace: [String: Any] = ["alt": alt, "steps": steps]
-        let thresholds = (try? JSONSerialization.jsonObject(with: JSONEncoder().encode(detector.t))) ?? [:]
-        let base: [String: Any] = ["device": "phone", "started_at": iso.string(from: s), "ended_at": iso.string(from: Date()),
-                                   "thresholds": thresholds, "trace": trace]
-        for r in (rides.isEmpty ? [["outcome": "no_ride"]] : rides) {
-            Self.post("/api/elevator/rides", base.merging(r) { _, new in new })
-        }
+        Self.note("elevator-watch-stop")
     }
 
     // MARK: CLLocationManagerDelegate
@@ -142,6 +163,11 @@ final class ElevatorUnlock: NSObject, CLLocationManagerDelegate {
     nonisolated func locationManager(_ manager: CLLocationManager, didExitRegion region: CLRegion) {
         guard region.identifier == Self.region else { return }
         Task { @MainActor in self.close() }
+    }
+
+    nonisolated func locationManager(_ manager: CLLocationManager, didDetermineState state: CLRegionState, for region: CLRegion) {
+        guard region.identifier == Self.region else { return }
+        Task { @MainActor in if state == .inside { self.open() } else if state == .outside { self.close() } }
     }
 
     nonisolated func locationManager(_ manager: CLLocationManager, monitoringDidFailFor region: CLRegion?, withError error: Error) {
@@ -203,6 +229,17 @@ final class ElevatorUnlock: NSObject, CLLocationManagerDelegate {
             let code = (resp as? HTTPURLResponse)?.statusCode ?? 0
             if code != 200 { ClientLog.fail("elevator-ride-failed", ["error": err.map(ClientLog.describe) ?? "HTTP \(code)"]) }
         }.resume()
+    }
+
+    /// A plain client-log line with the battery level, which is how the cost of watching is measured.
+    nonisolated private static func note(_ ev: String) {
+        Task { @MainActor in
+            UIDevice.current.isBatteryMonitoringEnabled = true
+            let level = Int((UIDevice.current.batteryLevel * 100).rounded())
+            guard let req = request("/api/clientlog", "POST", ["src": "phone", "ev": ev, "phone_battery": level,
+                                                               "t": ISO8601DateFormatter().string(from: Date())]) else { return }
+            URLSession.shared.dataTask(with: req).resume()
+        }
     }
 
     /// Reported to the ops responder (`ClientLog`).

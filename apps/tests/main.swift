@@ -28,7 +28,8 @@ check(run(80, alt: rise, steps: { _ in 3 }).allSatisfy { if case .unlock = $0 { 
 check(run(200, alt: rise, steps: { _ in 3 }).contains { if case .noExit = $0 { return true }; return false },
       "a ride with no steps after it gives up as noExit")
 check(run(80, alt: rise, steps: { t in Int(t * 1.8) }).isEmpty, "climbing stairs (steps all the way) is not a ride")
-check(run(80, alt: { t in t < 20 ? 0 : t < 40 ? -(t - 20) * 0.5 : -10 }, steps: walkOut).isEmpty, "a ride down does nothing")
+let down = run(80, alt: { t in t < 20 ? 0 : t < 40 ? -(t - 20) * 0.5 : -10 }, steps: walkOut)
+check(down.count == 1 && { if case .down = down[0] { return true }; return false }(), "a ride down is recorded once and never unlocks")
 check(run(80, alt: { t in t < 20 ? 0 : t < 24 ? (t - 20) * 0.5 : 2 }, steps: walkOut).isEmpty, "a 2 m rise is not a ride")
 check(run(80, alt: { _ in 0 }, steps: { t in Int(t) }).isEmpty, "walking on the flat does nothing")
 // The car stops at floor 2 for 8 s, then carries on; nobody steps out at floor 2.
@@ -36,6 +37,18 @@ let stop = { (t: Double) in t < 20 ? 0 : t < 28 ? (t - 20) * 0.5 : t < 36 ? 4 : 
 let stopRide = run(100, alt: stop, steps: { t in t < 55 ? 3 : 3 + Int(t - 55) })
 check(stopRide.count == 1, "a stop at another floor then the rest of the ride unlocks once")
 if case let .unlock(r, _, _, _)? = stopRide.first { check(r >= 9.5, "the rise covers the whole ride, not the first leg") }
+
+// Hours near home: the buffers stay bounded and a ride after them still unlocks.
+var long = ElevatorDetector()
+var got: [ElevatorDetector.Event] = []
+for i in 0...(4 * 3600) { let t = Double(i); _ = long.altitude(0, at: t); if i % 2 == 0 { _ = long.stepCount(i / 100, at: t) } }
+for i in 0...80 {
+    let t = Double(4 * 3600 + 1 + i)
+    let e = long.altitude(rise(Double(i)), at: t); if e != .none { got.append(e) }
+    if i % 2 == 0 { let s = long.stepCount(4 * 36 + walkOut(Double(i)), at: t); if s != .none { got.append(s) } }
+}
+check(long.alt.count < 1100, "four hours near home keep at most about fifteen minutes of samples")
+check(got.count == 1 && { if case .unlock = got[0] { return true }; return false }(), "a ride after hours near home still unlocks")
 
 print(failures == 0 ? "all passed" : "\(failures) failed")
 if failures > 0 { exit(1) }

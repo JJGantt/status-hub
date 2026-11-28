@@ -37,7 +37,10 @@ final class WatchLink: NSObject, WCSessionDelegate, WKHTTPCookieStoreObserver {
     private func push() {
         let session = WCSession.default
         guard session.activationState == .activated, session.isPaired, session.isWatchAppInstalled else { return }
-        currentToken { token in try? session.updateApplicationContext(["hubToken": token]) }
+        currentToken { token in
+            do { try session.updateApplicationContext(["hubToken": token]) }
+            catch { ClientLog.fail("watch-token-failed", ["error": ClientLog.describe(error)]) }
+        }
     }
 
     func cookiesDidChange(in cookieStore: WKHTTPCookieStore) { push() }

@@ -50,12 +50,13 @@ final class SleepSync {
     // its anchor before the next is asked for.
     private func page(from anchor: HKQueryAnchor?, then done: @escaping () -> Void) {
         let q = HKAnchoredObjectQuery(type: type, predicate: nil, anchor: anchor, limit: 500) { [weak self] _, added, deleted, next, error in
+            if let error { ClientLog.fail("sleep-sync-failed", ["step": "query", "error": ClientLog.describe(error)]) }
             guard let self, error == nil, let next else { return done() }
             let samples = (added ?? []).compactMap { $0 as? HKCategorySample }.compactMap(Self.row)
             let gone = (deleted ?? []).map { $0.uuid.uuidString }
             if samples.isEmpty && gone.isEmpty { self.saveAnchor(next); return done() }
             self.post(samples, gone) { ok in
-                guard ok else { return done() }
+                guard ok else { ClientLog.fail("sleep-sync-failed", ["step": "post"]); return done() }
                 self.saveAnchor(next)
                 // A full page means there may be more behind it.
                 if (added?.count ?? 0) + (deleted?.count ?? 0) >= 500 { self.page(from: next, then: done) } else { done() }

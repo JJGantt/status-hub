@@ -202,16 +202,13 @@ final class ElevatorUnlock: NSObject, CLLocationManagerDelegate {
         guard let req = request(path, "POST", json) else { error("elevator unlock: no hub token to store a ride"); return }
         URLSession.shared.dataTask(with: req) { _, resp, err in
             let code = (resp as? HTTPURLResponse)?.statusCode ?? 0
-            if code != 200 { print("elevator ride not stored: \(err?.localizedDescription ?? "HTTP \(code)")") }
+            if code != 200 { ClientLog.fail("elevator-ride-failed", ["error": err.map(ClientLog.describe) ?? "HTTP \(code)"]) }
         }.resume()
     }
 
-    /// Reported to the ops responder through the hub's client log (`ev: error`, server routes/voice.js).
+    /// Reported to the ops responder (`ClientLog`).
     nonisolated private static func error(_ msg: String) {
-        print(msg)
-        guard let req = request("/api/clientlog", "POST", ["src": "phone", "ev": "error", "msg": msg,
-                                                           "t": ISO8601DateFormatter().string(from: Date())]) else { return }
-        URLSession.shared.dataTask(with: req).resume()
+        ClientLog.fail("elevator-unlock-failed", ["error": msg])
     }
 }
 #endif

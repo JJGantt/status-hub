@@ -58,8 +58,15 @@ enum HubAPI {
     // same round trip — no second request, and no waiting on a throttled silent push. `done` always
     // runs, including on failure, so the system's action handler can finish either way.
     static func post(_ path: String, _ json: [String: Any], done: @escaping () -> Void) {
-        guard let req = request(path, method: "POST", json: json) else { return done() }
-        URLSession.shared.dataTask(with: req) { data, _, _ in
+        guard let req = request(path, method: "POST", json: json) else {
+            ClientLog.fail("action-failed", ["path": path, "error": "no hub token"]); return done()
+        }
+        URLSession.shared.dataTask(with: req) { data, resp, err in
+            let code = (resp as? HTTPURLResponse)?.statusCode ?? 0
+            // A notification action that did not land (a STOP, a snooze, an approval) is a failure; a 5xx
+            // the hub reported itself.
+            if let err { ClientLog.fail("action-failed", ["path": path, "error": ClientLog.describe(err)]) }
+            else if !(200..<300).contains(code) && code < 500 { ClientLog.fail("action-failed", ["path": path, "error": "HTTP \(code)"]) }
             applyBadge(data); DispatchQueue.main.async(execute: done)
         }.resume()
     }
@@ -140,7 +147,8 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
 
     func application(_ application: UIApplication,
                      didFailToRegisterForRemoteNotificationsWithError error: Error) {
-        print("APNs registration failed: \(error.localizedDescription)")
+        // No token means no reminder, alarm or answer ever reaches the phone.
+        ClientLog.fail("push-register-failed", ["error": ClientLog.describe(error)])
     }
 
     // Show the banner even when the app is foregrounded.

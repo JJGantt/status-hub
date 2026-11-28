@@ -139,6 +139,7 @@ final class HealthSync {
     private func page(from anchor: HKQueryAnchor?, then done: @escaping () -> Void) {
         let descriptors = Self.allTypes.map { HKQueryDescriptor(sampleType: $0, predicate: nil) }
         let q = HKAnchoredObjectQuery(queryDescriptors: descriptors, anchor: anchor, limit: Self.pageSize) { [weak self] _, added, deleted, next, error in
+            if let error { ClientLog.fail("health-sync-failed", ["step": "query", "error": ClientLog.describe(error)]) }
             guard let self, error == nil, let next else { return done() }
             self.queue.async {
                 let rows = (added ?? []).compactMap(self.row)
@@ -150,7 +151,7 @@ final class HealthSync {
                 }
                 self.post(rows, gone) { result in
                     switch result {
-                    case .failed: return done()
+                    case .failed: ClientLog.fail("health-sync-failed", ["step": "post"]); return done()
                     case .wait(let seconds):
                         // The hub paces the history read (docs/HEALTH.md). Release this run so HealthKit's
                         // delivery is answered now, and pick the same anchor up once the gap has passed.

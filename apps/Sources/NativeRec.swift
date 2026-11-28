@@ -82,7 +82,7 @@ final class NativeRec: NSObject {
         case "reset":
             // A page that loaded while a recording ran cannot ask for it: nothing there holds its id. Its
             // stream is left open rather than cancelled, so the hub uses what arrived (it goes silent).
-            if engine != nil { log("nativerec-orphaned", ["secs": recorded]); finish(deliver: false, orphaned: true) }
+            if engine != nil { ClientLog.fail("nativerec-orphaned", ["secs": recorded]); finish(deliver: false, orphaned: true) }
         default: break
         }
     }
@@ -123,7 +123,7 @@ final class NativeRec: NSObject {
             emit(["state": "rec"])
             log("nativerec-start", ["stream": chunks.id])
         } catch {
-            log("nativerec-failed", ["error": String(describing: error).prefix(160).description])
+            ClientLog.fail("nativerec-failed", ["error": String(describing: error).prefix(160).description])
             teardown()
             fail("Mic unavailable")
         }
@@ -205,7 +205,7 @@ final class NativeRec: NSObject {
                 guard deliver else { return }
                 guard let data = try? Data(contentsOf: url), !data.isEmpty else {
                     MainActor.assumeIsolated {
-                        self.log("nativerec-empty", ["secs": secs])
+                        ClientLog.fail("nativerec-empty", ["secs": secs])
                         self.emit(["state": "error", "error": "Nothing recorded"], id: rid)
                     }
                     return
@@ -245,7 +245,7 @@ final class NativeRec: NSObject {
             interrupted = false
             since = Date()
         } catch {
-            log("nativerec-resume-failed", ["error": String(describing: error).prefix(160).description])
+            ClientLog.fail("nativerec-resume-failed", ["error": String(describing: error).prefix(160).description])
         }
     }
 

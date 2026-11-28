@@ -202,14 +202,22 @@ enum TodoAPI {
     static func clear(id: String) async { await post("/api/todos/clear", id: id) }
 
     private static func post(_ path: String, id: String) async {
-        guard let url = URL(string: Auth.host + path), let token = Auth.token() else { return }
+        guard let url = URL(string: Auth.host + path), let token = Auth.token() else {
+            return ClientLog.fail("widget-action-failed", ["path": path, "error": "no hub token"])
+        }
         var r = URLRequest(url: url)
         r.httpMethod = "POST"
         r.timeoutInterval = 15
         r.setValue(token, forHTTPHeaderField: "X-Hub-Token")
         r.setValue("application/json", forHTTPHeaderField: "Content-Type")
         r.httpBody = try? JSONSerialization.data(withJSONObject: ["id": id])
-        _ = try? await URLSession.shared.data(for: r)
+        do {
+            let (_, resp) = try await URLSession.shared.data(for: r)
+            let code = (resp as? HTTPURLResponse)?.statusCode ?? 0
+            if !(200..<300).contains(code) && code < 500 { ClientLog.fail("widget-action-failed", ["path": path, "error": "HTTP \(code)"]) }
+        } catch {
+            ClientLog.fail("widget-action-failed", ["path": path, "error": ClientLog.describe(error)])
+        }
     }
 }
 

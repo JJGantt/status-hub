@@ -1743,6 +1743,17 @@ it does to the hub), and its heartbeat go to the ops responder (health/responder
 every machine and service and starts the agent; it also detects a machine going silent, without
 depending on Supabase.
 
+**Every client failure reaches it by default, through `/api/clientlog`.** A page's uncaught errors, its
+`console.error`, and every same-origin `fetch` that fails or answers 4xx (`public/shared.js`; not while the
+page is hidden, when iOS kills its requests) are `ev: 'error'` lines. The iPhone app's native failures go
+through `ClientLog.fail` (`apps/Shared/ClientLog.swift`, app and widgets, held in an outbox until the hub
+has them) and the watch's through `Hub.fail`; `lib/clientfail.js` decides which phone and watch lines are
+failures — marked `level: error` or named `…-failed` / `…-broken`, never by a list of events.
+
+**A push that reached no device is an error and is tried again.** `pushAll` logs it with `console.error`
+and writes its `notifications` row WITHOUT the dedupe key, since the key is what marks an occurrence
+delivered; `dueTick` stays dirty on a failed reminder, so the minute tick sends it again.
+
 **Every 5xx the hub answers is an error.** `reportFailures()` (lib/httpfail.js), mounted first in
 server.js, logs `[http] <METHOD> <path> answered <status>: <body>` with `console.error` whenever a
 response finishes at 500 or above, so a route that answers 5xx is reported without doing anything

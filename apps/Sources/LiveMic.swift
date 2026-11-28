@@ -126,7 +126,7 @@ final class LiveMic: NSObject, URLSessionWebSocketDelegate {
             let input = engine.inputNode
             let format = input.outputFormat(forBus: 0)
             guard format.sampleRate > 0, format.channelCount > 0, let enc = Encoder(from: format) else {
-                log("livemic-failed", ["error": "no input format"])
+                ClientLog.fail("livemic-failed", ["error": "no input format"])
                 return false
             }
             queue.sync { encoder = enc }
@@ -138,7 +138,7 @@ final class LiveMic: NSObject, URLSessionWebSocketDelegate {
             try engine.start()
             return true
         } catch {
-            log("livemic-failed", ["error": String(describing: error).prefix(120).description])
+            ClientLog.fail("livemic-failed", ["error": String(describing: error).prefix(120).description])
             stopCapture()
             return false
         }
@@ -234,7 +234,7 @@ final class LiveMic: NSObject, URLSessionWebSocketDelegate {
                 case .success:
                     self.receive(task, attempt: this)
                 case .failure(let error):
-                    self.log("livemic-socket-ended", ["error": String(describing: error).prefix(120).description])
+                    ClientLog.fail("livemic-socket-ended", ["error": String(describing: error).prefix(120).description])
                     self.reconnect()
                 }
             }

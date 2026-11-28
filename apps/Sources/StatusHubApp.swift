@@ -92,11 +92,11 @@ enum AlarmAudio {
             do {
                 try s.setCategory(.playback, mode: .default, options: [])
                 try s.setActive(true)
-            } catch { NSLog("alarmAudio claim: \(error)") }
+            } catch { ClientLog.fail("alarm-audio-failed", ["step": "claim", "error": ClientLog.describe(error)]) }
         } else {
             guard let (category, mode, options) = found else { return }
             found = nil
-            do { try s.setCategory(category, mode: mode, options: options) } catch { NSLog("alarmAudio restore: \(error)") }
+            do { try s.setCategory(category, mode: mode, options: options) } catch { ClientLog.fail("alarm-audio-failed", ["step": "restore", "error": ClientLog.describe(error)]) }
         }
     }
 }
@@ -178,6 +178,7 @@ struct StatusHubApp: App {
                 .onChange(of: scenePhase) { _, phase in
                     StayAwake.apply(phase == .active)
                     AppActive.shared.set(phase == .active)
+                    if phase == .active { ClientLog.flush() }
                     if phase == .active { LocationTrail.shared.fix() }  // a point per use (docs/LOCATION.md)
                 }
                 .task { StayAwake.apply(true) }

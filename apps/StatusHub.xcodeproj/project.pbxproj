@@ -34,6 +34,7 @@
 		49EFB53930636E1DA9D5EA54 /* LiveStream.swift in Sources */ = {isa = PBXBuildFile; fileRef = B47D0D32A221BCBB3473BE45 /* LiveStream.swift */; };
 		4A85806E830267380041B940 /* Speaker.swift in Sources */ = {isa = PBXBuildFile; fileRef = 14DD24EA8F44511AAE8A666A /* Speaker.swift */; };
 		4D60B234E0ADF4D9465FE606 /* SessionsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AC7643D7992852F757EF0A7E /* SessionsView.swift */; };
+		4DA443DEDDE91966002997D3 /* ClientLog.swift in Sources */ = {isa = PBXBuildFile; fileRef = 99B568BCF8AE4F335EBA84B3 /* ClientLog.swift */; };
 		4DB8BD1AC2A03D075B399CA4 /* WorkoutView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A3F70079ED5B30314C83B6BD /* WorkoutView.swift */; };
 		4DE2F21E70EC60A06611DF49 /* Rewind.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A7D22E52C6A0ABBCB9FF3BF /* Rewind.swift */; };
 		4E481C843B282A73A6959192 /* WatchWorkout.swift in Sources */ = {isa = PBXBuildFile; fileRef = 122F17573AF11E3BFB34C78C /* WatchWorkout.swift */; };
@@ -89,6 +90,7 @@
 		CDDBE30861DC50F9003C9B3C /* StatusHubWatchWidgets.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 7A798171A56FC30D0250CDD7 /* StatusHubWatchWidgets.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		D331FFF01B536787A0263385 /* BodyPaths.swift in Sources */ = {isa = PBXBuildFile; fileRef = CAEDD165B40FC7BE05380CE2 /* BodyPaths.swift */; };
 		D3E5EB61797DC506EFFC29B3 /* Router.swift in Sources */ = {isa = PBXBuildFile; fileRef = 04D43ADC9891823E1EFA0E4C /* Router.swift */; };
+		D3ECE2A6D86575CE3CCD341A /* ClientLog.swift in Sources */ = {isa = PBXBuildFile; fileRef = 99B568BCF8AE4F335EBA84B3 /* ClientLog.swift */; };
 		D75951639D8E19EF3004D9E2 /* SleepSync.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8500D56F95DF5A6D21132960 /* SleepSync.swift */; };
 		D8B3EEDED01AB105C95F173D /* Auth.swift in Sources */ = {isa = PBXBuildFile; fileRef = 88D699B5FDC0F7476374CF07 /* Auth.swift */; };
 		E34E8A8F7CA83D65E839396E /* LocationTrail.swift in Sources */ = {isa = PBXBuildFile; fileRef = 45C78D4725DD9720852DFFD9 /* LocationTrail.swift */; };
@@ -225,6 +227,7 @@
 		94DD1B301CE525AF6B208DC7 /* StatusHubWatch.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = StatusHubWatch.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		951A385F7EE64123592C4DA6 /* WatchSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchSettings.swift; sourceTree = "<group>"; };
 		980C6D4E9785922A04236D2D /* OpenTodoItem.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenTodoItem.swift; sourceTree = "<group>"; };
+		99B568BCF8AE4F335EBA84B3 /* ClientLog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClientLog.swift; sourceTree = "<group>"; };
 		9C54DAA3F7B8ECC9A1ED73A8 /* HandoffView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HandoffView.swift; sourceTree = "<group>"; };
 		9C61C65954CA9A7056B2B127 /* HomeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeView.swift; sourceTree = "<group>"; };
 		9F6A38324B6E1FE85ABDB8B6 /* AssetsWatch.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = AssetsWatch.xcassets; sourceTree = "<group>"; };
@@ -297,6 +300,7 @@
 			isa = PBXGroup;
 			children = (
 				88D699B5FDC0F7476374CF07 /* Auth.swift */,
+				99B568BCF8AE4F335EBA84B3 /* ClientLog.swift */,
 				630A58399AEBE9A0EB63449B /* HubVoiceIntent.swift */,
 				45C78D4725DD9720852DFFD9 /* LocationTrail.swift */,
 				980C6D4E9785922A04236D2D /* OpenTodoItem.swift */,
@@ -717,6 +721,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				D8B3EEDED01AB105C95F173D /* Auth.swift in Sources */,
+				D3ECE2A6D86575CE3CCD341A /* ClientLog.swift in Sources */,
 				5C4FDFB95CAA6A48D814F684 /* ElevatorDetector.swift in Sources */,
 				569570CC6401CDD2E901C2A0 /* ElevatorUnlock.swift in Sources */,
 				09ECD41B51EB9F304B7B6306 /* HealthSync.swift in Sources */,
@@ -758,6 +763,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				7876C764C368F15A396CAEDC /* Auth.swift in Sources */,
+				4DA443DEDDE91966002997D3 /* ClientLog.swift in Sources */,
 				B0778EBC2C7F517F88E6662D /* HubVoiceIntent.swift in Sources */,
 				CBAD81738815335B41DE4408 /* LocationTrail.swift in Sources */,
 				5B95BB853AE0BB3D7E93EC0F /* OpenTodoItem.swift in Sources */,

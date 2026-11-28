@@ -9,7 +9,7 @@ const fs = require('fs');
 const heicConvert = require('heic-convert');
 const { localDate, etNowString } = require('../lib/dates');
 const ops = require('../lib/report');
-const { watchFailure } = require('../lib/clientfail');
+const { clientFailure } = require('../lib/clientfail');
 const { vanishedRecordings, RECORD_EVENTS } = require('../lib/outcomes');
 const { FrameReader, endOf, adtsSeconds, PauseClock, BrokenStreams, endedBy, RECOVER_GRACE_MS } = require('../lib/livestream');
 const { heardStart, heardEnd } = require('../lib/streams');
@@ -746,15 +746,15 @@ module.exports = function (ctx) {
       try { console.log('[clientlog]', JSON.stringify(l).slice(0, 900)); } catch (_) {}
       if (l.ev === 'alarmclock' || l.ev === 'tvring') noteRinger(l, req);
       // A client's own error, sent by the page's global handler (public/shared.js) or by an app, is
-      // reported as that client's, not the hub's. The watch's are decided by lib/clientfail.js.
-      if (l.ev === 'error' && l.src !== 'watch') {
+      // reported as that client's, not the hub's. The watch's and the phone's are decided by lib/clientfail.js.
+      if (l.ev === 'error' && l.src !== 'watch' && l.src !== 'phone') {
         ops.report(String(l.msg || 'client error'), { machine: 'client', service: `${l.src || 'unknown'}${l.page ? `:${l.page}` : ''}`,
           stack: l.stack ? String(l.stack) : undefined, context: { ua: req.headers['user-agent'] } });
       }
-      // Every failure the watch logged (lib/clientfail.js): it arrives only once the watch can reach the
-      // hub again, stamped with its own time.
-      const watchFail = watchFailure(l);
-      if (watchFail) ops.report(watchFail.message, { machine: 'client', service: 'watch', context: watchFail.context });
+      // Every failure the watch or the phone logged (lib/clientfail.js): it arrives only once the device
+      // can reach the hub again, stamped with its own time.
+      const clientFail = clientFailure(l);
+      if (clientFail) ops.report(clientFail.message, { machine: 'client', service: clientFail.service, context: clientFail.context });
       // The phone's voice outbox: an upload that failed, or one that went through only on a later attempt
       // (voice-send-late, which carries the first failure — the failure's own beacon is often lost,
       // because a page suspended mid-upload cannot send one).

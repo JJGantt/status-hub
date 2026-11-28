@@ -94,3 +94,11 @@ and set by `GET` / `POST /api/door/modes` and the debug page's switches, so each
   `presenceEvent`) unlocks on an `arrive` when `bluetooth` is on. `GET /api/presence/events`.
 - Both unlock at most once per device a minute, record the command with `reason` `wifi:<device>` /
   `bluetooth:<device>`, and report a failed unlock.
+
+## Relock after an automatic unlock
+
+An unlock with reason `elevator`, `wifi:*` or `bluetooth:*` arms a relock in the hub (`relockAfter` in
+`routes/switchbot.js`): 20 s after the door next closes, or 30 s after the unlock if the door never opens.
+It never locks an open door (reported instead), and any lock in the meantime disarms it. It follows
+`door_events` over realtime (`doorEvent`). The lock's own auto-lock in the SwitchBot app is off. The
+arming lives in the hub's memory, so a hub restart inside that window drops it.

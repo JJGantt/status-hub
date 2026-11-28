@@ -42,7 +42,6 @@ function liveHtml() {
     row('Altitude', typeof live.alt === 'number' ? `${n1(live.alt, 2)} m` : '—') +
     row('Steps', String(live.steps ?? '—')) +
     row('Phase', esc(phase(live.detector))) +
-    row('Elevator unlock', live.elevator_on ? 'on' : 'off') +
     (th ? row('Thresholds', esc(`rise ${th.minRise} m / ${th.rideWindow} s · ≤${th.maxRideSteps} steps · still <${th.stillRise} m / ${th.stillFor} s · ${th.exitSteps} steps / ${th.exitWithin} s`)) : '') +
     '<h3>Log</h3>' +
     ((live.events || []).slice().reverse().map((e) =>

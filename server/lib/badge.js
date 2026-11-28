@@ -14,7 +14,13 @@ function createBadge({ apns, overdueCount, sb }) {
     lastBadge = n;
     let tokens = [];
     try { tokens = await sb('device_tokens?platform=eq.ios&select=token,environment'); } catch (e) { lastBadge = null; console.error('[badge] device token read failed:', e); return; }
-    for (const { token, environment } of tokens) await apns.send(token, { environment, badge: n });
+    const failed = [];
+    for (const { token, environment } of tokens) {
+      const r = await apns.send(token, { environment, badge: n });
+      if (!r.ok) failed.push(`${token.slice(0, 8)}=${r.status}(${String(r.detail || '').slice(0, 60)})`);
+    }
+    // Forgotten on a failure, so the next sync sends it again rather than believing the icon is right.
+    if (failed.length) { lastBadge = null; console.error(`[badge] ${n} not delivered: ${failed.join(' ')}`); return; }
     console.log(`[badge] -> ${n}`);
   }
 

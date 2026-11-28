@@ -16,6 +16,43 @@ export function reportPageError(message, stack) {
 addEventListener('error', (e) => reportPageError(e.message || 'error', e.error && e.error.stack));
 addEventListener('unhandledrejection', (e) => reportPageError((e.reason && e.reason.message) || String(e.reason), e.reason && e.reason.stack));
 
+// A caught failure is reported too: `console.error` is how every module here says one, so it reaches
+// the hub as well as the console. This is the page's equivalent of the server's reporter.
+// A failed request is reported once, by the fetch wrapper below; the call site's own console.error for
+// the same failure within three seconds is left to the console.
+let lastRequestFailure = null;   // { why, at }
+const consoleError = console.error.bind(console);
+console.error = (...args) => {
+  consoleError(...args);
+  const err = args.find((a) => a instanceof Error);
+  const text = args.map((a) => (a instanceof Error ? a.message : typeof a === 'string' ? a : (() => { try { return JSON.stringify(a); } catch (_) { return String(a); } })())).join(' ');
+  if (lastRequestFailure && Date.now() - lastRequestFailure.at < 3000 && text.includes(lastRequestFailure.why)) return;
+  reportPageError(text, err && err.stack);
+};
+
+// EVERY REQUEST TO THE HUB THAT FAILS IS REPORTED, here at the one place every call passes through, so a
+// `.catch(() => {})` at a call site (a STOP, a snooze, a setting) cannot hide one. Not the log's own post,
+// not an abort (the caller gave it up), not a 5xx (the hub reported its own when it answered it), and not
+// while the page is hidden: iOS kills a suspended page's requests, which is the OS, not the system failing.
+const pageFetch = window.fetch.bind(window);
+window.fetch = async (input, init) => {
+  const url = new URL(typeof input === 'string' || input instanceof URL ? input : input.url, location.href);
+  const method = (init && init.method) || (input instanceof Request ? input.method : 'GET');
+  const watched = url.origin === location.origin && url.pathname !== '/api/clientlog';
+  const say = (why) => {
+    if (!watched) return;
+    lastRequestFailure = { why, at: Date.now() };
+    if (document.visibilityState !== 'hidden') reportPageError(`request failed: ${method} ${url.pathname}: ${why}`);
+  };
+  let r;
+  try { r = await pageFetch(input, init); } catch (e) {
+    if (!(e && e.name === 'AbortError')) say(e && e.message || String(e));
+    throw e;
+  }
+  if (!r.ok && r.status < 500) say(`HTTP ${r.status}`);
+  return r;
+};
+
 export const TOUCH = matchMedia('(pointer: coarse)').matches; // phone/tablet: tap-only, no hover previews
 
 // Mac app view (?mode=mac): the landscape TV wall rendered INTERACTIVELY — chat as a docked VS-Code-style

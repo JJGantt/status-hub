@@ -103,7 +103,7 @@ function parseFallback(json) {
 /**
  * `store(rows)` persists new readings (water_readings); `onReading()` is told whenever one arrives.
  */
-function createLiveWind({ store, onReading = () => {}, log = () => {} }) {
+function createLiveWind({ store, onReading = () => {}, log = () => {}, error = console.error }) {
   let readings = [];          // newest first, the last KEEP_MS
   let fallback = [];          // the same, from KNRB, only while the dock is quiet
   let lastTs = null;
@@ -125,7 +125,7 @@ function createLiveWind({ store, onReading = () => {}, log = () => {} }) {
       // reads as stale readings, so returning on a failed fetch skips the fallback in precisely the
       // case the fallback exists for — and the wind then sits hours old with a current KNRB report
       // available the whole time.
-      if (!failing) log(`[live-wind] fetch failed: ${e.message}`);
+      if (!failing) error(`[live-wind] fetch failed: ${e.message}`);
       failing = true;
     }
     const fresh = json ? parse(json).filter((r) => !lastTs || r.ts > lastTs) : [];
@@ -145,7 +145,7 @@ function createLiveWind({ store, onReading = () => {}, log = () => {} }) {
     // Wind only: the water temperature on these rows is the Pi's hourly NDBC collector's, and a
     // merge upsert leaves a column it is not given alone.
     try { await store(fresh.map((r) => ({ station: STATION, ts: r.ts, wind_kts: r.kts, wind_dir_deg: r.dir, gust_kts: r.gust }))); }
-    catch (e) { log(`[live-wind] store failed: ${e.message}`); }
+    catch (e) { error(`[live-wind] store failed: ${e.message}`); }
     onReading();
   }
 
@@ -159,14 +159,14 @@ function createLiveWind({ store, onReading = () => {}, log = () => {} }) {
       const r = await fetch(FALLBACK, { headers: { 'User-Agent': 'gnarcast (status-hub)' } });
       if (!r.ok) throw new Error(`HTTP ${r.status}`);
       rows = parseFallback(await r.json());
-    } catch (e) { return log(`[live-wind] fallback failed: ${e.message}`); }
+    } catch (e) { return error(`[live-wind] fallback failed: ${e.message}`); }
     if (!rows.length) return;
     const added = rows.filter((r) => !lastFallbackTs || r.ts > lastFallbackTs);
     fallback = rows.slice(0, 12);
     if (!added.length) return;
     lastFallbackTs = rows[0].ts;
     try { await store(added.map((r) => ({ station: FALLBACK_STATION, ts: r.ts, wind_kts: r.kts, wind_dir_deg: r.dir, gust_kts: r.gust }))); }
-    catch (e) { log(`[live-wind] fallback store failed: ${e.message}`); }
+    catch (e) { error(`[live-wind] fallback store failed: ${e.message}`); }
     log(`[live-wind] dock quiet — using ${FALLBACK_STATION}, newest ${rows[0].ts}`);
     onReading();
   }

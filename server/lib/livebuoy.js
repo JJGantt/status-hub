@@ -100,7 +100,7 @@ function pickPoint(rs, field, w) {
 /**
  * `store(rows)` persists new readings (wave_readings); `onReading()` is told whenever one arrives.
  */
-function createLiveBuoy({ store, onReading = () => {}, log = () => {} }) {
+function createLiveBuoy({ store, onReading = () => {}, log = () => {}, error = console.error }) {
   const latest = new Map();            // station -> newest merged reading
   const lastTs = new Map();
   let failing = false;
@@ -123,14 +123,14 @@ function createLiveBuoy({ store, onReading = () => {}, log = () => {} }) {
         if (add.length) { lastTs.set(st.id, rows[0].ts); fresh = fresh.concat(add.map((r) => ({ station: st.id, ...r }))); }
       }
     } catch (e) {
-      if (!failing) log(`[live-buoy] fetch failed: ${e.message}`);
+      if (!failing) error(`[live-buoy] fetch failed: ${e.message}`);
       failing = true;
       return;
     }
     if (failing) log('[live-buoy] fetching again');
     failing = false;
     if (!fresh.length) return;
-    try { await store(fresh); } catch (e) { log(`[live-buoy] store failed: ${e.message}`); }
+    try { await store(fresh); } catch (e) { error(`[live-buoy] store failed: ${e.message}`); }
     onReading();
   }
 

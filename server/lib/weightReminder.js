@@ -106,7 +106,7 @@ async function tick(ctx) {
   }
   if (!apns.configured()) {
     await supaInsert('notifications', { kind: 'weight_reminder', dedupe_key: dedupe, ok: false, detail: 'apns not configured' });
-    if (log) log('apns not configured — set APNS_KEY_* secrets');
+    console.error('[weight-reminder] apns not configured — set APNS_KEY_* secrets');
     return;
   }
 
@@ -116,6 +116,7 @@ async function tick(ctx) {
     okAny = okAny || r.ok;
     details.push(`${token.slice(0, 8)}=${r.status}${r.ok ? '' : '(' + (r.detail || '').slice(0, 60) + ')'}`);
   }
+  if (!okAny) console.error(`[weight-reminder] reached no device: ${details.join(' ')}`);
   await supaInsert('notifications', {
     kind: 'weight_reminder', dedupe_key: dedupe, title: TITLE, body: BODY,
     sent_at: new Date().toISOString(), ok: okAny, detail: details.join(' '),

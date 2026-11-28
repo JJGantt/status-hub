@@ -109,6 +109,8 @@ module.exports = function (ctx) {
       if (!Number.isFinite(sim) || sim <= 0) return { ok: true, sim, why: 'could not tell' };
       return { ok: sim >= bar, sim, bar };
     } catch (e) {
+      // Let through rather than lose the command, but the gate being down is a failure.
+      console.error('[voice-verify] speaker check failed, clip let through:', e.message || e);
       return { ok: true, why: `verify failed: ${e.message || e}` };
     } finally {
       fs.promises.unlink(wav).catch(() => {});

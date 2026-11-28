@@ -145,7 +145,9 @@ function createJobs(ctx) {
       }
       const handler = DUE_HANDLERS.push;
       if (handler === DUE_HANDLERS.push && !apns.configured()) continue;   // nothing to deliver through
-      await handler({ ...r, emoji: emojiOf[r.list_name] }, dk);
+      const sent = await handler({ ...r, emoji: emojiOf[r.list_name] }, dk);
+      // Reached no device (pushAll reported it): left dirty, so the minute tick tries it again.
+      if (!sent || !sent.ok) { dueDirty = true; continue; }
       console.log(`[due] fired ${r.id} [${r.list_name}] "${String(r.title || r.text).slice(0, 40)}"`);
       if (r.alarm) alarmLog('hub', 'due', { title: itemTitle(r), due: r.due, ringers: ringerReport() }, r.id);
       // Nothing to re-arm. Every occurrence of a recurring thing is its own row with its own due

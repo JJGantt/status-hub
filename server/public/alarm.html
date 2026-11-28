@@ -47,6 +47,11 @@
 
 <script>
 (() => {
+  // Standalone, so it carries its own copy of shared.js's reporter: a failure here is an alarm that
+  // does not ring, and it reaches the ops responder like any page's.
+  const report = (msg, stack) => { try { navigator.sendBeacon('/api/clientlog', new Blob([JSON.stringify({ src: 'web', ev: 'error', page: location.pathname, msg: String(msg).slice(0, 500), stack: String(stack || '').slice(0, 2000), t: new Date().toISOString() })], { type: 'application/json' })); } catch (_) {} };
+  addEventListener('error', (e) => report(e.message || 'error', e.error && e.error.stack));
+  addEventListener('unhandledrejection', (e) => report((e.reason && e.reason.message) || String(e.reason), e.reason && e.reason.stack));
   const $ = (id) => document.getElementById(id);
   const pad = (n) => String(n).padStart(2, '0');
   const hhmm = (d) => `${((d.getHours() + 11) % 12) + 1}:${pad(d.getMinutes())}`;
@@ -111,7 +116,7 @@
       const d = await r.json();
       items = (d.items || []).filter((x) => x.alarm && x.when);
       schedule();
-    } catch (_) { /* keep whatever schedule is already held */ }
+    } catch (e) { report(`alarm page: schedule read failed, keeping the one held: ${e && e.message || e}`); }
   }
 
   function nextItem() {

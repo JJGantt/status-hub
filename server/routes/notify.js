@@ -60,13 +60,17 @@ module.exports = function (ctx) {
     } catch (e) { console.error('[notify] overdue count read failed:', e); return null; }
   }
 
+  // A push that reached no device is an error, and its ledger row carries NO dedupe key: the key is what
+  // marks an occurrence delivered, so writing it on a failure would keep a reminder from ever being
+  // tried again (dueTick retries on its next tick while the push answers ok:false).
   async function pushAll(kind, title, body, dedupe_key, extra = {}) {
-    const base = { kind, title, body, ...(dedupe_key ? { dedupe_key } : {}) };
+    const base = { kind, title, body };
+    const delivered = dedupe_key ? { dedupe_key } : {};
     const { emoji, ...style } = { ...(NOTIFY_STYLE[kind] || {}), ...extra };   // copy: never mutate the shared constant
     if (emoji && !String(title).startsWith(emoji)) title = `${emoji} ${title}`;
     const badge = await overdueCount();
     if (Number.isInteger(badge)) style.badge = badge;
-    if (!apns.configured()) { await sbInsert('notifications', { ...base, ok: false, detail: 'apns not configured' }); return { ok: false, detail: 'apns not configured' }; }
+    if (!apns.configured()) { console.error(`[notify] apns not configured, "${String(title).slice(0, 60)}" not pushed`); await sbInsert('notifications', { ...base, ok: false, detail: 'apns not configured' }); return { ok: false, detail: 'apns not configured' }; }
     let tokens;
     try { tokens = await sb('device_tokens?platform=eq.ios&select=token,environment'); } catch (e) {
       console.error(`[notify] device token read failed, "${String(title).slice(0, 60)}" not pushed:`, e);
@@ -84,7 +88,8 @@ module.exports = function (ctx) {
       if (r.ok) anyOk = true;
       details.push(`${token.slice(0, 8)}=${r.status}${r.ok ? '' : '(' + (r.detail || '').slice(0, 60) + ')'}`);
     }
-    await sbInsert('notifications', { ...base, ok: anyOk, detail: details.join(' ') });
+    if (!anyOk) console.error(`[notify] "${String(title).slice(0, 60)}" reached no device: ${details.join(' ')}`);
+    await sbInsert('notifications', { ...base, ...(anyOk ? delivered : {}), ok: anyOk, detail: details.join(' ') });
     return { ok: anyOk, detail: details.join(' ') };
   }
 

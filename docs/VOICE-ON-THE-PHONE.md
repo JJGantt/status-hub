@@ -70,7 +70,9 @@ the same file when it ends (`NativeRec.swift` `interruption`). A `began` counts 
 stopped arriving: iOS posts some that stop nothing, so the recorder waits 0.6 s and pauses only if no
 buffer reached the file meanwhile, logging `nativerec-interrupt-ignored` otherwise. It tells the page
 `paused` and `rec` on `hub:nativerec`, and the page shows the button `armed` with `Paused` only on that,
-logging `voice-paused` with `native: true`. App builds older than that (no `pauses` on their first
+logging `voice-paused` with `native: true`. Its `rec` takes `Paused` down again on every surface, including the
+failure-only status lines (the chat sheet, the session composer). The resume logs `nativerec-resumed`,
+and a recording that finishes still paused is reported as `nativerec-interrupt-unended`. App builds older than that (no `pauses` on their first
 `rec`) are still read from the raw `hub:audiointerrupt`. A tap while paused sends what was recorded before the interruption.
 
 ## Every pressed recording streams to the hub

@@ -32,6 +32,8 @@ import WebKit
 /// waits `confirmGap` and pauses only if no buffer reached the file meanwhile; otherwise it is logged
 /// (`nativerec-interrupt-ignored`) and the recording carries on. The page is told `paused` and `rec`
 /// here rather than reading the raw notification (`pauses` on the first `rec` says so).
+/// Every confirmed pause has its end: `nativerec-resumed` when the microphone comes back, and a recording
+/// that finishes still paused is reported (`nativerec-interrupt-unended`).
 ///
 /// **The built-in microphone, never AirPods** — the same rule as the page's (`acquireBuiltIn`): opening
 /// AirPods' mic drops the link into the hands-free profile.
@@ -53,6 +55,7 @@ final class NativeRec: NSObject {
     private var tick: Timer?
     private var found: (AVAudioSession.Category, AVAudioSession.Mode, AVAudioSession.CategoryOptions)?
     private var interrupted = false
+    private var pausedAt: Date?     // when the confirmed interruption began, for its matching end
     /// What the recording is, for the hub: its source label, and whether it is a dictation rather than a
     /// command (a dictation is never enqueued from its stream).
     private var source = "web"
@@ -126,7 +129,7 @@ final class NativeRec: NSObject {
             let engine = AVAudioEngine()
             self.engine = engine
             try startEngine(engine)
-            banked = 0; since = Date(); interrupted = false
+            banked = 0; since = Date(); interrupted = false; pausedAt = nil
             q.sync { frames.n = 0 }
             tick = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { _ in
                 MainActor.assumeIsolated { self.stream?.flush(secs: self.recorded, state: self.interrupted ? "paused" : "rec") }
@@ -202,6 +205,12 @@ final class NativeRec: NSObject {
     private func finish(deliver: Bool, orphaned: Bool = false) {
         guard engine != nil else { return }
         let secs = recorded
+        // A confirmed interruption is a start whose end is the system handing the microphone back. A
+        // recording that finishes still paused never got that end.
+        if interrupted, let at = pausedAt {
+            ClientLog.fail("nativerec-interrupt-unended", ["secs": secs, "paused": Date().timeIntervalSince(at), "deliver": deliver])
+        }
+        interrupted = false; pausedAt = nil
         teardown()
         let rid = id, url = file, chunks = stream
         var held = writer   // the file finishes when the last reference goes, after every queued write
@@ -254,6 +263,7 @@ final class NativeRec: NSObject {
                         return
                     }
                     self.interrupted = true
+                    self.pausedAt = at
                     if let s = self.since { self.banked += at.timeIntervalSince(s) }
                     self.since = nil
                     self.stream?.flush(secs: self.recorded, state: "paused")
@@ -268,6 +278,8 @@ final class NativeRec: NSObject {
             try AVAudioSession.sharedInstance().setActive(true)
             try startEngine(engine)
             interrupted = false
+            log("nativerec-resumed", ["secs": recorded, "paused": pausedAt.map { Date().timeIntervalSince($0) } ?? 0])
+            pausedAt = nil
             since = Date()
             emit(["state": "rec"])
         } catch {

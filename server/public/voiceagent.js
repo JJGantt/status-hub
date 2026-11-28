@@ -1777,7 +1777,8 @@ function initCard() {
     // Only failures and clears reach the line. The red mic already says it is listening, and the
     // thread's pending bubble (dots, then the transcript) already says it was heard and is being worked
     // on — a progress line under the composer repeats both and jumps the layout as it comes and goes.
-    onStatus: (t, kind) => { if (kind === 'err' || kind === 'clear') setStatus(t); },
+    // Recording again ('rec': a resume after Paused) takes the failure down; the red mic says the rest.
+    onStatus: (t, kind) => { if (kind === 'err' || kind === 'clear') setStatus(t); else if (kind === 'rec') setStatus(''); },
     onState: (s) => { micBtn.classList.toggle('ai-rec', s === 'rec');
                       micBtn.classList.toggle('ai-armed', s === 'armed'); },
     dryWhen: () => attItems.length > 0,

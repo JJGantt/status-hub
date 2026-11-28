@@ -891,11 +891,12 @@ async function openSession(id) {
     dryWhen: () => true,
     session: at.id,
     // Failures only: the red mic is what says it is listening (see initCard in voiceagent.js). A send
-    // starting again ('busy', the outbox retrying a clip) takes the last failure down.
+    // starting again ('busy', the outbox retrying a clip) or recording again ('rec', a resume after
+    // Paused) takes the last failure down.
     onStatus: (t, kind) => {
       if (cur !== at) return;
       if (kind === 'err' || kind === 'clear') status.textContent = t || '';
-      else if (kind === 'busy') status.textContent = '';
+      else if (kind === 'busy' || kind === 'rec') status.textContent = '';
     },
     onState: (s) => { mic.classList.toggle('ai-rec', s === 'rec'); mic.classList.toggle('ai-armed', s === 'armed'); },
     onTranscript: (t) => {

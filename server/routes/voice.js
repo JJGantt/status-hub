@@ -1041,7 +1041,10 @@ module.exports = function (ctx) {
         else { last = f.type; paused = f.type === 'P' ? true : f.type === 'R' ? false : paused; pauses.frame(f.type); }
       }
     });
-    req.on('end', () => { complete = true; if (!res.headersSent) res.status(204).end(); });
+    // A finished body settles here, not on 'close': its verdict is already fixed (complete, last frame), and
+    // in production 'close' has come ~5.4 s after 'end', which a command waiting on this stream (liveAudio)
+    // spent doing nothing. 'close' still settles a connection that dropped.
+    req.on('end', () => { complete = true; if (!res.headersSent) res.status(204).end(); settle(); });
     const settle = () => {
       if (settled) return;
       settled = true;

@@ -1254,6 +1254,10 @@ the server has to name it. A plain `Hub.log` is only for a retry or fallback alr
   failing is `decode-failed`. The call site's own line for the same error, within three seconds, is
   marked `also` and stored without a second report.
 - **A 5xx is not reported from the watch**: the hub reported it when it answered (HUB-INTERNALS § 6f).
+- **A line the hub already stored is dropped when it comes again** (server `lib/clientresend.js`): a batch
+  whose 204 was lost in flight stays in `LogOutbox` and is resent with the next one, which would report
+  each failure in it twice. Each drop is counted as an occurrence; a resend across a hub restart still
+  gets through twice.
 - **Watchset** (`Packages/Watchset`) reports through `WatchsetHost.fail`, which lands in this log with
   `page: watchset`; its requests use their own session, so it says each failure itself.
 - **The widget extension** has no outbox: its only request is the door, and `DoorAPI.report` posts a

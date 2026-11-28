@@ -11,6 +11,7 @@ const { localDate, etNowString } = require('../lib/dates');
 const ops = require('../lib/report');
 const { clientFailure } = require('../lib/clientfail');
 const { createFloodGuard } = require('../lib/clientflood');
+const { createResendGuard } = require('../lib/clientresend');
 const { vanishedRecordings, RECORD_EVENTS } = require('../lib/outcomes');
 const { FrameReader, endOf, adtsSeconds, PauseClock, BrokenStreams, endedBy, RECOVER_GRACE_MS } = require('../lib/livestream');
 const { heardStart, heardEnd } = require('../lib/streams');
@@ -751,12 +752,22 @@ module.exports = function (ctx) {
   // A device logging far more than it ever does is reported and its excess dropped (lib/clientflood.js).
   const admitClientLine = createFloodGuard({ report: (message, src, context) =>
     ops.report(message, { machine: 'client', service: src, context }) });
+  // A batch stored once and sent again because its answer was lost loses the lines already stored
+  // (lib/clientresend.js), so a failure in it is not reported twice.
+  const resent = createResendGuard();
 
   gated.post('/api/clientlog', express.json({ limit: '256kb' }), async (req, res) => {
     const b = req.body || {};
     // The watch's battery rides its batches (lib/watchbattery.js); a failed store never fails the log.
     if (b.battery && watchBattery) watchBattery.ingest(b.battery);
-    const lines = Array.isArray(b.lines) ? b.lines.filter((l) => l && typeof l === 'object') : [b];
+    const batch = Array.isArray(b.lines) ? b.lines.filter((l) => l && typeof l === 'object') : null;
+    const { kept: lines, dropped } = batch ? resent.fresh(batch) : { kept: [b], dropped: 0 };
+    // The device resent lines because the hub's answer for them never reached it: counted, not raised.
+    if (dropped) {
+      const src = batch[0].src || 'client';
+      ops.occurrence(`${src} log batch came again after it was stored; the repeated lines were dropped`,
+        { machine: 'client', service: src, context: { dropped, of: batch.length } });
+    }
     const keep = [];
     for (const l of lines) {
       if (!admitClientLine(l)) continue;
@@ -825,6 +836,7 @@ module.exports = function (ctx) {
       }
       checkRecordings(keep).catch((e) => console.error('[clientlog] recording check failed:', e.message || e));
     }
+    if (batch) resent.remember(lines);
     res.status(204).end();
   });
 

@@ -56,6 +56,10 @@ window.fetch = async (input, init) => {
     throw e;
   }
   if (!r.ok && r.status < 500) say(`HTTP ${r.status}`);
+  // A 5xx is the hub's to report (it did, when it answered it), or Fly's proxy answering while the hub
+  // restarts for a deploy, which the hub's heartbeat covers if it never comes back. The call site's own
+  // console.error for it ("… voice-inbox 502") is held to the console like any other request failure's.
+  if (r.status >= 500 && watched) lastRequestFailure = { why: String(r.status), at: Date.now() };
   return r;
 };
 

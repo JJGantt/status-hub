@@ -18,7 +18,7 @@ const { fail, logged } = require('../lib/httpfail');
 //
 // An open handoff is also ON ITS SESSION (`openFor`, in the session payload), so the phone's and the
 // watch's session views show it for as long as it waits, as a permission prompt is shown.
-const COLS = 'id,session,target,note,status,image,seq,width,height,taps,typed,error,created_at,updated_at,region,selector,whole,full_image,focus,suggest,driver';
+const COLS = 'id,session,target,note,status,image,seq,width,height,taps,typed,error,created_at,updated_at,region,selector,whole,full_image,focus,suggest,driver,typing_into';
 const view = (r) => r && {
   id: r.id, session: r.session, target: r.target, note: r.note, status: r.status, seq: r.seq,
   img: r.image ? `/img/${r.image}` : null, width: r.width, height: r.height, error: r.error,
@@ -29,6 +29,8 @@ const view = (r) => r && {
   full: r.full_image ? `/img/${r.full_image}` : null, focus: r.focus || null,
   // Values the session knows he will type (his email, a card number): buttons that fill his text box.
   suggest: Array.isArray(r.suggest) ? r.suggest : [],
+  // The field his typing will go into, in fractions of `full` (the phone outlines it and names it on Type).
+  typing_into: r.typing_into || null,
 };
 const KINDS = ['tap', 'text', 'key', 'refresh', 'view', 'done', 'cancel'];
 const KEYS = ['enter', 'tab', 'backspace', 'escape'];

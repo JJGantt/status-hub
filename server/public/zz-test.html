@@ -1,0 +1,9 @@
+<!doctype html><html><head><meta name=viewport content="width=device-width,initial-scale=1">
+<link rel=stylesheet href="/app.css"><link rel=stylesheet href="/phone-home.css"></head>
+<body class="tv phonewall homewall phonehome" style="margin:0;height:100vh"><div id=m style="height:100vh;display:flex;flex-direction:column"></div>
+<script type=module>
+window.fetch = async (u) => ({ ok: true, json: async () => String(u).includes('/api/handoffs/') ? { id:'x', status:'open', seq:1, suggest:[{label:'User name',text:'jaredgantt'}] } : { id:'s1', ice:[] } });
+window.RTCPeerConnection = class { constructor(){ this.connectionState='new'; } createDataChannel(){ return { addEventListener(){}, readyState:'connecting' }; } addTransceiver(){} addEventListener(){} async createOffer(){ return {sdp:''}; } async setLocalDescription(){} get localDescription(){ return {sdp:''}; } close(){} getStats(){ return new Map(); } };
+const { openScreen } = await import('/screen.js');
+openScreen({ mount: document.getElementById('m'), session: 's', handoff: { id: 'x', focus: null } });
+</script></body></html>

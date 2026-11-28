@@ -23,7 +23,10 @@ export function openHandoff(id, { page = false, mount = null, onEnd = null } = {
   const wrap = h('div', 'ho-wrap');
   const img = h('img', 'ho-img'); img.alt = '';
   const mark = h('div', 'ho-mark');
-  wrap.append(img, mark); stage.append(wrap);
+  // The field his typing will go into (`typing_into`, read with the screenshot), outlined on the picture,
+  // so a tap that landed one field off is seen before anything is typed.
+  const caret = h('div', 'ho-caret'); caret.hidden = true;
+  wrap.append(img, caret, mark); stage.append(wrap);
   const bar = h('div', 'ho-bar');
   const input = h('input', 'ho-input');
   Object.assign(input, { type: 'text', autocomplete: 'off', autocapitalize: 'off', spellcheck: false });
@@ -153,6 +156,13 @@ export function openHandoff(id, { page = false, mount = null, onEnd = null } = {
     onFull = !!v.full;
     focus = v.full ? v.focus : null;
     if (src && img.getAttribute('src') !== src) img.src = src;
+    const ti = onFull ? v.typing_into : null;
+    caret.hidden = !ti;
+    if (ti) {
+      Object.assign(caret.style, { left: `${ti.x * 100}%`, top: `${ti.y * 100}%`, width: `${ti.w * 100}%`, height: `${ti.h * 100}%` });
+      caret.classList.toggle('secure', !!ti.secure);
+    }
+    typeBtn.textContent = ti && ti.label ? `Type → ${ti.label}` : 'Type';
     const sug = JSON.stringify(v.suggest || []);
     if (sug !== suggested) {
       suggested = sug;
@@ -178,11 +188,12 @@ export function openHandoff(id, { page = false, mount = null, onEnd = null } = {
     } catch (e) { state.textContent = String(e.message || e); setBusy(false); }
   }
 
-  row1.append(input, btn('Type', () => {
+  const typeBtn = btn('Type', () => {
     if (!input.value) return;
     const text = input.value; input.value = '';
     act({ kind: 'text', text });
-  }, 'ho-go'));
+  }, 'ho-go');
+  row1.append(input, typeBtn);
   row2.append(
     btn('Enter', () => act({ kind: 'key', key: 'enter' })),
     btn('Tab', () => act({ kind: 'key', key: 'tab' })),

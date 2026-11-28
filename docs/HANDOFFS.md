@@ -65,6 +65,11 @@ A tap is sent as fractions (0-1) of the picture it was made on, so it lands in t
 size the picture is drawn at: the phone's carry `full` (fractions of `full_image`), the watch's do not
 (fractions of `image`).
 
+**Where his typing will go.** With every Mac screenshot the agent reads the focused field (`typing_into`,
+data-layer README § Handoffs); the tap screen outlines it on the picture (blue for a password field, green
+otherwise) and the Type button names it (`Type → Password`). A tap that lands a field away from where he
+aimed moves the focus, and this is how he sees that before typing.
+
 **Suggested values.** The session passes `suggest` ([{label, text}]: his email, a card number he gave
 it) with the request; the phone shows each as a button that fills the text box, and he presses Type
 himself. Never a password or a one-time code. The agent clears `suggest` when the handoff ends. The session chooses them from what the screen asks for. In the live Mac view

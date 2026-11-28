@@ -168,6 +168,31 @@ module.exports = function (ctx) {
     catch (e) { console.error('[switchbot] reading lan_joins failed:', e); res.status(502).json({ error: 'unreachable' }); }
   });
 
+  // Phone and watch arrivals and departures heard over Bluetooth (data-layer presence/ble.py).
+  gated.get('/api/presence/events', async (req, res) => {
+    try { res.json(await sb('presence_events?select=at,machine,device,source,event,rssi,away_s&order=at.desc&limit=30')); }
+    catch (e) { console.error('[switchbot] reading presence_events failed:', e); res.status(502).json({ error: 'unreachable' }); }
+  });
+
+  // His phone or watch heard again over Bluetooth after being away: unlocks when the bluetooth approach is
+  // on. One unlock per device a minute; an extra unlock does nothing anyway.
+  const lastBleUnlock = new Map();
+  async function presenceEvent(row) {
+    try {
+      if (!row || row.source !== 'ble' || row.event !== 'arrive') return;
+      if (!(await modes()).bluetooth) { console.log(`[switchbot] ${row.device} arrived over Bluetooth; bluetooth approach is off`); return; }
+      if (Date.now() - (lastBleUnlock.get(row.device) || 0) < 60e3) return;
+      lastBleUnlock.set(row.device, Date.now());
+      const t = Date.now();
+      const { body } = await bot.command('unlocked', (b) => stateOf(b).lock);
+      await record(stateOf(body), 'command', { ...body, reason: `bluetooth:${row.device}`, arrive_at: row.at }, battery(body));
+      console.log(`[switchbot] unlocked for ${row.device} arriving over Bluetooth, ${Date.now() - t}ms`);
+    } catch (e) {
+      console.error('[switchbot] Bluetooth arrival unlock failed:', e);
+      report(`Front door unlock for a Bluetooth arrival failed: ${e.message || e}`);
+    }
+  }
+
   // A device joining the home Wi-Fi (a DHCP Discover or Request, which a phone or watch sends only when it
   // joins or rejoins) unlocks the door when the wifi approach is on and the MAC is his: app_settings
   // presence_devices, {"<mac>": "phone" | "watch"}. Both listeners hear the same join; one unlock per
@@ -200,5 +225,5 @@ module.exports = function (ctx) {
 
   if (!TOKEN || !SECRET) console.error('[switchbot] SWITCHBOT_TOKEN / SWITCHBOT_SECRET not set; the front door backstop is off');
   else { setTimeout(backstop, 30e3); setInterval(backstop, BACKSTOP_MS); }
-  return { lanJoined };
+  return { lanJoined, presenceEvent };
 };

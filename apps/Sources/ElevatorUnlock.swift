@@ -207,6 +207,17 @@ final class ElevatorUnlock: NSObject, CLLocationManagerDelegate {
                 }
                 if on != self.elevatorOn { self.event(on ? "elevator mode on" : "elevator mode off", [:]) }
                 self.elevatorOn = on
+                // Any thresholds the hub sets replace the defaults key by key.
+                if let th = j["thresholds"] as? [String: Any] {
+                    var cur = (try? JSONSerialization.jsonObject(with: JSONEncoder().encode(self.detector.t))) as? [String: Any] ?? [:]
+                    cur.merge(th) { _, new in new }
+                    if let data = try? JSONSerialization.data(withJSONObject: cur),
+                       let next = try? JSONDecoder().decode(ElevatorDetector.Thresholds.self, from: data) {
+                        self.detector.t = next
+                    } else {
+                        Self.error("elevator unlock: the hub's elevator_thresholds did not decode: \(th)")
+                    }
+                }
                 self.publish()
             } catch {
                 Self.error("elevator unlock: reading the unlock modes failed: \(error.localizedDescription)")

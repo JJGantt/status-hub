@@ -16,9 +16,11 @@ import Foundation
 ///   car stopped at another floor) goes back to riding from the same lowest point; no steps in time
 ///   gives up on it.
 struct ElevatorDetector {
+    /// Defaults; the hub's `app_settings.elevator_thresholds` overrides any of them at runtime
+    /// (`GET /api/door/modes`, `ElevatorUnlock.refreshModes`), so tuning never needs an app build.
     struct Thresholds: Codable {
-        var minRise = 3.5
-        var rideWindow: TimeInterval = 90
+        var minRise = 5.0
+        var rideWindow: TimeInterval = 120
         var maxRideSteps = 10
         var stillRise = 0.4
         var stillFor: TimeInterval = 5
@@ -43,7 +45,7 @@ struct ElevatorDetector {
         case ended(rideStart: TimeInterval, base: Double, at: TimeInterval, top: Double, steps: Int, stepsInRide: Int)
     }
 
-    let t: Thresholds
+    var t: Thresholds
     private(set) var alt: [(t: TimeInterval, m: Double)] = []
     private(set) var steps: [(t: TimeInterval, n: Int)] = []
     private var state = State.idle

@@ -187,8 +187,15 @@ module.exports = function (ctx) {
     try { m = JSON.parse((row && row.value) || '{}'); } catch (e) { report(`app_settings.door_unlock_modes is not JSON: ${e.message}`); }
     return Object.fromEntries(MODES.map((k) => [k, m[k] === true]));
   }
+  // Also carries app_settings.elevator_thresholds ({"minRise": 5, ...}, ElevatorDetector.Thresholds keys),
+  // which the phone applies over its defaults, so the ride rules are tuned without an app build.
   gated.get('/api/door/modes', async (req, res) => {
-    try { res.json(await modes()); } catch (e) { console.error('[switchbot] reading modes failed:', e); res.status(502).json({ error: 'unreachable' }); }
+    try {
+      const row = (await sb('app_settings?select=value&key=eq.elevator_thresholds'))[0];
+      let thresholds;
+      try { thresholds = row && row.value ? JSON.parse(row.value) : undefined; } catch (e) { report(`app_settings.elevator_thresholds is not JSON: ${e.message}`); }
+      res.json({ ...(await modes()), ...(thresholds ? { thresholds } : {}) });
+    } catch (e) { console.error('[switchbot] reading modes failed:', e); res.status(502).json({ error: 'unreachable' }); }
   });
   gated.post('/api/door/modes', express.json(), async (req, res) => {
     try {

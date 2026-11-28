@@ -37,7 +37,7 @@ Riding the elevator up to the apartment and walking out of it unlocks the door.
   steps is a ride; it has ended when the last 5 s rose less than 0.4 m; then 5 steps within 90 s is
   walking out, and the door is unlocked (`POST /api/door`, reason `elevator`). A rise that resumes (a
   stop at another floor) goes back to riding from the same lowest point, so the whole climb counts. A ride
-  down is recorded once it stops (`down`). These are loose first values, to be tuned from traces.
+  down is recorded once it stops (`down`). These are loose first values, to be tuned from traces: `app_settings.elevator_thresholds` (any `Thresholds` key, e.g. `{"minRise":5,"rideWindow":120}`) overrides the app's defaults at runtime, sent with `GET /api/door/modes`, so tuning needs no build.
 - **Every ride is stored** in `elevator_rides` a minute after it, up or down, unlocked or not
   (`no_exit`), with the thresholds it ran with and its trace: relative altitude and cumulative steps
   from four minutes before it, in seconds from `trace.t0`, when watching started.

@@ -4,7 +4,8 @@ One of the capabilities in the shared `~/CLAUDE.md` § What each machine can do 
 
 A session can also drive a screen itself with `drive_screen` (`handoffs.driver = 'session'`): the same
 rows and agents, pushed to his phone so he can watch, but nothing is asked of him (data-layer `README.md`
-§ Driving a screen).
+§ Driving a screen). When that session then hands him the same screen, the row is handed over in place
+(`driver` cleared) and pushed again, so one screen is one handoff on his phone.
 
 A session blocked on something only Jared can do (a sign-in, a 2FA code, a captcha, a choice that is
 his) calls the data MCP's `request_handoff(target, note)`. He gets the screenshot on his phone and

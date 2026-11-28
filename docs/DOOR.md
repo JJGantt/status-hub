@@ -139,6 +139,35 @@ door on the first to land and then reports which one it was.
 
 A second, measurement-only report, `GET /api/lobby/started/<nonce>/<path>` (kind `start`, data-layer 00222), is sent by the automation's first step, before the unlock shortcut; with `opened` it splits a race's delay into message delivery plus automation start, and the unlock itself (`started_s` / `arrived_s` in `GET /api/lobby/races`).
 
+## PIN by text or email
+
+A text to his number, or an email to his Gmail, whose whole content is a PIN opens a door: the lobby
+PIN starts a lobby race for the main entrance (§ Lobby door, so his phone has to be on to run the
+shortcut), the front PIN unlocks the apartment door through the SwitchBot cloud (nothing of his needs to
+be on). "Whole content" is `lib/doorpin.js`: a text that is only the digits, or an email whose subject and
+body are each empty or those same digits, a `Sent from my ...` footer aside. Anything else is ignored.
+
+- **The decision is the hub's** (`routes/doorpin.js`, `POST /api/door/pin`). The PINs are stored only as
+  HMAC-SHA256 under the Fly secret `DOOR_PIN_PEPPER` (local copy `~/.config/door-pin/pepper`), in
+  `app_settings.door_pins` `{lobby, front}`. Change one with `bin/hub POST /api/door/pin/set
+  '{"door":"front","pin":"…"}'`.
+- **Every message is logged once** in `door_pin_messages` (data-layer 00224) by Gmail id or iMessage
+  guid, with its outcome and never its content, and every outcome pushes to the phone (Door PIN used,
+  Lobby PIN used, Wrong door PIN, Door PIN locked, … failed). `GET /api/door/pin/messages` reads it.
+- **Lockout**: three wrong PIN-shaped messages within an hour set `app_settings.door_pin_locked`, which
+  refuses every PIN until `POST /api/door/pin/unlock`. The lockout is reported to the responder.
+
+Where the messages come from:
+
+| path | runs on | needs |
+|---|---|---|
+| email, hub's own watch (`routes/gmailpush.js`) | Fly | nothing else. Pub/Sub push subscription `gmail-watch-hub` on topic `gmail-watch` (project `status-hub-507320`) posts to `/api/gmail/push/<GMAIL_PUSH_TOKEN>` (Fly secret, local copy `~/.config/door-pin/gmail-push-token`); the hub reads history from `app_settings.hub_gmail_history` and renews `users.watch` daily itself |
+| email, gmail-watcher `handlers/doorpin.py` | Mac, Pi | the second path if the push breaks; posts the same mail to the hub, which dedupes |
+| text, data-layer `presence/textpin.py` (`com.jaredgantt.textpin`) | Mac only | the Mac awake: only it has chat.db. With the Mac off a texted PIN is not seen; email is the path for that |
+
+The front door is unlocked through the SwitchBot cloud only: no Bluetooth command path to the lock exists
+yet (the Mac and Pi listeners only read its broadcasts).
+
 ## Near-home trace (phone)
 
 While the elevator watch runs (inside the 500 m home geofence), `apps/Sources/HomeTrace.swift` records

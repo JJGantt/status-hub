@@ -24,12 +24,17 @@ module.exports = function (ctx) {
   const headers = { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}`, 'Content-Type': 'application/json' };
   if (!USER || !PASS) { console.error('[icloudmail] ICLOUD_EMAIL / ICLOUD_APP_PASSWORD not set; the hub is not watching iCloud mail'); return; }
 
+  // One shared object for both mailboxes, loaded once: two loads would each save their own copy and the
+  // later save would drop the other mailbox's cursor.
   let cursors = null;
-  async function loadCursors() {
-    if (cursors) return cursors;
-    const row = (await sb(`app_settings?select=value&key=eq.${CURSOR}`))[0];
-    try { cursors = row && row.value ? (typeof row.value === 'string' ? JSON.parse(row.value) : row.value) : {}; } catch { cursors = {}; }
-    return cursors;
+  let loading = null;
+  function loadCursors() {
+    if (!loading) loading = (async () => {
+      const row = (await sb(`app_settings?select=value&key=eq.${CURSOR}`))[0];
+      try { cursors = row && row.value ? (typeof row.value === 'string' ? JSON.parse(row.value) : row.value) : {}; } catch { cursors = {}; }
+      return cursors;
+    })().catch((e) => { loading = null; throw e; });
+    return loading;
   }
   async function saveCursors() {
     const r = await fetch(`${SUPABASE_URL}/rest/v1/app_settings?on_conflict=key`, { method: 'POST',

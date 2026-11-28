@@ -2096,7 +2096,8 @@ Fly keeps minutes of them. Writers merge keys with `rpc/voice_timing` (or, for t
 `lib/latency.js` judges every command against the ones before it, so a stage that quietly goes from
 3s to 14s opens an incident at the ops responder instead of waiting to be noticed. Three stages:
 `hub:<audio_via>` (`hub_ms`; a dictation, which writes no row, is fed its hub time straight from
-`/api/voice-command`), `pickup` (`hub_enqueued` to `worker_start`) and `first_output` (`hub_received` to
+`/api/voice-command`, under `hub:<audio_via>:long` when it is over a minute, since its transcription alone
+takes seconds), `pickup` (`hub_enqueued` to `worker_start`) and `first_output` (`hub_received` to
 the model's first output, what the user waits through). A command counts when realtime delivers its row
 with `first_output` stamped; the last fortnight is read once when realtime starts. A stage is reported,
 as a `console.error`, when the median of its last 5 commands is at least twice its median over the

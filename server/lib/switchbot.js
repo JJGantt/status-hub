@@ -37,19 +37,19 @@ function createSwitchBot({ token, secret, lockId = '', fetchImpl = fetch, sleep 
 
   /** Lock or unlock (`want` 'locked' | 'unlocked'), answered with the status body once the lock
    *  reports that state; already there sends nothing. Not there after CONFIRM_MS throws. */
+  // The command goes out first, with no read before it: an unlock sent to an unlocked lock does nothing,
+  // and a read first would add its round trip to every command. Then the lock's own state confirms it.
   async function command(want, norm) {
-    const before = await status();
-    if (norm(before) === want) return { body: before, changed: false };
     const id = await findLock();
     await api('POST', `/devices/${id}/commands`, { command: want === 'locked' ? 'lock' : 'unlock', parameter: 'default', commandType: 'command' });
     const sent = Date.now();
-    let body = before;
+    let body = null;
     while (Date.now() - sent < CONFIRM_MS) {
       await sleep(STEP_MS);
       body = await status();
-      if (norm(body) === want) return { body, changed: true };
+      if (norm(body) === want) return { body };
     }
-    throw new Error(`sent ${want === 'locked' ? 'lock' : 'unlock'}, but after ${CONFIRM_MS / 1000}s the lock reports ${body.lockState}`);
+    throw new Error(`sent ${want === 'locked' ? 'lock' : 'unlock'}, but after ${CONFIRM_MS / 1000}s the lock reports ${body ? body.lockState : 'nothing'}`);
   }
 
   return { api, findLock, status, command };

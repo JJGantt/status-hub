@@ -549,7 +549,9 @@ module.exports = function (ctx) {
         }
         return res.json({ transcript: '', enqueued: false, ...(damaged ? { capture: 'damaged', ...damaged } : {}) });
       }
-      if (dry) latency.sample(`hub:${timing.audio_via}`, since(t0));   // a dictation writes no row to be judged from
+      // A dictation writes no row to be judged from, so its hub time is fed here. One over a minute is its
+      // own stage: transcribing nine minutes takes seconds, which against short commands reads as a regression.
+      if (dry) latency.sample(`hub:${timing.audio_via}${dur > 60 ? ':long' : ''}`, since(t0));
       if (dry) return res.json({ transcript, enqueued: false, ...(damaged ? { capture: 'damaged', ...damaged } : {}) });
       // Instructions recorded for a rewind grab: the command the model sees is the grab plus the user's words.
       const rewindId = REWIND_ID.test(String(req.query.rewind || '')) ? String(req.query.rewind) : null;

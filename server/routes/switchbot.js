@@ -93,9 +93,10 @@ module.exports = function (ctx) {
     const reason = typeof req.body.reason === 'string' ? req.body.reason.slice(0, 40) : 'watch';
     const want = action === 'lock' ? 'locked' : 'unlocked';
     try {
-      const { body, changed } = await bot.command(want, (b) => stateOf(b).lock);
-      if (changed) await record(stateOf(body), 'command', { ...body, reason }, battery(body));
-      res.json(answer(body, { changed }));
+      const { body } = await bot.command(want, (b) => stateOf(b).lock);
+      // door_report() writes a row only if no other source has recorded the change yet.
+      const { rows } = await record(stateOf(body), 'command', { ...body, reason }, battery(body));
+      res.json(answer(body, { recorded: rows.length > 0 }));
     } catch (e) {
       console.error(`[switchbot] ${action} (${reason}) failed:`, e);
       report(`Front door ${action} for ${reason} failed: ${e.message || e}`);

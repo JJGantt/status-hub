@@ -1,5 +1,5 @@
 // Bootstrapping: SSE → render orchestrator, then the layout init.
-import { TOUCH, KIOSK, state, liveStream, safeReload } from './shared.js';
+import { TOUCH, KIOSK, state, liveStream, reloadWhenIdle } from './shared.js';
 import * as litter from './cards/litter.js';
 import * as feeder from './cards/feeder.js';
 import * as surf from './cards/surf.js';
@@ -32,29 +32,13 @@ let builtAt = null, stale = false;
 
 // A DEPLOY HAS TO REACH THE SCREEN. A page open for hours never re-requests its own bundle, and on
 // iOS closing the app usually SUSPENDS it: reopening restores the same page with the same code, so
-// "I closed and reopened it" is not a reload and a fix can look unfixed for an afternoon.
-//
-// Two moments, because the first is not reliable on a phone. Going HIDDEN is the invisible one, and
-// it is tried first — but JS is suspended shortly after backgrounding and the navigation may never
-// finish. Coming back VISIBLE is the one that always runs, and it is the least-bad time to
-// interrupt: the user has just arrived and has typed nothing.
-//
-// A wall is never hidden, so it reloads at once, which is what a wall wants.
-// A PHONE THAT NEVER GOES HIDDEN is the third case, and it holds the old bundle forever: a screen
-// parked on this page has no visibilitychange coming, and since the page is now also the alarm clock
-// that means a deploy can leave a phone holding code that cannot ring. So idleness is the other
-// moment to take. Interrupting a page nobody has touched for two minutes costs nothing — the
-// deferral above exists only to avoid reloading under someone's hands, not to wait forever.
-const STALE_IDLE_MS = 120000;
-function goStale() {
+// "I closed and reopened it" is not a reload and a fix can look unfixed for an afternoon. When the
+// frame names a commit other than the one this page loaded, `reloadWhenIdle` (shared.js) takes the
+// reload at the first moment nobody is reading.
+function goStale(commit) {
   if (stale) return;
   stale = true;
-  if (KIOSK || document.hidden) return safeReload();
-  document.addEventListener('visibilitychange', () => safeReload());
-  let idleT = null;
-  const arm = () => { clearTimeout(idleT); idleT = setTimeout(safeReload, STALE_IDLE_MS); };
-  ['pointerdown', 'keydown', 'touchstart'].forEach((e) => document.addEventListener(e, arm, { passive: true }));
-  arm();
+  reloadWhenIdle(`frame from ${commit}`);
 }
 
 // A widget can't poll — it draws snapshots WidgetKit schedules, so it only learns about new food or
@@ -87,7 +71,7 @@ function render(s){
  // which is what a wall wants, since nobody is typing into it.
  if(s.commit){
   if(!builtAt) builtAt=s.commit;
-  else if(s.commit!==builtAt) goStale();
+  else if(s.commit!==builtAt) goStale(s.commit);
  }
  nudgeWidgets(s);
  litter.render(s);

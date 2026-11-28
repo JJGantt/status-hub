@@ -1008,7 +1008,7 @@ window.__startRepoSession = async (path) => {
 // Called by the native app when a session's reply notification is tapped: opens that session, so
 // the reply the notification was about is what is on screen. A row that no longer exists lands on
 // the list instead. Remembered BEFORE the fetch: a tap that brings a stale page forward reloads it at
-// that moment (core.js goStale), and an id remembered only once the fetch lands is lost with it.
+// that moment (shared.js reloadWhenIdle), and an id remembered only once the fetch lands is lost with it.
 window.__showSession = async (id) => {
   const el = document.getElementById('repospane');
   if (!el) return;

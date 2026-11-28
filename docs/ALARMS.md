@@ -172,8 +172,8 @@ nothing but to be on; these are for the phone to ring as well:
 - The app is open on `/`, in Guided Access, **plugged in** — a lit screen all night will flatten it.
 - The item is marked `alarm` (`list_items.alarm`); the page rings nothing else.
 - The page is on a current bundle. A deploy after the page loaded leaves it holding old code until
-  `goStale` (`core.js`) reloads it: at once when hidden, otherwise after two minutes with no touch,
-  and never while a voice command is recording.
+  `reloadWhenIdle` (`shared.js`) reloads it: at once when hidden, on the next visibility change, or
+  after five minutes with no touch, key or scroll, and never while a voice command is recording.
 
 **Read `alarm_log` to check any of it** — the section below. The page beacons every minute with
 `audio`, `media` (readyState), `lock`, `visible`, `next`, `armed`, `guided`. That beacon exists

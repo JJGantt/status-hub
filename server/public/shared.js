@@ -245,6 +245,39 @@ export function safeReload() {
   location.reload();
 }
 
+// A RELOAD THE PAGE WANTS BUT THE READER DID NOT ASK FOR waits until nobody is using it. A deploy made
+// the page stale, or a stream went deaf: either way a reload under someone mid-read throws away where
+// they were, and the thread rules then land them on the newest message. So it is taken at one of three
+// moments: at once when nobody can be looking (a kiosk, a hidden page); on the next visibilitychange
+// (going hidden is invisible; coming back is a moment the user has just arrived and typed nothing);
+// or after IDLE_RELOAD_MS with no touch, key, wheel or scroll anywhere on the page. That last one is
+// what reaches a phone that never goes hidden (the alarm clock in Guided Access), and scrolling counts
+// as use because scrolling is what reading on a phone is.
+const IDLE_RELOAD_MS = 300000;
+let idleReloadArmed = false;
+export function reloadWhenIdle(why) {
+  if (idleReloadArmed) return;
+  idleReloadArmed = true;
+  const go = (how) => { reportReload(`${why} (${how})`); safeReload(); };
+  if (KIOSK || document.hidden) return go('nobody looking');
+  document.addEventListener('visibilitychange', () => go(document.hidden ? 'hidden' : 'shown'));
+  let t = null;
+  const typing = () => { const a = document.activeElement;
+    return a && (a.tagName === 'INPUT' || a.tagName === 'TEXTAREA' || a.isContentEditable); };
+  const arm = () => { clearTimeout(t); t = setTimeout(() => (typing() ? arm() : go('idle')), IDLE_RELOAD_MS); };
+  ['pointerdown', 'keydown', 'touchstart', 'wheel', 'scroll'].forEach((e) =>
+    document.addEventListener(e, arm, { passive: true, capture: true }));
+  arm();
+}
+// Every self-initiated reload says why, as a client-log line, so "the page reloaded on me" can be
+// answered from the hub's log instead of guessed at.
+function reportReload(why) {
+  try {
+    const body = JSON.stringify({ src: 'web', ev: 'reload', page: location.pathname, msg: why, t: new Date().toISOString() });
+    navigator.sendBeacon('/api/clientlog', new Blob([body], { type: 'application/json' }));
+  } catch (_) { /* the reload goes ahead either way */ }
+}
+
 // ---------------------------------------------------------------- live streams
 //
 // An EventSource that notices when it has gone deaf.
@@ -300,7 +333,7 @@ export function liveStream(url, listeners, { onOpen } = {}) {
     if (a && (a.tagName === 'INPUT' || a.tagName === 'TEXTAREA' || a.isContentEditable)) return;
     reloading = true;
     fetch('/healthz', { cache: 'no-store' })
-      .then((r) => { if (r.ok) safeReload(); else reloading = false; })
+      .then((r) => { if (r.ok) reloadWhenIdle(`stream ${url} deaf`); else reloading = false; })
       .catch(() => { reloading = false; });
   }, 5000);
   return self;
@@ -641,10 +674,9 @@ export function dualPlot(calPts,wPts,maintPts,targetPts){
 // against and reloads when that changes. It is a text response with no database behind it, so the
 // poll is cheap enough to be boring.
 //
-// The guards are the same three the staleness recovery uses, for the same reasons: a hidden tab is
-// supposed to be idle, reloading out from under something being typed throws the text away, and a
-// reload is pointless if the answer never came. Failing all three just means waiting for the next
-// pass — a stale page is always better than a lost one.
+// A change of commit does not reload on the spot: `reloadWhenIdle` waits until nobody is reading. A
+// deploy lands every few minutes on a busy day, and a reload on each one is a page that throws its
+// reader back to the newest message every time.
 const BUILD_POLL_MS = 120000;
 if (typeof window !== 'undefined' && typeof fetch === 'function') {
   let seen = null;
@@ -655,10 +687,7 @@ if (typeof window !== 'undefined' && typeof fetch === 'function') {
     if (!now.startsWith('ok ')) return;
     if (seen === null) { seen = now; return; }
     if (now === seen) return;
-    if (document.hidden) return;                      // let a backgrounded tab stay asleep
-    const a = document.activeElement;
-    if (a && (a.tagName === 'INPUT' || a.tagName === 'TEXTAREA' || a.isContentEditable)) return;
-    safeReload();
+    reloadWhenIdle(`deployed ${now.slice(3)}`);
   };
   setInterval(check, BUILD_POLL_MS);
   check();

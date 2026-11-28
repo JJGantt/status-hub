@@ -111,7 +111,10 @@ Supabase ──▶ lib/dashboard.js buildStatus() ──▶ /api/status payload 
   page — but only once `/healthz` answers, since reloading into an unreachable hub lands on the
   browser error page where no JS is left to recover (the trap `.xinitrc` gates the kiosk against).
 - **No self-initiated reload interrupts a recording.** The page reloads on its own after a deploy
-  (core.js `goStale`, the `/healthz` build check in shared.js) and when a stream stays deaf, and a
+  (core.js `goStale`, the `/healthz` build check in shared.js) and when a stream stays deaf. None of
+  those reloads on the spot: all three go through `reloadWhenIdle`, which waits for a hidden page, a
+  visibility change, or five minutes with no touch, key or scroll, so a deploy never reloads a page
+  under someone reading it; each logs an `ev: 'reload'` client-log line with its reason. And a
   reload mid-command destroys the clip, which is only in the MediaRecorder's memory until stop. All of
   them go through `safeReload()`; `makeRecorder` holds it off (`holdReload`) whenever its state is not
   `idle` — arming, capturing, uploading — and the wanted reload happens 3s after the last hold lets go.

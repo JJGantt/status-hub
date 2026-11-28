@@ -81,6 +81,7 @@ targets:
         # The watch's rep counter reads motion, and Apple's scan attributes the embedded watch binary's
         # CoreMotion use to this bundle too.
         NSMotionUsageDescription: Counts your reps, records motion for gesture testing, and detects your elevator ride home to unlock the door.
+        NSBluetoothAlwaysUsageDescription: Detects your watch reconnecting at home.
         NSCameraUsageDescription: Status Hub uses the camera to capture food and nutrition labels.
         NSPhotoLibraryUsageDescription: Status Hub attaches photos of food and nutrition labels.
         # The hub page's navigator.geolocation in the WKWebView (voiceagent.js hereNow) needs it.
@@ -96,8 +97,10 @@ targets:
         # app without it, and leaving it out is what stops the app running behind others (docs/LOCATION.md).
         UIBackgroundModes:
           - audio
-          # Keeps the app running only during the elevator-unlock window near home (Sources/ElevatorUnlock.swift).
+          # Keeps the app running while he is near home, for the elevator unlock (Sources/ElevatorUnlock.swift).
           - location
+          # Connection events for the watch reconnecting, delivered in the background (Sources/WatchLinkWatch.swift).
+          - bluetooth-central
         CFBundleURLTypes:
           - CFBundleURLName: com.jaredgantt.statushub
             CFBundleURLSchemes:

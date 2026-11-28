@@ -133,6 +133,7 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
         HealthSync.shared.start()  // Apple Health -> the hub, and SleepSync after it (docs/HEALTH.md, docs/SLEEP.md)
         LocationTrail.shared.start()  // every position -> the hub's location history (docs/LOCATION.md)
         ElevatorUnlock.shared.start()  // the elevator ride home unlocks the front door (docs/DOOR.md)
+        WatchLinkWatch.shared.start()  // logs the watch reconnecting to the phone, an experiment (docs/DOOR.md)
         UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound, .badge]) { granted, _ in
             guard granted else { return }
             DispatchQueue.main.async { application.registerForRemoteNotifications() }

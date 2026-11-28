@@ -88,6 +88,7 @@ final class ElevatorUnlock: NSObject, CLLocationManagerDelegate {
         lastPhase = "idle"; lastAlt = nil; lastSteps = 0
         Self.note("elevator-watch-start")
         event("watching", [:])
+        WatchLinkWatch.shared.start()   // what the phone can see of the watch's link, logged (docs/DOOR.md)
         refreshModes()
         keepAlive.allowsBackgroundLocationUpdates = true
         keepAlive.pausesLocationUpdatesAutomatically = false
@@ -239,7 +240,8 @@ final class ElevatorUnlock: NSObject, CLLocationManagerDelegate {
         publish()
     }
 
-    private func event(_ what: String, _ fields: [String: Any]) {
+    /// A line in the elevator pane's live log. Also used by `WatchLinkWatch`.
+    func event(_ what: String, _ fields: [String: Any]) {
         var e = fields
         e["what"] = what
         e["at"] = ISO8601DateFormatter().string(from: Date())

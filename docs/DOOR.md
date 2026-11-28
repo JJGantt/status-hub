@@ -55,3 +55,22 @@ Riding the elevator up to the apartment and walking out of it unlocks the door.
 - Tests: `apps/tests/run-elevator-detector.sh` compiles the detector with its cases and runs them.
 
     select at, outcome, rise_m, ride_s, steps_in_ride, steps_after, unlock_ms from elevator_rides order by at desc;
+
+## Watch reconnecting to the phone (experiment)
+
+`apps/Sources/WatchLinkWatch.swift` logs what iOS reports about the Apple Watch's link to the phone, to
+learn whether it can see him arrive with only the watch while the phone is already home. Observation
+only: nothing unlocks from it yet (it becomes the phone's half of the `bluetooth` mode once it is shown
+to work). Three sources, each a `watch-link` line in `client_log` (`kind` says which) and a line in the
+elevator pane's log:
+
+- CoreBluetooth connection events (`registerForConnectionEvents`), matched on Device Information,
+  Battery, Apple's Continuity and Nearby services and on every peripheral already seen connected;
+  `bluetooth-central` in UIBackgroundModes and a restore identifier let them arrive in the background.
+- `retrieveConnectedPeripherals(withServices:)` at launch and whenever watching near home starts.
+- WatchConnectivity pairing, install and reachability changes (from `WatchLink`'s delegate).
+  Reachability is the watch app being reachable, not the radio link.
+
+Unknown until it runs on his phone: whether iOS lists the watch as a connected peripheral at all.
+
+    select at, data->>'kind', data from client_log where ev = 'watch-link' order by at desc;

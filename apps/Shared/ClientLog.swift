@@ -16,10 +16,19 @@ enum ClientLog {
     /// Every way something on the phone did not happen: a request, a notification action, the audio
     /// session, HealthKit. `fields["error"]` is what went wrong.
     static func fail(_ event: String, _ fields: [String: Any] = [:]) {
+        add(event, fields, level: "error")
+    }
+
+    /// A plain line, not a failure: kept in `client_log` and never raised. Same outbox as `fail`.
+    static func note(_ event: String, _ fields: [String: Any] = [:]) {
+        add(event, fields, level: nil)
+    }
+
+    private static func add(_ event: String, _ fields: [String: Any], level: String?) {
         var line = fields
         line["src"] = "phone"
         line["ev"] = event
-        line["level"] = "error"
+        if let level { line["level"] = level }
         line["t"] = ISO8601DateFormatter().string(from: Date())
         line["build"] = Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "?"
         guard let data = try? JSONSerialization.data(withJSONObject: line),

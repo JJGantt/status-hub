@@ -35,6 +35,8 @@
 	<false/>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
+	<key>NSBluetoothAlwaysUsageDescription</key>
+	<string>Detects your watch reconnecting at home.</string>
 	<key>NSCameraUsageDescription</key>
 	<string>Status Hub uses the camera to capture food and nutrition labels.</string>
 	<key>NSHealthShareUsageDescription</key>
@@ -57,6 +59,7 @@
 	<array>
 		<string>audio</string>
 		<string>location</string>
+		<string>bluetooth-central</string>
 	</array>
 	<key>UILaunchScreen</key>
 	<dict/>

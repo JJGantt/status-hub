@@ -47,9 +47,15 @@ final class WatchLink: NSObject, WCSessionDelegate, WKHTTPCookieStoreObserver {
 
     func session(_ session: WCSession, activationDidCompleteWith state: WCSessionActivationState, error: Error?) {
         push()
+        WatchLinkWatch.observe(session, "activated")
     }
 
-    func sessionWatchStateDidChange(_ session: WCSession) { push() }
+    func sessionWatchStateDidChange(_ session: WCSession) {
+        push()
+        WatchLinkWatch.observe(session, "watch state")
+    }
+
+    func sessionReachabilityDidChange(_ session: WCSession) { WatchLinkWatch.observe(session, "reachability") }
 
     func session(_ session: WCSession, didReceiveMessage message: [String: Any],
                  replyHandler: @escaping ([String: Any]) -> Void) {

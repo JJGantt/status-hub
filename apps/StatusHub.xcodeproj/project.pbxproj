@@ -28,6 +28,7 @@
 		2F21E62C9C469627AE83C165 /* Inbox.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1AFDE309B6B2A7FC8858ABF7 /* Inbox.swift */; };
 		37B8CD22B29443C972657287 /* WorkoutHold.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6B0D864852BB9CE5DFF9B363 /* WorkoutHold.swift */; };
 		37CD0E58D2EE7273A012632B /* DayView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 01225D88DDA6CA36478FE1CA /* DayView.swift */; };
+		37EFC5FF8F1048867E30AF61 /* WatchLinkWatch.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2178880DDA457F94DF263D1B /* WatchLinkWatch.swift */; };
 		3995C08AAC931FCC8F627A14 /* StatusHubShare.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 1C987C27ED7B0DC15E346FD4 /* StatusHubShare.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		4047BFD86E0305E129C06B77 /* Info-iOS.plist in Resources */ = {isa = PBXBuildFile; fileRef = 12B2F6A89FA87D30EEC5ED56 /* Info-iOS.plist */; };
 		48D80B4A545868D78E2DC799 /* Auth.swift in Sources */ = {isa = PBXBuildFile; fileRef = 88D699B5FDC0F7476374CF07 /* Auth.swift */; };
@@ -64,6 +65,7 @@
 		77A3FC66BCC0B5FAA82C04C6 /* StatusHubWatchApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = C00E5B1C61B9780EE2BE1945 /* StatusHubWatchApp.swift */; };
 		7876C764C368F15A396CAEDC /* Auth.swift in Sources */ = {isa = PBXBuildFile; fileRef = 88D699B5FDC0F7476374CF07 /* Auth.swift */; };
 		80C001EA5124225A4538240B /* StatusHubApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = DBE4FD566029B00F912457DA /* StatusHubApp.swift */; };
+		84576EE6AA3704FFBF9AEB5E /* WatchLinkWatch.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2178880DDA457F94DF263D1B /* WatchLinkWatch.swift */; };
 		86F3FAF2206C002FF5A79054 /* Chat.swift in Sources */ = {isa = PBXBuildFile; fileRef = 65394C860C697D281720B76A /* Chat.swift */; };
 		8F4734EA7CF078B6F76963FB /* StatusHubWatchWidgets.swift in Sources */ = {isa = PBXBuildFile; fileRef = 73F9EE0177B282256E68470C /* StatusHubWatchWidgets.swift */; };
 		905EEDBA7E6CAC2D5CCFF2F3 /* HealthSync.swift in Sources */ = {isa = PBXBuildFile; fileRef = DE5381BDCB65D60B40634510 /* HealthSync.swift */; };
@@ -193,6 +195,7 @@
 		1AFDE309B6B2A7FC8858ABF7 /* Inbox.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Inbox.swift; sourceTree = "<group>"; };
 		1C987C27ED7B0DC15E346FD4 /* StatusHubShare.appex */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = "wrapper.app-extension"; path = StatusHubShare.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		1E94C4C0D42288352ED7299B /* VolumeKnob.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VolumeKnob.swift; sourceTree = "<group>"; };
+		2178880DDA457F94DF263D1B /* WatchLinkWatch.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchLinkWatch.swift; sourceTree = "<group>"; };
 		279F09507BAD56AB8AD69831 /* TodoWidget.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TodoWidget.swift; sourceTree = "<group>"; };
 		2BA599375B5694F4C40BB517 /* RewindBuffer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RewindBuffer.swift; sourceTree = "<group>"; };
 		3251682C199FAA956E5C87A4 /* ElevatorDetector.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ElevatorDetector.swift; sourceTree = "<group>"; };
@@ -322,6 +325,7 @@
 				8500D56F95DF5A6D21132960 /* SleepSync.swift */,
 				DBE4FD566029B00F912457DA /* StatusHubApp.swift */,
 				D87B899987639512DD905DCE /* WatchLink.swift */,
+				2178880DDA457F94DF263D1B /* WatchLinkWatch.swift */,
 				122F17573AF11E3BFB34C78C /* WatchWorkout.swift */,
 			);
 			path = Sources;
@@ -735,6 +739,7 @@
 				6E741EA6022469DE675FB215 /* SleepSync.swift in Sources */,
 				ED30317D3B77A590C83D95BC /* StatusHubApp.swift in Sources */,
 				C692F0368E5A3BD1BA7E0679 /* WatchLink.swift in Sources */,
+				37EFC5FF8F1048867E30AF61 /* WatchLinkWatch.swift in Sources */,
 				E61B504A70548076F6AB0631 /* WatchWorkout.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -754,6 +759,7 @@
 				D75951639D8E19EF3004D9E2 /* SleepSync.swift in Sources */,
 				80C001EA5124225A4538240B /* StatusHubApp.swift in Sources */,
 				AE3C14A7061F839013EA169A /* WatchLink.swift in Sources */,
+				84576EE6AA3704FFBF9AEB5E /* WatchLinkWatch.swift in Sources */,
 				4E481C843B282A73A6959192 /* WatchWorkout.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;

@@ -251,6 +251,12 @@ final class ElevatorUnlock: NSObject, CLLocationManagerDelegate {
     }
 
     /// The live state, to the page as a `hub:elevator` event. Only while the app is in front.
+    /// The pane asked: its switches may have changed, so re-read them (which publishes), and publish now.
+    func pageAsked() {
+        refreshModes()
+        publish()
+    }
+
     func publish() {
         guard let web, UIApplication.shared.applicationState == .active else { return }
         var d: [String: Any] = ["watching": started != nil, "region": region, "radius": homeRadius, "elevator_on": elevatorOn,

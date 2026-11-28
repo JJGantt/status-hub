@@ -508,9 +508,9 @@ struct HubWebView {
                 guard let n = message.body as? NSNumber else { return }
                 DispatchQueue.main.async { UNUserNotificationCenter.current().setBadgeCount(n.intValue) }
             case "elevator":
-                // The elevator pane just mounted or came back into view: hand it the live state now
-                // rather than at the next sensor reading (Sources/ElevatorUnlock.swift).
-                DispatchQueue.main.async { MainActor.assumeIsolated { ElevatorUnlock.shared.publish() } }
+                // The elevator pane just mounted, came back into view, or flipped an unlock switch: re-read
+                // the switches and hand it the live state now (Sources/ElevatorUnlock.swift).
+                DispatchQueue.main.async { MainActor.assumeIsolated { ElevatorUnlock.shared.pageAsked() } }
             case "workoutSet":
                 // A set landed while the page is open: launch the watch app into its workout hold.
                 guard let at = message.body as? String else { return }

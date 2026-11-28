@@ -17,8 +17,10 @@ GitHub Actions run ──workflow_run webhook──▶ POST /api/ci/github ─�
 - **The record of who pushed.** Commits carry no session id (no attribution lines), so the link is
   made at push time: `claude-config/shared/git-hooks/pre-push` posts the pushed sha with
   `CLAUDE_CODE_SESSION_ID` (which is `desk_sessions.claude_session_id`) through
-  `claude-config/shared/bin/ci-record-push`. It runs in the background and never blocks a push. A
-  push by hand records no conversation, and its failures go to a new session.
+  `claude-config/shared/bin/ci-record-push`. It runs in the background and never blocks a push, and
+  retries for about 3.5 minutes so a push made during a hub deploy (proxy 503) still lands; the hub
+  upserts on (repo, sha), so a repeat is harmless. A push by hand records no conversation, and its
+  failures go to a new session.
 - **The webhook.** `POST /api/ci/github` is on `pub`: GitHub carries no hub credential, so the HMAC
   over the raw body with `GITHUB_WEBHOOK_SECRET` (a Fly secret; the Mac's copy is
   `~/.config/ci/github-webhook-secret`) is the auth. Only `workflow_run` is acted on.

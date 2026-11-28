@@ -69,7 +69,7 @@ function bleHtml(evs) {
 
 function modesHtml(m) {
   const t = (key, label) => `<button type="button" class="el-mode${m && m[key] ? ' on' : ''}" data-mode="${key}"${m ? '' : ' disabled'}>${label}</button>`;
-  return `<h3>Unlock by</h3><div class="el-modes">${t('elevator', 'Elevator')}${t('wifi', 'Wi-Fi')}${t('bluetooth', 'Bluetooth')}</div>`;
+  return `<h3>Unlock by</h3><div class="el-modes">${t('elevator', 'Elevator')}${t('wifi', 'Wi-Fi')}${t('bluetooth', 'Bluetooth')}${t('relock', 'Relock')}</div>`;
 }
 
 function devicesHtml(d) {

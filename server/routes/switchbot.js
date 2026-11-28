@@ -146,7 +146,11 @@ module.exports = function (ctx) {
   const AUTO_REASONS = /^(elevator|wifi|bluetooth)/;
   const RELOCK_CLOSED_MS = 20e3, RELOCK_UNOPENED_MS = 30e3;
   let relock = null;   // { reason, opened, timer }
-  function relockAfter(reason) {
+  // Only while door_unlock_modes.relock is on (off by default: the keypad is not on the outside yet).
+  async function relockAfter(reason) {
+    try {
+      if (!(await modes()).relock) { console.log(`[switchbot] relock after ${reason} not armed: relock is off`); return; }
+    } catch (e) { report(`Reading the relock switch failed: ${e.message || e}`); return; }
     if (relock) clearTimeout(relock.timer);
     relock = { reason, opened: false, timer: setTimeout(() => relockNow('the door was not opened'), RELOCK_UNOPENED_MS) };
     console.log(`[switchbot] relock armed after ${reason}`);
@@ -180,7 +184,7 @@ module.exports = function (ctx) {
   // ── Arrival approaches (docs/DOOR.md § Arrival) ──
   // Which approaches may unlock: app_settings.door_unlock_modes (data-layer 00215), so each can be tested
   // alone. Read per decision; it is one small row and the decisions are rare.
-  const MODES = ['elevator', 'wifi', 'bluetooth'];
+  const MODES = ['elevator', 'wifi', 'bluetooth', 'relock'];
   async function modes() {
     const row = (await sb('app_settings?select=value&key=eq.door_unlock_modes'))[0];
     let m = {};

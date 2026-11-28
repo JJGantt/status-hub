@@ -74,7 +74,9 @@ elevator pane's log:
 - WatchConnectivity pairing, install and reachability changes (from `WatchLink`'s delegate).
   Reachability is the watch app being reachable, not the radio link.
 
-Unknown until it runs on his phone: whether iOS lists the watch as a connected peripheral at all.
+It does: on build 235 a connection event named his Apple Watch (`connected`, id `DEEC6331`) the
+moment the manager registered, before any disconnect was seen. Whether a reconnect after he leaves and
+returns fires one in the background is still to be measured.
 
     select at, data->>'kind', data from client_log where ev = 'watch-link' order by at desc;
 

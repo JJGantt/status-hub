@@ -74,6 +74,9 @@ struct ElevatorDetector {
     /// Cumulative steps counted by time `at` (the last report at or before it).
     func steps(at time: TimeInterval) -> Int { steps.last(where: { $0.t <= time })?.n ?? 0 }
 
+    /// How far from a ride's starting level the altitude has to be before the ride counts as under way.
+    static let leftBy = 0.5
+
     /// Samples older than this are dropped: the detector runs for as long as he is near home.
     static let keep: TimeInterval = 15 * 60
 
@@ -90,15 +93,21 @@ struct ElevatorDetector {
         switch state {
         case .idle:
             let recent = alt.filter { $0.t >= max(time - t.rideWindow, since) }
-            if let high = recent.max(by: { $0.m < $1.m }), high.m - m >= t.minRise,
-               steps(at: time) - steps(at: high.t) <= t.maxRideSteps {
-                state = .falling(top: high.m)
+            // Steps are counted from the moment the altitude LEFT its extreme (the last sample still within
+            // `leftBy` of it), not from the extreme itself: the walk to the elevator happens at that
+            // level, and counting it made a real ride look like stairs until the walk aged out.
+            if let high = recent.max(by: { $0.m < $1.m }), high.m - m >= t.minRise {
+                let left = recent.last(where: { $0.m >= high.m - Self.leftBy })?.t ?? high.t
+                if steps(at: time) - steps(at: left) <= t.maxRideSteps { state = .falling(top: high.m) }
                 return .none
             }
-            guard let low = recent.min(by: { $0.m < $1.m }), m - low.m >= t.minRise,
-                  steps(at: time) - steps(at: low.t) <= t.maxRideSteps else { return .none }
-            state = .riding(start: low.t, base: low.m)
+            guard let low = recent.min(by: { $0.m < $1.m }), m - low.m >= t.minRise else { return .none }
+            let left = recent.last(where: { $0.m <= low.m + Self.leftBy })?.t ?? low.t
+            guard steps(at: time) - steps(at: left) <= t.maxRideSteps else { return .none }
+            state = .riding(start: left, base: low.m)
         case let .riding(start, base):
+            // Walking all through the climb is stairs, not the elevator.
+            if steps(at: time) - steps(at: start) > t.maxRideSteps { state = .idle; since = time; return .none }
             // Still once the last `stillFor` seconds rose less than `stillRise`; needs that much history.
             guard let past = alt.last(where: { $0.t <= time - t.stillFor }), past.t >= start else { return .none }
             if m - past.m < t.stillRise {

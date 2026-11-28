@@ -50,5 +50,12 @@ for i in 0...80 {
 check(long.alt.count < 1100, "four hours near home keep at most about fifteen minutes of samples")
 check(got.count == 1 && { if case .unlock = got[0] { return true }; return false }(), "a ride after hours near home still unlocks")
 
+// He walks 40 steps down the hall to the elevator, waits, then rides: the hallway steps are not the ride's.
+let hallway = { (t: Double) in t < 15 ? Int(t * 2.5) : 40 }
+let viaHall = run(80, alt: rise, steps: { t in t < 45 ? hallway(t) : 40 + Int(t - 45) })
+check(viaHall.count == 1 && { if case .unlock = viaHall[0] { return true }; return false }(), "a walk to the elevator before the ride does not hide the ride")
+let downHall = run(80, alt: { t in t < 20 ? 0 : t < 40 ? -(t - 20) * 0.5 : -10 }, steps: hallway)
+check(downHall.count == 1 && { if case .down = downHall[0] { return true }; return false }(), "a walk to the elevator before a ride down does not hide it")
+
 print(failures == 0 ? "all passed" : "\(failures) failed")
 if failures > 0 { exit(1) }

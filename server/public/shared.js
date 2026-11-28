@@ -13,6 +13,21 @@ export function reportPageError(message, stack) {
     navigator.sendBeacon('/api/clientlog', new Blob([body], { type: 'application/json' }));
   } catch (_) { /* nothing left to report it with */ }
 }
+// A failure the page handles by itself, or one a frozen page causes: counted by the responder, raised only
+// when its watch rate is crossed (routes/voice.js `/api/clientlog`, `ev: 'occurrence'`).
+export function reportPageOccurrence(message) {
+  try {
+    const body = JSON.stringify({ src: 'web', ev: 'occurrence', page: location.pathname, msg: String(message).slice(0, 500),
+      t: new Date().toISOString() });
+    navigator.sendBeacon('/api/clientlog', new Blob([body], { type: 'application/json' }));
+  } catch (_) { /* nothing left to report it with */ }
+}
+
+// A page iOS froze while it stayed `visible` (no visibilitychange, no pagehide) wakes with every request it
+// had in flight already dead, each rejected as "Load failed" at once. A module that sees its own timer fire
+// late marks the wake here, and request failures within three seconds of it are counted, not raised.
+let wokeAt = 0, frozeFor = 0;
+export function noteWake(frozenMs) { wokeAt = Date.now(); frozeFor = frozenMs; }
 addEventListener('error', (e) => reportPageError(e.message || 'error', e.error && e.error.stack));
 addEventListener('unhandledrejection', (e) => reportPageError((e.reason && e.reason.message) || String(e.reason), e.reason && e.reason.stack));
 
@@ -48,7 +63,9 @@ window.fetch = async (input, init) => {
   const say = (why) => {
     if (!watched) return;
     lastRequestFailure = { why, at: Date.now() };
-    if (document.visibilityState !== 'hidden' && !leaving) reportPageError(`request failed: ${method} ${url.pathname}: ${why}`);
+    if (document.visibilityState === 'hidden' || leaving) return;
+    if (Date.now() - wokeAt < 3000) reportPageOccurrence(`request failed after the page was frozen ${Math.round(frozeFor / 1000)}s: ${method} ${url.pathname}: ${why}`);
+    else reportPageError(`request failed: ${method} ${url.pathname}: ${why}`);
   };
   let r;
   try { r = await pageFetch(input, init); } catch (e) {

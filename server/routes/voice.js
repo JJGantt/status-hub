@@ -753,6 +753,10 @@ module.exports = function (ctx) {
         ops.report(String(l.msg || 'client error'), { machine: 'client', service: `${l.src || 'unknown'}${l.page ? `:${l.page}` : ''}`,
           stack: l.stack ? String(l.stack) : undefined, context: { ua: req.headers['user-agent'] } });
       }
+      // A page's counted failure (public/shared.js reportPageOccurrence): kept and counted, raised only past its watch.
+      if (l.ev === 'occurrence' && l.src === 'web') {
+        ops.occurrence(String(l.msg || 'client occurrence'), { machine: 'client', service: `web${l.page ? `:${l.page}` : ''}` });
+      }
       // Every failure the watch or the phone logged (lib/clientfail.js): it arrives only once the device
       // can reach the hub again, stamped with its own time.
       const clientFail = clientFailure(l);

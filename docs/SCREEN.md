@@ -115,7 +115,10 @@ since its viewer was cut off.
 - The agent reports any end that is not `bye`, `stopped`, `disconnected` or `closed`, and a helper that
   exits without saying why.
 - The phone reports a share that never showed a picture (`console.error`, reported through
-  `/api/clientlog`).
+  `/api/clientlog`). When its 25 s timer fires more than 2 s late, iOS froze the page while it stayed
+  `visible` (no `visibilitychange`, so no `bye`), the viewer could not connect, and the end is an
+  occurrence instead, `… the page was frozen Ns`; the page's request failures in the next 3 s are
+  occurrences too (`shared.js` `noteWake`).
 - The hub reports a share whose time to first picture is over three times the median of the last
   twenty.
 - A screen exists on one machine, so there is no fallback machine. For a handoff, the fallback is the

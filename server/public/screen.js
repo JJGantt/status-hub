@@ -8,6 +8,8 @@
 // drags on the Mac); two fingers pinch to zoom, or scroll the Mac when they move together without
 // spreading. The text box sends each character as it is typed.
 
+import { noteWake, reportPageOccurrence } from './shared.js';
+
 const h = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
 
 /** How long to wait for the picture before falling back (a handoff) or offering Retry. */
@@ -43,7 +45,7 @@ export function openScreen({ mount, session = null, handoff = null, onEnd = null
   ov.append(stage, bar);
   mount.append(ov);
 
-  let alive = true, pc = null, dc = null, shareId = null, askedAt = 0, firstAt = 0, timer = null, ended = false;
+  let alive = true, pc = null, dc = null, shareId = null, askedAt = 0, firstAt = 0, timer = null, ended = false, frozen = 0;
   let disp = { w: 0, h: 0 };          // the Mac display in points, from the helper
   let cmd = false, dragMode = false;
 
@@ -264,7 +266,16 @@ export function openScreen({ mount, session = null, handoff = null, onEnd = null
         body: JSON.stringify({ offer: pc.localDescription.sdp, session, handoff: handoff ? handoff.id : null }) });
       if (!r.ok) throw new Error(`start ${r.status}`);
       shareId = (await r.json()).id;
-      timer = setTimeout(() => { if (!firstAt) lost('no picture'); }, CONNECT_MS);
+      // A timer that fires well past its time means iOS froze the page (it stays `visible`, so nothing
+      // else says so): the viewer was not running, so the share could not connect. That is the phone, not
+      // the share, and it is counted rather than raised.
+      const due = Date.now() + CONNECT_MS;
+      timer = setTimeout(() => {
+        if (firstAt) return;
+        const late = Date.now() - due;
+        if (late > 2000) { noteWake(late); frozen = late; }
+        lost('no picture');
+      }, CONNECT_MS);
       const id = shareId;
       // Held until the Mac answers; asked again only if a request ends with no answer yet.
       while (alive && id === shareId) {
@@ -347,7 +358,9 @@ export function openScreen({ mount, session = null, handoff = null, onEnd = null
   function lost(why) {
     if (!alive || ended) return;
     ended = true;
-    if (!firstAt) console.error(`[screen] no picture from the Mac: ${why}`);
+    if (!firstAt && frozen) reportPageOccurrence(`[screen] no picture from the Mac: the page was frozen ${Math.round(frozen / 1000)}s`);
+    else if (!firstAt) console.error(`[screen] no picture from the Mac: ${why}`);
+    frozen = 0;
     teardown(why);
     if (onFail && !firstAt) { close(); onFail(); return; }
     veil.classList.add('on'); retry.hidden = false;

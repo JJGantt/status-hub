@@ -74,3 +74,18 @@ elevator pane's log:
 Unknown until it runs on his phone: whether iOS lists the watch as a connected peripheral at all.
 
     select at, data->>'kind', data from client_log where ev = 'watch-link' order by at desc;
+
+## Arrival by Wi-Fi and Bluetooth (house side)
+
+Which approaches may unlock is `app_settings.door_unlock_modes` (`elevator`, `wifi`, `bluetooth`), read
+and set by `GET` / `POST /api/door/modes` and the debug page's switches, so each can be tested alone.
+
+- **Wi-Fi:** data-layer `presence/listener.py` writes every DHCP message heard on the LAN to `lan_joins`.
+  The hub (realtime INSERT, `lanJoined`) unlocks on a Discover or Request from a MAC listed in
+  `app_settings.presence_devices` (`{"<mac>": "phone" | "watch"}`) when `wifi` is on. iOS uses a private
+  MAC per network, so the list is filled from his own test joins. `GET /api/presence/joins`.
+- **Bluetooth:** data-layer `presence/ble.py` writes `arrive` / `leave` rows to `presence_events` for his
+  phone and watch, which the Mac recognises by their real addresses. The hub (realtime INSERT,
+  `presenceEvent`) unlocks on an `arrive` when `bluetooth` is on. `GET /api/presence/events`.
+- Both unlock at most once per device a minute, record the command with `reason` `wifi:<device>` /
+  `bluetooth:<device>`, and report a failed unlock.

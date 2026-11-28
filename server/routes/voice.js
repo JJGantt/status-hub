@@ -152,6 +152,22 @@ module.exports = function (ctx) {
   // A clip upload still in flight, by request id: the request is claimable before its clip is stored, so
   // /api/list-recordings waits on this rather than finding no audio yet. The hub is one instance.
   const clipUploads = new Map();
+  // A dictation (?dry=1: speech typed into a session, or the composer's words) writes no voice_requests
+  // row, so its words and its clip are kept in voice_dictations (data-layer 00225), the clip in the same
+  // bucket and the same 7-day sweep as a command's.
+  async function keepDictation(id, { source, msgId, transcript, file, ct, size, dur }) {
+    try {
+      const type = ct.split(';')[0].trim();
+      const objectPath = `${id}.${extFor(ct)}`;
+      const r = await fetch(`${SUPABASE_URL}/storage/v1/object/${CLIP_BUCKET}/${objectPath}`, {
+        method: 'POST', headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}`, 'Content-Type': type },
+        body: await fs.openAsBlob(file, { type }) });
+      if (!r.ok) throw new Error(`upload -> ${r.status}`);
+      await sbWrite('voice_dictations', 'POST', { id, source, client_msg_id: msgId || null, transcript,
+        audio: { path: objectPath, bytes: size, type, ...(dur > 0 ? { dur: +dur.toFixed(1) } : {}) } });
+    } catch (e) { console.error(`[voice-command] could not keep dictation ${id}: ${e.message || e}`); }
+  }
+
   function keepClip(id, file, contentType, bytes, dur) {
     const p = storeClip(id, file, contentType, bytes, dur).finally(() => clipUploads.delete(id));
     clipUploads.set(id, p);
@@ -563,7 +579,11 @@ module.exports = function (ctx) {
       // A dictation writes no row to be judged from, so its hub time is fed here. One over a minute is its
       // own stage: transcribing nine minutes takes seconds, which against short commands reads as a regression.
       if (dry) latency.sample(`hub:${timing.audio_via}${dur > 60 ? ':long' : ''}`, since(t0));
-      if (dry) return res.json({ transcript, enqueued: false, ...(damaged ? { capture: 'damaged', ...damaged } : {}) });
+      if (dry) {
+        res.json({ transcript, enqueued: false, ...(damaged ? { capture: 'damaged', ...damaged } : {}) });
+        await keepDictation(id, { source, msgId, transcript, file: tmp, ct, size, dur });   // before the finally deletes the temp file
+        return;
+      }
       // Instructions recorded for a rewind grab: the command the model sees is the grab plus the user's words.
       const rewindId = REWIND_ID.test(String(req.query.rewind || '')) ? String(req.query.rewind) : null;
       if (rewindId && !untranscribed) transcript = await withRewind(rewindId, transcript);

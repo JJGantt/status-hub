@@ -1,6 +1,9 @@
 'use strict';
 const crypto = require('crypto');
 const express = require('express');
+// The most of one prompt, reply or thought a session's thread keeps. An hour of dictation is about 50,000
+// characters, so this is a guard against a runaway frame, never a length anyone reaches by talking.
+const TEXT_MAX = 200000;
 const { echoesLaunch } = require('../lib/outcomes');
 
 module.exports = function (ctx) {
@@ -139,7 +142,7 @@ module.exports = function (ctx) {
   // prompt, marked `launch`; the host's copy of that prompt, when it arrives, is recognised by the
   // dispatch command's id (or, from a host that sent none, by its text) and not appended a second time.
   function seedLaunch(conv, rowId, log, prompt, cmd) {
-    const text = cleanSaid(String(prompt || '')).slice(0, 20000);
+    const text = cleanSaid(String(prompt || '')).slice(0, TEXT_MAX);
     if (log.events.length || !text) return;
     appendEvent(conv, rowId, log, { id: crypto.randomUUID(), kind: 'prompt', text, seen: true, launch: true,
                                     ...(cmd ? { cmd: String(cmd).slice(0, 64) } : {}) });
@@ -190,7 +193,7 @@ module.exports = function (ctx) {
     const kind = e.state === 'said' || e.state === 'queued' ? 'prompt' : EVENT_KINDS.includes(e.state) ? e.state : null;
     if (!kind) return null;
     // A thought or a dictated prompt can run to a paragraph; a tool line never needs more than 400.
-    const text = cleanSaid(String(e.text || '')).slice(0, kind === 'tool' ? 400 : 20000);
+    const text = cleanSaid(String(e.text || '')).slice(0, kind === 'tool' ? 400 : TEXT_MAX);
     if (!text) return null;
     const ev = { id: kind === 'prompt' && typeof e.id === 'string' && e.id ? e.id.slice(0, 64) : crypto.randomUUID(), kind, text };
     if (kind === 'prompt') { ev.seen = e.state === 'said'; if (e.cmd) ev.cmd = String(e.cmd).slice(0, 64); }
@@ -268,12 +271,12 @@ module.exports = function (ctx) {
       else {
         // The tick's report of a turn end the watcher missed carries no list. A turn whose prompt never
         // came as a frame still has it here, from the host's read of the transcript.
-        const prompt = typeof b.prompt === 'string' ? cleanSaid(b.prompt).slice(0, 20000) : '';
+        const prompt = typeof b.prompt === 'string' ? cleanSaid(b.prompt).slice(0, TEXT_MAX) : '';
         if (prompt && !live.some((e) => e.kind === 'prompt' && flatText(e.text) === flatText(prompt))) {
           appendEvent(conv, rowId, log, { id: crypto.randomUUID(), kind: 'prompt', text: prompt, seen: true });
         }
       }
-      const reply = typeof b.reply === 'string' && b.reply ? cleanSaid(b.reply).slice(0, 20000) : text;
+      const reply = typeof b.reply === 'string' && b.reply ? cleanSaid(b.reply).slice(0, TEXT_MAX) : text;
       if (!reply) return {};
       const turn = sinceLastReply(log);
       appendEvent(conv, rowId, log, { id: replyId(at), kind: 'reply', text: reply, ...(at ? { at } : {}) });
@@ -296,7 +299,7 @@ module.exports = function (ctx) {
     const done = state === 'done';
     // A thought or a dictated prompt can run to a paragraph; a tool line or a row's reply never needs
     // more than 400.
-    const text = cleanSaid(String(b.text || '')).slice(0, ['text', 'said', 'queued'].includes(state) ? 20000 : 400);
+    const text = cleanSaid(String(b.text || '')).slice(0, ['text', 'said', 'queued'].includes(state) ? TEXT_MAX : 400);
     const at = typeof b.at === 'string' ? b.at : null;
     // THE NOTIFICATION IS A SENTENCE, and the machine that produced the reply writes it — it already
     // runs Claude, so no key lives anywhere for this. That takes seconds, and `done` cannot wait: it is

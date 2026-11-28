@@ -1318,9 +1318,10 @@ already read the turn, and the four places a turn end is written (two machines, 
 and its tick) cannot disagree. It is keyed by `claude_session_id`, which is what carries the history
 across a resume or a transfer, and it bounds itself: 20 turns a conversation, 30 days.
 
-A turn carries what the row carried, so a reply is the same 20000 characters the machines cut
-`last_reply` to. Every hop (pi-desk, the orchestrator, this server) has to agree on that number:
-any one of them lower cuts a long reply off mid-word with nothing on screen saying it was cut.
+A turn carries what the row carried: every prompt, reply and thought is cut at `TEXT_MAX`, 200,000
+characters (an hour of dictation is about 50,000), in `routes/conversation.js` here and in voice-pipeline
+`orchestrator/src/transcripts.js`, which pi-desk and the orchestrator import. Every hop has to agree on
+that number: any one of them lower cuts a long message off mid-word with nothing on screen saying it was cut.
 
 `events` is the one column the hub writes (`storeTurn`, through the `desk_turn_events` function of
 data-layer `00118`, one write a turn): the turn in the order it happened, every prompt where the

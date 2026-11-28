@@ -10,10 +10,11 @@
 // already reported elsewhere, never because they look harmless:
 //   - `also`: the watch's transport already sent a `request-failed` line for the same error, and this is
 //     the call site's line saying what the request was for (apps/Watch/Hub.swift `line`).
-//   - a 5xx from the hub: the hub reported its own failure when it answered it (lib/httpfail.js).
+//   - a 5xx from the hub: the hub reported its own failure when it answered it (lib/httpfail.js). The
+//     watch spells it `status(502)` (Hub.call), `status 502` (LiveStream's dropped stream) or `HTTP 502`.
 
 const FAILURE_NAME = /-(failed|broken)$/;
-const HUB_5XX = /status\(5\d\d\)|HTTP 5\d\d/;
+const HUB_5XX = /status(\(| )5\d\d\b|HTTP 5\d\d/;
 
 const clip = (v, n = 160) => String(v == null ? '' : v).slice(0, n);
 

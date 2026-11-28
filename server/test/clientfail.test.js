@@ -44,8 +44,10 @@ test('a failure already reported elsewhere is not reported again', () => {
   // The hub reported its own 5xx when it answered it, as the watch and as Watchset spell it.
   assert.equal(clientFailure(w('request-failed', { level: 'error', path: '/api/door', error: 'status(502)' })), null);
   assert.equal(clientFailure(w('set-report-failed', { level: 'error', error: 'HTTP 503' })), null);
+  assert.equal(clientFailure(w('live-broken', { id: 'c1', view: 'chat', error: 'status 502' })), null);
   // A 4xx is the hub refusing the watch, which only the watch sees.
   assert.ok(clientFailure(w('request-failed', { level: 'error', path: '/api/door', error: 'status(400)' })));
+  assert.ok(clientFailure(w('live-broken', { id: 'c1', view: 'chat', error: 'status 409' })));
 });
 
 test('the established failures keep their wording', () => {

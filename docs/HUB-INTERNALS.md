@@ -2079,7 +2079,8 @@ Fly keeps minutes of them. Writers merge keys with `rpc/voice_timing` (or, for t
 | `audio_via` | hub | `live` (audio taken from the `/api/voice-live` stream), `upload` (the clip in the body), or `stream-recovered` (the device never delivered the recording, and the hub acted on what its stream held) |
 | `cut_off` | hub | on a `stream-recovered` row: `{verdict, held_s, view, flow}` (watch) or `{verdict: 'silent', held_s, of_s}` (phone); the worker frames the command as possibly cut off and possibly already repeated (`docs/WATCH.md` § The wrist can drop mid-recording). On a phone command the phone stopped itself (`broke()` in voiceagent.js, sent as `X-Voice-Cut-Off: <why>:<secs>`): `{verdict: 'stopped', why, held_s}`, framed as possibly cut off but not late. A cut-off DICTATION (a session follow-up) writes no row, so its transcript instead starts with a `[Cut off: …]` marker (`cutOffNote`) wherever it is delivered, the live recorder or a stranded one |
 | `supersedes` | hub | the id of the request recovered from this command's stream before its clip arrived; the worker treats this one as the whole of it |
-| `live_wait_ms` | hub | how long the command waited for its stream to finish arriving |
+| `live_wait_ms` | hub | how long the command waited for its stream to finish arriving, remux included |
+| `live_end_wait_ms`, `live_remux_ms` | hub | its two parts: waiting for the stream to settle, and making the clip |
 | `audio_in_ms` | hub | from arrival until the audio was all on disk |
 | `probe_ms` | hub | measuring how much audio the file holds (the damaged-capture check): counted from the frames for streamed audio, read from the MP4's boxes for an upload (ffmpeg for any other format) |
 | `stt_ms`, `stt_alt_ms`, `stt_both_ms` | hub | the primary Whisper, the second opinion, and both (the enqueue waits for both) |

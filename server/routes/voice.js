@@ -410,6 +410,7 @@ module.exports = function (ctx) {
         req.resume();
         const got = await liveAudio(String(req.query.live || ''), tmp, dur);
         timing.live_wait_ms = since(t0);
+        if (got.ok) Object.assign(timing, { live_end_wait_ms: got.endWaitMs, live_remux_ms: got.remuxMs });
         if (!got.ok) {
           console.log(`[voice-command] live audio for ${req.query.live || '-'} not usable (${got.why}); asking for the clip`);
           return res.status(409).json({ upload: true, why: got.why });
@@ -1005,7 +1006,9 @@ module.exports = function (ctx) {
   async function liveAudio(id, file, dur) {
     const s = LIVE_ID.test(id) ? liveStreams.get(id) : null;
     if (!s) return { ok: false, why: 'unknown' };
+    const t = Date.now();
     const end = await Promise.race([s.ended, new Promise((r) => setTimeout(() => r(null), LIVE_WAIT_MS))]);
+    const endWaitMs = Date.now() - t;
     if (!end) return { ok: false, why: 'still open' };
     if (end.verdict !== 'ended' || !end.audio.length) return { ok: false, why: end.verdict };
     const raw = `${file}.aac`;
@@ -1013,7 +1016,7 @@ module.exports = function (ctx) {
       await fs.promises.writeFile(raw, end.audio);
       await new Promise((resolve, reject) => execFile('ffmpeg', ['-v', 'error', '-y', '-f', 'aac', '-i', raw, '-c', 'copy', '-f', 'mp4', file],
         (e) => (e ? reject(e) : resolve())));
-      return { ok: true, heldS: adtsSeconds(end.audio) };
+      return { ok: true, heldS: adtsSeconds(end.audio), endWaitMs, remuxMs: Date.now() - t - endWaitMs };
     } catch (e) {
       console.error(`[voice-live] ${id} could not be made into a clip: ${e.message || e}`);
       return { ok: false, why: 'remux' };
@@ -1041,9 +1044,9 @@ module.exports = function (ctx) {
         else { last = f.type; paused = f.type === 'P' ? true : f.type === 'R' ? false : paused; pauses.frame(f.type); }
       }
     });
-    // A finished body settles here, not on 'close': its verdict is already fixed (complete, last frame), and
-    // in production 'close' has come ~5.4 s after 'end', which a command waiting on this stream (liveAudio)
-    // spent doing nothing. 'close' still settles a connection that dropped.
+    // A finished body settles here, not on 'close': its verdict is already fixed (complete, last frame), so
+    // a command waiting on this stream (liveAudio) never waits on the socket. 'close' still settles a
+    // connection that dropped.
     req.on('end', () => { complete = true; if (!res.headersSent) res.status(204).end(); settle(); });
     const settle = () => {
       if (settled) return;

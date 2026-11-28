@@ -189,7 +189,7 @@ require('./routes/failures')({ followUpSession, gated, openSession, sb, sbWrite,
 require('./routes/ci')({ MACHINE_NAME, SUPABASE_KEY, SUPABASE_URL, followUpSession, gated, openSession, pub, sb, sbWrite });
 const { lanJoined, presenceEvent, doorEvent } = require('./routes/switchbot')({ SUPABASE_KEY, SUPABASE_URL, gated, pub, sb });
 const { lobbyRace } = require('./routes/lobby')({ SUPABASE_KEY, SUPABASE_URL, gated, pub, sb });
-require('./routes/elevator')({ gated, sb });
+require('./routes/elevator')({ gated, sb, sbWrite });
 
 const prompts = require('./routes/prompts')({ auth, gated, pushAll, pushSessions, sb });
 const handoffs = require('./routes/handoffs')({ gated, pushAll, pushSessions, sb, sbInsert });

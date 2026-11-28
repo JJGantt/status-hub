@@ -136,3 +136,30 @@ door on the first to land and then reports which one it was.
 - A race with a path sent and no report within 90 s is reported as a failure.
 - `GET /api/lobby/races`: the last 10 races (winner, each path's send result and arrival), shown in the
   elevator page's Lobby section.
+
+## Near-home trace (phone)
+
+While the elevator watch runs (inside the 500 m home geofence), `apps/Sources/HomeTrace.swift` records
+everything the phone senses, for picking the thresholds of a future entrance unlock (precise location,
+or the stairs in front of the main entrance). Logging only: nothing acts on it.
+
+- **Streams**, each sample a compact array with `t` in seconds from the chunk's `started_at`:
+  - `alt`: `[t, relative altitude m, pressure kPa]` (every barometer sample, about 1 Hz)
+  - `steps`: `[t, cumulative steps, cadence steps/s, pace s/m]` (every pedometer update)
+  - `fixes`: `[t, lat, lon, horizontal accuracy m, altitude m, vertical accuracy m, speed m/s, course deg]`
+  - `activity`: `[t, stationary|walking|running|automotive|cycling|unknown, confidence 0-2]`
+  - `modes`: `[t, best|low]`, each accuracy switch
+- **Accuracy switching** (`TracePolicy.swift`, cases in `apps/tests`): the keep-alive location manager runs
+  at best accuracy (GPS, about one fix a second) while the motion activity is anything but stationary,
+  and drops back to 100 m after two minutes stationary. An unknown activity keeps the current mode.
+- **Battery:** best accuracy is the expensive part, so it runs only while he is moving near home (arriving,
+  leaving, walking the grounds). Not yet measured: the `elevator-watch-start` / `-stop` client-log lines
+  carry `phone_battery` for that.
+- **Upload:** a chunk every 30 s and when watching stops, `POST /api/home-trace` → table `home_trace`
+  (data-layer 00221), one row per chunk; the hub validates it (`lib/hometrace.js`, `test/hometrace.test.js`).
+  A failed upload keeps the chunk and sends it again at the next cut, reported once per run of failures
+  (`home-trace-failed`). `GET /api/home-trace/summary` feeds the pane's Trace section.
+- **Retention:** about 60 days is enough; there is no pruning yet (todo).
+
+    select started_at, jsonb_array_length(fixes) fixes, jsonb_array_length(alt) alt, activity, modes
+      from home_trace order by started_at desc limit 20;

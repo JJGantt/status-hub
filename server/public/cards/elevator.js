@@ -61,6 +61,17 @@ function joinsHtml(joins) {
     `<span class="el-f">${esc([j.hostname ? j.mac : '', j.message].filter(Boolean).join(' · '))}</span></div>`).join('') : row('—', ''));
 }
 
+// The near-home trace (apps/Sources/HomeTrace.swift): the hub's summary plus the app's live state.
+function traceHtml(sum) {
+  const t = live && live.trace;
+  return '<h3>Trace</h3>' +
+    row('Last chunk', sum && sum.last_chunk ? `${day(sum.last_chunk)} ${clock(sum.last_chunk)}` : '—') +
+    row('Chunks 24h', sum ? String(sum.chunks_24h ?? '—') : '—') +
+    row('Activity', t ? esc(t.activity) : '—') +
+    row('Accuracy', t ? esc(t.mode) : '—') +
+    row('Unsent', t ? String(t.unsent) : '—');
+}
+
 function bleHtml(evs) {
   return '<h3>Bluetooth</h3>' + (evs.length ? evs.map((e) =>
     `<div class="el-ev"><span class="el-t">${day(e.at)} ${clock(e.at)}</span><span class="el-w">${esc(`${e.device} ${e.event}`)}</span>` +
@@ -84,7 +95,7 @@ function devicesHtml(d) {
   return '<h3>Devices</h3>' + (list.length ? list.map(([mac, who]) => row(who, esc(mac))).join('') : row('—', ''));
 }
 
-let modes = null, rides = [], joins = [], devices = {}, bleEvents = [], lobbyRaces = [];
+let modes = null, rides = [], joins = [], devices = {}, bleEvents = [], lobbyRaces = [], traceSummary = null;
 
 function paint() {
   const el = document.getElementById('elevatorpane');
@@ -95,6 +106,7 @@ function paint() {
   el.querySelector('.el-joins').innerHTML = joinsHtml(joins);
   el.querySelector('.el-ble').innerHTML = bleHtml(bleEvents);
   el.querySelector('.el-lobby').innerHTML = lobbyHtml(lobbyRaces);
+  el.querySelector('.el-trace').innerHTML = traceHtml(traceSummary);
   el.querySelector('.el-devices').innerHTML = devicesHtml(devices);
 }
 
@@ -103,8 +115,9 @@ async function getJson(url) {
 }
 
 async function load() {
-  const [m, r, j, st, b, lb] = await Promise.all([getJson('/api/door/modes'), getJson('/api/elevator/rides?limit=10'),
-    getJson('/api/presence/joins'), getJson('/api/settings'), getJson('/api/presence/events'), getJson('/api/lobby/races')]);
+  const [m, r, j, st, b, lb, tr] = await Promise.all([getJson('/api/door/modes'), getJson('/api/elevator/rides?limit=10'),
+    getJson('/api/presence/joins'), getJson('/api/settings'), getJson('/api/presence/events'), getJson('/api/lobby/races'), getJson('/api/home-trace/summary')]);
+  traceSummary = tr;
   bleEvents = Array.isArray(b) ? b : [];
   lobbyRaces = Array.isArray(lb) ? lb : [];
   // presence_devices ({"<mac>": "phone" | "watch"}): which Wi-Fi joins are his.
@@ -141,7 +154,7 @@ export function render() {
   const el = document.getElementById('elevatorpane');
   if (!el) return;
   mounted = true;
-  el.innerHTML = '<div class="el-modes-wrap"></div><div class="el-live"></div><div class="el-rides"></div><div class="el-joins"></div><div class="el-ble"></div><div class="el-lobby"></div><div class="el-devices"></div>';
+  el.innerHTML = '<div class="el-modes-wrap"></div><div class="el-live"></div><div class="el-rides"></div><div class="el-joins"></div><div class="el-ble"></div><div class="el-lobby"></div><div class="el-trace"></div><div class="el-devices"></div>';
   el.addEventListener('click', (e) => { const b = e.target.closest('.el-mode'); if (b) toggle(b.dataset.mode); });
   window.addEventListener('hub:elevator', (e) => {
     live = e.detail || null;

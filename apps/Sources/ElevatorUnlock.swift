@@ -95,11 +95,13 @@ final class ElevatorUnlock: NSObject, CLLocationManagerDelegate {
         keepAlive.showsBackgroundLocationIndicator = false
         keepAlive.desiredAccuracy = kCLLocationAccuracyHundredMeters
         keepAlive.startUpdatingLocation()
+        HomeTrace.shared.start(manager: keepAlive)   // the near-home trace, and the accuracy switching (docs/DOOR.md)
         altimeter.startRelativeAltitudeUpdates(to: .main) { [weak self] data, err in
             MainActor.assumeIsolated {
                 guard let self else { return }
                 if let err { Self.error("elevator unlock: altimeter failed: \(err.localizedDescription)"); return }
                 guard let data, let s = self.started else { return }
+                HomeTrace.shared.altitude(data)
                 self.lastAlt = data.relativeAltitude.doubleValue
                 self.handle(self.detector.altitude(data.relativeAltitude.doubleValue, at: Date().timeIntervalSince(s)))
                 self.traceSteps()
@@ -110,6 +112,7 @@ final class ElevatorUnlock: NSObject, CLLocationManagerDelegate {
                 guard let self else { return }
                 if let err { Self.error("elevator unlock: step counter failed: \(err.localizedDescription)"); return }
                 guard let data, let s = self.started else { return }
+                HomeTrace.shared.pedometer(data)
                 self.lastSteps = data.numberOfSteps.intValue
                 self.handle(self.detector.stepCount(data.numberOfSteps.intValue, at: Date().timeIntervalSince(s)))
                 self.traceSteps()
@@ -186,6 +189,7 @@ final class ElevatorUnlock: NSObject, CLLocationManagerDelegate {
         pendingStores = []
         waiting.forEach { $0() }
         started = nil
+        HomeTrace.shared.stop()
         altimeter.stopRelativeAltitudeUpdates()
         pedometer.stopUpdates()
         keepAlive.stopUpdatingLocation()
@@ -278,6 +282,7 @@ final class ElevatorUnlock: NSObject, CLLocationManagerDelegate {
             d["thresholds"] = (try? JSONSerialization.jsonObject(with: JSONEncoder().encode(detector.t))) ?? [:]
         }
         if let a = lastAlt { d["alt"] = a }
+        d["trace"] = HomeTrace.shared.status
         if let f = lastFix {
             var fix: [String: Any] = ["lat": f.coordinate.latitude, "lon": f.coordinate.longitude,
                                       "acc": f.horizontalAccuracy, "at": ISO8601DateFormatter().string(from: f.timestamp)]
@@ -311,7 +316,10 @@ final class ElevatorUnlock: NSObject, CLLocationManagerDelegate {
 
     nonisolated func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
         guard let last = locations.last else { return }
-        Task { @MainActor in self.lastFix = last; self.publish() }
+        Task { @MainActor in
+            locations.forEach { HomeTrace.shared.fix($0) }
+            self.lastFix = last; self.publish()
+        }
     }
 
     nonisolated func locationManager(_ manager: CLLocationManager, monitoringDidFailFor region: CLRegion?, withError error: Error) {

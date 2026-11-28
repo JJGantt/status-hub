@@ -57,5 +57,15 @@ check(viaHall.count == 1 && { if case .unlock = viaHall[0] { return true }; retu
 let downHall = run(80, alt: { t in t < 20 ? 0 : t < 40 ? -(t - 20) * 0.5 : -10 }, steps: hallway)
 check(downHall.count == 1 && { if case .down = downHall[0] { return true }; return false }(), "a walk to the elevator before a ride down does not hide it")
 
+// The near-home trace's location accuracy (Sources/TracePolicy.swift).
+typealias TP = TracePolicy
+check(TP.mode(current: .low, activity: .walking, stationarySince: nil, now: 0) == .best, "walking switches to best accuracy at once")
+check(TP.mode(current: .low, activity: .automotive, stationarySince: nil, now: 0) == .best, "driving switches to best accuracy at once")
+check(TP.mode(current: .best, activity: .stationary, stationarySince: 100, now: 150) == .best, "a short stop keeps best accuracy")
+check(TP.mode(current: .best, activity: .stationary, stationarySince: 100, now: 220) == .low, "two minutes stationary drops to low accuracy")
+check(TP.mode(current: .low, activity: .stationary, stationarySince: 0, now: 10) == .low, "stationary at low stays low")
+check(TP.mode(current: .best, activity: .unknown, stationarySince: nil, now: 0) == .best, "an unknown activity keeps the current mode")
+check(TP.mode(current: .low, activity: .unknown, stationarySince: nil, now: 0) == .low, "an unknown activity keeps low too")
+
 print(failures == 0 ? "all passed" : "\(failures) failed")
 if failures > 0 { exit(1) }

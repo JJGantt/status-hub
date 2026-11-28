@@ -100,13 +100,15 @@ and set by `GET` / `POST /api/door/modes` and the debug page's switches, so each
 - Both unlock at most once per device a minute, record the command with `reason` `wifi:<device>` /
   `bluetooth:<device>`, and report a failed unlock.
 
-## Relock after an automatic unlock
+## Automatic lock
 
-Only while `door_unlock_modes.relock` is on (the page's Relock button; off by default, since there is no keypad outside yet), an unlock with reason `elevator`, `wifi:*` or `bluetooth:*` arms a relock in the hub (`relockAfter` in
-`routes/switchbot.js`): 20 s after the door next closes, or 30 s after the unlock if the door never opens.
-It never locks an open door (reported instead), and any lock in the meantime disarms it. It follows
-`door_events` over realtime (`doorEvent`). The lock's own auto-lock in the SwitchBot app is off. The
-arming lives in the hub's memory, so a hub restart inside that window drops it.
+While `door_unlock_modes.relock` is on (the Relock button on the debug page), every unlock, from any
+source (the app, the watch, a PIN, an arrival, the key, the thumb-turn), is followed by a lock 60 s
+later (`RELOCK_MS` in routes/switchbot.js). If the door is opened first, the lock comes 60 s after it
+next closes; it never fires with the door open, since the bolt would hit the frame. A lock from anywhere
+cancels it. It is driven by `door_events` rows (realtime), held in memory, and re-armed at hub start-up
+when the lock is found unlocked. A failed lock is reported. The PIN by email is the way back in if it
+locks him out.
 
 ## Lobby door (ButterflyMX)
 
@@ -160,6 +162,7 @@ Where the messages come from:
 | path | runs on | needs |
 |---|---|---|
 | email, hub's own watch (`routes/gmailpush.js`) | Fly | nothing else. Pub/Sub push subscription `gmail-watch-hub` on topic `gmail-watch` (project `status-hub-507320`) posts to `/api/gmail/push/<GMAIL_PUSH_TOKEN>` (Fly secret, local copy `~/.config/door-pin/gmail-push-token`); the hub reads history from `app_settings.hub_gmail_history` and renews `users.watch` daily itself |
+| email to his iCloud address, hub's IMAP IDLE (`routes/icloudmail.js`) | Fly | `ICLOUD_EMAIL` / `ICLOUD_APP_PASSWORD` (Fly secrets); INBOX and Junk, read-only, cursor `app_settings.hub_icloud_uid` |
 | email, gmail-watcher `handlers/doorpin.py` | Mac, Pi | the second path if the push breaks; posts the same mail to the hub, which dedupes |
 | text, data-layer `presence/textpin.py` (`com.jaredgantt.textpin`) | Mac only | the Mac awake: only it has chat.db. With the Mac off a texted PIN is not seen; email is the path for that |
 

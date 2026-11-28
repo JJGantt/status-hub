@@ -90,7 +90,6 @@ module.exports = function (ctx) {
   async function doorCommand(want, reason) {
     const { body } = await bot.command(want, (b) => stateOf(b).lock);
     const { rows } = await record(stateOf(body), 'command', { ...body, reason }, battery(body));
-    if (want === 'unlocked' && AUTO_REASONS.test(reason)) relockAfter(reason);
     return { body, rows };
   }
 
@@ -143,48 +142,62 @@ module.exports = function (ctx) {
     }
   });
 
-  // ── Relock after an automatic unlock ──
-  // An unlock nobody pressed for (the elevator, Wi-Fi or Bluetooth arrival) is followed by a lock: 20 s
-  // after the door next closes, or 30 s after the unlock if the door never opens (a false arrival).
-  // Never while the door is open, since the bolt would hit the frame. Driven by door_events as the
-  // listeners write them (realtime INSERT, doorEvent); a manual lock or unlock in the meantime ends it.
-  // Held in memory: a hub restart in that window drops it, which is logged at start-up as nothing.
-  const AUTO_REASONS = /^(elevator|wifi|bluetooth)/;
-  const RELOCK_CLOSED_MS = 20e3, RELOCK_UNOPENED_MS = 30e3;
-  let relock = null;   // { reason, opened, timer }
-  // Only while door_unlock_modes.relock is on (off by default: the keypad is not on the outside yet).
-  async function relockAfter(reason) {
-    try {
-      if (!(await modes()).relock) { console.log(`[switchbot] relock after ${reason} not armed: relock is off`); return; }
-    } catch (e) { report(`Reading the relock switch failed: ${e.message || e}`); return; }
+  // ── Automatic lock ──
+  // While door_unlock_modes.relock is on, EVERY unlock (the app, the watch, a PIN, an arrival, the key or
+  // the thumb-turn) is followed by a lock RELOCK_MS later; if the door is opened in the meantime, RELOCK_MS
+  // after it next closes. Never while the door is open, since the bolt would hit the frame: a door still
+  // open at the deadline locks RELOCK_MS after it closes. A lock from anywhere ends it. Driven by
+  // door_events as every source writes them (realtime INSERT, doorEvent). Held in memory, so start-up
+  // reads the lock and arms itself if it finds the door unlocked and closed.
+  const RELOCK_MS = 60e3;
+  let relock = null;   // { reason, open, timer }
+  async function relockOn() {
+    try { return (await modes()).relock; }
+    catch (e) { report(`Reading the relock switch failed: ${e.message || e}`); return false; }
+  }
+  function arm(reason, why) {
     if (relock) clearTimeout(relock.timer);
-    relock = { reason, opened: false, timer: setTimeout(() => relockNow('the door was not opened'), RELOCK_UNOPENED_MS) };
-    console.log(`[switchbot] relock armed after ${reason}`);
+    relock = { reason, open: false, timer: setTimeout(() => relockNow(why), RELOCK_MS) };
+    console.log(`[switchbot] lock armed in ${RELOCK_MS / 1000}s after ${reason}`);
   }
   async function relockNow(why) {
     const r = relock;
-    relock = null;
     if (!r) return;
     try {
       const s = stateOf(await bot.status());
-      if (s.door === 'opened') { report(`Relock after ${r.reason} skipped: the door is open (${why})`); return; }
-      if (s.lock === 'locked') return;
+      if (s.lock === 'locked') { relock = null; return; }
+      if (s.door === 'opened') { r.open = true; console.log(`[switchbot] lock after ${r.reason} waits: the door is open`); return; }
+      relock = null;
       const { body } = await bot.command('locked', (b) => stateOf(b).lock);
       await record(stateOf(body), 'command', { ...body, reason: `relock:${r.reason}` }, battery(body));
-      console.log(`[switchbot] relocked after ${r.reason}: ${why}`);
+      console.log(`[switchbot] locked after ${r.reason}: ${why}`);
     } catch (e) {
-      console.error(`[switchbot] relock after ${r.reason} failed:`, e);
-      report(`Front door relock after ${r.reason} failed: ${e.message || e}`);
+      relock = null;
+      console.error(`[switchbot] lock after ${r.reason} failed:`, e);
+      report(`Front door automatic lock after ${r.reason} failed: ${e.message || e}`);
     }
   }
-  // A new door_events row. The relock's own lock and the auto-unlock's own row land here too.
-  function doorEvent(row) {
-    if (!relock || !row) return;
-    if (row.event === 'opened') { relock.opened = true; clearTimeout(relock.timer); }
-    else if (row.event === 'closed' && relock.opened) {
+  // A new door_events row, from any source; the automatic lock's own lands here too.
+  async function doorEvent(row) {
+    if (!row) return;
+    if (row.event === 'unlocked') { if (await relockOn()) arm(row.source || 'unlock', `${RELOCK_MS / 1000}s after the unlock`); return; }
+    if (!relock) return;
+    if (row.event === 'opened') { relock.open = true; clearTimeout(relock.timer); }
+    else if (row.event === 'closed' && relock.open) {
       clearTimeout(relock.timer);
-      relock.timer = setTimeout(() => relockNow('the door closed'), RELOCK_CLOSED_MS);
+      relock.open = false;
+      relock.timer = setTimeout(() => relockNow(`${RELOCK_MS / 1000}s after the door closed`), RELOCK_MS);
     } else if (row.event === 'locked') { clearTimeout(relock.timer); relock = null; }
+  }
+  async function armAtStart() {
+    try {
+      if (!(await relockOn())) return;
+      const s = stateOf(await bot.status());
+      if (s.lock === 'unlocked') {
+        arm('start-up', `${RELOCK_MS / 1000}s after the hub started`);
+        if (s.door === 'opened') { relock.open = true; clearTimeout(relock.timer); }
+      }
+    } catch (e) { console.error('[switchbot] checking the lock at start-up failed:', e); report(`Checking the front door at hub start-up failed: ${e.message || e}`); }
   }
 
   // ── Arrival approaches (docs/DOOR.md § Arrival) ──
@@ -260,7 +273,6 @@ module.exports = function (ctx) {
       const t = Date.now();
       const { body } = await bot.command('unlocked', (b) => stateOf(b).lock);
       await record(stateOf(body), 'command', { ...body, reason: `bluetooth:${row.device}`, arrive_at: row.at }, battery(body));
-      relockAfter(`bluetooth:${row.device}`);
       console.log(`[switchbot] unlocked for ${row.device} arriving over Bluetooth, ${Date.now() - t}ms`);
     } catch (e) {
       console.error('[switchbot] Bluetooth arrival unlock failed:', e);
@@ -292,7 +304,6 @@ module.exports = function (ctx) {
     try {
       const { body } = await bot.command('unlocked', (b) => stateOf(b).lock);
       await record(stateOf(body), 'command', { ...body, reason: `wifi:${who}`, join_at: row.at }, battery(body));
-      relockAfter(`wifi:${who}`);
       console.log(`[switchbot] unlocked for ${who} joining the Wi-Fi, ${Date.now() - t}ms`);
     } catch (e) {
       console.error(`[switchbot] Wi-Fi unlock for ${who} failed:`, e);
@@ -301,6 +312,6 @@ module.exports = function (ctx) {
   }
 
   if (!TOKEN || !SECRET) console.error('[switchbot] SWITCHBOT_TOKEN / SWITCHBOT_SECRET not set; the front door backstop is off');
-  else { setTimeout(backstop, 30e3); setInterval(backstop, BACKSTOP_MS); }
+  else { setTimeout(backstop, 30e3); setInterval(backstop, BACKSTOP_MS); setTimeout(armAtStart, 20e3); }
   return { lanJoined, presenceEvent, doorEvent, unlockFront: (reason) => doorCommand('unlocked', reason) };
 };

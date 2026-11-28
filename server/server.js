@@ -191,6 +191,7 @@ const { lanJoined, presenceEvent, doorEvent, unlockFront } = require('./routes/s
 const { lobbyRace, startRace } = require('./routes/lobby')({ SUPABASE_KEY, SUPABASE_URL, gated, pub, sb });
 const { handlePin } = require('./routes/doorpin')({ SUPABASE_KEY, SUPABASE_URL, gated, pushAll, sb, startRace, unlockFront });
 require('./routes/gmailpush')({ SUPABASE_KEY, SUPABASE_URL, handlePin, pub, sb });
+require('./routes/icloudmail')({ SUPABASE_KEY, SUPABASE_URL, handlePin, sb });
 require('./routes/elevator')({ gated, sb, sbWrite });
 
 const prompts = require('./routes/prompts')({ auth, gated, pushAll, pushSessions, sb });

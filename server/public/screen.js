@@ -73,7 +73,53 @@ export function openScreen({ mount, session = null, handoff = null, onEnd = null
     wrap.style.width = `${W}px`; wrap.style.height = `${H}px`;
     if (fresh) fit();
   });
-  new ResizeObserver(() => { if (unframed) fit(); }).observe(stage);
+  // A video started while its pane was hidden (a handoff tab mounted behind the conversation) keeps decoding
+  // frames on iOS but draws them BLACK once shown. So whenever the stage goes from no size to a size, the
+  // stream is re-attached and played again.
+  let sized = false;
+  new ResizeObserver(() => {
+    const now = stage.clientWidth > 0 && stage.clientHeight > 0;
+    if (now && !sized && video.srcObject) { const m = video.srcObject; video.srcObject = null; video.srcObject = m; play('shown'); }
+    sized = now;
+    if (unframed) fit();
+  }).observe(stage);
+  function play(why) {
+    video.play().catch((e) => console.error(`[screen] the live picture would not play (${why}): ${e.message || e}`));
+  }
+
+  // A BLACK PICTURE IS NEVER ALL HE SEES. Frames can arrive and be drawn black (above, or anything else that
+  // breaks the picture without breaking the stream), which every other check here reads as working. So a
+  // frame is sampled every 2 s, and a picture that has stayed black for BLACK_MS while visible falls back
+  // to the screenshot tap screen (onFail), as a share that never connected does.
+  const BLACK_MS = 6000;
+  const probe = document.createElement('canvas'); probe.width = 16; probe.height = 10;
+  let blackSince = 0;
+  const blackCheck = setInterval(() => {
+    if (!alive || !firstAt || !sized || video.readyState < 2) { blackSince = 0; return; }
+    let black;
+    try {
+      const g = probe.getContext('2d', { willReadFrequently: true });
+      g.drawImage(video, 0, 0, 16, 10);
+      const d = g.getImageData(0, 0, 16, 10).data;
+      black = true;
+      for (let i = 0; i < d.length; i += 4) if (d[i] > 10 || d[i + 1] > 10 || d[i + 2] > 10) { black = false; break; }
+    } catch (_) { return; }   // a frame that cannot be read says nothing either way
+    if (!black) { blackSince = 0; blackTries = 0; return; }
+    blackSince ||= Date.now();
+    if (Date.now() - blackSince < BLACK_MS) return;
+    blackSince = 0;
+    // The video is the mode: a black picture is answered with a fresh share first, and only a fresh share
+    // that is black too falls back to the screenshot tap screen, as the net under it.
+    if (blackTries++ < 1) {
+      console.error(`[screen] the live picture stayed black for ${BLACK_MS / 1000}s while frames arrived; reconnecting`);
+      teardown('black'); ended = false; connect();
+      return;
+    }
+    console.error(`[screen] the live picture was black again after reconnecting${onFail ? '; showing the screenshot instead' : ''}`);
+    clearInterval(blackCheck);
+    if (onFail) { close(); onFail(); } else { lost('black picture'); }
+  }, 2000);
+  let blackTries = 0;
 
   // A point on the stage as fractions of the Mac's display, or null off the picture.
   const at = (cx, cy) => {
@@ -243,7 +289,7 @@ export function openScreen({ mount, session = null, handoff = null, onEnd = null
       }
       dc = pc.createDataChannel('input', { ordered: true });
       dc.onmessage = (e) => { try { const m = JSON.parse(e.data); if (m.t === 'display') disp = { w: m.w, h: m.h }; } catch (_) {} };
-      pc.ontrack = (e) => { video.srcObject = new MediaStream([e.track]); video.play().catch(() => {}); };
+      pc.ontrack = (e) => { video.srcObject = new MediaStream([e.track]); play('track'); };
       pc.onconnectionstatechange = () => {
         if (!pc) return;
         const st = pc.connectionState;
@@ -299,7 +345,7 @@ export function openScreen({ mount, session = null, handoff = null, onEnd = null
     const now = performance.now();
     if (!firstAt) {
       firstAt = Date.now(); clearTimeout(timer); waiting(false);
-      fpsAt = now;
+      fpsAt = now; drops = 0;
     }
     fpsN++;
     if (now - fpsAt >= 1000) { setState(`${path}${path ? ' · ' : ''}${Math.round(fpsN * 1000 / (now - fpsAt))} fps`); fpsN = 0; fpsAt = now; }
@@ -366,9 +412,19 @@ export function openScreen({ mount, session = null, handoff = null, onEnd = null
     frozen = 0; replaced = false;
     teardown(why);
     if (onFail && !firstAt) { close(); onFail(); return; }
+    // A share that was showing and dropped (the Mac's agent restarted, the network blinked) comes back by
+    // itself: a few attempts a few seconds apart, and only then the Retry button.
+    if (firstAt && drops < 3) {
+      drops++;
+      setState(why);
+      waiting(true);
+      setTimeout(() => { if (alive && ended) { ended = false; connect(); } }, 1500 * drops);
+      return;
+    }
     veil.classList.add('on'); retry.hidden = false;
     setState(why);
   }
+  let drops = 0;
   retry.onclick = () => connect();
 
   // Into the background: iOS freezes the page without a pagehide, so the Mac would see a dead peer and end
@@ -427,6 +483,7 @@ export function openScreen({ mount, session = null, handoff = null, onEnd = null
   function close() {
     if (!alive) return;
     alive = false;
+    clearInterval(blackCheck);
     document.removeEventListener('visibilitychange', onVis);
     removeEventListener('pagehide', onHide);
     teardown('closed');

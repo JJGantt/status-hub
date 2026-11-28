@@ -124,3 +124,13 @@ since its viewer was cut off.
   twenty.
 - A screen exists on one machine, so there is no fallback machine. For a handoff, the fallback is the
   screenshot tap screen.
+
+## When the picture fails
+
+- **A share that was showing and drops** (the Mac's agent restarted, the network blinked) reconnects by
+  itself, up to three times a few seconds apart, before the Retry button appears.
+- **A black picture is answered with a fresh share.** Frames can arrive and be drawn black (on iOS, a video
+  started while its pane was hidden draws black once shown), which every other check reads as working. So
+  a frame is sampled every 2 s, and a picture black for 6 s while visible gets a new share; only a fresh
+  share that is black too falls back to the screenshot tap screen, the net under the video. A stage going
+  from no size to a size also re-attaches and plays the stream, which is the fix for the hidden-pane case.

@@ -9,6 +9,7 @@
 const express = require('express');
 const ops = require('../lib/report');
 const { DOORS, message, judgeArrival, summarize } = require('../lib/lobby');
+const gmail = require('../lib/gmail');
 
 // A race nobody's phone reported within this long, with at least one path sent, is a failure: the
 // messages went out and the door did not open (or the shortcut never reported).
@@ -46,20 +47,11 @@ module.exports = function (ctx) {
     return {};
   }
   async function sendEmail(text) {
-    const { GOOGLE_CLIENT_ID: id, GOOGLE_CLIENT_SECRET: secret, GOOGLE_REFRESH_TOKEN: refresh } = process.env;
     const to = await setting('lobby_icloud_email');
-    if (!id || !secret || !refresh) return { skipped: 'GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET / GOOGLE_REFRESH_TOKEN not set' };
+    if (!gmail.configured()) return { skipped: 'GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET / GOOGLE_REFRESH_TOKEN not set' };
     if (!to) return { skipped: 'app_settings.lobby_icloud_email not set' };
-    const t = await fetch('https://oauth2.googleapis.com/token', { method: 'POST', signal: AbortSignal.timeout(15e3),
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: new URLSearchParams({ client_id: id, client_secret: secret, refresh_token: refresh, grant_type: 'refresh_token' }) });
-    if (!t.ok) throw new Error(`Google token ${t.status} ${(await t.text().catch(() => '')).slice(0, 200)}`);
-    const { access_token } = await t.json();
     const raw = Buffer.from(`To: ${to}\r\nSubject: ${text}\r\nContent-Type: text/plain; charset=utf-8\r\n\r\n${text}\r\n`).toString('base64url');
-    const r = await fetch('https://gmail.googleapis.com/gmail/v1/users/me/messages/send', { method: 'POST',
-      signal: AbortSignal.timeout(15e3), headers: { Authorization: `Bearer ${access_token}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ raw }) });
-    if (!r.ok) throw new Error(`Gmail send ${r.status} ${(await r.text().catch(() => '')).slice(0, 200)}`);
+    await gmail.api('messages/send', { method: 'POST', body: { raw } });
     return {};
   }
 
@@ -145,6 +137,13 @@ module.exports = function (ctx) {
     } catch (e) { console.error('[lobby] reading races failed:', e); res.status(502).json({ error: 'unreachable' }); }
   });
 
-  return { lobbyRace: (row) => raceStarted(row).catch((e) => { console.error('[lobby] race failed:', e); report(`Lobby door race failed: ${e.message || e}`); }) };
+  // Start a race from inside the hub (the PIN by text or email): the row, its paths sent.
+  async function startRace(reason, door = 'main') {
+    const race = await insert('lobby_races', { reason, door }, true);
+    raceStarted(race);
+    return race;
+  }
+
+  return { startRace, lobbyRace: (row) => raceStarted(row).catch((e) => { console.error('[lobby] race failed:', e); report(`Lobby door race failed: ${e.message || e}`); }) };
 };
 

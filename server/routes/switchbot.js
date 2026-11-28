@@ -85,6 +85,15 @@ module.exports = function (ctx) {
     }
   });
 
+  // Lock or unlock, recorded as a command with its reason. door_report() writes a row only if no other
+  // source has recorded the change yet.
+  async function doorCommand(want, reason) {
+    const { body } = await bot.command(want, (b) => stateOf(b).lock);
+    const { rows } = await record(stateOf(body), 'command', { ...body, reason }, battery(body));
+    if (want === 'unlocked' && AUTO_REASONS.test(reason)) relockAfter(reason);
+    return { body, rows };
+  }
+
   // `reason` names what asked for it ('elevator' from the phone's elevator watch; the watch sends none)
   // and is kept on the command's door_events row.
   gated.post('/api/door', express.json(), async (req, res) => {
@@ -93,10 +102,7 @@ module.exports = function (ctx) {
     const reason = typeof req.body.reason === 'string' ? req.body.reason.slice(0, 40) : 'watch';
     const want = action === 'lock' ? 'locked' : 'unlocked';
     try {
-      const { body } = await bot.command(want, (b) => stateOf(b).lock);
-      // door_report() writes a row only if no other source has recorded the change yet.
-      const { rows } = await record(stateOf(body), 'command', { ...body, reason }, battery(body));
-      if (want === 'unlocked' && AUTO_REASONS.test(reason)) relockAfter(reason);
+      const { body, rows } = await doorCommand(want, reason);
       res.json(answer(body, { recorded: rows.length > 0 }));
     } catch (e) {
       console.error(`[switchbot] ${action} (${reason}) failed:`, e);
@@ -296,5 +302,5 @@ module.exports = function (ctx) {
 
   if (!TOKEN || !SECRET) console.error('[switchbot] SWITCHBOT_TOKEN / SWITCHBOT_SECRET not set; the front door backstop is off');
   else { setTimeout(backstop, 30e3); setInterval(backstop, BACKSTOP_MS); }
-  return { lanJoined, presenceEvent, doorEvent };
+  return { lanJoined, presenceEvent, doorEvent, unlockFront: (reason) => doorCommand('unlocked', reason) };
 };

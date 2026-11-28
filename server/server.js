@@ -187,8 +187,10 @@ const { MACHINE_NAME, deadLetter, desk, followUpSession, machineAwake, openSessi
 
 require('./routes/failures')({ followUpSession, gated, openSession, sb, sbWrite, sessionVerb, transferSession });
 require('./routes/ci')({ MACHINE_NAME, SUPABASE_KEY, SUPABASE_URL, followUpSession, gated, openSession, pub, sb, sbWrite });
-const { lanJoined, presenceEvent, doorEvent } = require('./routes/switchbot')({ SUPABASE_KEY, SUPABASE_URL, gated, pub, sb });
-const { lobbyRace } = require('./routes/lobby')({ SUPABASE_KEY, SUPABASE_URL, gated, pub, sb });
+const { lanJoined, presenceEvent, doorEvent, unlockFront } = require('./routes/switchbot')({ SUPABASE_KEY, SUPABASE_URL, gated, pub, sb });
+const { lobbyRace, startRace } = require('./routes/lobby')({ SUPABASE_KEY, SUPABASE_URL, gated, pub, sb });
+const { handlePin } = require('./routes/doorpin')({ SUPABASE_KEY, SUPABASE_URL, gated, pushAll, sb, startRace, unlockFront });
+require('./routes/gmailpush')({ SUPABASE_KEY, SUPABASE_URL, handlePin, pub, sb });
 require('./routes/elevator')({ gated, sb, sbWrite });
 
 const prompts = require('./routes/prompts')({ auth, gated, pushAll, pushSessions, sb });

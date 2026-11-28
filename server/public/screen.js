@@ -45,7 +45,7 @@ export function openScreen({ mount, session = null, handoff = null, onEnd = null
   ov.append(stage, bar);
   mount.append(ov);
 
-  let alive = true, pc = null, dc = null, shareId = null, askedAt = 0, firstAt = 0, timer = null, ended = false, frozen = 0;
+  let alive = true, pc = null, dc = null, shareId = null, askedAt = 0, firstAt = 0, timer = null, ended = false, frozen = 0, replaced = false;
   let disp = { w: 0, h: 0 };          // the Mac display in points, from the helper
   let cmd = false, dragMode = false;
 
@@ -281,6 +281,8 @@ export function openScreen({ mount, session = null, handoff = null, onEnd = null
       while (alive && id === shareId) {
         const v = await (await fetch(`/api/screen/${id}?wait=20`)).json();
         if (v.answer) { await pc.setRemoteDescription({ type: 'answer', sdp: v.answer }); break; }
+        // `stopped`: the screen agent ended it on purpose, for a newer share from this same device.
+        if (v.status === 'ended' && v.ended_reason === 'stopped') { frozen = 0; replaced = true; lost('replaced'); return; }
         if (v.status === 'failed' || v.status === 'ended') { lost(v.error || v.status); return; }
         if (Date.now() - askedAt > CONNECT_MS) return;
       }
@@ -358,9 +360,10 @@ export function openScreen({ mount, session = null, handoff = null, onEnd = null
   function lost(why) {
     if (!alive || ended) return;
     ended = true;
-    if (!firstAt && frozen) reportPageOccurrence(`[screen] no picture from the Mac: the page was frozen ${Math.round(frozen / 1000)}s`);
+    if (!firstAt && replaced) reportPageOccurrence('[screen] no picture from the Mac: replaced by a newer share from this device');
+    else if (!firstAt && frozen) reportPageOccurrence(`[screen] no picture from the Mac: the page was frozen ${Math.round(frozen / 1000)}s`);
     else if (!firstAt) console.error(`[screen] no picture from the Mac: ${why}`);
-    frozen = 0;
+    frozen = 0; replaced = false;
     teardown(why);
     if (onFail && !firstAt) { close(); onFail(); return; }
     veil.classList.add('on'); retry.hidden = false;

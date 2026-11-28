@@ -118,7 +118,8 @@ since its viewer was cut off.
   `/api/clientlog`). When its 25 s timer fires more than 2 s late, iOS froze the page while it stayed
   `visible` (no `visibilitychange`, so no `bye`), the viewer could not connect, and the end is an
   occurrence instead, `… the page was frozen Ns`; the page's request failures in the next 3 s are
-  occurrences too (`shared.js` `noteWake`).
+  occurrences too (`shared.js` `noteWake`). A share the screen agent ended `stopped` for a newer one from the
+  same device is the occurrence `… replaced by a newer share from this device`.
 - The hub reports a share whose time to first picture is over three times the median of the last
   twenty.
 - A screen exists on one machine, so there is no fallback machine. For a handoff, the fallback is the

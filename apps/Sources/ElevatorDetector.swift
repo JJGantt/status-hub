@@ -52,6 +52,25 @@ struct ElevatorDetector {
 
     init(_ t: Thresholds = Thresholds()) { self.t = t }
 
+    /// Where the rules stand, for the debug pane (`ElevatorUnlock.publish`). Read-only: nothing here
+    /// changes what the detector does. `now` is the current time on the same clock as the samples.
+    func status(now: TimeInterval) -> [String: Any] {
+        let cur = alt.last?.m
+        switch state {
+        case .idle:
+            return ["phase": "idle"]
+        case let .riding(start, base):
+            return ["phase": "riding", "base": base, "rise": (cur ?? base) - base, "since": now - start,
+                    "steps_in_ride": steps(at: now) - steps(at: start)]
+        case let .falling(top):
+            return ["phase": "falling", "top": top, "drop": top - (cur ?? top)]
+        case let .ended(rideStart, base, at, top, from, stepsInRide):
+            return ["phase": "stopped", "base": base, "top": top, "rise": top - base, "ride_s": at - rideStart,
+                    "steps_in_ride": stepsInRide, "steps_after": steps(at: now) - from, "steps_needed": t.exitSteps,
+                    "left_s": max(0, t.exitWithin - (now - at))]
+        }
+    }
+
     /// Cumulative steps counted by time `at` (the last report at or before it).
     func steps(at time: TimeInterval) -> Int { steps.last(where: { $0.t <= time })?.n ?? 0 }
 

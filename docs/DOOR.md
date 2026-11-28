@@ -43,6 +43,15 @@ Riding the elevator up to the apartment and walking out of it unlocks the door.
   from four minutes before it, in seconds from `trace.t0`, when watching started.
 - **What it cannot see:** an arrival iOS reports late. Entry is worked out from cell and Wi-Fi
   positions and can come a minute or more late, which the 500 m radius allows for.
+- **The elevator pane** (rightmost swipe pane on the phone, `server/public/cards/elevator.js`), for
+  testing: the unlock-mode switches (`/api/door/modes`), the live state the app sends while it is in
+  front (`hub:elevator` from `ElevatorUnlock.publish`, on every sensor reading; the page asks for it
+  through the `elevator` message handler when it mounts or regains focus): watching, area, location
+  and distance from home, relative altitude, steps, the detector's phase (`ElevatorDetector.status`)
+  and a log of its transitions, steps out and unlocks; then the last rides (`GET /api/elevator/rides`,
+  `server/routes/elevator.js`) the Wi-Fi joins (`/api/presence/joins`) and `presence_devices`. In a browser it has no live
+  state. The app reads the modes when watching starts and as each ride begins; with `elevator` off a
+  ride is still detected and stored, as `disabled`, and nothing is unlocked.
 - Tests: `apps/tests/run-elevator-detector.sh` compiles the detector with its cases and runs them.
 
     select at, outcome, rise_m, ride_s, steps_in_ride, steps_after, unlock_ms from elevator_rides order by at desc;

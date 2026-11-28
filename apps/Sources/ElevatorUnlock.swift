@@ -3,6 +3,7 @@ import CoreLocation
 import CoreMotion
 import Foundation
 import UIKit
+import WebKit
 
 /// Unlocks the front door when he rides the elevator up and walks out of it (docs/DOOR.md).
 ///
@@ -17,6 +18,9 @@ import UIKit
 ///
 /// Every ride, up or down, unlocked or not, is stored with its trace (`POST /api/elevator/rides`, table
 /// `elevator_rides`) a minute after it, so the thresholds can be tuned from real rides.
+///
+/// While the app is in front it also feeds the hub page's elevator pane (`cards/elevator.js`) with its
+/// live state on every sensor reading (`publish`), and keeps a short log of the detector's steps.
 @MainActor
 final class ElevatorUnlock: NSObject, CLLocationManagerDelegate {
     static let shared = ElevatorUnlock()
@@ -34,6 +38,22 @@ final class ElevatorUnlock: NSObject, CLLocationManagerDelegate {
     private var detector = ElevatorDetector()
     private var started: Date?
 
+    /// The hub page, for the elevator pane (StatusHubApp.swift attaches it).
+    weak var web: WKWebView?
+    private var homeAt: CLLocation?
+    private var homeRadius: Double = 0
+    private var region = "unknown"
+    private var lastFix: CLLocation?
+    private var lastAlt: Double?
+    private var lastSteps = 0
+    private var lastPhase = "idle"
+    private var lastStepsAfter = 0
+    /// Whether the elevator may unlock the door (`door_unlock_modes.elevator`, GET /api/door/modes). Read
+    /// when watching starts and again as a ride begins, so the unlock itself waits on nothing.
+    private var elevatorOn = true
+    /// The pane's event log, newest last, in memory only (the rides themselves are stored).
+    private var events: [[String: Any]] = []
+
     func start() {
         geofence.delegate = self
         keepAlive.delegate = self
@@ -45,6 +65,8 @@ final class ElevatorUnlock: NSObject, CLLocationManagerDelegate {
             Self.error("elevator unlock: region monitoring is not available on this phone"); return
         }
         guard let home = await Self.home() else { return }
+        homeAt = CLLocation(latitude: home.lat, longitude: home.lon)
+        homeRadius = home.radius
         let region = CLCircularRegion(center: CLLocationCoordinate2D(latitude: home.lat, longitude: home.lon),
                                       radius: home.radius, identifier: Self.region)
         region.notifyOnEntry = true
@@ -63,7 +85,10 @@ final class ElevatorUnlock: NSObject, CLLocationManagerDelegate {
         let now = Date()
         started = now
         detector = ElevatorDetector()
+        lastPhase = "idle"; lastAlt = nil; lastSteps = 0
         Self.note("elevator-watch-start")
+        event("watching", [:])
+        refreshModes()
         keepAlive.allowsBackgroundLocationUpdates = true
         keepAlive.pausesLocationUpdatesAutomatically = false
         keepAlive.showsBackgroundLocationIndicator = false
@@ -74,7 +99,9 @@ final class ElevatorUnlock: NSObject, CLLocationManagerDelegate {
                 guard let self else { return }
                 if let err { Self.error("elevator unlock: altimeter failed: \(err.localizedDescription)"); return }
                 guard let data, let s = self.started else { return }
+                self.lastAlt = data.relativeAltitude.doubleValue
                 self.handle(self.detector.altitude(data.relativeAltitude.doubleValue, at: Date().timeIntervalSince(s)))
+                self.traceSteps()
             }
         }
         pedometer.startUpdates(from: now) { [weak self] data, err in
@@ -82,7 +109,9 @@ final class ElevatorUnlock: NSObject, CLLocationManagerDelegate {
                 guard let self else { return }
                 if let err { Self.error("elevator unlock: step counter failed: \(err.localizedDescription)"); return }
                 guard let data, let s = self.started else { return }
+                self.lastSteps = data.numberOfSteps.intValue
                 self.handle(self.detector.stepCount(data.numberOfSteps.intValue, at: Date().timeIntervalSince(s)))
+                self.traceSteps()
             }
         }
     }
@@ -93,10 +122,19 @@ final class ElevatorUnlock: NSObject, CLLocationManagerDelegate {
         switch e {
         case .none: return
         case let .down(drop):
+            event("down", ["drop": drop])
             store(["outcome": "down", "rise_m": -drop], at: at)
         case let .noExit(rise, rideSeconds, stepsInRide):
+            event("no exit", ["rise": rise])
             store(["outcome": "no_exit", "rise_m": rise, "ride_s": rideSeconds, "steps_in_ride": stepsInRide], at: at)
         case let .unlock(rise, rideSeconds, stepsInRide, stepsAfter):
+            guard elevatorOn else {
+                event("unlock skipped: elevator off", ["rise": rise, "steps": stepsAfter])
+                store(["outcome": "disabled", "rise_m": rise, "ride_s": rideSeconds, "steps_in_ride": stepsInRide,
+                       "steps_after": stepsAfter], at: at)
+                return
+            }
+            event("unlock sent", ["rise": rise, "steps": stepsAfter])
             var ride: [String: Any] = ["rise_m": rise, "ride_s": rideSeconds, "steps_in_ride": stepsInRide, "steps_after": stepsAfter]
             let asked = Date()
             Task {
@@ -108,6 +146,7 @@ final class ElevatorUnlock: NSObject, CLLocationManagerDelegate {
                     ride["error"] = String(describing: error)
                 }
                 ride["unlock_ms"] = Int(Date().timeIntervalSince(asked) * 1000)
+                self.event(ride["outcome"] as? String ?? "?", ["ms": ride["unlock_ms"] ?? 0])
                 self.store(ride, at: at)
             }
         }
@@ -151,23 +190,109 @@ final class ElevatorUnlock: NSObject, CLLocationManagerDelegate {
         keepAlive.stopUpdatingLocation()
         keepAlive.allowsBackgroundLocationUpdates = false
         Self.note("elevator-watch-stop")
+        event("stopped watching", [:])
+    }
+
+    /// Re-reads the unlock modes. A failed read keeps the last value and is reported.
+    private func refreshModes() {
+        Task {
+            guard let req = Self.request("/api/door/modes", "GET", nil) else { return }
+            do {
+                let (data, resp) = try await URLSession.shared.data(for: req)
+                let code = (resp as? HTTPURLResponse)?.statusCode ?? 0
+                guard code == 200, let j = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+                      let on = j["elevator"] as? Bool else {
+                    Self.error("elevator unlock: GET /api/door/modes answered \(code)"); return
+                }
+                if on != self.elevatorOn { self.event(on ? "elevator mode on" : "elevator mode off", [:]) }
+                self.elevatorOn = on
+                self.publish()
+            } catch {
+                Self.error("elevator unlock: reading the unlock modes failed: \(error.localizedDescription)")
+            }
+        }
+    }
+
+    // MARK: The elevator pane
+
+    /// Logs the detector's own transitions (ride, stopped, resumed) and each step out after a stop,
+    /// then publishes. Called after every reading.
+    private func traceSteps() {
+        guard let s = started else { return }
+        let st = detector.status(now: Date().timeIntervalSince(s))
+        let phase = st["phase"] as? String ?? "idle"
+        if phase != lastPhase {
+            switch (lastPhase, phase) {
+            case ("idle", "riding"): event("ride up", ["from": st["base"] ?? 0]); refreshModes()
+            case ("riding", "stopped"): event("stopped", ["rise": st["rise"] ?? 0])
+            case ("stopped", "riding"): event("moving again", ["rise": st["rise"] ?? 0])
+            case ("idle", "falling"): event("ride down", [:])
+            default: break
+            }
+            lastPhase = phase
+            lastStepsAfter = 0
+        }
+        if phase == "stopped", let n = st["steps_after"] as? Int, n != lastStepsAfter {
+            lastStepsAfter = n
+            event("step", ["n": n, "of": st["steps_needed"] ?? 0])
+        }
+        publish()
+    }
+
+    private func event(_ what: String, _ fields: [String: Any]) {
+        var e = fields
+        e["what"] = what
+        e["at"] = ISO8601DateFormatter().string(from: Date())
+        events.append(e)
+        if events.count > 60 { events.removeFirst(events.count - 60) }
+        publish()
+    }
+
+    /// The live state, to the page as a `hub:elevator` event. Only while the app is in front.
+    func publish() {
+        guard let web, UIApplication.shared.applicationState == .active else { return }
+        var d: [String: Any] = ["watching": started != nil, "region": region, "radius": homeRadius, "elevator_on": elevatorOn,
+                                "steps": lastSteps, "events": events]
+        if let s = started {
+            d["since"] = ISO8601DateFormatter().string(from: s)
+            d["detector"] = detector.status(now: Date().timeIntervalSince(s))
+            d["thresholds"] = (try? JSONSerialization.jsonObject(with: JSONEncoder().encode(detector.t))) ?? [:]
+        }
+        if let a = lastAlt { d["alt"] = a }
+        if let f = lastFix {
+            var fix: [String: Any] = ["lat": f.coordinate.latitude, "lon": f.coordinate.longitude,
+                                      "acc": f.horizontalAccuracy, "at": ISO8601DateFormatter().string(from: f.timestamp)]
+            if let h = homeAt { fix["home_m"] = f.distance(from: h) }
+            d["fix"] = fix
+        }
+        guard let json = try? JSONSerialization.data(withJSONObject: d), let s = String(data: json, encoding: .utf8) else { return }
+        web.evaluateJavaScript("window.dispatchEvent(new CustomEvent('hub:elevator',{detail:\(s)}))", completionHandler: nil)
     }
 
     // MARK: CLLocationManagerDelegate
 
     nonisolated func locationManager(_ manager: CLLocationManager, didEnterRegion region: CLRegion) {
         guard region.identifier == Self.region else { return }
-        Task { @MainActor in self.open() }
+        Task { @MainActor in self.region = "inside"; self.event("entered home area", [:]); self.open() }
     }
 
     nonisolated func locationManager(_ manager: CLLocationManager, didExitRegion region: CLRegion) {
         guard region.identifier == Self.region else { return }
-        Task { @MainActor in self.close() }
+        Task { @MainActor in self.region = "outside"; self.event("left home area", [:]); self.close() }
     }
 
     nonisolated func locationManager(_ manager: CLLocationManager, didDetermineState state: CLRegionState, for region: CLRegion) {
         guard region.identifier == Self.region else { return }
-        Task { @MainActor in if state == .inside { self.open() } else if state == .outside { self.close() } }
+        Task { @MainActor in
+            self.region = state == .inside ? "inside" : state == .outside ? "outside" : "unknown"
+            if state == .inside { self.open() } else if state == .outside { self.close() }
+            self.publish()
+        }
+    }
+
+    nonisolated func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
+        guard let last = locations.last else { return }
+        Task { @MainActor in self.lastFix = last; self.publish() }
     }
 
     nonisolated func locationManager(_ manager: CLLocationManager, monitoringDidFailFor region: CLRegion?, withError error: Error) {

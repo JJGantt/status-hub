@@ -21,6 +21,7 @@ import './cards/dayline.js';                     // the day column, wherever one
 import * as todo from './cards/todo.js';         // phone-wall lists pane (no-ops elsewhere)
 import * as repos from './cards/repos.js';       // phone-wall repo picker → Claude session on the Mac (no-ops elsewhere)
 import * as guide from './cards/guide.js';       // phone TV Guide pane — the bedroom TV's shelves (no-ops elsewhere)
+import * as elevator from './cards/elevator.js'; // phone elevator-unlock pane, while it is tested (no-ops elsewhere)
 import * as reports from './cards/reports.js';   // phone-wall reports pane — what dispatched sessions hand back (no-ops elsewhere)
 import './voiceagent.js';   // shared 'hub' conversation + activity popup (self-skips on the TV wall)
 import './settings.js';     // gear → settings panel (routing mode + trailing-silence); self-skips on TV
@@ -109,6 +110,7 @@ function render(s){
  repos.render(s);      // phone-wall repo picker (sixth swipe pane; self-fetches)
  deskfoot.render(s);   // TV footer follow-up target
  guide.render();
+ elevator.render();
  reports.render(s);    // phone-wall reports pane (seventh swipe pane; self-fetches)
 }
 

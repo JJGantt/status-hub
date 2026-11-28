@@ -655,3 +655,19 @@ body.tv.phonehome .hw-row.bg::before{content:'';position:absolute;left:0;width:4
 .loginbanner[hidden] { display: none; }
 .loginbanner .lb-chip { display: inline-flex; gap: 6px; white-space: nowrap; }
 .loginbanner .lb-v { font-weight: 800; }
+
+/* The elevator-unlock pane (cards/elevator.js), while the unlock is tested: plain rows of label and value. */
+body.tv.phonewall.phonehome .pane-elevator{padding:0 0 70px;overflow-y:auto}
+body.tv.phonewall.phonehome .pane-elevator .card{background:#000!important;border:none;border-radius:0}
+.elevatorcard{padding:10px 14px;font-size:14px;color:#d8dee6}
+.elevatorcard h3{margin:16px 0 6px;font-size:12px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:#7d8896}
+.el-row{display:flex;justify-content:space-between;gap:12px;padding:4px 0;border-bottom:1px solid #161b21}
+.el-k{color:#8b96a3;flex:0 0 auto}
+.el-v{text-align:right;font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
+.el-ev{display:grid;grid-template-columns:auto auto 1fr;gap:8px;padding:4px 0;border-bottom:1px solid #161b21;align-items:baseline}
+.el-t{color:#7d8896;font-variant-numeric:tabular-nums;white-space:nowrap}
+.el-w{font-weight:600;white-space:nowrap}
+.el-f{color:#9aa5b1;text-align:right;overflow-wrap:anywhere}
+.el-modes{display:flex;gap:8px}
+.el-mode{flex:1;padding:10px 0;border-radius:10px;border:1px solid #2a323c;background:none;color:#8b96a3;font:inherit}
+.el-mode.on{border-color:#3fb950;color:#3fb950}

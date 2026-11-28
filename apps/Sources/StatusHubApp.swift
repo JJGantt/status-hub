@@ -507,6 +507,10 @@ struct HubWebView {
             case "badge":
                 guard let n = message.body as? NSNumber else { return }
                 DispatchQueue.main.async { UNUserNotificationCenter.current().setBadgeCount(n.intValue) }
+            case "elevator":
+                // The elevator pane just mounted or came back into view: hand it the live state now
+                // rather than at the next sensor reading (Sources/ElevatorUnlock.swift).
+                DispatchQueue.main.async { MainActor.assumeIsolated { ElevatorUnlock.shared.publish() } }
             case "workoutSet":
                 // A set landed while the page is open: launch the watch app into its workout hold.
                 guard let at = message.body as? String else { return }
@@ -561,6 +565,7 @@ struct HubWebView {
         cfg.userContentController.add(coordinator, name: "nativeRec")      // page -> record a command natively
         cfg.userContentController.add(coordinator, name: "openURL")        // page -> open a reply's link in Safari
         cfg.userContentController.add(coordinator, name: "workoutSet")     // page -> a set landed; start the watch's workout
+        cfg.userContentController.add(coordinator, name: "elevator")       // page -> send the elevator pane its state now
         #endif
         cfg.mediaTypesRequiringUserActionForPlayback = []
         cfg.websiteDataStore = .default()          // persistent cookies → stays signed in across launches
@@ -584,6 +589,7 @@ struct HubWebView {
         PageLaunch.handoff.webView = wv    // …and a tapped handoff notification
         MainActor.assumeIsolated { LiveMic.shared.web = wv }   // so the live mic can report its state to the page
         MainActor.assumeIsolated { NativeRec.shared.web = wv } // and the native recorder can hand back its clip
+        MainActor.assumeIsolated { ElevatorUnlock.shared.web = wv } // and the elevator watch can feed its pane
         #endif
         #if os(iOS)
         wv.scrollView.contentInsetAdjustmentBehavior = .never

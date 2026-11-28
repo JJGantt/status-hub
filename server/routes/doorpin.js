@@ -8,7 +8,7 @@
 // door_pin_messages by outcome, never by content.
 const express = require('express');
 const ops = require('../lib/report');
-const { fromText, fromEmail, keyed, doorFor, lockedOut, LOCK_WINDOW_MS, DIGITS } = require('../lib/doorpin');
+const { fromText, fromEmail, keyed, doorFor, readPins, DIGITS } = require('../lib/doorpin');
 
 const SOURCES = ['imessage', 'email'];
 
@@ -44,29 +44,15 @@ module.exports = function (ctx) {
   const push = (title, body) => pushAll('door', title, body).catch((e) => console.error('[doorpin] push failed:', e));
 
   // Decide one PIN-shaped message: { source, message_id, sender, pin } -> outcome (lobby, front, wrong,
-  // locked, duplicate). Throws when the door command or the log write fails.
+  // duplicate). Throws when the door command or the log write fails.
   async function handlePin({ source, message_id, sender, pin }) {
     const via = `${source === 'email' ? 'Email' : 'Text'} from ${sender || 'unknown'}`;
     if (!PEPPER) throw new Error('DOOR_PIN_PEPPER is not set');
-    const door = doorFor(pin, await setting('door_pins'), PEPPER);
-    const locked = !!(await setting('door_pin_locked'));
-    const outcome = locked ? 'locked' : door || 'wrong';
+    const door = doorFor(pin, readPins(await setting('door_pins')), PEPPER);
+    const outcome = door || 'wrong';
     const row = await claim({ source, message_id: String(message_id).slice(0, 200), sender: sender ? String(sender).slice(0, 120) : null, outcome });
     if (!row) return 'duplicate';
-
-    if (outcome === 'locked') { push('Door PIN locked', `${via} ignored`); return outcome; }
-    if (outcome === 'wrong') {
-      const since = new Date(Date.now() - LOCK_WINDOW_MS).toISOString();
-      const wrong = await sb(`door_pin_messages?select=at&outcome=eq.wrong&at=gte.${since}`);
-      if (lockedOut(wrong.map((w) => Date.parse(w.at)), Date.now())) {
-        await putSetting('door_pin_locked', new Date().toISOString());
-        report(`Door PIN locked out after ${wrong.length} wrong PINs in an hour (latest: ${via})`);
-        push('Door PIN locked', `${wrong.length} wrong PINs · ${via}`);
-      } else {
-        push('Wrong door PIN', via);
-      }
-      return outcome;
-    }
+    if (outcome === 'wrong') { push('Wrong door PIN', via); return outcome; }
     try {
       if (door === 'lobby') await startRace(`pin:${source}`, 'main');
       else await unlockFront(`pin:${source}`);
@@ -105,11 +91,11 @@ module.exports = function (ctx) {
     }
     try {
       if (!PEPPER) throw new Error('DOOR_PIN_PEPPER is not set');
-      const hashes = { ...((await setting('door_pins')) || {}) };
+      const hashes = readPins(await setting('door_pins'));
       const other = door === 'lobby' ? 'front' : 'lobby';
       if (hashes[other] && hashes[other] === keyed(PEPPER, pin)) return res.status(400).json({ error: `that is the ${other} PIN` });
       hashes[door] = keyed(PEPPER, pin);
-      await putSetting('door_pins', hashes);
+      await putSetting('door_pins', JSON.stringify(hashes));
       res.json({ ok: true, door });
     } catch (e) {
       console.error('[doorpin] setting a PIN failed:', e);
@@ -117,16 +103,9 @@ module.exports = function (ctx) {
     }
   });
 
-  // Turn the feature back on after a lockout.
-  gated.post('/api/door/pin/unlock', async (req, res) => {
-    try { await putSetting('door_pin_locked', ''); res.json({ ok: true }); }
-    catch (e) { console.error('[doorpin] clearing the lockout failed:', e); res.status(502).json({ error: 'failed' }); }
-  });
-
   gated.get('/api/door/pin/messages', async (req, res) => {
     try {
-      res.json({ locked: !!(await setting('door_pin_locked')),
-        messages: await sb('door_pin_messages?select=at,source,sender,outcome&order=at.desc&limit=20') });
+      res.json({ messages: await sb('door_pin_messages?select=at,source,sender,outcome&order=at.desc&limit=20') });
     } catch (e) { console.error('[doorpin] reading messages failed:', e); res.status(502).json({ error: 'unreachable' }); }
   });
 

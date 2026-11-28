@@ -1,9 +1,9 @@
 'use strict';
 // PIN unlock by text or email (lib/doorpin.js): only a message that is the PIN and nothing else counts,
-// each PIN opens its own door, and repeated wrong PINs lock the feature.
+// each PIN opens its own door.
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
-const { fromText, fromEmail, keyed, doorFor, lockedOut, LOCK_WINDOW_MS } = require('../lib/doorpin');
+const { fromText, fromEmail, keyed, doorFor, readPins } = require('../lib/doorpin');
 
 test('a text counts only when it is the digits alone', () => {
   assert.equal(fromText('5555'), '5555');
@@ -36,9 +36,11 @@ test('each PIN opens its own door, and nothing opens without the key', () => {
   assert.equal(doorFor('1111', null, pepper), null);
 });
 
-test('three wrong PINs within an hour lock it', () => {
-  const now = Date.parse('2026-11-28T12:00:00Z');
-  assert.equal(lockedOut([now - 1000, now - 2000], now), false);
-  assert.equal(lockedOut([now - 1000, now - 2000, now], now), true);
-  assert.equal(lockedOut([now - LOCK_WINDOW_MS - 1, now - 2000, now], now), false);
+test('the stored PINs are read from the JSON text app_settings holds', () => {
+  const pepper = 'pepper';
+  const stored = JSON.stringify({ lobby: keyed(pepper, '1111'), front: keyed(pepper, '2222'), 0: '{' });
+  assert.deepEqual(Object.keys(readPins(stored)).sort(), ['front', 'lobby']);
+  assert.equal(doorFor('2222', readPins(stored), pepper), 'front');
+  assert.deepEqual(readPins('not json'), {});
+  assert.deepEqual(readPins(null), {});
 });

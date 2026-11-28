@@ -149,13 +149,11 @@ body are each empty or those same digits, a `Sent from my ...` footer aside. Any
 
 - **The decision is the hub's** (`routes/doorpin.js`, `POST /api/door/pin`). The PINs are stored only as
   HMAC-SHA256 under the Fly secret `DOOR_PIN_PEPPER` (local copy `~/.config/door-pin/pepper`), in
-  `app_settings.door_pins` `{lobby, front}`. Change one with `bin/hub POST /api/door/pin/set
+  `app_settings.door_pins`, a text column holding JSON `{lobby, front}` (read through `readPins`). Change one with `bin/hub POST /api/door/pin/set
   '{"door":"front","pin":"…"}'`.
 - **Every message is logged once** in `door_pin_messages` (data-layer 00224) by Gmail id or iMessage
   guid, with its outcome and never its content, and every outcome pushes to the phone (Door PIN used,
-  Lobby PIN used, Wrong door PIN, Door PIN locked, … failed). `GET /api/door/pin/messages` reads it.
-- **Lockout**: three wrong PIN-shaped messages within an hour set `app_settings.door_pin_locked`, which
-  refuses every PIN until `POST /api/door/pin/unlock`. The lockout is reported to the responder.
+  Lobby PIN used, Wrong door PIN, … failed). `GET /api/door/pin/messages` reads it.
 
 Where the messages come from:
 

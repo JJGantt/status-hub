@@ -5,10 +5,6 @@
 const crypto = require('crypto');
 
 const DIGITS = /^\d{4,12}$/;
-// Wrong PIN-shaped messages within the window that lock the feature until it is turned back on.
-const LOCK_AFTER = 3;
-const LOCK_WINDOW_MS = 60 * 60e3;
-
 const clean = (s) => String(s ?? '').replace(/[\s​﻿]+/g, ' ').trim();
 
 // The digits a text consists of, or null.
@@ -40,9 +36,15 @@ function doorFor(pin, hashes, pepper) {
   return null;
 }
 
-// Whether wrong attempts at these times (ms) lock the feature at `now`.
-function lockedOut(wrongTimes, now) {
-  return wrongTimes.filter((t) => now - t <= LOCK_WINDOW_MS).length >= LOCK_AFTER;
+// app_settings.door_pins as stored: a text column holding JSON { lobby, front } of keyed hashes. Only
+// those two keys are kept.
+function readPins(value) {
+  let v = value;
+  if (typeof v === 'string') { try { v = JSON.parse(v); } catch { return {}; } }
+  if (!v || typeof v !== 'object') return {};
+  const out = {};
+  for (const door of ['lobby', 'front']) if (typeof v[door] === 'string') out[door] = v[door];
+  return out;
 }
 
-module.exports = { DIGITS, LOCK_AFTER, LOCK_WINDOW_MS, fromText, fromEmail, keyed, doorFor, lockedOut };
+module.exports = { readPins, DIGITS, fromText, fromEmail, keyed, doorFor };
